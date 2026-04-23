@@ -1,0 +1,23 @@
+Module Name,Feature Name,Requirement (from PDF),Current Status,Completion %,Gap / Issue Description,Exact Fix (Step‑by‑Step Technical Solution),Priority,Impact
+System Architecture,Payslip PDF (Dompdf),Server‑side PDF generation using barryvdh/laravel-dompdf for payslip & letters (emailable + signed URL),Deviated,20 %,Browser‑print only; cannot email or securely download.,1 composer require barryvdh/laravel-dompdf; 2 Create resources/views/payslips/pdf.blade.php; 3 PayrollService→ PDF::loadView()→ Storage::put()→ set pdf_path; 4 Send via Mail::to($emp)->send(new PayslipMailed()); 5 Signed route for download (expiry 5 min).,Critical,Finance / Compliance
+System Architecture,SMTP Email Delivery,SMTP only for payslip emails + account notifications,Partial,40 %,Configured but no attachment emails.,"1 After PDF fix, implement PayslipMailed mailable class; 2 verify MAIL_ creds in .env; 3 log delivery via emailed_at.",Critical,HR / Finance
+System Architecture,DB Backups,Daily MySQL dump + 30‑day retention,Missing,0 %,spatie/laravel-backup not installed.,composer require spatie/laravel-backup; publish config; set disk (S3/GCS); scheduler daily 02 AM.,Critical,Compliance
+RBAC,System Settings Access,Super Admin = full; HR Admin = partial,Partial,30 %,UI missing.,Create Settings controller + blade; define Gate manageFullSettings; conditional form sections.,High,HR / Operations
+Employee Mgmt,salary_cycle (A/B),Controls Cycle A/B Payroll assignment,Partial,60 %,Field exists but not used in service.,"Confirm ENUM('A','B'); filter payroll runs by cycle.",Critical,Finance
+Attendance,shift_settings table,Configurable grace + break per shift,Partial,40 %,Hard‑coded in logic.,Create table; seed IT/UK shifts; link employment_details.shift_id.,High,HR / Ops
+Attendance,Late Arrival Cron,Auto‑flag late employees,Missing,0 %,Command not built.,Create CheckLateArrivals command; read shift_settings; notify manager.,Critical,HR
+Leave,Mandatory Dec Leave (MDL),6 days blocked in Dec; CO earned if worked,Partial,20 %,No table / logic.,Create december_mandatory_days table + seed dates; validate in LeaveService; auto credit Comp Off if worked.,Critical,HR / Compliance
+Leave,Comp Off Logic,Earn 1 CO when working MDL/public holiday,Missing,0 %,No auto‑credit.,Add comp_off_credits column; AttendanceService@clockOut → if holiday worked → credit.,High,HR
+Leave,Public Holidays,UK/India calendar non‑working days,Missing,0 %,Table not seeded.,public_holidays migration + seed; reference in LeaveService.,High,HR
+Leave,Leave Encashment,CSL encashment → Payroll line item,Partial,20 %,Workflow not wired to Payroll.,Implement model + controller; on approval → deduct balance + push to payroll_run.,Critical,Finance
+Overtime,Escalation Cron,Notify if pending > 24 h,Missing,0 %,Job not scheduled.,Command CheckOtEscalations; schedule hourly.,High,HR
+Payroll & Finance,Incentives Module,DB + workflow + Director approval,Missing,0 %,No schema/workflow.,Migration incentives; controller; approve → include in payroll.,Critical,Finance
+Payroll & Finance,Reimbursements Module,Claims + receipt upload + approval,Missing,0 %,None built.,Migration reimbursements; controller + file storage + approval flow.,Critical,Finance
+Payroll & Finance,Cycle A/B Runs,Separate runs per cycle,Partial,50 %,All employees processed together.,Split query by employment_details.salary_cycle; generate two payroll_runs.,Critical,Finance
+Payroll & Finance,Payroll Approval Flow,HR locks → Finance approves → Email,Partial,50 %,Sign‑off pending (Dompdf dependency).,Add status transitions; trigger PDF + mail on approval.,Critical,Finance
+Security & Audit,audit_logs table + Observers,Track create/update/delete on key models,Missing,0 %,No logs.,Migration + AuditObserver; register 5 models; viewer UI for HR & Super Admin.,Critical,Compliance
+Dashboards,Finance Dashboard,Payroll queue & summary view,Missing,0 %,None built.,"Livewire component showing Cycle A/B runs, gross/net, incentives, encashments.",Critical,Finance
+Dashboards,Executive Dashboard,"Headcount, attendance, alerts",Missing,0 %,Not built.,Component aggregating company‑wide stats + KPI widgets.,High,Exec
+Scheduled Jobs,All cron suite (11 jobs),Automated checks & notifications,Partial,40 %,"Some implemented, others missing.",Implement remaining 9 commands (per Sprint 3 plan).,High,Ops / HR
+Security & Audit,DB Backup,Spatie backup to S3 daily,Missing,0 %,Not set up.,As above.,Critical,Ops
+UI / UX,Responsive Dashboards,Livewire + Tailwind adaptive layouts,Completed,100 %,N/A.,QA before go‑live.,Low,UX

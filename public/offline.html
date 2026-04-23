@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Offline | HRMS Pulse</title>
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; text-align: center; padding: 50px; background-color: #fafafa; color: #333; }
+        h1 { font-size: 2em; margin-bottom: 0.5em; }
+        p { color: #666; margin-bottom: 2em; }
+        a { background: #000; color: #fff; text-decoration: none; padding: 10px 20px; border-radius: 5px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>You are offline</h1>
+    <p>Please check your internet connection and try again.</p>
+    <a href="/">Try Again</a>
+    <script>
+        window.addEventListener('online', () => window.location.reload());
+    </script>
+</body>
+</html>

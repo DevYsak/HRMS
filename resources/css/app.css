@@ -1,0 +1,163 @@
+@import 'tailwindcss';
+@import '../../vendor/livewire/flux/dist/flux.css';
+
+@source '../views';
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../vendor/livewire/flux-pro/stubs/**/*.blade.php';
+@source '../../vendor/livewire/flux/stubs/**/*.blade.php';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ===================================================
+   PULSE HRMS — Design Tokens (TailwindCSS v4 @theme)
+   Primary Brand: #1DB77A  |  Sidebar: white light
+   =================================================== */
+
+@theme {
+    /* Font */
+    --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji';
+
+    /* Brand Palette — Emerald/Mint Green */
+    --color-brand-50:  #f0fdf9;
+    --color-brand-100: #ccfbef;
+    --color-brand-200: #99f6de;
+    --color-brand-300: #5eead4;
+    --color-brand-400: #2dd4bf;
+    --color-brand-500: #14b8a6;
+    --color-brand-600: #1DB77A;
+    --color-brand-700: #0d9488;
+    --color-brand-800: #0f766e;
+    --color-brand-900: #134e4a;
+
+    /* Neutral / Zinc scale */
+    --color-zinc-50:  #fafafa;
+    --color-zinc-100: #f5f5f5;
+    --color-zinc-200: #e5e5e5;
+    --color-zinc-300: #d4d4d4;
+    --color-zinc-400: #a3a3a3;
+    --color-zinc-500: #737373;
+    --color-zinc-600: #525252;
+    --color-zinc-700: #404040;
+    --color-zinc-800: #262626;
+    --color-zinc-900: #171717;
+    --color-zinc-950: #0a0a0a;
+
+    /* Flux accent override → brand green */
+    --color-accent:            #1DB77A;
+    --color-accent-content:    #1DB77A;
+    --color-accent-foreground: #ffffff;
+}
+
+/* Dark mode accent */
+@layer theme {
+    .dark {
+        --color-accent:            #1DB77A;
+        --color-accent-content:    #1DB77A;
+        --color-accent-foreground: #ffffff;
+    }
+}
+
+/* ===================================================
+   Base resets
+   =================================================== */
+@layer base {
+    *, ::after, ::before, ::backdrop, ::file-selector-button {
+        border-color: var(--color-zinc-200, currentColor);
+    }
+    body {
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }
+}
+
+/* ===================================================
+   Flux field overrides
+   =================================================== */
+[data-flux-field]:not(ui-radio, ui-checkbox) {
+    @apply grid gap-2;
+}
+[data-flux-label] {
+    @apply !mb-0 !leading-tight;
+}
+input:focus[data-flux-control],
+textarea:focus[data-flux-control],
+select:focus[data-flux-control] {
+    @apply outline-hidden ring-2 ring-brand-600 ring-offset-1;
+}
+
+/* ===================================================
+   Sidebar — Active item: GREEN filled pill (Figma)
+   Override Flux default white/border active style
+   =================================================== */
+[data-flux-sidebar] [data-flux-sidebar-item][data-current] {
+    background-color: #1DB77A !important;
+    color: #ffffff !important;
+    border-color: transparent !important;
+}
+[data-flux-sidebar] [data-flux-sidebar-item][data-current] svg {
+    color: #ffffff !important;
+}
+/* Dark mode: slightly lighter green pill */
+.dark [data-flux-sidebar] [data-flux-sidebar-item][data-current] {
+    background-color: #1DB77A !important;
+    color: #ffffff !important;
+}
+
+/* ===================================================
+   Pulse component utilities
+   =================================================== */
+@layer utilities {
+    /* Card */
+    .pulse-card {
+        @apply rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900;
+    }
+
+    /* Stat value */
+    .pulse-stat__value {
+        @apply text-3xl font-bold text-zinc-900 dark:text-white;
+    }
+
+    /* Stat label */
+    .pulse-stat__label {
+        @apply text-sm text-zinc-500 dark:text-zinc-400;
+    }
+
+    /* Trend badges */
+    .pulse-stat__trend-up {
+        @apply inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400;
+    }
+    .pulse-stat__trend-down {
+        @apply inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-600 dark:bg-red-900/30 dark:text-red-400;
+    }
+
+    /* Page header */
+    .pulse-page-header {
+        @apply mb-6 flex items-start justify-between;
+    }
+    .pulse-page-title {
+        @apply text-2xl font-bold text-zinc-900 dark:text-white;
+    }
+    .pulse-page-subtitle {
+        @apply mt-0.5 text-sm text-zinc-500 dark:text-zinc-400;
+    }
+
+    /* Employee Status Badges */
+    .badge-active {
+        @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400;
+    }
+    .badge-onboarding {
+        @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400;
+    }
+    .badge-probation {
+        @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400;
+    }
+    .badge-on-leave {
+        @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400;
+    }
+    .badge-resigned {
+        @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400;
+    }
+    .badge-terminated {
+        @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400;
+    }
+}
