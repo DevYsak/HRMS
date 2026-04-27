@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Enums\UserRole;
 use App\Models\Company;
 use App\Models\Department;
+use App\Models\Employee;
 use App\Models\JobTitle;
 use App\Models\Office;
 use App\Models\User;
@@ -109,7 +110,7 @@ class DatabaseSeeder extends Seeder
             'email' => 'admin@conexus.in',
             'role' => UserRole::Admin,
         ]);
-        \App\Models\Employee::factory()->create([
+        Employee::factory()->create([
             'user_id' => $admin->id,
             'employee_id' => 'EMP-0001',
             'manager_id' => null,
@@ -123,7 +124,7 @@ class DatabaseSeeder extends Seeder
             'role' => UserRole::Hr,
             'avatar' => null, // Let the fallback handle it
         ]);
-        \App\Models\Employee::factory()->create([
+        Employee::factory()->create([
             'user_id' => $hr->id,
             'employee_id' => 'EMP-0002',
             'department_id' => Department::where('code', 'HR')->first()?->id,
@@ -137,7 +138,7 @@ class DatabaseSeeder extends Seeder
             'email' => 'rayna@conexus.in',
             'role' => UserRole::Manager,
         ]);
-        \App\Models\Employee::factory()->create([
+        Employee::factory()->create([
             'user_id' => $manager->id,
             'employee_id' => 'EMP-0003',
             'department_id' => Department::where('code', 'PRD')->first()?->id,
@@ -151,7 +152,7 @@ class DatabaseSeeder extends Seeder
             'email' => 'test@example.com',
             'role' => UserRole::Employee,
         ]);
-        \App\Models\Employee::factory()->create([
+        Employee::factory()->create([
             'user_id' => $employee->id,
             'employee_id' => 'EMP-0004',
             'department_id' => Department::where('code', 'ENG')->first()?->id,
@@ -161,9 +162,18 @@ class DatabaseSeeder extends Seeder
 
         // Seed 50 more random employees
         User::factory(50)->create(['role' => UserRole::Employee])->each(function ($user) {
-            \App\Models\Employee::factory()->create([
+            Employee::factory()->create([
                 'user_id' => $user->id,
             ]);
         });
+
+        // Call additional seeders for spec compliance
+        $this->call([
+            PublicHolidaySeeder::class,
+            DecemberMandatoryDaySeeder::class,
+            LeaveSeeder::class,
+            AttendanceSeeder::class,
+            PayrollSeeder::class,
+        ]);
     }
 }

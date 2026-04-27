@@ -102,7 +102,7 @@
                         <h3 class="text-md font-bold text-brand-900 dark:text-brand-400">Offboarding Checklist</h3>
                         <p class="text-sm text-brand-700 dark:text-brand-500 mt-1">Manage departmental clearance tasks</p>
                     </div>
-                    <flux:button href="{{ route('onboarding.checklist') }}" variant="primary">View Tasks</flux:button>
+                    <flux:button href="{{ route('employees.offboarding', $selectedEmployee->id) }}" variant="primary">View Tasks</flux:button>
                 </div>
 
                 {{-- Experience Letter --}}

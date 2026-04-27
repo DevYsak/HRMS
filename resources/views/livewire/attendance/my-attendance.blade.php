@@ -1,8 +1,20 @@
 <flux:main class="bg-zinc-50 p-6 space-y-6 dark:bg-zinc-950">
-    <div class="pulse-page-header">
+    <div class="pulse-page-header flex items-center justify-between">
         <div>
             <h1 class="pulse-page-title">Attendance Tracking</h1>
             <p class="pulse-page-subtitle">{{ \Illuminate\Support\Carbon::now()->format('l, jS F Y') }}</p>
+        </div>
+        <div class="flex items-center gap-3">
+            @if($todayAttendance && !$todayAttendance->check_out)
+                @if(!$todayAttendance->break_start)
+                    <flux:button wire:click="startBreak" variant="outline" size="sm">Start Break</flux:button>
+                @else
+                    <flux:button wire:click="endBreak" variant="outline" size="sm">End Break</flux:button>
+                @endif
+                <flux:button @click="$flux.modal('regularisation-modal').show()" variant="ghost" size="sm">Request Regularisation</flux:button>
+            @else
+                <flux:button @click="$dispatch('open-clock-widget')" variant="ghost" size="sm">Quick Actions</flux:button>
+            @endif
         </div>
     </div>
 
@@ -59,6 +71,12 @@
                 <div class="bg-brand-50 text-brand-700 px-4 py-1.5 rounded-full text-sm font-bold dark:bg-brand-900/40 dark:text-brand-400">
                     {{ $todayAttendance ? 'ACTIVE SHIFT' : 'NOT CLOCKED IN' }}
                 </div>
+
+                @if(!empty($shiftLabel))
+                    <div class="text-sm text-zinc-500 mt-2">
+                        <div class="font-semibold">{{ $shiftLabel }}</div>
+                    </div>
+                @endif
 
                 <div class="text-5xl font-black text-zinc-900 tracking-tighter dark:text-white" x-text="time"></div>
 
@@ -119,7 +137,20 @@
                         <div class="p-6 bg-green-50 rounded-2xl border border-green-100 dark:bg-green-950/20 dark:border-green-900/40">
                             <flux:icon.check-badge class="size-10 text-green-600 mx-auto mb-2" />
                             <h4 class="font-bold text-green-900 dark:text-green-400">Shift Completed</h4>
-                            <p class="text-sm text-green-700 dark:text-green-500 mt-1">Net: {{ (float)$todayAttendance->total_hours }} Hours</p>
+                            <p class="text-sm text-green-700 dark:text-green-500 mt-1">
+                                Net:
+                                @if($todayAttendance->check_out)
+                                    @php $diff = $todayAttendance->check_out->diff($todayAttendance->check_in); @endphp
+                                    {{ $diff->h }}h {{ $diff->i }}m
+                                @elseif($todayAttendance->check_in)
+                                    <span wire:poll.30s>
+                                        @php $diff = \Illuminate\Support\Carbon::now()->diff($todayAttendance->check_in); @endphp
+                                        {{ $diff->h }}h {{ $diff->i }}m
+                                    </span>
+                                @else
+                                    0h 0m
+                                @endif
+                            </p>
                             <div class="text-[10px] text-zinc-400 mt-1 uppercase tracking-widest">Breaks: {{ $todayAttendance->break_minutes }}m</div>
                         </div>
                     @endif
@@ -138,28 +169,105 @@
                 </div>
             </div>
 
-            {{-- Summary Stats --}}
+            {{-- Top Stats Bar (current month) --}}
             <div class="grid grid-cols-3 gap-4">
                 <div class="pulse-card p-4 text-center">
                     <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Present</div>
-                    <div class="text-xl font-bold mt-1 text-zinc-900 dark:text-white">{{ $stats['present'] }}</div>
+                    <div class="text-xl font-bold mt-1 text-green-600">{{ $stats['present'] }}</div>
                 </div>
                 <div class="pulse-card p-4 text-center">
                     <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Late</div>
-                    <div class="text-xl font-bold mt-1 text-red-500">{{ $stats['late'] }}</div>
+                    <div class="text-xl font-bold mt-1 text-amber-600">{{ $stats['late'] }}</div>
                 </div>
                 <div class="pulse-card p-4 text-center">
                     <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Hours</div>
-                    <div class="text-xl font-bold mt-1 text-zinc-900 dark:text-white">{{ round($stats['hours'], 1) }}</div>
+                    <div class="text-xl font-bold mt-1 text-sky-600">
+                        @if($todayAttendance && !$todayAttendance->check_out)
+                            <span wire:poll.30s>
+                                @php $diff = \Illuminate\Support\Carbon::now()->diff($todayAttendance->check_in); @endphp
+                                {{ $diff->h }}h {{ $diff->i }}m
+                            </span>
+                        @else
+                            {{ round($stats['hours'], 1) }}
+                        @endif
+                    </div>
                 </div>
             </div>
         </div>
 
         {{-- Log Area --}}
         <div class="lg:col-span-8 space-y-6">
+            {{-- Monthly Calendar Card --}}
+            <div class="pulse-card">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="text-lg font-bold">{{ $calendarMonth ? $calendarMonth->format('F Y') : \Illuminate\Support\Carbon::now()->format('F Y') }}</div>
+                    <div class="flex items-center gap-2">
+                        <button wire:click="previousMonth" class="p-2 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800"><flux:icon.chevron-left class="size-4" /></button>
+                        <button wire:click="nextMonth" class="p-2 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800"><flux:icon.chevron-right class="size-4" /></button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-7 gap-1 text-xs text-zinc-500 mb-2">
+                    <div class="text-center">Sun</div>
+                    <div class="text-center">Mon</div>
+                    <div class="text-center">Tue</div>
+                    <div class="text-center">Wed</div>
+                    <div class="text-center">Thu</div>
+                    <div class="text-center">Fri</div>
+                    <div class="text-center">Sat</div>
+                </div>
+
+                <div class="grid grid-cols-7 gap-2">
+                    @foreach($calendarDays as $day)
+                        <div wire:click="showDay('{{ $day['date'] }}')" class="p-2 rounded-lg cursor-pointer border {{ $day['in_month'] ? 'bg-white dark:bg-zinc-900' : 'bg-zinc-50 dark:bg-zinc-800 text-zinc-400' }} {{ $day['carbon']->isToday() ? 'ring-2 ring-brand-500' : '' }}">
+                            <div class="flex items-start justify-between">
+                                <div class="text-sm font-medium">{{ $day['carbon']->format('j') }}</div>
+                                <div>
+                                    @if($day['status'] === 'on_time')
+                                        <span class="w-2 h-2 bg-green-600 rounded-full inline-block"></span>
+                                    @elseif($day['status'] === 'late')
+                                        <span class="w-2 h-2 bg-amber-500 rounded-full inline-block"></span>
+                                    @elseif($day['status'] === 'absent')
+                                        <span class="w-2 h-2 bg-red-600 rounded-full inline-block"></span>
+                                    @elseif($day['status'] === 'leave')
+                                        <span class="w-2 h-2 bg-violet-600 rounded-full inline-block"></span>
+                                    @elseif($day['status'] === 'mdl')
+                                        <span class="inline-flex items-center justify-center w-5 h-5 bg-indigo-600 text-white text-[10px] rounded-full">MDL</span>
+                                    @elseif($day['status'] === 'holiday')
+                                        <span class="inline-flex items-center justify-center w-5 h-5 bg-blue-500 text-white text-[10px] rounded-full">PH</span>
+                                    @elseif($day['status'] === 'weekend')
+                                        <span class="w-2 h-2 bg-gray-400 rounded-full inline-block"></span>
+                                    @endif
+                                </div>
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+
+                @if(($monthHolidays ?? collect())->isNotEmpty() || ($monthMdls ?? collect())->isNotEmpty())
+                    <div class="mt-4 border-t pt-3">
+                        <h4 class="text-sm font-bold mb-2">Holidays This Month</h4>
+                        <div class="grid gap-2">
+                            @foreach($monthHolidays as $h)
+                                <div class="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                                    <span class="inline-flex items-center justify-center w-6 h-6 bg-blue-500 text-white text-[10px] rounded-full">PH</span>
+                                    <div>{{ \Illuminate\Support\Carbon::parse($h->date)->format('j M') }} — {{ $h->name }}</div>
+                                </div>
+                            @endforeach
+                            @foreach($monthMdls as $m)
+                                <div class="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                                    <span class="inline-flex items-center justify-center w-6 h-6 bg-indigo-600 text-white text-[10px] rounded-full">MDL</span>
+                                    <div>{{ \Illuminate\Support\Carbon::parse($m->date)->format('j M') }} — {{ $m->description ?? 'MDL' }}</div>
+                                </div>
+                            @endforeach
+                        </div>
+                    </div>
+                @endif
+            </div>
+
             <div class="pulse-card">
                 <h3 class="text-lg font-bold text-zinc-900 dark:text-white mb-6">Attendance Log (This Month)</h3>
-                
+
                 <div class="overflow-x-auto -mx-6">
                     <table class="w-full text-sm">
                         <thead>
@@ -168,6 +276,7 @@
                                 <th class="pb-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">In/Out</th>
                                 <th class="pb-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Break</th>
                                 <th class="pb-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Status</th>
+                                <th class="pb-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Action</th>
                                 <th class="pb-3 pr-6 text-right text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Net Hours</th>
                             </tr>
                         </thead>
@@ -188,17 +297,40 @@
                                         {{ $item->break_minutes }}m
                                     </td>
                                     <td class="py-4 pr-4">
-                                        <span class="badge-{{ $item->status === 'on_time' ? $item->status : ($item->status === 'late' ? 'rejected' : 'manager') }}">
-                                            {{ strtoupper($item->status) }}
-                                        </span>
+                                        @php
+                                            $st = strtoupper($item->status);
+                                            $badgeClass = match($item->status) {
+                                                'on_time' => 'bg-green-100 text-green-700',
+                                                'late' => 'bg-amber-100 text-amber-700',
+                                                'absent' => 'bg-red-100 text-red-700',
+                                                'remote' => 'bg-gray-100 text-gray-700',
+                                                default => 'bg-zinc-100 text-zinc-700'
+                                            };
+                                        @endphp
+                                        <span class="inline-flex items-center px-2 py-1 rounded-full text-[11px] font-semibold {{ $badgeClass }}">{{ $st }}</span>
+                                    </td>
+                                    <td class="py-4 pr-4">
+                                        @if($item->missing_checkout || $item->is_late)
+                                            <flux:button wire:click="openRegularisation('{{ $item->date->toDateString() }}')" size="sm" variant="ghost">Regularisation Request</flux:button>
+                                        @endif
                                     </td>
                                     <td class="py-4 pr-6 text-right font-bold text-zinc-900 dark:text-white">
-                                        {{ (float)$item->total_hours }}
+                                        @if($item->check_out)
+                                            @php $diff = $item->check_out->diff($item->check_in); @endphp
+                                            {{ $diff->h }}h {{ $diff->i }}m
+                                        @elseif($item->check_in && $item->date->isToday())
+                                            <span wire:poll.30s>
+                                                @php $diff = \Illuminate\Support\Carbon::now()->diff($item->check_in); @endphp
+                                                {{ $diff->h }}h {{ $diff->i }}m
+                                            </span>
+                                        @else
+                                            --
+                                        @endif
                                     </td>
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="5" class="py-12 text-center text-zinc-400">No attendance records found for this month.</td>
+                                    <td colspan="6" class="py-12 text-center text-zinc-400">No attendance records found for this month.</td>
                                 </tr>
                             @endforelse
                         </tbody>
@@ -209,6 +341,42 @@
     </div>
 
     {{-- Regularisation Modal --}}
+    {{-- Day Details Modal --}}
+    <flux:modal name="day-details" class="max-w-sm">
+        <div class="space-y-4">
+            <div>
+                <flux:heading size="md">Day Details</flux:heading>
+                <p class="text-sm text-zinc-500">{{ $selectedDay ?? '—' }}</p>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <div class="space-y-1">
+                    <div class="text-xs text-zinc-400">Clock In</div>
+                    <div class="font-bold">{{ $selectedDayDetails['check_in'] ?? '--:--' }}</div>
+                </div>
+                <div class="space-y-1">
+                    <div class="text-xs text-zinc-400">Clock Out</div>
+                    <div class="font-bold">{{ $selectedDayDetails['check_out'] ?? '--:--' }}</div>
+                </div>
+                <div class="space-y-1">
+                    <div class="text-xs text-zinc-400">Break</div>
+                    <div class="font-bold">{{ $selectedDayDetails['break_minutes'] ?? 0 }}m</div>
+                </div>
+                <div class="space-y-1">
+                    <div class="text-xs text-zinc-400">Hours</div>
+                    <div class="font-bold">{{ $selectedDayDetails['total_hours'] ?? 0 }}</div>
+                </div>
+            </div>
+
+            <div class="pt-4 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
+                <div class="text-xs text-zinc-500">Status: <span class="font-bold">{{ $selectedDayDetails['status'] ?? '—' }}</span></div>
+                <div class="flex gap-2">
+                    <flux:button @click="$flux.modal('day-details').close()">Close</flux:button>
+                    <flux:button wire:click="openRegularisation('{{ $selectedDay ?? '' }}')" variant="primary">Request Regularisation</flux:button>
+                </div>
+            </div>
+        </div>
+    </flux:modal>
     <flux:modal name="regularisation-modal" class="max-w-md">
         <div class="space-y-6">
             <div>

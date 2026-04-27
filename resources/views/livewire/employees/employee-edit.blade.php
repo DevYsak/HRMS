@@ -98,13 +98,16 @@
         <div class="lg:col-span-8 xl:col-span-9 pulse-card p-0 overflow-hidden shadow-sm">
             {{-- Tabs --}}
             <div class="flex items-center gap-8 px-8 pt-4 border-b border-zinc-100 dark:border-zinc-800 text-sm font-semibold overflow-x-auto whitespace-nowrap">
-                @foreach(['General', 'Job', 'Payroll', 'Documents', 'Setting'] as $tab)
+                @foreach(['General', 'Job', 'Probation', 'Payroll', 'Documents', 'Setting'] as $tab)
                     <button 
                         type="button" 
                         wire:click="setTab('{{ $tab }}')" 
                         class="pb-3 border-b-2 transition-colors {{ $activeTab === $tab ? 'border-brand-500 text-brand-600 dark:text-brand-400' : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300' }}"
                     >
                         {{ $tab }}
+                        @if($tab === 'Probation' && $employee->status->value === 'probation')
+                            <span class="ml-1 inline-flex size-1.5 rounded-full bg-amber-500"></span>
+                        @endif
                     </button>
                 @endforeach
             </div>
@@ -179,6 +182,95 @@
                             <div class="flex justify-end pt-4">
                                 <flux:button type="submit" variant="primary">Save Job Info</flux:button>
                             </div>
+                        </div>
+
+                    @elseif($activeTab === 'Probation')
+                        <div class="space-y-6">
+                            <div class="flex items-start justify-between">
+                                <div>
+                                    <h3 class="text-base font-bold text-zinc-900 dark:text-white">Probation Management</h3>
+                                    <p class="text-sm text-zinc-500 mt-1">Review and action this employee's probation period.</p>
+                                </div>
+                                @if($employee->status->value === 'probation')
+                                    <flux:badge color="amber" size="sm">On Probation</flux:badge>
+                                @else
+                                    <flux:badge color="green" size="sm">Permanent</flux:badge>
+                                @endif
+                            </div>
+
+                            {{-- Current probation info --}}
+                            <div class="grid grid-cols-2 gap-4 p-4 bg-zinc-50 dark:bg-zinc-900 rounded-xl border border-zinc-100 dark:border-zinc-800 text-sm">
+                                <div>
+                                    <div class="text-zinc-400 mb-1">Joining Date</div>
+                                    <div class="font-medium text-zinc-900 dark:text-white">{{ $employee->joining_date->format('d M Y') }}</div>
+                                </div>
+                                <div>
+                                    <div class="text-zinc-400 mb-1">Probation End Date</div>
+                                    <div class="font-medium text-zinc-900 dark:text-white">
+                                        {{ $employee->probation_end_date ? $employee->probation_end_date->format('d M Y') : 'Not set' }}
+                                    </div>
+                                </div>
+                                @if($employee->probation_extension_reason)
+                                    <div class="col-span-2">
+                                        <div class="text-zinc-400 mb-1">Extension Reason</div>
+                                        <div class="text-zinc-700 dark:text-zinc-300">{{ $employee->probation_extension_reason }}</div>
+                                    </div>
+                                @endif
+                            </div>
+
+                            @if($employee->status->value === 'probation')
+                                {{-- Confirm Probation --}}
+                                <div class="p-5 rounded-xl border border-emerald-200 bg-emerald-50 dark:bg-emerald-900/20 dark:border-emerald-800 space-y-4">
+                                    <div>
+                                        <h4 class="font-semibold text-emerald-800 dark:text-emerald-300">Confirm Probation</h4>
+                                        <p class="text-sm text-emerald-700 dark:text-emerald-400 mt-1">Mark this employee as permanent. Their status will change to <strong>Active</strong>.</p>
+                                    </div>
+                                    <flux:button
+                                        wire:click="confirmProbation"
+                                        wire:confirm="Are you sure you want to confirm probation? This will mark the employee as permanent."
+                                        variant="primary"
+                                        icon="check"
+                                    >
+                                        Confirm &amp; Make Permanent
+                                    </flux:button>
+                                </div>
+
+                                {{-- Extend Probation --}}
+                                <div class="p-5 rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 space-y-4">
+                                    <div>
+                                        <h4 class="font-semibold text-amber-800 dark:text-amber-300">Extend Probation</h4>
+                                        <p class="text-sm text-amber-700 dark:text-amber-400 mt-1">Set a new probation end date and provide a reason. The line manager will be notified.</p>
+                                    </div>
+                                    <form wire:submit="extendProbation" class="space-y-4">
+                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <flux:input
+                                                wire:model="extend_end_date"
+                                                type="date"
+                                                label="New Probation End Date"
+                                                required
+                                            />
+                                        </div>
+                                        <flux:textarea
+                                            wire:model="extend_reason"
+                                            label="Reason for Extension"
+                                            placeholder="Provide the reason for extending the probation period..."
+                                            rows="3"
+                                            required
+                                        />
+                                        <div class="flex justify-end">
+                                            <flux:button type="submit" variant="filled" icon="clock">Extend Probation</flux:button>
+                                        </div>
+                                    </form>
+                                </div>
+                            @else
+                                <div class="flex flex-col items-center justify-center py-10 text-center">
+                                    <div class="p-4 rounded-full bg-emerald-50 mb-3 dark:bg-emerald-900/30">
+                                        <flux:icon.check-circle class="size-8 text-emerald-500" />
+                                    </div>
+                                    <h3 class="text-base font-medium text-zinc-900 dark:text-white">Probation Completed</h3>
+                                    <p class="text-sm text-zinc-500 mt-1">This employee has successfully completed their probation period.</p>
+                                </div>
+                            @endif
                         </div>
 
                     @elseif($activeTab === 'Payroll')

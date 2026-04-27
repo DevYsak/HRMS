@@ -17,17 +17,21 @@
 
             {{-- Quick Action Chips --}}
             <div class="hidden md:flex items-center gap-3">
+                <a href="{{ route('attendance.my') }}" wire:navigate
+                   class="flex items-center gap-2 px-4 py-2 bg-white/15 hover:bg-white/25 transition rounded-full text-sm text-white font-medium">
+                    <flux:icon.clock class="size-4" /> Clock In
+                </a>
                 <a href="{{ route('time-off.my') }}" wire:navigate
                    class="flex items-center gap-2 px-4 py-2 bg-white/15 hover:bg-white/25 transition rounded-full text-sm text-white font-medium">
                     <flux:icon.calendar-days class="size-4" /> Apply Leave
                 </a>
                 <a href="{{ route('overtime.my') }}" wire:navigate
                    class="flex items-center gap-2 px-4 py-2 bg-white/15 hover:bg-white/25 transition rounded-full text-sm text-white font-medium">
-                    <flux:icon.clock class="size-4" /> Log Overtime
+                    <flux:icon.plus-circle class="size-4" /> Log OT
                 </a>
                 <a href="{{ route('payroll.payslips') }}" wire:navigate
                    class="flex items-center gap-2 px-4 py-2 bg-white/15 hover:bg-white/25 transition rounded-full text-sm text-white font-medium">
-                    <flux:icon.document-text class="size-4" /> My Payslips
+                    <flux:icon.arrow-down-tray class="size-4" /> Download Payslip
                 </a>
             </div>
         </div>
@@ -55,7 +59,43 @@
                 </div>
                 <p class="text-xs text-zinc-400 mt-1">{{ now()->format('D, d M Y') }}</p>
 
-                <div class="mt-4 grid grid-cols-2 gap-2">
+                {{-- Weekly Strip --}}
+                <div class="mt-5 mb-4">
+                    <div class="flex items-center justify-between gap-1">
+                        @foreach(['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] as $idx => $dayStr)
+                            @php
+                                $dDate = now()->startOfWeek(\Illuminate\Support\Carbon::MONDAY)->addDays($idx);
+                                $isToday = $dDate->isToday();
+                                
+                                // Reset iterator logic
+                                $record = null;
+                                foreach($currentWeekAttendance as $att) {
+                                    if (\Carbon\Carbon::parse($att->date)->isSameDay($dDate)) {
+                                        $record = $att;
+                                        break;
+                                    }
+                                }
+                                
+                                $statusColor = 'bg-zinc-100 dark:bg-zinc-800'; // default/future
+                                if ($record) {
+                                    if ($record->is_late) $statusColor = 'bg-amber-400';
+                                    elseif ($record->status === 'absent') $statusColor = 'bg-rose-500';
+                                    elseif ($record->status === 'remote' || $record->status === 'on_time' || $record->check_in) $statusColor = 'bg-emerald-500';
+                                } elseif ($dDate->isPast() && !$dDate->isWeekend()) {
+                                    $statusColor = 'bg-rose-500'; // Past and no record means absent
+                                } elseif ($dDate->isWeekend()) {
+                                    $statusColor = 'bg-zinc-300 dark:bg-zinc-700'; // Weekend
+                                }
+                            @endphp
+                            <div class="flex flex-col items-center gap-1.5 flex-1">
+                                <span class="text-[10px] uppercase font-semibold text-zinc-400">{{ $dayStr }}</span>
+                                <div class="h-1.5 w-full rounded-full {{ $statusColor }} {{ $isToday ? 'ring-2 ring-offset-2 ring-indigo-500 dark:ring-offset-zinc-950 animate-pulse' : '' }}"></div>
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
                     @if($todayAttendance)
                         <div class="rounded-xl bg-green-50 dark:bg-green-900/20 px-3 py-2.5">
                             <div class="text-[10px] text-green-600 font-bold uppercase tracking-wide">Check In</div>
@@ -69,22 +109,10 @@
                                 {{ $todayAttendance->check_out?->format('H:i') ?? '—' }}
                             </div>
                         </div>
-                        @if($todayAttendance->is_late)
-                            <div class="col-span-2 flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700">
-                                <flux:icon.exclamation-triangle class="size-3.5 text-amber-600" />
-                                <span class="text-xs font-bold text-amber-700">Late by {{ $todayAttendance->late_minutes }}m</span>
-                            </div>
-                        @endif
-                        @if($todayAttendance->total_hours)
-                            <div class="col-span-2 flex items-center justify-between px-3 py-2 rounded-xl bg-indigo-50 dark:bg-indigo-900/20">
-                                <span class="text-xs text-indigo-600 dark:text-indigo-300">Hours Today</span>
-                                <span class="text-sm font-bold text-indigo-700 dark:text-indigo-300">{{ round($todayAttendance->total_hours, 1) }}h</span>
-                            </div>
-                        @endif
                     @else
-                        <div class="col-span-2 flex flex-col items-center py-4 text-zinc-400">
-                            <flux:icon.clock class="size-8 mb-2 opacity-40" />
-                            <p class="text-xs">No check-in recorded today.</p>
+                        <div class="col-span-2 flex flex-col items-center py-4 text-zinc-400 bg-zinc-100 dark:bg-zinc-800 rounded-xl">
+                            <flux:icon.clock class="size-6 mb-1 opacity-40" />
+                            <p class="text-[10px] uppercase font-bold tracking-widest">Not Clocked In</p>
                         </div>
                     @endif
                 </div>
@@ -105,28 +133,34 @@
                 @if($leaveBalances->isEmpty())
                     <p class="text-xs text-zinc-400 text-center py-3">No balances configured. Contact HR.</p>
                 @else
-                    <div class="space-y-3">
+                    <div class="space-y-4 mt-2">
                         @foreach($leaveBalances as $balance)
                             @php
+                                $typeCode = $balance->leaveType?->code ?? 'OTHER';
                                 $total     = (float)($balance->allocated_days ?? 0);
                                 $used      = (float)($balance->used_days ?? 0);
                                 $remaining = max(0, $total - $used);
                                 $pct       = $total > 0 ? min(100, ($used / $total) * 100) : 0;
-                                $colors    = ['bg-indigo-500','bg-violet-500','bg-emerald-500','bg-amber-500','bg-rose-500'];
-                                $color     = $colors[$loop->index % count($colors)];
+                                
+                                $color = match($typeCode) {
+                                    'CSL' => 'bg-indigo-500',
+                                    'CO'  => 'bg-emerald-500',
+                                    'MDL' => 'bg-amber-500',
+                                    default => 'bg-zinc-500'
+                                };
                             @endphp
                             <div>
-                                <div class="flex justify-between items-end mb-1">
+                                <div class="flex justify-between items-end mb-1.5">
                                     <span class="text-xs font-medium text-zinc-700 dark:text-zinc-300">
                                         {{ $balance->leaveType?->name ?? 'Leave' }}
                                     </span>
                                     <span class="text-xs text-zinc-500">
-                                        <span class="font-bold text-zinc-900 dark:text-white">{{ $remaining }}</span> / {{ $total }}d
+                                        <span class="font-bold text-zinc-900 dark:text-white">{{ $remaining }}</span> remaining
                                     </span>
                                 </div>
-                                <div class="h-1.5 bg-zinc-200 dark:bg-zinc-700 rounded-full overflow-hidden">
+                                <div class="h-2 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
                                     <div class="h-full {{ $color }} rounded-full transition-all duration-500"
-                                         style="width: {{ $pct }}%"></div>
+                                         style="width: {{ 100 - $pct }}%"></div>
                                 </div>
                             </div>
                         @endforeach
@@ -134,28 +168,51 @@
                 @endif
             </div>
 
-            {{-- ---- PENDING ACTIONS (Inbox) ---- --}}
+            {{-- ---- UPCOMING & APPROVALS ---- --}}
             <div class="rounded-2xl border border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-5">
-                <span class="text-xs font-bold text-zinc-500 uppercase tracking-widest block mb-3">Inbox / Actions</span>
+                <span class="text-xs font-bold text-zinc-500 uppercase tracking-widest block mb-3">Upcoming</span>
 
-                @if($myOtRequests->where('status','pending')->isEmpty())
-                    <div class="flex flex-col items-center py-4 text-zinc-400">
-                        <flux:icon.check-circle class="size-8 mb-2 opacity-40" />
-                        <p class="text-xs">You have no pending actions.</p>
-                    </div>
-                @else
-                    <div class="space-y-2">
-                        @foreach($myOtRequests->where('status','pending') as $ot)
-                            <div class="flex items-start gap-3 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-800">
-                                <flux:icon.clock class="size-4 text-amber-500 mt-0.5 shrink-0" />
-                                <div class="min-w-0">
-                                    <p class="text-xs font-medium text-zinc-800 dark:text-zinc-200 truncate">OT Request Pending</p>
-                                    <p class="text-[10px] text-zinc-400">{{ \Carbon\Carbon::parse($ot->work_date)->format('d M') }} · {{ $ot->requested_hours }}h</p>
-                                </div>
+                <div class="space-y-3">
+                    @if($nextPublicHoliday)
+                        <div class="flex items-start gap-3 p-3 rounded-xl bg-indigo-50 dark:bg-indigo-900/10 border border-indigo-100 dark:border-indigo-800/50">
+                            <flux:icon.sparkles class="size-4 text-indigo-500 mt-0.5 shrink-0" />
+                            <div class="min-w-0">
+                                <p class="text-xs font-medium text-zinc-800 dark:text-zinc-200 truncate">{{ $nextPublicHoliday->name }}</p>
+                                <p class="text-[10px] text-zinc-500">{{ \Carbon\Carbon::parse($nextPublicHoliday->date)->format('l, d F Y') }}</p>
                             </div>
-                        @endforeach
-                    </div>
-                @endif
+                            <span class="shrink-0 ml-auto text-[9px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-400">HOLIDAY</span>
+                        </div>
+                    @endif
+
+                    @foreach($pendingLeaveRequests->take(2) as $leave)
+                        <div class="flex items-start gap-3 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-800/50">
+                            <flux:icon.calendar class="size-4 text-amber-500 mt-0.5 shrink-0" />
+                            <div class="min-w-0">
+                                <p class="text-xs font-medium text-zinc-800 dark:text-zinc-200 truncate">Leave: {{ $leave->leaveType?->name }}</p>
+                                <p class="text-[10px] text-zinc-500">{{ \Carbon\Carbon::parse($leave->start_date)->format('d M') }} - {{ \Carbon\Carbon::parse($leave->end_date)->format('d M') }}</p>
+                            </div>
+                            <span class="shrink-0 ml-auto text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400">PENDING</span>
+                        </div>
+                    @endforeach
+
+                    @foreach($myOtRequests->where('status','pending')->take(2) as $ot)
+                        <div class="flex items-start gap-3 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-800/50">
+                            <flux:icon.clock class="size-4 text-amber-500 mt-0.5 shrink-0" />
+                            <div class="min-w-0">
+                                <p class="text-xs font-medium text-zinc-800 dark:text-zinc-200 truncate">OT Request</p>
+                                <p class="text-[10px] text-zinc-500">{{ \Carbon\Carbon::parse($ot->work_date)->format('d M') }} · {{ $ot->requested_hours }}h</p>
+                            </div>
+                            <span class="shrink-0 ml-auto text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400">PENDING</span>
+                        </div>
+                    @endforeach
+
+                    @if(!$nextPublicHoliday && $pendingLeaveRequests->isEmpty() && $myOtRequests->where('status','pending')->isEmpty())
+                        <div class="flex flex-col items-center py-4 text-zinc-400">
+                            <flux:icon.check-circle class="size-8 mb-2 opacity-40" />
+                            <p class="text-xs">Nothing upcoming.</p>
+                        </div>
+                    @endif
+                </div>
             </div>
 
         </div>
@@ -227,42 +284,37 @@
             {{-- ---- BOTTOM 2-PANEL ROW ---- --}}
             <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
 
-                {{-- OT Requests --}}
+                {{-- Inbox / Actions Task List --}}
                 <div class="rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-5">
                     <div class="flex items-center justify-between mb-4">
                         <h3 class="text-sm font-bold text-zinc-900 dark:text-white flex items-center gap-2">
-                            <flux:icon.clock class="size-4 text-purple-500" /> My OT Requests
+                            <flux:icon.inbox class="size-4 text-rose-500" /> Action Required
                         </h3>
-                        <a href="{{ route('overtime.my') }}" wire:navigate
-                           class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-medium">View All →</a>
+                        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-400">
+                            {{ $pendingActions->count() }} TASKS
+                        </span>
                     </div>
 
-                    @if($myOtRequests->isEmpty())
-                        <div class="flex flex-col items-center py-8 text-zinc-400">
-                            <flux:icon.clock class="size-8 mb-2 opacity-30" />
-                            <p class="text-xs">No overtime requests yet.</p>
-                            <a href="{{ route('overtime.my') }}" wire:navigate
-                               class="mt-3 text-xs text-indigo-600 hover:underline">Submit a request →</a>
+                    @if($pendingActions->isEmpty())
+                        <div class="flex flex-col items-center justify-center py-8 text-zinc-400">
+                            <flux:icon.check-badge class="size-10 mb-3 text-emerald-400 opacity-60" />
+                            <p class="text-xs font-medium text-zinc-500">You're all caught up!</p>
                         </div>
                     @else
                         <div class="space-y-2">
-                            @foreach($myOtRequests as $ot)
-                                <div class="flex items-center justify-between p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/60">
-                                    <div class="min-w-0">
-                                        <div class="text-sm font-medium text-zinc-900 dark:text-white">
-                                            {{ \Carbon\Carbon::parse($ot->work_date)->format('d M Y') }}
-                                        </div>
-                                        <div class="text-xs text-zinc-400 truncate">{{ $ot->requested_hours }}h · {{ Str::limit($ot->reason, 30) }}</div>
+                            @foreach($pendingActions as $action)
+                                <a href="{{ $action['url'] }}" wire:navigate class="flex items-start gap-3 p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/60 hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-transparent hover:border-zinc-200 dark:hover:border-zinc-700 transition cursor-pointer">
+                                    <div class="mt-0.5">
+                                        <div class="size-4 rounded border-2 border-zinc-300 dark:border-zinc-600"></div>
                                     </div>
-                                    <span class="shrink-0 ml-2 text-[10px] font-bold px-2.5 py-1 rounded-full
-                                        {{ match($ot->status) {
-                                            'approved' => 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400',
-                                            'rejected' => 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400',
-                                            default    => 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400',
-                                        } }}">
-                                        {{ strtoupper($ot->status) }}
-                                    </span>
-                                </div>
+                                    <div class="min-w-0 flex-1">
+                                        <div class="text-sm font-medium text-zinc-900 dark:text-white">
+                                            {{ $action['title'] }}
+                                        </div>
+                                        <div class="text-xs text-zinc-400">{{ \Carbon\Carbon::parse($action['date'])->diffForHumans() }}</div>
+                                    </div>
+                                    <flux:icon.chevron-right class="size-4 text-zinc-400 self-center" />
+                                </a>
                             @endforeach
                         </div>
                     @endif

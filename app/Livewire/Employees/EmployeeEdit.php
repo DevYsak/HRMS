@@ -10,42 +10,61 @@ use App\Models\Employee;
 use App\Models\JobTitle;
 use App\Models\Office;
 use App\Models\User;
+use App\Notifications\ProbationExtendedNotification;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
 
 class EmployeeEdit extends Component
 {
     public Employee $employee;
+
     public $activeTab = 'General';
-    
+
     public $name = '';
+
     public $email = '';
+
     public $role = '';
-    
+
     public $employee_id = '';
+
     public $office_id = '';
+
     public $department_id = '';
+
     public $job_title_id = '';
+
     public $manager_id = '';
+
     public $joining_date = '';
+
     public $status = '';
+
     public $employment_type = '';
+
+    // Probation fields
+    public $probation_end_date = '';
+
+    public $extend_end_date = '';
+
+    public $extend_reason = '';
 
     public function mount(Employee $employee)
     {
         $this->authorize('update', $employee);
         $this->employee = $employee->load('user');
-        
+
         $this->name = $this->employee->user->name;
         $this->email = $this->employee->user->email;
         $this->role = $this->employee->user->role->value;
-        
+
         $this->employee_id = $this->employee->employee_id;
         $this->office_id = $this->employee->office_id;
         $this->department_id = $this->employee->department_id;
         $this->job_title_id = $this->employee->job_title_id;
         $this->manager_id = $this->employee->manager_id;
         $this->joining_date = $this->employee->joining_date->format('Y-m-d');
+        $this->probation_end_date = $this->employee->probation_end_date?->format('Y-m-d') ?? '';
         $this->status = $this->employee->status->value;
         $this->employment_type = $this->employee->employment_type->value;
     }
@@ -53,6 +72,44 @@ class EmployeeEdit extends Component
     public function setTab($tab)
     {
         $this->activeTab = $tab;
+    }
+
+    public function confirmProbation(): void
+    {
+        $this->authorize('update', $this->employee);
+
+        $this->employee->update([
+            'status' => EmployeeStatus::Active,
+            'probation_end_date' => now()->toDateString(),
+        ]);
+
+        $this->status = EmployeeStatus::Active->value;
+
+        $this->dispatch('notify', ['message' => 'Probation confirmed. Employee is now permanent.', 'type' => 'success']);
+    }
+
+    public function extendProbation(): void
+    {
+        $this->authorize('update', $this->employee);
+
+        $this->validate([
+            'extend_end_date' => 'required|date|after:today',
+            'extend_reason' => 'required|string|max:1000',
+        ]);
+
+        $this->employee->update([
+            'probation_end_date' => $this->extend_end_date,
+            'probation_extension_reason' => $this->extend_reason,
+        ]);
+
+        // Notify manager in-app
+        if ($this->employee->manager) {
+            $this->employee->manager->notify(new ProbationExtendedNotification($this->employee));
+        }
+
+        $this->reset('extend_end_date', 'extend_reason');
+
+        $this->dispatch('notify', ['message' => 'Probation extended and manager notified.', 'type' => 'success']);
     }
 
     public function save()
@@ -86,7 +143,7 @@ class EmployeeEdit extends Component
         ]);
 
         session()->flash('status', 'Employee updated successfully.');
-        
+
         $this->redirect(route('employees.index'), navigate: true);
     }
 

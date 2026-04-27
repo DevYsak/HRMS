@@ -15,29 +15,38 @@ class DocumentManager extends Component
     use WithFileUploads, WithPagination;
 
     public string $filterCategory = '';
-    public string $filterSearch   = '';
+
+    public string $filterSearch = '';
 
     // Upload modal
-    public bool    $showUploadModal = false;
-    public string  $title           = '';
-    public string  $description     = '';
-    public string  $category        = 'policy';
-    public string  $visibility      = 'all';
-    public string  $expiresAt       = '';
-    public bool    $requiresAck     = false;
-    public ?int    $parentId        = null;
+    public bool $showUploadModal = false;
+
+    public string $title = '';
+
+    public string $description = '';
+
+    public string $category = 'policy';
+
+    public string $visibility = 'all';
+
+    public string $expiresAt = '';
+
+    public bool $requiresAck = false;
+
+    public ?int $parentId = null;
+
     public $file;
-    /** @var int|null */
+
     public ?int $departmentId = null;
 
     protected function rules(): array
     {
         return [
-            'title'      => 'required|max:255',
-            'category'   => 'required|string',
+            'title' => 'required|max:255',
+            'category' => 'required|string',
             'visibility' => 'required|string',
-            'file'       => 'required|file|max:10240|mimes:pdf,png,jpg,jpeg',
-            'expiresAt'  => 'nullable|date|after:today',
+            'file' => 'required|file|max:10240|mimes:pdf,png,jpg,jpeg',
+            'expiresAt' => 'nullable|date|after:today',
         ];
     }
 
@@ -46,29 +55,29 @@ class DocumentManager extends Component
         abort_unless(Auth::user()->isHrAdmin() || Auth::user()->isSuperAdmin(), 403);
         $this->validate();
 
-        $path     = $this->file->store('documents', 'local');
-        $version  = 1;
+        $path = $this->file->store('documents', 'local');
+        $version = 1;
 
         if ($this->parentId) {
-            $parent  = Document::findOrFail($this->parentId);
+            $parent = Document::findOrFail($this->parentId);
             $version = $parent->versions()->max('version') + 1;
         }
 
         Document::create([
-            'title'                   => $this->title,
-            'description'             => $this->description,
-            'file_path'               => $path,
-            'file_name'               => $this->file->getClientOriginalName(),
-            'mime_type'               => $this->file->getMimeType(),
-            'file_size'               => $this->file->getSize(),
-            'version'                 => $version,
-            'parent_id'               => $this->parentId,
-            'category'                => $this->category,
-            'visibility'              => $this->visibility,
-            'department_id'           => $this->departmentId,
+            'title' => $this->title,
+            'description' => $this->description,
+            'file_path' => $path,
+            'file_name' => $this->file->getClientOriginalName(),
+            'mime_type' => $this->file->getMimeType(),
+            'file_size' => $this->file->getSize(),
+            'version' => $version,
+            'parent_id' => $this->parentId,
+            'category' => $this->category,
+            'visibility' => $this->visibility,
+            'department_id' => $this->departmentId,
             'requires_acknowledgement' => $this->requiresAck,
-            'expires_at'              => $this->expiresAt ?: null,
-            'uploaded_by'             => Auth::id(),
+            'expires_at' => $this->expiresAt ?: null,
+            'uploaded_by' => Auth::id(),
         ]);
 
         $this->reset(['title', 'description', 'file', 'expiresAt', 'requiresAck', 'parentId', 'departmentId']);
@@ -96,7 +105,7 @@ class DocumentManager extends Component
     {
         abort_unless(Auth::user()->canManageDocuments(), 403);
         $doc = Document::findOrFail($documentId);
-        Storage::disk('public')->delete($doc->file_path);
+        Storage::disk('local')->delete($doc->file_path);
         $doc->delete();
         \Flux::toast('Document deleted.', variant: 'warning');
         $this->resetPage();
@@ -111,14 +120,14 @@ class DocumentManager extends Component
             ->when($this->filterCategory, fn ($q) => $q->where('category', $this->filterCategory))
             ->when($this->filterSearch, fn ($q) => $q->where('title', 'like', "%{$this->filterSearch}%"))
             ->whereNull('parent_id'); // show only latest/root documents
-            
+
         // Role-based filtering
-        if (!$user->isHrAdmin() && !$user->isSuperAdmin()) {
+        if (! $user->isHrAdmin() && ! $user->isSuperAdmin()) {
             $documents->where(function ($query) use ($user, $employee) {
                 // Employees see own documents and company policies
                 $query->where('visibility', 'all')
-                      ->orWhere('category', 'policy');
-                      
+                    ->orWhere('category', 'policy');
+
                 if ($employee) {
                     $query->orWhere('employee_id', $employee->id);
                 }

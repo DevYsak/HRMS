@@ -9,7 +9,8 @@ class EmployeePolicy
 {
     public function viewAny(User $user): bool
     {
-        return $user->canManageEmployees() || $user->isManager();
+        // Allow all authenticated users to view the employee directory (read-only)
+        return true;
     }
 
     public function view(User $user, Employee $employee): bool

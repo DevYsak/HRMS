@@ -14,6 +14,18 @@
             $isHr    = $user->isHrAdmin() || $user->isSuperAdmin();
             $isFin   = $user->canApproveFinance();
             $isDir   = $user->role?->value === 'director';
+
+            // Unread notifications count for the sidebar Inbox badge
+            $unreadNotifications = $user->unreadNotifications()->count();
+
+            // Prefer a dedicated notifications route if available
+            if (Route::has('notifications.index')) {
+                $inboxRoute = route('notifications.index');
+            } elseif (Route::has('notifications')) {
+                $inboxRoute = route('notifications');
+            } else {
+                $inboxRoute = '#';
+            }
         @endphp
 
         {{-- =====================================================
@@ -37,7 +49,8 @@
                 {{-- ============================================
                      EMPLOYEE SIDEBAR (Keka-style simplified)
                      ============================================ --}}
-                @if($isEmp && !$isMgr && !$isHr && !$isFin && !$isDir)
+                @auth
+                @if(auth()->user()->role?->value === 'employee' && !auth()->user()->isManager() && !auth()->user()->isHrAdmin() && !auth()->user()->canApproveFinance() && auth()->user()->role?->value !== 'director')
 
                     {{-- Home / Dashboard --}}
                     <flux:sidebar.item
@@ -91,19 +104,25 @@
                         :heading="'Expenses & Travel'"
                         icon="receipt-percent"
                         :expandable="true"
-                        :expanded="request()->routeIs('operations.*')"
+                        :expanded="request()->routeIs('operations.*') || request()->routeIs('payroll.reimbursements')"
                     >
                         <flux:sidebar.item :href="route('operations.expenses')" :current="request()->routeIs('operations.expenses')" wire:navigate>{{ __('Expense Claims') }}</flux:sidebar.item>
                         <flux:sidebar.item :href="route('operations.assets')"   :current="request()->routeIs('operations.assets')"   wire:navigate>{{ __('My Assets') }}</flux:sidebar.item>
+                        <flux:sidebar.item :href="route('payroll.reimbursements')" :current="request()->routeIs('payroll.reimbursements')" wire:navigate>{{ __('Reimbursements') }}</flux:sidebar.item>
                     </flux:sidebar.group>
 
                     {{-- Inbox / Notifications --}}
                     <flux:sidebar.item
                         icon="inbox"
-                        href="#"
-                        :current="false"
+                        href="{{ $inboxRoute }}"
+                        :current="request()->routeIs('notifications.*')"
                     >
-                        {{ __('Inbox') }}
+                        <div class="flex items-center gap-2">
+                            <span>{{ __('Inbox') }}</span>
+                            @if($unreadNotifications > 0)
+                                <span class="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-500 text-white">{{ $unreadNotifications > 9 ? '9+' : $unreadNotifications }}</span>
+                            @endif
+                        </div>
                     </flux:sidebar.item>
 
                     {{-- My Finances --}}
@@ -124,8 +143,8 @@
                         :expandable="true"
                         :expanded="request()->routeIs('employees.directory') || request()->routeIs('employees.org-chart')"
                     >
-                        <flux:sidebar.item :href="route('employees.directory')"  :current="request()->routeIs('employees.directory')"  wire:navigate>{{ __('Directory') }}</flux:sidebar.item>
                         <flux:sidebar.item :href="route('employees.org-chart')"  :current="request()->routeIs('employees.org-chart')"  wire:navigate>{{ __('Org Chart') }}</flux:sidebar.item>
+                        <flux:sidebar.item :href="route('employees.directory')"  :current="request()->routeIs('employees.directory')"  wire:navigate>{{ __('Directory') }}</flux:sidebar.item>
                     </flux:sidebar.group>
 
                     {{-- Documents --}}
@@ -236,7 +255,6 @@
                         @if($isFin)
                             <flux:sidebar.item :href="route('payroll.finance-approve')" :current="request()->routeIs('payroll.finance-approve')" wire:navigate>{{ __('Finance Approval') }}</flux:sidebar.item>
                             <flux:sidebar.item :href="route('payroll.incentives')"      :current="request()->routeIs('payroll.incentives')"      wire:navigate>{{ __('Incentives') }}</flux:sidebar.item>
-                            <flux:sidebar.item :href="route('payroll.reimbursements')"  :current="request()->routeIs('payroll.reimbursements')"  wire:navigate>{{ __('Reimbursements') }}</flux:sidebar.item>
                         @endif
                     </flux:sidebar.group>
 
@@ -259,6 +277,7 @@
                     </flux:sidebar.group>
 
                 @endif
+                @endauth
 
             </flux:sidebar.nav>
 

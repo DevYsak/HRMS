@@ -3,68 +3,83 @@
 use App\Models\PublicHoliday;
 use App\Models\DecemberMandatoryDay;
 use Illuminate\Support\Carbon;
-use function Livewire\Volt\{state, rules, computed};
+use Livewire\Attributes\Computed;
+use Livewire\Attributes\Title;
+use Livewire\Component;
+use Flux\Flux;
 
-state([
-    'holidayDate' => '',
-    'holidayName' => '',
-    'mandatoryYear' => Carbon::now()->year,
-    'mandatoryDate' => '',
-    'mandatoryDesc' => 'Mandatory December Leave',
-]);
+new #[Title('Holiday Calendar')] class extends Component {
+    public string $holidayDate = '';
+    public string $holidayName = '';
+    public int $mandatoryYear;
+    public string $mandatoryDate = '';
+    public string $mandatoryDesc = 'Mandatory December Leave';
 
-$publicHolidays = computed(fn () => PublicHoliday::orderBy('date', 'desc')->get());
-$mandatoryDays = computed(fn () => DecemberMandatoryDay::orderBy('date', 'desc')->get());
+    public function mount(): void
+    {
+        $this->mandatoryYear = Carbon::now()->year;
+    }
 
-$addPublicHoliday = function () {
-    $this->validate([
-        'holidayDate' => 'required|date|unique:public_holidays,date',
-        'holidayName' => 'required|string|max:255',
-    ]);
+    #[Computed]
+    public function publicHolidays()
+    {
+        return PublicHoliday::orderBy('date', 'desc')->get();
+    }
 
-    PublicHoliday::create([
-        'date' => $this->holidayDate,
-        'name' => $this->holidayName,
-    ]);
+    #[Computed]
+    public function mandatoryDays()
+    {
+        return DecemberMandatoryDay::orderBy('date', 'desc')->get();
+    }
 
-    $this->holidayDate = '';
-    $this->holidayName = '';
-    
-    Flux::toast('Public holiday added.');
-};
+    public function addPublicHoliday(): void
+    {
+        $this->validate([
+            'holidayDate' => 'required|date|unique:public_holidays,date',
+            'holidayName' => 'required|string|max:255',
+        ]);
 
-$removePublicHoliday = function ($id) {
-    PublicHoliday::findOrFail($id)->delete();
-    Flux::toast('Public holiday removed.');
-};
+        PublicHoliday::create([
+            'date' => $this->holidayDate,
+            'name' => $this->holidayName,
+        ]);
 
-$addMandatoryDay = function () {
-    $this->validate([
-        'mandatoryDate' => 'required|date',
-        'mandatoryYear' => 'required|integer',
-    ]);
+        $this->reset('holidayDate', 'holidayName');
+        
+        Flux::toast('Public holiday added.');
+    }
 
-    DecemberMandatoryDay::create([
-        'year' => $this->mandatoryYear,
-        'date' => $this->mandatoryDate,
-        'description' => $this->mandatoryDesc,
-    ]);
+    public function removePublicHoliday(int $id): void
+    {
+        PublicHoliday::findOrFail($id)->delete();
+        Flux::toast('Public holiday removed.');
+    }
 
-    $this->mandatoryDate = '';
-    Flux::toast('Mandatory day added.');
-};
+    public function addMandatoryDay(): void
+    {
+        $this->validate([
+            'mandatoryDate' => 'required|date',
+            'mandatoryYear' => 'required|integer',
+        ]);
 
-$removeMandatoryDay = function ($id) {
-    DecemberMandatoryDay::findOrFail($id)->delete();
-    Flux::toast('Mandatory day removed.');
-};
+        DecemberMandatoryDay::create([
+            'year' => $this->mandatoryYear,
+            'date' => $this->mandatoryDate,
+            'description' => $this->mandatoryDesc,
+        ]);
 
-?>
+        $this->reset('mandatoryDate');
+        Flux::toast('Mandatory day added.');
+    }
 
-<x-pages.settings.layout>
-    <x-slot name="heading">Holiday Calendar</x-slot>
-    <x-slot name="subheading">Manage public holidays and mandatory shutdown days.</x-slot>
+    public function removeMandatoryDay(int $id): void
+    {
+        DecemberMandatoryDay::findOrFail($id)->delete();
+        Flux::toast('Mandatory day removed.');
+    }
+}; ?>
 
+<x-pages::settings.layout :heading="__('Holiday Calendar')" :subheading="__('Manage public holidays and mandatory shutdown days.')">
     <div class="space-y-12">
         {{-- Public Holidays Section --}}
         <section>
@@ -176,4 +191,4 @@ $removeMandatoryDay = function ($id) {
             </div>
         </form>
     </flux:modal>
-</x-pages.settings.layout>
+</x-pages::settings.layout>

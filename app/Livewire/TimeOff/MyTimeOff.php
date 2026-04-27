@@ -187,8 +187,9 @@ class MyTimeOff extends Component
             ? $employee->leaveBalances()->with('leaveType')->get()
             : collect();
 
+        // paginate 5 per page as requested
         $requests = $employee
-            ? $employee->leaveRequests()->with(['leaveType', 'reviewer'])->latest()->paginate(10)
+            ? $employee->leaveRequests()->with(['leaveType', 'reviewer'])->latest()->paginate(5)
             : collect();
 
         // Encashable leave types (current employee has balance & type allows encashment)
@@ -202,12 +203,113 @@ class MyTimeOff extends Component
             ? LeaveEncashment::where('employee_id', $employee->id)->with('leaveType')->latest()->get()
             : collect();
 
+        // --- Additional UI data for enhanced analytics ---
+        $year = now()->year;
+
+        // Requests overlapping the current year for the analytics
+        $requestsForYear = $employee
+            ? $employee->leaveRequests()->with('leaveType')
+                ->where(function ($q) use ($year) {
+                    $q->whereYear('start_date', $year)
+                        ->orWhereYear('end_date', $year)
+                        ->orWhere(function ($q2) {
+                            // Requests that span across the year boundary
+                            $q2->where('start_date', '<', now()->startOfYear())
+                                ->where('end_date', '>', now()->endOfYear());
+                        });
+                })->get()
+            : collect();
+
+        // Weekly pattern (Mon-Sun) boolean flags for whether any leave day exists on that weekday this year
+        $weeklyPattern = array_fill(0, 7, false); // 0=Mon ... 6=Sun
+        // Monthly stats (Jan..Dec) - number of leave days per month
+        $monthlyStats = array_fill(0, 12, 0);
+
+        foreach ($requestsForYear as $r) {
+            $start = $r->start_date->copy();
+            $end = $r->end_date->copy();
+
+            // clamp to current year
+            $yearStart = now()->startOfYear();
+            $yearEnd = now()->endOfYear();
+
+            if ($start->lt($yearStart)) {
+                $start = $yearStart->copy();
+            }
+            if ($end->gt($yearEnd)) {
+                $end = $yearEnd->copy();
+            }
+
+            // Protect against unexpectedly large ranges by capping iteration to one year (366 days)
+            $daysCount = $start->diffInDays($end) + 1;
+            $maxDaysLimit = 366;
+            if ($daysCount > $maxDaysLimit) {
+                $daysCount = $maxDaysLimit;
+            }
+
+            for ($i = 0; $i < $daysCount; $i++) {
+                $cursor = $start->copy()->addDays($i);
+                $dow = $cursor->dayOfWeekIso; // 1..7 (Mon..Sun)
+                $weeklyPattern[$dow - 1] = true;
+                $monthlyStats[$cursor->month - 1]++;
+            }
+        }
+
+        // Find CSL (casual), Comp Off and MDL balances (best-effort matching)
+        $findBalance = function ($keywords) use ($balances) {
+            foreach ($balances as $b) {
+                $name = strtolower($b->leaveType->name ?? '');
+                foreach ((array) $keywords as $kw) {
+                    if (str_contains($name, strtolower($kw))) {
+                        return $b;
+                    }
+                }
+            }
+
+            return null;
+        };
+
+        $csl = $findBalance(['casual', 'csl', 'casual leave']);
+        $compOff = $findBalance(['comp', 'compensatory', 'comp off']);
+        $mdl = $findBalance(['md', 'medical', 'mdl', 'maternity']);
+
+        // Fallback: choose first balances if any are missing
+        $firstBalances = $balances->values();
+        if (! $csl && $firstBalances->count() > 0) {
+            $csl = $firstBalances->get(0);
+        }
+        if (! $compOff && $firstBalances->count() > 1) {
+            $compOff = $firstBalances->get(1) ?? $firstBalances->get(0);
+        }
+        if (! $mdl && $firstBalances->count() > 2) {
+            $mdl = $firstBalances->get(2) ?? $firstBalances->get(0);
+        }
+
+        // CSL donut: used vs remaining
+        $cslUsed = $csl ? ($csl->used_days + ($csl->encashed_days ?? 0)) : 0;
+        $cslTotal = $csl ? max(0, $csl->allocated_days) : 0;
+        $cslRemaining = max(0, $cslTotal - $cslUsed);
+
         return view('livewire.time-off.my-time-off', [
             'balances' => $balances,
             'requests' => $requests,
             'leaveTypes' => LeaveType::all(),
             'encashableTypes' => $encashableTypes,
             'encashments' => $encashments,
+            'pendingCount' => $employee ? $employee->leaveRequests()->where('status', 'pending')->count() : 0,
+            'weeklyPattern' => $weeklyPattern,
+            'monthlyStats' => $monthlyStats,
+            'cslData' => [
+                'used' => (float) $cslUsed,
+                'remaining' => (float) $cslRemaining,
+                'label' => $csl?->leaveType->name ?? 'CSL',
+                'color' => $csl?->leaveType->color ?? '#f59e0b',
+            ],
+            'highlightBalances' => [
+                'csl' => $csl,
+                'compOff' => $compOff,
+                'mdl' => $mdl,
+            ],
         ])->layout('layouts.app', ['title' => 'My Time Off']);
     }
 }
