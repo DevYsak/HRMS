@@ -1,18 +1,22 @@
 <?php
 
+use App\Enums\UserRole;
+use App\Models\Employee;
 use App\Models\User;
 
 test('all hrms module routes return 200 for admin', function () {
     $admin = User::factory()->create([
-        'role' => \App\Enums\UserRole::Admin,
+        'role' => UserRole::SuperAdmin,
     ]);
+
+    // Most Livewire components require the authenticated user to have an Employee record
+    Employee::factory()->create(['user_id' => $admin->id, 'status' => 'active']);
 
     $routes = [
         'dashboard',
         'employees.index',
         'employees.directory',
         'employees.org-chart',
-        'time-off.my',
         'time-off.team',
         'time-off.employees',
         'time-off.settings',
@@ -20,8 +24,7 @@ test('all hrms module routes return 200 for admin', function () {
         'attendance.team',
         'attendance.employees',
         'attendance.settings',
-        'payroll.my',
-        'payroll.index',
+        'payroll.payslips',
         'settings.general',
     ];
 
@@ -37,11 +40,9 @@ test('all hrms module routes return 200 for admin', function () {
 
 test('employee role cannot access restricted admin routes', function () {
     $employee = User::factory()->create([
-        'role' => \App\Enums\UserRole::Employee,
+        'role' => UserRole::Employee,
     ]);
 
-    // These pages are accessible but conditionally hide admin-only UI
-    // The routes themselves don't gate on role — just the sidebar nav items
     $response = $this
         ->withoutVite()
         ->actingAs($employee)

@@ -54,8 +54,22 @@ class MyPayslips extends Component
     {
         $employee = Auth::user()->employee;
 
+        if (! $employee) {
+            return view('livewire.payroll.my-payslips', [
+                'payslips' => collect(),
+                'payslipsByYear' => collect(),
+                'years' => collect(),
+                'selectedYear' => now()->year,
+                'salaryComponents' => collect(),
+                'monthlyGross' => 0,
+                'ctc' => 0,
+                'payCycle' => null,
+                'timeline' => collect(),
+            ])->layout('layouts.app', ['title' => 'My Payslips']);
+        }
+
         $payslips = Payslip::where('employee_id', $employee->id)
-            ->where('status', 'paid')
+            ->whereIn('status', ['paid', 'draft'])
             ->with(['payroll', 'items'])
             ->orderByDesc('id')
             ->get();
@@ -63,7 +77,7 @@ class MyPayslips extends Component
         // group payslips by payroll year
         $payslipsByYear = $payslips->groupBy(function ($p) {
             return $p->payroll->year ?? now()->year;
-        })->map(fn ($g) => $g->sortByDesc(fn ($p) => $p->payroll->month_index ?? 0));
+        })->map(fn ($g) => $g->sortByDesc(fn ($p) => $p->payroll->month ?? 0));
 
         $years = $payslipsByYear->keys()->sortDesc()->values();
 

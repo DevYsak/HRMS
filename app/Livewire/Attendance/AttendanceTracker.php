@@ -5,6 +5,7 @@ namespace App\Livewire\Attendance;
 use App\Models\Attendance;
 use App\Models\AttendanceRegularisation;
 use App\Models\AttendanceSetting;
+use App\Models\BreakLog;
 use App\Models\LeaveRequest;
 use App\Models\PublicHoliday;
 use App\Models\ShiftSetting;
@@ -16,6 +17,12 @@ use Livewire\Component;
 class AttendanceTracker extends Component
 {
     public $todayAttendance;
+
+    /** Active BreakLog record (null when not on break). */
+    public $activeBreak = null;
+
+    /** Work mode selected at clock-in: office | wfh */
+    public string $workMode = 'office';
 
     public $attendanceSettings;
 
@@ -96,8 +103,14 @@ class AttendanceTracker extends Component
             }
         }
 
-        // 4. Assign Today's Attendance
+        // 4. Assign Today's Attendance + active break from break_logs
         $this->todayAttendance = $attendanceMap->get(Carbon::today()->toDateString());
+
+        $this->activeBreak = $this->todayAttendance
+            ? BreakLog::where('attendance_id', $this->todayAttendance->id)
+                ->whereNull('break_end')
+                ->first()
+            : null;
 
         // 5. Calculate Stats (Current month only)
         $monthItems = $allAttendances->filter(fn ($a) => $a->date->month === $start->month && $a->date->year === $start->year);
@@ -172,30 +185,52 @@ class AttendanceTracker extends Component
 
     public function startBreak()
     {
-        if (! $this->todayAttendance || $this->todayAttendance->check_out || $this->todayAttendance->break_start) {
+        if (! $this->todayAttendance || $this->todayAttendance->check_out) {
             return;
         }
 
-        $this->todayAttendance->update(['break_start' => Carbon::now()]);
+        $activeBreak = BreakLog::where('attendance_id', $this->todayAttendance->id)
+            ->whereNull('break_end')
+            ->exists();
+
+        if ($activeBreak) {
+            return;
+        }
+
+        BreakLog::create([
+            'attendance_id' => $this->todayAttendance->id,
+            'employee_id' => $this->todayAttendance->employee_id,
+            'break_start' => Carbon::now(),
+        ]);
+
         $this->loadData();
         $this->dispatch('toast', message: 'Break started', variant: 'success');
     }
 
     public function endBreak()
     {
-        if (! $this->todayAttendance || ! $this->todayAttendance->break_start) {
+        if (! $this->todayAttendance) {
+            return;
+        }
+
+        $activeBreak = BreakLog::where('attendance_id', $this->todayAttendance->id)
+            ->whereNull('break_end')
+            ->first();
+
+        if (! $activeBreak) {
             return;
         }
 
         $now = Carbon::now();
-        $breakMins = $this->todayAttendance->break_start->diffInMinutes($now);
-        $totalBreak = ($this->todayAttendance->break_minutes ?? 0) + $breakMins;
+        $mins = (int) $activeBreak->break_start->diffInMinutes($now);
+        $activeBreak->update(['break_end' => $now, 'duration_minutes' => $mins]);
 
-        $this->todayAttendance->update([
-            'break_end' => $now,
-            'break_start' => null,
-            'break_minutes' => $totalBreak,
-        ]);
+        // Keep legacy break_minutes in sync for backward-compatible queries
+        $totalMins = BreakLog::where('attendance_id', $this->todayAttendance->id)
+            ->whereNotNull('break_end')
+            ->sum('duration_minutes');
+
+        $this->todayAttendance->update(['break_minutes' => $totalMins]);
 
         $this->loadData();
         $this->dispatch('toast', message: 'Break ended', variant: 'success');
@@ -209,23 +244,23 @@ class AttendanceTracker extends Component
 
         $employee = Auth::user()->employee;
         $now = Carbon::now();
-        $shiftStart = Carbon::createFromTimeString($this->shift->start_time ?? '09:00:00');
+        $shiftStart = Carbon::createFromTimeString($this->shift->start_time ?? '10:30:00');
 
-        $isLate = false;
-        $lateMinutes = 0;
-        $grace = $this->attendanceSettings->late_grace_period ?? 15;
+        // Use grace_minutes from shift settings; spec mandates 5 minutes
+        $graceMinutes = (int) ($this->shift->grace_minutes ?? 5);
+        $cutoff = $shiftStart->copy()->addMinutes($graceMinutes);
 
-        if ($now->greaterThan($shiftStart->copy()->addMinutes($grace))) {
-            $isLate = true;
-            $lateMinutes = $shiftStart->diffInMinutes($now);
-        }
+        $isLate = $now->gt($cutoff);
+        $lateMinutes = $isLate ? (int) $cutoff->diffInMinutes($now) : 0;
 
         $this->todayAttendance = Attendance::create([
             'employee_id' => $employee->id,
             'date' => Carbon::today(),
             'check_in' => $now,
+            'check_in_ip' => request()->ip(),
             'check_in_lat' => $lat,
             'check_in_lng' => $lng,
+            'work_mode' => in_array($this->workMode, ['office', 'wfh']) ? $this->workMode : 'office',
             'status' => $isLate ? 'late' : 'on_time',
             'is_late' => $isLate,
             'late_minutes' => $lateMinutes,

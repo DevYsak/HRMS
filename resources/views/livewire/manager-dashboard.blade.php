@@ -1,133 +1,202 @@
-<flux:main class="bg-zinc-50 p-6 space-y-6 dark:bg-zinc-950">
+<flux:main class="bg-zinc-50 dark:bg-zinc-950 min-h-screen">
 
-    {{-- Header --}}
-    <div class="pulse-page-header">
-        <div>
-            <h1 class="pulse-page-title">Manager Dashboard</h1>
-            <p class="pulse-page-subtitle">Your team overview for {{ now()->format('l, jS F Y') }}</p>
-        </div>
-        <div class="flex gap-2">
-            <flux:button :href="route('time-off.team')" wire:navigate variant="ghost" icon="calendar-days">Leave Approvals</flux:button>
-            <flux:button :href="route('overtime.manage')" wire:navigate variant="ghost" icon="clock">OT Approvals</flux:button>
+    {{-- ── HEADER ── --}}
+    <div class="relative overflow-hidden bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 px-6 md:px-10 py-8">
+        <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(29,183,122,0.12),_transparent_60%)]"></div>
+        <div class="relative flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+                <p class="text-zinc-400 text-sm mb-1">{{ now()->format('l, jS F Y') }}</p>
+                <h1 class="text-2xl font-bold text-white tracking-tight">Team Dashboard</h1>
+                <p class="text-zinc-400 text-sm mt-1">Your team overview — attendance, leave & OT approvals</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <a href="{{ route('time-off.team') }}" wire:navigate
+                   class="flex items-center gap-2 px-4 py-2.5 bg-white/10 hover:bg-white/20 border border-white/10 text-white rounded-xl text-sm font-semibold transition-all">
+                    <flux:icon.calendar-days class="size-4" />
+                    Leave Approvals
+                    @if($pendingLeaves->count())
+                        <span class="px-1.5 py-0.5 bg-amber-500 text-white text-[9px] font-black rounded-full">{{ $pendingLeaves->count() }}</span>
+                    @endif
+                </a>
+                <a href="{{ route('overtime.manage') }}" wire:navigate
+                   class="flex items-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-700 border border-brand-500 text-white rounded-xl text-sm font-semibold transition-all shadow-lg shadow-brand-900/20">
+                    <flux:icon.clock class="size-4" />
+                    OT Approvals
+                    @if($pendingOt->count())
+                        <span class="px-1.5 py-0.5 bg-white/25 text-white text-[9px] font-black rounded-full">{{ $pendingOt->count() }}</span>
+                    @endif
+                </a>
+            </div>
         </div>
     </div>
 
-    {{-- KPI Bar --}}
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div class="pulse-card text-center p-5">
-            <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Present Today</div>
-            <div class="text-3xl font-black text-brand-600 mt-2">{{ $presentCount }}</div>
-            <div class="text-[10px] text-zinc-400 mt-1">Team members in</div>
-        </div>
-        <div class="pulse-card text-center p-5">
-            <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Late Today</div>
-            <div class="text-3xl font-black text-amber-500 mt-2">{{ $lateCount }}</div>
-            <div class="text-[10px] text-zinc-400 mt-1">Late arrivals flagged</div>
-        </div>
-        <div class="pulse-card text-center p-5">
-            <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Absent Today</div>
-            <div class="text-3xl font-black text-red-500 mt-2">{{ $absentCount }}</div>
-            <div class="text-[10px] text-zinc-400 mt-1">No clock-in recorded</div>
-        </div>
-        <div class="pulse-card text-center p-5">
-            <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Reviews Pending</div>
-            <div class="text-3xl font-black text-purple-500 mt-2">{{ $reviewsPending }}</div>
-            <div class="text-[10px] text-zinc-400 mt-1">{{ $reviewsSubmitted }} submitted this year</div>
-        </div>
-    </div>
+    <div class="p-4 md:p-6 space-y-5">
 
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {{-- ── KPI ROW ── --}}
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-5 shadow-sm">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Present</span>
+                    <div class="size-8 rounded-xl bg-brand-50 dark:bg-brand-950/30 flex items-center justify-center">
+                        <flux:icon.check-circle class="size-4 text-brand-600" />
+                    </div>
+                </div>
+                <div class="text-4xl font-black text-brand-600">{{ $presentCount }}</div>
+                <div class="text-[10px] text-zinc-400 mt-1">clocked in today</div>
+            </div>
+            <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-5 shadow-sm">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Late</span>
+                    <div class="size-8 rounded-xl bg-amber-50 dark:bg-amber-950/30 flex items-center justify-center">
+                        <flux:icon.clock class="size-4 text-amber-500" />
+                    </div>
+                </div>
+                <div class="text-4xl font-black text-amber-500">{{ $lateCount }}</div>
+                <div class="text-[10px] text-zinc-400 mt-1">late arrivals flagged</div>
+            </div>
+            <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-5 shadow-sm">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Absent</span>
+                    <div class="size-8 rounded-xl bg-rose-50 dark:bg-rose-950/30 flex items-center justify-center">
+                        <flux:icon.x-circle class="size-4 text-rose-500" />
+                    </div>
+                </div>
+                <div class="text-4xl font-black text-rose-500">{{ $absentCount }}</div>
+                <div class="text-[10px] text-zinc-400 mt-1">no clock-in recorded</div>
+            </div>
+            <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-5 shadow-sm">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Reviews</span>
+                    <div class="size-8 rounded-xl bg-purple-50 dark:bg-purple-950/30 flex items-center justify-center">
+                        <flux:icon.star class="size-4 text-purple-500" />
+                    </div>
+                </div>
+                <div class="text-4xl font-black text-purple-500">{{ $reviewsPending }}</div>
+                <div class="text-[10px] text-zinc-400 mt-1">{{ $reviewsSubmitted }} submitted this cycle</div>
+            </div>
+        </div>
 
-        {{-- Team Attendance Table --}}
-        <div class="pulse-card p-6 lg:col-span-2">
-            <h3 class="text-sm font-bold text-zinc-900 dark:text-white mb-4 flex items-center gap-2">
-                <flux:icon.clock class="size-4 text-brand-500" /> Team Attendance — Today
-            </h3>
-            <div class="overflow-x-auto -mx-6">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+
+            {{-- ── TEAM ATTENDANCE TABLE ── --}}
+            <div class="lg:col-span-2 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
+                <div class="flex items-center justify-between px-6 py-4 border-b border-zinc-100 dark:border-zinc-800">
+                    <h3 class="text-sm font-bold text-zinc-900 dark:text-white flex items-center gap-2">
+                        <flux:icon.users class="size-4 text-brand-500" /> Team Attendance — Today
+                    </h3>
+                    <a href="{{ route('attendance.team') }}" wire:navigate class="text-xs text-brand-600 hover:text-brand-700 font-bold">Full view →</a>
+                </div>
                 <table class="w-full text-sm">
                     <thead>
-                        <tr class="border-b border-zinc-100 dark:border-zinc-800">
-                            <th class="pb-2 pl-6 pr-4 text-left text-xs font-semibold uppercase text-zinc-400">Employee</th>
-                            <th class="pb-2 pr-4 text-left text-xs font-semibold uppercase text-zinc-400">Dept</th>
-                            <th class="pb-2 pr-4 text-left text-xs font-semibold uppercase text-zinc-400">In</th>
-                            <th class="pb-2 pr-4 text-left text-xs font-semibold uppercase text-zinc-400">Out</th>
-                            <th class="pb-2 pr-6 text-left text-xs font-semibold uppercase text-zinc-400">Status</th>
+                        <tr class="bg-zinc-50 dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800">
+                            <th class="py-3 px-6 text-left text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Employee</th>
+                            <th class="py-3 px-4 text-left text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Dept</th>
+                            <th class="py-3 px-4 text-left text-[10px] font-bold text-zinc-400 uppercase tracking-widest">In</th>
+                            <th class="py-3 px-4 text-left text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Out</th>
+                            <th class="py-3 px-6 text-left text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Status</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-zinc-50 dark:divide-zinc-800">
+                    <tbody class="divide-y divide-zinc-50 dark:divide-zinc-800/50">
                         @forelse($teamAttendanceList as $row)
-                            <tr class="hover:bg-zinc-50 dark:hover:bg-zinc-800/30">
-                                <td class="py-3 pl-6 pr-4 font-medium text-zinc-900 dark:text-white">{{ $row['name'] }}</td>
-                                <td class="py-3 pr-4 text-zinc-500 text-xs">{{ $row['department'] ?? '—' }}</td>
-                                <td class="py-3 pr-4 text-zinc-600 dark:text-zinc-300">{{ $row['check_in'] ?? '—' }}</td>
-                                <td class="py-3 pr-4 text-zinc-600 dark:text-zinc-300">{{ $row['check_out'] ?? '—' }}</td>
-                                <td class="py-3 pr-6">
-                                    @if($row['status'] === 'absent')
-                                        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">ABSENT</span>
-                                    @elseif($row['is_late'])
-                                        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">LATE</span>
+                            <tr class="hover:bg-zinc-50/60 dark:hover:bg-zinc-800/30 transition-colors">
+                                <td class="py-3.5 px-6 font-semibold text-zinc-900 dark:text-white">{{ $row['name'] }}</td>
+                                <td class="py-3.5 px-4 text-zinc-400 text-xs">{{ $row['department'] ?? '—' }}</td>
+                                <td class="py-3.5 px-4 text-zinc-600 dark:text-zinc-300 font-mono text-xs">{{ $row['check_in'] ?? '—' }}</td>
+                                <td class="py-3.5 px-4 text-zinc-600 dark:text-zinc-300 font-mono text-xs">
+                                    @if($row['check_out'])
+                                        {{ $row['check_out'] }}
+                                    @elseif($row['check_in'])
+                                        <span class="text-brand-600 animate-pulse text-[10px] font-bold">LIVE</span>
                                     @else
-                                        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">ON TIME</span>
+                                        —
+                                    @endif
+                                </td>
+                                <td class="py-3.5 px-6">
+                                    @if($row['status'] === 'absent')
+                                        <span class="px-2 py-0.5 rounded text-[9px] font-bold bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400">ABSENT</span>
+                                    @elseif($row['is_late'])
+                                        <span class="px-2 py-0.5 rounded text-[9px] font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400">LATE</span>
+                                    @else
+                                        <span class="px-2 py-0.5 rounded text-[9px] font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400">ON TIME</span>
                                     @endif
                                 </td>
                             </tr>
                         @empty
-                            <tr><td colspan="5" class="py-10 text-center text-zinc-400">No team members assigned to you yet.</td></tr>
+                            <tr><td colspan="5" class="py-14 text-center text-zinc-400 text-sm">No team members assigned to you yet.</td></tr>
                         @endforelse
                     </tbody>
                 </table>
             </div>
-        </div>
 
-        {{-- Approvals Panel --}}
-        <div class="space-y-4">
-            {{-- Pending Leaves --}}
-            <div class="pulse-card p-5">
-                <h3 class="text-sm font-bold text-zinc-900 dark:text-white mb-3 flex items-center gap-2">
-                    <flux:icon.calendar-days class="size-4 text-amber-500" /> Pending Leave Approvals
-                    @if($pendingLeaves->count())
-                        <span class="ml-auto text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">{{ $pendingLeaves->count() }}</span>
-                    @endif
-                </h3>
-                <div class="space-y-2 max-h-48 overflow-y-auto">
-                    @forelse($pendingLeaves as $leave)
-                        <div class="flex items-start justify-between gap-2 p-2 bg-zinc-50 dark:bg-zinc-900 rounded-lg">
-                            <div>
-                                <div class="text-xs font-semibold text-zinc-900 dark:text-white">{{ $leave->employee->user->name }}</div>
-                                <div class="text-[11px] text-zinc-500">{{ $leave->leaveType?->name }} · {{ $leave->start_date }} → {{ $leave->end_date }}</div>
+            {{-- ── APPROVALS SIDEBAR ── --}}
+            <div class="space-y-4">
+
+                {{-- Pending Leaves --}}
+                <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
+                    <div class="flex items-center justify-between px-5 py-3.5 border-b border-zinc-100 dark:border-zinc-800">
+                        <h3 class="text-xs font-bold text-zinc-900 dark:text-white flex items-center gap-2">
+                            <flux:icon.calendar-days class="size-3.5 text-amber-500" /> Leave Approvals
+                        </h3>
+                        @if($pendingLeaves->count())
+                            <span class="px-2 py-0.5 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 text-[10px] font-black rounded-full">{{ $pendingLeaves->count() }} PENDING</span>
+                        @endif
+                    </div>
+                    <div class="p-4 space-y-2.5 max-h-52 overflow-y-auto">
+                        @forelse($pendingLeaves as $leave)
+                            <div class="p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/40 rounded-xl">
+                                <div class="font-semibold text-xs text-zinc-900 dark:text-white">{{ $leave->employee->user->name }}</div>
+                                <div class="text-[10px] text-zinc-500 mt-0.5">
+                                    {{ $leave->leaveType?->name }} ·
+                                    {{ \Carbon\Carbon::parse($leave->start_date)->format('d M') }}
+                                    @if($leave->start_date != $leave->end_date)
+                                        – {{ \Carbon\Carbon::parse($leave->end_date)->format('d M') }}
+                                    @endif
+                                </div>
                             </div>
-                        </div>
-                    @empty
-                        <p class="text-xs text-zinc-400 py-2">No pending leave requests.</p>
-                    @endforelse
+                        @empty
+                            <div class="py-6 text-center text-zinc-400 text-xs">All clear — no pending leaves</div>
+                        @endforelse
+                    </div>
+                    <div class="px-4 pb-4">
+                        <a href="{{ route('time-off.team') }}" wire:navigate
+                           class="block w-full py-2 text-center text-xs font-bold text-brand-600 hover:text-brand-700 bg-brand-50 dark:bg-brand-950/30 hover:bg-brand-100 rounded-xl transition-colors">
+                            Manage All Leaves →
+                        </a>
+                    </div>
                 </div>
-                <flux:button :href="route('time-off.team')" wire:navigate size="sm" variant="ghost" class="w-full mt-3">Manage All →</flux:button>
-            </div>
 
-            {{-- Pending OT --}}
-            <div class="pulse-card p-5">
-                <h3 class="text-sm font-bold text-zinc-900 dark:text-white mb-3 flex items-center gap-2">
-                    <flux:icon.clock class="size-4 text-purple-500" /> Pending OT Approvals
-                    @if($pendingOt->count())
-                        <span class="ml-auto text-[10px] font-bold bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">{{ $pendingOt->count() }}</span>
-                    @endif
-                </h3>
-                <div class="space-y-2 max-h-48 overflow-y-auto">
-                    @forelse($pendingOt as $ot)
-                        <div class="flex items-start justify-between gap-2 p-2 bg-zinc-50 dark:bg-zinc-900 rounded-lg">
-                            <div>
-                                <div class="text-xs font-semibold text-zinc-900 dark:text-white">{{ $ot->employee->user->name }}</div>
-                                <div class="text-[11px] text-zinc-500">{{ $ot->work_date }} · {{ $ot->requested_hours }}h</div>
+                {{-- Pending OT --}}
+                <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
+                    <div class="flex items-center justify-between px-5 py-3.5 border-b border-zinc-100 dark:border-zinc-800">
+                        <h3 class="text-xs font-bold text-zinc-900 dark:text-white flex items-center gap-2">
+                            <flux:icon.clock class="size-3.5 text-purple-500" /> OT Approvals
+                        </h3>
+                        @if($pendingOt->count())
+                            <span class="px-2 py-0.5 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-400 text-[10px] font-black rounded-full">{{ $pendingOt->count() }} PENDING</span>
+                        @endif
+                    </div>
+                    <div class="p-4 space-y-2.5 max-h-52 overflow-y-auto">
+                        @forelse($pendingOt as $ot)
+                            <div class="p-3 bg-purple-50 dark:bg-purple-950/20 border border-purple-100 dark:border-purple-900/40 rounded-xl">
+                                <div class="font-semibold text-xs text-zinc-900 dark:text-white">{{ $ot->employee->user->name }}</div>
+                                <div class="text-[10px] text-zinc-500 mt-0.5">
+                                    {{ \Carbon\Carbon::parse($ot->work_date)->format('d M, D') }} · {{ $ot->requested_hours }}h estimated
+                                </div>
                             </div>
-                        </div>
-                    @empty
-                        <p class="text-xs text-zinc-400 py-2">No pending OT requests.</p>
-                    @endforelse
+                        @empty
+                            <div class="py-6 text-center text-zinc-400 text-xs">All clear — no pending OT</div>
+                        @endforelse
+                    </div>
+                    <div class="px-4 pb-4">
+                        <a href="{{ route('overtime.manage') }}" wire:navigate
+                           class="block w-full py-2 text-center text-xs font-bold text-brand-600 hover:text-brand-700 bg-brand-50 dark:bg-brand-950/30 hover:bg-brand-100 rounded-xl transition-colors">
+                            Manage All OT →
+                        </a>
+                    </div>
                 </div>
-                <flux:button :href="route('overtime.manage')" wire:navigate size="sm" variant="ghost" class="w-full mt-3">Manage All →</flux:button>
+
             </div>
         </div>
-
     </div>
 
 </flux:main>

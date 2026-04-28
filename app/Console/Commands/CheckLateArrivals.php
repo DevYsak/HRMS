@@ -4,18 +4,20 @@ namespace App\Console\Commands;
 
 use App\Models\Attendance;
 use Illuminate\Console\Command;
+use Illuminate\Support\Carbon;
 
 class CheckLateArrivals extends Command
 {
-    protected $signature   = 'hrms:check-late-arrivals';
-    protected $description = 'Flag attendance records from yesterday where check-in exceeded the shift grace period.';
+    protected $signature = 'hrms:check-late-arrivals';
+
+    protected $description = 'Flag today\'s check-ins that exceeded the shift grace period (5 min). Runs at 10:45 for IT shift and 13:15 for UK shift.';
 
     public function handle(): int
     {
-        $yesterday = now()->subDay()->toDateString();
+        $today = now()->toDateString();
 
-        $records = Attendance::with(['employee.office', 'employee.shift'])
-            ->where('date', $yesterday)
+        $records = Attendance::with(['employee.shift'])
+            ->where('date', $today)
             ->whereNotNull('check_in')
             ->where('is_late', false)
             ->get();
@@ -24,21 +26,24 @@ class CheckLateArrivals extends Command
 
         foreach ($records as $record) {
             $shift = $record->employee->shift;
-            $startTimeStr = $shift ? $shift->start_time : '09:00:00';
-            
-            $startTime = \Carbon\Carbon::parse($startTimeStr);
-            // Add 15 min grace
-            $graceTime = $startTime->addMinutes(15)->format('H:i');
 
-            ['is_late' => $isLate, 'late_minutes' => $lateMinutes] = $record->computeLate($graceTime);
+            if (! $shift) {
+                continue;
+            }
 
-            if ($isLate) {
-                $record->update(['is_late' => true, 'late_minutes' => $lateMinutes]);
+            $graceMinutes = (int) ($shift->grace_minutes ?? 5);
+            $shiftStart = Carbon::parse($shift->start_time);
+            $cutoff = $shiftStart->copy()->addMinutes($graceMinutes);
+            $checkIn = Carbon::parse($record->check_in);
+
+            if ($checkIn->gt($cutoff)) {
+                $lateMinutes = (int) $cutoff->diffInMinutes($checkIn);
+                $record->update(['is_late' => true, 'late_minutes' => $lateMinutes, 'status' => 'late']);
                 $flagged++;
             }
         }
 
-        $this->info("Flagged {$flagged} late arrival(s) for {$yesterday}.");
+        $this->info("Flagged {$flagged} late arrival(s) for {$today}.");
 
         return self::SUCCESS;
     }

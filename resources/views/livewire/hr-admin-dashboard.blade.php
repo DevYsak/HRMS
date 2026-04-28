@@ -1,16 +1,28 @@
-<flux:main class="bg-zinc-50 p-6 space-y-6 dark:bg-zinc-950">
+<flux:main class="bg-zinc-50 dark:bg-zinc-950 min-h-screen">
 
-    {{-- Header --}}
-    <div class="pulse-page-header">
-        <div>
-            <h1 class="pulse-page-title">HR Admin Dashboard</h1>
-            <p class="pulse-page-subtitle">{{ now()->format('l, jS F Y') }} — Company Overview</p>
-        </div>
-        <div class="flex gap-2">
-            <flux:button :href="route('employees.create')" wire:navigate variant="primary" icon="plus">Add Employee</flux:button>
-            <flux:button :href="route('payroll.process')" wire:navigate variant="ghost" icon="banknotes">Run Payroll</flux:button>
+    {{-- Premium Header --}}
+    <div class="relative overflow-hidden bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 px-6 md:px-10 py-8">
+        <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(29,183,122,0.12),_transparent_60%)]"></div>
+        <div class="relative flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+                <p class="text-zinc-400 text-sm mb-1">{{ now()->format('l, jS F Y') }}</p>
+                <h1 class="text-2xl font-bold text-white tracking-tight">HR Admin Dashboard</h1>
+                <p class="text-zinc-400 text-sm mt-1">Company overview — employees, attendance & payroll</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <a href="{{ route('employees.create') }}" wire:navigate
+                   class="flex items-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-700 border border-brand-500 text-white rounded-xl text-sm font-semibold transition-all shadow-lg shadow-brand-900/20">
+                    <flux:icon.plus class="size-4" /> Add Employee
+                </a>
+                <a href="{{ route('payroll.process') }}" wire:navigate
+                   class="flex items-center gap-2 px-4 py-2.5 bg-white/10 hover:bg-white/20 border border-white/10 text-white rounded-xl text-sm font-semibold transition-all">
+                    <flux:icon.banknotes class="size-4" /> Run Payroll
+                </a>
+            </div>
         </div>
     </div>
+
+    <div class="p-4 md:p-6 space-y-5">
 
     {{-- KPI Cards --}}
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -167,5 +179,7 @@
             </table>
         </div>
     </div>
+
+    </div>{{-- end p-4 md:p-6 --}}
 
 </flux:main>

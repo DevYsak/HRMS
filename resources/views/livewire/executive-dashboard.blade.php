@@ -1,89 +1,161 @@
-<flux:main class="bg-zinc-50 p-6 space-y-6 dark:bg-zinc-950">
-    <div class="pulse-page-header">
-        <div>
-            <h1 class="pulse-page-title">Executive Dashboard</h1>
-            <p class="pulse-page-subtitle">Company-wide overview — {{ now()->format('l, jS F Y') }}</p>
+<flux:main class="bg-zinc-50 dark:bg-zinc-950 min-h-screen">
+
+    {{-- ── HEADER ── --}}
+    <div class="relative overflow-hidden bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 px-6 md:px-10 py-8">
+        <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(29,183,122,0.14),_transparent_60%)]"></div>
+        <div class="absolute bottom-0 right-0 w-64 h-32 bg-brand-600/5 rounded-full blur-3xl"></div>
+        <div class="relative">
+            <p class="text-zinc-400 text-sm mb-1">{{ now()->format('l, jS F Y') }}</p>
+            <h1 class="text-2xl font-bold text-white tracking-tight">Executive Overview</h1>
+            <p class="text-zinc-400 text-sm mt-1">Company-wide headcount, attendance, approvals & payroll</p>
         </div>
     </div>
 
-    {{-- KPI Bar --}}
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div class="pulse-card p-5 text-center">
-            <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Active Employees</div>
-            <div class="text-3xl font-black text-zinc-900 dark:text-white mt-2">{{ $activeCount }}</div>
-            <div class="text-[10px] text-zinc-400 mt-1">{{ $onboardingCount }} onboarding · {{ $probationCount }} probation</div>
-        </div>
-        <div class="pulse-card p-5 text-center">
-            <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Present Today</div>
-            <div class="text-3xl font-black text-brand-600 mt-2">{{ $presentToday }}</div>
-            <div class="text-[10px] text-red-500 mt-1">{{ $lateToday }} arrived late</div>
-        </div>
-        <div class="pulse-card p-5 text-center">
-            <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Pending Leaves</div>
-            <div class="text-3xl font-black text-amber-500 mt-2">{{ $pendingLeaves }}</div>
-            <div class="text-[10px] text-zinc-400 mt-1">Awaiting manager approval</div>
-        </div>
-        <div class="pulse-card p-5 text-center">
-            <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Pending OT</div>
-            <div class="text-3xl font-black text-purple-500 mt-2">{{ $pendingOt }}</div>
-            <div class="text-[10px] text-zinc-400 mt-1">Awaiting approval</div>
-        </div>
-    </div>
+    <div class="p-4 md:p-6 space-y-5">
 
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {{-- Payroll Status --}}
-        <div class="pulse-card p-6">
-            <h3 class="text-base font-bold text-zinc-900 dark:text-white mb-4">
-                <flux:icon.banknotes class="size-4 inline-block mr-1 text-green-500" /> Payroll Status (This Month)
-            </h3>
-            <div class="space-y-3">
-                @foreach([['label' => 'Cycle A (1st–31st)', 'payroll' => $cycleAPayroll], ['label' => 'Cycle B (21st–20th)', 'payroll' => $cycleBPayroll]] as $cycleData)
-                    <div class="flex items-center justify-between p-3 bg-zinc-50 rounded-xl dark:bg-zinc-900">
+        {{-- ── KPI ROW ── --}}
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {{-- Headcount --}}
+            <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-5 shadow-sm">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Headcount</span>
+                    <div class="size-8 rounded-xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
+                        <flux:icon.users class="size-4 text-zinc-600 dark:text-zinc-300" />
+                    </div>
+                </div>
+                <div class="text-4xl font-black text-zinc-900 dark:text-white">{{ $activeCount }}</div>
+                <div class="flex gap-3 mt-2">
+                    <span class="text-[10px] text-amber-600 font-bold">{{ $onboardingCount }} onboarding</span>
+                    <span class="text-[10px] text-purple-600 font-bold">{{ $probationCount }} probation</span>
+                </div>
+            </div>
+
+            {{-- Today's attendance --}}
+            <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-5 shadow-sm">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">In Today</span>
+                    <div class="size-8 rounded-xl bg-brand-50 dark:bg-brand-950/30 flex items-center justify-center">
+                        <flux:icon.check-circle class="size-4 text-brand-600" />
+                    </div>
+                </div>
+                <div class="text-4xl font-black text-brand-600">{{ $presentToday }}</div>
+                @if($lateToday > 0)
+                    <div class="text-[10px] text-rose-500 font-bold mt-2">{{ $lateToday }} arrived late</div>
+                @else
+                    <div class="text-[10px] text-zinc-400 mt-2">no late arrivals today</div>
+                @endif
+            </div>
+
+            {{-- Pending Leaves --}}
+            <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-5 shadow-sm">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Pending Leaves</span>
+                    <div class="size-8 rounded-xl bg-amber-50 dark:bg-amber-950/30 flex items-center justify-center">
+                        <flux:icon.calendar-days class="size-4 text-amber-500" />
+                    </div>
+                </div>
+                <div class="text-4xl font-black text-amber-500">{{ $pendingLeaves }}</div>
+                <div class="text-[10px] text-zinc-400 mt-2">awaiting manager approval</div>
+            </div>
+
+            {{-- Pending OT --}}
+            <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-5 shadow-sm">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Pending OT</span>
+                    <div class="size-8 rounded-xl bg-purple-50 dark:bg-purple-950/30 flex items-center justify-center">
+                        <flux:icon.clock class="size-4 text-purple-500" />
+                    </div>
+                </div>
+                <div class="text-4xl font-black text-purple-500">{{ $pendingOt }}</div>
+                <div class="text-[10px] text-zinc-400 mt-2">awaiting approval</div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+
+            {{-- ── PAYROLL STATUS ── --}}
+            <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
+                <div class="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 flex items-center gap-2">
+                    <flux:icon.banknotes class="size-4 text-brand-500" />
+                    <h3 class="text-sm font-bold text-zinc-900 dark:text-white">Payroll Status</h3>
+                    <span class="ml-auto text-[10px] text-zinc-400">{{ now()->format('M Y') }}</span>
+                </div>
+                <div class="p-5 space-y-3">
+                    @foreach([['Cycle A', '1st–31st', $cycleAPayroll], ['Cycle B', '21st–20th', $cycleBPayroll]] as [$label, $period, $payroll])
+                        <div class="p-4 rounded-xl {{ $payroll ? 'bg-zinc-50 dark:bg-zinc-950' : 'bg-zinc-50/50 dark:bg-zinc-950/50' }} border border-zinc-100 dark:border-zinc-800">
+                            <div class="flex items-start justify-between gap-2">
+                                <div>
+                                    <div class="text-sm font-bold text-zinc-900 dark:text-white">{{ $label }}</div>
+                                    <div class="text-[10px] text-zinc-400 mt-0.5">{{ $period }}</div>
+                                </div>
+                                @php
+                                    $status = $payroll?->status ?? 'not_run';
+                                    $badge = match($status) {
+                                        'approved','finalized' => 'bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400',
+                                        'pending_finance','draft' => 'bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400',
+                                        default => 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500',
+                                    };
+                                @endphp
+                                <span class="text-[9px] font-black px-2 py-0.5 rounded-full {{ $badge }}">
+                                    {{ $payroll ? strtoupper(str_replace('_', ' ', $payroll->status)) : 'NOT RUN' }}
+                                </span>
+                            </div>
+                            @if($payroll && $payroll->total_payout)
+                                <div class="mt-2 text-lg font-black text-brand-600">₹{{ number_format($payroll->total_payout, 0) }}</div>
+                            @endif
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+
+            {{-- ── PERFORMANCE ── --}}
+            <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
+                <div class="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 flex items-center gap-2">
+                    <flux:icon.chart-bar class="size-4 text-purple-500" />
+                    <h3 class="text-sm font-bold text-zinc-900 dark:text-white">Performance</h3>
+                </div>
+                <div class="p-6 flex flex-col items-center justify-center min-h-[140px]">
+                    @if($avgRating)
+                        <div class="text-6xl font-black text-purple-600 leading-none">{{ number_format($avgRating, 1) }}</div>
+                        <div class="text-xs text-zinc-400 mt-2">avg rating / 5.0</div>
+                        <div class="flex gap-1 mt-3">
+                            @for($i = 1; $i <= 5; $i++)
+                                <div class="h-1.5 w-8 rounded-full {{ $i <= round($avgRating) ? 'bg-purple-500' : 'bg-zinc-200 dark:bg-zinc-700' }}"></div>
+                            @endfor
+                        </div>
+                        <div class="text-[10px] text-zinc-400 mt-3">Based on submitted QBR reviews</div>
+                    @else
+                        <flux:icon.chart-bar class="size-10 text-zinc-300 dark:text-zinc-700 mb-2" />
+                        <div class="text-sm text-zinc-400">No reviews submitted yet</div>
+                    @endif
+                </div>
+            </div>
+
+            {{-- ── DEPT HEADCOUNT ── --}}
+            <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
+                <div class="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 flex items-center gap-2">
+                    <flux:icon.building-office class="size-4 text-blue-500" />
+                    <h3 class="text-sm font-bold text-zinc-900 dark:text-white">By Department</h3>
+                </div>
+                <div class="p-4 space-y-2.5">
+                    @php $maxCount = collect($byDepartment)->max() ?: 1; @endphp
+                    @forelse($byDepartment as $dept => $count)
                         <div>
-                            <div class="font-semibold text-sm text-zinc-900 dark:text-white">{{ $cycleData['label'] }}</div>
-                            <div class="text-xs text-zinc-400">
-                                @if($cycleData['payroll'])
-                                    ₹{{ number_format($cycleData['payroll']->total_payout, 2) }} payout
-                                @else
-                                    Not processed yet
-                                @endif
+                            <div class="flex justify-between items-center mb-1">
+                                <span class="text-xs text-zinc-600 dark:text-zinc-300 font-medium truncate max-w-[130px]" title="{{ $dept ?? 'Unassigned' }}">{{ $dept ?? 'Unassigned' }}</span>
+                                <span class="text-xs font-bold text-zinc-900 dark:text-white">{{ $count }}</span>
+                            </div>
+                            <div class="h-1.5 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                                <div class="h-full bg-brand-500 rounded-full transition-all" style="width: {{ ($count / $maxCount) * 100 }}%"></div>
                             </div>
                         </div>
-                        <span class="text-xs font-bold px-2 py-1 rounded-full
-                            {{ $cycleData['payroll']?->status === 'finalized' ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400' : ($cycleData['payroll'] ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400' : 'bg-zinc-200 text-zinc-500 dark:bg-zinc-700 dark:text-zinc-400') }}">
-                            {{ $cycleData['payroll'] ? strtoupper($cycleData['payroll']->status) : 'PENDING' }}
-                        </span>
-                    </div>
-                @endforeach
+                    @empty
+                        <div class="py-8 text-center text-zinc-400 text-sm">No data available</div>
+                    @endforelse
+                </div>
             </div>
-        </div>
 
-        {{-- Avg Performance Rating --}}
-        <div class="pulse-card p-6">
-            <h3 class="text-base font-bold text-zinc-900 dark:text-white mb-4">
-                <flux:icon.chart-bar class="size-4 inline-block mr-1 text-purple-500" /> Performance (This Year)
-            </h3>
-            <div class="flex items-center gap-6">
-                <div class="text-5xl font-black text-purple-600">{{ $avgRating ? number_format($avgRating, 1) : '—' }}</div>
-                <div class="text-sm text-zinc-500">Average rating out of 5 across all submitted reviews this year.</div>
-            </div>
-        </div>
-
-        {{-- Department Breakdown --}}
-        <div class="pulse-card p-6 lg:col-span-2">
-            <h3 class="text-base font-bold text-zinc-900 dark:text-white mb-4">
-                <flux:icon.building-office class="size-4 inline-block mr-1 text-blue-500" /> Headcount by Department
-            </h3>
-            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                @forelse($byDepartment as $dept => $count)
-                    <div class="p-4 bg-zinc-50 rounded-xl text-center dark:bg-zinc-900">
-                        <div class="text-2xl font-bold text-zinc-900 dark:text-white">{{ $count }}</div>
-                        <div class="text-[11px] text-zinc-500 mt-1 truncate" title="{{ $dept ?? 'Unassigned' }}">{{ $dept ?? 'Unassigned' }}</div>
-                    </div>
-                @empty
-                    <div class="col-span-4 text-center py-8 text-zinc-400">No department data available.</div>
-                @endforelse
-            </div>
         </div>
     </div>
+
 </flux:main>

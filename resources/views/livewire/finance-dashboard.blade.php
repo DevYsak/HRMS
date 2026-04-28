@@ -1,13 +1,27 @@
-<flux:main class="bg-zinc-50 p-6 space-y-6 dark:bg-zinc-950">
-    <div class="pulse-page-header">
-        <div>
-            <h1 class="pulse-page-title">Finance Dashboard</h1>
-            <p class="pulse-page-subtitle">Payroll, incentives & reimbursements overview</p>
+<flux:main class="bg-zinc-50 dark:bg-zinc-950 min-h-screen">
+
+    {{-- Premium Header --}}
+    <div class="relative overflow-hidden bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 px-6 md:px-10 py-8">
+        <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(29,183,122,0.12),_transparent_60%)]"></div>
+        <div class="relative flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+                <p class="text-zinc-400 text-sm mb-1">Payroll, incentives & reimbursements</p>
+                <h1 class="text-2xl font-bold text-white tracking-tight">Finance Dashboard</h1>
+                <p class="text-zinc-400 text-sm mt-1">Review, verify and approve payroll runs</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <flux:input wire:model.live="month" type="month" size="sm" class="bg-white/10 border-white/20 text-white" />
+                <a href="{{ route('payroll.finance-approve') }}" wire:navigate
+                   class="flex items-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-700 border border-brand-500 text-white rounded-xl text-sm font-semibold transition-all shadow-lg shadow-brand-900/20">
+                    <flux:icon.check-circle class="size-4" /> Finance Approval
+                </a>
+            </div>
         </div>
-        <div class="flex gap-2 items-center">
-            <flux:input wire:model.live="month" type="month" size="sm" />
-            <flux:button :href="route('payroll.finance-approve')" wire:navigate variant="primary" icon="check-circle">Finance Approval</flux:button>
-        </div>
+    </div>
+
+    <div class="p-4 md:p-6 space-y-5">
+    {{-- Legacy header placeholder for downstream code compat --}}
+    <div>
     </div>
 
     {{-- KPI Bar --}}
@@ -189,5 +203,7 @@
         </div>
     </div>
     @endif
+
+    </div>{{-- end p-4 md:p-6 --}}
 
 </flux:main>

@@ -15,6 +15,9 @@ class ShiftSetting extends Model
         'start_time',
         'end_time',
         'break_duration',
+        'grace_minutes',
+        'standard_hours',
+        'ot_threshold_hours',
         'description',
     ];
 

@@ -3,12 +3,11 @@
 namespace App\Livewire\Attendance;
 
 use App\Models\Attendance;
-use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Auth;
 use App\Models\AttendanceRegularisation;
 use App\Models\AuditLog;
-use Illuminate\Support\Facades\Notification;
 use App\Notifications\RegularisationReviewedNotification;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -17,7 +16,9 @@ class TeamAttendance extends Component
     use WithPagination;
 
     public $showReviewModal = false;
+
     public $activeRequest = null;
+
     public $reviewComment = '';
 
     public function openReviewModal(int $id)
@@ -29,7 +30,9 @@ class TeamAttendance extends Component
 
     public function approveRegularisation()
     {
-        if (!$this->activeRequest) return;
+        if (! $this->activeRequest) {
+            return;
+        }
 
         $this->activeRequest->update([
             'status' => 'approved',
@@ -39,9 +42,9 @@ class TeamAttendance extends Component
         ]);
 
         $attendance = $this->activeRequest->attendance;
-        
+
         // Ensure attendance exists (in case it was a completely missed punch)
-        if (!$attendance) {
+        if (! $attendance) {
             $attendance = Attendance::create([
                 'employee_id' => $this->activeRequest->employee_id,
                 'date' => $this->activeRequest->work_date,
@@ -56,7 +59,7 @@ class TeamAttendance extends Component
         $checkOut = Carbon::parse($this->activeRequest->requested_check_out);
         $grossMinutes = $checkIn->diffInMinutes($checkOut);
         $netMinutes = max(0, $grossMinutes - ($attendance->break_minutes ?? 0));
-        
+
         $attendance->update([
             'check_in' => $checkIn,
             'check_out' => $checkOut,
@@ -73,7 +76,9 @@ class TeamAttendance extends Component
 
     public function rejectRegularisation()
     {
-        if (!$this->activeRequest) return;
+        if (! $this->activeRequest) {
+            return;
+        }
 
         $this->validate(['reviewComment' => 'required|string|min:5']);
 
@@ -94,7 +99,7 @@ class TeamAttendance extends Component
     public function render()
     {
         $manager = Auth::user()->employee;
-        $teamIds = $manager->subordinates->pluck('id')->toArray();
+        $teamIds = $manager ? $manager->subordinates->pluck('id')->toArray() : [];
 
         $currentlyIn = Attendance::whereIn('employee_id', $teamIds)
             ->where('date', Carbon::today())

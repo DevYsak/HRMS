@@ -16,6 +16,7 @@ class DatabaseSeeder extends Seeder
             OfficeSeeder::class,
             DepartmentSeeder::class,
             JobTitleSeeder::class,
+            ShiftSettingSeeder::class,
             UserSeeder::class,
             EmployeeSeeder::class,
 

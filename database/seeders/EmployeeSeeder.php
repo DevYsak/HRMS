@@ -4,38 +4,55 @@ namespace Database\Seeders;
 
 use App\Models\Department;
 use App\Models\Employee;
+use App\Models\ShiftSetting;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 
 class EmployeeSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     */
     public function run(): void
     {
+        $itShift = ShiftSetting::where('name', 'IT Shift')->first();
+        $ukShift = ShiftSetting::where('name', 'UK Sales Shift')->first();
+
+        // email → [dept code, shift]
+        // Includes both new spec emails and legacy fallback emails.
         $mappings = [
-            'admin@conexus.in' => ['code' => 'ADMIN', 'emp_id' => 'EMP-0001'],
-            'pristia@conexus.in' => ['code' => 'HR',    'emp_id' => 'EMP-0002'],
-            'rayna@conexus.in' => ['code' => 'PRD',   'emp_id' => 'EMP-0003'],
-            'test@example.com' => ['code' => 'PRD',   'emp_id' => 'EMP-0004'],
+            // New spec users (UserSeeder v2)
+            'mazhar@conexus.in' => ['code' => 'ADMIN', 'shift' => $itShift],
+            'shivani@conexus.in' => ['code' => 'HR',    'shift' => $itShift],
+            'rustom@conexus.in' => ['code' => 'PRD',   'shift' => $itShift],
+            'nick@conexus.in' => ['code' => 'PRD',   'shift' => $ukShift],
+            'nikia@conexus.in' => ['code' => 'PRD',   'shift' => $ukShift],
+            'emad@conexus.in' => ['code' => 'ADMIN', 'shift' => $itShift],
+            'employee@conexus.in' => ['code' => 'PRD',   'shift' => $itShift],
+
+            // Legacy emails (UserSeeder v1 — backward compat with existing DBs)
+            'admin@conexus.in' => ['code' => 'ADMIN', 'shift' => $itShift],
+            'pristia@conexus.in' => ['code' => 'HR',    'shift' => $itShift],
+            'rayna@conexus.in' => ['code' => 'PRD',   'shift' => $itShift],
+            'test@example.com' => ['code' => 'PRD',   'shift' => $itShift],
         ];
 
         foreach ($mappings as $email => $data) {
             $user = User::where('email', $email)->first();
+            if (! $user) {
+                continue;
+            }
+
             $dept = Department::where('code', $data['code'])->first();
 
-            if ($user && $dept) {
-                Employee::updateOrCreate(
-                    ['user_id' => $user->id],
-                    [
-                        'employee_id' => $data['emp_id'],
-                        'department_id' => $dept->id,
-                        'joining_date' => now()->subYears(1),
-                        'status' => 'active',
-                    ]
-                );
-            }
+            Employee::updateOrCreate(
+                ['user_id' => $user->id],
+                [
+                    'employee_id' => 'EMP-'.str_pad($user->id, 4, '0', STR_PAD_LEFT),
+                    'department_id' => $dept?->id,
+                    'shift_id' => $data['shift']?->id,
+                    'joining_date' => now()->subYear(),
+                    'status' => 'active',
+                    'salary_cycle' => 'A',
+                ]
+            );
         }
     }
 }

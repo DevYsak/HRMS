@@ -9,75 +9,81 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 // --------------------------------------------------
-// HRMS Scheduled Jobs
+// HRMS Scheduled Jobs (all times IST)
 // --------------------------------------------------
 
-// Escalate leave requests not reviewed within 24 hours → runs every hour
+// Escalate leave requests not reviewed within 24 hours → hourly
 Schedule::command('hrms:escalate-leaves')
     ->hourly()
     ->withoutOverlapping()
     ->runInBackground();
 
-// Flag attendance records from yesterday with no check-out → runs at 08:00 daily
+// Flag today's missing check-outs → 21:00 IST (IT shift ends 19:30 + 1 hr buffer; spec §7)
 Schedule::command('hrms:flag-missing-checkouts')
-    ->dailyAt('08:00')
+    ->dailyAt('21:00')
     ->withoutOverlapping()
     ->runInBackground();
 
-// Flag yesterday's late arrivals beyond grace period → runs at 09:30 daily
+// Confirm late flags for IT shift (10:30 start + 5 min grace) → 10:45 IST
 Schedule::command('hrms:check-late-arrivals')
-    ->dailyAt('09:30')
+    ->dailyAt('10:45')
     ->withoutOverlapping()
     ->runInBackground();
 
-// Flag attendance records with break time > 60 mins → runs at 20:00 daily
+// Confirm late flags for UK Sales shift (13:00 start + 5 min grace) → 13:15 IST
+Schedule::command('hrms:check-late-arrivals')
+    ->dailyAt('13:15')
+    ->withoutOverlapping()
+    ->runInBackground();
+
+// Flag excess breaks (>60 min) for today → 20:00 IST (after IT shift ends at 19:30)
 Schedule::command('hrms:check-excess-breaks')
     ->dailyAt('20:00')
     ->withoutOverlapping()
     ->runInBackground();
 
-// Escalate OT requests pending > 24 hours to HR → runs every hour
+// Escalate OT requests pending > 24 hours to HR → hourly
 Schedule::command('hrms:escalate-ot')
     ->hourly()
     ->withoutOverlapping()
     ->runInBackground();
 
-// Notify HR of documents expiring within 30 days → runs at 08:00 daily
+// Notify HR of documents expiring within 30 days → 08:00 daily
 Schedule::command('hrms:check-document-expiry')
     ->dailyAt('08:00')
     ->withoutOverlapping()
     ->runInBackground();
 
-// Alert HR of employees whose probation review is due within 10 days → runs at 08:00 daily
+// Notify manager + HR Admin 10 days before probation end → 08:00 daily
 Schedule::command('hrms:check-probation-due')
     ->dailyAt('08:00')
     ->withoutOverlapping()
     ->runInBackground();
 
-// Send HR check-in reminder for employees at their 30-day milestone → runs at 08:00 daily
+// Notify manager when employee hits 30-day milestone → 08:00 daily
 Schedule::command('hrms:check-newhire-checkin')
     ->dailyAt('08:00')
     ->withoutOverlapping()
     ->runInBackground();
 
-// Send weekly performance review reminders to employees with pending reviews → runs Monday at 09:00
+// Notify employees + managers if QBR review due within 7 days → Monday 09:00
 Schedule::command('hrms:send-review-reminders')
     ->weeklyOn(1, '09:00')
     ->withoutOverlapping()
     ->runInBackground();
 
-// Delete read notifications older than 90 days → runs Sunday at midnight
+// Delete notifications older than 90 days → Sunday midnight
 Schedule::command('hrms:prune-notifications')
     ->weeklyOn(0, '00:00')
     ->withoutOverlapping()
     ->runInBackground();
 
-// Generate monthly attendance summary for all active employees → runs on 1st of each month at 01:00
+// Generate previous month attendance summary → 1st of each month at 01:00
 Schedule::command('hrms:generate-attendance-summary')
     ->monthlyOn(1, '01:00')
     ->withoutOverlapping()
     ->runInBackground();
 
-// Spatie Backup commands
+// Spatie Backup
 Schedule::command('backup:clean')->daily()->at('01:00');
 Schedule::command('backup:run')->daily()->at('01:30');

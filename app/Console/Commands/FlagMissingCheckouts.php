@@ -7,19 +7,21 @@ use Illuminate\Console\Command;
 
 class FlagMissingCheckouts extends Command
 {
-    protected $signature   = 'hrms:flag-missing-checkouts';
-    protected $description = 'Flag attendance records from yesterday with no check-out.';
+    protected $signature = 'hrms:flag-missing-checkouts';
+
+    protected $description = 'Flag today\'s attendance records with no check-out. Runs at 21:00 IST (shift end + 1 hr).';
 
     public function handle(): int
     {
-        $yesterday = now()->subDay()->toDateString();
+        $today = now()->toDateString();
 
-        $flagged = Attendance::where('date', $yesterday)
+        $flagged = Attendance::where('date', $today)
+            ->whereNotNull('check_in')
             ->whereNull('check_out')
             ->where('missing_checkout', false)
             ->update(['missing_checkout' => true]);
 
-        $this->info("Flagged {$flagged} attendance record(s) as missing check-out.");
+        $this->info("Flagged {$flagged} attendance record(s) as missing check-out for {$today}.");
 
         return self::SUCCESS;
     }

@@ -9,41 +9,58 @@ use Illuminate\Support\Facades\Hash;
 
 class UserSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     */
     public function run(): void
     {
         $users = [
+            // Super Admin — Mazhar (full system access, spec §1.4)
             [
-                'email' => 'admin@conexus.in',
-                'name' => 'Super Admin',
+                'email' => 'mazhar@conexus.in',
+                'name' => 'Mazhar',
                 'role' => UserRole::SuperAdmin,
             ],
+            // HR Admin — Shivani (all HR modules except system config, spec §1.4)
             [
-                'email' => 'pristia@conexus.in',
-                'name' => 'Pristia Candra',
+                'email' => 'shivani@conexus.in',
+                'name' => 'Shivani',
                 'role' => UserRole::HrAdmin,
             ],
+            // Directors — Rustom, Nick, Nikia (spec §1.4)
             [
-                'email' => 'rayna@conexus.in',
-                'name' => 'Rayna Torff',
-                'role' => UserRole::Manager,
+                'email' => 'rustom@conexus.in',
+                'name' => 'Rustom',
+                'role' => UserRole::Director,
             ],
             [
-                'email' => 'test@example.com',
+                'email' => 'nick@conexus.in',
+                'name' => 'Nick',
+                'role' => UserRole::Director,
+            ],
+            [
+                'email' => 'nikia@conexus.in',
+                'name' => 'Nikia',
+                'role' => UserRole::Director,
+            ],
+            // Finance — Emad (compensation module + payroll approval, spec §1.4)
+            [
+                'email' => 'emad@conexus.in',
+                'name' => 'Emad',
+                'role' => UserRole::Finance,
+            ],
+            // Demo employee for testing
+            [
+                'email' => 'employee@conexus.in',
                 'name' => 'Test Employee',
                 'role' => UserRole::Employee,
             ],
         ];
 
-        foreach ($users as $user) {
+        foreach ($users as $data) {
             User::updateOrCreate(
-                ['email' => $user['email']],
+                ['email' => $data['email']],
                 [
-                    'name' => $user['name'],
-                    'password' => Hash::make('12345678'),
-                    'role' => $user['role']->value,
+                    'name' => $data['name'],
+                    'password' => Hash::make('password'),
+                    'role' => $data['role']->value,
                 ]
             );
         }

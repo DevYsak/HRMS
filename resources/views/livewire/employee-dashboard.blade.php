@@ -1,37 +1,36 @@
 <flux:main class="bg-zinc-50 dark:bg-zinc-950 min-h-screen">
 
     {{-- ===== WELCOME BANNER ===== --}}
-    <div class="relative overflow-hidden bg-gradient-to-r from-indigo-700 via-violet-700 to-purple-800 px-8 py-6">
-        {{-- decorative circles --}}
-        <div class="absolute -top-8 -right-8 size-40 rounded-full bg-white/5 blur-2xl"></div>
-        <div class="absolute bottom-0 left-1/3 size-24 rounded-full bg-white/5 blur-xl"></div>
+    <div class="relative overflow-hidden bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 px-8 py-7">
+        <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(29,183,122,0.18),_transparent_60%)]"></div>
+        <div class="absolute bottom-0 left-0 w-48 h-48 bg-brand-600/5 rounded-full blur-3xl"></div>
 
         <div class="relative flex items-center justify-between">
             <div>
-                <p class="text-indigo-200 text-sm mb-1">{{ now()->format('l, d F Y') }}</p>
-                <h1 class="text-2xl font-bold text-white">
-                    Welcome, {{ Str::of(auth()->user()->name)->explode(' ')->first() }} 👋
+                <p class="text-zinc-400 text-sm mb-1">{{ now()->format('l, d F Y') }}</p>
+                <h1 class="text-2xl font-bold text-white tracking-tight">
+                    Good {{ now()->format('H') < 12 ? 'Morning' : (now()->format('H') < 17 ? 'Afternoon' : 'Evening') }}, {{ Str::of(auth()->user()->name)->explode(' ')->first() }}
                 </h1>
-                <p class="text-indigo-200 text-sm mt-1">Here's your personal workspace for today.</p>
+                <p class="text-zinc-400 text-sm mt-1">Here's your personal workspace for today.</p>
             </div>
 
             {{-- Quick Action Chips --}}
-            <div class="hidden md:flex items-center gap-3">
+            <div class="hidden md:flex items-center gap-2">
                 <a href="{{ route('attendance.my') }}" wire:navigate
-                   class="flex items-center gap-2 px-4 py-2 bg-white/15 hover:bg-white/25 transition rounded-full text-sm text-white font-medium">
-                    <flux:icon.clock class="size-4" /> Clock In
+                   class="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/10 transition rounded-xl text-sm text-white font-semibold">
+                    <flux:icon.clock class="size-4" /> Attendance
                 </a>
                 <a href="{{ route('time-off.my') }}" wire:navigate
-                   class="flex items-center gap-2 px-4 py-2 bg-white/15 hover:bg-white/25 transition rounded-full text-sm text-white font-medium">
+                   class="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/10 transition rounded-xl text-sm text-white font-semibold">
                     <flux:icon.calendar-days class="size-4" /> Apply Leave
                 </a>
                 <a href="{{ route('overtime.my') }}" wire:navigate
-                   class="flex items-center gap-2 px-4 py-2 bg-white/15 hover:bg-white/25 transition rounded-full text-sm text-white font-medium">
+                   class="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/10 transition rounded-xl text-sm text-white font-semibold">
                     <flux:icon.plus-circle class="size-4" /> Log OT
                 </a>
                 <a href="{{ route('payroll.payslips') }}" wire:navigate
-                   class="flex items-center gap-2 px-4 py-2 bg-white/15 hover:bg-white/25 transition rounded-full text-sm text-white font-medium">
-                    <flux:icon.arrow-down-tray class="size-4" /> Download Payslip
+                   class="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 border border-brand-500 transition rounded-xl text-sm text-white font-semibold shadow-lg shadow-brand-900/20">
+                    <flux:icon.banknotes class="size-4" /> My Pay
                 </a>
             </div>
         </div>
@@ -350,9 +349,9 @@
                                             {{ $slip->status === 'paid' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700' }}">
                                             {{ strtoupper($slip->status) }}
                                         </span>
-                                        <a href="{{ route('payroll.payslips.download', $slip->id) }}"
-                                           class="size-7 flex items-center justify-center rounded-lg bg-zinc-200 dark:bg-zinc-700 hover:bg-indigo-100 transition"
-                                           title="Download PDF">
+                                        <a href="{{ route('payroll.payslips') }}" wire:navigate
+                                           class="size-7 flex items-center justify-center rounded-lg bg-zinc-200 dark:bg-zinc-700 hover:bg-brand-100 dark:hover:bg-brand-900/30 transition"
+                                           title="View Payslips">
                                             <flux:icon.arrow-down-tray class="size-3.5 text-zinc-600 dark:text-zinc-300" />
                                         </a>
                                     </div>
