@@ -1,16 +1,18 @@
-<flux:main class="bg-[#f7f7f5] p-4 md:p-8 font-['DM_Sans'] text-[#1a1a1a]"
-     x-data="{ 
+<flux:main class="bg-[#f7f7f5] p-4 md:p-8 font-['DM_Sans'] text-[#1a1a1a]" x-data="{ 
         currentTime: '', 
         updateClock() {
             const now = new Date();
             this.currentTime = now.toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit' });
         }
-     }" 
-     x-init="updateClock(); setInterval(() => updateClock(), 1000)">
-    
+     }" x-init="updateClock(); setInterval(() => updateClock(), 1000)">
+
     <style>
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;700&family=DM+Mono&display=swap');
-        .font-mono { font-family: 'DM Mono', monospace; }
+
+        .font-mono {
+            font-family: 'DM Mono', monospace;
+        }
+
         .pulse-dot {
             width: 8px;
             height: 8px;
@@ -20,10 +22,19 @@
             box-shadow: 0 0 0 rgba(26, 92, 58, 0.4);
             animation: pulse 2s infinite;
         }
+
         @keyframes pulse {
-            0% { box-shadow: 0 0 0 0 rgba(26, 92, 58, 0.4); }
-            70% { box-shadow: 0 0 0 10px rgba(26, 92, 58, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(26, 92, 58, 0); }
+            0% {
+                box-shadow: 0 0 0 0 rgba(26, 92, 58, 0.4);
+            }
+
+            70% {
+                box-shadow: 0 0 0 10px rgba(26, 92, 58, 0);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(26, 92, 58, 0);
+            }
         }
     </style>
 
@@ -36,16 +47,19 @@
         <div class="flex items-center gap-3">
             @if($todayAttendance && !$todayAttendance->check_out)
                 @if(!$todayAttendance->break_start)
-                    <button wire:click="startBreak" class="flex items-center gap-2 px-4 py-2 bg-white border border-[#e8e6df] rounded-lg text-sm font-medium hover:bg-zinc-50 transition-colors">
+                    <button wire:click="startBreak"
+                        class="flex items-center gap-2 px-4 py-2 bg-white border border-[#e8e6df] rounded-lg text-sm font-medium hover:bg-zinc-50 transition-colors">
                         <flux:icon.pause class="size-4" /> Start Break
                     </button>
                 @else
-                    <button wire:click="endBreak" class="flex items-center gap-2 px-4 py-2 bg-amber-50 border border-amber-200 text-amber-700 rounded-lg text-sm font-medium hover:bg-amber-100 transition-colors">
+                    <button wire:click="endBreak"
+                        class="flex items-center gap-2 px-4 py-2 bg-amber-50 border border-amber-200 text-amber-700 rounded-lg text-sm font-medium hover:bg-amber-100 transition-colors">
                         <flux:icon.play class="size-4" /> End Break
                     </button>
                 @endif
             @endif
-            <button @click="$flux.modal('regularisation-modal').show()" class="flex items-center gap-2 px-4 py-2 bg-white border border-[#e8e6df] rounded-lg text-sm font-medium hover:bg-zinc-50 transition-colors">
+            <button @click="$flux.modal('regularisation-modal').show()"
+                class="flex items-center gap-2 px-4 py-2 bg-white border border-[#e8e6df] rounded-lg text-sm font-medium hover:bg-zinc-50 transition-colors">
                 <flux:icon.pencil-square class="size-4" /> Request Regularisation
             </button>
         </div>
@@ -55,12 +69,13 @@
         {{-- Shift Card --}}
         <div class="lg:col-span-2 bg-[#1a1a1a] rounded-2xl p-8 text-white relative overflow-hidden">
             <div class="relative z-10">
-                <div class="inline-flex items-center gap-2 px-3 py-1 bg-[#262626] border border-[#333] rounded-full text-[10px] font-bold tracking-wider mb-6">
+                <div
+                    class="inline-flex items-center gap-2 px-3 py-1 bg-[#262626] border border-[#333] rounded-full text-[10px] font-bold tracking-wider mb-6">
                     <span class="pulse-dot"></span> ACTIVE SHIFT
                 </div>
-                
+
                 <h2 class="text-5xl font-light tracking-tight mb-2">
-                    {{ $shift ? Carbon\Carbon::parse($shift->start_time)->format('g:i A') : '10:30 AM' }} – 
+                    {{ $shift ? Carbon\Carbon::parse($shift->start_time)->format('g:i A') : '10:30 AM' }} –
                     {{ $shift ? Carbon\Carbon::parse($shift->end_time)->format('g:i A') : '07:30 PM' }}
                 </h2>
                 <p class="text-zinc-500 text-sm mb-12">
@@ -75,12 +90,14 @@
                     <div>
                         <div class="text-3xl font-bold mb-1">
                             @if($shift)
-                                {{ Carbon\Carbon::parse($shift->start_time)->diffInHours(Carbon\Carbon::parse($shift->end_time)) }} hrs
+                                {{ Carbon\Carbon::parse($shift->start_time)->diffInHours(Carbon\Carbon::parse($shift->end_time)) }}
+                                hrs
                             @else
                                 9 hrs
                             @endif
                         </div>
-                        <div class="text-[10px] text-zinc-500 uppercase tracking-widest font-medium">Standard hours</div>
+                        <div class="text-[10px] text-zinc-500 uppercase tracking-widest font-medium">Standard hours
+                        </div>
                     </div>
                     <div>
                         <div class="text-3xl font-bold mb-1">{{ $shift->break_duration ?? 60 }} min</div>
@@ -102,17 +119,20 @@
                     <div class="space-y-6">
                         <div>
                             <div class="flex justify-between items-center mb-1">
-                                <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Checked in at</div>
+                                <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Checked in at
+                                </div>
                                 @if($todayAttendance->is_late)
-                                    <div class="text-[10px] font-bold text-[#d44c4c] uppercase">Late: {{ $todayAttendance->late_minutes }}m</div>
+                                    <div class="text-[10px] font-bold text-[#d44c4c] uppercase">Late:
+                                        {{ $todayAttendance->late_minutes }}m</div>
                                 @else
                                     <div class="text-[10px] font-bold text-[#1a5c3a] uppercase">On time</div>
                                 @endif
                             </div>
-                            <div class="text-2xl font-bold font-mono">{{ $todayAttendance->check_in->format('h:i A') }}</div>
+                            <div class="text-2xl font-bold font-mono">{{ $todayAttendance->check_in->format('h:i A') }}
+                            </div>
                         </div>
 
-                        <div class="inline-flex items-center gap-2 px-3 py-1 bg-green-50 text-[#1a5c3a] rounded-full text-xs font-bold" wire:poll.10s>
+                        <div class="inline-flex items-center gap-2 px-3 py-1 bg-green-50 text-[#1a5c3a] rounded-full text-xs font-bold">
                             <span class="w-1.5 h-1.5 bg-[#1a5c3a] rounded-full"></span>
                             @php
                                 $diff = now()->diff($todayAttendance->check_in);
@@ -132,23 +152,28 @@
             <div class="grid grid-cols-2 gap-3 mt-8">
                 @if($todayAttendance && !$todayAttendance->check_out)
                     @if(!$todayAttendance->break_start)
-                        <button wire:click="startBreak" class="py-3 bg-amber-50 border border-amber-200 text-amber-700 rounded-xl font-bold text-sm hover:bg-amber-100 transition-colors">
+                        <button wire:click="startBreak"
+                            class="py-3 bg-amber-50 border border-amber-200 text-amber-700 rounded-xl font-bold text-sm hover:bg-amber-100 transition-colors">
                             Start Break
                         </button>
                     @else
-                        <button wire:click="endBreak" class="py-3 bg-amber-600 text-white rounded-xl font-bold text-sm hover:bg-amber-700 transition-colors">
+                        <button wire:click="endBreak"
+                            class="py-3 bg-amber-600 text-white rounded-xl font-bold text-sm hover:bg-amber-700 transition-colors">
                             End Break
                         </button>
                     @endif
-                    <button wire:click="checkOut" class="py-3 bg-[#1a1a1a] text-white rounded-xl font-bold text-sm hover:bg-black transition-colors">
+                    <button wire:click="checkOut"
+                        class="py-3 bg-[#1a1a1a] text-white rounded-xl font-bold text-sm hover:bg-black transition-colors">
                         Clock Out
                     </button>
                 @elseif(!$todayAttendance)
-                    <button wire:click="checkIn" class="col-span-2 py-4 bg-[#1a5c3a] text-white rounded-xl font-bold text-sm hover:bg-[#154a2e] transition-colors shadow-lg shadow-green-900/10">
+                    <button wire:click="checkIn"
+                        class="col-span-2 py-4 bg-[#1a5c3a] text-white rounded-xl font-bold text-sm hover:bg-[#154a2e] transition-colors shadow-lg shadow-green-900/10">
                         Clock In
                     </button>
                 @else
-                    <div class="col-span-2 py-3 bg-green-50 text-[#1a5c3a] text-center rounded-xl font-bold text-sm border border-green-100">
+                    <div
+                        class="col-span-2 py-3 bg-green-50 text-[#1a5c3a] text-center rounded-xl font-bold text-sm border border-green-100">
                         Shift Completed
                     </div>
                 @endif
@@ -160,82 +185,113 @@
     <div class="grid grid-cols-2 md:grid-cols-4 gap-6 mb-6">
         <div class="bg-white p-6 rounded-2xl border-[0.5px] border-[#e8e6df] shadow-sm">
             <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Present this month</div>
-            <div class="text-4xl font-light text-[#1a5c3a]">{{ $stats['present'] }}</div>
+            <div class="text-4xl font-light text-emerald-600">{{ $stats['present'] }}</div>
         </div>
         <div class="bg-white p-6 rounded-2xl border-[0.5px] border-[#e8e6df] shadow-sm">
             <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Late Arrivals</div>
-            <div class="text-4xl font-light text-[#c4621a]">{{ $stats['late'] }}</div>
+            <div class="text-4xl font-light text-rose-500">{{ $stats['late'] }}</div>
         </div>
-        <div class="bg-white p-6 rounded-2xl border-[0.5px] border-[#e8e6df] shadow-sm" @if($todayAttendance && ! $todayAttendance->check_out) wire:poll.30s @endif>
+        <div class="bg-white p-6 rounded-2xl border-[0.5px] border-[#e8e6df] shadow-sm" @if($todayAttendance && !$todayAttendance->check_out) wire:poll.30s @endif>
             <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Hours Logged</div>
-            <div class="text-4xl font-light text-[#1a4a7a] font-mono">{{ $stats['hours'] }}</div>
+            <div class="text-4xl font-light text-blue-600 font-mono">{{ $stats['hours'] }}</div>
         </div>
         <div class="bg-white p-6 rounded-2xl border-[0.5px] border-[#e8e6df] shadow-sm">
             <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Leaves Taken</div>
-            <div class="text-4xl font-light text-zinc-900">{{ $stats['leaves'] }}</div>
+            <div class="text-4xl font-light text-amber-600">{{ $stats['leaves'] }}</div>
         </div>
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {{-- Calendar --}}
-        <div class="lg:col-span-8 bg-white rounded-2xl p-8 border-[0.5px] border-[#e8e6df] shadow-sm">
-            <div class="flex items-center justify-between mb-8">
-                <h3 class="text-lg font-bold">{{ $calendarMonth->format('F Y') }}</h3>
-                <div class="flex gap-2">
-                    <button wire:click="previousMonth" class="p-2 border border-[#e8e6df] rounded-lg hover:bg-zinc-50 transition-colors"><flux:icon.chevron-left class="size-4" /></button>
-                    <button wire:click="nextMonth" class="p-2 border border-[#e8e6df] rounded-lg hover:bg-zinc-50 transition-colors"><flux:icon.chevron-right class="size-4" /></button>
+        <div class="lg:col-span-8 bg-white rounded-2xl p-4 md:p-6 border-[0.5px] border-[#e8e6df] shadow-sm">
+            <div class="flex items-center justify-between mb-6">
+                <h3 class="text-base font-bold">{{ $calendarMonth->format('F Y') }}</h3>
+                <div class="flex gap-1">
+                    <button wire:click="previousMonth"
+                        class="p-1.5 border border-[#e8e6df] rounded-lg hover:bg-zinc-50 transition-colors"><flux:icon.chevron-left
+                            class="size-3.5" /></button>
+                    <button wire:click="nextMonth"
+                        class="p-1.5 border border-[#e8e6df] rounded-lg hover:bg-zinc-50 transition-colors"><flux:icon.chevron-right
+                            class="size-3.5" /></button>
                 </div>
             </div>
 
-            <div class="grid grid-cols-7 gap-y-4 text-center">
+            <div class="grid grid-cols-7 gap-2 text-center">
                 @foreach(['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'] as $dayName)
-                    <div class="text-[10px] font-bold text-zinc-400 tracking-widest">{{ $dayName }}</div>
+                    <div class="text-[10px] font-bold text-zinc-400 tracking-widest pb-2">{{ $dayName }}</div>
                 @endforeach
 
                 @foreach($calendarDays as $day)
-                    <div class="relative py-2 group">
-                        <div class="text-sm font-medium mx-auto flex items-center justify-center w-10 h-10 rounded-xl transition-colors
-                            {{ !$day['in_month'] ? 'text-zinc-300' : 'text-zinc-900' }}
-                            {{ $day['is_today'] ? 'bg-[#1a1a1a] text-white shadow-lg' : '' }}
-                        ">
-                            {{ $day['day'] }}
-                        </div>
-                        
-                        {{-- Status Dot --}}
-                        <div class="flex justify-center mt-1">
-                            @if($day['status'] === 'present')
-                                <div class="w-1 h-1 rounded-full bg-[#1a5c3a]"></div>
-                            @elseif($day['status'] === 'late')
-                                <div class="w-1 h-1 rounded-full bg-[#d44c4c]"></div>
-                            @elseif($day['status'] === 'leave')
-                                <div class="w-1 h-1 rounded-full bg-[#c4621a]"></div>
-                            @elseif($day['status'] === 'holiday')
-                                <div class="w-1 h-1 rounded-full bg-[#1a4a7a]"></div>
-                            @elseif($day['status'] === 'absent' && $day['in_month'] && Carbon\Carbon::parse($day['date'])->isPast())
-                                <div class="w-1 h-1 rounded-full bg-zinc-300"></div>
+                    @php
+                        $dayDate = \Carbon\Carbon::parse($day['date']);
+                        $isWeekend = $dayDate->isWeekend();
+                        $statusClass = '';
+                        $dotClass = '';
+
+                        if ($day['in_month']) {
+                            $statusClass = match ($day['status']) {
+                                'present' => 'bg-emerald-50 border-emerald-100',
+                                'late' => 'bg-rose-50 border-rose-100',
+                                'leave' => 'bg-amber-50 border-amber-100',
+                                'holiday' => 'bg-blue-50 border-blue-100',
+                                'absent' => $dayDate->isPast() ? 'bg-zinc-50 border-zinc-100' : 'bg-white border-zinc-50',
+                                default => 'border-transparent',
+                            };
+
+                            $dotClass = match ($day['status']) {
+                                'present' => 'bg-emerald-500',
+                                'late' => 'bg-rose-500',
+                                'leave' => 'bg-amber-500',
+                                'holiday' => 'bg-blue-500',
+                                'absent' => 'bg-zinc-300',
+                                default => '',
+                            };
+                        }
+                    @endphp
+
+                    <div class="relative">
+                        <div class="aspect-square rounded-lg border transition-all duration-300 flex flex-col items-center justify-center relative
+                                {{ !$day['in_month'] ? 'opacity-20 pointer-events-none' : '' }}
+                                {{ $day['is_today'] ? 'bg-emerald-600 border-emerald-600 text-white shadow-lg scale-105 z-20' : ($statusClass ?: 'bg-white border-zinc-50 hover:border-zinc-200') }}
+                            ">
+                            <span
+                                class="text-sm font-bold tracking-tight {{ $day['is_today'] ? 'text-white' : ($isWeekend && $day['status'] === 'absent' ? 'text-zinc-400' : 'text-zinc-800') }}">
+                                {{ $day['day'] }}
+                            </span>
+
+                            @if($dotClass && !$day['is_today'])
+                                <div class="mt-0.5 flex gap-1">
+                                    <div class="w-1 h-1 rounded-full {{ $dotClass }}"></div>
+                                </div>
                             @endif
                         </div>
 
                         @if($day['is_holiday'])
-                            <div class="absolute top-2 right-2 flex items-center justify-center bg-blue-50 text-[#1a4a7a] text-[8px] font-bold px-1 rounded">PH</div>
+                            <div class="absolute -top-0.5 -right-0.5 z-30">
+                                <span class="relative flex h-2 w-2">
+                                    <span
+                                        class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                                    <span
+                                        class="relative inline-flex rounded-full h-2 w-2 bg-blue-600 border border-white shadow-sm"></span>
+                                </span>
+                            </div>
                         @endif
                     </div>
                 @endforeach
             </div>
 
-            {{-- Legend --}}
             <div class="mt-8 pt-8 border-t border-[#e8e6df] flex flex-wrap gap-6">
                 <div class="flex items-center gap-2 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
-                    <div class="w-1.5 h-1.5 rounded-full bg-[#1a5c3a]"></div> Present
+                    <div class="w-1.5 h-1.5 rounded-full bg-emerald-500"></div> Present
                 </div>
                 <div class="flex items-center gap-2 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
-                    <div class="w-1.5 h-1.5 rounded-full bg-[#d44c4c]"></div> Late
+                    <div class="w-1.5 h-1.5 rounded-full bg-rose-500"></div> Late
                 </div>
                 <div class="flex items-center gap-2 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
-                    <div class="w-1.5 h-1.5 rounded-full bg-[#c4621a]"></div> On leave
+                    <div class="w-1.5 h-1.5 rounded-full bg-amber-500"></div> On leave
                 </div>
                 <div class="flex items-center gap-2 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
-                    <div class="w-1.5 h-1.5 rounded-full bg-[#1a4a7a]"></div> Public Holiday
+                    <div class="w-1.5 h-1.5 rounded-full bg-blue-500"></div> Public Holiday
                 </div>
                 <div class="flex items-center gap-2 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
                     <div class="w-1.5 h-1.5 rounded-full bg-zinc-300"></div> Absent
@@ -247,19 +303,25 @@
         <div class="lg:col-span-4 space-y-6">
             <div class="bg-white rounded-2xl p-8 border-[0.5px] border-[#e8e6df] shadow-sm">
                 <h3 class="text-lg font-bold mb-1">Holidays this month</h3>
-                <p class="text-xs text-zinc-400 mb-6 uppercase tracking-wider">UK public holidays — {{ $calendarMonth->format('F Y') }}</p>
+                <p class="text-xs text-zinc-400 mb-6 uppercase tracking-wider">UK public holidays —
+                    {{ $calendarMonth->format('F Y') }}</p>
 
                 <div class="space-y-4">
                     @forelse($monthHolidays as $holiday)
-                        <div class="flex items-center gap-4 p-4 border border-[#e8e6df] rounded-xl hover:border-zinc-300 transition-colors">
+                        <div
+                            class="flex items-center gap-4 p-4 border border-[#e8e6df] rounded-xl hover:border-zinc-300 transition-colors">
                             <div class="text-center min-w-[40px]">
-                                <div class="text-xl font-bold leading-none">{{ Carbon\Carbon::parse($holiday->date)->format('j') }}</div>
-                                <div class="text-[9px] font-bold text-zinc-400 uppercase tracking-widest">{{ Carbon\Carbon::parse($holiday->date)->format('M') }}</div>
+                                <div class="text-xl font-bold leading-none">
+                                    {{ Carbon\Carbon::parse($holiday->date)->format('j') }}</div>
+                                <div class="text-[9px] font-bold text-zinc-400 uppercase tracking-widest">
+                                    {{ Carbon\Carbon::parse($holiday->date)->format('M') }}</div>
                             </div>
                             <div class="w-[1px] h-8 bg-[#e8e6df]"></div>
                             <div class="flex-1">
                                 <div class="text-sm font-bold text-zinc-900">{{ $holiday->name }}</div>
-                                <div class="inline-flex items-center px-1.5 py-0.5 bg-blue-50 text-[#1a4a7a] text-[9px] font-bold rounded uppercase mt-1">UK Public Holiday</div>
+                                <div
+                                    class="inline-flex items-center px-1.5 py-0.5 bg-blue-50 text-[#1a4a7a] text-[9px] font-bold rounded uppercase mt-1">
+                                    UK Public Holiday</div>
                             </div>
                         </div>
                     @empty
@@ -267,7 +329,8 @@
                     @endforelse
                 </div>
 
-                <div class="mt-8 pt-8 border-t border-[#e8e6df] flex items-center gap-2 text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
+                <div
+                    class="mt-8 pt-8 border-t border-[#e8e6df] flex items-center gap-2 text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
                     <span class="w-1.5 h-1.5 rounded-full bg-zinc-300"></span> IP & Geo Logging active
                 </div>
             </div>
@@ -278,7 +341,8 @@
     <div class="mt-6 bg-white rounded-2xl p-8 border-[0.5px] border-[#e8e6df] shadow-sm">
         <div class="flex items-center justify-between mb-8">
             <h3 class="text-lg font-bold">Attendance log — {{ $calendarMonth->format('F Y') }}</h3>
-            <button class="px-3 py-1.5 border border-[#e8e6df] rounded-lg text-xs font-bold text-zinc-500 hover:bg-zinc-50 transition-colors flex items-center gap-2">
+            <button
+                class="px-3 py-1.5 border border-[#e8e6df] rounded-lg text-xs font-bold text-zinc-500 hover:bg-zinc-50 transition-colors flex items-center gap-2">
                 Filter <flux:icon.chevron-down class="size-3" />
             </button>
         </div>
@@ -303,11 +367,11 @@
                                 <span class="text-zinc-400 text-xs ml-1">{{ $item->date->format('D') }}</span>
                             </td>
                             <td class="py-5 font-mono text-xs">
-                                {{ $item->check_in->format('H:i') }} — 
+                                {{ $item->check_in->format('H:i') }} —
                                 @if($item->check_out)
                                     {{ $item->check_out->format('H:i') }}
                                 @elseif($item->date->isToday())
-                                    <span class="text-[#1a5c3a] animate-pulse">running</span>
+                                    <span class="text-emerald-600 animate-pulse">running</span>
                                 @else
                                     --:--
                                 @endif
@@ -317,14 +381,14 @@
                             </td>
                             <td class="py-5">
                                 @php
-                                    $statusColor = match($item->status) {
-                                        'on_time' => 'bg-green-50 text-[#1a5c3a]',
-                                        'late' => 'bg-red-50 text-[#d44c4c]',
-                                        'remote' => 'bg-blue-50 text-[#1a4a7a]',
-                                        'wfh' => 'bg-purple-50 text-purple-700',
+                                    $statusColor = match ($item->status) {
+                                        'on_time' => 'bg-emerald-50 text-emerald-700',
+                                        'late' => 'bg-rose-50 text-rose-700',
+                                        'remote' => 'bg-blue-50 text-blue-700',
+                                        'wfh' => 'bg-indigo-50 text-indigo-700',
                                         default => 'bg-zinc-50 text-zinc-500'
                                     };
-                                    $statusLabel = match($item->status) {
+                                    $statusLabel = match ($item->status) {
                                         'on_time' => 'ON TIME',
                                         'late' => 'LATE',
                                         'remote' => 'REMOTE',
@@ -332,11 +396,14 @@
                                         default => strtoupper($item->status)
                                     };
                                 @endphp
-                                <span class="px-2 py-0.5 rounded text-[9px] font-bold tracking-wider {{ $statusColor }}">{{ $statusLabel }}</span>
+                                <span
+                                    class="px-2 py-0.5 rounded text-[9px] font-bold tracking-wider {{ $statusColor }}">{{ $statusLabel }}</span>
                             </td>
                             <td class="py-5">
                                 @if(!$item->check_out && !$item->date->isToday())
-                                    <button wire:click="openRegularisation('{{ $item->date->toDateString() }}')" class="text-zinc-400 text-[10px] font-bold uppercase hover:text-[#1a1a1a] transition-colors">Regularisation &rarr;</button>
+                                    <button wire:click="openRegularisation('{{ $item->date->toDateString() }}')"
+                                        class="text-zinc-400 text-[10px] font-bold uppercase hover:text-[#1a1a1a] transition-colors">Regularisation
+                                        &rarr;</button>
                                 @elseif($item->check_in_ip)
                                     <span class="text-zinc-300 text-[10px] font-mono">{{ $item->check_in_ip }}</span>
                                 @endif
@@ -350,7 +417,8 @@
                                     @endphp
                                     {{ $h }}h {{ $m }}m
                                 @elseif($item->date->isToday())
-                                    <span class="inline-flex items-center gap-1.5 px-2 py-0.5 bg-green-50 text-[#1a5c3a] rounded text-[10px] font-bold" wire:poll.10s>
+                                    <span
+                                        class="inline-flex items-center gap-1.5 px-2 py-0.5 bg-green-50 text-[#1a5c3a] rounded text-[10px] font-bold">
                                         <span class="w-1 h-1 bg-[#1a5c3a] rounded-full"></span>
                                         @php
                                             $diff = now()->diff($item->check_in);
@@ -380,13 +448,14 @@
 
             <div class="space-y-4">
                 <flux:input wire:model="regDate" label="Date of Work" type="date" />
-                
+
                 <div class="grid grid-cols-2 gap-4">
                     <flux:input wire:model="regCheckIn" label="Actual Check-in" type="time" />
                     <flux:input wire:model="regCheckOut" label="Actual Check-out" type="time" />
                 </div>
 
-                <flux:textarea wire:model="regReason" label="Reason for correction" placeholder="e.g. System glitch, forgot to clock in..." rows="3" />
+                <flux:textarea wire:model="regReason" label="Reason for correction"
+                    placeholder="e.g. System glitch, forgot to clock in..." rows="3" />
             </div>
 
             <div class="flex gap-2 justify-end mt-6">

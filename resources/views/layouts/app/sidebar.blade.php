@@ -15,6 +15,8 @@
             $isFin   = $user->canApproveFinance();
             $isDir   = $user->role?->value === 'director';
 
+            $company = \App\Models\Company::first() ?? new \App\Models\Company(['name' => 'Pulse HRMS', 'primary_color' => '#4f46e5']);
+
             // Unread notifications count for the sidebar Inbox badge
             $unreadNotifications = $user->unreadNotifications()->count();
 
@@ -35,12 +37,16 @@
 
             {{-- Brand --}}
             <flux:sidebar.brand
-                name="Pulse HRMS"
+                :name="$company->name"
                 :href="route('dashboard')"
                 wire:navigate
             >
-                <x-slot name="logo" class="flex aspect-square size-8 items-center justify-center rounded-lg bg-indigo-600">
-                    <svg class="size-4 fill-white" viewBox="0 0 24 24"><path d="M4 3h3v7h10V3h3v18h-3v-8H7v8H4V3z"/></svg>
+                <x-slot name="logo" class="flex aspect-square size-8 items-center justify-center rounded-lg" style="background-color: {{ $company->primary_color }}">
+                    @if($company->logo)
+                        <img src="{{ asset('storage/'.$company->logo) }}" class="size-6 object-contain" alt="{{ $company->name }}">
+                    @else
+                        <svg class="size-4 fill-white" viewBox="0 0 24 24"><path d="M4 3h3v7h10V3h3v18h-3v-8H7v8H4V3z"/></svg>
+                    @endif
                 </x-slot>
             </flux:sidebar.brand>
 

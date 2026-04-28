@@ -11,6 +11,9 @@
             {{-- Sidebar Navigation --}}
             <div class="w-full md:w-64 shrink-0">
                 <flux:navlist aria-label="{{ __('Settings') }}" class="space-y-1">
+                    @can('manageFullSettings')
+                        <flux:navlist.item :href="route('settings.general')" :current="request()->routeIs('settings.general')" wire:navigate icon="building-office-2">{{ __('Company') }}</flux:navlist.item>
+                    @endcan
                     <flux:navlist.item :href="route('profile.edit')" :current="request()->routeIs('profile.edit')" wire:navigate icon="user">{{ __('Profile') }}</flux:navlist.item>
                     <flux:navlist.item :href="route('security.edit')" :current="request()->routeIs('security.edit')" wire:navigate icon="lock-closed">{{ __('Security') }}</flux:navlist.item>
                     <flux:navlist.item :href="route('teams.index')" :current="request()->routeIs('teams.*')" wire:navigate icon="users">{{ __('Teams') }}</flux:navlist.item>

@@ -57,68 +57,23 @@ class AttendanceTracker extends Component
     public function loadData()
     {
         $employee = Auth::user()->employee;
+        if (! $employee) {
+            return;
+        }
+
         $this->shift = $employee->shift ?? ShiftSetting::first();
         $this->shiftLabel = $this->buildShiftLabel();
 
-        $this->todayAttendance = Attendance::where('employee_id', $employee->id)
-            ->where('date', Carbon::today())
-            ->first();
-
-        $this->loadStats();
-        $this->loadCalendar();
-        $this->loadHolidays();
-        $this->loadHistory();
-    }
-
-    public function loadStats()
-    {
-        $employee = Auth::user()->employee;
-        $month = $this->calendarMonth->month;
-        $year = $this->calendarMonth->year;
-
-        $monthAttendance = Attendance::where('employee_id', $employee->id)
-            ->whereYear('date', $year)
-            ->whereMonth('date', $month)
-            ->get();
-
-        $totalMinutes = $monthAttendance->sum(function ($a) {
-            if ($a->check_in && $a->check_out) {
-                return $a->check_in->diffInMinutes($a->check_out);
-            }
-
-            if ($a->date->isToday() && $a->check_in && ! $a->check_out) {
-                return $a->check_in->diffInMinutes(now());
-            }
-
-            return 0;
-        });
-
-        $this->stats = [
-            'present' => $monthAttendance->where('status', '!=', 'absent')->count(),
-            'late' => $monthAttendance->where('status', 'late')->count(),
-            'hours' => floor($totalMinutes / 60).'h '.($totalMinutes % 60).'m',
-            'leaves' => LeaveRequest::where('employee_id', $employee->id)
-                ->where('status', 'approved')
-                ->where(function ($query) use ($month, $year) {
-                    $query->whereMonth('start_date', $month)->whereYear('start_date', $year)
-                        ->orWhereMonth('end_date', $month)->whereYear('end_date', $year);
-                })->count(),
-        ];
-    }
-
-    public function loadCalendar()
-    {
-        $employee = Auth::user()->employee;
+        // 1. Setup boundaries
         $start = $this->calendarMonth->copy()->startOfMonth();
         $end = $start->copy()->endOfMonth();
-
         $gridStart = $start->copy()->startOfWeek();
         $gridEnd = $end->copy()->endOfWeek();
 
-        $attendances = Attendance::where('employee_id', $employee->id)
+        // 2. Fetch all required data in consolidated queries
+        $allAttendances = Attendance::where('employee_id', $employee->id)
             ->whereBetween('date', [$gridStart->toDateString(), $gridEnd->toDateString()])
-            ->get()
-            ->keyBy(fn ($a) => $a->date->toDateString());
+            ->get();
 
         $leaves = LeaveRequest::where('employee_id', $employee->id)
             ->where('status', 'approved')
@@ -127,8 +82,11 @@ class AttendanceTracker extends Component
             ->get();
 
         $holidays = PublicHoliday::whereBetween('date', [$gridStart->toDateString(), $gridEnd->toDateString()])
-            ->get()
-            ->keyBy(fn ($h) => Carbon::parse($h->date)->toDateString());
+            ->get();
+
+        // 3. Process data in memory
+        $attendanceMap = $allAttendances->keyBy(fn ($a) => $a->date->toDateString());
+        $holidayMap = $holidays->keyBy(fn ($h) => Carbon::parse($h->date)->toDateString());
 
         $leaveMap = [];
         foreach ($leaves as $l) {
@@ -138,19 +96,42 @@ class AttendanceTracker extends Component
             }
         }
 
-        $period = CarbonPeriod::create($gridStart, $gridEnd);
+        // 4. Assign Today's Attendance
+        $this->todayAttendance = $attendanceMap->get(Carbon::today()->toDateString());
+
+        // 5. Calculate Stats (Current month only)
+        $monthItems = $allAttendances->filter(fn ($a) => $a->date->month === $start->month && $a->date->year === $start->year);
+        $totalMinutes = $monthItems->sum(function ($a) {
+            if ($a->check_in && $a->check_out) {
+                return $a->check_in->diffInMinutes($a->check_out) - ($a->break_minutes ?? 0);
+            }
+
+            return 0;
+        });
+
+        $this->stats = [
+            'present' => $monthItems->where('status', 'on_time')->count() + $monthItems->where('status', 'late')->count(),
+            'late' => $monthItems->where('is_late', true)->count(),
+            'hours' => floor($totalMinutes / 60).'h '.($totalMinutes % 60).'m',
+            'leaves' => $leaves->filter(fn ($l) => ($l->start_date->month === $start->month && $l->start_date->year === $start->year) ||
+                ($l->end_date->month === $start->month && $l->end_date->year === $start->year)
+            )->count(),
+        ];
+
+        // 6. Build Calendar Days
+        $gridPeriod = CarbonPeriod::create($gridStart, $gridEnd);
         $this->calendarDays = [];
 
-        foreach ($period as $d) {
+        foreach ($gridPeriod as $d) {
             $dateKey = $d->toDateString();
             $status = 'absent';
 
-            if (isset($attendances[$dateKey])) {
-                $att = $attendances[$dateKey];
+            if (isset($attendanceMap[$dateKey])) {
+                $att = $attendanceMap[$dateKey];
                 $status = ($att->status === 'late' || $att->is_late) ? 'late' : 'present';
             } elseif (isset($leaveMap[$dateKey])) {
                 $status = 'leave';
-            } elseif (isset($holidays[$dateKey])) {
+            } elseif (isset($holidayMap[$dateKey])) {
                 $status = 'holiday';
             } elseif ($d->isWeekend()) {
                 $status = 'weekend';
@@ -164,29 +145,17 @@ class AttendanceTracker extends Component
                 'in_month' => $d->month === $start->month,
                 'status' => $status,
                 'is_today' => $d->isToday(),
-                'is_holiday' => isset($holidays[$dateKey]),
+                'is_holiday' => isset($holidayMap[$dateKey]),
             ];
         }
-    }
 
-    public function loadHolidays()
-    {
-        $this->monthHolidays = PublicHoliday::select('date', 'name')
-            ->whereMonth('date', $this->calendarMonth->month)
-            ->whereYear('date', $this->calendarMonth->year)
-            ->distinct()
-            ->orderBy('date')
-            ->get();
-    }
+        // 7. Load UI specific lists
+        $this->monthHolidays = $holidays->filter(fn ($h) => Carbon::parse($h->date)->month === $start->month &&
+            Carbon::parse($h->date)->year === $start->year
+        )->values();
 
-    public function loadHistory()
-    {
-        $employee = Auth::user()->employee;
-        $this->history = Attendance::where('employee_id', $employee->id)
-            ->whereYear('date', $this->calendarMonth->year)
-            ->whereMonth('date', $this->calendarMonth->month)
-            ->latest('date')
-            ->get();
+        $this->history = $allAttendances->filter(fn ($a) => $a->date->month === $start->month && $a->date->year === $start->year
+        )->sortByDesc('date')->values();
     }
 
     public function previousMonth()

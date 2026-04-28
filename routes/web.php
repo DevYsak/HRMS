@@ -159,7 +159,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // --------------------------------------------------
     // Settings (general — company settings)
     // --------------------------------------------------
-    Route::view('settings/general', 'pages.settings.general')->name('settings.general');
+    Route::livewire('settings/general', 'pages::settings.general')->name('settings.general');
 
 });
 

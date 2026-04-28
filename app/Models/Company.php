@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 #[Fillable([
     'name', 'logo', 'website', 'industry', 'phone', 'email',
     'address', 'city', 'country', 'timezone', 'date_format',
-    'currency', 'currency_symbol',
+    'currency', 'currency_symbol', 'primary_color', 'secondary_color',
 ])]
 class Company extends Model
 {
