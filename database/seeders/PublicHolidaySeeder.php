@@ -14,13 +14,12 @@ class PublicHolidaySeeder extends Seeder
     public function run(): void
     {
         // Ensure the table exists before attempting operations
-        if (!Schema::hasTable('public_holidays')) {
+        if (! Schema::hasTable('public_holidays')) {
             $this->command?->info('Table public_holidays not found. Skipping PublicHolidaySeeder.');
 
             return;
         }
 
-        $hasYear = Schema::hasColumn('public_holidays', 'year');
         $hasCountry = Schema::hasColumn('public_holidays', 'country');
 
         $holidays = [
@@ -58,7 +57,7 @@ class PublicHolidaySeeder extends Seeder
             ['date' => '2025-12-26', 'name' => 'Boxing Day', 'country' => 'UK'],
         ];
 
-        DB::transaction(function () use ($holidays, $hasYear, $hasCountry) {
+        DB::transaction(function () use ($holidays, $hasCountry) {
             foreach ($holidays as $h) {
                 $data = [
                     'name' => $h['name'],
