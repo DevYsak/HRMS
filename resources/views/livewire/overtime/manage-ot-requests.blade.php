@@ -1,10 +1,10 @@
-<flux:main class="bg-zinc-50 p-6 space-y-6 dark:bg-zinc-950">
+﻿<flux:main class="bg-zinc-50 p-6 space-y-6 dark:bg-zinc-950">
     <div class="pulse-page-header">
         <div>
             <h1 class="pulse-page-title">Manage OT Requests</h1>
             <p class="pulse-page-subtitle">Review, approve or reject overtime pre-approval requests</p>
         </div>
-        <flux:button href="{{ route('reports.ot-records', ['month' => now()->month, 'year' => now()->year]) }}" variant="outline" icon="arrow-down-tray" target="_blank">Export CSV</flux:button>
+        <flux:button href="{{ route('reports.ot-records', ['month' => now()->month, 'year' => now()->year]) }}" variant="ghost" icon="arrow-down-tray" target="_blank">Export CSV</flux:button>
     </div>
 
     {{-- Filters --}}

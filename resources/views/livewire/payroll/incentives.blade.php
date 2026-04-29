@@ -1,4 +1,4 @@
-<flux:main class="bg-zinc-50 p-6 space-y-6 dark:bg-zinc-950">
+﻿<flux:main class="bg-zinc-50 p-6 space-y-6 dark:bg-zinc-950">
     <div class="pulse-page-header">
         <div>
             <h1 class="pulse-page-title">Incentives</h1>
@@ -57,7 +57,7 @@
                             @if($inc->status === 'pending')
                             <div class="flex gap-2 justify-end">
                                 <flux:button size="xs" variant="primary" wire:click="approve({{ $inc->id }})">Approve</flux:button>
-                                <flux:button size="xs" variant="danger" wire:click="reject({{ $inc->id }})">Reject</flux:button>
+                                <flux:button size="xs" variant="ghost" class="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30" wire:click="reject({{ $inc->id }})">Reject</flux:button>
                             </div>
                             @else
                             <span class="text-zinc-400 text-xs">{{ $inc->approvedBy?->name ?? '—' }}</span>

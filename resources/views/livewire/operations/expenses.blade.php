@@ -1,11 +1,11 @@
-<flux:main>
+﻿<flux:main>
         <div class="flex items-center justify-between mb-8">
             <div>
                 <flux:heading size="xl" level="1">{{ __('Expense Claims') }}</flux:heading>
                 <flux:subheading>{{ __('Review and manage employee expense reimbursements.') }}</flux:subheading>
             </div>
             <div class="flex items-center gap-2">
-                <flux:button icon="arrow-down-tray" variant="outline">{{ __('Export') }}</flux:button>
+                <flux:button icon="arrow-down-tray" variant="ghost">{{ __('Export') }}</flux:button>
                 <flux:button icon="plus" variant="primary" wire:click="openSubmitModal">{{ __('New Claim') }}</flux:button>
             </div>
         </div>
@@ -57,7 +57,7 @@
                                     @if($canReview && $expense->status->value === $pendingStatus)
                                         <div class="flex justify-end gap-2">
                                             <flux:button size="sm" variant="primary" wire:click="approve({{ $expense->id }})">Approve</flux:button>
-                                            <flux:button size="sm" variant="danger" wire:click="openRejectModal({{ $expense->id }})">Reject</flux:button>
+                                            <flux:button size="sm" variant="ghost" class="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30" wire:click="openRejectModal({{ $expense->id }})">Reject</flux:button>
                                         </div>
                                     @elseif($expense->status->value === 'rejected' && $expense->rejection_reason)
                                         <span class="text-xs text-red-500 italic max-w-xs text-right block">{{ $expense->rejection_reason }}</span>
@@ -85,7 +85,7 @@
                 <flux:textarea wire:model="rejectionReason" label="Reason for Rejection" rows="3" placeholder="Provide a reason for the employee…" />
                 <div class="flex justify-end gap-2">
                     <flux:button variant="ghost" wire:click="$set('showRejectModal', false)">Cancel</flux:button>
-                    <flux:button variant="danger" wire:click="reject">Confirm Rejection</flux:button>
+                    <flux:button variant="ghost" class="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30" wire:click="reject">Confirm Rejection</flux:button>
                 </div>
             </div>
         </flux:modal>

@@ -1,4 +1,4 @@
-<flux:main class="bg-zinc-50 p-6 space-y-6 dark:bg-zinc-950">
+﻿<flux:main class="bg-zinc-50 p-6 space-y-6 dark:bg-zinc-950">
     <div class="pulse-page-header">
         <div>
             <h1 class="pulse-page-title">Team Time Off</h1>
@@ -138,7 +138,7 @@
                     <flux:textarea wire:model="reviewer_comment" label="Manager Comment / Feedback" placeholder="Add a comment..." rows="2" />
                     
                     <div class="flex gap-3 pt-4 border-t border-zinc-100 dark:border-zinc-800">
-                        <flux:button wire:click="reject" variant="danger" class="flex-1">Reject</flux:button>
+                        <flux:button wire:click="reject" variant="ghost" class="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 flex-1">Reject</flux:button>
                         <flux:button wire:click="approve" variant="primary" class="flex-1">Approve</flux:button>
                     </div>
                 </div>

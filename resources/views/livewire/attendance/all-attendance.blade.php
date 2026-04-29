@@ -1,4 +1,4 @@
-<flux:main class="bg-zinc-50 p-6 space-y-6 dark:bg-zinc-950">
+﻿<flux:main class="bg-zinc-50 p-6 space-y-6 dark:bg-zinc-950">
     <div class="pulse-page-header">
         <div>
             <h1 class="pulse-page-title">Employee Attendance Master</h1>
@@ -14,7 +14,7 @@
                 <option value="remote">Remote</option>
                 <option value="absent">Absent</option>
              </flux:select>
-             <flux:button href="{{ route('reports.attendance-summary', ['month' => now()->month, 'year' => now()->year]) }}" variant="outline" icon="arrow-down-tray" size="sm" target="_blank">Export CSV</flux:button>
+             <flux:button href="{{ route('reports.attendance-summary', ['month' => now()->month, 'year' => now()->year]) }}" variant="ghost" icon="arrow-down-tray" size="sm" target="_blank">Export CSV</flux:button>
         </div>
     </div>
 
@@ -156,7 +156,7 @@
                     <flux:modal.close>
                         <flux:button variant="ghost">Cancel</flux:button>
                     </flux:modal.close>
-                    <flux:button wire:click="rejectRegularisation" variant="danger">Reject</flux:button>
+                    <flux:button wire:click="rejectRegularisation" variant="ghost" class="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30">Reject</flux:button>
                     <flux:button wire:click="approveRegularisation" variant="primary">Approve</flux:button>
                 </div>
             @endif

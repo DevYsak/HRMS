@@ -70,7 +70,7 @@
             <div class="flex justify-between items-center mb-6">
                 <h3 class="text-lg font-bold text-zinc-900 dark:text-white">Draft Payslips</h3>
                 @if($currentPayroll->status === 'draft')
-                    <flux:button wire:click="submitToFinance" variant="warning" icon="paper-airplane">Submit for Finance Approval</flux:button>
+                    <flux:button wire:click="submitToFinance" icon="paper-airplane" class="bg-amber-500 hover:bg-amber-600 text-white border-amber-500">Submit for Finance Approval</flux:button>
                 @endif
                 @if(in_array($currentPayroll->status, ['draft', 'pending_finance']))
                     <flux:button wire:click="finalize" wire:confirm="Finalize payroll? This will mark all payslips as paid and notify employees." variant="primary" icon="check-circle">Finalize &amp; Pay</flux:button>

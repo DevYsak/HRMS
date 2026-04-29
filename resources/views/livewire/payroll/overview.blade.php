@@ -1,11 +1,11 @@
-<flux:main class="bg-zinc-50 p-6 space-y-6 dark:bg-zinc-950">
+﻿<flux:main class="bg-zinc-50 p-6 space-y-6 dark:bg-zinc-950">
     <div class="pulse-page-header">
         <div>
             <h1 class="pulse-page-title">Payroll Overview</h1>
             <p class="pulse-page-subtitle">Summary of company-wide salary disbursements</p>
         </div>
         <div class="flex gap-3">
-            <flux:button href="{{ route('reports.payroll-summary', ['month' => now()->month, 'year' => now()->year]) }}" variant="outline" icon="arrow-down-tray" target="_blank">Export PDF</flux:button>
+            <flux:button href="{{ route('reports.payroll-summary', ['month' => now()->month, 'year' => now()->year]) }}" variant="ghost" icon="arrow-down-tray" target="_blank">Export PDF</flux:button>
             <flux:button href="{{ route('payroll.process') }}" variant="primary" icon="play" wire:navigate>Process Payroll</flux:button>
             <flux:button href="{{ route('payroll.components') }}" variant="ghost" icon="cog-6-tooth" wire:navigate>Settings</flux:button>
         </div>
