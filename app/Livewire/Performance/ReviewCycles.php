@@ -2,25 +2,35 @@
 
 namespace App\Livewire\Performance;
 
+use App\Enums\EmployeeStatus;
 use App\Models\Employee;
 use App\Models\PerformanceReview;
 use App\Models\ReviewCycle;
+use App\Models\ReviewGoal;
+use App\Services\PerformanceService;
+use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 
 class ReviewCycles extends Component
 {
     public bool $showModal = false;
+
     public ?int $editingId = null;
 
     // Form fields
     public string $name = '';
+
     public string $start_date = '';
+
     public string $end_date = '';
+
     public string $status = 'draft';
+
     public string $description = '';
 
     public function create(): void
     {
+        abort_unless(Auth::user()->canManageEmployees(), 403);
         $this->reset(['name', 'start_date', 'end_date', 'status', 'description', 'editingId']);
         $this->status = 'draft';
         $this->showModal = true;
@@ -28,6 +38,7 @@ class ReviewCycles extends Component
 
     public function edit(int $id): void
     {
+        abort_unless(Auth::user()->canManageEmployees(), 403);
         $cycle = ReviewCycle::findOrFail($id);
         $this->editingId = $id;
         $this->name = $cycle->name;
@@ -38,14 +49,24 @@ class ReviewCycles extends Component
         $this->showModal = true;
     }
 
-    public function save(): void
+    public function save(PerformanceService $performanceService): void
     {
+        abort_unless(Auth::user()->canManageEmployees(), 403);
+
         $this->validate([
             'name' => 'required|string|max:255',
             'start_date' => 'required|date',
             'end_date' => 'required|date|after:start_date',
             'status' => 'required|in:draft,active,closed',
         ]);
+
+        try {
+            $performanceService->validateConexusQuarterWindow($this->name, $this->start_date, $this->end_date);
+        } catch (\DomainException $exception) {
+            $this->addError('start_date', $exception->getMessage());
+
+            return;
+        }
 
         $data = [
             'name' => $this->name,
@@ -71,9 +92,9 @@ class ReviewCycles extends Component
     protected function generateReviewsForCycle(ReviewCycle $cycle): void
     {
         $employees = Employee::whereIn('status', [
-            \App\Enums\EmployeeStatus::Active,
-            \App\Enums\EmployeeStatus::Onboarding,
-            \App\Enums\EmployeeStatus::Probation,
+            EmployeeStatus::Active,
+            EmployeeStatus::Onboarding,
+            EmployeeStatus::Probation,
         ])->get();
 
         foreach ($employees as $employee) {
@@ -98,18 +119,22 @@ class ReviewCycles extends Component
 
     public function activate(int $id): void
     {
+        abort_unless(Auth::user()->canManageEmployees(), 403);
         ReviewCycle::findOrFail($id)->update(['status' => 'active']);
         session()->flash('status', 'Cycle activated.');
     }
 
     public function close(int $id): void
     {
+        abort_unless(Auth::user()->canManageEmployees(), 403);
         ReviewCycle::findOrFail($id)->update(['status' => 'closed']);
         session()->flash('status', 'Cycle closed.');
     }
 
     public function render()
     {
+        abort_unless(Auth::user()->canManageEmployees(), 403);
+
         $cycles = ReviewCycle::withCount('reviews')->latest()->get();
 
         return view('livewire.performance.review-cycles', [

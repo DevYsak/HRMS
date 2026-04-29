@@ -2,30 +2,40 @@
 
 namespace App\Livewire\Performance;
 
-use App\Models\Employee;
 use App\Models\PerformanceReview;
+use App\Models\ReviewGoal;
+use App\Services\PerformanceService;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Livewire\Component;
 
 class TeamReviews extends Component
 {
     public $showReviewModal = false;
+
     public ?PerformanceReview $activeReview = null;
 
     // Form fields
     public int $rating = 0;
+
     public string $strengths = '';
+
     public string $improvements = '';
+
     public string $comments = '';
+
     public string $manager_feedback = '';
+
     public bool $promotion_recommended = false;
+
     public array $goalRatings = []; // [goal_id => rating]
+
     public array $goalComments = []; // [goal_id => comment]
 
     public function openManagerReview(int $reviewId): void
     {
         $this->activeReview = PerformanceReview::with('goals', 'employee.user')->findOrFail($reviewId);
-        
+
         $this->rating = $this->activeReview->overall_rating ?? 0;
         $this->strengths = $this->activeReview->strengths ?? '';
         $this->improvements = $this->activeReview->improvements ?? '';
@@ -43,9 +53,18 @@ class TeamReviews extends Component
         $this->showReviewModal = true;
     }
 
-    public function submitManagerReview(): void
+    public function submitManagerReview(PerformanceService $performanceService): void
     {
-        if (!$this->activeReview || $this->activeReview->status !== 'submitted') {
+        if (! $this->activeReview) {
+            return;
+        }
+
+        $this->activeReview->loadMissing('cycle');
+        try {
+            $performanceService->assertReviewEditable($this->activeReview, 'submitted');
+        } catch (\DomainException $exception) {
+            \Flux::toast($exception->getMessage(), variant: 'danger');
+
             return;
         }
 
@@ -57,10 +76,10 @@ class TeamReviews extends Component
             'goalComments.*' => 'nullable|string',
         ]);
 
-        \Illuminate\Support\Facades\DB::transaction(function () {
+        DB::transaction(function () {
             // Update goals
             foreach ($this->goalRatings as $goalId => $rating) {
-                \App\Models\ReviewGoal::where('id', $goalId)
+                ReviewGoal::where('id', $goalId)
                     ->where('performance_review_id', $this->activeReview->id)
                     ->update([
                         'manager_rating' => $rating,
@@ -87,7 +106,7 @@ class TeamReviews extends Component
         $user = Auth::user();
         $managerEmployee = $user->employee;
 
-        if (!$managerEmployee) {
+        if (! $managerEmployee) {
             return view('livewire.performance.team-reviews', [
                 'teamReviews' => collect(),
             ])->layout('layouts.app', ['title' => 'Team Performance Reviews']);

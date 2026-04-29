@@ -5,6 +5,7 @@
             <p class="pulse-page-subtitle">Summary of company-wide salary disbursements</p>
         </div>
         <div class="flex gap-3">
+            <flux:button href="{{ route('reports.payroll-summary', ['month' => now()->month, 'year' => now()->year]) }}" variant="outline" icon="arrow-down-tray" target="_blank">Export PDF</flux:button>
             <flux:button href="{{ route('payroll.process') }}" variant="primary" icon="play" wire:navigate>Process Payroll</flux:button>
             <flux:button href="{{ route('payroll.components') }}" variant="ghost" icon="cog-6-tooth" wire:navigate>Settings</flux:button>
         </div>

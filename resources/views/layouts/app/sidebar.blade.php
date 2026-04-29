@@ -105,16 +105,14 @@
                         <flux:sidebar.item :href="route('performance.goals')" :current="request()->routeIs('performance.goals')" wire:navigate>{{ __('Goals') }}</flux:sidebar.item>
                     </flux:sidebar.group>
 
-                    {{-- Expenses & Travel — top-level main nav --}}
+                    {{-- Expenses & Travel — employee only shows claims --}}
                     <flux:sidebar.group
                         :heading="'Expenses & Travel'"
                         icon="receipt-percent"
                         :expandable="true"
-                        :expanded="request()->routeIs('operations.*') || request()->routeIs('payroll.reimbursements')"
+                        :expanded="request()->routeIs('operations.expenses')"
                     >
                         <flux:sidebar.item :href="route('operations.expenses')" :current="request()->routeIs('operations.expenses')" wire:navigate>{{ __('Expense Claims') }}</flux:sidebar.item>
-                        <flux:sidebar.item :href="route('operations.assets')"   :current="request()->routeIs('operations.assets')"   wire:navigate>{{ __('My Assets') }}</flux:sidebar.item>
-                        <flux:sidebar.item :href="route('payroll.reimbursements')" :current="request()->routeIs('payroll.reimbursements')" wire:navigate>{{ __('Reimbursements') }}</flux:sidebar.item>
                     </flux:sidebar.group>
 
                     {{-- Inbox / Notifications --}}

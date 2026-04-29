@@ -14,6 +14,7 @@
                 <option value="remote">Remote</option>
                 <option value="absent">Absent</option>
              </flux:select>
+             <flux:button href="{{ route('reports.attendance-summary', ['month' => now()->month, 'year' => now()->year]) }}" variant="outline" icon="arrow-down-tray" size="sm" target="_blank">Export CSV</flux:button>
         </div>
     </div>
 

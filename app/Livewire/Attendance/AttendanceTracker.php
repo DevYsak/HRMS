@@ -9,6 +9,9 @@ use App\Models\BreakLog;
 use App\Models\LeaveRequest;
 use App\Models\PublicHoliday;
 use App\Models\ShiftSetting;
+use App\Models\User;
+use App\Notifications\AttendanceRegularisationNotification;
+use App\Services\AttendanceService;
 use Carbon\CarbonPeriod;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -189,19 +192,9 @@ class AttendanceTracker extends Component
             return;
         }
 
-        $activeBreak = BreakLog::where('attendance_id', $this->todayAttendance->id)
-            ->whereNull('break_end')
-            ->exists();
-
-        if ($activeBreak) {
+        if (! app(AttendanceService::class)->startBreak($this->todayAttendance)) {
             return;
         }
-
-        BreakLog::create([
-            'attendance_id' => $this->todayAttendance->id,
-            'employee_id' => $this->todayAttendance->employee_id,
-            'break_start' => Carbon::now(),
-        ]);
 
         $this->loadData();
         $this->dispatch('toast', message: 'Break started', variant: 'success');
@@ -213,24 +206,9 @@ class AttendanceTracker extends Component
             return;
         }
 
-        $activeBreak = BreakLog::where('attendance_id', $this->todayAttendance->id)
-            ->whereNull('break_end')
-            ->first();
-
-        if (! $activeBreak) {
+        if (! app(AttendanceService::class)->endBreak($this->todayAttendance)) {
             return;
         }
-
-        $now = Carbon::now();
-        $mins = (int) $activeBreak->break_start->diffInMinutes($now);
-        $activeBreak->update(['break_end' => $now, 'duration_minutes' => $mins]);
-
-        // Keep legacy break_minutes in sync for backward-compatible queries
-        $totalMins = BreakLog::where('attendance_id', $this->todayAttendance->id)
-            ->whereNotNull('break_end')
-            ->sum('duration_minutes');
-
-        $this->todayAttendance->update(['break_minutes' => $totalMins]);
 
         $this->loadData();
         $this->dispatch('toast', message: 'Break ended', variant: 'success');
@@ -243,27 +221,11 @@ class AttendanceTracker extends Component
         }
 
         $employee = Auth::user()->employee;
-        $now = Carbon::now();
-        $shiftStart = Carbon::createFromTimeString($this->shift->start_time ?? '10:30:00');
-
-        // Use grace_minutes from shift settings; spec mandates 5 minutes
-        $graceMinutes = (int) ($this->shift->grace_minutes ?? 5);
-        $cutoff = $shiftStart->copy()->addMinutes($graceMinutes);
-
-        $isLate = $now->gt($cutoff);
-        $lateMinutes = $isLate ? (int) $cutoff->diffInMinutes($now) : 0;
-
-        $this->todayAttendance = Attendance::create([
-            'employee_id' => $employee->id,
-            'date' => Carbon::today(),
-            'check_in' => $now,
-            'check_in_ip' => request()->ip(),
-            'check_in_lat' => $lat,
-            'check_in_lng' => $lng,
-            'work_mode' => in_array($this->workMode, ['office', 'wfh']) ? $this->workMode : 'office',
-            'status' => $isLate ? 'late' : 'on_time',
-            'is_late' => $isLate,
-            'late_minutes' => $lateMinutes,
+        $this->todayAttendance = app(AttendanceService::class)->checkIn($employee, $this->shift, [
+            'ip' => request()->ip(),
+            'lat' => $lat,
+            'lng' => $lng,
+            'work_mode' => $this->workMode,
         ]);
 
         $this->loadData();
@@ -276,14 +238,9 @@ class AttendanceTracker extends Component
             return;
         }
 
-        $now = Carbon::now();
-        $totalHours = $this->todayAttendance->check_in->diffInMinutes($now) / 60;
-
-        $this->todayAttendance->update([
-            'check_out' => $now,
-            'check_out_lat' => $lat,
-            'check_out_lng' => $lng,
-            'total_hours' => round($totalHours, 2),
+        $this->todayAttendance = app(AttendanceService::class)->checkOut($this->todayAttendance, [
+            'lat' => $lat,
+            'lng' => $lng,
         ]);
 
         $this->loadData();
@@ -325,6 +282,20 @@ class AttendanceTracker extends Component
             'status' => 'pending',
         ]);
 
+        // Notify manager (or HR) about the regularisation request
+        $notification = new AttendanceRegularisationNotification(
+            Auth::user()->name,
+            Carbon::parse($this->regDate)->format('d M Y'),
+            'pending',
+        );
+        $manager = $employee->manager;
+        if ($manager) {
+            $manager->notify($notification);
+        } else {
+            User::whereIn('role', ['hr_admin', 'super_admin'])
+                ->each(fn ($hr) => $hr->notify($notification));
+        }
+
         $this->reset(['regDate', 'regCheckIn', 'regCheckOut', 'regReason']);
         $this->dispatch('flux:modal:close', name: 'regularisation-modal');
         $this->dispatch('toast', message: 'Regularisation request submitted', variant: 'success');
@@ -333,29 +304,50 @@ class AttendanceTracker extends Component
     protected function buildShiftLabel(): ?string
     {
         $employee = Auth::user()->employee;
+
+        // Path 1 — employee has shift_id linked to a ShiftSetting record
         $shiftSetting = $employee->shift ?? null;
-
-        if ($shiftSetting) {
-            $name = $shiftSetting->name;
-            $start = Carbon::parse($shiftSetting->start_time)->format('g:i A');
-            $end = Carbon::parse($shiftSetting->end_time)->format('g:i A');
-
-            return sprintf('%s: %s – %s IST | Grace: 5 mins', $name, $start, $end);
+        if ($shiftSetting && $shiftSetting->start_time && $shiftSetting->end_time) {
+            return sprintf(
+                '%s: %s – %s IST | Grace: %d mins',
+                $shiftSetting->name ?? 'Shift',
+                Carbon::parse($shiftSetting->start_time)->format('g:i A'),
+                Carbon::parse($shiftSetting->end_time)->format('g:i A'),
+                $shiftSetting->grace_minutes ?? 5,
+            );
         }
 
-        // Fallback to code mapping if relationship is missing
-        $shiftCode = $employee->getAttribute('shift') ?? null;
+        // Path 2 — try DB lookup by shift code before using hardcoded fallbacks
+        $shiftCode = $employee->getAttribute('shift_code') ?? null;
         if ($shiftCode) {
-            $code = strtolower((string) $shiftCode);
-            if ($code === 'it') {
-                return 'IT Shift: 10:30 AM – 7:30 PM IST | Grace: 5 mins';
+            $found = ShiftSetting::where('name', 'like', '%'.trim($shiftCode).'%')->first();
+            if ($found) {
+                return sprintf(
+                    '%s: %s – %s IST | Grace: %d mins',
+                    $found->name,
+                    Carbon::parse($found->start_time)->format('g:i A'),
+                    Carbon::parse($found->end_time)->format('g:i A'),
+                    $found->grace_minutes ?? 5,
+                );
             }
-            if ($code === 'uk') {
-                return 'UK Sales Shift: 1:00 PM – 10:00 PM IST | Grace: 5 mins';
-            }
+
+            return match (strtolower(trim($shiftCode))) {
+                'it' => 'IT Shift: 10:30 AM – 7:30 PM IST | Grace: 5 mins',
+                'uk' => 'UK Sales Shift: 1:00 PM – 10:00 PM IST | Grace: 5 mins',
+                default => null,
+            };
         }
 
-        return 'Shift: 10:30 AM – 7:30 PM IST | Grace: 5 mins';
+        // Path 3 — global fallback from AttendanceSetting
+        if ($this->attendanceSettings?->shift_start && $this->attendanceSettings?->shift_end) {
+            return sprintf(
+                'Default Shift: %s – %s IST',
+                Carbon::parse($this->attendanceSettings->shift_start)->format('g:i A'),
+                Carbon::parse($this->attendanceSettings->shift_end)->format('g:i A'),
+            );
+        }
+
+        return null;
     }
 
     public function render()

@@ -3,7 +3,7 @@
 namespace App\Livewire\TimeOff;
 
 use App\Models\LeaveRequest;
-use Illuminate\Support\Carbon;
+use App\Services\LeaveService;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -28,6 +28,8 @@ class TeamTimeOff extends Component
 
     public function selectRequest($id)
     {
+        abort_unless(Auth::user()->canApproveLeave(), 403);
+
         $this->selectedRequest = LeaveRequest::with(['employee.user', 'leaveType'])->findOrFail($id);
         $this->reviewer_comment = $this->selectedRequest->reviewer_comment ?? '';
         $this->form = [
@@ -61,44 +63,23 @@ class TeamTimeOff extends Component
             return;
         }
 
-        $oldStatus = $this->selectedRequest->status;
-        $oldDays = $this->selectedRequest->days;
-        $oldTypeId = $this->selectedRequest->leave_type_id;
-
         $this->validate([
             'form.leave_type_id' => 'required|exists:leave_types,id',
             'form.start_date' => 'required|date',
             'form.end_date' => 'required|date|after_or_equal:form.start_date',
         ]);
+        try {
+            $this->selectedRequest = app(LeaveService::class)->reviewRequest(
+                $this->selectedRequest,
+                $this->form,
+                $status,
+                Auth::id(),
+                $this->reviewer_comment ?: null,
+            );
+        } catch (\DomainException $exception) {
+            $this->addError('form.leave_type_id', $exception->getMessage());
 
-        $start = Carbon::parse($this->form['start_date']);
-        $end = Carbon::parse($this->form['end_date']);
-        $newDays = $start->diffInDays($end) + 1;
-
-        $employee = $this->selectedRequest->employee;
-
-        // 1. Revert old balance if previously approved
-        if ($oldStatus === 'approved') {
-            $oldBalance = $employee->leaveBalances()->where('leave_type_id', $oldTypeId)->first();
-            $oldBalance?->decrement('used_days', $oldDays);
-        }
-
-        // 2. Update request
-        $this->selectedRequest->update([
-            'status' => $status,
-            'leave_type_id' => $this->form['leave_type_id'],
-            'start_date' => $this->form['start_date'],
-            'end_date' => $this->form['end_date'],
-            'days' => $newDays,
-            'reason' => $this->form['reason'],
-            'reviewer_id' => Auth::id(),
-            'reviewer_comment' => $this->reviewer_comment,
-        ]);
-
-        // 3. Apply balance if approved
-        if ($status === 'approved') {
-            $newBalance = $employee->leaveBalances()->where('leave_type_id', $this->form['leave_type_id'])->first();
-            $newBalance?->increment('used_days', $newDays);
+            return;
         }
 
         $this->showReviewModal = false;
@@ -108,6 +89,8 @@ class TeamTimeOff extends Component
 
     public function render()
     {
+        abort_unless(Auth::user()->canApproveLeave(), 403);
+
         $pendingRequests = LeaveRequest::with(['employee.user', 'leaveType'])
             ->where('status', 'pending')
             ->whereHas('employee', fn ($q) => $q->where('manager_id', Auth::id()))

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\PayslipController;
+use App\Http\Controllers\ReportController;
 use App\Livewire\Attendance\AllAttendance;
 use App\Livewire\Attendance\AttendanceSettings;
 use App\Livewire\Attendance\AttendanceTracker;
@@ -39,6 +40,7 @@ use App\Livewire\Performance\TeamReviews;
 use App\Livewire\TimeOff\AllTimeOff;
 use App\Livewire\TimeOff\MyTimeOff;
 use App\Livewire\TimeOff\TeamTimeOff;
+use App\Livewire\NotificationsPage;
 use App\Livewire\TimeOff\TimeOffSettings;
 use Illuminate\Support\Facades\Route;
 use Laravel\Fortify\Features;
@@ -62,15 +64,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Employees module
     // --------------------------------------------------
     Route::prefix('employees')->name('employees.')->group(function () {
+        // All authenticated users may browse the directory and org chart
         Route::get('/', EmployeeIndex::class)->name('index');
-        Route::get('/create', EmployeeCreate::class)->name('create');
         Route::get('/directory', Directory::class)->name('directory');
         Route::get('/org-chart', OrgChart::class)->name('org-chart');
-        Route::get('/{employee}/edit', EmployeeEdit::class)->name('edit');
-        // Onboarding / offboarding checklists (per employee)
-        Route::get('/{employee}/onboarding', OnboardingChecklist::class)->name('onboarding');
-        Route::get('/{employee}/offboarding', OnboardingChecklist::class)->name('offboarding');
-        Route::get('/offboarding-manager', OffboardingManager::class)->name('offboarding-manager');
+
+        // HR / admin only
+        Route::middleware('role:manage-employees')->group(function () {
+            Route::get('/create', EmployeeCreate::class)->name('create');
+            Route::get('/{employee}/edit', EmployeeEdit::class)->name('edit');
+            Route::get('/{employee}/onboarding', OnboardingChecklist::class)->name('onboarding');
+            Route::get('/{employee}/offboarding', OnboardingChecklist::class)->name('offboarding');
+            Route::get('/offboarding-manager', OffboardingManager::class)->name('offboarding-manager');
+        });
     });
 
     // --------------------------------------------------
@@ -78,9 +84,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // --------------------------------------------------
     Route::prefix('time-off')->name('time-off.')->group(function () {
         Route::get('/my', MyTimeOff::class)->name('my');
-        Route::get('/team', TeamTimeOff::class)->name('team');
-        Route::get('/employees', AllTimeOff::class)->name('employees');
-        Route::get('/settings', TimeOffSettings::class)->name('settings');
+        Route::middleware('role:approve-leave')->group(function () {
+            Route::get('/team', TeamTimeOff::class)->name('team');
+            Route::get('/employees', AllTimeOff::class)->name('employees');
+        });
+        Route::get('/settings', TimeOffSettings::class)->name('settings')->middleware('role:manage-settings');
     });
 
     // --------------------------------------------------
@@ -88,33 +96,43 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // --------------------------------------------------
     Route::prefix('attendance')->name('attendance.')->group(function () {
         Route::get('/my', AttendanceTracker::class)->name('my');
-        Route::get('/team', TeamAttendance::class)->name('team');
-        Route::get('/employees', AllAttendance::class)->name('employees');
-        Route::get('/settings', AttendanceSettings::class)->name('settings');
+        Route::middleware('role:approve-leave')->group(function () {
+            Route::get('/team', TeamAttendance::class)->name('team');
+            Route::get('/employees', AllAttendance::class)->name('employees');
+        });
+        Route::get('/settings', AttendanceSettings::class)->name('settings')->middleware('role:manage-settings');
     });
 
     // --------------------------------------------------
-    // Overtime module (NEW)
+    // Overtime module
     // --------------------------------------------------
     Route::prefix('overtime')->name('overtime.')->group(function () {
         Route::get('/my', MyOtRequests::class)->name('my');
-        Route::get('/manage', ManageOtRequests::class)->name('manage');
+        Route::get('/manage', ManageOtRequests::class)->name('manage')->middleware('role:approve-ot');
     });
 
     // --------------------------------------------------
     // Payroll module
     // --------------------------------------------------
     Route::prefix('payroll')->name('payroll.')->group(function () {
-        Route::get('/overview', Overview::class)->name('overview');
-        Route::get('/components', Components::class)->name('components');
-        Route::get('/process', Process::class)->name('process');
-        Route::get('/finance-approve', FinanceApproval::class)->name('finance-approve');
+        // All authenticated users may view their own payslips
         Route::get('/my-payslips', MyPayslips::class)->name('payslips');
-        Route::get('/incentives', Incentives::class)->name('incentives');
-        Route::get('/reimbursements', Reimbursements::class)->name('reimbursements');
         Route::get('/payslips/{payslip}/download', [PayslipController::class, 'download'])
             ->name('payslips.download')
             ->middleware('signed');
+
+        // Payroll administration — finance, HR Admin, Super Admin
+        Route::middleware('role:run-payroll')->group(function () {
+            Route::get('/overview', Overview::class)->name('overview');
+            Route::get('/components', Components::class)->name('components');
+            Route::get('/process', Process::class)->name('process');
+            Route::get('/incentives', Incentives::class)->name('incentives');
+            Route::get('/reimbursements', Reimbursements::class)->name('reimbursements');
+        });
+
+        // Finance approval — Finance, Director, Super Admin
+        Route::get('/finance-approve', FinanceApproval::class)->name('finance-approve')
+            ->middleware('role:approve-finance');
     });
 
     // --------------------------------------------------
@@ -130,11 +148,18 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Performance module
     // --------------------------------------------------
     Route::prefix('performance')->name('performance.')->group(function () {
+        // All authenticated employees can view their own review and goals
         Route::get('/my', MyReview::class)->name('my');
-        Route::get('/team', TeamReviews::class)->name('team');
-        Route::get('/employees', AllReviews::class)->name('employees');
-        Route::get('/cycles', ReviewCycles::class)->name('cycles');
         Route::get('/goals', Goals::class)->name('goals');
+
+        // Managers can see team reviews
+        Route::get('/team', TeamReviews::class)->name('team')->middleware('role:approve-leave');
+
+        // HR / admin only — all reviews and cycle management
+        Route::middleware('role:manage-employees')->group(function () {
+            Route::get('/employees', AllReviews::class)->name('employees');
+            Route::get('/cycles', ReviewCycles::class)->name('cycles');
+        });
     });
 
     // --------------------------------------------------
@@ -143,18 +168,42 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Operations module
     // --------------------------------------------------
     Route::prefix('operations')->name('operations.')->group(function () {
-        Route::get('/assets', Assets::class)->name('assets');
+        // All authenticated users can submit and view their own expense claims
         Route::get('/expenses', Expenses::class)->name('expenses');
+        // Asset management is HR / admin only
+        Route::get('/assets', Assets::class)->name('assets')->middleware('role:manage-employees');
     });
 
     // --------------------------------------------------
-    // Documents module (NEW)
+    // Documents module
     // --------------------------------------------------
     Route::get('/documents', DocumentManager::class)->name('documents.index');
-    Route::get('/documents/experience-letter/{employee}', [DocumentController::class, 'experienceLetter'])->name('documents.experience-letter');
+    Route::middleware('role:manage-documents')->group(function () {
+        Route::get('/documents/experience-letter/{employee}', [DocumentController::class, 'experienceLetter'])->name('documents.experience-letter');
+    });
     Route::get('/documents/{document}/download', [DocumentController::class, 'download'])
         ->name('documents.download')
         ->middleware('signed');
+
+    // --------------------------------------------------
+    // Reports (downloadable exports)
+    // --------------------------------------------------
+    Route::prefix('reports')->name('reports.')->group(function () {
+        Route::get('/payroll-summary.pdf', [ReportController::class, 'payrollSummaryPdf'])
+            ->name('payroll-summary')
+            ->middleware('role:run-payroll');
+        Route::get('/attendance-summary.csv', [ReportController::class, 'attendanceSummaryCsv'])
+            ->name('attendance-summary')
+            ->middleware('role:approve-leave');
+        Route::get('/ot-records.csv', [ReportController::class, 'otRecordsCsv'])
+            ->name('ot-records')
+            ->middleware('role:approve-ot');
+    });
+
+    // --------------------------------------------------
+    // Notifications inbox (full page)
+    // --------------------------------------------------
+    Route::get('/notifications', NotificationsPage::class)->name('notifications.index');
 
     // --------------------------------------------------
     // Settings (general — company settings)

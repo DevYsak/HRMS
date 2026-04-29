@@ -6,7 +6,7 @@
             </div>
             <div class="flex items-center gap-2">
                 <flux:button icon="arrow-down-tray" variant="outline">{{ __('Export') }}</flux:button>
-                <flux:button icon="plus" variant="primary">{{ __('New Claim') }}</flux:button>
+                <flux:button icon="plus" variant="primary" wire:click="openSubmitModal">{{ __('New Claim') }}</flux:button>
             </div>
         </div>
 
@@ -54,7 +54,16 @@
                                     @endif
                                 </td>
                                 <td class="px-6 py-4 text-right">
-                                    <flux:button variant="ghost" size="sm" icon="ellipsis-horizontal" />
+                                    @if($canReview && $expense->status->value === $pendingStatus)
+                                        <div class="flex justify-end gap-2">
+                                            <flux:button size="sm" variant="primary" wire:click="approve({{ $expense->id }})">Approve</flux:button>
+                                            <flux:button size="sm" variant="danger" wire:click="openRejectModal({{ $expense->id }})">Reject</flux:button>
+                                        </div>
+                                    @elseif($expense->status->value === 'rejected' && $expense->rejection_reason)
+                                        <span class="text-xs text-red-500 italic max-w-xs text-right block">{{ $expense->rejection_reason }}</span>
+                                    @else
+                                        <flux:button variant="ghost" size="sm" disabled icon="check">No action</flux:button>
+                                    @endif
                                 </td>
                             </tr>
                         @empty
@@ -69,4 +78,30 @@
                 </table>
             </div>
         </flux:card>
+
+        <flux:modal wire:model="showRejectModal" class="max-w-md">
+            <div class="space-y-4">
+                <flux:heading size="lg">Reject Expense Claim</flux:heading>
+                <flux:textarea wire:model="rejectionReason" label="Reason for Rejection" rows="3" placeholder="Provide a reason for the employee…" />
+                <div class="flex justify-end gap-2">
+                    <flux:button variant="ghost" wire:click="$set('showRejectModal', false)">Cancel</flux:button>
+                    <flux:button variant="danger" wire:click="reject">Confirm Rejection</flux:button>
+                </div>
+            </div>
+        </flux:modal>
+
+        <flux:modal wire:model="showSubmitModal" class="max-w-xl">
+            <div class="space-y-4">
+                <flux:heading size="lg">Submit Expense Claim</flux:heading>
+                <flux:input wire:model="title" label="Title" required />
+                <flux:input wire:model="category" label="Category" placeholder="travel, meals, equipment, etc." required />
+                <flux:input wire:model="amount" type="number" step="0.01" min="1" label="Amount" required />
+                <flux:input wire:model="expenseDate" type="date" label="Expense Date" required />
+                <flux:input wire:model="receipt" type="file" label="Receipt (PDF or image)" accept=".pdf,.jpg,.jpeg,.png,.webp" required />
+                <flux:textarea wire:model="notes" label="Notes" rows="3" />
+                <div class="flex justify-end">
+                    <flux:button variant="primary" wire:click="submit">Submit Claim</flux:button>
+                </div>
+            </div>
+        </flux:modal>
     </flux:main>

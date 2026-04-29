@@ -3,8 +3,13 @@
 namespace App\Console\Commands;
 
 use App\Models\Attendance;
+use App\Notifications\ExcessBreakNotification;
 use Illuminate\Console\Command;
 
+/**
+ * FIX 4 — Spec §3.2 + §3.6
+ * Flags excess break (>60 min) and notifies employee + their manager in-app.
+ */
 class CheckExcessBreaks extends Command
 {
     protected $signature = 'hrms:check-excess-breaks';
@@ -15,7 +20,7 @@ class CheckExcessBreaks extends Command
     {
         $today = now()->toDateString();
 
-        $records = Attendance::with('breakLogs')
+        $records = Attendance::with(['employee.user', 'employee.manager', 'breakLogs'])
             ->where('date', $today)
             ->whereNotNull('check_in')
             ->where('excess_break_flag', false)
@@ -24,7 +29,6 @@ class CheckExcessBreaks extends Command
         $flagged = 0;
 
         foreach ($records as $record) {
-            // Sum completed break segments from break_logs; fall back to legacy break_minutes column
             $totalBreakMins = $record->breakLogs->whereNotNull('break_end')->sum('duration_minutes');
 
             if ($totalBreakMins === 0) {
@@ -37,6 +41,16 @@ class CheckExcessBreaks extends Command
                     'excess_break_flag' => true,
                     'notes' => trim(($record->notes ?? '')." [Auto] Excess break: {$totalBreakMins}min (+{$excess}min over limit)."),
                 ]);
+
+                $employee = $record->employee;
+                $notification = new ExcessBreakNotification($record, $totalBreakMins);
+
+                $employee->user?->notify($notification);
+
+                if ($employee->manager_id) {
+                    $employee->manager?->notify($notification);
+                }
+
                 $flagged++;
             }
         }

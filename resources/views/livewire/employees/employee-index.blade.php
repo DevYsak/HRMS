@@ -43,10 +43,11 @@
             <table class="w-full text-sm">
                 <thead>
                     <tr class="border-b border-zinc-100 dark:border-zinc-800">
-                        <th class="pb-3 pl-6 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Employee Name</th>
+                        <th class="pb-3 pl-6 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Employee</th>
+                        <th class="pb-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Emp ID</th>
                         <th class="pb-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Job Title</th>
-                        <th class="pb-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Line Manager</th>
                         <th class="pb-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Department</th>
+                        <th class="pb-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Shift</th>
                         <th class="pb-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Status</th>
                         <th class="pb-3 pr-6 text-right text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Actions</th>
                     </tr>
@@ -56,24 +57,45 @@
                         <tr class="group hover:bg-zinc-50/70 dark:hover:bg-zinc-800/30 transition-colors">
                             <td class="py-3.5 pl-6 pr-4">
                                 <div class="flex items-center gap-3">
-                                    @if($emp->user->avatar)
-                                        <img src="{{ $emp->user->avatarUrl() }}" class="size-8 rounded-full" />
+                                    @if($emp->photo)
+                                        <img src="{{ asset('storage/'.$emp->photo) }}" class="size-8 rounded-full object-cover" />
                                     @else
                                         <div class="flex size-8 shrink-0 items-center justify-center rounded-full bg-brand-600 text-xs font-bold text-white">
                                             {{ strtoupper(substr($emp->user->name, 0, 1)) }}
                                         </div>
                                     @endif
                                     <div>
-                                        <div class="font-medium text-zinc-900 dark:text-white">{{ $emp->user->name }}</div>
+                                        <div class="font-semibold text-zinc-900 dark:text-white">{{ $emp->user->name }}</div>
                                         <div class="text-xs text-zinc-400">{{ $emp->user->email }}</div>
                                     </div>
                                 </div>
                             </td>
-                            <td class="py-3.5 pr-4 text-zinc-600 dark:text-zinc-300">{{ $emp->jobTitle?->name ?? 'N/A' }}</td>
-                            <td class="py-3.5 pr-4 font-medium text-brand-700 dark:text-brand-400">{{ $emp->manager?->name ?? 'None' }}</td>
-                            <td class="py-3.5 pr-4 text-zinc-600 dark:text-zinc-300">{{ $emp->department?->name ?? 'N/A' }}</td>
                             <td class="py-3.5 pr-4">
-                                <span class="badge-{{ $emp->status->value }}">{{ strtoupper($emp->status->label()) }}</span>
+                                <span class="font-mono text-xs font-bold text-zinc-700 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded-md">
+                                    {{ $emp->employee_id ?? '—' }}
+                                </span>
+                            </td>
+                            <td class="py-3.5 pr-4 text-sm text-zinc-600 dark:text-zinc-300">{{ $emp->jobTitle?->name ?? '—' }}</td>
+                            <td class="py-3.5 pr-4 text-sm text-zinc-600 dark:text-zinc-300">{{ $emp->department?->name ?? '—' }}</td>
+                            <td class="py-3.5 pr-4">
+                                @if($emp->shift)
+                                    <span class="text-xs font-medium text-zinc-600 dark:text-zinc-400">{{ $emp->shift->name }}</span>
+                                @else
+                                    <span class="text-xs text-zinc-300 dark:text-zinc-600">—</span>
+                                @endif
+                            </td>
+                            <td class="py-3.5 pr-4">
+                                @php
+                                    $sc = match($emp->status->value) {
+                                        'active'    => 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400',
+                                        'probation' => 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400',
+                                        'inactive'  => 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400',
+                                        default     => 'bg-zinc-100 text-zinc-600',
+                                    };
+                                @endphp
+                                <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider {{ $sc }}">
+                                    {{ $emp->status->label() }}
+                                </span>
                             </td>
                             <td class="py-3.5 pr-6 text-right">
                                 <div class="flex items-center justify-end gap-2">
@@ -99,7 +121,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="6" class="py-8 text-center text-zinc-500">No employees found.</td>
+                            <td colspan="7" class="py-8 text-center text-zinc-500">No employees found.</td>
                         </tr>
                     @endforelse
                 </tbody>

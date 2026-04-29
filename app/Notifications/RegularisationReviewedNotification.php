@@ -3,6 +3,7 @@
 namespace App\Notifications;
 
 use App\Models\AttendanceRegularisation;
+use Carbon\Carbon;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Notification;
@@ -11,9 +12,7 @@ class RegularisationReviewedNotification extends Notification implements ShouldQ
 {
     use Queueable;
 
-    public function __construct(public AttendanceRegularisation $regularisation)
-    {
-    }
+    public function __construct(public AttendanceRegularisation $regularisation) {}
 
     public function via(object $notifiable): array
     {
@@ -22,14 +21,28 @@ class RegularisationReviewedNotification extends Notification implements ShouldQ
 
     public function toArray(object $notifiable): array
     {
-        $status = ucfirst($this->regularisation->status);
-        $date = \Carbon\Carbon::parse($this->regularisation->work_date)->format('M d, Y');
-        return [
-            'title' => "Attendance Regularisation {$status}",
-            'message' => "Your request for {$date} has been {$this->regularisation->status}.",
-            'url' => route('attendance.my-attendance'),
-            'icon' => $this->regularisation->status === 'approved' ? 'check-circle' : 'x-circle',
-            'icon_color' => $this->regularisation->status === 'approved' ? 'text-green-500' : 'text-red-500',
-        ];
+        $status = $this->regularisation->status;
+        $date = Carbon::parse($this->regularisation->work_date)->format('d M Y');
+
+        return match ($status) {
+            'approved' => [
+                'type' => 'attendance_regularisation',
+                'title' => 'Regularisation Approved',
+                'body' => "Your attendance correction for {$date} has been approved.",
+                'action' => 'View',
+                'url' => '/attendance/my',
+                'icon' => 'check-circle',
+                'color' => 'green',
+            ],
+            default => [
+                'type' => 'attendance_regularisation',
+                'title' => 'Regularisation Rejected',
+                'body' => "Your attendance correction request for {$date} was not approved.",
+                'action' => 'View',
+                'url' => '/attendance/my',
+                'icon' => 'x-circle',
+                'color' => 'red',
+            ],
+        };
     }
 }

@@ -4,9 +4,10 @@ namespace App\Livewire\TimeOff;
 
 use App\Models\LeaveBalance;
 use App\Models\LeaveEncashment;
-use App\Models\LeaveRequest;
 use App\Models\LeaveType;
-use Illuminate\Support\Carbon;
+use App\Models\User;
+use App\Notifications\LeaveEncashmentNotification;
+use App\Services\LeaveService;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -23,6 +24,8 @@ class MyTimeOff extends Component
     public string $start_date = '';
 
     public string $end_date = '';
+
+    public bool $is_half_day = false;
 
     public string $reason = '';
 
@@ -51,7 +54,7 @@ class MyTimeOff extends Component
 
     public function openRequestModal(): void
     {
-        $this->reset(['leave_type_id', 'start_date', 'end_date', 'reason']);
+        $this->reset(['leave_type_id', 'start_date', 'end_date', 'is_half_day', 'reason']);
         $this->showRequestModal = true;
     }
 
@@ -68,32 +71,21 @@ class MyTimeOff extends Component
             return;
         }
 
-        $start = Carbon::parse($this->start_date);
-        $end = Carbon::parse($this->end_date);
-        $days = $start->diffInDays($end) + 1;
-
         $leaveType = LeaveType::find($this->leave_type_id);
-        if ($leaveType?->is_paid) {
-            $balance = LeaveBalance::where('employee_id', $employee->id)
-                ->where('leave_type_id', $this->leave_type_id)
-                ->first();
+        try {
+            app(LeaveService::class)->submitRequest(
+                $employee,
+                $leaveType,
+                $this->start_date,
+                $this->end_date,
+                $this->reason,
+                $this->is_half_day,
+            );
+        } catch (\DomainException $exception) {
+            $this->addError('leave_type_id', $exception->getMessage());
 
-            if (! $balance || ($balance->allocated_days - $balance->used_days) < $days) {
-                $this->addError('leave_type_id', 'Insufficient balance for this request.');
-
-                return;
-            }
+            return;
         }
-
-        LeaveRequest::create([
-            'employee_id' => $employee->id,
-            'leave_type_id' => $this->leave_type_id,
-            'start_date' => $this->start_date,
-            'end_date' => $this->end_date,
-            'days' => $days,
-            'reason' => $this->reason,
-            'status' => 'pending',
-        ]);
 
         $this->showRequestModal = false;
         \Flux::toast('Leave request submitted successfully.');
@@ -158,7 +150,7 @@ class MyTimeOff extends Component
             return;
         }
 
-        LeaveEncashment::create([
+        $encashment = LeaveEncashment::create([
             'employee_id' => $employee->id,
             'leave_type_id' => $this->encash_leave_type_id,
             'requested_days' => $this->encash_days,
@@ -170,6 +162,11 @@ class MyTimeOff extends Component
         if ($balance) {
             $balance->increment('encashed_days', $this->encash_days);
         }
+
+        // Notify Finance & HR about the encashment request
+        $encashment->load(['employee.user', 'leaveType']);
+        User::whereIn('role', ['finance', 'hr_admin', 'super_admin'])
+            ->each(fn ($u) => $u->notify(new LeaveEncashmentNotification($encashment, 'submitted')));
 
         $this->showEncashModal = false;
         \Flux::toast('Encashment request submitted. Pending HR/Finance approval.');
@@ -184,7 +181,7 @@ class MyTimeOff extends Component
         $employee = Auth::user()->employee;
 
         $balances = $employee
-            ? $employee->leaveBalances()->with('leaveType')->get()
+            ? $employee->leaveBalances()->with('leaveType')->where('year', now()->year)->get()
             : collect();
 
         // paginate 5 per page as requested

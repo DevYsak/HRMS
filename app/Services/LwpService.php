@@ -84,6 +84,7 @@ class LwpService
 
         // Detect balance-exceeded leave type IDs for this employee
         $exceededTypeIds = LeaveBalance::where('employee_id', $employeeId)
+            ->where('year', $to->year)
             ->whereColumn('used_days', '>', 'allocated_days')
             ->pluck('leave_type_id');
 

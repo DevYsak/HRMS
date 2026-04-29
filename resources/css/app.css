@@ -10,24 +10,24 @@
 
 /* ===================================================
    PULSE HRMS — Design Tokens (TailwindCSS v4 @theme)
-   Primary Brand: #1DB77A  |  Sidebar: white light
+   Primary Brand: #F97316 (Conexus Orange) | Sidebar: white
    =================================================== */
 
 @theme {
     /* Font */
     --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji';
 
-    /* Brand Palette — Emerald/Mint Green */
-    --color-brand-50:  #f0fdf9;
-    --color-brand-100: #ccfbef;
-    --color-brand-200: #99f6de;
-    --color-brand-300: #5eead4;
-    --color-brand-400: #2dd4bf;
-    --color-brand-500: #14b8a6;
-    --color-brand-600: #1DB77A;
-    --color-brand-700: #0d9488;
-    --color-brand-800: #0f766e;
-    --color-brand-900: #134e4a;
+    /* Brand Palette — Conexus Orange */
+    --color-brand-50:  #fff7ed;
+    --color-brand-100: #ffedd5;
+    --color-brand-200: #fed7aa;
+    --color-brand-300: #fdba74;
+    --color-brand-400: #fb923c;
+    --color-brand-500: #f97316;
+    --color-brand-600: #f97316;
+    --color-brand-700: #ea580c;
+    --color-brand-800: #c2410c;
+    --color-brand-900: #9a3412;
 
     /* Neutral / Zinc scale */
     --color-zinc-50:  #fafafa;
@@ -42,17 +42,17 @@
     --color-zinc-900: #171717;
     --color-zinc-950: #0a0a0a;
 
-    /* Flux accent override → brand green */
-    --color-accent:            #1DB77A;
-    --color-accent-content:    #1DB77A;
+    /* Flux accent override → Conexus Orange */
+    --color-accent:            #f97316;
+    --color-accent-content:    #f97316;
     --color-accent-foreground: #ffffff;
 }
 
 /* Dark mode accent */
 @layer theme {
     .dark {
-        --color-accent:            #1DB77A;
-        --color-accent-content:    #1DB77A;
+        --color-accent:            #f97316;
+        --color-accent-content:    #f97316;
         --color-accent-foreground: #ffffff;
     }
 }
@@ -86,21 +86,21 @@ select:focus[data-flux-control] {
 }
 
 /* ===================================================
-   Sidebar — Active item: GREEN filled pill (Figma)
-   Override Flux default white/border active style
+   Sidebar — Active item: Orange left-border highlight (Conexus style)
    =================================================== */
 [data-flux-sidebar] [data-flux-sidebar-item][data-current] {
-    background-color: #1DB77A !important;
-    color: #ffffff !important;
-    border-color: transparent !important;
+    background-color: #fff7ed !important;
+    color: #ea580c !important;
+    border-right: 2px solid #f97316 !important;
+    font-weight: 600 !important;
 }
 [data-flux-sidebar] [data-flux-sidebar-item][data-current] svg {
-    color: #ffffff !important;
+    color: #f97316 !important;
 }
-/* Dark mode: slightly lighter green pill */
 .dark [data-flux-sidebar] [data-flux-sidebar-item][data-current] {
-    background-color: #1DB77A !important;
-    color: #ffffff !important;
+    background-color: rgba(249, 115, 22, 0.12) !important;
+    color: #fb923c !important;
+    border-right: 2px solid #f97316 !important;
 }
 
 /* ===================================================

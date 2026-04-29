@@ -15,6 +15,7 @@ class LeaveType extends Model
     protected $casts = [
         'is_paid' => 'boolean',
         'allow_carry_forward' => 'boolean',
+        'carry_forward_limit' => 'integer',
         'allow_encashment' => 'boolean',
     ];
 

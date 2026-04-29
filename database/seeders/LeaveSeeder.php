@@ -19,16 +19,17 @@ class LeaveSeeder extends Seeder
     {
         // 1. Create standard Leave Types
         $types = [
-            ['name' => 'Annual Leave', 'is_paid' => true, 'color' => '#1DB77A'],
-            ['name' => 'Sick Leave', 'is_paid' => true, 'color' => '#EF4444'],
-            ['name' => 'Casual Leave', 'is_paid' => true, 'color' => '#F59E0B'],
-            ['name' => 'Maternity Leave', 'is_paid' => true, 'color' => '#D946EF'],
-            ['name' => 'Unpaid Leave', 'is_paid' => false, 'color' => '#6B7280'],
+            ['name' => 'Annual Leave', 'is_paid' => true, 'color' => '#1DB77A', 'category' => 'annual', 'allow_carry_forward' => true, 'carry_forward_limit' => 0, 'allow_encashment' => true],
+            ['name' => 'Sick Leave', 'is_paid' => true, 'color' => '#EF4444', 'category' => 'sick', 'allow_carry_forward' => true, 'carry_forward_limit' => 0, 'allow_encashment' => false],
+            ['name' => 'Casual Leave', 'is_paid' => true, 'color' => '#F59E0B', 'category' => 'other', 'allow_carry_forward' => true, 'carry_forward_limit' => 0, 'allow_encashment' => false],
+            ['name' => 'Maternity Leave', 'is_paid' => true, 'color' => '#D946EF', 'category' => 'mdl', 'allow_carry_forward' => true, 'carry_forward_limit' => 0, 'allow_encashment' => false],
+            ['name' => 'Comp Off', 'is_paid' => true, 'color' => '#06B6D4', 'category' => 'comp_off', 'allow_carry_forward' => true, 'carry_forward_limit' => 0, 'allow_encashment' => false],
+            ['name' => 'Unpaid Leave', 'is_paid' => false, 'color' => '#6B7280', 'category' => 'unpaid', 'allow_carry_forward' => false, 'carry_forward_limit' => 0, 'allow_encashment' => false],
         ];
 
         $leaveTypes = collect();
         foreach ($types as $type) {
-            $leaveTypes->push(LeaveType::firstOrCreate(['name' => $type['name']], $type));
+            $leaveTypes->push(LeaveType::updateOrCreate(['name' => $type['name']], $type));
         }
 
         // 2. Initialize Balances for all employees
@@ -39,19 +40,19 @@ class LeaveSeeder extends Seeder
         foreach ($employees as $employee) {
             // Give everyone 14 days annual leave and 7 days sick leave
             LeaveBalance::firstOrCreate(
-                ['employee_id' => $employee->id, 'leave_type_id' => $annualLeave->id],
-                ['allocated_days' => 14, 'used_days' => rand(0, 5)]
+                ['employee_id' => $employee->id, 'leave_type_id' => $annualLeave->id, 'year' => now()->year],
+                ['allocated_days' => 14, 'used_days' => rand(0, 5), 'carried_forward_days' => 0, 'encashed_days' => 0, 'comp_off_credits' => 0]
             );
 
             LeaveBalance::firstOrCreate(
-                ['employee_id' => $employee->id, 'leave_type_id' => $sickLeave->id],
-                ['allocated_days' => 7, 'used_days' => rand(0, 2)]
+                ['employee_id' => $employee->id, 'leave_type_id' => $sickLeave->id, 'year' => now()->year],
+                ['allocated_days' => 7, 'used_days' => rand(0, 2), 'carried_forward_days' => 0, 'encashed_days' => 0, 'comp_off_credits' => 0]
             );
         }
 
         // 3. Create some dummy Leave Requests
         $managers = User::whereIn('role', ['admin', 'hr', 'manager'])->get();
-        
+
         foreach ($employees->take(10) as $employee) {
             $startDate = Carbon::now()->addDays(rand(1, 30));
             $days = rand(1, 5);

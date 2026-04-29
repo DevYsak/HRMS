@@ -2,9 +2,10 @@
 
 namespace App\Livewire\Onboarding;
 
+use App\Models\Asset;
 use App\Models\Employee;
 use App\Models\ExitRecord;
-use App\Models\Asset;
+use App\Services\AssetAssignmentService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
@@ -12,25 +13,33 @@ use Livewire\Component;
 class OffboardingManager extends Component
 {
     public $search = '';
+
     public $selectedEmployeeId = null;
-    
+
     // Exit Record Form
     public $lastWorkingDay;
+
     public $exitType = 'resignation';
+
     public $exitReason = '';
+
     public $noticePeriodServed = true;
+
     public $interviewNotes = '';
+
     public $finalSettlementAmount = 0;
+
     public $finalSettlementDone = false;
-    
+
     // Assets
     public $assetConditions = [];
 
     public function selectEmployee($id)
     {
+        abort_unless(Auth::user()->canManageEmployees(), 403);
         $this->selectedEmployeeId = $id;
         $employee = Employee::with('exitRecord', 'assets')->findOrFail($id);
-        
+
         if ($employee->exitRecord) {
             $this->lastWorkingDay = $employee->exitRecord->last_working_day->format('Y-m-d');
             $this->exitType = $employee->exitRecord->exit_type;
@@ -59,6 +68,8 @@ class OffboardingManager extends Component
 
     public function processOffboarding()
     {
+        abort_unless(Auth::user()->canManageEmployees(), 403);
+
         $this->validate([
             'lastWorkingDay' => 'required|date',
             'exitType' => 'required|string',
@@ -68,9 +79,9 @@ class OffboardingManager extends Component
         ]);
 
         $employee = Employee::findOrFail($this->selectedEmployeeId);
-        
+
         $exitRecord = $employee->exitRecord ?? new ExitRecord(['employee_id' => $employee->id]);
-        
+
         $exitRecord->last_working_day = $this->lastWorkingDay;
         $exitRecord->exit_type = $this->exitType;
         $exitRecord->exit_reason = $this->exitReason;
@@ -78,7 +89,7 @@ class OffboardingManager extends Component
         $exitRecord->interview_notes = $this->interviewNotes;
         $exitRecord->final_settlement_amount = $this->finalSettlementAmount;
         $exitRecord->final_settlement_done = $this->finalSettlementDone;
-        
+
         $exitRecord->processed_by = Auth::id();
         $exitRecord->processed_at = now();
         $exitRecord->save();
@@ -91,25 +102,24 @@ class OffboardingManager extends Component
         \Flux::toast('Offboarding processed successfully.');
     }
 
-    public function returnAsset($assetId)
+    public function returnAsset($assetId, AssetAssignmentService $assetService)
     {
+        abort_unless(Auth::user()->canManageEmployees(), 403);
+
         $asset = Asset::findOrFail($assetId);
         $condition = $this->assetConditions[$assetId] ?? 'Good';
-
-        $asset->update([
-            'status' => 'available',
-            'returned_date' => now(),
-            'condition_on_return' => $condition,
-        ]);
+        $assetService->returnAsset($asset, Auth::id(), $condition);
 
         \Flux::toast('Asset returned successfully.');
     }
 
     public function render()
     {
+        abort_unless(Auth::user()->canManageEmployees(), 403);
+
         $employees = Employee::with('user', 'department')
-            ->whereHas('user', function($q) {
-                $q->where('name', 'like', '%' . $this->search . '%');
+            ->whereHas('user', function ($q) {
+                $q->where('name', 'like', '%'.$this->search.'%');
             })
             ->where('status', '!=', 'inactive')
             ->get();

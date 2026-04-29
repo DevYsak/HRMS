@@ -2,35 +2,43 @@
 
 namespace App\Livewire\Performance;
 
-use App\Models\Employee;
 use App\Models\PerformanceReview;
-use App\Models\ReviewCycle;
+use App\Models\ReviewGoal;
+use App\Services\PerformanceService;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Livewire\Component;
 
 class MyReview extends Component
 {
     public $activeTab = 'reviews';
+
     public $showSelfReviewModal = false;
+
     public ?PerformanceReview $activeReview = null;
 
     // Form fields
     public int $rating = 0;
+
     public string $strengths = '';
+
     public string $improvements = '';
+
     public string $comments = '';
+
     public array $goalRatings = []; // [goal_id => rating]
+
     public array $goalComments = []; // [goal_id => comment]
 
     public function openReview(int $reviewId): void
     {
         $this->activeReview = PerformanceReview::with('goals')->findOrFail($reviewId);
-        
+
         $this->rating = $this->activeReview->overall_rating ?? 0;
         $this->strengths = $this->activeReview->strengths ?? '';
         $this->improvements = $this->activeReview->improvements ?? '';
         $this->comments = $this->activeReview->comments ?? '';
-        
+
         $this->goalRatings = [];
         $this->goalComments = [];
         foreach ($this->activeReview->goals as $goal) {
@@ -41,9 +49,18 @@ class MyReview extends Component
         $this->showSelfReviewModal = true;
     }
 
-    public function submitSelfReview(): void
+    public function submitSelfReview(PerformanceService $performanceService): void
     {
-        if (!$this->activeReview || $this->activeReview->status !== 'draft') {
+        if (! $this->activeReview) {
+            return;
+        }
+
+        $this->activeReview->loadMissing('cycle');
+        try {
+            $performanceService->assertReviewEditable($this->activeReview, 'draft');
+        } catch (\DomainException $exception) {
+            \Flux::toast($exception->getMessage(), variant: 'danger');
+
             return;
         }
 
@@ -56,10 +73,10 @@ class MyReview extends Component
             'goalComments.*' => 'nullable|string',
         ]);
 
-        \Illuminate\Support\Facades\DB::transaction(function () {
+        DB::transaction(function () {
             // Update goals
             foreach ($this->goalRatings as $goalId => $rating) {
-                \App\Models\ReviewGoal::where('id', $goalId)
+                ReviewGoal::where('id', $goalId)
                     ->where('performance_review_id', $this->activeReview->id)
                     ->update([
                         'self_rating' => $rating,
@@ -87,7 +104,7 @@ class MyReview extends Component
     {
         $employee = Auth::user()->employee;
 
-        if (!$employee) {
+        if (! $employee) {
             return view('livewire.performance.my-review', [
                 'activeReviews' => collect(),
                 'completedReviews' => collect(),

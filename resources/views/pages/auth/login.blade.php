@@ -3,7 +3,8 @@
 
         {{-- Heading --}}
         <div class="text-center">
-            <h1 class="text-2xl font-bold text-zinc-900">Login first to your account</h1>
+            <h1 class="text-2xl font-bold text-zinc-900">Log in to your account</h1>
+            <p class="mt-1 text-sm text-zinc-500">Enter your email and password below to log in</p>
         </div>
 
         {{-- Session Status --}}
@@ -24,7 +25,7 @@
                     autofocus
                     autocomplete="email"
                     placeholder="Input your registered email"
-                    class="border-zinc-300 focus:border-brand-600"
+                    class="border-zinc-300 focus:border-orange-400 focus:ring-orange-400"
                 />
                 <flux:error name="email" />
             </flux:field>
@@ -39,7 +40,7 @@
                     autocomplete="current-password"
                     placeholder="Input your password account"
                     viewable
-                    class="border-zinc-300 focus:border-brand-600"
+                    class="border-zinc-300 focus:border-orange-400 focus:ring-orange-400"
                 />
                 <flux:error name="password" />
             </flux:field>
@@ -48,7 +49,7 @@
             <div class="flex items-center justify-between">
                 <flux:checkbox name="remember" :label="__('Remember Me')" :checked="old('remember')" />
                 @if (Route::has('password.request'))
-                    <flux:link class="text-sm text-zinc-500 hover:text-brand-600" :href="route('password.request')" wire:navigate>
+                    <flux:link class="text-sm text-zinc-500 hover:text-orange-600" :href="route('password.request')" wire:navigate>
                         {{ __('Forgot Password') }}
                     </flux:link>
                 @endif
@@ -58,7 +59,7 @@
             <flux:button
                 variant="primary"
                 type="submit"
-                class="w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold"
+                class="w-full !bg-orange-500 hover:!bg-orange-600 !text-white font-semibold !rounded-lg !border-0"
                 data-test="login-button"
             >
                 {{ __('Login') }}
@@ -99,7 +100,7 @@
         @if (Route::has('register'))
             <p class="text-center text-sm text-zinc-500">
                 You're new in here?
-                <flux:link :href="route('register')" wire:navigate class="font-semibold text-brand-600 hover:text-brand-700">
+                <flux:link :href="route('register')" wire:navigate class="font-semibold text-orange-500 hover:text-orange-600">
                     Create Account
                 </flux:link>
             </p>

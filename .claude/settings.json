@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pdftotext \"c:/Users/91937/Desktop/HRMS/pulse/Pulse_by_Conexus_v3.1.pdf\" -)",
+      "Bash(python -c \"import json,sys; cmds=[c['name'] for c in json.load\\(sys.stdin\\)['commands'] if c['name'].startswith\\(\\('hrms:','pulse:'\\)\\)]; print\\('\\\\n'.join\\(sorted\\(cmds\\)\\)\\)\")",
+      "mcp__laravel-boost__application-info",
+      "mcp__laravel-boost__database-schema",
+      "Bash(grep -E \"public \\\\$|public string|public bool|public int\")",
+      "Bash(grep -n 'class Attendance\\\\|protected $table\\\\|public function' /c/Users/91937/Desktop/HRMS/pulse/app/Models/Attendance.php)",
+      "Bash(grep -c \"public \\\\$\\\\|protected \\\\$\" \"/c/Users/91937/Desktop/HRMS/pulse/app/Models/EmployeeSalary.php\")",
+      "Bash(sc query *)",
+      "Bash(tasklist)",
+      "Bash(where mysql *)",
+      "Read(//c/laragon/**)",
+      "Read(//c/xampp/**)",
+      "Read(//c//**)",
+      "Bash(vendor/bin/pint app/Livewire/Attendance/AttendanceSettings.php app/Livewire/Attendance/MyAttendance.php database/seeders/AttendanceSeeder.php --format agent)",
+      "Bash(vendor/bin/pint app/Livewire/Employees/EmployeeEdit.php --format agent)",
+      "Bash(python -c \"import subprocess; result = subprocess.run\\(['pdftotext', 'C:/Users/91937/Desktop/HRMS/pulse/Pulse_by_Conexus_v3.1.pdf', '-'], capture_output=True, text=True\\); print\\(result.stdout[:3000] if result.stdout else result.stderr\\)\")",
+      "PowerShell(Add-Type -AssemblyName System.IO; try { $bytes = [System.IO.File]::ReadAllBytes\\(\"C:\\\\Users\\\\91937\\\\Desktop\\\\HRMS\\\\pulse\\\\Pulse_by_Conexus_v3.1.pdf\"\\); $text = [System.Text.Encoding]::UTF8.GetString\\($bytes\\); $clean = $text -replace '[^\\\\x20-\\\\x7E\\\\r\\\\n]', ' '; $lines = $clean -split '\\\\r?\\\\n' | Where-Object { $_.Trim\\(\\).Length -gt 15 } | Select-Object -First 300; $lines -join \"`n\" } catch { $_.Exception.Message })",
+      "Bash(sqlite3 \"c:\\\\Users\\\\91937\\\\Desktop\\\\HRMS\\\\pulse\\\\database\\\\database.sqlite\" \".schema payrolls\")",
+      "Bash(grep -v \"//\")",
+      "Bash(vendor/bin/pint app/Livewire/Employees/EmployeeEdit.php app/Livewire/Employees/EmployeeIndex.php --format agent)",
+      "Bash(vendor/bin/pint app/Livewire/Employees/EmployeeIndex.php --format agent)",
+      "Bash(vendor/bin/pint app/Livewire/Attendance/AttendanceTracker.php --format agent)",
+      "Bash(findstr /V \"notif\\\\.\")",
+      "Bash(findstr \"notify\\(\")",
+      "Bash(findstr /s /n \"->notify\\(\" app\\\\Livewire\\\\*.php app\\\\Services\\\\*.php app\\\\Livewire\\\\TimeOff\\\\*.php app\\\\Livewire\\\\Overtime\\\\*.php app\\\\Livewire\\\\Payroll\\\\*.php)",
+      "Bash(vendor/bin/pint app/Services/LeaveService.php app/Livewire/Attendance/AttendanceTracker.php app/Livewire/TimeOff/MyTimeOff.php --format agent)",
+      "Bash(vendor/bin/pint app/Livewire/NotificationsPage.php app/Notifications/RegularisationReviewedNotification.php --format agent)",
+      "Bash(rm app/Livewire/Attendance/MyAttendance.php)",
+      "Bash(rm resources/views/livewire/attendance/my-attendance.blade.php)"
+    ]
+  }
+}

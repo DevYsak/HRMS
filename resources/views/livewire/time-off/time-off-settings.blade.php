@@ -22,7 +22,11 @@
                                 <div>
                                     <div class="font-semibold text-zinc-900 dark:text-white">{{ $type->name }}</div>
                                     <div class="text-[10px] uppercase font-bold text-zinc-400">
-                                        {{ $type->is_paid ? 'Paid' : 'Unpaid' }}
+                                        {{ $type->is_paid ? 'Paid' : 'Unpaid' }} · {{ str_replace('_', ' ', $type->category ?? 'other') }}
+                                    </div>
+                                    <div class="text-[10px] text-zinc-500 mt-1">
+                                        Carry Forward: {{ $type->allow_carry_forward ? ($type->carry_forward_limit > 0 ? 'Yes · Limit '.$type->carry_forward_limit.' days' : 'Yes · No limit') : 'No' }}
+                                        · Encashment: {{ $type->allow_encashment ? 'Enabled' : 'Disabled' }}
                                     </div>
                                 </div>
                             </div>
@@ -57,9 +61,25 @@
 
             <form wire:submit="save" class="space-y-5">
                 <flux:input wire:model="name" label="Type Name" placeholder="e.g. Annual Leave" required />
-                
+
                 <div class="flex items-center gap-4 py-2">
                     <flux:checkbox wire:model="is_paid" label="Paid Leave" />
+                </div>
+
+                <flux:select wire:model="category" label="Category">
+                    <option value="annual">Annual</option>
+                    <option value="sick">Sick</option>
+                    <option value="mdl">MDL</option>
+                    <option value="comp_off">Comp Off</option>
+                    <option value="encashment">Encashment</option>
+                    <option value="unpaid">Unpaid</option>
+                    <option value="other">Other</option>
+                </flux:select>
+
+                <div class="grid grid-cols-1 gap-4">
+                    <flux:switch wire:model="allow_carry_forward" label="Allow Carry Forward" />
+                    <flux:input wire:model="carry_forward_limit" type="number" min="0" label="Carry Forward Limit" suffix="days" />
+                    <flux:switch wire:model="allow_encashment" label="Allow Encashment" />
                 </div>
 
                 <div class="space-y-2">

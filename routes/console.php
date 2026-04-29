@@ -84,6 +84,12 @@ Schedule::command('hrms:generate-attendance-summary')
     ->withoutOverlapping()
     ->runInBackground();
 
+// Roll over remaining leave balances to new year → 1 Jan 02:00 (after attendance summary)
+Schedule::command('hrms:carry-forward-leaves')
+    ->yearlyOn(1, 1, '02:00')
+    ->withoutOverlapping()
+    ->runInBackground();
+
 // Spatie Backup
 Schedule::command('backup:clean')->daily()->at('01:00');
 Schedule::command('backup:run')->daily()->at('01:30');

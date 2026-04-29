@@ -9,70 +9,165 @@ use App\Models\Department;
 use App\Models\Employee;
 use App\Models\JobTitle;
 use App\Models\Office;
+use App\Models\ShiftSetting;
 use App\Models\User;
 use App\Notifications\ProbationExtendedNotification;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 
 class EmployeeEdit extends Component
 {
+    use WithFileUploads;
+
     public Employee $employee;
 
-    public $activeTab = 'General';
+    public string $activeTab = 'General';
 
-    public $name = '';
+    // ── Account ──────────────────────────────────────────────────────────────
+    public string $name = '';
 
-    public $email = '';
+    public string $email = '';
 
-    public $role = '';
+    public string $role = '';
 
-    public $employee_id = '';
+    // ── Personal profile ─────────────────────────────────────────────────────
+    public string $employee_id = '';
 
-    public $office_id = '';
+    public string $phone = '';
 
-    public $department_id = '';
+    public string $date_of_birth = '';
 
-    public $job_title_id = '';
+    public string $gender = '';
 
-    public $manager_id = '';
+    public string $address = '';
 
-    public $joining_date = '';
+    public string $emergency_contact = '';
 
-    public $status = '';
+    public $photo = null;
 
-    public $employment_type = '';
+    // ── Employment ───────────────────────────────────────────────────────────
+    public string $office_id = '';
 
-    // Probation fields
-    public $probation_end_date = '';
+    public string $department_id = '';
 
-    public $extend_end_date = '';
+    public string $job_title_id = '';
 
-    public $extend_reason = '';
+    public string $manager_id = '';
 
-    public function mount(Employee $employee)
+    public string $shift_id = '';
+
+    public string $salary_cycle = 'A';
+
+    public string $joining_date = '';
+
+    public string $status = '';
+
+    public string $employment_type = '';
+
+    // ── Probation ────────────────────────────────────────────────────────────
+    public string $probation_end_date = '';
+
+    public string $extend_end_date = '';
+
+    public string $extend_reason = '';
+
+    public function mount(Employee $employee): void
     {
         $this->authorize('update', $employee);
         $this->employee = $employee->load('user');
 
+        // Account
         $this->name = $this->employee->user->name;
         $this->email = $this->employee->user->email;
         $this->role = $this->employee->user->role->value;
 
-        $this->employee_id = $this->employee->employee_id;
-        $this->office_id = $this->employee->office_id;
-        $this->department_id = $this->employee->department_id;
-        $this->job_title_id = $this->employee->job_title_id;
-        $this->manager_id = $this->employee->manager_id;
+        // Personal
+        $this->employee_id = $this->employee->employee_id ?? '';
+        $this->phone = $this->employee->phone ?? '';
+        $this->date_of_birth = $this->employee->date_of_birth?->format('Y-m-d') ?? '';
+        $this->gender = $this->employee->gender ?? '';
+        $this->address = $this->employee->address ?? '';
+        $this->emergency_contact = $this->employee->emergency_contact ?? '';
+
+        // Employment
+        $this->office_id = (string) ($this->employee->office_id ?? '');
+        $this->department_id = (string) ($this->employee->department_id ?? '');
+        $this->job_title_id = (string) ($this->employee->job_title_id ?? '');
+        $this->manager_id = (string) ($this->employee->manager_id ?? '');
+        $this->shift_id = (string) ($this->employee->shift_id ?? '');
+        $this->salary_cycle = $this->employee->salary_cycle ?? 'A';
         $this->joining_date = $this->employee->joining_date->format('Y-m-d');
         $this->probation_end_date = $this->employee->probation_end_date?->format('Y-m-d') ?? '';
         $this->status = $this->employee->status->value;
         $this->employment_type = $this->employee->employment_type->value;
     }
 
-    public function setTab($tab)
+    public function setTab(string $tab): void
     {
         $this->activeTab = $tab;
     }
+
+    // ── Save (General + Job + Personal tabs share the same action) ────────────
+
+    public function save(): void
+    {
+        $this->authorize('update', $this->employee);
+
+        $this->validate([
+            // Account
+            'name' => 'required|string|max:255',
+            'email' => ['required', 'email', Rule::unique('users', 'email')->ignore($this->employee->user_id)],
+            'role' => 'required|string',
+            // Personal
+            'employee_id' => ['required', 'string', Rule::unique('employees', 'employee_id')->ignore($this->employee->id)],
+            'phone' => 'nullable|string|max:30',
+            'date_of_birth' => 'nullable|date|before:today',
+            'gender' => 'nullable|string|in:male,female,other,prefer_not_to_say',
+            'address' => 'nullable|string|max:500',
+            'emergency_contact' => 'nullable|string|max:255',
+            'photo' => 'nullable|image|max:2048',
+            // Employment
+            'joining_date' => 'required|date',
+            'shift_id' => 'nullable|exists:shift_settings,id',
+            'salary_cycle' => 'required|in:A,B',
+            'status' => 'required|string',
+            'employment_type' => 'required|string',
+        ]);
+
+        $this->employee->user->update([
+            'name' => $this->name,
+            'email' => $this->email,
+            'role' => UserRole::from($this->role),
+        ]);
+
+        $photoPath = $this->photo
+            ? $this->photo->store('employee-photos', 'public')
+            : $this->employee->photo;
+
+        $this->employee->update([
+            'employee_id' => $this->employee_id,
+            'phone' => $this->phone ?: null,
+            'date_of_birth' => $this->date_of_birth ?: null,
+            'gender' => $this->gender ?: null,
+            'address' => $this->address ?: null,
+            'emergency_contact' => $this->emergency_contact ?: null,
+            'photo' => $photoPath,
+            'office_id' => $this->office_id ?: null,
+            'department_id' => $this->department_id ?: null,
+            'job_title_id' => $this->job_title_id ?: null,
+            'manager_id' => $this->manager_id ?: null,
+            'shift_id' => $this->shift_id ?: null,
+            'salary_cycle' => $this->salary_cycle,
+            'joining_date' => $this->joining_date,
+            'status' => $this->status,
+            'employment_type' => $this->employment_type,
+        ]);
+
+        \Flux::toast('Employee updated successfully.');
+    }
+
+    // ── Probation ─────────────────────────────────────────────────────────────
 
     public function confirmProbation(): void
     {
@@ -84,8 +179,7 @@ class EmployeeEdit extends Component
         ]);
 
         $this->status = EmployeeStatus::Active->value;
-
-        $this->dispatch('notify', ['message' => 'Probation confirmed. Employee is now permanent.', 'type' => 'success']);
+        \Flux::toast('Probation confirmed. Employee is now permanent.');
     }
 
     public function extendProbation(): void
@@ -102,62 +196,27 @@ class EmployeeEdit extends Component
             'probation_extension_reason' => $this->extend_reason,
         ]);
 
-        // Notify manager in-app
         if ($this->employee->manager) {
             $this->employee->manager->notify(new ProbationExtendedNotification($this->employee));
         }
 
         $this->reset('extend_end_date', 'extend_reason');
-
-        $this->dispatch('notify', ['message' => 'Probation extended and manager notified.', 'type' => 'success']);
-    }
-
-    public function save()
-    {
-        $this->authorize('update', $this->employee);
-        $this->validate([
-            'name' => 'required|string|max:255',
-            'email' => ['required', 'email', Rule::unique('users', 'email')->ignore($this->employee->user_id)],
-            'role' => 'required|string',
-            'employee_id' => ['required', 'string', Rule::unique('employees', 'employee_id')->ignore($this->employee->id)],
-            'joining_date' => 'required|date',
-            'status' => 'required|string',
-            'employment_type' => 'required|string',
-        ]);
-
-        $this->employee->user->update([
-            'name' => $this->name,
-            'email' => $this->email,
-            'role' => UserRole::from($this->role),
-        ]);
-
-        $this->employee->update([
-            'employee_id' => $this->employee_id,
-            'office_id' => $this->office_id ?: null,
-            'department_id' => $this->department_id ?: null,
-            'job_title_id' => $this->job_title_id ?: null,
-            'manager_id' => $this->manager_id ?: null,
-            'joining_date' => $this->joining_date,
-            'status' => $this->status,
-            'employment_type' => $this->employment_type,
-        ]);
-
-        session()->flash('status', 'Employee updated successfully.');
-
-        $this->redirect(route('employees.index'), navigate: true);
+        \Flux::toast('Probation extended and manager notified.');
     }
 
     public function render()
     {
-        $this->employee->load(['salaries.component']);
+        $this->employee->load(['salaries.component', 'shift']);
 
         return view('livewire.employees.employee-edit', [
             'offices' => Office::all(),
             'departments' => Department::all(),
             'jobTitles' => JobTitle::all(),
-            'managers' => User::whereIn('role', [UserRole::SuperAdmin, UserRole::HrAdmin, UserRole::Director, UserRole::Manager])
-                ->where('id', '!=', $this->employee->user_id)
-                ->get(),
+            'shifts' => ShiftSetting::all(),
+            'managers' => User::whereIn('role', [
+                UserRole::SuperAdmin, UserRole::HrAdmin,
+                UserRole::Director, UserRole::Manager,
+            ])->where('id', '!=', $this->employee->user_id)->get(),
             'roles' => UserRole::cases(),
             'statuses' => EmployeeStatus::cases(),
             'employmentTypes' => EmploymentType::cases(),

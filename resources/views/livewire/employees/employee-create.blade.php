@@ -6,86 +6,115 @@
                 <flux:breadcrumbs.item>Add Employee</flux:breadcrumbs.item>
             </flux:breadcrumbs>
             <h1 class="pulse-page-title">Add New Employee</h1>
-            <p class="pulse-page-subtitle">Create a new user and employee profile.</p>
+            <p class="pulse-page-subtitle">Create a new user account and employee profile. Spec §3.1</p>
         </div>
     </div>
 
-    <form wire:submit="save" class="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {{-- User Account Info --}}
-        <div class="pulse-card space-y-5">
-            <h3 class="font-semibold text-zinc-900 dark:text-white mb-4 border-b border-zinc-100 pb-2 dark:border-zinc-800">Account Information</h3>
-            
-            <flux:input wire:model="name" label="Full Name" placeholder="e.g. John Doe" required />
-            <flux:input wire:model="email" type="email" label="Email Address" placeholder="e.g. john@example.com" required />
-            
-            <flux:select wire:model="role" label="Account Role">
-                @foreach($roles as $roleCase)
-                    <option value="{{ $roleCase->value }}">{{ ucfirst($roleCase->value) }}</option>
-                @endforeach
-            </flux:select>
+    <form wire:submit="save" class="space-y-6">
 
-            <div class="text-sm text-zinc-500 mt-2">
-                Note: A default password "<kbd class="font-mono bg-zinc-100 px-1 rounded dark:bg-zinc-800">password</kbd>" will be set.
+        {{-- Section 1: Account --}}
+        <div class="pulse-card space-y-5">
+            <h3 class="font-semibold text-zinc-900 dark:text-white border-b border-zinc-100 pb-2 dark:border-zinc-800">Account Information</h3>
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <flux:input wire:model="name" label="Full Name" placeholder="e.g. John Doe" required />
+                <flux:input wire:model="email" type="email" label="Email Address" placeholder="e.g. john@conexus.com" required />
+                <flux:select wire:model="role" label="System Role">
+                    @foreach($roles as $roleCase)
+                        <option value="{{ $roleCase->value }}">{{ $roleCase->label() }}</option>
+                    @endforeach
+                </flux:select>
+            </div>
+            <p class="text-xs text-zinc-500">Default password: <kbd class="font-mono bg-zinc-100 px-1 rounded dark:bg-zinc-800">Password@123</kbd> — employee should change on first login.</p>
+        </div>
+
+        {{-- Section 2: Personal Profile (Spec §3.1) --}}
+        <div class="pulse-card space-y-5">
+            <h3 class="font-semibold text-zinc-900 dark:text-white border-b border-zinc-100 pb-2 dark:border-zinc-800">Personal Profile</h3>
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <flux:input wire:model="employee_id" label="Employee ID" required />
+                <flux:input wire:model="phone" label="Phone" placeholder="+91 98765 43210" />
+                <flux:input wire:model="date_of_birth" type="date" label="Date of Birth" />
+            </div>
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <flux:select wire:model="gender" label="Gender">
+                    <option value="">Select…</option>
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                    <option value="other">Other</option>
+                    <option value="prefer_not_to_say">Prefer not to say</option>
+                </flux:select>
+                <flux:input wire:model="emergency_contact" label="Emergency Contact" placeholder="Name & phone number" />
+            </div>
+            <flux:textarea wire:model="address" label="Address" rows="2" placeholder="Full residential address" />
+            <div>
+                <flux:label>Profile Photo</flux:label>
+                <flux:input wire:model="photo" type="file" accept="image/*" class="mt-1" />
+                @error('photo') <p class="text-red-500 text-xs mt-1">{{ $message }}</p> @enderror
             </div>
         </div>
 
-        {{-- HR Profile Info --}}
+        {{-- Section 3: Employment Record (Spec §3.1) --}}
         <div class="pulse-card space-y-5">
-            <h3 class="font-semibold text-zinc-900 dark:text-white mb-4 border-b border-zinc-100 pb-2 dark:border-zinc-800">HR Information</h3>
-            
-            <div class="grid grid-cols-2 gap-4">
-                <flux:input wire:model="employee_id" label="Employee ID" required />
-                <flux:input wire:model="joining_date" type="date" label="Joining Date" required />
-            </div>
-
-            <div class="grid grid-cols-2 gap-4">
+            <h3 class="font-semibold text-zinc-900 dark:text-white border-b border-zinc-100 pb-2 dark:border-zinc-800">Employment Record</h3>
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
                 <flux:select wire:model="office_id" label="Office">
-                    <option value="">Select Office...</option>
+                    <option value="">Select Office…</option>
                     @foreach($offices as $office)
                         <option value="{{ $office->id }}">{{ $office->name }}</option>
                     @endforeach
                 </flux:select>
-
                 <flux:select wire:model="department_id" label="Department">
-                    <option value="">Select Department...</option>
+                    <option value="">Select Department…</option>
                     @foreach($departments as $dept)
                         <option value="{{ $dept->id }}">{{ $dept->name }}</option>
                     @endforeach
                 </flux:select>
+                <flux:select wire:model="job_title_id" label="Job Title">
+                    <option value="">Select Job Title…</option>
+                    @foreach($jobTitles as $title)
+                        <option value="{{ $title->id }}">{{ $title->name }}</option>
+                    @endforeach
+                </flux:select>
             </div>
-
-            <flux:select wire:model="job_title_id" label="Job Title">
-                <option value="">Select Job Title...</option>
-                @foreach($jobTitles as $title)
-                    <option value="{{ $title->id }}">{{ $title->name }}</option>
-                @endforeach
-            </flux:select>
-
-            <flux:select wire:model="manager_id" label="Line Manager">
-                <option value="">Select Manager...</option>
-                @foreach($managers as $mgr)
-                    <option value="{{ $mgr->id }}">{{ $mgr->name }} ({{ ucfirst($mgr->role->value) }})</option>
-                @endforeach
-            </flux:select>
-
-            <div class="grid grid-cols-2 gap-4">
-                <flux:select wire:model="status" label="Current Status">
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <flux:select wire:model="manager_id" label="Line Manager">
+                    <option value="">Select Manager…</option>
+                    @foreach($managers as $mgr)
+                        <option value="{{ $mgr->id }}">{{ $mgr->name }} ({{ $mgr->role->label() }})</option>
+                    @endforeach
+                </flux:select>
+                <flux:select wire:model="shift_id" label="Shift">
+                    <option value="">Select Shift…</option>
+                    @foreach($shifts as $shift)
+                        <option value="{{ $shift->id }}">{{ $shift->name }}</option>
+                    @endforeach
+                </flux:select>
+            </div>
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-4">
+                <flux:select wire:model="status" label="Status">
                     @foreach($statuses as $case)
                         <option value="{{ $case->value }}">{{ $case->label() }}</option>
                     @endforeach
                 </flux:select>
-
                 <flux:select wire:model="employment_type" label="Employment Type">
                     @foreach($employmentTypes as $case)
                         <option value="{{ $case->value }}">{{ $case->label() }}</option>
                     @endforeach
                 </flux:select>
+                <flux:select wire:model="salary_cycle" label="Salary Cycle">
+                    <option value="A">Cycle A (1st–31st)</option>
+                    <option value="B">Cycle B (21st–20th)</option>
+                </flux:select>
+                <flux:input wire:model="joining_date" type="date" label="Joining Date" required />
+            </div>
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <flux:input wire:model="probation_end_date" type="date" label="Probation End Date" />
             </div>
         </div>
 
-        <div class="lg:col-span-2 flex items-center justify-end gap-3 mt-4">
+        <div class="flex items-center justify-end gap-3">
             <flux:button href="{{ route('employees.index') }}" wire:navigate variant="ghost">Cancel</flux:button>
-            <flux:button type="submit" variant="primary">Create Employee</flux:button>
+            <flux:button type="submit" variant="primary" icon="user-plus">Create Employee</flux:button>
         </div>
     </form>
 </flux:main>

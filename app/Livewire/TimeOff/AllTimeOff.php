@@ -4,6 +4,8 @@ namespace App\Livewire\TimeOff;
 
 use App\Models\LeaveRequest;
 use App\Models\LeaveType;
+use App\Services\LeaveService;
+use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -12,12 +14,16 @@ class AllTimeOff extends Component
     use WithPagination;
 
     public $search = '';
+
     public $status = '';
+
     public $leave_type_id = '';
 
     // Management properties
     public $showManageModal = false;
+
     public $editingId = null;
+
     public $form = [
         'status' => '',
         'leave_type_id' => '',
@@ -29,6 +35,8 @@ class AllTimeOff extends Component
 
     public function manageRequest($id)
     {
+        abort_unless(Auth::user()->canApproveLeave(), 403);
+
         $request = LeaveRequest::findOrFail($id);
         $this->editingId = $id;
         $this->form = [
@@ -45,9 +53,6 @@ class AllTimeOff extends Component
     public function saveManage()
     {
         $request = LeaveRequest::findOrFail($this->editingId);
-        $oldStatus = $request->status;
-        $oldDays = $request->days;
-        $oldTypeId = $request->leave_type_id;
 
         $this->validate([
             'form.status' => 'required|in:pending,approved,rejected,cancelled',
@@ -55,40 +60,18 @@ class AllTimeOff extends Component
             'form.start_date' => 'required|date',
             'form.end_date' => 'required|date|after_or_equal:form.start_date',
         ]);
+        try {
+            app(LeaveService::class)->reviewRequest(
+                $request,
+                $this->form,
+                $this->form['status'],
+                Auth::id(),
+                $this->form['reviewer_comment'] ?: null,
+            );
+        } catch (\DomainException $exception) {
+            $this->addError('form.leave_type_id', $exception->getMessage());
 
-        $start = \Illuminate\Support\Carbon::parse($this->form['start_date']);
-        $end = \Illuminate\Support\Carbon::parse($this->form['end_date']);
-        $newDays = $start->diffInDays($end) + 1;
-
-        // Balance adjustment logic
-        $employee = $request->employee;
-
-        // 1. Revert old balance if it was approved
-        if ($oldStatus === 'approved') {
-            $oldBalance = $employee->leaveBalances()->where('leave_type_id', $oldTypeId)->first();
-            if ($oldBalance) {
-                $oldBalance->decrement('used_days', $oldDays);
-            }
-        }
-
-        // 2. Update the request
-        $request->update([
-            'status' => $this->form['status'],
-            'leave_type_id' => $this->form['leave_type_id'],
-            'start_date' => $this->form['start_date'],
-            'end_date' => $this->form['end_date'],
-            'days' => $newDays,
-            'reason' => $this->form['reason'],
-            'reviewer_comment' => $this->form['reviewer_comment'],
-            'reviewer_id' => \Illuminate\Support\Facades\Auth::id(),
-        ]);
-
-        // 3. Apply new balance if it is now approved
-        if ($this->form['status'] === 'approved') {
-            $newBalance = $employee->leaveBalances()->where('leave_type_id', $this->form['leave_type_id'])->first();
-            if ($newBalance) {
-                $newBalance->increment('used_days', $newDays);
-            }
+            return;
         }
 
         $this->showManageModal = false;
@@ -97,10 +80,12 @@ class AllTimeOff extends Component
 
     public function render()
     {
+        abort_unless(Auth::user()->canApproveLeave(), 403);
+
         $requests = LeaveRequest::with(['employee.user', 'leaveType', 'reviewer'])
             ->when($this->search, function ($query) {
                 $query->whereHas('employee.user', function ($q) {
-                    $q->where('name', 'like', '%' . $this->search . '%');
+                    $q->where('name', 'like', '%'.$this->search.'%');
                 });
             })
             ->when($this->status, function ($query) {

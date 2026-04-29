@@ -3,12 +3,8 @@
 namespace App\Livewire\Payroll;
 
 use App\Models\Payroll;
-use App\Models\User;
-use App\Notifications\PayrollApprovalNotification;
-use App\Services\OvertimeService;
-use Illuminate\Support\Carbon;
+use App\Services\PayrollService;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 use Livewire\Component;
 
 class FinanceApproval extends Component
@@ -28,44 +24,18 @@ class FinanceApproval extends Component
             ->get();
     }
 
-    public function approve($payrollId, OvertimeService $overtimeService)
+    public function approve($payrollId, PayrollService $payrollService)
     {
+        abort_unless(Auth::user()->canApproveFinance(), 403);
+
         $payroll = Payroll::findOrFail($payrollId);
 
         if ($payroll->status !== 'pending_finance') {
             return;
         }
 
-        DB::transaction(function () use ($payroll, $overtimeService) {
-            $payroll->update([
-                'status'              => 'finalized',
-                'finance_approved_by' => Auth::id(),
-                'finance_approved_at' => Carbon::now(),
-            ]);
-
-            $payroll->payslips()->update(['status' => 'paid']);
-
-            // Mark unpaid OT records as paid
-            foreach ($payroll->payslips as $payslip) {
-                $unpaidRecords = $overtimeService->getUnpaidRecords($payslip->employee);
-                if ($unpaidRecords->isNotEmpty()) {
-                    $overtimeService->markAsPaid($unpaidRecords, $payslip->id);
-                }
-            }
-        });
-
-        // Notify employees and send email
-        foreach ($payroll->payslips as $payslip) {
-            if ($payslip->employee->user) {
-                $payslip->employee->user->notify(
-                    new PayrollApprovalNotification($payroll, 'processed')
-                );
-                
-                \Illuminate\Support\Facades\Mail::to($payslip->employee->user->email)->send(
-                    new \App\Mail\PayslipMail($payslip)
-                );
-            }
-        }
+        $payroll = $payrollService->approveFinance($payroll, Auth::id());
+        $payrollService->dispatchFinalizedPayrollNotifications($payroll);
 
         $this->loadPending();
         \Flux::toast('Payroll approved and finalized!');
@@ -73,15 +43,25 @@ class FinanceApproval extends Component
 
     public function reject($payrollId)
     {
+        abort_unless(Auth::user()->canApproveFinance(), 403);
+
         $payroll = Payroll::findOrFail($payrollId);
-        $payroll->update(['status' => 'draft']); // Send back to draft for HR to fix
-        
+        if ($payroll->status !== 'pending_finance') {
+            \Flux::toast('Only pending payrolls can be rejected.', variant: 'danger');
+
+            return;
+        }
+
+        app(PayrollService::class)->rejectFinance($payroll);
+
         $this->loadPending();
         \Flux::toast('Payroll sent back for corrections.');
     }
 
     public function render()
     {
+        abort_unless(Auth::user()->canApproveFinance(), 403);
+
         return view('livewire.payroll.finance-approval')
             ->layout('layouts.app', ['title' => 'Finance Approval']);
     }

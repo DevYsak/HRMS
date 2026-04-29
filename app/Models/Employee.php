@@ -12,7 +12,13 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-#[Fillable(['user_id', 'employee_id', 'office_id', 'department_id', 'job_title_id', 'manager_id', 'joining_date', 'probation_end_date', 'probation_extension_reason', 'status', 'employment_type', 'salary_cycle', 'shift_id'])]
+#[Fillable([
+    'user_id', 'employee_id',
+    'phone', 'date_of_birth', 'gender', 'address', 'emergency_contact', 'photo',
+    'office_id', 'department_id', 'job_title_id', 'manager_id',
+    'joining_date', 'probation_end_date', 'probation_extension_reason',
+    'status', 'employment_type', 'salary_cycle', 'shift_id',
+])]
 class Employee extends Model
 {
     use HasFactory;
@@ -93,6 +99,7 @@ class Employee extends Model
         return [
             'joining_date' => 'date',
             'probation_end_date' => 'date',
+            'date_of_birth' => 'date',
             'status' => EmployeeStatus::class,
             'employment_type' => EmploymentType::class,
         ];

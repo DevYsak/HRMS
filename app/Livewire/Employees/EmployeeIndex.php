@@ -3,8 +3,8 @@
 namespace App\Livewire\Employees;
 
 use App\Models\Employee;
-use App\Models\Office;
 use App\Models\JobTitle;
+use App\Models\Office;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -13,8 +13,11 @@ class EmployeeIndex extends Component
     use WithPagination;
 
     public $search = '';
+
     public $office_id = '';
+
     public $job_title_id = '';
+
     public $status = '';
 
     public function mount()
@@ -31,10 +34,10 @@ class EmployeeIndex extends Component
     {
         $employee = Employee::findOrFail($id);
         $this->authorize('delete', $employee);
-        
+
         $employee->delete();
         $employee->user->delete();
-        
+
         \Flux::toast('Employee deleted successfully.');
     }
 
@@ -42,15 +45,16 @@ class EmployeeIndex extends Component
     {
         $user = auth()->user();
 
-        $employees = Employee::with(['user', 'office', 'department', 'jobTitle', 'manager'])
+        $employees = Employee::with(['user', 'office', 'department', 'jobTitle', 'manager', 'shift'])
             ->when(! $user->canManageEmployees(), function ($query) use ($user) {
                 // If they are just a manager, only show their direct reports
                 $query->where('manager_id', $user->employee?->id);
             })
             ->when($this->search, function ($query) {
-                $query->whereHas('user', function ($q) {
-                    $q->where('name', 'like', '%' . $this->search . '%')
-                      ->orWhere('email', 'like', '%' . $this->search . '%');
+                $s = '%'.$this->search.'%';
+                $query->where(function ($q) use ($s) {
+                    $q->where('employee_id', 'like', $s)
+                        ->orWhereHas('user', fn ($u) => $u->where('name', 'like', $s)->orWhere('email', 'like', $s));
                 });
             })
             ->when($this->office_id, function ($query) {

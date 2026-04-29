@@ -5,9 +5,9 @@ namespace App\Livewire\Attendance;
 use App\Models\Attendance;
 use App\Models\AttendanceRegularisation;
 use App\Models\AuditLog;
-use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Auth;
 use App\Notifications\RegularisationReviewedNotification;
+use App\Services\AttendanceService;
+use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -16,7 +16,9 @@ class AllAttendance extends Component
     use WithPagination;
 
     public $search = '';
+
     public $status = '';
+
     public $date = '';
 
     public function updatingSearch()
@@ -25,11 +27,15 @@ class AllAttendance extends Component
     }
 
     public $showReviewModal = false;
+
     public $activeRequest = null;
+
     public $reviewComment = '';
 
     public function openReviewModal(int $id)
     {
+        abort_unless(Auth::user()->canApproveLeave(), 403);
+
         $this->activeRequest = AttendanceRegularisation::with('employee.user', 'attendance')->findOrFail($id);
         $this->reviewComment = '';
         $this->showReviewModal = true;
@@ -37,37 +43,17 @@ class AllAttendance extends Component
 
     public function approveRegularisation()
     {
-        if (!$this->activeRequest) return;
-
-        $this->activeRequest->update([
-            'status' => 'approved',
-            'reviewer_id' => Auth::id(),
-            'reviewer_comment' => $this->reviewComment,
-            'reviewed_at' => now(),
-        ]);
-
-        $attendance = $this->activeRequest->attendance;
-        
-        if (!$attendance) {
-            $attendance = Attendance::create([
-                'employee_id' => $this->activeRequest->employee_id,
-                'date' => $this->activeRequest->work_date,
-            ]);
+        if (! $this->activeRequest) {
+            return;
         }
 
-        AuditLog::record($attendance, 'regularised', $attendance->toArray(), null);
+        $attendance = app(AttendanceService::class)->approveRegularisation(
+            $this->activeRequest,
+            Auth::id(),
+            $this->reviewComment ?: null,
+        );
 
-        $checkIn = Carbon::parse($this->activeRequest->requested_check_in);
-        $checkOut = Carbon::parse($this->activeRequest->requested_check_out);
-        $grossMinutes = $checkIn->diffInMinutes($checkOut);
-        $netMinutes = max(0, $grossMinutes - ($attendance->break_minutes ?? 0));
-        
-        $attendance->update([
-            'check_in' => $checkIn,
-            'check_out' => $checkOut,
-            'total_hours' => round($netMinutes / 60, 2),
-            'status' => 'on_time',
-        ]);
+        AuditLog::record($attendance, 'regularised', $attendance->toArray(), null);
 
         $this->activeRequest->employee->user->notify(new RegularisationReviewedNotification($this->activeRequest));
 
@@ -78,16 +64,13 @@ class AllAttendance extends Component
 
     public function rejectRegularisation()
     {
-        if (!$this->activeRequest) return;
+        if (! $this->activeRequest) {
+            return;
+        }
 
         $this->validate(['reviewComment' => 'required|string|min:5']);
 
-        $this->activeRequest->update([
-            'status' => 'rejected',
-            'reviewer_id' => Auth::id(),
-            'reviewer_comment' => $this->reviewComment,
-            'reviewed_at' => now(),
-        ]);
+        app(AttendanceService::class)->rejectRegularisation($this->activeRequest, Auth::id(), $this->reviewComment);
 
         $this->activeRequest->employee->user->notify(new RegularisationReviewedNotification($this->activeRequest));
 
@@ -98,11 +81,13 @@ class AllAttendance extends Component
 
     public function render()
     {
+        abort_unless(Auth::user()->canApproveLeave(), 403);
+
         $query = Attendance::query()->with('employee.user');
 
         if ($this->search) {
             $query->whereHas('employee.user', function ($q) {
-                $q->where('name', 'like', '%' . $this->search . '%');
+                $q->where('name', 'like', '%'.$this->search.'%');
             });
         }
 

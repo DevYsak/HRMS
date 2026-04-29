@@ -5,7 +5,7 @@
                 <flux:subheading>{{ __('Manage hardware, equipment, and other company assets assigned to employees.') }}</flux:subheading>
             </div>
             <div class="flex items-center gap-2">
-                <flux:button icon="plus" variant="primary">{{ __('Add Asset') }}</flux:button>
+                <flux:button icon="plus" variant="primary" wire:click="openCreateModal">{{ __('Add Asset') }}</flux:button>
             </div>
         </div>
 
@@ -51,7 +51,13 @@
                                     @endif
                                 </td>
                                 <td class="px-6 py-4 text-right">
-                                    <flux:button variant="ghost" size="sm" icon="ellipsis-horizontal" />
+                                    @if($asset->status->value === 'available')
+                                        <flux:button variant="ghost" size="sm" wire:click="openAssignModal({{ $asset->id }})">Assign</flux:button>
+                                    @elseif($asset->status->value === 'assigned')
+                                        <flux:button variant="ghost" size="sm" wire:click="openReturnModal({{ $asset->id }})">Return</flux:button>
+                                    @else
+                                        <flux:button variant="ghost" size="sm" disabled>No action</flux:button>
+                                    @endif
                                 </td>
                             </tr>
                         @empty
@@ -66,4 +72,44 @@
                 </table>
             </div>
         </flux:card>
+
+        <flux:modal wire:model="showCreateModal" class="max-w-xl">
+            <div class="space-y-4">
+                <flux:heading size="lg">Add Asset</flux:heading>
+                <flux:input wire:model="name" label="Asset Name" required />
+                <flux:input wire:model="type" label="Type" placeholder="laptop, phone, card, etc." required />
+                <flux:input wire:model="serialNumber" label="Serial Number" />
+                <flux:textarea wire:model="notes" label="Notes" rows="3" />
+                <div class="flex justify-end">
+                    <flux:button variant="primary" wire:click="createAsset">Create</flux:button>
+                </div>
+            </div>
+        </flux:modal>
+
+        <flux:modal wire:model="showAssignModal" class="max-w-xl">
+            <div class="space-y-4">
+                <flux:heading size="lg">Assign Asset</flux:heading>
+                <flux:select wire:model="employeeId" label="Employee" required>
+                    <option value="">Select employee</option>
+                    @foreach($employees as $employee)
+                        <option value="{{ $employee->id }}">{{ $employee->user->name }}</option>
+                    @endforeach
+                </flux:select>
+                <flux:textarea wire:model="notes" label="Assignment Notes" rows="3" />
+                <div class="flex justify-end">
+                    <flux:button variant="primary" wire:click="assignAsset">Assign</flux:button>
+                </div>
+            </div>
+        </flux:modal>
+
+        <flux:modal wire:model="showReturnModal" class="max-w-xl">
+            <div class="space-y-4">
+                <flux:heading size="lg">Return Asset</flux:heading>
+                <flux:input wire:model="conditionOnReturn" label="Condition on Return" required />
+                <flux:textarea wire:model="returnNotes" label="Return Notes" rows="3" />
+                <div class="flex justify-end">
+                    <flux:button variant="primary" wire:click="returnAsset">Mark Returned</flux:button>
+                </div>
+            </div>
+        </flux:modal>
     </flux:main>

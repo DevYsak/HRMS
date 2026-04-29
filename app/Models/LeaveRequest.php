@@ -2,12 +2,13 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Database\Eloquent\Attributes\Fillable;
 
-#[Fillable(['employee_id', 'leave_type_id', 'start_date', 'end_date', 'days', 'reason', 'status', 'reviewer_id', 'reviewer_comment'])]
+#[Fillable(['employee_id', 'leave_type_id', 'start_date', 'end_date', 'is_half_day', 'days', 'reason', 'status', 'reviewer_id', 'reviewer_comment'])]
 class LeaveRequest extends Model
 {
     use SoftDeletes;
@@ -15,6 +16,7 @@ class LeaveRequest extends Model
     protected $casts = [
         'start_date' => 'date',
         'end_date' => 'date',
+        'is_half_day' => 'boolean',
     ];
 
     public function employee(): BelongsTo
@@ -32,8 +34,8 @@ class LeaveRequest extends Model
         return $this->belongsTo(User::class, 'reviewer_id');
     }
 
-    public function escalations(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function escalations(): HasMany
     {
-        return $this->hasMany(\App\Models\LeaveEscalation::class);
+        return $this->hasMany(LeaveEscalation::class);
     }
 }

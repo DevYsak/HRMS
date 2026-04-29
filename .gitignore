@@ -1,3 +1,7 @@
+# Deploy scripts (server credentials hain — commit mat karo)
+/setup-deploy-key.sh
+/.deploy-secrets
+
 /.phpunit.cache
 /node_modules
 /public/build

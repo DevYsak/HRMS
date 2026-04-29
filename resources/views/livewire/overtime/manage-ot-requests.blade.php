@@ -4,6 +4,7 @@
             <h1 class="pulse-page-title">Manage OT Requests</h1>
             <p class="pulse-page-subtitle">Review, approve or reject overtime pre-approval requests</p>
         </div>
+        <flux:button href="{{ route('reports.ot-records', ['month' => now()->month, 'year' => now()->year]) }}" variant="outline" icon="arrow-down-tray" target="_blank">Export CSV</flux:button>
     </div>
 
     {{-- Filters --}}
