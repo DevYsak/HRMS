@@ -29,7 +29,8 @@
       "Bash(vendor/bin/pint app/Services/LeaveService.php app/Livewire/Attendance/AttendanceTracker.php app/Livewire/TimeOff/MyTimeOff.php --format agent)",
       "Bash(vendor/bin/pint app/Livewire/NotificationsPage.php app/Notifications/RegularisationReviewedNotification.php --format agent)",
       "Bash(rm app/Livewire/Attendance/MyAttendance.php)",
-      "Bash(rm resources/views/livewire/attendance/my-attendance.blade.php)"
+      "Bash(rm resources/views/livewire/attendance/my-attendance.blade.php)",
+      "Bash(git add *)"
     ]
   }
 }
