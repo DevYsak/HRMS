@@ -5,8 +5,12 @@ namespace App\Livewire\Attendance;
 use App\Models\Attendance;
 use App\Models\AttendanceRegularisation;
 use App\Models\AuditLog;
+use App\Models\Employee;
+use App\Models\User;
+use App\Notifications\AttendanceRegularisationNotification;
 use App\Notifications\RegularisationReviewedNotification;
 use App\Services\AttendanceService;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -26,11 +30,81 @@ class AllAttendance extends Component
         $this->resetPage();
     }
 
-    public $showReviewModal = false;
+    public bool $showReviewModal = false;
 
     public $activeRequest = null;
 
-    public $reviewComment = '';
+    public string $reviewComment = '';
+
+    // ── HR Mark Attendance ───────────────────────────────────────────────────
+    public bool $showMarkModal = false;
+
+    public string $markEmployeeId = '';
+
+    public string $markDate = '';
+
+    public string $markCheckIn = '';
+
+    public string $markCheckOut = '';
+
+    public string $markWorkMode = 'office';
+
+    public string $markReason = '';
+
+    public function openMarkModal(): void
+    {
+        abort_unless(Auth::user()->canManageEmployees(), 403);
+
+        $this->reset(['markEmployeeId', 'markDate', 'markCheckIn', 'markCheckOut', 'markReason']);
+        $this->markWorkMode = 'office';
+        $this->markDate = now()->format('Y-m-d');
+        $this->showMarkModal = true;
+    }
+
+    public function submitMarkAttendance(): void
+    {
+        abort_unless(Auth::user()->canManageEmployees(), 403);
+
+        $this->validate([
+            'markEmployeeId' => 'required|exists:employees,id',
+            'markDate' => 'required|date|before_or_equal:today',
+            'markCheckIn' => 'required|date_format:H:i',
+            'markCheckOut' => 'required|date_format:H:i|after:markCheckIn',
+            'markReason' => 'required|string|min:5',
+        ]);
+
+        $employee = Employee::with(['user', 'manager'])->findOrFail($this->markEmployeeId);
+        $attendance = Attendance::where('employee_id', $employee->id)
+            ->where('date', $this->markDate)
+            ->first();
+
+        AttendanceRegularisation::create([
+            'employee_id' => $employee->id,
+            'attendance_id' => $attendance?->id,
+            'work_date' => $this->markDate,
+            'requested_check_in' => $this->markDate.' '.$this->markCheckIn.':00',
+            'requested_check_out' => $this->markDate.' '.$this->markCheckOut.':00',
+            'reason' => '[HR — '.Auth::user()->name.'] '.$this->markReason,
+            'status' => 'pending',
+        ]);
+
+        // Notify manager for approval; fallback to HR team if no manager
+        $notification = new AttendanceRegularisationNotification(
+            $employee->user->name,
+            Carbon::parse($this->markDate)->format('d M Y'),
+            'pending',
+        );
+
+        if ($employee->manager) {
+            $employee->manager->notify($notification);
+        } else {
+            User::whereIn('role', ['hr_admin', 'super_admin'])
+                ->each(fn ($u) => $u->notify($notification));
+        }
+
+        $this->showMarkModal = false;
+        \Flux::toast("Attendance regularisation submitted for {$employee->user->name}. Pending manager approval.");
+    }
 
     public function openReviewModal(int $id)
     {
@@ -106,6 +180,7 @@ class AllAttendance extends Component
         return view('livewire.attendance.all-attendance', [
             'attendances' => $query->latest('date')->paginate(15),
             'pendingRegularisations' => $pendingRegularisations,
+            'allEmployees' => Employee::with('user')->orderBy('id')->get(),
         ])->layout('layouts.app', ['title' => 'Employee Attendance']);
     }
 }

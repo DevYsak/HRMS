@@ -57,76 +57,55 @@
     @endif
 
     {{-- ─── LEAVE BALANCE CARDS ─── --}}
-    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
         @forelse($balances as $balance)
             @php
-                $remaining = (float)($balance->allocated_days - $balance->used_days - $balance->encashed_days);
-                $percentage = ($balance->allocated_days > 0)
-                    ? (($balance->used_days + $balance->encashed_days) / $balance->allocated_days) * 100
-                    : 0;
-                $pct = min(100, $percentage);
-                $radius = 20;
-                $circumference = 2 * M_PI * $radius;
-                $strokeOffset = $circumference * (1 - $pct / 100);
-                $icon = match(strtolower($balance->leaveType->name)) {
-                    'casual leave', 'cl' => 'sun',
-                    'sick leave', 'sl' => 'heart',
-                    'earned leave', 'el' => 'briefcase',
-                    'compensatory off', 'comp off' => 'gift',
-                    default => 'calendar-days'
-                };
+                $remaining   = (float)($balance->allocated_days - $balance->used_days - $balance->encashed_days);
+                $used        = (float)$balance->used_days;
+                $total       = (float)$balance->allocated_days;
+                $pct         = $total > 0 ? min(100, round(($used + (float)$balance->encashed_days) / $total * 100)) : 0;
+                $color       = $balance->leaveType->color ?? '#7c3aed';
             @endphp
-            <div class="group relative overflow-hidden rounded-2xl border border-zinc-100 bg-white shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900">
-                {{-- Colored top accent bar --}}
-                <div class="h-1 w-full" style="background: linear-gradient(90deg, {{ $balance->leaveType->color }}, {{ $balance->leaveType->color }}80)"></div>
+            <div class="group overflow-hidden rounded-2xl shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl" style="border: 1px solid {{ $color }}30">
 
-                <div class="p-5">
-                    <div class="mb-4 flex items-start justify-between gap-3">
-                        <div class="min-w-0">
-                            <span class="text-[10px] font-black uppercase tracking-[0.15em] text-zinc-400 dark:text-zinc-500">
-                                {{ $balance->leaveType->name }}
-                            </span>
-                            <div class="mt-1 flex items-baseline gap-1">
-                                <span class="text-3xl font-black tabular-nums text-zinc-900 dark:text-white">{{ (float)$remaining }}</span>
-                                <span class="text-xs font-bold uppercase text-zinc-400">days left</span>
-                            </div>
+                {{-- Colored header --}}
+                <div class="relative flex flex-col items-start justify-between p-5 pb-4" style="background: linear-gradient(135deg, {{ $color }}, {{ $color }}cc)">
+                    <div class="mb-3 text-[10px] font-black uppercase tracking-[0.15em] text-white/70">
+                        {{ $balance->leaveType->name }}
+                    </div>
+                    <div class="flex w-full items-end justify-between">
+                        <div>
+                            <span class="text-5xl font-black tabular-nums text-white">{{ (float)$remaining }}</span>
+                            <div class="mt-0.5 text-xs font-bold uppercase tracking-wider text-white/60">days left</div>
                         </div>
-
-                        {{-- SVG Ring Progress --}}
-                        <div class="relative shrink-0">
-                            <svg width="56" height="56" class="-rotate-90">
-                                <circle cx="28" cy="28" r="{{ $radius }}" fill="none"
-                                    class="stroke-zinc-100 dark:stroke-zinc-800"
-                                    stroke-width="4"/>
-                                <circle cx="28" cy="28" r="{{ $radius }}" fill="none"
-                                    stroke="{{ $balance->leaveType->color }}"
-                                    stroke-width="4"
-                                    stroke-dasharray="{{ number_format($circumference, 4) }}"
-                                    stroke-dashoffset="{{ number_format($strokeOffset, 4) }}"
-                                    stroke-linecap="round"
-                                    style="transition: stroke-dashoffset 0.6s ease"/>
-                            </svg>
-                            <div class="absolute inset-0 flex items-center justify-center">
-                                <flux:icon :name="$icon" class="size-4 text-zinc-400 dark:text-zinc-500" />
-                            </div>
+                        {{-- Circle badge --}}
+                        <div class="flex size-14 flex-col items-center justify-center rounded-full border-2 border-white/30 bg-white/15 backdrop-blur-sm">
+                            <span class="text-base font-black text-white">{{ $pct }}%</span>
+                            <span class="text-[8px] font-bold uppercase text-white/60">used</span>
                         </div>
                     </div>
+                </div>
 
-                    <div class="flex justify-between text-[10px] font-bold uppercase tracking-wider text-zinc-400">
-                        <span>Used <span class="text-zinc-600 dark:text-zinc-300">{{ (float)$balance->used_days }}</span></span>
-                        <span>Total <span class="text-zinc-600 dark:text-zinc-300">{{ (float)$balance->allocated_days }}</span></span>
+                {{-- White bottom --}}
+                <div class="bg-white px-5 pb-4 pt-3 dark:bg-zinc-900">
+                    {{-- Progress bar --}}
+                    <div class="mb-3 h-1.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                        <div class="h-full rounded-full transition-all duration-700" style="width: {{ $pct }}%; background: {{ $color }}"></div>
                     </div>
-
+                    <div class="flex justify-between text-[11px] font-bold text-zinc-400">
+                        <span>Used <span class="text-zinc-700 dark:text-zinc-300">{{ $used }}</span></span>
+                        <span>Total <span class="text-zinc-700 dark:text-zinc-300">{{ $total }}</span></span>
+                    </div>
                     @if($balance->encashed_days > 0)
-                        <div class="mt-3 flex items-center gap-1.5 rounded-lg bg-amber-50 px-2.5 py-1.5 text-[10px] font-bold text-amber-600 dark:bg-amber-900/20 dark:text-amber-400">
-                            <flux:icon.banknotes class="size-3 shrink-0" />
-                            <span>{{ (float)$balance->encashed_days }} days encashed</span>
+                        <div class="mt-2 flex items-center gap-1 text-[10px] font-bold text-amber-600 dark:text-amber-400">
+                            <flux:icon.banknotes class="size-3" />
+                            {{ (float)$balance->encashed_days }} days encashed
                         </div>
                     @endif
                 </div>
             </div>
         @empty
-            <div class="rounded-2xl border border-dashed border-zinc-200 p-10 text-center dark:border-zinc-800 sm:col-span-2 lg:col-span-4">
+            <div class="col-span-2 rounded-2xl border border-dashed border-zinc-200 p-10 text-center dark:border-zinc-800 lg:col-span-4">
                 <flux:icon.calendar-days class="mx-auto mb-3 size-10 text-zinc-200 dark:text-zinc-700" />
                 <p class="text-sm font-medium text-zinc-400">No leave balances found. Please contact HR.</p>
             </div>
@@ -483,7 +462,15 @@
     {{-- Chart.js --}}
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
-        document.addEventListener('livewire:load', function () {
+        function initTimeOffCharts() {
+            // Destroy existing chart instances to prevent duplication on re-render
+            ['cslDonut','monthlyBar'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    const existing = Chart.getChart(el);
+                    if (existing) existing.destroy();
+                }
+            });
             try {
                 const donutEl = document.getElementById('cslDonut');
                 if (donutEl) {
@@ -534,7 +521,10 @@
             } catch (e) {
                 console.error('Chart init error', e);
             }
-        });
+        }
+        // Livewire 4: use DOMContentLoaded + livewire:navigated
+        document.addEventListener('DOMContentLoaded', initTimeOffCharts);
+        document.addEventListener('livewire:navigated', initTimeOffCharts);
     </script>
 
 </flux:main>

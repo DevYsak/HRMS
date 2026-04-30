@@ -4,7 +4,7 @@
             <h1 class="pulse-page-title">Employee Attendance Master</h1>
             <p class="pulse-page-subtitle">View and audit attendance across the organization</p>
         </div>
-        <div class="flex gap-3">
+        <div class="flex flex-wrap gap-3">
              <flux:input wire:model.live="search" placeholder="Search employee..." icon="magnifying-glass" size="sm" class="w-64" />
              <flux:input wire:model.live="date" type="date" size="sm" class="w-48" />
              <flux:select wire:model.live="status" placeholder="Filter by status" size="sm" class="w-40">
@@ -15,6 +15,7 @@
                 <option value="absent">Absent</option>
              </flux:select>
              <flux:button href="{{ route('reports.attendance-summary', ['month' => now()->month, 'year' => now()->year]) }}" variant="ghost" icon="arrow-down-tray" size="sm" target="_blank">Export CSV</flux:button>
+             <flux:button wire:click="openMarkModal" variant="primary" icon="pencil-square" size="sm">Mark for Employee</flux:button>
         </div>
     </div>
 
@@ -162,4 +163,73 @@
             @endif
         </div>
     </flux:modal>
+
+    {{-- ─── HR MARK ATTENDANCE MODAL ─── --}}
+    <flux:modal wire:model="showMarkModal" class="w-full max-w-lg">
+        <div class="space-y-5">
+            <div class="flex items-start gap-3">
+                <div class="shrink-0 rounded-xl bg-brand-50 p-2.5 dark:bg-brand-900/20">
+                    <flux:icon.pencil-square class="size-5 text-brand-600 dark:text-brand-400" />
+                </div>
+                <div>
+                    <flux:heading size="lg">Mark Attendance for Employee</flux:heading>
+                    <flux:subheading>HR can submit attendance on an employee's behalf. Requires manager approval.</flux:subheading>
+                </div>
+            </div>
+
+            {{-- Approval info callout --}}
+            <div class="flex gap-3 rounded-xl border border-amber-100 bg-amber-50 p-3 dark:border-amber-800/30 dark:bg-amber-900/10">
+                <flux:icon.information-circle class="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                <p class="text-xs leading-relaxed text-amber-700 dark:text-amber-300">
+                    This creates a <strong>Regularisation Request</strong> on behalf of the employee.
+                    It will be sent to the employee's <strong>Line Manager</strong> for approval before attendance is updated.
+                </p>
+            </div>
+
+            <div class="space-y-4">
+                <flux:select wire:model="markEmployeeId" label="Employee" placeholder="Select employee..." required>
+                    @foreach($allEmployees as $emp)
+                        <option value="{{ $emp->id }}">{{ $emp->user->name }} ({{ $emp->employee_id ?? 'No ID' }})</option>
+                    @endforeach
+                </flux:select>
+
+                <flux:input wire:model="markDate" type="date" label="Date of Attendance"
+                    max="{{ now()->format('Y-m-d') }}" required />
+
+                <div class="grid grid-cols-2 gap-4">
+                    <flux:input wire:model="markCheckIn" type="time" label="Check-in Time" required />
+                    <flux:input wire:model="markCheckOut" type="time" label="Check-out Time" required />
+                </div>
+
+                <div>
+                    <flux:label>Work Mode</flux:label>
+                    <div class="mt-1.5 grid grid-cols-3 gap-2">
+                        @foreach(['office' => 'Office', 'wfh' => 'WFH', 'remote' => 'Remote'] as $val => $label)
+                            <button type="button" wire:click="$set('markWorkMode', '{{ $val }}')"
+                                class="rounded-xl border py-2 text-sm font-bold transition-all
+                                    {{ $markWorkMode === $val
+                                        ? 'border-brand-500 bg-brand-50 text-brand-700 dark:bg-brand-900/20 dark:text-brand-400'
+                                        : 'border-zinc-200 text-zinc-500 hover:border-zinc-300 dark:border-zinc-700' }}">
+                                {{ $label }}
+                            </button>
+                        @endforeach
+                    </div>
+                </div>
+
+                <flux:textarea wire:model="markReason" label="Reason for HR Entry"
+                    placeholder="e.g. Employee's biometric failed, client visit, system issue..."
+                    rows="2" required />
+            </div>
+
+            <div class="flex justify-end gap-3 pt-2">
+                <flux:modal.close>
+                    <flux:button variant="ghost">Cancel</flux:button>
+                </flux:modal.close>
+                <flux:button wire:click="submitMarkAttendance" variant="primary" icon="paper-airplane">
+                    Submit for Approval
+                </flux:button>
+            </div>
+        </div>
+    </flux:modal>
+
 </flux:main>
