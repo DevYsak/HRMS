@@ -3,6 +3,8 @@
 namespace App\Livewire\Overtime;
 
 use App\Models\OtRequest;
+use App\Models\User;
+use App\Notifications\OtRequestNotification;
 use App\Services\OvertimeService;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
@@ -15,18 +17,21 @@ class MyOtRequests extends Component
     public bool $showModal = false;
 
     // Form fields
-    public string $work_date   = '';
-    public string $start_time  = '';
-    public string $end_time    = '';
-    public string $reason      = '';
+    public string $work_date = '';
+
+    public string $start_time = '';
+
+    public string $end_time = '';
+
+    public string $reason = '';
 
     protected function rules(): array
     {
         return [
-            'work_date'  => 'required|date|before_or_equal:today',
+            'work_date' => 'required|date|before_or_equal:today',
             'start_time' => 'required|date_format:H:i',
-            'end_time'   => 'required|date_format:H:i|after:start_time',
-            'reason'     => 'required|min:5|max:500',
+            'end_time' => 'required|date_format:H:i|after:start_time',
+            'reason' => 'required|min:5|max:500',
         ];
     }
 
@@ -62,16 +67,19 @@ class MyOtRequests extends Component
         }
 
         $request = $service->submitRequest($employee, [
-            'work_date'  => $this->work_date,
+            'work_date' => $this->work_date,
             'start_time' => $this->start_time,
-            'end_time'   => $this->end_time,
-            'reason'     => $this->reason,
+            'end_time' => $this->end_time,
+            'reason' => $this->reason,
         ]);
 
-        // Notify manager
+        // Notify manager; fallback to HR/SuperAdmin if no manager assigned
         $manager = $employee->manager;
         if ($manager) {
-            $manager->notify(new \App\Notifications\OtRequestNotification($request));
+            $manager->notify(new OtRequestNotification($request));
+        } else {
+            User::whereIn('role', ['hr_admin', 'super_admin', 'manager'])
+                ->each(fn ($u) => $u->notify(new OtRequestNotification($request)));
         }
 
         $this->showModal = false;
@@ -82,7 +90,7 @@ class MyOtRequests extends Component
     public function cancel(int $id): void
     {
         $employee = Auth::user()->employee;
-        $request  = OtRequest::where('employee_id', $employee?->id)->findOrFail($id);
+        $request = OtRequest::where('employee_id', $employee?->id)->findOrFail($id);
 
         if (! $request->isPending()) {
             \Flux::toast('Only pending requests can be cancelled.', variant: 'warning');
