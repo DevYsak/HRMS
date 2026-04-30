@@ -2,10 +2,10 @@
 
 namespace App\Livewire;
 
-use App\Models\Employee;
 use App\Models\Incentive;
 use App\Models\LeaveEncashment;
 use App\Models\OtRequest;
+use App\Models\OvertimeRecord;
 use App\Models\Payroll;
 use App\Models\Reimbursement;
 use Illuminate\Support\Carbon;
@@ -13,13 +13,14 @@ use Livewire\Component;
 
 class FinanceDashboard extends Component
 {
-    public string $month;
-    public int    $year;
+    public string $month = '';
+
+    public int $year = 0;
 
     public function mount(): void
     {
         $this->month = Carbon::now()->format('Y-m');
-        $this->year  = Carbon::now()->year;
+        $this->year = Carbon::now()->year;
     }
 
     public function render()
@@ -38,21 +39,21 @@ class FinanceDashboard extends Component
             ->with('payslips')
             ->first();
 
-        $pendingIncentives    = Incentive::where('status', 'pending')->count();
+        $pendingIncentives = Incentive::where('status', 'pending')->count();
         $pendingReimbursements = Reimbursement::where('status', 'pending')->count();
-        $pendingEncashments   = LeaveEncashment::where('status', 'pending')->count();
+        $pendingEncashments = LeaveEncashment::where('status', 'pending')->count();
 
-        $approvedIncentivesTotal    = Incentive::where('month', $this->month)->where('status', 'approved')->sum('amount');
+        $approvedIncentivesTotal = Incentive::where('month', $this->month)->where('status', 'approved')->sum('amount');
         $approvedReimbursementsTotal = Reimbursement::where('month', $this->month)->where('status', 'approved')->sum('amount');
 
-        $otPendingCount  = OtRequest::where('status', 'pending')->count();
+        $otPendingCount = OtRequest::where('status', 'pending')->count();
         $monthlyOtAmount = OtRequest::where('status', 'approved')
             ->whereYear('work_date', $year)
             ->whereMonth('work_date', $mon)
             ->sum('requested_hours') * 100; // ₹100/hr
 
-        $otSummary = \App\Models\OvertimeRecord::query()
-            ->whereHas('otRequest', fn($q) => $q->where('status', 'approved'))
+        $otSummary = OvertimeRecord::query()
+            ->whereHas('otRequest', fn ($q) => $q->where('status', 'approved'))
             ->whereYear('work_date', $year)
             ->whereMonth('work_date', $mon)
             ->selectRaw('employee_id, SUM(ot_hours) as total_hours, SUM(ot_amount) as total_amount')
