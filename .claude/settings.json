@@ -34,7 +34,8 @@
       "Bash(git commit *)",
       "Bash(git push *)",
       "Bash(vendor/bin/pint app/Livewire/Attendance/AllAttendance.php --format agent)",
-      "Bash(vendor/bin/pint app/Livewire/Overtime/MyOtRequests.php --format agent)"
+      "Bash(vendor/bin/pint app/Livewire/Overtime/MyOtRequests.php --format agent)",
+      "Bash(grep -rn \"public string \\\\$\\\\|public int \\\\$\\\\|public float \\\\$\\\\|public bool \\\\$\\\\|public array \\\\$\" app/Livewire/ --include=\"*.php\")"
     ]
   }
 }
