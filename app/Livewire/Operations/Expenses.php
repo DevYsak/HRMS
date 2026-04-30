@@ -159,6 +159,6 @@ class Expenses extends Component
             'expenses' => $expenses,
             'canReview' => $this->canReviewClaims(),
             'pendingStatus' => ExpenseStatus::Pending->value,
-        ]);
+        ])->layout('layouts.app', ['title' => 'Expense Claims']);
     }
 }
