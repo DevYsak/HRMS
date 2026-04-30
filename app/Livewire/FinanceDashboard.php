@@ -25,7 +25,15 @@ class FinanceDashboard extends Component
 
     public function render()
     {
-        [$year, $mon] = explode('-', $this->month);
+        // Guard: if month not yet set (render called before mount in embedded context)
+        if (empty($this->month) || ! str_contains($this->month, '-')) {
+            $this->month = Carbon::now()->format('Y-m');
+            $this->year = Carbon::now()->year;
+        }
+
+        $parts = explode('-', $this->month);
+        $year = (int) ($parts[0] ?? Carbon::now()->year);
+        $mon = (int) ($parts[1] ?? Carbon::now()->month);
 
         $cycleARun = Payroll::where('cycle', 'cycle_a')
             ->whereYear('created_at', $year)
