@@ -25,7 +25,17 @@ class AllAttendance extends Component
 
     public $date = '';
 
-    public function updatingSearch()
+    public function updatingSearch(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatingStatus(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatingDate(): void
     {
         $this->resetPage();
     }
@@ -160,8 +170,13 @@ class AllAttendance extends Component
         $query = Attendance::query()->with('employee.user');
 
         if ($this->search) {
-            $query->whereHas('employee.user', function ($q) {
-                $q->where('name', 'like', '%'.$this->search.'%');
+            $search = $this->search;
+            $query->where(function ($q) use ($search) {
+                $q->whereHas('employee.user', function ($q2) use ($search) {
+                    $q2->where('name', 'like', '%'.$search.'%');
+                })->orWhereHas('employee', function ($q2) use ($search) {
+                    $q2->where('employee_id', 'like', '%'.$search.'%');
+                });
             });
         }
 

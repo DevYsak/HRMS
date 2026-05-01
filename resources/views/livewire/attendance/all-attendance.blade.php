@@ -1,21 +1,24 @@
-﻿<flux:main class="bg-zinc-50 p-6 space-y-6 dark:bg-zinc-950">
-    <div class="pulse-page-header">
-        <div>
-            <h1 class="pulse-page-title">Employee Attendance Master</h1>
-            <p class="pulse-page-subtitle">View and audit attendance across the organization</p>
+<flux:main class="bg-zinc-50 p-6 space-y-6 dark:bg-zinc-950">
+    {{-- Page Header: title row + filters row stacked --}}
+    <div>
+        <div class="flex items-start justify-between mb-4">
+            <div>
+                <h1 class="pulse-page-title">Employee Attendance Master</h1>
+                <p class="pulse-page-subtitle">View and audit attendance across the organization</p>
+            </div>
+            <flux:button wire:click="openMarkModal" variant="primary" icon="pencil-square" size="sm">Mark for Employee</flux:button>
         </div>
-        <div class="flex flex-wrap gap-3">
-             <flux:input wire:model.live="search" placeholder="Search employee..." icon="magnifying-glass" size="sm" class="w-64" />
-             <flux:input wire:model.live="date" type="date" size="sm" class="w-48" />
-             <flux:select wire:model.live="status" placeholder="Filter by status" size="sm" class="w-40">
+        <div class="flex flex-wrap items-center gap-3">
+            <flux:input wire:model.live.debounce.300ms="search" placeholder="Search employee..." icon="magnifying-glass" size="sm" class="w-64" />
+            <flux:input wire:model.live="date" type="date" size="sm" class="w-48" />
+            <flux:select wire:model.live="status" placeholder="Filter by status" size="sm" class="w-44">
                 <option value="">All Status</option>
                 <option value="on_time">On Time</option>
                 <option value="late">Late</option>
                 <option value="remote">Remote</option>
                 <option value="absent">Absent</option>
-             </flux:select>
-             <flux:button href="{{ route('reports.attendance-summary', ['month' => now()->month, 'year' => now()->year]) }}" variant="ghost" icon="arrow-down-tray" size="sm" target="_blank">Export CSV</flux:button>
-             <flux:button wire:click="openMarkModal" variant="primary" icon="pencil-square" size="sm">Mark for Employee</flux:button>
+            </flux:select>
+            <flux:button href="{{ route('reports.attendance-summary', ['month' => now()->month, 'year' => now()->year]) }}" variant="ghost" icon="arrow-down-tray" size="sm" target="_blank">Export CSV</flux:button>
         </div>
     </div>
 
