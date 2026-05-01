@@ -1,21 +1,21 @@
 @props(['node', 'grouped', 'visited' => []])
 
 @php
-    $visited    = $visited ?? [];
-    $canRender  = isset($grouped[$node->user_id])
+    $visited   = $visited ?? [];
+    $canRender = isset($grouped[$node->user_id])
         && $grouped[$node->user_id]->count() > 0
         && ! in_array($node->user_id, $visited);
 
     // Department → color palette
     $palette = [
-        'indigo'   => ['border' => '#6366f1', 'bg' => 'rgba(99,102,241,0.08)',  'badge' => 'bg-indigo-500/20 text-indigo-300',  'dot' => 'bg-indigo-400'],
-        'violet'   => ['border' => '#8b5cf6', 'bg' => 'rgba(139,92,246,0.08)', 'badge' => 'bg-violet-500/20 text-violet-300',  'dot' => 'bg-violet-400'],
-        'sky'      => ['border' => '#0ea5e9', 'bg' => 'rgba(14,165,233,0.08)', 'badge' => 'bg-sky-500/20 text-sky-300',        'dot' => 'bg-sky-400'],
-        'emerald'  => ['border' => '#10b981', 'bg' => 'rgba(16,185,129,0.08)', 'badge' => 'bg-emerald-500/20 text-emerald-300','dot' => 'bg-emerald-400'],
-        'amber'    => ['border' => '#f59e0b', 'bg' => 'rgba(245,158,11,0.08)', 'badge' => 'bg-amber-500/20 text-amber-300',    'dot' => 'bg-amber-400'],
-        'rose'     => ['border' => '#f43f5e', 'bg' => 'rgba(244,63,94,0.08)',  'badge' => 'bg-rose-500/20 text-rose-300',      'dot' => 'bg-rose-400'],
-        'cyan'     => ['border' => '#06b6d4', 'bg' => 'rgba(6,182,212,0.08)',  'badge' => 'bg-cyan-500/20 text-cyan-300',      'dot' => 'bg-cyan-400'],
-        'pink'     => ['border' => '#ec4899', 'bg' => 'rgba(236,72,153,0.08)', 'badge' => 'bg-pink-500/20 text-pink-300',      'dot' => 'bg-pink-400'],
+        'indigo'  => ['accent' => '#6366f1', 'ring' => 'ring-indigo-200',  'badge' => 'bg-indigo-50 text-indigo-600 ring-indigo-100',   'border' => 'border-indigo-200',  'dot' => 'bg-indigo-500',  'bar' => '#6366f1'],
+        'violet'  => ['accent' => '#7c3aed', 'ring' => 'ring-violet-200',  'badge' => 'bg-violet-50 text-violet-700 ring-violet-100',   'border' => 'border-violet-200',  'dot' => 'bg-violet-600',  'bar' => '#7c3aed'],
+        'sky'     => ['accent' => '#0284c7', 'ring' => 'ring-sky-200',     'badge' => 'bg-sky-50 text-sky-700 ring-sky-100',            'border' => 'border-sky-200',     'dot' => 'bg-sky-600',     'bar' => '#0284c7'],
+        'emerald' => ['accent' => '#059669', 'ring' => 'ring-emerald-200', 'badge' => 'bg-emerald-50 text-emerald-700 ring-emerald-100','border' => 'border-emerald-200', 'dot' => 'bg-emerald-600', 'bar' => '#059669'],
+        'amber'   => ['accent' => '#d97706', 'ring' => 'ring-amber-200',   'badge' => 'bg-amber-50 text-amber-700 ring-amber-100',      'border' => 'border-amber-200',   'dot' => 'bg-amber-500',   'bar' => '#d97706'],
+        'rose'    => ['accent' => '#e11d48', 'ring' => 'ring-rose-200',    'badge' => 'bg-rose-50 text-rose-700 ring-rose-100',         'border' => 'border-rose-200',    'dot' => 'bg-rose-600',    'bar' => '#e11d48'],
+        'cyan'    => ['accent' => '#0891b2', 'ring' => 'ring-cyan-200',    'badge' => 'bg-cyan-50 text-cyan-700 ring-cyan-100',         'border' => 'border-cyan-200',    'dot' => 'bg-cyan-600',    'bar' => '#0891b2'],
+        'pink'    => ['accent' => '#db2777', 'ring' => 'ring-pink-200',    'badge' => 'bg-pink-50 text-pink-700 ring-pink-100',         'border' => 'border-pink-200',    'dot' => 'bg-pink-600',    'bar' => '#db2777'],
     ];
     $paletteKeys = array_keys($palette);
 @endphp
@@ -23,89 +23,89 @@
 <div class="flex flex-col items-center">
     @if($canRender)
         @php
-            $reports  = $grouped[$node->user_id];
-            $count    = $reports->count();
+            $reports   = $grouped[$node->user_id];
+            $count     = $reports->count();
             $visited[] = $node->user_id;
         @endphp
 
-        {{-- Vertical connector from parent --}}
-        <div class="h-8 w-px bg-gradient-to-b from-zinc-600 to-zinc-700"></div>
+        {{-- Vertical stub down from parent node --}}
+        <div class="h-8 w-px bg-slate-300"></div>
 
-        {{-- Horizontal bar --}}
-        <div class="relative flex w-full justify-center">
-            @if($count > 1)
-                <div class="absolute top-0 h-px bg-zinc-700"
-                     style="width: calc(100% - {{ round(100 / $count) }}%); left: {{ round(50 / $count) }}%;"></div>
-            @endif
+        {{-- The children row --}}
+        <div class="relative flex items-start gap-8">
 
-            <div class="flex gap-10 justify-center">
-                @foreach($reports as $report)
-                    @php
-                        $deptName   = $report->department?->name ?? 'default';
-                        $colorKey   = $paletteKeys[abs(crc32($deptName)) % count($paletteKeys)];
-                        $color      = $palette[$colorKey];
-                        $subReports = isset($grouped[$report->user_id]) ? $grouped[$report->user_id]->count() : 0;
-                    @endphp
+            @foreach($reports as $i => $report)
+                @php
+                    $deptName = $report->department?->name ?? 'default';
+                    $colorKey = $paletteKeys[abs(crc32($deptName)) % count($paletteKeys)];
+                    $color    = $palette[$colorKey];
+                    $subCount = isset($grouped[$report->user_id]) ? $grouped[$report->user_id]->count() : 0;
+                @endphp
 
-                    <div class="group flex flex-col items-center">
+                <div class="group flex flex-col items-center">
 
-                        {{-- Vertical connector to child --}}
-                        <div class="h-6 w-px bg-gradient-to-b from-zinc-700 to-zinc-600"></div>
+                    {{-- Top connector: vertical stub coming down to this child --}}
+                    @if($count === 1)
+                        {{-- Single child: no horizontal bar, just a direct vertical line --}}
+                        {{-- (parent already drew 32px, we just add a tiny bit more) --}}
+                    @else
+                        {{-- Multi-child: horizontal crossbar is built from absolute overlay later,
+                             here we just draw a 24px vertical drop to the card --}}
+                        <div class="h-6 w-px bg-slate-300"></div>
+                    @endif
 
-                        {{-- ── CHILD NODE CARD ── --}}
-                        <div class="relative w-64 cursor-default transition-all duration-300 hover:-translate-y-1">
+                    {{-- ── CHILD CARD ── --}}
+                    <div class="relative w-60 cursor-default">
+                        {{-- Hover glow --}}
+                        <div class="absolute -inset-1 rounded-2xl opacity-0 blur-lg transition-opacity duration-500 group-hover:opacity-40"
+                             style="background: {{ $color['accent'] }}40;"></div>
 
-                            {{-- Glow on hover --}}
-                            <div class="absolute -inset-px rounded-xl opacity-0 blur-md transition-opacity duration-500 group-hover:opacity-60"
-                                 style="background: {{ $color['border'] }}30"></div>
+                        <div class="relative overflow-hidden rounded-xl border-2 bg-white shadow-md shadow-slate-200/80 transition-all duration-300 group-hover:-translate-y-0.5 group-hover:shadow-xl {{ $color['border'] }}">
+                            {{-- Top color accent bar --}}
+                            <div class="h-1 w-full" style="background: {{ $color['accent'] }};"></div>
 
-                            <div class="relative overflow-hidden rounded-xl border bg-zinc-900 shadow-lg transition-all duration-300 group-hover:shadow-2xl"
-                                 style="border-color: {{ $color['border'] }}40; background: {{ $color['bg'] }};">
-
-                                {{-- Left accent bar --}}
-                                <div class="absolute inset-y-0 left-0 w-0.5 rounded-l-xl"
-                                     style="background: {{ $color['border'] }}"></div>
-
-                                <div class="flex items-center gap-3 p-3.5 pl-4">
-                                    {{-- Avatar --}}
-                                    <div class="relative shrink-0">
-                                        <div class="absolute -inset-0.5 rounded-full opacity-60"
-                                             style="background: linear-gradient(135deg, {{ $color['border'] }}, transparent)"></div>
-                                        <img src="{{ $report->user->avatarUrl() }}"
-                                            class="relative size-11 rounded-full border border-zinc-800 object-cover" />
-                                    </div>
-
-                                    <div class="min-w-0 flex-1">
-                                        <h4 class="truncate text-sm font-bold text-white">
-                                            {{ $report->user->name }}
-                                        </h4>
-                                        <p class="truncate text-[10px] font-bold uppercase tracking-wider"
-                                           style="color: {{ $color['border'] }}">
-                                            {{ $report->jobTitle?->name ?? 'Employee' }}
-                                        </p>
-                                        @if($report->department)
-                                            <span class="mt-0.5 inline-block rounded-full px-1.5 py-px text-[9px] font-bold {{ $color['badge'] }}">
-                                                {{ $report->department->name }}
-                                            </span>
-                                        @endif
-                                    </div>
-
-                                    {{-- Sub-reports badge --}}
-                                    @if($subReports > 0)
-                                        <div class="flex size-6 shrink-0 items-center justify-center rounded-full text-[9px] font-black text-white"
-                                             style="background: {{ $color['border'] }}50; border: 1px solid {{ $color['border'] }}40">
-                                            {{ $subReports }}
+                            <div class="flex items-center gap-3 p-3.5">
+                                {{-- Avatar --}}
+                                <div class="relative shrink-0">
+                                    <img src="{{ $report->user->avatarUrl() }}"
+                                         class="size-11 rounded-full border-2 border-white object-cover shadow-sm ring-2 {{ $color['ring'] }}" />
+                                    @if($subCount > 0)
+                                        <div class="absolute -bottom-0.5 -right-0.5 flex size-[18px] items-center justify-center rounded-full border-2 border-white text-[9px] font-black text-white {{ $color['dot'] }}">
+                                            {{ $subCount }}
                                         </div>
+                                    @endif
+                                </div>
+
+                                {{-- Info --}}
+                                <div class="min-w-0 flex-1">
+                                    <h4 class="truncate text-sm font-bold text-slate-800">{{ $report->user->name }}</h4>
+                                    <p class="truncate text-[10px] font-semibold uppercase tracking-wider" style="color: {{ $color['accent'] }}">
+                                        {{ $report->jobTitle?->name ?? 'Employee' }}
+                                    </p>
+                                    @if($report->department)
+                                        <span class="mt-0.5 inline-block rounded-full px-1.5 py-px text-[9px] font-semibold ring-1 {{ $color['badge'] }}">
+                                            {{ $report->department->name }}
+                                        </span>
                                     @endif
                                 </div>
                             </div>
                         </div>
-
-                        {{-- Recurse --}}
-                        <x-org-node :node="$report" :grouped="$grouped" :visited="$visited" />
                     </div>
-                @endforeach
-            </div>
+
+                    {{-- Recurse into grandchildren --}}
+                    <x-org-node :node="$report" :grouped="$grouped" :visited="$visited" />
+                </div>
+            @endforeach
+
+            {{-- Horizontal crossbar connecting all siblings (if >1 child) --}}
+            @if($count > 1)
+                {{-- Overlay the horizontal line at the very top of the children row.
+                     It stretches from the center of the first child to the center of the last,
+                     using absolute positioning inside the relative parent div. --}}
+                <div class="pointer-events-none absolute inset-x-0 top-0 flex justify-center" style="height: 1px;">
+                    <div class="h-px w-[calc(100%-240px)] bg-slate-300" style="margin: 0 120px;"></div>
+                </div>
+            @endif
         </div>
     @endif
 </div>
