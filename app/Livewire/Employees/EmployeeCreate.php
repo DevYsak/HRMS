@@ -12,6 +12,7 @@ use App\Models\Office;
 use App\Models\ShiftSetting;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 
@@ -65,7 +66,7 @@ class EmployeeCreate extends Component
 
     public string $status = 'active';
 
-    public string $employment_type = 'full_time';
+    public string $employment_type = 'full-time';
 
     public function mount(): void
     {
@@ -97,7 +98,7 @@ class EmployeeCreate extends Component
             'shift_id' => ['nullable', 'exists:shift_settings,id'],
             'salary_cycle' => ['required', 'in:A,B'],
             'status' => ['required', 'string'],
-            'employment_type' => ['required', 'string'],
+            'employment_type' => ['required', Rule::enum(EmploymentType::class)],
         ]);
 
         $photoPath = $this->photo?->store('employee-photos', 'public');
