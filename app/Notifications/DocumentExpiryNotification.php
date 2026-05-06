@@ -2,16 +2,13 @@
 
 namespace App\Notifications;
 
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
+use App\Models\Document;
 use Illuminate\Notifications\Notification;
 use Illuminate\Support\Collection;
 
-class DocumentExpiryNotification extends Notification implements ShouldQueue
+class DocumentExpiryNotification extends Notification
 {
-    use Queueable;
-
-    /** @param  \Illuminate\Support\Collection<int, \App\Models\Document>  $documents */
+    /** @param  Collection<int, Document>  $documents */
     public function __construct(public readonly Collection $documents) {}
 
     public function via(object $notifiable): array
@@ -24,13 +21,13 @@ class DocumentExpiryNotification extends Notification implements ShouldQueue
         $count = $this->documents->count();
 
         return [
-            'type'   => 'document_expiry',
-            'title'  => 'Documents Expiring Soon',
-            'body'   => "{$count} document(s) are expiring within 30 days. Please review and renew as needed.",
+            'type' => 'document_expiry',
+            'title' => 'Documents Expiring Soon',
+            'body' => "{$count} document(s) are expiring within 30 days. Please review and renew as needed.",
             'action' => 'View Documents',
-            'url'    => '/documents',
-            'icon'   => 'document-text',
-            'color'  => 'amber',
+            'url' => '/documents',
+            'icon' => 'document-text',
+            'color' => 'amber',
         ];
     }
 }

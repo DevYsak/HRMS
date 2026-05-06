@@ -3,8 +3,6 @@
 namespace App\Notifications;
 
 use App\Models\Attendance;
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Notification;
 
 /**
@@ -12,10 +10,8 @@ use Illuminate\Notifications\Notification;
  * Sent to the employee (and their manager) when a missing clock-out is flagged.
  * Notification event: "Missing clock-out reminder" → Employee + Manager
  */
-class MissingCheckoutNotification extends Notification implements ShouldQueue
+class MissingCheckoutNotification extends Notification
 {
-    use Queueable;
-
     public function __construct(public readonly Attendance $attendance) {}
 
     public function via(object $notifiable): array

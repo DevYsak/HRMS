@@ -3,14 +3,10 @@
 namespace App\Notifications;
 
 use App\Models\Incentive;
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Notification;
 
-class IncentiveNotification extends Notification implements ShouldQueue
+class IncentiveNotification extends Notification
 {
-    use Queueable;
-
     public function __construct(public readonly Incentive $incentive) {}
 
     public function via(object $notifiable): array

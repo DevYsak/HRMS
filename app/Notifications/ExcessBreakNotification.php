@@ -3,8 +3,6 @@
 namespace App\Notifications;
 
 use App\Models\Attendance;
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Notification;
 
 /**
@@ -12,10 +10,8 @@ use Illuminate\Notifications\Notification;
  * Sent to the employee (and their manager) when excess break is flagged.
  * Notification event: "Excess break flag (>60 mins)" → Employee + Manager
  */
-class ExcessBreakNotification extends Notification implements ShouldQueue
+class ExcessBreakNotification extends Notification
 {
-    use Queueable;
-
     public function __construct(
         public readonly Attendance $attendance,
         public readonly int $totalBreakMinutes,

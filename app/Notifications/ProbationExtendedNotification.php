@@ -3,14 +3,10 @@
 namespace App\Notifications;
 
 use App\Models\Employee;
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Notification;
 
-class ProbationExtendedNotification extends Notification implements ShouldQueue
+class ProbationExtendedNotification extends Notification
 {
-    use Queueable;
-
     public function __construct(public readonly Employee $employee) {}
 
     /**

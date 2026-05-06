@@ -3,14 +3,10 @@
 namespace App\Notifications;
 
 use App\Models\LeaveRequest;
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Notification;
 
-class LeaveRequestNotification extends Notification implements ShouldQueue
+class LeaveRequestNotification extends Notification
 {
-    use Queueable;
-
     public function __construct(public readonly LeaveRequest $leaveRequest) {}
 
     public function via(object $notifiable): array

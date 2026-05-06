@@ -4,14 +4,10 @@ namespace App\Notifications;
 
 use App\Models\AttendanceRegularisation;
 use Carbon\Carbon;
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Notification;
 
-class RegularisationReviewedNotification extends Notification implements ShouldQueue
+class RegularisationReviewedNotification extends Notification
 {
-    use Queueable;
-
     public function __construct(public AttendanceRegularisation $regularisation) {}
 
     public function via(object $notifiable): array

@@ -3,14 +3,10 @@
 namespace App\Notifications;
 
 use App\Models\Reimbursement;
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Notification;
 
-class ReimbursementNotification extends Notification implements ShouldQueue
+class ReimbursementNotification extends Notification
 {
-    use Queueable;
-
     public function __construct(public readonly Reimbursement $reimbursement) {}
 
     public function via(object $notifiable): array
