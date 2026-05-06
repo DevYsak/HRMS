@@ -20,13 +20,16 @@ class ManageOtRequests extends Component
     public ?int    $reviewingId     = null;
     public string  $reviewAction    = ''; // 'approve' | 'reject'
     public string  $reviewComment   = '';
+    public ?OtRequest $selectedRequest = null;
 
     public function openReview(int $id, string $action): void
     {
         $this->checkOtPermission();
-        $this->reviewingId    = $id;
-        $this->reviewAction   = $action;
-        $this->reviewComment  = '';
+        $this->selectedRequest = OtRequest::with(['employee.user', 'employee.department', 'attendance'])->findOrFail($id);
+        $this->reviewingId = $id;
+        $this->reviewAction = $action;
+        $this->reviewComment = $this->selectedRequest->reviewer_comment ?? '';
+        $this->resetErrorBag();
         $this->showReviewModal = true;
     }
 
@@ -40,21 +43,27 @@ class ManageOtRequests extends Component
                 : 'nullable|max:500',
         ]);
 
-        $request = OtRequest::findOrFail($this->reviewingId);
+        $request = OtRequest::with(['employee.user', 'attendance'])->findOrFail($this->reviewingId);
 
         if (! $request->isPending()) {
             \Flux::toast('This request has already been reviewed.', variant: 'warning');
-            $this->showReviewModal = false;
+            $this->closeReviewModal();
 
             return;
         }
 
-        if ($this->reviewAction === 'approve') {
-            $service->approve($request, Auth::id(), $this->reviewComment ?: null);
-            \Flux::toast('OT request approved. Overtime record created.');
-        } else {
-            $service->reject($request, Auth::id(), $this->reviewComment);
-            \Flux::toast('OT request rejected.', variant: 'warning');
+        try {
+            if ($this->reviewAction === 'approve') {
+                $service->approve($request, Auth::id(), $this->reviewComment ?: null);
+                \Flux::toast('OT request approved. Overtime record created.');
+            } else {
+                $service->reject($request, Auth::id(), $this->reviewComment);
+                \Flux::toast('OT request rejected.', variant: 'warning');
+            }
+        } catch (\DomainException $exception) {
+            $this->addError('reviewComment', $exception->getMessage());
+
+            return;
         }
 
         // Notify employee
@@ -62,8 +71,13 @@ class ManageOtRequests extends Component
             new \App\Notifications\OtRequestNotification($request->fresh())
         );
 
-        $this->showReviewModal = false;
+        $this->closeReviewModal();
         $this->resetPage();
+    }
+
+    public function closeReviewModal(): void
+    {
+        $this->reset(['showReviewModal', 'reviewingId', 'reviewAction', 'reviewComment', 'selectedRequest']);
     }
 
     public function checkOtPermission(): void

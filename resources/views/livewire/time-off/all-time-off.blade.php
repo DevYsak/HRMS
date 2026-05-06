@@ -85,13 +85,30 @@
     </div>
     {{-- Management Modal --}}
     <flux:modal wire:model="showManageModal" class="w-full max-w-lg">
-        <div class="space-y-6">
+        <div class="space-y-5">
             <div>
                 <flux:heading size="lg">Manage Leave Request</flux:heading>
                 <flux:subheading>Update request details and sync balances.</flux:subheading>
             </div>
 
-            <form wire:submit="saveManage" class="space-y-5">
+            {{-- Super Admin lock warning --}}
+            @if($superAdminLocked)
+                <div class="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800 dark:bg-amber-950/30">
+                    <svg class="mt-0.5 size-5 shrink-0 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                    <div>
+                        <p class="text-sm font-semibold text-amber-800 dark:text-amber-300">Approved by Super Admin ({{ $lockedByName }})</p>
+                        <p class="text-xs text-amber-700 dark:text-amber-400 mt-0.5">To reject or cancel this leave, a mandatory comment is required explaining the reason for override.</p>
+                    </div>
+                </div>
+            @endif
+
+            @error('form.leave_type_id')
+                <div class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/30 dark:text-red-400">
+                    {{ $message }}
+                </div>
+            @enderror
+
+            <form wire:submit="saveManage" class="space-y-4">
                 <flux:select wire:model="form.status" label="Request Status">
                     <option value="pending">Pending</option>
                     <option value="approved">Approved</option>
@@ -111,9 +128,20 @@
                 </div>
 
                 <flux:textarea wire:model="form.reason" label="Reason" rows="2" />
-                <flux:textarea wire:model="form.reviewer_comment" label="Reviewer Comment" rows="2" />
 
-                <div class="flex justify-end gap-3 pt-4">
+                <div>
+                    <flux:textarea
+                        wire:model="form.reviewer_comment"
+                        label="Reviewer Comment{{ $superAdminLocked ? ' (Required for override)' : '' }}"
+                        rows="2"
+                        placeholder="{{ $superAdminLocked ? 'Explain why you are overriding the Super Admin approval…' : 'Optional comment…' }}"
+                    />
+                    @error('form.reviewer_comment')
+                        <p class="mt-1 text-xs text-red-500">{{ $message }}</p>
+                    @enderror
+                </div>
+
+                <div class="flex justify-end gap-3 border-t border-zinc-100 pt-4 dark:border-zinc-800">
                     <flux:modal.close>
                         <flux:button variant="ghost">Cancel</flux:button>
                     </flux:modal.close>

@@ -19,6 +19,17 @@ class AllReviews extends Component
 
     public string $cycle_id = '';
 
+    public bool $showViewModal = false;
+
+    public ?PerformanceReview $viewingReview = null;
+
+    public function viewReview(int $id): void
+    {
+        abort_unless(auth()->user()->canManageEmployees(), 403);
+        $this->viewingReview = PerformanceReview::with(['employee.user', 'employee.jobTitle', 'cycle', 'reviewer.user', 'goals'])->findOrFail($id);
+        $this->showViewModal = true;
+    }
+
     public function lockReview(int $id, PerformanceService $performanceService): void
     {
         abort_unless(Auth::user()->canManageEmployees(), 403);

@@ -42,6 +42,10 @@ class AllAttendance extends Component
 
     public bool $showReviewModal = false;
 
+    public bool $regularisationLocked = false;
+
+    public string $lockedByName = '';
+
     public $activeRequest = null;
 
     public string $reviewComment = '';
@@ -116,12 +120,26 @@ class AllAttendance extends Component
         \Flux::toast("Attendance regularisation submitted for {$employee->user->name}. Pending manager approval.");
     }
 
-    public function openReviewModal(int $id)
+    public function openReviewModal(int $id): void
     {
         abort_unless(Auth::user()->canApproveLeave(), 403);
 
-        $this->activeRequest = AttendanceRegularisation::with('employee.user', 'attendance')->findOrFail($id);
+        $this->activeRequest = AttendanceRegularisation::with('employee.user', 'attendance', 'reviewer')->findOrFail($id);
         $this->reviewComment = '';
+        $this->regularisationLocked = false;
+        $this->lockedByName = '';
+
+        // Warn HR if this was previously approved by Super Admin
+        if (
+            $this->activeRequest->status === 'approved'
+            && $this->activeRequest->reviewer
+            && $this->activeRequest->reviewer->isSuperAdmin()
+            && Auth::user()->isHrAdmin()
+        ) {
+            $this->regularisationLocked = true;
+            $this->lockedByName = $this->activeRequest->reviewer->name;
+        }
+
         $this->showReviewModal = true;
     }
 
@@ -146,9 +164,16 @@ class AllAttendance extends Component
         \Flux::toast('Regularisation request approved.');
     }
 
-    public function rejectRegularisation()
+    public function rejectRegularisation(): void
     {
         if (! $this->activeRequest) {
+            return;
+        }
+
+        // HR cannot override Super Admin approved regularisation without a comment
+        if ($this->regularisationLocked && empty(trim($this->reviewComment))) {
+            $this->addError('reviewComment', 'A comment is required to override a Super Admin approved regularisation.');
+
             return;
         }
 

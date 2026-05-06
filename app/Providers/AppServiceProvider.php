@@ -47,6 +47,11 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Allow up to 120s for dashboard/payroll renders in non-production
+        if (! app()->isProduction()) {
+            ini_set('max_execution_time', '120');
+        }
+
         $this->configureDefaults();
         $this->registerObservers();
 

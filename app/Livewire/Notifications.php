@@ -3,44 +3,40 @@
 namespace App\Livewire;
 
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Livewire\Component;
 
 class Notifications extends Component
 {
     public bool $open = false;
 
-    /** Mark a single notification as read and redirect to its URL. */
     public function markRead(string $id): void
     {
-        $notification = Auth::user()
-            ->notifications()
-            ->findOrFail($id);
-
+        $notification = Auth::user()->notifications()->findOrFail($id);
         $notification->markAsRead();
+        Cache::forget('notif_count_'.Auth::id());
 
         $url = $notification->data['url'] ?? null;
-
         if ($url) {
-            $this->redirect($url);
+            $this->redirect($url, navigate: true);
         }
     }
 
-    /** Mark all as read. */
     public function markAllRead(): void
     {
         Auth::user()->unreadNotifications->markAsRead();
+        Cache::forget('notif_count_'.Auth::id());
         $this->open = false;
     }
 
     public function render()
     {
-        $user          = Auth::user();
-        $notifications = $user->notifications()->latest()->take(15)->get();
-        $unreadCount   = $user->unreadNotifications()->count();
+        $user = Auth::user();
 
-        return view('livewire.notifications', [
-            'notifications' => $notifications,
-            'unreadCount'   => $unreadCount,
-        ]);
+        $unreadCount = Cache::remember('notif_count_'.$user->id, 30, fn () => $user->unreadNotifications()->count());
+
+        $notifications = $user->notifications()->latest()->take(15)->get();
+
+        return view('livewire.notifications', compact('notifications', 'unreadCount'));
     }
 }

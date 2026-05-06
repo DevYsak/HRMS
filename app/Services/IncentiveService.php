@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Employee;
 use App\Models\Incentive;
 use App\Models\Payroll;
+use App\Notifications\IncentiveNotification;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -32,7 +33,10 @@ class IncentiveService
             'approved_at' => Carbon::now(),
         ]);
 
-        return $incentive->fresh();
+        $fresh = $incentive->fresh(['employee.user']);
+        $fresh->employee->user->notify(new IncentiveNotification($fresh));
+
+        return $fresh;
     }
 
     public function reject(Incentive $incentive, int $approverId, ?string $note = null): Incentive
@@ -45,7 +49,10 @@ class IncentiveService
             'payroll_id' => null,
         ]);
 
-        return $incentive->fresh();
+        $fresh = $incentive->fresh(['employee.user']);
+        $fresh->employee->user->notify(new IncentiveNotification($fresh));
+
+        return $fresh;
     }
 
     public function includeApprovedForEmployeeMonth(Employee $employee, string $monthLabel, Payroll $payroll): array

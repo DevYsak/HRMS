@@ -5,13 +5,15 @@ namespace App\Services;
 use App\Enums\ExpenseStatus;
 use App\Models\Employee;
 use App\Models\ExpenseClaim;
+use App\Models\User;
+use App\Notifications\ExpenseClaimNotification;
 use Illuminate\Support\Facades\DB;
 
 class ExpenseClaimService
 {
     public function submit(Employee $employee, array $data): ExpenseClaim
     {
-        return ExpenseClaim::create([
+        $claim = ExpenseClaim::create([
             'employee_id' => $employee->id,
             'title' => $data['title'],
             'category' => $data['category'],
@@ -21,6 +23,20 @@ class ExpenseClaimService
             'notes' => $data['notes'] ?? null,
             'status' => ExpenseStatus::Pending,
         ]);
+
+        $claim->load(['employee.user']);
+
+        // Notify manager; fall back to HR/super admins if no manager assigned
+        $manager = $employee->manager;
+        if ($manager) {
+            $manager->notify(new ExpenseClaimNotification($claim));
+        } else {
+            User::whereIn('role', ['hr_admin', 'super_admin'])->each(
+                fn ($hr) => $hr->notify(new ExpenseClaimNotification($claim))
+            );
+        }
+
+        return $claim;
     }
 
     public function approve(ExpenseClaim $claim, int $approverId, ReimbursementService $reimbursementService): ExpenseClaim
@@ -40,7 +56,7 @@ class ExpenseClaimService
                 'receipt_path' => $claim->receipt_path,
             ]);
 
-            $reimbursementService->approve($reimbursement, $approverId);
+            $reimbursementService->approve($reimbursement, $approverId, notify: false);
 
             $claim->update([
                 'status' => ExpenseStatus::Approved,
@@ -48,7 +64,11 @@ class ExpenseClaimService
                 'rejection_reason' => null,
             ]);
 
-            return $claim->fresh(['employee.user', 'approver']);
+            $fresh = $claim->fresh(['employee.user', 'approver']);
+
+            $fresh->employee->user->notify(new ExpenseClaimNotification($fresh));
+
+            return $fresh;
         });
     }
 
@@ -64,6 +84,10 @@ class ExpenseClaimService
             'rejection_reason' => $reason,
         ]);
 
-        return $claim->fresh(['employee.user', 'approver']);
+        $fresh = $claim->fresh(['employee.user', 'approver']);
+
+        $fresh->employee->user->notify(new ExpenseClaimNotification($fresh));
+
+        return $fresh;
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Employees;
 
+use App\Models\Department;
 use App\Models\Employee;
 use App\Models\JobTitle;
 use App\Models\Office;
@@ -16,6 +17,8 @@ class EmployeeIndex extends Component
 
     public $office_id = '';
 
+    public $department_id = '';
+
     public $job_title_id = '';
 
     public $status = '';
@@ -25,7 +28,27 @@ class EmployeeIndex extends Component
         $this->authorize('viewAny', Employee::class);
     }
 
-    public function updatingSearch()
+    public function updatingSearch(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatingOfficeId(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatingDepartmentId(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatingJobTitleId(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatingStatus(): void
     {
         $this->resetPage();
     }
@@ -47,7 +70,6 @@ class EmployeeIndex extends Component
 
         $employees = Employee::with(['user', 'office', 'department', 'jobTitle', 'manager', 'shift'])
             ->when(! $user->canManageEmployees(), function ($query) use ($user) {
-                // If they are just a manager, only show their direct reports
                 $query->where('manager_id', $user->employee?->id);
             })
             ->when($this->search, function ($query) {
@@ -57,20 +79,17 @@ class EmployeeIndex extends Component
                         ->orWhereHas('user', fn ($u) => $u->where('name', 'like', $s)->orWhere('email', 'like', $s));
                 });
             })
-            ->when($this->office_id, function ($query) {
-                $query->where('office_id', $this->office_id);
-            })
-            ->when($this->job_title_id, function ($query) {
-                $query->where('job_title_id', $this->job_title_id);
-            })
-            ->when($this->status, function ($query) {
-                $query->where('status', $this->status);
-            })
+            ->when($this->office_id, fn ($q) => $q->where('office_id', $this->office_id))
+            ->when($this->department_id, fn ($q) => $q->where('department_id', $this->department_id))
+            ->when($this->job_title_id, fn ($q) => $q->where('job_title_id', $this->job_title_id))
+            ->when($this->status, fn ($q) => $q->where('status', $this->status))
+            ->orderByDesc('id')
             ->paginate(15);
 
         return view('livewire.employees.employee-index', [
             'employees' => $employees,
             'offices' => Office::all(),
+            'departments' => Department::orderBy('name')->get(),
             'jobTitles' => JobTitle::all(),
         ])->layout('layouts.app', ['title' => 'Manage Employees']);
     }

@@ -106,40 +106,80 @@
     {{-- Review Modal --}}
     <flux:modal wire:model="showReviewModal" class="w-full max-w-lg">
         @if($selectedRequest)
-            <div class="space-y-6">
+            <div class="space-y-5">
                 <div>
                     <flux:heading size="lg">Review Leave Request</flux:heading>
                     <flux:subheading>From {{ $selectedRequest->employee->user->name }}</flux:subheading>
                 </div>
 
-                <div class="bg-zinc-50 p-4 rounded-xl space-y-3 dark:bg-zinc-900">
-                    <div class="flex justify-between items-center text-sm">
+                {{-- Request summary card --}}
+                <div class="rounded-xl bg-zinc-50 p-4 space-y-2.5 dark:bg-zinc-900">
+                    <div class="flex justify-between text-sm">
                         <span class="text-zinc-500">Leave Type</span>
-                        <span class="font-bold text-zinc-900 dark:text-zinc-100">{{ $selectedRequest->leaveType->name }}</span>
+                        <span class="font-semibold text-zinc-900 dark:text-zinc-100">{{ $selectedRequest->leaveType->name }}</span>
                     </div>
-                    <div class="flex justify-between items-center text-sm">
+                    <div class="flex justify-between text-sm">
                         <span class="text-zinc-500">Duration</span>
-                        <span class="font-bold text-zinc-900 dark:text-zinc-100">{{ (float)$selectedRequest->days }} Days 
-                        <span class="text-[10px] text-zinc-400 font-normal ml-1">({{ $selectedRequest->start_date->format('M d') }} - {{ $selectedRequest->end_date->format('M d') }})</span></span>
+                        <span class="font-semibold text-zinc-900 dark:text-zinc-100">
+                            {{ (float)$selectedRequest->days }} {{ $selectedRequest->is_half_day ? 'Half Day' : 'Day(s)' }}
+                        </span>
                     </div>
-                    <div class="pt-2 border-t border-zinc-200 dark:border-zinc-800">
-                        <div class="text-xs text-zinc-400 mb-1">Reason:</div>
-                        <div class="text-sm text-zinc-700 italic dark:text-zinc-300">"{{ $selectedRequest->reason }}"</div>
+                    <div class="flex justify-between text-sm">
+                        <span class="text-zinc-500">Dates</span>
+                        <span class="font-semibold text-zinc-900 dark:text-zinc-100">
+                            {{ $selectedRequest->start_date->format('d M Y') }}
+                            @if(!$selectedRequest->start_date->equalTo($selectedRequest->end_date))
+                                – {{ $selectedRequest->end_date->format('d M Y') }}
+                            @endif
+                        </span>
+                    </div>
+                    <div class="pt-2 border-t border-zinc-200 dark:border-zinc-700">
+                        <p class="text-xs text-zinc-400 mb-1">Employee's reason:</p>
+                        <p class="text-sm text-zinc-700 italic dark:text-zinc-300">"{{ $selectedRequest->reason }}"</p>
                     </div>
                 </div>
 
-                <div class="space-y-4">
-                    <div class="grid grid-cols-2 gap-4">
-                        <flux:input wire:model="form.start_date" type="date" label="Start Date" required />
-                        <flux:input wire:model="form.end_date" type="date" label="End Date" required />
+                {{-- Error from service (e.g. insufficient balance on re-approve) --}}
+                @error('form.leave_type_id')
+                    <div class="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700 dark:bg-red-950/30 dark:border-red-800 dark:text-red-400">
+                        {{ $message }}
                     </div>
+                @enderror
 
-                    <flux:textarea wire:model="form.reason" label="Reason (Employee)" rows="2" />
-                    <flux:textarea wire:model="reviewer_comment" label="Manager Comment / Feedback" placeholder="Add a comment..." rows="2" />
-                    
-                    <div class="flex gap-3 pt-4 border-t border-zinc-100 dark:border-zinc-800">
-                        <flux:button wire:click="reject" variant="ghost" class="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 flex-1">Reject</flux:button>
-                        <flux:button wire:click="approve" variant="primary" class="flex-1">Approve</flux:button>
+                {{-- Manager comment --}}
+                <div class="space-y-1.5">
+                    <flux:textarea
+                        wire:model="reviewer_comment"
+                        label="Manager Comment"
+                        placeholder="Add a comment (required to reject)…"
+                        rows="2"
+                    />
+                    @error('reviewer_comment')
+                        <p class="text-xs text-red-500 mt-1">{{ $message }}</p>
+                    @enderror
+                </div>
+
+                <div class="flex gap-3 pt-2 border-t border-zinc-100 dark:border-zinc-800">
+                    <flux:button
+                        wire:click="reject"
+                        wire:loading.attr="disabled"
+                        wire:target="reject"
+                        variant="ghost"
+                        class="flex-1 !text-red-600 hover:!bg-red-50 dark:hover:!bg-red-950/30"
+                    >
+                        <span wire:loading.remove wire:target="reject">Reject</span>
+                        <span wire:loading wire:target="reject">Rejecting…</span>
+                    </flux:button>
+                    <flux:button
+                        wire:click="approve"
+                        wire:loading.attr="disabled"
+                        wire:target="approve"
+                        variant="primary"
+                        class="flex-1"
+                    >
+                        <span wire:loading.remove wire:target="approve">Approve</span>
+                        <span wire:loading wire:target="approve">Approving…</span>
+                    </flux:button>
                     </div>
                 </div>
             </div>

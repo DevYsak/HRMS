@@ -130,7 +130,7 @@ class EmployeeCreate extends Component
             'employment_type' => $this->employment_type,
         ]);
 
-        session()->flash('status', 'Employee created. Temporary password: Password@123');
+        session()->flash('employee_created', "Employee {$this->name} added successfully. Temporary password: Password@123");
 
         $this->redirect(route('employees.index'), navigate: true);
     }

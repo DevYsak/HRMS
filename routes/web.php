@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\DocumentController;
+use App\Http\Controllers\DocumentUploadController;
 use App\Http\Controllers\PayslipController;
 use App\Http\Controllers\ReportController;
 use App\Livewire\Attendance\AllAttendance;
@@ -19,8 +20,10 @@ use App\Livewire\ExecutiveDashboard;
 use App\Livewire\FinanceDashboard;
 use App\Livewire\HrAdminDashboard;
 use App\Livewire\ManagerDashboard;
+use App\Livewire\NotificationsPage;
 use App\Livewire\Onboarding\OffboardingManager;
 use App\Livewire\Onboarding\OnboardingChecklist;
+use App\Livewire\Onboarding\OnboardingManager;
 use App\Livewire\Operations\Assets;
 use App\Livewire\Operations\Expenses;
 use App\Livewire\Overtime\ManageOtRequests;
@@ -40,7 +43,6 @@ use App\Livewire\Performance\TeamReviews;
 use App\Livewire\TimeOff\AllTimeOff;
 use App\Livewire\TimeOff\MyTimeOff;
 use App\Livewire\TimeOff\TeamTimeOff;
-use App\Livewire\NotificationsPage;
 use App\Livewire\TimeOff\TimeOffSettings;
 use Illuminate\Support\Facades\Route;
 use Laravel\Fortify\Features;
@@ -75,6 +77,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/{employee}/edit', EmployeeEdit::class)->name('edit');
             Route::get('/{employee}/onboarding', OnboardingChecklist::class)->name('onboarding');
             Route::get('/{employee}/offboarding', OnboardingChecklist::class)->name('offboarding');
+            Route::get('/onboarding-manager', OnboardingManager::class)->name('onboarding-manager');
             Route::get('/offboarding-manager', OffboardingManager::class)->name('offboarding-manager');
         });
     });
@@ -178,11 +181,22 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Documents module
     // --------------------------------------------------
     Route::get('/documents', DocumentManager::class)->name('documents.index');
+
+    // Upload routes — standard controller POST (not Livewire) for reliable file handling
+    Route::post('/documents/upload', [DocumentUploadController::class, 'store'])
+        ->name('documents.upload')
+        ->middleware('role:manage-documents');
+    Route::post('/documents/upload-personal', [DocumentUploadController::class, 'storePersonal'])
+        ->name('documents.upload-personal');
+
     Route::middleware('role:manage-documents')->group(function () {
         Route::get('/documents/experience-letter/{employee}', [DocumentController::class, 'experienceLetter'])->name('documents.experience-letter');
     });
     Route::get('/documents/{document}/download', [DocumentController::class, 'download'])
         ->name('documents.download')
+        ->middleware('signed');
+    Route::get('/documents/{document}/view', [DocumentController::class, 'view'])
+        ->name('documents.view')
         ->middleware('signed');
 
     // --------------------------------------------------

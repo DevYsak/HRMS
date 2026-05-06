@@ -206,7 +206,7 @@
                     </div>
 
                     {{-- Hours --}}
-                    <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-5 shadow-sm" @if($todayAttendance && !$todayAttendance->check_out) wire:poll.30s @endif>
+                    <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-5 shadow-sm" @if($todayAttendance && !$todayAttendance->check_out) wire:poll.120s.keep-alive @endif>
                         <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-3">Hours Logged</div>
                         <div class="text-4xl font-black text-brand-600 tabular-nums">{{ $stats['hours'] }}</div>
                         <div class="text-xs text-zinc-400 mt-1">{{ $periodLabel }}</div>

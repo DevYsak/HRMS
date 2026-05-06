@@ -52,7 +52,7 @@ class NotificationsPage extends Component
         $notif->markAsRead();
         $url = $notif->data['url'] ?? null;
         if ($url) {
-            $this->redirect($url);
+            $this->redirect($url, navigate: true);
         }
     }
 

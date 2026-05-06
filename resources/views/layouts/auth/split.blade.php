@@ -38,17 +38,17 @@
             {{-- Main tagline --}}
             <div class="relative z-10 flex flex-col justify-center flex-1 px-10">
                 <h2 class="text-4xl font-bold text-white leading-tight">
-                    Manage projects<br>
+                    Manage your workforce<br>
                     with clarity &amp;<br>
                     confidence.
                 </h2>
                 <p class="mt-4 text-orange-100 text-base max-w-sm leading-relaxed">
-                    Streamline your team's workflow, track progress and deliver results — all in one place.
+                    Track attendance, manage leave, run payroll and review performance — all in one place.
                 </p>
 
                 {{-- Feature pills --}}
                 <div class="mt-8 flex flex-wrap gap-2">
-                    @foreach(['Task Tracking', 'Time Logging', 'Team Workload', 'Real-time Chat'] as $pill)
+                    @foreach(['Attendance Tracking', 'Leave Management', 'Payroll & Payslips', 'Performance Reviews'] as $pill)
                         <span class="inline-flex items-center rounded-full border border-white/40 bg-white/15 backdrop-blur-sm px-4 py-1.5 text-sm font-medium text-white">
                             {{ $pill }}
                         </span>

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Employee;
 use App\Models\Payroll;
 use App\Models\Reimbursement;
+use App\Notifications\ReimbursementNotification;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -25,7 +26,7 @@ class ReimbursementService
         ]);
     }
 
-    public function approve(Reimbursement $reimbursement, int $approverId, ?string $note = null): Reimbursement
+    public function approve(Reimbursement $reimbursement, int $approverId, ?string $note = null, bool $notify = true): Reimbursement
     {
         $reimbursement->update([
             'status' => 'approved',
@@ -34,10 +35,16 @@ class ReimbursementService
             'approved_at' => Carbon::now(),
         ]);
 
-        return $reimbursement->fresh();
+        $fresh = $reimbursement->fresh(['employee.user']);
+
+        if ($notify) {
+            $fresh->employee->user->notify(new ReimbursementNotification($fresh));
+        }
+
+        return $fresh;
     }
 
-    public function reject(Reimbursement $reimbursement, int $approverId, ?string $note = null): Reimbursement
+    public function reject(Reimbursement $reimbursement, int $approverId, ?string $note = null, bool $notify = true): Reimbursement
     {
         $reimbursement->update([
             'status' => 'rejected',
@@ -47,7 +54,13 @@ class ReimbursementService
             'payroll_id' => null,
         ]);
 
-        return $reimbursement->fresh();
+        $fresh = $reimbursement->fresh(['employee.user']);
+
+        if ($notify) {
+            $fresh->employee->user->notify(new ReimbursementNotification($fresh));
+        }
+
+        return $fresh;
     }
 
     public function includeApprovedForEmployeeMonth(Employee $employee, string $monthLabel, Payroll $payroll): array

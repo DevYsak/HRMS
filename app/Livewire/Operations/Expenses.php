@@ -9,10 +9,12 @@ use App\Services\ReimbursementService;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Livewire\WithFileUploads;
+use Livewire\WithPagination;
 
 class Expenses extends Component
 {
     use WithFileUploads;
+    use WithPagination;
 
     public bool $showSubmitModal = false;
 
@@ -33,6 +35,20 @@ class Expenses extends Component
     public ?int $reviewingId = null;
 
     public string $rejectionReason = '';
+
+    public string $filterStatus = '';
+
+    public string $filterMonth = '';
+
+    public function updatingFilterStatus(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatingFilterMonth(): void
+    {
+        $this->resetPage();
+    }
 
     public function mount(): void
     {
@@ -153,7 +169,11 @@ class Expenses extends Component
             $expensesQuery->whereHas('employee', fn ($query) => $query->where('manager_id', $user->id));
         }
 
-        $expenses = $expensesQuery->latest()->get();
+        $expenses = $expensesQuery
+            ->when($this->filterStatus, fn ($q) => $q->where('status', $this->filterStatus))
+            ->when($this->filterMonth, fn ($q) => $q->whereYear('expense_date', substr($this->filterMonth, 0, 4))->whereMonth('expense_date', substr($this->filterMonth, 5, 2)))
+            ->latest()
+            ->paginate(15);
 
         return view('livewire.operations.expenses', [
             'expenses' => $expenses,

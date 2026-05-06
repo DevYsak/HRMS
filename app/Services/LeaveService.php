@@ -94,17 +94,32 @@ class LeaveService
             ]);
 
             if ($status === 'approved') {
-                $newBalance = $this->getBalance($employee->id, (int) $data['leave_type_id']);
-                if (! $newBalance) {
-                    throw new \DomainException('Leave balance record is missing for the selected leave type.');
-                }
+                $leaveType = LeaveType::find($data['leave_type_id']);
 
-                $available = max(0, $newBalance->allocated_days - $newBalance->used_days - ($newBalance->encashed_days ?? 0));
-                if ($available < $newDays) {
-                    throw new \DomainException('Insufficient balance for this approval.');
-                }
+                if ($leaveType?->is_paid) {
+                    $newBalance = $this->getBalance($employee->id, (int) $data['leave_type_id']);
 
-                $newBalance->increment('used_days', $newDays);
+                    // Auto-create balance with 0 days if HR is approving and record doesn't exist yet
+                    if (! $newBalance) {
+                        $newBalance = LeaveBalance::create([
+                            'employee_id' => $employee->id,
+                            'leave_type_id' => (int) $data['leave_type_id'],
+                            'year' => now()->year,
+                            'allocated_days' => 0,
+                            'used_days' => 0,
+                            'carried_forward_days' => 0,
+                            'encashed_days' => 0,
+                            'comp_off_credits' => 0,
+                        ]);
+                    }
+
+                    $available = max(0, $newBalance->allocated_days - $newBalance->used_days - ($newBalance->encashed_days ?? 0));
+                    if ($available < $newDays) {
+                        throw new \DomainException("Insufficient leave balance. Available: {$available} day(s), requested: {$newDays}.");
+                    }
+
+                    $newBalance->increment('used_days', $newDays);
+                }
             }
 
             $fresh = $leaveRequest->fresh(['employee.user', 'leaveType', 'reviewer']);

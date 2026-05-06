@@ -20,7 +20,11 @@ class AllTimeOff extends Component
     public $leave_type_id = '';
 
     // Management properties
-    public $showManageModal = false;
+    public bool $showManageModal = false;
+
+    public bool $superAdminLocked = false;
+
+    public string $lockedByName = '';
 
     public $editingId = null;
 
@@ -33,11 +37,11 @@ class AllTimeOff extends Component
         'reviewer_comment' => '',
     ];
 
-    public function manageRequest($id)
+    public function manageRequest($id): void
     {
         abort_unless(Auth::user()->canApproveLeave(), 403);
 
-        $request = LeaveRequest::findOrFail($id);
+        $request = LeaveRequest::with('reviewer')->findOrFail($id);
         $this->editingId = $id;
         $this->form = [
             'status' => $request->status,
@@ -45,14 +49,41 @@ class AllTimeOff extends Component
             'start_date' => $request->start_date->format('Y-m-d'),
             'end_date' => $request->end_date->format('Y-m-d'),
             'reason' => $request->reason,
-            'reviewer_comment' => $request->reviewer_comment,
+            'reviewer_comment' => $request->reviewer_comment ?? '',
         ];
+
+        // Lock flag: if leave was approved by Super Admin and current user is HR Admin
+        $this->superAdminLocked = false;
+        $this->lockedByName = '';
+        if (
+            $request->status === 'approved'
+            && $request->reviewer
+            && $request->reviewer->isSuperAdmin()
+            && Auth::user()->isHrAdmin()
+        ) {
+            $this->superAdminLocked = true;
+            $this->lockedByName = $request->reviewer->name;
+        }
+
         $this->showManageModal = true;
     }
 
-    public function saveManage()
+    public function saveManage(): void
     {
-        $request = LeaveRequest::findOrFail($this->editingId);
+        abort_unless(Auth::user()->canApproveLeave(), 403);
+
+        $request = LeaveRequest::with('reviewer')->findOrFail($this->editingId);
+
+        // HR Admin cannot override a Super Admin approved leave without a comment
+        if (
+            $this->superAdminLocked
+            && in_array($this->form['status'], ['rejected', 'cancelled'])
+            && empty(trim($this->form['reviewer_comment'] ?? ''))
+        ) {
+            $this->addError('form.reviewer_comment', 'A comment is required to override a Super Admin approved leave.');
+
+            return;
+        }
 
         $this->validate([
             'form.status' => 'required|in:pending,approved,rejected,cancelled',
@@ -60,6 +91,7 @@ class AllTimeOff extends Component
             'form.start_date' => 'required|date',
             'form.end_date' => 'required|date|after_or_equal:form.start_date',
         ]);
+
         try {
             app(LeaveService::class)->reviewRequest(
                 $request,
@@ -75,7 +107,8 @@ class AllTimeOff extends Component
         }
 
         $this->showManageModal = false;
-        \Flux::toast('Leave request updated and balances synced.');
+        $this->superAdminLocked = false;
+        \Flux::toast('Leave request updated.');
     }
 
     public function render()

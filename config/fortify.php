@@ -146,7 +146,7 @@ return [
     'features' => [
         Features::registration(),
         Features::resetPasswords(),
-        Features::emailVerification(),
+        // Features::emailVerification(), // Internal HRMS — email verification not required
         Features::twoFactorAuthentication([
             'confirm' => true,
             'confirmPassword' => true,

@@ -135,6 +135,17 @@
             </div>
 
             @if($activeRequest)
+                {{-- Super Admin lock warning --}}
+                @if($regularisationLocked)
+                    <div class="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800 dark:bg-amber-950/30">
+                        <svg class="mt-0.5 size-5 shrink-0 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                        <div>
+                            <p class="text-sm font-semibold text-amber-800 dark:text-amber-300">Already approved by Super Admin ({{ $lockedByName }})</p>
+                            <p class="text-xs text-amber-700 dark:text-amber-400 mt-0.5">A mandatory comment is required to override this approval.</p>
+                        </div>
+                    </div>
+                @endif
+
                 <div class="bg-zinc-50 p-4 rounded-xl dark:bg-zinc-900 text-sm space-y-3">
                     <div class="flex justify-between">
                         <span class="text-zinc-500">Employee</span>
@@ -142,11 +153,15 @@
                     </div>
                     <div class="flex justify-between">
                         <span class="text-zinc-500">Date</span>
-                        <span class="font-bold">{{ \Carbon\Carbon::parse($activeRequest->work_date)->format('M d, Y') }}</span>
+                        <span class="font-bold">{{ \Carbon\Carbon::parse($activeRequest->work_date ?? $activeRequest->date)->format('d M Y') }}</span>
                     </div>
                     <div class="flex justify-between">
                         <span class="text-zinc-500">Requested Time</span>
-                        <span class="font-bold text-brand-600">{{ \Carbon\Carbon::parse($activeRequest->requested_check_in)->format('H:i') }} - {{ \Carbon\Carbon::parse($activeRequest->requested_check_out)->format('H:i') }}</span>
+                        <span class="font-bold text-orange-600">
+                            {{ \Carbon\Carbon::parse($activeRequest->requested_check_in)->format('H:i') }}
+                            –
+                            {{ \Carbon\Carbon::parse($activeRequest->requested_check_out)->format('H:i') }}
+                        </span>
                     </div>
                     <div>
                         <span class="text-zinc-500 block mb-1">Reason provided</span>
@@ -154,13 +169,23 @@
                     </div>
                 </div>
 
-                <flux:textarea wire:model="reviewComment" label="HR Comment (Required for Rejection)" rows="2" />
+                <div>
+                    <flux:textarea
+                        wire:model="reviewComment"
+                        label="{{ $regularisationLocked ? 'Comment (Required for Override)' : 'HR Comment (Required for Rejection)' }}"
+                        rows="2"
+                        placeholder="{{ $regularisationLocked ? 'Explain why you are overriding…' : 'Add a comment…' }}"
+                    />
+                    @error('reviewComment')
+                        <p class="mt-1 text-xs text-red-500">{{ $message }}</p>
+                    @enderror
+                </div>
 
-                <div class="flex gap-2 justify-end pt-4">
+                <div class="flex gap-2 justify-end pt-2 border-t border-zinc-100 dark:border-zinc-800">
                     <flux:modal.close>
                         <flux:button variant="ghost">Cancel</flux:button>
                     </flux:modal.close>
-                    <flux:button wire:click="rejectRegularisation" variant="ghost" class="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30">Reject</flux:button>
+                    <flux:button wire:click="rejectRegularisation" variant="ghost" class="!text-red-600 hover:!bg-red-50 dark:hover:!bg-red-950/30">Reject</flux:button>
                     <flux:button wire:click="approveRegularisation" variant="primary">Approve</flux:button>
                 </div>
             @endif
@@ -198,6 +223,20 @@
 
                 <flux:input wire:model="markDate" type="date" label="Date of Attendance"
                     max="{{ now()->format('Y-m-d') }}" required />
+
+                <div class="mt-2 grid grid-cols-7 gap-1">
+                    @php
+                        $weekStart = \Carbon\Carbon::parse($markDate ?? today())->startOfWeek(\Carbon\Carbon::MONDAY);
+                    @endphp
+                    @for($d = 0; $d < 7; $d++)
+                        @php $day = $weekStart->copy()->addDays($d); @endphp
+                        <div class="flex flex-col items-center rounded-lg p-1.5 text-center text-[10px]
+                            {{ $day->isToday() ? 'bg-orange-100 text-orange-700 font-bold' : 'bg-zinc-50 text-zinc-400' }}">
+                            <span class="font-bold">{{ $day->format('D') }}</span>
+                            <span>{{ $day->format('d') }}</span>
+                        </div>
+                    @endfor
+                </div>
 
                 <div class="grid grid-cols-2 gap-4">
                     <flux:input wire:model="markCheckIn" type="time" label="Check-in Time" required />

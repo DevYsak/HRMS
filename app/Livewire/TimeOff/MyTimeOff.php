@@ -8,6 +8,7 @@ use App\Models\LeaveType;
 use App\Models\User;
 use App\Notifications\LeaveEncashmentNotification;
 use App\Services\LeaveService;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -28,6 +29,28 @@ class MyTimeOff extends Component
     public bool $is_half_day = false;
 
     public string $reason = '';
+
+    // ---- Filters ----
+    public string $filterStatus = '';
+
+    public string $filterTypeId = '';
+
+    public string $filterYear = '';
+
+    public function mount(): void
+    {
+        $this->filterYear = (string) now()->year;
+    }
+
+    public function updatingFilterStatus(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatingFilterTypeId(): void
+    {
+        $this->resetPage();
+    }
 
     // ---- Leave Encashment ----
     public bool $showEncashModal = false;
@@ -181,13 +204,15 @@ class MyTimeOff extends Component
         $employee = Auth::user()->employee;
 
         $balances = $employee
-            ? $employee->leaveBalances()->with('leaveType')->where('year', now()->year)->get()
+            ? $employee->leaveBalances()->with('leaveType')->where('year', $this->filterYear ?: now()->year)->get()
             : collect();
 
-        // paginate 5 per page as requested
         $requests = $employee
-            ? $employee->leaveRequests()->with(['leaveType', 'reviewer'])->latest()->paginate(5)
-            : collect();
+            ? $employee->leaveRequests()->with(['leaveType', 'reviewer'])
+                ->when($this->filterStatus, fn ($q) => $q->where('status', $this->filterStatus))
+                ->when($this->filterTypeId, fn ($q) => $q->where('leave_type_id', $this->filterTypeId))
+                ->latest()->paginate(8)
+            : new LengthAwarePaginator([], 0, 8);
 
         // Encashable leave types (current employee has balance & type allows encashment)
         $encashableTypes = $employee

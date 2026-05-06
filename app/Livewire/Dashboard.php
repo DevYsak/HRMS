@@ -59,8 +59,7 @@ class Dashboard extends Component
         $month = $today->month;
         $year = $today->year;
 
-        $activeEmployees = Employee::where('status', EmployeeStatus::Active)->get();
-        $totalActive = $activeEmployees->count();
+        $totalActive = Employee::where('status', EmployeeStatus::Active)->count();
 
         $onboarding = Employee::where('status', EmployeeStatus::Onboarding)->count();
         $probation = Employee::where('status', EmployeeStatus::Probation)->count();
@@ -80,6 +79,11 @@ class Dashboard extends Component
         // Pending Approvals
         $pendingLeavesCount = LeaveRequest::where('status', 'pending')->count();
         $pendingOtCount = OtRequest::where('status', 'pending')->count();
+        $pendingLeaveRequests = LeaveRequest::with(['employee.user', 'leaveType'])
+            ->where('status', 'pending')
+            ->latest()
+            ->take(3)
+            ->get();
 
         // Active Payroll Cycles
         $activePayrolls = Payroll::where('status', 'draft')
@@ -92,40 +96,36 @@ class Dashboard extends Component
             $days->push(now()->subDays($i)->startOfDay());
         }
 
+        $dayStrings = $days->map(fn ($d) => $d->toDateString());
+
         $heatmapData = Employee::whereIn('status', [EmployeeStatus::Active, EmployeeStatus::Probation])
             ->with(['user', 'attendances' => function ($q) use ($days) {
-                $q->whereBetween('date', [$days->first(), $days->last()]);
+                $q->whereBetween('date', [$days->first()->toDateString(), $days->last()->toDateString()])
+                    ->select(['id', 'employee_id', 'date', 'check_in', 'is_late']);
             }])
+            ->select(['id', 'user_id'])
+            ->limit(50)
             ->get()
-            ->map(function ($emp) use ($days) {
-                $row = [
+            ->map(function ($emp) use ($days, $dayStrings) {
+                // Key attendance by date string for O(1) lookup — avoids Carbon::parse() in loop
+                $attByDate = $emp->attendances->keyBy(fn ($a) => $a->date instanceof \Carbon\Carbon
+                    ? $a->date->toDateString()
+                    : (string) $a->date
+                );
+
+                return [
                     'name' => $emp->user?->name ?? 'Unknown',
-                    'avatar' => $emp->user?->profile_photo_url,
                     'initials' => collect(explode(' ', $emp->user?->name ?? 'U'))->map(fn ($n) => $n[0] ?? '')->take(2)->join(''),
-                    'days' => $days->map(function ($d) use ($emp) {
-                        $att = $emp->attendances->first(fn ($a) => Carbon::parse($a->date)->isSameDay($d));
+                    'days' => $dayStrings->map(function ($dateStr) use ($attByDate, $days) {
+                        $d = $days->first(fn ($day) => $day->toDateString() === $dateStr);
+                        $att = $attByDate->get($dateStr);
                         if ($att) {
-                            if ($att->is_late) {
-                                return 'late';
-                            }
-                            if ($att->check_in) {
-                                return 'present';
-                            }
-
-                            return 'absent';
-                        }
-                        if ($d->isWeekend()) {
-                            return 'weekend';
-                        }
-                        if ($d->isPast()) {
-                            return 'absent';
+                            return $att->is_late ? 'late' : ($att->check_in ? 'present' : 'absent');
                         }
 
-                        return 'future';
+                        return $d?->isWeekend() ? 'weekend' : ($d?->isPast() ? 'absent' : 'future');
                     }),
                 ];
-
-                return $row;
             });
 
         // Recent Activity Feed (Formatted)
@@ -154,6 +154,7 @@ class Dashboard extends Component
         $upcomingProbations = Employee::where('status', EmployeeStatus::Probation)
             ->whereNotNull('probation_end_date')
             ->where('probation_end_date', '<=', $today->copy()->addDays(30))
+            ->with('user')
             ->get();
 
         // Workforce Composition (Department-wise distribution)
@@ -172,6 +173,39 @@ class Dashboard extends Component
             },
         ])->filter(fn ($d) => $d['count'] > 0)->values();
 
+        $complianceAlerts = collect([
+            [
+                'label' => 'Pending leave approvals awaiting action',
+                'status' => $pendingLeavesCount > 0 ? 'Action required' : 'Clear',
+                'tone' => $pendingLeavesCount > 0 ? 'rose' : 'emerald',
+                'count' => $pendingLeavesCount,
+                'href' => route('time-off.employees'),
+            ],
+            [
+                'label' => 'Documents expiring in the next 30 days',
+                'status' => $expiringDocuments->isNotEmpty() ? 'Due soon' : 'Current',
+                'tone' => $expiringDocuments->isNotEmpty() ? 'amber' : 'emerald',
+                'count' => $expiringDocuments->count(),
+                'href' => route('documents.index'),
+            ],
+            [
+                'label' => 'Probation reviews approaching deadline',
+                'status' => $upcomingProbations->isNotEmpty() ? 'Upcoming' : 'On track',
+                'tone' => $upcomingProbations->isNotEmpty() ? 'blue' : 'emerald',
+                'count' => $upcomingProbations->count(),
+                'href' => route('employees.index'),
+            ],
+            [
+                'label' => 'Draft payroll cycles still open',
+                'status' => $activePayrolls->isNotEmpty() ? 'In progress' : 'Ready',
+                'tone' => $activePayrolls->isNotEmpty() ? 'violet' : 'emerald',
+                'count' => $activePayrolls->count(),
+                'href' => route('payroll.overview'),
+            ],
+        ]);
+
+        $actionRequiredCount = $pendingLeavesCount + $pendingOtCount + $expiringDocuments->count();
+
         return view('dashboard', compact(
             'totalActive',
             'onboarding',
@@ -183,13 +217,16 @@ class Dashboard extends Component
             'onLeaveTodayCount',
             'pendingLeavesCount',
             'pendingOtCount',
+            'pendingLeaveRequests',
             'activePayrolls',
             'heatmapData',
             'days',
             'recentAuditLogs',
             'expiringDocuments',
             'upcomingProbations',
-            'workforceComposition'
+            'workforceComposition',
+            'complianceAlerts',
+            'actionRequiredCount'
         ))->layout('layouts.app', ['title' => 'Admin Dashboard']);
     }
 

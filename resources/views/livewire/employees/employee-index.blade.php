@@ -1,4 +1,20 @@
 <flux:main class="bg-zinc-50 p-6 space-y-6 dark:bg-zinc-950">
+
+    @if(session('employee_created'))
+        <div x-data="{ show: true }" x-show="show" x-init="setTimeout(() => show = false, 6000)"
+             x-transition:leave="transition ease-in duration-300" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0"
+             class="flex items-start gap-3 rounded-xl border border-green-200 bg-green-50 px-5 py-4 text-green-800 shadow-sm">
+            <svg class="mt-0.5 size-5 shrink-0 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            <div>
+                <p class="font-semibold text-sm">Employee Added Successfully</p>
+                <p class="text-xs text-green-700 mt-0.5">{{ session('employee_created') }}</p>
+            </div>
+            <button @click="show = false" class="ml-auto text-green-400 hover:text-green-600">
+                <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+        </div>
+    @endif
+
     <div class="pulse-page-header">
         <div>
             <h1 class="pulse-page-title">Employees</h1>
@@ -22,6 +38,12 @@
                     <option value="">All Offices</option>
                     @foreach($offices as $office)
                         <option value="{{ $office->id }}">{{ $office->name }}</option>
+                    @endforeach
+                </select>
+                <select wire:model.live="department_id" class="h-8 rounded-lg border border-zinc-200 bg-white px-2 text-xs text-zinc-600 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                    <option value="">All Departments</option>
+                    @foreach($departments as $dept)
+                        <option value="{{ $dept->id }}">{{ $dept->name }}</option>
                     @endforeach
                 </select>
                 <select wire:model.live="job_title_id" class="h-8 rounded-lg border border-zinc-200 bg-white px-2 text-xs text-zinc-600 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">

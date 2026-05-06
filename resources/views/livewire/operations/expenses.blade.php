@@ -1,18 +1,18 @@
 <flux:main class="min-h-screen bg-zinc-50 dark:bg-zinc-950 p-6 space-y-5">
 
     {{-- ─── HEADER ─── --}}
-    <div class="relative overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-600 via-teal-600 to-cyan-700 p-7 shadow-xl shadow-emerald-500/20">
+    <div class="relative overflow-hidden rounded-2xl bg-gradient-to-br from-orange-500 via-orange-600 to-amber-600 p-7 shadow-xl shadow-orange-500/20">
         <div class="pointer-events-none absolute -top-16 -right-16 size-56 rounded-full bg-white/10 blur-3xl"></div>
         <div class="pointer-events-none absolute inset-0 opacity-[0.06]" style="background-image: radial-gradient(circle, white 1px, transparent 1px); background-size: 22px 22px;"></div>
 
         <div class="relative flex flex-col sm:flex-row sm:items-center justify-between gap-5">
             <div>
                 <div class="mb-3 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 backdrop-blur-sm">
-                    <div class="size-1.5 rounded-full bg-emerald-200"></div>
-                    <span class="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-100">Operations</span>
+                    <div class="size-1.5 rounded-full bg-orange-200"></div>
+                    <span class="text-[11px] font-bold uppercase tracking-[0.18em] text-orange-100">Operations</span>
                 </div>
                 <h1 class="text-3xl font-black tracking-tight text-white">Expense Claims</h1>
-                <p class="mt-1.5 text-sm font-medium text-emerald-200/80">Submit and manage employee expense reimbursements.</p>
+                <p class="mt-1.5 text-sm font-medium text-orange-200/80">Submit and manage employee expense reimbursements.</p>
             </div>
             <div class="flex shrink-0 flex-wrap items-center gap-3">
                 <flux:button variant="ghost" icon="arrow-down-tray"
@@ -20,12 +20,26 @@
                     Export
                 </flux:button>
                 <button wire:click="openSubmitModal"
-                    class="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-black text-emerald-700 shadow-lg shadow-black/20 transition-all hover:bg-emerald-50">
+                    class="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-black text-orange-700 shadow-lg shadow-black/20 transition-all hover:bg-orange-50">
                     <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
                     New Claim
                 </button>
             </div>
         </div>
+    </div>
+
+    {{-- ─── FILTERS ─── --}}
+    <div class="flex flex-wrap items-center gap-3">
+        <flux:select wire:model.live="filterStatus" class="w-36 text-sm" placeholder="All Statuses">
+            <flux:select.option value="">All Statuses</flux:select.option>
+            <flux:select.option value="pending">Pending</flux:select.option>
+            <flux:select.option value="approved">Approved</flux:select.option>
+            <flux:select.option value="rejected">Rejected</flux:select.option>
+        </flux:select>
+        <flux:input wire:model.live="filterMonth" type="month" class="w-44 text-sm" />
+        @if($filterStatus || $filterMonth)
+            <button wire:click="$set('filterStatus','');$set('filterMonth','')" class="text-xs text-zinc-400 hover:text-zinc-600 underline">Clear</button>
+        @endif
     </div>
 
     {{-- ─── TABLE ─── --}}
@@ -51,7 +65,7 @@
                             </td>
                             <td class="px-4 py-4">
                                 <div class="flex items-center gap-2.5">
-                                    <div class="flex size-7 items-center justify-center rounded-full bg-emerald-600 text-[10px] font-black text-white">
+                                    <div class="flex size-7 items-center justify-center rounded-full bg-orange-500 text-[10px] font-black text-white">
                                         {{ strtoupper(substr($expense->employee->user->name, 0, 1)) }}
                                     </div>
                                     <span class="text-sm font-medium text-zinc-700 dark:text-zinc-300">{{ $expense->employee->user->name }}</span>
@@ -115,6 +129,11 @@
                 </tbody>
             </table>
         </div>
+        @if($expenses->hasPages())
+            <div class="border-t border-zinc-50 px-6 py-3 dark:border-zinc-800">
+                {{ $expenses->links() }}
+            </div>
+        @endif
     </div>
 
     {{-- ─── REJECT MODAL ─── --}}
@@ -144,8 +163,8 @@
     <flux:modal wire:model="showSubmitModal" class="max-w-xl">
         <div class="space-y-5">
             <div class="flex items-start gap-3">
-                <div class="shrink-0 rounded-xl bg-emerald-50 p-2.5 dark:bg-emerald-900/20">
-                    <flux:icon.receipt-percent class="size-5 text-emerald-600 dark:text-emerald-400" />
+                <div class="shrink-0 rounded-xl bg-orange-50 p-2.5 dark:bg-orange-900/20">
+                    <flux:icon.receipt-percent class="size-5 text-orange-500 dark:text-orange-400" />
                 </div>
                 <div>
                     <flux:heading size="lg">Submit Expense Claim</flux:heading>

@@ -79,11 +79,11 @@ class AttendanceTracker extends Component
         $this->shift = $employee->shift ?? ShiftSetting::first();
         $this->shiftLabel = $this->buildShiftLabel();
 
-        // 1. Setup boundaries
+        // 1. Setup boundaries  (week starts Sunday to match S M T W T F S header)
         $start = $this->calendarMonth->copy()->startOfMonth();
         $end = $start->copy()->endOfMonth();
-        $gridStart = $start->copy()->startOfWeek();
-        $gridEnd = $end->copy()->endOfWeek();
+        $gridStart = $start->copy()->startOfWeek(Carbon::SUNDAY);
+        $gridEnd = $end->copy()->endOfWeek(Carbon::SATURDAY);
 
         // 2. Fetch all required data in consolidated queries
         $allAttendances = Attendance::where('employee_id', $employee->id)
@@ -185,7 +185,7 @@ class AttendanceTracker extends Component
         $this->loadData();
     }
 
-    public function updatingStatsPeriod(): void
+    public function updatedStatsPeriod(): void
     {
         $this->computeStats();
     }
@@ -234,7 +234,7 @@ class AttendanceTracker extends Component
             $absentPeriod = CarbonPeriod::create($start, min($end, $cutoff));
             foreach ($absentPeriod as $d) {
                 $dateKey = $d->toDateString();
-                if (! $d->isWeekend()
+                if ($d->dayOfWeek !== Carbon::SUNDAY && $d->dayOfWeek !== Carbon::SATURDAY
                     && ! isset($attendanceDates[$dateKey])
                     && ! isset($leaveMap[$dateKey])
                     && ! isset($holidayDates[$dateKey])) {
@@ -271,7 +271,7 @@ class AttendanceTracker extends Component
         }
 
         $this->loadData();
-        $this->dispatch('toast', message: 'Break started', variant: 'success');
+        \Flux::toast('Break started.');
     }
 
     public function endBreak()
@@ -285,7 +285,7 @@ class AttendanceTracker extends Component
         }
 
         $this->loadData();
-        $this->dispatch('toast', message: 'Break ended', variant: 'success');
+        \Flux::toast('Break ended. Welcome back!');
     }
 
     public function checkIn($lat = null, $lng = null)
@@ -295,7 +295,22 @@ class AttendanceTracker extends Component
         }
 
         $employee = Auth::user()->employee;
-        $this->todayAttendance = app(AttendanceService::class)->checkIn($employee, $this->shift, [
+
+        if (! $employee) {
+            \Flux::toast('No employee profile found. Contact HR.', variant: 'danger');
+
+            return;
+        }
+
+        $shift = $this->shift instanceof ShiftSetting ? $this->shift : ShiftSetting::first();
+
+        if (! $shift) {
+            \Flux::toast('No shift configured. Contact HR to set up your shift.', variant: 'danger');
+
+            return;
+        }
+
+        $this->todayAttendance = app(AttendanceService::class)->checkIn($employee, $shift, [
             'ip' => request()->ip(),
             'lat' => $lat,
             'lng' => $lng,
@@ -303,7 +318,7 @@ class AttendanceTracker extends Component
         ]);
 
         $this->loadData();
-        $this->dispatch('toast', message: 'Clocked in successfully', variant: 'success');
+        \Flux::toast('Clocked in successfully.');
     }
 
     public function checkOut($lat = null, $lng = null)
@@ -318,7 +333,7 @@ class AttendanceTracker extends Component
         ]);
 
         $this->loadData();
-        $this->dispatch('toast', message: 'Clocked out successfully', variant: 'success');
+        \Flux::toast('Clocked out successfully. Good work today!');
     }
 
     public function openRegularisation($date)
@@ -372,7 +387,7 @@ class AttendanceTracker extends Component
 
         $this->reset(['regDate', 'regCheckIn', 'regCheckOut', 'regReason']);
         $this->dispatch('flux:modal:close', name: 'regularisation-modal');
-        $this->dispatch('toast', message: 'Regularisation request submitted', variant: 'success');
+        \Flux::toast('Regularisation request submitted successfully.');
     }
 
     protected function buildShiftLabel(): ?string
