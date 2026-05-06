@@ -224,11 +224,21 @@
                 {{-- People --}}
                 @if($isHr)
                 <flux:sidebar.group heading="People" icon="users" :expandable="true" :expanded="request()->routeIs('employees.*')">
+                    @if(Route::has('employees.index'))
                     <flux:sidebar.item :href="route('employees.index')"               :current="request()->routeIs('employees.index')"               wire:navigate>Manage Employees</flux:sidebar.item>
+                    @endif
+                    @if(Route::has('employees.onboarding-manager'))
                     <flux:sidebar.item :href="route('employees.onboarding-manager')"  :current="request()->routeIs('employees.onboarding-manager')"  wire:navigate>Onboarding</flux:sidebar.item>
+                    @endif
+                    @if(Route::has('employees.offboarding-manager'))
                     <flux:sidebar.item :href="route('employees.offboarding-manager')" :current="request()->routeIs('employees.offboarding-manager')" wire:navigate>Offboarding</flux:sidebar.item>
+                    @endif
+                    @if(Route::has('employees.directory'))
                     <flux:sidebar.item :href="route('employees.directory')"           :current="request()->routeIs('employees.directory')"           wire:navigate>Directory</flux:sidebar.item>
+                    @endif
+                    @if(Route::has('employees.org-chart'))
                     <flux:sidebar.item :href="route('employees.org-chart')"           :current="request()->routeIs('employees.org-chart')"           wire:navigate>Org Chart</flux:sidebar.item>
+                    @endif
                 </flux:sidebar.group>
                 @elseif($isDir)
                 <flux:sidebar.group heading="Company" icon="building-office" :expandable="true"
