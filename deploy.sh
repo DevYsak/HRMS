@@ -89,6 +89,12 @@ fail() { echo -e "  ${R}FAIL${NC} ${1}"; exit 1; }
 
 cd "$APP_DIR" || fail "App directory not found: $APP_DIR"
 
+cleanup() {
+    $PHP_BIN artisan up >/dev/null 2>&1 || true
+}
+
+trap cleanup EXIT
+
 echo ""
 echo "  -- Maintenance Mode ON"
 $PHP_BIN artisan down --retry=5 2>/dev/null || true

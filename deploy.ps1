@@ -71,6 +71,12 @@ set -euo pipefail
 
 cd "$APP_DIR"
 
+cleanup() {
+    php artisan up >/dev/null 2>&1 || true
+}
+
+trap cleanup EXIT
+
 echo ''
 echo '-- Maintenance Mode ON'
 php artisan down --retry=5 2>/dev/null || true
