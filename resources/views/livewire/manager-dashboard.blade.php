@@ -1,13 +1,35 @@
 <flux:main class="bg-zinc-50 dark:bg-zinc-950 min-h-screen">
 
+    @php
+        $hour = now()->hour;
+        $greeting = $hour < 12 ? 'Good Morning' : ($hour < 17 ? 'Good Afternoon' : 'Good Evening');
+        $firstName = \Illuminate\Support\Str::of(auth()->user()->name)->explode(' ')->first();
+        $timeContext = $hour < 12 ? 'Your team is ready — time to lead.' : ($hour < 17 ? 'Afternoon check-in — team overview below.' : 'End of day — review pending approvals.');
+    @endphp
     {{-- ── HEADER ── --}}
-    <div class="relative overflow-hidden bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 px-6 md:px-10 py-8">
-        <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(29,183,122,0.12),_transparent_60%)]"></div>
-        <div class="relative flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <div class="relative overflow-hidden bg-gradient-to-br from-blue-950 via-blue-900 to-zinc-900 px-6 md:px-10 py-8">
+        <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(59,130,246,0.2),_transparent_60%)]"></div>
+        <div class="absolute bottom-0 left-0 w-64 h-48 bg-blue-500/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div class="absolute top-0 right-0 w-80 h-32 bg-teal-500/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div class="relative flex flex-col md:flex-row md:items-center md:justify-between gap-5">
             <div>
-                <p class="text-zinc-400 text-sm mb-1">{{ now()->format('l, jS F Y') }}</p>
-                <h1 class="text-2xl font-bold text-white tracking-tight">Team Dashboard</h1>
-                <p class="text-zinc-400 text-sm mt-1">Your team overview — attendance, leave & OT approvals</p>
+                <div class="flex items-center gap-2.5 mb-3">
+                    <div class="inline-flex items-center gap-1.5 px-3 py-1 bg-white/10 border border-white/10 rounded-full">
+                        @if($hour < 12)
+                            <flux:icon.sun class="size-3 text-amber-300" />
+                            <span class="text-[11px] font-semibold text-white/70">Morning</span>
+                        @elseif($hour < 17)
+                            <flux:icon.sun class="size-3 text-orange-300" />
+                            <span class="text-[11px] font-semibold text-white/70">Afternoon</span>
+                        @else
+                            <flux:icon.moon class="size-3 text-blue-300" />
+                            <span class="text-[11px] font-semibold text-white/70">Evening</span>
+                        @endif
+                    </div>
+                    <span class="text-white/40 text-xs">{{ now()->format('l, d F Y') }}</span>
+                </div>
+                <h1 class="text-3xl font-black text-white tracking-tight">{{ $greeting }}, {{ $firstName }}</h1>
+                <p class="text-white/55 text-sm mt-1.5">{{ $timeContext }}</p>
             </div>
             <div class="flex items-center gap-2">
                 <a href="{{ route('time-off.team') }}" wire:navigate
@@ -19,7 +41,7 @@
                     @endif
                 </a>
                 <a href="{{ route('overtime.manage') }}" wire:navigate
-                   class="flex items-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-700 border border-brand-500 text-white rounded-xl text-sm font-semibold transition-all shadow-lg shadow-brand-900/20">
+                   class="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 border border-blue-500/50 text-white rounded-xl text-sm font-semibold transition-all shadow-lg shadow-blue-900/30">
                     <flux:icon.clock class="size-4" />
                     OT Approvals
                     @if($pendingOt->count())

@@ -1,18 +1,43 @@
 <flux:main class="bg-zinc-50 dark:bg-zinc-950 min-h-screen">
 
+    @php
+        $hour = now()->hour;
+        $greeting = $hour < 12 ? 'Good Morning' : ($hour < 17 ? 'Good Afternoon' : 'Good Evening');
+        $firstName = \Illuminate\Support\Str::of(auth()->user()->name)->explode(' ')->first();
+        $timeContext = $hour < 12 ? 'Morning finance brief — payroll window open.' : ($hour < 17 ? 'Afternoon — review and verify payroll.' : 'End of day — financial wrap-up.');
+    @endphp
     {{-- Premium Header --}}
-    <div class="relative overflow-hidden bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 px-6 md:px-10 py-8">
-        <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(29,183,122,0.12),_transparent_60%)]"></div>
-        <div class="relative flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <div class="relative overflow-hidden bg-gradient-to-br from-emerald-950 via-emerald-900 to-zinc-900 px-6 md:px-10 py-8">
+        <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(16,185,129,0.2),_transparent_60%)]"></div>
+        <div class="absolute bottom-0 left-0 w-64 h-48 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div class="absolute top-0 right-0 w-72 h-40 bg-teal-500/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div class="relative flex flex-col md:flex-row md:items-center md:justify-between gap-5">
             <div>
-                <p class="text-zinc-400 text-sm mb-1">Payroll, incentives & reimbursements</p>
-                <h1 class="text-2xl font-bold text-white tracking-tight">Finance Dashboard</h1>
-                <p class="text-zinc-400 text-sm mt-1">Review, verify and approve payroll runs</p>
+                <div class="flex items-center gap-2.5 mb-3">
+                    <div class="inline-flex items-center gap-1.5 px-3 py-1 bg-white/10 border border-white/10 rounded-full">
+                        @if($hour < 12)
+                            <flux:icon.sun class="size-3 text-amber-300" />
+                            <span class="text-[11px] font-semibold text-white/70">Morning</span>
+                        @elseif($hour < 17)
+                            <flux:icon.sun class="size-3 text-orange-300" />
+                            <span class="text-[11px] font-semibold text-white/70">Afternoon</span>
+                        @else
+                            <flux:icon.moon class="size-3 text-emerald-300" />
+                            <span class="text-[11px] font-semibold text-white/70">Evening</span>
+                        @endif
+                    </div>
+                    <span class="inline-flex items-center px-3 py-1 bg-emerald-500/15 border border-emerald-500/20 rounded-full text-[11px] font-bold text-emerald-400">
+                        {{ now()->format('F Y') }}
+                    </span>
+                    <span class="text-white/40 text-xs">{{ now()->format('l, d F Y') }}</span>
+                </div>
+                <h1 class="text-3xl font-black text-white tracking-tight">{{ $greeting }}, {{ $firstName }}</h1>
+                <p class="text-white/55 text-sm mt-1.5">{{ $timeContext }}</p>
             </div>
             <div class="flex items-center gap-2">
                 <flux:input wire:model.live="month" type="month" size="sm" class="bg-white/10 border-white/20 text-white" />
                 <a href="{{ route('payroll.finance-approve') }}" wire:navigate
-                   class="flex items-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-700 border border-brand-500 text-white rounded-xl text-sm font-semibold transition-all shadow-lg shadow-brand-900/20">
+                   class="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 border border-emerald-500/50 text-white rounded-xl text-sm font-semibold transition-all shadow-lg shadow-emerald-900/30">
                     <flux:icon.check-circle class="size-4" /> Finance Approval
                 </a>
             </div>

@@ -155,6 +155,10 @@
     </style>
 
     @php
+        $hour = now()->hour;
+        $greeting = $hour < 12 ? 'Good Morning' : ($hour < 17 ? 'Good Afternoon' : 'Good Evening');
+        $firstName = \Illuminate\Support\Str::of(auth()->user()->name)->explode(' ')->first();
+        $timeContext = $hour < 12 ? 'New day — your HRMS snapshot is ready.' : ($hour < 17 ? 'Afternoon — operations overview below.' : 'End of day — final admin summary.');
         $totalPending = $pendingLeavesCount + $pendingOtCount;
         $readinessScore = max(12, min(96, round(
             ($attendancePercent * 0.55)
@@ -170,11 +174,22 @@
 
     <div class="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
         <div>
-            <h1 class="text-3xl font-black tracking-tight text-zinc-900 dark:text-white">Admin Dashboard</h1>
-            <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                {{ $totalActive }} active employees, {{ $totalPending }} approvals in queue,
-                {{ $activePayrolls->count() }} payroll cycles in progress
-            </p>
+            <div class="flex items-center gap-2 mb-2">
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800/50 rounded-full text-[10px] font-bold uppercase tracking-wider text-orange-600 dark:text-orange-400">
+                    @if($hour < 12)
+                        <flux:icon.sun class="size-3" /> Morning
+                    @elseif($hour < 17)
+                        <flux:icon.sun class="size-3" /> Afternoon
+                    @else
+                        <flux:icon.moon class="size-3" /> Evening
+                    @endif
+                </span>
+                <span class="text-xs text-zinc-400 dark:text-zinc-500">{{ now()->format('l, d F Y') }}</span>
+            </div>
+            <h1 class="text-3xl font-black tracking-tight text-zinc-900 dark:text-white">
+                {{ $greeting }}, {{ $firstName }}
+            </h1>
+            <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{{ $timeContext }}</p>
         </div>
         <div class="flex items-center gap-3">
             <div

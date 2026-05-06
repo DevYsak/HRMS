@@ -1,4 +1,4 @@
-<div class="relative" x-data="{ open: false }" @click.outside="open = false">
+<div class="relative" x-data="{ open: false }" @click.outside="open = false" wire:poll.30s>
 
     {{-- Bell Button --}}
     <button @click="open = !open"

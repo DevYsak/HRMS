@@ -1,13 +1,37 @@
 <flux:main class="bg-zinc-50 dark:bg-zinc-950 min-h-screen">
 
+    @php
+        $hour = now()->hour;
+        $greeting = $hour < 12 ? 'Good Morning' : ($hour < 17 ? 'Good Afternoon' : 'Good Evening');
+        $firstName = \Illuminate\Support\Str::of(auth()->user()->name)->explode(' ')->first();
+        $timeContext = $hour < 12 ? 'Here\'s your company at a glance.' : ($hour < 17 ? 'Afternoon executive overview.' : 'End of day — company snapshot.');
+    @endphp
     {{-- ── HEADER ── --}}
-    <div class="relative overflow-hidden bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 px-6 md:px-10 py-8">
-        <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(29,183,122,0.14),_transparent_60%)]"></div>
-        <div class="absolute bottom-0 right-0 w-64 h-32 bg-brand-600/5 rounded-full blur-3xl"></div>
+    <div class="relative overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-zinc-900 px-6 md:px-10 py-8">
+        <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(217,119,6,0.18),_transparent_55%)]"></div>
+        <div class="absolute bottom-0 right-0 w-80 h-40 bg-amber-500/8 rounded-full blur-3xl pointer-events-none"></div>
+        <div class="absolute top-0 left-1/4 w-64 h-48 bg-slate-600/15 rounded-full blur-3xl pointer-events-none"></div>
         <div class="relative">
-            <p class="text-zinc-400 text-sm mb-1">{{ now()->format('l, jS F Y') }}</p>
-            <h1 class="text-2xl font-bold text-white tracking-tight">Executive Overview</h1>
-            <p class="text-zinc-400 text-sm mt-1">Company-wide headcount, attendance, approvals & payroll</p>
+            <div class="flex items-center gap-2.5 mb-3">
+                <div class="inline-flex items-center gap-1.5 px-3 py-1 bg-white/10 border border-white/10 rounded-full">
+                    @if($hour < 12)
+                        <flux:icon.sun class="size-3 text-amber-300" />
+                        <span class="text-[11px] font-semibold text-white/70">Morning</span>
+                    @elseif($hour < 17)
+                        <flux:icon.sun class="size-3 text-orange-300" />
+                        <span class="text-[11px] font-semibold text-white/70">Afternoon</span>
+                    @else
+                        <flux:icon.moon class="size-3 text-slate-300" />
+                        <span class="text-[11px] font-semibold text-white/70">Evening</span>
+                    @endif
+                </div>
+                <span class="inline-flex items-center px-3 py-1 bg-amber-500/15 border border-amber-500/20 rounded-full text-[11px] font-bold text-amber-400 uppercase tracking-wide">
+                    Executive
+                </span>
+                <span class="text-white/40 text-xs">{{ now()->format('l, d F Y') }}</span>
+            </div>
+            <h1 class="text-3xl font-black text-white tracking-tight">{{ $greeting }}, {{ $firstName }}</h1>
+            <p class="text-white/55 text-sm mt-1.5">{{ $timeContext }}</p>
         </div>
     </div>
 
