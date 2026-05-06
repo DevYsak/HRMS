@@ -25,3 +25,6 @@ yarn-error.log
 /.nova
 /.vscode
 /.zed
+/.claude/settings.local.json
+*.pdf
+PULSE_HRMS_Test_Cases.md
