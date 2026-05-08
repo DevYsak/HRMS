@@ -1,12 +1,10 @@
 <flux:main class="min-h-screen bg-zinc-50 dark:bg-zinc-950 p-6 space-y-5" x-data="{ tab: 'requests' }">
 
     {{-- ─── HERO HEADER ─── --}}
-    <div class="relative overflow-hidden rounded-2xl bg-gradient-to-br from-orange-500 via-orange-700 to-zinc-900 p-7 md:p-8 shadow-xl shadow-orange-500/20">
-        {{-- Decorative blobs --}}
-        <div class="pointer-events-none absolute -top-16 -right-16 size-56 rounded-full bg-white/10 blur-3xl"></div>
-        <div class="pointer-events-none absolute -bottom-12 -left-12 size-40 rounded-full bg-indigo-400/20 blur-3xl"></div>
-        {{-- Dot grid overlay --}}
-        <div class="pointer-events-none absolute inset-0 opacity-[0.07]" style="background-image: radial-gradient(circle, white 1px, transparent 1px); background-size: 22px 22px;"></div>
+    <div class="pulse-hero shadow-xl">
+        <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_rgba(249,115,22,0.22),_transparent_65%)]"></div>
+        <div class="pointer-events-none absolute -bottom-10 -left-10 size-64 rounded-full blur-3xl" style="background:radial-gradient(circle,rgba(249,115,22,0.30),transparent 70%)"></div>
+        <div class="pointer-events-none absolute top-0 right-0 size-48 rounded-full blur-3xl" style="background:radial-gradient(circle,rgba(249,115,22,0.08),transparent 70%)"></div>
 
         <div class="relative flex flex-col sm:flex-row sm:items-center justify-between gap-6">
             <div>

@@ -7,10 +7,10 @@
         $timeContext = $hour < 12 ? 'Here\'s your company at a glance.' : ($hour < 17 ? 'Afternoon executive overview.' : 'End of day — company snapshot.');
     @endphp
     {{-- ── HEADER ── --}}
-    <div class="relative overflow-hidden bg-gradient-to-br from-orange-600 via-orange-800 to-zinc-900 px-6 md:px-10 py-8">
-        <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(251,191,36,0.18),_transparent_55%)]"></div>
-        <div class="absolute bottom-0 right-0 w-80 h-40 bg-amber-400/10 rounded-full blur-3xl pointer-events-none"></div>
-        <div class="absolute top-0 left-1/4 w-64 h-48 bg-orange-500/10 rounded-full blur-3xl pointer-events-none"></div>
+    <div class="pulse-hero">
+        <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_rgba(249,115,22,0.22),_transparent_65%)]"></div>
+        <div class="pointer-events-none absolute -bottom-10 -left-10 size-64 rounded-full blur-3xl" style="background:radial-gradient(circle,rgba(249,115,22,0.30),transparent 70%)"></div>
+        <div class="pointer-events-none absolute top-0 right-0 size-48 rounded-full blur-3xl" style="background:radial-gradient(circle,rgba(249,115,22,0.08),transparent 70%)"></div>
         <div class="relative">
             <div class="flex items-center gap-2.5 mb-3">
                 <div class="inline-flex items-center gap-1.5 px-3 py-1 bg-white/10 border border-white/10 rounded-full">

@@ -39,9 +39,10 @@
 {{-- ═══════════════════════════════════════════════
      HEADER
 ═══════════════════════════════════════════════ --}}
-<div class="relative overflow-hidden bg-gradient-to-br from-orange-600 via-orange-800 to-zinc-900 px-6 py-7 md:px-10">
-    <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(251,191,36,0.18),_transparent_60%)]"></div>
-    <div class="absolute bottom-0 left-0 w-72 h-40 bg-orange-500/10 rounded-full blur-3xl pointer-events-none"></div>
+<div class="pulse-hero">
+    <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_rgba(249,115,22,0.22),_transparent_65%)]"></div>
+    <div class="pointer-events-none absolute -bottom-10 -left-10 size-64 rounded-full blur-3xl" style="background:radial-gradient(circle,rgba(249,115,22,0.30),transparent 70%)"></div>
+    <div class="pointer-events-none absolute top-0 right-0 size-48 rounded-full blur-3xl" style="background:radial-gradient(circle,rgba(249,115,22,0.08),transparent 70%)"></div>
     <div class="relative flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
             <div class="flex items-center gap-2 mb-2">

@@ -134,6 +134,23 @@ select:focus[data-flux-control] {
     .pulse-page-header {
         @apply mb-6 flex items-start justify-between;
     }
+
+    /* Premium hero header — dark with orange glow, rounded card style */
+    .pulse-hero {
+        position: relative;
+        overflow: hidden;
+        border-radius: 1rem;
+        margin: 1rem 1rem 0;
+        padding: 1.75rem 1.5rem;
+        background: linear-gradient(135deg, #1f0d02 0%, #130800 50%, #080300 100%);
+        box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 0 0 1px rgba(249,115,22,0.10);
+    }
+    @media (min-width: 768px) {
+        .pulse-hero {
+            margin: 1.5rem 1.5rem 0;
+            padding: 2rem 2.5rem;
+        }
+    }
     .pulse-page-title {
         @apply text-2xl font-bold text-zinc-900 dark:text-white;
     }
