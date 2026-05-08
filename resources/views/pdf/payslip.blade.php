@@ -15,19 +15,22 @@
     $employee = $payslip->employee;
     $payroll  = $payslip->payroll;
 
-    // Logo — try company logo first, then fallback to static asset
+    // Logo — only embed if GD extension is available (DomPDF requires it for images)
     $logoData = null;
-    if ($company->logo) {
-        $p = public_path('storage/' . $company->logo);
-        if (file_exists($p)) {
-            $mime    = mime_content_type($p);
-            $logoData = "data:{$mime};base64," . base64_encode(file_get_contents($p));
+    $gdAvailable = extension_loaded('gd');
+    if ($gdAvailable) {
+        if ($company->logo) {
+            $p = public_path('storage/' . $company->logo);
+            if (file_exists($p)) {
+                $mime     = mime_content_type($p);
+                $logoData = "data:{$mime};base64," . base64_encode(file_get_contents($p));
+            }
         }
-    }
-    if (!$logoData) {
-        $p = public_path('build/assets/logo-company.png');
-        if (file_exists($p)) {
-            $logoData = 'data:image/png;base64,' . base64_encode(file_get_contents($p));
+        if (!$logoData) {
+            $p = public_path('build/assets/logo-company.png');
+            if (file_exists($p)) {
+                $logoData = 'data:image/png;base64,' . base64_encode(file_get_contents($p));
+            }
         }
     }
 
