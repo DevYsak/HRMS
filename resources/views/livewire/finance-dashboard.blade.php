@@ -7,10 +7,10 @@
         $timeContext = $hour < 12 ? 'Morning finance brief — payroll window open.' : ($hour < 17 ? 'Afternoon — review and verify payroll.' : 'End of day — financial wrap-up.');
     @endphp
     {{-- Premium Header --}}
-    <div class="relative overflow-hidden bg-gradient-to-br from-emerald-950 via-emerald-900 to-zinc-900 px-6 md:px-10 py-8">
-        <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(16,185,129,0.2),_transparent_60%)]"></div>
-        <div class="absolute bottom-0 left-0 w-64 h-48 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
-        <div class="absolute top-0 right-0 w-72 h-40 bg-teal-500/10 rounded-full blur-3xl pointer-events-none"></div>
+    <div class="relative overflow-hidden bg-gradient-to-br from-orange-600 via-orange-800 to-zinc-900 px-6 md:px-10 py-8">
+        <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(251,191,36,0.18),_transparent_60%)]"></div>
+        <div class="absolute bottom-0 left-0 w-64 h-48 bg-orange-500/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div class="absolute top-0 right-0 w-72 h-40 bg-amber-500/10 rounded-full blur-3xl pointer-events-none"></div>
         <div class="relative flex flex-col md:flex-row md:items-center md:justify-between gap-5">
             <div>
                 <div class="flex items-center gap-2.5 mb-3">
@@ -37,7 +37,7 @@
             <div class="flex items-center gap-2">
                 <flux:input wire:model.live="month" type="month" size="sm" class="bg-white/10 border-white/20 text-white" />
                 <a href="{{ route('payroll.finance-approve') }}" wire:navigate
-                   class="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 border border-emerald-500/50 text-white rounded-xl text-sm font-semibold transition-all shadow-lg shadow-emerald-900/30">
+                   class="flex items-center gap-2 px-4 py-2.5 bg-white text-orange-700 hover:bg-orange-50 rounded-xl text-sm font-bold transition-all shadow-sm">
                     <flux:icon.check-circle class="size-4" /> Finance Approval
                 </a>
             </div>

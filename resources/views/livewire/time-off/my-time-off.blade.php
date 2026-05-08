@@ -1,7 +1,7 @@
 <flux:main class="min-h-screen bg-zinc-50 dark:bg-zinc-950 p-6 space-y-5" x-data="{ tab: 'requests' }">
 
     {{-- ─── HERO HEADER ─── --}}
-    <div class="relative overflow-hidden rounded-2xl bg-gradient-to-br from-violet-600 via-purple-600 to-indigo-700 p-7 md:p-8 shadow-xl shadow-violet-500/20">
+    <div class="relative overflow-hidden rounded-2xl bg-gradient-to-br from-orange-500 via-orange-700 to-zinc-900 p-7 md:p-8 shadow-xl shadow-orange-500/20">
         {{-- Decorative blobs --}}
         <div class="pointer-events-none absolute -top-16 -right-16 size-56 rounded-full bg-white/10 blur-3xl"></div>
         <div class="pointer-events-none absolute -bottom-12 -left-12 size-40 rounded-full bg-indigo-400/20 blur-3xl"></div>
@@ -11,8 +11,8 @@
         <div class="relative flex flex-col sm:flex-row sm:items-center justify-between gap-6">
             <div>
                 <div class="mb-3 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 backdrop-blur-sm">
-                    <div class="size-1.5 animate-pulse rounded-full bg-violet-200"></div>
-                    <span class="text-[11px] font-bold uppercase tracking-[0.18em] text-violet-100">Leave Management</span>
+                    <div class="size-1.5 animate-pulse rounded-full bg-orange-200"></div>
+                    <span class="text-[11px] font-bold uppercase tracking-[0.18em] text-orange-100">Leave Management</span>
                 </div>
                 <h1 class="text-3xl font-black tracking-tight text-white">My Time Off</h1>
                 <p class="mt-1.5 text-sm font-medium text-violet-200/80">Manage balances, apply for leave & track encashments.</p>

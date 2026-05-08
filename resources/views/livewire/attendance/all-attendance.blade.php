@@ -3,25 +3,27 @@
     {{-- ══════════════════════════════════════════
          PAGE HEADER
     ══════════════════════════════════════════ --}}
-    <div class="border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-6 md:px-8 py-5">
-        <div class="flex items-center justify-between gap-4">
+    <div class="relative overflow-hidden bg-gradient-to-br from-orange-600 via-orange-800 to-zinc-900 px-6 md:px-8 py-7">
+        <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(251,191,36,0.18),_transparent_60%)]"></div>
+        <div class="absolute bottom-0 left-0 w-64 h-40 bg-orange-500/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div class="relative flex items-center justify-between gap-4">
             <div>
-                <div class="flex items-center gap-1.5 text-xs text-zinc-400 mb-1">
+                <div class="flex items-center gap-1.5 text-xs text-white/50 mb-1.5">
                     <span>Attendance</span>
                     <flux:icon.chevron-right class="size-3" />
-                    <span class="text-zinc-700 dark:text-zinc-300 font-semibold">Employees Attendance</span>
+                    <span class="text-white/80 font-semibold">Employees Attendance</span>
                 </div>
-                <h1 class="text-2xl font-black text-zinc-900 dark:text-white tracking-tight">Employees Attendance</h1>
-                <p class="text-sm text-zinc-500 mt-0.5">Today — {{ now()->format('l, d M Y') }}</p>
+                <h1 class="text-2xl font-black text-white tracking-tight">Employees Attendance</h1>
+                <p class="text-sm text-white/55 mt-0.5">Today — {{ now()->format('l, d M Y') }}</p>
             </div>
             <div class="flex items-center gap-2 shrink-0">
                 <a href="{{ route('reports.attendance-summary', ['month' => now()->month, 'year' => now()->year]) }}"
                    target="_blank"
-                   class="flex items-center gap-2 px-4 py-2 border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 rounded-xl text-sm font-semibold transition">
+                   class="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/10 text-white rounded-xl text-sm font-semibold transition">
                     <flux:icon.arrow-down-tray class="size-4" /> Export
                 </a>
                 <button wire:click="openMarkModal"
-                    class="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold transition shadow-sm shadow-indigo-200 dark:shadow-none">
+                    class="flex items-center gap-2 px-4 py-2 bg-white text-orange-700 hover:bg-orange-50 rounded-xl text-sm font-bold transition shadow-sm">
                     <flux:icon.pencil-square class="size-4" /> Mark Attendance
                 </button>
             </div>

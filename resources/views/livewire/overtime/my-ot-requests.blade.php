@@ -1,16 +1,16 @@
 <flux:main class="bg-zinc-50 dark:bg-zinc-950 min-h-screen">
 
     {{-- Header --}}
-    <div class="relative overflow-hidden bg-gradient-to-br from-purple-950 via-purple-900 to-zinc-900 px-6 md:px-10 py-8">
-        <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(168,85,247,0.2),_transparent_60%)]"></div>
-        <div class="absolute bottom-0 left-0 w-64 h-48 bg-purple-500/10 rounded-full blur-3xl pointer-events-none"></div>
+    <div class="relative overflow-hidden bg-gradient-to-br from-orange-600 via-orange-800 to-zinc-900 px-6 md:px-10 py-8">
+        <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(251,191,36,0.18),_transparent_60%)]"></div>
+        <div class="absolute bottom-0 left-0 w-64 h-48 bg-orange-500/10 rounded-full blur-3xl pointer-events-none"></div>
         <div class="relative flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
                 <h1 class="text-3xl font-black text-white tracking-tight">My Overtime</h1>
                 <p class="text-white/55 text-sm mt-1">Submit and track your overtime pre-approval requests.</p>
             </div>
             <button wire:click="openModal"
-                class="inline-flex items-center gap-2 px-5 py-2.5 bg-purple-600 hover:bg-purple-700 border border-purple-500/50 text-white rounded-xl text-sm font-bold transition shadow-lg shadow-purple-900/30">
+                class="inline-flex items-center gap-2 px-5 py-2.5 bg-orange-500 hover:bg-orange-600 border border-orange-400/50 text-white rounded-xl text-sm font-bold transition shadow-lg shadow-orange-900/30">
                 <flux:icon.plus class="size-4" /> Request OT
             </button>
         </div>

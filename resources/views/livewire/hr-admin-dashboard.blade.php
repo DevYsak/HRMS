@@ -7,10 +7,10 @@
         $timeContext = $hour < 12 ? 'New day, new opportunities — people first.' : ($hour < 17 ? 'Afternoon HR brief — operations in view.' : 'Day closing — final HR checks below.');
     @endphp
     {{-- Premium Header --}}
-    <div class="relative overflow-hidden bg-gradient-to-br from-violet-950 via-violet-900 to-zinc-900 px-6 md:px-10 py-8">
-        <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(139,92,246,0.22),_transparent_60%)]"></div>
-        <div class="absolute bottom-0 left-0 w-64 h-48 bg-violet-500/10 rounded-full blur-3xl pointer-events-none"></div>
-        <div class="absolute top-0 right-0 w-72 h-40 bg-pink-500/10 rounded-full blur-3xl pointer-events-none"></div>
+    <div class="relative overflow-hidden bg-gradient-to-br from-orange-600 via-orange-800 to-zinc-900 px-6 md:px-10 py-8">
+        <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(251,191,36,0.18),_transparent_60%)]"></div>
+        <div class="absolute bottom-0 left-0 w-64 h-48 bg-orange-500/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div class="absolute top-0 right-0 w-72 h-40 bg-amber-400/10 rounded-full blur-3xl pointer-events-none"></div>
         <div class="relative flex flex-col md:flex-row md:items-center md:justify-between gap-5">
             <div>
                 <div class="flex items-center gap-2.5 mb-3">
@@ -33,7 +33,7 @@
             </div>
             <div class="flex items-center gap-2">
                 <a href="{{ route('employees.create') }}" wire:navigate
-                   class="flex items-center gap-2 px-4 py-2.5 bg-violet-600 hover:bg-violet-700 border border-violet-500/50 text-white rounded-xl text-sm font-semibold transition-all shadow-lg shadow-violet-900/30">
+                   class="flex items-center gap-2 px-4 py-2.5 bg-white text-orange-700 hover:bg-orange-50 rounded-xl text-sm font-bold transition-all shadow-sm">
                     <flux:icon.plus class="size-4" /> Add Employee
                 </a>
                 <a href="{{ route('payroll.process') }}" wire:navigate

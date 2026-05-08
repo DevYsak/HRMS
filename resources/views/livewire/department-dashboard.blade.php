@@ -1,8 +1,8 @@
 <div class="bg-zinc-50 dark:bg-zinc-950 min-h-screen">
 
     {{-- Premium Header --}}
-    <div class="relative overflow-hidden bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 px-6 md:px-10 py-8">
-        <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(29,183,122,0.12),_transparent_60%)]"></div>
+    <div class="relative overflow-hidden bg-gradient-to-br from-orange-600 via-orange-800 to-zinc-900 px-6 md:px-10 py-8">
+        <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(251,191,36,0.18),_transparent_60%)]"></div>
         <div class="relative flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
                 <p class="text-zinc-400 text-sm mb-1">{{ now()->format('l, jS F Y') }}</p>
