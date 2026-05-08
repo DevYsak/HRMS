@@ -82,7 +82,7 @@
                                             <div class="text-right">
                                                     <div class="font-black">₹{{ number_format($pslip->net_salary, 2) }}</div>
                                                     <div class="mt-1 text-xs">
-                                                        <a href="{{ URL::temporarySignedRoute('payroll.payslips.download', now()->addMinutes(5), ['payslip' => $pslip->id]) }}" onclick="event.stopPropagation()" class="text-xs text-brand-600 hover:underline">Download</a>
+                                                        <a href="{{ URL::temporarySignedRoute('payroll.payslips.download', now()->addMinutes(5), ['payslip' => $pslip->id]) }}" target="_blank" onclick="event.stopPropagation()" class="text-xs text-brand-600 hover:underline">View PDF</a>
                                                     </div>
                                             </div>
                                         </div>
@@ -104,7 +104,7 @@
                                         <div class="text-xs text-zinc-400">Issued on {{ $selectedSlip->updated_at->format('M d, Y') }}</div>
                                     </div>
                                     <div class="flex items-center gap-2">
-                                        <flux:button href="{{ URL::temporarySignedRoute('payroll.payslips.download', now()->addMinutes(5), ['payslip' => $selectedSlip->id]) }}" variant="primary" icon="arrow-down-tray">Download</flux:button>
+                                        <flux:button href="{{ URL::temporarySignedRoute('payroll.payslips.download', now()->addMinutes(5), ['payslip' => $selectedSlip->id]) }}" target="_blank" variant="primary" icon="arrow-down-tray">View PDF</flux:button>
                                     </div>
                                 </div>
 

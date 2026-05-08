@@ -23,11 +23,11 @@ class PayslipController extends Controller
             return Storage::download($payslip->pdf_path, $filename);
         }
 
-        // Fallback: generate PDF on the fly (keeps previous behavior)
+        // Generate PDF and stream inline (opens in browser tab)
         $pdf = Pdf::loadView('pdf.payslip', compact('payslip'));
 
         $filename = 'payslip_'.$payslip->employee->employee_id.'_'.$payslip->payroll->month.'_'.$payslip->payroll->year.'_'.$payslip->payroll->cycle.'.pdf';
 
-        return $pdf->download($filename);
+        return $pdf->stream($filename);
     }
 }
