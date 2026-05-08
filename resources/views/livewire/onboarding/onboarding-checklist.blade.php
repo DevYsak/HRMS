@@ -4,7 +4,7 @@
             <flux:avatar :src="$employee->user->avatarUrl()" :initials="$employee->user->initials()" size="lg" />
             <div>
                 <h1 class="pulse-page-title">{{ $employee->user->name }}'s {{ ucfirst($phase) }}</h1>
-                <p class="pulse-page-subtitle">{{ $employee->jobTitle->name }} • Joined {{ $employee->joining_date->format('M d, Y') }}</p>
+                <p class="pulse-page-subtitle">{{ $employee->jobTitle?->name ?? 'No designation' }} • Joined {{ $employee->joining_date?->format('M d, Y') ?? '—' }}</p>
             </div>
         </div>
         <div class="flex items-center gap-3">
