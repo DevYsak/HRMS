@@ -140,14 +140,14 @@ select:focus[data-flux-control] {
         position: relative;
         overflow: hidden;
         border-radius: 1rem;
-        margin: 1rem 1rem 0;
+        margin: 1rem 1rem 1.25rem;
         padding: 1.75rem 1.5rem;
         background: linear-gradient(135deg, #1f0d02 0%, #130800 50%, #080300 100%);
-        box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 0 0 1px rgba(249,115,22,0.10);
+        box-shadow: 0 8px 24px rgba(0,0,0,0.28), 0 0 0 1px rgba(249,115,22,0.10);
     }
     @media (min-width: 768px) {
         .pulse-hero {
-            margin: 1.5rem 1.5rem 0;
+            margin: 1.5rem 1.5rem 1.5rem;
             padding: 2rem 2.5rem;
         }
     }
