@@ -413,8 +413,7 @@
             class="admin-card overflow-hidden border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900 lg:col-span-2">
             <div class="mb-8 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                 <h3 class="text-base font-bold text-zinc-900 dark:text-white">Team Attendance Heatmap</h3>
-                <div
-                    class="flex flex-wrap items-center gap-4 text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+                <div class="flex flex-wrap items-center gap-3 text-[10px] font-bold uppercase tracking-widest text-zinc-500">
                     <div class="flex items-center gap-1.5">
                         <div class="size-2.5 rounded-[2px] bg-emerald-500"></div> Present
                     </div>
@@ -422,13 +421,13 @@
                         <div class="size-2.5 rounded-[2px] bg-amber-500"></div> Late
                     </div>
                     <div class="flex items-center gap-1.5">
-                        <div
-                            class="size-2.5 rounded-[2px] border border-zinc-200 bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800">
-                        </div> Absent
+                        <div class="size-2.5 rounded-[2px] border border-zinc-300 bg-zinc-200 dark:border-zinc-600 dark:bg-zinc-700"></div> Absent
                     </div>
-                    <flux:link
-                        :href="route('reports.attendance-summary', ['month' => now()->month, 'year' => now()->year])"
-                        class="font-bold text-brand-500 !no-underline transition-colors hover:text-brand-600">
+                    <div class="flex items-center gap-1.5 opacity-50">
+                        <div class="size-2.5 rounded-[2px] border border-dashed border-zinc-300 bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800/50"></div> Off (Sat/Sun)
+                    </div>
+                    <flux:link :href="route('reports.attendance-summary', ['month' => now()->month, 'year' => now()->year])"
+                        class="font-bold text-brand-500 !no-underline transition-colors hover:text-brand-600 ml-auto">
                         Full Report →
                     </flux:link>
                 </div>
@@ -437,11 +436,14 @@
             <div class="scrollbar-hide overflow-x-auto">
                 <table class="w-full text-left">
                     <thead>
-                        <tr
-                            class="border-b border-zinc-50 text-[10px] font-bold uppercase tracking-widest text-zinc-400 dark:border-zinc-800/50">
+                        <tr class="border-b border-zinc-50 text-[10px] font-bold uppercase tracking-widest text-zinc-400 dark:border-zinc-800/50">
                             <th class="pb-4 pr-6">Employee</th>
                             @foreach($days as $day)
-                                <th class="px-2 pb-4 text-center">{{ $day->format('D j') }}</th>
+                                @php $isWeekend = $day->isSaturday() || $day->isSunday(); @endphp
+                                <th class="px-2 pb-4 text-center {{ $isWeekend ? 'text-zinc-300 dark:text-zinc-600' : '' }}">
+                                    <div>{{ $day->format('D') }}</div>
+                                    <div class="text-[9px] font-normal {{ $day->isToday() ? 'text-brand-500 font-bold' : '' }}">{{ $day->format('j') }}</div>
+                                </th>
                             @endforeach
                         </tr>
                     </thead>
@@ -460,15 +462,27 @@
                                         </div>
                                     </div>
                                 </td>
-                                @foreach($row['days'] as $status)
-                                    <td class="px-2 py-3 text-center">
+                                @foreach($row['days'] as $i => $status)
+                                    @php
+                                        $day = $days[$i];
+                                        $isWeekend = $day->isSaturday() || $day->isSunday();
+                                    @endphp
+                                    <td class="px-2 py-3 text-center {{ $isWeekend && $status === 'off' ? 'opacity-40' : '' }}">
                                         <div @class([
                                             'status-box mx-auto transition-all duration-300 group-hover:scale-110',
-                                            'bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.2)]' => $status === 'present',
-                                            'bg-amber-500 shadow-[0_0_12px_rgba(245,158,11,0.2)]' => $status === 'late',
-                                            'border border-zinc-200 bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800' => $status === 'absent' || $status === 'weekend',
-                                            'bg-zinc-50 dark:bg-zinc-800/30' => $status === 'future',
+                                            'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.25)]' => $status === 'present',
+                                            'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.25)]'   => $status === 'late',
+                                            'border border-zinc-300 bg-zinc-200 dark:border-zinc-600 dark:bg-zinc-700' => $status === 'absent',
+                                            // Sat/Sun off — diagonal stripes via background
+                                            'border border-dashed border-zinc-300 bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800/50' => $status === 'off',
+                                            // Today — brand ring
+                                            'border-2 border-brand-400 bg-brand-50 dark:bg-brand-950/30' => $status === 'today',
+                                            // Future — very faint
+                                            'border border-zinc-100 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900' => $status === 'future',
                                         ])></div>
+                                        @if($status === 'off' && $isWeekend)
+                                            <div class="text-[7px] text-zinc-300 dark:text-zinc-600 mt-0.5 leading-none">off</div>
+                                        @endif
                                     </td>
                                 @endforeach
                             </tr>

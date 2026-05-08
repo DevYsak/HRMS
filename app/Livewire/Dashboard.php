@@ -90,11 +90,9 @@ class Dashboard extends Component
             ->where('year', $year)
             ->get();
 
-        // Attendance Heatmap Data (Last 7 Days)
-        $days = collect();
-        for ($i = 6; $i >= 0; $i--) {
-            $days->push(now()->subDays($i)->startOfDay());
-        }
+        // Attendance Heatmap — current week Mon–Sun
+        $monday = Carbon::now()->startOfWeek(Carbon::MONDAY);
+        $days = collect(range(0, 6))->map(fn ($i) => $monday->copy()->addDays($i));
 
         $dayStrings = $days->map(fn ($d) => $d->toDateString());
 
@@ -107,7 +105,6 @@ class Dashboard extends Component
             ->limit(50)
             ->get()
             ->map(function ($emp) use ($days, $dayStrings) {
-                // Key attendance by YYYY-MM-DD string — handles Carbon, CarbonImmutable and raw strings
                 $attByDate = $emp->attendances->keyBy(
                     fn ($a) => Carbon::parse($a->date)->toDateString()
                 );
@@ -118,11 +115,22 @@ class Dashboard extends Component
                     'days' => $dayStrings->map(function ($dateStr) use ($attByDate, $days) {
                         $d = $days->first(fn ($day) => $day->toDateString() === $dateStr);
                         $att = $attByDate->get($dateStr);
-                        if ($att) {
-                            return $att->is_late ? 'late' : ($att->check_in ? 'present' : 'absent');
+                        $isWeekend = $d?->isSaturday() || $d?->isSunday();
+
+                        if ($att && $att->check_in) {
+                            // Clocked in even on weekend — show actual status
+                            return $att->is_late ? 'late' : 'present';
                         }
 
-                        return $d?->isWeekend() ? 'weekend' : ($d?->isPast() ? 'absent' : 'future');
+                        if ($isWeekend) {
+                            return 'off'; // Sat/Sun with no attendance = off day
+                        }
+
+                        if (! $d || $d->isFuture()) {
+                            return 'future';
+                        }
+
+                        return $d->isToday() ? 'today' : 'absent';
                     }),
                 ];
             });
