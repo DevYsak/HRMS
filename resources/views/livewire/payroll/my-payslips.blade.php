@@ -113,7 +113,7 @@
                                     <div>
                                         <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Employee</div>
                                         <div class="font-bold mt-2">{{ $selectedSlip->employee->user->name }}</div>
-                                        <div class="text-sm text-zinc-500">{{ $selectedSlip->employee->jobTitle->name }}</div>
+                                        <div class="text-sm text-zinc-500">{{ $selectedSlip->employee->jobTitle?->name ?? '—' }}</div>
                                     </div>
                                     <div class="text-right">
                                         <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Payslip</div>
