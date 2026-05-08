@@ -420,7 +420,7 @@
         </div>
 
         {{-- Holidays this month --}}
-        @if($monthHolidays->isNotEmpty())
+        @if(count($monthHolidays) > 0)
             <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm p-4">
                 <h3 class="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3 flex items-center gap-2">
                     <flux:icon.sparkles class="size-3.5 text-blue-500" /> Holidays · {{ $calendarMonth->format('M Y') }}
