@@ -589,16 +589,10 @@
                                 </p>
                             </div>
                         </div>
-                        <div class="flex gap-2">
-                            <button
-                                class="flex size-8 items-center justify-center rounded-lg border border-emerald-500/20 bg-emerald-500/10 text-emerald-500 transition-all hover:bg-emerald-500 hover:text-white active:scale-90">
-                                <flux:icon.check class="size-4" />
-                            </button>
-                            <button
-                                class="flex size-8 items-center justify-center rounded-lg border border-rose-500/20 bg-rose-500/10 text-rose-500 transition-all hover:bg-rose-500 hover:text-white active:scale-90">
-                                <flux:icon.x-mark class="size-4" />
-                            </button>
-                        </div>
+                        <a href="{{ route('time-off.employees') }}" wire:navigate
+                            class="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-brand-50 dark:bg-brand-950/30 text-brand-600 dark:text-brand-400 text-[10px] font-bold hover:bg-brand-100 transition-colors">
+                            Review <flux:icon.chevron-right class="size-3" />
+                        </a>
                     </div>
                 @empty
                     <div class="flex flex-col items-center justify-center py-10">
