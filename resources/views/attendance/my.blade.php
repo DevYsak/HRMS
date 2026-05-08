@@ -7,30 +7,33 @@
 }" x-init="updateClock(); setInterval(() => updateClock(), 1000)">
 
 @php
-    $totalWorkingDays = 0;
     $presentCount = (int)($stats['present'] ?? 0);
-    // Calculate working days for attendance %
-    $periodStart = match($statsPeriod) {
+    $lateCount    = (int)($stats['late'] ?? 0);
+    $absentCount  = (int)($stats['absent'] ?? 0);
+    $leaveCount   = (int)($stats['leaves'] ?? 0);
+
+    // Calculate working days (Mon–Sat) using Carbon's built-in — no manual loop
+    $pStart = match($statsPeriod) {
         'last_month' => now()->subMonth()->startOfMonth(),
         '3_months'   => now()->subMonths(2)->startOfMonth(),
         'year'       => now()->startOfYear(),
         default      => now()->startOfMonth(),
     };
-    $periodEnd = match($statsPeriod) {
+    $pEnd = match($statsPeriod) {
         'last_month' => now()->subMonth()->endOfMonth(),
-        default      => now()->endOfMonth(),
+        default      => now()->endOfDay(),
     };
-    for ($d = $periodStart->copy(); $d->lte($periodEnd) && $d->lte(now()); $d->addDay()) {
-        if (!$d->isSunday()) $totalWorkingDays++;
-    }
-    $attPct = $totalWorkingDays > 0 ? round(($presentCount / $totalWorkingDays) * 100, 1) : 0;
+    // Cap end at today so we don't count future days
+    if ($pEnd->gt(now())) { $pEnd = now(); }
 
-    $lateCount    = (int)($stats['late'] ?? 0);
-    $absentCount  = (int)($stats['absent'] ?? 0);
-    $leaveCount   = (int)($stats['leaves'] ?? 0);
+    $totalWorkingDays = max(1, (int) $pStart->diffInDaysFiltered(
+        fn(\Carbon\Carbon $d) => !$d->isSunday(),
+        $pEnd
+    ));
 
-    $latePct   = $totalWorkingDays > 0 ? round(($lateCount / $totalWorkingDays) * 100) : 0;
-    $absentPct = $totalWorkingDays > 0 ? round(($absentCount / $totalWorkingDays) * 100) : 0;
+    $attPct    = round(($presentCount / $totalWorkingDays) * 100, 1);
+    $latePct   = round(($lateCount    / $totalWorkingDays) * 100);
+    $absentPct = round(($absentCount  / $totalWorkingDays) * 100);
 @endphp
 
 {{-- ═══════════════════════════════════════════════
