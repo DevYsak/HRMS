@@ -154,72 +154,147 @@
     </div>
 
     {{-- ─── ANALYTICS SECTION ─── --}}
+    @php
+        $maxWeekday   = max(array_max($weeklyPattern), 1);
+        $maxMonthly   = max(array_max($monthlyStats), 1);
+        $totalUsed    = array_sum($weeklyPattern);
+        $dayLabels    = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+        $dayShort     = ['M','T','W','T','F','S','S'];
+        $monthShort   = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    @endphp
     <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
 
-        {{-- Weekly Pattern --}}
+        {{-- ── Weekly Pattern ── --}}
         <div class="rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-            <div class="mb-5 flex items-center gap-2">
-                <div class="rounded-lg bg-violet-50 p-1.5 dark:bg-violet-900/20">
-                    <flux:icon.calendar class="size-4 text-violet-600 dark:text-violet-400" />
-                </div>
-                <h3 class="text-xs font-black uppercase tracking-[0.12em] text-zinc-600 dark:text-zinc-300">Weekly Pattern</h3>
-            </div>
-            @php $dayLabels = ['M','T','W','T','F','S','S']; $dayFull = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']; @endphp
-            <div class="flex h-20 items-end gap-1.5">
-                @foreach($dayLabels as $i => $d)
-                    <div class="flex flex-1 flex-col items-center gap-1.5">
-                        <div class="w-full rounded-lg transition-all duration-500"
-                            style="height: {{ $weeklyPattern[$i] ? '100%' : '28%' }}; background-color: {{ $weeklyPattern[$i] ? '#7c3aed' : '#f4f4f5' }};"
-                            title="{{ $dayFull[$i] }}">
-                        </div>
-                        <span class="text-[9px] font-bold uppercase text-zinc-400">{{ $d }}</span>
+            <div class="mb-1 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <div class="rounded-lg bg-violet-50 p-1.5 dark:bg-violet-900/20">
+                        <flux:icon.calendar class="size-4 text-violet-600 dark:text-violet-400" />
                     </div>
-                @endforeach
+                    <h3 class="text-xs font-black uppercase tracking-[0.12em] text-zinc-600 dark:text-zinc-300">Weekly Pattern</h3>
+                </div>
+                <span class="text-[10px] font-bold text-violet-600 dark:text-violet-400">{{ $totalUsed }}d this year</span>
             </div>
-            <p class="mt-4 text-[11px] leading-relaxed text-zinc-400">Weekdays you've taken leave this year.</p>
+            <p class="mb-4 text-[11px] text-zinc-400">Approved leave days taken per weekday.</p>
+
+            @if($totalUsed === 0)
+                <div class="flex flex-col items-center justify-center py-6 text-center">
+                    <flux:icon.calendar class="size-8 mb-2 text-zinc-200 dark:text-zinc-700" />
+                    <p class="text-xs font-medium text-zinc-400">No approved leave taken yet this year.</p>
+                </div>
+            @else
+                <div class="flex items-end gap-1.5 h-24">
+                    @foreach($dayShort as $i => $d)
+                        @php
+                            $count  = $weeklyPattern[$i];
+                            $pct    = $maxWeekday > 0 ? round(($count / $maxWeekday) * 100) : 0;
+                            $height = max(8, $pct);
+                            $isWknd = $i >= 5;
+                        @endphp
+                        <div class="flex flex-1 flex-col items-center gap-1">
+                            @if($count > 0)
+                                <span class="text-[9px] font-black text-violet-600 dark:text-violet-400">{{ $count }}</span>
+                            @else
+                                <span class="text-[9px] text-transparent">0</span>
+                            @endif
+                            <div class="w-full rounded-md transition-all duration-500 relative group"
+                                style="height: {{ $height }}%; min-height: 6px; background: {{ $count > 0 ? ($isWknd ? '#a78bfa' : '#7c3aed') : '#f4f4f5' }};"
+                                title="{{ $dayLabels[$i] }}: {{ $count }} day(s)">
+                            </div>
+                            <span class="text-[9px] font-bold uppercase {{ $count > 0 ? 'text-zinc-600 dark:text-zinc-300' : 'text-zinc-300 dark:text-zinc-600' }}">{{ $d }}</span>
+                        </div>
+                    @endforeach
+                </div>
+            @endif
         </div>
 
-        {{-- CSL Donut --}}
+        {{-- ── Leave Distribution ── --}}
         <div class="rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-            <div class="mb-5 flex items-center gap-2">
+            <div class="mb-1 flex items-center gap-2">
                 <div class="rounded-lg bg-violet-50 p-1.5 dark:bg-violet-900/20">
                     <flux:icon.chart-pie class="size-4 text-violet-600 dark:text-violet-400" />
                 </div>
                 <h3 class="text-xs font-black uppercase tracking-[0.12em] text-zinc-600 dark:text-zinc-300">Leave Distribution</h3>
             </div>
-            <div class="flex items-center gap-5">
-                <div class="relative h-32 w-32 shrink-0">
-                    <canvas id="cslDonut" class="absolute inset-0"></canvas>
-                    <div class="absolute inset-0 flex flex-col items-center justify-center">
-                        <span class="text-xl font-black text-zinc-900 dark:text-white">{{ $cslData['used'] }}</span>
-                        <span class="text-[9px] font-bold uppercase text-zinc-400">used</span>
-                    </div>
+            <p class="mb-4 text-[11px] text-zinc-400">Usage across all leave types this year.</p>
+
+            @if($balances->isEmpty())
+                <div class="flex flex-col items-center justify-center py-6 text-center">
+                    <flux:icon.chart-pie class="size-8 mb-2 text-zinc-200 dark:text-zinc-700" />
+                    <p class="text-xs font-medium text-zinc-400">No leave balances found.</p>
                 </div>
-                <div class="space-y-2.5">
-                    <span class="text-[10px] font-bold uppercase tracking-wider text-zinc-400">{{ $cslData['label'] }}</span>
-                    <div class="flex items-center gap-2">
-                        <div class="size-2 rounded-full" style="background: {{ $cslData['color'] }}"></div>
-                        <span class="text-xs font-bold text-zinc-700 dark:text-zinc-300">{{ $cslData['used'] }} days used</span>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <div class="size-2 rounded-full bg-zinc-200 dark:bg-zinc-700"></div>
-                        <span class="text-xs text-zinc-400">{{ $cslData['remaining'] }} remaining</span>
-                    </div>
+            @else
+                <div class="space-y-3">
+                    @foreach($balances as $bal)
+                        @php
+                            $alloc   = (float) $bal->allocated_days;
+                            $used    = (float) $bal->used_days;
+                            $pctUsed = $alloc > 0 ? min(100, round(($used / $alloc) * 100)) : 0;
+                            $color   = $bal->leaveType->color ?? '#7c3aed';
+                        @endphp
+                        <div>
+                            <div class="flex items-center justify-between mb-1">
+                                <div class="flex items-center gap-1.5">
+                                    <div class="size-2 rounded-full shrink-0" style="background: {{ $color }}"></div>
+                                    <span class="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300">{{ $bal->leaveType->name }}</span>
+                                </div>
+                                <span class="text-[11px] text-zinc-500">
+                                    <span class="font-bold text-zinc-900 dark:text-white">{{ (int)$used }}</span> / {{ (int)$alloc }}d
+                                </span>
+                            </div>
+                            <div class="h-2 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                                <div class="h-full rounded-full transition-all duration-700"
+                                    style="width: {{ $pctUsed }}%; background: {{ $color }}"></div>
+                            </div>
+                        </div>
+                    @endforeach
                 </div>
-            </div>
+            @endif
         </div>
 
-        {{-- Monthly Trend --}}
+        {{-- ── Monthly Trend ── --}}
         <div class="rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-            <div class="mb-5 flex items-center gap-2">
-                <div class="rounded-lg bg-violet-50 p-1.5 dark:bg-violet-900/20">
-                    <flux:icon.chart-bar class="size-4 text-violet-600 dark:text-violet-400" />
+            <div class="mb-1 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <div class="rounded-lg bg-violet-50 p-1.5 dark:bg-violet-900/20">
+                        <flux:icon.chart-bar class="size-4 text-violet-600 dark:text-violet-400" />
+                    </div>
+                    <h3 class="text-xs font-black uppercase tracking-[0.12em] text-zinc-600 dark:text-zinc-300">Monthly Trend</h3>
                 </div>
-                <h3 class="text-xs font-black uppercase tracking-[0.12em] text-zinc-600 dark:text-zinc-300">Monthly Trend</h3>
+                <span class="text-[10px] font-bold text-zinc-400">{{ now()->year }}</span>
             </div>
-            <div class="h-28 w-full">
-                <canvas id="monthlyBar"></canvas>
-            </div>
+            <p class="mb-4 text-[11px] text-zinc-400">Days of approved leave per month.</p>
+
+            @if(array_sum($monthlyStats) === 0)
+                <div class="flex flex-col items-center justify-center py-6 text-center">
+                    <flux:icon.chart-bar class="size-8 mb-2 text-zinc-200 dark:text-zinc-700" />
+                    <p class="text-xs font-medium text-zinc-400">No leave data for {{ now()->year }} yet.</p>
+                </div>
+            @else
+                {{-- Pure CSS bar chart — no Chart.js, no CDN --}}
+                <div class="flex items-end gap-1 h-24">
+                    @foreach($monthlyStats as $mi => $days)
+                        @php
+                            $barPct    = $maxMonthly > 0 ? round(($days / $maxMonthly) * 100) : 0;
+                            $barH      = max(4, $barPct);
+                            $isCurrent = ($mi + 1) === now()->month;
+                        @endphp
+                        <div class="flex flex-1 flex-col items-center gap-1">
+                            @if($days > 0)
+                                <span class="text-[8px] font-black text-violet-600">{{ $days }}</span>
+                            @else
+                                <span class="text-[8px] text-transparent">0</span>
+                            @endif
+                            <div class="w-full rounded-t-md transition-all duration-500"
+                                style="height: {{ $barH }}%; min-height: 4px; background: {{ $days > 0 ? '#7c3aed' : '#f4f4f5' }}; {{ $isCurrent && $days > 0 ? 'box-shadow: 0 0 0 2px #7c3aed40;' : '' }}">
+                            </div>
+                            <span class="text-[8px] font-bold {{ $isCurrent ? 'text-violet-600 dark:text-violet-400' : 'text-zinc-300 dark:text-zinc-600' }}">
+                                {{ substr($monthShort[$mi], 0, 1) }}
+                            </span>
+                        </div>
+                    @endforeach
+                </div>
+            @endif
         </div>
     </div>
 
@@ -524,72 +599,5 @@
         </div>
     </flux:modal>
 
-    {{-- Chart.js --}}
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script>
-        function initTimeOffCharts() {
-            // Destroy existing chart instances to prevent duplication on re-render
-            ['cslDonut','monthlyBar'].forEach(id => {
-                const el = document.getElementById(id);
-                if (el) {
-                    const existing = Chart.getChart(el);
-                    if (existing) existing.destroy();
-                }
-            });
-            try {
-                const donutEl = document.getElementById('cslDonut');
-                if (donutEl) {
-                    new Chart(donutEl.getContext('2d'), {
-                        type: 'doughnut',
-                        data: {
-                            labels: ['Used', 'Remaining'],
-                            datasets: [{
-                                data: [parseFloat(@json($cslData['used'])), parseFloat(@json($cslData['remaining']))],
-                                backgroundColor: [@json($cslData['color']), '#f4f4f5'],
-                                borderWidth: 0,
-                                borderRadius: 4,
-                            }]
-                        },
-                        options: {
-                            maintainAspectRatio: false,
-                            cutout: '72%',
-                            plugins: { legend: { display: false } }
-                        }
-                    });
-                }
-
-                const barEl = document.getElementById('monthlyBar');
-                if (barEl) {
-                    new Chart(barEl.getContext('2d'), {
-                        type: 'bar',
-                        data: {
-                            labels: ['J','F','M','A','M','J','J','A','S','O','N','D'],
-                            datasets: [{
-                                label: 'Days off',
-                                data: @json($monthlyStats),
-                                backgroundColor: 'rgba(124,58,237,0.12)',
-                                borderColor: '#7c3aed',
-                                borderWidth: 2,
-                                borderRadius: 5,
-                            }]
-                        },
-                        options: {
-                            maintainAspectRatio: false,
-                            scales: {
-                                x: { grid: { display: false }, border: { display: false }, ticks: { font: { size: 9 }, color: '#a1a1aa' } },
-                                y: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 9 }, color: '#a1a1aa' }, grid: { color: 'rgba(0,0,0,0.04)' }, border: { display: false } }
-                            },
-                            plugins: { legend: { display: false } }
-                        }
-                    });
-                }
-            } catch (e) {
-                console.error('Chart init error', e);
-            }
-        }
-        // Livewire 4: use DOMContentLoaded + livewire:navigated
-        document.addEventListener('DOMContentLoaded', initTimeOffCharts);
-        document.addEventListener('livewire:navigated', initTimeOffCharts);
-    </script>
 
 </flux:main>

@@ -242,16 +242,19 @@ class MyTimeOff extends Component
                 })->get()
             : collect();
 
-        // Weekly pattern (Mon-Sun) boolean flags for whether any leave day exists on that weekday this year
-        $weeklyPattern = array_fill(0, 7, false); // 0=Mon ... 6=Sun
+        // Weekly pattern (Mon-Sun): count of leave days taken per weekday this year
+        $weeklyPattern = array_fill(0, 7, 0); // 0=Mon ... 6=Sun
         // Monthly stats (Jan..Dec) - number of leave days per month
         $monthlyStats = array_fill(0, 12, 0);
 
         foreach ($requestsForYear as $r) {
+            if ($r->status !== 'approved') {
+                continue;
+            }
+
             $start = $r->start_date->copy();
             $end = $r->end_date->copy();
 
-            // clamp to current year
             $yearStart = now()->startOfYear();
             $yearEnd = now()->endOfYear();
 
@@ -262,17 +265,12 @@ class MyTimeOff extends Component
                 $end = $yearEnd->copy();
             }
 
-            // Protect against unexpectedly large ranges by capping iteration to one year (366 days)
-            $daysCount = $start->diffInDays($end) + 1;
-            $maxDaysLimit = 366;
-            if ($daysCount > $maxDaysLimit) {
-                $daysCount = $maxDaysLimit;
-            }
+            $daysCount = min($start->diffInDays($end) + 1, 366);
 
             for ($i = 0; $i < $daysCount; $i++) {
                 $cursor = $start->copy()->addDays($i);
                 $dow = $cursor->dayOfWeekIso; // 1..7 (Mon..Sun)
-                $weeklyPattern[$dow - 1] = true;
+                $weeklyPattern[$dow - 1]++;
                 $monthlyStats[$cursor->month - 1]++;
             }
         }
