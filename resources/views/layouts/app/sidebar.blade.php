@@ -89,41 +89,13 @@
                  ════════════════════════════════════════════ --}}
             @if($pureEmployee)
 
+                {{-- Home --}}
                 <flux:sidebar.item icon="home" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>
-                    Home
+                    Dashboard
                 </flux:sidebar.item>
 
-                <flux:sidebar.group heading="Me" icon="user-circle" :expandable="true"
-                    :expanded="request()->routeIs('attendance.my', 'time-off.my', 'overtime.my')">
-                    <flux:sidebar.item :href="route('attendance.my')" :current="request()->routeIs('attendance.my')" wire:navigate>Attendance</flux:sidebar.item>
-                    <flux:sidebar.item :href="route('time-off.my')"   :current="request()->routeIs('time-off.my')"   wire:navigate>Leave</flux:sidebar.item>
-                    <flux:sidebar.item :href="route('overtime.my')"   :current="request()->routeIs('overtime.my')"   wire:navigate>Overtime</flux:sidebar.item>
-                </flux:sidebar.group>
-
-                <flux:sidebar.group heading="Performance" icon="arrow-trending-up" :expandable="true"
-                    :expanded="request()->routeIs('performance.my', 'performance.goals')">
-                    <flux:sidebar.item :href="route('performance.my')"    :current="request()->routeIs('performance.my')"    wire:navigate>My Review</flux:sidebar.item>
-                    <flux:sidebar.item :href="route('performance.goals')" :current="request()->routeIs('performance.goals')" wire:navigate>My Goals</flux:sidebar.item>
-                </flux:sidebar.group>
-
-                <flux:sidebar.group heading="Finance" icon="banknotes" :expandable="true"
-                    :expanded="request()->routeIs('payroll.payslips', 'payroll.reimbursements', 'operations.expenses')">
-                    <flux:sidebar.item :href="route('payroll.payslips')"       :current="request()->routeIs('payroll.payslips')"       wire:navigate>My Payslips</flux:sidebar.item>
-                    <flux:sidebar.item :href="route('operations.expenses')"    :current="request()->routeIs('operations.expenses')"    wire:navigate>Expense Claims</flux:sidebar.item>
-                    <flux:sidebar.item :href="route('payroll.reimbursements')" :current="request()->routeIs('payroll.reimbursements')" wire:navigate>Reimbursements</flux:sidebar.item>
-                </flux:sidebar.group>
-
-                <flux:sidebar.item icon="document-text" :href="route('documents.index')" :current="request()->routeIs('documents.*')" wire:navigate>
-                    Documents
-                </flux:sidebar.item>
-
-                <flux:sidebar.group heading="Company" icon="building-office" :expandable="true"
-                    :expanded="request()->routeIs('employees.directory', 'employees.org-chart')">
-                    <flux:sidebar.item :href="route('employees.directory')" :current="request()->routeIs('employees.directory')" wire:navigate>Directory</flux:sidebar.item>
-                    <flux:sidebar.item :href="route('employees.org-chart')" :current="request()->routeIs('employees.org-chart')" wire:navigate>Org Chart</flux:sidebar.item>
-                </flux:sidebar.group>
-
-                <flux:sidebar.item icon="inbox" href="{{ $inboxRoute }}" :current="request()->routeIs('notifications.*')">
+                {{-- Inbox --}}
+                <flux:sidebar.item icon="inbox" href="{{ $inboxRoute }}" :current="request()->routeIs('notifications.*')" wire:navigate>
                     <div class="flex items-center gap-2">
                         Inbox
                         @if($unread > 0)
@@ -131,6 +103,58 @@
                         @endif
                     </div>
                 </flux:sidebar.item>
+
+                {{-- My Work --}}
+                <flux:sidebar.group heading="My Work" icon="user-circle" :expandable="true"
+                    :expanded="request()->routeIs('attendance.my', 'time-off.my', 'overtime.my')">
+                    <flux:sidebar.item :href="route('attendance.my')" :current="request()->routeIs('attendance.my')" wire:navigate>
+                        Attendance
+                    </flux:sidebar.item>
+                    <flux:sidebar.item :href="route('time-off.my')" :current="request()->routeIs('time-off.my')" wire:navigate>
+                        Leave
+                    </flux:sidebar.item>
+                    <flux:sidebar.item :href="route('overtime.my')" :current="request()->routeIs('overtime.my')" wire:navigate>
+                        Overtime
+                    </flux:sidebar.item>
+                </flux:sidebar.group>
+
+                {{-- Finance — reimbursements removed (requires run-payroll, 403 for employee) --}}
+                <flux:sidebar.group heading="Finance" icon="banknotes" :expandable="true"
+                    :expanded="request()->routeIs('payroll.payslips', 'operations.expenses')">
+                    <flux:sidebar.item :href="route('payroll.payslips')" :current="request()->routeIs('payroll.payslips')" wire:navigate>
+                        My Payslips
+                    </flux:sidebar.item>
+                    <flux:sidebar.item :href="route('operations.expenses')" :current="request()->routeIs('operations.expenses')" wire:navigate>
+                        Expense Claims
+                    </flux:sidebar.item>
+                </flux:sidebar.group>
+
+                {{-- Performance --}}
+                <flux:sidebar.group heading="Performance" icon="arrow-trending-up" :expandable="true"
+                    :expanded="request()->routeIs('performance.my', 'performance.goals')">
+                    <flux:sidebar.item :href="route('performance.my')" :current="request()->routeIs('performance.my')" wire:navigate>
+                        My Review
+                    </flux:sidebar.item>
+                    <flux:sidebar.item :href="route('performance.goals')" :current="request()->routeIs('performance.goals')" wire:navigate>
+                        My Goals
+                    </flux:sidebar.item>
+                </flux:sidebar.group>
+
+                {{-- Documents --}}
+                <flux:sidebar.item icon="document-text" :href="route('documents.index')" :current="request()->routeIs('documents.*')" wire:navigate>
+                    Documents
+                </flux:sidebar.item>
+
+                {{-- Company --}}
+                <flux:sidebar.group heading="Company" icon="building-office" :expandable="true"
+                    :expanded="request()->routeIs('employees.directory', 'employees.org-chart')">
+                    <flux:sidebar.item :href="route('employees.directory')" :current="request()->routeIs('employees.directory')" wire:navigate>
+                        Directory
+                    </flux:sidebar.item>
+                    <flux:sidebar.item :href="route('employees.org-chart')" :current="request()->routeIs('employees.org-chart')" wire:navigate>
+                        Org Chart
+                    </flux:sidebar.item>
+                </flux:sidebar.group>
 
             {{-- ════════════════════════════════════════════
                  MANAGER SIDEBAR
