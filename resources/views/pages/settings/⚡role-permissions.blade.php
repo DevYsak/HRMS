@@ -56,10 +56,6 @@ new #[Title('Role Permissions')] class extends Component {
         \Flux::toast(RolePermissionService::$configurableRoles[$role] . ' permissions reset to defaults.');
     }
 
-    public function render(): \Illuminate\View\View
-    {
-        return view('pages.settings.role-permissions');
-    }
 };
 
 ?>
