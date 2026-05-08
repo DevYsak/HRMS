@@ -5,10 +5,12 @@ namespace App\Models;
 use App\Concerns\HasTeams;
 use App\Enums\ThemePreference;
 use App\Enums\UserRole;
+use App\Services\RolePermissionService;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -67,37 +69,42 @@ class User extends Authenticatable
 
     public function canManageEmployees(): bool
     {
-        return $this->role?->canManageEmployees() ?? false;
+        return RolePermissionService::check($this->role?->value, 'manage-employees');
     }
 
     public function canApproveLeave(): bool
     {
-        return $this->role?->canApproveLeave() ?? false;
+        return RolePermissionService::check($this->role?->value, 'approve-leave');
     }
 
     public function canRunPayroll(): bool
     {
-        return $this->role?->canRunPayroll() ?? false;
+        return RolePermissionService::check($this->role?->value, 'run-payroll');
     }
 
     public function canApproveOt(): bool
     {
-        return $this->role?->canApproveOt() ?? false;
+        return RolePermissionService::check($this->role?->value, 'approve-ot');
     }
 
     public function canApproveFinance(): bool
     {
-        return $this->role?->canApproveFinance() ?? false;
+        return RolePermissionService::check($this->role?->value, 'approve-finance');
     }
 
     public function canManageDocuments(): bool
     {
-        return $this->role?->canManageDocuments() ?? false;
+        return RolePermissionService::check($this->role?->value, 'manage-documents');
     }
 
     public function canManageSettings(): bool
     {
-        return $this->role?->canManageSettings() ?? false;
+        return RolePermissionService::check($this->role?->value, 'manage-settings');
+    }
+
+    public function canViewReports(): bool
+    {
+        return RolePermissionService::check($this->role?->value, 'view-reports');
     }
 
     public function avatarUrl(): string
@@ -109,7 +116,7 @@ class User extends Authenticatable
         return 'https://ui-avatars.com/api/?name='.urlencode($this->name).'&background=1DB77A&color=fff&size=128';
     }
 
-    public function employee(): \Illuminate\Database\Eloquent\Relations\HasOne
+    public function employee(): HasOne
     {
         return $this->hasOne(Employee::class);
     }

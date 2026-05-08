@@ -224,6 +224,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // --------------------------------------------------
     Route::livewire('settings/general', 'pages::settings.general')->name('settings.general');
 
+    // Role permission management — Super Admin only
+    Route::livewire('settings/role-permissions', 'pages::settings.role-permissions')
+        ->name('settings.role-permissions')
+        ->middleware('role:manage-settings');
+
 });
 
 // ======================================================
