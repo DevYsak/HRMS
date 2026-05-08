@@ -27,7 +27,7 @@
     if ($pEnd->gt(now())) { $pEnd = now(); }
 
     $totalWorkingDays = max(1, (int) $pStart->diffInDaysFiltered(
-        fn(\Carbon\Carbon $d) => !$d->isSunday(),
+        fn($d) => !$d->isSunday(),
         $pEnd
     ));
 
