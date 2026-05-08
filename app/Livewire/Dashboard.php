@@ -107,10 +107,9 @@ class Dashboard extends Component
             ->limit(50)
             ->get()
             ->map(function ($emp) use ($days, $dayStrings) {
-                // Key attendance by date string for O(1) lookup — avoids Carbon::parse() in loop
-                $attByDate = $emp->attendances->keyBy(fn ($a) => $a->date instanceof \Carbon\Carbon
-                    ? $a->date->toDateString()
-                    : (string) $a->date
+                // Key attendance by YYYY-MM-DD string — handles Carbon, CarbonImmutable and raw strings
+                $attByDate = $emp->attendances->keyBy(
+                    fn ($a) => Carbon::parse($a->date)->toDateString()
                 );
 
                 return [
