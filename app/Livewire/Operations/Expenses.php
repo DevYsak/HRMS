@@ -40,6 +40,10 @@ class Expenses extends Component
 
     public string $filterMonth = '';
 
+    public string $filterCategory = '';
+
+    public string $search = '';
+
     public function updatingFilterStatus(): void
     {
         $this->resetPage();
@@ -47,6 +51,25 @@ class Expenses extends Component
 
     public function updatingFilterMonth(): void
     {
+        $this->resetPage();
+    }
+
+    public function updatingFilterCategory(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatingSearch(): void
+    {
+        $this->resetPage();
+    }
+
+    public function clearFilters(): void
+    {
+        $this->filterStatus = '';
+        $this->filterMonth = '';
+        $this->filterCategory = '';
+        $this->search = '';
         $this->resetPage();
     }
 
@@ -171,8 +194,10 @@ class Expenses extends Component
 
         $expenses = $expensesQuery
             ->when($this->filterStatus, fn ($q) => $q->where('status', $this->filterStatus))
+            ->when($this->filterCategory, fn ($q) => $q->where('category', $this->filterCategory))
             ->when($this->filterMonth, fn ($q) => $q->whereYear('expense_date', substr($this->filterMonth, 0, 4))->whereMonth('expense_date', substr($this->filterMonth, 5, 2)))
-            ->latest()
+            ->when($this->search, fn ($q) => $q->where(fn ($q2) => $q2->where('title', 'like', '%'.$this->search.'%')->orWhere('notes', 'like', '%'.$this->search.'%')))
+            ->latest('expense_date')
             ->paginate(15);
 
         return view('livewire.operations.expenses', [

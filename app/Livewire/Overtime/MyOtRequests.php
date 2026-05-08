@@ -103,16 +103,56 @@ class MyOtRequests extends Component
         $this->resetPage();
     }
 
+    public string $filterStatus = '';
+
+    public string $filterMonth = '';
+
+    public function updatingFilterStatus(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatingFilterMonth(): void
+    {
+        $this->resetPage();
+    }
+
+    public function clearFilters(): void
+    {
+        $this->filterStatus = '';
+        $this->filterMonth = '';
+        $this->resetPage();
+    }
+
     public function render()
     {
         $employee = Auth::user()->employee;
 
-        $requests = $employee
-            ? $employee->otRequests()->with('reviewer')->latest()->paginate(10)
-            : collect();
+        $query = $employee
+            ? $employee->otRequests()->with('reviewer')
+            : OtRequest::whereNull('id');
+
+        if ($this->filterStatus) {
+            $query->where('status', $this->filterStatus);
+        }
+
+        if ($this->filterMonth) {
+            [$y, $m] = explode('-', $this->filterMonth);
+            $query->whereYear('work_date', $y)->whereMonth('work_date', $m);
+        }
+
+        $requests = $query->latest('work_date')->paginate(10);
+
+        $summary = $employee ? [
+            'total' => $employee->otRequests()->count(),
+            'approved' => $employee->otRequests()->where('status', 'approved')->count(),
+            'pending' => $employee->otRequests()->where('status', 'pending')->count(),
+            'hours' => round($employee->otRequests()->where('status', 'approved')->sum('requested_hours'), 1),
+        ] : ['total' => 0, 'approved' => 0, 'pending' => 0, 'hours' => 0];
 
         return view('livewire.overtime.my-ot-requests', [
             'requests' => $requests,
+            'summary' => $summary,
         ])->layout('layouts.app', ['title' => 'My OT Requests']);
     }
 }

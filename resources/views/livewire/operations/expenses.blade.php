@@ -29,17 +29,33 @@
     </div>
 
     {{-- ─── FILTERS ─── --}}
-    <div class="flex flex-wrap items-center gap-3">
-        <flux:select wire:model.live="filterStatus" class="w-36 text-sm" placeholder="All Statuses">
-            <flux:select.option value="">All Statuses</flux:select.option>
-            <flux:select.option value="pending">Pending</flux:select.option>
-            <flux:select.option value="approved">Approved</flux:select.option>
-            <flux:select.option value="rejected">Rejected</flux:select.option>
-        </flux:select>
-        <flux:input wire:model.live="filterMonth" type="month" class="w-44 text-sm" />
-        @if($filterStatus || $filterMonth)
-            <button wire:click="$set('filterStatus','');$set('filterMonth','')" class="text-xs text-zinc-400 hover:text-zinc-600 underline">Clear</button>
-        @endif
+    <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl px-5 py-4">
+        <div class="flex flex-wrap items-center gap-3">
+            <flux:input wire:model.live.debounce.300ms="search" placeholder="Search title..." icon="magnifying-glass" size="sm" class="w-52" />
+            <flux:select wire:model.live="filterStatus" placeholder="All Status" size="sm" class="w-36">
+                <option value="">All Status</option>
+                <option value="pending">Pending</option>
+                <option value="approved">Approved</option>
+                <option value="rejected">Rejected</option>
+            </flux:select>
+            <flux:select wire:model.live="filterCategory" placeholder="All Categories" size="sm" class="w-40">
+                <option value="">All Categories</option>
+                <option value="Travel">Travel</option>
+                <option value="Food">Food</option>
+                <option value="Equipment">Equipment</option>
+                <option value="Medical">Medical</option>
+                <option value="Training">Training</option>
+                <option value="general">General</option>
+            </flux:select>
+            <flux:input wire:model.live="filterMonth" type="month" size="sm" class="w-44" />
+            @if($filterStatus || $filterMonth || $filterCategory || $search)
+                <button wire:click="clearFilters"
+                    class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-zinc-500 hover:text-zinc-700 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 rounded-lg transition">
+                    <flux:icon.x-mark class="size-3.5" /> Clear
+                </button>
+            @endif
+            <div class="ml-auto text-xs text-zinc-400">{{ $expenses->total() }} records</div>
+        </div>
     </div>
 
     {{-- ─── TABLE ─── --}}
