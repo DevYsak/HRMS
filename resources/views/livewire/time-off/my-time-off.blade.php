@@ -155,8 +155,8 @@
 
     {{-- ─── ANALYTICS SECTION ─── --}}
     @php
-        $maxWeekday   = max(array_max($weeklyPattern), 1);
-        $maxMonthly   = max(array_max($monthlyStats), 1);
+        $maxWeekday   = max(max($weeklyPattern), 1);
+        $maxMonthly   = max(max($monthlyStats), 1);
         $totalUsed    = array_sum($weeklyPattern);
         $dayLabels    = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
         $dayShort     = ['M','T','W','T','F','S','S'];
