@@ -7,7 +7,6 @@
 }" x-init="updateClock(); setInterval(() => updateClock(), 1000)">
 
 @php
-    use Carbon\Carbon;
     $totalWorkingDays = 0;
     $presentCount = (int)($stats['present'] ?? 0);
     // Calculate working days for attendance %
