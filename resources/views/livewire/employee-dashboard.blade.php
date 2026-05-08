@@ -304,38 +304,87 @@
             {{-- ---- BOTTOM 2-PANEL ROW ---- --}}
             <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
 
-                {{-- Inbox / Actions Task List --}}
+                {{-- My Pending Requests --}}
                 <div class="rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-5">
+                    @php
+                        $allPending = collect();
+                        foreach ($pendingLeaveRequests as $lr) {
+                            $allPending->push([
+                                'type'    => 'leave',
+                                'label'   => $lr->leaveType?->name ?? 'Leave',
+                                'sub'     => \Carbon\Carbon::parse($lr->start_date)->format('d M') . ($lr->start_date->toDateString() !== $lr->end_date->toDateString() ? ' – ' . \Carbon\Carbon::parse($lr->end_date)->format('d M') : ''),
+                                'status'  => 'pending',
+                                'url'     => route('time-off.my'),
+                                'icon'    => 'calendar-days',
+                                'color'   => 'text-violet-600 bg-violet-50 dark:bg-violet-950/30',
+                            ]);
+                        }
+                        foreach ($myOtRequests->where('status','pending') as $ot) {
+                            $allPending->push([
+                                'type'    => 'ot',
+                                'label'   => 'OT Request',
+                                'sub'     => \Carbon\Carbon::parse($ot->work_date)->format('d M') . ' · ' . $ot->requested_hours . 'h',
+                                'status'  => 'pending',
+                                'url'     => route('overtime.my'),
+                                'icon'    => 'clock',
+                                'color'   => 'text-amber-600 bg-amber-50 dark:bg-amber-950/30',
+                            ]);
+                        }
+                    @endphp
+
                     <div class="flex items-center justify-between mb-4">
                         <h3 class="text-sm font-bold text-zinc-900 dark:text-white flex items-center gap-2">
-                            <flux:icon.inbox class="size-4 text-rose-500" /> Action Required
+                            <flux:icon.paper-airplane class="size-4 text-indigo-500" /> My Requests
                         </h3>
-                        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-400">
-                            {{ $pendingActions->count() }} TASKS
-                        </span>
+                        @if($allPending->isNotEmpty())
+                            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400">
+                                {{ $allPending->count() }} PENDING
+                            </span>
+                        @endif
                     </div>
 
-                    @if($pendingActions->isEmpty())
+                    @if($allPending->isEmpty())
                         <div class="flex flex-col items-center justify-center py-8 text-zinc-400">
                             <flux:icon.check-badge class="size-10 mb-3 text-emerald-400 opacity-60" />
-                            <p class="text-xs font-medium text-zinc-500">You're all caught up!</p>
+                            <p class="text-xs font-medium text-zinc-500">No pending requests.</p>
+                            <div class="mt-3 flex gap-2">
+                                <a href="{{ route('time-off.my') }}" wire:navigate
+                                    class="px-3 py-1.5 bg-violet-50 dark:bg-violet-950/30 text-violet-600 dark:text-violet-400 text-[10px] font-bold rounded-lg hover:bg-violet-100 transition">
+                                    Apply Leave
+                                </a>
+                                <a href="{{ route('overtime.my') }}" wire:navigate
+                                    class="px-3 py-1.5 bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 text-[10px] font-bold rounded-lg hover:bg-amber-100 transition">
+                                    Log OT
+                                </a>
+                            </div>
                         </div>
                     @else
                         <div class="space-y-2">
-                            @foreach($pendingActions as $action)
-                                <a href="{{ $action['url'] }}" wire:navigate class="flex items-start gap-3 p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/60 hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-transparent hover:border-zinc-200 dark:hover:border-zinc-700 transition cursor-pointer">
-                                    <div class="mt-0.5">
-                                        <div class="size-4 rounded border-2 border-zinc-300 dark:border-zinc-600"></div>
+                            @foreach($allPending as $req)
+                                <a href="{{ $req['url'] }}" wire:navigate
+                                    class="flex items-center gap-3 p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-transparent hover:border-zinc-200 dark:hover:border-zinc-700 transition">
+                                    <div class="size-8 rounded-xl {{ $req['color'] }} flex items-center justify-center shrink-0">
+                                        <flux:icon :name="$req['icon']" class="size-4" />
                                     </div>
-                                    <div class="min-w-0 flex-1">
-                                        <div class="text-sm font-medium text-zinc-900 dark:text-white">
-                                            {{ $action['title'] }}
-                                        </div>
-                                        <div class="text-xs text-zinc-400">{{ \Carbon\Carbon::parse($action['date'])->diffForHumans() }}</div>
+                                    <div class="flex-1 min-w-0">
+                                        <div class="text-xs font-bold text-zinc-900 dark:text-white">{{ $req['label'] }}</div>
+                                        <div class="text-[10px] text-zinc-400 mt-0.5">{{ $req['sub'] }}</div>
                                     </div>
-                                    <flux:icon.chevron-right class="size-4 text-zinc-400 self-center" />
+                                    <span class="shrink-0 text-[9px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                                        PENDING
+                                    </span>
                                 </a>
                             @endforeach
+                        </div>
+                        <div class="mt-3 pt-3 border-t border-zinc-100 dark:border-zinc-800 flex gap-3">
+                            <a href="{{ route('time-off.my') }}" wire:navigate
+                                class="flex-1 text-center py-1.5 bg-violet-50 dark:bg-violet-950/30 text-violet-600 dark:text-violet-400 text-[10px] font-bold rounded-lg hover:bg-violet-100 transition">
+                                + Apply Leave
+                            </a>
+                            <a href="{{ route('overtime.my') }}" wire:navigate
+                                class="flex-1 text-center py-1.5 bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 text-[10px] font-bold rounded-lg hover:bg-amber-100 transition">
+                                + Log OT
+                            </a>
                         </div>
                     @endif
                 </div>
