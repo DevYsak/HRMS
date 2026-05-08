@@ -12,6 +12,7 @@
         ?? new \App\Models\Company(['name' => 'Pulse HRMS', 'primary_color' => '#881819']);
 
     $brand    = '#881819';
+    $curr     = 'Rs.'; // ₹ not supported in DomPDF DejaVu font — use Rs.
     $employee = $payslip->employee;
     $payroll  = $payslip->payroll;
 
@@ -106,9 +107,9 @@
         width: 100%;
     }
     .header-table { width: 100%; border-collapse: collapse; }
-    .header-logo-cell { width: 120px; vertical-align: middle; }
-    .header-center { text-align: center; vertical-align: middle; padding: 0 10px; }
-    .header-right { width: 110px; text-align: right; vertical-align: middle; }
+    .header-logo-cell { width: 110px; vertical-align: middle; }
+    .header-center { text-align: center; vertical-align: middle; padding: 0 8px; }
+    .header-right { width: 100px; text-align: right; vertical-align: middle; }
 
     .logo-img { width: 100px; height: auto; }
     .logo-text {
@@ -142,13 +143,14 @@
     .slip-badge {
         background: {{ $brand }};
         color: #fff;
-        font-size: 9px;
+        font-size: 8px;
         font-weight: 700;
-        letter-spacing: 1.5px;
+        letter-spacing: 1px;
         text-transform: uppercase;
-        padding: 4px 10px 3px;
+        padding: 4px 8px 3px;
         border-radius: 3px;
         display: inline-block;
+        white-space: nowrap;
     }
     .slip-month {
         font-size: 9px;
@@ -413,9 +415,9 @@
             <thead>
                 <tr>
                     <th class="col-desc-e">Earnings &amp; Reimbursements</th>
-                    <th class="col-amt-e right">Amount ({{ $company->currency_symbol ?? '₹' }})</th>
+                    <th class="col-amt-e right">Amount ({{ $curr }})</th>
                     <th class="col-desc-d divider">Deductions &amp; Recoveries</th>
-                    <th class="col-amt-d right">Amount ({{ $company->currency_symbol ?? '₹' }})</th>
+                    <th class="col-amt-d right">Amount ({{ $curr }})</th>
                 </tr>
             </thead>
             <tbody>
@@ -448,7 +450,7 @@
                 <tr class="net">
                     <td colspan="2" class="net-label">Net Pay</td>
                     <td colspan="2" class="net-amount">
-                        {{ $company->currency_symbol ?? '₹' }} {{ number_format($payslip->net_salary, 2) }}
+                        {{ $curr }} {{ number_format($payslip->net_salary, 2) }}
                     </td>
                 </tr>
             </tfoot>
