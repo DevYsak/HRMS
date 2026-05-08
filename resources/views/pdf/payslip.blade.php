@@ -7,349 +7,462 @@
     use Carbon\Carbon;
     use App\Models\Attendance;
     use App\Models\LeaveRequest;
-    use App\Models\PublicHoliday;
 
     $company  = \App\Models\Company::first()
-        ?? new \App\Models\Company(['name' => 'Pulse HRMS', 'primary_color' => '#1DB77A']);
+        ?? new \App\Models\Company(['name' => 'Pulse HRMS', 'primary_color' => '#881819']);
 
+    $brand    = '#881819';
     $employee = $payslip->employee;
     $payroll  = $payslip->payroll;
 
-    // Logo — only embed if GD extension is available (DomPDF requires it for images)
+    // Logo via base64 (requires GD) — graceful fallback to text
     $logoData = null;
-    $gdAvailable = extension_loaded('gd');
-    if ($gdAvailable) {
-        if ($company->logo) {
-            $p = public_path('storage/' . $company->logo);
-            if (file_exists($p)) {
+    if (extension_loaded('gd')) {
+        foreach ([
+            public_path('build/assets/logo-company.png'),
+            public_path('storage/' . $company->logo),
+        ] as $p) {
+            if ($p && file_exists($p)) {
                 $mime     = mime_content_type($p);
                 $logoData = "data:{$mime};base64," . base64_encode(file_get_contents($p));
-            }
-        }
-        if (!$logoData) {
-            $p = public_path('build/assets/logo-company.png');
-            if (file_exists($p)) {
-                $logoData = 'data:image/png;base64,' . base64_encode(file_get_contents($p));
+                break;
             }
         }
     }
 
-    // Cycle date range
+    // Cycle dates
     $monthNum  = Carbon::parse("1 {$payroll->month} {$payroll->year}")->month;
     if ($payroll->cycle === 'cycle_a') {
-        $cycleFrom = Carbon::create($payroll->year, $monthNum, 1)->startOfDay();
-        $cycleTo   = $cycleFrom->copy()->endOfMonth();
+        $from = Carbon::create($payroll->year, $monthNum, 1)->startOfDay();
+        $to   = $from->copy()->endOfMonth();
     } else {
-        $cycleFrom = Carbon::create($payroll->year, $monthNum, 1)->subMonth()->setDay(21)->startOfDay();
-        $cycleTo   = Carbon::create($payroll->year, $monthNum, 20)->endOfDay();
+        $from = Carbon::create($payroll->year, $monthNum, 1)->subMonth()->setDay(21)->startOfDay();
+        $to   = Carbon::create($payroll->year, $monthNum, 20)->endOfDay();
     }
 
-    // Attendance stats
-    $totalDays    = $cycleFrom->diffInDays($cycleTo) + 1;
-    $weekOffDays  = 0;
-    for ($d = $cycleFrom->copy(); $d->lte($cycleTo); $d->addDay()) {
-        if ($d->isSunday()) { $weekOffDays++; }
+    // Attendance stats — use integers throughout
+    $totalDays   = (int) ($from->diffInDays($to) + 1);
+    $weekOff     = 0;
+    for ($d = $from->copy(); $d->lte($to); $d->addDay()) {
+        if ($d->isSunday()) $weekOff++;
     }
-    $paidDays    = $totalDays - $weekOffDays;
+    $paidDays    = $totalDays - $weekOff;
+    $presentDays = (int) Attendance::where('employee_id', $employee->id)
+        ->whereBetween('date', [$from->toDateString(), $to->toDateString()])
+        ->whereNotNull('check_in')->count();
 
-    $presentDays = Attendance::where('employee_id', $employee->id)
-        ->whereBetween('date', [$cycleFrom->toDateString(), $cycleTo->toDateString()])
-        ->whereNotNull('check_in')
-        ->count();
-
-    $approvedLeaveDays = 0;
-    $leaveRequests = LeaveRequest::where('employee_id', $employee->id)
+    $leaveDays = 0;
+    LeaveRequest::where('employee_id', $employee->id)
         ->where('status', 'approved')
-        ->whereBetween('start_date', [$cycleFrom->toDateString(), $cycleTo->toDateString()])
-        ->get();
-    foreach ($leaveRequests as $lr) {
-        $s = Carbon::parse($lr->start_date)->max($cycleFrom);
-        $e = Carbon::parse($lr->end_date)->min($cycleTo);
-        if ($s->lte($e)) { $approvedLeaveDays += $s->diffInDays($e) + 1; }
-    }
+        ->where('start_date', '<=', $to->toDateString())
+        ->where('end_date', '>=', $from->toDateString())
+        ->get()
+        ->each(function ($lr) use ($from, $to, &$leaveDays) {
+            $s = Carbon::parse($lr->start_date)->max($from);
+            $e = Carbon::parse($lr->end_date)->min($to);
+            if ($s->lte($e)) $leaveDays += (int)($s->diffInDays($e) + 1);
+        });
 
-    $lwp = max(0, $paidDays - $presentDays - $approvedLeaveDays);
+    $lwp = max(0, $paidDays - $presentDays - $leaveDays);
 
-    // Earnings & Deductions
+    // Items
     $earnings   = $payslip->items->where('type', 'earning')->values();
     $deductions = $payslip->items->where('type', 'deduction')->values();
     $maxRows    = max($earnings->count(), $deductions->count());
 
-    $monthLabel = Carbon::parse("1 {$payroll->month} {$payroll->year}")->format('F-Y');
+    $monthLabel   = Carbon::parse("1 {$payroll->month} {$payroll->year}")->format('F Y');
+    $cycleLabel   = $payroll->cycle === 'cycle_a' ? '1st – Last' : '21st – 20th';
     $joiningLabel = $employee->joining_date
-        ? Carbon::parse($employee->joining_date)->format('F-Y')
-        : '—';
+        ? Carbon::parse($employee->joining_date)->format('F Y') : '—';
 @endphp
 <style>
+    @page { margin: 0; size: A4; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
+
     body {
         font-family: 'DejaVu Sans', Arial, sans-serif;
-        font-size: 9.5px;
-        color: #222;
-        padding: 22px 28px;
+        font-size: 9px;
+        color: #1a1a1a;
         background: #fff;
     }
 
-    /* ── TOP HEADER ── */
-    .top-header {
+    /* ── OUTER WRAPPER ── */
+    .page {
+        padding: 0;
         width: 100%;
-        margin-bottom: 10px;
-        border-bottom: 2px solid #333;
-        padding-bottom: 8px;
     }
-    .logo-cell { width: 90px; vertical-align: middle; }
-    .logo-cell img { width: 80px; height: auto; }
-    .logo-cell .company-text {
-        font-size: 18px;
+
+    /* ── TOP COLOR BAND ── */
+    .top-band {
+        background: {{ $brand }};
+        height: 6px;
+        width: 100%;
+    }
+
+    /* ── HEADER ── */
+    .header {
+        padding: 18px 28px 14px;
+        border-bottom: 1px solid #e0e0e0;
+        width: 100%;
+    }
+    .header-table { width: 100%; border-collapse: collapse; }
+    .header-logo-cell { width: 120px; vertical-align: middle; }
+    .header-center { text-align: center; vertical-align: middle; padding: 0 10px; }
+    .header-right { width: 110px; text-align: right; vertical-align: middle; }
+
+    .logo-img { width: 100px; height: auto; }
+    .logo-text {
+        font-size: 22px;
         font-weight: 900;
-        color: {{ $company->primary_color }};
+        color: {{ $brand }};
         letter-spacing: -0.5px;
+        line-height: 1;
     }
-    .company-info-cell { text-align: center; vertical-align: middle; }
-    .company-info-cell .company-name {
-        font-size: 13px;
+    .logo-sub {
+        font-size: 7px;
+        color: #999;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        margin-top: 1px;
+    }
+
+    .company-name {
+        font-size: 14px;
         font-weight: 700;
         color: #111;
-        margin-bottom: 2px;
+        letter-spacing: 0.2px;
     }
-    .company-info-cell .company-addr {
-        font-size: 8.5px;
-        color: #555;
-        line-height: 1.5;
+    .company-detail {
+        font-size: 8px;
+        color: #666;
+        margin-top: 2px;
+        line-height: 1.6;
+    }
+
+    .slip-badge {
+        background: {{ $brand }};
+        color: #fff;
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 1.5px;
+        text-transform: uppercase;
+        padding: 4px 10px 3px;
+        border-radius: 3px;
+        display: inline-block;
+    }
+    .slip-month {
+        font-size: 9px;
+        color: #888;
+        margin-top: 5px;
+        font-weight: 600;
+    }
+
+    /* ── SECTION TITLE ── */
+    .section-title {
+        font-size: 7.5px;
+        font-weight: 700;
+        letter-spacing: 1.5px;
+        text-transform: uppercase;
+        color: {{ $brand }};
+        padding: 7px 28px 4px;
+        border-top: 1px solid #eee;
     }
 
     /* ── EMPLOYEE INFO ── */
-    .info-table {
+    .emp-table {
         width: 100%;
-        margin-bottom: 0;
         border-collapse: collapse;
+        margin: 0 0 0;
     }
-    .info-table td {
-        padding: 3px 6px;
-        font-size: 9px;
+    .emp-table td {
+        padding: 5px 12px 5px 28px;
+        font-size: 8.5px;
         vertical-align: top;
-        border: none;
+        border-bottom: 1px solid #f0f0f0;
     }
-    .info-label { color: #555; width: 90px; }
-    .info-value { font-weight: 600; color: #111; }
-    .info-section {
-        border: 1px solid #ccc;
-        margin-bottom: 6px;
-    }
+    .emp-table td:nth-child(3) { padding-left: 12px; border-left: 1px solid #f0f0f0; }
+    .emp-label { color: #999; font-size: 7.5px; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 1px; }
+    .emp-value { font-weight: 600; color: #111; }
 
     /* ── ATTENDANCE BAR ── */
-    .att-bar {
+    .att-wrap { padding: 0 28px 0; }
+    .att-table {
         width: 100%;
         border-collapse: collapse;
-        margin-bottom: 6px;
-        background: #f5f5f5;
-        border: 1px solid #bbb;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        margin: 8px 0;
     }
-    .att-bar td {
-        padding: 5px 10px;
+    .att-table td {
         text-align: center;
-        font-size: 9px;
-        border-right: 1px solid #ccc;
+        padding: 7px 4px 5px;
+        border-right: 1px solid #e5e5e5;
+        vertical-align: middle;
     }
-    .att-bar td:last-child { border-right: none; }
-    .att-label { font-size: 7.5px; color: #888; display: block; margin-bottom: 1px; }
-    .att-value { font-size: 11px; font-weight: 700; color: #111; }
+    .att-table td:last-child { border-right: none; }
+    .att-label { font-size: 6.5px; text-transform: uppercase; letter-spacing: 0.8px; color: #aaa; display: block; margin-bottom: 2px; }
+    .att-value { font-size: 13px; font-weight: 800; color: #111; display: block; line-height: 1; }
+    .att-value.lwp-red { color: {{ $brand }}; }
 
     /* ── SALARY TABLE ── */
-    .salary-wrap {
+    .sal-wrap { padding: 0 28px 0; }
+    .sal-table {
         width: 100%;
         border-collapse: collapse;
-        border: 1px solid #bbb;
-        margin-bottom: 0;
+        border: 1px solid #ddd;
+        margin: 8px 0 0;
+        table-layout: fixed;
     }
-    .salary-wrap th {
-        background: #e8e8e8;
-        padding: 5px 8px;
-        font-size: 9px;
+    .sal-table thead tr {
+        background: {{ $brand }};
+    }
+    .sal-table thead th {
+        color: #fff;
+        font-size: 8px;
         font-weight: 700;
+        letter-spacing: 0.8px;
         text-transform: uppercase;
-        letter-spacing: 0.3px;
-        border: 1px solid #bbb;
+        padding: 7px 10px;
+        text-align: left;
     }
-    .salary-wrap td {
-        padding: 4px 8px;
-        font-size: 9px;
-        border-bottom: 1px solid #e5e5e5;
+    .sal-table thead th.right { text-align: right; }
+    .sal-table thead th.divider { border-left: 1px solid rgba(255,255,255,0.25); }
+    .col-desc-e { width: 32%; }
+    .col-amt-e  { width: 18%; border-right: 2px solid #bbb; }
+    .col-desc-d { width: 30%; }
+    .col-amt-d  { width: 20%; }
+
+    .sal-table tbody tr:nth-child(odd)  { background: #fff; }
+    .sal-table tbody tr:nth-child(even) { background: #fafafa; }
+    .sal-table tbody td {
+        padding: 5px 10px;
+        font-size: 8.5px;
+        color: #333;
+        border-bottom: 1px solid #f0f0f0;
         vertical-align: top;
     }
-    .salary-wrap .divider td { border-right: 1px solid #bbb; }
-    .salary-wrap .amount { text-align: right; }
-    .salary-wrap .total-row td {
-        background: #f0f0f0;
+    .sal-table tbody td.amt    { text-align: right; font-weight: 600; font-family: 'DejaVu Sans Mono', monospace; }
+    .sal-table tbody td.right-div { border-right: 2px solid #ddd; }
+    .sal-table tbody td.ded-label { color: #555; }
+
+    /* Total row */
+    .sal-table tfoot tr.total td {
+        background: #f2f2f2;
         font-weight: 700;
-        font-size: 9.5px;
-        border-top: 1.5px solid #999;
-        padding: 5px 8px;
+        font-size: 9px;
+        padding: 6px 10px;
+        border-top: 2px solid #ccc;
+        border-bottom: none;
     }
-    .salary-wrap .net-row td {
-        background: {{ $company->primary_color }};
+    .sal-table tfoot tr.total td.amt { font-family: 'DejaVu Sans Mono', monospace; }
+
+    /* Net pay row */
+    .sal-table tfoot tr.net td {
+        background: {{ $brand }};
         color: #fff;
         font-weight: 700;
-        font-size: 11px;
-        padding: 7px 10px;
+        font-size: 12px;
+        padding: 10px 12px;
         border: none;
     }
-    .col-earn { width: 50%; border-right: 2px solid #aaa; }
-    .col-ded  { width: 50%; }
+    .sal-table tfoot tr.net td.net-label { font-size: 10px; letter-spacing: 0.5px; text-align: right; }
+    .sal-table tfoot tr.net td.net-amount {
+        text-align: right;
+        font-size: 15px;
+        font-weight: 900;
+        font-family: 'DejaVu Sans Mono', monospace;
+    }
 
-    .footer-note {
-        margin-top: 18px;
-        text-align: center;
-        font-size: 8px;
-        color: #999;
-        border-top: 1px solid #ddd;
-        padding-top: 8px;
+    /* ── FOOTER ── */
+    .footer {
+        margin: 16px 28px 0;
+        padding: 8px 0;
+        border-top: 1px solid #eee;
+        display: table;
+        width: calc(100% - 56px);
+    }
+    .footer-left  { display: table-cell; width: 50%; font-size: 7.5px; color: #aaa; vertical-align: bottom; }
+    .footer-right { display: table-cell; width: 50%; text-align: right; font-size: 7.5px; color: #aaa; vertical-align: bottom; }
+
+    .bottom-band {
+        background: {{ $brand }};
+        height: 4px;
+        width: 100%;
+        margin-top: 24px;
     }
 </style>
 </head>
 <body>
+<div class="page">
 
-{{-- ── COMPANY HEADER ── --}}
-<table class="top-header" cellpadding="0" cellspacing="0">
-    <tr>
-        <td class="logo-cell">
-            @if($logoData)
-                <img src="{{ $logoData }}" alt="{{ $company->name }}">
-            @else
-                <div class="company-text">{{ strtoupper(substr($company->name, 0, 6)) }}</div>
-            @endif
-        </td>
-        <td class="company-info-cell">
-            <div class="company-name">{{ $company->name }}</div>
-            @if($company->address)
-                <div class="company-addr">{{ $company->address }}</div>
-            @endif
-            @if($company->city)
-                <div class="company-addr">{{ $company->city }}{{ $company->country ? ', ' . $company->country : '' }}</div>
-            @endif
-            @if($company->phone || $company->email)
-                <div class="company-addr">
-                    {{ $company->phone }}{{ $company->phone && $company->email ? '  |  ' : '' }}{{ $company->email }}
-                </div>
-            @endif
-        </td>
-        <td style="width:90px; text-align:right; vertical-align:middle;">
-            <div style="font-size:11px; font-weight:800; color:{{ $company->primary_color }};">PAYSLIP</div>
-            <div style="font-size:8px; color:#888; margin-top:2px;">{{ $monthLabel }}</div>
-        </td>
-    </tr>
-</table>
+    <div class="top-band"></div>
 
-{{-- ── EMPLOYEE INFO ── --}}
-<table class="info-section" style="width:100%; border-collapse:collapse; margin-bottom:6px;">
-    <tr>
-        <td style="width:50%; padding:4px 8px; border-right:1px solid #ddd; font-size:9px;">
-            <span style="color:#888;">Month:</span>
-            <strong style="margin-left:6px;">{{ $monthLabel }}</strong>
-        </td>
-        <td style="width:50%; padding:4px 8px; font-size:9px;">
-            <span style="color:#888;">Joining Month:</span>
-            <strong style="margin-left:6px;">{{ $joiningLabel }}</strong>
-        </td>
-    </tr>
-    <tr style="border-top:1px solid #eee;">
-        <td style="padding:4px 8px; border-right:1px solid #ddd; font-size:9px;">
-            <span style="color:#888;">Name:</span>
-            <strong style="margin-left:6px;">{{ $employee->user->name }}</strong>
-        </td>
-        <td style="padding:4px 8px; font-size:9px;">
-            <span style="color:#888;">Department:</span>
-            <strong style="margin-left:6px;">{{ $employee->department?->name ?? '—' }}</strong>
-        </td>
-    </tr>
-    <tr style="border-top:1px solid #eee;">
-        <td style="padding:4px 8px; border-right:1px solid #ddd; font-size:9px;">
-            <span style="color:#888;">Designation:</span>
-            <strong style="margin-left:6px;">{{ $employee->jobTitle?->title ?? $employee->jobTitle?->name ?? '—' }}</strong>
-        </td>
-        <td style="padding:4px 8px; font-size:9px;">
-            <span style="color:#888;">Employee ID:</span>
-            <strong style="margin-left:6px;">{{ $employee->employee_id ?? '—' }}</strong>
-        </td>
-    </tr>
-</table>
-
-{{-- ── ATTENDANCE BAR ── --}}
-<table class="att-bar" cellpadding="0" cellspacing="0">
-    <tr>
-        <td>
-            <span class="att-label">Paid Days</span>
-            <span class="att-value">{{ $paidDays }}</span>
-        </td>
-        <td>
-            <span class="att-label">Present</span>
-            <span class="att-value">{{ $presentDays }}</span>
-        </td>
-        <td>
-            <span class="att-label">Approved Leave</span>
-            <span class="att-value">{{ $approvedLeaveDays }}</span>
-        </td>
-        <td>
-            <span class="att-label">Wk Off</span>
-            <span class="att-value">{{ $weekOffDays }}</span>
-        </td>
-        <td>
-            <span class="att-label">LWP / ABS</span>
-            <span class="att-value" style="{{ $lwp > 0 ? 'color:#c00;' : '' }}">{{ number_format($lwp, 2) }}</span>
-        </td>
-        <td>
-            <span class="att-label">Cycle</span>
-            <span class="att-value">{{ strtoupper(str_replace('_', ' ', $payroll->cycle)) }}</span>
-        </td>
-    </tr>
-</table>
-
-{{-- ── EARNINGS & DEDUCTIONS TABLE ── --}}
-<table class="salary-wrap" cellpadding="0" cellspacing="0">
-    <thead>
-        <tr>
-            <th class="col-earn" colspan="2">Earnings &amp; Reimbursements</th>
-            <th class="col-ded"  colspan="2">Deductions &amp; Recoveries</th>
-        </tr>
-    </thead>
-    <tbody>
-        @for($i = 0; $i < $maxRows; $i++)
-            @php
-                $earn = $earnings->get($i);
-                $ded  = $deductions->get($i);
-            @endphp
-            <tr class="divider">
-                <td class="col-earn" style="border-right:none;">{{ $earn?->name ?? '' }}</td>
-                <td class="col-earn amount" style="border-right:2px solid #aaa;">
-                    {{ $earn ? number_format($earn->amount, 2) : '' }}
+    {{-- HEADER --}}
+    <div class="header">
+        <table class="header-table" cellpadding="0" cellspacing="0">
+            <tr>
+                <td class="header-logo-cell">
+                    @if($logoData)
+                        <img src="{{ $logoData }}" class="logo-img" alt="{{ $company->name }}">
+                    @else
+                        <div class="logo-text">
+                            @php
+                                // Build styled text from company name
+                                $parts = explode(' ', $company->name);
+                                echo strtoupper(implode('', array_map(fn($p) => substr($p,0,3), array_slice($parts,0,2))));
+                            @endphp
+                        </div>
+                        <div class="logo-sub">{{ strtolower($company->industry ?? 'Technologies') }}</div>
+                    @endif
                 </td>
-                <td>{{ $ded?->name ?? '' }}</td>
-                <td class="amount">{{ $ded ? number_format($ded->amount, 2) : '' }}</td>
+                <td class="header-center">
+                    <div class="company-name">{{ $company->name }}</div>
+                    @if($company->address)
+                        <div class="company-detail">{{ $company->address }}</div>
+                    @endif
+                    @if($company->city)
+                        <div class="company-detail">{{ $company->city }}{{ $company->country ? ', ' . $company->country : '' }}</div>
+                    @endif
+                    @if($company->phone || $company->email)
+                        <div class="company-detail">
+                            {{ $company->phone }}{{ $company->phone && $company->email ? '  ·  ' : '' }}{{ $company->email }}
+                        </div>
+                    @endif
+                </td>
+                <td class="header-right">
+                    <div class="slip-badge">Salary Slip</div>
+                    <div class="slip-month">{{ $monthLabel }}</div>
+                    <div class="slip-month" style="color:#bbb; font-size:7.5px; font-weight:400;">{{ $cycleLabel }}</div>
+                </td>
             </tr>
-        @endfor
-    </tbody>
-    <tfoot>
-        <tr class="total-row">
-            <td class="col-earn" style="border-right:none;"><strong>Total Earnings</strong></td>
-            <td class="col-earn amount" style="border-right:2px solid #999;">
-                <strong>{{ number_format($payslip->gross_salary, 2) }}</strong>
-            </td>
-            <td><strong>Total Deductions</strong></td>
-            <td class="amount"><strong>{{ number_format($payslip->total_deductions, 2) }}</strong></td>
-        </tr>
-        <tr class="net-row">
-            <td colspan="2" style="text-align:right; padding-right:16px;">Net Pay</td>
-            <td colspan="2" style="text-align:right; font-size:13px;">
-                {{ $company->currency_symbol ?? '₹' }} {{ number_format($payslip->net_salary, 2) }}
-            </td>
-        </tr>
-    </tfoot>
-</table>
+        </table>
+    </div>
 
-<div class="footer-note">
-    This is a system-generated payslip and does not require a signature. &nbsp;|&nbsp;
-    Generated: {{ now()->format('d M Y, H:i') }}
+    {{-- EMPLOYEE INFO --}}
+    <div class="section-title">Employee Details</div>
+    <table class="emp-table" cellpadding="0" cellspacing="0">
+        <tr>
+            <td style="width:50%;">
+                <span class="emp-label">Employee Name</span>
+                <span class="emp-value">{{ $employee->user->name }}</span>
+            </td>
+            <td style="width:50%;">
+                <span class="emp-label">Employee ID</span>
+                <span class="emp-value">{{ $employee->employee_id ?? '—' }}</span>
+            </td>
+        </tr>
+        <tr>
+            <td>
+                <span class="emp-label">Designation</span>
+                <span class="emp-value">{{ $employee->jobTitle?->title ?? $employee->jobTitle?->name ?? '—' }}</span>
+            </td>
+            <td>
+                <span class="emp-label">Department</span>
+                <span class="emp-value">{{ $employee->department?->name ?? '—' }}</span>
+            </td>
+        </tr>
+        <tr>
+            <td>
+                <span class="emp-label">Date of Joining</span>
+                <span class="emp-value">{{ $employee->joining_date ? Carbon::parse($employee->joining_date)->format('d M Y') : '—' }}</span>
+            </td>
+            <td>
+                <span class="emp-label">Pay Period</span>
+                <span class="emp-value">{{ $monthLabel }} &nbsp;·&nbsp; {{ $cycleLabel }}</span>
+            </td>
+        </tr>
+    </table>
+
+    {{-- ATTENDANCE --}}
+    <div class="section-title">Attendance Summary</div>
+    <div class="att-wrap">
+        <table class="att-table" cellpadding="0" cellspacing="0">
+            <tr>
+                <td style="width:16%">
+                    <span class="att-label">Total Days</span>
+                    <span class="att-value">{{ $totalDays }}</span>
+                </td>
+                <td style="width:16%">
+                    <span class="att-label">Week Off</span>
+                    <span class="att-value">{{ $weekOff }}</span>
+                </td>
+                <td style="width:16%">
+                    <span class="att-label">Paid Days</span>
+                    <span class="att-value">{{ $paidDays }}</span>
+                </td>
+                <td style="width:16%">
+                    <span class="att-label">Present</span>
+                    <span class="att-value">{{ $presentDays }}</span>
+                </td>
+                <td style="width:16%">
+                    <span class="att-label">On Leave</span>
+                    <span class="att-value">{{ $leaveDays }}</span>
+                </td>
+                <td style="width:20%">
+                    <span class="att-label">LWP / Absent</span>
+                    <span class="att-value {{ $lwp > 0 ? 'lwp-red' : '' }}">{{ $lwp > 0 ? $lwp : '0' }}</span>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    {{-- EARNINGS & DEDUCTIONS --}}
+    <div class="section-title">Earnings &amp; Deductions</div>
+    <div class="sal-wrap">
+        <table class="sal-table" cellpadding="0" cellspacing="0">
+            <thead>
+                <tr>
+                    <th class="col-desc-e">Earnings &amp; Reimbursements</th>
+                    <th class="col-amt-e right">Amount ({{ $company->currency_symbol ?? '₹' }})</th>
+                    <th class="col-desc-d divider">Deductions &amp; Recoveries</th>
+                    <th class="col-amt-d right">Amount ({{ $company->currency_symbol ?? '₹' }})</th>
+                </tr>
+            </thead>
+            <tbody>
+                @for($i = 0; $i < $maxRows; $i++)
+                    @php $e = $earnings->get($i); $d = $deductions->get($i); @endphp
+                    <tr>
+                        <td>{{ $e?->name ?? '' }}</td>
+                        <td class="amt right-div">{{ $e ? number_format($e->amount, 2) : '' }}</td>
+                        <td class="ded-label">{{ $d?->name ?? '' }}</td>
+                        <td class="amt">{{ $d ? number_format($d->amount, 2) : '' }}</td>
+                    </tr>
+                @endfor
+
+                {{-- Filler rows to balance columns --}}
+                @if($maxRows < 4)
+                    @for($i = $maxRows; $i < 4; $i++)
+                        <tr>
+                            <td>&nbsp;</td><td class="right-div"></td><td></td><td></td>
+                        </tr>
+                    @endfor
+                @endif
+            </tbody>
+            <tfoot>
+                <tr class="total">
+                    <td><strong>Total Earnings</strong></td>
+                    <td class="amt right-div"><strong>{{ number_format($payslip->gross_salary, 2) }}</strong></td>
+                    <td><strong>Total Deductions</strong></td>
+                    <td class="amt"><strong>{{ number_format($payslip->total_deductions, 2) }}</strong></td>
+                </tr>
+                <tr class="net">
+                    <td colspan="2" class="net-label">Net Pay</td>
+                    <td colspan="2" class="net-amount">
+                        {{ $company->currency_symbol ?? '₹' }} {{ number_format($payslip->net_salary, 2) }}
+                    </td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+
+    {{-- FOOTER --}}
+    <div class="footer">
+        <div class="footer-left">This is a computer-generated payslip and does not require a signature.</div>
+        <div class="footer-right">Generated: {{ now()->format('d M Y') }}</div>
+    </div>
+
+    <div class="bottom-band"></div>
+
 </div>
-
 </body>
 </html>
