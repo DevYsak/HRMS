@@ -217,10 +217,31 @@ class AllAttendance extends Component
             ->with(['employee.user', 'attendance'])
             ->get();
 
+        // KPI stats for today
+        $today = Carbon::today();
+        $totalActive = Employee::where('status', 'active')->count();
+        $todayRecords = Attendance::where('date', $today)->get();
+        $presentToday = $todayRecords->whereNotNull('check_in')->count();
+        $lateToday = $todayRecords->where('is_late', true)->count();
+        $onTimeToday = $presentToday - $lateToday;
+        $absentToday = max(0, $totalActive - $presentToday);
+
+        $stats = [
+            'total' => $totalActive,
+            'present' => $presentToday,
+            'absent' => $absentToday,
+            'on_time' => $onTimeToday,
+            'late' => $lateToday,
+            'present_pct' => $totalActive > 0 ? round(($presentToday / $totalActive) * 100, 1) : 0,
+            'absent_pct' => $totalActive > 0 ? round(($absentToday / $totalActive) * 100, 1) : 0,
+            'late_pct' => $presentToday > 0 ? round(($lateToday / $presentToday) * 100, 1) : 0,
+        ];
+
         return view('livewire.attendance.all-attendance', [
-            'attendances' => $query->latest('date')->paginate(15),
+            'attendances' => $query->latest('date')->paginate(20),
             'pendingRegularisations' => $pendingRegularisations,
             'allEmployees' => Employee::with('user')->orderBy('id')->get(),
+            'stats' => $stats,
         ])->layout('layouts.app', ['title' => 'Employee Attendance']);
     }
 }
