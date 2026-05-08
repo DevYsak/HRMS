@@ -206,6 +206,60 @@ class Dashboard extends Component
 
         $actionRequiredCount = $pendingLeavesCount + $pendingOtCount + $expiringDocuments->count();
 
+        // ── Upcoming Birthdays (next 30 days) ──────────────────────────────
+        $upcomingBirthdays = Employee::with(['user', 'department'])
+            ->where('status', EmployeeStatus::Active)
+            ->whereNotNull('date_of_birth')
+            ->get()
+            ->map(function ($emp) {
+                $dob = Carbon::parse($emp->date_of_birth);
+                $next = now()->copy()->setDay($dob->day)->setMonth($dob->month);
+                if ($next->lt(now()->startOfDay())) {
+                    $next->addYear();
+                }
+
+                return [
+                    'emp' => $emp,
+                    'name' => $emp->user?->name ?? '—',
+                    'dept' => $emp->department?->name ?? '',
+                    'dob_fmt' => $dob->format('d M'),
+                    'age' => $dob->age,
+                    'days' => (int) now()->startOfDay()->diffInDays($next),
+                    'is_today' => $next->isToday(),
+                ];
+            })
+            ->filter(fn ($b) => $b['days'] <= 30)
+            ->sortBy('days')
+            ->take(6)
+            ->values();
+
+        // ── Monthly Attendance Trend (last 6 months) ───────────────────────
+        $attendanceTrend = collect();
+        for ($i = 5; $i >= 0; $i--) {
+            $d = now()->subMonths($i);
+            $workDays = $d->copy()->startOfMonth()->diffInDaysFiltered(fn ($day) => ! $day->isSunday(), $d->copy()->endOfMonth());
+            $present = Attendance::whereYear('date', $d->year)
+                ->whereMonth('date', $d->month)
+                ->whereNotNull('check_in')
+                ->count();
+            $rate = ($totalActive > 0 && $workDays > 0)
+                ? min(100, round(($present / ($totalActive * $workDays)) * 100))
+                : 0;
+            $attendanceTrend->push([
+                'month' => $d->format('M'),
+                'present' => $present,
+                'rate' => $rate,
+            ]);
+        }
+
+        // ── Today's Live Check-ins ─────────────────────────────────────────
+        $liveCheckins = Attendance::with('employee.user')
+            ->where('date', $today)
+            ->whereNotNull('check_in')
+            ->orderByDesc('check_in')
+            ->take(6)
+            ->get();
+
         return view('dashboard', compact(
             'totalActive',
             'onboarding',
@@ -226,7 +280,10 @@ class Dashboard extends Component
             'upcomingProbations',
             'workforceComposition',
             'complianceAlerts',
-            'actionRequiredCount'
+            'actionRequiredCount',
+            'upcomingBirthdays',
+            'attendanceTrend',
+            'liveCheckins'
         ))->layout('layouts.app', ['title' => 'Admin Dashboard']);
     }
 

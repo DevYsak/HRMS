@@ -658,4 +658,192 @@
             </div>
         </div>
     </div>
+
+    {{-- ══════════════════════════════════════════════════════════
+         BOTTOM ROW: Attendance Trend + Birthdays + Live Check-ins
+    ══════════════════════════════════════════════════════════ --}}
+    <div class="grid grid-cols-1 gap-5 lg:grid-cols-3 mt-5">
+
+        {{-- ── Attendance Trend (6 months bar chart) ── --}}
+        <div class="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <div class="mb-5 flex items-center justify-between">
+                <div>
+                    <h3 class="text-sm font-bold text-zinc-900 dark:text-white">Attendance Trend</h3>
+                    <p class="mt-0.5 text-[11px] text-zinc-400">Monthly attendance rate — last 6 months</p>
+                </div>
+                <div class="flex size-8 items-center justify-center rounded-xl bg-indigo-50 dark:bg-indigo-950/30">
+                    <flux:icon.chart-bar class="size-4 text-indigo-600 dark:text-indigo-400" />
+                </div>
+            </div>
+
+            @php
+                $maxRate = max($attendanceTrend->pluck('rate')->max(), 1);
+            @endphp
+
+            {{-- Bar Chart --}}
+            <div class="flex items-end justify-between gap-2 h-32 mb-3">
+                @foreach($attendanceTrend as $t)
+                    @php
+                        $barH = max(4, round(($t['rate'] / 100) * 100));
+                        $barColor = $t['rate'] >= 80 ? 'bg-indigo-500' : ($t['rate'] >= 60 ? 'bg-amber-400' : 'bg-rose-400');
+                        $isCurrentMonth = $t['month'] === now()->format('M');
+                    @endphp
+                    <div class="flex flex-1 flex-col items-center gap-1.5">
+                        <span class="text-[9px] font-bold text-zinc-500">{{ $t['rate'] > 0 ? $t['rate'].'%' : '' }}</span>
+                        <div class="w-full rounded-t-lg {{ $barColor }} transition-all duration-700 relative {{ $isCurrentMonth ? 'ring-2 ring-offset-1 ring-indigo-400' : '' }}"
+                            style="height: {{ $barH }}%;">
+                        </div>
+                        <span class="text-[10px] font-bold {{ $isCurrentMonth ? 'text-indigo-600 dark:text-indigo-400' : 'text-zinc-400' }} uppercase">
+                            {{ $t['month'] }}
+                        </span>
+                    </div>
+                @endforeach
+            </div>
+
+            {{-- Summary --}}
+            <div class="pt-3 border-t border-zinc-100 dark:border-zinc-800 grid grid-cols-3 gap-3 text-center">
+                @php
+                    $avgRate = $attendanceTrend->avg('rate');
+                    $bestMonth = $attendanceTrend->sortByDesc('rate')->first();
+                    $totalPresent = $attendanceTrend->sum('present');
+                @endphp
+                <div>
+                    <div class="text-sm font-black text-zinc-900 dark:text-white">{{ round($avgRate) }}%</div>
+                    <div class="text-[9px] text-zinc-400 uppercase tracking-wider">Avg Rate</div>
+                </div>
+                <div>
+                    <div class="text-sm font-black text-zinc-900 dark:text-white">{{ $bestMonth['month'] }}</div>
+                    <div class="text-[9px] text-zinc-400 uppercase tracking-wider">Best Month</div>
+                </div>
+                <div>
+                    <div class="text-sm font-black text-zinc-900 dark:text-white">{{ number_format($totalPresent) }}</div>
+                    <div class="text-[9px] text-zinc-400 uppercase tracking-wider">Check-ins</div>
+                </div>
+            </div>
+        </div>
+
+        {{-- ── Upcoming Birthdays ── --}}
+        <div class="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <div class="mb-5 flex items-center justify-between">
+                <div>
+                    <h3 class="text-sm font-bold text-zinc-900 dark:text-white">Upcoming Birthdays</h3>
+                    <p class="mt-0.5 text-[11px] text-zinc-400">Next 30 days</p>
+                </div>
+                <div class="flex size-8 items-center justify-center rounded-xl bg-rose-50 dark:bg-rose-950/30">
+                    <flux:icon.cake class="size-4 text-rose-500" />
+                </div>
+            </div>
+
+            @if($upcomingBirthdays->isEmpty())
+                <div class="flex flex-col items-center justify-center py-8 text-center">
+                    <flux:icon.cake class="size-9 mb-2 text-zinc-200 dark:text-zinc-700" />
+                    <p class="text-xs text-zinc-400">No birthdays in the next 30 days</p>
+                </div>
+            @else
+                <div class="space-y-3">
+                    @foreach($upcomingBirthdays as $b)
+                        @php
+                            $initials = collect(explode(' ', $b['name']))->map(fn($n) => $n[0] ?? '')->take(2)->join('');
+                            $colors = ['bg-rose-100 text-rose-700','bg-violet-100 text-violet-700','bg-blue-100 text-blue-700','bg-amber-100 text-amber-700','bg-emerald-100 text-emerald-700','bg-orange-100 text-orange-700'];
+                            $color = $colors[$loop->index % count($colors)];
+                        @endphp
+                        <div class="flex items-center gap-3 p-2.5 rounded-xl {{ $b['is_today'] ? 'bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/40' : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/40' }} transition-colors">
+                            <div class="size-9 rounded-xl {{ $color }} flex items-center justify-center text-[11px] font-black shrink-0">
+                                {{ $initials }}
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <div class="text-xs font-bold text-zinc-900 dark:text-white truncate">{{ $b['name'] }}</div>
+                                <div class="text-[10px] text-zinc-400">{{ $b['dept'] ?: 'No department' }}</div>
+                            </div>
+                            <div class="text-right shrink-0">
+                                @if($b['is_today'])
+                                    <span class="inline-flex items-center px-2 py-0.5 bg-rose-500 text-white text-[9px] font-black rounded-full">TODAY</span>
+                                @else
+                                    <span class="text-xs font-bold text-zinc-700 dark:text-zinc-300">{{ $b['dob_fmt'] }}</span>
+                                    <div class="text-[9px] text-zinc-400">in {{ $b['days'] }}d</div>
+                                @endif
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+                <div class="mt-4 pt-3 border-t border-zinc-100 dark:border-zinc-800">
+                    <a href="{{ route('employees.index') }}" wire:navigate
+                        class="text-[10px] font-bold uppercase tracking-widest text-brand-500 hover:text-brand-600">
+                        View all employees →
+                    </a>
+                </div>
+            @endif
+        </div>
+
+        {{-- ── Today's Live Check-ins ── --}}
+        <div class="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <div class="mb-5 flex items-center justify-between">
+                <div>
+                    <h3 class="text-sm font-bold text-zinc-900 dark:text-white">Live Check-ins</h3>
+                    <p class="mt-0.5 text-[11px] text-zinc-400">Today · {{ now()->format('d M Y') }}</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="flex items-center gap-1.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                        <span class="size-1.5 rounded-full bg-emerald-500 animate-pulse inline-block"></span>
+                        LIVE
+                    </span>
+                    <div class="flex size-8 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-950/30">
+                        <flux:icon.users class="size-4 text-emerald-600 dark:text-emerald-400" />
+                    </div>
+                </div>
+            </div>
+
+            @if($liveCheckins->isEmpty())
+                <div class="flex flex-col items-center justify-center py-8 text-center">
+                    <flux:icon.clock class="size-9 mb-2 text-zinc-200 dark:text-zinc-700" />
+                    <p class="text-xs text-zinc-400">No check-ins yet today</p>
+                </div>
+            @else
+                <div class="space-y-2.5">
+                    @foreach($liveCheckins as $ci)
+                        @php
+                            $initials = collect(explode(' ', $ci->employee->user->name))->map(fn($n) => $n[0] ?? '')->take(2)->join('');
+                            $isLive   = is_null($ci->check_out);
+                        @endphp
+                        <div class="flex items-center gap-2.5 p-2 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors">
+                            <div class="relative size-8 shrink-0">
+                                <div class="size-8 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-[10px] font-black text-zinc-600 dark:text-zinc-300">
+                                    {{ $initials }}
+                                </div>
+                                @if($isLive)
+                                    <span class="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full bg-emerald-500 border-2 border-white dark:border-zinc-900"></span>
+                                @endif
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <div class="text-xs font-bold text-zinc-900 dark:text-white truncate">{{ $ci->employee->user->name }}</div>
+                                <div class="text-[10px] font-mono text-zinc-400">
+                                    In: {{ $ci->check_in->format('H:i') }}
+                                    @if($ci->check_out)
+                                        · Out: {{ $ci->check_out->format('H:i') }}
+                                    @endif
+                                </div>
+                            </div>
+                            <div class="shrink-0">
+                                @if($ci->is_late)
+                                    <span class="px-1.5 py-0.5 bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 text-[9px] font-black rounded">LATE</span>
+                                @elseif($isLive)
+                                    <span class="px-1.5 py-0.5 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[9px] font-black rounded">LIVE</span>
+                                @else
+                                    <span class="px-1.5 py-0.5 bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400 text-[9px] font-black rounded">DONE</span>
+                                @endif
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+                <div class="mt-4 pt-3 border-t border-zinc-100 dark:border-zinc-800">
+                    <a href="{{ route('attendance.employees') }}" wire:navigate
+                        class="text-[10px] font-bold uppercase tracking-widest text-brand-500 hover:text-brand-600">
+                        Full attendance report →
+                    </a>
+                </div>
+            @endif
+        </div>
+
+    </div>{{-- end bottom row --}}
+
 </flux:main>
