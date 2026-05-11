@@ -11,7 +11,7 @@ $SERVER_HOST = "69.62.74.243"
 $APP_DIR     = "/home/ysak/app/nexc"
 $GIT_BRANCH  = "staging"
 $SITE_URL    = "https://nexcore.wayforweb.tech"
-$RUN_SEEDERS = if ($env:RUN_SEEDERS) { $env:RUN_SEEDERS } else { "false" }
+$RUN_SEEDERS = if ($null -ne $env:RUN_SEEDERS -and $env:RUN_SEEDERS -ne "") { $env:RUN_SEEDERS } else { "false" }
 
 function Fail($message) {
     Write-Host "  FAIL $message" -ForegroundColor Red
@@ -44,7 +44,8 @@ if ($LASTEXITCODE -ne 0) {
 
 $UNTRACKED = git ls-files --others --exclude-standard
 if ($UNTRACKED) {
-    Fail "Untracked files mile hain. Unhe add/commit ya ignore karke phir deploy chalao."
+    Write-Host "  WARN Untracked files hain (deploy continue karega):" -ForegroundColor Yellow
+    $UNTRACKED | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray }
 }
 
 if ($LOCAL_BRANCH -ne $GIT_BRANCH) {

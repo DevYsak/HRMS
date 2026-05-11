@@ -50,7 +50,8 @@ if ! git diff --quiet || ! git diff --cached --quiet; then
 fi
 
 if git ls-files --others --exclude-standard | grep -q .; then
-    fail "Untracked files mile hain. Unhe add/commit ya ignore karke phir deploy chalao."
+    warn "Untracked files hain (deploy continue karega):"
+    git ls-files --others --exclude-standard | sed 's/^/    /'
 fi
 
 if [ "$LOCAL_BRANCH" != "$GIT_BRANCH" ]; then
