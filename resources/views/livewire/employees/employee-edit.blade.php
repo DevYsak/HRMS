@@ -98,13 +98,20 @@
 
             {{-- Tab bar --}}
             <div class="flex items-center gap-1 overflow-x-auto border-b border-zinc-100 px-6 pt-4 pb-0 dark:border-zinc-800">
-                @foreach(['General', 'Personal', 'Job', 'Probation', 'Payroll'] as $tab)
+                @foreach(['General', 'Personal', 'Job', 'Probation', 'Payroll', 'Nexflow'] as $tab)
                     <button type="button" wire:click="setTab('{{ $tab }}')"
                         class="whitespace-nowrap border-b-2 pb-3 px-3 text-sm font-bold transition-colors
                             {{ $activeTab === $tab
                                 ? 'border-brand-500 text-brand-600 dark:text-brand-400'
                                 : 'border-transparent text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300' }}">
-                        {{ $tab }}
+                        @if($tab === 'Nexflow')
+                            <span class="flex items-center gap-1.5">
+                                <span class="flex size-1.5 rounded-full bg-indigo-400"></span>
+                                Nexflow
+                            </span>
+                        @else
+                            {{ $tab }}
+                        @endif
                         @if($tab === 'Probation' && $employee->status->value === 'probation')
                             <span class="ml-1 inline-flex size-1.5 rounded-full bg-amber-500"></span>
                         @endif
@@ -373,6 +380,10 @@
                             </div>
                         </div>
                     @endif
+
+                    {{-- ── Nexflow Tab ── --}}
+                    @elseif($activeTab === 'Nexflow')
+                        <livewire:employees.nexflow-activity :employee="$employee" :key="'nexflow-'.$employee->id" />
 
                 </form>
             </div>
