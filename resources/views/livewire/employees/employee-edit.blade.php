@@ -379,11 +379,9 @@
                                 </div>
                             </div>
                         </div>
-                    @endif
-
-                    {{-- ── Nexflow Tab ── --}}
                     @elseif($activeTab === 'Nexflow')
                         <livewire:employees.nexflow-activity :employee="$employee" :key="'nexflow-'.$employee->id" />
+                    @endif
 
                 </form>
             </div>
