@@ -113,10 +113,10 @@
                                         <div class="flex items-center gap-2">
                                             <div
                                                 class="size-7 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center text-[10px] font-black text-amber-700 dark:text-amber-400 shrink-0">
-                                                {{ collect(explode(' ', $req->employee->user->name))->map(fn($n) => $n[0] ?? '')->take(2)->join('') }}
+                                                {{ collect(explode(' ', $req->employee?->user?->name ?? 'Unknown'))->map(fn($n) => $n[0] ?? '')->take(2)->join('') }}
                                             </div>
                                             <span
-                                                class="text-xs font-semibold text-zinc-800 dark:text-zinc-200">{{ $req->employee->user->name }}</span>
+                                                class="text-xs font-semibold text-zinc-800 dark:text-zinc-200">{{ $req->employee?->user?->name ?? 'Unknown Employee' }}</span>
                                         </div>
                                     </td>
                                     <td class="py-3 pr-4 text-xs text-zinc-600 dark:text-zinc-400">
@@ -213,7 +213,7 @@
                     <tbody class="divide-y divide-zinc-50 dark:divide-zinc-800/40">
                         @forelse($attendances as $log)
                             @php
-                                $initials = collect(explode(' ', $log->employee->user->name))
+                                $initials = collect(explode(' ', $log->employee?->user?->name ?? 'Unknown'))
                                     ->map(fn($n) => $n[0] ?? '')->take(2)->join('');
 
                                 [$statusBadge, $statusLabel, $avatarBg] = match ($log->status) {
@@ -264,7 +264,7 @@
                                         </div>
                                         <div class="min-w-0">
                                             <div class="font-semibold text-sm text-zinc-900 dark:text-white truncate">
-                                                {{ $log->employee->user->name }}
+                                                {{ $log->employee?->user?->name ?? '—' }}
                                             </div>
                                             <div class="text-[10px] text-zinc-400">{{ $log->employee->employee_id ?? 'â€”' }}
                                             </div>
@@ -402,7 +402,7 @@
                     <div class="flex justify-between items-center">
                         <span class="text-zinc-500">Employee</span>
                         <span
-                            class="font-bold text-zinc-900 dark:text-white">{{ $activeRequest->employee->user->name }}</span>
+                            class="font-bold text-zinc-900 dark:text-white">{{ $activeRequest->employee?->user?->name ?? '—' }}</span>
                     </div>
                     <div class="flex justify-between items-center">
                         <span class="text-zinc-500">Date</span>

@@ -192,7 +192,7 @@ class AllAttendance extends Component
     {
         abort_unless(Auth::user()->canApproveLeave(), 403);
 
-        $query = Attendance::query()->with('employee.user');
+        $query = Attendance::query()->with('employee.user')->whereHas('employee.user');
 
         if ($this->search) {
             $search = $this->search;
@@ -215,6 +215,7 @@ class AllAttendance extends Component
 
         $pendingRegularisations = AttendanceRegularisation::where('status', 'pending')
             ->with(['employee.user', 'attendance'])
+            ->whereHas('employee.user')
             ->get();
 
         // KPI stats for today
@@ -240,7 +241,7 @@ class AllAttendance extends Component
         return view('livewire.attendance.all-attendance', [
             'attendances' => $query->latest('date')->paginate(20),
             'pendingRegularisations' => $pendingRegularisations,
-            'allEmployees' => Employee::with('user')->orderBy('id')->get(),
+            'allEmployees' => Employee::with('user')->whereHas('user')->orderBy('id')->get(),
             'stats' => $stats,
         ])->layout('layouts.app', ['title' => 'Employee Attendance']);
     }
