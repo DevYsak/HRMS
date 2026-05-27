@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AdmsController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\DocumentUploadController;
 use App\Http\Controllers\PayslipController;
@@ -7,6 +8,7 @@ use App\Http\Controllers\ReportController;
 use App\Livewire\Attendance\AllAttendance;
 use App\Livewire\Attendance\AttendanceSettings;
 use App\Livewire\Attendance\AttendanceTracker;
+use App\Livewire\Attendance\BiometricSync;
 use App\Livewire\Attendance\TeamAttendance;
 use App\Livewire\Dashboard;
 use App\Livewire\DepartmentDashboard;
@@ -21,6 +23,7 @@ use App\Livewire\FinanceDashboard;
 use App\Livewire\HrAdminDashboard;
 use App\Livewire\ManagerDashboard;
 use App\Livewire\NotificationsPage;
+use App\Livewire\Onboarding\OffboardingChecklist;
 use App\Livewire\Onboarding\OffboardingManager;
 use App\Livewire\Onboarding\OnboardingChecklist;
 use App\Livewire\Onboarding\OnboardingManager;
@@ -46,6 +49,16 @@ use App\Livewire\TimeOff\TeamTimeOff;
 use App\Livewire\TimeOff\TimeOffSettings;
 use Illuminate\Support\Facades\Route;
 use Laravel\Fortify\Features;
+
+// ======================================================
+// eSSL ADMS push receiver — no auth, device posts directly
+// ======================================================
+Route::prefix('iclock')->name('adms.')->group(function () {
+    Route::get('/cdata', [AdmsController::class, 'options']);
+    Route::post('/cdata', [AdmsController::class, 'upload']);
+    Route::get('/getrequest', [AdmsController::class, 'getRequest']);
+    Route::post('/devicecmd', [AdmsController::class, 'deviceCmd']);
+});
 
 // ======================================================
 // Public routes
@@ -76,7 +89,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/create', EmployeeCreate::class)->name('create');
             Route::get('/{employee}/edit', EmployeeEdit::class)->name('edit');
             Route::get('/{employee}/onboarding', OnboardingChecklist::class)->name('onboarding');
-            Route::get('/{employee}/offboarding', OnboardingChecklist::class)->name('offboarding');
+            Route::get('/{employee}/offboarding', OffboardingChecklist::class)->name('offboarding');
             Route::get('/onboarding-manager', OnboardingManager::class)->name('onboarding-manager');
             Route::get('/offboarding-manager', OffboardingManager::class)->name('offboarding-manager');
         });
@@ -104,6 +117,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/employees', AllAttendance::class)->name('employees');
         });
         Route::get('/settings', AttendanceSettings::class)->name('settings')->middleware('role:manage-settings');
+        Route::get('/biometric', BiometricSync::class)->name('biometric')->middleware('role:manage-settings');
     });
 
     // --------------------------------------------------

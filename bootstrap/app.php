@@ -22,6 +22,11 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'role' => EnsureRole::class,
         ]);
+
+        // eSSL ADMS device push endpoints — device posts directly, no CSRF token
+        $middleware->validateCsrfTokens(except: [
+            'iclock/*',
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

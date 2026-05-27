@@ -13,7 +13,7 @@ class CompanySeeder extends Seeder
     public function run(): void
     {
         Company::updateOrCreate(
-            ['email' => 'hr@conexus.in'],
+            ['email' => 'hr@conexus-ns.com'],
             [
                 'name' => 'Conexus Technologies',
                 'website' => 'https://conexus.in',

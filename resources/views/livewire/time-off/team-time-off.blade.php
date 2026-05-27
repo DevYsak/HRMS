@@ -104,8 +104,8 @@
     </div>
 
     {{-- Review Modal --}}
-    <flux:modal wire:model="showReviewModal" class="w-full max-w-lg">
-        @if($selectedRequest)
+    <flux:modal name="review-modal" wire:model.self="showReviewModal" class="w-full max-w-lg">
+        @if($selectedRequestId && $selectedRequest)
             <div class="space-y-5">
                 <div>
                     <flux:heading size="lg">Review Leave Request</flux:heading>
@@ -180,7 +180,6 @@
                         <span wire:loading.remove wire:target="approve">Approve</span>
                         <span wire:loading wire:target="approve">Approving…</span>
                     </flux:button>
-                    </div>
                 </div>
             </div>
         @endif

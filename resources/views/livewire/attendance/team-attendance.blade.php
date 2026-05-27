@@ -1,4 +1,4 @@
-﻿<flux:main class="bg-zinc-50 p-6 space-y-6 dark:bg-zinc-950">
+<flux:main class="bg-zinc-50 p-6 space-y-6 dark:bg-zinc-950">
     <div class="pulse-page-header">
         <div>
             <h1 class="pulse-page-title">Team Attendance</h1>
@@ -127,7 +127,7 @@
     </div>
 
     {{-- Review Modal --}}
-    <flux:modal wire:model="showReviewModal" class="w-full max-w-md">
+    <flux:modal wire:model.self="showReviewModal" class="w-full max-w-md">
         <div class="space-y-6">
             <div>
                 <flux:heading size="lg">Review Regularisation Request</flux:heading>

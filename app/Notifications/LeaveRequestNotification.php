@@ -21,13 +21,19 @@ class LeaveRequestNotification extends Notification
         $type = $this->leaveRequest->leaveType->name;
         $days = $this->leaveRequest->days;
 
+        // For manager/HR (pending) we open the Team page and pass a query param
+        // that the Livewire component will use to open the review modal.
+        $teamUrl = route('time-off.team') . '?selectedRequestId=' . $this->leaveRequest->id;
+        // For employees we anchor to the specific row in My Time Off.
+        $myUrl = route('time-off.my') . '#request-' . $this->leaveRequest->id;
+
         return match ($status) {
             'pending' => [
                 'type' => 'leave_request',
                 'title' => 'New Leave Request',
                 'body' => "{$employee} requested {$days} day(s) of {$type}.",
                 'action' => 'Review',
-                'url' => '/time-off/team',
+                'url' => $teamUrl,
                 'icon' => 'calendar',
                 'color' => 'blue',
             ],
@@ -36,7 +42,7 @@ class LeaveRequestNotification extends Notification
                 'title' => 'Leave Approved ✓',
                 'body' => "Your {$type} request for {$days} day(s) has been approved.",
                 'action' => 'View',
-                'url' => '/time-off/my',
+                'url' => $myUrl,
                 'icon' => 'check-circle',
                 'color' => 'green',
             ],
@@ -45,7 +51,7 @@ class LeaveRequestNotification extends Notification
                 'title' => 'Leave Cancelled',
                 'body' => "Your {$type} request for {$days} day(s) has been cancelled.",
                 'action' => 'View',
-                'url' => '/time-off/my',
+                'url' => $myUrl,
                 'icon' => 'x-circle',
                 'color' => 'orange',
             ],
@@ -54,7 +60,7 @@ class LeaveRequestNotification extends Notification
                 'title' => 'Leave Rejected',
                 'body' => "Your {$type} request for {$days} day(s) was rejected.",
                 'action' => 'View',
-                'url' => '/time-off/my',
+                'url' => $myUrl,
                 'icon' => 'x-circle',
                 'color' => 'red',
             ],

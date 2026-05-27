@@ -22,11 +22,11 @@
                                 <div>
                                     <div class="font-semibold text-zinc-900 dark:text-white">{{ $type->name }}</div>
                                     <div class="text-[10px] uppercase font-bold text-zinc-400">
-                                        {{ $type->is_paid ? 'Paid' : 'Unpaid' }} · {{ str_replace('_', ' ', $type->category ?? 'other') }}
+                                        {{ $type->is_paid ? 'Paid' : 'Unpaid' }} Â· {{ str_replace('_', ' ', $type->category ?? 'other') }}
                                     </div>
                                     <div class="text-[10px] text-zinc-500 mt-1">
-                                        Carry Forward: {{ $type->allow_carry_forward ? ($type->carry_forward_limit > 0 ? 'Yes · Limit '.$type->carry_forward_limit.' days' : 'Yes · No limit') : 'No' }}
-                                        · Encashment: {{ $type->allow_encashment ? 'Enabled' : 'Disabled' }}
+                                        Carry Forward: {{ $type->allow_carry_forward ? ($type->carry_forward_limit > 0 ? 'Yes Â· Limit '.$type->carry_forward_limit.' days' : 'Yes Â· No limit') : 'No' }}
+                                        Â· Encashment: {{ $type->allow_encashment ? 'Enabled' : 'Disabled' }}
                                     </div>
                                 </div>
                             </div>
@@ -53,7 +53,7 @@
     </div>
 
     {{-- Type Modal --}}
-    <flux:modal wire:model="showModal" class="w-full max-w-sm">
+    <flux:modal wire:model.self="showModal" class="w-full max-w-sm">
         <div class="space-y-6">
             <div>
                 <flux:heading size="lg">{{ $editingId ? 'Edit' : 'Add' }} Leave Type</flux:heading>

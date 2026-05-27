@@ -29,6 +29,19 @@ class LeaveService
 
         $days = $isHalfDay ? 0.5 : ($start->diffInDays($end) + 1);
 
+        $overlap = LeaveRequest::where('employee_id', $employee->id)
+            ->whereIn('status', ['approved', 'pending'])
+            ->where('start_date', '<=', $endDate)
+            ->where('end_date', '>=', $startDate)
+            ->first();
+
+        if ($overlap) {
+            $status = $overlap->status === 'approved' ? 'approved' : 'pending';
+            throw new \DomainException(
+                "You already have a {$status} leave from {$overlap->start_date->format('d M Y')} to {$overlap->end_date->format('d M Y')}. Please choose different dates."
+            );
+        }
+
         if ($leaveType->is_paid) {
             $balance = $this->getBalance($employee->id, $leaveType->id);
             $available = $balance ? max(0, $balance->allocated_days - $balance->used_days - ($balance->encashed_days ?? 0)) : 0;
@@ -49,16 +62,18 @@ class LeaveService
             'status' => 'pending',
         ]);
 
-        // Notify manager first; fall back to all HR admins if no manager assigned
+        // Notify manager (if assigned) + always notify HR admins and Super Admins
         $request->load(['employee.user', 'leaveType']);
         $manager = $employee->manager;
+        $managerId = $manager?->id;
+
         if ($manager) {
             $manager->notify(new LeaveRequestNotification($request));
-        } else {
-            User::whereIn('role', ['hr_admin', 'super_admin'])->each(
-                fn ($hr) => $hr->notify(new LeaveRequestNotification($request))
-            );
         }
+
+        User::whereIn('role', ['hr_admin', 'super_admin'])
+            ->when($managerId, fn ($q) => $q->where('id', '!=', $managerId))
+            ->each(fn ($hr) => $hr->notify(new LeaveRequestNotification($request)));
 
         return $request;
     }
@@ -94,6 +109,19 @@ class LeaveService
             ]);
 
             if ($status === 'approved') {
+                $overlap = LeaveRequest::where('employee_id', $employee->id)
+                    ->where('id', '!=', $leaveRequest->id)
+                    ->where('status', 'approved')
+                    ->where('start_date', '<=', $data['end_date'])
+                    ->where('end_date', '>=', $data['start_date'])
+                    ->first();
+
+                if ($overlap) {
+                    throw new \DomainException(
+                        "Cannot approve: employee already has approved leave from {$overlap->start_date->format('d M Y')} to {$overlap->end_date->format('d M Y')} overlapping these dates."
+                    );
+                }
+
                 $leaveType = LeaveType::find($data['leave_type_id']);
 
                 if ($leaveType?->is_paid) {

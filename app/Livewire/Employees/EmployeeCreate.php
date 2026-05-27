@@ -78,6 +78,9 @@ class EmployeeCreate extends Component
         $this->employee_id = 'CNX-'.str_pad($lastId + 1, 4, '0', STR_PAD_LEFT);
     }
 
+    // Leave allocations keyed by leave_type_id (editable during creation)
+    public array $leave_allocations = [];
+
     public function save(): void
     {
         $this->authorize('create', Employee::class);
@@ -130,9 +133,31 @@ class EmployeeCreate extends Component
             'employment_type' => $this->employment_type,
         ]);
 
-        session()->flash('employee_created', "Employee {$this->name} added successfully. Temporary password: Password@123");
+        \Flux::toast(
+            text: "Employee {$this->name} added successfully. Temporary password: Password@123",
+            variant: 'success',
+        );
 
-        $this->redirect(route('employees.index'), navigate: true);
+        $this->js("setTimeout(() => { window.location = '".route('employees.index')."'; }, 2500)");
+
+        // Persist initial leave balances for current year (if provided)
+        foreach (\App\Models\LeaveType::all() as $lt) {
+            $allocated = isset($this->leave_allocations[$lt->id]) ? (float) $this->leave_allocations[$lt->id] : 0.0;
+            if ($allocated <= 0) {
+                continue;
+            }
+
+            \App\Models\LeaveBalance::create([
+                'employee_id' => $user->employee->id,
+                'leave_type_id' => $lt->id,
+                'year' => now()->year,
+                'allocated_days' => $allocated,
+                'used_days' => 0,
+                'carried_forward_days' => 0,
+                'encashed_days' => 0,
+                'comp_off_credits' => 0,
+            ]);
+        }
     }
 
     public function render()

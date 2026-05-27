@@ -7,11 +7,17 @@ use App\Enums\EmploymentType;
 use App\Enums\UserRole;
 use App\Models\Department;
 use App\Models\Employee;
+use App\Models\EmployeeSalary;
 use App\Models\JobTitle;
+use App\Models\LeaveBalance;
+use App\Models\LeaveType;
 use App\Models\Office;
+use App\Models\SalaryComponent;
 use App\Models\ShiftSetting;
 use App\Models\User;
 use App\Notifications\ProbationExtendedNotification;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Password;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
 use Livewire\WithFileUploads;
@@ -47,6 +53,8 @@ class EmployeeEdit extends Component
     public $photo = null;
 
     // ── Employment ───────────────────────────────────────────────────────────
+    public string $biometric_id = '';
+
     public string $office_id = '';
 
     public string $department_id = '';
@@ -72,6 +80,9 @@ class EmployeeEdit extends Component
 
     public string $extend_reason = '';
 
+    // Leave allocations keyed by leave_type_id (editable)
+    public array $leave_allocations = [];
+
     public function mount(Employee $employee): void
     {
         $this->authorize('update', $employee);
@@ -91,6 +102,7 @@ class EmployeeEdit extends Component
         $this->emergency_contact = $this->employee->emergency_contact ?? '';
 
         // Employment
+        $this->biometric_id = $this->employee->biometric_id ?? '';
         $this->office_id = (string) ($this->employee->office_id ?? '');
         $this->department_id = (string) ($this->employee->department_id ?? '');
         $this->job_title_id = (string) ($this->employee->job_title_id ?? '');
@@ -101,6 +113,17 @@ class EmployeeEdit extends Component
         $this->probation_end_date = $this->employee->probation_end_date?->format('Y-m-d') ?? '';
         $this->status = $this->employee->status->value;
         $this->employment_type = $this->employee->employment_type->value;
+
+        // Load existing leave allocations for editing
+        $this->leave_allocations = [];
+        foreach (LeaveType::all() as $lt) {
+            $bal = LeaveBalance::where('employee_id', $this->employee->id)
+                ->where('leave_type_id', $lt->id)
+                ->where('year', now()->year)
+                ->first();
+
+            $this->leave_allocations[$lt->id] = $bal?->allocated_days ?? 0;
+        }
     }
 
     public function setTab(string $tab): void
@@ -128,6 +151,7 @@ class EmployeeEdit extends Component
             'emergency_contact' => 'nullable|string|max:255',
             'photo' => 'nullable|image|max:2048',
             // Employment
+            'biometric_id' => ['nullable', 'string', 'max:20', Rule::unique('employees', 'biometric_id')->ignore($this->employee->id)],
             'joining_date' => 'required|date',
             'shift_id' => 'nullable|exists:shift_settings,id',
             'salary_cycle' => 'required|in:A,B',
@@ -147,6 +171,7 @@ class EmployeeEdit extends Component
 
         $this->employee->update([
             'employee_id' => $this->employee_id,
+            'biometric_id' => $this->biometric_id ?: null,
             'phone' => $this->phone ?: null,
             'date_of_birth' => $this->date_of_birth ?: null,
             'gender' => $this->gender ?: null,
@@ -164,7 +189,151 @@ class EmployeeEdit extends Component
             'employment_type' => $this->employment_type,
         ]);
 
-        \Flux::toast('Employee updated successfully.');
+        \Flux::toast(text: 'Employee updated successfully.', variant: 'success');
+
+        // Persist leave allocations for current year
+        foreach (LeaveType::all() as $lt) {
+            $allocated = isset($this->leave_allocations[$lt->id]) ? (float) $this->leave_allocations[$lt->id] : 0.0;
+
+            LeaveBalance::updateOrCreate([
+                'employee_id' => $this->employee->id,
+                'leave_type_id' => $lt->id,
+                'year' => now()->year,
+            ], [
+                'allocated_days' => $allocated,
+                'used_days' => 0,
+                'carried_forward_days' => 0,
+                'encashed_days' => 0,
+                'comp_off_credits' => 0,
+            ]);
+        }
+
+        $this->js("setTimeout(() => { window.location = '".route('employees.index')."'; }, 1500)");
+    }
+
+    // ── Email modal ──────────────────────────────────────────────────────────
+    public bool $showEmailModal = false;
+
+    public string $emailSubject = '';
+
+    public string $emailBody = '';
+
+    // ── Salary modal ─────────────────────────────────────────────────────────
+    public bool $showSalaryModal = false;
+
+    public ?int $editingSalaryId = null;
+
+    public string $salaryComponentId = '';
+
+    public string $salaryAmount = '';
+
+    // ── Header actions ────────────────────────────────────────────────────────
+
+    public function resetPassword(): void
+    {
+        $this->authorize('update', $this->employee);
+
+        Password::sendResetLink(['email' => $this->employee->user->email]);
+
+        \Flux::toast('Password reset link sent to '.$this->employee->user->email, variant: 'success');
+    }
+
+    public function openEmailModal(): void
+    {
+        $this->emailSubject = '';
+        $this->emailBody = '';
+        $this->showEmailModal = true;
+        $this->dispatch('modal-show', name: 'send-email-modal');
+    }
+
+    public function sendEmail(): void
+    {
+        $this->authorize('update', $this->employee);
+
+        $this->validate([
+            'emailSubject' => ['required', 'string', 'max:255'],
+            'emailBody' => ['required', 'string', 'max:5000'],
+        ]);
+
+        $to = $this->employee->user->email;
+        $subject = $this->emailSubject;
+        $body = $this->emailBody;
+
+        Mail::raw($body, function ($msg) use ($to, $subject) {
+            $msg->to($to)->subject($subject);
+        });
+
+        $this->showEmailModal = false;
+        $this->dispatch('modal-close', name: 'send-email-modal');
+        \Flux::toast('Email sent to '.$to, variant: 'success');
+    }
+
+    public function deactivate(): void
+    {
+        $this->authorize('update', $this->employee);
+
+        $this->employee->update(['status' => EmployeeStatus::Inactive]);
+        $this->status = EmployeeStatus::Inactive->value;
+
+        \Flux::toast('Employee has been deactivated.', variant: 'warning');
+    }
+
+    // ── Salary management ────────────────────────────────────────────────────
+
+    public function openAddSalary(): void
+    {
+        $this->editingSalaryId = null;
+        $this->salaryComponentId = '';
+        $this->salaryAmount = '';
+        $this->showSalaryModal = true;
+        $this->dispatch('modal-show', name: 'salary-modal');
+    }
+
+    public function openEditSalary(int $id): void
+    {
+        $row = EmployeeSalary::findOrFail($id);
+        $this->editingSalaryId = $id;
+        $this->salaryComponentId = (string) $row->salary_component_id;
+        $this->salaryAmount = (string) $row->amount;
+        $this->showSalaryModal = true;
+        $this->dispatch('modal-show', name: 'salary-modal');
+    }
+
+    public function saveSalary(): void
+    {
+        $this->authorize('update', $this->employee);
+
+        $this->validate([
+            'salaryComponentId' => ['required', 'exists:salary_components,id'],
+            'salaryAmount' => ['required', 'numeric', 'min:0'],
+        ]);
+
+        if ($this->editingSalaryId) {
+            EmployeeSalary::findOrFail($this->editingSalaryId)->update([
+                'salary_component_id' => $this->salaryComponentId,
+                'amount' => $this->salaryAmount,
+            ]);
+        } else {
+            EmployeeSalary::create([
+                'employee_id' => $this->employee->id,
+                'salary_component_id' => $this->salaryComponentId,
+                'amount' => $this->salaryAmount,
+            ]);
+        }
+
+        $this->employee->load('salaries.component');
+        $this->showSalaryModal = false;
+        $this->dispatch('modal-close', name: 'salary-modal');
+        \Flux::toast('Salary component saved.', variant: 'success');
+    }
+
+    public function removeSalary(int $id): void
+    {
+        $this->authorize('update', $this->employee);
+
+        EmployeeSalary::where('employee_id', $this->employee->id)->findOrFail($id)->delete();
+        $this->employee->load('salaries.component');
+        \Flux::toast('Salary component removed.', variant: 'success');
     }
 
     // ── Probation ─────────────────────────────────────────────────────────────
@@ -213,6 +382,7 @@ class EmployeeEdit extends Component
             'departments' => Department::all(),
             'jobTitles' => JobTitle::all(),
             'shifts' => ShiftSetting::all(),
+            'salaryComponents' => SalaryComponent::where('is_active', true)->orderBy('type')->orderBy('name')->get(),
             'managers' => User::whereIn('role', [
                 UserRole::SuperAdmin, UserRole::HrAdmin,
                 UserRole::Director, UserRole::Manager,

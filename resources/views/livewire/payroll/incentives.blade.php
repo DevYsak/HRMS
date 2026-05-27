@@ -1,10 +1,10 @@
-﻿<flux:main class="bg-zinc-50 p-6 space-y-6 dark:bg-zinc-950">
+<flux:main class="bg-zinc-50 p-6 space-y-6 dark:bg-zinc-950">
     <div class="pulse-page-header">
         <div>
             <h1 class="pulse-page-title">Incentives</h1>
             <p class="pulse-page-subtitle">Manage employee performance incentives</p>
         </div>
-        <flux:button @click="$flux.modal('incentive-modal').show()" variant="primary" icon="plus">
+        <flux:button wire:click="openModal" variant="primary" icon="plus">
             Add Incentive
         </flux:button>
     </div>
@@ -74,28 +74,49 @@
     </div>
 
     {{-- Add Modal --}}
-    <flux:modal name="incentive-modal" class="max-w-md">
+    <flux:modal wire:model.self="showModal" class="max-w-md">
         <div class="space-y-6">
             <div>
                 <flux:heading size="lg">Add Incentive</flux:heading>
                 <flux:subheading>Submit an incentive for Director/Finance approval</flux:subheading>
             </div>
-            <div class="space-y-4">
-                <flux:select wire:model="employeeId" label="Employee">
-                    <flux:select.option value="">Select Employee</flux:select.option>
-                    @foreach($employees as $emp)
-                    <flux:select.option value="{{ $emp->id }}">{{ $emp->user?->name }}</flux:select.option>
-                    @endforeach
-                </flux:select>
-                <flux:input wire:model="title" label="Incentive Title" placeholder="e.g. Q1 Performance Bonus" />
-                <flux:input wire:model="amount" label="Amount (₹)" type="number" min="1" />
-                <flux:input wire:model="month" label="Payout Month" type="month" />
+            <form wire:submit="submit" class="space-y-4">
+                <flux:field>
+                    <flux:select wire:model="employeeId" label="Employee">
+                        <flux:select.option value="">Select Employee</flux:select.option>
+                        @foreach($employees as $emp)
+                            <flux:select.option value="{{ $emp->id }}">{{ $emp->user?->name }}</flux:select.option>
+                        @endforeach
+                    </flux:select>
+                    @error('employeeId') <flux:error>{{ $message }}</flux:error> @enderror
+                </flux:field>
+
+                <flux:field>
+                    <flux:input wire:model="title" label="Incentive Title" placeholder="e.g. Q1 Performance Bonus" />
+                    @error('title') <flux:error>{{ $message }}</flux:error> @enderror
+                </flux:field>
+
+                <flux:field>
+                    <flux:input wire:model="amount" label="Amount (₹)" type="number" min="1" step="0.01" />
+                    @error('amount') <flux:error>{{ $message }}</flux:error> @enderror
+                </flux:field>
+
+                <flux:field>
+                    <flux:input wire:model="month" label="Payout Month" type="month" />
+                    @error('month') <flux:error>{{ $message }}</flux:error> @enderror
+                </flux:field>
+
                 <flux:textarea wire:model="description" label="Description (optional)" rows="2" />
-            </div>
-            <div class="flex gap-2 justify-end">
-                <flux:button @click="$flux.modal('incentive-modal').close()">Cancel</flux:button>
-                <flux:button wire:click="submit" variant="primary">Submit</flux:button>
-            </div>
+
+                <div class="flex gap-2 justify-end pt-2">
+                    <flux:button type="button" wire:click="$set('showModal', false)">Cancel</flux:button>
+                    <flux:button type="submit" variant="primary"
+                        wire:loading.attr="disabled" wire:target="submit">
+                        <span wire:loading.remove wire:target="submit">Submit</span>
+                        <span wire:loading wire:target="submit">Submitting…</span>
+                    </flux:button>
+                </div>
+            </form>
         </div>
     </flux:modal>
 </flux:main>

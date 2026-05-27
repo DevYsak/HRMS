@@ -11,6 +11,7 @@ use App\Models\PublicHoliday;
 use App\Models\ShiftSetting;
 use App\Models\User;
 use App\Notifications\AttendanceRegularisationNotification;
+use App\Notifications\RegularisationReviewedNotification;
 use App\Services\AttendanceService;
 use Carbon\CarbonPeriod;
 use Illuminate\Support\Carbon;
@@ -361,7 +362,7 @@ class AttendanceTracker extends Component
             ->where('date', $this->regDate)
             ->first();
 
-        AttendanceRegularisation::create([
+        $regularisation = AttendanceRegularisation::create([
             'employee_id' => $employee->id,
             'attendance_id' => $attendance?->id,
             'work_date' => $this->regDate,
@@ -384,6 +385,9 @@ class AttendanceTracker extends Component
             User::whereIn('role', ['hr_admin', 'super_admin'])
                 ->each(fn ($hr) => $hr->notify($notification));
         }
+
+        // Notify the employee themselves so the request appears in their inbox
+        Auth::user()->notify(new RegularisationReviewedNotification($regularisation));
 
         $this->reset(['regDate', 'regCheckIn', 'regCheckOut', 'regReason']);
         $this->dispatch('flux:modal:close', name: 'regularisation-modal');

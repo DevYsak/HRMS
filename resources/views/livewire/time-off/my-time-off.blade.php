@@ -1,6 +1,6 @@
 <flux:main class="min-h-screen bg-zinc-50 dark:bg-zinc-950 p-6 space-y-5" x-data="{ tab: 'requests' }">
 
-    {{-- ─── HERO HEADER ─── --}}
+    {{-- â”€â”€â”€ HERO HEADER â”€â”€â”€ --}}
     <div class="pulse-hero shadow-xl">
         <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_rgba(249,115,22,0.22),_transparent_65%)]"></div>
         <div class="pointer-events-none absolute -bottom-10 -left-10 size-64 rounded-full blur-3xl" style="background:radial-gradient(circle,rgba(249,115,22,0.30),transparent 70%)"></div>
@@ -32,7 +32,7 @@
         </div>
     </div>
 
-    {{-- ─── PENDING ALERT ─── --}}
+    {{-- â”€â”€â”€ PENDING ALERT â”€â”€â”€ --}}
     @if(!empty($pendingCount) && $pendingCount > 0)
         <div class="flex items-center gap-4 rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 to-orange-50 p-4 dark:border-amber-800/40 dark:from-amber-950/30 dark:to-orange-950/20">
             <div class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-900/40">
@@ -54,7 +54,7 @@
         </div>
     @endif
 
-    {{-- ─── LEAVE BALANCE CARDS ─── --}}
+    {{-- â”€â”€â”€ LEAVE BALANCE CARDS â”€â”€â”€ --}}
     {{-- Each card shows: Available days clearly, plus a plain breakdown row --}}
     <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         @forelse($balances as $balance)
@@ -88,7 +88,7 @@
                         {{-- Low balance warning --}}
                         @if($isLow && $available > 0)
                             <span class="mt-0.5 inline-flex items-center gap-1 rounded-full bg-white/25 px-2 py-0.5 text-[10px] font-bold text-white">
-                                ⚠ Low
+                                âš  Low
                             </span>
                         @elseif($available === 0.0 && $allocated > 0)
                             <span class="mt-0.5 inline-flex items-center gap-1 rounded-full bg-white/25 px-2 py-0.5 text-[10px] font-bold text-white">
@@ -126,17 +126,17 @@
                         <div class="flex flex-wrap gap-1.5 pt-1 border-t border-zinc-100 dark:border-zinc-800">
                             @if($carryFwd > 0)
                                 <span class="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-600 dark:bg-blue-950/30 dark:text-blue-400">
-                                    ↩ {{ (float)$carryFwd }} carried fwd
+                                    â†© {{ (float)$carryFwd }} carried fwd
                                 </span>
                             @endif
                             @if($encashed > 0)
                                 <span class="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-600 dark:bg-amber-950/30 dark:text-amber-400">
-                                    ₹ {{ (float)$encashed }} encashed
+                                    â‚¹ {{ (float)$encashed }} encashed
                                 </span>
                             @endif
                             @if($compOff > 0)
                                 <span class="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400">
-                                    ✓ {{ (float)$compOff }} comp off credits
+                                    âœ“ {{ (float)$compOff }} comp off credits
                                 </span>
                             @endif
                         </div>
@@ -151,7 +151,7 @@
         @endforelse
     </div>
 
-    {{-- ─── ANALYTICS SECTION ─── --}}
+    {{-- â”€â”€â”€ ANALYTICS SECTION â”€â”€â”€ --}}
     @php
         $maxWeekday   = max(max($weeklyPattern), 1);
         $maxMonthly   = max(max($monthlyStats), 1);
@@ -162,7 +162,7 @@
     @endphp
     <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
 
-        {{-- ── Weekly Pattern ── --}}
+        {{-- â”€â”€ Weekly Pattern â”€â”€ --}}
         <div class="rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
             <div class="mb-1 flex items-center justify-between">
                 <div class="flex items-center gap-2">
@@ -206,7 +206,7 @@
             @endif
         </div>
 
-        {{-- ── Leave Distribution ── --}}
+        {{-- â”€â”€ Leave Distribution â”€â”€ --}}
         <div class="rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
             <div class="mb-1 flex items-center gap-2">
                 <div class="rounded-lg bg-violet-50 p-1.5 dark:bg-violet-900/20">
@@ -250,7 +250,7 @@
             @endif
         </div>
 
-        {{-- ── Monthly Trend ── --}}
+        {{-- â”€â”€ Monthly Trend â”€â”€ --}}
         <div class="rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
             <div class="mb-1 flex items-center justify-between">
                 <div class="flex items-center gap-2">
@@ -269,7 +269,7 @@
                     <p class="text-xs font-medium text-zinc-400">No leave data for {{ now()->year }} yet.</p>
                 </div>
             @else
-                {{-- Pure CSS bar chart — no Chart.js, no CDN --}}
+                {{-- Pure CSS bar chart â€” no Chart.js, no CDN --}}
                 <div class="flex items-end gap-1 h-24">
                     @foreach($monthlyStats as $mi => $days)
                         @php
@@ -296,7 +296,7 @@
         </div>
     </div>
 
-    {{-- ─── HISTORY SECTION ─── --}}
+    {{-- â”€â”€â”€ HISTORY SECTION â”€â”€â”€ --}}
     <div class="overflow-hidden rounded-2xl border border-zinc-100 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
 
         {{-- Tab Nav --}}
@@ -357,7 +357,7 @@
                     </thead>
                     <tbody class="divide-y divide-zinc-50 dark:divide-zinc-800/30">
                         @forelse($requests as $req)
-                            <tr class="transition-colors hover:bg-zinc-50/60 dark:hover:bg-zinc-800/20">
+                            <tr id="request-{{ $req->id }}" class="transition-colors hover:bg-zinc-50/60 dark:hover:bg-zinc-800/20">
                                 <td class="py-4 pl-6 pr-4">
                                     <div class="flex items-center gap-2.5">
                                         <div class="size-2.5 rounded-full shadow-sm" style="background-color: {{ $req->leaveType->color }}"></div>
@@ -515,8 +515,8 @@
         </div>
     </div>
 
-    {{-- ─── REQUEST LEAVE MODAL ─── --}}
-    <flux:modal wire:model="showRequestModal" class="w-full max-w-lg">
+    {{-- â”€â”€â”€ REQUEST LEAVE MODAL â”€â”€â”€ --}}
+    <flux:modal wire:model.self="showRequestModal" class="w-full max-w-lg">
         <div class="space-y-6">
             <div class="flex items-start gap-3">
                 <div class="shrink-0 rounded-xl bg-violet-50 p-2.5 dark:bg-violet-900/20">
@@ -527,6 +527,12 @@
                     <flux:subheading>Submit a new leave application for review.</flux:subheading>
                 </div>
             </div>
+
+            @error('request')
+                <div class="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700 dark:bg-red-950/30 dark:border-red-800 dark:text-red-400">
+                    {{ $message }}
+                </div>
+            @enderror
 
             <form wire:submit="submitRequest" class="space-y-5">
                 <flux:select wire:model="leave_type_id" label="Leave Type" placeholder="Select type..." required>
@@ -560,7 +566,7 @@
         </div>
     </flux:modal>
 
-    {{-- ─── ENCASHMENT MODAL ─── --}}
+    {{-- â”€â”€â”€ ENCASHMENT MODAL â”€â”€â”€ --}}
     <flux:modal name="encashment-modal" class="max-w-md">
         <div class="space-y-6">
             <div class="flex items-start gap-3">

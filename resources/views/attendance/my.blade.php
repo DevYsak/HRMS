@@ -187,7 +187,11 @@
                         </div>
                         @if($todayAttendance->is_late)
                             <span class="px-2 py-1 bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-400 text-[9px] font-black rounded-lg">
-                                LATE {{ $todayAttendance->late_minutes ?? '' }}m
+                                @php
+                                $lm = (int)($todayAttendance->late_minutes ?? 0);
+                                $lateLabel = $lm >= 60 ? floor($lm/60).'h '.($lm%60).'m' : $lm.'m';
+                            @endphp
+                            LATE {{ $lateLabel }}
                             </span>
                         @else
                             <span class="px-2 py-1 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 text-[9px] font-black rounded-lg">ON TIME</span>
@@ -258,6 +262,7 @@
                             </button>
                         @endif
                         <button wire:click="checkOut"
+                            wire:confirm="Are you sure you want to clock out?"
                             class="py-3 bg-zinc-900 dark:bg-zinc-700 hover:bg-black text-white rounded-xl font-bold text-sm transition-all active:scale-95 flex items-center justify-center gap-1.5">
                             <flux:icon.arrow-right-start-on-rectangle class="size-4" /> Clock Out
                         </button>

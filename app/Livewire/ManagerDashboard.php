@@ -7,18 +7,97 @@ use App\Models\Employee;
 use App\Models\LeaveRequest;
 use App\Models\OtRequest;
 use App\Models\PerformanceReview;
+use App\Services\LeaveService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 
 class ManagerDashboard extends Component
 {
+    public bool $showRejectModal = false;
+
+    public ?int $rejectingLeaveId = null;
+
+    public string $rejectComment = '';
+
+    public function quickApproveLeave(int $leaveId): void
+    {
+        abort_unless(Auth::user()->canApproveLeave(), 403);
+
+        $leaveRequest = LeaveRequest::with('employee')->findOrFail($leaveId);
+
+        try {
+            app(LeaveService::class)->reviewRequest(
+                $leaveRequest,
+                [
+                    'leave_type_id' => $leaveRequest->leave_type_id,
+                    'start_date' => $leaveRequest->start_date->format('Y-m-d'),
+                    'end_date' => $leaveRequest->end_date->format('Y-m-d'),
+                    'reason' => $leaveRequest->reason,
+                    'is_half_day' => (bool) $leaveRequest->is_half_day,
+                ],
+                'approved',
+                Auth::id(),
+            );
+        } catch (\DomainException $exception) {
+            \Flux::toast($exception->getMessage(), variant: 'danger');
+
+            return;
+        }
+
+        \Flux::toast('Leave approved successfully.');
+    }
+
+    public function openRejectModal(int $leaveId): void
+    {
+        abort_unless(Auth::user()->canApproveLeave(), 403);
+
+        $this->rejectingLeaveId = $leaveId;
+        $this->rejectComment = '';
+        $this->showRejectModal = true;
+    }
+
+    public function quickRejectLeave(): void
+    {
+        abort_unless(Auth::user()->canApproveLeave(), 403);
+        abort_unless($this->rejectingLeaveId !== null, 422);
+
+        $this->validate([
+            'rejectComment' => ['required', 'min:5'],
+        ], [
+            'rejectComment.required' => 'Please provide a reason for rejection.',
+            'rejectComment.min' => 'Reason must be at least 5 characters.',
+        ]);
+
+        $leaveRequest = LeaveRequest::findOrFail($this->rejectingLeaveId);
+
+        app(LeaveService::class)->reviewRequest(
+            $leaveRequest,
+            [
+                'leave_type_id' => $leaveRequest->leave_type_id,
+                'start_date' => $leaveRequest->start_date->format('Y-m-d'),
+                'end_date' => $leaveRequest->end_date->format('Y-m-d'),
+                'reason' => $leaveRequest->reason,
+                'is_half_day' => (bool) $leaveRequest->is_half_day,
+            ],
+            'rejected',
+            Auth::id(),
+            $this->rejectComment,
+        );
+
+        $this->showRejectModal = false;
+        $this->rejectingLeaveId = null;
+        $this->rejectComment = '';
+
+        \Flux::toast('Leave request rejected.', variant: 'danger');
+    }
+
     public function render()
     {
-        $manager   = Auth::user()->employee;
-        $today     = Carbon::today();
-        $month     = $today->month;
-        $year      = $today->year;
+        $manager = Auth::user()->employee;
+        $today = Carbon::today();
+        $month = $today->month;
+        $year = $today->year;
 
         // My direct reports
         $teamIds = $manager
@@ -32,8 +111,8 @@ class ManagerDashboard extends Component
             ->get();
 
         $presentCount = $teamAttendance->whereNotNull('check_in')->count();
-        $lateCount    = $teamAttendance->where('is_late', true)->count();
-        $absentCount  = $teamIds->count() - $presentCount;
+        $lateCount = $teamAttendance->where('is_late', true)->count();
+        $absentCount = $teamIds->count() - $presentCount;
 
         // --- Full team attendance list ---
         $teamAttendanceList = Employee::with(['user', 'department'])
@@ -41,13 +120,14 @@ class ManagerDashboard extends Component
             ->get()
             ->map(function ($emp) use ($teamAttendance) {
                 $record = $teamAttendance->firstWhere('employee_id', $emp->id);
+
                 return [
-                    'name'       => $emp->user->name,
+                    'name' => $emp->user->name,
                     'department' => $emp->department?->name,
-                    'check_in'   => $record?->check_in?->format('H:i'),
-                    'check_out'  => $record?->check_out?->format('H:i'),
-                    'status'     => $record?->status ?? 'absent',
-                    'is_late'    => $record?->is_late ?? false,
+                    'check_in' => $record?->check_in?->format('H:i'),
+                    'check_out' => $record?->check_out?->format('H:i'),
+                    'status' => $record?->status ?? 'absent',
+                    'is_late' => $record?->is_late ?? false,
                 ];
             });
 

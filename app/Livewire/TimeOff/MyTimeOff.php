@@ -105,7 +105,9 @@ class MyTimeOff extends Component
                 $this->is_half_day,
             );
         } catch (\DomainException $exception) {
-            $this->addError('leave_type_id', $exception->getMessage());
+            // Surface service-level errors as a modal-level message so it's obvious
+            // (e.g. insufficient balance). Attach to a dedicated 'request' key.
+            $this->addError('request', $exception->getMessage());
 
             return;
         }

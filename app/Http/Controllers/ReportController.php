@@ -86,8 +86,8 @@ class ReportController extends Controller
         $to = $from->copy()->endOfMonth();
 
         $rows = OvertimeRecord::with('employee.user', 'otRequest')
-            ->whereBetween('ot_date', [$from->toDateString(), $to->toDateString()])
-            ->orderBy('ot_date')
+            ->whereBetween('work_date', [$from->toDateString(), $to->toDateString()])
+            ->orderBy('work_date')
             ->get();
 
         $filename = "ot-records-{$year}-{$month}.csv";
@@ -104,7 +104,7 @@ class ReportController extends Controller
                 fputcsv($handle, [
                     $row->employee->employee_id ?? '',
                     $row->employee->user->name ?? '',
-                    $row->ot_date ?? '',
+                    $row->work_date?->toDateString() ?? '',
                     $row->ot_hours ?? '',
                     $row->ot_amount ?? '',
                     $row->is_paid ? 'Yes' : 'No',

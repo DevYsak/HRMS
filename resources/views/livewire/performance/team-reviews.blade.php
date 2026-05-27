@@ -7,6 +7,9 @@
     </div>
 
     <div class="pulse-card">
+        <div class="px-6 pt-4 pb-3 border-b border-zinc-100 dark:border-zinc-800">
+            <flux:input wire:model.live.debounce.300ms="search" placeholder="Search by employee name..." icon="magnifying-glass" class="max-w-xs" />
+        </div>
         <div class="overflow-x-auto -mx-6">
             <table class="w-full text-sm">
                 <thead>
@@ -54,12 +57,12 @@
     </div>
 
     {{-- Manager Review Form Modal --}}
-    <flux:modal wire:model="showReviewModal" class="w-full max-w-4xl">
+    <flux:modal wire:model.self="showReviewModal" class="w-full max-w-4xl">
         <div class="space-y-6">
             @if($activeReview)
                 <div>
                     <flux:heading size="lg">{{ $activeReview->status === 'submitted' ? 'Review Assessment' : 'Performance Review Details' }}</flux:heading>
-                    <flux:subheading>{{ $activeReview->employee->user->name }} • {{ $activeReview->cycle->name }}</flux:subheading>
+                    <flux:subheading>{{ $activeReview->employee->user->name }} â€¢ {{ $activeReview->cycle->name }}</flux:subheading>
                 </div>
 
                 <div class="max-h-[70vh] overflow-y-auto px-1 space-y-8">

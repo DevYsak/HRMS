@@ -9,10 +9,15 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Livewire\WithFileUploads;
+use Livewire\WithPagination;
 
 class Reimbursements extends Component
 {
     use WithFileUploads;
+    use WithPagination;
+
+    // Modal
+    public bool $showModal = false;
 
     // Form fields
     public int $employeeId = 0;
@@ -43,6 +48,17 @@ class Reimbursements extends Component
         $this->expenseDate = Carbon::today()->toDateString();
     }
 
+    public function openModal(): void
+    {
+        $this->reset(['employeeId', 'title', 'description', 'amount', 'receipt']);
+        $this->resetErrorBag();
+        $this->expenseDate = Carbon::today()->toDateString();
+        $this->month = Carbon::now()->format('Y-m');
+        $this->category = 'general';
+        $this->amount = 0;
+        $this->showModal = true;
+    }
+
     public function submit(ReimbursementService $reimbursementService): void
     {
         $this->validate([
@@ -57,7 +73,7 @@ class Reimbursements extends Component
 
         $receiptPath = null;
         if ($this->receipt) {
-            $receiptPath = $this->receipt->store('reimbursements', 'private');
+            $receiptPath = $this->receipt->store('reimbursements', 'local');
         }
 
         $employee = Employee::findOrFail($this->employeeId);
@@ -71,9 +87,9 @@ class Reimbursements extends Component
             'receipt_path' => $receiptPath,
         ]);
 
+        $this->showModal = false;
         $this->reset(['employeeId', 'title', 'description', 'amount', 'expenseDate', 'category', 'receipt']);
-        $this->dispatch('flux:modal:close', name: 'reimbursement-modal');
-        \Flux::toast('Reimbursement claim submitted for approval.');
+        \Flux::toast('Reimbursement submitted for approval.');
     }
 
     public function approve(int $id, ReimbursementService $reimbursementService): void

@@ -47,10 +47,10 @@
                         <tr class="hover:bg-zinc-50/30 transition-colors">
                             <td class="py-3 pl-6 pr-4">
                                 <div class="font-medium text-zinc-900 dark:text-white">{{ $review->employee->user->name ?? 'Unknown' }}</div>
-                                <div class="text-[10px] text-zinc-500">{{ $review->employee->jobTitle?->name ?? '—' }}</div>
+                                <div class="text-[10px] text-zinc-500">{{ $review->employee->jobTitle?->name ?? 'â€”' }}</div>
                             </td>
                             <td class="py-3 pr-4 text-zinc-600 dark:text-zinc-300">
-                                {{ $review->cycle?->name ?? '—' }}
+                                {{ $review->cycle?->name ?? 'â€”' }}
                             </td>
                             <td class="py-3 pr-4 text-zinc-600 dark:text-zinc-300">
                                 {{ $review->reviewer?->user?->name ?? 'No Manager' }}
@@ -64,7 +64,7 @@
                                         <span class="ml-1 text-[10px] text-zinc-400">({{ $review->overall_rating }}/5)</span>
                                     </div>
                                 @else
-                                    <span class="text-zinc-400">—</span>
+                                    <span class="text-zinc-400">â€”</span>
                                 @endif
                             </td>
                             <td class="py-3 pr-4">
@@ -92,13 +92,13 @@
     </div>
 
     {{-- View Review Modal --}}
-    <flux:modal wire:model="showViewModal" class="w-full max-w-2xl">
+    <flux:modal wire:model.self="showViewModal" class="w-full max-w-2xl">
         @if($viewingReview)
         <div class="space-y-5">
             <div class="flex items-start justify-between">
                 <div>
                     <flux:heading size="lg">Performance Review</flux:heading>
-                    <flux:subheading>{{ $viewingReview->employee->user?->name }} · {{ $viewingReview->cycle?->name }}</flux:subheading>
+                    <flux:subheading>{{ $viewingReview->employee->user?->name }} Â· {{ $viewingReview->cycle?->name }}</flux:subheading>
                 </div>
                 <span class="badge-{{ $viewingReview->statusColor() }} text-xs px-2 py-1 rounded-full">{{ $viewingReview->statusLabel() }}</span>
             </div>
@@ -131,13 +131,13 @@
             {{-- Manager Feedback --}}
             @if($viewingReview->manager_feedback || $viewingReview->status === 'manager_reviewed' || $viewingReview->status === 'locked')
             <div class="rounded-xl bg-blue-50 dark:bg-blue-950/20 p-4 space-y-3">
-                <p class="text-xs font-bold uppercase tracking-wider text-blue-400">Manager Feedback · {{ $viewingReview->reviewer?->user?->name ?? 'N/A' }}</p>
+                <p class="text-xs font-bold uppercase tracking-wider text-blue-400">Manager Feedback Â· {{ $viewingReview->reviewer?->user?->name ?? 'N/A' }}</p>
                 @if($viewingReview->manager_feedback)
                     <p class="text-sm text-zinc-700 dark:text-zinc-300">{{ $viewingReview->manager_feedback }}</p>
                 @endif
                 @if($viewingReview->promotion_recommended)
                     <span class="inline-flex items-center gap-1 rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
-                        ✓ Promotion Recommended
+                        âœ“ Promotion Recommended
                     </span>
                 @endif
                 @if(!$viewingReview->manager_feedback)
@@ -156,13 +156,13 @@
                     <div class="mt-2 grid grid-cols-2 gap-3 text-xs text-zinc-500">
                         <div>
                             <span class="font-semibold">Self: </span>
-                            {{ $goal->self_rating ? $goal->self_rating.'/5' : '—' }}
-                            @if($goal->self_comment) · "{{ $goal->self_comment }}" @endif
+                            {{ $goal->self_rating ? $goal->self_rating.'/5' : 'â€”' }}
+                            @if($goal->self_comment) Â· "{{ $goal->self_comment }}" @endif
                         </div>
                         <div>
                             <span class="font-semibold">Manager: </span>
-                            {{ $goal->manager_rating ? $goal->manager_rating.'/5' : '—' }}
-                            @if($goal->manager_comment) · "{{ $goal->manager_comment }}" @endif
+                            {{ $goal->manager_rating ? $goal->manager_rating.'/5' : 'â€”' }}
+                            @if($goal->manager_comment) Â· "{{ $goal->manager_comment }}" @endif
                         </div>
                     </div>
                 </div>

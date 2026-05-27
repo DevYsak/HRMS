@@ -84,7 +84,7 @@
         </div>
     </div>
     {{-- Management Modal --}}
-    <flux:modal wire:model="showManageModal" class="w-full max-w-lg">
+    <flux:modal wire:model.self="showManageModal" class="w-full max-w-lg">
         <div class="space-y-5">
             <div>
                 <flux:heading size="lg">Manage Leave Request</flux:heading>
@@ -134,7 +134,7 @@
                         wire:model="form.reviewer_comment"
                         label="Reviewer Comment{{ $superAdminLocked ? ' (Required for override)' : '' }}"
                         rows="2"
-                        placeholder="{{ $superAdminLocked ? 'Explain why you are overriding the Super Admin approval…' : 'Optional comment…' }}"
+                        placeholder="{{ $superAdminLocked ? 'Explain why you are overriding the Super Admin approvalâ€¦' : 'Optional commentâ€¦' }}"
                     />
                     @error('form.reviewer_comment')
                         <p class="mt-1 text-xs text-red-500">{{ $message }}</p>

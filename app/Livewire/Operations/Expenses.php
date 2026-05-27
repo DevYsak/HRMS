@@ -86,7 +86,13 @@ class Expenses extends Component
     public function submit(ExpenseClaimService $expenseClaimService): void
     {
         $employee = Auth::user()->employee;
-        abort_unless($employee, 403);
+
+        if (! $employee) {
+            \Flux::toast('You do not have an active employee profile. Contact HR.', variant: 'danger');
+            $this->showSubmitModal = false;
+
+            return;
+        }
 
         $this->validate([
             'title' => ['required', 'string', 'max:191'],
@@ -97,7 +103,7 @@ class Expenses extends Component
             'receipt' => ['required', 'file', 'max:5120', 'mimes:pdf,jpg,jpeg,png,webp'],
         ]);
 
-        $receiptPath = $this->receipt?->store('expense-claims', 'private');
+        $receiptPath = $this->receipt?->store('expense-claims', 'local');
 
         $expenseClaimService->submit($employee, [
             'title' => $this->title,

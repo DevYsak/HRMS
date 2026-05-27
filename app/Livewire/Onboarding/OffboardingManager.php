@@ -5,6 +5,7 @@ namespace App\Livewire\Onboarding;
 use App\Models\Asset;
 use App\Models\Employee;
 use App\Models\ExitRecord;
+use App\Notifications\OffboardingDetailsNotification;
 use App\Services\AssetAssignmentService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -98,6 +99,9 @@ class OffboardingManager extends Component
         if (now()->startOfDay()->greaterThan(Carbon::parse($this->lastWorkingDay)->endOfDay())) {
             $employee->update(['status' => 'inactive']);
         }
+
+        // Notify the employee about their offboarding details
+        $employee->user->notify(new OffboardingDetailsNotification($exitRecord));
 
         \Flux::toast('Offboarding processed successfully.');
     }

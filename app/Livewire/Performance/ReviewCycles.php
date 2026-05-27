@@ -78,12 +78,12 @@ class ReviewCycles extends Component
 
         if ($this->editingId) {
             ReviewCycle::findOrFail($this->editingId)->update($data);
-            session()->flash('status', 'Review cycle updated.');
+            \Flux::toast('Review cycle updated.');
         } else {
             $cycle = ReviewCycle::create($data);
             // Auto-create self & manager reviews for all active employees
             $this->generateReviewsForCycle($cycle);
-            session()->flash('status', 'Review cycle created and reviews assigned to employees.');
+            \Flux::toast('Review cycle created and reviews assigned to employees.');
         }
 
         $this->showModal = false;
@@ -121,14 +121,14 @@ class ReviewCycles extends Component
     {
         abort_unless(Auth::user()->canManageEmployees(), 403);
         ReviewCycle::findOrFail($id)->update(['status' => 'active']);
-        session()->flash('status', 'Cycle activated.');
+        \Flux::toast('Cycle activated.');
     }
 
     public function close(int $id): void
     {
         abort_unless(Auth::user()->canManageEmployees(), 403);
         ReviewCycle::findOrFail($id)->update(['status' => 'closed']);
-        session()->flash('status', 'Cycle closed.');
+        \Flux::toast('Cycle closed.');
     }
 
     public function render()

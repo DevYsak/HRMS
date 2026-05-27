@@ -1,0 +1,149 @@
+<?php
+
+use App\Models\Employee;
+use App\Models\LeaveRequest;
+use App\Models\LeaveType;
+use App\Models\User;
+use App\Services\LeaveService;
+use Carbon\Carbon;
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function makeEmployee(): Employee
+{
+    $user = User::factory()->create();
+
+    return Employee::factory()->create(['user_id' => $user->id]);
+}
+
+function mdlType(): LeaveType
+{
+    return LeaveType::firstOrCreate(
+        ['category' => 'mdl'],
+        [
+            'name' => 'Maternity Leave',
+            'is_paid' => false,
+            'color' => '#ec4899',
+            'allow_carry_forward' => false,
+            'carry_forward_limit' => 0,
+            'allow_encashment' => false,
+        ],
+    );
+}
+
+function approvedMdl(Employee $employee, string $start, string $end, bool $halfDay = false): LeaveRequest
+{
+    return LeaveRequest::create([
+        'employee_id' => $employee->id,
+        'leave_type_id' => mdlType()->id,
+        'start_date' => $start,
+        'end_date' => $end,
+        'is_half_day' => $halfDay,
+        'days' => $halfDay ? 0.5 : (Carbon::parse($start)->diffInDays(Carbon::parse($end)) + 1),
+        'reason' => 'Maternity',
+        'status' => 'approved',
+    ]);
+}
+
+function pendingMdl(Employee $employee, string $start, string $end, bool $halfDay = false): LeaveRequest
+{
+    return LeaveRequest::create([
+        'employee_id' => $employee->id,
+        'leave_type_id' => mdlType()->id,
+        'start_date' => $start,
+        'end_date' => $end,
+        'is_half_day' => $halfDay,
+        'days' => $halfDay ? 0.5 : (Carbon::parse($start)->diffInDays(Carbon::parse($end)) + 1),
+        'reason' => 'Maternity',
+        'status' => 'pending',
+    ]);
+}
+
+// ─── Approved-leave conflicts ──────────────────────────────────────────────────
+
+it('blocks a new MDL full-day when an approved MDL full-day overlaps', function () {
+    $employee = makeEmployee();
+    approvedMdl($employee, '2026-06-01', '2026-06-30');
+
+    expect(fn () => app(LeaveService::class)->submitRequest(
+        $employee, mdlType(), '2026-06-15', '2026-06-15', 'test',
+    ))->toThrow(DomainException::class, 'approved leave');
+});
+
+it('blocks a new MDL half-day when an approved MDL full-day overlaps', function () {
+    $employee = makeEmployee();
+    approvedMdl($employee, '2026-06-01', '2026-06-30');
+
+    expect(fn () => app(LeaveService::class)->submitRequest(
+        $employee, mdlType(), '2026-06-15', '2026-06-15', 'test', isHalfDay: true,
+    ))->toThrow(DomainException::class, 'approved leave');
+});
+
+it('blocks a new MDL full-day when an approved MDL half-day is on the same date', function () {
+    $employee = makeEmployee();
+    approvedMdl($employee, '2026-07-10', '2026-07-10', halfDay: true);
+
+    expect(fn () => app(LeaveService::class)->submitRequest(
+        $employee, mdlType(), '2026-07-10', '2026-07-10', 'test',
+    ))->toThrow(DomainException::class, 'approved leave');
+});
+
+it('blocks a new MDL half-day when an approved MDL half-day is on the same date', function () {
+    $employee = makeEmployee();
+    approvedMdl($employee, '2026-07-10', '2026-07-10', halfDay: true);
+
+    expect(fn () => app(LeaveService::class)->submitRequest(
+        $employee, mdlType(), '2026-07-10', '2026-07-10', 'test', isHalfDay: true,
+    ))->toThrow(DomainException::class, 'approved leave');
+});
+
+// ─── Pending-leave conflicts ───────────────────────────────────────────────────
+
+it('blocks a new MDL request when a pending MDL already exists on overlapping dates', function () {
+    $employee = makeEmployee();
+    pendingMdl($employee, '2026-08-01', '2026-08-31');
+
+    expect(fn () => app(LeaveService::class)->submitRequest(
+        $employee, mdlType(), '2026-08-15', '2026-08-15', 'test',
+    ))->toThrow(DomainException::class, 'pending leave');
+});
+
+it('blocks a new MDL half-day when a pending MDL half-day is on the same date', function () {
+    $employee = makeEmployee();
+    pendingMdl($employee, '2026-08-10', '2026-08-10', halfDay: true);
+
+    expect(fn () => app(LeaveService::class)->submitRequest(
+        $employee, mdlType(), '2026-08-10', '2026-08-10', 'test', isHalfDay: true,
+    ))->toThrow(DomainException::class, 'pending leave');
+});
+
+// ─── Non-overlapping is allowed ───────────────────────────────────────────────
+
+it('allows MDL on dates outside the approved MDL window', function () {
+    $employee = makeEmployee();
+    approvedMdl($employee, '2026-06-01', '2026-06-30');
+
+    $request = app(LeaveService::class)->submitRequest(
+        $employee, mdlType(), '2026-07-01', '2026-07-01', 'post-MDL follow-up',
+    );
+
+    expect($request)->toBeInstanceOf(LeaveRequest::class)
+        ->and($request->status)->toBe('pending');
+});
+
+// ─── Cross-type overlap is also blocked ───────────────────────────────────────
+
+it('blocks any leave type when approved MDL covers those dates', function () {
+    $employee = makeEmployee();
+    approvedMdl($employee, '2026-06-01', '2026-06-30');
+
+    $sickLeave = LeaveType::firstOrCreate(
+        ['category' => 'sick'],
+        ['name' => 'Sick Leave', 'is_paid' => false, 'color' => '#ef4444',
+            'allow_carry_forward' => false, 'carry_forward_limit' => 0, 'allow_encashment' => false],
+    );
+
+    expect(fn () => app(LeaveService::class)->submitRequest(
+        $employee, $sickLeave, '2026-06-10', '2026-06-10', 'sick',
+    ))->toThrow(DomainException::class, 'approved leave');
+});

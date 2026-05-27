@@ -90,6 +90,13 @@ Schedule::command('hrms:carry-forward-leaves')
     ->withoutOverlapping()
     ->runInBackground();
 
+// Pull biometric punch logs every 5 minutes during working hours (07:00–22:00 IST)
+Schedule::command('hrms:sync-biometric')
+    ->everyFiveMinutes()
+    ->between('07:00', '22:00')
+    ->withoutOverlapping()
+    ->runInBackground();
+
 // Spatie Backup
 Schedule::command('backup:clean')->daily()->at('01:00');
 Schedule::command('backup:run')->daily()->at('01:30');

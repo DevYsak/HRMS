@@ -19,18 +19,18 @@ class EmployeeSeeder extends Seeder
         // Includes both new spec emails and legacy fallback emails.
         $mappings = [
             // New spec users (UserSeeder v2)
-            'mazhar@conexus.in' => ['code' => 'ADMIN', 'shift' => $itShift],
-            'shivani@conexus.in' => ['code' => 'HR',    'shift' => $itShift],
-            'rustom@conexus.in' => ['code' => 'PRD',   'shift' => $itShift],
-            'nick@conexus.in' => ['code' => 'PRD',   'shift' => $ukShift],
-            'nikia@conexus.in' => ['code' => 'PRD',   'shift' => $ukShift],
-            'emad@conexus.in' => ['code' => 'ADMIN', 'shift' => $itShift],
-            'employee@conexus.in' => ['code' => 'PRD',   'shift' => $itShift],
+            'mazhar@conexus-ns.com' => ['code' => 'ADMIN', 'shift' => $itShift],
+            'shivani@conexus-ns.com' => ['code' => 'HR',    'shift' => $itShift],
+            'rustom@conexus-ns.com' => ['code' => 'PRD',   'shift' => $itShift],
+            'nick@conexus-ns.com' => ['code' => 'PRD',   'shift' => $ukShift],
+            'nikia@conexus-ns.com' => ['code' => 'PRD',   'shift' => $ukShift],
+            'emad@conexus-ns.com' => ['code' => 'ADMIN', 'shift' => $itShift],
+            'employee@conexus-ns.com' => ['code' => 'PRD',   'shift' => $itShift],
 
             // Legacy emails (UserSeeder v1 — backward compat with existing DBs)
-            'admin@conexus.in' => ['code' => 'ADMIN', 'shift' => $itShift],
-            'pristia@conexus.in' => ['code' => 'HR',    'shift' => $itShift],
-            'rayna@conexus.in' => ['code' => 'PRD',   'shift' => $itShift],
+            'admin@conexus-ns.com' => ['code' => 'ADMIN', 'shift' => $itShift],
+            'pristia@conexus-ns.com' => ['code' => 'HR',    'shift' => $itShift],
+            'rayna@conexus-ns.com' => ['code' => 'PRD',   'shift' => $itShift],
             'test@example.com' => ['code' => 'PRD',   'shift' => $itShift],
         ];
 

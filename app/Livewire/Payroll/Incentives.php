@@ -11,6 +11,9 @@ use Livewire\Component;
 
 class Incentives extends Component
 {
+    // Modal
+    public bool $showModal = false;
+
     // Form fields
     public int $employeeId = 0;
 
@@ -33,6 +36,14 @@ class Incentives extends Component
         $this->filterMonth = Carbon::now()->format('Y-m');
     }
 
+    public function openModal(): void
+    {
+        $this->reset(['employeeId', 'title', 'description', 'amount']);
+        $this->resetErrorBag();
+        $this->month = Carbon::now()->format('Y-m');
+        $this->showModal = true;
+    }
+
     public function submit(IncentiveService $incentiveService): void
     {
         $this->validate([
@@ -50,9 +61,9 @@ class Incentives extends Component
             'month' => $this->month,
         ], Auth::id());
 
+        $this->showModal = false;
         $this->reset(['employeeId', 'title', 'description', 'amount']);
-        $this->dispatch('flux:modal:close', name: 'incentive-modal');
-        \Flux::toast('Incentive request submitted for approval.');
+        \Flux::toast('Incentive submitted for approval.');
     }
 
     public function approve(int $id, IncentiveService $incentiveService): void

@@ -9,11 +9,14 @@ use Livewire\Component;
 class Goals extends Component
 {
     public bool $showModal = false;
+
     public ?int $editingId = null;
 
     // Form fields
     public string $title = '';
+
     public string $description = '';
+
     public string $due_date = '';
 
     public function create(): void
@@ -48,6 +51,7 @@ class Goals extends Component
                 'description' => $this->description ?: null,
                 'due_date' => $this->due_date ?: null,
             ]);
+            \Flux::toast('Goal updated successfully.');
         } else {
             ReviewGoal::create([
                 'employee_id' => $employee->id,
@@ -55,6 +59,7 @@ class Goals extends Component
                 'description' => $this->description ?: null,
                 'due_date' => $this->due_date ?: null,
             ]);
+            \Flux::toast('Goal created successfully.');
         }
 
         $this->showModal = false;
@@ -72,6 +77,7 @@ class Goals extends Component
     public function delete(int $id): void
     {
         ReviewGoal::findOrFail($id)->delete();
+        \Flux::toast('Goal deleted.');
     }
 
     public function render()

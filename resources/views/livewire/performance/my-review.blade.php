@@ -76,7 +76,7 @@
     </div>
 
     {{-- Self Review Form Modal --}}
-    <flux:modal wire:model="showSelfReviewModal" class="w-full max-w-3xl">
+    <flux:modal wire:model.self="showSelfReviewModal" class="w-full max-w-3xl">
         <div class="space-y-6">
             <div>
                 <flux:heading size="lg">{{ $activeReview?->status === 'draft' ? 'Self Assessment' : 'View Performance Review' }}</flux:heading>

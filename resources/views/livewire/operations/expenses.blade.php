@@ -1,6 +1,6 @@
 <flux:main class="min-h-screen bg-zinc-50 dark:bg-zinc-950 p-6 space-y-5">
 
-    {{-- ─── HEADER ─── --}}
+    {{-- â”€â”€â”€ HEADER â”€â”€â”€ --}}
     <div class="relative overflow-hidden rounded-2xl bg-gradient-to-br from-orange-500 via-orange-600 to-amber-600 p-7 shadow-xl shadow-orange-500/20">
         <div class="pointer-events-none absolute -top-16 -right-16 size-56 rounded-full bg-white/10 blur-3xl"></div>
         <div class="pointer-events-none absolute inset-0 opacity-[0.06]" style="background-image: radial-gradient(circle, white 1px, transparent 1px); background-size: 22px 22px;"></div>
@@ -28,7 +28,7 @@
         </div>
     </div>
 
-    {{-- ─── FILTERS ─── --}}
+    {{-- â”€â”€â”€ FILTERS â”€â”€â”€ --}}
     <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl px-5 py-4">
         <div class="flex flex-wrap items-center gap-3">
             <flux:input wire:model.live.debounce.300ms="search" placeholder="Search title..." icon="magnifying-glass" size="sm" class="w-52" />
@@ -58,7 +58,7 @@
         </div>
     </div>
 
-    {{-- ─── TABLE ─── --}}
+    {{-- â”€â”€â”€ TABLE â”€â”€â”€ --}}
     <div class="overflow-hidden rounded-2xl border border-zinc-100 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
         <div class="overflow-x-auto">
             <table class="w-full text-left text-sm">
@@ -89,7 +89,7 @@
                             </td>
                             <td class="px-4 py-4">
                                 <span class="font-black tabular-nums text-zinc-900 dark:text-white">
-                                    ₹{{ number_format($expense->amount, 2) }}
+                                    â‚¹{{ number_format($expense->amount, 2) }}
                                 </span>
                             </td>
                             <td class="px-4 py-4 text-sm text-zinc-500 dark:text-zinc-400">
@@ -123,7 +123,7 @@
                                 @elseif($expense->status->value === 'rejected' && $expense->rejection_reason)
                                     <span class="block max-w-xs text-right text-xs italic text-rose-400">{{ $expense->rejection_reason }}</span>
                                 @else
-                                    <span class="text-xs text-zinc-300 dark:text-zinc-600">—</span>
+                                    <span class="text-xs text-zinc-300 dark:text-zinc-600">â€”</span>
                                 @endif
                             </td>
                         </tr>
@@ -152,8 +152,8 @@
         @endif
     </div>
 
-    {{-- ─── REJECT MODAL ─── --}}
-    <flux:modal wire:model="showRejectModal" class="max-w-md">
+    {{-- â”€â”€â”€ REJECT MODAL â”€â”€â”€ --}}
+    <flux:modal wire:model.self="showRejectModal" class="max-w-md">
         <div class="space-y-5">
             <div class="flex items-start gap-3">
                 <div class="shrink-0 rounded-xl bg-rose-50 p-2.5 dark:bg-rose-900/20">
@@ -175,8 +175,8 @@
         </div>
     </flux:modal>
 
-    {{-- ─── SUBMIT MODAL ─── --}}
-    <flux:modal wire:model="showSubmitModal" class="max-w-xl">
+    {{-- â”€â”€â”€ SUBMIT MODAL â”€â”€â”€ --}}
+    <flux:modal wire:model.self="showSubmitModal" class="max-w-xl">
         <div class="space-y-5">
             <div class="flex items-start gap-3">
                 <div class="shrink-0 rounded-xl bg-orange-50 p-2.5 dark:bg-orange-900/20">
@@ -188,41 +188,60 @@
                 </div>
             </div>
 
-            <div class="space-y-4">
-                <flux:input wire:model="title" label="Title" placeholder="e.g. Client dinner, Flight to Mumbai" required />
+            <form wire:submit="submit" class="space-y-4">
+                <flux:field>
+                    <flux:input wire:model="title" label="Title" placeholder="e.g. Client dinner, Flight to Mumbai" required />
+                    @error('title') <flux:error>{{ $message }}</flux:error> @enderror
+                </flux:field>
 
                 <div class="grid grid-cols-2 gap-4">
-                    <flux:select wire:model="category" label="Category">
-                        <option value="travel">Travel</option>
-                        <option value="meals">Meals & Entertainment</option>
-                        <option value="accommodation">Accommodation</option>
-                        <option value="equipment">Equipment</option>
-                        <option value="software">Software / Subscriptions</option>
-                        <option value="training">Training</option>
-                        <option value="general">General</option>
-                    </flux:select>
-                    <flux:input wire:model="amount" type="number" step="0.01" min="1" label="Amount (₹)" required />
+                    <flux:field>
+                        <flux:select wire:model="category" label="Category">
+                            <option value="travel">Travel</option>
+                            <option value="meals">Meals & Entertainment</option>
+                            <option value="accommodation">Accommodation</option>
+                            <option value="equipment">Equipment</option>
+                            <option value="software">Software / Subscriptions</option>
+                            <option value="training">Training</option>
+                            <option value="general">General</option>
+                        </flux:select>
+                        @error('category') <flux:error>{{ $message }}</flux:error> @enderror
+                    </flux:field>
+                    <flux:field>
+                        <flux:input wire:model="amount" type="number" step="0.01" min="1" label="Amount (â‚¹)" required />
+                        @error('amount') <flux:error>{{ $message }}</flux:error> @enderror
+                    </flux:field>
                 </div>
 
-                <flux:input wire:model="expenseDate" type="date" label="Expense Date"
-                    max="{{ now()->toDateString() }}" required />
+                <flux:field>
+                    <flux:input wire:model="expenseDate" type="date" label="Expense Date"
+                        max="{{ now()->toDateString() }}" required />
+                    @error('expenseDate') <flux:error>{{ $message }}</flux:error> @enderror
+                </flux:field>
 
                 <flux:field>
-                    <flux:label>Receipt <span class="text-zinc-400 font-normal">(PDF, JPG, PNG — max 5MB)</span></flux:label>
+                    <flux:label>Receipt <span class="text-zinc-400 font-normal">(PDF, JPG, PNG â€” max 5MB)</span></flux:label>
                     <flux:input wire:model="receipt" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" class="mt-1" />
                     @error('receipt') <flux:error>{{ $message }}</flux:error> @enderror
                 </flux:field>
 
-                <flux:textarea wire:model="notes" label="Notes (optional)" rows="2"
-                    placeholder="Any additional details for the reviewer..." />
-            </div>
+                <flux:field>
+                    <flux:textarea wire:model="notes" label="Notes (optional)" rows="2"
+                        placeholder="Any additional details for the reviewer..." />
+                    @error('notes') <flux:error>{{ $message }}</flux:error> @enderror
+                </flux:field>
 
-            <div class="flex justify-end gap-3 pt-2">
-                <flux:modal.close>
-                    <flux:button variant="ghost">Cancel</flux:button>
-                </flux:modal.close>
-                <flux:button variant="primary" wire:click="submit" icon="paper-airplane">Submit Claim</flux:button>
-            </div>
+                <div class="flex justify-end gap-3 pt-2">
+                    <flux:modal.close>
+                        <flux:button type="button" variant="ghost">Cancel</flux:button>
+                    </flux:modal.close>
+                    <flux:button type="submit" variant="primary" icon="paper-airplane"
+                        wire:loading.attr="disabled" wire:target="submit">
+                        <span wire:loading.remove wire:target="submit">Submit Claim</span>
+                        <span wire:loading wire:target="submit">Submittingâ€¦</span>
+                    </flux:button>
+                </div>
+            </form>
         </div>
     </flux:modal>
 

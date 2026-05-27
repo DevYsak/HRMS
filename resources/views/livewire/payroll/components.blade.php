@@ -84,7 +84,7 @@
     </div>
 
     {{-- Management Modal --}}
-    <flux:modal wire:model="showModal" class="w-full max-w-lg">
+    <flux:modal wire:model.self="showModal" class="w-full max-w-lg">
         <div class="space-y-6">
             <div>
                 <flux:heading size="lg">{{ $editingId ? 'Edit Component' : 'New Salary Component' }}</flux:heading>

@@ -1,8 +1,8 @@
 <flux:main class="min-h-screen bg-zinc-50 dark:bg-zinc-950">
 
-    {{-- ══════════════════════════════════════════
+    {{-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     PAGE HEADER
-    ══════════════════════════════════════════ --}}
+    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• --}}
     <div class="pulse-hero">
         <div
             class="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_rgba(249,115,22,0.22),_transparent_65%)]">
@@ -17,7 +17,7 @@
                     <span class="text-white/80 font-semibold">Employees Attendance</span>
                 </div>
                 <h1 class="text-2xl font-black text-white tracking-tight">Employees Attendance</h1>
-                <p class="text-sm text-white/55 mt-0.5">Today — {{ now()->format('l, d M Y') }}</p>
+                <p class="text-sm text-white/55 mt-0.5">Today â€” {{ now()->format('l, d M Y') }}</p>
             </div>
             <div class="flex items-center gap-2 shrink-0">
                 <a href="{{ route('reports.attendance-summary', ['month' => now()->month, 'year' => now()->year]) }}"
@@ -33,9 +33,9 @@
         </div>
     </div>
 
-    {{-- ══════════════════════════════════════════
+    {{-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     KPI STATS BAR
-    ══════════════════════════════════════════ --}}
+    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• --}}
     <div
         class="space-y-4 m-[30px] rounded-[10px] grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-0 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
         @php
@@ -64,9 +64,9 @@
 
     <div class="p-4 md:p-6 space-y-4">
 
-        {{-- ══════════════════════════════════════════
+        {{-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         PENDING REGULARISATIONS
-        ══════════════════════════════════════════ --}}
+        â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• --}}
         @if($pendingRegularisations->isNotEmpty())
             <div
                 class="bg-white dark:bg-zinc-900 border border-amber-200 dark:border-amber-800/50 rounded-2xl overflow-hidden">
@@ -125,7 +125,7 @@
                                     <td class="py-3 pr-4">
                                         <span
                                             class="font-mono text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 px-2 py-0.5 rounded">
-                                            {{ \Carbon\Carbon::parse($req->requested_check_in)->format('H:i') }} →
+                                            {{ \Carbon\Carbon::parse($req->requested_check_in)->format('H:i') }} â†’
                                             {{ \Carbon\Carbon::parse($req->requested_check_out)->format('H:i') }}
                                         </span>
                                     </td>
@@ -144,9 +144,9 @@
             </div>
         @endif
 
-        {{-- ══════════════════════════════════════════
+        {{-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         FILTER BAR
-        ══════════════════════════════════════════ --}}
+        â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• --}}
         <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl px-5 py-3.5">
             <div class="flex flex-wrap items-center gap-3">
                 <flux:input wire:model.live.debounce.300ms="search" placeholder="Search employee name or ID..."
@@ -170,15 +170,15 @@
                 @endif
 
                 <div class="ml-auto text-xs text-zinc-400 font-medium">
-                    Showing {{ $attendances->firstItem() }}–{{ $attendances->lastItem() }} of
+                    Showing {{ $attendances->firstItem() }}â€“{{ $attendances->lastItem() }} of
                     {{ $attendances->total() }}
                 </div>
             </div>
         </div>
 
-        {{-- ══════════════════════════════════════════
+        {{-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         ATTENDANCE TABLE
-        ══════════════════════════════════════════ --}}
+        â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• --}}
         <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden">
             <div class="overflow-x-auto">
                 <table class="w-full text-sm">
@@ -239,7 +239,7 @@
                                     ],
                                     default => [
                                         'bg-zinc-100 text-zinc-600 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700',
-                                        ucfirst($log->status ?? '—'),
+                                        ucfirst($log->status ?? 'â€”'),
                                         'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400',
                                     ],
                                 };
@@ -266,7 +266,7 @@
                                             <div class="font-semibold text-sm text-zinc-900 dark:text-white truncate">
                                                 {{ $log->employee->user->name }}
                                             </div>
-                                            <div class="text-[10px] text-zinc-400">{{ $log->employee->employee_id ?? '—' }}
+                                            <div class="text-[10px] text-zinc-400">{{ $log->employee->employee_id ?? 'â€”' }}
                                             </div>
                                         </div>
                                     </div>
@@ -283,7 +283,7 @@
                                 {{-- Check In --}}
                                 <td class="py-3.5 pr-4">
                                     <div class="font-mono text-sm font-bold text-zinc-900 dark:text-white tabular-nums">
-                                        {{ $log->check_in?->format('H:i') ?? '—' }}
+                                        {{ $log->check_in?->format('H:i') ?? 'â€”' }}
                                     </div>
                                     @if($log->is_late)
                                         <div class="text-[10px] text-amber-600 font-bold">Late {{ $log->late_minutes ?? '' }}m
@@ -306,7 +306,7 @@
                                             LIVE
                                         </span>
                                     @else
-                                        <span class="text-zinc-300 dark:text-zinc-600">—</span>
+                                        <span class="text-zinc-300 dark:text-zinc-600">â€”</span>
                                     @endif
                                 </td>
 
@@ -315,7 +315,7 @@
                                     @php $hrs = (float) $log->total_hours; @endphp
                                     <span
                                         class="text-sm font-black tabular-nums {{ $hrs >= 8 ? 'text-emerald-600' : ($hrs > 0 ? 'text-amber-600' : 'text-zinc-300 dark:text-zinc-600') }}">
-                                        {{ $hrs > 0 ? number_format($hrs, 1) . 'h' : '—' }}
+                                        {{ $hrs > 0 ? number_format($hrs, 1) . 'h' : 'â€”' }}
                                     </span>
                                 </td>
 
@@ -329,7 +329,7 @@
 
                                 {{-- Office --}}
                                 <td class="py-3.5 pr-4 text-xs text-zinc-500 dark:text-zinc-400 truncate max-w-[110px]">
-                                    {{ $log->employee->office?->name ?? '—' }}
+                                    {{ $log->employee->office?->name ?? 'â€”' }}
                                 </td>
 
                                 {{-- Attendance % --}}
@@ -375,10 +375,10 @@
 
     </div>
 
-    {{-- ══════════════════════════════════════════
+    {{-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     REVIEW REGULARISATION MODAL
-    ══════════════════════════════════════════ --}}
-    <flux:modal wire:model="showReviewModal" class="w-full max-w-md">
+    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• --}}
+    <flux:modal wire:model.self="showReviewModal" class="w-full max-w-md">
         <div class="space-y-5">
             <div>
                 <flux:heading size="lg">Review Regularisation</flux:heading>
@@ -413,7 +413,7 @@
                         <span class="text-zinc-500">Requested Time</span>
                         <span class="font-bold text-amber-600 font-mono">
                             {{ \Carbon\Carbon::parse($activeRequest->requested_check_in)->format('H:i') }}
-                            → {{ \Carbon\Carbon::parse($activeRequest->requested_check_out)->format('H:i') }}
+                            â†’ {{ \Carbon\Carbon::parse($activeRequest->requested_check_out)->format('H:i') }}
                         </span>
                     </div>
                     <div class="pt-2 border-t border-zinc-100 dark:border-zinc-800">
@@ -439,10 +439,10 @@
         </div>
     </flux:modal>
 
-    {{-- ══════════════════════════════════════════
+    {{-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     HR MARK ATTENDANCE MODAL
-    ══════════════════════════════════════════ --}}
-    <flux:modal wire:model="showMarkModal" class="w-full max-w-lg">
+    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• --}}
+    <flux:modal wire:model.self="showMarkModal" class="w-full max-w-lg">
         <div class="space-y-5">
             <div class="flex items-start gap-3">
                 <div class="shrink-0 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 p-2.5">

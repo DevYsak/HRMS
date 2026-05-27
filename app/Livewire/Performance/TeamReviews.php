@@ -11,6 +11,8 @@ use Livewire\Component;
 
 class TeamReviews extends Component
 {
+    public string $search = '';
+
     public $showReviewModal = false;
 
     public ?PerformanceReview $activeReview = null;
@@ -116,6 +118,7 @@ class TeamReviews extends Component
         $teamReviews = PerformanceReview::with(['employee.user', 'employee.jobTitle', 'cycle'])
             ->where('reviewer_id', $managerEmployee->id)
             ->whereIn('status', ['submitted', 'manager_reviewed'])
+            ->when($this->search, fn ($q) => $q->whereHas('employee.user', fn ($u) => $u->where('name', 'like', "%{$this->search}%")))
             ->latest()
             ->get();
 

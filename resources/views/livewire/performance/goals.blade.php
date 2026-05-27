@@ -73,7 +73,7 @@
     </div>
 
     {{-- Goal Form Modal --}}
-    <flux:modal wire:model="showModal" class="w-full max-w-md">
+    <flux:modal wire:model.self="showModal" class="w-full max-w-md">
         <form wire:submit="save" class="space-y-6">
             <div>
                 <flux:heading size="lg">{{ $editingId ? 'Edit Goal' : 'Add New Goal' }}</flux:heading>

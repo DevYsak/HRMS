@@ -73,7 +73,7 @@
             </div>
         </flux:card>
 
-        <flux:modal wire:model="showCreateModal" class="max-w-xl">
+        <flux:modal wire:model.self="showCreateModal" class="max-w-xl">
             <div class="space-y-4">
                 <flux:heading size="lg">Add Asset</flux:heading>
                 <flux:input wire:model="name" label="Asset Name" required />
@@ -86,7 +86,7 @@
             </div>
         </flux:modal>
 
-        <flux:modal wire:model="showAssignModal" class="max-w-xl">
+        <flux:modal wire:model.self="showAssignModal" class="max-w-xl">
             <div class="space-y-4">
                 <flux:heading size="lg">Assign Asset</flux:heading>
                 <flux:select wire:model="employeeId" label="Employee" required>
@@ -102,7 +102,7 @@
             </div>
         </flux:modal>
 
-        <flux:modal wire:model="showReturnModal" class="max-w-xl">
+        <flux:modal wire:model.self="showReturnModal" class="max-w-xl">
             <div class="space-y-4">
                 <flux:heading size="lg">Return Asset</flux:heading>
                 <flux:input wire:model="conditionOnReturn" label="Condition on Return" required />

@@ -16,6 +16,11 @@ class TeamTimeOff extends Component
 
     public ?int $selectedRequestId = null;
 
+    public ?LeaveRequest $selectedRequest = null;
+
+    // Keep this property in the query string so notifications can open a specific request.
+    protected $queryString = ['selectedRequestId'];
+
     public string $reviewer_comment = '';
 
     public array $form = [
@@ -26,6 +31,14 @@ class TeamTimeOff extends Component
         'is_half_day' => false,
     ];
 
+    public function mount(): void
+    {
+        // If a notification includes ?selectedRequestId=123, open that request on mount.
+        if ($id = request()->query('selectedRequestId')) {
+            $this->selectRequest((int) $id);
+        }
+    }
+
     public function selectRequest(int $id): void
     {
         abort_unless(Auth::user()->canApproveLeave(), 403);
@@ -33,6 +46,7 @@ class TeamTimeOff extends Component
         $req = LeaveRequest::with(['employee.user', 'leaveType'])->findOrFail($id);
 
         $this->selectedRequestId = $id;
+        $this->selectedRequest = $req;
         $this->reviewer_comment = $req->reviewer_comment ?? '';
         $this->form = [
             'leave_type_id' => $req->leave_type_id,
@@ -43,6 +57,7 @@ class TeamTimeOff extends Component
         ];
         $this->resetErrorBag();
         $this->showReviewModal = true;
+        $this->dispatch('modal-show', name: 'review-modal');
     }
 
     public function approve(): void
@@ -91,6 +106,7 @@ class TeamTimeOff extends Component
 
         $this->showReviewModal = false;
         $this->selectedRequestId = null;
+        $this->selectedRequest = null;
         $this->reset(['reviewer_comment', 'form']);
         $this->form = ['leave_type_id' => '', 'start_date' => '', 'end_date' => '', 'reason' => '', 'is_half_day' => false];
 
@@ -114,14 +130,9 @@ class TeamTimeOff extends Component
             ->latest()
             ->paginate(10);
 
-        $selectedRequest = $this->selectedRequestId
-            ? LeaveRequest::with(['employee.user', 'leaveType'])->find($this->selectedRequestId)
-            : null;
-
         return view('livewire.time-off.team-time-off', [
             'pendingRequests' => $pendingRequests,
             'history' => $history,
-            'selectedRequest' => $selectedRequest,
         ])->layout('layouts.app', ['title' => 'Team Time Off']);
     }
 }

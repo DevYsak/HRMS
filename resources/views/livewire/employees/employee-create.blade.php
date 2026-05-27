@@ -112,6 +112,19 @@
             </div>
         </div>
 
+        {{-- Section 4: Leave Allocations --}}
+        <div class="pulse-card space-y-3">
+            <h3 class="font-semibold text-zinc-900 dark:text-white border-b border-zinc-100 pb-2 dark:border-zinc-800">Assign Leave Balances (optional)</h3>
+            <p class="text-xs text-zinc-500">Set initial allocated days per leave type for this employee. Leave blank or zero to skip.</p>
+            <div class="grid grid-cols-1 gap-3 md:grid-cols-3 mt-3">
+                @foreach(App\Models\LeaveType::all() as $lt)
+                    <div>
+                        <flux:input wire:model.defer="leave_allocations.{{ $lt->id }}" type="number" step="0.5" label="{{ $lt->name }} (days)" />
+                    </div>
+                @endforeach
+            </div>
+        </div>
+
         <div class="flex items-center justify-end gap-3">
             <flux:button href="{{ route('employees.index') }}" wire:navigate variant="ghost">Cancel</flux:button>
             <flux:button type="submit" variant="primary" icon="user-plus">Create Employee</flux:button>

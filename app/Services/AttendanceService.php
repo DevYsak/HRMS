@@ -102,14 +102,13 @@ class AttendanceService
                 'reviewed_at' => now(),
             ]);
 
-            $attendance = $regularisation->attendance;
-
-            if (! $attendance) {
-                $attendance = Attendance::create([
+            $attendance = $regularisation->attendance
+                ?? Attendance::firstOrCreate([
                     'employee_id' => $regularisation->employee_id,
                     'date' => $regularisation->work_date,
                 ]);
 
+            if (! $regularisation->attendance_id) {
                 $regularisation->update(['attendance_id' => $attendance->id]);
             }
 

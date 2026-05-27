@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 #[Fillable([
-    'user_id', 'employee_id',
+    'user_id', 'employee_id', 'biometric_id',
     'phone', 'date_of_birth', 'gender', 'address', 'emergency_contact', 'photo',
     'office_id', 'department_id', 'job_title_id', 'manager_id',
     'joining_date', 'probation_end_date', 'probation_extension_reason',

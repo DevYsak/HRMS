@@ -21,6 +21,15 @@ class RegularisationReviewedNotification extends Notification
         $date = Carbon::parse($this->regularisation->work_date)->format('d M Y');
 
         return match ($status) {
+            'pending' => [
+                'type' => 'attendance_regularisation',
+                'title' => 'Regularisation Request Submitted',
+                'body' => "Your attendance correction request for {$date} has been submitted and is awaiting review.",
+                'action' => 'View',
+                'url' => '/attendance/my',
+                'icon' => 'clipboard-document-check',
+                'color' => 'amber',
+            ],
             'approved' => [
                 'type' => 'attendance_regularisation',
                 'title' => 'Regularisation Approved',

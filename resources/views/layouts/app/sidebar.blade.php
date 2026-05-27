@@ -291,6 +291,7 @@
                     @if($user->canManageSettings())
                     <flux:sidebar.item :href="route('time-off.settings')"   :current="request()->routeIs('time-off.settings')"   wire:navigate>Leave Settings</flux:sidebar.item>
                     <flux:sidebar.item :href="route('attendance.settings')" :current="request()->routeIs('attendance.settings')" wire:navigate>Attendance Settings</flux:sidebar.item>
+                    <flux:sidebar.item :href="route('attendance.biometric')" :current="request()->routeIs('attendance.biometric')" wire:navigate>Biometric Sync</flux:sidebar.item>
                     @endif
                 </flux:sidebar.group>
 
@@ -467,6 +468,8 @@
                 </div>
             </div>
         </flux:modal>
+
+        <flux:toast />
 
         @fluxScripts
     </body>

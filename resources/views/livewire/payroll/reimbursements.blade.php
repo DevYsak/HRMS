@@ -1,10 +1,10 @@
-﻿<flux:main class="bg-zinc-50 p-6 space-y-6 dark:bg-zinc-950">
+<flux:main class="bg-zinc-50 p-6 space-y-6 dark:bg-zinc-950">
     <div class="pulse-page-header">
         <div>
             <h1 class="pulse-page-title">Reimbursements</h1>
             <p class="pulse-page-subtitle">Manage employee expense claims</p>
         </div>
-        <flux:button @click="$flux.modal('reimbursement-modal').show()" variant="primary" icon="plus">
+        <flux:button wire:click="openModal" variant="primary" icon="plus">
             Submit Claim
         </flux:button>
     </div>
@@ -77,43 +77,73 @@
     </div>
 
     {{-- Add Modal --}}
-    <flux:modal name="reimbursement-modal" class="max-w-md">
+    <flux:modal wire:model.self="showModal" class="max-w-md">
         <div class="space-y-6">
             <div>
                 <flux:heading size="lg">Submit Expense Claim</flux:heading>
                 <flux:subheading>Attach receipt and submit for Finance approval</flux:subheading>
             </div>
-            <div class="space-y-4">
-                <flux:select wire:model="employeeId" label="Employee">
-                    <flux:select.option value="">Select Employee</flux:select.option>
-                    @foreach($employees as $emp)
-                    <flux:select.option value="{{ $emp->id }}">{{ $emp->user?->name }}</flux:select.option>
-                    @endforeach
-                </flux:select>
-                <flux:input wire:model="title" label="Expense Title" placeholder="e.g. Client dinner, Taxi fare" />
-                <div class="grid grid-cols-2 gap-4">
-                    <flux:input wire:model="amount" label="Amount (₹)" type="number" min="1" />
-                    <flux:input wire:model="expenseDate" label="Expense Date" type="date" />
-                </div>
-                <div class="grid grid-cols-2 gap-4">
-                    <flux:select wire:model="category" label="Category">
-                        <flux:select.option value="general">General</flux:select.option>
-                        <flux:select.option value="travel">Travel</flux:select.option>
-                        <flux:select.option value="food">Food</flux:select.option>
-                        <flux:select.option value="equipment">Equipment</flux:select.option>
+            <form wire:submit="submit" class="space-y-4">
+                <flux:field>
+                    <flux:select wire:model="employeeId" label="Employee">
+                        <flux:select.option value="">Select Employee</flux:select.option>
+                        @foreach($employees as $emp)
+                            <flux:select.option value="{{ $emp->id }}">{{ $emp->user?->name }}</flux:select.option>
+                        @endforeach
                     </flux:select>
-                    <flux:input wire:model="month" label="Payout Month" type="month" />
+                    @error('employeeId') <flux:error>{{ $message }}</flux:error> @enderror
+                </flux:field>
+
+                <flux:field>
+                    <flux:input wire:model="title" label="Expense Title" placeholder="e.g. Client dinner, Taxi fare" />
+                    @error('title') <flux:error>{{ $message }}</flux:error> @enderror
+                </flux:field>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <flux:field>
+                        <flux:input wire:model="amount" label="Amount (₹)" type="number" min="1" step="0.01" />
+                        @error('amount') <flux:error>{{ $message }}</flux:error> @enderror
+                    </flux:field>
+                    <flux:field>
+                        <flux:input wire:model="expenseDate" label="Expense Date" type="date" :max="now()->toDateString()" />
+                        @error('expenseDate') <flux:error>{{ $message }}</flux:error> @enderror
+                    </flux:field>
                 </div>
-                <div>
-                    <label class="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Receipt (optional)</label>
-                    <input type="file" wire:model="receipt" accept=".jpg,.jpeg,.png,.pdf" class="text-sm text-zinc-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100 dark:file:bg-brand-900/40 dark:file:text-brand-400" />
+
+                <div class="grid grid-cols-2 gap-4">
+                    <flux:field>
+                        <flux:select wire:model="category" label="Category">
+                            <flux:select.option value="general">General</flux:select.option>
+                            <flux:select.option value="travel">Travel</flux:select.option>
+                            <flux:select.option value="food">Food</flux:select.option>
+                            <flux:select.option value="equipment">Equipment</flux:select.option>
+                        </flux:select>
+                        @error('category') <flux:error>{{ $message }}</flux:error> @enderror
+                    </flux:field>
+                    <flux:field>
+                        <flux:input wire:model="month" label="Payout Month" type="month" />
+                        @error('month') <flux:error>{{ $message }}</flux:error> @enderror
+                    </flux:field>
                 </div>
+
+                <flux:field>
+                    <flux:label>Receipt <span class="font-normal text-zinc-400">(optional — JPG, PNG, PDF, max 5MB)</span></flux:label>
+                    <input type="file" wire:model="receipt" accept=".jpg,.jpeg,.png,.pdf"
+                        class="mt-1 text-sm text-zinc-500 file:mr-3 file:rounded-lg file:border-0 file:bg-brand-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-brand-700 hover:file:bg-brand-100 dark:file:bg-brand-900/40 dark:file:text-brand-400" />
+                    @error('receipt') <flux:error>{{ $message }}</flux:error> @enderror
+                </flux:field>
+
                 <flux:textarea wire:model="description" label="Notes (optional)" rows="2" />
-            </div>
-            <div class="flex gap-2 justify-end">
-                <flux:button @click="$flux.modal('reimbursement-modal').close()">Cancel</flux:button>
-                <flux:button wire:click="submit" variant="primary">Submit Claim</flux:button>
-            </div>
+
+                <div class="flex gap-2 justify-end pt-2">
+                    <flux:button type="button" wire:click="$set('showModal', false)">Cancel</flux:button>
+                    <flux:button type="submit" variant="primary"
+                        wire:loading.attr="disabled" wire:target="submit">
+                        <span wire:loading.remove wire:target="submit">Submit Claim</span>
+                        <span wire:loading wire:target="submit">Submitting…</span>
+                    </flux:button>
+                </div>
+            </form>
         </div>
     </flux:modal>
 </flux:main>
