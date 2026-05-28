@@ -218,6 +218,8 @@ class EmployeeEdit extends Component
 
     public string $emailBody = '';
 
+    public ?string $localResetUrl = null;
+
     // ── Salary modal ─────────────────────────────────────────────────────────
     public bool $showSalaryModal = false;
 
@@ -234,7 +236,29 @@ class EmployeeEdit extends Component
         $this->authorize('update', $this->employee);
 
         try {
-            Password::sendResetLink(['email' => $this->employee->user->email]);
+            $this->localResetUrl = null;
+
+            if (app()->isLocal() && in_array(config('mail.default'), ['log', 'array'], true)) {
+                $token = Password::broker(config('fortify.passwords'))->createToken($this->employee->user);
+
+                $this->localResetUrl = route('password.reset', [
+                    'token' => $token,
+                    'email' => $this->employee->user->email,
+                ]);
+
+                \Flux::toast('Reset link generated for local use. Mail is using the '.config('mail.default').' driver.', variant: 'warning');
+
+                return;
+            }
+
+            $status = Password::sendResetLink(['email' => $this->employee->user->email]);
+
+            if ($status !== Password::RESET_LINK_SENT) {
+                \Flux::toast(__($status), variant: 'danger');
+
+                return;
+            }
+
             \Flux::toast('Password reset link sent to '.$this->employee->user->email, variant: 'success');
         } catch (\Throwable $e) {
             \Flux::toast('Could not send reset email: '.$e->getMessage(), variant: 'danger');

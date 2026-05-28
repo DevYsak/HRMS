@@ -46,6 +46,28 @@
         </div>
     @endif
 
+    @if($localResetUrl)
+        <div class="space-y-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-200">
+            <div class="flex items-start gap-2">
+                <flux:icon.exclamation-triangle class="mt-0.5 size-4 shrink-0" />
+                <div>
+                    <p class="font-semibold">Mail is configured for local logging, not delivery.</p>
+                    <p class="mt-1 text-amber-800/90 dark:text-amber-200/90">Use this reset link for now, or switch `MAIL_MAILER` to a real SMTP service to send the email inbox-to-inbox.</p>
+                </div>
+            </div>
+
+            <div class="rounded-lg border border-amber-200/80 bg-white/80 p-3 font-mono text-xs break-all dark:border-amber-800 dark:bg-black/10">
+                {{ $localResetUrl }}
+            </div>
+
+            <div class="flex flex-wrap gap-2">
+                <a href="{{ $localResetUrl }}" class="inline-flex items-center rounded-lg bg-amber-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-amber-700">
+                    Open Reset Link
+                </a>
+            </div>
+        </div>
+    @endif
+
     <div class="grid grid-cols-1 gap-5 lg:grid-cols-12">
 
         {{-- ─── LEFT: Profile Card ─── --}}
