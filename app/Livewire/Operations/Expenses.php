@@ -73,13 +73,22 @@ class Expenses extends Component
         $this->resetPage();
     }
 
+    public bool $hasEmployeeProfile = false;
+
     public function mount(): void
     {
         $this->expenseDate = now()->toDateString();
+        $this->hasEmployeeProfile = (bool) Auth::user()?->employee;
     }
 
     public function openSubmitModal(): void
     {
+        if (! $this->hasEmployeeProfile) {
+            \Flux::toast('You do not have an active employee profile. Contact HR.', variant: 'danger');
+
+            return;
+        }
+
         $this->showSubmitModal = true;
     }
 

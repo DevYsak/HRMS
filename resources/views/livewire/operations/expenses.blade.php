@@ -19,14 +19,29 @@
                     class="border-white/25 bg-white/15 text-white backdrop-blur-sm hover:bg-white/25">
                     Export
                 </flux:button>
-                <button wire:click="openSubmitModal"
-                    class="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-black text-orange-700 shadow-lg shadow-black/20 transition-all hover:bg-orange-50">
-                    <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-                    New Claim
-                </button>
+                @if($hasEmployeeProfile)
+                    <button wire:click="openSubmitModal"
+                        class="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-black text-orange-700 shadow-lg shadow-black/20 transition-all hover:bg-orange-50">
+                        <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                        New Claim
+                    </button>
+                @endif
             </div>
         </div>
     </div>
+
+    {{-- No Employee Profile Warning --}}
+    @if(!$hasEmployeeProfile)
+        <div class=”flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 dark:border-amber-800/50 dark:bg-amber-950/20”>
+            <svg class=”mt-0.5 size-5 shrink-0 text-amber-500” fill=”none” stroke=”currentColor” viewBox=”0 0 24 24”>
+                <path stroke-linecap=”round” stroke-linejoin=”round” stroke-width=”2” d=”M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z”/>
+            </svg>
+            <div>
+                <p class=”font-bold text-amber-800 dark:text-amber-300”>No active employee profile</p>
+                <p class=”mt-0.5 text-sm text-amber-700 dark:text-amber-400”>You cannot submit expense claims until HR links your account to an employee profile. Please contact your HR administrator.</p>
+            </div>
+        </div>
+    @endif
 
     {{-- â”€â”€â”€ FILTERS â”€â”€â”€ --}}
     <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl px-5 py-4">
