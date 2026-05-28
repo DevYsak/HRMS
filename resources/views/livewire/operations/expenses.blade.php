@@ -1,6 +1,6 @@
 <flux:main class="min-h-screen bg-zinc-50 dark:bg-zinc-950 p-6 space-y-5">
 
-    {{-- â”€â”€â”€ HEADER â”€â”€â”€ --}}
+    {{-- â"€â"€â"€ HEADER â"€â"€â"€ --}}
     <div class="relative overflow-hidden rounded-2xl bg-gradient-to-br from-orange-500 via-orange-600 to-amber-600 p-7 shadow-xl shadow-orange-500/20">
         <div class="pointer-events-none absolute -top-16 -right-16 size-56 rounded-full bg-white/10 blur-3xl"></div>
         <div class="pointer-events-none absolute inset-0 opacity-[0.06]" style="background-image: radial-gradient(circle, white 1px, transparent 1px); background-size: 22px 22px;"></div>
@@ -32,18 +32,18 @@
 
     {{-- No Employee Profile Warning --}}
     @if(!$hasEmployeeProfile)
-        <div class=”flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 dark:border-amber-800/50 dark:bg-amber-950/20”>
-            <svg class=”mt-0.5 size-5 shrink-0 text-amber-500” fill=”none” stroke=”currentColor” viewBox=”0 0 24 24”>
-                <path stroke-linecap=”round” stroke-linejoin=”round” stroke-width=”2” d=”M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z”/>
+        <div class="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 dark:border-amber-800/50 dark:bg-amber-950/20">
+            <svg class="mt-0.5 size-5 shrink-0 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
             </svg>
             <div>
-                <p class=”font-bold text-amber-800 dark:text-amber-300”>No active employee profile</p>
-                <p class=”mt-0.5 text-sm text-amber-700 dark:text-amber-400”>You cannot submit expense claims until HR links your account to an employee profile. Please contact your HR administrator.</p>
+                <p class="font-bold text-amber-800 dark:text-amber-300">No active employee profile</p>
+                <p class="mt-0.5 text-sm text-amber-700 dark:text-amber-400">You cannot submit expense claims until HR links your account to an employee profile. Please contact your HR administrator.</p>
             </div>
         </div>
     @endif
 
-    {{-- â”€â”€â”€ FILTERS â”€â”€â”€ --}}
+    {{-- â"€â"€â"€ FILTERS â"€â"€â"€ --}}
     <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl px-5 py-4">
         <div class="flex flex-wrap items-center gap-3">
             <flux:input wire:model.live.debounce.300ms="search" placeholder="Search title..." icon="magnifying-glass" size="sm" class="w-52" />
@@ -73,7 +73,7 @@
         </div>
     </div>
 
-    {{-- â”€â”€â”€ TABLE â”€â”€â”€ --}}
+    {{-- â"€â"€â"€ TABLE â"€â"€â"€ --}}
     <div class="overflow-hidden rounded-2xl border border-zinc-100 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
         <div class="overflow-x-auto">
             <table class="w-full text-left text-sm">
@@ -138,7 +138,7 @@
                                 @elseif($expense->status->value === 'rejected' && $expense->rejection_reason)
                                     <span class="block max-w-xs text-right text-xs italic text-rose-400">{{ $expense->rejection_reason }}</span>
                                 @else
-                                    <span class="text-xs text-zinc-300 dark:text-zinc-600">â€”</span>
+                                    <span class="text-xs text-zinc-300 dark:text-zinc-600">â€"</span>
                                 @endif
                             </td>
                         </tr>
@@ -169,36 +169,36 @@
 
     {{-- ─── REJECT MODAL ─── --}}
     @if($showRejectModal)
-        <div class=”fixed inset-0 z-50 flex items-center justify-center p-4”
-             x-data x-on:keydown.escape.window=”$wire.set('showRejectModal', false)”>
-            <div class=”absolute inset-0 bg-black/40 backdrop-blur-sm” wire:click=”$set('showRejectModal', false)”></div>
-            <div class=”relative w-full max-w-md bg-white dark:bg-zinc-800 rounded-2xl shadow-xl ring ring-black/5 dark:ring-zinc-700 p-6 space-y-5”>
-                <button type=”button” wire:click=”$set('showRejectModal', false)”
-                    class=”absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors”>
-                    <svg class=”size-5” fill=”none” stroke=”currentColor” viewBox=”0 0 24 24”><path stroke-linecap=”round” stroke-linejoin=”round” stroke-width=”2” d=”M6 18L18 6M6 6l12 12”/></svg>
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4"
+             x-data x-on:keydown.escape.window="$wire.set('showRejectModal', false)">
+            <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" wire:click="$set('showRejectModal', false)"></div>
+            <div class="relative w-full max-w-md bg-white dark:bg-zinc-800 rounded-2xl shadow-xl ring ring-black/5 dark:ring-zinc-700 p-6 space-y-5">
+                <button type="button" wire:click="$set('showRejectModal', false)"
+                    class="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors">
+                    <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                 </button>
-                <div class=”flex items-start gap-3”>
-                    <div class=”shrink-0 rounded-xl bg-rose-50 p-2.5 dark:bg-rose-900/20”>
-                        <flux:icon.x-circle class=”size-5 text-rose-600 dark:text-rose-400” />
+                <div class="flex items-start gap-3">
+                    <div class="shrink-0 rounded-xl bg-rose-50 p-2.5 dark:bg-rose-900/20">
+                        <flux:icon.x-circle class="size-5 text-rose-600 dark:text-rose-400" />
                     </div>
                     <div>
-                        <h2 class=”text-base font-bold text-zinc-900 dark:text-white”>Reject Expense Claim</h2>
-                        <p class=”text-sm text-zinc-500 mt-0.5”>Provide a reason so the employee can resubmit.</p>
+                        <h2 class="text-base font-bold text-zinc-900 dark:text-white">Reject Expense Claim</h2>
+                        <p class="text-sm text-zinc-500 mt-0.5">Provide a reason so the employee can resubmit.</p>
                     </div>
                 </div>
                 <div>
-                    <label class=”text-sm font-medium text-zinc-700 dark:text-zinc-300”>Reason for Rejection</label>
-                    <textarea wire:model=”rejectionReason” rows=”3”
-                        placeholder=”e.g. Missing receipt, amount exceeds policy limit...”
-                        class=”mt-1 w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-brand-400/30 focus:border-brand-400 resize-none”></textarea>
+                    <label class="text-sm font-medium text-zinc-700 dark:text-zinc-300">Reason for Rejection</label>
+                    <textarea wire:model="rejectionReason" rows="3"
+                        placeholder="e.g. Missing receipt, amount exceeds policy limit..."
+                        class="mt-1 w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-brand-400/30 focus:border-brand-400 resize-none"></textarea>
                 </div>
-                <div class=”flex justify-end gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-700”>
-                    <button type=”button” wire:click=”$set('showRejectModal', false)”
-                        class=”px-4 py-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300 bg-white dark:bg-zinc-700 border border-zinc-200 dark:border-zinc-600 rounded-xl hover:bg-zinc-50 transition-colors”>
+                <div class="flex justify-end gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-700">
+                    <button type="button" wire:click="$set('showRejectModal', false)"
+                        class="px-4 py-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300 bg-white dark:bg-zinc-700 border border-zinc-200 dark:border-zinc-600 rounded-xl hover:bg-zinc-50 transition-colors">
                         Cancel
                     </button>
-                    <button type=”button” wire:click=”reject”
-                        class=”px-4 py-2 text-sm font-semibold text-white bg-red-500 hover:bg-red-600 rounded-xl transition-colors”>
+                    <button type="button" wire:click="reject"
+                        class="px-4 py-2 text-sm font-semibold text-white bg-red-500 hover:bg-red-600 rounded-xl transition-colors">
                         Confirm Rejection
                     </button>
                 </div>
@@ -208,78 +208,78 @@
 
     {{-- ─── SUBMIT MODAL ─── --}}
     @if($showSubmitModal)
-        <div class=”fixed inset-0 z-50 flex items-center justify-center p-4”
-             x-data x-on:keydown.escape.window=”$wire.set('showSubmitModal', false)”>
-            <div class=”absolute inset-0 bg-black/40 backdrop-blur-sm” wire:click=”$set('showSubmitModal', false)”></div>
-            <div class=”relative w-full max-w-xl bg-white dark:bg-zinc-800 rounded-2xl shadow-xl ring ring-black/5 dark:ring-zinc-700 p-6 space-y-5”>
-                <button type=”button” wire:click=”$set('showSubmitModal', false)”
-                    class=”absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors”>
-                    <svg class=”size-5” fill=”none” stroke=”currentColor” viewBox=”0 0 24 24”><path stroke-linecap=”round” stroke-linejoin=”round” stroke-width=”2” d=”M6 18L18 6M6 6l12 12”/></svg>
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4"
+             x-data x-on:keydown.escape.window="$wire.set('showSubmitModal', false)">
+            <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" wire:click="$set('showSubmitModal', false)"></div>
+            <div class="relative w-full max-w-xl bg-white dark:bg-zinc-800 rounded-2xl shadow-xl ring ring-black/5 dark:ring-zinc-700 p-6 space-y-5">
+                <button type="button" wire:click="$set('showSubmitModal', false)"
+                    class="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors">
+                    <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                 </button>
-                <div class=”flex items-start gap-3”>
-                    <div class=”shrink-0 rounded-xl bg-orange-50 p-2.5 dark:bg-orange-900/20”>
-                        <flux:icon.receipt-percent class=”size-5 text-orange-500 dark:text-orange-400” />
+                <div class="flex items-start gap-3">
+                    <div class="shrink-0 rounded-xl bg-orange-50 p-2.5 dark:bg-orange-900/20">
+                        <flux:icon.receipt-percent class="size-5 text-orange-500 dark:text-orange-400" />
                     </div>
                     <div>
-                        <h2 class=”text-base font-bold text-zinc-900 dark:text-white”>Submit Expense Claim</h2>
-                        <p class=”text-sm text-zinc-500 mt-0.5”>Upload your receipt and fill in the expense details.</p>
+                        <h2 class="text-base font-bold text-zinc-900 dark:text-white">Submit Expense Claim</h2>
+                        <p class="text-sm text-zinc-500 mt-0.5">Upload your receipt and fill in the expense details.</p>
                     </div>
                 </div>
 
-                <form wire:submit=”submit” class=”space-y-4”>
+                <form wire:submit="submit" class="space-y-4">
                     <flux:field>
-                        <flux:input wire:model=”title” label=”Title” placeholder=”e.g. Client dinner, Flight to Mumbai” required />
-                        @error('title') <p class=”text-xs text-red-500 mt-1”>{{ $message }}</p> @enderror
+                        <flux:input wire:model="title" label="Title" placeholder="e.g. Client dinner, Flight to Mumbai" required />
+                        @error('title') <p class="text-xs text-red-500 mt-1">{{ $message }}</p> @enderror
                     </flux:field>
 
-                    <div class=”grid grid-cols-2 gap-4”>
+                    <div class="grid grid-cols-2 gap-4">
                         <flux:field>
-                            <flux:select wire:model=”category” label=”Category”>
-                                <option value=”travel”>Travel</option>
-                                <option value=”meals”>Meals & Entertainment</option>
-                                <option value=”accommodation”>Accommodation</option>
-                                <option value=”equipment”>Equipment</option>
-                                <option value=”software”>Software / Subscriptions</option>
-                                <option value=”training”>Training</option>
-                                <option value=”general”>General</option>
+                            <flux:select wire:model="category" label="Category">
+                                <option value="travel">Travel</option>
+                                <option value="meals">Meals & Entertainment</option>
+                                <option value="accommodation">Accommodation</option>
+                                <option value="equipment">Equipment</option>
+                                <option value="software">Software / Subscriptions</option>
+                                <option value="training">Training</option>
+                                <option value="general">General</option>
                             </flux:select>
-                            @error('category') <p class=”text-xs text-red-500 mt-1”>{{ $message }}</p> @enderror
+                            @error('category') <p class="text-xs text-red-500 mt-1">{{ $message }}</p> @enderror
                         </flux:field>
                         <flux:field>
-                            <flux:input wire:model=”amount” type=”number” step=”0.01” min=”1” label=”Amount (₹)” required />
-                            @error('amount') <p class=”text-xs text-red-500 mt-1”>{{ $message }}</p> @enderror
+                            <flux:input wire:model="amount" type="number" step="0.01" min="1" label="Amount (₹)" required />
+                            @error('amount') <p class="text-xs text-red-500 mt-1">{{ $message }}</p> @enderror
                         </flux:field>
                     </div>
 
                     <flux:field>
-                        <flux:input wire:model=”expenseDate” type=”date” label=”Expense Date”
-                            max=”{{ now()->toDateString() }}” required />
-                        @error('expenseDate') <p class=”text-xs text-red-500 mt-1”>{{ $message }}</p> @enderror
+                        <flux:input wire:model="expenseDate" type="date" label="Expense Date"
+                            max="{{ now()->toDateString() }}" required />
+                        @error('expenseDate') <p class="text-xs text-red-500 mt-1">{{ $message }}</p> @enderror
                     </flux:field>
 
                     <flux:field>
-                        <flux:label>Receipt <span class=”text-zinc-400 font-normal”>(PDF, JPG, PNG — max 5MB)</span></flux:label>
-                        <flux:input wire:model=”receipt” type=”file” accept=”.pdf,.jpg,.jpeg,.png,.webp” class=”mt-1” />
-                        @error('receipt') <p class=”text-xs text-red-500 mt-1”>{{ $message }}</p> @enderror
+                        <flux:label>Receipt <span class="text-zinc-400 font-normal">(PDF, JPG, PNG — max 5MB)</span></flux:label>
+                        <flux:input wire:model="receipt" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" class="mt-1" />
+                        @error('receipt') <p class="text-xs text-red-500 mt-1">{{ $message }}</p> @enderror
                     </flux:field>
 
                     <flux:field>
-                        <flux:textarea wire:model=”notes” label=”Notes (optional)” rows=”2”
-                            placeholder=”Any additional details for the reviewer...” />
-                        @error('notes') <p class=”text-xs text-red-500 mt-1”>{{ $message }}</p> @enderror
+                        <flux:textarea wire:model="notes" label="Notes (optional)" rows="2"
+                            placeholder="Any additional details for the reviewer..." />
+                        @error('notes') <p class="text-xs text-red-500 mt-1">{{ $message }}</p> @enderror
                     </flux:field>
 
-                    <div class=”flex justify-end gap-3 pt-2 border-t border-zinc-100 dark:border-zinc-700”>
-                        <button type=”button” wire:click=”$set('showSubmitModal', false)”
-                            class=”px-4 py-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300 bg-white dark:bg-zinc-700 border border-zinc-200 dark:border-zinc-600 rounded-xl hover:bg-zinc-50 transition-colors”>
+                    <div class="flex justify-end gap-3 pt-2 border-t border-zinc-100 dark:border-zinc-700">
+                        <button type="button" wire:click="$set('showSubmitModal', false)"
+                            class="px-4 py-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300 bg-white dark:bg-zinc-700 border border-zinc-200 dark:border-zinc-600 rounded-xl hover:bg-zinc-50 transition-colors">
                             Cancel
                         </button>
-                        <button type=”submit”
-                            wire:loading.attr=”disabled” wire:target=”submit”
-                            class=”inline-flex items-center gap-2 px-5 py-2 text-sm font-bold text-white bg-brand-600 hover:bg-brand-700 rounded-xl transition-colors disabled:opacity-60”>
-                            <flux:icon.paper-airplane class=”size-4” />
-                            <span wire:loading.remove wire:target=”submit”>Submit Claim</span>
-                            <span wire:loading wire:target=”submit”>Submitting…</span>
+                        <button type="submit"
+                            wire:loading.attr="disabled" wire:target="submit"
+                            class="inline-flex items-center gap-2 px-5 py-2 text-sm font-bold text-white bg-brand-600 hover:bg-brand-700 rounded-xl transition-colors disabled:opacity-60">
+                            <flux:icon.paper-airplane class="size-4" />
+                            <span wire:loading.remove wire:target="submit">Submit Claim</span>
+                            <span wire:loading wire:target="submit">Submitting…</span>
                         </button>
                     </div>
                 </form>
