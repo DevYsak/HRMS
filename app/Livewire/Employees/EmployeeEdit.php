@@ -233,9 +233,12 @@ class EmployeeEdit extends Component
     {
         $this->authorize('update', $this->employee);
 
-        Password::sendResetLink(['email' => $this->employee->user->email]);
-
-        \Flux::toast('Password reset link sent to '.$this->employee->user->email, variant: 'success');
+        try {
+            Password::sendResetLink(['email' => $this->employee->user->email]);
+            \Flux::toast('Password reset link sent to '.$this->employee->user->email, variant: 'success');
+        } catch (\Throwable $e) {
+            \Flux::toast('Could not send reset email: '.$e->getMessage(), variant: 'danger');
+        }
     }
 
     public function openEmailModal(): void
@@ -259,13 +262,17 @@ class EmployeeEdit extends Component
         $subject = $this->emailSubject;
         $body = $this->emailBody;
 
-        Mail::raw($body, function ($msg) use ($to, $subject) {
-            $msg->to($to)->subject($subject);
-        });
+        try {
+            Mail::raw($body, function ($msg) use ($to, $subject) {
+                $msg->to($to)->subject($subject);
+            });
+            \Flux::toast('Email sent to '.$to, variant: 'success');
+        } catch (\Throwable $e) {
+            \Flux::toast('Could not send email: '.$e->getMessage(), variant: 'danger');
+        }
 
         $this->showEmailModal = false;
         $this->dispatch('modal-close', name: 'send-email-modal');
-        \Flux::toast('Email sent to '.$to, variant: 'success');
     }
 
     public function deactivate(): void
