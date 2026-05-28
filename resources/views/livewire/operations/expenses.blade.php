@@ -138,7 +138,7 @@
                                 @elseif($expense->status->value === 'rejected' && $expense->rejection_reason)
                                     <span class="block max-w-xs text-right text-xs italic text-rose-400">{{ $expense->rejection_reason }}</span>
                                 @else
-                                    <span class="text-xs text-zinc-300 dark:text-zinc-600">â€"</span>
+                                    <span class="text-xs text-zinc-300 dark:text-zinc-600">—</span>
                                 @endif
                             </td>
                         </tr>
