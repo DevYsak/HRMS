@@ -92,7 +92,7 @@
                         @foreach($currentPayroll->payslips as $slip)
                             <tr class="hover:bg-zinc-50/30 transition-colors">
                                 <td class="py-4 pl-6 pr-4">
-                                    <div class="font-bold text-zinc-900 dark:text-white">{{ $slip->employee->user->name }}</div>
+                                    <div class="font-bold text-zinc-900 dark:text-white">{{ $slip->employee->user?->name ?? '—' }}</div>
                                     <div class="text-xs text-zinc-500">{{ $slip->employee->jobTitle?->name ?? 'No Job Title' }}</div>
                                 </td>
                                 <td class="py-4 pr-4 font-medium text-zinc-700 dark:text-zinc-300">
