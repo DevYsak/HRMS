@@ -139,7 +139,7 @@
                 <tbody class="divide-y divide-zinc-50 dark:divide-zinc-800/60">
                     @forelse($requests as $req)
                         @php
-                            $avatarColors = ['bg-violet-500','bg-indigo-500','bg-blue-500','bg-emerald-500','bg-orange-500','bg-rose-500','bg-amber-500','bg-teal-500'];
+                            $avatarColors = ['bg-violet-500','bg-indigo-500','bg-blue-500','bg-emerald-500','bg-brand-600','bg-rose-500','bg-amber-500','bg-teal-500'];
                             $avatarColor  = $avatarColors[crc32($req->employee->user->name) % count($avatarColors)];
                         @endphp
                         <tr class="group transition-colors hover:bg-zinc-50/70 dark:hover:bg-zinc-800/30" wire:key="mng-ot-{{ $req->id }}">

@@ -17,17 +17,17 @@
     /* Font */
     --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji';
 
-    /* Brand Palette — Conexus Orange */
-    --color-brand-50:  #fff7ed;
-    --color-brand-100: #ffedd5;
-    --color-brand-200: #fed7aa;
-    --color-brand-300: #fdba74;
-    --color-brand-400: #fb923c;
-    --color-brand-500: #f97316;
-    --color-brand-600: #f97316;
-    --color-brand-700: #ea580c;
-    --color-brand-800: #c2410c;
-    --color-brand-900: #9a3412;
+    /* Brand Palette — Conexus Orange #fe9a00 */
+    --color-brand-50:  #fff8eb;
+    --color-brand-100: #fef0c7;
+    --color-brand-200: #fedf89;
+    --color-brand-300: #fec84b;
+    --color-brand-400: #fdb022;
+    --color-brand-500: #fe9a00;
+    --color-brand-600: #fe9a00;
+    --color-brand-700: #dc7a00;
+    --color-brand-800: #b45309;
+    --color-brand-900: #92400e;
 
     /* Neutral / Zinc scale */
     --color-zinc-50:  #fafafa;
@@ -43,16 +43,16 @@
     --color-zinc-950: #0a0a0a;
 
     /* Flux accent override → Conexus Orange */
-    --color-accent:            #f97316;
-    --color-accent-content:    #f97316;
+    --color-accent:            #fe9a00;
+    --color-accent-content:    #fe9a00;
     --color-accent-foreground: #ffffff;
 }
 
 /* Dark mode accent */
 @layer theme {
     .dark {
-        --color-accent:            #f97316;
-        --color-accent-content:    #f97316;
+        --color-accent:            #fe9a00;
+        --color-accent-content:    #fe9a00;
         --color-accent-foreground: #ffffff;
     }
 }
@@ -90,17 +90,17 @@ select:focus[data-flux-control] {
    =================================================== */
 [data-flux-sidebar] [data-flux-sidebar-item][data-current] {
     background-color: #fff7ed !important;
-    color: #ea580c !important;
-    border-right: 2px solid #f97316 !important;
+    color: #dc7a00 !important;
+    border-right: 2px solid #fe9a00 !important;
     font-weight: 600 !important;
 }
 [data-flux-sidebar] [data-flux-sidebar-item][data-current] svg {
-    color: #f97316 !important;
+    color: #fe9a00 !important;
 }
 .dark [data-flux-sidebar] [data-flux-sidebar-item][data-current] {
     background-color: rgba(249, 115, 22, 0.12) !important;
     color: #fb923c !important;
-    border-right: 2px solid #f97316 !important;
+    border-right: 2px solid #fe9a00 !important;
 }
 
 /* ===================================================

@@ -197,7 +197,7 @@
                 {{ now()->format('D, j M Y') }}
             </div>
             <flux:button variant="primary" icon="plus" size="sm" :href="route('employees.create')"
-                class="rounded-xl border-none !bg-orange-500 !font-bold !text-white shadow-lg shadow-orange-500/20 transition-all hover:!bg-orange-600 active:scale-95">
+                class="rounded-xl border-none !bg-brand-600 !font-bold !text-white shadow-lg shadow-orange-500/20 transition-all hover:!bg-brand-600 active:scale-95">
                 Add Employee
             </flux:button>
         </div>

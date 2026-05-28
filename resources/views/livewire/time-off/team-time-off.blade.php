@@ -1,118 +1,410 @@
-﻿<flux:main class="bg-zinc-50 p-6 space-y-6 dark:bg-zinc-950">
-    <div class="pulse-page-header">
-        <div>
-            <h1 class="pulse-page-title">Team Time Off</h1>
-            <p class="pulse-page-subtitle">Review and manage leave requests for your direct reports</p>
-        </div>
-    </div>
+<flux:main class="bg-[#F7F8FA] min-h-screen dark:bg-zinc-950">
 
-    {{-- Pending Requests Section --}}
-    @if($pendingRequests->count() > 0)
-        <div class="space-y-4">
-            <h3 class="text-sm font-bold text-zinc-400 uppercase tracking-wider">Pending Action ({{ $pendingRequests->count() }})</h3>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                @foreach($pendingRequests as $req)
-                    <div class="pulse-card flex flex-col gap-4">
-                        <div class="flex items-center gap-3">
-                            <div class="size-10 rounded-full bg-brand-600 flex items-center justify-center font-bold text-white text-sm">
-                                {{ strtoupper(substr($req->employee->user->name, 0, 1)) }}
-                            </div>
-                            <div>
-                                <div class="font-bold text-zinc-900 dark:text-white">{{ $req->employee->user->name }}</div>
-                                <div class="text-xs text-zinc-500">{{ $req->leaveType->name }}</div>
-                            </div>
-                        </div>
-                        
-                        <div class="bg-zinc-50 p-3 rounded-lg dark:bg-zinc-800/50">
-                            <div class="flex justify-between text-xs mb-1">
-                                <span class="text-zinc-400 font-medium">Requested Period</span>
-                                <span class="text-zinc-900 font-bold dark:text-zinc-100">{{ (float)$req->days }} Days</span>
-                            </div>
-                            <div class="text-[13px] text-zinc-700 dark:text-zinc-300">
-                                {{ $req->start_date->format('M d') }} - {{ $req->end_date->format('M d, Y') }}
-                            </div>
-                        </div>
-
-                        <div class="text-xs text-zinc-500 italic line-clamp-2">
-                            "{{ $req->reason }}"
-                        </div>
-
-                        <div class="flex gap-2 mt-2">
-                            <flux:button wire:click="selectRequest({{ $req->id }})" variant="primary" class="flex-1">Review</flux:button>
-                        </div>
-                    </div>
-                @endforeach
+    {{-- ── Page Header ────────────────────────────────────────────────────── --}}
+    <div class="bg-white dark:bg-zinc-900 border-b border-zinc-200/70 dark:border-zinc-800 px-8 py-5">
+        <div class="flex items-center justify-between gap-4">
+            <div>
+                <div class="flex items-center gap-1.5 text-[11px] text-zinc-400 mb-1 font-medium">
+                    <span>Time Off</span>
+                    <flux:icon.chevron-right class="size-3" />
+                    <span class="text-zinc-600 dark:text-zinc-300">Team Leave</span>
+                </div>
+                <h1 class="text-2xl font-black text-zinc-900 dark:text-white tracking-tight">Team Time Off</h1>
+                <p class="text-sm text-zinc-500 mt-0.5">Review and manage leave requests for your direct reports</p>
             </div>
-        </div>
-    @else
-        <div class="pulse-card py-12 flex flex-col items-center justify-center text-center opacity-60">
-            <flux:icon.check-circle class="size-10 text-brand-500 mb-2" />
-            <h4 class="font-bold text-zinc-900 dark:text-white">All caught up!</h4>
-            <p class="text-sm text-zinc-500 max-w-xs">There are no pending leave requests from your team right now.</p>
-        </div>
-    @endif
-
-    {{-- Team History --}}
-    <div class="pulse-card">
-        <h3 class="text-lg font-bold text-zinc-900 dark:text-white mb-6">Recent Team Activity</h3>
-        
-        <div class="overflow-x-auto -mx-6">
-            <table class="w-full text-sm">
-                <thead>
-                    <tr class="border-b border-zinc-100 dark:border-zinc-800">
-                        <th class="pb-3 pl-6 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Employee</th>
-                        <th class="pb-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Leave Type</th>
-                        <th class="pb-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Status</th>
-                        <th class="pb-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Dates</th>
-                        <th class="pb-3 pr-4 text-right text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Days</th>
-                        <th class="pb-3 pr-6 text-right text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Actions</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-zinc-50 dark:divide-zinc-800/60">
-                    @forelse($history as $item)
-                        <tr class="group hover:bg-zinc-50/70 dark:hover:bg-zinc-800/30 transition-colors">
-                            <td class="py-4 pl-6 pr-4 font-medium text-zinc-900 dark:text-white">
-                                {{ $item->employee->user->name }}
-                            </td>
-                            <td class="py-4 pr-4 text-zinc-600 dark:text-zinc-300">
-                                {{ $item->leaveType->name }}
-                            </td>
-                            <td class="py-4 pr-4">
-                                <span class="badge-{{ $item->status }}">{{ strtoupper($item->status) }}</span>
-                            </td>
-                            <td class="py-4 pr-4 text-xs text-zinc-500">
-                                {{ $item->start_date->format('d M') }} - {{ $item->end_date->format('d M, Y') }}
-                            </td>
-                            <td class="py-4 pr-4 text-right font-bold text-zinc-900 dark:text-white">
-                                {{ (float)$item->days }}
-                            </td>
-                            <td class="py-4 pr-6 text-right">
-                                <flux:button wire:click="selectRequest({{ $item->id }})" variant="ghost" size="sm" icon="pencil-square" class="text-zinc-400 hover:text-brand-600" />
-                            </td>
-                        </tr>
-                    @empty
-                        <tr>
-                            <td colspan="5" class="py-8 text-center text-zinc-400">No team leave history found.</td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-        <div class="mt-4 border-t border-zinc-50 pt-3 dark:border-zinc-800">
-            {{ $history->links() }}
+            <a href="{{ route('time-off.my') }}" wire:navigate
+               class="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-white bg-brand-600 hover:bg-brand-700 rounded-xl transition-colors shadow-sm shadow-brand-200 dark:shadow-none">
+                <flux:icon.plus class="size-4" />
+                New Leave Request
+            </a>
         </div>
     </div>
 
-    {{-- Review Modal --}}
-    <flux:modal name="review-modal" wire:model.self="showReviewModal" class="w-full max-w-lg">
-        @if($selectedRequestId && $selectedRequest)
-            <div class="space-y-5">
+    <div class="p-8 space-y-6">
+
+        {{-- ── KPI Cards ──────────────────────────────────────────────────── --}}
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+
+            {{-- Pending Action --}}
+            <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 p-5 shadow-sm flex items-center gap-4">
+                <div class="size-12 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0">
+                    <flux:icon.clock class="size-6 text-amber-500" />
+                </div>
                 <div>
-                    <flux:heading size="lg">Review Leave Request</flux:heading>
-                    <flux:subheading>From {{ $selectedRequest->employee->user->name }}</flux:subheading>
+                    <div class="text-[11px] font-bold text-zinc-400 uppercase tracking-wider mb-0.5">Pending Action</div>
+                    <div class="text-3xl font-black text-zinc-900 dark:text-white leading-none">{{ $pendingRequests->count() }}</div>
+                    <div class="text-xs text-amber-500 font-semibold mt-1">
+                        @if($pendingRequests->count() > 0)
+                            Requests need review
+                        @else
+                            All caught up!
+                        @endif
+                    </div>
+                </div>
+            </div>
+
+            {{-- Approved This Month --}}
+            <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 p-5 shadow-sm flex items-center gap-4">
+                <div class="size-12 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center shrink-0">
+                    <flux:icon.check-circle class="size-6 text-emerald-500" />
+                </div>
+                <div>
+                    <div class="text-[11px] font-bold text-zinc-400 uppercase tracking-wider mb-0.5">Approved</div>
+                    <div class="text-3xl font-black text-zinc-900 dark:text-white leading-none">{{ $approvedThisMonth }}</div>
+                    <div class="text-xs text-emerald-500 font-semibold mt-1">This Month</div>
+                </div>
+            </div>
+
+            {{-- Total Days Approved --}}
+            <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 p-5 shadow-sm flex items-center gap-4">
+                <div class="size-12 rounded-xl bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center shrink-0">
+                    <flux:icon.calendar-days class="size-6 text-violet-500" />
+                </div>
+                <div>
+                    <div class="text-[11px] font-bold text-zinc-400 uppercase tracking-wider mb-0.5">Total Days Approved</div>
+                    <div class="text-3xl font-black text-zinc-900 dark:text-white leading-none">{{ (float)$totalDaysThisMonth }}</div>
+                    <div class="text-xs text-violet-500 font-semibold mt-1">This Month</div>
+                </div>
+            </div>
+
+            {{-- Team Members --}}
+            <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 p-5 shadow-sm flex items-center gap-4">
+                <div class="size-12 rounded-xl bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center shrink-0">
+                    <flux:icon.users class="size-6 text-violet-500" />
+                </div>
+                <div>
+                    <div class="text-[11px] font-bold text-zinc-400 uppercase tracking-wider mb-0.5">Team Members</div>
+                    <div class="text-3xl font-black text-zinc-900 dark:text-white leading-none">{{ $teamMembersCount }}</div>
+                    <div class="text-xs text-zinc-400 font-semibold mt-1">Under your team</div>
+                </div>
+            </div>
+
+        </div>
+
+        {{-- ── Two-Column: Pending Requests + Quick Filters ────────────────── --}}
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+            {{-- Pending Requests (Left 2/3) --}}
+            <div class="lg:col-span-2 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 shadow-sm overflow-hidden">
+                <div class="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
+                    <h3 class="text-base font-bold text-zinc-900 dark:text-white">
+                        Pending Action
+                        <span class="ml-2 inline-flex items-center justify-center size-5 rounded-full bg-amber-100 text-amber-600 text-[10px] font-black">
+                            {{ $pendingRequests->count() }}
+                        </span>
+                    </h3>
                 </div>
 
-                {{-- Request summary card --}}
+                @if($pendingRequests->count() > 0)
+                    <div class="divide-y divide-zinc-50 dark:divide-zinc-800/60">
+                        @foreach($pendingRequests as $req)
+                            <div class="p-6 hover:bg-zinc-50/50 dark:hover:bg-zinc-800/30 transition-colors">
+                                <div class="flex items-start gap-4">
+                                    {{-- Avatar --}}
+                                    <div class="size-10 rounded-full bg-amber-500 flex items-center justify-center font-bold text-white text-sm shrink-0">
+                                        {{ strtoupper(substr($req->employee->user->name, 0, 1)) }}
+                                    </div>
+                                    <div class="flex-1 min-w-0">
+                                        <div class="flex items-center gap-2 flex-wrap mb-3">
+                                            <span class="font-bold text-zinc-900 dark:text-white text-sm">{{ $req->employee->user->name }}</span>
+                                            <span class="text-sm text-zinc-500">{{ $req->leaveType->name }}</span>
+                                            <span class="px-2 py-0.5 rounded-md bg-amber-50 text-amber-600 border border-amber-200 text-[10px] font-bold uppercase tracking-wide dark:bg-amber-950/30 dark:border-amber-800/40">
+                                                PENDING
+                                            </span>
+                                        </div>
+
+                                        {{-- Info grid --}}
+                                        <div class="grid grid-cols-3 gap-3 mb-3">
+                                            <div class="bg-zinc-50 dark:bg-zinc-800/50 rounded-lg p-2.5">
+                                                <div class="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide mb-1">Requested Period</div>
+                                                <div class="text-xs font-bold text-zinc-800 dark:text-zinc-200">
+                                                    {{ $req->start_date->format('M d') }} – {{ $req->end_date->format('M d, Y') }}
+                                                </div>
+                                            </div>
+                                            <div class="bg-zinc-50 dark:bg-zinc-800/50 rounded-lg p-2.5">
+                                                <div class="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide mb-1">Total Days</div>
+                                                <div class="text-xs font-bold text-zinc-800 dark:text-zinc-200">{{ (float)$req->days }} {{ $req->is_half_day ? 'Half Day' : 'Days' }}</div>
+                                            </div>
+                                            <div class="bg-zinc-50 dark:bg-zinc-800/50 rounded-lg p-2.5">
+                                                <div class="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide mb-1">Applied On</div>
+                                                <div class="text-xs font-bold text-zinc-800 dark:text-zinc-200">{{ $req->created_at->format('M d, Y') }}</div>
+                                            </div>
+                                        </div>
+
+                                        @if($req->reason)
+                                            <p class="text-xs text-zinc-500 italic mb-4 line-clamp-1">"{{ $req->reason }}"</p>
+                                        @endif
+
+                                        <div class="flex gap-2">
+                                            <button
+                                                type="button"
+                                                wire:click="selectRequest({{ $req->id }})"
+                                                class="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors"
+                                            >
+                                                <flux:icon.eye class="size-4" />
+                                                View Details
+                                            </button>
+                                            <button
+                                                type="button"
+                                                wire:click="selectRequest({{ $req->id }})"
+                                                class="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-bold text-white bg-brand-600 hover:bg-brand-700 rounded-xl transition-colors shadow-sm shadow-brand-200 dark:shadow-none"
+                                            >
+                                                <flux:icon.check-circle class="size-4" />
+                                                Review Request
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+                @else
+                    <div class="py-14 flex flex-col items-center justify-center text-center">
+                        <div class="size-14 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 flex items-center justify-center mx-auto mb-3">
+                            <flux:icon.check-circle class="size-7 text-emerald-500" />
+                        </div>
+                        <h4 class="font-bold text-zinc-900 dark:text-white mb-1">All caught up!</h4>
+                        <p class="text-sm text-zinc-500 max-w-xs">No pending leave requests from your team right now.</p>
+                    </div>
+                @endif
+            </div>
+
+            {{-- Quick Filters (Right 1/3) --}}
+            <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 shadow-sm p-6">
+                <h3 class="text-base font-bold text-zinc-900 dark:text-white mb-5">Quick Filters</h3>
+
+                <div class="space-y-4">
+                    {{-- Date Range --}}
+                    <div class="space-y-2">
+                        <label class="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Date Range</label>
+                        <div class="flex items-center gap-2 p-3 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl">
+                            <flux:icon.calendar class="size-4 text-zinc-400 shrink-0" />
+                            <input
+                                type="date"
+                                wire:model="filterFrom"
+                                class="flex-1 bg-transparent text-xs font-semibold text-zinc-700 dark:text-zinc-300 border-0 outline-none focus:ring-0 p-0"
+                            />
+                            <span class="text-zinc-400 text-xs">–</span>
+                            <input
+                                type="date"
+                                wire:model="filterTo"
+                                class="flex-1 bg-transparent text-xs font-semibold text-zinc-700 dark:text-zinc-300 border-0 outline-none focus:ring-0 p-0"
+                            />
+                        </div>
+                    </div>
+
+                    {{-- Leave Type --}}
+                    <div class="space-y-2">
+                        <label class="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Leave Type</label>
+                        <select
+                            wire:model="filterLeaveType"
+                            class="w-full px-3 py-2.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-sm text-zinc-700 dark:text-zinc-300 font-medium focus:outline-none focus:ring-2 focus:ring-brand-400/30 focus:border-brand-400 transition-colors"
+                        >
+                            <option value="">All Leave Types</option>
+                            @foreach($leaveTypes as $lt)
+                                <option value="{{ $lt->id }}">{{ $lt->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    {{-- Status --}}
+                    <div class="space-y-2">
+                        <label class="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Status</label>
+                        <select
+                            wire:model="filterStatus"
+                            class="w-full px-3 py-2.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-sm text-zinc-700 dark:text-zinc-300 font-medium focus:outline-none focus:ring-2 focus:ring-brand-400/30 focus:border-brand-400 transition-colors"
+                        >
+                            <option value="">All Status</option>
+                            <option value="pending">Pending</option>
+                            <option value="approved">Approved</option>
+                            <option value="rejected">Rejected</option>
+                        </select>
+                    </div>
+
+                    {{-- Buttons --}}
+                    <div class="flex gap-2 pt-2">
+                        <button
+                            type="button"
+                            wire:click="resetFilters"
+                            class="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors"
+                        >
+                            <flux:icon.arrow-path class="size-3.5" />
+                            Reset
+                        </button>
+                        <button
+                            type="button"
+                            wire:click="applyFilters"
+                            class="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-bold text-white bg-brand-600 hover:bg-brand-700 rounded-xl transition-colors shadow-sm shadow-brand-200 dark:shadow-none"
+                        >
+                            <flux:icon.funnel class="size-3.5" />
+                            Apply Filters
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        {{-- ── Recent Team Activity Table ───────────────────────────────────── --}}
+        <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 shadow-sm overflow-hidden">
+            <div class="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800">
+                <h3 class="text-base font-bold text-zinc-900 dark:text-white">Recent Team Activity</h3>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="bg-zinc-50/70 dark:bg-zinc-950/40 border-b border-zinc-100 dark:border-zinc-800">
+                            <th class="py-3 pl-6 pr-4 text-left text-[10px] font-bold uppercase tracking-widest text-zinc-400">Employee</th>
+                            <th class="py-3 pr-4 text-left text-[10px] font-bold uppercase tracking-widest text-zinc-400">Leave Type</th>
+                            <th class="py-3 pr-4 text-left text-[10px] font-bold uppercase tracking-widest text-zinc-400">Duration</th>
+                            <th class="py-3 pr-4 text-left text-[10px] font-bold uppercase tracking-widest text-zinc-400">Status</th>
+                            <th class="py-3 pr-4 text-left text-[10px] font-bold uppercase tracking-widest text-zinc-400">Applied On</th>
+                            <th class="py-3 pr-6 text-right text-[10px] font-bold uppercase tracking-widest text-zinc-400">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-zinc-50 dark:divide-zinc-800/50">
+                        @forelse($history as $item)
+                            @php
+                                [$statusClass, $statusLabel] = match($item->status) {
+                                    'approved' => ['bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800/40', 'Approved'],
+                                    'rejected' => ['bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-400 dark:border-red-800/40', 'Rejected'],
+                                    'pending'  => ['bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800/40', 'Pending'],
+                                    default    => ['bg-zinc-100 text-zinc-600 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700', ucfirst($item->status)],
+                                };
+                                $avatarColor = match(strtolower(substr($item->employee->user->name, 0, 1))) {
+                                    'a','b','c' => 'bg-violet-500',
+                                    'd','e','f' => 'bg-blue-500',
+                                    'g','h','i' => 'bg-emerald-500',
+                                    'j','k','l' => 'bg-amber-500',
+                                    'm','n','o' => 'bg-rose-500',
+                                    default     => 'bg-zinc-500',
+                                };
+                            @endphp
+                            <tr class="hover:bg-violet-50/20 dark:hover:bg-violet-950/10 transition-colors group">
+                                <td class="py-3.5 pl-6 pr-4">
+                                    <div class="flex items-center gap-3">
+                                        <div class="size-8 rounded-full {{ $avatarColor }} flex items-center justify-center font-bold text-white text-xs shrink-0">
+                                            {{ strtoupper(substr($item->employee->user->name, 0, 1)) }}
+                                        </div>
+                                        <div>
+                                            <div class="font-semibold text-zinc-900 dark:text-white text-sm">{{ $item->employee->user->name }}</div>
+                                            <div class="text-[11px] text-zinc-400">{{ $item->employee->department?->name ?? '—' }}</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="py-3.5 pr-4 text-zinc-600 dark:text-zinc-300">{{ $item->leaveType->name }}</td>
+                                <td class="py-3.5 pr-4">
+                                    <div class="text-zinc-800 dark:text-zinc-200 font-medium text-sm">
+                                        {{ $item->start_date->format('M d') }} – {{ $item->end_date->format('M d, Y') }}
+                                    </div>
+                                    <div class="text-[11px] text-zinc-400">{{ (float)$item->days }} {{ (float)$item->days == 1 ? 'Day' : 'Days' }}</div>
+                                </td>
+                                <td class="py-3.5 pr-4">
+                                    <span class="inline-flex items-center px-2.5 py-1 rounded-lg border text-[10px] font-bold {{ $statusClass }}">
+                                        {{ strtoupper($statusLabel) }}
+                                    </span>
+                                </td>
+                                <td class="py-3.5 pr-4">
+                                    <div class="text-sm text-zinc-700 dark:text-zinc-300">{{ $item->created_at->format('M d, Y') }}</div>
+                                    <div class="text-[11px] text-zinc-400">{{ $item->created_at->format('h:i A') }}</div>
+                                </td>
+                                <td class="py-3.5 pr-6 text-right">
+                                    <div class="flex items-center justify-end gap-1">
+                                        <button
+                                            type="button"
+                                            wire:click="selectRequest({{ $item->id }})"
+                                            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors"
+                                        >
+                                            <flux:icon.eye class="size-3.5" />
+                                            View
+                                        </button>
+                                        <button
+                                            type="button"
+                                            wire:click="selectRequest({{ $item->id }})"
+                                            class="p-1.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded-lg transition-colors"
+                                            title="More options"
+                                        >
+                                            <flux:icon.ellipsis-vertical class="size-4" />
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="6" class="py-14 text-center">
+                                    <div class="size-12 rounded-2xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center mx-auto mb-3">
+                                        <flux:icon.calendar-days class="size-6 text-zinc-400" />
+                                    </div>
+                                    <p class="text-sm font-bold text-zinc-600 dark:text-zinc-300">No leave activity found</p>
+                                    <p class="text-xs text-zinc-400 mt-1">Try adjusting your filters to see more results</p>
+                                </td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+
+            {{-- Table Footer --}}
+            <div class="px-6 py-3 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-between gap-4">
+                <div class="text-xs text-zinc-500">
+                    Showing {{ $history->firstItem() ?? 0 }} to {{ $history->lastItem() ?? 0 }} of {{ $history->total() }} results
+                </div>
+                <div class="flex items-center gap-4">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs text-zinc-400">Per page</span>
+                        <select
+                            wire:model.live="perPage"
+                            class="text-xs font-semibold text-zinc-700 dark:text-zinc-300 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-400/30"
+                        >
+                            <option value="10">10</option>
+                            <option value="25">25</option>
+                            <option value="50">50</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center gap-1">
+                        {{ $history->links('vendor.pagination.simple-tailwind') }}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    {{-- ── Review Modal (div-based — no <dialog> to avoid backdrop issues) ── --}}
+    @if($showReviewModal && $selectedRequest)
+        <div
+            class="fixed inset-0 z-50 flex items-center justify-center p-4"
+            x-data
+            x-on:keydown.escape.window="$wire.closeReviewModal()"
+        >
+            {{-- Backdrop --}}
+            <div
+                class="absolute inset-0 bg-black/40 backdrop-blur-sm"
+                wire:click="closeReviewModal"
+            ></div>
+
+            {{-- Panel --}}
+            <div class="relative w-full max-w-lg bg-white dark:bg-zinc-800 rounded-2xl shadow-xl ring ring-black/5 dark:ring-zinc-700 p-6 space-y-5">
+
+                {{-- Close X --}}
+                <button
+                    type="button"
+                    wire:click="closeReviewModal"
+                    class="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors"
+                    aria-label="Close"
+                >
+                    <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+
+                <div>
+                    <h2 class="text-lg font-bold text-zinc-900 dark:text-white">Review Leave Request</h2>
+                    <p class="text-sm text-zinc-500 mt-0.5">From {{ $selectedRequest->employee->user->name }}</p>
+                </div>
+
+                {{-- Request summary --}}
                 <div class="rounded-xl bg-zinc-50 p-4 space-y-2.5 dark:bg-zinc-900">
                     <div class="flex justify-between text-sm">
                         <span class="text-zinc-500">Leave Type</span>
@@ -139,7 +431,7 @@
                     </div>
                 </div>
 
-                {{-- Error from service (e.g. insufficient balance on re-approve) --}}
+                {{-- Error --}}
                 @error('form.leave_type_id')
                     <div class="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700 dark:bg-red-950/30 dark:border-red-800 dark:text-red-400">
                         {{ $message }}
@@ -160,28 +452,25 @@
                 </div>
 
                 <div class="flex gap-3 pt-2 border-t border-zinc-100 dark:border-zinc-800">
-                    <flux:button
-                        wire:click="reject"
-                        wire:loading.attr="disabled"
-                        wire:target="reject"
-                        variant="ghost"
-                        class="flex-1 !text-red-600 hover:!bg-red-50 dark:hover:!bg-red-950/30"
-                    >
+                    <button type="button" wire:click="closeReviewModal"
+                        class="flex-1 px-4 py-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300 bg-white dark:bg-zinc-700 border border-zinc-200 dark:border-zinc-600 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-600 transition-colors">
+                        Cancel
+                    </button>
+                    <button type="button" wire:click="reject"
+                        wire:loading.attr="disabled" wire:target="reject"
+                        class="flex-1 px-4 py-2 text-sm font-semibold text-red-600 bg-red-50 border border-red-200 rounded-xl hover:bg-red-100 transition-colors disabled:opacity-60 dark:bg-red-950/30 dark:border-red-800 dark:text-red-400">
                         <span wire:loading.remove wire:target="reject">Reject</span>
                         <span wire:loading wire:target="reject">Rejecting…</span>
-                    </flux:button>
-                    <flux:button
-                        wire:click="approve"
-                        wire:loading.attr="disabled"
-                        wire:target="approve"
-                        variant="primary"
-                        class="flex-1"
-                    >
+                    </button>
+                    <button type="button" wire:click="approve"
+                        wire:loading.attr="disabled" wire:target="approve"
+                        class="flex-1 px-4 py-2 text-sm font-bold text-white bg-brand-600 hover:bg-brand-700 rounded-xl transition-colors shadow-sm shadow-brand-200 dark:shadow-none disabled:opacity-60">
                         <span wire:loading.remove wire:target="approve">Approve</span>
                         <span wire:loading wire:target="approve">Approving…</span>
-                    </flux:button>
+                    </button>
                 </div>
             </div>
-        @endif
-    </flux:modal>
+        </div>
+    @endif
+
 </flux:main>

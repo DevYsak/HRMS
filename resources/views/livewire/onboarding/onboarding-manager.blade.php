@@ -7,7 +7,7 @@
             <p class="text-sm text-zinc-500 mt-1">New joiners in the last 90 days and their checklist progress.</p>
         </div>
         <a href="{{ route('employees.create') }}" wire:navigate
-            class="inline-flex items-center gap-2 rounded-xl bg-orange-500 hover:bg-orange-600 px-4 py-2.5 text-sm font-bold text-white shadow transition-colors">
+            class="inline-flex items-center gap-2 rounded-xl bg-brand-600 hover:bg-brand-700 px-4 py-2.5 text-sm font-bold text-white shadow transition-colors">
             <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
             Add Employee
         </a>
@@ -22,11 +22,11 @@
         </div>
         <div class="flex rounded-lg border border-zinc-200 overflow-hidden text-sm dark:border-zinc-700">
             <button wire:click="$set('filter','active')"
-                class="px-4 py-1.5 font-semibold transition-colors {{ $filter === 'active' ? 'bg-orange-500 text-white' : 'bg-white text-zinc-500 hover:bg-zinc-50 dark:bg-zinc-800 dark:text-zinc-400' }}">
+                class="px-4 py-1.5 font-semibold transition-colors {{ $filter === 'active' ? 'bg-brand-600 text-white' : 'bg-white text-zinc-500 hover:bg-zinc-50 dark:bg-zinc-800 dark:text-zinc-400' }}">
                 Recent (90 days)
             </button>
             <button wire:click="$set('filter','all')"
-                class="px-4 py-1.5 font-semibold transition-colors {{ $filter === 'all' ? 'bg-orange-500 text-white' : 'bg-white text-zinc-500 hover:bg-zinc-50 dark:bg-zinc-800 dark:text-zinc-400' }}">
+                class="px-4 py-1.5 font-semibold transition-colors {{ $filter === 'all' ? 'bg-brand-600 text-white' : 'bg-white text-zinc-500 hover:bg-zinc-50 dark:bg-zinc-800 dark:text-zinc-400' }}">
                 All Employees
             </button>
         </div>
@@ -56,7 +56,7 @@
                     <tr class="hover:bg-zinc-50/60 dark:hover:bg-zinc-800/20 transition-colors">
                         <td class="py-4 pl-6 pr-4">
                             <div class="flex items-center gap-3">
-                                <div class="flex size-8 shrink-0 items-center justify-center rounded-full bg-orange-500 text-xs font-bold text-white">
+                                <div class="flex size-8 shrink-0 items-center justify-center rounded-full bg-brand-600 text-xs font-bold text-white">
                                     {{ strtoupper(substr($emp->user->name, 0, 1)) }}
                                 </div>
                                 <div>
@@ -76,7 +76,7 @@
                             @if($total > 0)
                                 <div class="flex items-center gap-3">
                                     <div class="h-2 w-28 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
-                                        <div class="h-full rounded-full transition-all {{ $pct === 100 ? 'bg-emerald-500' : 'bg-orange-500' }}"
+                                        <div class="h-full rounded-full transition-all {{ $pct === 100 ? 'bg-emerald-500' : 'bg-brand-600' }}"
                                             style="width: {{ $pct }}%"></div>
                                     </div>
                                     <span class="text-xs font-bold {{ $pct === 100 ? 'text-emerald-600' : 'text-zinc-500' }}">

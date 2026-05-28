@@ -2,7 +2,9 @@
 
 namespace App\Livewire\TimeOff;
 
+use App\Models\Employee;
 use App\Models\LeaveRequest;
+use App\Models\LeaveType;
 use App\Services\LeaveService;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
@@ -31,12 +33,44 @@ class TeamTimeOff extends Component
         'is_half_day' => false,
     ];
 
+    // Filters
+    public string $filterFrom = '';
+
+    public string $filterTo = '';
+
+    public string $filterLeaveType = '';
+
+    public string $filterStatus = '';
+
+    public int $perPage = 10;
+
     public function mount(): void
     {
-        // If a notification includes ?selectedRequestId=123, open that request on mount.
+        $this->filterFrom = now()->startOfMonth()->format('Y-m-d');
+        $this->filterTo = now()->endOfMonth()->format('Y-m-d');
+
         if ($id = request()->query('selectedRequestId')) {
             $this->selectRequest((int) $id);
         }
+    }
+
+    public function applyFilters(): void
+    {
+        $this->resetPage();
+    }
+
+    public function resetFilters(): void
+    {
+        $this->filterFrom = now()->startOfMonth()->format('Y-m-d');
+        $this->filterTo = now()->endOfMonth()->format('Y-m-d');
+        $this->filterLeaveType = '';
+        $this->filterStatus = '';
+        $this->resetPage();
+    }
+
+    public function updatingPerPage(): void
+    {
+        $this->resetPage();
     }
 
     public function selectRequest(int $id): void
@@ -57,7 +91,6 @@ class TeamTimeOff extends Component
         ];
         $this->resetErrorBag();
         $this->showReviewModal = true;
-        $this->dispatch('modal-show', name: 'review-modal');
     }
 
     public function approve(): void
@@ -75,6 +108,16 @@ class TeamTimeOff extends Component
         ]);
 
         $this->updateStatus('rejected');
+    }
+
+    public function closeReviewModal(): void
+    {
+        $this->showReviewModal = false;
+        $this->selectedRequestId = null;
+        $this->selectedRequest = null;
+        $this->resetErrorBag();
+        $this->reset(['reviewer_comment', 'form']);
+        $this->form = ['leave_type_id' => '', 'start_date' => '', 'end_date' => '', 'reason' => '', 'is_half_day' => false];
     }
 
     protected function updateStatus(string $status): void
@@ -104,11 +147,7 @@ class TeamTimeOff extends Component
             return;
         }
 
-        $this->showReviewModal = false;
-        $this->selectedRequestId = null;
-        $this->selectedRequest = null;
-        $this->reset(['reviewer_comment', 'form']);
-        $this->form = ['leave_type_id' => '', 'start_date' => '', 'end_date' => '', 'reason' => '', 'is_half_day' => false];
+        $this->closeReviewModal();
 
         \Flux::toast($status === 'approved' ? 'Leave approved successfully.' : 'Leave request rejected.', variant: $status === 'approved' ? 'success' : 'danger');
         $this->resetPage();
@@ -118,21 +157,63 @@ class TeamTimeOff extends Component
     {
         abort_unless(Auth::user()->canApproveLeave(), 403);
 
-        $pendingRequests = LeaveRequest::with(['employee.user', 'leaveType'])
+        $managerId = Auth::id();
+
+        $pendingRequests = LeaveRequest::with(['employee.user', 'employee.department', 'leaveType'])
             ->where('status', 'pending')
-            ->whereHas('employee', fn ($q) => $q->where('manager_id', Auth::id()))
+            ->whereHas('employee', fn ($q) => $q->where('manager_id', $managerId))
             ->latest()
             ->get();
 
-        $history = LeaveRequest::with(['employee.user', 'leaveType'])
-            ->whereIn('status', ['approved', 'rejected'])
-            ->whereHas('employee', fn ($q) => $q->where('manager_id', Auth::id()))
-            ->latest()
-            ->paginate(10);
+        $historyQuery = LeaveRequest::with(['employee.user', 'employee.department', 'leaveType'])
+            ->whereHas('employee', fn ($q) => $q->where('manager_id', $managerId));
+
+        if ($this->filterFrom) {
+            $historyQuery->where('start_date', '>=', $this->filterFrom);
+        }
+
+        if ($this->filterTo) {
+            $historyQuery->where('start_date', '<=', $this->filterTo);
+        }
+
+        if ($this->filterLeaveType) {
+            $historyQuery->where('leave_type_id', $this->filterLeaveType);
+        }
+
+        if ($this->filterStatus) {
+            $historyQuery->where('status', $this->filterStatus);
+        } else {
+            $historyQuery->whereIn('status', ['approved', 'rejected', 'pending']);
+        }
+
+        $history = $historyQuery->latest()->paginate($this->perPage);
+
+        // KPI stats
+        $approvedThisMonth = LeaveRequest::whereHas('employee', fn ($q) => $q->where('manager_id', $managerId))
+            ->where('status', 'approved')
+            ->whereMonth('updated_at', now()->month)
+            ->whereYear('updated_at', now()->year)
+            ->count();
+
+        $totalDaysThisMonth = LeaveRequest::whereHas('employee', fn ($q) => $q->where('manager_id', $managerId))
+            ->where('status', 'approved')
+            ->whereMonth('updated_at', now()->month)
+            ->whereYear('updated_at', now()->year)
+            ->sum('days');
+
+        $teamMembersCount = Employee::where('manager_id', $managerId)
+            ->where('status', 'active')
+            ->count();
+
+        $leaveTypes = LeaveType::orderBy('name')->get();
 
         return view('livewire.time-off.team-time-off', [
             'pendingRequests' => $pendingRequests,
             'history' => $history,
+            'approvedThisMonth' => $approvedThisMonth,
+            'totalDaysThisMonth' => $totalDaysThisMonth,
+            'teamMembersCount' => $teamMembersCount,
+            'leaveTypes' => $leaveTypes,
         ])->layout('layouts.app', ['title' => 'Team Time Off']);
     }
 }

@@ -59,7 +59,7 @@
             <flux:button
                 variant="primary"
                 type="submit"
-                class="w-full !bg-orange-500 hover:!bg-orange-600 !text-white font-semibold !rounded-lg !border-0"
+                class="w-full !bg-brand-600 hover:!bg-brand-600 !text-white font-semibold !rounded-lg !border-0"
                 data-test="login-button"
             >
                 {{ __('Login') }}

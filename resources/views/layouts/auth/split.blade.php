@@ -69,7 +69,7 @@
             <div class="w-full max-w-sm">
                 {{-- Mobile logo (shown only on small screens) --}}
                 <div class="mb-8 flex items-center gap-3 lg:hidden">
-                    <span class="flex size-9 items-center justify-center rounded-xl bg-orange-500">
+                    <span class="flex size-9 items-center justify-center rounded-xl bg-brand-600">
                         <svg class="size-5 fill-white" viewBox="0 0 24 24">
                             <path d="M4 3h3v7h10V3h3v18h-3v-8H7v8H4V3z" />
                         </svg>

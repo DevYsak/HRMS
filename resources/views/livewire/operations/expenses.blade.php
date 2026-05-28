@@ -81,7 +81,7 @@
                             </td>
                             <td class="px-4 py-4">
                                 <div class="flex items-center gap-2.5">
-                                    <div class="flex size-7 items-center justify-center rounded-full bg-orange-500 text-[10px] font-black text-white">
+                                    <div class="flex size-7 items-center justify-center rounded-full bg-brand-600 text-[10px] font-black text-white">
                                         {{ strtoupper(substr($expense->employee->user->name, 0, 1)) }}
                                     </div>
                                     <span class="text-sm font-medium text-zinc-700 dark:text-zinc-300">{{ $expense->employee->user->name }}</span>

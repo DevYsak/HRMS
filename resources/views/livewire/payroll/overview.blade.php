@@ -28,7 +28,7 @@
                 </a>
                 <a href="{{ route('payroll.process') }}"
                    wire:navigate
-                   class="inline-flex items-center gap-2 px-5 py-2 text-sm font-bold text-white bg-orange-500 hover:bg-orange-600 rounded-xl transition-colors shadow-sm shadow-orange-200 dark:shadow-none">
+                   class="inline-flex items-center gap-2 px-5 py-2 text-sm font-bold text-white bg-brand-600 hover:bg-brand-700 rounded-xl transition-colors shadow-sm shadow-orange-200 dark:shadow-none">
                     <flux:icon.play class="size-4" />
                     Process Payroll
                 </a>
@@ -112,7 +112,7 @@
         </div>
 
         {{-- ── YTD Banner ──────────────────────────────────────────────── --}}
-        <div class="bg-gradient-to-r from-violet-600 to-violet-700 dark:from-violet-800 dark:to-violet-900 rounded-2xl p-5 flex items-center justify-between shadow-sm shadow-violet-200 dark:shadow-none">
+        <div class="bg-gradient-to-r from-violet-600 to-violet-700 dark:from-violet-800 dark:to-violet-900 rounded-2xl p-5 flex items-center justify-between shadow-sm shadow-brand-200 dark:shadow-none">
             <div class="flex items-center gap-4">
                 <div class="size-11 rounded-xl bg-white/15 flex items-center justify-center shrink-0">
                     <flux:icon.chart-bar class="size-5 text-white" />
@@ -136,7 +136,7 @@
                     <p class="text-xs text-zinc-500 mt-0.5">Last {{ $recentPayrolls->count() }} processed runs</p>
                 </div>
                 <a href="{{ route('payroll.process') }}" wire:navigate
-                   class="inline-flex items-center gap-1 text-xs font-semibold text-violet-600 hover:text-violet-700 dark:text-violet-400 transition-colors">
+                   class="inline-flex items-center gap-1 text-xs font-semibold text-brand-600 hover:text-brand-700 dark:text-violet-400 transition-colors">
                     View all <flux:icon.arrow-right class="size-3.5" />
                 </a>
             </div>
@@ -202,7 +202,7 @@
                                     <p class="text-sm font-bold text-zinc-600 dark:text-zinc-300">No payroll cycles yet</p>
                                     <p class="text-xs text-zinc-400 mt-1">Run your first payroll to see history here</p>
                                     <a href="{{ route('payroll.process') }}" wire:navigate
-                                       class="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-bold rounded-xl transition-colors">
+                                       class="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-bold rounded-xl transition-colors">
                                         <flux:icon.play class="size-4" /> Process Payroll
                                     </a>
                                 </td>

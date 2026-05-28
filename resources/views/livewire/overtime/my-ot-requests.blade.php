@@ -11,7 +11,7 @@
                 <p class="text-white/55 text-sm mt-1">Submit and track your overtime pre-approval requests.</p>
             </div>
             <button wire:click="openModal"
-                class="inline-flex items-center gap-2 px-5 py-2.5 bg-orange-500 hover:bg-orange-600 border border-orange-400/50 text-white rounded-xl text-sm font-bold transition shadow-lg shadow-orange-900/30">
+                class="inline-flex items-center gap-2 px-5 py-2.5 bg-brand-600 hover:bg-brand-700 border border-orange-400/50 text-white rounded-xl text-sm font-bold transition shadow-lg shadow-orange-900/30">
                 <flux:icon.plus class="size-4" /> Request OT
             </button>
         </div>

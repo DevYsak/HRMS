@@ -9,7 +9,7 @@
     // Department → color palette
     $palette = [
         'indigo'  => ['accent' => '#6366f1', 'ring' => 'ring-indigo-200',  'badge' => 'bg-indigo-50 text-indigo-600 ring-indigo-100',   'border' => 'border-indigo-200',  'dot' => 'bg-indigo-500',  'bar' => '#6366f1'],
-        'violet'  => ['accent' => '#7c3aed', 'ring' => 'ring-violet-200',  'badge' => 'bg-violet-50 text-violet-700 ring-violet-100',   'border' => 'border-violet-200',  'dot' => 'bg-violet-600',  'bar' => '#7c3aed'],
+        'violet'  => ['accent' => '#7c3aed', 'ring' => 'ring-violet-200',  'badge' => 'bg-violet-50 text-violet-700 ring-violet-100',   'border' => 'border-violet-200',  'dot' => 'bg-brand-600',  'bar' => '#7c3aed'],
         'sky'     => ['accent' => '#0284c7', 'ring' => 'ring-sky-200',     'badge' => 'bg-sky-50 text-sky-700 ring-sky-100',            'border' => 'border-sky-200',     'dot' => 'bg-sky-600',     'bar' => '#0284c7'],
         'emerald' => ['accent' => '#059669', 'ring' => 'ring-emerald-200', 'badge' => 'bg-emerald-50 text-emerald-700 ring-emerald-100','border' => 'border-emerald-200', 'dot' => 'bg-emerald-600', 'bar' => '#059669'],
         'amber'   => ['accent' => '#d97706', 'ring' => 'ring-amber-200',   'badge' => 'bg-amber-50 text-amber-700 ring-amber-100',      'border' => 'border-amber-200',   'dot' => 'bg-amber-500',   'bar' => '#d97706'],

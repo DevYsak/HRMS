@@ -143,7 +143,7 @@ new #[Title('Role Permissions')] class extends Component {
         <span>Disabled</span>
     </div>
     <div class="flex items-center gap-2">
-        <div class="size-5 rounded-lg bg-orange-600 flex items-center justify-center shadow-sm">
+        <div class="size-5 rounded-lg bg-brand-600 flex items-center justify-center shadow-sm">
             <flux:icon.lock-closed class="size-3 text-white" />
         </div>
         <span>Super Admin (always on, locked)</span>
@@ -218,7 +218,7 @@ new #[Title('Role Permissions')] class extends Component {
                         {{-- Super Admin locked --}}
                         <td class="py-4 px-3 text-center align-middle">
                             <div class="flex justify-center">
-                                <div class="size-9 rounded-xl bg-orange-600 flex items-center justify-center cursor-not-allowed shadow-sm" title="Super Admin always has this permission">
+                                <div class="size-9 rounded-xl bg-brand-600 flex items-center justify-center cursor-not-allowed shadow-sm" title="Super Admin always has this permission">
                                     <flux:icon.lock-closed class="size-4 text-white" />
                                 </div>
                             </div>

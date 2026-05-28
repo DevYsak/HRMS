@@ -50,7 +50,7 @@
                     <flux:icon.plus-circle class="size-4" /> Log OT
                 </a>
                 <a href="{{ route('payroll.payslips') }}" wire:navigate
-                   class="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 border border-orange-400/50 transition rounded-xl text-sm text-white font-semibold shadow-lg shadow-orange-900/30">
+                   class="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 border border-orange-400/50 transition rounded-xl text-sm text-white font-semibold shadow-lg shadow-orange-900/30">
                     <flux:icon.banknotes class="size-4" /> My Pay
                 </a>
             </div>

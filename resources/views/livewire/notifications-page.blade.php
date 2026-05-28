@@ -9,7 +9,7 @@
             'green'  => ['bg-emerald-50 dark:bg-emerald-950/20', 'text-emerald-600 dark:text-emerald-400', 'bg-emerald-500'],
             'red'    => ['bg-rose-50 dark:bg-rose-950/20',    'text-rose-600 dark:text-rose-400',    'bg-rose-500'],
             'amber'  => ['bg-amber-50 dark:bg-amber-950/20',  'text-amber-600 dark:text-amber-400',  'bg-amber-500'],
-            'orange' => ['bg-orange-50 dark:bg-orange-950/20','text-orange-600 dark:text-orange-400','bg-orange-500'],
+            'orange' => ['bg-orange-50 dark:bg-orange-950/20','text-orange-600 dark:text-orange-400','bg-brand-600'],
             'purple' => ['bg-violet-50 dark:bg-violet-950/20','text-violet-600 dark:text-violet-400','bg-violet-500'],
             'zinc'   => ['bg-zinc-100 dark:bg-zinc-800',      'text-zinc-500 dark:text-zinc-400',    'bg-zinc-400'],
             default  => ['bg-blue-50 dark:bg-blue-950/20',    'text-blue-600 dark:text-blue-400',    'bg-blue-500'],

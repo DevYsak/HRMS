@@ -363,7 +363,7 @@
                     <flux:sidebar.profile :name="auth()->user()->name" :initials="auth()->user()->initials()" icon:trailing="chevrons-up-down" />
                     <flux:menu class="w-56">
                         <div class="flex items-center gap-3 px-2 py-2">
-                            <flux:avatar :initials="auth()->user()->initials()" size="sm" class="bg-orange-500 text-white" />
+                            <flux:avatar :initials="auth()->user()->initials()" size="sm" class="bg-brand-600 text-white" />
                             <div class="min-w-0">
                                 <p class="truncate text-sm font-semibold text-zinc-900 dark:text-white">{{ auth()->user()->name }}</p>
                                 <p class="truncate text-xs text-zinc-500">{{ auth()->user()->email }}</p>
@@ -406,7 +406,7 @@
                 <flux:profile :name="auth()->user()->name" :initials="auth()->user()->initials()" class="ms-1 cursor-pointer" />
                 <flux:menu class="w-52">
                     <div class="flex items-center gap-2 px-2 py-2">
-                        <flux:avatar :initials="auth()->user()->initials()" size="sm" class="bg-orange-500 text-white" />
+                        <flux:avatar :initials="auth()->user()->initials()" size="sm" class="bg-brand-600 text-white" />
                         <div class="min-w-0">
                             <p class="truncate text-sm font-semibold">{{ auth()->user()->name }}</p>
                             <p class="truncate text-xs text-zinc-500">{{ auth()->user()->email }}</p>
