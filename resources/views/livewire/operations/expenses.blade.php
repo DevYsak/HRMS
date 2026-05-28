@@ -89,7 +89,7 @@
                             </td>
                             <td class="px-4 py-4">
                                 <span class="font-black tabular-nums text-zinc-900 dark:text-white">
-                                    â‚¹{{ number_format($expense->amount, 2) }}
+                                    ₹{{ number_format($expense->amount, 2) }}
                                 </span>
                             </td>
                             <td class="px-4 py-4 text-sm text-zinc-500 dark:text-zinc-400">
@@ -208,7 +208,7 @@
                         @error('category') <flux:error>{{ $message }}</flux:error> @enderror
                     </flux:field>
                     <flux:field>
-                        <flux:input wire:model="amount" type="number" step="0.01" min="1" label="Amount (â‚¹)" required />
+                        <flux:input wire:model="amount" type="number" step="0.01" min="1" label="Amount (₹)" required />
                         @error('amount') <flux:error>{{ $message }}</flux:error> @enderror
                     </flux:field>
                 </div>

@@ -179,7 +179,7 @@
                 />
 
                 <div class="rounded-lg bg-blue-50 p-3 text-xs text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
-                    â„¹ï¸ OT is calculated as hours worked beyond 9 hrs/day at â‚¹100/hr. This request requires manager approval.
+                    â„¹ï¸ OT is calculated as hours worked beyond 9 hrs/day at ₹100/hr. This request requires manager approval.
                 </div>
 
                 <div class="flex justify-end gap-3 pt-4">

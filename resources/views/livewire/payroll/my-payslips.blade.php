@@ -18,13 +18,13 @@
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                     <div class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
                         <div class="text-xs font-bold text-zinc-400 uppercase tracking-widest">Current CTC</div>
-                        <div class="text-2xl font-black mt-3">â‚¹{{ number_format($ctc, 2) }}</div>
+                        <div class="text-2xl font-black mt-3">₹{{ number_format($ctc, 2) }}</div>
                         <div class="text-sm text-zinc-500 mt-1">Gross annual compensation</div>
                     </div>
 
                     <div class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
                         <div class="text-xs font-bold text-zinc-400 uppercase tracking-widest">Pay Cycle</div>
-                        <div class="text-xl font-black mt-3">{{ ($payCycle === 'A' || $payCycle === 'cycle_a') ? 'Cycle A' : (($payCycle === 'B' || $payCycle === 'cycle_b') ? 'Cycle B' : ($payCycle ?? 'â€”')) }}</div>
+                        <div class="text-xl font-black mt-3">{{ ($payCycle === 'A' || $payCycle === 'cycle_a') ? 'Cycle A' : (($payCycle === 'B' || $payCycle === 'cycle_b') ? 'Cycle B' : ($payCycle ?? '—')) }}</div>
                         <div class="text-sm text-zinc-500 mt-1">Salary cycle for payroll</div>
                     </div>
 
@@ -42,7 +42,7 @@
                                             @if($i === 0)
                                                 <span class="inline-flex items-center px-2 py-1 rounded-full text-[11px] font-black bg-emerald-50 text-emerald-700">CURRENT</span>
                                             @endif
-                                            <div class="text-sm font-bold mt-2">â‚¹{{ number_format($row['regular_salary'], 2) }} + â‚¹{{ number_format($row['allowances'], 2) }} = <span class="font-black">â‚¹{{ number_format($row['total'], 2) }}</span></div>
+                                            <div class="text-sm font-bold mt-2">₹{{ number_format($row['regular_salary'], 2) }} + ₹{{ number_format($row['allowances'], 2) }} = <span class="font-black">₹{{ number_format($row['total'], 2) }}</span></div>
                                         </div>
                                     </div>
                                 @endforeach
@@ -80,7 +80,7 @@
                                                 <div class="text-xs text-zinc-400">Issued {{ $pslip->updated_at->format('M d, Y') }}</div>
                                             </div>
                                             <div class="text-right">
-                                                    <div class="font-black">â‚¹{{ number_format($pslip->net_salary, 2) }}</div>
+                                                    <div class="font-black">₹{{ number_format($pslip->net_salary, 2) }}</div>
                                                     <div class="mt-1 text-xs">
                                                         <a href="{{ URL::temporarySignedRoute('payroll.payslips.download', now()->addMinutes(5), ['payslip' => $pslip->id]) }}" target="_blank" onclick="event.stopPropagation()" class="text-xs text-brand-600 hover:underline">View PDF</a>
                                                     </div>
@@ -100,7 +100,7 @@
                             @if($selectedSlip)
                                 <div class="flex justify-between items-center mb-4">
                                     <div>
-                                        <h3 class="text-lg font-bold">Payslip â€” {{ $selectedSlip->payroll->month }} {{ $selectedSlip->payroll->year }}</h3>
+                                        <h3 class="text-lg font-bold">Payslip — {{ $selectedSlip->payroll->month }} {{ $selectedSlip->payroll->year }}</h3>
                                         <div class="text-xs text-zinc-400">Issued on {{ $selectedSlip->updated_at->format('M d, Y') }}</div>
                                     </div>
                                     <div class="flex items-center gap-2">
@@ -113,12 +113,12 @@
                                     <div>
                                         <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Employee</div>
                                         <div class="font-bold mt-2">{{ $selectedSlip->employee->user->name }}</div>
-                                        <div class="text-sm text-zinc-500">{{ $selectedSlip->employee->jobTitle?->name ?? 'â€”' }}</div>
+                                        <div class="text-sm text-zinc-500">{{ $selectedSlip->employee->jobTitle?->name ?? '—' }}</div>
                                     </div>
                                     <div class="text-right">
                                         <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Payslip</div>
                                         <div class="font-bold mt-2">#{{ str_pad($selectedSlip->id, 6, '0', STR_PAD_LEFT) }}</div>
-                                        <div class="text-sm text-zinc-500">Net: â‚¹{{ number_format($selectedSlip->net_salary, 2) }}</div>
+                                        <div class="text-sm text-zinc-500">Net: ₹{{ number_format($selectedSlip->net_salary, 2) }}</div>
                                     </div>
                                 </div>
 
@@ -129,7 +129,7 @@
                                             @foreach($selectedSlip->items->where('type','earning') as $item)
                                                 <div class="flex justify-between text-sm">
                                                     <span class="text-zinc-600">{{ $item->name }}</span>
-                                                    <span class="font-bold">â‚¹{{ number_format($item->amount, 2) }}</span>
+                                                    <span class="font-bold">₹{{ number_format($item->amount, 2) }}</span>
                                                 </div>
                                             @endforeach
                                         </div>
@@ -140,7 +140,7 @@
                                             @foreach($selectedSlip->items->where('type','deduction') as $item)
                                                 <div class="flex justify-between text-sm">
                                                     <span class="text-zinc-600">{{ $item->name }}</span>
-                                                    <span class="font-bold text-rose-600">-â‚¹{{ number_format($item->amount, 2) }}</span>
+                                                    <span class="font-bold text-rose-600">-₹{{ number_format($item->amount, 2) }}</span>
                                                 </div>
                                             @endforeach
                                         </div>
@@ -148,9 +148,9 @@
                                 </div>
 
                                 <div class="bg-zinc-900 text-white p-6 rounded-lg text-center md:text-left">
-                                    <div class="text-sm">Gross: â‚¹{{ number_format($selectedSlip->gross_salary, 2) }}</div>
-                                    <div class="text-sm">Deductions: -â‚¹{{ number_format($selectedSlip->total_deductions, 2) }}</div>
-                                    <div class="text-2xl font-black mt-2">Net Pay: â‚¹{{ number_format($selectedSlip->net_salary, 2) }}</div>
+                                    <div class="text-sm">Gross: ₹{{ number_format($selectedSlip->gross_salary, 2) }}</div>
+                                    <div class="text-sm">Deductions: -₹{{ number_format($selectedSlip->total_deductions, 2) }}</div>
+                                    <div class="text-2xl font-black mt-2">Net Pay: ₹{{ number_format($selectedSlip->net_salary, 2) }}</div>
                                 </div>
                             @else
                                 <div class="flex flex-col items-center justify-center h-full text-center text-zinc-400">
@@ -187,8 +187,8 @@
                             <div class="flex justify-between text-sm">
                                 <div class="text-zinc-600">{{ $sc->component->name }}</div>
                                 <div class="text-right">
-                                    <div class="font-bold">â‚¹{{ number_format($sc->amount, 2) }}</div>
-                                    <div class="text-xs text-zinc-400">Annual: â‚¹{{ number_format($sc->amount * 12, 2) }}</div>
+                                    <div class="font-bold">₹{{ number_format($sc->amount, 2) }}</div>
+                                    <div class="text-xs text-zinc-400">Annual: ₹{{ number_format($sc->amount * 12, 2) }}</div>
                                 </div>
                             </div>
                         @endforeach
@@ -202,8 +202,8 @@
                             <div class="flex justify-between text-sm">
                                 <div class="text-zinc-600">{{ $sc->component->name }}</div>
                                 <div class="text-right">
-                                    <div class="font-bold">â‚¹{{ number_format($sc->amount, 2) }}</div>
-                                    <div class="text-xs text-zinc-400">Annual: â‚¹{{ number_format($sc->amount * 12, 2) }}</div>
+                                    <div class="font-bold">₹{{ number_format($sc->amount, 2) }}</div>
+                                    <div class="text-xs text-zinc-400">Annual: ₹{{ number_format($sc->amount * 12, 2) }}</div>
                                 </div>
                             </div>
                         @endforeach
