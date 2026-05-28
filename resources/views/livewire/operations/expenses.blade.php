@@ -167,97 +167,116 @@
         @endif
     </div>
 
-    {{-- â”€â”€â”€ REJECT MODAL â”€â”€â”€ --}}
-    <flux:modal wire:model.self="showRejectModal" class="max-w-md">
-        <div class="space-y-5">
-            <div class="flex items-start gap-3">
-                <div class="shrink-0 rounded-xl bg-rose-50 p-2.5 dark:bg-rose-900/20">
-                    <flux:icon.x-circle class="size-5 text-rose-600 dark:text-rose-400" />
+    {{-- ─── REJECT MODAL ─── --}}
+    @if($showRejectModal)
+        <div class=”fixed inset-0 z-50 flex items-center justify-center p-4”
+             x-data x-on:keydown.escape.window=”$wire.set('showRejectModal', false)”>
+            <div class=”absolute inset-0 bg-black/40 backdrop-blur-sm” wire:click=”$set('showRejectModal', false)”></div>
+            <div class=”relative w-full max-w-md bg-white dark:bg-zinc-800 rounded-2xl shadow-xl ring ring-black/5 dark:ring-zinc-700 p-6 space-y-5”>
+                <button type=”button” wire:click=”$set('showRejectModal', false)”
+                    class=”absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors”>
+                    <svg class=”size-5” fill=”none” stroke=”currentColor” viewBox=”0 0 24 24”><path stroke-linecap=”round” stroke-linejoin=”round” stroke-width=”2” d=”M6 18L18 6M6 6l12 12”/></svg>
+                </button>
+                <div class=”flex items-start gap-3”>
+                    <div class=”shrink-0 rounded-xl bg-rose-50 p-2.5 dark:bg-rose-900/20”>
+                        <flux:icon.x-circle class=”size-5 text-rose-600 dark:text-rose-400” />
+                    </div>
+                    <div>
+                        <h2 class=”text-base font-bold text-zinc-900 dark:text-white”>Reject Expense Claim</h2>
+                        <p class=”text-sm text-zinc-500 mt-0.5”>Provide a reason so the employee can resubmit.</p>
+                    </div>
                 </div>
-                <div>
-                    <flux:heading size="lg">Reject Expense Claim</flux:heading>
-                    <flux:subheading>Provide a reason so the employee can resubmit.</flux:subheading>
+                <flux:textarea wire:model=”rejectionReason” label=”Reason for Rejection” rows=”3”
+                    placeholder=”e.g. Missing receipt, amount exceeds policy limit...” />
+                <div class=”flex justify-end gap-2 pt-2”>
+                    <flux:button variant=”ghost” wire:click=”$set('showRejectModal', false)”>Cancel</flux:button>
+                    <flux:button variant=”ghost”
+                        class=”text-red-600 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950/30”
+                        wire:click=”reject”>Confirm Rejection</flux:button>
                 </div>
-            </div>
-            <flux:textarea wire:model="rejectionReason" label="Reason for Rejection" rows="3"
-                placeholder="e.g. Missing receipt, amount exceeds policy limit..." />
-            <div class="flex justify-end gap-2 pt-2">
-                <flux:button variant="ghost" wire:click="$set('showRejectModal', false)">Cancel</flux:button>
-                <flux:button variant="ghost"
-                    class="text-red-600 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950/30"
-                    wire:click="reject">Confirm Rejection</flux:button>
             </div>
         </div>
-    </flux:modal>
+    @endif
 
-    {{-- â”€â”€â”€ SUBMIT MODAL â”€â”€â”€ --}}
-    <flux:modal wire:model.self="showSubmitModal" class="max-w-xl">
-        <div class="space-y-5">
-            <div class="flex items-start gap-3">
-                <div class="shrink-0 rounded-xl bg-orange-50 p-2.5 dark:bg-orange-900/20">
-                    <flux:icon.receipt-percent class="size-5 text-orange-500 dark:text-orange-400" />
+    {{-- ─── SUBMIT MODAL ─── --}}
+    @if($showSubmitModal)
+        <div class=”fixed inset-0 z-50 flex items-center justify-center p-4”
+             x-data x-on:keydown.escape.window=”$wire.set('showSubmitModal', false)”>
+            <div class=”absolute inset-0 bg-black/40 backdrop-blur-sm” wire:click=”$set('showSubmitModal', false)”></div>
+            <div class=”relative w-full max-w-xl bg-white dark:bg-zinc-800 rounded-2xl shadow-xl ring ring-black/5 dark:ring-zinc-700 p-6 space-y-5”>
+                <button type=”button” wire:click=”$set('showSubmitModal', false)”
+                    class=”absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors”>
+                    <svg class=”size-5” fill=”none” stroke=”currentColor” viewBox=”0 0 24 24”><path stroke-linecap=”round” stroke-linejoin=”round” stroke-width=”2” d=”M6 18L18 6M6 6l12 12”/></svg>
+                </button>
+                <div class=”flex items-start gap-3”>
+                    <div class=”shrink-0 rounded-xl bg-orange-50 p-2.5 dark:bg-orange-900/20”>
+                        <flux:icon.receipt-percent class=”size-5 text-orange-500 dark:text-orange-400” />
+                    </div>
+                    <div>
+                        <h2 class=”text-base font-bold text-zinc-900 dark:text-white”>Submit Expense Claim</h2>
+                        <p class=”text-sm text-zinc-500 mt-0.5”>Upload your receipt and fill in the expense details.</p>
+                    </div>
                 </div>
-                <div>
-                    <flux:heading size="lg">Submit Expense Claim</flux:heading>
-                    <flux:subheading>Upload your receipt and fill in the expense details.</flux:subheading>
-                </div>
+
+                <form wire:submit=”submit” class=”space-y-4”>
+                    <flux:field>
+                        <flux:input wire:model=”title” label=”Title” placeholder=”e.g. Client dinner, Flight to Mumbai” required />
+                        @error('title') <p class=”text-xs text-red-500 mt-1”>{{ $message }}</p> @enderror
+                    </flux:field>
+
+                    <div class=”grid grid-cols-2 gap-4”>
+                        <flux:field>
+                            <flux:select wire:model=”category” label=”Category”>
+                                <option value=”travel”>Travel</option>
+                                <option value=”meals”>Meals & Entertainment</option>
+                                <option value=”accommodation”>Accommodation</option>
+                                <option value=”equipment”>Equipment</option>
+                                <option value=”software”>Software / Subscriptions</option>
+                                <option value=”training”>Training</option>
+                                <option value=”general”>General</option>
+                            </flux:select>
+                            @error('category') <p class=”text-xs text-red-500 mt-1”>{{ $message }}</p> @enderror
+                        </flux:field>
+                        <flux:field>
+                            <flux:input wire:model=”amount” type=”number” step=”0.01” min=”1” label=”Amount (₹)” required />
+                            @error('amount') <p class=”text-xs text-red-500 mt-1”>{{ $message }}</p> @enderror
+                        </flux:field>
+                    </div>
+
+                    <flux:field>
+                        <flux:input wire:model=”expenseDate” type=”date” label=”Expense Date”
+                            max=”{{ now()->toDateString() }}” required />
+                        @error('expenseDate') <p class=”text-xs text-red-500 mt-1”>{{ $message }}</p> @enderror
+                    </flux:field>
+
+                    <flux:field>
+                        <flux:label>Receipt <span class=”text-zinc-400 font-normal”>(PDF, JPG, PNG — max 5MB)</span></flux:label>
+                        <flux:input wire:model=”receipt” type=”file” accept=”.pdf,.jpg,.jpeg,.png,.webp” class=”mt-1” />
+                        @error('receipt') <p class=”text-xs text-red-500 mt-1”>{{ $message }}</p> @enderror
+                    </flux:field>
+
+                    <flux:field>
+                        <flux:textarea wire:model=”notes” label=”Notes (optional)” rows=”2”
+                            placeholder=”Any additional details for the reviewer...” />
+                        @error('notes') <p class=”text-xs text-red-500 mt-1”>{{ $message }}</p> @enderror
+                    </flux:field>
+
+                    <div class=”flex justify-end gap-3 pt-2 border-t border-zinc-100 dark:border-zinc-700”>
+                        <button type=”button” wire:click=”$set('showSubmitModal', false)”
+                            class=”px-4 py-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300 bg-white dark:bg-zinc-700 border border-zinc-200 dark:border-zinc-600 rounded-xl hover:bg-zinc-50 transition-colors”>
+                            Cancel
+                        </button>
+                        <button type=”submit”
+                            wire:loading.attr=”disabled” wire:target=”submit”
+                            class=”inline-flex items-center gap-2 px-5 py-2 text-sm font-bold text-white bg-brand-600 hover:bg-brand-700 rounded-xl transition-colors disabled:opacity-60”>
+                            <flux:icon.paper-airplane class=”size-4” />
+                            <span wire:loading.remove wire:target=”submit”>Submit Claim</span>
+                            <span wire:loading wire:target=”submit”>Submitting…</span>
+                        </button>
+                    </div>
+                </form>
             </div>
-
-            <form wire:submit="submit" class="space-y-4">
-                <flux:field>
-                    <flux:input wire:model="title" label="Title" placeholder="e.g. Client dinner, Flight to Mumbai" required />
-                    @error('title') <flux:error>{{ $message }}</flux:error> @enderror
-                </flux:field>
-
-                <div class="grid grid-cols-2 gap-4">
-                    <flux:field>
-                        <flux:select wire:model="category" label="Category">
-                            <option value="travel">Travel</option>
-                            <option value="meals">Meals & Entertainment</option>
-                            <option value="accommodation">Accommodation</option>
-                            <option value="equipment">Equipment</option>
-                            <option value="software">Software / Subscriptions</option>
-                            <option value="training">Training</option>
-                            <option value="general">General</option>
-                        </flux:select>
-                        @error('category') <flux:error>{{ $message }}</flux:error> @enderror
-                    </flux:field>
-                    <flux:field>
-                        <flux:input wire:model="amount" type="number" step="0.01" min="1" label="Amount (₹)" required />
-                        @error('amount') <flux:error>{{ $message }}</flux:error> @enderror
-                    </flux:field>
-                </div>
-
-                <flux:field>
-                    <flux:input wire:model="expenseDate" type="date" label="Expense Date"
-                        max="{{ now()->toDateString() }}" required />
-                    @error('expenseDate') <flux:error>{{ $message }}</flux:error> @enderror
-                </flux:field>
-
-                <flux:field>
-                    <flux:label>Receipt <span class="text-zinc-400 font-normal">(PDF, JPG, PNG â€” max 5MB)</span></flux:label>
-                    <flux:input wire:model="receipt" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" class="mt-1" />
-                    @error('receipt') <flux:error>{{ $message }}</flux:error> @enderror
-                </flux:field>
-
-                <flux:field>
-                    <flux:textarea wire:model="notes" label="Notes (optional)" rows="2"
-                        placeholder="Any additional details for the reviewer..." />
-                    @error('notes') <flux:error>{{ $message }}</flux:error> @enderror
-                </flux:field>
-
-                <div class="flex justify-end gap-3 pt-2">
-                    <flux:modal.close>
-                        <flux:button type="button" variant="ghost">Cancel</flux:button>
-                    </flux:modal.close>
-                    <flux:button type="submit" variant="primary" icon="paper-airplane"
-                        wire:loading.attr="disabled" wire:target="submit">
-                        <span wire:loading.remove wire:target="submit">Submit Claim</span>
-                        <span wire:loading wire:target="submit">Submittingâ€¦</span>
-                    </flux:button>
-                </div>
-            </form>
         </div>
-    </flux:modal>
+    @endif
 
 </flux:main>
