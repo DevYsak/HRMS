@@ -13,14 +13,31 @@ class Overview extends Component
     {
         abort_unless(Auth::user()->canRunPayroll(), 403);
 
-        $recentPayrolls = Payroll::latest()->take(5)->get();
-        $totalMonthlyPayout = Payroll::where('month', Carbon::now()->format('F'))
-            ->where('year', Carbon::now()->year)
+        $now = Carbon::now();
+        $lastMonth = $now->copy()->subMonth();
+
+        $recentPayrolls = Payroll::latest('created_at')->take(10)->get();
+
+        $thisMonthPayout = Payroll::where('month', $now->format('F'))
+            ->where('year', $now->year)
             ->sum('total_payout');
+
+        $lastMonthPayout = Payroll::where('month', $lastMonth->format('F'))
+            ->where('year', $lastMonth->year)
+            ->sum('total_payout');
+
+        $ytdPayout = Payroll::where('year', $now->year)->sum('total_payout');
+
+        $statusCounts = Payroll::selectRaw('status, count(*) as total')
+            ->groupBy('status')
+            ->pluck('total', 'status');
 
         return view('livewire.payroll.overview', [
             'recentPayrolls' => $recentPayrolls,
-            'totalMonthlyPayout' => $totalMonthlyPayout,
+            'totalMonthlyPayout' => $thisMonthPayout,
+            'lastMonthPayout' => $lastMonthPayout,
+            'ytdPayout' => $ytdPayout,
+            'statusCounts' => $statusCounts,
         ])->layout('layouts.app', ['title' => 'Payroll Overview']);
     }
 }
