@@ -2,10 +2,13 @@
 
 namespace App\Notifications;
 
+use App\Notifications\Concerns\SendsMailChannel;
 use Illuminate\Notifications\Notification;
 
 class AttendanceRegularisationNotification extends Notification
 {
+    use SendsMailChannel;
+
     public function __construct(
         public readonly string $employeeName,
         public readonly string $date,
@@ -14,7 +17,7 @@ class AttendanceRegularisationNotification extends Notification
 
     public function via(object $notifiable): array
     {
-        return ['database'];
+        return ['database', 'mail'];
     }
 
     public function toArray(object $notifiable): array

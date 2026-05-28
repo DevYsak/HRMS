@@ -3,15 +3,18 @@
 namespace App\Notifications;
 
 use App\Models\LeaveEncashment;
+use App\Notifications\Concerns\SendsMailChannel;
 use Illuminate\Notifications\Notification;
 
 class LeaveEncashmentNotification extends Notification
 {
+    use SendsMailChannel;
+
     public function __construct(public readonly LeaveEncashment $encashment, public readonly string $action = 'submitted') {}
 
     public function via(object $notifiable): array
     {
-        return ['database'];
+        return ['database', 'mail'];
     }
 
     public function toArray(object $notifiable): array

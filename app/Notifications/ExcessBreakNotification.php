@@ -3,6 +3,7 @@
 namespace App\Notifications;
 
 use App\Models\Attendance;
+use App\Notifications\Concerns\SendsMailChannel;
 use Illuminate\Notifications\Notification;
 
 /**
@@ -12,6 +13,8 @@ use Illuminate\Notifications\Notification;
  */
 class ExcessBreakNotification extends Notification
 {
+    use SendsMailChannel;
+
     public function __construct(
         public readonly Attendance $attendance,
         public readonly int $totalBreakMinutes,
@@ -19,7 +22,7 @@ class ExcessBreakNotification extends Notification
 
     public function via(object $notifiable): array
     {
-        return ['database'];
+        return ['database', 'mail'];
     }
 
     public function toArray(object $notifiable): array

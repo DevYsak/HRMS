@@ -3,15 +3,18 @@
 namespace App\Notifications;
 
 use App\Models\OtRequest;
+use App\Notifications\Concerns\SendsMailChannel;
 use Illuminate\Notifications\Notification;
 
 class OtRequestNotification extends Notification
 {
+    use SendsMailChannel;
+
     public function __construct(public readonly OtRequest $otRequest) {}
 
     public function via(object $notifiable): array
     {
-        return ['database'];
+        return ['database', 'mail'];
     }
 
     public function toArray(object $notifiable): array

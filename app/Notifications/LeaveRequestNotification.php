@@ -3,15 +3,18 @@
 namespace App\Notifications;
 
 use App\Models\LeaveRequest;
+use App\Notifications\Concerns\SendsMailChannel;
 use Illuminate\Notifications\Notification;
 
 class LeaveRequestNotification extends Notification
 {
+    use SendsMailChannel;
+
     public function __construct(public readonly LeaveRequest $leaveRequest) {}
 
     public function via(object $notifiable): array
     {
-        return ['database'];
+        return ['database', 'mail'];
     }
 
     public function toArray(object $notifiable): array
@@ -23,9 +26,9 @@ class LeaveRequestNotification extends Notification
 
         // For manager/HR (pending) we open the Team page and pass a query param
         // that the Livewire component will use to open the review modal.
-        $teamUrl = route('time-off.team') . '?selectedRequestId=' . $this->leaveRequest->id;
+        $teamUrl = route('time-off.team').'?selectedRequestId='.$this->leaveRequest->id;
         // For employees we anchor to the specific row in My Time Off.
-        $myUrl = route('time-off.my') . '#request-' . $this->leaveRequest->id;
+        $myUrl = route('time-off.my').'#request-'.$this->leaveRequest->id;
 
         return match ($status) {
             'pending' => [

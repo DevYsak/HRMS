@@ -3,15 +3,18 @@
 namespace App\Notifications;
 
 use App\Models\Incentive;
+use App\Notifications\Concerns\SendsMailChannel;
 use Illuminate\Notifications\Notification;
 
 class IncentiveNotification extends Notification
 {
+    use SendsMailChannel;
+
     public function __construct(public readonly Incentive $incentive) {}
 
     public function via(object $notifiable): array
     {
-        return ['database'];
+        return ['database', 'mail'];
     }
 
     public function toArray(object $notifiable): array

@@ -3,15 +3,18 @@
 namespace App\Notifications;
 
 use App\Models\ExpenseClaim;
+use App\Notifications\Concerns\SendsMailChannel;
 use Illuminate\Notifications\Notification;
 
 class ExpenseClaimNotification extends Notification
 {
+    use SendsMailChannel;
+
     public function __construct(public readonly ExpenseClaim $claim) {}
 
     public function via(object $notifiable): array
     {
-        return ['database'];
+        return ['database', 'mail'];
     }
 
     public function toArray(object $notifiable): array

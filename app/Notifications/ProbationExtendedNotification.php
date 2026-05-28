@@ -3,10 +3,13 @@
 namespace App\Notifications;
 
 use App\Models\Employee;
+use App\Notifications\Concerns\SendsMailChannel;
 use Illuminate\Notifications\Notification;
 
 class ProbationExtendedNotification extends Notification
 {
+    use SendsMailChannel;
+
     public function __construct(public readonly Employee $employee) {}
 
     /**
@@ -16,7 +19,7 @@ class ProbationExtendedNotification extends Notification
      */
     public function via(object $notifiable): array
     {
-        return ['database'];
+        return ['database', 'mail'];
     }
 
     /**

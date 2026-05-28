@@ -4,10 +4,13 @@ namespace App\Notifications;
 
 use App\Models\PerformanceReview;
 use App\Models\ReviewCycle;
+use App\Notifications\Concerns\SendsMailChannel;
 use Illuminate\Notifications\Notification;
 
 class ReviewReminderNotification extends Notification
 {
+    use SendsMailChannel;
+
     public function __construct(
         public readonly ReviewCycle $cycle,
         public readonly PerformanceReview $review,
@@ -15,7 +18,7 @@ class ReviewReminderNotification extends Notification
 
     public function via(object $notifiable): array
     {
-        return ['database'];
+        return ['database', 'mail'];
     }
 
     public function toArray(object $notifiable): array

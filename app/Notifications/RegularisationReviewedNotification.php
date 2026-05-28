@@ -3,16 +3,19 @@
 namespace App\Notifications;
 
 use App\Models\AttendanceRegularisation;
+use App\Notifications\Concerns\SendsMailChannel;
 use Carbon\Carbon;
 use Illuminate\Notifications\Notification;
 
 class RegularisationReviewedNotification extends Notification
 {
+    use SendsMailChannel;
+
     public function __construct(public AttendanceRegularisation $regularisation) {}
 
     public function via(object $notifiable): array
     {
-        return ['database'];
+        return ['database', 'mail'];
     }
 
     public function toArray(object $notifiable): array

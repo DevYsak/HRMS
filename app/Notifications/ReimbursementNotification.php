@@ -3,15 +3,18 @@
 namespace App\Notifications;
 
 use App\Models\Reimbursement;
+use App\Notifications\Concerns\SendsMailChannel;
 use Illuminate\Notifications\Notification;
 
 class ReimbursementNotification extends Notification
 {
+    use SendsMailChannel;
+
     public function __construct(public readonly Reimbursement $reimbursement) {}
 
     public function via(object $notifiable): array
     {
-        return ['database'];
+        return ['database', 'mail'];
     }
 
     public function toArray(object $notifiable): array

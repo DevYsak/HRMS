@@ -3,15 +3,18 @@
 namespace App\Notifications;
 
 use App\Models\Payroll;
+use App\Notifications\Concerns\SendsMailChannel;
 use Illuminate\Notifications\Notification;
 
 class PayrollApprovalNotification extends Notification
 {
+    use SendsMailChannel;
+
     public function __construct(public readonly Payroll $payroll, public readonly string $event) {}
 
     public function via(object $notifiable): array
     {
-        return ['database'];
+        return ['database', 'mail'];
     }
 
     public function toArray(object $notifiable): array
