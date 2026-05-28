@@ -186,13 +186,21 @@
                         <p class=”text-sm text-zinc-500 mt-0.5”>Provide a reason so the employee can resubmit.</p>
                     </div>
                 </div>
-                <flux:textarea wire:model=”rejectionReason” label=”Reason for Rejection” rows=”3”
-                    placeholder=”e.g. Missing receipt, amount exceeds policy limit...” />
-                <div class=”flex justify-end gap-2 pt-2”>
-                    <flux:button variant=”ghost” wire:click=”$set('showRejectModal', false)”>Cancel</flux:button>
-                    <flux:button variant=”ghost”
-                        class=”text-red-600 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950/30”
-                        wire:click=”reject”>Confirm Rejection</flux:button>
+                <div>
+                    <label class=”text-sm font-medium text-zinc-700 dark:text-zinc-300”>Reason for Rejection</label>
+                    <textarea wire:model=”rejectionReason” rows=”3”
+                        placeholder=”e.g. Missing receipt, amount exceeds policy limit...”
+                        class=”mt-1 w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-brand-400/30 focus:border-brand-400 resize-none”></textarea>
+                </div>
+                <div class=”flex justify-end gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-700”>
+                    <button type=”button” wire:click=”$set('showRejectModal', false)”
+                        class=”px-4 py-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300 bg-white dark:bg-zinc-700 border border-zinc-200 dark:border-zinc-600 rounded-xl hover:bg-zinc-50 transition-colors”>
+                        Cancel
+                    </button>
+                    <button type=”button” wire:click=”reject”
+                        class=”px-4 py-2 text-sm font-semibold text-white bg-red-500 hover:bg-red-600 rounded-xl transition-colors”>
+                        Confirm Rejection
+                    </button>
                 </div>
             </div>
         </div>
