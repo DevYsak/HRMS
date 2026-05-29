@@ -13,67 +13,11 @@ class MyPayslips extends Component
 {
     use WithPagination;
 
-    public $selectedSlip = null;
-
-    public bool $showModal = false;
-
-    public bool $showSalaryBreakup = false;
-
-    public bool $showShareModal = false;
-
-    public ?int $sharePayslipId = null;
-
-    public string $shareUrl = '';
-
     public bool $emailingSending = false;
 
     public ?int $emailingId = null;
 
     public string $filterYear = '';
-
-    // ── View payslip detail modal ─────────────────────────────────────────────
-
-    public function viewDetails(int $id): void
-    {
-        $this->selectedSlip = Payslip::with(['payroll', 'items', 'employee.user', 'employee.jobTitle', 'employee.department'])
-            ->where('employee_id', Auth::user()->employee->id)
-            ->findOrFail($id);
-        $this->showModal = true;
-    }
-
-    public function closeModal(): void
-    {
-        $this->showModal = false;
-        $this->selectedSlip = null;
-    }
-
-    // ── Salary Structure breakup modal ────────────────────────────────────────
-
-    public function openSalaryBreakup(): void
-    {
-        $this->showSalaryBreakup = true;
-    }
-
-    public function closeSalaryBreakup(): void
-    {
-        $this->showSalaryBreakup = false;
-    }
-
-    // ── Share payslip (copy link) ─────────────────────────────────────────────
-
-    public function sharePayslip(int $id): void
-    {
-        $this->sharePayslipId = $id;
-        $this->shareUrl = route('payroll.payslips.download', $id);
-        $this->showShareModal = true;
-    }
-
-    public function closeShareModal(): void
-    {
-        $this->showShareModal = false;
-        $this->sharePayslipId = null;
-        $this->shareUrl = '';
-    }
 
     // ── Email payslip to employee ─────────────────────────────────────────────
 

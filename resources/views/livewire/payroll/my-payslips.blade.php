@@ -221,24 +221,18 @@
                                     </td>
                                     <td class="py-3.5 pr-6 text-right" wire:key="actions-{{ $slip->id }}">
                                         <div class="flex items-center justify-end gap-1">
-                                            {{-- View --}}
-                                            <button type="button" wire:click="viewDetails({{ $slip->id }})"
-                                                title="View Payslip"
+                                            {{-- View / Open PDF in new tab --}}
+                                            <a href="{{ route('payroll.payslips.download', $slip->id) }}" target="_blank"
+                                                title="View Payslip PDF"
                                                 class="cursor-pointer p-1.5 text-zinc-400 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-900/20 rounded-lg transition-colors">
                                                 <flux:icon.eye class="size-4" />
-                                            </button>
-                                            {{-- Download --}}
+                                            </a>
+                                            {{-- Download PDF --}}
                                             <a href="{{ route('payroll.payslips.download', $slip->id) }}" target="_blank"
                                                 title="Download PDF"
                                                 class="cursor-pointer p-1.5 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded-lg transition-colors">
                                                 <flux:icon.arrow-down-tray class="size-4" />
                                             </a>
-                                            {{-- Share --}}
-                                            <button type="button" wire:click="sharePayslip({{ $slip->id }})"
-                                                title="Share Payslip Link"
-                                                class="cursor-pointer p-1.5 text-zinc-400 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-900/20 rounded-lg transition-colors">
-                                                <flux:icon.share class="size-4" />
-                                            </button>
                                             {{-- Email --}}
                                             <button type="button"
                                                 wire:click="emailPayslip({{ $slip->id }})"
@@ -369,7 +363,7 @@
                         </div>
 
                         {{-- Quick Actions --}}
-                        <div>
+                        <div x-data="{ showStructure: false }">
                             <div class="text-xs font-bold text-zinc-500 uppercase tracking-wide mb-3">Quick Actions</div>
                             <div class="grid grid-cols-4 gap-2">
                                 <a href="{{ route('payroll.payslips.download', $latestPayslip->id) }}" target="_blank"
@@ -390,19 +384,57 @@
                                     </span>
                                     <span class="text-[10px] font-semibold text-zinc-600 text-center leading-tight">Email Payslip</span>
                                 </button>
-                                <button type="button"
-                                    wire:click="sharePayslip({{ $latestPayslip->id }})"
-                                    title="Copy shareable link"
+                                <a href="{{ route('payroll.payslips.download', $latestPayslip->id) }}" target="_blank"
+                                    title="Open PDF in new tab"
                                     class="cursor-pointer flex flex-col items-center gap-1.5 p-2.5 bg-zinc-50 dark:bg-zinc-800 rounded-xl hover:bg-violet-50 transition-colors">
-                                    <flux:icon.share class="size-5 text-zinc-600" />
-                                    <span class="text-[10px] font-semibold text-zinc-600 text-center leading-tight">Share PDF</span>
-                                </button>
-                                <button type="button" wire:click="openSalaryBreakup"
+                                    <flux:icon.arrow-top-right-on-square class="size-5 text-zinc-600" />
+                                    <span class="text-[10px] font-semibold text-zinc-600 text-center leading-tight">Open PDF</span>
+                                </a>
+                                <button type="button" @click="showStructure = !showStructure"
                                     title="View salary structure breakdown"
-                                    class="cursor-pointer flex flex-col items-center gap-1.5 p-2.5 bg-zinc-50 dark:bg-zinc-800 rounded-xl hover:bg-brand-50 transition-colors">
+                                    :class="showStructure ? 'bg-brand-50 dark:bg-brand-900/20' : 'bg-zinc-50 dark:bg-zinc-800 hover:bg-brand-50'"
+                                    class="cursor-pointer flex flex-col items-center gap-1.5 p-2.5 rounded-xl transition-colors">
                                     <flux:icon.chart-pie class="size-5 text-zinc-600" />
                                     <span class="text-[10px] font-semibold text-zinc-600 text-center leading-tight">Salary Structure</span>
                                 </button>
+                            </div>
+
+                            {{-- Inline Salary Structure (no modal) --}}
+                            <div x-show="showStructure" x-transition class="mt-4 rounded-xl border border-zinc-200 dark:border-zinc-700 overflow-hidden">
+                                <div class="flex items-center justify-between px-4 py-2.5 bg-zinc-50 dark:bg-zinc-800 border-b border-zinc-200 dark:border-zinc-700">
+                                    <span class="text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wide">Salary Structure</span>
+                                    <button @click="showStructure = false" class="text-zinc-400 hover:text-zinc-600 text-lg leading-none font-bold">&times;</button>
+                                </div>
+                                @php
+                                    $struE = $salaryComponents->filter(fn($s) => ($s->component?->type ?? '') === 'earning');
+                                    $struD = $salaryComponents->filter(fn($s) => ($s->component?->type ?? '') === 'deduction');
+                                @endphp
+                                @if($struE->isNotEmpty())
+                                    <div class="px-4 pt-3 pb-1">
+                                        <div class="text-[10px] font-bold text-emerald-600 uppercase tracking-wide mb-1.5">Earnings</div>
+                                        @foreach($struE as $s)
+                                            <div class="flex justify-between py-1 text-xs border-b border-zinc-50 dark:border-zinc-800">
+                                                <span class="text-zinc-600 dark:text-zinc-400">{{ $s->component?->name }}</span>
+                                                <span class="font-semibold text-zinc-800 dark:text-zinc-200">₹{{ number_format($s->amount, 2) }}</span>
+                                            </div>
+                                        @endforeach
+                                    </div>
+                                @endif
+                                @if($struD->isNotEmpty())
+                                    <div class="px-4 pt-2 pb-1">
+                                        <div class="text-[10px] font-bold text-red-500 uppercase tracking-wide mb-1.5">Deductions</div>
+                                        @foreach($struD as $s)
+                                            <div class="flex justify-between py-1 text-xs border-b border-zinc-50 dark:border-zinc-800">
+                                                <span class="text-zinc-600 dark:text-zinc-400">{{ $s->component?->name }}</span>
+                                                <span class="font-semibold text-red-600">- ₹{{ number_format($s->amount, 2) }}</span>
+                                            </div>
+                                        @endforeach
+                                    </div>
+                                @endif
+                                <div class="flex justify-between px-4 py-2.5 bg-brand-50 dark:bg-brand-900/20">
+                                    <span class="text-xs font-bold text-brand-700 dark:text-brand-400">Net Take-Home</span>
+                                    <span class="text-sm font-black text-brand-700 dark:text-brand-400">₹{{ number_format($monthlyNet, 2) }}</span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -447,43 +479,6 @@
         </div>
 
     </div>
-
-    {{-- ── Salary Structure Modal ─────────────────────────────────────────────── --}}
-    @if($showSalaryBreakup)
-        <div class="fixed inset-0 z-50 flex items-center justify-center p-4"
-             x-data x-on:keydown.escape.window="$wire.set('showSalaryBreakup', false)">
-            <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="$wire.set('showSalaryBreakup', false)"></div>
-            <div class="relative w-full max-w-md bg-white dark:bg-zinc-800 rounded-2xl shadow-xl ring ring-black/5 dark:ring-zinc-700 p-6 space-y-5 max-h-[90vh] overflow-y-auto">
-                <button type="button" @click="$wire.set('showSalaryBreakup', false)"
-                    class="absolute top-3 right-3 size-8 flex items-center justify-center rounded-lg text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors font-bold text-lg leading-none">
-                    &times;
-                </button>
-                <div>
-                    <h2 class="text-lg font-bold text-zinc-900 dark:text-white">Salary Structure</h2>
-                    <p class="text-sm text-zinc-500 mt-0.5">Your current salary components breakdown</p>
-                </div>
-                {{-- Earnings --}}
-                @php
-                    $struEarnings   = $salaryComponents->filter(fn($s) => ($s->component?->type ?? '') === 'earning');
-                    $struDeductions = $salaryComponents->filter(fn($s) => ($s->component?->type ?? '') === 'deduction');
-                @endphp
-                @if($struEarnings->isNotEmpty())
-                    <div>
-                        <div class="text-xs font-bold text-emerald-600 uppercase tracking-wide mb-2">Earnings</div>
-                        <div class="space-y-2 rounded-xl bg-zinc-50 dark:bg-zinc-900 p-3">
-                            @foreach($struEarnings as $s)
-                                <div class="flex items-center justify-between">
-                                    <span class="text-sm text-zinc-600 dark:text-zinc-400">{{ $s->component?->name ?? 'Component' }}</span>
-                                    <span class="text-sm font-bold text-zinc-800 dark:text-zinc-200">₹{{ number_format($s->amount, 2) }}</span>
-                                </div>
-                            @endforeach
-                            <div class="border-t border-zinc-200 dark:border-zinc-700 pt-2 flex justify-between font-bold text-sm">
-                                <span class="text-emerald-700 dark:text-emerald-400">Total Earnings</span>
-                                <span class="text-emerald-700 dark:text-emerald-400">₹{{ number_format($struEarnings->sum('amount'), 2) }}</span>
-                            </div>
-                        </div>
-                    </div>
-                @endif
                 @if($struDeductions->isNotEmpty())
                     <div>
                         <div class="text-xs font-bold text-red-600 uppercase tracking-wide mb-2">Deductions</div>
@@ -508,110 +503,6 @@
                 <div class="flex justify-end">
                     <button type="button" @click="$wire.set('showSalaryBreakup', false)"
                         class="px-4 py-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-600 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors">
-                        Close
-                    </button>
-                </div>
-            </div>
-        </div>
-    @endif
-
-    {{-- ── Share Payslip Modal ──────────────────────────────────────────────── --}}
-    @if($showShareModal)
-        <div class="fixed inset-0 z-50 flex items-center justify-center p-4"
-             x-data x-on:keydown.escape.window="$wire.set('showShareModal', false)">
-            <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="$wire.set('showShareModal', false)"></div>
-            <div class="relative w-full max-w-sm bg-white dark:bg-zinc-800 rounded-2xl shadow-xl ring ring-black/5 dark:ring-zinc-700 p-6 space-y-4">
-                <button type="button" @click="$wire.set('showShareModal', false)"
-                    class="absolute top-3 right-3 size-8 flex items-center justify-center rounded-lg text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors font-bold text-lg leading-none">
-                    &times;
-                </button>
-                <div>
-                    <h2 class="text-base font-bold text-zinc-900 dark:text-white">Share Payslip</h2>
-                    <p class="text-sm text-zinc-500 mt-0.5">Copy the link to share or download your payslip.</p>
-                </div>
-                <div x-data="{ copied: false }">
-                    <div class="flex gap-2">
-                        <input type="text" readonly value="{{ $shareUrl }}"
-                            class="flex-1 h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 text-xs text-zinc-600 dark:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-brand-400/30"
-                            id="share-url-input" />
-                        <button type="button"
-                            @click="
-                                navigator.clipboard.writeText('{{ $shareUrl }}').then(() => {
-                                    copied = true;
-                                    setTimeout(() => copied = false, 2000);
-                                });
-                            "
-                            class="h-9 px-3 text-xs font-bold text-white rounded-xl transition-colors"
-                            :class="copied ? 'bg-emerald-600' : 'bg-brand-600 hover:bg-brand-700'">
-                            <span x-show="!copied">Copy</span>
-                            <span x-show="copied">Copied!</span>
-                        </button>
-                    </div>
-                </div>
-                <div class="flex gap-2 pt-1">
-                    <a href="{{ $shareUrl }}" target="_blank"
-                        class="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-bold text-white bg-brand-600 hover:bg-brand-700 rounded-xl transition-colors">
-                        <flux:icon.arrow-down-tray class="size-4" />
-                        Open PDF
-                    </a>
-                    <button type="button" @click="$wire.set('showShareModal', false)"
-                        class="px-4 py-2.5 text-sm font-semibold text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-600 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors">
-                        Close
-                    </button>
-                </div>
-            </div>
-        </div>
-    @endif
-
-    {{-- ── Payslip Detail Modal ──────────────────────────────────────────────── --}}
-    @if($showModal && $selectedSlip)
-        <div class="fixed inset-0 z-50 flex items-center justify-center p-4"
-             x-data x-on:keydown.escape.window="$wire.closeModal()">
-            <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" wire:click="closeModal"></div>
-            <div class="relative w-full max-w-lg bg-white dark:bg-zinc-800 rounded-2xl shadow-xl ring ring-black/5 dark:ring-zinc-700 p-6 space-y-5 max-h-[90vh] overflow-y-auto">
-                <button type="button" wire:click="closeModal"
-                    class="absolute top-3 right-3 size-8 flex items-center justify-center rounded-lg text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors font-bold text-lg leading-none">
-                    &times;
-                </button>
-                <div>
-                    <h2 class="text-lg font-bold text-zinc-900 dark:text-white">
-                        Payslip — {{ $selectedSlip->payroll->month }} {{ $selectedSlip->payroll->year }}
-                    </h2>
-                    <p class="text-sm text-zinc-500 mt-0.5">{{ $selectedSlip->employee->user?->name }}</p>
-                </div>
-                <div class="space-y-3">
-                    @foreach($selectedSlip->items->where('type','earning') as $item)
-                        <div class="flex justify-between text-sm">
-                            <span class="text-zinc-600 dark:text-zinc-400">{{ $item->name }}</span>
-                            <span class="font-semibold text-zinc-800 dark:text-zinc-200">₹{{ number_format($item->amount, 2) }}</span>
-                        </div>
-                    @endforeach
-                    <div class="border-t border-zinc-100 dark:border-zinc-700 pt-2">
-                        <div class="flex justify-between text-sm font-bold">
-                            <span>Gross Salary</span><span>₹{{ number_format($selectedSlip->gross_salary, 2) }}</span>
-                        </div>
-                    </div>
-                    @foreach($selectedSlip->items->where('type','deduction') as $item)
-                        <div class="flex justify-between text-sm">
-                            <span class="text-zinc-600 dark:text-zinc-400">{{ $item->name }}</span>
-                            <span class="font-semibold text-red-600">- ₹{{ number_format($item->amount, 2) }}</span>
-                        </div>
-                    @endforeach
-                    <div class="border-t border-zinc-100 dark:border-zinc-700 pt-2">
-                        <div class="flex justify-between text-base font-black">
-                            <span class="text-zinc-900 dark:text-white">Net Payable</span>
-                            <span class="text-brand-600">₹{{ number_format($selectedSlip->net_salary, 2) }}</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="flex gap-3 pt-2">
-                    <a href="{{ route('payroll.payslips.download', $selectedSlip->id) }}" target="_blank"
-                        class="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-bold text-white bg-brand-600 hover:bg-brand-700 rounded-xl transition-colors">
-                        <flux:icon.arrow-down-tray class="size-4" />
-                        Download PDF
-                    </a>
-                    <button type="button" wire:click="closeModal"
-                        class="px-4 py-2.5 text-sm font-semibold text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-600 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors">
                         Close
                     </button>
                 </div>
