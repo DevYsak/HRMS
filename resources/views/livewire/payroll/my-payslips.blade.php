@@ -384,12 +384,6 @@
                                     </span>
                                     <span class="text-[10px] font-semibold text-zinc-600 text-center leading-tight">Email Payslip</span>
                                 </button>
-                                <a href="{{ route('payroll.payslips.download', $latestPayslip->id) }}" target="_blank"
-                                    title="Open PDF in new tab"
-                                    class="cursor-pointer flex flex-col items-center gap-1.5 p-2.5 bg-zinc-50 dark:bg-zinc-800 rounded-xl hover:bg-violet-50 transition-colors">
-                                    <flux:icon.arrow-top-right-on-square class="size-5 text-zinc-600" />
-                                    <span class="text-[10px] font-semibold text-zinc-600 text-center leading-tight">Open PDF</span>
-                                </a>
                                 <button type="button" @click="showStructure = !showStructure"
                                     title="View salary structure breakdown"
                                     :class="showStructure ? 'bg-brand-50 dark:bg-brand-900/20' : 'bg-zinc-50 dark:bg-zinc-800 hover:bg-brand-50'"
