@@ -81,9 +81,9 @@
                     $cMax    = ceil(($rawMax + $pad) / 1000) * 1000;
                     $cRange  = $cMax - $cMin ?: 1;
 
-                    // SVG viewBox: 0 0 600 220  (600 wide, 220 tall — chart area 0..500 x 0..180)
-                    $svgW = 600; $svgH = 220;
-                    $padL = 70; $padR = 20; $padT = 20; $padB = 40;
+                    // SVG viewBox: 0 0 600 200 — edge-to-edge, Y labels overlaid inside
+                    $svgW = 600; $svgH = 200;
+                    $padL = 0; $padR = 0; $padT = 24; $padB = 32;
                     $chartW = $svgW - $padL - $padR;
                     $chartH = $svgH - $padT - $padB;
 
@@ -154,15 +154,16 @@
                 </div>
 
                 {{-- SVG Chart --}}
-                <div x-data="{ tip: null }" class="relative" style="height: 220px;">
+                <div x-data="{ tip: null }" class="relative" style="height: 200px;">
                     <svg viewBox="0 0 {{ $svgW }} {{ $svgH }}" class="w-full h-full" style="overflow:visible;">
 
-                        {{-- Grid lines --}}
+                        {{-- Grid lines + overlaid Y-axis labels --}}
                         @foreach($yTicks as $tick)
-                            <line x1="{{ $padL }}" y1="{{ $tick['y'] }}" x2="{{ $svgW - $padR }}" y2="{{ $tick['y'] }}"
+                            <line x1="0" y1="{{ $tick['y'] }}" x2="{{ $svgW }}" y2="{{ $tick['y'] }}"
                                 stroke="#f3f4f6" stroke-width="1" />
-                            <text x="{{ $padL - 6 }}" y="{{ $tick['y'] + 4 }}" text-anchor="end"
-                                font-size="11" fill="#9ca3af" font-family="Arial, sans-serif">{{ $tick['lbl'] }}</text>
+                            <text x="6" y="{{ $tick['y'] - 3 }}" text-anchor="start"
+                                font-size="10" fill="#9ca3af" font-family="Arial, sans-serif"
+                                style="dominant-baseline: text-after-edge;">{{ $tick['lbl'] }}</text>
                         @endforeach
 
                         {{-- Subtle gross area fill --}}
@@ -247,7 +248,7 @@
                 </div>
 
                 {{-- Legend --}}
-                <div class="flex items-center gap-5 mt-3 pl-[70px]">
+                <div class="flex items-center gap-5 mt-3">
                     <div class="flex items-center gap-2">
                         <div class="w-5 h-0.5 rounded-full bg-orange-500"></div>
                         <span class="text-xs text-zinc-500">Gross Salary</span>
