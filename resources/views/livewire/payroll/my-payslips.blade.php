@@ -456,7 +456,7 @@
             <div class="relative w-full max-w-md bg-white dark:bg-zinc-800 rounded-2xl shadow-xl ring ring-black/5 dark:ring-zinc-700 p-6 space-y-5 max-h-[90vh] overflow-y-auto">
                 <button type="button" wire:click="closeSalaryBreakup"
                     class="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors">
-                    <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    <flux:icon.x-mark class="size-5" />
                 </button>
                 <div>
                     <h2 class="text-lg font-bold text-zinc-900 dark:text-white">Salary Structure</h2>
@@ -523,7 +523,7 @@
             <div class="relative w-full max-w-sm bg-white dark:bg-zinc-800 rounded-2xl shadow-xl ring ring-black/5 dark:ring-zinc-700 p-6 space-y-4">
                 <button type="button" wire:click="closeShareModal"
                     class="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors">
-                    <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    <flux:icon.x-mark class="size-5" />
                 </button>
                 <div>
                     <h2 class="text-base font-bold text-zinc-900 dark:text-white">Share Payslip</h2>
@@ -571,7 +571,7 @@
             <div class="relative w-full max-w-lg bg-white dark:bg-zinc-800 rounded-2xl shadow-xl ring ring-black/5 dark:ring-zinc-700 p-6 space-y-5 max-h-[90vh] overflow-y-auto">
                 <button type="button" wire:click="closeModal"
                     class="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors">
-                    <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    <flux:icon.x-mark class="size-5" />
                 </button>
                 <div>
                     <h2 class="text-lg font-bold text-zinc-900 dark:text-white">
