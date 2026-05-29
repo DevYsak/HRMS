@@ -68,87 +68,203 @@
 
             {{-- Salary Trend Chart --}}
             <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 p-6 shadow-sm">
+
+                @if(count($trendGross) >= 2)
+                @php
+                    // ── Chart computation (all in PHP → no SVG namespace issues) ──
+                    $n       = count($trendGross);
+                    $allVals = array_merge($trendGross, $trendNet);
+                    $rawMin  = min($allVals);
+                    $rawMax  = max($allVals);
+                    $pad     = ($rawMax - $rawMin) * 0.15 ?: $rawMax * 0.05;
+                    $cMin    = max(0, floor(($rawMin - $pad) / 1000) * 1000);
+                    $cMax    = ceil(($rawMax + $pad) / 1000) * 1000;
+                    $cRange  = $cMax - $cMin ?: 1;
+
+                    // SVG viewBox: 0 0 600 220  (600 wide, 220 tall — chart area 0..500 x 0..180)
+                    $svgW = 600; $svgH = 220;
+                    $padL = 70; $padR = 20; $padT = 20; $padB = 40;
+                    $chartW = $svgW - $padL - $padR;
+                    $chartH = $svgH - $padT - $padB;
+
+                    $mapX = fn($i) => $padL + ($n > 1 ? $i / ($n - 1) * $chartW : $chartW / 2);
+                    $mapY = fn($v) => $padT + $chartH - (($v - $cMin) / $cRange) * $chartH;
+
+                    // Bezier smooth path
+                    $bezierPath = function(array $vals) use ($mapX, $mapY, $n): string {
+                        if ($n < 2) return '';
+                        $pts = [];
+                        foreach ($vals as $i => $v) $pts[] = [$mapX($i), $mapY($v)];
+                        $d = "M {$pts[0][0]},{$pts[0][1]}";
+                        for ($i = 1; $i < count($pts); $i++) {
+                            [$x0, $y0] = $pts[$i-1];
+                            [$x1, $y1] = $pts[$i];
+                            $cp = ($x0 + $x1) / 2;
+                            $d .= " C {$cp},{$y0} {$cp},{$y1} {$x1},{$y1}";
+                        }
+                        return $d;
+                    };
+
+                    $grossPath = $bezierPath($trendGross);
+                    $netPath   = $bezierPath($trendNet);
+
+                    // Y-axis ticks (4 levels)
+                    $yTicks = [];
+                    for ($t = 0; $t <= 3; $t++) {
+                        $val = $cMin + ($cRange / 3) * $t;
+                        $y   = $mapY($val);
+                        $lbl = '₹' . (abs($val) >= 1000 ? number_format($val / 1000, 0) . 'K' : number_format($val, 0));
+                        $yTicks[] = compact('y', 'lbl');
+                    }
+
+                    // Summary stats
+                    $latestGross   = $trendGross[$n - 1] ?? 0;
+                    $latestNet     = $trendNet[$n - 1]   ?? 0;
+                    $firstGross    = $trendGross[0]      ?? $latestGross;
+                    $growthPct     = $firstGross > 0 ? round((($latestGross - $firstGross) / $firstGross) * 100, 1) : 0;
+                    $fmtK          = fn($v) => '₹' . number_format($v / 1000, 1) . 'K';
+
+                    // Point coordinates
+                    $gPts = array_map(fn($i, $v) => [$mapX($i), $mapY($v)], array_keys($trendGross), $trendGross);
+                    $nPts = array_map(fn($i, $v) => [$mapX($i), $mapY($v)], array_keys($trendNet),   $trendNet);
+                @endphp
+
+                {{-- Summary strip --}}
                 <div class="flex items-center justify-between mb-5">
-                    <h3 class="font-bold text-zinc-900 dark:text-white">Salary Trend <span class="text-sm font-normal text-zinc-400">(Last 6 Months)</span></h3>
+                    <div>
+                        <h3 class="font-bold text-zinc-900 dark:text-white text-sm">Salary Trend
+                            <span class="text-xs font-normal text-zinc-400 ml-1">(Last {{ $n }} Months)</span>
+                        </h3>
+                    </div>
+                    <div class="flex items-center gap-5">
+                        <div class="text-right">
+                            <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Gross</div>
+                            <div class="text-sm font-black text-zinc-800 dark:text-zinc-200">₹{{ number_format($latestGross, 0) }}</div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Net</div>
+                            <div class="text-sm font-black text-emerald-600">₹{{ number_format($latestNet, 0) }}</div>
+                        </div>
+                        @if($growthPct != 0)
+                            <div class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold {{ $growthPct > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600' }}">
+                                {{ $growthPct > 0 ? '↑' : '↓' }} {{ abs($growthPct) }}%
+                            </div>
+                        @endif
+                    </div>
                 </div>
 
-                @if(count($trendGross) > 0)
-                    @php
-                        $maxVal = max(array_merge($trendGross, [1]));
-                        $chartH = 140;
-                    @endphp
-                    <div x-data="{
-                        gross: {{ json_encode($trendGross) }},
-                        net: {{ json_encode($trendNet) }},
-                        labels: {{ json_encode($trendLabels) }},
-                        max: {{ $maxVal }},
-                        tooltip: null,
-                        tooltipX: 0, tooltipY: 0,
-                        points(arr) {
-                            const w = 100 / (arr.length - 1 || 1);
-                            return arr.map((v, i) => `${i * w},${100 - (v / this.max * 85)}`).join(' ');
-                        }
-                    }" class="relative">
-                        {{-- Y-axis labels --}}
-                        <div class="flex">
-                            <div class="flex flex-col justify-between text-[10px] text-zinc-400 text-right pr-2 shrink-0" style="height:{{ $chartH }}px; width:60px">
-                                <span>₹{{ number_format($maxVal, 0) }}</span>
-                                <span>₹{{ number_format($maxVal * 0.5, 0) }}</span>
-                                <span>₹0</span>
-                            </div>
-                            <div class="flex-1 relative" style="height:{{ $chartH }}px">
-                                <svg viewBox="0 0 100 100" preserveAspectRatio="none" class="absolute inset-0 w-full h-full">
-                                    {{-- Grid lines (static) --}}
-                                    <line x1="0" y1="15" x2="100" y2="15" stroke="#e5e7eb" stroke-width="0.3" />
-                                    <line x1="0" y1="57" x2="100" y2="57" stroke="#e5e7eb" stroke-width="0.3" />
-                                    <line x1="0" y1="100" x2="100" y2="100" stroke="#e5e7eb" stroke-width="0.3" />
-                                    {{-- Gross fill — x-show works on SVG elements, x-if does not --}}
-                                    <polygon x-show="gross.length > 1"
-                                        :points="'0,100 ' + gross.map((v,i) => `${i*(100/(gross.length-1))},${100-(v/max*85)}`).join(' ') + ` 100,100`"
-                                        fill="rgba(254,154,0,0.12)" />
-                                    {{-- Gross line --}}
-                                    <polyline x-show="gross.length > 1"
-                                        :points="gross.map((v,i) => `${i*(100/(gross.length-1))},${100-(v/max*85)}`).join(' ')"
-                                        fill="none" stroke="#fe9a00" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" />
-                                    {{-- Net line --}}
-                                    <polyline x-show="net.length > 1"
-                                        :points="net.map((v,i) => `${i*(100/(net.length-1))},${100-(v/max*85)}`).join(' ')"
-                                        fill="none" stroke="#10b981" stroke-width="1.5" stroke-dasharray="2 1" stroke-linejoin="round" stroke-linecap="round" />
-                                    {{-- Data points (Blade loop — SVG circles inside template x-for lose namespace) --}}
-                                    @php $n = count($trendGross); @endphp
-                                    @foreach($trendGross as $idx => $val)
-                                        @php
-                                            $cx = $n > 1 ? round($idx * (100 / ($n - 1)), 2) : 50;
-                                            $cy = $maxVal > 0 ? round(100 - ($val / $maxVal * 85), 2) : 100;
-                                        @endphp
-                                        <circle cx="{{ $cx }}" cy="{{ $cy }}" r="2" fill="#fe9a00" />
-                                    @endforeach
-                                    @foreach($trendNet as $idx => $val)
-                                        @php
-                                            $cx = $n > 1 ? round($idx * (100 / ($n - 1)), 2) : 50;
-                                            $cy = $maxVal > 0 ? round(100 - ($val / $maxVal * 85), 2) : 100;
-                                        @endphp
-                                        <circle cx="{{ $cx }}" cy="{{ $cy }}" r="1.5" fill="#10b981" />
-                                    @endforeach
-                                </svg>
-                            </div>
-                        </div>
+                {{-- SVG Chart --}}
+                <div x-data="{ tip: null }" class="relative" style="height: 220px;">
+                    <svg viewBox="0 0 {{ $svgW }} {{ $svgH }}" class="w-full h-full" style="overflow:visible;">
+
+                        {{-- Grid lines --}}
+                        @foreach($yTicks as $tick)
+                            <line x1="{{ $padL }}" y1="{{ $tick['y'] }}" x2="{{ $svgW - $padR }}" y2="{{ $tick['y'] }}"
+                                stroke="#f3f4f6" stroke-width="1" />
+                            <text x="{{ $padL - 6 }}" y="{{ $tick['y'] + 4 }}" text-anchor="end"
+                                font-size="11" fill="#9ca3af" font-family="Arial, sans-serif">{{ $tick['lbl'] }}</text>
+                        @endforeach
+
+                        {{-- Subtle gross area fill --}}
+                        <path d="{{ $grossPath }} L {{ $mapX($n-1) }},{{ $padT + $chartH }} L {{ $padL }},{{ $padT + $chartH }} Z"
+                            fill="rgba(249,115,22,0.06)" />
+
+                        {{-- Net line (dashed) --}}
+                        <path d="{{ $netPath }}" fill="none" stroke="#10b981" stroke-width="2.5"
+                            stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 3" />
+
+                        {{-- Gross line --}}
+                        <path d="{{ $grossPath }}" fill="none" stroke="#f97316" stroke-width="2.5"
+                            stroke-linecap="round" stroke-linejoin="round" />
+
+                        {{-- Net data points --}}
+                        @foreach($nPts as $i => [$x, $y])
+                            @php $isLast = $i === $n - 1; @endphp
+                            <circle cx="{{ $x }}" cy="{{ $y }}" r="{{ $isLast ? 6 : 4 }}"
+                                fill="#fff" stroke="#10b981" stroke-width="{{ $isLast ? 2.5 : 2 }}" />
+                        @endforeach
+
+                        {{-- Gross data points --}}
+                        @foreach($gPts as $i => [$x, $y])
+                            @php $isLast = $i === $n - 1; @endphp
+                            <circle cx="{{ $x }}" cy="{{ $y }}" r="{{ $isLast ? 7 : 4.5 }}"
+                                fill="{{ $isLast ? '#f97316' : '#fff' }}" stroke="#f97316"
+                                stroke-width="{{ $isLast ? 0 : 2 }}" />
+                            @if($isLast)
+                                <circle cx="{{ $x }}" cy="{{ $y }}" r="3.5" fill="#fff" opacity="0.5" />
+                            @endif
+                        @endforeach
+
+                        {{-- "Current" badge on last point --}}
+                        @php [$lx, $ly] = $gPts[$n - 1]; @endphp
+                        <rect x="{{ $lx - 44 }}" y="{{ $ly - 26 }}" width="88" height="18" rx="9"
+                            fill="#f97316" />
+                        <text x="{{ $lx }}" y="{{ $ly - 14 }}" text-anchor="middle"
+                            font-size="10" fill="#fff" font-weight="bold"
+                            font-family="Arial, sans-serif">{{ $fmtK($latestNet) }} Net</text>
+
+                        {{-- Hover hit areas + tooltip trigger (Alpine) --}}
+                        @foreach($gPts as $i => [$x, $y])
+                        @php
+                            $tipData = json_encode([
+                                'label' => $trendLabels[$i] ?? '',
+                                'gross' => $fmtK($trendGross[$i]),
+                                'net'   => $fmtK($trendNet[$i]   ?? 0),
+                            ]);
+                        @endphp
+                        <rect x="{{ $x - 28 }}" y="{{ $padT }}" width="56" height="{{ $chartH }}"
+                            fill="transparent"
+                            @mouseenter="tip = {{ $tipData }}"
+                            @mouseleave="tip = null" />
+                        @endforeach
+
                         {{-- X-axis labels --}}
-                        <div class="flex ml-[68px] mt-2">
-                            <div class="flex-1 flex justify-between">
-                                @foreach($trendLabels as $label)
-                                    <span class="text-[10px] text-zinc-400">{{ $label }}</span>
-                                @endforeach
+                        @foreach($trendLabels as $i => $label)
+                            <text x="{{ $mapX($i) }}" y="{{ $svgH - 8 }}" text-anchor="middle"
+                                font-size="10" fill="#9ca3af" font-family="Arial, sans-serif">{{ $label }}</text>
+                        @endforeach
+
+                    </svg>
+
+                    {{-- Tooltip (Alpine) --}}
+                    <div x-show="tip !== null" x-cloak
+                        class="absolute pointer-events-none bg-zinc-900 text-white rounded-xl px-3 py-2 text-xs shadow-xl z-10"
+                        style="top: 10px; left: 50%; transform: translateX(-50%); min-width: 120px;">
+                        <template x-if="tip">
+                            <div class="space-y-1">
+                                <div class="font-bold text-zinc-300 mb-1" x-text="tip.label"></div>
+                                <div class="flex justify-between gap-3">
+                                    <span class="text-orange-400">Gross</span>
+                                    <span class="font-bold" x-text="tip.gross"></span>
+                                </div>
+                                <div class="flex justify-between gap-3">
+                                    <span class="text-emerald-400">Net</span>
+                                    <span class="font-bold" x-text="tip.net"></span>
+                                </div>
                             </div>
-                        </div>
-                        {{-- Legend --}}
-                        <div class="flex items-center gap-4 mt-3 ml-[68px]">
-                            <div class="flex items-center gap-1.5"><div class="w-4 h-0.5 bg-brand-500"></div><span class="text-xs text-zinc-500">Gross</span></div>
-                            <div class="flex items-center gap-1.5"><div class="w-4 h-0.5 bg-emerald-500" style="border-top: 1.5px dashed #10b981"></div><span class="text-xs text-zinc-500">Net</span></div>
+                        </template>
+                    </div>
+                </div>
+
+                {{-- Legend --}}
+                <div class="flex items-center gap-5 mt-3 pl-[70px]">
+                    <div class="flex items-center gap-2">
+                        <div class="w-5 h-0.5 rounded-full bg-orange-500"></div>
+                        <span class="text-xs text-zinc-500">Gross Salary</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div class="w-5 h-px bg-emerald-500" style="border-top: 2px dashed #10b981; background:transparent;"></div>
+                        <span class="text-xs text-zinc-500">Net Salary</span>
+                    </div>
+                </div>
+
+                @else
+                    <div class="flex items-center justify-center h-52 text-zinc-400 text-sm">
+                        <div class="text-center">
+                            <div class="text-2xl mb-2">📈</div>
+                            <div>Need at least 2 payslips to show trend</div>
                         </div>
                     </div>
-                @else
-                    <div class="flex items-center justify-center h-32 text-zinc-400 text-sm">No payslip data yet</div>
                 @endif
             </div>
 
