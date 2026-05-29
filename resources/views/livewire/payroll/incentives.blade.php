@@ -74,49 +74,54 @@
     </div>
 
     {{-- Add Modal --}}
-    <flux:modal wire:model.self="showModal" class="max-w-md">
-        <div class="space-y-6">
-            <div>
-                <flux:heading size="lg">Add Incentive</flux:heading>
-                <flux:subheading>Submit an incentive for Director/Finance approval</flux:subheading>
-            </div>
-            <form wire:submit="submit" class="space-y-4">
-                <flux:field>
-                    <flux:select wire:model="employeeId" label="Employee">
-                        <flux:select.option value="">Select Employee</flux:select.option>
-                        @foreach($employees as $emp)
-                            <flux:select.option value="{{ $emp->id }}">{{ $emp->user?->name }}</flux:select.option>
-                        @endforeach
-                    </flux:select>
-                    @error('employeeId') <flux:error>{{ $message }}</flux:error> @enderror
-                </flux:field>
-
-                <flux:field>
-                    <flux:input wire:model="title" label="Incentive Title" placeholder="e.g. Q1 Performance Bonus" />
-                    @error('title') <flux:error>{{ $message }}</flux:error> @enderror
-                </flux:field>
-
-                <flux:field>
-                    <flux:input wire:model="amount" label="Amount (₹)" type="number" min="1" step="0.01" />
-                    @error('amount') <flux:error>{{ $message }}</flux:error> @enderror
-                </flux:field>
-
-                <flux:field>
-                    <flux:input wire:model="month" label="Payout Month" type="month" />
-                    @error('month') <flux:error>{{ $message }}</flux:error> @enderror
-                </flux:field>
-
-                <flux:textarea wire:model="description" label="Description (optional)" rows="2" />
-
-                <div class="flex gap-2 justify-end pt-2">
-                    <flux:button type="button" wire:click="$set('showModal', false)">Cancel</flux:button>
-                    <flux:button type="submit" variant="primary"
-                        wire:loading.attr="disabled" wire:target="submit">
-                        <span wire:loading.remove wire:target="submit">Submit</span>
-                        <span wire:loading wire:target="submit">Submitting…</span>
-                    </flux:button>
+    @if($showModal)
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4"
+             x-data x-on:keydown.escape.window="$wire.set('showModal', false)">
+            <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" wire:click="$set('showModal', false)"></div>
+            <div class="relative w-full max-w-md bg-white dark:bg-zinc-800 rounded-2xl shadow-xl ring ring-black/5 dark:ring-zinc-700 p-6 space-y-5">
+                <button type="button" wire:click="$set('showModal', false)"
+                    class="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors">
+                    <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+                <div>
+                    <h2 class="text-base font-bold text-zinc-900 dark:text-white">Add Incentive</h2>
+                    <p class="text-sm text-zinc-500 mt-0.5">Submit an incentive for Director/Finance approval</p>
                 </div>
-            </form>
+                <form wire:submit="submit" class="space-y-4">
+                    <flux:field>
+                        <flux:select wire:model="employeeId" label="Employee">
+                            <flux:select.option value="">Select Employee</flux:select.option>
+                            @foreach($employees as $emp)
+                                <flux:select.option value="{{ $emp->id }}">{{ $emp->user?->name }}</flux:select.option>
+                            @endforeach
+                        </flux:select>
+                        @error('employeeId') <flux:error>{{ $message }}</flux:error> @enderror
+                    </flux:field>
+                    <flux:field>
+                        <flux:input wire:model="title" label="Incentive Title" placeholder="e.g. Q1 Performance Bonus" />
+                        @error('title') <flux:error>{{ $message }}</flux:error> @enderror
+                    </flux:field>
+                    <flux:field>
+                        <flux:input wire:model="amount" label="Amount (₹)" type="number" min="1" step="0.01" />
+                        @error('amount') <flux:error>{{ $message }}</flux:error> @enderror
+                    </flux:field>
+                    <flux:field>
+                        <flux:input wire:model="month" label="Payout Month" type="month" />
+                        @error('month') <flux:error>{{ $message }}</flux:error> @enderror
+                    </flux:field>
+                    <flux:textarea wire:model="description" label="Description (optional)" rows="2" />
+                    <div class="flex gap-2 justify-end pt-2 border-t border-zinc-100 dark:border-zinc-700">
+                        <button type="button" wire:click="$set('showModal', false)"
+                            class="px-4 py-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-600 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors">
+                            Cancel
+                        </button>
+                        <flux:button type="submit" variant="primary" wire:loading.attr="disabled" wire:target="submit">
+                            <span wire:loading.remove wire:target="submit">Submit</span>
+                            <span wire:loading wire:target="submit">Submitting…</span>
+                        </flux:button>
+                    </div>
+                </form>
+            </div>
         </div>
-    </flux:modal>
+    @endif
 </flux:main>
