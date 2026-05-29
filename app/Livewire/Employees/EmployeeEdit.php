@@ -269,8 +269,16 @@ class EmployeeEdit extends Component
     {
         $this->emailSubject = '';
         $this->emailBody = '';
+        $this->resetErrorBag();
         $this->showEmailModal = true;
-        $this->dispatch('modal-show', name: 'send-email-modal');
+    }
+
+    public function closeEmailModal(): void
+    {
+        $this->showEmailModal = false;
+        $this->emailSubject = '';
+        $this->emailBody = '';
+        $this->resetErrorBag();
     }
 
     public function sendEmail(): void
@@ -295,8 +303,7 @@ class EmployeeEdit extends Component
             \Flux::toast('Could not send email: '.$e->getMessage(), variant: 'danger');
         }
 
-        $this->showEmailModal = false;
-        $this->dispatch('modal-close', name: 'send-email-modal');
+        $this->closeEmailModal();
     }
 
     public function deactivate(): void

@@ -8,7 +8,6 @@
         </flux:breadcrumbs>
 
         <div class="flex items-center gap-2">
-            <flux:button wire:click="setTab('General')" variant="primary" icon="pencil-square" size="sm">Edit Employee</flux:button>
             <flux:button
                 wire:click="resetPassword"
                 wire:loading.attr="disabled"
@@ -583,36 +582,45 @@
     </div>
 
     {{-- Send Email Modal --}}
-    <flux:modal name="send-email-modal" wire:model.self="showEmailModal" class="w-full max-w-lg">
-        <div class="space-y-5">
-            <div>
-                <flux:heading size="lg">Send Email</flux:heading>
-                <flux:subheading>To: {{ $employee->user->email }}</flux:subheading>
-            </div>
-
-            <div class="space-y-4">
-                <flux:input wire:model="emailSubject" label="Subject" placeholder="e.g. Important Update" required />
-                @error('emailSubject') <p class="text-xs text-red-500 -mt-2">{{ $message }}</p> @enderror
-
-                <flux:textarea wire:model="emailBody" label="Message" placeholder="Write your message here…" rows="5" required />
-                @error('emailBody') <p class="text-xs text-red-500 -mt-2">{{ $message }}</p> @enderror
-            </div>
-
-            <div class="flex justify-end gap-3 border-t border-zinc-100 pt-4 dark:border-zinc-800">
-                <flux:modal.close>
-                    <flux:button variant="ghost">Cancel</flux:button>
-                </flux:modal.close>
-                <flux:button
-                    wire:click="sendEmail"
-                    wire:loading.attr="disabled"
-                    wire:target="sendEmail"
-                    variant="primary"
-                    icon="paper-airplane"
-                >
-                    <span wire:loading.remove wire:target="sendEmail">Send Email</span>
-                    <span wire:loading wire:target="sendEmail">Sending…</span>
-                </flux:button>
+    @if($showEmailModal)
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4"
+             x-data x-on:keydown.escape.window="$wire.closeEmailModal()">
+            <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" wire:click="closeEmailModal"></div>
+            <div class="relative w-full max-w-lg bg-white dark:bg-zinc-800 rounded-2xl shadow-xl ring ring-black/5 dark:ring-zinc-700 p-6 space-y-5">
+                <button type="button" wire:click="closeEmailModal"
+                    class="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors">
+                    <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+                <div>
+                    <h2 class="text-base font-bold text-zinc-900 dark:text-white">Send Email</h2>
+                    <p class="text-sm text-zinc-500 mt-0.5">To: {{ $employee->user->email }}</p>
+                </div>
+                <div class="space-y-4">
+                    <flux:field>
+                        <flux:label>Subject</flux:label>
+                        <flux:input wire:model="emailSubject" placeholder="e.g. Important Update" required />
+                        @error('emailSubject') <p class="text-xs text-red-500">{{ $message }}</p> @enderror
+                    </flux:field>
+                    <flux:field>
+                        <flux:label>Message</flux:label>
+                        <flux:textarea wire:model="emailBody" placeholder="Write your message here…" rows="5" required />
+                        @error('emailBody') <p class="text-xs text-red-500">{{ $message }}</p> @enderror
+                    </flux:field>
+                </div>
+                <div class="flex justify-end gap-3 border-t border-zinc-100 dark:border-zinc-800 pt-4">
+                    <button type="button" wire:click="closeEmailModal"
+                        class="px-4 py-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300 bg-white dark:bg-zinc-700 border border-zinc-200 dark:border-zinc-600 rounded-xl hover:bg-zinc-50 transition-colors">
+                        Cancel
+                    </button>
+                    <button type="button" wire:click="sendEmail"
+                        wire:loading.attr="disabled" wire:target="sendEmail"
+                        class="inline-flex items-center gap-2 px-5 py-2 text-sm font-bold text-white bg-brand-600 hover:bg-brand-700 rounded-xl transition-colors disabled:opacity-60">
+                        <flux:icon.paper-airplane class="size-4" />
+                        <span wire:loading.remove wire:target="sendEmail">Send Email</span>
+                        <span wire:loading wire:target="sendEmail">Sending…</span>
+                    </button>
+                </div>
             </div>
         </div>
-    </flux:modal>
+    @endif
 </flux:main>
