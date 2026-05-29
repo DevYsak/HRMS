@@ -89,19 +89,19 @@
     function fmt($n) { return 'Rs.' . number_format((float) $n, 2); }
 @endphp
 <style>
-@page  { margin: 14px 20px; size: A4 portrait; }
+@page  { margin: 10px 18px 12px; size: A4 portrait; }
 *      { margin: 0; padding: 0; box-sizing: border-box; }
 body   { font-family: 'DejaVu Sans', Arial, sans-serif; font-size: 10px; color: #1f2937; background: #fff; line-height: 1.5; }
 
 /* ── TOP BAR ── */
-.top { height: 5px; background: {{ $orange }}; margin: -14px -20px 0; }
+.top { height: 5px; background: {{ $orange }}; }
 
 /* ── HEADER ── */
 .hdr     { padding: 14px 0 12px; border-bottom: 1.5px solid #e5e7eb; }
 .hdr-tbl { width: 100%; border-collapse: collapse; }
-.h-logo  { width: 145px; vertical-align: middle; }
-.h-co    { vertical-align: middle; text-align: center; padding: 0 10px; }
-.h-slip  { width: 155px; text-align: right; vertical-align: middle; }
+.h-logo  { width: 130px; vertical-align: middle; }
+.h-co    { vertical-align: middle; text-align: center; padding: 0 8px; }
+.h-slip  { width: 175px; text-align: right; vertical-align: middle; white-space: nowrap; }
 
 /* Logo */
 .lg-main { font-size: 22px; font-weight: 900; color: #111; letter-spacing: -0.5px; line-height: 1; }
@@ -113,22 +113,23 @@ body   { font-family: 'DejaVu Sans', Arial, sans-serif; font-size: 10px; color: 
 .co-addr { font-size: 8px; color: #6b7280; margin-top: 3px; line-height: 1.7; }
 .co-cin  { font-size: 7.5px; color: #9ca3af; margin-top: 2px; }
 
-.slip-title { font-size: 26px; font-weight: 900; color: #111; letter-spacing: 1px; line-height: 1; }
-.slip-month { font-size: 14px; font-weight: 800; color: {{ $orange }}; margin-top: 3px; }
+.slip-title { font-size: 26px; font-weight: 900; color: #111; letter-spacing: 1px; line-height: 1; white-space: nowrap; }
+.slip-month { font-size: 14px; font-weight: 800; color: {{ $orange }}; margin-top: 3px; white-space: nowrap; }
 .cyc-tag    {
-    display: inline-block; margin-top: 7px;
+    display: block; margin-top: 7px;
     background: #fff7ed; border: 1px solid #fed7aa;
-    color: #9a3412; font-size: 7.5px; font-weight: 700;
-    padding: 3px 9px; border-radius: 4px; letter-spacing: 0.2px;
+    color: #9a3412; font-size: 7px; font-weight: 700;
+    padding: 3px 7px; border-radius: 4px; letter-spacing: 0.1px;
+    white-space: nowrap;
 }
 
 /* ── EMPLOYEE ── */
 .emp     { padding: 12px 0 11px; border-bottom: 1.5px solid #e5e7eb; }
-.emp-tbl { width: 100%; border-collapse: collapse; }
-.ea      { width: 74px; vertical-align: middle; }
-.en      { vertical-align: top; padding-left: 12px; }
-.em      { vertical-align: top; border-left: 1px solid #f3f4f6; padding-left: 14px; width: 27%; }
-.er      { vertical-align: top; border-left: 1px solid #f3f4f6; padding-left: 14px; width: 27%; }
+.emp-tbl { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.ea      { width: 76px; vertical-align: middle; }
+.en      { width: 19%; vertical-align: top; padding-left: 12px; }
+.em      { width: 27%; vertical-align: top; border-left: 1px solid #f3f4f6; padding-left: 14px; }
+.er      { width: 27%; vertical-align: top; border-left: 1px solid #f3f4f6; padding-left: 14px; }
 
 .av-circle {
     width: 60px; height: 60px; border-radius: 50%;
@@ -279,7 +280,7 @@ body   { font-family: 'DejaVu Sans', Arial, sans-serif; font-size: 10px; color: 
 .sys-note    { font-size: 8.5px; color: #6b7280; line-height: 1.8; font-style: italic; }
 
 /* ── BOTTOM BAR ── */
-.btm     { background: {{ $orange }}; padding: 9px 0; margin: 8px -20px -14px; }
+.btm     { background: {{ $orange }}; padding: 9px 0; margin-top: 8px; }
 .btm-tbl { width: 100%; border-collapse: collapse; }
 .btm-td  { text-align: center; padding: 0 10px;
            border-right: 1px solid rgba(255,255,255,0.3); }
@@ -419,7 +420,7 @@ body   { font-family: 'DejaVu Sans', Arial, sans-serif; font-size: 10px; color: 
     <table class="att-tbl" cellpadding="0" cellspacing="0">
     <tr>
         <td class="att-td">
-            <div class="att-icon-box aib-blue">{{ $paidDays }}</div>
+            <div class="att-icon-box aib-blue">D</div>
             <span class="att-lbl">Paid Days</span>
             <span class="att-val">{{ $paidDays }}</span>
         </td>
@@ -434,7 +435,7 @@ body   { font-family: 'DejaVu Sans', Arial, sans-serif; font-size: 10px; color: 
             <span class="att-val">{{ $weekOff }}</span>
         </td>
         <td class="att-td">
-            <div class="att-icon-box aib-orange">A</div>
+            <div class="att-icon-box aib-orange">L</div>
             <span class="att-lbl">LWP / ABS</span>
             <span class="{{ $lwp > 0 ? 'att-val-o' : 'att-val' }}">{{ number_format($lwp, 2) }}</span>
         </td>
