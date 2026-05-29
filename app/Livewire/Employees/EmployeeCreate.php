@@ -5,13 +5,17 @@ namespace App\Livewire\Employees;
 use App\Enums\EmployeeStatus;
 use App\Enums\EmploymentType;
 use App\Enums\UserRole;
+use App\Mail\WelcomeEmployeeMail;
 use App\Models\Department;
 use App\Models\Employee;
 use App\Models\JobTitle;
+use App\Models\LeaveBalance;
+use App\Models\LeaveType;
 use App\Models\Office;
 use App\Models\ShiftSetting;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
 use Livewire\WithFileUploads;
@@ -133,21 +137,28 @@ class EmployeeCreate extends Component
             'employment_type' => $this->employment_type,
         ]);
 
+        // Send welcome email with credentials
+        try {
+            Mail::to($user->email)->send(new WelcomeEmployeeMail($user));
+        } catch (\Throwable) {
+            // Mail failure should not block employee creation
+        }
+
         \Flux::toast(
-            text: "Employee {$this->name} added successfully. Temporary password: Password@123",
+            text: "Employee {$this->name} added successfully. Welcome email sent to {$this->email}.",
             variant: 'success',
         );
 
         $this->js("setTimeout(() => { window.location = '".route('employees.index')."'; }, 2500)");
 
         // Persist initial leave balances for current year (if provided)
-        foreach (\App\Models\LeaveType::all() as $lt) {
+        foreach (LeaveType::all() as $lt) {
             $allocated = isset($this->leave_allocations[$lt->id]) ? (float) $this->leave_allocations[$lt->id] : 0.0;
             if ($allocated <= 0) {
                 continue;
             }
 
-            \App\Models\LeaveBalance::create([
+            LeaveBalance::create([
                 'employee_id' => $user->employee->id,
                 'leave_type_id' => $lt->id,
                 'year' => now()->year,

@@ -251,7 +251,8 @@ class EmployeeEdit extends Component
                 return;
             }
 
-            $status = Password::sendResetLink(['email' => $this->employee->user->email]);
+            $broker = config('fortify.passwords', 'users');
+            $status = Password::broker($broker)->sendResetLink(['email' => $this->employee->user->email]);
 
             if ($status !== Password::RESET_LINK_SENT) {
                 \Flux::toast(__($status), variant: 'danger');
