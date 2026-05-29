@@ -455,8 +455,8 @@
             <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" wire:click="$set('showSalaryBreakup', false)"></div>
             <div class="relative w-full max-w-md bg-white dark:bg-zinc-800 rounded-2xl shadow-xl ring ring-black/5 dark:ring-zinc-700 p-6 space-y-5 max-h-[90vh] overflow-y-auto">
                 <button type="button" wire:click="$set('showSalaryBreakup', false)"
-                    class="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors">
-                    <flux:icon.x-mark class="size-5 pointer-events-none" />
+                    class="absolute top-3 right-3 size-8 flex items-center justify-center rounded-lg text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors font-bold text-lg leading-none">
+                    &times;
                 </button>
                 <div>
                     <h2 class="text-lg font-bold text-zinc-900 dark:text-white">Salary Structure</h2>
@@ -522,8 +522,8 @@
             <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" wire:click="$set('showShareModal', false)"></div>
             <div class="relative w-full max-w-sm bg-white dark:bg-zinc-800 rounded-2xl shadow-xl ring ring-black/5 dark:ring-zinc-700 p-6 space-y-4">
                 <button type="button" wire:click="$set('showShareModal', false)"
-                    class="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors">
-                    <flux:icon.x-mark class="size-5 pointer-events-none" />
+                    class="absolute top-3 right-3 size-8 flex items-center justify-center rounded-lg text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors font-bold text-lg leading-none">
+                    &times;
                 </button>
                 <div>
                     <h2 class="text-base font-bold text-zinc-900 dark:text-white">Share Payslip</h2>
@@ -570,8 +570,8 @@
             <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" wire:click="$set('showModal', false)"></div>
             <div class="relative w-full max-w-lg bg-white dark:bg-zinc-800 rounded-2xl shadow-xl ring ring-black/5 dark:ring-zinc-700 p-6 space-y-5 max-h-[90vh] overflow-y-auto">
                 <button type="button" wire:click="$set('showModal', false)"
-                    class="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors">
-                    <flux:icon.x-mark class="size-5 pointer-events-none" />
+                    class="absolute top-3 right-3 size-8 flex items-center justify-center rounded-lg text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors font-bold text-lg leading-none">
+                    &times;
                 </button>
                 <div>
                     <h2 class="text-lg font-bold text-zinc-900 dark:text-white">
