@@ -90,9 +90,10 @@
     function fmt($n) { return 'Rs.' . number_format((float) $n, 2); }
 @endphp
 <style>
-@page  { margin: 14px 28px 16px; size: A4 portrait; }
+@page  { margin: 0; size: A4 portrait; }
 *      { margin: 0; padding: 0; box-sizing: border-box; }
 body   { font-family: 'DejaVu Sans', Arial, sans-serif; font-size: 10px; color: #1f2937; background: #fff; line-height: 1.5; }
+.page  { padding: 0 32px 24px; }
 
 /* ── TOP BAR ── */
 .top { height: 5px; background: {{ $orange }}; }
@@ -288,6 +289,8 @@ body   { font-family: 'DejaVu Sans', Arial, sans-serif; font-size: 10px; color: 
 <body>
 
 <div class="top"></div>
+
+<div class="page">
 
 {{-- HEADER --}}
 <div class="hdr">
@@ -496,6 +499,7 @@ body   { font-family: 'DejaVu Sans', Arial, sans-serif; font-size: 10px; color: 
 </div>
 
 {{-- BOTTOM BAR --}}
+</div>{{-- end .page --}}
 <div class="btm">
 <table class="btm-tbl" cellpadding="0" cellspacing="0">
 <tr>
