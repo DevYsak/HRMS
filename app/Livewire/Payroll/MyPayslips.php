@@ -66,7 +66,7 @@ class MyPayslips extends Component
             ->with(['payroll', 'items'])
             ->when($this->filterYear, fn ($q) => $q->whereHas('payroll', fn ($q2) => $q2->where('year', $this->filterYear)))
             ->orderByDesc('id')
-            ->paginate(5);
+            ->paginate(5)->withPath(route('payroll.payslips'));
 
         $allPayslips = Payslip::where('employee_id', $employee->id)
             ->whereIn('status', ['paid', 'draft'])

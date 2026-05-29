@@ -311,10 +311,18 @@
                                 </td>
 
                                 {{-- Actions --}}
-                                <td class="py-3.5 pr-6 text-right">
+                                <td class="py-3.5 pr-6 text-right" wire:click.stop>
                                     <div class="flex items-center justify-end gap-1">
-                                        <flux:button variant="ghost" size="sm" icon="eye" class="text-zinc-400 hover:text-zinc-700" />
-                                        <flux:button variant="ghost" size="sm" icon="ellipsis-vertical" class="text-zinc-400 hover:text-zinc-700" />
+                                        <a href="{{ route('payroll.payslips.download', $slip->id) }}" target="_blank"
+                                            class="inline-flex items-center justify-center size-8 rounded-lg text-zinc-400 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-900/20 transition-colors"
+                                            title="Download PDF">
+                                            <flux:icon.eye class="size-4" />
+                                        </a>
+                                        <a href="{{ route('payroll.payslips.download', $slip->id) }}" target="_blank"
+                                            class="inline-flex items-center justify-center size-8 rounded-lg text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors"
+                                            title="Download PDF">
+                                            <flux:icon.arrow-down-tray class="size-4" />
+                                        </a>
                                     </div>
                                 </td>
                             </tr>
