@@ -70,7 +70,8 @@
 
     // Company — updated contact details
     $coName  = 'Conexus Network Solutions Pvt Ltd';
-    $coAddr  = '709, 7th Level, Wing F, Tower II Seawoods Grand Central, Seawoods Railway Station, Nerul, Navi Mumbai - 400706';
+    $coAddr1 = '709, 7th Level, Wing F, Tower II Seawoods Grand Central,';
+    $coAddr2 = 'Seawoods Railway Station, Nerul, Navi Mumbai - 400706';
     $coCIN   = 'U72900MH2013PTC234567';
     $coPhone = '+91 959 458 6666';
     $coEmail = 'info@conexus-ns.com';
@@ -89,7 +90,7 @@
     function fmt($n) { return 'Rs.' . number_format((float) $n, 2); }
 @endphp
 <style>
-@page  { margin: 10px 18px 12px; size: A4 portrait; }
+@page  { margin: 14px 28px 16px; size: A4 portrait; }
 *      { margin: 0; padding: 0; box-sizing: border-box; }
 body   { font-family: 'DejaVu Sans', Arial, sans-serif; font-size: 10px; color: #1f2937; background: #fff; line-height: 1.5; }
 
@@ -126,16 +127,10 @@ body   { font-family: 'DejaVu Sans', Arial, sans-serif; font-size: 10px; color: 
 /* ── EMPLOYEE ── */
 .emp     { padding: 12px 0 11px; border-bottom: 1.5px solid #e5e7eb; }
 .emp-tbl { width: 100%; border-collapse: collapse; table-layout: fixed; }
-.ea      { width: 76px; vertical-align: middle; }
-.en      { width: 19%; vertical-align: top; padding-left: 12px; }
-.em      { width: 27%; vertical-align: top; border-left: 1px solid #f3f4f6; padding-left: 14px; }
-.er      { width: 27%; vertical-align: top; border-left: 1px solid #f3f4f6; padding-left: 14px; }
+.en      { width: 26%; vertical-align: top; padding-right: 10px; }
+.em      { width: 37%; vertical-align: top; border-left: 1px solid #f3f4f6; padding-left: 16px; }
+.er      { width: 37%; vertical-align: top; border-left: 1px solid #f3f4f6; padding-left: 16px; }
 
-.av-circle {
-    width: 60px; height: 60px; border-radius: 50%;
-    background: {{ $orange }}; text-align: center; line-height: 60px;
-    font-size: 22px; font-weight: 900; color: #fff; display: inline-block;
-}
 .e-name { font-size: 16px; font-weight: 900; color: #111; line-height: 1.2; }
 .e-role { font-size: 10px; color: {{ $orange }}; font-weight: 700; margin-top: 2px; }
 .e-eid  { font-size: 8px; color: #6b7280; margin-top: 6px; font-weight: 600; }
@@ -305,7 +300,7 @@ body   { font-family: 'DejaVu Sans', Arial, sans-serif; font-size: 10px; color: 
     </td>
     <td class="h-co">
         <div class="co-name">{{ $coName }}</div>
-        <div class="co-addr">{{ $coAddr }}</div>
+        <div class="co-addr">{{ $coAddr1 }}<br>{{ $coAddr2 }}</div>
         <div class="co-cin">CIN: {{ $coCIN }}&nbsp;&nbsp;|&nbsp;&nbsp;{{ $coWeb }}</div>
     </td>
     <td class="h-slip">
@@ -321,7 +316,6 @@ body   { font-family: 'DejaVu Sans', Arial, sans-serif; font-size: 10px; color: 
 <div class="emp">
 <table class="emp-tbl" cellpadding="0" cellspacing="0">
 <tr>
-    <td class="ea"><div class="av-circle">{{ $initials }}</div></td>
     <td class="en">
         <div class="e-name">{{ $user->name }}</div>
         <div class="e-role">{{ $employee->jobTitle?->name ?? 'Employee' }}</div>
