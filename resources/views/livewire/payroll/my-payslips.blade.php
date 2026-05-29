@@ -479,35 +479,5 @@
         </div>
 
     </div>
-                @if($struDeductions->isNotEmpty())
-                    <div>
-                        <div class="text-xs font-bold text-red-600 uppercase tracking-wide mb-2">Deductions</div>
-                        <div class="space-y-2 rounded-xl bg-zinc-50 dark:bg-zinc-900 p-3">
-                            @foreach($struDeductions as $s)
-                                <div class="flex items-center justify-between">
-                                    <span class="text-sm text-zinc-600 dark:text-zinc-400">{{ $s->component?->name ?? 'Component' }}</span>
-                                    <span class="text-sm font-bold text-red-600">- ₹{{ number_format($s->amount, 2) }}</span>
-                                </div>
-                            @endforeach
-                            <div class="border-t border-zinc-200 dark:border-zinc-700 pt-2 flex justify-between font-bold text-sm">
-                                <span class="text-red-600">Total Deductions</span>
-                                <span class="text-red-600">- ₹{{ number_format($struDeductions->sum('amount'), 2) }}</span>
-                            </div>
-                        </div>
-                    </div>
-                @endif
-                <div class="rounded-xl bg-brand-50 dark:bg-brand-900/20 p-4 flex items-center justify-between">
-                    <span class="text-sm font-bold text-brand-700 dark:text-brand-400">Net Monthly Take-Home</span>
-                    <span class="text-xl font-black text-brand-700 dark:text-brand-400">₹{{ number_format($monthlyNet, 2) }}</span>
-                </div>
-                <div class="flex justify-end">
-                    <button type="button" @click="$wire.set('showSalaryBreakup', false)"
-                        class="px-4 py-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-600 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors">
-                        Close
-                    </button>
-                </div>
-            </div>
-        </div>
-    @endif
 
 </flux:main>
