@@ -103,7 +103,7 @@ class Process extends Component
     public function getPayslipsProperty(): LengthAwarePaginator
     {
         if (! $this->currentPayroll) {
-            return Payslip::whereRaw('0=1')->paginate($this->perPage);
+            return Payslip::whereRaw('0=1')->paginate($this->perPage)->withPath(route('payroll.process'));
         }
 
         $query = Payslip::with(['employee.user', 'employee.department', 'employee.office', 'payroll'])
@@ -135,7 +135,7 @@ class Process extends Component
             }
         }
 
-        return $query->paginate($this->perPage);
+        return $query->paginate($this->perPage)->withPath(route('payroll.process'));
     }
 
     public function clearFilters(): void
