@@ -98,34 +98,38 @@
                             </div>
                             <div class="flex-1 relative" style="height:{{ $chartH }}px">
                                 <svg viewBox="0 0 100 100" preserveAspectRatio="none" class="absolute inset-0 w-full h-full">
-                                    {{-- Grid lines --}}
+                                    {{-- Grid lines (static) --}}
                                     <line x1="0" y1="15" x2="100" y2="15" stroke="#e5e7eb" stroke-width="0.3" />
                                     <line x1="0" y1="57" x2="100" y2="57" stroke="#e5e7eb" stroke-width="0.3" />
                                     <line x1="0" y1="100" x2="100" y2="100" stroke="#e5e7eb" stroke-width="0.3" />
-                                    {{-- Gross fill --}}
-                                    <template x-if="gross.length > 1">
-                                        <polygon
-                                            :points="'0,100 ' + gross.map((v,i) => `${i * (100/(gross.length-1))},${100-(v/max*85)}`).join(' ') + ` ${100},100`"
-                                            fill="rgba(254,154,0,0.12)" />
-                                    </template>
+                                    {{-- Gross fill — x-show works on SVG elements, x-if does not --}}
+                                    <polygon x-show="gross.length > 1"
+                                        :points="'0,100 ' + gross.map((v,i) => `${i*(100/(gross.length-1))},${100-(v/max*85)}`).join(' ') + ` 100,100`"
+                                        fill="rgba(254,154,0,0.12)" />
                                     {{-- Gross line --}}
-                                    <template x-if="gross.length > 1">
-                                        <polyline
-                                            :points="gross.map((v,i) => `${i*(100/(gross.length-1))},${100-(v/max*85)}`).join(' ')"
-                                            fill="none" stroke="#fe9a00" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" />
-                                    </template>
+                                    <polyline x-show="gross.length > 1"
+                                        :points="gross.map((v,i) => `${i*(100/(gross.length-1))},${100-(v/max*85)}`).join(' ')"
+                                        fill="none" stroke="#fe9a00" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" />
                                     {{-- Net line --}}
-                                    <template x-if="net.length > 1">
-                                        <polyline
-                                            :points="net.map((v,i) => `${i*(100/(net.length-1))},${100-(v/max*85)}`).join(' ')"
-                                            fill="none" stroke="#10b981" stroke-width="1.5" stroke-dasharray="2 1" stroke-linejoin="round" stroke-linecap="round" />
-                                    </template>
-                                    {{-- Data points --}}
-                                    <template x-for="(v,i) in gross" :key="i">
-                                        <circle
-                                            :cx="i*(100/(gross.length-1))" :cy="100-(v/max*85)"
-                                            r="1.5" fill="#fe9a00" />
-                                    </template>
+                                    <polyline x-show="net.length > 1"
+                                        :points="net.map((v,i) => `${i*(100/(net.length-1))},${100-(v/max*85)}`).join(' ')"
+                                        fill="none" stroke="#10b981" stroke-width="1.5" stroke-dasharray="2 1" stroke-linejoin="round" stroke-linecap="round" />
+                                    {{-- Data points (Blade loop — SVG circles inside template x-for lose namespace) --}}
+                                    @php $n = count($trendGross); @endphp
+                                    @foreach($trendGross as $idx => $val)
+                                        @php
+                                            $cx = $n > 1 ? round($idx * (100 / ($n - 1)), 2) : 50;
+                                            $cy = $maxVal > 0 ? round(100 - ($val / $maxVal * 85), 2) : 100;
+                                        @endphp
+                                        <circle cx="{{ $cx }}" cy="{{ $cy }}" r="2" fill="#fe9a00" />
+                                    @endforeach
+                                    @foreach($trendNet as $idx => $val)
+                                        @php
+                                            $cx = $n > 1 ? round($idx * (100 / ($n - 1)), 2) : 50;
+                                            $cy = $maxVal > 0 ? round(100 - ($val / $maxVal * 85), 2) : 100;
+                                        @endphp
+                                        <circle cx="{{ $cx }}" cy="{{ $cy }}" r="1.5" fill="#10b981" />
+                                    @endforeach
                                 </svg>
                             </div>
                         </div>
