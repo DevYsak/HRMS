@@ -3,7 +3,9 @@
 namespace App\Livewire\Payroll;
 
 use App\Models\Payslip;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Mail;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -17,7 +19,19 @@ class MyPayslips extends Component
 
     public bool $showSalaryBreakup = false;
 
+    public bool $showShareModal = false;
+
+    public ?int $sharePayslipId = null;
+
+    public string $shareUrl = '';
+
+    public bool $emailingSending = false;
+
+    public ?int $emailingId = null;
+
     public string $filterYear = '';
+
+    // ── View payslip detail modal ─────────────────────────────────────────────
 
     public function viewDetails(int $id): void
     {
@@ -33,10 +47,82 @@ class MyPayslips extends Component
         $this->selectedSlip = null;
     }
 
+    // ── Salary Structure breakup modal ────────────────────────────────────────
+
     public function openSalaryBreakup(): void
     {
         $this->showSalaryBreakup = true;
     }
+
+    public function closeSalaryBreakup(): void
+    {
+        $this->showSalaryBreakup = false;
+    }
+
+    // ── Share payslip (copy link) ─────────────────────────────────────────────
+
+    public function sharePayslip(int $id): void
+    {
+        $this->sharePayslipId = $id;
+        $this->shareUrl = route('payroll.payslips.download', $id);
+        $this->showShareModal = true;
+    }
+
+    public function closeShareModal(): void
+    {
+        $this->showShareModal = false;
+        $this->sharePayslipId = null;
+        $this->shareUrl = '';
+    }
+
+    // ── Email payslip to employee ─────────────────────────────────────────────
+
+    public function emailPayslip(int $id): void
+    {
+        $employee = Auth::user()->employee;
+        abort_unless($employee, 403);
+
+        $slip = Payslip::with(['payroll', 'items', 'employee.user'])
+            ->where('employee_id', $employee->id)
+            ->findOrFail($id);
+
+        $email = $slip->employee->user?->email;
+        if (! $email) {
+            \Flux::toast('No email address found for this employee.', variant: 'danger');
+
+            return;
+        }
+
+        try {
+            $this->emailingId = $id;
+
+            $payslip = $slip;
+            $pdf = Pdf::loadView('pdf.payslip', compact('payslip'))
+                ->setPaper('a4', 'portrait');
+
+            $month = $slip->payroll->month.' '.$slip->payroll->year;
+
+            Mail::send([], [], function ($message) use ($email, $pdf, $month, $slip) {
+                $message->to($email)
+                    ->subject("Your Payslip for {$month}")
+                    ->setBody(
+                        "<p>Dear {$slip->employee->user->name},</p>".
+                        "<p>Please find attached your salary slip for <strong>{$month}</strong>.</p>".
+                        '<p>If you have any questions, please contact HR.</p><br><p>Regards,<br>HR Team</p>',
+                        'text/html'
+                    )
+                    ->attachData($pdf->output(), "payslip_{$month}.pdf", ['mime' => 'application/pdf']);
+            });
+
+            \Flux::toast("Payslip emailed to {$email}.", variant: 'success');
+        } catch (\Throwable $e) {
+            \Flux::toast('Failed to send email: '.$e->getMessage(), variant: 'danger');
+        } finally {
+            $this->emailingId = null;
+        }
+    }
+
+    // ── Render ────────────────────────────────────────────────────────────────
 
     public function render()
     {
@@ -76,7 +162,7 @@ class MyPayslips extends Component
 
         $latestPayslip = $allPayslips->first();
 
-        // Last 6 months trend (oldest → newest for chart)
+        // Trend data
         $trendSlips = $allPayslips->take(6)->reverse()->values();
         $trendLabels = $trendSlips->map(fn ($s) => substr($s->payroll->month ?? '', 0, 3).' '.($s->payroll->year ?? ''))->toArray();
         $trendGross = $trendSlips->map(fn ($s) => (float) $s->gross_salary)->toArray();
@@ -89,7 +175,7 @@ class MyPayslips extends Component
         $monthlyNet = (float) ($latestPayslip?->net_salary ?? $monthlyGross - $monthlyDeductions);
         $ctc = round($monthlyGross * 12, 2);
 
-        // Salary revision history from payslip gross changes
+        // Salary revision history
         $salaryRevisions = [];
         $prev = null;
         foreach ($allPayslips->reverse() as $slip) {

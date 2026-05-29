@@ -219,19 +219,39 @@
                                             <span class="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400">DRAFT</span>
                                         @endif
                                     </td>
-                                    <td class="py-3.5 pr-6 text-right">
+                                    <td class="py-3.5 pr-6 text-right" wire:key="actions-{{ $slip->id }}">
                                         <div class="flex items-center justify-end gap-1">
+                                            {{-- View --}}
                                             <button type="button" wire:click="viewDetails({{ $slip->id }})"
-                                                class="p-1.5 text-zinc-400 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-900/20 rounded-lg transition-colors" title="View">
+                                                title="View Payslip"
+                                                class="cursor-pointer p-1.5 text-zinc-400 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-900/20 rounded-lg transition-colors">
                                                 <flux:icon.eye class="size-4" />
                                             </button>
+                                            {{-- Download --}}
                                             <a href="{{ route('payroll.payslips.download', $slip->id) }}" target="_blank"
-                                                class="p-1.5 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded-lg transition-colors" title="Download PDF">
+                                                title="Download PDF"
+                                                class="cursor-pointer p-1.5 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded-lg transition-colors">
                                                 <flux:icon.arrow-down-tray class="size-4" />
                                             </a>
+                                            {{-- Share --}}
+                                            <button type="button" wire:click="sharePayslip({{ $slip->id }})"
+                                                title="Share Payslip Link"
+                                                class="cursor-pointer p-1.5 text-zinc-400 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-900/20 rounded-lg transition-colors">
+                                                <flux:icon.share class="size-4" />
+                                            </button>
+                                            {{-- Email --}}
                                             <button type="button"
-                                                class="p-1.5 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded-lg transition-colors" title="Share">
-                                                <flux:icon.envelope class="size-4" />
+                                                wire:click="emailPayslip({{ $slip->id }})"
+                                                wire:loading.attr="disabled"
+                                                wire:target="emailPayslip({{ $slip->id }})"
+                                                title="Email Payslip"
+                                                class="cursor-pointer p-1.5 text-zinc-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg transition-colors disabled:opacity-50">
+                                                <span wire:loading.remove wire:target="emailPayslip({{ $slip->id }})">
+                                                    <flux:icon.envelope class="size-4" />
+                                                </span>
+                                                <span wire:loading wire:target="emailPayslip({{ $slip->id }})">
+                                                    <flux:icon.arrow-path class="size-4 animate-spin" />
+                                                </span>
                                             </button>
                                         </div>
                                     </td>
@@ -357,18 +377,29 @@
                                     <flux:icon.arrow-down-tray class="size-5 text-brand-600" />
                                     <span class="text-[10px] font-semibold text-brand-700 dark:text-brand-400 text-center leading-tight">Download PDF</span>
                                 </a>
-                                <button type="button" onclick="window.print()"
-                                    class="flex flex-col items-center gap-1.5 p-2.5 bg-zinc-50 dark:bg-zinc-800 rounded-xl hover:bg-zinc-100 transition-colors">
-                                    <flux:icon.printer class="size-5 text-zinc-600" />
-                                    <span class="text-[10px] font-semibold text-zinc-600 text-center leading-tight">Print Payslip</span>
+                                <button type="button"
+                                    wire:click="emailPayslip({{ $latestPayslip->id }})"
+                                    wire:loading.attr="disabled" wire:target="emailPayslip({{ $latestPayslip->id }})"
+                                    title="Email payslip to your inbox"
+                                    class="cursor-pointer flex flex-col items-center gap-1.5 p-2.5 bg-zinc-50 dark:bg-zinc-800 rounded-xl hover:bg-emerald-50 hover:text-emerald-600 transition-colors disabled:opacity-50">
+                                    <span wire:loading.remove wire:target="emailPayslip({{ $latestPayslip->id }})">
+                                        <flux:icon.envelope class="size-5 text-zinc-600" />
+                                    </span>
+                                    <span wire:loading wire:target="emailPayslip({{ $latestPayslip->id }})">
+                                        <flux:icon.arrow-path class="size-5 text-emerald-500 animate-spin" />
+                                    </span>
+                                    <span class="text-[10px] font-semibold text-zinc-600 text-center leading-tight">Email Payslip</span>
                                 </button>
                                 <button type="button"
-                                    class="flex flex-col items-center gap-1.5 p-2.5 bg-zinc-50 dark:bg-zinc-800 rounded-xl hover:bg-zinc-100 transition-colors">
+                                    wire:click="sharePayslip({{ $latestPayslip->id }})"
+                                    title="Copy shareable link"
+                                    class="cursor-pointer flex flex-col items-center gap-1.5 p-2.5 bg-zinc-50 dark:bg-zinc-800 rounded-xl hover:bg-violet-50 transition-colors">
                                     <flux:icon.share class="size-5 text-zinc-600" />
                                     <span class="text-[10px] font-semibold text-zinc-600 text-center leading-tight">Share PDF</span>
                                 </button>
                                 <button type="button" wire:click="openSalaryBreakup"
-                                    class="flex flex-col items-center gap-1.5 p-2.5 bg-zinc-50 dark:bg-zinc-800 rounded-xl hover:bg-zinc-100 transition-colors">
+                                    title="View salary structure breakdown"
+                                    class="cursor-pointer flex flex-col items-center gap-1.5 p-2.5 bg-zinc-50 dark:bg-zinc-800 rounded-xl hover:bg-brand-50 transition-colors">
                                     <flux:icon.chart-pie class="size-5 text-zinc-600" />
                                     <span class="text-[10px] font-semibold text-zinc-600 text-center leading-tight">Salary Structure</span>
                                 </button>
@@ -416,6 +447,121 @@
         </div>
 
     </div>
+
+    {{-- ── Salary Structure Modal ─────────────────────────────────────────────── --}}
+    @if($showSalaryBreakup)
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4"
+             x-data x-on:keydown.escape.window="$wire.closeSalaryBreakup()">
+            <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" wire:click="closeSalaryBreakup"></div>
+            <div class="relative w-full max-w-md bg-white dark:bg-zinc-800 rounded-2xl shadow-xl ring ring-black/5 dark:ring-zinc-700 p-6 space-y-5 max-h-[90vh] overflow-y-auto">
+                <button type="button" wire:click="closeSalaryBreakup"
+                    class="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors">
+                    <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+                <div>
+                    <h2 class="text-lg font-bold text-zinc-900 dark:text-white">Salary Structure</h2>
+                    <p class="text-sm text-zinc-500 mt-0.5">Your current salary components breakdown</p>
+                </div>
+                {{-- Earnings --}}
+                @php
+                    $struEarnings   = $salaryComponents->filter(fn($s) => ($s->component?->type ?? '') === 'earning');
+                    $struDeductions = $salaryComponents->filter(fn($s) => ($s->component?->type ?? '') === 'deduction');
+                @endphp
+                @if($struEarnings->isNotEmpty())
+                    <div>
+                        <div class="text-xs font-bold text-emerald-600 uppercase tracking-wide mb-2">Earnings</div>
+                        <div class="space-y-2 rounded-xl bg-zinc-50 dark:bg-zinc-900 p-3">
+                            @foreach($struEarnings as $s)
+                                <div class="flex items-center justify-between">
+                                    <span class="text-sm text-zinc-600 dark:text-zinc-400">{{ $s->component?->name ?? 'Component' }}</span>
+                                    <span class="text-sm font-bold text-zinc-800 dark:text-zinc-200">₹{{ number_format($s->amount, 2) }}</span>
+                                </div>
+                            @endforeach
+                            <div class="border-t border-zinc-200 dark:border-zinc-700 pt-2 flex justify-between font-bold text-sm">
+                                <span class="text-emerald-700 dark:text-emerald-400">Total Earnings</span>
+                                <span class="text-emerald-700 dark:text-emerald-400">₹{{ number_format($struEarnings->sum('amount'), 2) }}</span>
+                            </div>
+                        </div>
+                    </div>
+                @endif
+                @if($struDeductions->isNotEmpty())
+                    <div>
+                        <div class="text-xs font-bold text-red-600 uppercase tracking-wide mb-2">Deductions</div>
+                        <div class="space-y-2 rounded-xl bg-zinc-50 dark:bg-zinc-900 p-3">
+                            @foreach($struDeductions as $s)
+                                <div class="flex items-center justify-between">
+                                    <span class="text-sm text-zinc-600 dark:text-zinc-400">{{ $s->component?->name ?? 'Component' }}</span>
+                                    <span class="text-sm font-bold text-red-600">- ₹{{ number_format($s->amount, 2) }}</span>
+                                </div>
+                            @endforeach
+                            <div class="border-t border-zinc-200 dark:border-zinc-700 pt-2 flex justify-between font-bold text-sm">
+                                <span class="text-red-600">Total Deductions</span>
+                                <span class="text-red-600">- ₹{{ number_format($struDeductions->sum('amount'), 2) }}</span>
+                            </div>
+                        </div>
+                    </div>
+                @endif
+                <div class="rounded-xl bg-brand-50 dark:bg-brand-900/20 p-4 flex items-center justify-between">
+                    <span class="text-sm font-bold text-brand-700 dark:text-brand-400">Net Monthly Take-Home</span>
+                    <span class="text-xl font-black text-brand-700 dark:text-brand-400">₹{{ number_format($monthlyNet, 2) }}</span>
+                </div>
+                <div class="flex justify-end">
+                    <button type="button" wire:click="closeSalaryBreakup"
+                        class="px-4 py-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-600 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    @endif
+
+    {{-- ── Share Payslip Modal ──────────────────────────────────────────────── --}}
+    @if($showShareModal)
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4"
+             x-data x-on:keydown.escape.window="$wire.closeShareModal()">
+            <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" wire:click="closeShareModal"></div>
+            <div class="relative w-full max-w-sm bg-white dark:bg-zinc-800 rounded-2xl shadow-xl ring ring-black/5 dark:ring-zinc-700 p-6 space-y-4">
+                <button type="button" wire:click="closeShareModal"
+                    class="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors">
+                    <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+                <div>
+                    <h2 class="text-base font-bold text-zinc-900 dark:text-white">Share Payslip</h2>
+                    <p class="text-sm text-zinc-500 mt-0.5">Copy the link to share or download your payslip.</p>
+                </div>
+                <div x-data="{ copied: false }">
+                    <div class="flex gap-2">
+                        <input type="text" readonly value="{{ $shareUrl }}"
+                            class="flex-1 h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 text-xs text-zinc-600 dark:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-brand-400/30"
+                            id="share-url-input" />
+                        <button type="button"
+                            @click="
+                                navigator.clipboard.writeText('{{ $shareUrl }}').then(() => {
+                                    copied = true;
+                                    setTimeout(() => copied = false, 2000);
+                                });
+                            "
+                            class="h-9 px-3 text-xs font-bold text-white rounded-xl transition-colors"
+                            :class="copied ? 'bg-emerald-600' : 'bg-brand-600 hover:bg-brand-700'">
+                            <span x-show="!copied">Copy</span>
+                            <span x-show="copied">Copied!</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="flex gap-2 pt-1">
+                    <a href="{{ $shareUrl }}" target="_blank"
+                        class="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-bold text-white bg-brand-600 hover:bg-brand-700 rounded-xl transition-colors">
+                        <flux:icon.arrow-down-tray class="size-4" />
+                        Open PDF
+                    </a>
+                    <button type="button" wire:click="closeShareModal"
+                        class="px-4 py-2.5 text-sm font-semibold text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-600 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    @endif
 
     {{-- ── Payslip Detail Modal ──────────────────────────────────────────────── --}}
     @if($showModal && $selectedSlip)
