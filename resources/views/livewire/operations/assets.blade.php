@@ -76,9 +76,9 @@
         @if($showCreateModal)
         <div class="fixed inset-0 z-50 flex items-center justify-center p-4"
              x-data x-on:keydown.escape.window="$wire.set('showCreateModal', false)">
-            <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" wire:click="$set('showCreateModal', false)"></div>
+            <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="$wire.set('showCreateModal', false)"></div>
             <div class="relative w-full max-w-xl bg-white dark:bg-zinc-800 rounded-2xl shadow-xl ring ring-black/5 dark:ring-zinc-700 p-6 max-h-[90vh] overflow-y-auto">
-                <button type="button" wire:click="$set('showCreateModal', false)"
+                <button type="button" @click="$wire.set('showCreateModal', false)"
                     class="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors">
                     <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                 </button>
@@ -101,9 +101,9 @@
         @if($showAssignModal)
         <div class="fixed inset-0 z-50 flex items-center justify-center p-4"
              x-data x-on:keydown.escape.window="$wire.set('showAssignModal', false)">
-            <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" wire:click="$set('showAssignModal', false)"></div>
+            <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="$wire.set('showAssignModal', false)"></div>
             <div class="relative w-full max-w-xl bg-white dark:bg-zinc-800 rounded-2xl shadow-xl ring ring-black/5 dark:ring-zinc-700 p-6 max-h-[90vh] overflow-y-auto">
-                <button type="button" wire:click="$set('showAssignModal', false)"
+                <button type="button" @click="$wire.set('showAssignModal', false)"
                     class="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors">
                     <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                 </button>
@@ -129,9 +129,9 @@
         @if($showReturnModal)
         <div class="fixed inset-0 z-50 flex items-center justify-center p-4"
              x-data x-on:keydown.escape.window="$wire.set('showReturnModal', false)">
-            <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" wire:click="$set('showReturnModal', false)"></div>
+            <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="$wire.set('showReturnModal', false)"></div>
             <div class="relative w-full max-w-xl bg-white dark:bg-zinc-800 rounded-2xl shadow-xl ring ring-black/5 dark:ring-zinc-700 p-6 max-h-[90vh] overflow-y-auto">
-                <button type="button" wire:click="$set('showReturnModal', false)"
+                <button type="button" @click="$wire.set('showReturnModal', false)"
                     class="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors">
                     <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                 </button>
