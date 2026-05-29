@@ -17,6 +17,8 @@ class MyPayslips extends Component
 
     public bool $showSalaryBreakup = false;
 
+    public string $filterYear = '';
+
     public function viewDetails(int $id): void
     {
         $this->selectedSlip = Payslip::with(['payroll', 'items', 'employee.user', 'employee.jobTitle', 'employee.department'])
@@ -62,6 +64,7 @@ class MyPayslips extends Component
         $payslips = Payslip::where('employee_id', $employee->id)
             ->whereIn('status', ['paid', 'draft'])
             ->with(['payroll', 'items'])
+            ->when($this->filterYear, fn ($q) => $q->whereHas('payroll', fn ($q2) => $q2->where('year', $this->filterYear)))
             ->orderByDesc('id')
             ->paginate(5);
 

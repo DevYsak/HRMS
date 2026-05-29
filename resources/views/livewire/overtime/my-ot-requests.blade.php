@@ -155,7 +155,16 @@
     </div>
 
     {{-- Request OT Modal --}}
-    <flux:modal wire:model.self="showModal" class="w-full max-w-lg">
+    @if($showModal)
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4"
+             x-data x-on:keydown.escape.window="$wire.set('showModal', false)">
+            <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" wire:click="$set('showModal', false)"></div>
+            <div class="relative w-full max-w-lg bg-white dark:bg-zinc-800 rounded-2xl shadow-xl ring ring-black/5 dark:ring-zinc-700 p-6 max-h-[90vh] overflow-y-auto">
+                <button type="button" wire:click="$set('showModal', false)"
+                    class="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors">
+                    <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+
         <div class="space-y-6">
             <div>
                 <flux:heading size="lg">Request Overtime</flux:heading>
@@ -183,9 +192,7 @@
                 </div>
 
                 <div class="flex justify-end gap-3 pt-4">
-                    <flux:modal.close>
-                        <flux:button variant="ghost">Cancel</flux:button>
-                    </flux:modal.close>
+                    <button type="button" wire:click="$set('showModal\', false)" class="px-4 py-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-600 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors">Cancel</button>
                     <flux:button type="submit" variant="primary" wire:loading.attr="disabled">
                         <span wire:loading.remove>Submit Request</span>
                         <span wire:loading>Submitting...</span>
@@ -193,5 +200,8 @@
                 </div>
             </form>
         </div>
-    </flux:modal>
+    
+            </div>
+        </div>
+    @endif
 </flux:main>

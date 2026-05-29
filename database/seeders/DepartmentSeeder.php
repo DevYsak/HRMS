@@ -17,8 +17,12 @@ class DepartmentSeeder extends Seeder
 
         $departments = [
             ['code' => 'ADMIN', 'name' => 'Admin'],
-            ['code' => 'HR',    'name' => 'Human Resources'],
+            ['code' => 'HR',    'name' => 'HR'],
             ['code' => 'PRD',   'name' => 'Production'],
+            ['code' => 'LOG',   'name' => 'Logistics'],
+            ['code' => 'MKT',   'name' => 'Marketing'],
+            ['code' => 'IT',    'name' => 'IT'],
+            ['code' => 'FIN',   'name' => 'Finance'],
         ];
 
         foreach ($departments as $dept) {

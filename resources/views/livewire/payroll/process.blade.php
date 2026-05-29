@@ -181,11 +181,20 @@
                     </flux:select>
                 </div>
 
-                {{-- Period display --}}
+                {{-- Month --}}
                 <div class="min-w-36">
                     <flux:select wire:model.live="month" size="sm">
                         @foreach(['January','February','March','April','May','June','July','August','September','October','November','December'] as $m)
-                            <option value="{{ $m }}">{{ $m }} {{ $year }}</option>
+                            <option value="{{ $m }}">{{ $m }}</option>
+                        @endforeach
+                    </flux:select>
+                </div>
+
+                {{-- Year --}}
+                <div class="min-w-28">
+                    <flux:select wire:model.live="year" size="sm">
+                        @foreach(range(now()->year, now()->year - 3) as $y)
+                            <option value="{{ $y }}">{{ $y }}</option>
                         @endforeach
                     </flux:select>
                 </div>

@@ -9,6 +9,8 @@ use Livewire\Component;
 
 class Overview extends Component
 {
+    public string $filterYear = '';
+
     public function render()
     {
         abort_unless(Auth::user()->canRunPayroll(), 403);
@@ -16,7 +18,11 @@ class Overview extends Component
         $now = Carbon::now();
         $lastMonth = $now->copy()->subMonth();
 
-        $recentPayrolls = Payroll::latest('created_at')->take(10)->get();
+        $recentPayrolls = Payroll::query()
+            ->when($this->filterYear, fn ($q) => $q->where('year', $this->filterYear))
+            ->latest('created_at')
+            ->take(10)
+            ->get();
 
         $thisMonthPayout = Payroll::where('month', $now->format('F'))
             ->where('year', $now->year)

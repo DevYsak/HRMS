@@ -127,7 +127,16 @@
     </div>
 
     {{-- Review Modal --}}
-    <flux:modal wire:model.self="showReviewModal" class="w-full max-w-md">
+    @if($showReviewModal)
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4"
+             x-data x-on:keydown.escape.window="$wire.set('showReviewModal', false)">
+            <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" wire:click="$set('showReviewModal', false)"></div>
+            <div class="relative w-full max-w-md bg-white dark:bg-zinc-800 rounded-2xl shadow-xl ring ring-black/5 dark:ring-zinc-700 p-6 max-h-[90vh] overflow-y-auto">
+                <button type="button" wire:click="$set('showReviewModal', false)"
+                    class="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors">
+                    <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+
         <div class="space-y-6">
             <div>
                 <flux:heading size="lg">Review Regularisation Request</flux:heading>
@@ -157,13 +166,14 @@
                 <flux:textarea wire:model="reviewComment" label="Manager Comment (Required for Rejection)" rows="2" />
 
                 <div class="flex gap-2 justify-end pt-4">
-                    <flux:modal.close>
-                        <flux:button variant="ghost">Cancel</flux:button>
-                    </flux:modal.close>
+                    <button type="button" wire:click="$set('showReviewModal\', false)" class="px-4 py-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-600 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors">Cancel</button>
                     <flux:button wire:click="rejectRegularisation" variant="ghost" class="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30">Reject</flux:button>
                     <flux:button wire:click="approveRegularisation" variant="primary">Approve</flux:button>
                 </div>
             @endif
         </div>
-    </flux:modal>
+    
+            </div>
+        </div>
+    @endif
 </flux:main>

@@ -29,6 +29,7 @@ class DatabaseSeeder extends Seeder
 
             // Optional demo data
             DemoEmployeeSeeder::class,
+            RunPayrollDemoSeeder::class,
         ]);
     }
 }

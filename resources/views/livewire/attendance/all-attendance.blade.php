@@ -378,7 +378,16 @@
     {{-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     REVIEW REGULARISATION MODAL
     â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• --}}
-    <flux:modal wire:model.self="showReviewModal" class="w-full max-w-md">
+    @if($showReviewModal)
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4"
+             x-data x-on:keydown.escape.window="$wire.set('showReviewModal', false)">
+            <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" wire:click="$set('showReviewModal', false)"></div>
+            <div class="relative w-full max-w-md bg-white dark:bg-zinc-800 rounded-2xl shadow-xl ring ring-black/5 dark:ring-zinc-700 p-6 max-h-[90vh] overflow-y-auto">
+                <button type="button" wire:click="$set('showReviewModal', false)"
+                    class="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors">
+                    <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+
         <div class="space-y-5">
             <div>
                 <flux:heading size="lg">Review Regularisation</flux:heading>
@@ -428,21 +437,31 @@
                     <p class="text-xs text-red-500">{{ $message }}</p>
                 @enderror
                 <div class="flex gap-2 justify-end pt-2 border-t border-zinc-100 dark:border-zinc-800">
-                    <flux:modal.close>
-                        <flux:button variant="ghost">Cancel</flux:button>
-                    </flux:modal.close>
+                    <button type="button" wire:click="$set('showReviewModal\', false)" class="px-4 py-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-600 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors">Cancel</button>
                     <flux:button wire:click="rejectRegularisation" variant="ghost" class="!text-red-600 hover:!bg-red-50">
                         Reject</flux:button>
                     <flux:button wire:click="approveRegularisation" variant="primary">Approve</flux:button>
                 </div>
             @endif
         </div>
-    </flux:modal>
+    
+            </div>
+        </div>
+    @endif
 
     {{-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     HR MARK ATTENDANCE MODAL
     â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• --}}
-    <flux:modal wire:model.self="showMarkModal" class="w-full max-w-lg">
+    @if($showMarkModal)
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4"
+             x-data x-on:keydown.escape.window="$wire.set('showMarkModal', false)">
+            <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" wire:click="$set('showMarkModal', false)"></div>
+            <div class="relative w-full max-w-lg bg-white dark:bg-zinc-800 rounded-2xl shadow-xl ring ring-black/5 dark:ring-zinc-700 p-6 max-h-[90vh] overflow-y-auto">
+                <button type="button" wire:click="$set('showMarkModal', false)"
+                    class="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors">
+                    <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+
         <div class="space-y-5">
             <div class="flex items-start gap-3">
                 <div class="shrink-0 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 p-2.5">
@@ -489,13 +508,14 @@
                     placeholder="e.g. Employee's biometric failed, system issue..." rows="2" required />
             </div>
             <div class="flex justify-end gap-3 pt-2">
-                <flux:modal.close>
-                    <flux:button variant="ghost">Cancel</flux:button>
-                </flux:modal.close>
+                <button type="button" wire:click="$set('showMarkModal\', false)" class="px-4 py-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-600 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors">Cancel</button>
                 <flux:button wire:click="submitMarkAttendance" variant="primary" icon="paper-airplane">Submit for
                     Approval</flux:button>
             </div>
         </div>
-    </flux:modal>
+    
+            </div>
+        </div>
+    @endif
 
 </flux:main>
