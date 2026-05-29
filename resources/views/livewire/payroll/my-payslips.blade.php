@@ -451,12 +451,12 @@
     {{-- ── Salary Structure Modal ─────────────────────────────────────────────── --}}
     @if($showSalaryBreakup)
         <div class="fixed inset-0 z-50 flex items-center justify-center p-4"
-             x-data x-on:keydown.escape.window="$wire.closeSalaryBreakup()">
-            <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" wire:click="closeSalaryBreakup"></div>
+             x-data x-on:keydown.escape.window="$wire.set('showSalaryBreakup', false)">
+            <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" wire:click="$set('showSalaryBreakup', false)"></div>
             <div class="relative w-full max-w-md bg-white dark:bg-zinc-800 rounded-2xl shadow-xl ring ring-black/5 dark:ring-zinc-700 p-6 space-y-5 max-h-[90vh] overflow-y-auto">
-                <button type="button" wire:click="closeSalaryBreakup"
+                <button type="button" wire:click="$set('showSalaryBreakup', false)"
                     class="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors">
-                    <flux:icon.x-mark class="size-5" />
+                    <flux:icon.x-mark class="size-5 pointer-events-none" />
                 </button>
                 <div>
                     <h2 class="text-lg font-bold text-zinc-900 dark:text-white">Salary Structure</h2>
@@ -506,7 +506,7 @@
                     <span class="text-xl font-black text-brand-700 dark:text-brand-400">₹{{ number_format($monthlyNet, 2) }}</span>
                 </div>
                 <div class="flex justify-end">
-                    <button type="button" wire:click="closeSalaryBreakup"
+                    <button type="button" wire:click="$set('showSalaryBreakup', false)"
                         class="px-4 py-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-600 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors">
                         Close
                     </button>
@@ -518,12 +518,12 @@
     {{-- ── Share Payslip Modal ──────────────────────────────────────────────── --}}
     @if($showShareModal)
         <div class="fixed inset-0 z-50 flex items-center justify-center p-4"
-             x-data x-on:keydown.escape.window="$wire.closeShareModal()">
-            <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" wire:click="closeShareModal"></div>
+             x-data x-on:keydown.escape.window="$wire.set('showShareModal', false)">
+            <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" wire:click="$set('showShareModal', false)"></div>
             <div class="relative w-full max-w-sm bg-white dark:bg-zinc-800 rounded-2xl shadow-xl ring ring-black/5 dark:ring-zinc-700 p-6 space-y-4">
-                <button type="button" wire:click="closeShareModal"
+                <button type="button" wire:click="$set('showShareModal', false)"
                     class="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors">
-                    <flux:icon.x-mark class="size-5" />
+                    <flux:icon.x-mark class="size-5 pointer-events-none" />
                 </button>
                 <div>
                     <h2 class="text-base font-bold text-zinc-900 dark:text-white">Share Payslip</h2>
@@ -554,7 +554,7 @@
                         <flux:icon.arrow-down-tray class="size-4" />
                         Open PDF
                     </a>
-                    <button type="button" wire:click="closeShareModal"
+                    <button type="button" wire:click="$set('showShareModal', false)"
                         class="px-4 py-2.5 text-sm font-semibold text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-600 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors">
                         Close
                     </button>
@@ -566,12 +566,12 @@
     {{-- ── Payslip Detail Modal ──────────────────────────────────────────────── --}}
     @if($showModal && $selectedSlip)
         <div class="fixed inset-0 z-50 flex items-center justify-center p-4"
-             x-data x-on:keydown.escape.window="$wire.closeModal()">
-            <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" wire:click="closeModal"></div>
+             x-data x-on:keydown.escape.window="$wire.set('showModal', false)">
+            <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" wire:click="$set('showModal', false)"></div>
             <div class="relative w-full max-w-lg bg-white dark:bg-zinc-800 rounded-2xl shadow-xl ring ring-black/5 dark:ring-zinc-700 p-6 space-y-5 max-h-[90vh] overflow-y-auto">
-                <button type="button" wire:click="closeModal"
+                <button type="button" wire:click="$set('showModal', false)"
                     class="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors">
-                    <flux:icon.x-mark class="size-5" />
+                    <flux:icon.x-mark class="size-5 pointer-events-none" />
                 </button>
                 <div>
                     <h2 class="text-lg font-bold text-zinc-900 dark:text-white">
@@ -610,7 +610,7 @@
                         <flux:icon.arrow-down-tray class="size-4" />
                         Download PDF
                     </a>
-                    <button type="button" wire:click="closeModal"
+                    <button type="button" wire:click="$set('showModal', false)"
                         class="px-4 py-2.5 text-sm font-semibold text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-600 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors">
                         Close
                     </button>
