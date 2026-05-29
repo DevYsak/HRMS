@@ -135,8 +135,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // All authenticated users may view their own payslips
         Route::get('/my-payslips', MyPayslips::class)->name('payslips');
         Route::get('/payslips/{payslip}/download', [PayslipController::class, 'download'])
-            ->name('payslips.download')
-            ->middleware('signed');
+            ->name('payslips.download');
 
         // Payroll administration — finance, HR Admin, Super Admin
         Route::middleware('role:run-payroll')->group(function () {
