@@ -5,47 +5,33 @@ namespace App\Livewire\Payroll;
 use App\Models\Payslip;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
+use Livewire\WithPagination;
 
 class MyPayslips extends Component
 {
+    use WithPagination;
+
     public $selectedSlip = null;
 
-    public $showModal = false;
+    public bool $showModal = false;
 
-    // Payslips sidebar / preview
-    public $selectedYear;
+    public bool $showSalaryBreakup = false;
 
-    public $selectedPayslipId = null;
-
-    // Salary breakup modal
-    public $showSalaryBreakup = false;
-
-    public function viewDetails($id)
+    public function viewDetails(int $id): void
     {
         $this->selectedSlip = Payslip::with(['payroll', 'items', 'employee.user', 'employee.jobTitle', 'employee.department'])
             ->where('employee_id', Auth::user()->employee->id)
             ->findOrFail($id);
-
         $this->showModal = true;
     }
 
-    public function selectPayslip($id)
+    public function closeModal(): void
     {
-        $this->selectedPayslipId = $id;
-        $this->selectedSlip = Payslip::with(['payroll', 'items', 'employee.user', 'employee.jobTitle', 'employee.department'])
-            ->where('employee_id', Auth::user()->employee->id)
-            ->find($id);
-    }
-
-    public function selectYear($year)
-    {
-        $this->selectedYear = $year;
-        // reset selected payslip when changing year
-        $this->selectedPayslipId = null;
+        $this->showModal = false;
         $this->selectedSlip = null;
     }
 
-    public function openSalaryBreakup()
+    public function openSalaryBreakup(): void
     {
         $this->showSalaryBreakup = true;
     }
@@ -54,75 +40,85 @@ class MyPayslips extends Component
     {
         $employee = Auth::user()->employee;
 
+        $empty = [
+            'payslips' => collect(),
+            'latestPayslip' => null,
+            'trendLabels' => [],
+            'trendGross' => [],
+            'trendNet' => [],
+            'salaryRevisions' => [],
+            'monthlyGross' => 0,
+            'monthlyNet' => 0,
+            'monthlyDeductions' => 0,
+            'ctc' => 0,
+            'payCycle' => null,
+            'salaryComponents' => collect(),
+        ];
+
         if (! $employee) {
-            return view('livewire.payroll.my-payslips', [
-                'payslips' => collect(),
-                'payslipsByYear' => collect(),
-                'years' => collect(),
-                'selectedYear' => now()->year,
-                'salaryComponents' => collect(),
-                'monthlyGross' => 0,
-                'ctc' => 0,
-                'payCycle' => null,
-                'timeline' => collect(),
-            ])->layout('layouts.app', ['title' => 'My Payslips']);
+            return view('livewire.payroll.my-payslips', $empty)->layout('layouts.app', ['title' => 'My Payslip']);
         }
 
         $payslips = Payslip::where('employee_id', $employee->id)
             ->whereIn('status', ['paid', 'draft'])
             ->with(['payroll', 'items'])
             ->orderByDesc('id')
+            ->paginate(5);
+
+        $allPayslips = Payslip::where('employee_id', $employee->id)
+            ->whereIn('status', ['paid', 'draft'])
+            ->with(['payroll', 'items'])
+            ->orderByDesc('id')
             ->get();
 
-        // group payslips by payroll year
-        $payslipsByYear = $payslips->groupBy(function ($p) {
-            return $p->payroll->year ?? now()->year;
-        })->map(fn ($g) => $g->sortByDesc(fn ($p) => $p->payroll->month ?? 0));
+        $latestPayslip = $allPayslips->first();
 
-        $years = $payslipsByYear->keys()->sortDesc()->values();
+        // Last 6 months trend (oldest → newest for chart)
+        $trendSlips = $allPayslips->take(6)->reverse()->values();
+        $trendLabels = $trendSlips->map(fn ($s) => substr($s->payroll->month ?? '', 0, 3).' '.($s->payroll->year ?? ''))->toArray();
+        $trendGross = $trendSlips->map(fn ($s) => (float) $s->gross_salary)->toArray();
+        $trendNet = $trendSlips->map(fn ($s) => (float) $s->net_salary)->toArray();
 
-        // salary components (monthly)
+        // Salary components
         $salaryComponents = $employee->salaries()->with('component')->get();
-        $monthlyGross = $salaryComponents->sum('amount');
+        $monthlyGross = (float) ($latestPayslip?->gross_salary ?? $salaryComponents->filter(fn ($s) => ($s->component?->type ?? '') === 'earning')->sum('amount'));
+        $monthlyDeductions = (float) ($latestPayslip?->total_deductions ?? $salaryComponents->filter(fn ($s) => ($s->component?->type ?? '') === 'deduction')->sum('amount'));
+        $monthlyNet = (float) ($latestPayslip?->net_salary ?? $monthlyGross - $monthlyDeductions);
         $ctc = round($monthlyGross * 12, 2);
 
-        // build a simple salary timeline from salary component created_at groups (best-effort)
-        $timeline = $salaryComponents->groupBy(fn ($s) => $s->created_at->toDateString())
-            ->map(function ($group, $date) {
-                $total = $group->sum('amount');
-                $basic = $group->filter(fn ($c) => str_contains(strtolower($c->component->name ?? ''), 'basic'))->sum('amount');
-                if ($basic <= 0) {
-                    $basic = $group->first()?->amount ?? 0;
-                }
-
-                return [
-                    'effective_from' => $date,
-                    'components' => $group->map(fn ($c) => [
-                        'name' => $c->component->name ?? 'Component',
-                        'amount' => $c->amount,
-                        'type' => $c->component->type ?? 'earning',
-                    ])->values(),
-                    'regular_salary' => round($basic, 2),
-                    'allowances' => round($total - $basic, 2),
-                    'total' => round($total, 2),
+        // Salary revision history from payslip gross changes
+        $salaryRevisions = [];
+        $prev = null;
+        foreach ($allPayslips->reverse() as $slip) {
+            $gross = (float) $slip->gross_salary;
+            if ($prev === null || abs($gross - $prev) > 100) {
+                $pct = $prev ? round((($gross - $prev) / $prev) * 100, 1) : 0;
+                $salaryRevisions[] = [
+                    'month' => ($slip->payroll->month ?? '').' '.($slip->payroll->year ?? ''),
+                    'gross' => $gross,
+                    'net' => (float) $slip->net_salary,
+                    'change' => $pct,
+                    'label' => $pct > 0 ? "{$pct}% Increment" : ($pct < 0 ? "{$pct}% Reduction" : 'Joining'),
+                    'color' => $pct > 0 ? 'emerald' : ($pct < 0 ? 'red' : 'blue'),
                 ];
-            })->sortByDesc('effective_from')->values();
-
-        // default selected year
-        if (! $this->selectedYear) {
-            $this->selectedYear = $years->first() ?? now()->year;
+                $prev = $gross;
+            }
         }
+        $salaryRevisions = array_reverse(array_slice($salaryRevisions, -4));
 
         return view('livewire.payroll.my-payslips', [
             'payslips' => $payslips,
-            'payslipsByYear' => $payslipsByYear,
-            'years' => $years,
-            'selectedYear' => $this->selectedYear,
-            'salaryComponents' => $salaryComponents,
+            'latestPayslip' => $latestPayslip,
+            'trendLabels' => $trendLabels,
+            'trendGross' => $trendGross,
+            'trendNet' => $trendNet,
+            'salaryRevisions' => $salaryRevisions,
             'monthlyGross' => $monthlyGross,
+            'monthlyNet' => $monthlyNet,
+            'monthlyDeductions' => $monthlyDeductions,
             'ctc' => $ctc,
             'payCycle' => $employee->salary_cycle ?? null,
-            'timeline' => $timeline,
-        ])->layout('layouts.app', ['title' => 'My Payslips']);
+            'salaryComponents' => $salaryComponents,
+        ])->layout('layouts.app', ['title' => 'My Payslip']);
     }
 }
