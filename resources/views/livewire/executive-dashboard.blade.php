@@ -4,7 +4,7 @@
         $hour = now()->hour;
         $greeting = $hour < 12 ? 'Good Morning' : ($hour < 17 ? 'Good Afternoon' : 'Good Evening');
         $firstName = \Illuminate\Support\Str::of(auth()->user()->name)->explode(' ')->first();
-        $timeContext = $hour < 12 ? 'Here's your company at a glance.' : ($hour < 17 ? 'Afternoon executive overview.' : 'End of day — company snapshot.');
+        $timeContext = $hour < 12 ? "Here's your company at a glance." : ($hour < 17 ? 'Afternoon executive overview.' : 'End of day — company snapshot.');
     @endphp
     {{-- ── HEADER ── --}}
     <div class="pulse-hero">
