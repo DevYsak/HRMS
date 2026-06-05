@@ -8,6 +8,11 @@ use App\Models\ShiftSetting;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 
+/**
+ * Creates Employee records for the core system users (admins only).
+ * Real employees are imported via BiometricEmployeeMasterSeeder or
+ * the `biometric:sync-employees` command.
+ */
 class EmployeeSeeder extends Seeder
 {
     public function run(): void
@@ -15,37 +20,29 @@ class EmployeeSeeder extends Seeder
         $itShift = ShiftSetting::where('name', 'IT Shift')->first();
         $ukShift = ShiftSetting::where('name', 'UK Sales Shift')->first();
 
-        // email → [dept code, shift]
-        // Includes both new spec emails and legacy fallback emails.
+        // Only core admin/system accounts get employee records here.
+        // No demo users. No legacy fallback emails.
         $mappings = [
-            // New spec users (UserSeeder v2)
-            'mazhar@conexus-ns.com' => ['code' => 'ADMIN', 'shift' => $itShift],
-            'shivani@conexus-ns.com' => ['code' => 'HR',    'shift' => $itShift],
-            'rustom@conexus-ns.com' => ['code' => 'PRD',   'shift' => $itShift],
-            'nick@conexus-ns.com' => ['code' => 'PRD',   'shift' => $ukShift],
-            'nikia@conexus-ns.com' => ['code' => 'PRD',   'shift' => $ukShift],
-            'emad@conexus-ns.com' => ['code' => 'ADMIN', 'shift' => $itShift],
-            'employee@conexus-ns.com' => ['code' => 'PRD',   'shift' => $itShift],
-
-            // Legacy emails (UserSeeder v1 — backward compat with existing DBs)
-            'admin@conexus-ns.com' => ['code' => 'ADMIN', 'shift' => $itShift],
-            'pristia@conexus-ns.com' => ['code' => 'HR',    'shift' => $itShift],
-            'rayna@conexus-ns.com' => ['code' => 'PRD',   'shift' => $itShift],
-            'test@example.com' => ['code' => 'PRD',   'shift' => $itShift],
+            'mazhar@conexus-ns.com' => ['dept' => 'ADMIN', 'shift' => $itShift],
+            'shivani@conexus-ns.com' => ['dept' => 'HR',    'shift' => $itShift],
+            'rustom@conexus-ns.com' => ['dept' => 'PRD',   'shift' => $itShift],
+            'nick@conexus-ns.com' => ['dept' => 'PRD',   'shift' => $ukShift],
+            'nikita@conexus-ns.com' => ['dept' => 'PRD',   'shift' => $ukShift],
+            'emad@conexus-ns.com' => ['dept' => 'ADMIN', 'shift' => $itShift],
         ];
 
         foreach ($mappings as $email => $data) {
             $user = User::where('email', $email)->first();
+
             if (! $user) {
                 continue;
             }
 
-            $dept = Department::where('code', $data['code'])->first();
+            $dept = Department::where('code', $data['dept'])->first();
 
             $existing = Employee::where('user_id', $user->id)->first();
 
             if ($existing) {
-                // Only update non-conflicting fields — never touch employee_id on existing records
                 $existing->update([
                     'department_id' => $dept?->id,
                     'shift_id' => $data['shift']?->id,
@@ -53,10 +50,9 @@ class EmployeeSeeder extends Seeder
                     'status' => 'active',
                 ]);
             } else {
-                // New employee — generate unique ID from user ID
                 Employee::create([
                     'user_id' => $user->id,
-                    'employee_id' => 'EMP-'.str_pad($user->id, 4, '0', STR_PAD_LEFT),
+                    'employee_id' => 'EMP-'.str_pad((string) $user->id, 4, '0', STR_PAD_LEFT),
                     'department_id' => $dept?->id,
                     'shift_id' => $data['shift']?->id,
                     'joining_date' => now()->subYear(),

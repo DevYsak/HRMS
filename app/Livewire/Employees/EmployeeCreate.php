@@ -3,20 +3,22 @@
 namespace App\Livewire\Employees;
 
 use App\Enums\EmployeeStatus;
-use App\Enums\EmploymentType;
 use App\Enums\UserRole;
 use App\Mail\WelcomeEmployeeMail;
 use App\Models\Department;
 use App\Models\Employee;
+use App\Models\EmploymentType;
 use App\Models\JobTitle;
 use App\Models\LeaveBalance;
 use App\Models\LeaveType;
 use App\Models\Office;
+use App\Models\ProbationSetting;
+use App\Models\SalaryCycle;
 use App\Models\ShiftSetting;
 use App\Models\User;
+use App\Models\WorkMode;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
-use Illuminate\Validation\Rule;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 
@@ -38,6 +40,8 @@ class EmployeeCreate extends Component
 
     // ── Personal profile (§3.1) ──────────────────────────
     public string $employee_id = '';
+
+    public string $employee_code = '';
 
     public string $phone = '';
 
@@ -62,24 +66,67 @@ class EmployeeCreate extends Component
 
     public string $shift_id = '';
 
-    public string $salary_cycle = 'A';
+    public string $employment_type_id = '';
+
+    public string $work_mode_id = '';
+
+    public string $salary_cycle_id = '';
 
     public string $joining_date = '';
 
     public string $probation_end_date = '';
 
-    public string $status = 'active';
-
-    public string $employment_type = 'full-time';
+    public string $status = 'onboarding';
 
     public function mount(): void
     {
         $this->authorize('create', Employee::class);
         $this->joining_date = now()->format('Y-m-d');
-        $this->probation_end_date = now()->addMonths(3)->format('Y-m-d');
 
         $lastId = Employee::max('id') ?? 0;
         $this->employee_id = 'CNX-'.str_pad($lastId + 1, 4, '0', STR_PAD_LEFT);
+
+        // Pre-select defaults
+        $defaultCycle = SalaryCycle::where('is_default', true)->where('is_active', true)->first()
+            ?? SalaryCycle::where('is_active', true)->first();
+        $this->salary_cycle_id = (string) ($defaultCycle?->id ?? '');
+
+        $defaultType = EmploymentType::where('slug', 'full-time')->where('is_active', true)->first()
+            ?? EmploymentType::where('is_active', true)->first();
+        $this->employment_type_id = (string) ($defaultType?->id ?? '');
+
+        $this->recalculateProbation();
+    }
+
+    public function updatedJoiningDate(): void
+    {
+        $this->recalculateProbation();
+    }
+
+    public function updatedEmploymentTypeId(): void
+    {
+        $this->recalculateProbation();
+    }
+
+    private function recalculateProbation(): void
+    {
+        if (! $this->joining_date) {
+            return;
+        }
+
+        $typeId = $this->employment_type_id ?: null;
+
+        $setting = ProbationSetting::when($typeId, fn ($q) => $q->where('employment_type_id', $typeId))
+            ->where('is_active', true)
+            ->when($typeId, fn ($q) => $q, fn ($q) => $q->whereNull('employment_type_id'))
+            ->first()
+            ?? ProbationSetting::whereNull('employment_type_id')->where('is_active', true)->first();
+
+        $days = $setting?->probation_days
+            ?? EmploymentType::find($typeId)?->probation_days
+            ?? 90;
+
+        $this->probation_end_date = now()->parse($this->joining_date)->addDays($days)->format('Y-m-d');
     }
 
     // Leave allocations keyed by leave_type_id (editable during creation)
@@ -94,6 +141,7 @@ class EmployeeCreate extends Component
             'email' => ['required', 'email', 'unique:users,email'],
             'role' => ['required', 'string'],
             'employee_id' => ['required', 'string', 'unique:employees,employee_id'],
+            'employee_code' => ['nullable', 'integer', 'min:1', 'max:65535', 'unique:employees,employee_code'],
             'phone' => ['nullable', 'string', 'max:30'],
             'date_of_birth' => ['nullable', 'date', 'before:today'],
             'gender' => ['nullable', 'string', 'in:male,female,other,prefer_not_to_say'],
@@ -103,9 +151,10 @@ class EmployeeCreate extends Component
             'joining_date' => ['required', 'date'],
             'probation_end_date' => ['nullable', 'date', 'after:joining_date'],
             'shift_id' => ['nullable', 'exists:shift_settings,id'],
-            'salary_cycle' => ['required', 'in:A,B'],
+            'employment_type_id' => ['nullable', 'exists:employment_types,id'],
+            'work_mode_id' => ['nullable', 'exists:work_modes,id'],
+            'salary_cycle_id' => ['nullable', 'exists:salary_cycles,id'],
             'status' => ['required', 'string'],
-            'employment_type' => ['required', Rule::enum(EmploymentType::class)],
         ]);
 
         $photoPath = $this->photo?->store('employee-photos', 'public');
@@ -119,6 +168,7 @@ class EmployeeCreate extends Component
 
         $user->employee()->create([
             'employee_id' => $this->employee_id,
+            'employee_code' => $this->employee_code !== '' ? (int) $this->employee_code : null,
             'phone' => $this->phone ?: null,
             'date_of_birth' => $this->date_of_birth ?: null,
             'gender' => $this->gender ?: null,
@@ -130,11 +180,12 @@ class EmployeeCreate extends Component
             'job_title_id' => $this->job_title_id ?: null,
             'manager_id' => $this->manager_id ?: null,
             'shift_id' => $this->shift_id ?: null,
-            'salary_cycle' => $this->salary_cycle,
+            'employment_type_id' => $this->employment_type_id ?: null,
+            'work_mode_id' => $this->work_mode_id ?: null,
+            'salary_cycle_id' => $this->salary_cycle_id ?: null,
             'joining_date' => $this->joining_date,
             'probation_end_date' => $this->probation_end_date ?: null,
             'status' => $this->status,
-            'employment_type' => $this->employment_type,
         ]);
 
         // Send welcome email with credentials
@@ -186,7 +237,9 @@ class EmployeeCreate extends Component
             ])->get(),
             'roles' => UserRole::cases(),
             'statuses' => EmployeeStatus::cases(),
-            'employmentTypes' => EmploymentType::cases(),
+            'employmentTypes' => EmploymentType::active()->get(),
+            'workModes' => WorkMode::active()->get(),
+            'salaryCycles' => SalaryCycle::active()->get(),
         ])->layout('layouts.app', ['title' => 'Add Employee']);
     }
 }

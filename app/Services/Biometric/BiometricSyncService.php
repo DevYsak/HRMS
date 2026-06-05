@@ -150,6 +150,109 @@ class BiometricSyncService
     }
 
     // ──────────────────────────────────────────────────────────────────────
+    // Employee push (HRMS → device)
+    // ──────────────────────────────────────────────────────────────────────
+
+    /**
+     * Enrol or update one employee on the given biometric device.
+     *
+     * Marks sync_status = 'synced' on success, 'failed' on error.
+     * Uses withoutEvents() when writing sync fields to avoid re-triggering the observer.
+     *
+     * @throws RuntimeException when the employee has no employee_code.
+     */
+    public function pushEmployee(Employee $employee, BiometricDevice $device): bool
+    {
+        if (! $employee->employee_code) {
+            throw new RuntimeException("Employee#{$employee->id} has no employee_code — cannot push to device.");
+        }
+
+        $zk = $this->makeZKService($device);
+        $zk->connect();
+
+        try {
+            $success = $zk->setUser(
+                userId: $employee->employee_code,
+                name: $employee->user->name ?? 'Unknown',
+            );
+        } finally {
+            $zk->disconnect();
+        }
+
+        Employee::withoutEvents(function () use ($employee, $device, $success) {
+            $employee->update([
+                'sync_status' => $success ? 'synced' : 'failed',
+                'last_biometric_sync_at' => now(),
+                'biometric_device_id' => $device->id,
+            ]);
+        });
+
+        return $success;
+    }
+
+    /**
+     * Push all employees whose sync_status is 'pending' or 'failed' to their assigned device.
+     *
+     * Employees without an employee_code or biometric_device_id are skipped.
+     *
+     * @return array{pushed: int, failed: int, skipped: int, errors: list<string>}
+     */
+    public function pushAllPendingEmployees(): array
+    {
+        $employees = Employee::with(['user', 'biometricDevice'])
+            ->whereNotNull('employee_code')
+            ->whereNotNull('biometric_device_id')
+            ->whereIn('sync_status', ['pending', 'failed'])
+            ->get();
+
+        $pushed = 0;
+        $failed = 0;
+        $errors = [];
+
+        foreach ($employees as $employee) {
+            try {
+                $this->pushEmployee($employee, $employee->biometricDevice);
+                $pushed++;
+            } catch (Throwable $e) {
+                Log::error("BiometricPush: employee#{$employee->id} failed — {$e->getMessage()}");
+
+                Employee::withoutEvents(function () use ($employee) {
+                    $employee->update([
+                        'sync_status' => 'failed',
+                        'last_biometric_sync_at' => now(),
+                    ]);
+                });
+
+                $failed++;
+                $errors[] = "Employee#{$employee->id} ({$employee->user?->name}): {$e->getMessage()}";
+            }
+        }
+
+        return compact('pushed', 'failed', 'errors') + ['skipped' => 0];
+    }
+
+    /**
+     * Remove an employee from a biometric device by deleting their enrolled user_id.
+     *
+     * Does not update sync_status — callers decide how to track removals.
+     */
+    public function removeEmployeeFromDevice(Employee $employee, BiometricDevice $device): bool
+    {
+        if (! $employee->employee_code) {
+            return false;
+        }
+
+        $zk = $this->makeZKService($device);
+        $zk->connect();
+
+        try {
+            return $zk->deleteUser($employee->employee_code);
+        } finally {
+            $zk->disconnect();
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
     // Raw log storage
     // ──────────────────────────────────────────────────────────────────────
 
@@ -157,13 +260,18 @@ class BiometricSyncService
      * Map raw device punch records to the biometric_logs table.
      * Uses upsert so re-running the sync is idempotent.
      *
+     * Attendance MUST map only by employee_code (the numeric code enrolled on the device).
+     * Name and email are NEVER used for matching — only employee_code is authoritative.
+     *
      * @param  array<int, array{device_user_id: string, punched_at: string, state: int, verify: int}>  $rawLogs
      */
     private function upsertRawLogs(BiometricDevice $device, array $rawLogs): int
     {
-        // Pre-load employee biometric_id map for fast lookup.
-        $employeeMap = Employee::whereNotNull('biometric_id')
-            ->pluck('id', 'biometric_id');
+        // Primary lookup: employee_code is the sole authoritative key for attendance mapping.
+        // device_user_id from the punch log is cast to int for comparison (devices send "17", "003", etc.).
+        $employeeMap = Employee::whereNotNull('employee_code')
+            ->pluck('id', 'employee_code')
+            ->mapWithKeys(fn ($id, $code) => [(string) $code => $id]);
 
         $inserted = 0;
         $punchTypes = config('biometric.punch_types', [0 => 'check_in', 1 => 'check_out']);
@@ -175,11 +283,13 @@ class BiometricSyncService
 
             foreach ($chunk as $raw) {
                 $punchType = $punchTypes[$raw['state']] ?? 'unknown';
-                $employeeId = $employeeMap[$raw['device_user_id']] ?? null;
+                // Normalise device_user_id: devices may send "017", "17", or "  17" — cast to int string.
+                $normalised = (string) (int) $raw['device_user_id'];
+                $employeeId = $employeeMap[$normalised] ?? null;
 
                 $rows[] = [
                     'device_id' => $device->id,
-                    'device_user_id' => $raw['device_user_id'],
+                    'device_user_id' => $normalised,   // always stored as normalised integer string
                     'employee_id' => $employeeId,
                     'punched_at' => $raw['punched_at'],
                     'punch_type' => $punchType,
@@ -348,7 +458,7 @@ class BiometricSyncService
     // Factory
     // ──────────────────────────────────────────────────────────────────────
 
-    private function makeZKService(BiometricDevice $device): ZKTecoService
+    protected function makeZKService(BiometricDevice $device): ZKTecoService
     {
         $zk = new ZKTecoService(
             ip: $device->ip_address,

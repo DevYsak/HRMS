@@ -66,15 +66,16 @@
     $joiningLabel = $employee->joining_date ? Carbon::parse($employee->joining_date)->format('F Y') : '-';
     $paymentDate  = $to->copy()->addDay()->format('d M Y');
 
-    $coName  = 'Conexus Network Solutions Pvt Ltd';
-    $coAddr1 = '709, 7th Level, Wing F, Tower II Seawoods Grand Central,';
-    $coAddr2 = 'Seawoods Railway Station, Nerul, Navi Mumbai - 400706';
-    $coCIN   = 'U72900MH2013PTC234567';
-    $coPhone = '+91 959 458 6666';
-    $coEmail = 'info@conexus-ns.com';
-    $coWeb   = 'www.conexus-ns.com';
+    $coName  = $company->name ?? 'Company Name';
+    $coAddr1 = $company->address ?? '';
+    $coAddr2 = $company->address_line2 ?? ($company->city ?? '');
+    $coCIN   = $company->cin ?? '';
+    $coPhone = $company->phone ?? '';
+    $coEmail = $company->email ?? '';
+    $coWeb   = $company->website ?? '';
 
-    // Conexus SVG logo
+    // Logo: use company logo from storage if set, otherwise fall back to the inline Conexus SVG
+    $logoSrc = $company->logo ? asset('storage/' . $company->logo) : null;
     $logoSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="140" height="54" viewBox="0 0 140 54" fill="none"><g clip-path="url(#a)"><path d="M18.894 33.599c-1.776 2.396-4.33 4.141-8.092 4.141-6.115 0-10.925-4.36-10.925-10.743S4.687 16.26 10.802 16.26c3.762 0 6.373 1.742 8.063 4.108l-2.2 1.212a7.7 7.7 0 0 0-2.778-2.031 7.74 7.74 0 0 0-3.085-.639c-4.65 0-8.187 3.457-8.187 8.44 0 4.92 3.552 8.44 8.187 8.44a7.76 7.76 0 0 0 3.086-.607 7.73 7.73 0 0 0 2.802-2.026l2.204 1.202Z" fill="#000"/><path d="M42.567 27c0 6.131-4.301 10.739-10.579 10.739S21.457 33.13 21.457 27c0-6.131 4.268-10.742 10.543-10.742S42.567 20.864 42.567 27Zm-2.741 0c0-4.847-3.09-8.437-7.838-8.437-4.748 0-7.805 3.578-7.805 8.437 0 4.86 3.028 8.447 7.805 8.447 4.777 0 7.838-3.62 7.838-8.447Z" fill="#000"/><path d="M62.705 16.616v20.767H60.156L47.763 20.818v16.565H45.117V16.616h2.709l12.236 16.22V16.616h2.643Z" fill="#000"/><path d="M79.175 16.616v2.302H67.898v4.436H65.252v-6.738h13.923Z" fill="#000"/><path d="m78.953 27.92-13.701.003v-2.311l13.701.003v2.305Z" fill="#7E1F24"/><path d="M67.898 35.078h11.277v2.305H65.252V30.18h2.646v4.898Z" fill="#000"/><path d="m90.071 27.089-8.329-10.57h3.368l6.63 8.349" fill="#7E1F24"/><path d="m94.932 28.507 6.734 8.867-3.35.009-4.988-6.68" fill="#000"/><path d="m93.389 22.672 4.88-6.153h3.398l-6.589 8.283-1.69-2.13Z" fill="#000"/><path d="m91.7 24.866 1.628 1.948-8.255 10.57-3.35-.01L91.7 24.866Z" fill="#7E1F24"/><path d="M104.219 25.857V16.6h2.664v9.257h-2.664Zm14.687 1.954h2.664v1.46c0 5.171-2.931 8.482-8.699 8.482s-8.664-3.332-8.664-8.437v-1.505h2.664v1.43c0 3.8 2.072 6.196 6 6.196s6.007-2.396 6.007-6.196l.028-1.43ZM118.906 25.857V16.6h2.664v9.257h-2.664Z" fill="#000"/><path d="M140.121 31.642c0 2.987-2.101 6.101-7.835 6.101-3.664 0-6.405-1.37-8.157-3.3l1.592-1.993a10.5 10.5 0 0 0 3.4 2.227 10.56 10.56 0 0 0 4.072.597c3.792 0 5.002-1.993 5.002-3.614 0-5.353-12.585-2.366-12.585-9.776 0-3.423 3.123-5.789 7.328-5.789 3.218 0 5.734 1.091 7.519 2.927l-1.593 1.899c-1.592-1.745-3.824-2.49-6.147-2.49-2.519 0-4.366 1.339-4.366 3.299 0 4.672 12.57 1.994 12.57 9.912Z" fill="#000"/></g><defs><clipPath id="a"><rect width="140" height="54" fill="#fff"/></clipPath></defs></svg>';
     $logoB64 = 'data:image/svg+xml;base64,' . base64_encode($logoSvg);
 
@@ -280,12 +281,12 @@ body   { font-family: 'DejaVu Sans', Arial, sans-serif; font-size: 10px; color: 
 <table class="hdr-tbl" cellpadding="0" cellspacing="0">
 <tr>
     <td class="h-logo">
-        <img src="{{ $logoB64 }}" alt="CONEXUS" style="width:118px;height:auto;display:block;" />
+        <img src="{{ $logoSrc ?? $logoB64 }}" alt="{{ $coName }}" style="width:118px;height:auto;display:block;" />
     </td>
     <td class="h-center">
         <div class="co-name">{{ $coName }}</div>
         <div class="co-addr">{{ $coAddr1 }}<br>{{ $coAddr2 }}</div>
-        <div class="co-cin">CIN: {{ $coCIN }}&nbsp;&nbsp;|&nbsp;&nbsp;{{ $coWeb }}</div>
+        <div class="co-cin">@if($coCIN)CIN: {{ $coCIN }}&nbsp;&nbsp;|&nbsp;&nbsp;@endif{{ $coWeb }}</div>
     </td>
     <td class="h-right">
         <div class="slip-ttl">PAYSLIP</div>
@@ -474,9 +475,9 @@ body   { font-family: 'DejaVu Sans', Arial, sans-serif; font-size: 10px; color: 
 {{-- ══ BOTTOM BAR ══ --}}
 <div class="btm-bar" style="padding: 9px 32px;">
 <table class="btm-inner" cellpadding="0" cellspacing="0"><tr>
-    <td class="btm-td"><span class="btm-lbl">Email</span><span class="btm-val">{{ $coEmail }}</span></td>
-    <td class="btm-td"><span class="btm-lbl">Phone</span><span class="btm-val">{{ $coPhone }}</span></td>
-    <td class="btm-td" style="border-right:none;"><span class="btm-lbl">Website</span><span class="btm-val">{{ $coWeb }}</span></td>
+    @if($coEmail)<td class="btm-td"><span class="btm-lbl">Email</span><span class="btm-val">{{ $coEmail }}</span></td>@endif
+    @if($coPhone)<td class="btm-td"><span class="btm-lbl">Phone</span><span class="btm-val">{{ $coPhone }}</span></td>@endif
+    @if($coWeb)<td class="btm-td" style="border-right:none;"><span class="btm-lbl">Website</span><span class="btm-val">{{ $coWeb }}</span></td>@endif
 </tr></table>
 </div>
 

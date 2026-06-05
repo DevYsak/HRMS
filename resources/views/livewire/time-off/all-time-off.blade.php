@@ -264,13 +264,15 @@
 
                     {{-- Scrollable content --}}
                     <div class="flex-1 overflow-y-auto p-5 space-y-5">
+                        @php
+                            $panelAvatarColors = ['bg-violet-500','bg-emerald-500','bg-amber-500','bg-rose-500','bg-sky-500','bg-indigo-500','bg-teal-500','bg-pink-500'];
+                            $panelColor = $panelAvatarColors[$viewingRequest->employee->id % count($panelAvatarColors)];
+                            $panelBalance = $viewingRequest->availableBalance ?? \App\Models\LeaveBalance::where('employee_id', $viewingRequest->employee_id)->where('leave_type_id', $viewingRequest->leave_type_id)->where('year', now()->year)->first();
+                            $effectivePayStatus = $viewingRequest->approved_leave_status ?? $viewingRequest->requested_leave_status ?? ($viewingRequest->leaveType?->is_paid ? 'paid' : 'unpaid');
+                        @endphp
 
                         {{-- Employee info --}}
                         <div class="flex items-center gap-3">
-                            @php
-                                $panelAvatarColors = ['bg-violet-500','bg-emerald-500','bg-amber-500','bg-rose-500','bg-sky-500','bg-indigo-500','bg-teal-500','bg-pink-500'];
-                                $panelColor = $panelAvatarColors[$viewingRequest->employee->id % count($panelAvatarColors)];
-                            @endphp
                             <div class="size-12 rounded-full {{ $panelColor }} flex items-center justify-center font-bold text-white text-lg shrink-0">
                                 {{ strtoupper(substr($viewingRequest->employee->user->name, 0, 1)) }}
                             </div>
@@ -281,115 +283,210 @@
                             </div>
                         </div>
 
-                        {{-- Details --}}
+                        {{-- Request Details --}}
                         <div class="rounded-xl bg-zinc-50 dark:bg-zinc-800/50 p-4 space-y-3">
-                            <div class="flex items-center gap-3">
-                                <flux:icon.tag class="size-4 text-zinc-400 shrink-0" />
-                                <div class="flex-1">
+                            <div class="flex justify-between items-start">
+                                <div>
                                     <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Leave Type</div>
                                     <div class="flex items-center gap-1.5 mt-0.5">
                                         <div class="size-2 rounded-full" style="background-color: {{ $viewingRequest->leaveType->color ?? '#6b7280' }}"></div>
                                         <span class="text-sm font-semibold text-zinc-800 dark:text-zinc-200">{{ $viewingRequest->leaveType->name }}</span>
                                     </div>
                                 </div>
+                                {{-- Payment status badge --}}
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold
+                                    {{ $effectivePayStatus === 'paid' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' }}">
+                                    {{ ucfirst($effectivePayStatus) }}
+                                    @if($viewingRequest->approved_leave_status && $viewingRequest->approved_leave_status !== $viewingRequest->requested_leave_status)
+                                        <span class="opacity-60">(overridden)</span>
+                                    @endif
+                                </span>
                             </div>
-                            <div class="flex items-center gap-3">
-                                <flux:icon.calendar class="size-4 text-zinc-400 shrink-0" />
-                                <div class="flex-1">
-                                    <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Dates</div>
-                                    <div class="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mt-0.5">
-                                        {{ $viewingRequest->start_date->format('M d') }} – {{ $viewingRequest->end_date->format('M d, Y') }}
+
+                            {{-- Balance --}}
+                            @if($panelBalance)
+                                <div class="flex items-center gap-2 text-xs">
+                                    <flux:icon.chart-bar class="size-3.5 text-zinc-400" />
+                                    <span class="text-zinc-500">Available balance:</span>
+                                    <span class="font-semibold {{ max(0, $panelBalance->allocated_days - $panelBalance->used_days - ($panelBalance->encashed_days ?? 0)) < $viewingRequest->days ? 'text-red-500' : 'text-emerald-600 dark:text-emerald-400' }}">
+                                        {{ max(0, $panelBalance->allocated_days - $panelBalance->used_days - ($panelBalance->encashed_days ?? 0)) }} day(s)
+                                    </span>
+                                </div>
+                            @endif
+
+                            <div class="grid grid-cols-2 gap-3 text-xs">
+                                <div>
+                                    <div class="text-zinc-400 font-semibold uppercase tracking-wide mb-0.5">Dates</div>
+                                    <div class="text-zinc-700 dark:text-zinc-300 font-semibold">{{ $viewingRequest->start_date->format('d M') }} – {{ $viewingRequest->end_date->format('d M Y') }}</div>
+                                </div>
+                                <div>
+                                    <div class="text-zinc-400 font-semibold uppercase tracking-wide mb-0.5">Days</div>
+                                    <div class="text-zinc-700 dark:text-zinc-300 font-semibold">
+                                        {{ (float)$viewingRequest->days }}
+                                        @if($viewingRequest->is_half_day) <span class="text-zinc-400">({{ $viewingRequest->half_day_period === 'first_half' ? 'First' : 'Second' }} Half)</span> @endif
                                     </div>
                                 </div>
-                            </div>
-                            <div class="flex items-center gap-3">
-                                <flux:icon.clock class="size-4 text-zinc-400 shrink-0" />
-                                <div class="flex-1">
-                                    <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Total Days</div>
-                                    <div class="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mt-0.5">
-                                        {{ (float)$viewingRequest->days }} {{ (float)$viewingRequest->days == 1 ? 'Day' : 'Days' }}
-                                        @if($viewingRequest->is_half_day) <span class="text-xs text-zinc-400">(Half Day)</span> @endif
-                                    </div>
+                                <div>
+                                    <div class="text-zinc-400 font-semibold uppercase tracking-wide mb-0.5">Requested As</div>
+                                    <div class="font-semibold {{ ($viewingRequest->requested_leave_status ?? 'paid') === 'paid' ? 'text-emerald-600' : 'text-amber-600' }}">{{ ucfirst($viewingRequest->requested_leave_status ?? 'paid') }}</div>
+                                </div>
+                                <div>
+                                    <div class="text-zinc-400 font-semibold uppercase tracking-wide mb-0.5">Applied On</div>
+                                    <div class="text-zinc-700 dark:text-zinc-300">{{ $viewingRequest->created_at->format('d M Y') }}</div>
                                 </div>
                             </div>
-                            <div class="flex items-center gap-3">
-                                <flux:icon.calendar-days class="size-4 text-zinc-400 shrink-0" />
-                                <div class="flex-1">
-                                    <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Applied On</div>
-                                    <div class="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mt-0.5">
-                                        {{ $viewingRequest->created_at->format('M d, Y') }} ({{ $viewingRequest->created_at->format('h:i A') }})
-                                    </div>
-                                </div>
-                            </div>
+
                             @if($viewingRequest->reason)
-                                <div class="flex items-start gap-3">
-                                    <flux:icon.document-text class="size-4 text-zinc-400 shrink-0 mt-0.5" />
-                                    <div class="flex-1">
-                                        <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Reason</div>
-                                        <div class="text-sm text-zinc-700 dark:text-zinc-300 mt-0.5">{{ $viewingRequest->reason }}</div>
-                                    </div>
+                                <div>
+                                    <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-wide mb-0.5">Reason</div>
+                                    <div class="text-xs text-zinc-700 dark:text-zinc-300">{{ $viewingRequest->reason }}</div>
                                 </div>
+                            @endif
+
+                            @if($viewingRequest->attachment_path)
+                                <a href="{{ asset('storage/'.$viewingRequest->attachment_path) }}" target="_blank"
+                                    class="flex items-center gap-1.5 text-xs text-indigo-600 dark:text-indigo-400 hover:underline">
+                                    <flux:icon.paper-clip class="size-3.5" />
+                                    View Attachment
+                                </a>
                             @endif
                         </div>
 
-                        {{-- Approval History --}}
+                        {{-- Approval History (timeline) --}}
                         <div>
-                            <h4 class="text-sm font-bold text-zinc-900 dark:text-white mb-3">Approval History</h4>
+                            <h4 class="text-xs font-bold text-zinc-500 uppercase tracking-wide mb-3">Approval Timeline</h4>
                             <div class="space-y-3">
-                                {{-- Request submitted --}}
                                 <div class="flex items-start gap-3">
-                                    <div class="size-2 rounded-full bg-brand-500 mt-1.5 shrink-0"></div>
+                                    <div class="size-2 rounded-full bg-indigo-500 mt-1.5 shrink-0"></div>
                                     <div>
-                                        <div class="text-xs font-semibold text-zinc-700 dark:text-zinc-300">Pending</div>
-                                        <div class="text-[11px] text-zinc-400">{{ $viewingRequest->created_at->format('M d, Y (h:i A)') }}</div>
-                                        <div class="text-[11px] text-zinc-500 mt-0.5">Requested by {{ $viewingRequest->employee->user->name }}</div>
+                                        <div class="text-xs font-semibold text-zinc-700 dark:text-zinc-300">Submitted</div>
+                                        <div class="text-[11px] text-zinc-400">{{ $viewingRequest->created_at->format('d M Y, h:i A') }}</div>
                                     </div>
                                 </div>
-                                {{-- Review decision --}}
                                 @if($viewingRequest->reviewer)
                                     <div class="flex items-start gap-3">
-                                        <div class="size-2 rounded-full {{ $viewingRequest->status === 'approved' ? 'bg-emerald-500' : 'bg-red-500' }} mt-1.5 shrink-0"></div>
+                                        <div class="size-2 rounded-full {{ in_array($viewingRequest->status, ['approved','pending_hr']) ? 'bg-emerald-500' : 'bg-red-500' }} mt-1.5 shrink-0"></div>
                                         <div>
-                                            <div class="text-xs font-semibold text-zinc-700 dark:text-zinc-300">{{ ucfirst($viewingRequest->status) }}</div>
-                                            <div class="text-[11px] text-zinc-400">{{ $viewingRequest->updated_at->format('M d, Y (h:i A)') }}</div>
-                                            <div class="text-[11px] text-zinc-500 mt-0.5">Reviewed by {{ $viewingRequest->reviewer->name }}</div>
+                                            <div class="text-xs font-semibold text-zinc-700 dark:text-zinc-300">{{ $viewingRequest->status === 'pending_hr' ? 'Manager Approved → Pending HR' : ucfirst($viewingRequest->status) }}</div>
+                                            <div class="text-[11px] text-zinc-400">by {{ $viewingRequest->reviewer->name }}</div>
                                             @if($viewingRequest->reviewer_comment)
-                                                <div class="text-[11px] text-zinc-500 italic mt-0.5">"{{ $viewingRequest->reviewer_comment }}"</div>
+                                                <div class="text-[11px] text-zinc-500 italic">"{{ $viewingRequest->reviewer_comment }}"</div>
                                             @endif
                                         </div>
                                     </div>
-                                @else
+                                @endif
+                                @if($viewingRequest->hrReviewer)
                                     <div class="flex items-start gap-3">
-                                        <div class="size-2 rounded-full bg-zinc-300 dark:bg-zinc-600 mt-1.5 shrink-0"></div>
+                                        <div class="size-2 rounded-full bg-emerald-500 mt-1.5 shrink-0"></div>
                                         <div>
-                                            <div class="text-xs font-semibold text-zinc-500">Pending</div>
-                                            <div class="text-[11px] text-zinc-400 mt-0.5">Waiting for approval</div>
+                                            <div class="text-xs font-semibold text-zinc-700 dark:text-zinc-300">HR Approved</div>
+                                            <div class="text-[11px] text-zinc-400">by {{ $viewingRequest->hrReviewer->name }} · {{ $viewingRequest->hr_reviewed_at?->format('d M Y, h:i A') }}</div>
+                                            @if($viewingRequest->hr_reviewer_comment)
+                                                <div class="text-[11px] text-zinc-500 italic">"{{ $viewingRequest->hr_reviewer_comment }}"</div>
+                                            @endif
                                         </div>
                                     </div>
                                 @endif
+
+                                {{-- Payment Status Change History --}}
+                                @foreach($viewingRequest->paymentAuditLogs as $log)
+                                    <div class="flex items-start gap-3">
+                                        <div class="size-2 rounded-full bg-orange-400 mt-1.5 shrink-0"></div>
+                                        <div>
+                                            <div class="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                                                Payment: {{ ucfirst($log->from_status) }} → {{ ucfirst($log->to_status) }}
+                                            </div>
+                                            <div class="text-[11px] text-zinc-400">by {{ $log->changedByUser?->name }} · {{ $log->created_at->format('d M Y, h:i A') }}</div>
+                                            <div class="text-[11px] text-zinc-500 italic">"{{ $log->reason }}"</div>
+                                        </div>
+                                    </div>
+                                @endforeach
                             </div>
                         </div>
 
-                        {{-- Comment box (for approve/reject) --}}
-                        @if(in_array($viewingRequest->status, ['pending']))
-                            <div class="space-y-1.5">
-                                <label class="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Reviewer Comment</label>
-                                <textarea
-                                    wire:model="panelReviewComment"
-                                    rows="2"
-                                    placeholder="Add a comment (required to reject)…"
-                                    class="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-brand-400/30 focus:border-brand-400 resize-none transition-colors"
-                                ></textarea>
-                                @error('panelReviewComment')
-                                    <p class="text-xs text-red-500">{{ $message }}</p>
-                                @enderror
+                        {{-- Comment box + HR Override (for pending/pending_hr) --}}
+                        @if(in_array($viewingRequest->status, ['pending', 'pending_hr']))
+                            <div class="space-y-3">
+                                <div class="space-y-1.5">
+                                    <label class="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Reviewer Comment</label>
+                                    <textarea wire:model="panelReviewComment" rows="2"
+                                        placeholder="Add a comment (required to reject)…"
+                                        class="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-brand-400/30 focus:border-brand-400 resize-none transition-colors"></textarea>
+                                    @error('panelReviewComment')
+                                        <p class="text-xs text-red-500">{{ $message }}</p>
+                                    @enderror
+                                </div>
+
+                                {{-- HR Override toggle --}}
+                                @if($viewingRequest->leaveType?->allow_hr_override)
+                                    <div class="rounded-xl border border-amber-200 dark:border-amber-800/40 overflow-hidden">
+                                        <button type="button" wire:click="$toggle('panelShowHrOverride')"
+                                            class="w-full flex items-center justify-between px-3 py-2 bg-amber-50 dark:bg-amber-950/20 text-xs font-semibold text-amber-700 dark:text-amber-400">
+                                            <span class="flex items-center gap-1.5"><flux:icon.shield-check class="size-3.5" /> HR Payment Override</span>
+                                            <flux:icon.chevron-down class="size-3.5 transition-transform {{ $panelShowHrOverride ? 'rotate-180' : '' }}" />
+                                        </button>
+                                        @if($panelShowHrOverride)
+                                            <div class="px-3 pb-3 pt-2 space-y-2 bg-amber-50/50 dark:bg-amber-950/10">
+                                                <div class="flex gap-3">
+                                                    <label class="flex items-center gap-1.5 cursor-pointer text-xs text-zinc-700 dark:text-zinc-300">
+                                                        <input type="radio" wire:model="panelHrOverrideStatus" value="paid" class="accent-emerald-600" />
+                                                        <span class="font-semibold text-emerald-700 dark:text-emerald-400">Approve as Paid</span>
+                                                    </label>
+                                                    <label class="flex items-center gap-1.5 cursor-pointer text-xs text-zinc-700 dark:text-zinc-300">
+                                                        <input type="radio" wire:model="panelHrOverrideStatus" value="unpaid" class="accent-amber-600" />
+                                                        <span class="font-semibold text-amber-700 dark:text-amber-400">Approve as Unpaid</span>
+                                                    </label>
+                                                </div>
+                                                <textarea wire:model="panelHrRemark" rows="2"
+                                                    placeholder="HR remark — mandatory when overriding payment status…"
+                                                    class="w-full rounded-lg border border-amber-200 dark:border-amber-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-700 dark:text-zinc-300 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-amber-300 resize-none"></textarea>
+                                                @error('panelHrRemark')
+                                                    <p class="text-xs text-red-500">{{ $message }}</p>
+                                                @enderror
+                                            </div>
+                                        @endif
+                                    </div>
+                                @endif
+                            </div>
+                        @endif
+
+                        {{-- HR Override on already-approved requests --}}
+                        @if($viewingRequest->status === 'approved' && $viewingRequest->leaveType?->allow_hr_override)
+                            <div class="rounded-xl border border-amber-200 dark:border-amber-800/40 overflow-hidden">
+                                <button type="button" wire:click="$toggle('panelShowHrOverride')"
+                                    class="w-full flex items-center justify-between px-3 py-2 bg-amber-50 dark:bg-amber-950/20 text-xs font-semibold text-amber-700 dark:text-amber-400">
+                                    <span class="flex items-center gap-1.5"><flux:icon.shield-check class="size-3.5" /> HR Payment Override</span>
+                                    <flux:icon.chevron-down class="size-3.5 transition-transform {{ $panelShowHrOverride ? 'rotate-180' : '' }}" />
+                                </button>
+                                @if($panelShowHrOverride)
+                                    <div class="px-3 pb-3 pt-2 space-y-2 bg-amber-50/50 dark:bg-amber-950/10">
+                                        <p class="text-xs text-amber-700 dark:text-amber-400">Current: <strong>{{ ucfirst($effectivePayStatus) }}</strong>. Override to:</p>
+                                        <div class="flex gap-3">
+                                            <label class="flex items-center gap-1.5 cursor-pointer text-xs">
+                                                <input type="radio" wire:model="panelHrOverrideStatus" value="paid" class="accent-emerald-600" />
+                                                <span class="font-semibold text-emerald-700 dark:text-emerald-400">Paid</span>
+                                            </label>
+                                            <label class="flex items-center gap-1.5 cursor-pointer text-xs">
+                                                <input type="radio" wire:model="panelHrOverrideStatus" value="unpaid" class="accent-amber-600" />
+                                                <span class="font-semibold text-amber-700 dark:text-amber-400">Unpaid</span>
+                                            </label>
+                                        </div>
+                                        <textarea wire:model="panelHrRemark" rows="2"
+                                            placeholder="HR remark — mandatory (min 10 characters)…"
+                                            class="w-full rounded-lg border border-amber-200 dark:border-amber-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-700 dark:text-zinc-300 placeholder-zinc-400 focus:outline-none resize-none"></textarea>
+                                        @error('panelHrRemark')
+                                            <p class="text-xs text-red-500">{{ $message }}</p>
+                                        @enderror
+                                        <flux:button wire:click="applyHrOverride" variant="filled" size="xs" icon="check">Apply Override</flux:button>
+                                    </div>
+                                @endif
                             </div>
                         @endif
 
                     </div>
 
-                    {{-- Panel Footer: Approve / Reject --}}
-                    @if(in_array($viewingRequest->status, ['pending']))
+                    {{-- Panel Footer --}}
+                    @if(in_array($viewingRequest->status, ['pending', 'pending_hr']))
                         <div class="px-5 py-4 border-t border-zinc-100 dark:border-zinc-800 flex gap-3 shrink-0">
                             <button type="button" wire:click="quickApprove"
                                 wire:loading.attr="disabled" wire:target="quickApprove"

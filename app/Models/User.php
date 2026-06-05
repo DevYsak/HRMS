@@ -107,6 +107,16 @@ class User extends Authenticatable
         return RolePermissionService::check($this->role?->value, 'view-reports');
     }
 
+    public function canViewFinanceProfile(): bool
+    {
+        return RolePermissionService::check($this->role?->value, 'view-finance-profile');
+    }
+
+    public function canReviewPerformance(): bool
+    {
+        return RolePermissionService::check($this->role?->value, 'review-performance');
+    }
+
     public function avatarUrl(): string
     {
         if ($this->avatar) {

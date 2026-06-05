@@ -6,30 +6,28 @@ use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
 {
-    /**
-     * Seed the application's database.
-     */
     public function run(): void
     {
         $this->call([
+            // ── System config (always required) ───────────────────────────
             CompanySeeder::class,
             OfficeSeeder::class,
             DepartmentSeeder::class,
             JobTitleSeeder::class,
             ShiftSettingSeeder::class,
-            UserSeeder::class,
-            EmployeeSeeder::class,
 
-            // App feature seeders
+            // ── System admin accounts ─────────────────────────────────────
+            UserSeeder::class,
+            EmployeeSeeder::class,   // creates Employee records for 6 admin users only
+
+            // ── App config / lookup data ──────────────────────────────────
             PublicHolidaySeeder::class,
             DecemberMandatoryDaySeeder::class,
             LeaveSeeder::class,
-            AttendanceSeeder::class,
-            PayrollSeeder::class,
+            LeaveTypeSeeder::class,
 
-            // Optional demo data
-            DemoEmployeeSeeder::class,
-            RunPayrollDemoSeeder::class,
+            // ── Real employee master (biometric codes are source of truth) ─
+            BiometricEmployeeMasterSeeder::class,
         ]);
     }
 }

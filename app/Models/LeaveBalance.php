@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
     'employee_id',
@@ -37,6 +38,28 @@ class LeaveBalance extends Model
 
     public function leaveType(): BelongsTo
     {
-        return $this->belongsTo(LeaveType::class);
+        return $this->belongsTo(LeaveType::class)->withTrashed();
+    }
+
+    public function adjustments(): HasMany
+    {
+        return $this->hasMany(LeaveBalanceAdjustment::class, 'leave_type_id', 'leave_type_id')
+            ->where('employee_id', $this->employee_id);
+    }
+
+    /** Available balance = allocated - used - encashed. */
+    public function available(): float
+    {
+        return max(0, (float) $this->allocated_days - (float) $this->used_days - (float) ($this->encashed_days ?? 0));
+    }
+
+    /** Days pending approval from current leave requests. */
+    public function pendingDays(): float
+    {
+        return (float) LeaveRequest::where('employee_id', $this->employee_id)
+            ->where('leave_type_id', $this->leave_type_id)
+            ->whereIn('status', ['pending', 'pending_hr'])
+            ->whereYear('start_date', $this->year)
+            ->sum('days');
     }
 }

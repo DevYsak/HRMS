@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['company_id', 'name', 'code', 'description'])]
+#[Fillable(['company_id', 'name', 'code', 'description', 'head_id'])]
 class Department extends Model
 {
     /** @use HasFactory<DepartmentFactory> */
@@ -28,5 +28,10 @@ class Department extends Model
     public function employees(): HasMany
     {
         return $this->hasMany(Employee::class);
+    }
+
+    public function head(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'head_id');
     }
 }

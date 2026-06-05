@@ -9,22 +9,26 @@ use Illuminate\Support\Facades\Hash;
 
 class UserSeeder extends Seeder
 {
+    /**
+     * Core system users — no demo accounts.
+     * These are the only users that should exist in a production environment.
+     */
     public function run(): void
     {
         $users = [
-            // Super Admin — Mazhar (full system access, spec §1.4)
+            // Super Admin — Mazhar (full system access)
             [
                 'email' => 'mazhar@conexus-ns.com',
                 'name' => 'Mazhar',
                 'role' => UserRole::SuperAdmin,
             ],
-            // HR Admin — Shivani (all HR modules except system config, spec §1.4)
+            // HR Admin — Shivani (all HR modules)
             [
                 'email' => 'shivani@conexus-ns.com',
                 'name' => 'Shivani',
                 'role' => UserRole::HrAdmin,
             ],
-            // Directors — Rustom, Nick, Nikia (spec §1.4)
+            // Directors
             [
                 'email' => 'rustom@conexus-ns.com',
                 'name' => 'Rustom',
@@ -36,21 +40,15 @@ class UserSeeder extends Seeder
                 'role' => UserRole::Director,
             ],
             [
-                'email' => 'nikia@conexus-ns.com',
-                'name' => 'Nikia',
+                'email' => 'nikita@conexus-ns.com',
+                'name' => 'Nikita',
                 'role' => UserRole::Director,
             ],
-            // Finance — Emad (compensation module + payroll approval, spec §1.4)
+            // Finance — Emad (payroll processing + finance approval)
             [
                 'email' => 'emad@conexus-ns.com',
                 'name' => 'Emad',
                 'role' => UserRole::Finance,
-            ],
-            // Demo employee for testing
-            [
-                'email' => 'employee@conexus-ns.com',
-                'name' => 'Test Employee',
-                'role' => UserRole::Employee,
             ],
         ];
 

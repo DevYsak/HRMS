@@ -75,7 +75,8 @@ it('blocks a new MDL half-day when an approved MDL full-day overlaps', function 
     approvedMdl($employee, '2026-06-01', '2026-06-30');
 
     expect(fn () => app(LeaveService::class)->submitRequest(
-        $employee, mdlType(), '2026-06-15', '2026-06-15', 'test', isHalfDay: true,
+        $employee, mdlType(), '2026-06-15', '2026-06-15', 'test',
+        isHalfDay: true, halfDayPeriod: 'first_half', requestedLeaveStatus: 'unpaid',
     ))->toThrow(DomainException::class, 'approved leave');
 });
 
@@ -84,7 +85,7 @@ it('blocks a new MDL full-day when an approved MDL half-day is on the same date'
     approvedMdl($employee, '2026-07-10', '2026-07-10', halfDay: true);
 
     expect(fn () => app(LeaveService::class)->submitRequest(
-        $employee, mdlType(), '2026-07-10', '2026-07-10', 'test',
+        $employee, mdlType(), '2026-07-10', '2026-07-10', 'test', requestedLeaveStatus: 'unpaid',
     ))->toThrow(DomainException::class, 'approved leave');
 });
 
@@ -93,7 +94,8 @@ it('blocks a new MDL half-day when an approved MDL half-day is on the same date'
     approvedMdl($employee, '2026-07-10', '2026-07-10', halfDay: true);
 
     expect(fn () => app(LeaveService::class)->submitRequest(
-        $employee, mdlType(), '2026-07-10', '2026-07-10', 'test', isHalfDay: true,
+        $employee, mdlType(), '2026-07-10', '2026-07-10', 'test',
+        isHalfDay: true, halfDayPeriod: 'second_half', requestedLeaveStatus: 'unpaid',
     ))->toThrow(DomainException::class, 'approved leave');
 });
 
@@ -104,7 +106,7 @@ it('blocks a new MDL request when a pending MDL already exists on overlapping da
     pendingMdl($employee, '2026-08-01', '2026-08-31');
 
     expect(fn () => app(LeaveService::class)->submitRequest(
-        $employee, mdlType(), '2026-08-15', '2026-08-15', 'test',
+        $employee, mdlType(), '2026-08-15', '2026-08-15', 'test', requestedLeaveStatus: 'unpaid',
     ))->toThrow(DomainException::class, 'pending leave');
 });
 
@@ -113,7 +115,8 @@ it('blocks a new MDL half-day when a pending MDL half-day is on the same date', 
     pendingMdl($employee, '2026-08-10', '2026-08-10', halfDay: true);
 
     expect(fn () => app(LeaveService::class)->submitRequest(
-        $employee, mdlType(), '2026-08-10', '2026-08-10', 'test', isHalfDay: true,
+        $employee, mdlType(), '2026-08-10', '2026-08-10', 'test',
+        isHalfDay: true, halfDayPeriod: 'first_half', requestedLeaveStatus: 'unpaid',
     ))->toThrow(DomainException::class, 'pending leave');
 });
 
@@ -124,7 +127,7 @@ it('allows MDL on dates outside the approved MDL window', function () {
     approvedMdl($employee, '2026-06-01', '2026-06-30');
 
     $request = app(LeaveService::class)->submitRequest(
-        $employee, mdlType(), '2026-07-01', '2026-07-01', 'post-MDL follow-up',
+        $employee, mdlType(), '2026-07-01', '2026-07-01', 'post-MDL follow-up', requestedLeaveStatus: 'unpaid',
     );
 
     expect($request)->toBeInstanceOf(LeaveRequest::class)
@@ -140,10 +143,11 @@ it('blocks any leave type when approved MDL covers those dates', function () {
     $sickLeave = LeaveType::firstOrCreate(
         ['category' => 'sick'],
         ['name' => 'Sick Leave', 'is_paid' => false, 'color' => '#ef4444',
-            'allow_carry_forward' => false, 'carry_forward_limit' => 0, 'allow_encashment' => false],
+            'allow_carry_forward' => false, 'carry_forward_limit' => 0, 'allow_encashment' => false,
+            'allow_paid_request' => false, 'allow_unpaid_request' => true],
     );
 
     expect(fn () => app(LeaveService::class)->submitRequest(
-        $employee, $sickLeave, '2026-06-10', '2026-06-10', 'sick',
+        $employee, $sickLeave, '2026-06-10', '2026-06-10', 'sick', requestedLeaveStatus: 'unpaid',
     ))->toThrow(DomainException::class, 'approved leave');
 });

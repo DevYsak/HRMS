@@ -174,7 +174,7 @@
 
             {{-- Tab bar --}}
             <div class="flex items-center gap-1 overflow-x-auto border-b border-zinc-100 px-6 pt-4 pb-0 dark:border-zinc-800">
-                @foreach(['General', 'Personal', 'Job', 'Probation', 'Payroll', 'Documents', 'Activity', 'Nexflow'] as $tab)
+                @foreach(['General', 'Personal', 'Job', 'Leave', 'Probation', 'Payroll', 'Documents', 'Activity', 'Nexflow'] as $tab)
                     <button type="button" wire:click="setTab('{{ $tab }}')"
                         class="whitespace-nowrap border-b-2 pb-3 px-3 text-sm font-semibold transition-colors
                             {{ $activeTab === $tab
@@ -290,9 +290,16 @@
                                         <option value="{{ $case->value }}">{{ $case->label() }}</option>
                                     @endforeach
                                 </flux:select>
-                                <flux:select wire:model="employment_type" label="Employment Type">
-                                    @foreach($employmentTypes as $case)
-                                        <option value="{{ $case->value }}">{{ $case->label() }}</option>
+                                <flux:select wire:model="employment_type_id" label="Employment Type">
+                                    <option value="">Select Employment Type…</option>
+                                    @foreach($employmentTypes as $type)
+                                        <option value="{{ $type->id }}">{{ $type->name }}</option>
+                                    @endforeach
+                                </flux:select>
+                                <flux:select wire:model="work_mode_id" label="Work Mode">
+                                    <option value="">Select Work Mode…</option>
+                                    @foreach($workModes as $mode)
+                                        <option value="{{ $mode->id }}">{{ $mode->name }}</option>
                                     @endforeach
                                 </flux:select>
                                 <flux:select wire:model="office_id" label="Office">
@@ -327,18 +334,12 @@
                                         </option>
                                     @endforeach
                                 </flux:select>
-                                <flux:select wire:model="salary_cycle" label="Salary Cycle">
-                                    <option value="A">Cycle A — 1st to 31st</option>
-                                    <option value="B">Cycle B — 21st to 20th</option>
+                                <flux:select wire:model="salary_cycle_id" label="Salary Cycle">
+                                    <option value="">Select Salary Cycle…</option>
+                                    @foreach($salaryCycles as $cycle)
+                                        <option value="{{ $cycle->id }}">{{ $cycle->name }}</option>
+                                    @endforeach
                                 </flux:select>
-                                <div class="col-span-full">
-                                    <h4 class="mb-3 text-sm font-semibold text-zinc-700 dark:text-zinc-300">Leave Allocations (current year)</h4>
-                                    <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
-                                        @foreach(\App\Models\LeaveType::all() as $lt)
-                                            <flux:input wire:model.defer="leave_allocations.{{ $lt->id }}" type="number" step="0.5" label="{{ $lt->name }} (days)" />
-                                        @endforeach
-                                    </div>
-                                </div>
                                 <flux:input wire:model="biometric_id" label="Biometric Device ID"
                                     placeholder="e.g. 3"
                                     description="Leave blank if not enrolled on the biometric device." />
@@ -353,6 +354,134 @@
                                     <flux:button type="submit" variant="primary" icon="check">Save Changes</flux:button>
                                 </div>
                             </div>
+                        </div>
+
+                    {{-- ── Leave Tab ── --}}
+                    @elseif($activeTab === 'Leave')
+                        <div class="space-y-6">
+                            {{-- Header row --}}
+                            <div class="flex flex-wrap items-start justify-between gap-3">
+                                <div>
+                                    <h3 class="text-base font-bold text-zinc-900 dark:text-white">Leave Balance</h3>
+                                    <p class="mt-0.5 text-sm text-zinc-500">Centrally managed — allocations are set via Leave Settings.</p>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    {{-- Year selector --}}
+                                    <select wire:model.live="leaveBalanceYear"
+                                        class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-1.5 text-sm text-zinc-700 dark:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-indigo-400/40">
+                                        @foreach([now()->year - 1, now()->year, now()->year + 1] as $yr)
+                                            <option value="{{ $yr }}">{{ $yr }}</option>
+                                        @endforeach
+                                    </select>
+                                    @if($canManageLeaveBalance)
+                                        <flux:button wire:click="openManageLeaveModal" variant="primary" icon="adjustments-horizontal" size="sm">
+                                            Manage Balance
+                                        </flux:button>
+                                    @endif
+                                </div>
+                            </div>
+
+                            {{-- Balance summary table --}}
+                            <div class="overflow-x-auto rounded-xl border border-zinc-100 dark:border-zinc-800">
+                                <table class="w-full text-sm">
+                                    <thead>
+                                        <tr class="border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50">
+                                            <th class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-zinc-400">Leave Type</th>
+                                            <th class="px-4 py-3 text-center text-xs font-bold uppercase tracking-wide text-zinc-400">Allocated</th>
+                                            <th class="px-4 py-3 text-center text-xs font-bold uppercase tracking-wide text-zinc-400">Carried Fwd</th>
+                                            <th class="px-4 py-3 text-center text-xs font-bold uppercase tracking-wide text-zinc-400">Used</th>
+                                            <th class="px-4 py-3 text-center text-xs font-bold uppercase tracking-wide text-zinc-400">Encashed</th>
+                                            <th class="px-4 py-3 text-center text-xs font-bold uppercase tracking-wide text-zinc-400">Available</th>
+                                            <th class="px-4 py-3 text-center text-xs font-bold uppercase tracking-wide text-zinc-400">Pending</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
+                                        @forelse($balanceSummary as $row)
+                                            <tr class="hover:bg-zinc-50/50 dark:hover:bg-zinc-800/30 transition-colors">
+                                                <td class="px-4 py-3">
+                                                    <div class="flex items-center gap-2">
+                                                        <div class="size-2.5 rounded-full shrink-0" style="background-color: {{ $row->leave_type->color }}"></div>
+                                                        <span class="font-medium text-zinc-900 dark:text-zinc-100">{{ $row->leave_type->name }}</span>
+                                                        @if($row->leave_type->is_system_controlled)
+                                                            <span class="px-1.5 py-0.5 text-[10px] font-bold bg-zinc-100 dark:bg-zinc-800 text-zinc-500 rounded">System</span>
+                                                        @endif
+                                                        @if($row->leave_type->is_monthly_accrual)
+                                                            <span class="px-1.5 py-0.5 text-[10px] font-bold bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded">Accrual</span>
+                                                        @endif
+                                                    </div>
+                                                </td>
+                                                <td class="px-4 py-3 text-center font-semibold text-zinc-700 dark:text-zinc-300">{{ $row->allocated > 0 ? $row->allocated : '—' }}</td>
+                                                <td class="px-4 py-3 text-center text-zinc-500">{{ $row->carried_forward > 0 ? $row->carried_forward : '—' }}</td>
+                                                <td class="px-4 py-3 text-center text-amber-600 dark:text-amber-400 font-semibold">{{ $row->used > 0 ? $row->used : '—' }}</td>
+                                                <td class="px-4 py-3 text-center text-zinc-500">{{ $row->encashed > 0 ? $row->encashed : '—' }}</td>
+                                                <td class="px-4 py-3 text-center">
+                                                    <span class="font-bold {{ $row->available > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-400' }}">
+                                                        {{ $row->available > 0 ? $row->available : '0' }}
+                                                    </span>
+                                                </td>
+                                                <td class="px-4 py-3 text-center">
+                                                    @if($row->pending > 0)
+                                                        <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400">
+                                                            {{ $row->pending }}d
+                                                        </span>
+                                                    @else
+                                                        <span class="text-zinc-300 dark:text-zinc-600">—</span>
+                                                    @endif
+                                                </td>
+                                            </tr>
+                                        @empty
+                                            <tr>
+                                                <td colspan="7" class="px-4 py-10 text-center text-sm text-zinc-400">
+                                                    No leave balances found for {{ $leaveBalanceYear }}. Balance initializes when leave is allocated via Leave Settings.
+                                                </td>
+                                            </tr>
+                                        @endforelse
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            {{-- Adjustment History --}}
+                            @if($adjustmentHistory->count() > 0)
+                                <div>
+                                    <h4 class="mb-3 text-sm font-bold text-zinc-700 dark:text-zinc-300">Adjustment History</h4>
+                                    <div class="space-y-2 max-h-64 overflow-y-auto">
+                                        @foreach($adjustmentHistory as $log)
+                                            <div class="flex items-start gap-3 rounded-xl border border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-4 py-3">
+                                                <div class="mt-0.5 shrink-0">
+                                                    @if($log->action === 'credit')
+                                                        <span class="flex size-6 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30">
+                                                            <flux:icon.plus class="size-3.5 text-emerald-600 dark:text-emerald-400" />
+                                                        </span>
+                                                    @else
+                                                        <span class="flex size-6 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30">
+                                                            <flux:icon.minus class="size-3.5 text-red-600 dark:text-red-400" />
+                                                        </span>
+                                                    @endif
+                                                </div>
+                                                <div class="flex-1 min-w-0">
+                                                    <div class="flex items-center gap-2 flex-wrap">
+                                                        <span class="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                                                            {{ ucfirst($log->action) }} {{ $log->days }} day(s)
+                                                        </span>
+                                                        <span class="text-xs text-zinc-400">{{ $log->leaveType?->name }}</span>
+                                                        <span class="text-xs text-zinc-400">·</span>
+                                                        <span class="text-xs text-zinc-400">{{ $log->adjusted_at->format('d M Y, h:i A') }}</span>
+                                                        <span class="text-xs text-zinc-400">by {{ $log->adjustedByUser?->name }}</span>
+                                                    </div>
+                                                    <p class="mt-0.5 text-xs text-zinc-500">{{ $log->reason }}</p>
+                                                    @if($log->remarks)
+                                                        <p class="text-xs text-zinc-400 italic">{{ $log->remarks }}</p>
+                                                    @endif
+                                                    <div class="mt-1 flex items-center gap-2 text-[11px] text-zinc-400">
+                                                        <span>Balance: {{ $log->previous_balance }} → <strong class="text-zinc-600 dark:text-zinc-300">{{ $log->new_balance }}</strong></span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        @endforeach
+                                    </div>
+                                </div>
+                            @endif
+
                         </div>
 
                     {{-- ── Probation Tab ── --}}
@@ -433,7 +562,7 @@
                                     <p class="mt-0.5 text-sm text-zinc-500">Manage salary structure and compensation for this employee</p>
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    <span class="text-xs font-bold uppercase text-zinc-400">Cycle {{ $employee->salary_cycle ?? 'A' }}</span>
+                                    <span class="text-xs font-bold uppercase text-zinc-400">{{ $employee->salaryCycle?->name ?? 'Default Cycle' }}</span>
                                     <flux:button wire:click="openAddSalary" variant="primary" icon="plus" size="sm">Add Component</flux:button>
                                 </div>
                             </div>
@@ -590,6 +719,87 @@
             </div>
         </div>
     </div>
+
+    {{-- Manage Leave Balance Modal --}}
+    @if($showManageLeaveModal)
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4"
+             x-data x-on:keydown.escape.window="$wire.closeManageLeaveModal()">
+            <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" wire:click="closeManageLeaveModal"></div>
+            <div class="relative w-full max-w-md bg-white dark:bg-zinc-800 rounded-2xl shadow-xl ring ring-black/5 dark:ring-zinc-700 p-6 space-y-5">
+                <button type="button" wire:click="closeManageLeaveModal"
+                    class="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors">
+                    <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+
+                <div>
+                    <h2 class="text-base font-bold text-zinc-900 dark:text-white">Manage Leave Balance</h2>
+                    <p class="text-sm text-zinc-500 mt-0.5">For {{ $employee->user->name }} · {{ $leaveBalanceYear }}</p>
+                </div>
+
+                <div class="space-y-4">
+                    {{-- Leave Type --}}
+                    <flux:field>
+                        <flux:label>Leave Type <span class="text-red-500">*</span></flux:label>
+                        <flux:select wire:model="leaveAdjustTypeId">
+                            <option value="">Select leave type…</option>
+                            @foreach($adjustableLeaveTypes as $lt)
+                                <option value="{{ $lt->id }}">{{ $lt->name }}</option>
+                            @endforeach
+                        </flux:select>
+                        @error('leaveAdjustTypeId') <flux:error>{{ $message }}</flux:error> @enderror
+                    </flux:field>
+
+                    {{-- Action --}}
+                    <div>
+                        <flux:label>Action <span class="text-red-500">*</span></flux:label>
+                        <div class="mt-1.5 flex gap-4">
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" wire:model="leaveAdjustAction" value="credit" class="accent-emerald-600" />
+                                <span class="text-sm font-semibold text-emerald-700 dark:text-emerald-400">Credit (Add Days)</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" wire:model="leaveAdjustAction" value="debit" class="accent-red-600" />
+                                <span class="text-sm font-semibold text-red-600 dark:text-red-400">Debit (Remove Days)</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    {{-- Days --}}
+                    <flux:input wire:model="leaveAdjustDays" type="number" step="0.5" min="0.5" label="Days" placeholder="e.g. 2" required />
+                    @error('leaveAdjustDays') <p class="text-xs text-red-500 -mt-2">{{ $message }}</p> @enderror
+
+                    {{-- Reason --}}
+                    <flux:field>
+                        <flux:label>Reason <span class="text-red-500">*</span></flux:label>
+                        <flux:textarea wire:model="leaveAdjustReason" rows="2" placeholder="Reason for the adjustment (min 5 chars)…" required />
+                        @error('leaveAdjustReason') <flux:error>{{ $message }}</flux:error> @enderror
+                    </flux:field>
+
+                    {{-- Remarks --}}
+                    <flux:field>
+                        <flux:label>Remarks <span class="text-xs font-normal text-zinc-400">(optional)</span></flux:label>
+                        <flux:textarea wire:model="leaveAdjustRemarks" rows="2" placeholder="Additional notes…" />
+                    </flux:field>
+                </div>
+
+                <div class="flex justify-end gap-3 border-t border-zinc-100 dark:border-zinc-800 pt-4">
+                    <button type="button" wire:click="closeManageLeaveModal"
+                        class="px-4 py-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-600 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors">
+                        Cancel
+                    </button>
+                    <flux:button
+                        wire:click="submitLeaveAdjustment"
+                        wire:loading.attr="disabled"
+                        wire:target="submitLeaveAdjustment"
+                        variant="primary"
+                        icon="check">
+                        <span wire:loading.remove wire:target="submitLeaveAdjustment">Apply Adjustment</span>
+                        <span wire:loading wire:target="submitLeaveAdjustment">Applying…</span>
+                    </flux:button>
+                </div>
+            </div>
+        </div>
+    @endif
 
     {{-- Send Email Modal --}}
     @if($showEmailModal)

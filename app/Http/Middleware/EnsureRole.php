@@ -19,6 +19,7 @@ class EnsureRole
      * Supported abilities:
      *   manage-employees | approve-leave | approve-ot | run-payroll
      *   approve-finance  | manage-settings | manage-documents
+     *   view-finance-profile | review-performance
      *
      * @param  Closure(Request): (Response)  $next
      */
@@ -46,6 +47,8 @@ class EnsureRole
             'approve-finance' => $user->canApproveFinance(),
             'manage-settings' => $user->canManageSettings(),
             'manage-documents' => $user->canManageDocuments(),
+            'view-finance-profile' => $user->canViewFinanceProfile(),
+            'review-performance' => $user->canReviewPerformance(),
             default => false,
         };
     }

@@ -8,6 +8,7 @@ use App\Http\Controllers\ReportController;
 use App\Livewire\Attendance\AllAttendance;
 use App\Livewire\Attendance\AttendanceSettings;
 use App\Livewire\Attendance\AttendanceTracker;
+use App\Livewire\Attendance\BiometricAttendance;
 use App\Livewire\Attendance\BiometricSync;
 use App\Livewire\Attendance\TeamAttendance;
 use App\Livewire\Dashboard;
@@ -17,7 +18,9 @@ use App\Livewire\Employees\Directory;
 use App\Livewire\Employees\EmployeeCreate;
 use App\Livewire\Employees\EmployeeEdit;
 use App\Livewire\Employees\EmployeeIndex;
+use App\Livewire\Employees\FinanceEmployeeProfile;
 use App\Livewire\Employees\OrgChart;
+use App\Livewire\Employees\ProbationConfirmation;
 use App\Livewire\ExecutiveDashboard;
 use App\Livewire\FinanceDashboard;
 use App\Livewire\HrAdminDashboard;
@@ -43,7 +46,11 @@ use App\Livewire\Performance\Goals;
 use App\Livewire\Performance\MyReview;
 use App\Livewire\Performance\ReviewCycles;
 use App\Livewire\Performance\TeamReviews;
+use App\Livewire\Settings\EmploymentTypeManager;
+use App\Livewire\Settings\SalaryCycleManager;
+use App\Livewire\Settings\WorkModeManager;
 use App\Livewire\TimeOff\AllTimeOff;
+use App\Livewire\TimeOff\FinanceEncashments;
 use App\Livewire\TimeOff\MyTimeOff;
 use App\Livewire\TimeOff\TeamTimeOff;
 use App\Livewire\TimeOff\TimeOffSettings;
@@ -84,10 +91,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/directory', Directory::class)->name('directory');
         Route::get('/org-chart', OrgChart::class)->name('org-chart');
 
+        // Finance read-only salary/bank profile
+        Route::get('/{employee}/finance-profile', FinanceEmployeeProfile::class)
+            ->name('finance-profile')
+            ->middleware('role:view-finance-profile');
+
         // HR / admin only
         Route::middleware('role:manage-employees')->group(function () {
             Route::get('/create', EmployeeCreate::class)->name('create');
             Route::get('/{employee}/edit', EmployeeEdit::class)->name('edit');
+            Route::get('/{employee}/probation', ProbationConfirmation::class)->name('probation');
             Route::get('/{employee}/onboarding', OnboardingChecklist::class)->name('onboarding');
             Route::get('/{employee}/offboarding', OffboardingChecklist::class)->name('offboarding');
             Route::get('/onboarding-manager', OnboardingManager::class)->name('onboarding-manager');
@@ -104,6 +117,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/team', TeamTimeOff::class)->name('team');
             Route::get('/employees', AllTimeOff::class)->name('employees');
         });
+        Route::get('/encashments', FinanceEncashments::class)->name('encashments')->middleware('role:approve-finance');
         Route::get('/settings', TimeOffSettings::class)->name('settings')->middleware('role:manage-settings');
     });
 
@@ -118,6 +132,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         });
         Route::get('/settings', AttendanceSettings::class)->name('settings')->middleware('role:manage-settings');
         Route::get('/biometric', BiometricSync::class)->name('biometric')->middleware('role:manage-settings');
+        Route::get('/biometric-live', BiometricAttendance::class)->name('biometric-live')->middleware('role:approve-leave');
     });
 
     // --------------------------------------------------
@@ -168,8 +183,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/my', MyReview::class)->name('my');
         Route::get('/goals', Goals::class)->name('goals');
 
-        // Managers can see team reviews
-        Route::get('/team', TeamReviews::class)->name('team')->middleware('role:approve-leave');
+        // Managers, Directors, HR, Finance can see team reviews
+        Route::get('/team', TeamReviews::class)->name('team')->middleware('role:review-performance');
 
         // HR / admin only — all reviews and cycle management
         Route::middleware('role:manage-employees')->group(function () {
@@ -241,6 +256,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::livewire('settings/role-permissions', 'pages::settings.role-permissions')
         ->name('settings.role-permissions')
         ->middleware('role:manage-settings');
+
+    // --------------------------------------------------
+    // Phase 1A — Employee configuration settings
+    // --------------------------------------------------
+    Route::middleware('role:manage-settings')->prefix('settings')->name('settings.')->group(function () {
+        Route::get('/employment-types', EmploymentTypeManager::class)->name('employment-types');
+        Route::get('/work-modes', WorkModeManager::class)->name('work-modes');
+        Route::get('/salary-cycles', SalaryCycleManager::class)->name('salary-cycles');
+    });
 
 });
 

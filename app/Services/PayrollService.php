@@ -143,14 +143,16 @@ class PayrollService
                     ];
                 }
 
-                $encashments = LeaveEncashment::where('employee_id', $employee->id)
+                $encashments = LeaveEncashment::with('leaveType')
+                    ->where('employee_id', $employee->id)
                     ->where('payout_month', $monthLabel)
                     ->where('status', 'approved')
                     ->get();
                 $encashmentTotal = $encashments->sum(function ($encashment) use ($gross) {
                     $dailyRate = $gross > 0 ? $gross / 26 : 0;
+                    $multiplier = (float) ($encashment->leaveType?->encashment_rate_multiplier ?? 1.00);
 
-                    return round($encashment->requested_days * $dailyRate, 2);
+                    return round($encashment->requested_days * $dailyRate * $multiplier, 2);
                 });
                 if ($encashmentTotal > 0) {
                     $gross += $encashmentTotal;

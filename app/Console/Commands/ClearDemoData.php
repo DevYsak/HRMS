@@ -7,15 +7,25 @@ use Illuminate\Support\Facades\DB;
 
 class ClearDemoData extends Command
 {
-    protected $signature = 'app:clear-demo-data
-                            {--keep-admins : Keep users with super_admin role instead of deleting them}
+    protected $signature = 'hrms:clear-demo-data
                             {--force : Skip the confirmation prompt}';
 
-    protected $description = 'Remove all demo/test data while preserving roles, system config, and optionally super admin accounts.';
+    protected $description = 'Wipe all demo/fake/test data and leave only the 6 system admin accounts and config tables.';
 
     /**
-     * Truncated in order: children before parents so FK constraints are satisfied.
+     * These system admin emails are NEVER deleted.
+     * All other users and their employee records are removed.
      */
+    private array $keepEmails = [
+        'mazhar@conexus-ns.com',
+        'shivani@conexus-ns.com',
+        'rustom@conexus-ns.com',
+        'nick@conexus-ns.com',
+        'nikita@conexus-ns.com',
+        'emad@conexus-ns.com',
+    ];
+
+    /** Transactional tables — wiped completely (FK children first). */
     private array $truncateTables = [
         'payslip_items',
         'payslips',
@@ -54,7 +64,8 @@ class ClearDemoData extends Command
         'teams',
     ];
 
-    private array $keptTables = [
+    /** Config/lookup tables — never touched. */
+    private array $preservedTables = [
         'role_permissions',
         'companies',
         'departments',
@@ -67,37 +78,39 @@ class ClearDemoData extends Command
         'december_mandatory_days',
         'attendance_settings',
         'biometric_devices',
+        'pause_codes',
+        'ot_windows',
     ];
 
     public function handle(): int
     {
-        $keepAdmins = $this->option('keep-admins');
-
         $this->newLine();
         $this->line('<fg=yellow;options=bold>  ⚠  DEMO DATA WIPE</>');
         $this->newLine();
-        $this->line('  This will permanently delete:');
-        $this->line('    • All employees and their user accounts'.($keepAdmins ? ' <fg=green>(super_admin users kept)</>' : ''));
+        $this->line('  Will permanently delete:');
         $this->line('    • All attendance, leave, payroll, OT, and performance records');
-        $this->line('    • All documents, assets, expenses, and notifications');
+        $this->line('    • All employee records EXCEPT the 6 system admin accounts');
+        $this->line('    • All user accounts EXCEPT:');
+        foreach ($this->keepEmails as $email) {
+            $this->line("        → {$email}");
+        }
         $this->newLine();
-        $this->line('  The following will be <fg=green>preserved</>:');
-        foreach ($this->keptTables as $table) {
-            $this->line("    ✓ {$table}");
+        $this->line('  Preserved tables (config/lookup — never wiped):');
+        foreach ($this->preservedTables as $t) {
+            $this->line("    ✓ {$t}");
         }
         $this->newLine();
 
-        if (! $this->option('force') && ! $this->confirm('Are you absolutely sure you want to proceed?', false)) {
-            $this->line('  Aborted. No changes made.');
+        if (! $this->option('force') && ! $this->confirm('Proceed?', false)) {
+            $this->line('  Aborted — no changes made.');
 
             return self::SUCCESS;
         }
 
         $this->newLine();
-
-        $this->line('  Disabling foreign key checks...');
         DB::statement('SET FOREIGN_KEY_CHECKS=0');
 
+        // 1. Wipe all transactional data
         $this->line('  Truncating transactional tables...');
         foreach ($this->truncateTables as $table) {
             if (DB::getSchemaBuilder()->hasTable($table)) {
@@ -106,33 +119,24 @@ class ClearDemoData extends Command
             }
         }
 
-        $this->line('  Deleting employees...');
+        // 2. Delete ALL employees — admin employee records will be recreated by EmployeeSeeder
         $deleted = DB::table('employees')->delete();
-        $this->line("    ✓ {$deleted} employee record(s) deleted");
+        $this->line("  Deleted {$deleted} employee record(s)");
 
-        $this->line('  Deleting users...');
-        $query = DB::table('users');
-        if ($keepAdmins) {
-            $query->where('role', '!=', 'super_admin');
-        }
-        $deleted = $query->delete();
-        $this->line("    ✓ {$deleted} user(s) deleted");
+        // 3. Delete users that are NOT in the keep list
+        $deleted = DB::table('users')
+            ->whereNotIn('email', $this->keepEmails)
+            ->delete();
+        $this->line("  Deleted {$deleted} non-admin user(s)");
 
         DB::statement('SET FOREIGN_KEY_CHECKS=1');
 
+        $remaining = DB::table('users')->whereIn('email', $this->keepEmails)->count();
         $this->newLine();
-        $this->info('  ✅ Demo data cleared successfully.');
-
-        if ($keepAdmins) {
-            $remaining = DB::table('users')->where('role', 'super_admin')->count();
-            $this->line("  {$remaining} super_admin user(s) retained.");
-        } else {
-            $this->newLine();
-            $this->line('  All users deleted. Create a fresh admin account:');
-            $this->line('  <fg=cyan>  php artisan tinker</>');
-            $this->line('  <fg=cyan>  App\Models\User::create([\'name\'=>\'Admin\',\'email\'=>\'you@email.com\',\'password\'=>bcrypt(\'yourpassword\'),\'role\'=>\'super_admin\'])</>');
-        }
-
+        $this->info('  ✅ Demo data cleared. '.$remaining.' system admin account(s) retained.');
+        $this->newLine();
+        $this->line('  Next step — import real employees:');
+        $this->line('    <fg=cyan>php artisan biometric:sync-employees</>');
         $this->newLine();
 
         return self::SUCCESS;

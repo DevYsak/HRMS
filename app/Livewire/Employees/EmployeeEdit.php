@@ -3,19 +3,21 @@
 namespace App\Livewire\Employees;
 
 use App\Enums\EmployeeStatus;
-use App\Enums\EmploymentType;
 use App\Enums\UserRole;
 use App\Models\Department;
 use App\Models\Employee;
 use App\Models\EmployeeSalary;
+use App\Models\EmploymentType;
 use App\Models\JobTitle;
-use App\Models\LeaveBalance;
 use App\Models\LeaveType;
 use App\Models\Office;
 use App\Models\SalaryComponent;
+use App\Models\SalaryCycle;
 use App\Models\ShiftSetting;
 use App\Models\User;
-use App\Notifications\ProbationExtendedNotification;
+use App\Models\WorkMode;
+use App\Services\LeaveBalanceService;
+use App\Services\ProbationEngine;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Validation\Rule;
@@ -65,13 +67,22 @@ class EmployeeEdit extends Component
 
     public string $shift_id = '';
 
-    public string $salary_cycle = 'A';
+    public string $employment_type_id = '';
+
+    public string $work_mode_id = '';
+
+    public string $salary_cycle_id = '';
 
     public string $joining_date = '';
 
     public string $status = '';
 
-    public string $employment_type = '';
+    // ── Lifecycle date fields (Phase 1A) ─────────────────────────────────────
+    public string $resignation_date = '';
+
+    public string $termination_date = '';
+
+    public string $notice_period_end_date = '';
 
     // ── Probation ────────────────────────────────────────────────────────────
     public string $probation_end_date = '';
@@ -80,8 +91,20 @@ class EmployeeEdit extends Component
 
     public string $extend_reason = '';
 
-    // Leave allocations keyed by leave_type_id (editable)
-    public array $leave_allocations = [];
+    // ── Leave Balance Manage Modal ────────────────────────────────────────────
+    public bool $showManageLeaveModal = false;
+
+    public string $leaveAdjustTypeId = '';
+
+    public string $leaveAdjustAction = 'credit';
+
+    public string $leaveAdjustDays = '';
+
+    public string $leaveAdjustReason = '';
+
+    public string $leaveAdjustRemarks = '';
+
+    public string $leaveBalanceYear = '';
 
     public function mount(Employee $employee): void
     {
@@ -108,22 +131,17 @@ class EmployeeEdit extends Component
         $this->job_title_id = (string) ($this->employee->job_title_id ?? '');
         $this->manager_id = (string) ($this->employee->manager_id ?? '');
         $this->shift_id = (string) ($this->employee->shift_id ?? '');
-        $this->salary_cycle = $this->employee->salary_cycle ?? 'A';
+        $this->employment_type_id = (string) ($this->employee->employment_type_id ?? '');
+        $this->work_mode_id = (string) ($this->employee->work_mode_id ?? '');
+        $this->salary_cycle_id = (string) ($this->employee->salary_cycle_id ?? '');
         $this->joining_date = $this->employee->joining_date->format('Y-m-d');
         $this->probation_end_date = $this->employee->probation_end_date?->format('Y-m-d') ?? '';
         $this->status = $this->employee->status->value;
-        $this->employment_type = $this->employee->employment_type->value;
-
-        // Load existing leave allocations for editing
-        $this->leave_allocations = [];
-        foreach (LeaveType::all() as $lt) {
-            $bal = LeaveBalance::where('employee_id', $this->employee->id)
-                ->where('leave_type_id', $lt->id)
-                ->where('year', now()->year)
-                ->first();
-
-            $this->leave_allocations[$lt->id] = $bal?->allocated_days ?? 0;
-        }
+        // Lifecycle dates
+        $this->resignation_date = $this->employee->resignation_date?->format('Y-m-d') ?? '';
+        $this->termination_date = $this->employee->termination_date?->format('Y-m-d') ?? '';
+        $this->notice_period_end_date = $this->employee->notice_period_end_date?->format('Y-m-d') ?? '';
+        $this->leaveBalanceYear = (string) now()->year;
     }
 
     public function setTab(string $tab): void
@@ -154,9 +172,13 @@ class EmployeeEdit extends Component
             'biometric_id' => ['nullable', 'string', 'max:20', Rule::unique('employees', 'biometric_id')->ignore($this->employee->id)],
             'joining_date' => 'required|date',
             'shift_id' => 'nullable|exists:shift_settings,id',
-            'salary_cycle' => 'required|in:A,B',
+            'employment_type_id' => 'nullable|exists:employment_types,id',
+            'work_mode_id' => 'nullable|exists:work_modes,id',
+            'salary_cycle_id' => 'nullable|exists:salary_cycles,id',
             'status' => 'required|string',
-            'employment_type' => 'required|string',
+            'resignation_date' => 'nullable|date',
+            'termination_date' => 'nullable|date',
+            'notice_period_end_date' => 'nullable|date',
         ]);
 
         $this->employee->user->update([
@@ -183,31 +205,17 @@ class EmployeeEdit extends Component
             'job_title_id' => $this->job_title_id ?: null,
             'manager_id' => $this->manager_id ?: null,
             'shift_id' => $this->shift_id ?: null,
-            'salary_cycle' => $this->salary_cycle,
+            'employment_type_id' => $this->employment_type_id ?: null,
+            'work_mode_id' => $this->work_mode_id ?: null,
+            'salary_cycle_id' => $this->salary_cycle_id ?: null,
             'joining_date' => $this->joining_date,
             'status' => $this->status,
-            'employment_type' => $this->employment_type,
+            'resignation_date' => $this->resignation_date ?: null,
+            'termination_date' => $this->termination_date ?: null,
+            'notice_period_end_date' => $this->notice_period_end_date ?: null,
         ]);
 
         \Flux::toast(text: 'Employee updated successfully.', variant: 'success');
-
-        // Persist leave allocations for current year
-        foreach (LeaveType::all() as $lt) {
-            $allocated = isset($this->leave_allocations[$lt->id]) ? (float) $this->leave_allocations[$lt->id] : 0.0;
-
-            LeaveBalance::updateOrCreate([
-                'employee_id' => $this->employee->id,
-                'leave_type_id' => $lt->id,
-                'year' => now()->year,
-            ], [
-                'allocated_days' => $allocated,
-                'used_days' => 0,
-                'carried_forward_days' => 0,
-                'encashed_days' => 0,
-                'comp_off_credits' => 0,
-            ]);
-        }
-
         $this->js("setTimeout(() => { window.location = '".route('employees.index')."'; }, 1500)");
     }
 
@@ -399,22 +407,88 @@ class EmployeeEdit extends Component
             'extend_reason' => 'required|string|max:1000',
         ]);
 
-        $this->employee->update([
-            'probation_end_date' => $this->extend_end_date,
-            'probation_extension_reason' => $this->extend_reason,
+        try {
+            app(ProbationEngine::class)->extend(
+                $this->employee,
+                auth()->user(),
+                $this->extend_end_date,
+                $this->extend_reason,
+            );
+
+            $this->probation_end_date = $this->extend_end_date;
+            $this->reset('extend_end_date', 'extend_reason');
+            \Flux::toast('Probation extended and manager notified.', variant: 'success');
+        } catch (\DomainException $e) {
+            \Flux::toast($e->getMessage(), variant: 'danger');
+        }
+    }
+
+    // ── Manage Leave Balance ──────────────────────────────────────────────────
+
+    public function openManageLeaveModal(): void
+    {
+        abort_unless(auth()->user()->isHrAdmin() || auth()->user()->isSuperAdmin(), 403);
+
+        $this->reset(['leaveAdjustTypeId', 'leaveAdjustDays', 'leaveAdjustReason', 'leaveAdjustRemarks']);
+        $this->leaveAdjustAction = 'credit';
+        $this->showManageLeaveModal = true;
+    }
+
+    public function closeManageLeaveModal(): void
+    {
+        $this->showManageLeaveModal = false;
+        $this->resetErrorBag();
+    }
+
+    public function submitLeaveAdjustment(): void
+    {
+        abort_unless(auth()->user()->isHrAdmin() || auth()->user()->isSuperAdmin(), 403);
+
+        $this->validate([
+            'leaveAdjustTypeId' => 'required|exists:leave_types,id',
+            'leaveAdjustAction' => 'required|in:credit,debit',
+            'leaveAdjustDays' => 'required|numeric|min:0.5|max:365',
+            'leaveAdjustReason' => 'required|string|min:5|max:500',
+            'leaveAdjustRemarks' => 'nullable|string|max:1000',
         ]);
 
-        if ($this->employee->manager) {
-            $this->employee->manager->notify(new ProbationExtendedNotification($this->employee));
+        $leaveType = LeaveType::findOrFail($this->leaveAdjustTypeId);
+
+        try {
+            app(LeaveBalanceService::class)->adjust(
+                $this->employee,
+                $leaveType,
+                $this->leaveAdjustAction,
+                (float) $this->leaveAdjustDays,
+                $this->leaveAdjustReason,
+                $this->leaveAdjustRemarks,
+                auth()->user(),
+                (int) $this->leaveBalanceYear,
+            );
+        } catch (\DomainException $e) {
+            $this->addError('leaveAdjustDays', $e->getMessage());
+
+            return;
         }
 
-        $this->reset('extend_end_date', 'extend_reason');
-        \Flux::toast('Probation extended and manager notified.');
+        $this->closeManageLeaveModal();
+        \Flux::toast(
+            ucfirst($this->leaveAdjustAction).' of '.$this->leaveAdjustDays.' day(s) applied successfully.',
+            variant: 'success',
+        );
     }
 
     public function render()
     {
         $this->employee->load(['salaries.component', 'shift']);
+
+        $leaveService = app(LeaveBalanceService::class);
+        $balanceSummary = $this->activeTab === 'Leave'
+            ? $leaveService->getBalanceSummary($this->employee, (int) $this->leaveBalanceYear)
+            : collect();
+        $adjustmentHistory = ($this->activeTab === 'Leave')
+            ? $leaveService->getAdjustmentHistory($this->employee)
+            : collect();
 
         return view('livewire.employees.employee-edit', [
             'offices' => Office::all(),
@@ -428,7 +502,13 @@ class EmployeeEdit extends Component
             ])->where('id', '!=', $this->employee->user_id)->get(),
             'roles' => UserRole::cases(),
             'statuses' => EmployeeStatus::cases(),
-            'employmentTypes' => EmploymentType::cases(),
+            'employmentTypes' => EmploymentType::active()->get(),
+            'workModes' => WorkMode::active()->get(),
+            'salaryCycles' => SalaryCycle::active()->get(),
+            'balanceSummary' => $balanceSummary,
+            'adjustmentHistory' => $adjustmentHistory,
+            'adjustableLeaveTypes' => LeaveType::where('is_system_controlled', false)->whereNull('deleted_at')->orderBy('name')->get(),
+            'canManageLeaveBalance' => auth()->user()->isHrAdmin() || auth()->user()->isSuperAdmin(),
         ])->layout('layouts.app', ['title' => 'Edit Employee']);
     }
 }

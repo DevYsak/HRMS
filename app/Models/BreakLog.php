@@ -13,6 +13,7 @@ class BreakLog extends Model
         'break_start',
         'break_end',
         'duration_minutes',
+        'pause_code',
     ];
 
     protected function casts(): array

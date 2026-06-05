@@ -1,6 +1,6 @@
 <flux:main class="min-h-screen bg-zinc-50 dark:bg-zinc-950 p-6 space-y-5" x-data="{ tab: 'requests' }">
 
-    {{-- â”€â”€â”€ HERO HEADER â”€â”€â”€ --}}
+    {{-- â"€â"€â"€ HERO HEADER â"€â"€â"€ --}}
     <div class="pulse-hero shadow-xl">
         <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_rgba(249,115,22,0.22),_transparent_65%)]"></div>
         <div class="pointer-events-none absolute -bottom-10 -left-10 size-64 rounded-full blur-3xl" style="background:radial-gradient(circle,rgba(249,115,22,0.30),transparent 70%)"></div>
@@ -32,7 +32,7 @@
         </div>
     </div>
 
-    {{-- â”€â”€â”€ PENDING ALERT â”€â”€â”€ --}}
+    {{-- â"€â"€â"€ PENDING ALERT â"€â"€â"€ --}}
     @if(!empty($pendingCount) && $pendingCount > 0)
         <div class="flex items-center gap-4 rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 to-orange-50 p-4 dark:border-amber-800/40 dark:from-amber-950/30 dark:to-orange-950/20">
             <div class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-900/40">
@@ -54,7 +54,7 @@
         </div>
     @endif
 
-    {{-- â”€â”€â”€ LEAVE BALANCE CARDS â”€â”€â”€ --}}
+    {{-- â"€â"€â"€ LEAVE BALANCE CARDS â"€â"€â"€ --}}
     {{-- Each card shows: Available days clearly, plus a plain breakdown row --}}
     <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         @forelse($balances as $balance)
@@ -136,7 +136,7 @@
                             @endif
                             @if($compOff > 0)
                                 <span class="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400">
-                                    âœ“ {{ (float)$compOff }} comp off credits
+                                    âœ" {{ (float)$compOff }} comp off credits
                                 </span>
                             @endif
                         </div>
@@ -151,7 +151,7 @@
         @endforelse
     </div>
 
-    {{-- â”€â”€â”€ ANALYTICS SECTION â”€â”€â”€ --}}
+    {{-- â"€â"€â"€ ANALYTICS SECTION â"€â"€â"€ --}}
     @php
         $maxWeekday   = max(max($weeklyPattern), 1);
         $maxMonthly   = max(max($monthlyStats), 1);
@@ -162,7 +162,7 @@
     @endphp
     <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
 
-        {{-- â”€â”€ Weekly Pattern â”€â”€ --}}
+        {{-- â"€â"€ Weekly Pattern â"€â"€ --}}
         <div class="rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
             <div class="mb-1 flex items-center justify-between">
                 <div class="flex items-center gap-2">
@@ -206,7 +206,7 @@
             @endif
         </div>
 
-        {{-- â”€â”€ Leave Distribution â”€â”€ --}}
+        {{-- â"€â"€ Leave Distribution â"€â"€ --}}
         <div class="rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
             <div class="mb-1 flex items-center gap-2">
                 <div class="rounded-lg bg-violet-50 p-1.5 dark:bg-violet-900/20">
@@ -250,7 +250,7 @@
             @endif
         </div>
 
-        {{-- â”€â”€ Monthly Trend â”€â”€ --}}
+        {{-- â"€â"€ Monthly Trend â"€â"€ --}}
         <div class="rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
             <div class="mb-1 flex items-center justify-between">
                 <div class="flex items-center gap-2">
@@ -269,7 +269,7 @@
                     <p class="text-xs font-medium text-zinc-400">No leave data for {{ now()->year }} yet.</p>
                 </div>
             @else
-                {{-- Pure CSS bar chart â€” no Chart.js, no CDN --}}
+                {{-- Pure CSS bar chart â€" no Chart.js, no CDN --}}
                 <div class="flex items-end gap-1 h-24">
                     @foreach($monthlyStats as $mi => $days)
                         @php
@@ -296,7 +296,7 @@
         </div>
     </div>
 
-    {{-- â”€â”€â”€ HISTORY SECTION â”€â”€â”€ --}}
+    {{-- â"€â"€â"€ HISTORY SECTION â"€â"€â"€ --}}
     <div class="overflow-hidden rounded-2xl border border-zinc-100 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
 
         {{-- Tab Nav --}}
@@ -378,16 +378,18 @@
                                 </td>
                                 <td class="px-4 py-4">
                                     @php
-                                        [$statusClass, $statusIcon] = match($req->status) {
-                                            'approved' => ['bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400', 'check-circle'],
-                                            'rejected' => ['bg-rose-50 text-rose-700 dark:bg-rose-900/20 dark:text-rose-400', 'x-circle'],
-                                            'pending'  => ['bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400', 'clock'],
-                                            default    => ['bg-zinc-50 text-zinc-700', 'question-mark-circle'],
+                                        [$statusClass, $statusIcon, $statusLabel] = match($req->status) {
+                                            'approved'    => ['bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400', 'check-circle', 'Approved'],
+                                            'rejected'    => ['bg-rose-50 text-rose-700 dark:bg-rose-900/20 dark:text-rose-400', 'x-circle', 'Rejected'],
+                                            'pending'     => ['bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400', 'clock', 'Pending'],
+                                            'pending_hr'  => ['bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400', 'clock', 'Pending HR'],
+                                            'cancelled'   => ['bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400', 'x-circle', 'Cancelled'],
+                                            default       => ['bg-zinc-50 text-zinc-700', 'question-mark-circle', $req->status],
                                         };
                                     @endphp
                                     <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wider {{ $statusClass }}">
                                         <flux:icon :name="$statusIcon" class="size-3" />
-                                        {{ $req->status }}
+                                        {{ $statusLabel }}
                                     </span>
                                 </td>
                                 <td class="px-4 py-4">
@@ -406,7 +408,18 @@
                                     @endif
                                 </td>
                                 <td class="py-4 pr-6 text-right">
-                                    <span class="text-xs font-medium text-zinc-400">{{ $req->created_at->format('d M Y') }}</span>
+                                    <div class="flex items-center justify-end gap-3">
+                                        <span class="text-xs font-medium text-zinc-400">{{ $req->created_at->format('d M Y') }}</span>
+                                        @if(in_array($req->status, ['pending', 'pending_hr', 'approved']))
+                                            <button
+                                                wire:click="cancelRequest({{ $req->id }})"
+                                                wire:confirm="Cancel this leave request?"
+                                                class="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold text-red-500 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40 rounded-lg transition-colors">
+                                                <flux:icon.x-mark class="size-3" />
+                                                Cancel
+                                            </button>
+                                        @endif
+                                    </div>
                                 </td>
                             </tr>
                         @empty
@@ -515,7 +528,7 @@
         </div>
     </div>
 
-    {{-- â”€â”€â”€ REQUEST LEAVE MODAL â”€â”€â”€ --}}
+    {{-- â"€â"€â"€ REQUEST LEAVE MODAL â"€â"€â"€ --}}
     @if($showRequestModal)
         <div class="fixed inset-0 z-50 flex items-center justify-center p-4"
              x-data x-on:keydown.escape.window="$wire.set('showRequestModal', false)">
@@ -544,26 +557,100 @@
             @enderror
 
             <form wire:submit="submitRequest" class="space-y-5">
-                <flux:select wire:model="leave_type_id" label="Leave Type" placeholder="Select type..." required>
+
+                {{-- Leave Type --}}
+                <flux:select wire:model.live="leave_type_id" label="Leave Type" placeholder="Select type..." required>
                     @foreach($leaveTypes as $type)
-                        <option value="{{ $type->id }}">{{ $type->name }} ({{ $type->is_paid ? 'Paid' : 'Unpaid' }})</option>
+                        <option value="{{ $type->id }}">{{ $type->name }}</option>
                     @endforeach
                 </flux:select>
 
+                {{-- Balance preview for selected type --}}
+                @if($selectedType && $selectedBalance)
+                    <div class="flex items-center gap-2 rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2 text-xs text-indigo-700 dark:border-indigo-900/40 dark:bg-indigo-950/20 dark:text-indigo-300">
+                        <flux:icon.information-circle class="size-3.5 shrink-0" />
+                        <span>Available balance: <strong>{{ max(0, $selectedBalance->allocated_days - $selectedBalance->used_days - ($selectedBalance->encashed_days ?? 0)) }} day(s)</strong></span>
+                    </div>
+                @endif
+
+                {{-- Dates --}}
                 <div class="grid grid-cols-2 gap-4">
                     <flux:input wire:model="start_date" type="date" label="Start Date" required />
                     <flux:input wire:model="end_date" type="date" label="End Date" required />
                 </div>
 
-                <div class="flex items-center gap-3 rounded-xl border border-zinc-200 bg-zinc-50/50 px-4 py-3 dark:border-zinc-700 dark:bg-zinc-800/30">
-                    <flux:checkbox wire:model.live="is_half_day" id="half_day_toggle" />
-                    <div>
-                        <label for="half_day_toggle" class="cursor-pointer text-sm font-semibold text-zinc-900 dark:text-zinc-100">Half-Day Leave</label>
-                        <p class="mt-0.5 text-xs text-zinc-500">Deducts 0.5 days. Only valid when start and end date are the same.</p>
+                {{-- Half Day --}}
+                @if(!$selectedType || $selectedType->allow_half_day)
+                    <div class="rounded-xl border border-zinc-200 bg-zinc-50/50 px-4 py-3 dark:border-zinc-700 dark:bg-zinc-800/30 space-y-3">
+                        <div class="flex items-center gap-3">
+                            <flux:checkbox wire:model.live="is_half_day" id="half_day_toggle" />
+                            <label for="half_day_toggle" class="cursor-pointer text-sm font-semibold text-zinc-900 dark:text-zinc-100">Half-Day Leave <span class="text-xs font-normal text-zinc-400">(deducts 0.5 days)</span></label>
+                        </div>
+                        @if($is_half_day)
+                            <div class="flex gap-4 pl-7">
+                                <label class="flex items-center gap-2 cursor-pointer text-sm text-zinc-700 dark:text-zinc-300">
+                                    <input type="radio" wire:model="half_day_period" value="first_half" class="accent-indigo-600" />
+                                    First Half
+                                </label>
+                                <label class="flex items-center gap-2 cursor-pointer text-sm text-zinc-700 dark:text-zinc-300">
+                                    <input type="radio" wire:model="half_day_period" value="second_half" class="accent-indigo-600" />
+                                    Second Half
+                                </label>
+                            </div>
+                            @error('half_day_period')
+                                <p class="pl-7 text-xs text-red-500">{{ $message }}</p>
+                            @enderror
+                        @endif
                     </div>
-                </div>
+                @endif
 
-                <flux:textarea wire:model="reason" label="Reason" placeholder="Please describe why you need time off..." rows="3" required />
+                {{-- Paid / Unpaid choice --}}
+                @if($selectedType && ($selectedType->allow_paid_request || $selectedType->allow_unpaid_request))
+                    <div class="rounded-xl border border-zinc-200 bg-zinc-50/50 px-4 py-3 dark:border-zinc-700 dark:bg-zinc-800/30">
+                        <p class="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">Leave Payment Type</p>
+                        <div class="flex gap-4">
+                            @if($selectedType->allow_paid_request)
+                                <label class="flex items-center gap-2 cursor-pointer text-sm text-zinc-700 dark:text-zinc-300">
+                                    <input type="radio" wire:model="requested_leave_status" value="paid" class="accent-indigo-600" />
+                                    <span class="font-medium text-emerald-600 dark:text-emerald-400">Paid Leave</span>
+                                </label>
+                            @endif
+                            @if($selectedType->allow_unpaid_request)
+                                <label class="flex items-center gap-2 cursor-pointer text-sm text-zinc-700 dark:text-zinc-300">
+                                    <input type="radio" wire:model="requested_leave_status" value="unpaid" class="accent-indigo-600" />
+                                    <span class="font-medium text-amber-600 dark:text-amber-400">Unpaid Leave</span>
+                                </label>
+                            @endif
+                        </div>
+                        @error('requested_leave_status')
+                            <p class="mt-1 text-xs text-red-500">{{ $message }}</p>
+                        @enderror
+                    </div>
+                @endif
+
+                {{-- Reason --}}
+                <flux:textarea wire:model="reason" label="Reason" placeholder="Please describe why you need time off..." rows="2" required />
+
+                {{-- Employee Remarks --}}
+                <flux:textarea wire:model="employee_remarks" label="Additional Remarks" placeholder="Any other notes for the approver (optional)..." rows="2" />
+
+                {{-- Attachment --}}
+                @if($selectedType?->attachment_required)
+                    <flux:field>
+                        <flux:label>
+                            Attachment <span class="text-red-500">*</span>
+                            <span class="ml-1 text-xs font-normal text-zinc-400">(PDF, JPG, PNG — max 5 MB)</span>
+                        </flux:label>
+                        <flux:input wire:model="attachment" type="file" accept=".pdf,.jpg,.jpeg,.png" />
+                        @error('attachment') <flux:error>{{ $message }}</flux:error> @enderror
+                    </flux:field>
+                @elseif($selectedType)
+                    <flux:field>
+                        <flux:label>Attachment <span class="ml-1 text-xs font-normal text-zinc-400">(optional — PDF, JPG, PNG)</span></flux:label>
+                        <flux:input wire:model="attachment" type="file" accept=".pdf,.jpg,.jpeg,.png" />
+                        @error('attachment') <flux:error>{{ $message }}</flux:error> @enderror
+                    </flux:field>
+                @endif
 
                 <div class="flex justify-end gap-3 pt-2">
                     <button type="button" @click="$wire.set('showRequestModal', false)" class="px-4 py-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-600 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors">Cancel</button>
@@ -577,38 +664,80 @@
     @endif
 
     {{-- ─── ENCASHMENT MODAL ─── --}}
-    <flux:modal name=”encashment-modal” class=”max-w-md”>
-        <div class=”space-y-6”>
+    <flux:modal name="encashment-modal" class="max-w-lg">
+        <div class="space-y-6">
             <div class="flex items-start gap-3">
                 <div class="shrink-0 rounded-xl bg-amber-50 p-2.5 dark:bg-amber-900/20">
                     <flux:icon.banknotes class="size-5 text-amber-600 dark:text-amber-400" />
                 </div>
                 <div>
                     <flux:heading size="lg">Encash Leave Balance</flux:heading>
-                    <flux:subheading>Convert unused paid leave into salary payout.</flux:subheading>
+                    <flux:subheading>Convert unused paid leave into salary payout. Requires HR then Finance approval.</flux:subheading>
                 </div>
             </div>
 
             <div class="space-y-4">
-                <flux:select wire:model="encash_leave_type_id" label="Select Leave Type" required>
+                <flux:select wire:model.live="encash_leave_type_id" label="Select Leave Type" required>
+                    <option value="">— Choose leave type —</option>
                     @foreach($encashableTypes as $type)
-                        <option value="{{ $type->id }}">{{ $type->name }}</option>
+                        <option value="{{ $type->id }}">
+                            {{ $type->name }}
+                            ({{ $type->available_for_encashment }}d available{{ $type->encashment_rate_multiplier != 1.00 ? ' · '.number_format($type->encashment_rate_multiplier, 2).'× rate' : '' }})
+                        </option>
                     @endforeach
                 </flux:select>
+                @error('encash_leave_type_id') <p class="text-xs text-red-500">{{ $message }}</p> @enderror
 
-                <flux:input wire:model="encash_days" label="Days to Encash" type="number" step="0.5" suffix="Days" required />
+                @php $selectedEncashType = $encashableTypes->firstWhere('id', (int) $encash_leave_type_id); @endphp
+
+                @if($selectedEncashType)
+                    <div class="grid grid-cols-2 gap-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/60 p-3 text-xs">
+                        <div>
+                            <span class="text-zinc-400 block mb-0.5">Carry-forward available</span>
+                            <span class="font-bold text-zinc-800 dark:text-zinc-200">{{ $selectedEncashType->cf_available }}d</span>
+                        </div>
+                        @if($selectedEncashType->allow_current_year_encashment)
+                            <div>
+                                <span class="text-zinc-400 block mb-0.5">Current-year available</span>
+                                <span class="font-bold text-zinc-800 dark:text-zinc-200">{{ $selectedEncashType->cy_available }}d</span>
+                            </div>
+                        @endif
+                        <div>
+                            <span class="text-zinc-400 block mb-0.5">Total encashable</span>
+                            <span class="font-bold text-emerald-600">{{ $selectedEncashType->available_for_encashment }}d</span>
+                        </div>
+                        @if($selectedEncashType->remaining_cap !== null)
+                            <div>
+                                <span class="text-zinc-400 block mb-0.5">Remaining cap this year</span>
+                                <span class="font-bold text-zinc-800 dark:text-zinc-200">{{ $selectedEncashType->remaining_cap }}d</span>
+                            </div>
+                        @endif
+                        @if($selectedEncashType->encashment_rate_multiplier != 1.00)
+                            <div>
+                                <span class="text-zinc-400 block mb-0.5">Rate multiplier</span>
+                                <span class="font-bold text-zinc-800 dark:text-zinc-200">{{ number_format($selectedEncashType->encashment_rate_multiplier, 2) }}×</span>
+                            </div>
+                        @endif
+                    </div>
+                @endif
+
+                <flux:input wire:model="encash_days" label="Days to Encash" type="number" step="0.5" min="0.5" suffix="Days" required />
+                @error('encash_days') <p class="text-xs text-red-500">{{ $message }}</p> @enderror
 
                 <div class="flex gap-3 rounded-xl border border-amber-100 bg-amber-50 p-3 dark:border-amber-800/30 dark:bg-amber-900/10">
                     <flux:icon.information-circle class="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
                     <p class="text-xs leading-relaxed text-amber-700 dark:text-amber-400">
-                        Only CSL leaves are eligible for encashment per company policy. Requests require HR &amp; Finance approval.
+                        Carry-forward (previous-year) days are encashed first. Payout = daily rate × multiplier, included in payroll for the current month.
                     </p>
                 </div>
             </div>
 
             <div class="flex justify-end gap-2">
-                <flux:button @click="$flux.modal('encashment-modal').close()">Cancel</flux:button>
-                <flux:button wire:click="submitEncashment" variant="primary">Submit Request</flux:button>
+                <button type="button" x-on:click="$flux.modal('encashment-modal').close()"
+                    class="px-4 py-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-600 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors">
+                    Cancel
+                </button>
+                <flux:button wire:click="submitEncashment()" variant="primary">Submit Request</flux:button>
             </div>
         </div>
     </flux:modal>

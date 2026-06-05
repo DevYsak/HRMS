@@ -3,6 +3,7 @@
 namespace App\Livewire\TimeOff;
 
 use App\Models\Employee;
+use App\Models\LeaveBalance;
 use App\Models\LeaveRequest;
 use App\Models\LeaveType;
 use App\Services\LeaveService;
@@ -36,6 +37,13 @@ class AllTimeOff extends Component
 
     public string $panelReviewComment = '';
 
+    // HR override (panel)
+    public string $panelHrOverrideStatus = '';
+
+    public string $panelHrRemark = '';
+
+    public bool $panelShowHrOverride = false;
+
     // Full manage modal
     public bool $showManageModal = false;
 
@@ -52,9 +60,11 @@ class AllTimeOff extends Component
         'end_date' => '',
         'reason' => '',
         'reviewer_comment' => '',
+        'approved_leave_status' => '',
+        'hr_remark' => '',
     ];
 
-    // New leave request for an employee
+    // New leave request
     public bool $showNewModal = false;
 
     public array $newForm = [
@@ -99,9 +109,17 @@ class AllTimeOff extends Component
         abort_unless(Auth::user()->canApproveLeave(), 403);
 
         $this->viewingId = $id;
-        $this->viewingRequest = LeaveRequest::with(['employee.user', 'employee.department', 'leaveType', 'reviewer'])
-            ->findOrFail($id);
+        $this->viewingRequest = LeaveRequest::with([
+            'employee.user', 'employee.department', 'leaveType',
+            'reviewer', 'hrReviewer', 'paymentAuditLogs.changedByUser',
+        ])->findOrFail($id);
+
         $this->panelReviewComment = '';
+        $this->panelHrOverrideStatus = $this->viewingRequest->approved_leave_status
+            ?? $this->viewingRequest->requested_leave_status
+            ?? ($this->viewingRequest->leaveType?->is_paid ? 'paid' : 'unpaid');
+        $this->panelHrRemark = '';
+        $this->panelShowHrOverride = false;
         $this->resetErrorBag();
         $this->showDetailPanel = true;
     }
@@ -112,6 +130,9 @@ class AllTimeOff extends Component
         $this->viewingId = null;
         $this->viewingRequest = null;
         $this->panelReviewComment = '';
+        $this->panelHrOverrideStatus = '';
+        $this->panelHrRemark = '';
+        $this->panelShowHrOverride = false;
         $this->resetErrorBag();
     }
 
@@ -120,6 +141,12 @@ class AllTimeOff extends Component
         abort_unless($this->viewingId !== null, 422);
         abort_unless(Auth::user()->canApproveLeave(), 403);
 
+        if ($this->panelShowHrOverride && trim($this->panelHrRemark) === '') {
+            $this->addError('panelHrRemark', 'HR remark is required when overriding payment status.');
+
+            return;
+        }
+
         $request = LeaveRequest::findOrFail($this->viewingId);
 
         $form = [
@@ -127,18 +154,35 @@ class AllTimeOff extends Component
             'start_date' => $request->start_date->format('Y-m-d'),
             'end_date' => $request->end_date->format('Y-m-d'),
             'reason' => $request->reason,
+            'is_half_day' => (bool) $request->is_half_day,
         ];
 
         try {
             app(LeaveService::class)->reviewRequest($request, $form, 'approved', Auth::id(), $this->panelReviewComment ?: null);
+
+            // Apply HR payment override if requested
+            if ($this->panelShowHrOverride && $this->panelHrOverrideStatus) {
+                $fresh = $request->fresh();
+                $currentEffective = $fresh->approved_leave_status ?? $fresh->requested_leave_status ?? 'paid';
+                if ($this->panelHrOverrideStatus !== $currentEffective) {
+                    app(LeaveService::class)->hrOverridePaymentStatus(
+                        $fresh,
+                        Auth::user(),
+                        $this->panelHrOverrideStatus,
+                        $this->panelHrRemark,
+                    );
+                }
+            }
         } catch (\DomainException $exception) {
             $this->addError('panelReviewComment', $exception->getMessage());
 
             return;
         }
 
-        $this->viewingRequest = LeaveRequest::with(['employee.user', 'employee.department', 'leaveType', 'reviewer'])
-            ->findOrFail($this->viewingId);
+        $this->viewingRequest = LeaveRequest::with([
+            'employee.user', 'employee.department', 'leaveType', 'reviewer',
+            'hrReviewer', 'paymentAuditLogs.changedByUser',
+        ])->findOrFail($this->viewingId);
 
         \Flux::toast('Leave approved successfully.', variant: 'success');
     }
@@ -160,14 +204,53 @@ class AllTimeOff extends Component
             'start_date' => $request->start_date->format('Y-m-d'),
             'end_date' => $request->end_date->format('Y-m-d'),
             'reason' => $request->reason,
+            'is_half_day' => (bool) $request->is_half_day,
         ];
 
         app(LeaveService::class)->reviewRequest($request, $form, 'rejected', Auth::id(), $this->panelReviewComment);
 
-        $this->viewingRequest = LeaveRequest::with(['employee.user', 'employee.department', 'leaveType', 'reviewer'])
-            ->findOrFail($this->viewingId);
+        $this->viewingRequest = LeaveRequest::with([
+            'employee.user', 'employee.department', 'leaveType', 'reviewer',
+            'hrReviewer', 'paymentAuditLogs.changedByUser',
+        ])->findOrFail($this->viewingId);
 
         \Flux::toast('Leave rejected.', variant: 'danger');
+    }
+
+    /** Apply HR payment status override on an already-open request. */
+    public function applyHrOverride(): void
+    {
+        abort_unless($this->viewingId !== null, 422);
+        abort_unless(Auth::user()->canApproveLeave(), 403);
+
+        $this->validate([
+            'panelHrOverrideStatus' => ['required', 'in:paid,unpaid'],
+            'panelHrRemark' => ['required', 'min:10'],
+        ]);
+
+        $request = LeaveRequest::findOrFail($this->viewingId);
+
+        try {
+            app(LeaveService::class)->hrOverridePaymentStatus(
+                $request,
+                Auth::user(),
+                $this->panelHrOverrideStatus,
+                $this->panelHrRemark,
+            );
+        } catch (\DomainException $exception) {
+            $this->addError('panelHrRemark', $exception->getMessage());
+
+            return;
+        }
+
+        $this->viewingRequest = LeaveRequest::with([
+            'employee.user', 'employee.department', 'leaveType', 'reviewer',
+            'hrReviewer', 'paymentAuditLogs.changedByUser',
+        ])->findOrFail($this->viewingId);
+
+        $this->panelShowHrOverride = false;
+        $this->panelHrRemark = '';
+        \Flux::toast('Payment status updated and employee notified.', variant: 'success');
     }
 
     // ── Full Manage Modal ────────────────────────────────────────────────────
@@ -176,7 +259,7 @@ class AllTimeOff extends Component
     {
         abort_unless(Auth::user()->canApproveLeave(), 403);
 
-        $request = LeaveRequest::with('reviewer')->findOrFail($id);
+        $request = LeaveRequest::with(['reviewer', 'paymentAuditLogs.changedByUser'])->findOrFail($id);
         $this->editingId = $id;
         $this->form = [
             'status' => $request->status,
@@ -185,17 +268,14 @@ class AllTimeOff extends Component
             'end_date' => $request->end_date->format('Y-m-d'),
             'reason' => $request->reason,
             'reviewer_comment' => $request->reviewer_comment ?? '',
+            'approved_leave_status' => $request->approved_leave_status ?? $request->requested_leave_status ?? '',
+            'hr_remark' => '',
         ];
 
         $this->superAdminLocked = false;
         $this->lockedByName = '';
 
-        if (
-            $request->status === 'approved'
-            && $request->reviewer
-            && $request->reviewer->isSuperAdmin()
-            && Auth::user()->isHrAdmin()
-        ) {
+        if ($request->status === 'approved' && $request->reviewer && $request->reviewer->isSuperAdmin() && Auth::user()->isHrAdmin()) {
             $this->superAdminLocked = true;
             $this->lockedByName = $request->reviewer->name;
         }
@@ -210,27 +290,32 @@ class AllTimeOff extends Component
         $this->superAdminLocked = false;
         $this->resetErrorBag();
         $this->reset(['form']);
-        $this->form = ['status' => '', 'leave_type_id' => '', 'start_date' => '', 'end_date' => '', 'reason' => '', 'reviewer_comment' => ''];
+        $this->form = ['status' => '', 'leave_type_id' => '', 'start_date' => '', 'end_date' => '', 'reason' => '', 'reviewer_comment' => '', 'approved_leave_status' => '', 'hr_remark' => ''];
     }
 
     public function saveManage(): void
     {
         abort_unless(Auth::user()->canApproveLeave(), 403);
 
-        $request = LeaveRequest::with('reviewer')->findOrFail($this->editingId);
+        $request = LeaveRequest::with(['reviewer', 'leaveType'])->findOrFail($this->editingId);
 
-        if (
-            $this->superAdminLocked
-            && in_array($this->form['status'], ['rejected', 'cancelled'])
-            && empty(trim($this->form['reviewer_comment'] ?? ''))
-        ) {
+        if ($this->superAdminLocked && \in_array($this->form['status'], ['rejected', 'cancelled'], true) && empty(trim($this->form['reviewer_comment'] ?? ''))) {
             $this->addError('form.reviewer_comment', 'A comment is required to override a Super Admin approved leave.');
 
             return;
         }
 
+        // Validate HR remark when payment status is being changed
+        $currentEffective = $request->approved_leave_status ?? $request->requested_leave_status ?? 'paid';
+        $newPaymentStatus = $this->form['approved_leave_status'] ?? '';
+        if ($newPaymentStatus && $newPaymentStatus !== $currentEffective && trim($this->form['hr_remark'] ?? '') === '') {
+            $this->addError('form.hr_remark', 'HR remark is required when changing the payment status.');
+
+            return;
+        }
+
         $this->validate([
-            'form.status' => 'required|in:pending,approved,rejected,cancelled',
+            'form.status' => 'required|in:pending,pending_hr,approved,rejected,cancelled',
             'form.leave_type_id' => 'required|exists:leave_types,id',
             'form.start_date' => 'required|date',
             'form.end_date' => 'required|date|after_or_equal:form.start_date',
@@ -244,6 +329,16 @@ class AllTimeOff extends Component
                 Auth::id(),
                 $this->form['reviewer_comment'] ?: null,
             );
+
+            // Apply payment override if applicable
+            if ($newPaymentStatus && $newPaymentStatus !== $currentEffective) {
+                app(LeaveService::class)->hrOverridePaymentStatus(
+                    $request->fresh(),
+                    Auth::user(),
+                    $newPaymentStatus,
+                    $this->form['hr_remark'],
+                );
+            }
         } catch (\DomainException $exception) {
             $this->addError('form.leave_type_id', $exception->getMessage());
 
@@ -323,14 +418,21 @@ class AllTimeOff extends Component
 
         $requests = $query->latest()->paginate($this->perPage);
 
-        // KPI stats (this month)
+        // Attach available balance
+        $requests->each(function (LeaveRequest $req) {
+            $req->availableBalance = LeaveBalance::where('employee_id', $req->employee_id)
+                ->where('leave_type_id', $req->leave_type_id)
+                ->where('year', now()->year)
+                ->first();
+        });
+
         $kpiBase = LeaveRequest::whereHas('employee.user')
             ->whereMonth('created_at', now()->month)
             ->whereYear('created_at', now()->year);
 
         $kpi = [
             'total' => (clone $kpiBase)->count(),
-            'pending' => (clone $kpiBase)->where('status', 'pending')->count(),
+            'pending' => (clone $kpiBase)->whereIn('status', ['pending', 'pending_hr'])->count(),
             'approved' => (clone $kpiBase)->where('status', 'approved')->count(),
             'rejected' => (clone $kpiBase)->where('status', 'rejected')->count(),
         ];

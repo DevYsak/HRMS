@@ -17,7 +17,9 @@ class RolePermissionService
         'approve-finance' => ['label' => 'Finance Approval', 'desc' => 'Sign off payroll for disbursement', 'icon' => 'check-badge'],
         'manage-settings' => ['label' => 'Manage Settings',  'desc' => 'Configure company-wide system settings', 'icon' => 'cog-6-tooth'],
         'manage-documents' => ['label' => 'Manage Documents', 'desc' => 'Upload and manage HR documents for employees', 'icon' => 'document-text'],
-        'view-reports' => ['label' => 'View Reports',     'desc' => 'Download attendance, OT and payroll reports', 'icon' => 'chart-bar'],
+        'view-reports' => ['label' => 'View Reports',           'desc' => 'Download attendance, OT and payroll reports',                    'icon' => 'chart-bar'],
+        'view-finance-profile' => ['label' => 'Finance Employee View',  'desc' => 'View salary, bank and statutory details for payroll processing', 'icon' => 'banknotes'],
+        'review-performance' => ['label' => 'Review Performance',     'desc' => 'Access employee performance reviews and ratings',                 'icon' => 'star'],
     ];
 
     /** Roles that can be configured (Super Admin is always locked). */
@@ -31,10 +33,10 @@ class RolePermissionService
 
     /** Default permissions per role (mirrors current hardcoded enum logic). */
     public static array $defaults = [
-        'hr_admin' => ['manage-employees', 'approve-leave', 'approve-ot', 'run-payroll', 'manage-settings', 'manage-documents', 'view-reports'],
-        'director' => ['manage-employees', 'approve-leave', 'approve-ot', 'approve-finance', 'view-reports'],
-        'manager' => ['approve-leave', 'approve-ot'],
-        'finance' => ['run-payroll', 'approve-finance', 'view-reports'],
+        'hr_admin' => ['manage-employees', 'approve-leave', 'approve-ot', 'run-payroll', 'manage-settings', 'manage-documents', 'view-reports', 'view-finance-profile', 'review-performance'],
+        'director' => ['manage-employees', 'approve-leave', 'approve-ot', 'approve-finance', 'view-reports', 'review-performance'],
+        'manager' => ['approve-leave', 'approve-ot', 'review-performance'],
+        'finance' => ['run-payroll', 'approve-finance', 'view-reports', 'view-finance-profile', 'review-performance'],
         'employee' => [],
     ];
 

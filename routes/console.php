@@ -90,10 +90,48 @@ Schedule::command('hrms:carry-forward-leaves')
     ->withoutOverlapping()
     ->runInBackground();
 
+// Flag previous day absences without approved leave as Unauthorized Leave → 09:30 IST (after grace window)
+Schedule::command('hrms:flag-unauthorized-absences')
+    ->dailyAt('09:30')
+    ->withoutOverlapping()
+    ->runInBackground();
+
+// Sync Nexflow clock data and auto-create OT requests for excess hours → 09:00 IST (after shift closes)
+Schedule::command('hrms:sync-nexflow-ot')
+    ->dailyAt('09:00')
+    ->withoutOverlapping()
+    ->runInBackground();
+
 // Pull biometric punch logs every 5 minutes during working hours (07:00–22:00 IST)
 Schedule::command('hrms:sync-biometric')
     ->everyFiveMinutes()
     ->between('07:00', '22:00')
+    ->withoutOverlapping()
+    ->runInBackground();
+
+// Push HRMS employee changes to biometric devices every 10 minutes (HRMS is master)
+Schedule::command('biometric:push-employees')
+    ->everyTenMinutes()
+    ->withoutOverlapping()
+    ->runInBackground();
+
+// Phase 1A — Employee Lifecycle Engine
+// Auto-advance date-driven transitions (notice period end → resigned) → 00:30 daily
+Schedule::command('hrms:process-lifecycle-transitions')
+    ->dailyAt('00:30')
+    ->withoutOverlapping()
+    ->runInBackground();
+
+// Notify HR of overdue or soon-expiring probation periods → 08:00 daily
+Schedule::command('hrms:check-probation-expiry')
+    ->dailyAt('08:00')
+    ->withoutOverlapping()
+    ->runInBackground();
+
+// Phase 1B — Leave Management Engine
+// Credit monthly leave accruals on the 1st of each month at 06:00
+Schedule::command('hrms:monthly-leave-accrual')
+    ->monthlyOn(1, '06:00')
     ->withoutOverlapping()
     ->runInBackground();
 

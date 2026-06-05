@@ -54,6 +54,10 @@ class ZKTecoService
 
     private const CMD_USERTEMP_RRQ = 9;    // get enrolled users
 
+    private const CMD_USER_WRQ = 11;       // write (enrol / update) a user record
+
+    private const CMD_DELETE_USER = 18;    // delete a user record by user_id
+
     private const CMD_AUTH = 1102;         // authenticate with comm key / password
 
     // ── TCP framing ────────────────────────────────────────────────────────
@@ -260,6 +264,55 @@ class ZKTecoService
         $raw = $this->readBulkData(self::CMD_USERTEMP_RRQ);
 
         return $this->parseUserRecords($raw);
+    }
+
+    /**
+     * Enrol or update a user on the device.
+     *
+     * Uses CMD_USER_WRQ (11) — idempotent: if the user_id already exists the
+     * device overwrites it; otherwise a new enrolment is created.
+     *
+     * @param  int  $userId  Biometric device user number (employee_code).
+     * @param  string  $name  Display name on device (truncated to 24 bytes).
+     * @param  string  $password  Optional PIN (max 8 chars). Empty string = no PIN.
+     * @param  int  $privilege  0 = normal user, 14 = administrator.
+     *
+     * @throws RuntimeException
+     */
+    public function setUser(int $userId, string $name, string $password = '', int $privilege = 0): bool
+    {
+        $this->assertConnected();
+
+        // Standard ZKTeco user record: 72 bytes.
+        // Layout: [2 user_id][2 privilege][8 password][24 name][1 card_hi][4 card_lo][1 group][30 reserved]
+        $record = pack('vv', $userId, $privilege)
+            .str_pad(substr($password, 0, 8), 8, "\x00")
+            .str_pad(substr($name, 0, 24), 24, "\x00")
+            ."\x00"           // card_hi
+            .pack('V', 0)     // card_lo (no card)
+            ."\x00"           // group / enable
+            .str_repeat("\x00", 30); // reserved
+
+        $response = $this->sendCommand(self::CMD_USER_WRQ, $record);
+
+        return in_array($response['cmd'], [self::CMD_ACK_OK, self::CMD_ACK_OK_ESSL], true);
+    }
+
+    /**
+     * Delete a user from the device by their user_id (employee_code).
+     *
+     * Uses CMD_DELETE_USER (18). Safe to call if the user is not enrolled — the
+     * device returns ACK_OK regardless.
+     *
+     * @throws RuntimeException
+     */
+    public function deleteUser(int $userId): bool
+    {
+        $this->assertConnected();
+
+        $response = $this->sendCommand(self::CMD_DELETE_USER, pack('v', $userId));
+
+        return in_array($response['cmd'], [self::CMD_ACK_OK, self::CMD_ACK_OK_ESSL], true);
     }
 
     /**

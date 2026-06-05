@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Attendance;
 use App\Models\Employee;
 use App\Models\OtRequest;
+use App\Models\OtWindow;
 use App\Models\OvertimeRecord;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Collection;
@@ -17,12 +18,22 @@ class OvertimeService
     public const RATE_PER_HOUR = 100.0;
 
     /**
-     * Create a pre-approval OT request for an employee.
+     * Create a pre-approval OT request.
+     * REQ-06: Only accepted when an active company OT window covers the work date.
      *
      * @param  array{work_date: string, start_time: string, end_time: string, reason: string, attendance_id?: int}  $data
      */
     public function submitRequest(Employee $employee, array $data): OtRequest
     {
+        $workDate = Carbon::parse($data['work_date']);
+
+        if (! OtWindow::isOpenFor($workDate)) {
+            throw new \DomainException(
+                'Overtime requests are not accepted at this time. '
+                .'Please wait for a company-approved OT window to be opened by HR or a Director.'
+            );
+        }
+
         $start = Carbon::parse("{$data['work_date']} {$data['start_time']}");
         $end = Carbon::parse("{$data['work_date']} {$data['end_time']}");
         $hours = max(0, $end->floatDiffInHours($start));

@@ -30,8 +30,17 @@
         {{-- Section 2: Personal Profile (Spec §3.1) --}}
         <div class="pulse-card space-y-5">
             <h3 class="font-semibold text-zinc-900 dark:text-white border-b border-zinc-100 pb-2 dark:border-zinc-800">Personal Profile</h3>
-            <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-4">
                 <flux:input wire:model="employee_id" label="Employee ID" required />
+                <flux:field>
+                    <flux:label>
+                        Bio Code
+                        <flux:badge size="sm" color="amber" class="ml-1">Biometric</flux:badge>
+                    </flux:label>
+                    <flux:input wire:model="employee_code" type="number" min="1" max="65535" placeholder="e.g. 17" />
+                    <flux:error name="employee_code" />
+                    <flux:description>Device enrolment number — used for attendance sync.</flux:description>
+                </flux:field>
                 <flux:input wire:model="phone" label="Phone" placeholder="+91 98765 43210" />
                 <flux:input wire:model="date_of_birth" type="date" label="Date of Birth" />
             </div>
@@ -96,19 +105,33 @@
                         <option value="{{ $case->value }}">{{ $case->label() }}</option>
                     @endforeach
                 </flux:select>
-                <flux:select wire:model="employment_type" label="Employment Type">
-                    @foreach($employmentTypes as $case)
-                        <option value="{{ $case->value }}">{{ $case->label() }}</option>
+                <flux:select wire:model.live="employment_type_id" label="Employment Type">
+                    <option value="">Select Type…</option>
+                    @foreach($employmentTypes as $type)
+                        <option value="{{ $type->id }}">{{ $type->name }}</option>
                     @endforeach
                 </flux:select>
-                <flux:select wire:model="salary_cycle" label="Salary Cycle">
-                    <option value="A">Cycle A (1st–31st)</option>
-                    <option value="B">Cycle B (21st–20th)</option>
+                <flux:select wire:model="work_mode_id" label="Work Mode">
+                    <option value="">Select Work Mode…</option>
+                    @foreach($workModes as $mode)
+                        <option value="{{ $mode->id }}">{{ $mode->name }}</option>
+                    @endforeach
                 </flux:select>
-                <flux:input wire:model="joining_date" type="date" label="Joining Date" required />
+                <flux:select wire:model="salary_cycle_id" label="Salary Cycle">
+                    <option value="">Select Cycle…</option>
+                    @foreach($salaryCycles as $cycle)
+                        <option value="{{ $cycle->id }}">{{ $cycle->name }} ({{ $cycle->periodLabel() }})</option>
+                    @endforeach
+                </flux:select>
             </div>
             <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <flux:input wire:model="probation_end_date" type="date" label="Probation End Date" />
+                <flux:input wire:model.live="joining_date" type="date" label="Joining Date" required />
+                <flux:field>
+                    <flux:label>Probation End Date</flux:label>
+                    <flux:input wire:model="probation_end_date" type="date" />
+                    <flux:description>Auto-calculated from employment type. Override if needed.</flux:description>
+                    <flux:error name="probation_end_date" />
+                </flux:field>
             </div>
         </div>
 

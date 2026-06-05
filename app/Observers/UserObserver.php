@@ -3,6 +3,7 @@
 namespace App\Observers;
 
 use App\Models\AuditLog;
+use App\Models\Employee;
 use App\Models\User;
 
 class UserObserver
@@ -23,6 +24,15 @@ class UserObserver
             array_intersect_key($user->getOriginal(), $dirty),
             $dirty,
         );
+
+        // Name is stored on the biometric device — mark the employee for re-sync.
+        if ($user->wasChanged('name')) {
+            $employee = $user->employee;
+
+            if ($employee?->employee_code && $employee->sync_status !== 'pending') {
+                Employee::withoutEvents(fn () => $employee->update(['sync_status' => 'pending']));
+            }
+        }
     }
 
     public function deleted(User $user): void

@@ -3,6 +3,7 @@
 namespace App\Livewire\TimeOff;
 
 use App\Models\Employee;
+use App\Models\LeaveBalance;
 use App\Models\LeaveRequest;
 use App\Models\LeaveType;
 use App\Services\LeaveService;
@@ -20,10 +21,16 @@ class TeamTimeOff extends Component
 
     public ?LeaveRequest $selectedRequest = null;
 
-    // Keep this property in the query string so notifications can open a specific request.
     protected $queryString = ['selectedRequestId'];
 
     public string $reviewer_comment = '';
+
+    // HR override fields
+    public string $hr_override_status = '';
+
+    public string $hr_remark = '';
+
+    public bool $showHrOverride = false;
 
     public array $form = [
         'leave_type_id' => '',
@@ -77,11 +84,14 @@ class TeamTimeOff extends Component
     {
         abort_unless(Auth::user()->canApproveLeave(), 403);
 
-        $req = LeaveRequest::with(['employee.user', 'leaveType'])->findOrFail($id);
+        $req = LeaveRequest::with(['employee.user', 'leaveType', 'paymentAuditLogs.changedByUser'])->findOrFail($id);
 
         $this->selectedRequestId = $id;
         $this->selectedRequest = $req;
         $this->reviewer_comment = $req->reviewer_comment ?? '';
+        $this->hr_override_status = $req->approved_leave_status ?? $req->requested_leave_status ?? ($req->leaveType?->is_paid ? 'paid' : 'unpaid');
+        $this->hr_remark = '';
+        $this->showHrOverride = false;
         $this->form = [
             'leave_type_id' => $req->leave_type_id,
             'start_date' => $req->start_date->format('Y-m-d'),
@@ -115,6 +125,9 @@ class TeamTimeOff extends Component
         $this->showReviewModal = false;
         $this->selectedRequestId = null;
         $this->selectedRequest = null;
+        $this->hr_override_status = '';
+        $this->hr_remark = '';
+        $this->showHrOverride = false;
         $this->resetErrorBag();
         $this->reset(['reviewer_comment', 'form']);
         $this->form = ['leave_type_id' => '', 'start_date' => '', 'end_date' => '', 'reason' => '', 'is_half_day' => false];
@@ -131,7 +144,20 @@ class TeamTimeOff extends Component
             'form.end_date' => ['required', 'date', 'after_or_equal:form.start_date'],
         ]);
 
+        // Validate HR override remark if override is being applied
+        if ($this->showHrOverride && $this->hr_remark === '') {
+            $this->addError('hr_remark', 'HR remark is required when overriding payment status.');
+
+            return;
+        }
+
         $leaveRequest = LeaveRequest::findOrFail($this->selectedRequestId);
+
+        $approvedLeaveStatus = $this->showHrOverride && $this->hr_override_status
+            ? $this->hr_override_status
+            : null;
+
+        $hrRemark = ($this->showHrOverride && $this->hr_remark) ? $this->hr_remark : null;
 
         try {
             app(LeaveService::class)->reviewRequest(
@@ -141,6 +167,19 @@ class TeamTimeOff extends Component
                 Auth::id(),
                 $this->reviewer_comment ?: null,
             );
+
+            // If HR override status was set and different from requested, apply override
+            if ($approvedLeaveStatus && $leaveRequest->fresh()->status === 'approved') {
+                $leaveRequest->refresh();
+                if ($approvedLeaveStatus !== ($leaveRequest->requested_leave_status ?? 'paid')) {
+                    app(LeaveService::class)->hrOverridePaymentStatus(
+                        $leaveRequest,
+                        Auth::user(),
+                        $approvedLeaveStatus,
+                        $hrRemark ?? $this->reviewer_comment ?? 'Override applied during approval.',
+                    );
+                }
+            }
         } catch (\DomainException $exception) {
             $this->addError('form.leave_type_id', $exception->getMessage());
 
@@ -149,7 +188,10 @@ class TeamTimeOff extends Component
 
         $this->closeReviewModal();
 
-        \Flux::toast($status === 'approved' ? 'Leave approved successfully.' : 'Leave request rejected.', variant: $status === 'approved' ? 'success' : 'danger');
+        \Flux::toast(
+            $status === 'approved' ? 'Leave approved successfully.' : 'Leave request rejected.',
+            variant: $status === 'approved' ? 'success' : 'danger'
+        );
         $this->resetPage();
     }
 
@@ -160,10 +202,18 @@ class TeamTimeOff extends Component
         $managerId = Auth::id();
 
         $pendingRequests = LeaveRequest::with(['employee.user', 'employee.department', 'leaveType'])
-            ->where('status', 'pending')
+            ->whereIn('status', ['pending', 'pending_hr'])
             ->whereHas('employee', fn ($q) => $q->where('manager_id', $managerId))
             ->latest()
             ->get();
+
+        // Attach available balance to each pending request
+        $pendingRequests->each(function (LeaveRequest $req) {
+            $req->availableBalance = LeaveBalance::where('employee_id', $req->employee_id)
+                ->where('leave_type_id', $req->leave_type_id)
+                ->where('year', now()->year)
+                ->first();
+        });
 
         $historyQuery = LeaveRequest::with(['employee.user', 'employee.department', 'leaveType'])
             ->whereHas('employee', fn ($q) => $q->where('manager_id', $managerId));
@@ -171,24 +221,20 @@ class TeamTimeOff extends Component
         if ($this->filterFrom) {
             $historyQuery->where('start_date', '>=', $this->filterFrom);
         }
-
         if ($this->filterTo) {
             $historyQuery->where('start_date', '<=', $this->filterTo);
         }
-
         if ($this->filterLeaveType) {
             $historyQuery->where('leave_type_id', $this->filterLeaveType);
         }
-
         if ($this->filterStatus) {
             $historyQuery->where('status', $this->filterStatus);
         } else {
-            $historyQuery->whereIn('status', ['approved', 'rejected', 'pending']);
+            $historyQuery->whereIn('status', ['approved', 'rejected', 'pending', 'pending_hr']);
         }
 
         $history = $historyQuery->latest()->paginate($this->perPage);
 
-        // KPI stats
         $approvedThisMonth = LeaveRequest::whereHas('employee', fn ($q) => $q->where('manager_id', $managerId))
             ->where('status', 'approved')
             ->whereMonth('updated_at', now()->month)

@@ -35,4 +35,12 @@ return [
         ],
     ],
 
+    // Biometric app — source of truth for all attendance data
+    'biometric_app' => [
+        'url' => env('BIOMETRIC_APP_URL', 'http://localhost:8080'),
+        'key' => env('BIOMETRIC_APP_KEY'),
+        'timeout' => (int) env('BIOMETRIC_APP_TIMEOUT', 10),
+        'verify_ssl' => (bool) env('BIOMETRIC_APP_VERIFY_SSL', true),
+    ],
+
 ];

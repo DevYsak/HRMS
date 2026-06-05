@@ -4,6 +4,7 @@ namespace App\Observers;
 
 use App\Models\AuditLog;
 use App\Models\Employee;
+use App\Models\OnboardingTask;
 
 class EmployeeObserver
 {
@@ -30,7 +31,7 @@ class EmployeeObserver
         ];
 
         foreach ($tasks as $task) {
-            \App\Models\OnboardingTask::create(array_merge($task, [
+            OnboardingTask::create(array_merge($task, [
                 'employee_id' => $employee->id,
                 'phase' => 'onboarding',
                 'due_date' => now()->addDays(7),
@@ -46,6 +47,16 @@ class EmployeeObserver
             $employee->getOriginal(),
             $employee->getDirty(),
         );
+
+        // Re-enrolment needed when biometric identity fields change.
+        // Guard against infinite loop: skip if sync_status itself is what changed.
+        if (
+            ! $employee->wasChanged('sync_status')
+            && $employee->wasChanged(['employee_code', 'biometric_device_id'])
+            && $employee->employee_code
+        ) {
+            Employee::withoutEvents(fn () => $employee->update(['sync_status' => 'pending']));
+        }
     }
 
     public function deleted(Employee $employee): void

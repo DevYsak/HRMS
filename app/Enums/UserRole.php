@@ -5,21 +5,21 @@ namespace App\Enums;
 enum UserRole: string
 {
     case SuperAdmin = 'super_admin';
-    case HrAdmin    = 'hr_admin';
-    case Director   = 'director';
-    case Manager    = 'manager';
-    case Finance    = 'finance';
-    case Employee   = 'employee';
+    case HrAdmin = 'hr_admin';
+    case Director = 'director';
+    case Manager = 'manager';
+    case Finance = 'finance';
+    case Employee = 'employee';
 
     public function label(): string
     {
         return match ($this) {
             self::SuperAdmin => 'Super Admin',
-            self::HrAdmin    => 'HR Admin',
-            self::Director   => 'Director',
-            self::Manager    => 'Manager',
-            self::Finance    => 'Finance',
-            self::Employee   => 'Employee',
+            self::HrAdmin => 'HR Admin',
+            self::Director => 'Director',
+            self::Manager => 'Manager',
+            self::Finance => 'Finance',
+            self::Employee => 'Employee',
         };
     }
 
@@ -83,6 +83,28 @@ enum UserRole: string
         return in_array($this, [
             self::SuperAdmin,
             self::HrAdmin,
+        ]);
+    }
+
+    /** REQ-09: Finance can view salary-related employee data (bank, PF, ESI, salary components). */
+    public function canViewFinanceProfile(): bool
+    {
+        return in_array($this, [
+            self::SuperAdmin,
+            self::HrAdmin,
+            self::Finance,
+        ]);
+    }
+
+    /** REQ-14: Roles that can view performance reviews. */
+    public function canReviewPerformance(): bool
+    {
+        return in_array($this, [
+            self::SuperAdmin,
+            self::HrAdmin,
+            self::Director,
+            self::Manager,
+            self::Finance,
         ]);
     }
 }
