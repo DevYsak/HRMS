@@ -146,7 +146,7 @@
                             ])>
                                 {{ $w }}% / 100%
                             </div>
-                            <flux:button wire:click="addCategory" x-on:click="console.log('[KPI Templates] Add Category clicked')" size="sm" icon="plus">Add Category</flux:button>
+                            <flux:button type="button" wire:click="addCategory" size="sm" icon="plus">Add Category</flux:button>
                         </div>
                     </div>
 
@@ -178,13 +178,16 @@
                                         placeholder="Category name (e.g. Technical)"
                                         class="flex-1 bg-transparent text-sm font-semibold text-zinc-900 dark:text-white outline-none placeholder:text-zinc-400"
                                     />
+                                    @error('categories.'.$ci.'.name')
+                                        <span class="text-xs text-red-500">{{ $message }}</span>
+                                    @enderror
                                     <input
                                         wire:model="categories.{{ $ci }}.code"
                                         placeholder="Code"
                                         class="w-20 bg-transparent text-xs font-mono text-zinc-500 outline-none placeholder:text-zinc-300 dark:placeholder:text-zinc-600"
                                     />
-                                    <flux:button wire:click="addComponent({{ $ci }})" x-on:click="console.log('[KPI Templates] Add Component clicked, categoryIndex=', {{ $ci }})" size="xs" variant="ghost" icon="plus">Add Component</flux:button>
-                                    <button wire:click="removeCategory({{ $ci }})" class="text-zinc-400 hover:text-red-500 transition-colors">
+                                    <flux:button type="button" wire:click="addComponent({{ $ci }})" size="xs" variant="ghost" icon="plus">Add Component</flux:button>
+                                    <button type="button" wire:click="removeCategory({{ $ci }})" class="text-zinc-400 hover:text-red-500 transition-colors">
                                         <flux:icon.trash class="size-4" />
                                     </button>
                                 </div>
@@ -200,6 +203,9 @@
                                                     placeholder="Component name"
                                                     class="w-full bg-transparent text-sm text-zinc-900 dark:text-white outline-none placeholder:text-zinc-400"
                                                 />
+                                                @error('categories.'.$ci.'.components.'.$ki.'.name')
+                                                    <p class="mt-1 text-xs text-red-500">{{ $message }}</p>
+                                                @enderror
                                             </div>
                                             {{-- Scoring type --}}
                                             <div class="col-span-3">
@@ -224,6 +230,9 @@
                                                     class="w-full text-xs text-right bg-zinc-100 dark:bg-zinc-800 border-0 rounded-lg px-2 py-1.5 text-zinc-900 dark:text-white outline-none"
                                                 />
                                                 <span class="text-xs text-zinc-400 shrink-0">%</span>
+                                                @error('categories.'.$ci.'.components.'.$ki.'.weight_percent')
+                                                    <p class="text-xs text-red-500">{{ $message }}</p>
+                                                @enderror
                                             </div>
                                             {{-- Max score --}}
                                             <div class="col-span-2 flex items-center gap-1">
@@ -237,7 +246,7 @@
                                             </div>
                                             {{-- Remove --}}
                                             <div class="col-span-1 flex justify-end">
-                                                <button wire:click="removeComponent({{ $ci }}, {{ $ki }})" class="text-zinc-300 hover:text-red-500 transition-colors">
+                                                <button type="button" wire:click="removeComponent({{ $ci }}, {{ $ki }})" class="text-zinc-300 hover:text-red-500 transition-colors">
                                                     <flux:icon.x-mark class="size-4" />
                                                 </button>
                                             </div>
@@ -266,8 +275,8 @@
                     @if($selectedTemplateId)
                         <flux:button wire:click="openLaunchCycle({{ $selectedTemplateId }})" variant="ghost" icon="rocket-launch">Launch Cycle</flux:button>
                     @endif
-                    <flux:button wire:click="cancelForm" variant="ghost">Cancel</flux:button>
-                    <flux:button wire:click="save" x-on:click="console.log('[KPI Templates] Save clicked, categories=', @js($categories))" variant="primary" wire:loading.attr="disabled" icon="check">
+                    <flux:button type="button" wire:click="cancelForm" variant="ghost">Cancel</flux:button>
+                    <flux:button type="button" wire:click="save" wire:target="save" variant="primary" wire:loading.attr="disabled" icon="check">
                         <span wire:loading.remove>{{ $selectedTemplateId ? 'Update Template' : 'Save Template' }}</span>
                         <span wire:loading>Saving…</span>
                     </flux:button>
@@ -358,17 +367,5 @@
             </div>
         </div>
     </flux:modal>
-
-    @script
-    <script>
-        Livewire.hook('request', ({ fail }) => {
-            fail(({ status, content }) => {
-                console.error('[KPI Templates] Livewire request failed', { status, content });
-            });
-        });
-
-        $wire.$on('error', (message) => console.error('[KPI Templates] Component error', message));
-    </script>
-    @endscript
 
 </flux:main>

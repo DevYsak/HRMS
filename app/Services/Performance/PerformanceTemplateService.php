@@ -8,6 +8,7 @@ use App\Models\PerformanceComponent;
 use App\Models\PerformanceTemplate;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class PerformanceTemplateService
 {
@@ -35,6 +36,13 @@ class PerformanceTemplateService
 
     private function syncCategories(PerformanceTemplate $template, array $categories): void
     {
+        Log::info('PerformanceTemplateService::syncCategories received.', [
+            'template_id' => $template->id,
+            'incoming_category_count' => count($categories),
+            'existing_category_count' => $template->categories()->count(),
+            'categories' => $categories,
+        ]);
+
         $keptCategoryIds = [];
 
         foreach ($categories as $sortOrder => $catData) {

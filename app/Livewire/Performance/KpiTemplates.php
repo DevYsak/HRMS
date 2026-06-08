@@ -167,6 +167,13 @@ class KpiTemplates extends Component
     {
         abort_unless(Auth::user()->canManageSettings(), 403);
 
+        Log::info('KPI template save() entered — server-side categories snapshot.', [
+            'user_id' => Auth::id(),
+            'template_id' => $this->selectedTemplateId,
+            'category_count' => count($this->categories),
+            'categories' => $this->categories,
+        ]);
+
         $this->validate([
             'name' => 'required|string|max:255',
             'code' => ['required', 'string', 'max:30', 'alpha_dash', Rule::unique('performance_templates', 'code')->ignore($this->selectedTemplateId)->whereNull('deleted_at')],
