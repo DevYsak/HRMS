@@ -4,9 +4,9 @@
         $hour = now()->hour;
         $greeting = $hour < 12 ? 'Good Morning' : ($hour < 17 ? 'Good Afternoon' : 'Good Evening');
         $firstName = \Illuminate\Support\Str::of(auth()->user()->name)->explode(' ')->first();
-        $timeContext = $hour < 12 ? 'Your team is ready â€” time to lead.' : ($hour < 17 ? 'Afternoon check-in â€” team overview below.' : 'End of day â€” review pending approvals.');
+        $timeContext = $hour < 12 ? 'Your team is ready — time to lead.' : ($hour < 17 ? 'Afternoon check-in — team overview below.' : 'End of day — review pending approvals.');
     @endphp
-    {{-- â”€â”€ HEADER â”€â”€ --}}
+    {{-- ── HEADER ── --}}
     <div class="pulse-hero">
         <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_rgba(249,115,22,0.22),_transparent_65%)]"></div>
         <div class="pointer-events-none absolute -bottom-10 -left-10 size-64 rounded-full blur-3xl" style="background:radial-gradient(circle,rgba(249,115,22,0.30),transparent 70%)"></div>
@@ -54,7 +54,7 @@
 
     <div class="p-4 md:p-6 space-y-5">
 
-        {{-- â”€â”€ KPI ROW â”€â”€ --}}
+        {{-- ── KPI ROW ── --}}
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-5 shadow-sm">
                 <div class="flex items-center justify-between mb-3">
@@ -100,13 +100,13 @@
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
 
-            {{-- â”€â”€ TEAM ATTENDANCE TABLE â”€â”€ --}}
+            {{-- ── TEAM ATTENDANCE TABLE ── --}}
             <div class="lg:col-span-2 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
                 <div class="flex items-center justify-between px-6 py-4 border-b border-zinc-100 dark:border-zinc-800">
                     <h3 class="text-sm font-bold text-zinc-900 dark:text-white flex items-center gap-2">
-                        <flux:icon.users class="size-4 text-brand-500" /> Team Attendance â€” Today
+                        <flux:icon.users class="size-4 text-brand-500" /> Team Attendance — Today
                     </h3>
-                    <a href="{{ route('attendance.team') }}" wire:navigate class="text-xs text-brand-600 hover:text-brand-700 font-bold">Full view â†’</a>
+                    <a href="{{ route('attendance.team') }}" wire:navigate class="text-xs text-brand-600 hover:text-brand-700 font-bold">Full view →</a>
                 </div>
                 <table class="w-full text-sm">
                     <thead>
@@ -122,15 +122,15 @@
                         @forelse($teamAttendanceList as $row)
                             <tr class="hover:bg-zinc-50/60 dark:hover:bg-zinc-800/30 transition-colors">
                                 <td class="py-3.5 px-6 font-semibold text-zinc-900 dark:text-white">{{ $row['name'] }}</td>
-                                <td class="py-3.5 px-4 text-zinc-400 text-xs">{{ $row['department'] ?? 'â€”' }}</td>
-                                <td class="py-3.5 px-4 text-zinc-600 dark:text-zinc-300 font-mono text-xs">{{ $row['check_in'] ?? 'â€”' }}</td>
+                                <td class="py-3.5 px-4 text-zinc-400 text-xs">{{ $row['department'] ?? '—' }}</td>
+                                <td class="py-3.5 px-4 text-zinc-600 dark:text-zinc-300 font-mono text-xs">{{ $row['check_in'] ?? '—' }}</td>
                                 <td class="py-3.5 px-4 text-zinc-600 dark:text-zinc-300 font-mono text-xs">
                                     @if($row['check_out'])
                                         {{ $row['check_out'] }}
                                     @elseif($row['check_in'])
                                         <span class="text-brand-600 animate-pulse text-[10px] font-bold">LIVE</span>
                                     @else
-                                        â€”
+                                        —
                                     @endif
                                 </td>
                                 <td class="py-3.5 px-6">
@@ -150,7 +150,7 @@
                 </table>
             </div>
 
-            {{-- â”€â”€ APPROVALS SIDEBAR â”€â”€ --}}
+            {{-- ── APPROVALS SIDEBAR ── --}}
             <div class="space-y-4">
 
                 {{-- Pending Leaves --}}
@@ -171,7 +171,7 @@
                                     {{ $leave->leaveType?->name }} Â·
                                     {{ \Carbon\Carbon::parse($leave->start_date)->format('d M') }}
                                     @if($leave->start_date != $leave->end_date)
-                                        â€“ {{ \Carbon\Carbon::parse($leave->end_date)->format('d M') }}
+                                        – {{ \Carbon\Carbon::parse($leave->end_date)->format('d M') }}
                                     @endif
                                     @if($leave->reason)
                                         Â· <span class="italic">{{ \Illuminate\Support\Str::limit($leave->reason, 30) }}</span>
@@ -190,13 +190,13 @@
                                 </div>
                             </div>
                         @empty
-                            <div class="py-6 text-center text-zinc-400 text-xs">All clear â€” no pending leaves</div>
+                            <div class="py-6 text-center text-zinc-400 text-xs">All clear — no pending leaves</div>
                         @endforelse
                     </div>
                     <div class="px-4 pb-4">
                         <a href="{{ route('time-off.team') }}" wire:navigate
                            class="block w-full py-2 text-center text-xs font-bold text-brand-600 hover:text-brand-700 bg-brand-50 dark:bg-brand-950/30 hover:bg-brand-100 rounded-xl transition-colors">
-                            Manage All Leaves â†’
+                            Manage All Leaves →
                         </a>
                     </div>
                 </div>
@@ -220,13 +220,13 @@
                                 </div>
                             </div>
                         @empty
-                            <div class="py-6 text-center text-zinc-400 text-xs">All clear â€” no pending OT</div>
+                            <div class="py-6 text-center text-zinc-400 text-xs">All clear — no pending OT</div>
                         @endforelse
                     </div>
                     <div class="px-4 pb-4">
                         <a href="{{ route('overtime.manage') }}" wire:navigate
                            class="block w-full py-2 text-center text-xs font-bold text-brand-600 hover:text-brand-700 bg-brand-50 dark:bg-brand-950/30 hover:bg-brand-100 rounded-xl transition-colors">
-                            Manage All OT â†’
+                            Manage All OT →
                         </a>
                     </div>
                 </div>

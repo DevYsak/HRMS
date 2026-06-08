@@ -98,7 +98,7 @@
                         @if($isLow && $available > 0)
                             <span
                                 class="mt-0.5 inline-flex items-center gap-1 rounded-full bg-white/25 px-2 py-0.5 text-[10px] font-bold text-white">
-                                âš  Low
+                                ⚠ Low
                             </span>
                         @elseif($available === 0.0 && $allocated > 0)
                             <span
@@ -140,19 +140,19 @@
                             @if($carryFwd > 0)
                                 <span
                                     class="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-600 dark:bg-blue-950/30 dark:text-blue-400">
-                                    â†© {{ (float) $carryFwd }} carried fwd
+                                    ↩ {{ (float) $carryFwd }} carried fwd
                                 </span>
                             @endif
                             @if($encashed > 0)
                                 <span
                                     class="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-600 dark:bg-amber-950/30 dark:text-amber-400">
-                                    â‚¹ {{ (float) $encashed }} encashed
+                                    ₹ {{ (float) $encashed }} encashed
                                 </span>
                             @endif
                             @if($compOff > 0)
                                 <span
                                     class="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400">
-                                    âœ" {{ (float) $compOff }} comp off credits
+                                    ✔ {{ (float) $compOff }} comp off credits
                                 </span>
                             @endif
                         </div>
@@ -294,7 +294,7 @@
                     <p class="text-xs font-medium text-zinc-400">No leave data for {{ now()->year }} yet.</p>
                 </div>
             @else
-                {{-- Pure CSS bar chart â€" no Chart.js, no CDN --}}
+                {{-- Pure CSS bar chart ”" no Chart.js, no CDN --}}
                 <div class="flex items-end gap-1 h-24">
                     @foreach($monthlyStats as $mi => $days)
                         @php

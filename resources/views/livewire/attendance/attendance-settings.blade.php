@@ -1,6 +1,6 @@
 <flux:main class="min-h-screen bg-zinc-50 dark:bg-zinc-950 p-6 space-y-6">
 
-    {{-- â”€â”€â”€ PAGE HEADER â”€â”€â”€ --}}
+    {{-- ─── PAGE HEADER ─── --}}
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
             <h1 class="text-2xl font-black text-zinc-900 dark:text-white">Attendance Settings</h1>
@@ -10,7 +10,7 @@
         <flux:button wire:click="save" variant="primary" icon="check">Save Global Settings</flux:button>
     </div>
 
-    {{-- â”€â”€â”€ ROW 1: Global Rules + Geo-fencing â”€â”€â”€ --}}
+    {{-- ─── ROW 1: Global Rules + Geo-fencing ─── --}}
     <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
 
         {{-- Global Rules --}}
@@ -84,7 +84,7 @@
         </div>
     </div>
 
-    {{-- â”€â”€â”€ ROW 2: Shift Management â”€â”€â”€ --}}
+    {{-- ─── ROW 2: Shift Management ─── --}}
     <div class="rounded-2xl border border-zinc-100 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
 
         {{-- Section header --}}
@@ -95,7 +95,7 @@
                 </div>
                 <div>
                     <h3 class="text-sm font-black text-zinc-900 dark:text-white">Shift Management</h3>
-                    <p class="text-[11px] text-zinc-400">Define named shifts â€” each employee is assigned one, which
+                    <p class="text-[11px] text-zinc-400">Define named shifts — each employee is assigned one, which
                         controls their late-detection time.</p>
                 </div>
             </div>
@@ -113,10 +113,10 @@
                     If clock-in time is beyond <strong>Start Time + Grace Period</strong>, they are flagged <span
                         class="font-black text-amber-600">LATE</span>.<br>
                     <span class="mt-1 block">
-                        Example â€” <strong>UK Sales Shift</strong> starts at 1:00 PM with 5 min grace â†’
+                        Example — <strong>UK Sales Shift</strong> starts at 1:00 PM with 5 min grace →
                         clocking in at 1:06 PM or later = <span class="font-black text-amber-600">LATE</span>.
                     </span>
-                    Assign a shift to an employee in <strong>Employee Management â†’ Edit Employee â†’ Shift</strong>.
+                    Assign a shift to an employee in <strong>Employee Management → Edit Employee → Shift</strong>.
                 </div>
             </div>
         </div>
@@ -223,7 +223,7 @@
         <div class="h-4"></div>
     </div>
 
-    {{-- â”€â”€â”€ SHIFT CREATE / EDIT MODAL â”€â”€â”€ --}}
+    {{-- ─── SHIFT CREATE / EDIT MODAL ─── --}}
     @if($showShiftModal)
         <div class="fixed inset-0 z-50 flex items-center justify-center p-4" x-data
             x-on:keydown.escape.window="$wire.set('showShiftModal', false)">

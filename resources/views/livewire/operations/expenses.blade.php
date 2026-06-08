@@ -16,7 +16,7 @@
             </div>
             <div class="flex shrink-0 flex-wrap items-center gap-3">
                 <flux:button variant="ghost" icon="arrow-down-tray"
-                    class="border-white/25 bg-white/15 text-white backdrop-blur-sm hover:bg-white/25">
+                    class="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-black text-orange-700 shadow-lg shadow-black/20 transition-all hover:bg-orange-50">
                     Export
                 </flux:button>
                 @if($hasEmployeeProfile)

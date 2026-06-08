@@ -103,7 +103,7 @@
                                     <div class="text-[10px] text-zinc-400">{{ $req->work_date->format('l') }}</div>
                                 </td>
                                 <td class="py-4 pr-4 font-mono text-xs text-zinc-600 dark:text-zinc-300">
-                                    {{ \Carbon\Carbon::parse($req->start_time)->format('H:i') }} â€“ {{ \Carbon\Carbon::parse($req->end_time)->format('H:i') }}
+                                    {{ \Carbon\Carbon::parse($req->start_time)->format('H:i') }} – {{ \Carbon\Carbon::parse($req->end_time)->format('H:i') }}
                                 </td>
                                 <td class="py-4 pr-4 font-black text-zinc-900 dark:text-white">
                                     {{ number_format($req->requested_hours, 1) }}h
@@ -117,7 +117,7 @@
                                     </span>
                                 </td>
                                 <td class="py-4 pr-4 text-xs text-zinc-500">
-                                    {{ $req->reviewer?->name ?? 'â€”' }}
+                                    {{ $req->reviewer?->name ?? '—' }}
                                 </td>
                                 <td class="py-4 pr-6">
                                     @if($req->isPending())
@@ -127,7 +127,7 @@
                                             Cancel
                                         </button>
                                     @else
-                                        <span class="text-zinc-300 dark:text-zinc-600 text-xs">â€”</span>
+                                        <span class="text-zinc-300 dark:text-zinc-600 text-xs">—</span>
                                     @endif
                                 </td>
                             </tr>
@@ -188,7 +188,7 @@
                 />
 
                 <div class="rounded-lg bg-blue-50 p-3 text-xs text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
-                    â„¹ï¸ OT is calculated as hours worked beyond 9 hrs/day at ₹100/hr. This request requires manager approval.
+                    ℹ️ OT is calculated as hours worked beyond 9 hrs/day at ₹100/hr. This request requires manager approval.
                 </div>
 
                 <div class="flex justify-end gap-3 pt-4">

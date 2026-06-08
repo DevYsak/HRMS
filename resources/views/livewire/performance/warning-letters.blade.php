@@ -316,7 +316,7 @@
 
                 <div class="space-y-4">
                     <flux:field>
-                        <flux:label>Document Title <flux:required /></flux:label>
+                        <flux:label>Document Title <span class="text-red-500">*</span></flux:label>
                         <flux:input wire:model="doc_title" placeholder="e.g. Evidence Screenshot, Signed Copy" />
                         <flux:error name="doc_title" />
                     </flux:field>
@@ -328,7 +328,7 @@
                     </flux:field>
 
                     <flux:field>
-                        <flux:label>File <flux:required /></flux:label>
+                        <flux:label>File <span class="text-red-500">*</span></flux:label>
                         <input type="file" wire:model="doc_file"
                             class="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-orange-50 file:px-3 file:py-1 file:text-sm file:font-medium file:text-orange-700 hover:file:bg-orange-100 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
                         <p class="mt-1 text-xs text-zinc-400">Any file type — max 10 MB</p>
