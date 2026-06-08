@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 #[Fillable([
     'review_cycle_id', 'performance_cycle_id', 'template_id',
@@ -77,6 +78,12 @@ class PerformanceReview extends Model
     public function componentScores(): HasMany
     {
         return $this->hasMany(PerformanceReviewScore::class, 'review_id');
+    }
+
+    /** Documents attached to this review (signed scorecard, manager notes, etc.). */
+    public function documents(): MorphMany
+    {
+        return $this->morphMany(Document::class, 'documentable');
     }
 
     public function promotionRecommendations(): HasMany

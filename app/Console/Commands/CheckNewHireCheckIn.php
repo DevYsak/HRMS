@@ -9,7 +9,8 @@ use Illuminate\Console\Command;
 
 class CheckNewHireCheckIn extends Command
 {
-    protected $signature   = 'hrms:check-newhire-checkin';
+    protected $signature = 'hrms:check-newhire-checkin';
+
     protected $description = 'Notify HR when a new hire reaches their 30-day milestone.';
 
     public function handle(): int

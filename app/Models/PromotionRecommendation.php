@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 #[Fillable([
@@ -48,6 +49,12 @@ class PromotionRecommendation extends Model
     public function targetDepartment(): BelongsTo
     {
         return $this->belongsTo(Department::class, 'target_department_id');
+    }
+
+    /** Documents attached to this recommendation (offer letter, approval memo, etc.). */
+    public function documents(): MorphMany
+    {
+        return $this->morphMany(Document::class, 'documentable');
     }
 
     public function incrementPercent(): ?float

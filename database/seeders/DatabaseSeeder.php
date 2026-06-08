@@ -28,6 +28,9 @@ class DatabaseSeeder extends Seeder
 
             // ── Real employee master (biometric codes are source of truth) ─
             BiometricEmployeeMasterSeeder::class,
+
+            // ── Dynamic roles & permissions (database-driven authorization) ─
+            RolesAndPermissionsSeeder::class,
         ]);
     }
 }

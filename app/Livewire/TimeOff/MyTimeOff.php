@@ -10,6 +10,7 @@ use App\Notifications\LeaveEncashmentNotification;
 use App\Services\LeaveService;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 use Livewire\WithPagination;
@@ -105,8 +106,12 @@ class MyTimeOff extends Component
             'employee_remarks' => 'nullable|string|max:1000',
             'attachment' => ($leaveType?->attachment_required ? 'required' : 'nullable')
                 .'|nullable|file|max:5120|mimes:pdf,jpg,jpeg,png',
-            'encash_leave_type_id' => 'required_if:showEncashModal,true|exists:leave_types,id',
-            'encash_days' => 'required_if:showEncashModal,true|numeric|min:0.5',
+            'encash_leave_type_id' => $this->showEncashModal
+                ? 'required|exists:leave_types,id'
+                : 'nullable',
+            'encash_days' => $this->showEncashModal
+                ? 'required|numeric|min:0.5'
+                : 'nullable',
         ];
     }
 
@@ -121,8 +126,17 @@ class MyTimeOff extends Component
             'half_day_period', 'requested_leave_status', 'reason',
             'employee_remarks', 'attachment',
         ]);
+        $this->resetErrorBag();
+        $this->resetValidation();
         $this->requested_leave_status = 'paid';
         $this->showRequestModal = true;
+    }
+
+    public function closeRequestModal(): void
+    {
+        $this->showRequestModal = false;
+        $this->resetErrorBag();
+        $this->resetValidation();
     }
 
     public function submitRequest(): void
@@ -133,12 +147,12 @@ class MyTimeOff extends Component
 
         if (! $employee) {
             \Flux::toast('You do not have an active employee profile. Contact HR.', variant: 'danger');
-            $this->showRequestModal = false;
+            $this->closeRequestModal();
 
             return;
         }
 
-        $leaveType = LeaveType::find($this->leave_type_id);
+        $leaveType = LeaveType::findOrFail($this->leave_type_id);
 
         // Store attachment
         $attachmentPath = null;
@@ -163,9 +177,21 @@ class MyTimeOff extends Component
             $this->addError('request', $exception->getMessage());
 
             return;
+        } catch (\Throwable $exception) {
+            Log::error('Leave request submission failed.', [
+                'employee_id' => $employee->id,
+                'leave_type_id' => $this->leave_type_id,
+                'start_date' => $this->start_date,
+                'end_date' => $this->end_date,
+                'message' => $exception->getMessage(),
+            ]);
+
+            $this->addError('request', 'Unable to submit the leave request right now. Please try again.');
+
+            return;
         }
 
-        $this->showRequestModal = false;
+        $this->closeRequestModal();
         \Flux::toast('Leave request submitted successfully.');
         $this->resetPage();
     }
@@ -405,7 +431,9 @@ class MyTimeOff extends Component
         return view('livewire.time-off.my-time-off', [
             'balances' => $balances,
             'requests' => $requests,
-            'leaveTypes' => LeaveType::all(),
+            'leaveTypes' => LeaveType::where(function ($q) {
+                $q->where('allow_paid_request', true)->orWhere('allow_unpaid_request', true);
+            })->orderBy('name')->get()->unique('name')->values(),
             'encashableTypes' => $encashableTypes,
             'encashments' => $encashments,
             'pendingCount' => $employee ? $employee->leaveRequests()->whereIn('status', ['pending', 'pending_hr'])->count() : 0,

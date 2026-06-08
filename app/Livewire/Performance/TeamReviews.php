@@ -3,10 +3,8 @@
 namespace App\Livewire\Performance;
 
 use App\Models\PerformanceReview;
-use App\Models\ReviewGoal;
-use App\Services\PerformanceService;
+use App\Services\Performance\ReviewWorkflowService;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 use Livewire\Component;
 
 class TeamReviews extends Component
@@ -18,89 +16,80 @@ class TeamReviews extends Component
     public ?PerformanceReview $activeReview = null;
 
     // Form fields
-    public int $rating = 0;
-
-    public string $strengths = '';
-
-    public string $improvements = '';
-
-    public string $comments = '';
-
     public string $manager_feedback = '';
 
     public bool $promotion_recommended = false;
 
-    public array $goalRatings = []; // [goal_id => rating]
+    public array $componentScores = []; // [component_id => score]
 
-    public array $goalComments = []; // [goal_id => comment]
+    public array $componentComments = []; // [component_id => comment]
 
     public function openManagerReview(int $reviewId): void
     {
-        $this->activeReview = PerformanceReview::with('goals', 'employee.user')->findOrFail($reviewId);
+        $this->activeReview = PerformanceReview::with(['componentScores.component.autoScoreConfig', 'template.categories.components', 'employee.user', 'documents'])->findOrFail($reviewId);
 
-        $this->rating = $this->activeReview->overall_rating ?? 0;
-        $this->strengths = $this->activeReview->strengths ?? '';
-        $this->improvements = $this->activeReview->improvements ?? '';
-        $this->comments = $this->activeReview->comments ?? '';
         $this->manager_feedback = $this->activeReview->manager_feedback ?? '';
-        $this->promotion_recommended = $this->activeReview->promotion_recommended;
+        $this->promotion_recommended = $this->activeReview->promotion_recommended ?? false;
 
-        $this->goalRatings = [];
-        $this->goalComments = [];
-        foreach ($this->activeReview->goals as $goal) {
-            $this->goalRatings[$goal->id] = $goal->manager_rating ?? 0;
-            $this->goalComments[$goal->id] = $goal->manager_comment ?? '';
+        $this->componentScores = [];
+        $this->componentComments = [];
+        foreach ($this->activeReview->componentScores as $score) {
+            $this->componentScores[$score->component_id] = $score->manager_score ?? '';
+            $this->componentComments[$score->component_id] = $score->manager_comment ?? '';
         }
 
         $this->showReviewModal = true;
     }
 
-    public function submitManagerReview(PerformanceService $performanceService): void
+    public function submitManagerReview(ReviewWorkflowService $workflowService): void
     {
         if (! $this->activeReview) {
             return;
         }
 
-        $this->activeReview->loadMissing('cycle');
+        $this->activeReview->loadMissing('performanceCycle');
+
+        $rules = [
+            'manager_feedback' => 'required|string|min:10',
+            'promotion_recommended' => 'required|boolean',
+        ];
+
+        foreach ($this->activeReview->componentScores as $score) {
+            if (! $score->component->isAutoScored()) {
+                $rules["componentScores.{$score->component_id}"] = "required|numeric|min:0|max:{$score->component->max_score}";
+                $rules["componentComments.{$score->component_id}"] = 'nullable|string';
+            }
+        }
+
+        $this->validate($rules);
+
+        // Update fields not managed by workflow service
+        $this->activeReview->update([
+            'promotion_recommended' => $this->promotion_recommended,
+        ]);
+
+        $scores = [];
+        foreach ($this->componentScores as $componentId => $scoreVal) {
+            if ($scoreVal !== '') {
+                $scores[] = [
+                    'component_id' => $componentId,
+                    'manager_score' => (float) $scoreVal,
+                    'manager_comment' => $this->componentComments[$componentId] ?? null,
+                ];
+            }
+        }
+
         try {
-            $performanceService->assertReviewEditable($this->activeReview, 'submitted');
+            $workflowService->submitManagerReview($this->activeReview, $scores, $this->manager_feedback, Auth::user());
         } catch (\DomainException $exception) {
             \Flux::toast($exception->getMessage(), variant: 'danger');
 
             return;
         }
 
-        $this->validate([
-            'rating' => 'required|integer|min:1|max:5',
-            'manager_feedback' => 'required|string|min:10',
-            'promotion_recommended' => 'required|boolean',
-            'goalRatings.*' => 'required|integer|min:1|max:5',
-            'goalComments.*' => 'nullable|string',
-        ]);
-
-        DB::transaction(function () {
-            // Update goals
-            foreach ($this->goalRatings as $goalId => $rating) {
-                ReviewGoal::where('id', $goalId)
-                    ->where('performance_review_id', $this->activeReview->id)
-                    ->update([
-                        'manager_rating' => $rating,
-                        'manager_comment' => $this->goalComments[$goalId] ?? null,
-                    ]);
-            }
-
-            // Update review
-            $this->activeReview->update([
-                'overall_rating' => $this->rating,
-                'manager_feedback' => $this->manager_feedback,
-                'promotion_recommended' => $this->promotion_recommended,
-                'status' => 'manager_reviewed',
-            ]);
-        });
-
         $this->showReviewModal = false;
-        $this->reset(['rating', 'strengths', 'improvements', 'comments', 'manager_feedback', 'promotion_recommended', 'activeReview', 'goalRatings', 'goalComments']);
-        \Flux::toast('Manager review submitted.');
+        $this->reset(['manager_feedback', 'promotion_recommended', 'activeReview', 'componentScores', 'componentComments']);
+        \Flux::toast('Manager review submitted.', variant: 'success');
     }
 
     public function render()
@@ -115,7 +104,7 @@ class TeamReviews extends Component
         }
 
         // Get direct reports' pending reviews
-        $teamReviews = PerformanceReview::with(['employee.user', 'employee.jobTitle', 'cycle'])
+        $teamReviews = PerformanceReview::with(['employee.user', 'employee.jobTitle', 'performanceCycle'])
             ->where('reviewer_id', $managerEmployee->id)
             ->whereIn('status', ['submitted', 'manager_reviewed'])
             ->when($this->search, fn ($q) => $q->whereHas('employee.user', fn ($u) => $u->where('name', 'like', "%{$this->search}%")))

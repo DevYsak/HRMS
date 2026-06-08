@@ -2,7 +2,6 @@
 
 namespace App\Console\Commands;
 
-use App\Models\Employee;
 use App\Models\PerformanceReview;
 use App\Models\ReviewCycle;
 use App\Notifications\ReviewReminderNotification;
@@ -10,7 +9,8 @@ use Illuminate\Console\Command;
 
 class SendReviewReminders extends Command
 {
-    protected $signature   = 'hrms:send-review-reminders';
+    protected $signature = 'hrms:send-review-reminders';
+
     protected $description = 'Send weekly reminders to employees with pending performance reviews in active cycles.';
 
     public function handle(): int

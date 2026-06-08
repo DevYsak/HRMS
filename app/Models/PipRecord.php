@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 #[Fillable([
@@ -57,6 +58,12 @@ class PipRecord extends Model
     public function goals(): HasMany
     {
         return $this->hasMany(PipGoal::class, 'pip_record_id');
+    }
+
+    /** Documents attached to this PIP (action plan, progress evidence, outcome letter, etc.). */
+    public function documents(): MorphMany
+    {
+        return $this->morphMany(Document::class, 'documentable');
     }
 
     public function overallProgress(): float

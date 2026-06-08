@@ -5,11 +5,11 @@ namespace App\Models;
 use App\Concerns\HasTeams;
 use App\Enums\ThemePreference;
 use App\Enums\UserRole;
-use App\Services\RolePermissionService;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -17,12 +17,26 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Str;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 
-#[Fillable(['name', 'email', 'password', 'current_team_id', 'avatar', 'role', 'theme'])]
+#[Fillable(['name', 'email', 'password', 'current_team_id', 'avatar', 'role', 'role_id', 'theme'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, HasTeams, Notifiable, SoftDeletes, TwoFactorAuthenticatable;
+
+    /**
+     * Keep `role_id` in sync with the legacy `role` enum so every code path
+     * that assigns `role` (factories, onboarding, EmployeeEdit, etc.) keeps
+     * working with the database-driven permission system without changes.
+     */
+    protected static function booted(): void
+    {
+        static::saving(function (User $user) {
+            if ($user->isDirty('role') && ! $user->isDirty('role_id') && $user->role !== null) {
+                $user->role_id = Role::where('slug', $user->role->value)->value('id');
+            }
+        });
+    }
 
     /**
      * Get the attributes that should be cast.
@@ -67,54 +81,73 @@ class User extends Authenticatable
         return $this->role === UserRole::Manager;
     }
 
+    public function assignedRole(): BelongsTo
+    {
+        return $this->belongsTo(Role::class, 'role_id');
+    }
+
+    public function hasPermission(string $key): bool
+    {
+        if ($this->assignedRole?->slug === 'super_admin') {
+            return true;
+        }
+
+        return $this->assignedRole?->hasPermission($key) ?? false;
+    }
+
     public function canManageEmployees(): bool
     {
-        return RolePermissionService::check($this->role?->value, 'manage-employees');
+        return $this->hasPermission('manage_employees');
     }
 
     public function canApproveLeave(): bool
     {
-        return RolePermissionService::check($this->role?->value, 'approve-leave');
+        return $this->hasPermission('approve_leave');
     }
 
     public function canRunPayroll(): bool
     {
-        return RolePermissionService::check($this->role?->value, 'run-payroll');
+        return $this->hasPermission('run_payroll');
     }
 
     public function canApproveOt(): bool
     {
-        return RolePermissionService::check($this->role?->value, 'approve-ot');
+        return $this->hasPermission('approve_overtime');
+    }
+
+    public function canApproveWfh(): bool
+    {
+        return $this->hasPermission('approve_wfh');
     }
 
     public function canApproveFinance(): bool
     {
-        return RolePermissionService::check($this->role?->value, 'approve-finance');
+        return $this->hasPermission('approve_finance');
     }
 
     public function canManageDocuments(): bool
     {
-        return RolePermissionService::check($this->role?->value, 'manage-documents');
+        return $this->hasPermission('manage_documents');
     }
 
     public function canManageSettings(): bool
     {
-        return RolePermissionService::check($this->role?->value, 'manage-settings');
+        return $this->hasPermission('manage_settings');
     }
 
     public function canViewReports(): bool
     {
-        return RolePermissionService::check($this->role?->value, 'view-reports');
+        return $this->hasPermission('view_reports');
     }
 
     public function canViewFinanceProfile(): bool
     {
-        return RolePermissionService::check($this->role?->value, 'view-finance-profile');
+        return $this->hasPermission('view_finance_profile');
     }
 
     public function canReviewPerformance(): bool
     {
-        return RolePermissionService::check($this->role?->value, 'review-performance');
+        return $this->hasPermission('review_performance');
     }
 
     public function avatarUrl(): string

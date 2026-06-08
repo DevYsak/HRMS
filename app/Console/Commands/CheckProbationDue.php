@@ -9,7 +9,8 @@ use Illuminate\Console\Command;
 
 class CheckProbationDue extends Command
 {
-    protected $signature   = 'hrms:check-probation-due';
+    protected $signature = 'hrms:check-probation-due';
+
     protected $description = 'Notify HR admins of employees whose probation review is due within 10 days.';
 
     public function handle(): int
@@ -17,10 +18,10 @@ class CheckProbationDue extends Command
         // Probation period = 90 days from joining_date.
         // Flag employees whose (joining_date + 90 days) falls within the next 10 days.
         $windowStart = now()->toDateString();
-        $windowEnd   = now()->addDays(10)->toDateString();
+        $windowEnd = now()->addDays(10)->toDateString();
 
         $probationCutoffStart = now()->subDays(90)->toDateString();
-        $probationCutoffEnd   = now()->subDays(80)->toDateString(); // 90-10=80
+        $probationCutoffEnd = now()->subDays(80)->toDateString(); // 90-10=80
 
         $due = Employee::with('user')
             ->where('status', 'probation')

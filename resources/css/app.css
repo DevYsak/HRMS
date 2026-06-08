@@ -18,7 +18,7 @@
     --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji';
 
     /* Brand Palette — Conexus Orange #fe9a00 */
-    --color-brand-50:  #fff8eb;
+    --color-brand-50: #fff8eb;
     --color-brand-100: #fef0c7;
     --color-brand-200: #fedf89;
     --color-brand-300: #fec84b;
@@ -30,7 +30,7 @@
     --color-brand-900: #92400e;
 
     /* Neutral / Zinc scale */
-    --color-zinc-50:  #fafafa;
+    --color-zinc-50: #fafafa;
     --color-zinc-100: #f5f5f5;
     --color-zinc-200: #e5e5e5;
     --color-zinc-300: #d4d4d4;
@@ -43,16 +43,16 @@
     --color-zinc-950: #0a0a0a;
 
     /* Flux accent override → Conexus Orange */
-    --color-accent:            #fe9a00;
-    --color-accent-content:    #fe9a00;
+    --color-accent: #fe9a00;
+    --color-accent-content: #fe9a00;
     --color-accent-foreground: #ffffff;
 }
 
 /* Dark mode accent */
 @layer theme {
     .dark {
-        --color-accent:            #fe9a00;
-        --color-accent-content:    #fe9a00;
+        --color-accent: #fe9a00;
+        --color-accent-content: #fe9a00;
         --color-accent-foreground: #ffffff;
     }
 }
@@ -61,9 +61,15 @@
    Base resets
    =================================================== */
 @layer base {
-    *, ::after, ::before, ::backdrop, ::file-selector-button {
+
+    *,
+    ::after,
+    ::before,
+    ::backdrop,
+    ::file-selector-button {
         border-color: var(--color-zinc-200, currentColor);
     }
+
     body {
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
@@ -76,9 +82,11 @@
 [data-flux-field]:not(ui-radio, ui-checkbox) {
     @apply grid gap-2;
 }
+
 [data-flux-label] {
     @apply !mb-0 !leading-tight;
 }
+
 input:focus[data-flux-control],
 textarea:focus[data-flux-control],
 select:focus[data-flux-control] {
@@ -94,9 +102,11 @@ select:focus[data-flux-control] {
     border-right: 2px solid #fe9a00 !important;
     font-weight: 600 !important;
 }
+
 [data-flux-sidebar] [data-flux-sidebar-item][data-current] svg {
     color: #fe9a00 !important;
 }
+
 .dark [data-flux-sidebar] [data-flux-sidebar-item][data-current] {
     background-color: rgba(249, 115, 22, 0.12) !important;
     color: #fb923c !important;
@@ -107,6 +117,7 @@ select:focus[data-flux-control] {
    Pulse component utilities
    =================================================== */
 @layer utilities {
+
     /* Card */
     .pulse-card {
         @apply rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900;
@@ -126,6 +137,7 @@ select:focus[data-flux-control] {
     .pulse-stat__trend-up {
         @apply inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400;
     }
+
     .pulse-stat__trend-down {
         @apply inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-600 dark:bg-red-900/30 dark:text-red-400;
     }
@@ -143,17 +155,20 @@ select:focus[data-flux-control] {
         margin: 1rem 1rem 1.25rem;
         padding: 1.75rem 1.5rem;
         background: linear-gradient(135deg, #1f0d02 0%, #130800 50%, #080300 100%);
-        box-shadow: 0 8px 24px rgba(0,0,0,0.28), 0 0 0 1px rgba(249,115,22,0.10);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28), 0 0 0 1px rgba(249, 115, 22, 0.10);
     }
+
     @media (min-width: 768px) {
         .pulse-hero {
             margin: 1.5rem 1.5rem 1.5rem;
             padding: 2rem 2.5rem;
         }
     }
+
     .pulse-page-title {
         @apply text-2xl font-bold text-zinc-900 dark:text-white;
     }
+
     .pulse-page-subtitle {
         @apply mt-0.5 text-sm text-zinc-500 dark:text-zinc-400;
     }
@@ -162,18 +177,23 @@ select:focus[data-flux-control] {
     .badge-active {
         @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400;
     }
+
     .badge-onboarding {
         @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400;
     }
+
     .badge-probation {
         @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400;
     }
+
     .badge-on-leave {
         @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400;
     }
+
     .badge-resigned {
         @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400;
     }
+
     .badge-terminated {
         @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400;
     }
@@ -182,28 +202,57 @@ select:focus[data-flux-control] {
     .badge-on_time {
         @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400;
     }
+
     .badge-approved {
         @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400;
     }
+
     .badge-pending {
         @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400;
     }
+
     .badge-rejected {
         @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400;
     }
+
     .badge-cancelled {
         @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400;
     }
+
     .badge-manager {
         @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400;
     }
+
     .badge-absent {
         @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400;
     }
+
     .badge-remote {
         @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400;
     }
+
     .badge-late {
         @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400;
+    }
+
+    /* Warning Letter status badges */
+    .badge-warning-draft {
+        @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400;
+    }
+
+    .badge-warning-issued {
+        @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400;
+    }
+
+    .badge-warning-acknowledged {
+        @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400;
+    }
+
+    .badge-warning-under_review {
+        @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-violet-100 text-orange-700 dark:bg-violet-900/40 dark:text-violet-400;
+    }
+
+    .badge-warning-closed {
+        @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400;
     }
 }

@@ -39,13 +39,13 @@
                         <td class="px-4 py-3 text-zinc-600 dark:text-zinc-300">{{ $type->probation_days }} days</td>
                         <td class="px-4 py-3 text-zinc-600 dark:text-zinc-300">{{ $type->notice_period_days }} days</td>
                         <td class="px-4 py-3 text-center">
-                            <flux:icon.check-circle class="mx-auto size-5 @if($type->leave_eligible) text-emerald-500 @else text-zinc-300 dark:text-zinc-700 @endif" />
+                            <flux:icon.check-circle class="mx-auto size-5 {{ $type->leave_eligible ? 'text-emerald-500' : 'text-zinc-300 dark:text-zinc-700' }}" />
                         </td>
                         <td class="px-4 py-3 text-center">
-                            <flux:icon.check-circle class="mx-auto size-5 @if($type->payroll_eligible) text-emerald-500 @else text-zinc-300 dark:text-zinc-700 @endif" />
+                            <flux:icon.check-circle class="mx-auto size-5 {{ $type->payroll_eligible ? 'text-emerald-500' : 'text-zinc-300 dark:text-zinc-700' }}" />
                         </td>
                         <td class="px-4 py-3 text-center">
-                            <flux:icon.check-circle class="mx-auto size-5 @if($type->ot_eligible) text-emerald-500 @else text-zinc-300 dark:text-zinc-700 @endif" />
+                            <flux:icon.check-circle class="mx-auto size-5 {{ $type->ot_eligible ? 'text-emerald-500' : 'text-zinc-300 dark:text-zinc-700' }}" />
                         </td>
                         <td class="px-4 py-3 text-center">
                             @if($type->trashed())

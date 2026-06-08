@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Document;
+use App\Notifications\DocumentUploadedNotification;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -36,7 +37,7 @@ class DocumentUploadController extends Controller
             $version = ((int) $parent->versions()->max('version') ?? 0) + 1;
         }
 
-        Document::create([
+        $document = Document::create([
             'title' => $data['title'],
             'description' => $data['description'] ?? null,
             'file_path' => $path,
@@ -52,6 +53,10 @@ class DocumentUploadController extends Controller
             'expires_at' => $data['expires_at'] ?? null,
             'uploaded_by' => Auth::id(),
         ]);
+
+        if (! empty($data['employee_id'])) {
+            $document->loadMissing('employee.user')->employee?->user?->notify(new DocumentUploadedNotification($document));
+        }
 
         return redirect()->route('documents.index')
             ->with('success', 'Document uploaded successfully.');

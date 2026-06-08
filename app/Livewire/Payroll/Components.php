@@ -8,7 +8,9 @@ use Livewire\Component;
 class Components extends Component
 {
     public $showModal = false;
+
     public $editingId = null;
+
     public $form = [
         'name' => '',
         'type' => 'earning',
@@ -60,7 +62,7 @@ class Components extends Component
     public function toggleActive($id)
     {
         $component = SalaryComponent::findOrFail($id);
-        $component->update(['is_active' => !$component->is_active]);
+        $component->update(['is_active' => ! $component->is_active]);
     }
 
     public function render()

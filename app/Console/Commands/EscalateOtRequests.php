@@ -9,7 +9,8 @@ use Illuminate\Console\Command;
 
 class EscalateOtRequests extends Command
 {
-    protected $signature   = 'hrms:escalate-ot';
+    protected $signature = 'hrms:escalate-ot';
+
     protected $description = 'Escalate OT requests pending more than 24 hours to HR admins.';
 
     public function handle(): int

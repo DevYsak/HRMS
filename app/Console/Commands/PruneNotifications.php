@@ -7,7 +7,8 @@ use Illuminate\Support\Facades\DB;
 
 class PruneNotifications extends Command
 {
-    protected $signature   = 'hrms:prune-notifications';
+    protected $signature = 'hrms:prune-notifications';
+
     protected $description = 'Delete read database notifications older than 90 days.';
 
     public function handle(): int

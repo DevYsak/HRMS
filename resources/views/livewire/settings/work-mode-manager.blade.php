@@ -36,7 +36,7 @@
                             </div>
                         </td>
                         <td class="px-4 py-3 text-center">
-                            <flux:icon.check-circle class="mx-auto size-5 @if($mode->requires_attendance_tracking) text-emerald-500 @else text-zinc-300 dark:text-zinc-700 @endif" />
+                            <flux:icon.check-circle class="mx-auto size-5 {{ $mode->requires_attendance_tracking ? 'text-emerald-500' : 'text-zinc-300 dark:text-zinc-700' }}" />
                         </td>
                         <td class="px-4 py-3 text-center">
                             @if($mode->trashed())

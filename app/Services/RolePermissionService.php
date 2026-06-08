@@ -13,6 +13,7 @@ class RolePermissionService
         'manage-employees' => ['label' => 'Manage Employees', 'desc' => 'Create, edit and view all employee records', 'icon' => 'users'],
         'approve-leave' => ['label' => 'Approve Leave',    'desc' => 'Review and approve / reject leave requests', 'icon' => 'calendar-days'],
         'approve-ot' => ['label' => 'Approve Overtime', 'desc' => 'Review and approve overtime pre-approval requests', 'icon' => 'clock'],
+        'approve-wfh' => ['label' => 'Approve Work From Home', 'desc' => 'Review and approve / reject work-from-home requests', 'icon' => 'home'],
         'run-payroll' => ['label' => 'Run Payroll',      'desc' => 'Process payroll cycles and manage components', 'icon' => 'banknotes'],
         'approve-finance' => ['label' => 'Finance Approval', 'desc' => 'Sign off payroll for disbursement', 'icon' => 'check-badge'],
         'manage-settings' => ['label' => 'Manage Settings',  'desc' => 'Configure company-wide system settings', 'icon' => 'cog-6-tooth'],
@@ -33,9 +34,9 @@ class RolePermissionService
 
     /** Default permissions per role (mirrors current hardcoded enum logic). */
     public static array $defaults = [
-        'hr_admin' => ['manage-employees', 'approve-leave', 'approve-ot', 'run-payroll', 'manage-settings', 'manage-documents', 'view-reports', 'view-finance-profile', 'review-performance'],
-        'director' => ['manage-employees', 'approve-leave', 'approve-ot', 'approve-finance', 'view-reports', 'review-performance'],
-        'manager' => ['approve-leave', 'approve-ot', 'review-performance'],
+        'hr_admin' => ['manage-employees', 'approve-leave', 'approve-ot', 'approve-wfh', 'run-payroll', 'manage-settings', 'manage-documents', 'view-reports', 'view-finance-profile', 'review-performance'],
+        'director' => ['manage-employees', 'approve-leave', 'approve-ot', 'approve-wfh', 'approve-finance', 'view-reports', 'review-performance'],
+        'manager' => ['approve-leave', 'approve-ot', 'approve-wfh', 'review-performance'],
         'finance' => ['run-payroll', 'approve-finance', 'view-reports', 'view-finance-profile', 'review-performance'],
         'employee' => [],
     ];

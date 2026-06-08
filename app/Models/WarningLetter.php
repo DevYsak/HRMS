@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 #[Fillable([
@@ -69,6 +70,12 @@ class WarningLetter extends Model
         return $this->hasOne(PipRecord::class, 'warning_letter_id');
     }
 
+    /** Documents attached to this warning letter (issued copy, evidence, signed acknowledgement, etc.). */
+    public function documents(): MorphMany
+    {
+        return $this->morphMany(Document::class, 'documentable');
+    }
+
     public function isAcknowledged(): bool
     {
         return $this->acknowledgements()->exists();
@@ -107,6 +114,18 @@ class WarningLetter extends Model
             'under_review' => 'Under Review',
             'closed' => 'Closed',
             default => ucfirst($this->status),
+        };
+    }
+
+    public function statusColor(): string
+    {
+        return match ($this->status) {
+            'draft' => 'warning-draft',
+            'issued' => 'warning-issued',
+            'acknowledged' => 'warning-acknowledged',
+            'under_review' => 'warning-under_review',
+            'closed' => 'warning-closed',
+            default => 'warning-draft',
         };
     }
 

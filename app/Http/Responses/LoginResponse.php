@@ -22,8 +22,8 @@ class LoginResponse implements LoginResponseContract
         if ($location) {
             $parts = parse_url($location);
             $path = ($parts['path'] ?? '/')
-                . (isset($parts['query']) ? '?'.$parts['query'] : '')
-                . (isset($parts['fragment']) ? '#'.$parts['fragment'] : '');
+                .(isset($parts['query']) ? '?'.$parts['query'] : '')
+                .(isset($parts['fragment']) ? '#'.$parts['fragment'] : '');
 
             $response->headers->set('Location', $path);
         }

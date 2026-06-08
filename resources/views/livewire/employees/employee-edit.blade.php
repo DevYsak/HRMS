@@ -201,7 +201,7 @@
 
                     {{-- ── General Tab ── --}}
                     @if($activeTab === 'General')
-                        <div class="space-y-6">
+                        <div wire:key="tab-general" class="space-y-6">
                             <div>
                                 <h3 class="text-base font-bold text-zinc-900 dark:text-white">Account Information</h3>
                                 <p class="mt-0.5 text-sm text-zinc-500">Update and manage employee account details</p>
@@ -234,7 +234,7 @@
 
                     {{-- ── Personal Tab ── --}}
                     @elseif($activeTab === 'Personal')
-                        <div class="space-y-6">
+                        <div wire:key="tab-personal" class="space-y-6">
                             <div>
                                 <h3 class="text-base font-bold text-zinc-900 dark:text-white">Personal Information</h3>
                                 <p class="mt-0.5 text-sm text-zinc-500">Manage personal and contact details</p>
@@ -277,7 +277,7 @@
 
                     {{-- ── Job Tab ── --}}
                     @elseif($activeTab === 'Job')
-                        <div class="space-y-6">
+                        <div wire:key="tab-job" class="space-y-6">
                             <div>
                                 <h3 class="text-base font-bold text-zinc-900 dark:text-white">Job Information</h3>
                                 <p class="mt-0.5 text-sm text-zinc-500">Employment details, role assignments, and leave allocations</p>
@@ -358,7 +358,7 @@
 
                     {{-- ── Leave Tab ── --}}
                     @elseif($activeTab === 'Leave')
-                        <div class="space-y-6">
+                        <div wire:key="tab-leave" class="space-y-6">
                             {{-- Header row --}}
                             <div class="flex flex-wrap items-start justify-between gap-3">
                                 <div>
@@ -486,7 +486,7 @@
 
                     {{-- ── Probation Tab ── --}}
                     @elseif($activeTab === 'Probation')
-                        <div class="space-y-6">
+                        <div wire:key="tab-probation" class="space-y-6">
                             <div class="flex items-start justify-between">
                                 <div>
                                     <h3 class="text-base font-bold text-zinc-900 dark:text-white">Probation Management</h3>
@@ -555,7 +555,7 @@
                             $totalDeductions = $employee->salaries->where('component.type', 'deduction')->sum('amount');
                             $netSalary       = $grossSalary - $totalDeductions;
                         @endphp
-                        <div class="space-y-6">
+                        <div wire:key="tab-payroll" class="space-y-6">
                             <div class="flex items-center justify-between">
                                 <div>
                                     <h3 class="text-base font-bold text-zinc-900 dark:text-white">Payroll Summary</h3>
@@ -689,7 +689,7 @@
 
                     {{-- ── Documents Tab ── --}}
                     @elseif($activeTab === 'Documents')
-                        <div class="space-y-5">
+                        <div wire:key="tab-documents" class="space-y-5">
                             <div>
                                 <h3 class="text-base font-bold text-zinc-900 dark:text-white">Documents</h3>
                                 <p class="mt-0.5 text-sm text-zinc-500">Employee documents and files</p>
@@ -699,7 +699,7 @@
 
                     {{-- ── Activity Tab ── --}}
                     @elseif($activeTab === 'Activity')
-                        <div class="space-y-5">
+                        <div wire:key="tab-activity" class="space-y-5">
                             <div>
                                 <h3 class="text-base font-bold text-zinc-900 dark:text-white">Activity Log</h3>
                                 <p class="mt-0.5 text-sm text-zinc-500">Recent actions and changes for this employee</p>

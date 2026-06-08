@@ -43,6 +43,7 @@ class EnsureRole
             'manage-employees' => $user->canManageEmployees(),
             'approve-leave' => $user->canApproveLeave(),
             'approve-ot' => $user->canApproveOt(),
+            'approve-wfh' => $user->canApproveWfh(),
             'run-payroll' => $user->canRunPayroll(),
             'approve-finance' => $user->canApproveFinance(),
             'manage-settings' => $user->canManageSettings(),

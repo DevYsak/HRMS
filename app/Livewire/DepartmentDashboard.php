@@ -2,9 +2,9 @@
 
 namespace App\Livewire;
 
-use App\Models\Employee;
-use App\Models\Department;
 use App\Models\Attendance;
+use App\Models\Department;
+use App\Models\Employee;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
@@ -12,9 +12,13 @@ use Livewire\Component;
 class DepartmentDashboard extends Component
 {
     public $department;
+
     public $totalEmployees = 0;
+
     public $presentToday = 0;
+
     public $lateToday = 0;
+
     public $absentToday = 0;
 
     public function mount()
@@ -34,7 +38,7 @@ class DepartmentDashboard extends Component
         $this->totalEmployees = count($employeeIds);
 
         $today = Carbon::today();
-        
+
         $attendances = Attendance::whereIn('employee_id', $employeeIds)
             ->where('date', $today)
             ->get();

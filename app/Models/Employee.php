@@ -78,6 +78,11 @@ class Employee extends Model
         return $this->hasMany(OtRequest::class);
     }
 
+    public function wfhRequests(): HasMany
+    {
+        return $this->hasMany(WfhRequest::class);
+    }
+
     public function overtimeRecords(): HasMany
     {
         return $this->hasMany(OvertimeRecord::class);

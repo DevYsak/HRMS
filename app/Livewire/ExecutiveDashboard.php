@@ -17,12 +17,12 @@ class ExecutiveDashboard extends Component
     {
         $today = Carbon::today();
         $month = $today->month;
-        $year  = $today->year;
+        $year = $today->year;
 
         // --- Headcount ---
-        $activeCount      = Employee::where('status', 'active')->count();
-        $onboardingCount  = Employee::where('status', 'onboarding')->count();
-        $probationCount   = Employee::where('status', 'probation')->count();
+        $activeCount = Employee::where('status', 'active')->count();
+        $onboardingCount = Employee::where('status', 'onboarding')->count();
+        $probationCount = Employee::where('status', 'probation')->count();
 
         // --- Today's Attendance ---
         $presentToday = Attendance::where('date', $today->toDateString())
@@ -35,7 +35,7 @@ class ExecutiveDashboard extends Component
 
         // --- Pending Approvals (company-wide) ---
         $pendingLeaves = LeaveRequest::where('status', 'pending')->count();
-        $pendingOt     = OtRequest::where('status', 'pending')->count();
+        $pendingOt = OtRequest::where('status', 'pending')->count();
 
         // --- Payroll Status ---
         $cycleAPayroll = Payroll::where('cycle', 'cycle_a')

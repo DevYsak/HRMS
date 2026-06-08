@@ -50,6 +50,10 @@
             <option value="contract">Contract</option>
             <option value="payslip">Payslip</option>
             <option value="personal">My Documents</option>
+            <option value="warning_letter">Warning Letters</option>
+            <option value="pip">Improvement Plans</option>
+            <option value="promotion">Promotions</option>
+            <option value="performance_review">Performance Reviews</option>
             <option value="other">Other</option>
         </select>
     </div>
@@ -69,8 +73,17 @@
                                 @elseif($doc->category === 'contract') bg-purple-100 text-purple-700
                                 @elseif($doc->category === 'personal') bg-orange-100 text-orange-700
                                 @elseif($doc->category === 'payslip') bg-indigo-100 text-indigo-700
+                                @elseif($doc->category === 'warning_letter') bg-red-100 text-red-700
+                                @elseif($doc->category === 'pip') bg-amber-100 text-amber-700
+                                @elseif($doc->category === 'promotion') bg-emerald-100 text-emerald-700
+                                @elseif($doc->category === 'performance_review') bg-sky-100 text-sky-700
                                 @else bg-zinc-100 text-zinc-500 @endif">
-                                {{ ucfirst($doc->category) }}
+                                @if($doc->category === 'warning_letter') Warning Letter
+                                @elseif($doc->category === 'pip') Improvement Plan
+                                @elseif($doc->category === 'promotion') Promotion
+                                @elseif($doc->category === 'performance_review') Review
+                                @else {{ ucfirst($doc->category) }}
+                                @endif
                             </span>
                         </div>
                     </div>
@@ -169,7 +182,7 @@
          ════════════════════════════════════════════════════════════ --}}
 @if($canManage)
 <dialog id="modal-upload" class="rounded-2xl shadow-2xl border-0 p-0 w-full max-w-lg backdrop:bg-black/40 backdrop:backdrop-blur-sm"
-    x-data="{ cat: 'policy' }">
+    x-data="{ vis: 'all' }">
     <form method="POST" action="{{ route('documents.upload') }}" enctype="multipart/form-data"
         class="space-y-5 p-6">
         @csrf
@@ -219,18 +232,20 @@
         <div class="grid grid-cols-2 gap-4">
             <div>
                 <label class="block text-sm font-medium text-zinc-700 mb-1">Category <span class="text-red-500">*</span></label>
-                <select name="category" x-model="cat" required
+                <select name="category" required
                     class="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
                     <option value="policy">Policy / Handbook</option>
                     <option value="contract">Contract</option>
                     <option value="personal">Personal Document</option>
                     <option value="payslip">Payslip</option>
+                    <option value="form">Form</option>
+                    <option value="notice">Notice</option>
                     <option value="other">Other</option>
                 </select>
             </div>
             <div>
                 <label class="block text-sm font-medium text-zinc-700 mb-1">Visibility</label>
-                <select name="visibility"
+                <select name="visibility" x-model="vis"
                     class="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
                     <option value="all">Company-wide</option>
                     <option value="restricted">Restricted (employee only)</option>
@@ -238,8 +253,8 @@
             </div>
         </div>
 
-        {{-- Employee assignment (visible when category is personal/contract/other) --}}
-        <div x-show="['personal','contract','other'].includes(cat)" x-transition style="display:none">
+        {{-- Employee assignment (visible when restricted to a specific employee) --}}
+        <div x-show="vis === 'restricted'" x-transition style="display:none">
             <label class="block text-sm font-medium text-zinc-700 mb-1">Assign to Employee <span class="text-zinc-400 font-normal text-xs">(optional)</span></label>
             <select name="employee_id"
                 class="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">

@@ -18,21 +18,21 @@ class HrAdminDashboard extends Component
     {
         $today = Carbon::today();
         $month = $today->month;
-        $year  = $today->year;
+        $year = $today->year;
 
         // --- Headcount ---
-        $totalActive     = Employee::where('status', 'active')->count();
-        $onboarding      = Employee::where('status', 'onboarding')->count();
-        $probation       = Employee::where('status', 'probation')->count();
-        $newThisMonth    = Employee::whereMonth('joining_date', $month)->whereYear('joining_date', $year)->count();
+        $totalActive = Employee::where('status', 'active')->count();
+        $onboarding = Employee::where('status', 'onboarding')->count();
+        $probation = Employee::where('status', 'probation')->count();
+        $newThisMonth = Employee::whereMonth('joining_date', $month)->whereYear('joining_date', $year)->count();
 
         // --- Attendance Exceptions ---
         $missingCheckout = Attendance::where('date', $today)->whereNull('check_out')->whereNotNull('check_in')->count();
-        $lateToday       = Attendance::where('date', $today)->where('is_late', true)->count();
-        $pendingReg      = AttendanceRegularisation::where('status', 'pending')->count();
+        $lateToday = Attendance::where('date', $today)->where('is_late', true)->count();
+        $pendingReg = AttendanceRegularisation::where('status', 'pending')->count();
 
         // --- Leave Exceptions ---
-        $pendingLeaves   = LeaveRequest::where('status', 'pending')->count();
+        $pendingLeaves = LeaveRequest::where('status', 'pending')->count();
         $escalatedLeaves = LeaveRequest::where('status', 'escalated')->count();
 
         // --- Payroll ---

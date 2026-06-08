@@ -6,6 +6,8 @@ use App\Models\Employee;
 use App\Models\PerformanceReview;
 use App\Models\PromotionRecommendation;
 use App\Models\User;
+use App\Notifications\BonusAwardedNotification;
+use App\Notifications\SalaryRevisionNotification;
 use Illuminate\Support\Facades\DB;
 
 class PromotionService
@@ -82,15 +84,31 @@ class PromotionService
         ]);
 
         if ($nextStatus === 'approved') {
+            $effectiveNote = 'Effective: '.($recommendation->effective_date?->toFormattedDateString() ?? 'TBD');
+
+            $timelineEvent = match ($recommendation->recommendation_type) {
+                'salary_increment' => 'salary_revised',
+                'bonus' => 'bonus_granted',
+                default => 'promotion_approved',
+            };
+
             $this->timeline->record(
                 $recommendation->employee,
-                'promotion_approved',
+                $timelineEvent,
                 $recommendation->recommendationTypeLabel().' Approved',
-                'Effective: '.($recommendation->effective_date?->toFormattedDateString() ?? 'TBD'),
+                $effectiveNote,
                 $recommendation,
                 $approver,
                 visibleToEmployee: true,
             );
+
+            $employeeUser = $recommendation->employee->user;
+
+            if ($recommendation->recommendation_type === 'salary_increment') {
+                $employeeUser->notify(new SalaryRevisionNotification($recommendation));
+            } elseif ($recommendation->recommendation_type === 'bonus') {
+                $employeeUser->notify(new BonusAwardedNotification($recommendation));
+            }
         }
     }
 

@@ -2,12 +2,17 @@
 
 namespace App\Services\Performance;
 
+use App\Models\Document;
 use App\Models\Employee;
 use App\Models\User;
 use App\Models\WarningAcknowledgement;
 use App\Models\WarningLetter;
+use App\Notifications\WarningEscalatedNotification;
+use App\Notifications\WarningIssuedNotification;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Request;
+use Illuminate\Support\Facades\Storage;
 
 class WarningService
 {
@@ -44,6 +49,8 @@ class WarningService
                     $warning,
                     $issuer,
                 );
+
+                $employee->user->notify(new WarningIssuedNotification($warning));
             }
 
             return $warning;
@@ -99,7 +106,7 @@ class WarningService
             throw new \DomainException('This warning type has no further escalation level.');
         }
 
-        return $this->issue(
+        $escalated = $this->issue(
             $warning->employee,
             array_merge([
                 'warning_type' => $nextType,
@@ -112,6 +119,52 @@ class WarningService
             ], $newData),
             $issuer,
         );
+
+        $this->timeline->record(
+            $escalated->employee,
+            'warning_escalated',
+            $warning->warningTypeLabel().' Escalated to '.$escalated->warningTypeLabel(),
+            $newData['reason'] ?? $warning->reason,
+            $escalated,
+            $issuer,
+        );
+
+        $escalated->employee->user->notify(new WarningEscalatedNotification($escalated));
+
+        return $escalated;
+    }
+
+    /**
+     * Generate the formal warning letter PDF and store it in the employee's
+     * documents (issued copies require acknowledgement).
+     */
+    public function generatePdf(WarningLetter $warning, User $generatedBy): Document
+    {
+        $warning->loadMissing(['employee.user', 'employee.department', 'employee.jobTitle', 'employee.manager', 'employee.employmentType', 'department', 'issuedBy', 'previousWarning']);
+
+        $pdf = Pdf::loadView('pdf.reports.warning-letter', ['warning' => $warning]);
+
+        $fileName = "warning-letter-{$warning->id}-".now()->format('Ymd-His').'.pdf';
+        $path = "documents/warning-letters/{$warning->id}/{$fileName}";
+
+        Storage::disk('local')->put($path, $pdf->output());
+
+        $nextVersion = ($warning->documents()->max('version') ?? 0) + 1;
+
+        return $warning->documents()->create([
+            'title' => $warning->warningTypeLabel().' — '.$warning->employee->user->name,
+            'description' => 'Formally generated warning letter (v'.$nextVersion.').',
+            'file_path' => $path,
+            'file_name' => $fileName,
+            'mime_type' => 'application/pdf',
+            'file_size' => Storage::disk('local')->size($path),
+            'version' => $nextVersion,
+            'category' => 'warning_letter',
+            'visibility' => 'restricted',
+            'employee_id' => $warning->employee_id,
+            'requires_acknowledgement' => true,
+            'uploaded_by' => $generatedBy->id,
+        ]);
     }
 
     /**

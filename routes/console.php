@@ -135,6 +135,31 @@ Schedule::command('hrms:monthly-leave-accrual')
     ->withoutOverlapping()
     ->runInBackground();
 
+// Phase 2 — Performance Engine
+// Remind employees of unacknowledged warnings older than 48 hours → daily 09:00
+Schedule::command('hrms:check-warning-acknowledgements')
+    ->dailyAt('09:00')
+    ->withoutOverlapping()
+    ->runInBackground();
+
+// Notify employees of goal deadlines within 7 days → Monday 08:00
+Schedule::command('hrms:check-kpi-deadlines')
+    ->weeklyOn(1, '08:00')
+    ->withoutOverlapping()
+    ->runInBackground();
+
+// Remind employees nearing self-review deadline in active performance cycles → daily 08:30
+Schedule::command('hrms:check-review-cycle-reminders')
+    ->dailyAt('08:30')
+    ->withoutOverlapping()
+    ->runInBackground();
+
+// Notify manager, HR, and employee of weekly PIP review due → Monday 09:00
+Schedule::command('hrms:check-pip-weekly-review')
+    ->weeklyOn(1, '09:00')
+    ->withoutOverlapping()
+    ->runInBackground();
+
 // Spatie Backup
 Schedule::command('backup:clean')->daily()->at('01:00');
 Schedule::command('backup:run')->daily()->at('01:30');

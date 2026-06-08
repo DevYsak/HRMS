@@ -15,7 +15,9 @@
     @if ($error)
         <div class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 flex items-start gap-3">
             <svg class="mt-0.5 h-4 w-4 shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-.75-11.25a.75.75 0 011.5 0v4.5a.75.75 0 01-1.5 0v-4.5zm.75 8a1 1 0 110-2 1 1 0 010 2z" clip-rule="evenodd"/>
+                <path fill-rule="evenodd"
+                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm-.75-11.25a.75.75 0 011.5 0v4.5a.75.75 0 01-1.5 0v-4.5zm.75 8a1 1 0 110-2 1 1 0 010 2z"
+                    clip-rule="evenodd" />
             </svg>
             <span><strong>Biometric server error:</strong> {{ $error }} — attendance data may be stale.</span>
         </div>
@@ -58,8 +60,8 @@
         </div>
         <div class="flex-1 min-w-48">
             <flux:label for="search-box">Search</flux:label>
-            <flux:input id="search-box" wire:model.live.debounce.300ms="search"
-                        placeholder="Name or employee code…" icon="magnifying-glass" />
+            <flux:input id="search-box" wire:model.live.debounce.300ms="search" placeholder="Name or employee code…"
+                icon="magnifying-glass" />
         </div>
         @if ($fetchedAt)
             <p class="mb-2 text-xs text-zinc-400">Last fetched: {{ $fetchedAt }}</p>
@@ -107,20 +109,21 @@
                         <td class="px-4 py-3">
                             @php
                                 $status = $summary['status'] ?? 'absent';
-                                $badge = match($status) {
-                                    'checked_out'     => 'bg-emerald-100 text-emerald-700',
-                                    'in_office'       => 'bg-blue-100 text-blue-700',
-                                    'admin_corrected' => 'bg-violet-100 text-violet-700',
-                                    default           => 'bg-zinc-100 text-zinc-500',
+                                $badge = match ($status) {
+                                    'checked_out' => 'bg-emerald-100 text-emerald-700',
+                                    'in_office' => 'bg-blue-100 text-blue-700',
+                                    'admin_corrected' => 'bg-violet-100 text-orange-700',
+                                    default => 'bg-zinc-100 text-zinc-500',
                                 };
-                                $label = match($status) {
-                                    'checked_out'     => 'Checked Out',
-                                    'in_office'       => 'In Office',
+                                $label = match ($status) {
+                                    'checked_out' => 'Checked Out',
+                                    'in_office' => 'In Office',
                                     'admin_corrected' => 'Corrected',
-                                    default           => 'Absent',
+                                    default => 'Absent',
                                 };
                             @endphp
-                            <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium {{ $badge }}">
+                            <span
+                                class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium {{ $badge }}">
                                 {{ $label }}
                             </span>
                         </td>

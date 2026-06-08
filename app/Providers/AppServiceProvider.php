@@ -11,6 +11,7 @@ use App\Models\LeaveRequest;
 use App\Models\OtRequest;
 use App\Models\Payroll;
 use App\Models\Payslip;
+use App\Models\Permission;
 use App\Models\Reimbursement;
 use App\Models\User;
 use App\Observers\AttendanceRegularisationObserver;
@@ -61,6 +62,20 @@ class AppServiceProvider extends ServiceProvider
 
         Gate::define('manageFullSettings', function (User $user) {
             return $user->isSuperAdmin() || $user->isHrAdmin();
+        });
+
+        Gate::define('manage-settings', function (User $user) {
+            return $user->canManageSettings();
+        });
+
+        // Dynamic, database-driven authorization: any ability matching a
+        // `permissions.key` row resolves through the user's assigned role.
+        Gate::before(function (User $user, string $ability) {
+            if (Permission::query()->where('key', $ability)->exists()) {
+                return $user->hasPermission($ability);
+            }
+
+            return null;
         });
     }
 

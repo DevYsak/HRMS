@@ -70,6 +70,7 @@ class DocumentManager extends Component
             $query->where(function ($q) use ($employee, $user) {
                 $q->where('visibility', 'all')->orWhere('category', 'policy');
                 if ($employee) {
+                    // Own docs (personal, warning letters, PIPs, promotions, reviews)
                     $q->orWhere('employee_id', $employee->id);
                 }
                 if ($user->canApproveFinance()) {

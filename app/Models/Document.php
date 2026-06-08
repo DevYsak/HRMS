@@ -3,17 +3,19 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 #[Fillable([
     'title', 'description', 'file_path', 'file_name', 'mime_type', 'file_size',
     'version', 'parent_id', 'category', 'visibility',
     'department_id', 'employee_id', 'requires_acknowledgement',
-    'expires_at', 'uploaded_by',
+    'expires_at', 'uploaded_by', 'documentable_type', 'documentable_id',
 ])]
 class Document extends Model
 {
@@ -22,7 +24,7 @@ class Document extends Model
     protected function casts(): array
     {
         return [
-            'expires_at'              => 'date',
+            'expires_at' => 'date',
             'requires_acknowledgement' => 'boolean',
         ];
     }
@@ -40,6 +42,12 @@ class Document extends Model
     public function employee(): BelongsTo
     {
         return $this->belongsTo(Employee::class);
+    }
+
+    /** The Warning Letter, PIP, Promotion Recommendation, or Performance Review this document belongs to, if any. */
+    public function documentable(): MorphTo
+    {
+        return $this->morphTo();
     }
 
     public function parent(): BelongsTo
@@ -77,8 +85,8 @@ class Document extends Model
             ->exists();
     }
 
-    /** @return \Illuminate\Database\Eloquent\Builder<static> */
-    public function scopeExpiringSoon(\Illuminate\Database\Eloquent\Builder $query, int $days = 30): \Illuminate\Database\Eloquent\Builder
+    /** @return Builder<static> */
+    public function scopeExpiringSoon(Builder $query, int $days = 30): Builder
     {
         return $query->whereNotNull('expires_at')
             ->whereDate('expires_at', '<=', now()->addDays($days))

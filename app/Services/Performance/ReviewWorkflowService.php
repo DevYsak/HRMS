@@ -9,6 +9,8 @@ use App\Models\PerformanceReview;
 use App\Models\PerformanceReviewScore;
 use App\Models\PerformanceTemplate;
 use App\Models\User;
+use App\Notifications\KpiAssignedNotification;
+use App\Notifications\ReviewCycleStartedNotification;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -38,16 +40,32 @@ class ReviewWorkflowService
 
                 // Seed KPI rows for each component
                 foreach ($template->components as $component) {
-                    EmployeeKpi::firstOrCreate(
+                    $kpi = EmployeeKpi::firstOrCreate(
                         ['employee_id' => $employee->id, 'component_id' => $component->id, 'performance_cycle_id' => $cycle->id],
                         ['assigned_by' => $actor->id, 'status' => 'not_started', 'due_date' => $cycle->end_date],
                     );
+
+                    if ($kpi->wasRecentlyCreated) {
+                        $employee->user->notify(new KpiAssignedNotification($kpi));
+                    }
 
                     PerformanceReviewScore::firstOrCreate(
                         ['review_id' => $review->id, 'component_id' => $component->id],
                         ['auto_computed' => $component->isAutoScored()],
                     );
                 }
+
+                $employee->user->notify(new ReviewCycleStartedNotification($cycle));
+
+                $this->timeline->record(
+                    $employee,
+                    'review_started',
+                    'Performance Review Cycle Started',
+                    "Cycle: {$cycle->name}",
+                    $review,
+                    $actor,
+                    visibleToEmployee: true,
+                );
             }
 
             $cycle->update(['status' => 'active']);

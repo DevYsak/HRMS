@@ -17,6 +17,7 @@ use App\Models\SalaryCycle;
 use App\Models\ShiftSetting;
 use App\Models\User;
 use App\Models\WorkMode;
+use App\Notifications\WelcomeOnboardingNotification;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Livewire\Component;
@@ -188,12 +189,14 @@ class EmployeeCreate extends Component
             'status' => $this->status,
         ]);
 
-        // Send welcome email with credentials
+        // Send welcome email with credentials and onboarding notification
         try {
             Mail::to($user->email)->send(new WelcomeEmployeeMail($user));
         } catch (\Throwable) {
             // Mail failure should not block employee creation
         }
+
+        $user->notify(new WelcomeOnboardingNotification($user->employee));
 
         \Flux::toast(
             text: "Employee {$this->name} added successfully. Welcome email sent to {$this->email}.",

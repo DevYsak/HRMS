@@ -752,7 +752,7 @@
                     @foreach($upcomingBirthdays as $b)
                         @php
                             $initials = collect(explode(' ', $b['name']))->map(fn($n) => $n[0] ?? '')->take(2)->join('');
-                            $colors = ['bg-rose-100 text-rose-700','bg-violet-100 text-violet-700','bg-blue-100 text-blue-700','bg-amber-100 text-amber-700','bg-emerald-100 text-emerald-700','bg-orange-100 text-orange-700'];
+                            $colors = ['bg-rose-100 text-rose-700','bg-violet-100 text-orange-700','bg-blue-100 text-blue-700','bg-amber-100 text-amber-700','bg-emerald-100 text-emerald-700','bg-orange-100 text-orange-700'];
                             $color = $colors[$loop->index % count($colors)];
                         @endphp
                         <div class="flex items-center gap-3 p-2.5 rounded-xl {{ $b['is_today'] ? 'bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/40' : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/40' }} transition-colors">

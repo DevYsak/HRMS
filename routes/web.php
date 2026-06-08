@@ -42,11 +42,23 @@ use App\Livewire\Payroll\Overview;
 use App\Livewire\Payroll\Process;
 use App\Livewire\Payroll\Reimbursements;
 use App\Livewire\Performance\AllReviews;
+use App\Livewire\Performance\EmployeeScorecard;
 use App\Livewire\Performance\Goals;
+use App\Livewire\Performance\KpiDashboard;
+use App\Livewire\Performance\KpiTemplates;
+use App\Livewire\Performance\ManagePips;
+use App\Livewire\Performance\ManagePromotions;
+use App\Livewire\Performance\MyKpis;
+use App\Livewire\Performance\MyPip;
+use App\Livewire\Performance\MyPromotions;
 use App\Livewire\Performance\MyReview;
+use App\Livewire\Performance\MyWarnings;
 use App\Livewire\Performance\ReviewCycles;
 use App\Livewire\Performance\TeamReviews;
+use App\Livewire\Performance\WarningLetters;
 use App\Livewire\Settings\EmploymentTypeManager;
+use App\Livewire\Settings\JobTitleManager;
+use App\Livewire\Settings\RoleManager;
 use App\Livewire\Settings\SalaryCycleManager;
 use App\Livewire\Settings\WorkModeManager;
 use App\Livewire\TimeOff\AllTimeOff;
@@ -54,6 +66,8 @@ use App\Livewire\TimeOff\FinanceEncashments;
 use App\Livewire\TimeOff\MyTimeOff;
 use App\Livewire\TimeOff\TeamTimeOff;
 use App\Livewire\TimeOff\TimeOffSettings;
+use App\Livewire\Wfh\ManageWfhRequests;
+use App\Livewire\Wfh\MyWfhRequests;
 use Illuminate\Support\Facades\Route;
 use Laravel\Fortify\Features;
 
@@ -144,6 +158,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 
     // --------------------------------------------------
+    // Work From Home module
+    // --------------------------------------------------
+    Route::prefix('wfh')->name('wfh.')->group(function () {
+        Route::get('/my', MyWfhRequests::class)->name('my');
+        Route::get('/manage', ManageWfhRequests::class)->name('manage')->middleware('role:approve-wfh');
+    });
+
+    // --------------------------------------------------
     // Payroll module
     // --------------------------------------------------
     Route::prefix('payroll')->name('payroll.')->group(function () {
@@ -179,9 +201,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Performance module
     // --------------------------------------------------
     Route::prefix('performance')->name('performance.')->group(function () {
-        // All authenticated employees can view their own review and goals
+        // All authenticated employees can view their own review, goals, and KPIs
         Route::get('/my', MyReview::class)->name('my');
         Route::get('/goals', Goals::class)->name('goals');
+        Route::get('/my-kpis', MyKpis::class)->name('my-kpis');
+        Route::get('/scorecard/{id}', EmployeeScorecard::class)->name('scorecard');
 
         // Managers, Directors, HR, Finance can see team reviews
         Route::get('/team', TeamReviews::class)->name('team')->middleware('role:review-performance');
@@ -190,6 +214,24 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::middleware('role:manage-employees')->group(function () {
             Route::get('/employees', AllReviews::class)->name('employees');
             Route::get('/cycles', ReviewCycles::class)->name('cycles');
+            Route::get('/kpi-dashboard', KpiDashboard::class)->name('kpi-dashboard');
+            Route::get('/kpi-templates', KpiTemplates::class)->name('kpi-templates');
+            Route::get('/warnings/manage', WarningLetters::class)->name('warnings.manage');
+        });
+
+        // Employee warnings (can be accessed by employee)
+        Route::get('/my-warnings', MyWarnings::class)->name('my-warnings');
+
+        // Performance Improvement Plans
+        Route::prefix('pip')->name('pip.')->group(function () {
+            Route::get('/my', MyPip::class)->name('my');
+            Route::get('/manage', ManagePips::class)->name('manage')->middleware('role:review-performance');
+        });
+
+        // Promotions & Rewards
+        Route::prefix('promotions')->name('promotions.')->group(function () {
+            Route::get('/my', MyPromotions::class)->name('my');
+            Route::get('/manage', ManagePromotions::class)->name('manage')->middleware('role:review-performance');
         });
     });
 
@@ -240,6 +282,38 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/ot-records.csv', [ReportController::class, 'otRecordsCsv'])
             ->name('ot-records')
             ->middleware('role:approve-ot');
+
+        // Performance reports — HR admin / performance reviewer access
+        Route::get('/performance-summary.csv', [ReportController::class, 'performanceSummaryCsv'])
+            ->name('performance-summary')
+            ->middleware('role:manage-employees');
+        Route::get('/kpi-summary.csv', [ReportController::class, 'kpiSummaryCsv'])
+            ->name('kpi-summary')
+            ->middleware('role:manage-employees');
+        Route::get('/department-performance.csv', [ReportController::class, 'departmentPerformanceCsv'])
+            ->name('department-performance')
+            ->middleware('role:manage-employees');
+        Route::get('/promotion-pipeline.csv', [ReportController::class, 'promotionPipelineCsv'])
+            ->name('promotion-pipeline')
+            ->middleware('role:manage-employees');
+        Route::get('/warning-letter-report.csv', [ReportController::class, 'warningLetterReportCsv'])
+            ->name('warning-letter-report')
+            ->middleware('role:manage-employees');
+        Route::get('/pip-progress.csv', [ReportController::class, 'pipProgressReportCsv'])
+            ->name('pip-progress')
+            ->middleware('role:manage-employees');
+        Route::get('/leave-utilization.csv', [ReportController::class, 'leaveUtilizationCsv'])
+            ->name('leave-utilization')
+            ->middleware('role:approve-leave');
+        Route::get('/leave-encashment-report.csv', [ReportController::class, 'leaveEncashmentReportCsv'])
+            ->name('leave-encashment-report')
+            ->middleware('role:approve-leave');
+        Route::get('/attendance-compliance.csv', [ReportController::class, 'attendanceComplianceCsv'])
+            ->name('attendance-compliance')
+            ->middleware('role:approve-leave');
+        Route::get('/employee-lifecycle.csv', [ReportController::class, 'employeeLifecycleCsv'])
+            ->name('employee-lifecycle')
+            ->middleware('role:manage-employees');
     });
 
     // --------------------------------------------------
@@ -252,18 +326,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // --------------------------------------------------
     Route::livewire('settings/general', 'pages::settings.general')->name('settings.general');
 
-    // Role permission management — Super Admin only
-    Route::livewire('settings/role-permissions', 'pages::settings.role-permissions')
-        ->name('settings.role-permissions')
-        ->middleware('role:manage-settings');
-
     // --------------------------------------------------
     // Phase 1A — Employee configuration settings
     // --------------------------------------------------
     Route::middleware('role:manage-settings')->prefix('settings')->name('settings.')->group(function () {
+        Route::get('/roles', RoleManager::class)->name('roles');
         Route::get('/employment-types', EmploymentTypeManager::class)->name('employment-types');
         Route::get('/work-modes', WorkModeManager::class)->name('work-modes');
         Route::get('/salary-cycles', SalaryCycleManager::class)->name('salary-cycles');
+        Route::get('/job-titles', JobTitleManager::class)->name('job-titles');
     });
 
 });

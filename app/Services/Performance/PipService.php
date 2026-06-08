@@ -7,6 +7,9 @@ use App\Models\PipGoal;
 use App\Models\PipRecord;
 use App\Models\User;
 use App\Models\WarningLetter;
+use App\Notifications\PipActivatedNotification;
+use App\Notifications\PipCreatedNotification;
+use App\Notifications\PipOutcomeNotification;
 use Illuminate\Support\Facades\DB;
 
 class PipService
@@ -46,6 +49,8 @@ class PipService
                 ]);
             }
 
+            $pip->manager->notify(new PipCreatedNotification($pip));
+
             return $pip;
         });
     }
@@ -73,6 +78,8 @@ class PipService
             $pip,
             $hr,
         );
+
+        $pip->employee->user->notify(new PipActivatedNotification($pip));
     }
 
     /**
@@ -116,10 +123,14 @@ class PipService
             throw new \DomainException("Invalid outcome: {$outcome}.");
         }
 
+        if (! in_array($pip->status, ['active', 'under_review'], true)) {
+            throw new \DomainException('Only active PIPs under review can have an outcome recorded.');
+        }
+
         $pip->update([
             'outcome' => $outcome,
             'outcome_date' => now()->toDateString(),
-            'status' => in_array($outcome, ['failed', 'escalated'], true) ? $outcome : $outcome,
+            'status' => $outcome,
         ]);
 
         $this->timeline->record(
@@ -129,6 +140,51 @@ class PipService
             null,
             $pip,
             $reviewer,
+        );
+
+        $pip->employee->user->notify(new PipOutcomeNotification($pip));
+    }
+
+    /**
+     * Add a new milestone goal to a PIP.
+     *
+     * @param  array{title: string, description: ?string, target_date: ?string, weightage: ?float}  $data
+     */
+    public function addGoal(PipRecord $pip, array $data): PipGoal
+    {
+        if (! in_array($pip->status, ['draft', 'active'], true)) {
+            throw new \DomainException('Goals can only be added to draft or active PIPs.');
+        }
+
+        return PipGoal::create([
+            'pip_record_id' => $pip->id,
+            'title' => $data['title'],
+            'description' => $data['description'] ?? null,
+            'target_date' => $data['target_date'] ?? null,
+            'weightage' => $data['weightage'] ?? 0,
+            'status' => 'not_started',
+        ]);
+    }
+
+    /**
+     * Employee records their comments/response on the PIP.
+     */
+    public function submitEmployeeComment(PipRecord $pip, User $employee, string $comment): void
+    {
+        if ($pip->employee->user_id !== $employee->id) {
+            throw new \DomainException('You may only comment on your own PIP.');
+        }
+
+        $pip->update(['employee_comments' => $comment]);
+
+        $this->timeline->record(
+            $pip->employee,
+            'pip_comment',
+            'Employee added comments to PIP',
+            null,
+            $pip,
+            $employee,
+            visibleToEmployee: true,
         );
     }
 

@@ -159,7 +159,7 @@ class EmployeeEdit extends Component
             // Account
             'name' => 'required|string|max:255',
             'email' => ['required', 'email', Rule::unique('users', 'email')->ignore($this->employee->user_id)],
-            'role' => 'required|string',
+            'role' => ['required', Rule::in(array_column(UserRole::cases(), 'value'))],
             // Personal
             'employee_id' => ['required', 'string', Rule::unique('employees', 'employee_id')->ignore($this->employee->id)],
             'phone' => 'nullable|string|max:30',

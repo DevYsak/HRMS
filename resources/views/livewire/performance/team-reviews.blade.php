@@ -33,7 +33,7 @@
                                 </div>
                             </td>
                             <td class="py-4 pr-4">
-                                <div class="font-medium text-zinc-700 dark:text-zinc-300">{{ $review->cycle->name }}</div>
+                                <div class="font-medium text-zinc-700 dark:text-zinc-300">{{ $review->performanceCycle?->name ?? '—' }}</div>
                             </td>
                             <td class="py-4 pr-4">
                                 <span class="badge-{{ $review->statusColor() }}">{{ strtoupper($review->statusLabel()) }}</span>
@@ -61,7 +61,7 @@
         <div class="fixed inset-0 z-50 flex items-center justify-center p-4"
              x-data x-on:keydown.escape.window="$wire.set('showReviewModal', false)">
             <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="$wire.set('showReviewModal', false)"></div>
-            <div class="relative w-full max-w-4xl bg-white dark:bg-zinc-800 rounded-2xl shadow-xl ring ring-black/5 dark:ring-zinc-700 p-6 max-h-[90vh] overflow-y-auto">
+            <div class="relative w-full max-w-5xl bg-white dark:bg-zinc-800 rounded-2xl shadow-xl ring ring-black/5 dark:ring-zinc-700 p-6 max-h-[90vh] overflow-y-auto">
                 <button type="button" @click="$wire.set('showReviewModal', false)"
                     class="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors">
                     <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
@@ -71,50 +71,71 @@
             @if($activeReview)
                 <div>
                     <flux:heading size="lg">{{ $activeReview->status === 'submitted' ? 'Review Assessment' : 'Performance Review Details' }}</flux:heading>
-                    <flux:subheading>{{ $activeReview->employee->user->name }} â€¢ {{ $activeReview->cycle->name }}</flux:subheading>
+                    <flux:subheading>{{ $activeReview->employee->user->name }} • {{ $activeReview->performanceCycle?->name ?? '—' }}</flux:subheading>
                 </div>
 
                 <div class="max-h-[70vh] overflow-y-auto px-1 space-y-8">
                     {{-- KPI Assessment --}}
                     <div class="space-y-4">
-                        <h4 class="font-bold text-zinc-900 dark:text-white border-b pb-2 dark:border-zinc-800">KPI / Goal Evaluation</h4>
-                        @foreach($activeReview->goals as $goal)
+                        <h4 class="font-bold text-zinc-900 dark:text-white border-b pb-2 dark:border-zinc-800">KPI / Component Evaluation</h4>
+                        @foreach($activeReview->componentScores as $scoreRow)
+                            @php $component = $scoreRow->component; @endphp
                             <div class="bg-zinc-50 p-4 rounded-xl border border-zinc-100 dark:bg-zinc-900 dark:border-zinc-800 space-y-4">
-                                <div class="flex justify-between">
+                                <div class="flex justify-between items-start">
                                     <div>
-                                        <div class="font-bold text-sm text-zinc-900 dark:text-white">{{ $goal->title }}</div>
-                                        <div class="text-xs text-zinc-500">{{ $goal->description }}</div>
+                                        <div class="font-bold text-sm text-zinc-900 dark:text-white">
+                                            {{ $component->name }}
+                                            @if($component->isAutoScored())
+                                                <span class="ml-2 text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full dark:bg-blue-900/40 dark:text-blue-400 font-semibold tracking-wider uppercase">Auto-Scored</span>
+                                            @endif
+                                        </div>
+                                        <div class="text-xs text-zinc-500 mt-1">{{ $component->description ?? 'No description.' }}</div>
                                     </div>
-                                    <div class="text-right">
+                                    <div class="text-right shrink-0">
                                         <div class="text-[10px] font-bold text-zinc-400 uppercase">Self Rating</div>
-                                        <div class="font-bold text-lg text-zinc-700 dark:text-zinc-300">{{ $goal->self_rating }}/5</div>
+                                        @if($component->isAutoScored())
+                                            <div class="text-xs text-zinc-500 italic mt-1">Auto-scored</div>
+                                        @else
+                                            <div class="font-bold text-lg text-zinc-700 dark:text-zinc-300">{{ $scoreRow->self_score ?? '-' }} <span class="text-xs text-zinc-400 font-normal">/ {{ $component->max_score }}</span></div>
+                                        @endif
                                     </div>
                                 </div>
                                 
-                                <div class="bg-white p-3 rounded-lg border border-zinc-100 dark:bg-zinc-800 dark:border-zinc-700">
-                                    <span class="text-[10px] font-bold text-zinc-400 uppercase">Employee Comments</span>
-                                    <p class="text-sm italic text-zinc-600 dark:text-zinc-400">"{{ $goal->self_comment ?: 'No comments provided.' }}"</p>
-                                </div>
+                                @if(!$component->isAutoScored())
+                                    <div class="bg-white p-3 rounded-lg border border-zinc-100 dark:bg-zinc-800 dark:border-zinc-700">
+                                        <span class="text-[10px] font-bold text-zinc-400 uppercase">Employee Comments</span>
+                                        <p class="text-sm italic text-zinc-600 dark:text-zinc-400">"{{ $scoreRow->self_comment ?: 'No comments provided.' }}"</p>
+                                    </div>
+                                @endif
 
                                 @if($activeReview->status === 'submitted')
-                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <flux:field>
-                                            <flux:label>Your Rating</flux:label>
-                                            <flux:select wire:model="goalRatings.{{ $goal->id }}">
-                                                <option value="0">Select Rating</option>
-                                                <option value="1">1 - Poor</option>
-                                                <option value="2">2 - Fair</option>
-                                                <option value="3">3 - Good</option>
-                                                <option value="4">4 - Very Good</option>
-                                                <option value="5">5 - Excellent</option>
-                                            </flux:select>
-                                        </flux:field>
-                                        <flux:textarea wire:model="goalComments.{{ $goal->id }}" label="Your Feedback" placeholder="Add specific feedback for this KPI..." rows="1" />
-                                    </div>
+                                    @if($component->isAutoScored())
+                                        <div class="bg-blue-50/50 p-3 rounded border border-blue-100 text-sm text-blue-700 dark:bg-blue-900/20 dark:border-blue-800/50 dark:text-blue-400">
+                                            This component will be automatically scored based on system data at the end of the review cycle.
+                                        </div>
+                                    @else
+                                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                            <flux:field class="md:col-span-1">
+                                                <flux:label>Manager Score (out of {{ $component->max_score }})</flux:label>
+                                                <flux:input type="number" wire:model="componentScores.{{ $component->id }}" min="0" max="{{ $component->max_score }}" step="0.5" />
+                                                <flux:error name="componentScores.{{ $component->id }}" />
+                                            </flux:field>
+                                            <flux:field class="md:col-span-2">
+                                                <flux:label>Manager Feedback</flux:label>
+                                                <flux:textarea wire:model="componentComments.{{ $component->id }}" rows="1" placeholder="Add specific feedback for this KPI..." />
+                                                <flux:error name="componentComments.{{ $component->id }}" />
+                                            </flux:field>
+                                        </div>
+                                    @endif
                                 @else
                                     <div class="bg-brand-50 p-3 rounded-lg border border-brand-100 dark:bg-brand-900/10 dark:border-brand-800/30">
-                                        <span class="text-[10px] font-bold text-brand-600 uppercase">Your Rating: {{ $goal->manager_rating }}/5</span>
-                                        <p class="text-sm text-brand-900 dark:text-brand-300">{{ $goal->manager_comment }}</p>
+                                        @if($component->isAutoScored())
+                                            <span class="text-[10px] font-bold text-brand-600 uppercase">Auto-Scored Component</span>
+                                            <p class="text-sm text-brand-900 dark:text-brand-300 mt-1">This score will be finalized when the review is locked.</p>
+                                        @else
+                                            <span class="text-[10px] font-bold text-brand-600 uppercase">Your Rating: {{ $scoreRow->manager_score }}/{{ $component->max_score }}</span>
+                                            <p class="text-sm text-brand-900 dark:text-brand-300">{{ $scoreRow->manager_comment ?: 'No comments provided.' }}</p>
+                                        @endif
                                     </div>
                                 @endif
                             </div>
@@ -130,16 +151,16 @@
                                 <div class="space-y-4">
                                     <h5 class="text-xs font-bold text-zinc-400 uppercase">Employee Reflection</h5>
                                     <div>
-                                        <span class="text-sm font-bold block">Overall Self Rating</span>
-                                        <div class="text-lg font-bold">{{ $activeReview->overall_rating }}/5</div>
-                                    </div>
-                                    <div>
                                         <span class="text-sm font-bold block">Strengths</span>
-                                        <p class="text-sm text-zinc-600 dark:text-zinc-400">{{ $activeReview->strengths }}</p>
+                                        <p class="text-sm text-zinc-600 dark:text-zinc-400">{{ $activeReview->strengths ?: 'None provided.' }}</p>
                                     </div>
                                     <div>
                                         <span class="text-sm font-bold block">Improvements</span>
-                                        <p class="text-sm text-zinc-600 dark:text-zinc-400">{{ $activeReview->improvements }}</p>
+                                        <p class="text-sm text-zinc-600 dark:text-zinc-400">{{ $activeReview->improvements ?: 'None provided.' }}</p>
+                                    </div>
+                                    <div>
+                                        <span class="text-sm font-bold block">Additional Comments</span>
+                                        <p class="text-sm text-zinc-600 dark:text-zinc-400">{{ $activeReview->comments ?: 'None provided.' }}</p>
                                     </div>
                                 </div>
 
@@ -147,14 +168,6 @@
                                     <h5 class="text-xs font-bold text-brand-600 uppercase">Manager Decision</h5>
                                     
                                     @if($activeReview->status === 'submitted')
-                                        <flux:field>
-                                            <flux:label>Final Performance Rating (1-5)</flux:label>
-                                            <div class="flex gap-4 items-center">
-                                                <input type="range" wire:model.live="rating" min="1" max="5" class="w-full accent-brand-600" />
-                                                <span class="font-bold text-xl text-brand-600">{{ $rating }}</span>
-                                            </div>
-                                        </flux:field>
-
                                         <flux:textarea wire:model="manager_feedback" label="Overall Performance Summary" placeholder="Summarize the employee's performance for this cycle..." rows="4" />
                                         
                                         <flux:field>
@@ -166,12 +179,8 @@
                                     @else
                                         <div class="space-y-4">
                                             <div>
-                                                <span class="text-sm font-bold block">Overall Rating</span>
-                                                <div class="text-lg font-bold text-brand-600">{{ $activeReview->overall_rating }}/5</div>
-                                            </div>
-                                            <div>
                                                 <span class="text-sm font-bold block">Feedback Summary</span>
-                                                <p class="text-sm text-zinc-600 dark:text-zinc-400">{{ $activeReview->manager_feedback }}</p>
+                                                <p class="text-sm text-zinc-600 dark:text-zinc-400">{{ $activeReview->manager_feedback ?: 'No feedback provided.' }}</p>
                                             </div>
                                             @if($activeReview->promotion_recommended)
                                                 <div class="flex items-center gap-2 text-green-600 font-bold text-sm bg-green-50 p-2 rounded-lg dark:bg-green-900/20">
@@ -185,6 +194,19 @@
                             </div>
                         </div>
                     </div>
+                </div>
+
+                {{-- Documents --}}
+                <div class="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl p-4">
+                    <h4 class="text-xs font-bold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider mb-2">Documents</h4>
+                    @forelse($activeReview->documents as $document)
+                        <div class="flex items-center justify-between text-sm py-1.5 border-b border-zinc-200 dark:border-zinc-700 last:border-0">
+                            <span class="text-zinc-700 dark:text-zinc-300">{{ $document->title }} <span class="text-xs text-zinc-400">v{{ $document->version }}</span></span>
+                            <a href="{{ URL::temporarySignedRoute('documents.download', now()->addMinutes(5), ['document' => $document->id]) }}" class="text-xs text-blue-600 hover:underline">Download</a>
+                        </div>
+                    @empty
+                        <p class="text-xs text-zinc-500 dark:text-zinc-400">No documents attached to this review yet.</p>
+                    @endforelse
                 </div>
 
                 <div class="flex justify-end gap-3 pt-4 border-t border-zinc-100 dark:border-zinc-800">

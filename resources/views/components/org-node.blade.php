@@ -1,21 +1,21 @@
 @props(['node', 'grouped', 'visited' => []])
 
 @php
-    $visited   = $visited ?? [];
+    $visited = $visited ?? [];
     $canRender = isset($grouped[$node->user_id])
         && $grouped[$node->user_id]->count() > 0
-        && ! in_array($node->user_id, $visited);
+        && !in_array($node->user_id, $visited);
 
     // Department → color palette
     $palette = [
-        'indigo'  => ['accent' => '#6366f1', 'ring' => 'ring-indigo-200',  'badge' => 'bg-indigo-50 text-indigo-600 ring-indigo-100',   'border' => 'border-indigo-200',  'dot' => 'bg-indigo-500',  'bar' => '#6366f1'],
-        'violet'  => ['accent' => '#7c3aed', 'ring' => 'ring-violet-200',  'badge' => 'bg-violet-50 text-violet-700 ring-violet-100',   'border' => 'border-violet-200',  'dot' => 'bg-brand-600',  'bar' => '#7c3aed'],
-        'sky'     => ['accent' => '#0284c7', 'ring' => 'ring-sky-200',     'badge' => 'bg-sky-50 text-sky-700 ring-sky-100',            'border' => 'border-sky-200',     'dot' => 'bg-sky-600',     'bar' => '#0284c7'],
-        'emerald' => ['accent' => '#059669', 'ring' => 'ring-emerald-200', 'badge' => 'bg-emerald-50 text-emerald-700 ring-emerald-100','border' => 'border-emerald-200', 'dot' => 'bg-emerald-600', 'bar' => '#059669'],
-        'amber'   => ['accent' => '#d97706', 'ring' => 'ring-amber-200',   'badge' => 'bg-amber-50 text-amber-700 ring-amber-100',      'border' => 'border-amber-200',   'dot' => 'bg-amber-500',   'bar' => '#d97706'],
-        'rose'    => ['accent' => '#e11d48', 'ring' => 'ring-rose-200',    'badge' => 'bg-rose-50 text-rose-700 ring-rose-100',         'border' => 'border-rose-200',    'dot' => 'bg-rose-600',    'bar' => '#e11d48'],
-        'cyan'    => ['accent' => '#0891b2', 'ring' => 'ring-cyan-200',    'badge' => 'bg-cyan-50 text-cyan-700 ring-cyan-100',         'border' => 'border-cyan-200',    'dot' => 'bg-cyan-600',    'bar' => '#0891b2'],
-        'pink'    => ['accent' => '#db2777', 'ring' => 'ring-pink-200',    'badge' => 'bg-pink-50 text-pink-700 ring-pink-100',         'border' => 'border-pink-200',    'dot' => 'bg-pink-600',    'bar' => '#db2777'],
+        'indigo' => ['accent' => '#6366f1', 'ring' => 'ring-indigo-200', 'badge' => 'bg-indigo-50 text-indigo-600 ring-indigo-100', 'border' => 'border-indigo-200', 'dot' => 'bg-indigo-500', 'bar' => '#6366f1'],
+        'violet' => ['accent' => '#7c3aed', 'ring' => 'ring-violet-200', 'badge' => 'bg-violet-50 text-orange-700 ring-violet-100', 'border' => 'border-violet-200', 'dot' => 'bg-brand-600', 'bar' => '#7c3aed'],
+        'sky' => ['accent' => '#0284c7', 'ring' => 'ring-sky-200', 'badge' => 'bg-sky-50 text-sky-700 ring-sky-100', 'border' => 'border-sky-200', 'dot' => 'bg-sky-600', 'bar' => '#0284c7'],
+        'emerald' => ['accent' => '#059669', 'ring' => 'ring-emerald-200', 'badge' => 'bg-emerald-50 text-emerald-700 ring-emerald-100', 'border' => 'border-emerald-200', 'dot' => 'bg-emerald-600', 'bar' => '#059669'],
+        'amber' => ['accent' => '#d97706', 'ring' => 'ring-amber-200', 'badge' => 'bg-amber-50 text-amber-700 ring-amber-100', 'border' => 'border-amber-200', 'dot' => 'bg-amber-500', 'bar' => '#d97706'],
+        'rose' => ['accent' => '#e11d48', 'ring' => 'ring-rose-200', 'badge' => 'bg-rose-50 text-rose-700 ring-rose-100', 'border' => 'border-rose-200', 'dot' => 'bg-rose-600', 'bar' => '#e11d48'],
+        'cyan' => ['accent' => '#0891b2', 'ring' => 'ring-cyan-200', 'badge' => 'bg-cyan-50 text-cyan-700 ring-cyan-100', 'border' => 'border-cyan-200', 'dot' => 'bg-cyan-600', 'bar' => '#0891b2'],
+        'pink' => ['accent' => '#db2777', 'ring' => 'ring-pink-200', 'badge' => 'bg-pink-50 text-pink-700 ring-pink-100', 'border' => 'border-pink-200', 'dot' => 'bg-pink-600', 'bar' => '#db2777'],
     ];
     $paletteKeys = array_keys($palette);
 @endphp
@@ -23,8 +23,8 @@
 <div class="flex flex-col items-center">
     @if($canRender)
         @php
-            $reports   = $grouped[$node->user_id];
-            $count     = $reports->count();
+            $reports = $grouped[$node->user_id];
+            $count = $reports->count();
             $visited[] = $node->user_id;
         @endphp
 
@@ -38,7 +38,7 @@
                 @php
                     $deptName = $report->department?->name ?? 'default';
                     $colorKey = $paletteKeys[abs(crc32($deptName)) % count($paletteKeys)];
-                    $color    = $palette[$colorKey];
+                    $color = $palette[$colorKey];
                     $subCount = isset($grouped[$report->user_id]) ? $grouped[$report->user_id]->count() : 0;
                 @endphp
 
@@ -50,7 +50,7 @@
                         {{-- (parent already drew 32px, we just add a tiny bit more) --}}
                     @else
                         {{-- Multi-child: horizontal crossbar is built from absolute overlay later,
-                             here we just draw a 24px vertical drop to the card --}}
+                        here we just draw a 24px vertical drop to the card --}}
                         <div class="h-6 w-px bg-slate-300"></div>
                     @endif
 
@@ -58,9 +58,10 @@
                     <div class="relative w-60 cursor-default">
                         {{-- Hover glow --}}
                         <div class="absolute -inset-1 rounded-2xl opacity-0 blur-lg transition-opacity duration-500 group-hover:opacity-40"
-                             style="background: {{ $color['accent'] }}40;"></div>
+                            style="background: {{ $color['accent'] }}40;"></div>
 
-                        <div class="relative overflow-hidden rounded-xl border-2 bg-white shadow-md shadow-slate-200/80 transition-all duration-300 group-hover:-translate-y-0.5 group-hover:shadow-xl {{ $color['border'] }}">
+                        <div
+                            class="relative overflow-hidden rounded-xl border-2 bg-white shadow-md shadow-slate-200/80 transition-all duration-300 group-hover:-translate-y-0.5 group-hover:shadow-xl {{ $color['border'] }}">
                             {{-- Top color accent bar --}}
                             <div class="h-1 w-full" style="background: {{ $color['accent'] }};"></div>
 
@@ -68,9 +69,10 @@
                                 {{-- Avatar --}}
                                 <div class="relative shrink-0">
                                     <img src="{{ $report->user->avatarUrl() }}"
-                                         class="size-11 rounded-full border-2 border-white object-cover shadow-sm ring-2 {{ $color['ring'] }}" />
+                                        class="size-11 rounded-full border-2 border-white object-cover shadow-sm ring-2 {{ $color['ring'] }}" />
                                     @if($subCount > 0)
-                                        <div class="absolute -bottom-0.5 -right-0.5 flex size-[18px] items-center justify-center rounded-full border-2 border-white text-[9px] font-black text-white {{ $color['dot'] }}">
+                                        <div
+                                            class="absolute -bottom-0.5 -right-0.5 flex size-[18px] items-center justify-center rounded-full border-2 border-white text-[9px] font-black text-white {{ $color['dot'] }}">
                                             {{ $subCount }}
                                         </div>
                                     @endif
@@ -79,11 +81,13 @@
                                 {{-- Info --}}
                                 <div class="min-w-0 flex-1">
                                     <h4 class="truncate text-sm font-bold text-slate-800">{{ $report->user->name }}</h4>
-                                    <p class="truncate text-[10px] font-semibold uppercase tracking-wider" style="color: {{ $color['accent'] }}">
+                                    <p class="truncate text-[10px] font-semibold uppercase tracking-wider"
+                                        style="color: {{ $color['accent'] }}">
                                         {{ $report->jobTitle?->name ?? 'Employee' }}
                                     </p>
                                     @if($report->department)
-                                        <span class="mt-0.5 inline-block rounded-full px-1.5 py-px text-[9px] font-semibold ring-1 {{ $color['badge'] }}">
+                                        <span
+                                            class="mt-0.5 inline-block rounded-full px-1.5 py-px text-[9px] font-semibold ring-1 {{ $color['badge'] }}">
                                             {{ $report->department->name }}
                                         </span>
                                     @endif
@@ -100,8 +104,8 @@
             {{-- Horizontal crossbar connecting all siblings (if >1 child) --}}
             @if($count > 1)
                 {{-- Overlay the horizontal line at the very top of the children row.
-                     It stretches from the center of the first child to the center of the last,
-                     using absolute positioning inside the relative parent div. --}}
+                It stretches from the center of the first child to the center of the last,
+                using absolute positioning inside the relative parent div. --}}
                 <div class="pointer-events-none absolute inset-x-0 top-0 flex justify-center" style="height: 1px;">
                     <div class="h-px w-[calc(100%-240px)] bg-slate-300" style="margin: 0 120px;"></div>
                 </div>
