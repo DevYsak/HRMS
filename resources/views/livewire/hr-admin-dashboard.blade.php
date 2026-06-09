@@ -47,7 +47,7 @@
     <div class="p-4 md:p-6 space-y-5">
 
     {{-- KPI Cards --}}
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+    <div class="grid grid-cols-2 lg:grid-cols-6 gap-4">
         <div class="pulse-card text-center p-5">
             <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Active Staff</div>
             <div class="text-3xl font-black text-zinc-900 dark:text-white mt-2">{{ $totalActive }}</div>
@@ -57,6 +57,16 @@
             <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">New Hires (Month)</div>
             <div class="text-3xl font-black text-brand-600 mt-2">{{ $newThisMonth }}</div>
             <div class="text-[10px] text-zinc-400 mt-1">Joined this month</div>
+        </div>
+        <div class="pulse-card text-center p-5">
+            <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Pending Exits</div>
+            <div class="text-3xl font-black text-orange-600 mt-2">{{ $pendingExits }}</div>
+            <div class="text-[10px] text-zinc-400 mt-1">Notice period / Leaving</div>
+        </div>
+        <div class="pulse-card text-center p-5">
+            <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Pending Clearances</div>
+            <div class="text-3xl font-black text-purple-600 mt-2">{{ $pendingClearances }}</div>
+            <div class="text-[10px] text-zinc-400 mt-1">Offboarding tasks open</div>
         </div>
         <div class="pulse-card text-center p-5">
             <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Pending Leaves</div>

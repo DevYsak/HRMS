@@ -82,7 +82,7 @@ class OnboardingTemplateTaskManager extends Component
             'owner_role' => ['nullable', 'string', 'max:50'],
             'due_days' => ['required', 'integer', 'min:0', 'max:365'],
             'sort_order' => ['integer', 'min:0'],
-            'auto_trigger' => ['nullable', 'string', 'in:account_create,kyc_upload,biometric_sync,asset_assign,'],
+            'auto_trigger' => ['nullable', 'string', 'in:account_create,kyc_upload,biometric_sync,asset_assign,asset_return'],
         ]);
 
         $data['auto_trigger'] = $data['auto_trigger'] ?: null;

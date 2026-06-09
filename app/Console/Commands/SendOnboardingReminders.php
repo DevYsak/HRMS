@@ -30,7 +30,6 @@ class SendOnboardingReminders extends Command
     private function notifyOverdueTasks(): void
     {
         $tasks = OnboardingTask::with(['employee.user', 'employee.department'])
-            ->where('phase', 'onboarding')
             ->where('status', 'overdue')
             ->where('is_completed', false)
             ->get();
@@ -81,29 +80,43 @@ class SendOnboardingReminders extends Command
     private function notifyCompletedEmployees(OnboardingService $service): void
     {
         $employees = Employee::with('user')
-            ->whereIn('status', ['onboarding', 'active', 'probation'])
-            ->get()
-            ->filter(function (Employee $employee): bool {
-                return $employee->onboardingTasks()
-                    ->where('phase', 'onboarding')
-                    ->where('is_completed', false)
-                    ->doesntExist()
-                    && $employee->onboardingTasks()
-                        ->where('phase', 'onboarding')
-                        ->exists();
-            })
-            ->filter(function (Employee $employee): bool {
-                // Skip if HR already received a completion notification for this employee.
-                return ! \DB::table('notifications')
+            ->whereIn('status', ['onboarding', 'active', 'probation', 'notice_period'])
+            ->get();
+
+        $onboardingCount = 0;
+        $offboardingCount = 0;
+
+        foreach ($employees as $employee) {
+            if ($employee->onboardingTasks()->where('phase', 'onboarding')->exists() &&
+                $employee->onboardingTasks()->where('phase', 'onboarding')->where('is_completed', false)->doesntExist()) {
+
+                $notified = \DB::table('notifications')
                     ->where('type', 'App\\Notifications\\OnboardingCompletedNotification')
                     ->whereJsonContains('data->body', $employee->user?->name)
                     ->exists();
-            });
 
-        foreach ($employees as $employee) {
-            $service->checkAndNotifyCompletion($employee);
+                if (! $notified) {
+                    $service->checkAndNotifyCompletion($employee);
+                    $onboardingCount++;
+                }
+            }
+
+            if ($employee->onboardingTasks()->where('phase', 'offboarding')->exists() &&
+                $employee->onboardingTasks()->where('phase', 'offboarding')->where('is_completed', false)->doesntExist()) {
+
+                $notifiedOffboarding = \DB::table('notifications')
+                    ->where('type', 'App\\Notifications\\OffboardingCompletedNotification')
+                    ->whereJsonContains('data->body', $employee->user?->name)
+                    ->exists();
+
+                if (! $notifiedOffboarding) {
+                    $service->checkAndNotifyOffboardingCompletion($employee);
+                    $offboardingCount++;
+                }
+            }
         }
 
-        $this->info("Sent {$employees->count()} onboarding completion notification(s).");
+        $this->info("Sent {$onboardingCount} onboarding completion notification(s).");
+        $this->info("Sent {$offboardingCount} offboarding completion notification(s).");
     }
 }

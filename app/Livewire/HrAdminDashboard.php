@@ -8,6 +8,7 @@ use App\Models\AuditLog;
 use App\Models\Department;
 use App\Models\Employee;
 use App\Models\LeaveRequest;
+use App\Models\OnboardingTask;
 use App\Models\Payroll;
 use Illuminate\Support\Carbon;
 use Livewire\Component;
@@ -44,6 +45,15 @@ class HrAdminDashboard extends Component
             $q->where('status', 'active');
         }])->get();
 
+        // --- Offboarding ---
+        $pendingExits = Employee::whereHas('exitRecord', function ($q) use ($today) {
+            $q->where('last_working_day', '>=', $today);
+        })->where('status', '!=', 'inactive')->count();
+
+        $pendingClearances = OnboardingTask::where('phase', 'offboarding')
+            ->where('is_completed', false)
+            ->count();
+
         // --- Recent Audit Logs ---
         $recentAudit = AuditLog::with('user')->orderByDesc('id')->take(6)->get();
 
@@ -60,6 +70,8 @@ class HrAdminDashboard extends Component
             'cycleARun',
             'cycleBRun',
             'deptBreakdown',
+            'pendingExits',
+            'pendingClearances',
             'recentAudit',
         ))->layout('layouts.app', ['title' => 'HR Admin Dashboard']);
     }

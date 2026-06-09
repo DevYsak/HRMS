@@ -140,7 +140,7 @@
                     </flux:select>
                 </flux:field>
                 <flux:field>
-                    <flux:label>Due (days from joining)</flux:label>
+                    <flux:label>Due (days from start)</flux:label>
                     <flux:input wire:model="due_days" type="number" min="0" max="365" />
                     <flux:error name="due_days" />
                 </flux:field>
@@ -155,6 +155,7 @@
                         <option value="kyc_upload">KYC Document Uploaded</option>
                         <option value="biometric_sync">Biometric Enrolled</option>
                         <option value="asset_assign">Asset Assigned</option>
+                        <option value="asset_return">Asset Returned</option>
                     </flux:select>
                     <flux:error name="auto_trigger" />
                 </flux:field>

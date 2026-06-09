@@ -28,7 +28,7 @@
                 <input type="date" wire:model.live="to"
                     class="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-800 shadow-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white" />
             </div>
-            <button wire:click="loadData"
+            <button type="button" wire:click="loadData"
                 class="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-indigo-700 active:scale-95 transition-all">
                 <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round"
@@ -65,7 +65,7 @@
                 <p class="mt-1 max-w-xs text-sm text-zinc-400">
                     Set a date range and click <strong>Load Data</strong> to pull this employee's clock and break time from Nexflow.
                 </p>
-                <button wire:click="loadData"
+                <button type="button" wire:click="loadData"
                     class="mt-5 flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-indigo-700 transition-colors">
                     <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round"

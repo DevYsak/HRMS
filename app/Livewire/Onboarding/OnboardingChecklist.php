@@ -4,6 +4,7 @@ namespace App\Livewire\Onboarding;
 
 use App\Models\Employee;
 use App\Models\OnboardingTask;
+use App\Services\Performance\TimelineService;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -46,7 +47,7 @@ class OnboardingChecklist extends Component
         $this->phase = $phase;
     }
 
-    public function toggleComplete(int $taskId): void
+    public function toggleComplete(int $taskId, TimelineService $timelineService): void
     {
         $task = OnboardingTask::where('employee_id', $this->employeeId)->findOrFail($taskId);
 
@@ -58,9 +59,19 @@ class OnboardingChecklist extends Component
             'completed_by' => $nowCompleted ? Auth::id() : null,
             'status' => $nowCompleted ? 'completed' : 'pending',
         ]);
+
+        $employee = Employee::findOrFail($this->employeeId);
+        $timelineService->record(
+            $employee,
+            'task_update',
+            'Task '.($nowCompleted ? 'Completed' : 'Reopened'),
+            "Task '{$task->title}' was marked as ".($nowCompleted ? 'completed' : 'pending').'.',
+            $task,
+            Auth::user()
+        );
     }
 
-    public function updateStatus(int $taskId, string $status): void
+    public function updateStatus(int $taskId, string $status, TimelineService $timelineService): void
     {
         if (! in_array($status, ['pending', 'in_progress', 'completed', 'overdue', 'blocked'])) {
             return;
@@ -85,9 +96,19 @@ class OnboardingChecklist extends Component
             'completed_by' => $isCompleted ? Auth::id() : null,
             'blocked_reason' => null,
         ]);
+
+        $employee = Employee::findOrFail($this->employeeId);
+        $timelineService->record(
+            $employee,
+            'task_update',
+            'Task Status Updated',
+            "Task '{$task->title}' status changed to {$status}.",
+            $task,
+            Auth::user()
+        );
     }
 
-    public function setBlocked(): void
+    public function setBlocked(TimelineService $timelineService): void
     {
         $this->validate(['blockReason' => ['required', 'string', 'max:500']]);
 
@@ -98,6 +119,16 @@ class OnboardingChecklist extends Component
             'status' => 'blocked',
             'blocked_reason' => $this->blockReason,
         ]);
+
+        $employee = Employee::findOrFail($this->employeeId);
+        $timelineService->record(
+            $employee,
+            'task_update',
+            'Task Blocked',
+            "Task '{$task->title}' was blocked: {$this->blockReason}",
+            $task,
+            Auth::user()
+        );
 
         $this->showBlockModal = false;
         $this->blockingTaskId = null;

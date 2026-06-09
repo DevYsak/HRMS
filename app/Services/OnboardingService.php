@@ -6,6 +6,7 @@ use App\Models\Employee;
 use App\Models\OnboardingTask;
 use App\Models\OnboardingTemplate;
 use App\Models\User;
+use App\Notifications\OffboardingCompletedNotification;
 use App\Notifications\OnboardingCompletedNotification;
 
 class OnboardingService
@@ -33,12 +34,31 @@ class OnboardingService
     }
 
     /**
+     * Hardcoded fallback tasks used when no templates exist yet for offboarding.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function fallbackOffboardingTasks(): array
+    {
+        return [
+            ['title' => 'Submit resignation letter / Exit Form', 'category' => 'hr',       'owner_role' => 'employee', 'sort_order' => 1,  'auto_trigger' => null,             'due_days' => 1],
+            ['title' => 'Knowledge Transfer (KT) sign-off',      'category' => 'general',  'owner_role' => 'manager',  'sort_order' => 2,  'auto_trigger' => null,             'due_days' => 7],
+            ['title' => 'Return IT Assets (Laptop, Peripherals)', 'category' => 'it_setup', 'owner_role' => 'it',       'sort_order' => 3,  'auto_trigger' => 'asset_return',   'due_days' => 1],
+            ['title' => 'Revoke Email & System Access',          'category' => 'it_setup', 'owner_role' => 'it',       'sort_order' => 4,  'auto_trigger' => null,             'due_days' => 1],
+            ['title' => 'Clear pending travel/expense dues',     'category' => 'finance',  'owner_role' => 'finance',  'sort_order' => 5,  'auto_trigger' => null,             'due_days' => 3],
+            ['title' => 'Final Settlement Calculation',          'category' => 'finance',  'owner_role' => 'finance',  'sort_order' => 6,  'auto_trigger' => null,             'due_days' => 15],
+            ['title' => 'Exit Interview',                        'category' => 'hr',       'owner_role' => 'hr',       'sort_order' => 7,  'auto_trigger' => null,             'due_days' => 5],
+            ['title' => 'Issue Relieving & Experience Letters',  'category' => 'hr',       'owner_role' => 'hr',       'sort_order' => 8,  'auto_trigger' => null,             'due_days' => 15],
+        ];
+    }
+
+    /**
      * Assign the best-matching template tasks to a newly created employee.
      * No-op if the employee already has tasks (prevents duplicate seeding).
      */
     public function assignTemplate(Employee $employee): void
     {
-        if ($employee->onboardingTasks()->exists()) {
+        if ($employee->onboardingTasks()->where('phase', 'onboarding')->exists()) {
             return;
         }
 
@@ -76,6 +96,57 @@ class OnboardingService
                 'sort_order' => $task['sort_order'],
                 'auto_trigger' => $task['auto_trigger'],
                 'due_date' => now()->parse($joiningDate)->addDays($task['due_days'])->toDateString(),
+                'status' => 'pending',
+            ]);
+        }
+    }
+
+    /**
+     * Assign offboarding tasks for an exiting employee.
+     * No-op if the employee already has offboarding tasks (prevents duplicate seeding).
+     */
+    public function assignOffboardingTasks(Employee $employee, string $lastWorkingDay): void
+    {
+        if ($employee->onboardingTasks()->where('phase', 'offboarding')->exists()) {
+            return;
+        }
+
+        $template = $this->resolveTemplate($employee);
+
+        if ($template !== null) {
+            $offboardingTasks = $template->tasks()->where('phase', 'offboarding')->orderBy('sort_order')->get();
+            if ($offboardingTasks->isNotEmpty()) {
+                foreach ($offboardingTasks as $task) {
+                    OnboardingTask::create([
+                        'employee_id' => $employee->id,
+                        'phase' => 'offboarding',
+                        'title' => $task->title,
+                        'description' => $task->description,
+                        'category' => $task->category,
+                        'owner_role' => $task->owner_role,
+                        'sort_order' => $task->sort_order,
+                        'auto_trigger' => $task->auto_trigger,
+                        'template_task_id' => $task->id,
+                        'due_date' => now()->parse($lastWorkingDay)->addDays($task->due_days)->toDateString(),
+                        'status' => 'pending',
+                    ]);
+                }
+
+                return;
+            }
+        }
+
+        // Fallback list
+        foreach ($this->fallbackOffboardingTasks() as $task) {
+            OnboardingTask::create([
+                'employee_id' => $employee->id,
+                'phase' => 'offboarding',
+                'title' => $task['title'],
+                'category' => $task['category'],
+                'owner_role' => $task['owner_role'],
+                'sort_order' => $task['sort_order'],
+                'auto_trigger' => $task['auto_trigger'],
+                'due_date' => now()->parse($lastWorkingDay)->addDays($task['due_days'])->toDateString(),
                 'status' => 'pending',
             ]);
         }
@@ -132,6 +203,31 @@ class OnboardingService
         $notification = new OnboardingCompletedNotification($employee);
 
         $employee->user->notify($notification);
+
+        User::whereIn('role', ['super_admin', 'hr_admin'])->each(
+            fn (User $user) => $user->notify($notification)
+        );
+    }
+
+    /**
+     * Send completion notification if all offboarding tasks for this employee are done.
+     */
+    public function checkAndNotifyOffboardingCompletion(Employee $employee): void
+    {
+        $hasPending = $employee->onboardingTasks()
+            ->where('phase', 'offboarding')
+            ->where('is_completed', false)
+            ->exists();
+
+        if ($hasPending) {
+            return;
+        }
+
+        $notification = new OffboardingCompletedNotification($employee);
+
+        if ($employee->user) {
+            $employee->user->notify($notification);
+        }
 
         User::whereIn('role', ['super_admin', 'hr_admin'])->each(
             fn (User $user) => $user->notify($notification)

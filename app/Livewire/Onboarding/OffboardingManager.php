@@ -5,8 +5,10 @@ namespace App\Livewire\Onboarding;
 use App\Models\Asset;
 use App\Models\Employee;
 use App\Models\ExitRecord;
+use App\Models\OnboardingTask;
 use App\Notifications\OffboardingDetailsNotification;
 use App\Services\AssetAssignmentService;
+use App\Services\OnboardingService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
@@ -34,6 +36,8 @@ class OffboardingManager extends Component
 
     // Assets
     public $assetConditions = [];
+
+    public $activeTab = 'offboarding'; // offboarding | analytics
 
     public function selectEmployee($id)
     {
@@ -67,7 +71,7 @@ class OffboardingManager extends Component
         }
     }
 
-    public function processOffboarding()
+    public function processOffboarding(OnboardingService $onboardingService)
     {
         abort_unless(Auth::user()->canManageEmployees(), 403);
 
@@ -100,6 +104,9 @@ class OffboardingManager extends Component
             $employee->update(['status' => 'inactive']);
         }
 
+        // Assign Offboarding tasks
+        $onboardingService->assignOffboardingTasks($employee, $this->lastWorkingDay);
+
         // Notify the employee about their offboarding details
         $employee->user->notify(new OffboardingDetailsNotification($exitRecord));
 
@@ -130,9 +137,56 @@ class OffboardingManager extends Component
 
         $selectedEmployee = $this->selectedEmployeeId ? Employee::with('exitRecord', 'assets')->find($this->selectedEmployeeId) : null;
 
+        $taskStats = null;
+        if ($selectedEmployee) {
+            $stats = OnboardingTask::where('employee_id', $selectedEmployee->id)
+                ->where('phase', 'offboarding')
+                ->selectRaw('count(*) as total, sum(is_completed) as completed')
+                ->first();
+            $taskStats = [
+                'total' => $stats->total ?? 0,
+                'completed' => $stats->completed ?? 0,
+            ];
+        }
+
+        $analytics = null;
+        $ownerBreakdown = null;
+        $departmentBreakdown = null;
+
+        if ($this->activeTab === 'analytics') {
+            $analytics = OnboardingTask::where('phase', 'offboarding')
+                ->selectRaw('
+                    COUNT(*) as total,
+                    SUM(is_completed) as completed,
+                    SUM(CASE WHEN is_completed = 0 AND (due_date IS NULL OR due_date >= CURDATE()) AND status != "blocked" THEN 1 ELSE 0 END) as pending,
+                    SUM(CASE WHEN is_completed = 0 AND due_date < CURDATE() THEN 1 ELSE 0 END) as overdue,
+                    SUM(CASE WHEN status = "blocked" THEN 1 ELSE 0 END) as blocked,
+                    SUM(CASE WHEN status = "in_progress" THEN 1 ELSE 0 END) as in_progress
+                ')
+                ->first();
+
+            $ownerBreakdown = OnboardingTask::where('phase', 'offboarding')
+                ->selectRaw('owner_role, COUNT(*) as total, SUM(is_completed) as completed')
+                ->groupBy('owner_role')
+                ->orderBy('owner_role')
+                ->get();
+
+            $departmentBreakdown = OnboardingTask::join('employees', 'onboarding_tasks.employee_id', '=', 'employees.id')
+                ->join('departments', 'employees.department_id', '=', 'departments.id')
+                ->where('onboarding_tasks.phase', 'offboarding')
+                ->selectRaw('departments.name as department_name, COUNT(onboarding_tasks.id) as total, SUM(onboarding_tasks.is_completed) as completed')
+                ->groupBy('departments.name')
+                ->orderBy('departments.name')
+                ->get();
+        }
+
         return view('livewire.onboarding.offboarding-manager', [
             'employees' => $employees,
             'selectedEmployee' => $selectedEmployee,
+            'taskStats' => $taskStats,
+            'analytics' => $analytics,
+            'ownerBreakdown' => $ownerBreakdown,
+            'departmentBreakdown' => $departmentBreakdown,
         ])->layout('layouts.app', ['title' => 'Offboarding Management']);
     }
 }
