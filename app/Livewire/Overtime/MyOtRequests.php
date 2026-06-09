@@ -147,7 +147,7 @@ class MyOtRequests extends Component
             'total' => $employee->otRequests()->count(),
             'approved' => $employee->otRequests()->where('status', 'approved')->count(),
             'pending' => $employee->otRequests()->where('status', 'pending')->count(),
-            'hours' => round($employee->otRequests()->where('status', 'approved')->sum('requested_hours'), 1),
+            'hours' => (float) $employee->otRequests()->where('status', 'approved')->sum('requested_hours'),
         ] : ['total' => 0, 'approved' => 0, 'pending' => 0, 'hours' => 0];
 
         return view('livewire.overtime.my-ot-requests', [

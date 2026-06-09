@@ -2,10 +2,10 @@
 
 namespace App\Models;
 
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Carbon;
 
 #[Fillable(['title', 'reason', 'starts_at', 'ends_at', 'is_active', 'created_by'])]
 class OtWindow extends Model
@@ -25,7 +25,7 @@ class OtWindow extends Model
     }
 
     /** Check whether an OT window is currently open for the given date (defaults to today). */
-    public static function isOpenFor(?Carbon $date = null): bool
+    public static function isOpenFor(?CarbonInterface $date = null): bool
     {
         $date = ($date ?? now())->toDateString();
 

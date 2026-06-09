@@ -38,7 +38,7 @@
             </div>
             <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5">
                 <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2">OT Hours</div>
-                <div class="text-3xl font-black text-purple-600">{{ $summary['hours'] }}h</div>
+                <div class="text-3xl font-black text-purple-600">{{ number_format($summary['hours'], 2) }}h</div>
                 <div class="text-xs text-zinc-400 mt-1">approved total</div>
             </div>
         </div>
@@ -106,7 +106,7 @@
                                     {{ \Carbon\Carbon::parse($req->start_time)->format('H:i') }} – {{ \Carbon\Carbon::parse($req->end_time)->format('H:i') }}
                                 </td>
                                 <td class="py-4 pr-4 font-black text-zinc-900 dark:text-white">
-                                    {{ number_format($req->requested_hours, 1) }}h
+                                    {{ number_format($req->requested_hours, 2) }}h
                                 </td>
                                 <td class="py-4 pr-4 text-xs text-zinc-500 max-w-[180px] truncate" title="{{ $req->reason }}">
                                     {{ $req->reason }}
