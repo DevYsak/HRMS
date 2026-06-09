@@ -66,12 +66,18 @@ class MyOtRequests extends Component
             return;
         }
 
-        $request = $service->submitRequest($employee, [
-            'work_date' => $this->work_date,
-            'start_time' => $this->start_time,
-            'end_time' => $this->end_time,
-            'reason' => $this->reason,
-        ]);
+        try {
+            $request = $service->submitRequest($employee, [
+                'work_date' => $this->work_date,
+                'start_time' => $this->start_time,
+                'end_time' => $this->end_time,
+                'reason' => $this->reason,
+            ]);
+        } catch (\DomainException $e) {
+            $this->addError('work_date', $e->getMessage());
+
+            return;
+        }
 
         // Notify manager; fallback to HR/SuperAdmin if no manager assigned
         $manager = $employee->manager;
