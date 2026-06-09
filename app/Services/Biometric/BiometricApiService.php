@@ -38,7 +38,7 @@ class BiometricApiService
      */
     public function forToday(): array
     {
-        return $this->get('/api/attendance/today');
+        return $this->forDate(now()->toDateString());
     }
 
     /**
@@ -48,7 +48,37 @@ class BiometricApiService
      */
     public function forDate(string $date): array
     {
-        return $this->get("/api/attendance/date/{$date}");
+        $response = $this->get('/api/attendance/grid', ['date' => $date, 'per_page' => 1000]);
+
+        if (! $response['success']) {
+            return $response;
+        }
+
+        $rows = $response['data']['rows'] ?? [];
+        $mapped = [];
+
+        foreach ($rows as $row) {
+            $mapped[] = [
+                'employee' => [
+                    'code' => $row['code'] ?? '',
+                    'name' => $row['name'] ?? '',
+                    'initials' => $row['initials'] ?? '',
+                    'department' => $row['department'] ?? '',
+                ],
+                'summary' => [
+                    'status' => $row['status'] ?? 'unknown',
+                    'first_punch' => $row['first_punch'] ?? null,
+                    'last_punch' => $row['last_punch'] ?? null,
+                    'working_hours' => $row['working_hours'] ?? null,
+                ],
+            ];
+        }
+
+        return [
+            'success' => true,
+            'data' => ['employees' => $mapped],
+            'error' => null,
+        ];
     }
 
     /**
@@ -63,7 +93,7 @@ class BiometricApiService
     {
         $query = array_filter(['from' => $from, 'to' => $to]);
 
-        return $this->get("/api/attendance/employee/{$code}", $query);
+        return $this->get("/api/attendance/timeline/{$code}", $query);
     }
 
     // ── Private ───────────────────────────────────────────────────────────────

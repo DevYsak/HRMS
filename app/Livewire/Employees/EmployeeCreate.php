@@ -18,6 +18,7 @@ use App\Models\ShiftSetting;
 use App\Models\User;
 use App\Models\WorkMode;
 use App\Notifications\WelcomeOnboardingNotification;
+use App\Services\OnboardingService;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Livewire\Component;
@@ -188,6 +189,9 @@ class EmployeeCreate extends Component
             'probation_end_date' => $this->probation_end_date ?: null,
             'status' => $this->status,
         ]);
+
+        // Auto-complete account_create triggered onboarding tasks.
+        app(OnboardingService::class)->autoComplete($user->employee, 'account_create', Auth::id());
 
         // Send welcome email with credentials and onboarding notification
         try {

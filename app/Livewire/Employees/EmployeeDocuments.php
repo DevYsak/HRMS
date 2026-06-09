@@ -4,6 +4,7 @@ namespace App\Livewire\Employees;
 
 use App\Models\Document;
 use App\Models\Employee;
+use App\Services\OnboardingService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Component;
@@ -64,6 +65,8 @@ class EmployeeDocuments extends Component
             'expires_at' => $this->expires_at ?: null,
             'uploaded_by' => Auth::id(),
         ]);
+
+        app(OnboardingService::class)->autoComplete($this->employee, 'kyc_upload', Auth::id());
 
         $this->showUploadModal = false;
         $this->reset(['title', 'description', 'category', 'expires_at', 'file']);

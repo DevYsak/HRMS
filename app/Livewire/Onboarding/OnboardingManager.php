@@ -16,6 +16,8 @@ class OnboardingManager extends Component
 
     public string $filter = 'active'; // active | all
 
+    public string $activeTab = 'employees'; // employees | analytics
+
     public function updatingSearch(): void
     {
         $this->resetPage();
@@ -39,7 +41,6 @@ class OnboardingManager extends Component
             ->orderByDesc('joining_date')
             ->paginate(15);
 
-        // Attach task stats
         $employeeIds = $employees->pluck('id');
         $taskStats = OnboardingTask::whereIn('employee_id', $employeeIds)
             ->where('phase', 'onboarding')
@@ -48,9 +49,33 @@ class OnboardingManager extends Component
             ->get()
             ->keyBy('employee_id');
 
+        $analytics = null;
+        $ownerBreakdown = null;
+
+        if ($this->activeTab === 'analytics') {
+            $analytics = OnboardingTask::where('phase', 'onboarding')
+                ->selectRaw('
+                    COUNT(*) as total,
+                    SUM(is_completed) as completed,
+                    SUM(CASE WHEN is_completed = 0 AND (due_date IS NULL OR due_date >= CURDATE()) AND status != "blocked" THEN 1 ELSE 0 END) as pending,
+                    SUM(CASE WHEN is_completed = 0 AND due_date < CURDATE() THEN 1 ELSE 0 END) as overdue,
+                    SUM(CASE WHEN status = "blocked" THEN 1 ELSE 0 END) as blocked,
+                    SUM(CASE WHEN status = "in_progress" THEN 1 ELSE 0 END) as in_progress
+                ')
+                ->first();
+
+            $ownerBreakdown = OnboardingTask::where('phase', 'onboarding')
+                ->selectRaw('owner_role, COUNT(*) as total, SUM(is_completed) as completed')
+                ->groupBy('owner_role')
+                ->orderBy('owner_role')
+                ->get();
+        }
+
         return view('livewire.onboarding.onboarding-manager', [
             'employees' => $employees,
             'taskStats' => $taskStats,
+            'analytics' => $analytics,
+            'ownerBreakdown' => $ownerBreakdown,
         ])->layout('layouts.app', ['title' => 'Onboarding']);
     }
 }

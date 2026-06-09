@@ -31,6 +31,9 @@ class DatabaseSeeder extends Seeder
 
             // ── Dynamic roles & permissions (database-driven authorization) ─
             RolesAndPermissionsSeeder::class,
+
+            // ── Onboarding default template ───────────────────────────────
+            OnboardingTemplateSeeder::class,
         ]);
     }
 }

@@ -1,4 +1,5 @@
-<div class="space-y-6">
+<flux:main class="bg-zinc-50 dark:bg-zinc-950 min-h-screen">
+    <div class="space-y-6">
 
     {{-- Header --}}
     <div class="flex items-center justify-between">
@@ -148,4 +149,5 @@
         To correct a record, use the Biometric App admin panel.
     </p>
 
-</div>
+    </div>
+</flux:main>

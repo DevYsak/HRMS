@@ -4,7 +4,7 @@ namespace App\Observers;
 
 use App\Models\AuditLog;
 use App\Models\Employee;
-use App\Models\OnboardingTask;
+use App\Services\OnboardingService;
 
 class EmployeeObserver
 {
@@ -12,31 +12,7 @@ class EmployeeObserver
     {
         AuditLog::record($employee, 'created', null, $employee->toArray());
 
-        $this->seedOnboardingTasks($employee);
-    }
-
-    protected function seedOnboardingTasks(Employee $employee): void
-    {
-        $tasks = [
-            ['title' => 'Complete personal profile', 'category' => 'hr', 'owner_role' => 'employee', 'sort_order' => 1],
-            ['title' => 'Upload KYC documents', 'category' => 'hr', 'owner_role' => 'employee', 'sort_order' => 2],
-            ['title' => 'Bank account setup', 'category' => 'finance', 'owner_role' => 'finance', 'sort_order' => 3],
-            ['title' => 'IT hardware assignment', 'category' => 'it_setup', 'owner_role' => 'it', 'sort_order' => 4],
-            ['title' => 'Email & Slack setup', 'category' => 'it_setup', 'owner_role' => 'it', 'sort_order' => 5],
-            ['title' => 'Company policy induction', 'category' => 'hr', 'owner_role' => 'hr', 'sort_order' => 6],
-            ['title' => 'Team introduction', 'category' => 'general', 'owner_role' => 'manager', 'sort_order' => 7],
-            ['title' => 'Role expectation setting', 'category' => 'general', 'owner_role' => 'manager', 'sort_order' => 8],
-            ['title' => 'Access card issuance', 'category' => 'hr', 'owner_role' => 'hr', 'sort_order' => 9],
-            ['title' => 'Welcome kit handover', 'category' => 'hr', 'owner_role' => 'hr', 'sort_order' => 10],
-        ];
-
-        foreach ($tasks as $task) {
-            OnboardingTask::create(array_merge($task, [
-                'employee_id' => $employee->id,
-                'phase' => 'onboarding',
-                'due_date' => now()->addDays(7),
-            ]));
-        }
+        app(OnboardingService::class)->assignTemplate($employee);
     }
 
     public function updated(Employee $employee): void
@@ -56,6 +32,11 @@ class EmployeeObserver
             && $employee->employee_code
         ) {
             Employee::withoutEvents(fn () => $employee->update(['sync_status' => 'pending']));
+        }
+
+        // Auto-complete biometric enrollment task when sync succeeds.
+        if ($employee->wasChanged('sync_status') && $employee->sync_status === 'synced') {
+            app(OnboardingService::class)->autoComplete($employee, 'biometric_sync', 0);
         }
     }
 

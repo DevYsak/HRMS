@@ -14,7 +14,11 @@ class OnboardingChecklist extends Component
 
     public int $employeeId;
 
-    public string $phase = 'onboarding'; // 'onboarding' | 'offboarding'
+    public string $phase = 'onboarding';
+
+    public string $statusFilter = 'all';
+
+    public bool $showTimeline = false;
 
     // Add task form
     public bool $showAddModal = false;
@@ -29,6 +33,13 @@ class OnboardingChecklist extends Component
 
     public string $newOwnerRole = 'hr';
 
+    // Block task form
+    public bool $showBlockModal = false;
+
+    public ?int $blockingTaskId = null;
+
+    public string $blockReason = '';
+
     public function mount(int $employee, string $phase = 'onboarding'): void
     {
         $this->employeeId = $employee;
@@ -39,11 +50,60 @@ class OnboardingChecklist extends Component
     {
         $task = OnboardingTask::where('employee_id', $this->employeeId)->findOrFail($taskId);
 
+        $nowCompleted = ! $task->is_completed;
+
         $task->update([
-            'is_completed' => ! $task->is_completed,
-            'completed_at' => $task->is_completed ? null : now(),
-            'completed_by' => $task->is_completed ? null : Auth::id(),
+            'is_completed' => $nowCompleted,
+            'completed_at' => $nowCompleted ? now() : null,
+            'completed_by' => $nowCompleted ? Auth::id() : null,
+            'status' => $nowCompleted ? 'completed' : 'pending',
         ]);
+    }
+
+    public function updateStatus(int $taskId, string $status): void
+    {
+        if (! in_array($status, ['pending', 'in_progress', 'completed', 'overdue', 'blocked'])) {
+            return;
+        }
+
+        if ($status === 'blocked') {
+            $this->blockingTaskId = $taskId;
+            $this->blockReason = '';
+            $this->showBlockModal = true;
+
+            return;
+        }
+
+        $task = OnboardingTask::where('employee_id', $this->employeeId)->findOrFail($taskId);
+
+        $isCompleted = $status === 'completed';
+
+        $task->update([
+            'status' => $status,
+            'is_completed' => $isCompleted,
+            'completed_at' => $isCompleted ? now() : null,
+            'completed_by' => $isCompleted ? Auth::id() : null,
+            'blocked_reason' => null,
+        ]);
+    }
+
+    public function setBlocked(): void
+    {
+        $this->validate(['blockReason' => ['required', 'string', 'max:500']]);
+
+        $task = OnboardingTask::where('employee_id', $this->employeeId)
+            ->findOrFail($this->blockingTaskId);
+
+        $task->update([
+            'status' => 'blocked',
+            'blocked_reason' => $this->blockReason,
+        ]);
+
+        $this->showBlockModal = false;
+        $this->blockingTaskId = null;
+        $this->blockReason = '';
+
+        \Flux::toast('Task marked as blocked.');
     }
 
     public function addTask(): void
@@ -67,6 +127,7 @@ class OnboardingChecklist extends Component
             'description' => $this->newDescription,
             'due_date' => $this->newDueDate ?: null,
             'sort_order' => $maxOrder + 1,
+            'status' => 'pending',
         ]);
 
         $this->reset(['newTitle', 'newCategory', 'newOwnerRole', 'newDescription', 'newDueDate']);
@@ -83,16 +144,34 @@ class OnboardingChecklist extends Component
     public function render()
     {
         $employee = Employee::with('user')->findOrFail($this->employeeId);
-        $tasks = OnboardingTask::where('employee_id', $this->employeeId)
+
+        $query = OnboardingTask::where('employee_id', $this->employeeId)
             ->where('phase', $this->phase)
-            ->orderBy('sort_order')
+            ->orderBy('sort_order');
+
+        if ($this->statusFilter !== 'all') {
+            $query->where('status', $this->statusFilter);
+        }
+
+        $tasks = $query->get();
+
+        $allTasks = OnboardingTask::where('employee_id', $this->employeeId)
+            ->where('phase', $this->phase)
             ->get();
 
-        $total = $tasks->count();
-        $completed = $tasks->where('is_completed', true)->count();
+        $total = $allTasks->count();
+        $completed = $allTasks->where('is_completed', true)->count();
         $progress = $total > 0 ? round(($completed / $total) * 100) : 0;
 
-        return view('livewire.onboarding.onboarding-checklist', compact('employee', 'tasks', 'total', 'completed', 'progress'))
-            ->layout('layouts.app', ['title' => ucfirst($this->phase).' Checklist']);
+        $timeline = OnboardingTask::where('employee_id', $this->employeeId)
+            ->where('phase', $this->phase)
+            ->where('is_completed', true)
+            ->with('completedBy')
+            ->orderBy('completed_at')
+            ->get();
+
+        return view('livewire.onboarding.onboarding-checklist', compact(
+            'employee', 'tasks', 'total', 'completed', 'progress', 'allTasks', 'timeline'
+        ))->layout('layouts.app', ['title' => ucfirst($this->phase).' Checklist']);
     }
 }

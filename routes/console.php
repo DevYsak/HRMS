@@ -135,6 +135,12 @@ Schedule::command('hrms:monthly-leave-accrual')
     ->withoutOverlapping()
     ->runInBackground();
 
+// Onboarding — Mark overdue tasks and notify owners → daily 09:00
+Schedule::command('hrms:send-onboarding-reminders')
+    ->dailyAt('09:00')
+    ->withoutOverlapping()
+    ->runInBackground();
+
 // Phase 2 — Performance Engine
 // Remind employees of unacknowledged warnings older than 48 hours → daily 09:00
 Schedule::command('hrms:check-warning-acknowledgements')

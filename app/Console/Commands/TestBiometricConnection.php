@@ -60,8 +60,8 @@ class TestBiometricConnection extends Command
         $this->line("  {$host} → {$ip}  ✓");
         $this->newLine();
 
-        // ── 3. HTTP probe — /api/attendance/today ─────────────────────────────
-        $endpoint = "{$baseUrl}/api/attendance/today";
+        // ── 3. HTTP probe — /api/attendance/grid ─────────────────────────────
+        $endpoint = "{$baseUrl}/api/attendance/grid?date=".now()->toDateString();
         $this->info('── HTTP probe ───────────────────────────────────────');
         $this->line("  GET {$endpoint}");
 
@@ -96,7 +96,7 @@ class TestBiometricConnection extends Command
             }
 
             if ($response->status() === 404) {
-                $this->error('  404 — Route /api/attendance/today does not exist on the biometric app.');
+                $this->error('  404 — Route /api/attendance/grid does not exist on the biometric app.');
                 $this->line('  Check that biometric-app routes are registered and the app is deployed.');
 
                 return self::FAILURE;

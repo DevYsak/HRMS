@@ -53,6 +53,8 @@ class AssetAssignmentService
                 'notes' => $notes,
             ]);
 
+            app(OnboardingService::class)->autoComplete($employee, 'asset_assign', $handledBy);
+
             return $asset->fresh(['employee.user']);
         });
     }
