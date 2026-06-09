@@ -80,6 +80,8 @@ class EmployeeCreate extends Component
 
     public string $status = 'onboarding';
 
+    public string $ot_tracking_source = 'biometric';
+
     public function mount(): void
     {
         $this->authorize('create', Employee::class);
@@ -98,6 +100,16 @@ class EmployeeCreate extends Component
         $this->employment_type_id = (string) ($defaultType?->id ?? '');
 
         $this->recalculateProbation();
+    }
+
+    public function updatedDepartmentId(): void
+    {
+        if ($this->department_id) {
+            $dept = Department::find($this->department_id);
+            if ($dept) {
+                $this->ot_tracking_source = $dept->default_ot_source ?? 'biometric';
+            }
+        }
     }
 
     public function updatedJoiningDate(): void
@@ -153,6 +165,7 @@ class EmployeeCreate extends Component
             'joining_date' => ['required', 'date'],
             'probation_end_date' => ['nullable', 'date', 'after:joining_date'],
             'shift_id' => ['nullable', 'exists:shift_settings,id'],
+            'ot_tracking_source' => ['required', 'in:biometric,manual,nexflow,hybrid'],
             'employment_type_id' => ['nullable', 'exists:employment_types,id'],
             'work_mode_id' => ['nullable', 'exists:work_modes,id'],
             'salary_cycle_id' => ['nullable', 'exists:salary_cycles,id'],
@@ -182,6 +195,7 @@ class EmployeeCreate extends Component
             'job_title_id' => $this->job_title_id ?: null,
             'manager_id' => $this->manager_id ?: null,
             'shift_id' => $this->shift_id ?: null,
+            'ot_tracking_source' => $this->ot_tracking_source,
             'employment_type_id' => $this->employment_type_id ?: null,
             'work_mode_id' => $this->work_mode_id ?: null,
             'salary_cycle_id' => $this->salary_cycle_id ?: null,

@@ -56,6 +56,7 @@ use App\Livewire\Performance\MyWarnings;
 use App\Livewire\Performance\ReviewCycles;
 use App\Livewire\Performance\TeamReviews;
 use App\Livewire\Performance\WarningLetters;
+use App\Livewire\Settings\DepartmentManager;
 use App\Livewire\Settings\EmploymentTypeManager;
 use App\Livewire\Settings\JobTitleManager;
 use App\Livewire\Settings\OnboardingTemplateManager;
@@ -284,6 +285,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/ot-records.csv', [ReportController::class, 'otRecordsCsv'])
             ->name('ot-records')
             ->middleware('role:approve-ot');
+        Route::get('/department-ot.csv', [ReportController::class, 'departmentOtCsv'])
+            ->name('department-ot')
+            ->middleware('role:approve-ot');
+        Route::get('/monthly-ot.csv', [ReportController::class, 'monthlyOtCsv'])
+            ->name('monthly-ot')
+            ->middleware('role:approve-ot');
+        Route::get('/nexflow-sync-log.csv', [ReportController::class, 'nexflowSyncLogCsv'])
+            ->name('nexflow-sync-log')
+            ->middleware('role:approve-ot');
 
         // Performance reports — HR admin / performance reviewer access
         Route::get('/performance-summary.csv', [ReportController::class, 'performanceSummaryCsv'])
@@ -332,6 +342,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Phase 1A — Employee configuration settings
     // --------------------------------------------------
     Route::middleware('role:manage-settings')->prefix('settings')->name('settings.')->group(function () {
+        Route::get('/departments', DepartmentManager::class)->name('departments');
         Route::get('/roles', RoleManager::class)->name('roles');
         Route::get('/employment-types', EmploymentTypeManager::class)->name('employment-types');
         Route::get('/work-modes', WorkModeManager::class)->name('work-modes');

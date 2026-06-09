@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\DB;
 
 class OvertimeService
 {
+    /** @deprecated Use $employee->shift?->ot_threshold_hours ?? 9.0 instead */
     public const STANDARD_HOURS = 9.0;
 
     public const RATE_PER_HOUR = 100.0;
@@ -131,6 +132,44 @@ class OvertimeService
             'payslip_id' => $payslipId,
             'is_paid' => true,
         ]);
+    }
+
+    /**
+     * Whether an employee is eligible for Nexflow-sourced OT tracking.
+     */
+    public function isNexflowEligible(Employee $employee): bool
+    {
+        return in_array($employee->ot_tracking_source, ['nexflow', 'hybrid'], true);
+    }
+
+    /**
+     * Auto-approve a pending OT request and create the overtime record.
+     * Used by the Nexflow sync for auto-approve eligible employees.
+     */
+    public function autoApprove(OtRequest $request): OvertimeRecord
+    {
+        return DB::transaction(function () use ($request) {
+            if ($request->status !== 'pending') {
+                throw new \DomainException('Only pending OT requests can be auto-approved.');
+            }
+
+            $request->update([
+                'status' => 'approved',
+                'reviewer_id' => null,
+                'reviewer_comment' => 'Auto-approved via Nexflow sync',
+                'reviewed_at' => now(),
+            ]);
+
+            return $this->createOvertimeRecordFromApprovedRequest($request->fresh(['attendance']));
+        });
+    }
+
+    /**
+     * Get the effective standard hours threshold for an employee.
+     */
+    public function getThresholdForEmployee(Employee $employee): float
+    {
+        return (float) ($employee->shift?->ot_threshold_hours ?? self::STANDARD_HOURS);
     }
 
     public function createOvertimeRecordFromApprovedRequest(OtRequest $request): OvertimeRecord

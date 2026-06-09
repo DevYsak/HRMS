@@ -3,10 +3,13 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Fillable;
-use Illuminate\Support\Carbon;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Carbon;
 
 #[Fillable([
     'employee_id',
@@ -20,15 +23,18 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     'reviewer_id',
     'reviewer_comment',
     'reviewed_at',
+    'source',
+    'nexflow_ref',
 ])]
 class OtRequest extends Model
 {
+    use HasFactory;
     use SoftDeletes;
 
     protected function casts(): array
     {
         return [
-            'work_date'   => 'date',
+            'work_date' => 'date',
             'reviewed_at' => 'datetime',
         ];
     }
@@ -48,19 +54,19 @@ class OtRequest extends Model
         return $this->belongsTo(User::class, 'reviewer_id');
     }
 
-    public function overtimeRecord(): \Illuminate\Database\Eloquent\Relations\HasOne
+    public function overtimeRecord(): HasOne
     {
         return $this->hasOne(OvertimeRecord::class, 'ot_request_id');
     }
 
-    /** @return \Illuminate\Database\Eloquent\Builder<static> */
-    public function scopePending(\Illuminate\Database\Eloquent\Builder $query): \Illuminate\Database\Eloquent\Builder
+    /** @return Builder<static> */
+    public function scopePending(Builder $query): Builder
     {
         return $query->where('status', 'pending');
     }
 
-    /** @return \Illuminate\Database\Eloquent\Builder<static> */
-    public function scopeApproved(\Illuminate\Database\Eloquent\Builder $query): \Illuminate\Database\Eloquent\Builder
+    /** @return Builder<static> */
+    public function scopeApproved(Builder $query): Builder
     {
         return $query->where('status', 'approved');
     }

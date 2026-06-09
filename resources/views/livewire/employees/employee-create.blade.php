@@ -123,6 +123,13 @@
                         <option value="{{ $cycle->id }}">{{ $cycle->name }} ({{ $cycle->periodLabel() }})</option>
                     @endforeach
                 </flux:select>
+                <flux:select wire:model="ot_tracking_source" label="OT Tracking Source"
+                    description="Auto-populated from department default. Nexflow enables Nexflow sync.">
+                    <option value="biometric">Biometric (standard attendance)</option>
+                    <option value="manual">Manual (HR-entered)</option>
+                    <option value="nexflow">Nexflow (IT/Dev/QA teams)</option>
+                    <option value="hybrid">Hybrid (both sources)</option>
+                </flux:select>
             </div>
             <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <flux:input wire:model.live="joining_date" type="date" label="Joining Date" required />

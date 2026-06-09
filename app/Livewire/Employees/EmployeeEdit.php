@@ -91,6 +91,8 @@ class EmployeeEdit extends Component
 
     public string $extend_reason = '';
 
+    public string $ot_tracking_source = 'biometric';
+
     // ── Leave Balance Manage Modal ────────────────────────────────────────────
     public bool $showManageLeaveModal = false;
 
@@ -137,6 +139,7 @@ class EmployeeEdit extends Component
         $this->joining_date = $this->employee->joining_date->format('Y-m-d');
         $this->probation_end_date = $this->employee->probation_end_date?->format('Y-m-d') ?? '';
         $this->status = $this->employee->status->value;
+        $this->ot_tracking_source = $this->employee->ot_tracking_source ?? 'biometric';
         // Lifecycle dates
         $this->resignation_date = $this->employee->resignation_date?->format('Y-m-d') ?? '';
         $this->termination_date = $this->employee->termination_date?->format('Y-m-d') ?? '';
@@ -172,6 +175,7 @@ class EmployeeEdit extends Component
             'biometric_id' => ['nullable', 'string', 'max:20', Rule::unique('employees', 'biometric_id')->ignore($this->employee->id)],
             'joining_date' => 'required|date',
             'shift_id' => 'nullable|exists:shift_settings,id',
+            'ot_tracking_source' => 'required|in:biometric,manual,nexflow,hybrid',
             'employment_type_id' => 'nullable|exists:employment_types,id',
             'work_mode_id' => 'nullable|exists:work_modes,id',
             'salary_cycle_id' => 'nullable|exists:salary_cycles,id',
@@ -205,6 +209,7 @@ class EmployeeEdit extends Component
             'job_title_id' => $this->job_title_id ?: null,
             'manager_id' => $this->manager_id ?: null,
             'shift_id' => $this->shift_id ?: null,
+            'ot_tracking_source' => $this->ot_tracking_source,
             'employment_type_id' => $this->employment_type_id ?: null,
             'work_mode_id' => $this->work_mode_id ?: null,
             'salary_cycle_id' => $this->salary_cycle_id ?: null,

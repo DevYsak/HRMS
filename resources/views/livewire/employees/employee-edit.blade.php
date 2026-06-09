@@ -174,7 +174,7 @@
 
             {{-- Tab bar --}}
             <div class="flex items-center gap-1 overflow-x-auto border-b border-zinc-100 px-6 pt-4 pb-0 dark:border-zinc-800">
-                @foreach(['General', 'Personal', 'Job', 'Leave', 'Probation', 'Payroll', 'Documents', 'Activity', 'Nexflow'] as $tab)
+                @foreach(array_merge(['General', 'Personal', 'Job', 'Leave', 'Probation', 'Payroll', 'Documents', 'Activity'], in_array($employee->ot_tracking_source, ['nexflow', 'hybrid']) ? ['Nexflow'] : []) as $tab)
                     <button type="button" wire:click="setTab('{{ $tab }}')"
                         class="whitespace-nowrap border-b-2 pb-3 px-3 text-sm font-semibold transition-colors
                             {{ $activeTab === $tab
@@ -339,6 +339,13 @@
                                     @foreach($salaryCycles as $cycle)
                                         <option value="{{ $cycle->id }}">{{ $cycle->name }}</option>
                                     @endforeach
+                                </flux:select>
+                                <flux:select wire:model.live="ot_tracking_source" label="OT Tracking Source"
+                                    description="Nexflow/Hybrid enables the Nexflow tab and sync.">
+                                    <option value="biometric">Biometric (standard attendance)</option>
+                                    <option value="manual">Manual (HR-entered)</option>
+                                    <option value="nexflow">Nexflow (IT/Dev/QA teams)</option>
+                                    <option value="hybrid">Hybrid (both sources)</option>
                                 </flux:select>
                                 <flux:input wire:model="biometric_id" label="Biometric Device ID"
                                     placeholder="e.g. 3"

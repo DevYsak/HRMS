@@ -7,6 +7,8 @@ use App\Models\Employee;
 use App\Models\EmployeeKpi;
 use App\Models\LeaveEncashment;
 use App\Models\LeaveRequest;
+use App\Models\NexflowOtSyncLog;
+use App\Models\OtRequest;
 use App\Models\OvertimeRecord;
 use App\Models\Payroll;
 use App\Models\PerformanceReview;
@@ -427,5 +429,122 @@ class ReportController extends Controller
             }
             fclose($handle);
         }, 'employee-lifecycle-'.now()->format('Ymd').'.csv', ['Content-Type' => 'text/csv']);
+    }
+
+    public function departmentOtCsv(Request $request): StreamedResponse
+    {
+        $month = (int) $request->integer('month', now()->month);
+        $year = (int) $request->integer('year', now()->year);
+
+        $from = Carbon::create($year, $month, 1)->startOfMonth();
+        $to = $from->copy()->endOfMonth();
+
+        $rows = OtRequest::with('employee.user', 'employee.department')
+            ->whereBetween('work_date', [$from->toDateString(), $to->toDateString()])
+            ->when($request->department_id, fn ($q) => $q->whereHas('employee', fn ($e) => $e->where('department_id', $request->department_id)))
+            ->when($request->source, fn ($q) => $q->where('source', $request->source))
+            ->orderBy('work_date')
+            ->get();
+
+        $filename = "department-ot-{$year}-{$month}.csv";
+
+        return response()->streamDownload(function () use ($rows) {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, ['Department', 'Employee ID', 'Employee Name', 'Work Date', 'OT Hours', 'Source', 'Status']);
+
+            foreach ($rows as $row) {
+                fputcsv($handle, [
+                    $row->employee?->department?->name ?? '',
+                    $row->employee?->employee_id ?? '',
+                    $row->employee?->user?->name ?? '',
+                    $row->work_date?->toDateString() ?? '',
+                    $row->requested_hours ?? '',
+                    $row->source ?? 'manual',
+                    ucfirst($row->status ?? ''),
+                ]);
+            }
+
+            fclose($handle);
+        }, $filename, ['Content-Type' => 'text/csv']);
+    }
+
+    public function monthlyOtCsv(Request $request): StreamedResponse
+    {
+        $month = (int) $request->integer('month', now()->month);
+        $year = (int) $request->integer('year', now()->year);
+
+        $from = Carbon::create($year, $month, 1)->startOfMonth();
+        $to = $from->copy()->endOfMonth();
+
+        $rows = Employee::with('user', 'department')
+            ->whereHas('otRequests', fn ($q) => $q->whereBetween('work_date', [$from->toDateString(), $to->toDateString()]))
+            ->get()
+            ->map(function (Employee $employee) use ($from, $to): array {
+                $requests = $employee->otRequests()
+                    ->whereBetween('work_date', [$from->toDateString(), $to->toDateString()])
+                    ->get();
+
+                return [
+                    'department' => $employee->department?->name ?? '',
+                    'employee_id' => $employee->employee_id ?? '',
+                    'name' => $employee->user?->name ?? '',
+                    'ot_source' => $employee->ot_tracking_source,
+                    'total_ot_hours' => $requests->sum('requested_hours'),
+                    'approved_hours' => $requests->where('status', 'approved')->sum('requested_hours'),
+                    'pending_count' => $requests->where('status', 'pending')->count(),
+                    'nexflow_count' => $requests->where('source', 'nexflow')->count(),
+                ];
+            });
+
+        $filename = "monthly-ot-{$year}-{$month}.csv";
+
+        return response()->streamDownload(function () use ($rows) {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, ['Department', 'Employee ID', 'Name', 'OT Source', 'Total OT Hours', 'Approved Hours', 'Pending Requests', 'Nexflow Synced']);
+
+            foreach ($rows as $row) {
+                fputcsv($handle, array_values($row));
+            }
+
+            fclose($handle);
+        }, $filename, ['Content-Type' => 'text/csv']);
+    }
+
+    public function nexflowSyncLogCsv(Request $request): StreamedResponse
+    {
+        $month = (int) $request->integer('month', now()->month);
+        $year = (int) $request->integer('year', now()->year);
+
+        $from = Carbon::create($year, $month, 1)->startOfMonth();
+        $to = $from->copy()->endOfMonth();
+
+        $rows = NexflowOtSyncLog::with('employee.user', 'employee.department')
+            ->whereBetween('sync_date', [$from->toDateString(), $to->toDateString()])
+            ->when($request->department_id, fn ($q) => $q->whereHas('employee', fn ($e) => $e->where('department_id', $request->department_id)))
+            ->when($request->action, fn ($q) => $q->where('action', $request->action))
+            ->orderBy('sync_date')
+            ->get();
+
+        $filename = "nexflow-sync-log-{$year}-{$month}.csv";
+
+        return response()->streamDownload(function () use ($rows) {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, ['Sync Date', 'Department', 'Employee', 'Net Hours', 'Threshold', 'OT Detected', 'Action', 'Skip Reason']);
+
+            foreach ($rows as $row) {
+                fputcsv($handle, [
+                    $row->sync_date?->toDateString() ?? '',
+                    $row->employee?->department?->name ?? '',
+                    $row->employee?->user?->name ?? '',
+                    $row->net_hours ?? '',
+                    $row->shift_threshold ?? '',
+                    $row->ot_hours_detected ?? '',
+                    $row->action ?? '',
+                    $row->skip_reason ?? '',
+                ]);
+            }
+
+            fclose($handle);
+        }, $filename, ['Content-Type' => 'text/csv']);
     }
 }

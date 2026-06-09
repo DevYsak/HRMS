@@ -23,8 +23,8 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     'employment_type_id', 'work_mode_id', 'salary_cycle_id',
     // Legacy string columns kept for backward compat during migration
     'employment_type', 'salary_cycle',
-    // Shift
-    'shift_id',
+    // Shift & OT source
+    'shift_id', 'ot_tracking_source',
     // Joining & probation
     'joining_date', 'probation_end_date', 'probation_extension_reason',
     'probation_confirmed_by', 'probation_confirmed_at', 'probation_hr_approved_by', 'probation_hr_approved_at',
