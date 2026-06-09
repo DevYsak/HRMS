@@ -5,7 +5,6 @@ namespace App\Console\Commands;
 use App\Models\Employee;
 use App\Models\NexflowOtSyncLog;
 use App\Models\OtRequest;
-use App\Models\OtWindow;
 use App\Models\ShiftSetting;
 use App\Notifications\NexflowOvertimeDetectedNotification;
 use App\Services\NexflowApiService;
@@ -53,24 +52,8 @@ class SyncNexflowOvertimeHours extends Command
 
             $threshold = (float) ($employee->shift?->ot_threshold_hours ?? ShiftSetting::DEFAULT_OT_THRESHOLD ?? 9.0);
 
-            // Per-employee OtWindow check (skip, don't abort globally)
-            if (! OtWindow::isOpenFor($date)) {
-                $skipped++;
-
-                if (! $isDryRun) {
-                    NexflowOtSyncLog::create([
-                        'employee_id' => $employee->id,
-                        'sync_date' => $date->toDateString(),
-                        'net_hours' => 0,
-                        'shift_threshold' => $threshold,
-                        'ot_hours_detected' => 0,
-                        'action' => 'skipped',
-                        'skip_reason' => 'No active OT window',
-                    ]);
-                }
-
-                continue;
-            }
+            // Automated Nexflow sync bypasses the manual OT submission window.
+            // The window only gates employee-initiated submissions.
 
             $summary = $nexflow->getClockSummary(
                 $employee->user->email,
@@ -78,13 +61,13 @@ class SyncNexflowOvertimeHours extends Command
                 $date->toDateString()
             );
 
-            if (! $summary || empty($summary['days'])) {
+            if (! $summary || empty($summary['daily_breakdown'])) {
                 $skipped++;
 
                 continue;
             }
 
-            $dayData = collect($summary['days'])->firstWhere('date', $date->toDateString());
+            $dayData = collect($summary['daily_breakdown'])->firstWhere('date', $date->toDateString());
 
             if (! $dayData) {
                 $skipped++;
@@ -92,15 +75,17 @@ class SyncNexflowOvertimeHours extends Command
                 continue;
             }
 
-            $totalHours = (float) ($dayData['total_hours'] ?? 0);
+            // Use Nexflow's pre-calculated ot_hours — already accounts for breaks and shift rules.
+            $otHours = (float) ($dayData['ot_hours'] ?? 0);
+            $netHours = (float) ($dayData['net_work_hours'] ?? 0);
 
-            if ($totalHours <= $threshold) {
+            if ($otHours <= 0) {
                 $skipped++;
 
                 continue;
             }
 
-            $otHours = round($totalHours - $threshold, 2);
+            $otHours = round($otHours, 2);
             $nexflowRef = $dayData['ref'] ?? null;
 
             // Duplicate check
@@ -116,7 +101,7 @@ class SyncNexflowOvertimeHours extends Command
                     NexflowOtSyncLog::create([
                         'employee_id' => $employee->id,
                         'sync_date' => $date->toDateString(),
-                        'net_hours' => $totalHours,
+                        'net_hours' => $netHours,
                         'shift_threshold' => $threshold,
                         'ot_hours_detected' => $otHours,
                         'action' => 'duplicate',
@@ -128,13 +113,13 @@ class SyncNexflowOvertimeHours extends Command
             }
 
             if ($isDryRun) {
-                $this->line("  [dry-run] Would create OT request for {$employee->user->name} on {$date->toDateString()} — {$otHours}h excess");
+                $this->line("  [dry-run] Would create OT request for {$employee->user->name} on {$date->toDateString()} — {$otHours}h OT (net {$netHours}h worked)");
                 $created++;
 
                 continue;
             }
 
-            // Derive a synthetic OT window: threshold marks end-of-standard-day, OT starts there.
+            // Derive synthetic OT time window from shift start + net hours worked.
             $shiftStartHour = (int) ($employee->shift?->start_time ? date('H', strtotime($employee->shift->start_time)) : 9);
             $otStartTime = sprintf('%02d:00', ($shiftStartHour + (int) $threshold) % 24);
             $otEndMinutes = (int) round($otHours * 60);
@@ -146,7 +131,7 @@ class SyncNexflowOvertimeHours extends Command
                 'start_time' => $otStartTime,
                 'end_time' => $otEndTime,
                 'requested_hours' => $otHours,
-                'reason' => "Auto-detected via Nexflow: worked {$totalHours}h (threshold {$threshold}h).",
+                'reason' => "Auto-detected via Nexflow: net {$netHours}h worked, {$otHours}h OT.",
                 'status' => 'pending',
                 'source' => 'nexflow',
                 'nexflow_ref' => $nexflowRef,
@@ -172,7 +157,7 @@ class SyncNexflowOvertimeHours extends Command
             NexflowOtSyncLog::create([
                 'employee_id' => $employee->id,
                 'sync_date' => $date->toDateString(),
-                'net_hours' => $totalHours,
+                'net_hours' => $netHours,
                 'shift_threshold' => $threshold,
                 'ot_hours_detected' => $otHours,
                 'ot_request_id' => $otRequest->id,
