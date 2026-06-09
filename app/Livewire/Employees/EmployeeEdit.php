@@ -4,6 +4,7 @@ namespace App\Livewire\Employees;
 
 use App\Enums\EmployeeStatus;
 use App\Enums\UserRole;
+use App\Mail\WelcomeEmployeeMail;
 use App\Models\Department;
 use App\Models\Employee;
 use App\Models\EmployeeSalary;
@@ -18,6 +19,7 @@ use App\Models\User;
 use App\Models\WorkMode;
 use App\Services\LeaveBalanceService;
 use App\Services\ProbationEngine;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Validation\Rule;
@@ -276,6 +278,24 @@ class EmployeeEdit extends Component
             \Flux::toast('Password reset link sent to '.$this->employee->user->email, variant: 'success');
         } catch (\Throwable $e) {
             \Flux::toast('Could not send reset email: '.$e->getMessage(), variant: 'danger');
+        }
+    }
+
+    public function setTemporaryPassword(): void
+    {
+        $this->authorize('update', $this->employee);
+
+        $tempPassword = 'Temp@'.rand(10000, 99999);
+
+        $this->employee->user->update(['password' => Hash::make($tempPassword)]);
+
+        try {
+            Mail::to($this->employee->user->email)->send(
+                new WelcomeEmployeeMail($this->employee->user, $tempPassword)
+            );
+            \Flux::toast('Temporary password set and emailed to '.$this->employee->user->email, variant: 'success');
+        } catch (\Throwable $e) {
+            \Flux::toast('Password reset but email failed: '.$e->getMessage(), variant: 'danger');
         }
     }
 

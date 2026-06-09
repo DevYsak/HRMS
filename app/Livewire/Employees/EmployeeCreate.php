@@ -19,8 +19,10 @@ use App\Models\User;
 use App\Models\WorkMode;
 use App\Notifications\WelcomeOnboardingNotification;
 use App\Services\OnboardingService;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Validation\Rule;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 
@@ -152,7 +154,7 @@ class EmployeeCreate extends Component
 
         $this->validate([
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'unique:users,email'],
+            'email' => ['required', 'email', Rule::unique('users', 'email')->whereNull('deleted_at')],
             'role' => ['required', 'string'],
             'employee_id' => ['required', 'string', 'unique:employees,employee_id'],
             'employee_code' => ['nullable', 'integer', 'min:1', 'max:65535', 'unique:employees,employee_code'],

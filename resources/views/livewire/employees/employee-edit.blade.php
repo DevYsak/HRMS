@@ -14,8 +14,18 @@
                 wire:target="resetPassword"
                 variant="outline" icon="lock-closed" size="sm"
             >
-                <span wire:loading.remove wire:target="resetPassword">Reset Password</span>
+                <span wire:loading.remove wire:target="resetPassword">Send Reset Link</span>
                 <span wire:loading wire:target="resetPassword">Sending…</span>
+            </flux:button>
+            <flux:button
+                wire:click="setTemporaryPassword"
+                wire:loading.attr="disabled"
+                wire:target="setTemporaryPassword"
+                wire:confirm="This will reset their password to a new temporary password and email it to them. Continue?"
+                variant="outline" icon="key" size="sm"
+            >
+                <span wire:loading.remove wire:target="setTemporaryPassword">Set Temp Password</span>
+                <span wire:loading wire:target="setTemporaryPassword">Resetting…</span>
             </flux:button>
             <flux:button wire:click="openEmailModal" variant="outline" icon="envelope" size="sm">Send Email</flux:button>
             <div x-data="{ open: false }" class="relative" @click.outside="open = false">
