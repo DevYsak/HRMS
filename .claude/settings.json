@@ -42,7 +42,14 @@
       "Bash(grep -rln \"Run Payroll\\\\|payroll.process\\\\|Payroll\\\\\\\\\\\\\\\\Process\" tests/)",
       "Bash(Select-Object -ExpandProperty Name)",
       "Bash(php -d max_execution_time=0 artisan test --compact)",
-      "Bash(php -d max_execution_time=0 artisan test --compact tests/Feature/EmployeeDirectoryTest.php tests/Feature/EmployeeEditTest.php tests/Feature/BiometricEmployeePushTest.php tests/Feature/SalaryCalculationServiceTest.php tests/Unit/FormulaEvaluatorTest.php)"
+      "Bash(php -d max_execution_time=0 artisan test --compact tests/Feature/EmployeeDirectoryTest.php tests/Feature/EmployeeEditTest.php tests/Feature/BiometricEmployeePushTest.php tests/Feature/SalaryCalculationServiceTest.php tests/Unit/FormulaEvaluatorTest.php)",
+      "Bash(grep -A 5 'protected $signature' app/Console/Commands/CreateAdmin.php app/Console/Commands/ClearDemoData.php app/Console/Commands/MonthlyLeaveAccrual.php)",
+      "Bash(php -l app/Console/Commands/PrepareUatEmployeeData.php)",
+      "Bash(grep -rn \"salary_cycle\" --include=*.php app/Livewire/Employees/)",
+      "Bash(grep -rn \"'A'\\\\|'B'\\\\|cycle_a\\\\|cycle_b\" --include=*.php app/Livewire/Settings/SalaryCycleManager.php)",
+      "Bash(php -l app/Console/Commands/NormalizeSalaryCycles.php)",
+      "Bash(php vendor/bin/pint --version)",
+      "Bash(composer show *)"
     ]
   }
 }

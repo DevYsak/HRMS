@@ -14,22 +14,27 @@
 
         {{-- Section 1: Account --}}
         <div class="pulse-card space-y-5">
-            <h3 class="font-semibold text-zinc-900 dark:text-white border-b border-zinc-100 pb-2 dark:border-zinc-800">Account Information</h3>
+            <h3 class="font-semibold text-zinc-900 dark:text-white border-b border-zinc-100 pb-2 dark:border-zinc-800">
+                Account Information</h3>
             <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
                 <flux:input wire:model="name" label="Full Name" placeholder="e.g. John Doe" required />
-                <flux:input wire:model="email" type="email" label="Email Address" placeholder="e.g. john@conexus.com" required />
+                <flux:input wire:model="email" type="email" label="Email Address" placeholder="e.g. john@conexus.com"
+                    required />
                 <flux:select wire:model="role" label="System Role">
                     @foreach($roles as $roleCase)
                         <option value="{{ $roleCase->value }}">{{ $roleCase->label() }}</option>
                     @endforeach
                 </flux:select>
             </div>
-            <p class="text-xs text-zinc-500">Default password: <kbd class="font-mono bg-zinc-100 px-1 rounded dark:bg-zinc-800">Password@123</kbd> — employee should change on first login.</p>
+            <p class="text-xs text-zinc-500">Default password: <kbd
+                    class="font-mono bg-zinc-100 px-1 rounded dark:bg-zinc-800">Password@123</kbd> — employee should
+                change on first login.</p>
         </div>
 
         {{-- Section 2: Personal Profile (Spec §3.1) --}}
         <div class="pulse-card space-y-5">
-            <h3 class="font-semibold text-zinc-900 dark:text-white border-b border-zinc-100 pb-2 dark:border-zinc-800">Personal Profile</h3>
+            <h3 class="font-semibold text-zinc-900 dark:text-white border-b border-zinc-100 pb-2 dark:border-zinc-800">
+                Personal Profile</h3>
             <div class="grid grid-cols-1 gap-4 md:grid-cols-4">
                 <flux:input wire:model="employee_id" label="Employee ID" required />
                 <flux:field>
@@ -39,7 +44,7 @@
                     </flux:label>
                     <flux:input wire:model="employee_code" type="number" min="1" max="65535" placeholder="e.g. 17" />
                     <flux:error name="employee_code" />
-                    <flux:description>Device enrolment number — used for attendance sync.</flux:description>
+                    <!-- <flux:description></flux:description> -->
                 </flux:field>
                 <flux:input wire:model="phone" label="Phone" placeholder="+91 98765 43210" />
                 <flux:input wire:model="date_of_birth" type="date" label="Date of Birth" />
@@ -52,7 +57,8 @@
                     <option value="other">Other</option>
                     <option value="prefer_not_to_say">Prefer not to say</option>
                 </flux:select>
-                <flux:input wire:model="emergency_contact" label="Emergency Contact" placeholder="Name & phone number" />
+                <flux:input wire:model="emergency_contact" label="Emergency Contact"
+                    placeholder="Name & phone number" />
             </div>
             <flux:textarea wire:model="address" label="Address" rows="2" placeholder="Full residential address" />
             <div>
@@ -64,7 +70,8 @@
 
         {{-- Section 3: Employment Record (Spec §3.1) --}}
         <div class="pulse-card space-y-5">
-            <h3 class="font-semibold text-zinc-900 dark:text-white border-b border-zinc-100 pb-2 dark:border-zinc-800">Employment Record</h3>
+            <h3 class="font-semibold text-zinc-900 dark:text-white border-b border-zinc-100 pb-2 dark:border-zinc-800">
+                Employment Record</h3>
             <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
                 <flux:select wire:model="office_id" label="Office">
                     <option value="">Select Office…</option>
@@ -144,12 +151,15 @@
 
         {{-- Section 4: Leave Allocations --}}
         <div class="pulse-card space-y-3">
-            <h3 class="font-semibold text-zinc-900 dark:text-white border-b border-zinc-100 pb-2 dark:border-zinc-800">Assign Leave Balances (optional)</h3>
-            <p class="text-xs text-zinc-500">Set initial allocated days per leave type for this employee. Leave blank or zero to skip.</p>
+            <h3 class="font-semibold text-zinc-900 dark:text-white border-b border-zinc-100 pb-2 dark:border-zinc-800">
+                Assign Leave Balances (optional)</h3>
+            <p class="text-xs text-zinc-500">Set initial allocated days per leave type for this employee. Leave blank or
+                zero to skip.</p>
             <div class="grid grid-cols-1 gap-3 md:grid-cols-3 mt-3">
                 @foreach(App\Models\LeaveType::all() as $lt)
                     <div>
-                        <flux:input wire:model.defer="leave_allocations.{{ $lt->id }}" type="number" step="0.5" label="{{ $lt->name }} (days)" />
+                        <flux:input wire:model.defer="leave_allocations.{{ $lt->id }}" type="number" step="0.5"
+                            label="{{ $lt->name }} (days)" />
                     </div>
                 @endforeach
             </div>
