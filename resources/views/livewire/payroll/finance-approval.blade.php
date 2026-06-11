@@ -64,8 +64,8 @@
                                 @foreach($payroll->payslips as $slp)
                                     <tr class="hover:bg-zinc-50/50 dark:hover:bg-zinc-800/20">
                                         <td class="py-3 pl-6">
-                                            <div class="font-bold text-zinc-900 dark:text-white">{{ $slp->employee->user->name }}</div>
-                                            <div class="text-[10px] text-zinc-400 uppercase">{{ $slp->employee->job_title }}</div>
+                                            <div class="font-bold text-zinc-900 dark:text-white">{{ $slp->employee?->user?->name ?? 'Unknown Employee' }}</div>
+                                            <div class="text-[10px] text-zinc-400 uppercase">{{ $slp->employee?->job_title ?? 'Unknown Title' }}</div>
                                         </td>
                                         <td class="py-3 text-zinc-600 dark:text-zinc-300">IDR {{ number_format($slp->gross_salary, 0) }}</td>
                                         <td class="py-3 text-red-500">IDR {{ number_format($slp->total_deductions, 0) }}</td>
