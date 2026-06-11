@@ -58,6 +58,11 @@ class Employee extends Model
         return $this->hasMany(EmployeeSalary::class);
     }
 
+    public function payrollSettings(): HasOne
+    {
+        return $this->hasOne(EmployeePayrollSettings::class);
+    }
+
     public function payslips(): HasMany
     {
         return $this->hasMany(Payslip::class);

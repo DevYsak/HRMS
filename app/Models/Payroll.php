@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
-    'month', 'year', 'status', 'total_payout',
+    'month', 'year', 'status', 'cycle', 'total_payout',
     'ot_amount', 'incentives', 'reimbursements', 'deductions',
     'processed_by', 'processed_at',
     'finance_approved_by', 'finance_approved_at', 'finance_note',
@@ -18,13 +18,13 @@ class Payroll extends Model
     protected function casts(): array
     {
         return [
-            'processed_at'       => 'datetime',
+            'processed_at' => 'datetime',
             'finance_approved_at' => 'datetime',
-            'ot_amount'          => 'decimal:2',
-            'incentives'         => 'decimal:2',
-            'reimbursements'     => 'decimal:2',
-            'deductions'         => 'decimal:2',
-            'total_payout'       => 'decimal:2',
+            'ot_amount' => 'decimal:2',
+            'incentives' => 'decimal:2',
+            'reimbursements' => 'decimal:2',
+            'deductions' => 'decimal:2',
+            'total_payout' => 'decimal:2',
         ];
     }
 

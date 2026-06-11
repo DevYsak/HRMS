@@ -1,33 +1,36 @@
 <flux:main class="bg-[#F7F8FA] min-h-screen dark:bg-zinc-950">
 
     {{-- ── Page Header ─────────────────────────────────────────────────────── --}}
-    <div class="bg-white dark:bg-zinc-900 border-b border-zinc-200/70 dark:border-zinc-800 px-8 py-5">
-        <div class="flex items-center justify-between gap-4">
+    <div class="pulse-hero shadow-xl">
+        <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_rgba(249,115,22,0.22),_transparent_65%)]"></div>
+        <div class="pointer-events-none absolute -bottom-10 -left-10 size-64 rounded-full blur-3xl" style="background:radial-gradient(circle,rgba(249,115,22,0.30),transparent 70%)"></div>
+        <div class="pointer-events-none absolute top-0 right-0 size-48 rounded-full blur-3xl" style="background:radial-gradient(circle,rgba(249,115,22,0.08),transparent 70%)"></div>
+
+        <div class="relative flex flex-col sm:flex-row sm:items-center justify-between gap-6">
             <div>
-                <div class="flex items-center gap-1.5 text-[11px] text-zinc-400 mb-1 font-medium">
-                    <span>Time Off</span>
-                    <flux:icon.chevron-right class="size-3" />
-                    <span class="text-zinc-600 dark:text-zinc-300">All Leave</span>
+                <div class="mb-3 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 backdrop-blur-sm">
+                    <div class="size-1.5 animate-pulse rounded-full bg-orange-200"></div>
+                    <span class="text-[11px] font-bold uppercase tracking-[0.18em] text-orange-100">Leave Management</span>
                 </div>
-                <h1 class="text-2xl font-black text-zinc-900 dark:text-white tracking-tight">Employee Leave Master</h1>
-                <p class="text-sm text-zinc-500 mt-0.5">Track and audit all leave requests company-wide</p>
+                <h1 class="text-3xl font-black tracking-tight text-white">Employee Leave Master</h1>
+                <p class="mt-1.5 text-sm font-medium text-violet-200/80">Track and audit all leave requests company-wide.</p>
             </div>
-            <div class="flex items-center gap-2.5 shrink-0">
+            <div class="flex shrink-0 flex-wrap items-center gap-3">
                 <button type="button"
-                    class="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors">
-                    <flux:icon.arrow-up-tray class="size-4" />
-                    Export
+                    class="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-white/25 bg-white/15 px-4 py-2.5 text-sm font-bold text-white backdrop-blur-sm transition-all hover:bg-white/25">
+                    <flux:icon.arrow-up-tray class="size-4 shrink-0" />
+                    <span>Export</span>
                 </button>
                 <button type="button" wire:click="openNewModal"
-                    class="inline-flex items-center gap-2 px-5 py-2 text-sm font-bold text-white bg-brand-600 hover:bg-brand-700 rounded-xl transition-colors shadow-sm shadow-brand-200 dark:shadow-none">
-                    <flux:icon.plus class="size-4" />
-                    New Leave Request
+                    class="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-black text-orange-700 shadow-lg shadow-black/20 transition-all hover:bg-violet-50">
+                    <flux:icon.plus class="size-4 shrink-0" />
+                    <span>New Leave Request</span>
                 </button>
             </div>
         </div>
     </div>
 
-    <div class="p-8 space-y-6">
+    <div class="p-4 md:p-6 space-y-5">
 
         {{-- ── KPI Cards ──────────────────────────────────────────────────── --}}
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">

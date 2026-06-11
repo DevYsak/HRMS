@@ -35,7 +35,14 @@
       "Bash(git push *)",
       "Bash(vendor/bin/pint app/Livewire/Attendance/AllAttendance.php --format agent)",
       "Bash(vendor/bin/pint app/Livewire/Overtime/MyOtRequests.php --format agent)",
-      "Bash(grep -rn \"public string \\\\$\\\\|public int \\\\$\\\\|public float \\\\$\\\\|public bool \\\\$\\\\|public array \\\\$\" app/Livewire/ --include=\"*.php\")"
+      "Bash(grep -rn \"public string \\\\$\\\\|public int \\\\$\\\\|public float \\\\$\\\\|public bool \\\\$\\\\|public array \\\\$\" app/Livewire/ --include=\"*.php\")",
+      "Bash(find app/Livewire -iname \"*TimeOffSettings*\" -o -iname \"*LeaveSettings*\")",
+      "Bash(find resources/views/livewire -iname \"*time-off-settings*\" -o -iname \"*leave-settings*\")",
+      "Bash(grep -n \"use App.*MyPayslips\\\\|use App.*Payroll\\\\\\\\\\\\\\\\Overview\\\\|use App.*Payroll\\\\\\\\\\\\\\\\Process\" routes/web.php)",
+      "Bash(grep -rln \"Run Payroll\\\\|payroll.process\\\\|Payroll\\\\\\\\\\\\\\\\Process\" tests/)",
+      "Bash(Select-Object -ExpandProperty Name)",
+      "Bash(php -d max_execution_time=0 artisan test --compact)",
+      "Bash(php -d max_execution_time=0 artisan test --compact tests/Feature/EmployeeDirectoryTest.php tests/Feature/EmployeeEditTest.php tests/Feature/BiometricEmployeePushTest.php tests/Feature/SalaryCalculationServiceTest.php tests/Unit/FormulaEvaluatorTest.php)"
     ]
   }
 }

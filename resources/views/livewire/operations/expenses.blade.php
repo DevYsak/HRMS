@@ -1,14 +1,14 @@
-<flux:main class="min-h-screen bg-zinc-50 dark:bg-zinc-950 p-6 space-y-5">
+<flux:main class="min-h-screen bg-zinc-50 dark:bg-zinc-950">
 
-    {{-- â"€â"€â"€ HEADER â"€â"€â"€ --}}
-    <div class="relative overflow-hidden rounded-2xl bg-gradient-to-br from-orange-500 via-orange-600 to-amber-600 p-7 shadow-xl shadow-orange-500/20">
-        <div class="pointer-events-none absolute -top-16 -right-16 size-56 rounded-full bg-white/10 blur-3xl"></div>
-        <div class="pointer-events-none absolute inset-0 opacity-[0.06]" style="background-image: radial-gradient(circle, white 1px, transparent 1px); background-size: 22px 22px;"></div>
+    <div class="pulse-hero shadow-xl">
+        <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_rgba(249,115,22,0.22),_transparent_65%)]"></div>
+        <div class="pointer-events-none absolute -bottom-10 -left-10 size-64 rounded-full blur-3xl" style="background:radial-gradient(circle,rgba(249,115,22,0.30),transparent 70%)"></div>
+        <div class="pointer-events-none absolute top-0 right-0 size-48 rounded-full blur-3xl" style="background:radial-gradient(circle,rgba(249,115,22,0.08),transparent 70%)"></div>
 
         <div class="relative flex flex-col sm:flex-row sm:items-center justify-between gap-5">
             <div>
                 <div class="mb-3 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 backdrop-blur-sm">
-                    <div class="size-1.5 rounded-full bg-orange-200"></div>
+                    <div class="size-1.5 animate-pulse rounded-full bg-orange-200"></div>
                     <span class="text-[11px] font-bold uppercase tracking-[0.18em] text-orange-100">Operations</span>
                 </div>
                 <h1 class="text-3xl font-black tracking-tight text-white">Expense Claims</h1>
@@ -29,6 +29,8 @@
             </div>
         </div>
     </div>
+
+    <div class="p-4 md:p-6 space-y-5">
 
     {{-- No Employee Profile Warning --}}
     @if(!$hasEmployeeProfile)
@@ -286,5 +288,7 @@
             </div>
         </div>
     @endif
+
+    </div>
 
 </flux:main>

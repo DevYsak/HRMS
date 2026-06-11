@@ -19,8 +19,8 @@
                         Management</span>
                 </div>
                 <h1 class="text-3xl font-black tracking-tight text-white">My Time Off</h1>
-                <p class="mt-1.5 text-sm font-medium text-violet-200/80">Manage balances, apply for leave & track
-                    encashments.</p>
+                <p class="mt-1.5 text-sm font-medium text-violet-200/80">Manage balances, apply for leave and track
+                    requests.</p>
             </div>
             <div class="flex shrink-0 flex-wrap items-center gap-3">
                 @if($encashableTypes->isNotEmpty())
@@ -42,131 +42,238 @@
     {{-- â"€â"€â"€ PENDING ALERT â"€â"€â"€ --}}
     @if(!empty($pendingCount) && $pendingCount > 0)
         <div
-            class="flex items-center gap-4 rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 to-orange-50 p-4 dark:border-amber-800/40 dark:from-amber-950/30 dark:to-orange-950/20">
+            class="pulse-margin flex flex-col gap-4 rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 to-orange-50 p-4 dark:border-amber-800/40 dark:from-amber-950/30 dark:to-orange-950/20 sm:flex-row sm:items-center">
             <div class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-900/40">
                 <flux:icon.clock class="size-5 text-amber-600 dark:text-amber-400" />
             </div>
             <div class="min-w-0 flex-1">
                 <p class="text-sm font-bold text-amber-900 dark:text-amber-200">
-                    {{ $pendingCount }} pending leave {{ Str::plural('request', $pendingCount) }} awaiting approval
+                    {{ $pendingCount }} leave {{ Str::plural('request', $pendingCount) }} awaiting approval
                 </p>
                 <p class="mt-0.5 text-xs text-amber-700/70 dark:text-amber-400/70">
-                    Your applications are under review. You'll be notified once actioned.
+                    Your applications are currently under review. You'll be notified once actioned.
                 </p>
             </div>
-            <button wire:click="openRequestModal"
-                class="inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-amber-600">
-                <flux:icon.plus class="size-3" />
-                New Request
-            </button>
+            <div class="flex shrink-0 items-center gap-2">
+                <a href="#recent-requests" @click="tab = 'requests'"
+                    class="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-bold text-amber-700 transition-colors hover:bg-amber-100 dark:border-amber-800/50 dark:bg-zinc-900 dark:text-amber-300 dark:hover:bg-amber-900/30">
+                    <flux:icon.eye class="size-3" />
+                    View Requests
+                </a>
+                <button wire:click="openRequestModal"
+                    class="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-amber-600">
+                    <flux:icon.plus class="size-3" />
+                    New Request
+                </button>
+            </div>
         </div>
     @endif
 
     {{-- â"€â"€â"€ LEAVE BALANCE CARDS â"€â"€â"€ --}}
     {{-- Each card shows: Available days clearly, plus a plain breakdown row --}}
-    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        @forelse($balances as $balance)
-            @php
-                $allocated = (float) $balance->allocated_days;
-                $used = (float) $balance->used_days;
-                $encashed = (float) ($balance->encashed_days ?? 0);
-                $carryFwd = (float) ($balance->carried_forward_days ?? 0);
-                $compOff = (float) ($balance->comp_off_credits ?? 0);
-                $available = max(0, $allocated - $used - $encashed);
-                $pct = $allocated > 0 ? min(100, round(($used + $encashed) / $allocated * 100)) : 0;
-                $color = $balance->leaveType->color ?? '#7c3aed';
-                $isLow = $available <= 2 && $allocated > 0;
-            @endphp
-            <div class="overflow-hidden rounded-2xl bg-white shadow-sm border dark:bg-zinc-900 dark:border-zinc-800 transition-all duration-200 hover:shadow-md"
-                style="border-color: {{ $color }}40">
+    @php
+        $leaveTypeStyles = [
+            'annual' => ['color' => '#10b981', 'icon' => 'sun'],
+            'sick' => ['color' => '#ef4444', 'icon' => 'heart'],
+            'casual' => ['color' => '#3b82f6', 'icon' => 'calendar-days'],
+            'maternity' => ['color' => '#a855f7', 'icon' => 'gift'],
+            'paternity' => ['color' => '#6366f1', 'icon' => 'user-group'],
+            'bereavement' => ['color' => '#64748b', 'icon' => 'moon'],
+        ];
+    @endphp
+    <div class="pulse-margin">
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            @forelse($balances as $balance)
+                @php
+                    $allocated = (float) $balance->allocated_days;
+                    $used = (float) $balance->used_days;
+                    $encashed = (float) ($balance->encashed_days ?? 0);
+                    $carryFwd = (float) ($balance->carried_forward_days ?? 0);
+                    $compOff = (float) ($balance->comp_off_credits ?? 0);
+                    $available = max(0, $allocated - $used - $encashed);
+                    $pct = $allocated > 0 ? min(100, round(($used + $encashed) / $allocated * 100)) : 0;
+                    $isLow = $available <= 2 && $allocated > 0;
 
-                {{-- Colored top band --}}
-                <div class="px-5 pt-4 pb-3" style="background: linear-gradient(135deg, {{ $color }}f0, {{ $color }}b0)">
-                    <div class="flex items-start justify-between">
-                        <div>
-                            <p class="text-[10px] font-black uppercase tracking-widest text-white/75">
-                                {{ $balance->leaveType->name }}
-                            </p>
-                            {{-- THE KEY NUMBER: Available days --}}
-                            <div class="mt-1 flex items-baseline gap-1.5">
+                    $typeName = strtolower($balance->leaveType->name ?? '');
+                    $matchedStyle = collect($leaveTypeStyles)->first(fn($s, $key) => str_contains($typeName, $key));
+                    $color = $matchedStyle['color'] ?? ($balance->leaveType->color ?? '#7c3aed');
+                    $typeIcon = $matchedStyle['icon'] ?? 'calendar-days';
+                @endphp
+                <div class="group overflow-hidden rounded-2xl bg-white shadow-sm border dark:bg-zinc-900 dark:border-zinc-800 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
+                    style="border-color: {{ $color }}40">
+
+                    {{-- Colored top band --}}
+                    <div class="px-5 pt-4 pb-3" style="background: linear-gradient(135deg, {{ $color }}f0, {{ $color }}b0)">
+                        <div class="flex items-start justify-between">
+                            <div>
+                                <div class="mb-1 flex items-center gap-1.5">
+                                    <flux:icon :name="$typeIcon" class="size-3.5 text-white/75" />
+                                    <p class="text-[10px] font-black uppercase tracking-widest text-white/75">
+                                        {{ $balance->leaveType->name }}
+                                    </p>
+                                </div>
+                                {{-- THE KEY NUMBER: Available days --}}
+                                <div class="mt-1 flex items-baseline gap-1.5">
+                                    <span
+                                        class="text-4xl font-black tabular-nums text-white leading-none">{{ number_format($available, 1) == number_format($available, 0) ? (int) $available : number_format($available, 1) }}</span>
+                                    <span class="text-sm font-semibold text-white/70">available</span>
+                                </div>
+                            </div>
+                            {{-- Low balance warning --}}
+                            @if($isLow && $available > 0)
                                 <span
-                                    class="text-4xl font-black tabular-nums text-white leading-none">{{ number_format($available, 1) == number_format($available, 0) ? (int) $available : number_format($available, 1) }}</span>
-                                <span class="text-sm font-semibold text-white/70">available</span>
+                                    class="mt-0.5 inline-flex items-center gap-1 rounded-full bg-white/25 px-2 py-0.5 text-[10px] font-bold text-white">
+                                    ⚠ Low
+                                </span>
+                            @elseif($available === 0.0 && $allocated > 0)
+                                <span
+                                    class="mt-0.5 inline-flex items-center gap-1 rounded-full bg-white/25 px-2 py-0.5 text-[10px] font-bold text-white">
+                                    No balance
+                                </span>
+                            @endif
+                        </div>
+                    </div>
+
+                    {{-- Bottom breakdown -- plain language --}}
+                    <div class="px-5 pb-4 pt-3 space-y-2.5">
+                        {{-- Progress bar --}}
+                        <div class="h-1.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                            <div class="h-full rounded-full transition-all duration-700"
+                                style="width: {{ $pct }}%; background: {{ $color }}"></div>
+                        </div>
+
+                        {{-- Breakdown grid: 3 rows, always visible --}}
+                        <div class="grid grid-cols-3 gap-x-2 text-center text-[11px]">
+                            <div>
+                                <p class="font-bold text-zinc-900 dark:text-zinc-100">{{ (int) $allocated }}</p>
+                                <p class="text-zinc-400">Allocated</p>
+                            </div>
+                            <div>
+                                <p class="font-bold text-zinc-900 dark:text-zinc-100">{{ (float) $used }}</p>
+                                <p class="text-zinc-400">Used</p>
+                            </div>
+                            <div>
+                                <p class="font-bold" style="color: {{ $color }}">
+                                    {{ $available > (int) $available ? number_format($available, 1) : (int) $available }}
+                                </p>
+                                <p class="text-zinc-400">Left</p>
                             </div>
                         </div>
-                        {{-- Low balance warning --}}
-                        @if($isLow && $available > 0)
-                            <span
-                                class="mt-0.5 inline-flex items-center gap-1 rounded-full bg-white/25 px-2 py-0.5 text-[10px] font-bold text-white">
-                                ⚠ Low
-                            </span>
-                        @elseif($available === 0.0 && $allocated > 0)
-                            <span
-                                class="mt-0.5 inline-flex items-center gap-1 rounded-full bg-white/25 px-2 py-0.5 text-[10px] font-bold text-white">
-                                No balance
-                            </span>
+
+                        {{-- Extra info pills (only shown if non-zero) --}}
+                        @if($carryFwd > 0 || $encashed > 0 || $compOff > 0)
+                            <div class="flex flex-wrap gap-1.5 pt-1 border-t border-zinc-100 dark:border-zinc-800">
+                                @if($carryFwd > 0)
+                                    <span
+                                        class="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-600 dark:bg-blue-950/30 dark:text-blue-400">
+                                        ↩ {{ (float) $carryFwd }} carried fwd
+                                    </span>
+                                @endif
+                                @if($encashed > 0)
+                                    <span
+                                        class="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-600 dark:bg-amber-950/30 dark:text-amber-400">
+                                        ₹ {{ (float) $encashed }} encashed
+                                    </span>
+                                @endif
+                                @if($compOff > 0)
+                                    <span
+                                        class="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400">
+                                        ✔ {{ (float) $compOff }} comp off credits
+                                    </span>
+                                @endif
+                            </div>
                         @endif
                     </div>
                 </div>
+            @empty
+                <div
+                    class="col-span-full rounded-2xl border border-dashed border-zinc-200 p-10 text-center dark:border-zinc-800">
+                    <flux:icon.calendar-days class="mx-auto mb-3 size-10 text-zinc-200 dark:text-zinc-700" />
+                    <p class="text-sm font-medium text-zinc-400">No leave balances found. Contact HR to set up your leave
+                        account.</p>
+                </div>
+            @endforelse
+        </div>
+    </div>
+    {{-- â"€â"€â"€ LEAVE STATISTICS (KPI) SECTION â"€â"€â"€ --}}
+    @php
+        $totalAllocated = (float) $balances->sum('allocated_days');
+        $totalUsedDays = (float) $balances->sum(fn($b) => $b->used_days + ($b->encashed_days ?? 0));
+        $totalRemaining = max(0, $totalAllocated - $totalUsedDays);
 
-                {{-- Bottom breakdown -- plain language --}}
-                <div class="px-5 pb-4 pt-3 space-y-2.5">
-                    {{-- Progress bar --}}
-                    <div class="h-1.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
-                        <div class="h-full rounded-full transition-all duration-700"
-                            style="width: {{ $pct }}%; background: {{ $color }}"></div>
+        $curMonthIdx = now()->month - 1;
+        $prevMonthIdx = ($curMonthIdx - 1 + 12) % 12;
+        $thisMonthUsed = $monthlyStats[$curMonthIdx] ?? 0;
+        $lastMonthUsed = $monthlyStats[$prevMonthIdx] ?? 0;
+        $usageTrend = $thisMonthUsed - $lastMonthUsed;
+
+        $statCards = [
+            [
+                'label' => 'Total Leaves Allocated',
+                'value' => $totalAllocated,
+                'icon' => 'calendar-days',
+                'color' => '#7c3aed',
+                'sub' => 'Across ' . $balances->count() . ' leave ' . Str::plural('type', $balances->count()),
+            ],
+            [
+                'label' => 'Leaves Used',
+                'value' => $totalUsedDays,
+                'icon' => 'arrow-trending-up',
+                'color' => '#f97316',
+                'sub' => $usageTrend == 0 ? 'No change vs last month' : (($usageTrend > 0 ? '+' . $usageTrend : $usageTrend) . 'd vs last month'),
+                'trend' => $usageTrend,
+            ],
+            [
+                'label' => 'Leaves Remaining',
+                'value' => $totalRemaining,
+                'icon' => 'check-badge',
+                'color' => '#10b981',
+                'sub' => $totalAllocated > 0 ? round(($totalRemaining / $totalAllocated) * 100) . '% of allocation left' : 'No allocation set',
+            ],
+            [
+                'label' => 'Pending Requests',
+                'value' => $pendingCount,
+                'icon' => 'clock',
+                'color' => '#f59e0b',
+                'sub' => $pendingCount > 0 ? 'Awaiting approval' : 'All caught up',
+            ],
+        ];
+    @endphp
+    <div class="pulse-margin grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        @foreach($statCards as $stat)
+            <div
+                class="rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900">
+                <div class="flex items-center justify-between">
+                    <div class="flex size-10 items-center justify-center rounded-xl"
+                        style="background: {{ $stat['color'] }}1a">
+                        <flux:icon :name="$stat['icon']" class="size-5" style="color: {{ $stat['color'] }}" />
                     </div>
-
-                    {{-- Breakdown grid: 3 rows, always visible --}}
-                    <div class="grid grid-cols-3 gap-x-2 text-center text-[11px]">
-                        <div>
-                            <p class="font-bold text-zinc-900 dark:text-zinc-100">{{ (int) $allocated }}</p>
-                            <p class="text-zinc-400">Allocated</p>
-                        </div>
-                        <div>
-                            <p class="font-bold text-zinc-900 dark:text-zinc-100">{{ (float) $used }}</p>
-                            <p class="text-zinc-400">Used</p>
-                        </div>
-                        <div>
-                            <p class="font-bold" style="color: {{ $color }}">
-                                {{ $available > (int) $available ? number_format($available, 1) : (int) $available }}</p>
-                            <p class="text-zinc-400">Left</p>
-                        </div>
-                    </div>
-
-                    {{-- Extra info pills (only shown if non-zero) --}}
-                    @if($carryFwd > 0 || $encashed > 0 || $compOff > 0)
-                        <div class="flex flex-wrap gap-1.5 pt-1 border-t border-zinc-100 dark:border-zinc-800">
-                            @if($carryFwd > 0)
-                                <span
-                                    class="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-600 dark:bg-blue-950/30 dark:text-blue-400">
-                                    ↩ {{ (float) $carryFwd }} carried fwd
-                                </span>
-                            @endif
-                            @if($encashed > 0)
-                                <span
-                                    class="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-600 dark:bg-amber-950/30 dark:text-amber-400">
-                                    ₹ {{ (float) $encashed }} encashed
-                                </span>
-                            @endif
-                            @if($compOff > 0)
-                                <span
-                                    class="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400">
-                                    ✔ {{ (float) $compOff }} comp off credits
-                                </span>
-                            @endif
-                        </div>
+                    @if(isset($stat['trend']))
+                        @if($stat['trend'] > 0)
+                            <span
+                                class="inline-flex items-center gap-0.5 rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-bold text-rose-600 dark:bg-rose-900/20 dark:text-rose-400">
+                                <flux:icon.arrow-up class="size-3" /> {{ $stat['trend'] }}d
+                            </span>
+                        @elseif($stat['trend'] < 0)
+                            <span
+                                class="inline-flex items-center gap-0.5 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400">
+                                <flux:icon.arrow-down class="size-3" /> {{ abs($stat['trend']) }}d
+                            </span>
+                        @else
+                            <span
+                                class="inline-flex items-center gap-0.5 rounded-full bg-zinc-50 px-2 py-0.5 text-[10px] font-bold text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                                <flux:icon.minus class="size-3" /> 0d
+                            </span>
+                        @endif
                     @endif
                 </div>
+                <p class="mt-3 text-3xl font-black tabular-nums text-zinc-900 dark:text-white">
+                    {{ $stat['value'] == (int) $stat['value'] ? (int) $stat['value'] : number_format($stat['value'], 1) }}
+                </p>
+                <p class="mt-0.5 text-xs font-bold uppercase tracking-wide text-zinc-400">{{ $stat['label'] }}</p>
+                <p class="mt-2 text-[11px] text-zinc-400">{{ $stat['sub'] }}</p>
             </div>
-        @empty
-            <div
-                class="col-span-full rounded-2xl border border-dashed border-zinc-200 p-10 text-center dark:border-zinc-800">
-                <flux:icon.calendar-days class="mx-auto mb-3 size-10 text-zinc-200 dark:text-zinc-700" />
-                <p class="text-sm font-medium text-zinc-400">No leave balances found. Contact HR to set up your leave
-                    account.</p>
-            </div>
-        @endforelse
+        @endforeach
     </div>
 
     {{-- â"€â"€â"€ ANALYTICS SECTION â"€â"€â"€ --}}
@@ -178,10 +285,10 @@
         $dayShort = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
         $monthShort = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     @endphp
-    <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
+    <div class="pulse-margin grid grid-cols-1 gap-4 lg:grid-cols-3">
 
         {{-- â"€â"€ Weekly Pattern â"€â"€ --}}
-        <div class="rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <div class=" rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
             <div class="mb-1 flex items-center justify-between">
                 <div class="flex items-center gap-2">
                     <div class="rounded-lg bg-violet-50 p-1.5 dark:bg-violet-900/20">
@@ -323,8 +430,8 @@
     </div>
 
     {{-- â"€â"€â"€ HISTORY SECTION â"€â"€â"€ --}}
-    <div
-        class="overflow-hidden rounded-2xl border border-zinc-100 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+    <div id="recent-requests"
+        class="pulse-margin overflow-hidden rounded-2xl border border-zinc-100 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900 scroll-mt-6">
 
         {{-- Tab Nav --}}
         <div
@@ -349,6 +456,8 @@
             {{-- Filters --}}
             <div
                 class="flex flex-wrap items-center gap-3 px-6 py-4 border-b border-zinc-100 dark:border-zinc-800/50 bg-white dark:bg-zinc-900/60">
+                <flux:input wire:model.live.debounce.400ms="search" icon="magnifying-glass"
+                    placeholder="Search by reason or leave type..." class="w-full sm:w-64 text-sm" />
                 <flux:select wire:model.live="filterStatus" class="w-40 text-sm" placeholder="All Statuses">
                     <flux:select.option value="">All Statuses</flux:select.option>
                     <flux:select.option value="pending">Pending</flux:select.option>
@@ -367,29 +476,51 @@
                         <flux:select.option value="{{ $yr }}">{{ $yr }}</flux:select.option>
                     @endforeach
                 </flux:select>
-                @if($filterStatus || $filterTypeId)
-                    <button wire:click="$set('filterStatus', ''); $set('filterTypeId', '')"
+                @if($filterStatus || $filterTypeId || $search)
+                    <button wire:click="$set('filterStatus', ''); $set('filterTypeId', ''); $set('search', '')"
                         class="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 underline">Clear</button>
                 @endif
             </div>
+            @php
+                $sortIcon = fn(string $field) => $sortField !== $field
+                    ? 'chevron-up-down'
+                    : ($sortDirection === 'asc' ? 'chevron-up' : 'chevron-down');
+            @endphp
             <div class="overflow-x-auto">
                 <table class="w-full text-left">
                     <thead>
                         <tr class="border-b border-zinc-50 bg-zinc-50/50 dark:border-zinc-800/50 dark:bg-zinc-950/50">
                             <th class="py-3 pl-6 pr-4 text-[10px] font-black uppercase tracking-[0.12em] text-zinc-400">
+                                Request ID</th>
+                            <th class="px-4 py-3 text-[10px] font-black uppercase tracking-[0.12em] text-zinc-400">
                                 Leave Type</th>
                             <th class="px-4 py-3 text-[10px] font-black uppercase tracking-[0.12em] text-zinc-400">
-                                Period</th>
+                                <button wire:click="sortBy('start_date')"
+                                    class="inline-flex cursor-pointer items-center gap-1 transition-colors hover:text-zinc-600 dark:hover:text-zinc-300">
+                                    Date Range
+                                    <flux:icon :name="$sortIcon('start_date')" class="size-3" />
+                                </button>
+                            </th>
                             <th
                                 class="px-4 py-3 text-center text-[10px] font-black uppercase tracking-[0.12em] text-zinc-400">
-                                Days</th>
+                                <button wire:click="sortBy('days')"
+                                    class="inline-flex cursor-pointer items-center gap-1 transition-colors hover:text-zinc-600 dark:hover:text-zinc-300">
+                                    Duration
+                                    <flux:icon :name="$sortIcon('days')" class="size-3" />
+                                </button>
+                            </th>
                             <th class="px-4 py-3 text-[10px] font-black uppercase tracking-[0.12em] text-zinc-400">
                                 Status</th>
                             <th class="px-4 py-3 text-[10px] font-black uppercase tracking-[0.12em] text-zinc-400">
                                 Reviewer</th>
                             <th
                                 class="py-3 pr-6 text-right text-[10px] font-black uppercase tracking-[0.12em] text-zinc-400">
-                                Applied</th>
+                                <button wire:click="sortBy('created_at')"
+                                    class="inline-flex cursor-pointer items-center gap-1 transition-colors hover:text-zinc-600 dark:hover:text-zinc-300">
+                                    Applied On
+                                    <flux:icon :name="$sortIcon('created_at')" class="size-3" />
+                                </button>
+                            </th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-zinc-50 dark:divide-zinc-800/30">
@@ -397,6 +528,10 @@
                             <tr id="request-{{ $req->id }}"
                                 class="transition-colors hover:bg-zinc-50/60 dark:hover:bg-zinc-800/20">
                                 <td class="py-4 pl-6 pr-4">
+                                    <span
+                                        class="text-xs font-bold text-zinc-400">LR-{{ str_pad($req->id, 4, '0', STR_PAD_LEFT) }}</span>
+                                </td>
+                                <td class="px-4 py-4">
                                     <div class="flex items-center gap-2.5">
                                         <div class="size-2.5 rounded-full shadow-sm"
                                             style="background-color: {{ $req->leaveType->color }}"></div>
@@ -413,8 +548,8 @@
                                 </td>
                                 <td class="px-4 py-4 text-center">
                                     <span
-                                        class="inline-flex size-7 items-center justify-center rounded-lg bg-zinc-50 text-sm font-black text-zinc-900 dark:bg-zinc-800 dark:text-white">
-                                        {{ (float) $req->days }}
+                                        class="inline-flex items-center justify-center rounded-lg bg-zinc-50 px-2.5 py-1 text-xs font-black text-zinc-900 dark:bg-zinc-800 dark:text-white">
+                                        {{ (float) $req->days }} {{ Str::plural('day', (float) $req->days == 1 ? 1 : 2) }}
                                     </span>
                                 </td>
                                 <td class="px-4 py-4">
@@ -585,6 +720,93 @@
                     </tbody>
                 </table>
             </div>
+        </div>
+    </div>
+
+    {{-- â"€â"€â"€ LEAVE CALENDAR WIDGET â"€â"€â"€ --}}
+    <div
+        class="pulse-margin rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-2">
+                <div class="rounded-lg bg-violet-50 p-1.5 dark:bg-violet-900/20">
+                    <flux:icon.calendar-days class="size-4 text-violet-600 dark:text-violet-400" />
+                </div>
+                <h3 class="text-xs font-black uppercase tracking-[0.12em] text-zinc-600 dark:text-zinc-300">Leave
+                    Calendar</h3>
+            </div>
+            <div class="flex items-center gap-1.5">
+                <button wire:click="previousCalendarMonth"
+                    class="flex size-7 cursor-pointer items-center justify-center rounded-lg border border-zinc-200 text-zinc-500 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800">
+                    <flux:icon.chevron-left class="size-3.5" />
+                </button>
+                <button wire:click="goToCurrentCalendarMonth"
+                    class="cursor-pointer rounded-lg px-3 py-1 text-xs font-black text-zinc-700 transition-colors hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-800">
+                    {{ $calendarLabel }}
+                </button>
+                <button wire:click="nextCalendarMonth"
+                    class="flex size-7 cursor-pointer items-center justify-center rounded-lg border border-zinc-200 text-zinc-500 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800">
+                    <flux:icon.chevron-right class="size-3.5" />
+                </button>
+            </div>
+        </div>
+
+        {{-- Legend --}}
+        <div
+            class="mb-4 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
+            <span class="inline-flex items-center gap-1.5"><span class="size-2.5 rounded-full bg-emerald-500"></span>
+                Approved</span>
+            <span class="inline-flex items-center gap-1.5"><span class="size-2.5 rounded-full bg-amber-400"></span>
+                Pending</span>
+            <span class="inline-flex items-center gap-1.5"><span class="size-2.5 rounded-full bg-rose-500"></span>
+                Holiday</span>
+            <span class="inline-flex items-center gap-1.5"><span
+                    class="size-2.5 rounded-sm border border-zinc-200 bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800"></span>
+                Weekend</span>
+        </div>
+
+        {{-- Weekday headers --}}
+        <div class="mb-1.5 grid grid-cols-7 gap-1.5">
+            @foreach(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as $wd)
+                <div class="text-center text-[10px] font-black uppercase tracking-wider text-zinc-400">{{ $wd }}</div>
+            @endforeach
+        </div>
+
+        {{-- Day grid --}}
+        <div class="grid grid-cols-7 gap-1.5">
+            @foreach($calendarDays as $day)
+                @php
+                    $cellClasses = 'relative flex flex-col items-center justify-center rounded-xl py-2.5 text-xs font-bold transition-colors';
+
+                    if (!$day['isCurrentMonth']) {
+                        $cellClasses .= ' text-zinc-300 dark:text-zinc-700';
+                    } elseif ($day['holiday']) {
+                        $cellClasses .= ' bg-rose-50 text-rose-700 dark:bg-rose-900/20 dark:text-rose-400';
+                    } elseif ($day['approved']) {
+                        $cellClasses .= ' bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400';
+                    } elseif ($day['pending']) {
+                        $cellClasses .= ' bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400';
+                    } elseif ($day['isWeekend']) {
+                        $cellClasses .= ' bg-zinc-50 text-zinc-400 dark:bg-zinc-800/50 dark:text-zinc-500';
+                    } else {
+                        $cellClasses .= ' text-zinc-700 dark:text-zinc-300';
+                    }
+
+                    if ($day['isToday']) {
+                        $cellClasses .= ' ring-2 ring-orange-500 ring-offset-1 dark:ring-offset-zinc-900';
+                    }
+
+                    $title = $day['holiday']?->name
+                        ?? ($day['approved'] ? $day['approved']->leaveType->name . ' (Approved)' : null)
+                        ?? ($day['pending'] ? $day['pending']->leaveType->name . ' (Pending)' : null);
+                @endphp
+                <div class="{{ $cellClasses }}" @if($title) title="{{ $title }}" @endif>
+                    {{ $day['date']->day }}
+                    @if($day['approved'] || $day['pending'] || $day['holiday'])
+                        <span
+                            class="mt-0.5 size-1 rounded-full {{ $day['holiday'] ? 'bg-rose-500' : ($day['approved'] ? 'bg-emerald-500' : 'bg-amber-400') }}"></span>
+                    @endif
+                </div>
+            @endforeach
         </div>
     </div>
 

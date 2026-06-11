@@ -5,9 +5,11 @@ namespace App\Livewire\TimeOff;
 use App\Models\LeaveBalance;
 use App\Models\LeaveEncashment;
 use App\Models\LeaveType;
+use App\Models\PublicHoliday;
 use App\Models\User;
 use App\Notifications\LeaveEncashmentNotification;
 use App\Services\LeaveService;
+use Carbon\Carbon;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -48,6 +50,15 @@ class MyTimeOff extends Component
 
     public string $filterYear = '';
 
+    public string $search = '';
+
+    public string $sortField = 'created_at';
+
+    public string $sortDirection = 'desc';
+
+    // ---- Calendar ----
+    public string $calendarMonth = '';
+
     // ---- Leave Encashment ----
     public bool $showEncashModal = false;
 
@@ -58,6 +69,7 @@ class MyTimeOff extends Component
     public function mount(): void
     {
         $this->filterYear = (string) now()->year;
+        $this->calendarMonth = now()->format('Y-m');
     }
 
     public function updatingFilterStatus(): void
@@ -68,6 +80,38 @@ class MyTimeOff extends Component
     public function updatingFilterTypeId(): void
     {
         $this->resetPage();
+    }
+
+    public function updatingSearch(): void
+    {
+        $this->resetPage();
+    }
+
+    public function sortBy(string $field): void
+    {
+        if ($this->sortField === $field) {
+            $this->sortDirection = $this->sortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+            $this->sortField = $field;
+            $this->sortDirection = 'asc';
+        }
+
+        $this->resetPage();
+    }
+
+    public function previousCalendarMonth(): void
+    {
+        $this->calendarMonth = \Illuminate\Support\Carbon::createFromFormat('Y-m', $this->calendarMonth)->subMonth()->format('Y-m');
+    }
+
+    public function nextCalendarMonth(): void
+    {
+        $this->calendarMonth = \Illuminate\Support\Carbon::createFromFormat('Y-m', $this->calendarMonth)->addMonth()->format('Y-m');
+    }
+
+    public function goToCurrentCalendarMonth(): void
+    {
+        $this->calendarMonth = now()->format('Y-m');
     }
 
     /** When the half-day toggle is turned off, clear the period selection. */
@@ -299,7 +343,12 @@ class MyTimeOff extends Component
             ? $employee->leaveRequests()->with(['leaveType', 'reviewer', 'hrReviewer', 'paymentAuditLogs.changedByUser'])
                 ->when($this->filterStatus, fn ($q) => $q->where('status', $this->filterStatus))
                 ->when($this->filterTypeId, fn ($q) => $q->where('leave_type_id', $this->filterTypeId))
-                ->latest()->paginate(8)
+                ->when($this->search, fn ($q) => $q->where(function ($q2) {
+                    $q2->where('reason', 'like', '%'.$this->search.'%')
+                        ->orWhereHas('leaveType', fn ($q3) => $q3->where('name', 'like', '%'.$this->search.'%'));
+                }))
+                ->orderBy($this->sortField, $this->sortDirection)
+                ->paginate(8)
             : new LengthAwarePaginator([], 0, 8);
 
         $encashableTypes = $employee
@@ -428,6 +477,46 @@ class MyTimeOff extends Component
             ? $balances->firstWhere('leave_type_id', $selectedType->id)
             : null;
 
+        // ── Calendar Widget ──────────────────────────────────────────────
+        $calendarCursor = \Illuminate\Support\Carbon::createFromFormat('Y-m', $this->calendarMonth ?: now()->format('Y-m'))->startOfMonth();
+        $monthStart = $calendarCursor->copy()->startOfMonth();
+        $monthEnd = $calendarCursor->copy()->endOfMonth();
+        $gridStart = $monthStart->copy()->startOfWeek(Carbon::MONDAY);
+        $gridEnd = $monthEnd->copy()->endOfWeek(Carbon::SUNDAY);
+
+        $holidays = PublicHoliday::whereBetween('date', [$gridStart->toDateString(), $gridEnd->toDateString()])
+            ->get()
+            ->keyBy(fn ($h) => $h->date->toDateString());
+
+        $calendarRequests = $employee
+            ? $employee->leaveRequests()
+                ->whereIn('status', ['approved', 'pending', 'pending_hr'])
+                ->where('start_date', '<=', $gridEnd)
+                ->where('end_date', '>=', $gridStart)
+                ->with('leaveType')
+                ->get()
+            : collect();
+
+        $calendarDays = [];
+        $cursor = $gridStart->copy();
+        while ($cursor->lte($gridEnd)) {
+            $dayRequests = $calendarRequests->filter(
+                fn ($r) => $cursor->between($r->start_date->copy()->startOfDay(), $r->end_date->copy()->startOfDay())
+            );
+
+            $calendarDays[] = [
+                'date' => $cursor->copy(),
+                'isCurrentMonth' => $cursor->month === $monthStart->month,
+                'isToday' => $cursor->isToday(),
+                'isWeekend' => $cursor->isWeekend(),
+                'holiday' => $holidays->get($cursor->toDateString()),
+                'approved' => $dayRequests->firstWhere('status', 'approved'),
+                'pending' => $dayRequests->first(fn ($r) => in_array($r->status, ['pending', 'pending_hr'], true)),
+            ];
+
+            $cursor->addDay();
+        }
+
         return view('livewire.time-off.my-time-off', [
             'balances' => $balances,
             'requests' => $requests,
@@ -452,6 +541,8 @@ class MyTimeOff extends Component
             ],
             'selectedType' => $selectedType,
             'selectedBalance' => $selectedBalance,
+            'calendarDays' => $calendarDays,
+            'calendarLabel' => $monthStart->format('F Y'),
         ])->layout('layouts.app', ['title' => 'My Time Off']);
     }
 }

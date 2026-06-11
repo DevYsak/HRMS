@@ -42,6 +42,7 @@ use App\Livewire\Payroll\Overview;
 use App\Livewire\Payroll\Process;
 use App\Livewire\Payroll\Reimbursements;
 use App\Livewire\Performance\AllReviews;
+use App\Livewire\Performance\Dashboard as PerformanceDashboard;
 use App\Livewire\Performance\EmployeeScorecard;
 use App\Livewire\Performance\Goals;
 use App\Livewire\Performance\KpiDashboard;
@@ -204,6 +205,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Performance module
     // --------------------------------------------------
     Route::prefix('performance')->name('performance.')->group(function () {
+        // Unified "My Performance" dashboard (Nexflow-style overview)
+        Route::get('/dashboard', PerformanceDashboard::class)->name('dashboard');
+
         // All authenticated employees can view their own review, goals, and KPIs
         Route::get('/my', MyReview::class)->name('my');
         Route::get('/goals', Goals::class)->name('goals');

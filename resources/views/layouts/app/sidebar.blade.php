@@ -11,6 +11,7 @@
 
     @php
         $user = auth()->user();
+        $employee = $user->employee;
         $isEmp = $user->role?->value === 'employee';
         $isMgr = $user->isManager();
         $isHr = $user->isHrAdmin() || $user->isSuperAdmin();
@@ -94,10 +95,152 @@
                 ════════════════════════════════════════════ --}}
                 @if($pureEmployee)
 
-                    {{-- Home --}}
+                    @php
+                        $pendingLeave = $employee?->leaveRequests()->whereIn('status', ['pending', 'pending_hr'])->count() ?? 0;
+                        $pendingOt = $employee?->otRequests()->pending()->count() ?? 0;
+                        $activeWarnings = $employee?->activeWarnings()->count() ?? 0;
+                        $hasActivePip = $employee?->activePip()->exists() ?? false;
+                        $showNexflow = $employee && in_array($employee->ot_tracking_source, ['nexflow', 'hybrid'], true);
+
+                        $pendingDocs = 0;
+                        if ($employee) {
+                            $pendingDocs = \App\Models\Document::whereNull('parent_id')
+                                ->where('requires_acknowledgement', true)
+                                ->where(function ($q) use ($employee) {
+                                    $q->where('visibility', 'all')
+                                        ->orWhere('category', 'policy')
+                                        ->orWhere('employee_id', $employee->id);
+                                })
+                                ->whereDoesntHave('acknowledgements', fn ($q) => $q->where('employee_id', $employee->id))
+                                ->count();
+                        }
+                    @endphp
+
+                    {{-- Dashboard --}}
                     <flux:sidebar.item icon="home" :href="route('dashboard')" :current="request()->routeIs('dashboard')"
                         wire:navigate>
                         Dashboard
+                    </flux:sidebar.item>
+
+                    {{-- My Profile --}}
+                    <flux:sidebar.item icon="user-circle" :href="route('profile.edit')"
+                        :current="request()->routeIs('profile.edit')" wire:navigate>
+                        My Profile
+                    </flux:sidebar.item>
+
+                    {{-- Attendance --}}
+                    <flux:sidebar.item icon="clock" :href="route('attendance.my')" :current="request()->routeIs('attendance.my')"
+                        wire:navigate>
+                        Attendance
+                    </flux:sidebar.item>
+
+                    {{-- Leave --}}
+                    <flux:sidebar.item icon="calendar-days" :href="route('time-off.my')"
+                        :current="request()->routeIs('time-off.my')" wire:navigate>
+                        <div class="flex items-center gap-2">
+                            Leave
+                            @if($pendingLeave > 0)
+                                <span
+                                    class="inline-flex items-center justify-center rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold text-white">{{ $pendingLeave > 9 ? '9+' : $pendingLeave }}</span>
+                            @endif
+                        </div>
+                    </flux:sidebar.item>
+
+                    {{-- Work From Home --}}
+                    <flux:sidebar.item icon="home-modern" :href="route('wfh.my')" :current="request()->routeIs('wfh.my')"
+                        wire:navigate>
+                        Work From Home
+                    </flux:sidebar.item>
+
+                    {{-- Overtime --}}
+                    <flux:sidebar.item icon="bolt" :href="route('overtime.my')" :current="request()->routeIs('overtime.my')"
+                        wire:navigate>
+                        <div class="flex items-center gap-2">
+                            Overtime
+                            @if($pendingOt > 0)
+                                <span
+                                    class="inline-flex items-center justify-center rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold text-white">{{ $pendingOt > 9 ? '9+' : $pendingOt }}</span>
+                            @endif
+                            @if($showNexflow)
+                                <span
+                                    class="inline-flex items-center rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-bold text-violet-700 dark:bg-violet-500/20 dark:text-violet-300">Nexflow</span>
+                            @endif
+                        </div>
+                    </flux:sidebar.item>
+
+                    {{-- Performance --}}
+                    <flux:sidebar.group heading="Performance" icon="arrow-trending-up" :expandable="true"
+                        :expanded="request()->routeIs('performance.dashboard', 'performance.my', 'performance.my-warnings', 'performance.pip.my', 'performance.promotions.my')">
+                        <flux:sidebar.item :href="route('performance.dashboard')" :current="request()->routeIs('performance.dashboard')"
+                            wire:navigate>
+                            My Performance
+                        </flux:sidebar.item>
+                        <flux:sidebar.item :href="route('performance.my')" :current="request()->routeIs('performance.my')"
+                            wire:navigate>
+                            My Review
+                        </flux:sidebar.item>
+                        <flux:sidebar.item :href="route('performance.my-warnings')"
+                            :current="request()->routeIs('performance.my-warnings')" wire:navigate>
+                            <div class="flex items-center gap-2">
+                                My Warnings
+                                @if($activeWarnings > 0)
+                                    <span
+                                        class="inline-flex items-center justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white">{{ $activeWarnings > 9 ? '9+' : $activeWarnings }}</span>
+                                @endif
+                            </div>
+                        </flux:sidebar.item>
+                        <flux:sidebar.item :href="route('performance.pip.my')"
+                            :current="request()->routeIs('performance.pip.my')" wire:navigate>
+                            <div class="flex items-center gap-2">
+                                My Improvement Plan
+                                @if($hasActivePip)
+                                    <span
+                                        class="inline-flex items-center justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white">1</span>
+                                @endif
+                            </div>
+                        </flux:sidebar.item>
+                        <flux:sidebar.item :href="route('performance.promotions.my')"
+                            :current="request()->routeIs('performance.promotions.my')" wire:navigate>
+                            My Promotions
+                        </flux:sidebar.item>
+                    </flux:sidebar.group>
+
+                    {{-- Development --}}
+                    <flux:sidebar.group heading="Development" icon="academic-cap" :expandable="true"
+                        :expanded="request()->routeIs('performance.goals', 'performance.my-kpis')">
+                        <flux:sidebar.item :href="route('performance.goals')" :current="request()->routeIs('performance.goals')"
+                            wire:navigate>
+                            My Goals
+                        </flux:sidebar.item>
+                        <flux:sidebar.item :href="route('performance.my-kpis')"
+                            :current="request()->routeIs('performance.my-kpis')" wire:navigate>
+                            My KPIs
+                        </flux:sidebar.item>
+                    </flux:sidebar.group>
+
+                    {{-- Payroll — reimbursements not shown (requires run-payroll, 403 for employee) --}}
+                    <flux:sidebar.group heading="Payroll" icon="banknotes" :expandable="true"
+                        :expanded="request()->routeIs('payroll.payslips', 'operations.expenses')">
+                        <flux:sidebar.item :href="route('payroll.payslips')" :current="request()->routeIs('payroll.payslips')"
+                            wire:navigate>
+                            My Payslips
+                        </flux:sidebar.item>
+                        <flux:sidebar.item :href="route('operations.expenses')"
+                            :current="request()->routeIs('operations.expenses')" wire:navigate>
+                            Expense Claims
+                        </flux:sidebar.item>
+                    </flux:sidebar.group>
+
+                    {{-- Documents --}}
+                    <flux:sidebar.item icon="document-text" :href="route('documents.index')"
+                        :current="request()->routeIs('documents.*')" wire:navigate>
+                        <div class="flex items-center gap-2">
+                            Documents
+                            @if($pendingDocs > 0)
+                                <span
+                                    class="inline-flex items-center justify-center rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold text-white">{{ $pendingDocs > 9 ? '9+' : $pendingDocs }}</span>
+                            @endif
+                        </div>
                     </flux:sidebar.item>
 
                     {{-- Inbox --}}
@@ -111,88 +254,6 @@
                             @endif
                         </div>
                     </flux:sidebar.item>
-
-                    {{-- My Work --}}
-                    <flux:sidebar.group heading="My Work" icon="user-circle" :expandable="true"
-                        :expanded="request()->routeIs('attendance.my', 'time-off.my', 'overtime.my', 'wfh.my')">
-                        <flux:sidebar.item :href="route('attendance.my')" :current="request()->routeIs('attendance.my')"
-                            wire:navigate>
-                            Attendance
-                        </flux:sidebar.item>
-                        <flux:sidebar.item :href="route('time-off.my')" :current="request()->routeIs('time-off.my')"
-                            wire:navigate>
-                            Leave
-                        </flux:sidebar.item>
-                        <flux:sidebar.item :href="route('overtime.my')" :current="request()->routeIs('overtime.my')"
-                            wire:navigate>
-                            Overtime
-                        </flux:sidebar.item>
-                        <flux:sidebar.item :href="route('wfh.my')" :current="request()->routeIs('wfh.my')"
-                            wire:navigate>
-                            Work From Home
-                        </flux:sidebar.item>
-                    </flux:sidebar.group>
-
-                    {{-- Finance — reimbursements removed (requires run-payroll, 403 for employee) --}}
-                    <flux:sidebar.group heading="Finance" icon="banknotes" :expandable="true"
-                        :expanded="request()->routeIs('payroll.payslips', 'operations.expenses')">
-                        <flux:sidebar.item :href="route('payroll.payslips')" :current="request()->routeIs('payroll.payslips')"
-                            wire:navigate>
-                            My Payslips
-                        </flux:sidebar.item>
-                        <flux:sidebar.item :href="route('operations.expenses')"
-                            :current="request()->routeIs('operations.expenses')" wire:navigate>
-                            Expense Claims
-                        </flux:sidebar.item>
-                    </flux:sidebar.group>
-
-                    {{-- Performance --}}
-                    <flux:sidebar.group heading="Performance" icon="arrow-trending-up" :expandable="true"
-                        :expanded="request()->routeIs('performance.my', 'performance.goals', 'performance.my-kpis', 'performance.my-warnings', 'performance.pip.my', 'performance.promotions.my')">
-                        <flux:sidebar.item :href="route('performance.my')" :current="request()->routeIs('performance.my')"
-                            wire:navigate>
-                            My Review
-                        </flux:sidebar.item>
-                        <flux:sidebar.item :href="route('performance.goals')" :current="request()->routeIs('performance.goals')"
-                            wire:navigate>
-                            My Goals
-                        </flux:sidebar.item>
-                        <flux:sidebar.item :href="route('performance.my-kpis')"
-                            :current="request()->routeIs('performance.my-kpis')" wire:navigate>
-                            My KPIs
-                        </flux:sidebar.item>
-                        <flux:sidebar.item :href="route('performance.my-warnings')"
-                            :current="request()->routeIs('performance.my-warnings')" wire:navigate>
-                            My Warnings
-                        </flux:sidebar.item>
-                        <flux:sidebar.item :href="route('performance.pip.my')"
-                            :current="request()->routeIs('performance.pip.my')" wire:navigate>
-                            My Improvement Plan
-                        </flux:sidebar.item>
-                        <flux:sidebar.item :href="route('performance.promotions.my')"
-                            :current="request()->routeIs('performance.promotions.my')" wire:navigate>
-                            My Promotions
-                        </flux:sidebar.item>
-                    </flux:sidebar.group>
-
-                    {{-- Documents --}}
-                    <flux:sidebar.item icon="document-text" :href="route('documents.index')"
-                        :current="request()->routeIs('documents.*')" wire:navigate>
-                        Documents
-                    </flux:sidebar.item>
-
-                    {{-- Company --}}
-                    <flux:sidebar.group heading="Company" icon="building-office" :expandable="true"
-                        :expanded="request()->routeIs('employees.directory', 'employees.org-chart')">
-                        <flux:sidebar.item :href="route('employees.directory')"
-                            :current="request()->routeIs('employees.directory')" wire:navigate>
-                            Directory
-                        </flux:sidebar.item>
-                        <flux:sidebar.item :href="route('employees.org-chart')"
-                            :current="request()->routeIs('employees.org-chart')" wire:navigate>
-                            Org Chart
-                        </flux:sidebar.item>
-                    </flux:sidebar.group>
 
                     {{-- ════════════════════════════════════════════
                     MANAGER SIDEBAR
@@ -248,7 +309,9 @@
                     </flux:sidebar.group>
 
                     <flux:sidebar.group heading="Performance" icon="arrow-trending-up" :expandable="true"
-                        :expanded="request()->routeIs('performance.my', 'performance.goals', 'performance.my-kpis', 'performance.my-warnings', 'performance.warnings.manage', 'performance.pip.my', 'performance.pip.manage', 'performance.promotions.my', 'performance.promotions.manage')">
+                        :expanded="request()->routeIs('performance.dashboard', 'performance.my', 'performance.goals', 'performance.my-kpis', 'performance.my-warnings', 'performance.warnings.manage', 'performance.pip.my', 'performance.pip.manage', 'performance.promotions.my', 'performance.promotions.manage')">
+                        <flux:sidebar.item :href="route('performance.dashboard')" :current="request()->routeIs('performance.dashboard')"
+                            wire:navigate>My Performance</flux:sidebar.item>
                         <flux:sidebar.item :href="route('performance.my')" :current="request()->routeIs('performance.my')"
                             wire:navigate>My Review</flux:sidebar.item>
                         <flux:sidebar.item :href="route('performance.goals')" :current="request()->routeIs('performance.goals')"
@@ -453,9 +516,7 @@
                         @endif
                         @canany(['manage_leave_types', 'manage_leave_policies'])
                             <flux:sidebar.item :href="route('time-off.settings')" :current="request()->routeIs('time-off.settings')"
-                                wire:navigate>Leave Types</flux:sidebar.item>
-                            <flux:sidebar.item :href="route('time-off.settings')" :current="request()->routeIs('time-off.settings')"
-                                wire:navigate>Leave Policies</flux:sidebar.item>
+                                wire:navigate>Leave Settings</flux:sidebar.item>
                         @endcanany
                     </flux:sidebar.group>
 
@@ -511,6 +572,8 @@
                     {{-- Performance --}}
                     <flux:sidebar.group heading="Performance" icon="arrow-trending-up" :expandable="true"
                         :expanded="request()->routeIs('performance.*')">
+                        <flux:sidebar.item :href="route('performance.dashboard')" :current="request()->routeIs('performance.dashboard')"
+                            wire:navigate>My Performance</flux:sidebar.item>
                         <flux:sidebar.item :href="route('performance.my')" :current="request()->routeIs('performance.my')"
                             wire:navigate>My Review</flux:sidebar.item>
                         <flux:sidebar.item :href="route('performance.goals')" :current="request()->routeIs('performance.goals')"

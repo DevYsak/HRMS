@@ -1,21 +1,24 @@
 <flux:main class="bg-[#F7F8FA] min-h-screen dark:bg-zinc-950">
 
     {{-- ── Page Header ─────────────────────────────────────────────────────── --}}
-    <div class="bg-white dark:bg-zinc-900 border-b border-zinc-200/70 dark:border-zinc-800 px-8 py-5">
-        <div class="flex items-center justify-between gap-4">
+    <div class="pulse-hero shadow-xl">
+        <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_rgba(249,115,22,0.22),_transparent_65%)]"></div>
+        <div class="pointer-events-none absolute -bottom-10 -left-10 size-64 rounded-full blur-3xl" style="background:radial-gradient(circle,rgba(249,115,22,0.30),transparent 70%)"></div>
+        <div class="pointer-events-none absolute top-0 right-0 size-48 rounded-full blur-3xl" style="background:radial-gradient(circle,rgba(249,115,22,0.08),transparent 70%)"></div>
+
+        <div class="relative flex flex-col sm:flex-row sm:items-center justify-between gap-6">
             <div>
-                <div class="flex items-center gap-1.5 text-[11px] text-zinc-400 mb-1 font-medium">
-                    <span>Time Off</span>
-                    <flux:icon.chevron-right class="size-3" />
-                    <span class="text-zinc-600 dark:text-zinc-300">Leave Encashments</span>
+                <div class="mb-3 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 backdrop-blur-sm">
+                    <div class="size-1.5 animate-pulse rounded-full bg-orange-200"></div>
+                    <span class="text-[11px] font-bold uppercase tracking-[0.18em] text-orange-100">Leave Management</span>
                 </div>
-                <h1 class="text-2xl font-black text-zinc-900 dark:text-white tracking-tight">Leave Encashment Approvals</h1>
-                <p class="text-sm text-zinc-500 mt-0.5">Review, approve, and manage employee leave encashment requests</p>
+                <h1 class="text-3xl font-black tracking-tight text-white">Leave Encashment Approvals</h1>
+                <p class="mt-1.5 text-sm font-medium text-violet-200/80">Review, approve, and manage employee leave encashment requests.</p>
             </div>
         </div>
     </div>
 
-    <div class="p-8 space-y-6">
+    <div class="p-4 md:p-6 space-y-5">
 
         {{-- ── KPI Cards ────────────────────────────────────────────────────── --}}
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-5">

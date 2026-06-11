@@ -163,6 +163,11 @@ select:focus[data-flux-control] {
             margin: 1.5rem 1.5rem 1.5rem;
             padding: 2rem 2.5rem;
         }
+
+        .pulse-margin {
+            margin: 20px !important;
+
+        }
     }
 
     .pulse-page-title {

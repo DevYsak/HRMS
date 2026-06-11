@@ -1,52 +1,61 @@
 <flux:main class="bg-zinc-50 p-6 space-y-6 dark:bg-zinc-950">
 
     {{-- ── Page Header ─────────────────────────────────────────────────────── --}}
-    <div class="pulse-page-header">
-        <div>
-            <h1 class="pulse-page-title">Run Payroll</h1>
-            <p class="pulse-page-subtitle">Generate and verify monthly salary payments</p>
+    <div class="pulse-hero shadow-xl">
+        <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_rgba(249,115,22,0.22),_transparent_65%)]"></div>
+        <div class="pointer-events-none absolute -bottom-10 -left-10 size-64 rounded-full blur-3xl" style="background:radial-gradient(circle,rgba(249,115,22,0.30),transparent 70%)"></div>
+        <div class="pointer-events-none absolute top-0 right-0 size-48 rounded-full blur-3xl" style="background:radial-gradient(circle,rgba(249,115,22,0.08),transparent 70%)"></div>
+
+        <div class="relative">
+            <div class="mb-3 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 backdrop-blur-sm">
+                <div class="size-1.5 animate-pulse rounded-full bg-orange-200"></div>
+                <span class="text-[11px] font-bold uppercase tracking-[0.18em] text-orange-100">Payroll</span>
+            </div>
+            <h1 class="text-3xl font-black tracking-tight text-white">Run Payroll</h1>
+            <p class="mt-1.5 text-sm font-medium text-violet-200/80">Generate and verify monthly salary payments.</p>
         </div>
+    </div>
 
-        <div class="flex gap-3 items-center">
-            {{-- Month / Year selectors (shown when no locked payroll) --}}
-            @if(!$currentPayroll || $currentPayroll->status === 'draft')
-                <div class="flex gap-2">
-                    <flux:select wire:model.live="month" size="sm" class="w-32">
-                        @foreach(['January','February','March','April','May','June','July','August','September','October','November','December'] as $m)
-                            <option value="{{ $m }}">{{ $m }}</option>
-                        @endforeach
-                    </flux:select>
-                    <flux:select wire:model.live="year" size="sm" class="w-24">
-                        <option value="2026">2026</option>
-                        <option value="2025">2025</option>
-                    </flux:select>
-                </div>
-                <flux:button wire:click="startProcessing" variant="primary" icon="play">
-                    {{ $currentPayroll ? 'Re-generate Draft' : 'Generate Draft' }}
+    {{-- ── Action Toolbar ──────────────────────────────────────────────────── --}}
+    <div class="flex flex-wrap items-center justify-end gap-3 rounded-2xl border border-zinc-100 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        {{-- Month / Year selectors (shown when no locked payroll) --}}
+        @if(!$currentPayroll || $currentPayroll->status === 'draft')
+            <div class="flex gap-2">
+                <flux:select wire:model.live="month" size="sm" class="w-32">
+                    @foreach(['January','February','March','April','May','June','July','August','September','October','November','December'] as $m)
+                        <option value="{{ $m }}">{{ $m }}</option>
+                    @endforeach
+                </flux:select>
+                <flux:select wire:model.live="year" size="sm" class="w-24">
+                    <option value="2026">2026</option>
+                    <option value="2025">2025</option>
+                </flux:select>
+            </div>
+            <flux:button wire:click="startProcessing" variant="primary" icon="play">
+                {{ $currentPayroll ? 'Re-generate Draft' : 'Generate Draft' }}
+            </flux:button>
+        @else
+            {{-- Export + Finalize when payroll exists --}}
+            <flux:button wire:click="exportExcel" variant="ghost" icon="arrow-down-tray">
+                Export Excel
+            </flux:button>
+
+            @if($currentPayroll->status === 'draft')
+                <flux:button wire:click="submitForApproval" class="bg-amber-500 hover:bg-amber-600 text-white border-amber-500" icon="paper-airplane">
+                    Submit for Approval
                 </flux:button>
-            @else
-                {{-- Export + Finalize when payroll exists --}}
-                <flux:button wire:click="exportExcel" variant="ghost" icon="arrow-down-tray">
-                    Export Excel
-                </flux:button>
-
-                @if($currentPayroll->status === 'draft')
-                    <flux:button wire:click="submitForApproval" class="bg-amber-500 hover:bg-amber-600 text-white border-amber-500" icon="paper-airplane">
-                        Submit for Approval
-                    </flux:button>
-                @endif
-
-                @if(in_array($currentPayroll->status, ['pending_finance']))
-                    <flux:button
-                        wire:click="finalize"
-                        wire:confirm="Finalize payroll? This will mark all payslips as paid and notify employees."
-                        variant="primary"
-                        icon="play">
-                        Finalize &amp; Pay
-                    </flux:button>
-                @endif
             @endif
-        </div>
+
+            @if(in_array($currentPayroll->status, ['pending_finance']))
+                <flux:button
+                    wire:click="finalize"
+                    wire:confirm="Finalize payroll? This will mark all payslips as paid and notify employees."
+                    variant="primary"
+                    icon="play">
+                    Finalize &amp; Pay
+                </flux:button>
+            @endif
+        @endif
     </div>
 
     @if($currentPayroll)
