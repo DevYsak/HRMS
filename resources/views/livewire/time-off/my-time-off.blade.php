@@ -731,8 +731,7 @@
                 <div class="rounded-lg bg-violet-50 p-1.5 dark:bg-violet-900/20">
                     <flux:icon.calendar-days class="size-4 text-violet-600 dark:text-violet-400" />
                 </div>
-                <h3 class="text-xs font-black uppercase tracking-[0.12em] text-zinc-600 dark:text-zinc-300">Leave
-                    Calendar</h3>
+                <h3 class="text-xs font-black uppercase tracking-[0.12em] text-zinc-600 dark:text-zinc-300">Leave Calendar</h3>
             </div>
             <div class="flex items-center gap-1.5">
                 <button wire:click="previousCalendarMonth"

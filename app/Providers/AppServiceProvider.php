@@ -48,8 +48,11 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // Allow up to 120s for dashboard/payroll renders in non-production
-        if (! app()->isProduction()) {
+        // Allow up to 120s for dashboard/payroll renders in non-production.
+        // Skip in console: CLI ignores this ini setting normally, but explicitly
+        // setting it here causes `php artisan test` to hit a cumulative 120s
+        // limit across the whole run and crash with a fatal error.
+        if (! app()->isProduction() && ! $this->app->runningInConsole()) {
             ini_set('max_execution_time', '120');
         }
 

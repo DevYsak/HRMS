@@ -49,7 +49,21 @@
       "Bash(grep -rn \"'A'\\\\|'B'\\\\|cycle_a\\\\|cycle_b\" --include=*.php app/Livewire/Settings/SalaryCycleManager.php)",
       "Bash(php -l app/Console/Commands/NormalizeSalaryCycles.php)",
       "Bash(php vendor/bin/pint --version)",
-      "Bash(composer show *)"
+      "Bash(composer show *)",
+      "Bash(python3 -c \"import PyPDF2\")",
+      "Bash(pdftotext -layout \"Pulse_by_Conexus_v3.1.pdf\" -)",
+      "Bash(php -r '$c=@fsockopen\\(\"127.0.0.1\",3306,$e,$s,1\\); if\\($c\\){echo \"UP\\\\n\"; exit;} echo \"waiting...\\\\n\"; sleep\\(2\\);')",
+      "Bash(cat /tmp/mysql_start.log 2>/dev/null; echo \"---procs---\"; tasklist 2>/dev/null | grep -i -E \"mysql|mariadb\")",
+      "Read(//tmp/**)",
+      "Bash(php -r '$c=@fsockopen\\(\"127.0.0.1\",3306,$e,$s,2\\); echo $c?\"UP\\\\n\":\"DOWN: $e $s\\\\n\";')",
+      "Bash(composer install *)",
+      "Bash(ls vendor/sebastian/)",
+      "Bash(find vendor/sebastian/environment -iname \"Console.php\")",
+      "Bash(composer dump-autoload *)",
+      "Bash(cat tests/TestCase.php)",
+      "Bash(cat tests/Pest.php)",
+      "Bash(php -i)",
+      "Bash(tee /tmp/pest_run3.log)"
     ]
   }
 }

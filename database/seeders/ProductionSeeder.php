@@ -12,11 +12,12 @@ use Illuminate\Database\Seeder;
  *   1. Company           → base record
  *   2. Departments       → needed by EmployeeSeeder
  *   3. ShiftSettings     → needed by EmployeeSeeder
- *   4. Users             → core Conexus staff (spec §1.4)
- *   5. Employees         → links users to departments/shifts
- *   6. LeaveTypes        → CSL / MDL / Comp-Off (spec §3.3)
- *   7. PublicHolidays    → UK calendar
- *   8. DecemberMandatoryDays → MDL shutdown dates
+ *   4. SalaryCycles      → needed by EmployeeSeeder
+ *   5. Users             → core Conexus staff (spec §1.4)
+ *   6. Employees         → links users to departments/shifts/cycles
+ *   7. LeaveTypes        → CSL / MDL / Comp-Off (spec §3.3)
+ *   8. PublicHolidays    → UK calendar
+ *   9. DecemberMandatoryDays → MDL shutdown dates
  */
 class ProductionSeeder extends Seeder
 {
@@ -26,6 +27,7 @@ class ProductionSeeder extends Seeder
             CompanySeeder::class,
             DepartmentSeeder::class,
             ShiftSettingSeeder::class,
+            SalaryCycleSeeder::class,
             UserSeeder::class,
             EmployeeSeeder::class,
             LeaveSeeder::class,

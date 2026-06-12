@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\Department;
 use App\Models\Employee;
+use App\Models\SalaryCycle;
 use App\Models\ShiftSetting;
 use App\Models\User;
 use Illuminate\Database\Seeder;
@@ -19,6 +20,7 @@ class EmployeeSeeder extends Seeder
     {
         $itShift = ShiftSetting::where('name', 'IT Shift')->first();
         $ukShift = ShiftSetting::where('name', 'UK Sales Shift')->first();
+        $cycleA = SalaryCycle::where('slug', 'cycle-a')->first();
 
         // Only core admin/system accounts get employee records here.
         // No demo users. No legacy fallback emails.
@@ -46,7 +48,8 @@ class EmployeeSeeder extends Seeder
                 $existing->update([
                     'department_id' => $dept?->id,
                     'shift_id' => $data['shift']?->id,
-                    'salary_cycle' => 'A',
+                    'salary_cycle' => 'cycle_a',
+                    'salary_cycle_id' => $cycleA?->id,
                     'status' => 'active',
                 ]);
             } else {
@@ -57,7 +60,8 @@ class EmployeeSeeder extends Seeder
                     'shift_id' => $data['shift']?->id,
                     'joining_date' => now()->subYear(),
                     'status' => 'active',
-                    'salary_cycle' => 'A',
+                    'salary_cycle' => 'cycle_a',
+                    'salary_cycle_id' => $cycleA?->id,
                 ]);
             }
         }
