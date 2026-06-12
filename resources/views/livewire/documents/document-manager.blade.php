@@ -36,6 +36,25 @@
         </div>
     @endif
 
+    {{-- ── View Tabs ───────────────────────────────────────── --}}
+    @php
+        $docTabs = ['library' => 'Library'];
+        if ($canManage) {
+            $docTabs['expiry'] = 'Expiry Tracking';
+            $docTabs['acknowledgements'] = 'Acknowledgements';
+        }
+    @endphp
+    <div class="flex w-fit items-center gap-1 rounded-xl border border-zinc-200 bg-white p-1 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        @foreach($docTabs as $val => $label)
+            <button wire:click="setView('{{ $val }}')"
+                class="rounded-lg px-4 py-1.5 text-sm font-bold transition-all
+                    {{ $view === $val ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300' }}">
+                {{ $label }}
+            </button>
+        @endforeach
+    </div>
+
+    @if($view === 'library')
     {{-- ── Filters ─────────────────────────────────────────── --}}
     <div class="flex flex-wrap items-center gap-3">
         <div class="relative">
@@ -56,6 +75,23 @@
             <option value="performance_review">Performance Reviews</option>
             <option value="other">Other</option>
         </select>
+        @if($canManage)
+            <select wire:model.live="filterEmployee"
+                class="h-9 rounded-lg border border-zinc-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100">
+                <option value="">All Employees</option>
+                @foreach($employees as $emp)
+                    <option value="{{ $emp->id }}">{{ $emp->user?->name }}</option>
+                @endforeach
+            </select>
+            <div class="flex items-center gap-1.5">
+                <span class="text-xs font-medium text-zinc-400">Expiry</span>
+                <input type="date" wire:model.live="filterExpiringFrom" aria-label="Expiring from"
+                    class="h-9 rounded-lg border border-zinc-200 bg-white px-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100" />
+                <span class="text-xs text-zinc-400">&rarr;</span>
+                <input type="date" wire:model.live="filterExpiringTo" aria-label="Expiring to"
+                    class="h-9 rounded-lg border border-zinc-200 bg-white px-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100" />
+            </div>
+        @endif
     </div>
 
     {{-- ── Documents Grid ──────────────────────────────────── --}}
@@ -109,7 +145,7 @@
                 {{-- Actions --}}
                 <div class="flex items-center justify-between border-t border-zinc-100 pt-3 dark:border-zinc-800">
                     {{-- View + Download --}}
-                    <div class="flex items-center gap-3">
+                    <div class="flex flex-wrap items-center gap-3">
                         <a href="{{ URL::temporarySignedRoute('documents.view', now()->addMinutes(5), ['document' => $doc->id]) }}"
                             target="_blank"
                             class="inline-flex items-center gap-1.5 text-sm text-zinc-600 hover:text-orange-600 font-medium transition-colors">
@@ -121,6 +157,18 @@
                             <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
                             Download
                         </a>
+                        <button type="button" wire:click="preview({{ $doc->id }})"
+                            class="inline-flex items-center gap-1.5 text-sm text-zinc-600 hover:text-orange-600 font-medium transition-colors">
+                            <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                            Preview
+                        </button>
+                        @if($doc->versions_count > 0)
+                            <button type="button" wire:click="showVersions({{ $doc->id }})"
+                                class="inline-flex items-center gap-1.5 text-sm text-zinc-600 hover:text-orange-600 font-medium transition-colors">
+                                <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                Versions ({{ $doc->versions_count }})
+                            </button>
+                        @endif
                     </div>
 
                     <div class="flex items-center gap-2">
@@ -175,6 +223,148 @@
     </div>
 
     <div>{{ $documents->links() }}</div>
+    @endif {{-- /library view --}}
+
+    {{-- ── Expiry Tracking ─────────────────────────────────── --}}
+    @if($view === 'expiry' && $expiry !== null)
+        @php
+            $buckets = [
+                'expired' => 'Expired',
+                'd30' => 'Within 30 days',
+                'd60' => '31–60 days',
+                'd90' => '61–90 days',
+            ];
+        @endphp
+        <div class="grid grid-cols-1 gap-5 lg:grid-cols-2 xl:grid-cols-4">
+            @foreach($buckets as $key => $label)
+                <div class="pulse-card">
+                    <div class="mb-4 flex items-center justify-between">
+                        <h3 class="text-sm font-bold uppercase tracking-wider text-zinc-400">{{ $label }}</h3>
+                        <span class="rounded-full px-2 py-0.5 text-xs font-black
+                            {{ $key === 'expired' ? 'bg-rose-100 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400' : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400' }}">
+                            {{ $expiry[$key]->count() }}
+                        </span>
+                    </div>
+                    <div class="space-y-3">
+                        @forelse($expiry[$key] as $doc)
+                            <div class="border-b border-zinc-50 pb-3 last:border-0 last:pb-0 dark:border-zinc-800/60">
+                                <p class="truncate text-sm font-bold text-zinc-900 dark:text-white">{{ $doc->title }}</p>
+                                <p class="text-xs text-zinc-400">
+                                    {{ $doc->employee?->user?->name ?? 'Company-wide' }} · Expires {{ $doc->expires_at->format('d M Y') }}
+                                </p>
+                            </div>
+                        @empty
+                            <p class="py-6 text-center text-xs text-zinc-400">Nothing here.</p>
+                        @endforelse
+                    </div>
+                </div>
+            @endforeach
+        </div>
+    @endif
+
+    {{-- ── Acknowledgement Tracker ─────────────────────────── --}}
+    @if($view === 'acknowledgements' && $ackTracker !== null)
+        <div class="space-y-4">
+            @forelse($ackTracker as $row)
+                <div class="pulse-card">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <div class="min-w-0">
+                            <h3 class="truncate text-sm font-bold text-zinc-900 dark:text-white">{{ $row['document']->title }}</h3>
+                            <p class="text-xs text-zinc-400">{{ ucfirst($row['document']->category) }} · {{ ucfirst($row['document']->visibility) }} audience</p>
+                        </div>
+                        <div class="flex items-center gap-2 text-xs font-bold">
+                            <span class="rounded-full bg-emerald-100 px-2.5 py-0.5 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">{{ $row['acknowledged'] }} confirmed</span>
+                            <span class="rounded-full bg-amber-100 px-2.5 py-0.5 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">{{ $row['pending'] }} pending</span>
+                            <span class="text-zinc-400">of {{ $row['expected'] }}</span>
+                        </div>
+                    </div>
+                    @php $pct = $row['expected'] > 0 ? round($row['acknowledged'] / $row['expected'] * 100) : 0; @endphp
+                    <div class="mt-3 h-2 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                        <div class="h-full rounded-full bg-emerald-500" style="width: {{ $pct }}%"></div>
+                    </div>
+                    @if($row['pending'] > 0)
+                        <div class="mt-3 flex flex-wrap gap-1.5">
+                            @foreach($row['pendingNames'] as $name)
+                                <span class="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">{{ $name }}</span>
+                            @endforeach
+                            @if($row['pending'] > $row['pendingNames']->count())
+                                <span class="px-2 py-0.5 text-[11px] font-medium text-zinc-400">+{{ $row['pending'] - $row['pendingNames']->count() }} more</span>
+                            @endif
+                        </div>
+                    @endif
+                </div>
+            @empty
+                <div class="pulse-card py-12 text-center text-sm text-zinc-400">No documents require acknowledgement.</div>
+            @endforelse
+        </div>
+    @endif
+
+    {{-- ── Version History ─────────────────────────────────── --}}
+    @if($versionList !== null)
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4" x-data x-on:keydown.escape.window="$wire.closeVersions()">
+            <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="$wire.closeVersions()"></div>
+            <div class="relative w-full max-w-lg rounded-2xl bg-white shadow-xl ring-1 ring-black/5 dark:bg-zinc-900 dark:ring-zinc-700">
+                <div class="flex items-center justify-between border-b border-zinc-100 px-5 py-4 dark:border-zinc-800">
+                    <h3 class="text-sm font-bold text-zinc-900 dark:text-white">Version History</h3>
+                    <button type="button" @click="$wire.closeVersions()" class="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200">
+                        <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                </div>
+                <div class="max-h-[70vh] divide-y divide-zinc-50 overflow-y-auto dark:divide-zinc-800/60">
+                    @foreach($versionList as $v)
+                        <div class="flex items-center justify-between gap-3 px-5 py-3">
+                            <div class="min-w-0">
+                                <div class="flex items-center gap-2">
+                                    <span class="rounded-md bg-zinc-100 px-2 py-0.5 text-[10px] font-bold uppercase text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">v{{ $v->version }}</span>
+                                    @if($loop->first)
+                                        <span class="rounded-md bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">Latest</span>
+                                    @endif
+                                    <p class="truncate text-sm font-semibold text-zinc-900 dark:text-white">{{ $v->title }}</p>
+                                </div>
+                                <p class="mt-0.5 text-xs text-zinc-400">{{ $v->created_at->format('d M Y, H:i') }} · {{ $v->uploader?->name ?? 'System' }}</p>
+                            </div>
+                            <div class="flex shrink-0 items-center gap-3">
+                                <a href="{{ URL::temporarySignedRoute('documents.view', now()->addMinutes(5), ['document' => $v->id]) }}" target="_blank" class="text-xs font-semibold text-zinc-500 hover:text-orange-600">View</a>
+                                <a href="{{ URL::temporarySignedRoute('documents.download', now()->addMinutes(5), ['document' => $v->id]) }}" class="text-xs font-semibold text-zinc-500 hover:text-orange-600">Download</a>
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+        </div>
+    @endif
+
+    {{-- ── Document Preview ────────────────────────────────── --}}
+    @if($preview !== null)
+        <div class="fixed inset-0 z-[60] flex items-center justify-center p-4" x-data x-on:keydown.escape.window="$wire.closePreview()">
+            <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="$wire.closePreview()"></div>
+            <div class="relative flex w-full max-w-4xl flex-col rounded-2xl bg-white shadow-2xl ring-1 ring-black/5 dark:bg-zinc-900 dark:ring-zinc-700">
+                <div class="flex items-center justify-between border-b border-zinc-100 px-5 py-3 dark:border-zinc-800">
+                    <h3 class="truncate text-sm font-bold text-zinc-900 dark:text-white">{{ $preview['document']->title }}</h3>
+                    <div class="flex items-center gap-3">
+                        <a href="{{ URL::temporarySignedRoute('documents.download', now()->addMinutes(5), ['document' => $preview['document']->id]) }}" class="text-xs font-semibold text-zinc-500 hover:text-orange-600">Download</a>
+                        <button type="button" @click="$wire.closePreview()" class="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200">
+                            <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
+                    </div>
+                </div>
+                <div class="bg-zinc-100 p-2 dark:bg-zinc-950">
+                    @if($preview['kind'] === 'pdf')
+                        <iframe src="{{ $preview['url'] }}" class="h-[75vh] w-full rounded-lg bg-white" title="Document preview"></iframe>
+                    @elseif($preview['kind'] === 'image')
+                        <div class="flex max-h-[75vh] items-center justify-center overflow-auto">
+                            <img src="{{ $preview['url'] }}" alt="{{ $preview['document']->title }}" class="max-h-[75vh] w-auto rounded-lg" />
+                        </div>
+                    @else
+                        <div class="flex h-48 flex-col items-center justify-center gap-3 text-center">
+                            <p class="text-sm text-zinc-500">Preview isn't available for this file type.</p>
+                            <a href="{{ URL::temporarySignedRoute('documents.download', now()->addMinutes(5), ['document' => $preview['document']->id]) }}" class="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">Download to view</a>
+                        </div>
+                    @endif
+                </div>
+            </div>
+        </div>
+    @endif
 
     {{-- ── Modals (inside flux:main = single root element) ── --}}
     {{-- ════════════════════════════════════════════════════════════
