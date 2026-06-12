@@ -260,4 +260,94 @@ select:focus[data-flux-control] {
     .badge-warning-closed {
         @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400;
     }
+
+    /* ===================================================
+       Phase 2 — Unified component classes
+       Tables · Toolbars · Sticky action bars · Filters ·
+       Inputs · Pagination
+       (Mirror the utilities pages already use, so they are
+        drop-in replacements with identical rendering.)
+       =================================================== */
+
+    /* Sticky action bar — pins a page header (title + primary
+       actions) to the top of the scroll area on list pages.
+       Background matches flux:main (zinc-50 / zinc-950). */
+    .pulse-action-bar {
+        @apply sticky top-0 z-20 -mx-6 -mt-6 mb-6 flex flex-wrap items-start justify-between gap-3 border-b border-zinc-200/70 bg-zinc-50/90 px-6 py-4 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/90;
+    }
+
+    /* Sticky form footer — pins Save / Cancel to the bottom of
+       form pages so primary actions are always reachable. */
+    .pulse-form-bar {
+        @apply sticky bottom-0 z-20 -mx-6 -mb-6 mt-6 flex items-center justify-end gap-3 border-t border-zinc-200/70 bg-white/90 px-6 py-4 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/90;
+    }
+
+    /* Toolbar row above a table (search + filters + actions). */
+    .pulse-toolbar {
+        @apply mb-5 flex flex-wrap items-center justify-between gap-3;
+    }
+
+    /* Filter cluster — wraps to multiple rows on mobile. */
+    .pulse-filters {
+        @apply flex flex-wrap items-center gap-2;
+    }
+
+    /* Horizontal scroll wrapper for wide tables (mobile-safe). */
+    .pulse-table-wrap {
+        @apply -mx-6 overflow-x-auto;
+    }
+
+    /* Data table — default body text color is set here so it is
+       INHERITED by cells; any cell's own text-* utility then wins
+       via the cascade without a specificity fight. */
+    .pulse-table {
+        @apply w-full text-sm text-zinc-600 dark:text-zinc-300;
+    }
+
+    .pulse-table thead tr {
+        @apply border-b border-zinc-100 dark:border-zinc-800;
+    }
+
+    .pulse-table tbody {
+        @apply divide-y divide-zinc-50 dark:divide-zinc-800/60;
+    }
+
+    .pulse-table tbody tr {
+        @apply transition-colors hover:bg-zinc-50/70 dark:hover:bg-zinc-800/30;
+    }
+
+    /* Cell classes are single-class (not descendant) selectors so
+       per-cell utility overrides (e.g. text-right!, pl-6) compose
+       without losing to specificity. Apply opt-in per cell. */
+    .pulse-th {
+        @apply pb-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500;
+    }
+
+    .pulse-td {
+        @apply py-3.5 pr-4 align-middle;
+    }
+
+    .pulse-table__empty {
+        @apply py-10 text-center text-sm text-zinc-500 dark:text-zinc-400;
+    }
+
+    /* Inputs / selects / search — unify the repeated field styles. */
+    .pulse-input,
+    .pulse-select {
+        @apply h-9 rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-800 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-brand-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100;
+    }
+
+    .pulse-search {
+        @apply h-9 rounded-lg border border-zinc-200 bg-white pl-9 pr-3 text-sm text-zinc-800 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-brand-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100;
+    }
+
+    /* Leading search icon, absolutely positioned inside a relative wrap. */
+    .pulse-search-icon {
+        @apply pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-400;
+    }
+
+    /* Pagination footer under a table. */
+    .pulse-pagination {
+        @apply mt-4 border-t border-zinc-100 pt-3 dark:border-zinc-800;
+    }
 }
