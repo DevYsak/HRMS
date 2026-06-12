@@ -26,6 +26,7 @@ use App\Observers\PayslipObserver;
 use App\Observers\ReimbursementObserver;
 use App\Observers\UserObserver;
 use Carbon\CarbonImmutable;
+use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
@@ -58,6 +59,7 @@ class AppServiceProvider extends ServiceProvider
 
         $this->configureDefaults();
         $this->registerObservers();
+        $this->configureNotificationPriority();
 
         if (app()->environment('production')) {
             URL::forceScheme('https');
@@ -120,5 +122,24 @@ class AppServiceProvider extends ServiceProvider
         Reimbursement::observe(ReimbursementObserver::class);
         AttendanceRegularisation::observe(AttendanceRegularisationObserver::class);
         DocumentAcknowledgement::observe(DocumentAcknowledgementObserver::class);
+    }
+
+    /**
+     * Populate the notifications.priority column from each notification's
+     * data['priority'] payload (high|normal|low) at write time, so the
+     * column can be filtered and sorted without parsing the data JSON.
+     */
+    protected function configureNotificationPriority(): void
+    {
+        DatabaseNotification::creating(function (DatabaseNotification $notification): void {
+            $data = $notification->data;
+            $priority = (is_array($data) || $data instanceof \ArrayAccess)
+                ? ($data['priority'] ?? null)
+                : null;
+
+            $notification->priority = in_array($priority, ['high', 'normal', 'low'], true)
+                ? $priority
+                : 'normal';
+        });
     }
 }

@@ -32,6 +32,7 @@ class ProbationDueNotification extends Notification
             'url' => '/employees',
             'icon' => 'calendar',
             'color' => 'amber',
+            'priority' => 'high',
         ];
     }
 }
