@@ -149,6 +149,79 @@
             </div>
         </div>
 
+        {{-- Section 3.5: Payroll Information --}}
+        <div class="pulse-card space-y-5">
+            <h3 class="font-semibold text-zinc-900 dark:text-white border-b border-zinc-100 pb-2 dark:border-zinc-800">
+                Payroll Information</h3>
+            
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <flux:input wire:model="ctc" type="number" step="0.01" label="CTC (Annual Salary Package)" placeholder="e.g. 500000" />
+                <flux:field>
+                    <flux:label>Salary Structure</flux:label>
+                    @if($salaryStructures->isEmpty())
+                        <flux:select disabled>
+                            <option value="">No salary structures configured</option>
+                        </flux:select>
+                        <flux:description>No active salary structures found. Configure them under Payroll &rarr; Salary Structures.</flux:description>
+                    @else
+                        <flux:select wire:model="salary_structure_id">
+                            <option value="">Select Structure…</option>
+                            @foreach($salaryStructures as $structure)
+                                <option value="{{ $structure->id }}">{{ $structure->name }}</option>
+                            @endforeach
+                        </flux:select>
+                    @endif
+                </flux:field>
+            </div>
+
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <flux:switch wire:model.live="pf_enabled" label="PF Applicable" description="Enable Provident Fund deduction." />
+                @if($pf_enabled)
+                    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <flux:input wire:model="pf_number" label="PF Number" placeholder="e.g. MH/BAN/12345/123" />
+                        <flux:input wire:model="uan_number" label="UAN Number" placeholder="e.g. 100000000000" />
+                    </div>
+                @else
+                    <div></div>
+                @endif
+            </div>
+
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <flux:switch wire:model.live="esi_enabled" label="ESI Applicable" description="Enable Employee State Insurance." />
+                @if($esi_enabled)
+                    <flux:input wire:model="esi_number" label="ESI Number" placeholder="e.g. 31000000000000000" />
+                @else
+                    <div></div>
+                @endif
+            </div>
+
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <flux:switch wire:model="professional_tax_enabled" label="Professional Tax Applicable" />
+                <flux:switch wire:model="incentive_eligible" label="Incentive Eligible" />
+                <flux:switch wire:model="reimbursement_eligible" label="Reimbursement Eligible" />
+            </div>
+
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <flux:switch wire:model.live="ot_eligible" label="OT Eligible" description="Enable Overtime tracking." />
+                @if($ot_eligible)
+                    <flux:input wire:model="ot_rate_per_hour" type="number" step="0.01" label="OT Rate Per Hour" placeholder="e.g. 150.00" />
+                @else
+                    <div></div>
+                @endif
+            </div>
+
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <flux:input wire:model="bank_name" label="Bank Name" placeholder="e.g. HDFC Bank" />
+                <flux:input wire:model="account_number" label="Account Number" placeholder="e.g. 50100000000000" />
+                <flux:input wire:model="ifsc_code" label="IFSC Code" placeholder="e.g. HDFC0001234" />
+            </div>
+
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <flux:input wire:model="pan_number" label="PAN Number" placeholder="e.g. ABCDE1234F" />
+                <flux:input wire:model="aadhar_number" label="Aadhar Number" placeholder="e.g. 123456789012" />
+            </div>
+        </div>
+
         {{-- Section 4: Leave Allocations --}}
         <div class="pulse-card space-y-3">
             <h3 class="font-semibold text-zinc-900 dark:text-white border-b border-zinc-100 pb-2 dark:border-zinc-800">

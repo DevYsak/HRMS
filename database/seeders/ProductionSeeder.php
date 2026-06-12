@@ -18,6 +18,7 @@ use Illuminate\Database\Seeder;
  *   7. LeaveTypes        → CSL / MDL / Comp-Off (spec §3.3)
  *   8. PublicHolidays    → UK calendar
  *   9. DecemberMandatoryDays → MDL shutdown dates
+ *  10. SalaryStructures  → default payroll structures (Standard, Manager, etc.)
  */
 class ProductionSeeder extends Seeder
 {
@@ -33,6 +34,7 @@ class ProductionSeeder extends Seeder
             LeaveSeeder::class,
             PublicHolidaySeeder::class,
             DecemberMandatoryDaySeeder::class,
+            SalaryStructureSeeder::class,
         ]);
     }
 }

@@ -68,7 +68,11 @@
       "Bash(ls resources/views/layouts/)",
       "Bash(ls resources/views/components/)",
       "Bash(find vendor/laravel/fortify -iname \"*simple*\")",
-      "Bash(find resources/views -iname \"*simple*\")"
+      "Bash(find resources/views -iname \"*simple*\")",
+      "Bash(grep -n \"Payroll\\\\\\\\\\\\\\\\Components\\\\|use App\\\\\\\\\\\\\\\\Livewire\\\\\\\\\\\\\\\\Payroll\" routes/web.php)",
+      "Bash(mysql -u root hrms -e \"DROP TABLE IF EXISTS salary_structure_components;\")",
+      "Bash(grep -rn \"RolesAndPermissionsSeeder\\\\|seed\\(\" tests/TestCase.php tests/Pest.php)",
+      "Bash(find tests *)"
     ]
   }
 }

@@ -28,7 +28,7 @@ class WelcomeEmployeeMail extends Mailable
     public function content(): Content
     {
         return new Content(
-            view: 'emails.welcome-employee',
+            markdown: 'emails.welcome-employee',
         );
     }
 

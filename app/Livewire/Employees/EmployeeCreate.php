@@ -14,6 +14,7 @@ use App\Models\LeaveType;
 use App\Models\Office;
 use App\Models\ProbationSetting;
 use App\Models\SalaryCycle;
+use App\Models\SalaryStructure;
 use App\Models\ShiftSetting;
 use App\Models\User;
 use App\Models\WorkMode;
@@ -83,6 +84,41 @@ class EmployeeCreate extends Component
     public string $status = 'onboarding';
 
     public string $ot_tracking_source = 'biometric';
+
+    // ── Payroll Information ──────────────────────────────
+    public $ctc = null;
+
+    public string $salary_structure_id = '';
+
+    public bool $pf_enabled = false;
+
+    public string $pf_number = '';
+
+    public string $uan_number = '';
+
+    public bool $esi_enabled = false;
+
+    public string $esi_number = '';
+
+    public bool $professional_tax_enabled = false;
+
+    public bool $ot_eligible = false;
+
+    public $ot_rate_per_hour = null;
+
+    public bool $incentive_eligible = false;
+
+    public bool $reimbursement_eligible = false;
+
+    public string $bank_name = '';
+
+    public string $account_number = '';
+
+    public string $ifsc_code = '';
+
+    public string $pan_number = '';
+
+    public string $aadhar_number = '';
 
     public function mount(): void
     {
@@ -172,6 +208,23 @@ class EmployeeCreate extends Component
             'work_mode_id' => ['nullable', 'exists:work_modes,id'],
             'salary_cycle_id' => ['nullable', 'exists:salary_cycles,id'],
             'status' => ['required', 'string'],
+            'ctc' => ['nullable', 'numeric', 'min:0'],
+            'salary_structure_id' => ['nullable', 'exists:salary_structures,id'],
+            'pf_enabled' => ['boolean'],
+            'pf_number' => ['nullable', 'required_if:pf_enabled,true', 'string', 'max:30'],
+            'uan_number' => ['nullable', 'required_if:pf_enabled,true', 'string', 'max:30'],
+            'esi_enabled' => ['boolean'],
+            'esi_number' => ['nullable', 'required_if:esi_enabled,true', 'string', 'max:30'],
+            'professional_tax_enabled' => ['boolean'],
+            'ot_eligible' => ['boolean'],
+            'ot_rate_per_hour' => ['nullable', 'required_if:ot_eligible,true', 'numeric', 'min:0'],
+            'incentive_eligible' => ['boolean'],
+            'reimbursement_eligible' => ['boolean'],
+            'bank_name' => ['nullable', 'string', 'max:100'],
+            'account_number' => ['nullable', 'string', 'max:50'],
+            'ifsc_code' => ['nullable', 'string', 'regex:/^[A-Z]{4}0[A-Z0-9]{6}$/'],
+            'pan_number' => ['nullable', 'string', 'regex:/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/'],
+            'aadhar_number' => ['nullable', 'string', 'regex:/^[0-9]{12}$/'],
         ]);
 
         $photoPath = $this->photo?->store('employee-photos', 'public');
@@ -204,6 +257,31 @@ class EmployeeCreate extends Component
             'joining_date' => $this->joining_date,
             'probation_end_date' => $this->probation_end_date ?: null,
             'status' => $this->status,
+        ]);
+
+        if ($this->salary_structure_id) {
+            $structure = SalaryStructure::with('components')->find($this->salary_structure_id);
+            $structure?->applyToEmployee($user->employee, $this->joining_date);
+        }
+
+        $user->employee->payrollSettings()->create([
+            'ctc' => $this->ctc,
+            'salary_structure_id' => $this->salary_structure_id ?: null,
+            'pf_enabled' => $this->pf_enabled,
+            'pf_number' => $this->pf_number ?: null,
+            'uan_number' => $this->uan_number ?: null,
+            'esi_enabled' => $this->esi_enabled,
+            'esi_number' => $this->esi_number ?: null,
+            'professional_tax_enabled' => $this->professional_tax_enabled,
+            'ot_eligible' => $this->ot_eligible,
+            'ot_rate_per_hour' => $this->ot_rate_per_hour ?: null,
+            'incentive_eligible' => $this->incentive_eligible,
+            'reimbursement_eligible' => $this->reimbursement_eligible,
+            'bank_name' => $this->bank_name ?: null,
+            'account_number' => $this->account_number ?: null,
+            'ifsc_code' => $this->ifsc_code ?: null,
+            'pan_number' => $this->pan_number ?: null,
+            'aadhar_number' => $this->aadhar_number ?: null,
         ]);
 
         // Auto-complete account_create triggered onboarding tasks.
@@ -263,6 +341,7 @@ class EmployeeCreate extends Component
             'employmentTypes' => EmploymentType::active()->get(),
             'workModes' => WorkMode::active()->get(),
             'salaryCycles' => SalaryCycle::active()->get(),
+            'salaryStructures' => SalaryStructure::where('is_active', true)->get(),
         ])->layout('layouts.app', ['title' => 'Add Employee']);
     }
 }

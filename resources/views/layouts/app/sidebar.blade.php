@@ -554,6 +554,8 @@
                                 wire:navigate>Run Payroll</flux:sidebar.item>
                             <flux:sidebar.item :href="route('payroll.components')"
                                 :current="request()->routeIs('payroll.components')" wire:navigate>Components</flux:sidebar.item>
+                            <flux:sidebar.item :href="route('payroll.structures')"
+                                :current="request()->routeIs('payroll.structures')" wire:navigate>Salary Structures</flux:sidebar.item>
                         @endcan
                         @if($isFin || $isHr)
                             <flux:sidebar.item :href="route('payroll.incentives')"

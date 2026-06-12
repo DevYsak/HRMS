@@ -41,6 +41,7 @@ use App\Livewire\Payroll\MyPayslips;
 use App\Livewire\Payroll\Overview;
 use App\Livewire\Payroll\Process;
 use App\Livewire\Payroll\Reimbursements;
+use App\Livewire\Payroll\SalaryStructures;
 use App\Livewire\Performance\AllReviews;
 use App\Livewire\Performance\Dashboard as PerformanceDashboard;
 use App\Livewire\Performance\EmployeeScorecard;
@@ -182,6 +183,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::middleware('role:run-payroll')->group(function () {
             Route::get('/overview', Overview::class)->name('overview');
             Route::get('/components', Components::class)->name('components');
+            Route::get('/structures', SalaryStructures::class)->name('structures');
             Route::get('/process', Process::class)->name('process');
             Route::get('/incentives', Incentives::class)->name('incentives');
             Route::get('/reimbursements', Reimbursements::class)->name('reimbursements');

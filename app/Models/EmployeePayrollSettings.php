@@ -18,6 +18,15 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'reimbursement_eligible',
     'hra_enabled',
     'hra_percentage',
+    'ctc',
+    'salary_structure_id',
+    'uan_number',
+    'ot_rate_per_hour',
+    'bank_name',
+    'account_number',
+    'ifsc_code',
+    'pan_number',
+    'aadhar_number',
 ])]
 class EmployeePayrollSettings extends Model
 {
@@ -62,6 +71,15 @@ class EmployeePayrollSettings extends Model
             'reimbursement_eligible' => true,
             'hra_enabled' => false,
             'hra_percentage' => null,
+            'ctc' => null,
+            'salary_structure_id' => null,
+            'uan_number' => null,
+            'ot_rate_per_hour' => null,
+            'bank_name' => null,
+            'account_number' => null,
+            'ifsc_code' => null,
+            'pan_number' => null,
+            'aadhar_number' => null,
         ]);
     }
 }
