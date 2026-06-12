@@ -63,7 +63,12 @@
       "Bash(cat tests/TestCase.php)",
       "Bash(cat tests/Pest.php)",
       "Bash(php -i)",
-      "Bash(tee /tmp/pest_run3.log)"
+      "Bash(tee /tmp/pest_run3.log)",
+      "Bash(ls resources/views/errors/)",
+      "Bash(ls resources/views/layouts/)",
+      "Bash(ls resources/views/components/)",
+      "Bash(find vendor/laravel/fortify -iname \"*simple*\")",
+      "Bash(find resources/views -iname \"*simple*\")"
     ]
   }
 }
