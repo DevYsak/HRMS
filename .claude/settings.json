@@ -72,7 +72,10 @@
       "Bash(grep -n \"Payroll\\\\\\\\\\\\\\\\Components\\\\|use App\\\\\\\\\\\\\\\\Livewire\\\\\\\\\\\\\\\\Payroll\" routes/web.php)",
       "Bash(mysql -u root hrms -e \"DROP TABLE IF EXISTS salary_structure_components;\")",
       "Bash(grep -rn \"RolesAndPermissionsSeeder\\\\|seed\\(\" tests/TestCase.php tests/Pest.php)",
-      "Bash(find tests *)"
+      "Bash(find tests *)",
+      "Bash(awk '/Welcome to|Reset Password Notification/{found=1} found' storage/logs/laravel.log)",
+      "Bash(curl -sS -o /dev/null -w \"HTTP %{http_code}\\\\n\" \"https://nexflow.wayforweb.tech/api/nexbridge/v1/employees/__connection_test__/clock-summary\" -H \"Authorization: Bearer ac5abfc91f8d37da4ae0b0638e85c50609b94dd4c02c1071884a1897f10575a8\" -H \"Accept: application/json\")",
+      "Bash(php -r \"echo php_ini_loaded_file\\(\\) . PHP_EOL; echo 'curl.cainfo=' . ini_get\\('curl.cainfo'\\) . PHP_EOL; echo 'openssl.cafile=' . ini_get\\('openssl.cafile'\\) . PHP_EOL;\")"
     ]
   }
 }
