@@ -723,7 +723,77 @@
         </div>
     </div>
 
-    {{-- â"€â"€â"€ LEAVE CALENDAR WIDGET â"€â"€â"€ --}}
+    {{-- ─── LEAVE FORECAST · HOLIDAY PLANNER · POLICY EXPLORER ─── --}}
+    <div class="pulse-margin grid grid-cols-1 gap-4 lg:grid-cols-3">
+        {{-- Leave Forecast --}}
+        <div class="rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <div class="mb-3 flex items-center gap-2">
+                <div class="rounded-lg bg-sky-50 p-1.5 dark:bg-sky-900/20"><flux:icon.chart-bar class="size-4 text-sky-600 dark:text-sky-400" /></div>
+                <h3 class="text-xs font-black uppercase tracking-[0.12em] text-zinc-600 dark:text-zinc-300">Leave Forecast</h3>
+            </div>
+            <div class="flex items-end gap-2">
+                <div class="text-3xl font-black text-zinc-900 dark:text-white">{{ $forecast['projected'] }}</div>
+                <div class="pb-1 text-xs text-zinc-400">projected {{ $forecast['label'] }} days this year</div>
+            </div>
+            <div class="mt-2 text-xs font-semibold {{ $forecast['on_track'] ? 'text-emerald-600' : 'text-rose-600' }}">
+                {{ $forecast['on_track'] ? 'On track' : 'Above allocation' }} · {{ $forecast['used'] }} used of {{ $forecast['allocated'] }}
+            </div>
+            @php $fpct = $forecast['allocated'] > 0 ? min(100, round($forecast['used'] / $forecast['allocated'] * 100)) : 0; @endphp
+            <div class="mt-3 h-2 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                <div class="h-full rounded-full {{ $forecast['on_track'] ? 'bg-emerald-500' : 'bg-rose-500' }}" style="width: {{ $fpct }}%"></div>
+            </div>
+        </div>
+
+        {{-- Holiday Planner --}}
+        <div class="rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <div class="mb-3 flex items-center gap-2">
+                <div class="rounded-lg bg-rose-50 p-1.5 dark:bg-rose-900/20"><flux:icon.calendar class="size-4 text-rose-600 dark:text-rose-400" /></div>
+                <h3 class="text-xs font-black uppercase tracking-[0.12em] text-zinc-600 dark:text-zinc-300">Holiday Planner</h3>
+            </div>
+            <div class="space-y-1.5">
+                @forelse($upcomingHolidays as $h)
+                    <div class="flex items-center justify-between text-sm">
+                        <span class="truncate text-zinc-700 dark:text-zinc-200">{{ $h->name }}</span>
+                        <span class="shrink-0 text-xs text-zinc-400">{{ $h->date->format('d M') }}</span>
+                    </div>
+                @empty
+                    <p class="text-xs text-zinc-400">No upcoming public holidays.</p>
+                @endforelse
+                @if($mandatoryDays->isNotEmpty())
+                    <div class="mt-2 border-t border-zinc-100 pt-2 dark:border-zinc-800">
+                        <p class="mb-1 text-[10px] font-bold uppercase tracking-wide text-amber-600">December Mandatory</p>
+                        @foreach($mandatoryDays as $m)
+                            <div class="flex items-center justify-between text-sm">
+                                <span class="truncate text-zinc-700 dark:text-zinc-200">{{ $m->description }}</span>
+                                <span class="shrink-0 text-xs text-zinc-400">{{ $m->date->format('d M') }}</span>
+                            </div>
+                        @endforeach
+                    </div>
+                @endif
+            </div>
+        </div>
+
+        {{-- Policy Explorer --}}
+        <div x-data="{ open: true }" class="rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <button type="button" @click="open = !open" class="flex w-full items-center justify-between gap-2">
+                <span class="flex items-center gap-2">
+                    <span class="rounded-lg bg-indigo-50 p-1.5 dark:bg-indigo-900/20"><flux:icon.book-open class="size-4 text-indigo-600 dark:text-indigo-400" /></span>
+                    <h3 class="text-xs font-black uppercase tracking-[0.12em] text-zinc-600 dark:text-zinc-300">Policy Explorer</h3>
+                </span>
+                <flux:icon.chevron-down class="size-4 text-zinc-400" x-bind:class="open && 'rotate-180'" />
+            </button>
+            <ul class="mt-3 space-y-1.5 text-xs text-zinc-600 dark:text-zinc-300" x-show="open" x-transition>
+                <li>&bull; 18 leave days/year = 12 CSL + 6 MDL.</li>
+                <li>&bull; December shutdown uses Mandatory Days (MDL).</li>
+                <li>&bull; No lapse — unused leave carries forward.</li>
+                <li>&bull; Encashment is paid on approval.</li>
+                <li>&bull; Overtime is pre-approved only (₹100/hr), tracked separately.</li>
+                <li>&bull; Financial year runs July 1 – June 30.</li>
+            </ul>
+        </div>
+    </div>
+
+    {{-- ─── LEAVE CALENDAR WIDGET ─── --}}
     <div
         class="pulse-margin rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
         <div class="mb-4 flex flex-wrap items-center justify-between gap-3">

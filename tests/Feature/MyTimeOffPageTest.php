@@ -1,10 +1,12 @@
 <?php
 
 use App\Livewire\TimeOff\MyTimeOff;
+use App\Models\DecemberMandatoryDay;
 use App\Models\Employee;
 use App\Models\LeaveBalance;
 use App\Models\LeaveRequest;
 use App\Models\LeaveType;
+use App\Models\PublicHoliday;
 use App\Models\User;
 use Illuminate\Support\Str;
 use Livewire\Livewire;
@@ -75,6 +77,32 @@ test('my time off page renders summary cards, statistics and calendar', function
         ->assertSee('Leave Calendar')
         ->assertSee('Request ID')
         ->assertSee('LR-'.str_pad((string) $request->id, 4, '0', STR_PAD_LEFT));
+});
+
+test('leave center shows forecast, holiday planner and policy explorer', function () {
+    $employee = timeOffEmployee();
+    $this->actingAs($employee->user);
+
+    $type = timeOffLeaveType(['name' => 'Casual Leave']);
+    timeOffBalance($employee, $type, ['allocated_days' => 12, 'used_days' => 6]);
+
+    PublicHoliday::create([
+        'date' => now()->addDays(10)->toDateString(),
+        'name' => 'TESTHOLIDAY',
+    ]);
+    DecemberMandatoryDay::create([
+        'year' => now()->year,
+        'date' => now()->setMonth(12)->setDay(25)->toDateString(),
+        'description' => 'TESTMDL',
+    ]);
+
+    Livewire::test(MyTimeOff::class)
+        ->assertSee('Leave Forecast')
+        ->assertSee('Holiday Planner')
+        ->assertSee('Policy Explorer')
+        ->assertSee('TESTHOLIDAY')
+        ->assertSee('TESTMDL')
+        ->assertSee('18 leave days/year');
 });
 
 test('search filters the leave requests table', function () {

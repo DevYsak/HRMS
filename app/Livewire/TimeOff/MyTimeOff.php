@@ -2,6 +2,7 @@
 
 namespace App\Livewire\TimeOff;
 
+use App\Models\DecemberMandatoryDay;
 use App\Models\LeaveBalance;
 use App\Models\LeaveEncashment;
 use App\Models\LeaveType;
@@ -517,6 +518,26 @@ class MyTimeOff extends Component
             $cursor->addDay();
         }
 
+        // ── Leave forecast: project full-year usage from the current run rate ──
+        $monthsElapsed = max(1, now()->month);
+        $projectedYearEnd = round(($cslUsed / $monthsElapsed) * 12, 1);
+        $forecast = [
+            'used' => (float) $cslUsed,
+            'allocated' => (float) $cslTotal,
+            'projected' => $projectedYearEnd,
+            'on_track' => $cslTotal <= 0 || $projectedYearEnd <= $cslTotal,
+            'label' => $csl?->leaveType->name ?? 'CSL',
+        ];
+
+        // ── Holiday planner: upcoming public holidays + December mandatory days ──
+        $upcomingHolidays = PublicHoliday::whereDate('date', '>=', now()->toDateString())
+            ->orderBy('date')
+            ->limit(8)
+            ->get();
+        $mandatoryDays = DecemberMandatoryDay::where('year', now()->year)
+            ->orderBy('date')
+            ->get();
+
         return view('livewire.time-off.my-time-off', [
             'balances' => $balances,
             'requests' => $requests,
@@ -543,6 +564,9 @@ class MyTimeOff extends Component
             'selectedBalance' => $selectedBalance,
             'calendarDays' => $calendarDays,
             'calendarLabel' => $monthStart->format('F Y'),
+            'forecast' => $forecast,
+            'upcomingHolidays' => $upcomingHolidays,
+            'mandatoryDays' => $mandatoryDays,
         ])->layout('layouts.app', ['title' => 'My Time Off']);
     }
 }
