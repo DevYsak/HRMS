@@ -85,7 +85,12 @@ test('kpi dashboard shows performer segments', function () {
         ->assertOk()
         ->assertSee('Top Performers')
         ->assertSee('At Risk')
-        ->assertSee('Promotion Ready');
+        ->assertSee('Promotion Ready')
+        // Phase 5 Performance Hub analytics
+        ->assertSee('Goal Progress')
+        ->assertSee('Department Ranking')
+        ->assertSee('PIP Risk')
+        ->assertSee('Heatmap');
 });
 
 test('finance dashboard hides payroll cost widgets', function () {
