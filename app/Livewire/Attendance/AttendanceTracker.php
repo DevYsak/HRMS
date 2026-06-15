@@ -40,6 +40,17 @@ class AttendanceTracker extends Component
         'absent' => 0,
     ];
 
+    /** Phase 6 attendance analytics (compliance, score, work pattern, breaks, late trend). */
+    public array $analytics = [
+        'shift_compliance' => 100,
+        'attendance_score' => 100,
+        'office_days' => 0,
+        'wfh_days' => 0,
+        'avg_break' => 0,
+        'excess_breaks' => 0,
+        'late_trend' => [],
+    ];
+
     public $shiftLabel;
 
     public $calendarMonth;
@@ -258,6 +269,48 @@ class AttendanceTracker extends Component
             'hours' => floor($totalMinutes / 60).'h '.($totalMinutes % 60).'m',
             'leaves' => $leaves->count(),
             'absent' => $absentCount,
+        ];
+
+        // ── Phase 6: Attendance analytics ────────────────────────────────
+        $present = $this->stats['present'];
+        $late = $this->stats['late'];
+        $workingBasis = $present + $absentCount;
+        $onTime = max(0, $present - $late);
+
+        $wfhDays = $attendances->filter(fn ($a) => $a->work_mode === 'wfh' || $a->status === 'remote')->count();
+        $officeDays = $attendances->count() - $wfhDays;
+
+        $excessBreaks = $attendances->where('break_minutes', '>', 60)->count();
+        $withBreaks = $attendances->where('break_minutes', '>', 0);
+        $avgBreak = $withBreaks->count() > 0 ? (int) round($withBreaks->avg('break_minutes')) : 0;
+
+        $onTimePct = $present > 0 ? ($onTime / $present) * 100 : 100;
+        $presentPct = $workingBasis > 0 ? ($present / $workingBasis) * 100 : 100;
+        $breakPct = max(0, 100 - min(100, $excessBreaks * 10));
+
+        // Late-arrival trend — fixed last-6-months window (independent of stats period)
+        $trendStart = Carbon::now()->subMonths(5)->startOfMonth();
+        $trendLate = Attendance::where('employee_id', $employee->id)
+            ->whereDate('date', '>=', $trendStart->toDateString())
+            ->where('is_late', true)
+            ->get(['date']);
+        $lateTrend = collect(range(0, 5))->map(function ($i) use ($trendStart, $trendLate) {
+            $m = $trendStart->copy()->addMonths($i);
+
+            return [
+                'month' => $m->format('M'),
+                'late' => $trendLate->filter(fn ($a) => $a->date->month === $m->month && $a->date->year === $m->year)->count(),
+            ];
+        })->values()->all();
+
+        $this->analytics = [
+            'shift_compliance' => $workingBasis > 0 ? (int) round($onTime / $workingBasis * 100) : 100,
+            'attendance_score' => (int) round($onTimePct * 0.6 + $presentPct * 0.25 + $breakPct * 0.15),
+            'office_days' => $officeDays,
+            'wfh_days' => $wfhDays,
+            'avg_break' => $avgBreak,
+            'excess_breaks' => $excessBreaks,
+            'late_trend' => $lateTrend,
         ];
     }
 
