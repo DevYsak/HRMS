@@ -209,6 +209,28 @@
     </div>
 </div>
 
+{{-- ─── AI ATTENDANCE INSIGHTS (only when OPENAI_API_KEY is set) ─── --}}
+@if($aiEnabled)
+    <div class="mb-5 rounded-2xl border border-indigo-200 bg-gradient-to-br from-indigo-50 to-white p-5 shadow-sm dark:border-indigo-900/50 dark:from-indigo-950/20 dark:to-zinc-900">
+        <div class="mb-3 flex items-center justify-between gap-3">
+            <div class="flex items-center gap-2">
+                <span class="rounded-lg bg-indigo-100 p-1.5 dark:bg-indigo-900/40"><flux:icon.sparkles class="size-4 text-indigo-600 dark:text-indigo-400" /></span>
+                <h3 class="text-xs font-black uppercase tracking-[0.12em] text-zinc-600 dark:text-zinc-300">AI Attendance Insights</h3>
+            </div>
+            <button type="button" wire:click="generateAiInsight" wire:loading.attr="disabled" wire:target="generateAiInsight"
+                class="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-indigo-700 disabled:opacity-50">
+                <span wire:loading.remove wire:target="generateAiInsight">{{ $aiInsight ? 'Regenerate' : 'Generate' }}</span>
+                <span wire:loading wire:target="generateAiInsight">Analysing…</span>
+            </button>
+        </div>
+        @if($aiInsight)
+            <div class="whitespace-pre-line text-sm text-zinc-700 dark:text-zinc-200">{{ $aiInsight }}</div>
+        @else
+            <p class="text-xs text-zinc-400">Generate a plain-language summary of attendance anomalies, burnout risk and late-arrival patterns.</p>
+        @endif
+    </div>
+@endif
+
 {{-- ═══════════════════════════════════════════════
      MAIN BODY: Clock + Calendar
 ═══════════════════════════════════════════════ --}}

@@ -813,6 +813,11 @@
 
     <flux:toast />
 
+    {{-- AI HR Copilot — renders nothing unless OPENAI_API_KEY is configured --}}
+    @auth
+        <livewire:ai-copilot />
+    @endauth
+
     @fluxScripts
 </body>
 
