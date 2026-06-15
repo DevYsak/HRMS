@@ -21,3 +21,21 @@ test('employee edit page renders quick action and probation action buttons with 
         ->assertSeeHtml('wire:click="confirmProbation"')
         ->assertSeeHtml('wire:click="extendProbation"');
 });
+
+test('employee profile 2.0 exposes the analytical tabs and panels', function () {
+    $this->actingAs(User::factory()->create(['role' => UserRole::HrAdmin]));
+
+    $employee = Employee::factory()->create(['status' => 'active']);
+
+    Livewire::test(EmployeeEdit::class, ['employee' => $employee])
+        ->assertSeeHtml('wire:click="setTab(\'Attendance\')"')
+        ->assertSeeHtml('wire:click="setTab(\'Performance\')"')
+        ->assertSeeHtml('wire:click="setTab(\'Timeline\')"')
+        ->call('setTab', 'Attendance')->assertSee('Most recent 30 attendance records')
+        ->call('setTab', 'OT')->assertSee('Recorded OT hours')
+        ->call('setTab', 'Performance')->assertSee('KPI History')
+        ->call('setTab', 'Warnings')->assertSee('Warning Letters')
+        ->call('setTab', 'PIP')->assertSee('Performance Improvement Plans')
+        ->call('setTab', 'Promotions')->assertSee('Recommendations')
+        ->call('setTab', 'Timeline')->assertSee('Career Timeline');
+});

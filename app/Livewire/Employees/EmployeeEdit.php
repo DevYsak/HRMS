@@ -515,6 +515,33 @@ class EmployeeEdit extends Component
             ? $leaveService->getAdjustmentHistory($this->employee)
             : collect();
 
+        // ── Phase 4: Profile 2.0 analytical tabs (loaded only for the active tab) ──
+        $tab = $this->activeTab;
+        $attendanceRecords = $tab === 'Attendance'
+            ? $this->employee->attendances()->latest('date')->limit(30)->get()
+            : collect();
+        $reviewHistory = $tab === 'Performance'
+            ? $this->employee->performanceReviews()->with('cycle')->latest('id')->get()
+            : collect();
+        $kpiHistory = $tab === 'Performance'
+            ? $this->employee->scorecards()->with('cycle')->latest('id')->get()
+            : collect();
+        $otRecords = $tab === 'OT'
+            ? $this->employee->overtimeRecords()->latest('work_date')->limit(30)->get()
+            : collect();
+        $warningHistory = $tab === 'Warnings'
+            ? $this->employee->warningLetters()->latest('id')->get()
+            : collect();
+        $pipHistory = $tab === 'PIP'
+            ? $this->employee->pipRecords()->latest('id')->get()
+            : collect();
+        $promotionHistory = $tab === 'Promotions'
+            ? $this->employee->promotionRecommendations()->latest('id')->get()
+            : collect();
+        $timeline = $tab === 'Timeline'
+            ? $this->employee->performanceTimelines()->get()
+            : collect();
+
         return view('livewire.employees.employee-edit', [
             'offices' => Office::all(),
             'departments' => Department::all(),
@@ -534,6 +561,14 @@ class EmployeeEdit extends Component
             'adjustmentHistory' => $adjustmentHistory,
             'adjustableLeaveTypes' => LeaveType::where('is_system_controlled', false)->whereNull('deleted_at')->orderBy('name')->get(),
             'canManageLeaveBalance' => auth()->user()->isHrAdmin() || auth()->user()->isSuperAdmin(),
+            'attendanceRecords' => $attendanceRecords,
+            'reviewHistory' => $reviewHistory,
+            'kpiHistory' => $kpiHistory,
+            'otRecords' => $otRecords,
+            'warningHistory' => $warningHistory,
+            'pipHistory' => $pipHistory,
+            'promotionHistory' => $promotionHistory,
+            'timeline' => $timeline,
         ])->layout('layouts.app', ['title' => 'Edit Employee']);
     }
 }
