@@ -7,6 +7,7 @@ use App\Models\LeaveBalance;
 use App\Models\LeaveRequest;
 use App\Models\LeaveType;
 use App\Services\LeaveService;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -14,6 +15,9 @@ use Livewire\WithPagination;
 class TeamTimeOff extends Component
 {
     use WithPagination;
+
+    /** Team leave calendar month (Y-m); empty = current month. */
+    public string $calendarMonth = '';
 
     public bool $showReviewModal = false;
 
@@ -195,6 +199,18 @@ class TeamTimeOff extends Component
         $this->resetPage();
     }
 
+    public function prevCalMonth(): void
+    {
+        $this->calendarMonth = Carbon::createFromFormat('Y-m', $this->calendarMonth ?: now()->format('Y-m'))
+            ->subMonth()->format('Y-m');
+    }
+
+    public function nextCalMonth(): void
+    {
+        $this->calendarMonth = Carbon::createFromFormat('Y-m', $this->calendarMonth ?: now()->format('Y-m'))
+            ->addMonth()->format('Y-m');
+    }
+
     public function render()
     {
         abort_unless(Auth::user()->canApproveLeave(), 403);
@@ -253,6 +269,41 @@ class TeamTimeOff extends Component
 
         $leaveTypes = LeaveType::orderBy('name')->get();
 
+        // ── Team leave calendar (monthly, colour-coded by leave type) ──
+        $monthStart = Carbon::createFromFormat('Y-m', $this->calendarMonth ?: now()->format('Y-m'))->startOfMonth();
+        $monthEnd = $monthStart->copy()->endOfMonth();
+        $gridStart = $monthStart->copy()->startOfWeek(Carbon::MONDAY);
+        $gridEnd = $monthEnd->copy()->endOfWeek(Carbon::SUNDAY);
+
+        $teamLeaves = LeaveRequest::with(['employee.user', 'leaveType'])
+            ->whereHas('employee', fn ($q) => $q->where('manager_id', $managerId))
+            ->where('status', 'approved')
+            ->where('start_date', '<=', $gridEnd->toDateString())
+            ->where('end_date', '>=', $gridStart->toDateString())
+            ->get();
+
+        $calendarDays = [];
+        $cursor = $gridStart->copy();
+        while ($cursor->lte($gridEnd)) {
+            $dayLeaves = $teamLeaves
+                ->filter(fn ($r) => $cursor->between($r->start_date->copy()->startOfDay(), $r->end_date->copy()->startOfDay()))
+                ->map(fn ($r) => [
+                    'name' => $r->employee->user->name ?? '—',
+                    'type' => $r->leaveType->name ?? 'Leave',
+                    'color' => $r->leaveType->color ?? '#6366f1',
+                ])
+                ->values();
+
+            $calendarDays[] = [
+                'date' => $cursor->copy(),
+                'inMonth' => $cursor->month === $monthStart->month,
+                'isToday' => $cursor->isToday(),
+                'isWeekend' => $cursor->isWeekend(),
+                'leaves' => $dayLeaves,
+            ];
+            $cursor->addDay();
+        }
+
         return view('livewire.time-off.team-time-off', [
             'pendingRequests' => $pendingRequests,
             'history' => $history,
@@ -260,6 +311,8 @@ class TeamTimeOff extends Component
             'totalDaysThisMonth' => $totalDaysThisMonth,
             'teamMembersCount' => $teamMembersCount,
             'leaveTypes' => $leaveTypes,
+            'calendarDays' => $calendarDays,
+            'calendarLabel' => $monthStart->format('F Y'),
         ])->layout('layouts.app', ['title' => 'Team Time Off']);
     }
 }

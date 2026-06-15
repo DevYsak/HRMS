@@ -86,6 +86,39 @@
 
         </div>
 
+        {{-- ── Team Leave Calendar ── --}}
+        <div class="pulse-card mb-6">
+            <div class="mb-4 flex items-center justify-between gap-3">
+                <h3 class="text-sm font-bold text-zinc-900 dark:text-white">Team Leave Calendar</h3>
+                <div class="flex items-center gap-1.5">
+                    <button type="button" wire:click="prevCalMonth" class="rounded-lg border border-zinc-200 px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800">&larr;</button>
+                    <span class="min-w-28 text-center text-xs font-bold text-zinc-700 dark:text-zinc-200">{{ $calendarLabel }}</span>
+                    <button type="button" wire:click="nextCalMonth" class="rounded-lg border border-zinc-200 px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800">&rarr;</button>
+                </div>
+            </div>
+            <div class="mb-1.5 grid grid-cols-7 gap-1.5 text-center text-[10px] font-bold uppercase tracking-wide text-zinc-400">
+                @foreach(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as $dow)<div>{{ $dow }}</div>@endforeach
+            </div>
+            <div class="grid grid-cols-7 gap-1.5">
+                @foreach($calendarDays as $day)
+                    <div class="min-h-16 rounded-lg border p-1.5 text-left
+                        {{ $day['inMonth'] ? 'border-zinc-100 dark:border-zinc-800' : 'border-transparent opacity-40' }}
+                        {{ $day['isToday'] ? 'ring-2 ring-brand-500' : '' }}
+                        {{ $day['isWeekend'] ? 'bg-zinc-50/60 dark:bg-zinc-800/30' : '' }}">
+                        <div class="text-[10px] font-semibold text-zinc-400">{{ $day['date']->day }}</div>
+                        <div class="mt-1 space-y-0.5">
+                            @foreach($day['leaves']->take(3) as $lv)
+                                <div class="truncate rounded px-1 py-0.5 text-[9px] font-bold text-white" style="background: {{ $lv['color'] }}" title="{{ $lv['name'] }} · {{ $lv['type'] }}">{{ $lv['name'] }}</div>
+                            @endforeach
+                            @if($day['leaves']->count() > 3)
+                                <div class="text-[9px] text-zinc-400">+{{ $day['leaves']->count() - 3 }} more</div>
+                            @endif
+                        </div>
+                    </div>
+                @endforeach
+            </div>
+        </div>
+
         {{-- ── Two-Column: Pending Requests + Quick Filters ────────────────── --}}
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
