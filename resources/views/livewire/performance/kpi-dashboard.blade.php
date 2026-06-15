@@ -156,6 +156,38 @@
         </flux:select>
     </div>
 
+    {{-- ── Performer Segments ────────────────────────────────────────────────── --}}
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+        @php
+            $segments = [
+                ['title' => 'Top Performers', 'rows' => $topPerformers, 'badge' => 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400', 'empty' => 'No scores yet.'],
+                ['title' => 'At Risk', 'rows' => $atRisk, 'badge' => 'bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400', 'empty' => 'No scores yet.'],
+                ['title' => 'Promotion Ready', 'rows' => $promotionReady, 'badge' => 'bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400', 'empty' => 'None scoring 85+ this cycle.'],
+            ];
+        @endphp
+        @foreach($segments as $segment)
+            <div class="pulse-card">
+                <div class="mb-3 flex items-center justify-between">
+                    <h3 class="text-sm font-bold text-zinc-900 dark:text-white">{{ $segment['title'] }}</h3>
+                    <span class="rounded-full px-2 py-0.5 text-xs font-black {{ $segment['badge'] }}">{{ $segment['rows']->count() }}</span>
+                </div>
+                <div class="space-y-2">
+                    @forelse($segment['rows'] as $sc)
+                        <div class="flex items-center justify-between gap-3 border-b border-zinc-50 pb-2 last:border-0 last:pb-0 dark:border-zinc-800/60">
+                            <span class="truncate text-sm text-zinc-700 dark:text-zinc-200">{{ $sc->employee?->user?->name ?? '—' }}</span>
+                            <div class="flex items-center gap-2">
+                                @if($sc->grade)<span class="rounded-md bg-zinc-100 px-1.5 py-0.5 text-[10px] font-bold text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">{{ $sc->grade }}</span>@endif
+                                <span class="text-sm font-bold text-zinc-900 dark:text-white">{{ $sc->final_score }}</span>
+                            </div>
+                        </div>
+                    @empty
+                        <p class="py-6 text-center text-xs text-zinc-400">{{ $segment['empty'] }}</p>
+                    @endforelse
+                </div>
+            </div>
+        @endforeach
+    </div>
+
     {{-- ── Scorecard Table ───────────────────────────────────────────────────── --}}
     <div class="pulse-card overflow-hidden p-0">
         <div class="overflow-x-auto">

@@ -5,18 +5,25 @@ namespace App\Livewire;
 use App\Enums\EmployeeStatus;
 use App\Enums\UserRole;
 use App\Models\Attendance;
+use App\Models\AttendanceRegularisation;
 use App\Models\AuditLog;
 use App\Models\Department;
 use App\Models\Document;
 use App\Models\DocumentAcknowledgement;
 use App\Models\Employee;
+use App\Models\EmployeeScorecard;
 use App\Models\LeaveBalance;
+use App\Models\LeaveEncashment;
 use App\Models\LeaveRequest;
 use App\Models\OtRequest;
 use App\Models\Payroll;
 use App\Models\Payslip;
+use App\Models\PerformanceCycle;
 use App\Models\PerformanceReview;
+use App\Models\PipRecord;
+use App\Models\PromotionRecommendation;
 use App\Models\PublicHoliday;
+use App\Models\WarningLetter;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
@@ -180,6 +187,23 @@ class Dashboard extends Component
             },
         ])->filter(fn ($d) => $d['count'] > 0)->values();
 
+        // ── Workforce risk / people-ops counters ───────────────────────────
+        $activeWarnings = WarningLetter::whereIn('status', ['issued', 'acknowledged', 'under_review'])->count();
+        $onPipCount = PipRecord::whereIn('status', ['active', 'under_review', 'extended'])->count();
+        $pendingPromotions = PromotionRecommendation::whereIn('status', [
+            'pending_hr', 'pending_dept_head', 'pending_super_admin',
+        ])->count();
+
+        // ── Pending approvals breakdown (leave / OT / regularisation / encashment) ──
+        $pendingRegularisations = AttendanceRegularisation::where('status', 'pending')->count();
+        $pendingEncashments = LeaveEncashment::where('status', 'pending')->count();
+        $pendingApprovals = collect([
+            ['label' => 'Leave', 'count' => $pendingLeavesCount, 'href' => route('time-off.employees')],
+            ['label' => 'Overtime', 'count' => $pendingOtCount, 'href' => route('overtime.manage')],
+            ['label' => 'Regularisations', 'count' => $pendingRegularisations, 'href' => route('attendance.employees')],
+            ['label' => 'Encashments', 'count' => $pendingEncashments, 'href' => route('time-off.employees')],
+        ]);
+
         $complianceAlerts = collect([
             [
                 'label' => 'Pending leave approvals awaiting action',
@@ -203,11 +227,25 @@ class Dashboard extends Component
                 'href' => route('employees.index'),
             ],
             [
-                'label' => 'Draft payroll cycles still open',
-                'status' => $activePayrolls->isNotEmpty() ? 'In progress' : 'Ready',
-                'tone' => $activePayrolls->isNotEmpty() ? 'violet' : 'emerald',
-                'count' => $activePayrolls->count(),
-                'href' => route('payroll.overview'),
+                'label' => 'Active warning letters',
+                'status' => $activeWarnings > 0 ? 'Open' : 'None',
+                'tone' => $activeWarnings > 0 ? 'amber' : 'emerald',
+                'count' => $activeWarnings,
+                'href' => route('employees.index'),
+            ],
+            [
+                'label' => 'Employees on a PIP',
+                'status' => $onPipCount > 0 ? 'Monitoring' : 'None',
+                'tone' => $onPipCount > 0 ? 'rose' : 'emerald',
+                'count' => $onPipCount,
+                'href' => route('employees.index'),
+            ],
+            [
+                'label' => 'Promotions awaiting review',
+                'status' => $pendingPromotions > 0 ? 'In pipeline' : 'Clear',
+                'tone' => $pendingPromotions > 0 ? 'blue' : 'emerald',
+                'count' => $pendingPromotions,
+                'href' => route('employees.index'),
             ],
         ]);
 
@@ -290,67 +328,21 @@ class Dashboard extends Component
             'actionRequiredCount',
             'upcomingBirthdays',
             'attendanceTrend',
-            'liveCheckins'
+            'liveCheckins',
+            'activeWarnings',
+            'onPipCount',
+            'pendingPromotions',
+            'pendingApprovals',
+            'pendingRegularisations',
+            'pendingEncashments',
         ))->layout('layouts.app', ['title' => 'Admin Dashboard']);
     }
 
     private function renderManager()
     {
-        $manager = Auth::user()->employee;
-        $today = Carbon::today();
-
-        $teamIds = $manager
-            ? Employee::where('manager_id', $manager->id)->pluck('id')
-            : collect();
-
-        $teamAttendance = Attendance::with('employee.user')
-            ->where('date', $today)
-            ->whereIn('employee_id', $teamIds)
-            ->get();
-
-        $presentCount = $teamAttendance->whereNotNull('check_in')->count();
-        $lateCount = $teamAttendance->where('is_late', true)->count();
-        $absentCount = $teamIds->count() - $presentCount;
-
-        $teamAttendanceList = Employee::with(['user', 'department'])
-            ->whereIn('id', $teamIds)
-            ->get()
-            ->map(function ($emp) use ($teamAttendance) {
-                $record = $teamAttendance->firstWhere('employee_id', $emp->id);
-
-                return [
-                    'name' => $emp->user->name,
-                    'department' => $emp->department?->name,
-                    'check_in' => $record?->check_in?->format('H:i'),
-                    'check_out' => $record?->check_out?->format('H:i'),
-                    'status' => $record?->status ?? 'absent',
-                    'is_late' => $record?->is_late ?? false,
-                ];
-            });
-
-        $pendingLeaves = LeaveRequest::with(['employee.user', 'leaveType'])
-            ->whereIn('employee_id', $teamIds)
-            ->where('status', 'pending')
-            ->latest()->take(10)->get();
-
-        $pendingOt = OtRequest::with('employee.user')
-            ->whereIn('employee_id', $teamIds)
-            ->where('status', 'pending')
-            ->latest()->take(10)->get();
-
-        $reviewsPending = 0;
-        $reviewsSubmitted = 0;
-
-        return view('livewire.manager-dashboard', compact(
-            'teamAttendanceList',
-            'presentCount',
-            'lateCount',
-            'absentCount',
-            'pendingLeaves',
-            'pendingOt',
-            'reviewsPending',
-            'reviewsSubmitted',
-        ))->layout('layouts.app', ['title' => 'Manager Dashboard']);
+        // Delegate to the canonical ManagerDashboard component (single source of
+        // truth — owns the team KPI widget, review counts and reject-modal flow).
+        return app(ManagerDashboard::class)->render();
     }
 
     private function renderFinance()
@@ -446,6 +438,19 @@ class Dashboard extends Component
 
         $pendingActions = $pendingActions->sortByDesc('date');
 
+        // My KPIs (latest performance cycle scorecard)
+        $latestCycle = PerformanceCycle::whereIn('status', ['active', 'completed', 'locked'])
+            ->latest('start_date')
+            ->first();
+        $myScorecard = ($employee && $latestCycle)
+            ? EmployeeScorecard::where('employee_id', $employee->id)
+                ->where('performance_cycle_id', $latestCycle->id)
+                ->first()
+            : null;
+
+        // Recent notifications feed (top 5)
+        $recentNotifications = $user->notifications()->latest()->take(5)->get();
+
         return view('livewire.employee-dashboard', compact(
             'todayAttendance',
             'leaveBalances',
@@ -455,7 +460,10 @@ class Dashboard extends Component
             'pendingLeaveRequests',
             'currentWeekAttendance',
             'nextPublicHoliday',
-            'pendingActions'
+            'pendingActions',
+            'myScorecard',
+            'latestCycle',
+            'recentNotifications',
         ))->layout('layouts.app', ['title' => 'My Dashboard']);
     }
 }

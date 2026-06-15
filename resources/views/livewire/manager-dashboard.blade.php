@@ -98,6 +98,35 @@
             </div>
         </div>
 
+        {{-- ── TEAM KPI SCORES ── --}}
+        <div class="pulse-card">
+            <div class="mb-4 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <flux:icon.chart-bar class="size-4 text-purple-500" />
+                    <h3 class="text-sm font-bold text-zinc-900 dark:text-white">Team KPI Scores</h3>
+                    @if($latestCycle)<span class="text-[10px] text-zinc-400">{{ $latestCycle->name }}</span>@endif
+                </div>
+                @if($teamAvgKpi !== null)
+                    <span class="rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-black text-purple-700 dark:bg-purple-950/40 dark:text-purple-400">avg {{ $teamAvgKpi }}</span>
+                @endif
+            </div>
+            @if($teamKpis->isNotEmpty())
+                <div class="space-y-2">
+                    @foreach($teamKpis as $sc)
+                        <div class="flex items-center justify-between gap-3 border-b border-zinc-50 pb-2 last:border-0 last:pb-0 dark:border-zinc-800/60">
+                            <span class="truncate text-sm text-zinc-700 dark:text-zinc-200">{{ $sc->employee?->user?->name ?? '—' }}</span>
+                            <div class="flex items-center gap-2">
+                                @if($sc->grade)<span class="rounded-md bg-zinc-100 px-1.5 py-0.5 text-[10px] font-bold text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">{{ $sc->grade }}</span>@endif
+                                <span class="text-sm font-bold text-zinc-900 dark:text-white">{{ $sc->final_score }}</span>
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+            @else
+                <p class="py-6 text-center text-xs text-zinc-400">No KPI scores for your team in the latest cycle.</p>
+            @endif
+        </div>
+
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
 
             {{-- ── TEAM ATTENDANCE TABLE ── --}}
@@ -236,8 +265,8 @@
     </div>
 
 
-    {{-- Reject Leave Modal --}}
-    @if($showRejectModal)
+    {{-- Reject Leave Modal (only interactive on the standalone ManagerDashboard component) --}}
+    @if($showRejectModal ?? false)
         <div class="fixed inset-0 z-50 flex items-center justify-center p-4"
              x-data x-on:keydown.escape.window="$wire.set('showRejectModal', false)">
             <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="$wire.set('showRejectModal', false)"></div>

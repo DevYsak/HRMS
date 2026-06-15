@@ -168,6 +168,8 @@
         $approvalPressure = min(100, $totalPending * 8);
         $leaveLoad = $totalActive > 0 ? min(100, round(($onLeaveTodayCount / $totalActive) * 100)) : 0;
         $payrollProgress = $activePayrolls->count() > 0 ? 68 : 100;
+        // Payroll widgets temporarily hidden from dashboard enhancement (functionality untouched).
+        $showPayroll = false;
         $topDepartments = $workforceComposition->sortByDesc('count')->take(3)->values();
         $latestMoments = $recentAuditLogs->take(3);
     @endphp
@@ -296,6 +298,7 @@
                                 </div>
                                 <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Pending review</p>
                             </div>
+                            @if($showPayroll)
                             <div
                                 class="rounded-2xl bg-gradient-to-br from-sky-50 via-orange-50/40 to-white p-4 dark:bg-zinc-800/60">
                                 <div class="text-[10px] font-black uppercase tracking-[0.22em] text-zinc-400">Payroll
@@ -305,6 +308,16 @@
                                 </div>
                                 <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Draft cycles open</p>
                             </div>
+                            @else
+                            <div class="rounded-2xl bg-gradient-to-br from-violet-50 to-white p-4 dark:bg-zinc-800/60">
+                                <div class="text-[10px] font-black uppercase tracking-[0.22em] text-zinc-400">On PIP
+                                </div>
+                                <div class="mt-2 text-2xl font-black text-zinc-900 dark:text-white">
+                                    {{ $onPipCount }}
+                                </div>
+                                <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $activeWarnings }} active warnings</p>
+                            </div>
+                            @endif
                         </div>
                     </div>
 
@@ -319,10 +332,12 @@
                         class="rounded-xl border border-zinc-200 bg-white/75 !text-zinc-700 hover:!text-zinc-950 dark:border-zinc-700 dark:bg-zinc-900/60 dark:!text-zinc-200">
                         Open People Hub
                     </flux:button>
+                    @if($showPayroll)
                     <flux:button :href="route('payroll.overview')" wire:navigate variant="ghost"
                         class="rounded-xl border border-zinc-200 bg-white/75 !text-zinc-700 hover:!text-zinc-950 dark:border-zinc-700 dark:bg-zinc-900/60 dark:!text-zinc-200">
                         Open Payroll
                     </flux:button>
+                    @endif
                 </div>
             </div>
 
@@ -390,6 +405,7 @@
                                         style="width: {{ $leaveLoad }}%"></div>
                                 </div>
                             </div>
+                            @if($showPayroll)
                             <div class="space-y-2">
                                 <div
                                     class="flex items-center justify-between text-[11px] font-bold uppercase tracking-[0.2em] text-zinc-500">
@@ -401,12 +417,30 @@
                                         style="width: {{ $payrollProgress }}%"></div>
                                 </div>
                             </div>
+                            @endif
                         </div>
                     </div>
                 </div>
             </div>
         </div>
     </section>
+
+    {{-- ── Pending Approvals ── --}}
+    <div class="pulse-card mb-6">
+        <div class="mb-4 flex items-center justify-between">
+            <h3 class="text-sm font-bold text-zinc-900 dark:text-white">Pending Approvals</h3>
+            <span class="text-[10px] uppercase tracking-widest text-zinc-400">requires action</span>
+        </div>
+        <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            @foreach($pendingApprovals as $approval)
+                <a href="{{ $approval['href'] }}" wire:navigate
+                    class="rounded-xl border border-zinc-100 p-4 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/40">
+                    <div class="text-2xl font-black {{ $approval['count'] > 0 ? 'text-amber-600' : 'text-zinc-900 dark:text-white' }}">{{ $approval['count'] }}</div>
+                    <div class="mt-1 text-xs font-medium text-zinc-500 dark:text-zinc-400">{{ $approval['label'] }}</div>
+                </a>
+            @endforeach
+        </div>
+    </div>
 
     <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div

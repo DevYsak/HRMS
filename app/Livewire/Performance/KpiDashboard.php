@@ -83,6 +83,11 @@ class KpiDashboard extends Component
                 ->toArray();
         }
 
+        // Performer segmentation (derived from the already-loaded, score-sorted scorecards)
+        $topPerformers = $scorecards->take(5)->values();
+        $atRisk = $scorecards->sortBy('final_score')->take(5)->values();
+        $promotionReady = $scorecards->filter(fn ($s) => (float) $s->final_score >= 85)->values();
+
         $departments = Department::orderBy('name')->get();
 
         // Cycle trend: last 4 cycles avg score
@@ -108,6 +113,9 @@ class KpiDashboard extends Component
             'strengthWeakness' => $strengthWeakness,
             'departments' => $departments,
             'trendCycles' => $trendCycles,
+            'topPerformers' => $topPerformers,
+            'atRisk' => $atRisk,
+            'promotionReady' => $promotionReady,
         ])->layout('layouts.app', ['title' => 'KPI Dashboard']);
     }
 }

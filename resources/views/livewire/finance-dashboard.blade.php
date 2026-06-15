@@ -49,6 +49,9 @@
     <div>
     </div>
 
+    {{-- Payroll/compensation widgets temporarily hidden (functionality untouched). --}}
+    @php $showPayroll = false; @endphp
+    @if($showPayroll)
     {{-- KPI Bar --}}
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div class="pulse-card p-5 text-center">
@@ -227,6 +230,14 @@
             </table>
         </div>
     </div>
+    @endif
+
+    @else
+        <div class="pulse-card text-center py-16">
+            <flux:icon.banknotes class="mx-auto size-10 text-zinc-300 dark:text-zinc-600" />
+            <p class="mt-3 text-sm font-semibold text-zinc-500 dark:text-zinc-400">Payroll &amp; compensation widgets are temporarily hidden.</p>
+            <p class="mt-1 text-xs text-zinc-400">Payroll functionality remains available in the Payroll module.</p>
+        </div>
     @endif
 
     </div>{{-- end p-4 md:p-6 --}}
