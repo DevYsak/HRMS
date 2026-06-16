@@ -46,16 +46,16 @@ echo -e "  Local commit : ${YELLOW}${LOCAL_COMMIT}${NC}"
 echo -e "  Deploy branch: ${YELLOW}${GIT_BRANCH}${NC}"
 
 if ! git diff --quiet || ! git diff --cached --quiet; then
-    fail "Working tree clean nahi hai. Pehle commit karo, phir deploy chalao."
+    fail "Dont changes after you push in github so please aware if do you any changes so please push 1st and try pull in your domain"
 fi
 
 if git ls-files --others --exclude-standard | grep -q .; then
-    warn "Untracked files hain (deploy continue karega):"
+    warn "Untracked File (deploy will continue):"
     git ls-files --others --exclude-standard | sed 's/^/    /'
 fi
 
 if [ "$LOCAL_BRANCH" != "$GIT_BRANCH" ]; then
-    warn "Aap '${LOCAL_BRANCH}' par ho, deploy '${GIT_BRANCH}' branch ka hoga. Continue? (y/N)"
+    warn "You are on '${LOCAL_BRANCH}' branch, deploy '${GIT_BRANCH}' branch ka hoga. Continue? (y/N)"
     read -r confirm
     [[ "$confirm" =~ ^[Yy]$ ]] || { echo "Aborted."; exit 0; }
 fi

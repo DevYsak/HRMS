@@ -49,7 +49,7 @@ if ($UNTRACKED) {
 }
 
 if ($LOCAL_BRANCH -ne $GIT_BRANCH) {
-    $confirm = Read-Host "Aap '$LOCAL_BRANCH' par ho, deploy '$GIT_BRANCH' branch ka hoga. Continue? (y/N)"
+   $confirm = Read-Host "Aap '$LOCAL_BRANCH' par ho, deploy '$GIT_BRANCH' branch ka hoga. Continue? (y/N)"
     if ($confirm -notmatch '^[Yy]$') {
         Write-Host "Aborted."
         exit 0
