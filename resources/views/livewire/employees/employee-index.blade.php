@@ -66,10 +66,10 @@
                 <thead>
                     <tr>
                         <th class="pulse-th pl-6">Employee</th>
-                        <th class="pulse-th">Emp ID</th>
-                        <th class="pulse-th">Job Title</th>
-                        <th class="pulse-th">Department</th>
-                        <th class="pulse-th">Shift</th>
+                        <th class="pulse-th pulse-col-sm">Emp ID</th>
+                        <th class="pulse-th pulse-col-sm">Job Title</th>
+                        <th class="pulse-th pulse-col-lg">Department</th>
+                        <th class="pulse-th pulse-col-lg">Shift</th>
                         <th class="pulse-th">Status</th>
                         <th class="pulse-th pr-6 text-right!">Actions</th>
                     </tr>
@@ -92,14 +92,14 @@
                                     </div>
                                 </div>
                             </td>
-                            <td class="pulse-td">
+                            <td class="pulse-td pulse-col-sm">
                                 <span class="font-mono text-xs font-bold text-zinc-700 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded-md">
                                     {{ $emp->employee_id ?? '—' }}
                                 </span>
                             </td>
-                            <td class="pulse-td">{{ $emp->jobTitle?->name ?? '—' }}</td>
-                            <td class="pulse-td">{{ $emp->department?->name ?? '—' }}</td>
-                            <td class="pulse-td">
+                            <td class="pulse-td pulse-col-sm">{{ $emp->jobTitle?->name ?? '—' }}</td>
+                            <td class="pulse-td pulse-col-lg">{{ $emp->department?->name ?? '—' }}</td>
+                            <td class="pulse-td pulse-col-lg">
                                 @if($emp->shift)
                                     <span class="text-xs font-medium text-zinc-600 dark:text-zinc-400">{{ $emp->shift->name }}</span>
                                 @else

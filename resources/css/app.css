@@ -273,7 +273,7 @@ select:focus[data-flux-control] {
        actions) to the top of the scroll area on list pages.
        Background matches flux:main (zinc-50 / zinc-950). */
     .pulse-action-bar {
-        @apply sticky top-0 z-20 -mx-6 -mt-6 mb-6 flex flex-wrap items-start justify-between gap-3 border-b border-zinc-200/70 bg-zinc-50/90 px-6 py-4 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/90;
+        @apply sticky top-0 z-20 -mx-3 -mt-3 mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-zinc-200/70 bg-zinc-50/90 px-3 py-3 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/90 sm:-mx-6 sm:-mt-6 sm:mb-6 sm:px-6 sm:py-4;
     }
 
     /* Sticky form footer — pins Save / Cancel to the bottom of
@@ -349,5 +349,48 @@ select:focus[data-flux-control] {
     /* Pagination footer under a table. */
     .pulse-pagination {
         @apply mt-4 border-t border-zinc-100 pt-3 dark:border-zinc-800;
+    }
+
+    /* ===================================================
+       Phase 12 — Mobile Optimisation utilities
+       =================================================== */
+
+    /* Hero header: title+subtitle stack, buttons row wraps on mobile */
+    .pulse-hero-body {
+        @apply relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between;
+    }
+
+    /* Responsive breadcrumb — hide on tiny screens to save vertical space */
+    .pulse-breadcrumb {
+        @apply hidden sm:flex items-center gap-1.5 text-xs text-white/50 mb-1.5;
+    }
+
+    /* Hero action buttons: stack on mobile, row on sm+ */
+    .pulse-hero-actions {
+        @apply flex flex-wrap items-center gap-2;
+    }
+
+    /* Table column — hidden on mobile, shown sm+ */
+    .pulse-col-sm {
+        @apply hidden sm:table-cell;
+    }
+
+    /* Table column — hidden on mobile+tablet, shown lg+ */
+    .pulse-col-lg {
+        @apply hidden lg:table-cell;
+    }
+
+    /* Mobile-aware page wrapper: tighter padding on xs */
+    .pulse-page {
+        @apply p-3 sm:p-4 md:p-6 space-y-4 md:space-y-6;
+    }
+
+    /* KPI stat bar — responsive horizontal scroll on tiny screens */
+    .pulse-stat-bar {
+        @apply flex overflow-x-auto gap-0 border border-zinc-200 dark:border-zinc-800 rounded-xl bg-white dark:bg-zinc-900 mx-3 sm:mx-6 mb-4 divide-x divide-zinc-100 dark:divide-zinc-800;
+    }
+
+    .pulse-stat-bar__item {
+        @apply flex items-center gap-3 px-4 py-4 shrink-0 min-w-[140px] sm:min-w-0 sm:flex-1;
     }
 }
