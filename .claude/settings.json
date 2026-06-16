@@ -107,7 +107,8 @@
       "Bash(php -r 'echo \"curl.cainfo=\".ini_get\\(\"curl.cainfo\"\\).\"\\\\n\";')",
       "PowerShell(& \"C:\\\\xampp\\\\mysql\\\\bin\\\\mysqladmin.exe\" -u root ping 2>&1)",
       "PowerShell(Start-Process \"C:\\\\xampp\\\\mysql\\\\bin\\\\mysqld.exe\" -ArgumentList \"--defaults-file=C:\\\\xampp\\\\mysql\\\\bin\\\\my.ini\" -WindowStyle Hidden)",
-      "Read(//c/xampp/mysql/data/**)"
+      "Read(//c/xampp/mysql/data/**)",
+      "Bash(grep -n 'fillable\\\\|protected $fill' app/Models/User.php)"
     ]
   }
 }
