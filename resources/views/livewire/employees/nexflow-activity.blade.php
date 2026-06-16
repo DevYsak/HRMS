@@ -20,13 +20,11 @@
         <div class="flex items-end gap-3">
             <div>
                 <label class="mb-1 block text-xs font-bold text-zinc-500 uppercase tracking-wider">From</label>
-                <input type="date" wire:model.live="from"
-                    class="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-800 shadow-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white" />
+                <input type="date" wire:model.live="from" class="pulse-input" />
             </div>
             <div>
                 <label class="mb-1 block text-xs font-bold text-zinc-500 uppercase tracking-wider">To</label>
-                <input type="date" wire:model.live="to"
-                    class="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-800 shadow-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white" />
+                <input type="date" wire:model.live="to" class="pulse-input" />
             </div>
             <button type="button" wire:click="loadData"
                 class="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-indigo-700 active:scale-95 transition-all">
@@ -163,33 +161,31 @@
             <div>
                 <h4 class="mb-3 text-xs font-black uppercase tracking-widest text-zinc-400">Daily Breakdown</h4>
                 <div class="overflow-hidden rounded-2xl border border-zinc-100 dark:border-zinc-800">
-                    <table class="w-full text-sm">
+                    <table class="pulse-table">
                         <thead>
-                            <tr class="border-b border-zinc-100 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900">
-                                <th class="px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-zinc-400">Date</th>
-                                <th class="px-4 py-3 text-right text-xs font-black uppercase tracking-wider text-zinc-400">Work</th>
-                                <th class="px-4 py-3 text-right text-xs font-black uppercase tracking-wider text-zinc-400">Break</th>
-                                <th class="px-4 py-3 text-right text-xs font-black uppercase tracking-wider text-zinc-400">Net</th>
-                                <th class="px-4 py-3 text-right text-xs font-black uppercase tracking-wider text-zinc-400">OT</th>
-                                <th class="px-4 py-3 text-right text-xs font-black uppercase tracking-wider text-zinc-400">Sessions</th>
+                            <tr>
+                                <th class="pulse-th pl-4">Date</th>
+                                <th class="pulse-th text-right">Work</th>
+                                <th class="pulse-th text-right">Break</th>
+                                <th class="pulse-th text-right">Net</th>
+                                <th class="pulse-th text-right">OT</th>
+                                <th class="pulse-th text-right">Sessions</th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-zinc-50 bg-white dark:divide-zinc-800 dark:bg-zinc-900">
+                        <tbody>
                             @forelse($days->sortByDesc('date') as $day)
                                 @php
                                     $isWeekend = $day['is_weekend'];
                                     $isToday   = $day['date'] === now()->toDateString();
                                     $hasWork   = $day['work_minutes'] > 0;
                                 @endphp
-                                <tr class="transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/50
-                                    {{ $isWeekend ? 'opacity-50' : '' }}
-                                    {{ $isToday ? 'bg-indigo-50/40 dark:bg-indigo-950/10' : '' }}">
+                                <tr class="{{ $isWeekend ? 'opacity-50' : '' }} {{ $isToday ? 'bg-brand-50/30 dark:bg-brand-950/10' : '' }}">
 
                                     {{-- Date --}}
-                                    <td class="px-4 py-3">
+                                    <td class="pulse-td pl-4">
                                         <div class="flex items-center gap-2">
                                             @if($isToday)
-                                                <span class="flex size-1.5 rounded-full bg-indigo-500"></span>
+                                                <span class="flex size-1.5 rounded-full bg-brand-500"></span>
                                             @endif
                                             <div>
                                                 <div class="font-bold text-zinc-800 dark:text-zinc-100">
@@ -205,7 +201,7 @@
                                     </td>
 
                                     {{-- Work Hours --}}
-                                    <td class="px-4 py-3 text-right">
+                                    <td class="pulse-td text-right">
                                         @if($hasWork)
                                             <span class="font-bold text-zinc-800 dark:text-zinc-100">{{ $day['work_hours'] }}h</span>
                                             <div class="text-[11px] text-zinc-400">{{ $day['work_minutes'] }}m</div>
@@ -215,7 +211,7 @@
                                     </td>
 
                                     {{-- Break Time --}}
-                                    <td class="px-4 py-3 text-right">
+                                    <td class="pulse-td text-right">
                                         @if($day['break_minutes'] > 0)
                                             <span class="font-bold text-amber-600 dark:text-amber-400">{{ $day['break_minutes'] }}m</span>
                                             <div class="text-[11px] text-zinc-400">{{ $day['breaks_count'] }} break{{ $day['breaks_count'] !== 1 ? 's' : '' }}</div>
@@ -225,7 +221,7 @@
                                     </td>
 
                                     {{-- Net Work --}}
-                                    <td class="px-4 py-3 text-right">
+                                    <td class="pulse-td text-right">
                                         @if($hasWork)
                                             <span class="font-black text-emerald-600 dark:text-emerald-400">{{ $day['net_work_hours'] }}h</span>
                                         @else
@@ -234,7 +230,7 @@
                                     </td>
 
                                     {{-- OT --}}
-                                    <td class="px-4 py-3 text-right">
+                                    <td class="pulse-td text-right">
                                         @if($day['ot_minutes'] > 0)
                                             <span class="font-bold text-purple-600 dark:text-purple-400">{{ $day['ot_hours'] }}h</span>
                                         @else
@@ -243,7 +239,7 @@
                                     </td>
 
                                     {{-- Sessions --}}
-                                    <td class="px-4 py-3 text-right">
+                                    <td class="pulse-td text-right">
                                         @if($hasWork)
                                             <span class="inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-bold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
                                                 {{ $day['sessions'] }}
@@ -255,7 +251,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="6" class="px-4 py-10 text-center text-sm text-zinc-400">No days in selected range.</td>
+                                    <td colspan="6" class="pulse-table__empty">No days in selected range.</td>
                                 </tr>
                             @endforelse
                         </tbody>

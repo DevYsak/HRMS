@@ -149,24 +149,24 @@
         </div>
 
         {{-- Recent Logs table --}}
-        <div class="overflow-hidden rounded-2xl border border-zinc-100 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <div class="pulse-card p-0 overflow-hidden">
             <div class="flex items-center justify-between border-b border-zinc-100 px-6 py-4 dark:border-zinc-800">
                 <h2 class="font-black text-zinc-900 dark:text-white">Recent Punch Logs</h2>
                 <span class="text-xs text-zinc-400">Last 50 records</span>
             </div>
-            <div class="overflow-x-auto">
-                <table class="w-full text-sm">
+            <div class="pulse-table-wrap">
+                <table class="pulse-table">
                     <thead>
-                        <tr class="border-b border-zinc-100 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-800/50">
-                            <th class="px-5 py-3 text-left text-xs font-black uppercase tracking-wider text-zinc-400">Employee</th>
-                            <th class="px-5 py-3 text-left text-xs font-black uppercase tracking-wider text-zinc-400">Device ID</th>
-                            <th class="px-5 py-3 text-left text-xs font-black uppercase tracking-wider text-zinc-400">Punched At</th>
-                            <th class="px-5 py-3 text-left text-xs font-black uppercase tracking-wider text-zinc-400">Type</th>
-                            <th class="px-5 py-3 text-left text-xs font-black uppercase tracking-wider text-zinc-400">Verify</th>
-                            <th class="px-5 py-3 text-left text-xs font-black uppercase tracking-wider text-zinc-400">Status</th>
+                        <tr>
+                            <th class="pulse-th pl-5">Employee</th>
+                            <th class="pulse-th">Device ID</th>
+                            <th class="pulse-th">Punched At</th>
+                            <th class="pulse-th">Type</th>
+                            <th class="pulse-th">Verify</th>
+                            <th class="pulse-th">Status</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-zinc-50 dark:divide-zinc-800">
+                    <tbody>
                         @forelse($this->recentLogs as $log)
                             @php
                                 $typeColor = match($log->punch_type) {
@@ -177,8 +177,8 @@
                                     default     => 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400',
                                 };
                             @endphp
-                            <tr class="hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
-                                <td class="px-5 py-3">
+                            <tr>
+                                <td class="pulse-td pl-5">
                                     @if($log->employee)
                                         <div class="font-medium text-zinc-900 dark:text-white">{{ $log->employee->user?->name }}</div>
                                         <div class="text-[11px] text-zinc-400">{{ $log->employee->employee_id }}</div>
@@ -186,17 +186,17 @@
                                         <span class="font-mono text-xs text-rose-500">Unmatched</span>
                                     @endif
                                 </td>
-                                <td class="px-5 py-3 font-mono text-xs text-zinc-500">{{ $log->device_user_id }}</td>
-                                <td class="px-5 py-3 text-zinc-700 dark:text-zinc-300">{{ $log->punched_at->format('d M Y, H:i:s') }}</td>
-                                <td class="px-5 py-3">
+                                <td class="pulse-td font-mono text-xs">{{ $log->device_user_id }}</td>
+                                <td class="pulse-td">{{ $log->punched_at->format('d M Y, H:i:s') }}</td>
+                                <td class="pulse-td">
                                     <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase {{ $typeColor }}">
                                         {{ str_replace('_', ' ', $log->punch_type) }}
                                     </span>
                                 </td>
-                                <td class="px-5 py-3 text-xs text-zinc-500">
+                                <td class="pulse-td text-xs">
                                     {{ config('biometric.verify_types')[$log->verify_type] ?? "#{$log->verify_type}" }}
                                 </td>
-                                <td class="px-5 py-3">
+                                <td class="pulse-td">
                                     @if($log->is_processed)
                                         <flux:badge color="green">Applied</flux:badge>
                                     @elseif($log->process_error)
@@ -208,7 +208,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="6" class="px-5 py-10 text-center text-sm text-zinc-400">
+                                <td colspan="6" class="pulse-table__empty">
                                     No biometric logs yet. Run a sync to pull data from the device.
                                 </td>
                             </tr>
@@ -270,23 +270,23 @@
                 </div>
             </div>
 
-            <div class="overflow-hidden rounded-2xl border border-zinc-100 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <div class="pulse-card p-0 overflow-hidden">
                 <div class="flex items-center justify-between border-b border-zinc-100 px-6 py-4 dark:border-zinc-800">
                     <h2 class="font-black text-zinc-900 dark:text-white">Enrolled Users</h2>
                     <span class="text-xs text-zinc-400">{{ $mappedCount }} / {{ $totalUsers }} mapped</span>
                 </div>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-sm">
+                <div class="pulse-table-wrap">
+                    <table class="pulse-table">
                         <thead>
-                            <tr class="border-b border-zinc-100 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-800/50">
-                                <th class="px-5 py-3 text-left text-xs font-black uppercase tracking-wider text-zinc-400">Device ID</th>
-                                <th class="px-5 py-3 text-left text-xs font-black uppercase tracking-wider text-zinc-400">Name on Device</th>
-                                <th class="px-5 py-3 text-left text-xs font-black uppercase tracking-wider text-zinc-400">Privilege</th>
-                                <th class="px-5 py-3 text-left text-xs font-black uppercase tracking-wider text-zinc-400">Mapped HRMS Employee</th>
-                                <th class="px-5 py-3 text-left text-xs font-black uppercase tracking-wider text-zinc-400">Action</th>
+                            <tr>
+                                <th class="pulse-th pl-5">Device ID</th>
+                                <th class="pulse-th">Name on Device</th>
+                                <th class="pulse-th">Privilege</th>
+                                <th class="pulse-th">Mapped HRMS Employee</th>
+                                <th class="pulse-th">Action</th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-zinc-50 dark:divide-zinc-800">
+                        <tbody>
                             @forelse($deviceUsers as $user)
                                 @php
                                     $emp = $user['employee_id']
@@ -298,25 +298,25 @@
                                         default => 'Level '.$user['privilege'],
                                     };
                                 @endphp
-                                <tr class="hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
+                                <tr>
                                     {{-- Device ID --}}
-                                    <td class="px-5 py-3">
+                                    <td class="pulse-td pl-5">
                                         <span class="inline-flex items-center rounded-lg bg-zinc-100 px-2.5 py-1 font-mono text-xs font-black text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
                                             #{{ $user['device_user_id'] }}
                                         </span>
                                     </td>
                                     {{-- Name on device --}}
-                                    <td class="px-5 py-3 font-medium text-zinc-900 dark:text-white">
+                                    <td class="pulse-td font-medium text-zinc-900 dark:text-white">
                                         {{ $user['name'] ?: '—' }}
                                     </td>
                                     {{-- Privilege --}}
-                                    <td class="px-5 py-3">
+                                    <td class="pulse-td">
                                         <flux:badge color="{{ $user['privilege'] > 0 ? 'amber' : 'zinc' }}">
                                             {{ $privilegeLabel }}
                                         </flux:badge>
                                     </td>
                                     {{-- Mapped employee --}}
-                                    <td class="px-5 py-3">
+                                    <td class="pulse-td">
                                         @if($emp)
                                             <div class="flex items-center gap-2">
                                                 <div class="flex size-7 items-center justify-center rounded-full bg-emerald-100 text-xs font-black text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
@@ -332,7 +332,7 @@
                                         @endif
                                     </td>
                                     {{-- Actions --}}
-                                    <td class="px-5 py-3">
+                                    <td class="pulse-td">
                                         <div class="flex items-center gap-2">
                                             <flux:button
                                                 wire:click="openMapping('{{ $user['device_user_id'] }}', '{{ addslashes($user['name']) }}')"

@@ -1,11 +1,10 @@
 <flux:main class="min-h-screen bg-zinc-50 dark:bg-zinc-950 p-6 space-y-6">
 
     {{-- ─── PAGE HEADER ─── --}}
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div class="pulse-action-bar">
         <div>
-            <h1 class="text-2xl font-black text-zinc-900 dark:text-white">Attendance Settings</h1>
-            <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Configure global rules, shifts, and geo-fencing
-                locations.</p>
+            <h1 class="pulse-page-title">Attendance Settings</h1>
+            <p class="pulse-page-subtitle">Configure global rules, shifts, and geo-fencing locations.</p>
         </div>
         <flux:button wire:click="save" variant="primary" icon="check">Save Global Settings</flux:button>
     </div>
