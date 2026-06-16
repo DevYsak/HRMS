@@ -22,6 +22,7 @@
                     <flux:navlist.item :href="route('teams.index')" :current="request()->routeIs('teams.*')" wire:navigate icon="users">{{ __('Teams') }}</flux:navlist.item>
                     <flux:navlist.item :href="route('settings.holidays')" :current="request()->routeIs('settings.holidays')" wire:navigate icon="calendar-days">{{ __('Holidays') }}</flux:navlist.item>
                     <flux:navlist.item :href="route('appearance.edit')" :current="request()->routeIs('appearance.edit')" wire:navigate icon="paint-brush">{{ __('Appearance') }}</flux:navlist.item>
+                    <flux:navlist.item :href="route('settings.preferences')" :current="request()->routeIs('settings.preferences')" wire:navigate icon="adjustments-horizontal">{{ __('Preferences') }}</flux:navlist.item>
                     @can('manageFullSettings')
                         <flux:separator class="my-2" />
                         <flux:navlist.item :href="route('settings.employment-types')" :current="request()->routeIs('settings.employment-types')" wire:navigate icon="briefcase">{{ __('Employment Types') }}</flux:navlist.item>

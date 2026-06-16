@@ -5,6 +5,7 @@ use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\DocumentUploadController;
 use App\Http\Controllers\PayslipController;
 use App\Http\Controllers\ReportController;
+use App\Livewire\AiAssistantPage;
 use App\Livewire\Attendance\AllAttendance;
 use App\Livewire\Attendance\AttendanceSettings;
 use App\Livewire\Attendance\AttendanceTracker;
@@ -100,6 +101,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Dashboard
     Route::get('/', Dashboard::class)->name('dashboard');
+
+    // AI Assistant full page
+    Route::get('/ai-assistant', AiAssistantPage::class)->name('ai.assistant');
 
     // --------------------------------------------------
     // Employees module

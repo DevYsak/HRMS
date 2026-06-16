@@ -149,12 +149,33 @@
         ══════════════════════════════════════════ --}}
         <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl px-5 py-3.5">
             <div class="flex flex-wrap items-center gap-3">
-                <flux:input wire:model.live.debounce.300ms="search" placeholder="Search employee name or ID..."
-                    icon="magnifying-glass" size="sm" class="w-60" />
 
-                <flux:input wire:model.live="date" type="date" size="sm" class="w-44" />
+                {{-- Week navigator --}}
+                <div class="flex items-center gap-1 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-1">
+                    <button wire:click="previousWeek" type="button"
+                        class="flex size-7 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-white hover:text-zinc-800 hover:shadow-sm dark:hover:bg-zinc-700 dark:hover:text-zinc-100">
+                        <flux:icon.chevron-left class="size-4" />
+                    </button>
+                    <button wire:click="thisWeek" type="button"
+                        class="px-3 py-1 text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:text-brand-600 transition min-w-[148px] text-center">
+                        {{ $weekLabel }}
+                    </button>
+                    <button wire:click="nextWeek" type="button"
+                        class="flex size-7 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-white hover:text-zinc-800 hover:shadow-sm dark:hover:bg-zinc-700 dark:hover:text-zinc-100">
+                        <flux:icon.chevron-right class="size-4" />
+                    </button>
+                </div>
 
-                <flux:select wire:model.live="status" placeholder="All Status" size="sm" class="w-40">
+                {{-- Specific date override --}}
+                <flux:input wire:model.live="date" type="date" size="sm" class="w-40"
+                    title="Pick a specific date (overrides week range)" />
+
+                {{-- Search --}}
+                <flux:input wire:model.live.debounce.300ms="search" placeholder="Search employee..."
+                    icon="magnifying-glass" size="sm" class="w-52" />
+
+                {{-- Status --}}
+                <flux:select wire:model.live="status" placeholder="All Status" size="sm" class="w-36">
                     <option value="">All Status</option>
                     <option value="on_time">On Time</option>
                     <option value="late">Late</option>
@@ -169,9 +190,14 @@
                     </button>
                 @endif
 
-                <div class="ml-auto text-xs text-zinc-400 font-medium">
-                    Showing {{ $attendances->firstItem() }}–{{ $attendances->lastItem() }} of
-                    {{ $attendances->total() }}
+                <div class="ml-auto flex items-center gap-3">
+                    <span class="text-xs text-zinc-400 font-medium">
+                        {{ $attendances->total() }} records
+                    </span>
+                    <button wire:click="exportCsv" type="button"
+                        class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs font-semibold text-zinc-600 dark:text-zinc-300 hover:border-brand-400 hover:text-brand-700 transition">
+                        <flux:icon.arrow-down-tray class="size-3.5" /> Export CSV
+                    </button>
                 </div>
             </div>
         </div>
