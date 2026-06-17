@@ -109,7 +109,10 @@
       "PowerShell(Start-Process \"C:\\\\xampp\\\\mysql\\\\bin\\\\mysqld.exe\" -ArgumentList \"--defaults-file=C:\\\\xampp\\\\mysql\\\\bin\\\\my.ini\" -WindowStyle Hidden)",
       "Read(//c/xampp/mysql/data/**)",
       "Bash(grep -n 'fillable\\\\|protected $fill' app/Models/User.php)",
-      "Bash(grep -v \"sm:\\\\|md:\\\\|lg:\\\\|xl:\\\\|[/\\\\\\\\*]\")"
+      "Bash(grep -v \"sm:\\\\|md:\\\\|lg:\\\\|xl:\\\\|[/\\\\\\\\*]\")",
+      "Bash(./mysql.exe -u root hrms -e ' *)",
+      "Bash(./mysql.exe -u root hrms -e \"SHOW TABLES LIKE '%exit%';\")",
+      "Bash(./mysql.exe -u root hrms -e \"DESCRIBE exit_records;\")"
     ]
   }
 }
