@@ -691,8 +691,22 @@
         {{-- User profile --}}
         <div class="mt-1 border-t border-zinc-100 px-2 pb-2 pt-2 dark:border-zinc-800">
             <flux:dropdown position="top" align="start" class="w-full">
-                <flux:sidebar.profile :name="auth()->user()->name" :initials="auth()->user()->initials()"
-                    icon:trailing="chevrons-up-down" />
+                <button type="button"
+                    class="flex w-full items-center gap-3 rounded-xl p-2 text-left transition hover:bg-white/5">
+                    <div class="relative shrink-0">
+                        <div class="flex size-9 items-center justify-center rounded-xl text-[13px] font-bold text-white"
+                            style="background-color: {{ $roleColor }}">
+                            {{ auth()->user()->initials() }}
+                        </div>
+                        <span class="absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-[#0F172A] bg-emerald-500"
+                            title="Online"></span>
+                    </div>
+                    <div class="min-w-0 flex-1">
+                        <div class="truncate text-[13px] font-bold text-white">{{ auth()->user()->name }}</div>
+                        <div class="truncate text-[11px] font-semibold" style="color: {{ $roleColor }}">{{ $roleLabel }}</div>
+                    </div>
+                    <flux:icon.chevron-up-down class="size-4 shrink-0 text-slate-400" />
+                </button>
                 <flux:menu class="w-56">
                     <div class="flex items-center gap-3 px-2 py-2">
                         <flux:avatar :initials="auth()->user()->initials()" size="sm" class="bg-brand-600 text-white" />
