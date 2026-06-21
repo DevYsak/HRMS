@@ -1,4 +1,4 @@
-<flux:main class="min-h-screen space-y-5 bg-zinc-50 p-4 font-['DM_Sans'] dark:bg-zinc-950 md:p-6">
+<flux:main class="min-h-screen space-y-5 bg-[#FAFAFA] p-4 font-['DM_Sans'] dark:bg-[#0B1220] md:p-6">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;700;900&display=swap');
 

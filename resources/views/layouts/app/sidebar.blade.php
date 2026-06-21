@@ -7,7 +7,7 @@
     @include('partials.head')
 </head>
 
-<body class="min-h-screen bg-zinc-50 antialiased dark:bg-zinc-950">
+<body class="min-h-screen bg-[#FAFAFA] antialiased dark:bg-[#0B1220]">
 
     @php
         $user = auth()->user();
