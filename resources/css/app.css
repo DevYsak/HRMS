@@ -15,36 +15,46 @@
    Premium role-accent sidebar (Flux) — driven by the
    --role-accent variable set per role on <flux:sidebar>.
    =================================================== */
-[data-flux-sidebar] [data-flux-sidebar-item][data-current]{
-    background-color: color-mix(in srgb, var(--role-accent, #fe9a00) 12%, transparent) !important;
-    color: var(--role-accent, #fe9a00) !important;
-    border-color: color-mix(in srgb, var(--role-accent, #fe9a00) 28%, transparent) !important;
-    box-shadow: inset 3px 0 0 0 var(--role-accent, #fe9a00) !important;
-    font-weight: 600 !important;
-}
-[data-flux-sidebar] [data-flux-sidebar-item][data-current] svg{
-    color: var(--role-accent, #fe9a00) !important;
-}
-[data-flux-sidebar] [data-flux-sidebar-item]:not([data-current]):hover{
-    background-color: color-mix(in srgb, var(--role-accent, #fe9a00) 8%, transparent) !important;
-    color: var(--role-accent, #fe9a00) !important;
-}
-[data-flux-sidebar] [data-flux-sidebar-item]:not([data-current]):hover svg{
-    color: var(--role-accent, #fe9a00) !important;
+/* Navy depth + 280px on desktop */
+.pulse-sidebar { background: linear-gradient(180deg, #0f172a 0%, #0b1120 100%) !important; }
+@media (min-width: 1024px) {
+    .pulse-sidebar[data-flux-sidebar-on-desktop]:not([data-flux-sidebar-collapsed-desktop]) { width: 280px; }
 }
 
-/* Premium dark-navy sidebar — 280px on desktop when expanded */
-@media (min-width: 1024px) {
-    .pulse-sidebar[data-flux-sidebar-on-desktop]:not([data-flux-sidebar-collapsed-desktop]) {
-        width: 280px;
-    }
+/* Base nav item — rounded, spaced, refined light label on navy */
+.pulse-sidebar [data-flux-sidebar-item] {
+    border-radius: 11px !important;
+    margin-block: 2px !important;
+    font-weight: 500 !important;
+    color: #cbd5e1 !important;
+    transition: background-color .18s ease, color .18s ease, box-shadow .18s ease !important;
 }
-/* Active item on navy: keep a soft tinted pill, light label */
+.pulse-sidebar [data-flux-sidebar-item] svg { color: #8b95a7 !important; }
+
+/* Hover — soft accent wash */
+.pulse-sidebar [data-flux-sidebar-item]:not([data-current]):hover {
+    background-color: color-mix(in srgb, var(--role-accent, #f97316) 12%, transparent) !important;
+    color: #ffffff !important;
+}
+.pulse-sidebar [data-flux-sidebar-item]:not([data-current]):hover svg {
+    color: var(--role-accent, #f97316) !important;
+}
+
+/* Active — orange glass pill with accent bar + soft glow */
 .pulse-sidebar [data-flux-sidebar-item][data-current] {
-    background-color: color-mix(in srgb, var(--role-accent, #f97316) 18%, transparent) !important;
+    color: #ffffff !important;
+    border-color: transparent !important;
+    background: linear-gradient(90deg,
+        color-mix(in srgb, var(--role-accent, #f97316) 30%, transparent),
+        color-mix(in srgb, var(--role-accent, #f97316) 8%, transparent)) !important;
+    box-shadow: inset 3px 0 0 0 var(--role-accent, #f97316),
+        0 6px 18px -8px color-mix(in srgb, var(--role-accent, #f97316) 80%, transparent) !important;
+    font-weight: 700 !important;
 }
-/* Subtle dividers/scroll on navy */
-.pulse-sidebar ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, .08); }
+.pulse-sidebar [data-flux-sidebar-item][data-current] svg { color: var(--role-accent, #f97316) !important; }
+
+/* Subtle scrollbar on navy */
+.pulse-sidebar ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, .10); border-radius: 8px; }
 
 /* ===================================================
    PULSE HRMS — Design Tokens (TailwindCSS v4 @theme)
@@ -135,26 +145,6 @@ input:focus[data-flux-control],
 textarea:focus[data-flux-control],
 select:focus[data-flux-control] {
     @apply outline-hidden ring-2 ring-brand-600 ring-offset-1;
-}
-
-/* ===================================================
-   Sidebar — Active item: Orange left-border highlight (Conexus style)
-   =================================================== */
-[data-flux-sidebar] [data-flux-sidebar-item][data-current] {
-    background-color: #fff7ed !important;
-    color: #dc7a00 !important;
-    border-right: 2px solid #fe9a00 !important;
-    font-weight: 600 !important;
-}
-
-[data-flux-sidebar] [data-flux-sidebar-item][data-current] svg {
-    color: #fe9a00 !important;
-}
-
-.dark [data-flux-sidebar] [data-flux-sidebar-item][data-current] {
-    background-color: rgba(249, 115, 22, 0.12) !important;
-    color: #fb923c !important;
-    border-right: 2px solid #fe9a00 !important;
 }
 
 /* ===================================================
