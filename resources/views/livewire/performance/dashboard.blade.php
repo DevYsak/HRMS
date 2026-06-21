@@ -164,45 +164,68 @@
 
         {{-- ===== TOP PERFORMANCE CARDS ===== --}}
         <div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
-            <div class="pulse-card text-center">
-                <div class="text-3xl font-bold text-zinc-900 dark:text-white">{{ $stats['kpis_total'] }}</div>
-                <div class="text-xs text-zinc-400 mt-1">Total KPIs Assigned</div>
+            <div class="pulse-card flex flex-col items-center text-center gap-1.5 py-5">
+                <div class="flex size-8 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800 mb-1">
+                    <flux:icon.clipboard-document-check class="size-4 text-zinc-500" />
+                </div>
+                <div class="text-2xl font-black text-zinc-900 dark:text-white tabular-nums">{{ $stats['kpis_total'] }}</div>
+                <div class="text-[11px] font-medium text-zinc-400">Total KPIs</div>
             </div>
-            <div class="pulse-card text-center">
-                <div class="text-3xl font-bold text-emerald-600">{{ $stats['kpis_completed'] }}</div>
-                <div class="text-xs text-zinc-400 mt-1">KPIs Completed</div>
+            <div class="pulse-card flex flex-col items-center text-center gap-1.5 py-5">
+                <div class="flex size-8 items-center justify-center rounded-full bg-emerald-50 dark:bg-emerald-900/20 mb-1">
+                    <flux:icon.check-circle class="size-4 text-emerald-500" />
+                </div>
+                <div class="text-2xl font-black text-emerald-600 tabular-nums">{{ $stats['kpis_completed'] }}</div>
+                <div class="text-[11px] font-medium text-zinc-400">Completed</div>
             </div>
-            <div class="pulse-card text-center">
-                <div class="text-3xl font-bold text-amber-500">{{ $stats['kpis_pending'] }}</div>
-                <div class="text-xs text-zinc-400 mt-1">KPIs Pending</div>
+            <div class="pulse-card flex flex-col items-center text-center gap-1.5 py-5">
+                <div class="flex size-8 items-center justify-center rounded-full bg-amber-50 dark:bg-amber-900/20 mb-1">
+                    <flux:icon.clock class="size-4 text-amber-500" />
+                </div>
+                <div class="text-2xl font-black text-amber-500 tabular-nums">{{ $stats['kpis_pending'] }}</div>
+                <div class="text-[11px] font-medium text-zinc-400">Pending</div>
             </div>
-            <div class="pulse-card text-center">
-                <div class="text-base font-bold text-zinc-900 dark:text-white truncate">{{ $cycle->name }}</div>
-                <div class="text-xs text-zinc-400 mt-1">Current Review Cycle</div>
+            <div class="pulse-card flex flex-col items-center text-center gap-1.5 py-5">
+                <div class="flex size-8 items-center justify-center rounded-full bg-indigo-50 dark:bg-indigo-900/20 mb-1">
+                    <flux:icon.star class="size-4 text-indigo-500" />
+                </div>
+                <div class="text-2xl font-black text-indigo-600 tabular-nums">{{ $scorecard ? number_format($scorecard->final_score, 1) : '—' }}</div>
+                <div class="text-[11px] font-medium text-zinc-400">Overall Score</div>
             </div>
-            <div class="pulse-card text-center">
-                <div class="text-3xl font-bold text-indigo-600">{{ $scorecard ? number_format($scorecard->final_score, 1) : '—' }}</div>
-                <div class="text-xs text-zinc-400 mt-1">Average Score</div>
+            <div class="pulse-card flex flex-col items-center text-center gap-1.5 py-5">
+                <div class="flex size-8 items-center justify-center rounded-full bg-blue-50 dark:bg-blue-900/20 mb-1">
+                    <flux:icon.calendar-days class="size-4 text-blue-500" />
+                </div>
+                <div class="text-2xl font-black text-zinc-900 dark:text-white tabular-nums">{{ $scorecard?->attendance_score !== null ? number_format($scorecard->attendance_score, 0) . '%' : '—' }}</div>
+                <div class="text-[11px] font-medium text-zinc-400">Attendance</div>
             </div>
-            <div class="pulse-card text-center">
-                <div class="text-3xl font-bold text-zinc-900 dark:text-white">{{ $scorecard?->attendance_score !== null ? number_format($scorecard->attendance_score, 0) . '%' : '—' }}</div>
-                <div class="text-xs text-zinc-400 mt-1">Attendance %</div>
+            <div class="pulse-card flex flex-col items-center text-center gap-1.5 py-5">
+                <div class="flex size-8 items-center justify-center rounded-full {{ $promoLabel === 'Approved' ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-zinc-100 dark:bg-zinc-800' }} mb-1">
+                    <flux:icon.arrow-trending-up class="size-4 {{ $promoLabel === 'Approved' ? 'text-emerald-500' : ($promoLabel === 'Under Review' ? 'text-amber-500' : 'text-zinc-400') }}" />
+                </div>
+                <div class="text-sm font-black {{ $promoLabel === 'Approved' ? 'text-emerald-600' : ($promoLabel === 'Under Review' ? 'text-amber-500' : 'text-zinc-700 dark:text-zinc-300') }}">{{ $promoLabel }}</div>
+                <div class="text-[11px] font-medium text-zinc-400">Promotion</div>
             </div>
-            <div class="pulse-card text-center">
-                <div class="text-base font-bold {{ $promoLabel === 'Approved' ? 'text-emerald-600' : ($promoLabel === 'Under Review' ? 'text-amber-500' : 'text-zinc-900 dark:text-white') }}">{{ $promoLabel }}</div>
-                <div class="text-xs text-zinc-400 mt-1">Promotion Eligibility</div>
+            <div class="pulse-card flex flex-col items-center text-center gap-1.5 py-5">
+                <div class="flex size-8 items-center justify-center rounded-full {{ $stats['open_warnings'] > 0 ? 'bg-red-50 dark:bg-red-900/20' : 'bg-zinc-100 dark:bg-zinc-800' }} mb-1">
+                    <flux:icon.exclamation-triangle class="size-4 {{ $stats['open_warnings'] > 0 ? 'text-red-500' : 'text-zinc-400' }}" />
+                </div>
+                <div class="text-2xl font-black {{ $stats['open_warnings'] > 0 ? 'text-red-500' : 'text-zinc-900 dark:text-white' }} tabular-nums">{{ $stats['open_warnings'] }}</div>
+                <div class="text-[11px] font-medium text-zinc-400">Warnings</div>
             </div>
-            <div class="pulse-card text-center">
-                <div class="text-3xl font-bold {{ $stats['open_warnings'] > 0 ? 'text-red-500' : 'text-zinc-900 dark:text-white' }}">{{ $stats['open_warnings'] }}</div>
-                <div class="text-xs text-zinc-400 mt-1">Open Warnings</div>
+            <div class="pulse-card flex flex-col items-center text-center gap-1.5 py-5">
+                <div class="flex size-8 items-center justify-center rounded-full {{ $stats['has_active_pip'] ? 'bg-red-50 dark:bg-red-900/20' : 'bg-emerald-50 dark:bg-emerald-900/20' }} mb-1">
+                    <flux:icon.chart-bar class="size-4 {{ $stats['has_active_pip'] ? 'text-red-500' : 'text-emerald-500' }}" />
+                </div>
+                <div class="text-sm font-black {{ $stats['has_active_pip'] ? 'text-red-500' : 'text-emerald-600' }}">{{ $stats['has_active_pip'] ? 'Active' : 'None' }}</div>
+                <div class="text-[11px] font-medium text-zinc-400">PIP Status</div>
             </div>
-            <div class="pulse-card text-center">
-                <div class="text-base font-bold {{ $stats['has_active_pip'] ? 'text-red-500' : 'text-emerald-600' }}">{{ $stats['has_active_pip'] ? 'Yes' : 'No' }}</div>
-                <div class="text-xs text-zinc-400 mt-1">Active PIP</div>
-            </div>
-            <div class="pulse-card text-center">
-                <div class="text-3xl font-bold text-zinc-900 dark:text-white">{{ $stats['manager_reviews_pending'] }}</div>
-                <div class="text-xs text-zinc-400 mt-1">Manager Reviews Pending</div>
+            <div class="pulse-card flex flex-col items-center text-center gap-1.5 py-5 lg:col-span-2">
+                <div class="flex size-8 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800 mb-1">
+                    <flux:icon.user-circle class="size-4 text-zinc-500" />
+                </div>
+                <div class="text-2xl font-black text-zinc-900 dark:text-white tabular-nums">{{ $stats['manager_reviews_pending'] }}</div>
+                <div class="text-[11px] font-medium text-zinc-400">Manager Reviews Pending</div>
             </div>
         </div>
 
@@ -262,43 +285,55 @@
         {{-- ===== KPI SCORECARD TABLE ===== --}}
         <div class="pulse-card overflow-hidden !p-0">
             <div class="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 flex items-center gap-2">
-                <flux:icon.table-cells class="size-4 text-indigo-500" />
+                <div class="flex size-6 items-center justify-center rounded-md bg-indigo-100 dark:bg-indigo-900/30">
+                    <flux:icon.table-cells class="size-3.5 text-indigo-600 dark:text-indigo-400" />
+                </div>
                 <h3 class="text-sm font-bold text-zinc-900 dark:text-white">KPI Scorecard</h3>
+                @if($scorecardRows->isNotEmpty())
+                    <span class="ml-auto text-xs text-zinc-400">{{ $scorecardRows->count() }} {{ Str::plural('component', $scorecardRows->count()) }}</span>
+                @endif
             </div>
             @if($scorecardRows->isEmpty())
                 <div class="flex flex-col items-center justify-center py-12 text-center">
                     <flux:icon.clipboard-document-list class="size-10 text-zinc-300 mb-3" />
-                    <p class="text-zinc-400">No KPI scorecard data for this cycle.</p>
+                    <p class="text-zinc-400 text-sm">No KPI scorecard data for this cycle.</p>
                 </div>
             @else
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm">
                         <thead>
-                            <tr class="bg-zinc-50 dark:bg-zinc-950 text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
-                                <th class="text-left py-3 px-6">KPI Component</th>
-                                <th class="text-left py-3 px-4">Category</th>
-                                <th class="text-right py-3 px-4">Weight</th>
-                                <th class="text-right py-3 px-4">Target</th>
-                                <th class="text-right py-3 px-4">Actual</th>
-                                <th class="text-right py-3 px-4">Achievement %</th>
-                                <th class="text-left py-3 px-4">Status</th>
-                                <th class="text-left py-3 px-6">Manager Feedback</th>
+                            <tr class="bg-zinc-50/80 dark:bg-zinc-950/60 border-b border-zinc-100 dark:border-zinc-800">
+                                <th class="text-left py-3 pl-6 pr-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider whitespace-nowrap min-w-[180px]">KPI Component</th>
+                                <th class="text-left py-3 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider whitespace-nowrap min-w-[120px]">Category</th>
+                                <th class="text-right py-3 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider whitespace-nowrap">Weight</th>
+                                <th class="text-right py-3 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider whitespace-nowrap">Target</th>
+                                <th class="text-right py-3 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider whitespace-nowrap">Actual</th>
+                                <th class="text-right py-3 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider whitespace-nowrap">Achievement %</th>
+                                <th class="text-left py-3 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider whitespace-nowrap">Status</th>
+                                <th class="text-left py-3 pl-4 pr-6 text-[10px] font-bold text-zinc-400 uppercase tracking-wider min-w-[160px]">Manager Feedback</th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
+                        <tbody class="divide-y divide-zinc-50 dark:divide-zinc-800/60">
                             @foreach($scorecardRows as $row)
                                 @php [$badgeLabel, $badgeClass] = $achievementBadge($row->achievement); @endphp
-                                <tr class="hover:bg-zinc-50/60 dark:hover:bg-zinc-800/30">
-                                    <td class="py-3 px-6 font-medium text-zinc-900 dark:text-white">{{ $row->name }}</td>
-                                    <td class="py-3 px-4 text-zinc-500 dark:text-zinc-400">{{ $row->category }}</td>
-                                    <td class="py-3 px-4 text-right tabular-nums">{{ $row->weight !== null ? number_format($row->weight, 0) . '%' : '—' }}</td>
-                                    <td class="py-3 px-4 text-right tabular-nums">{{ $row->target ?? '—' }}</td>
-                                    <td class="py-3 px-4 text-right tabular-nums font-semibold">{{ $row->actual ?? '—' }}</td>
-                                    <td class="py-3 px-4 text-right tabular-nums font-semibold">{{ number_format($row->achievement, 0) }}%</td>
-                                    <td class="py-3 px-4">
-                                        <span class="px-2 py-0.5 text-[10px] font-semibold rounded {{ $badgeClass }}">{{ $badgeLabel }}</span>
+                                <tr class="hover:bg-zinc-50/60 dark:hover:bg-zinc-800/20 transition-colors">
+                                    <td class="py-3.5 pl-6 pr-4 font-semibold text-zinc-900 dark:text-white">{{ $row->name }}</td>
+                                    <td class="py-3.5 px-4 text-zinc-500 dark:text-zinc-400">{{ $row->category ?? '—' }}</td>
+                                    <td class="py-3.5 px-4 text-right tabular-nums text-zinc-700 dark:text-zinc-300 font-medium">{{ $row->weight !== null ? number_format($row->weight, 0) . '%' : '—' }}</td>
+                                    <td class="py-3.5 px-4 text-right tabular-nums text-zinc-500 dark:text-zinc-400">{{ $row->target ?? '—' }}</td>
+                                    <td class="py-3.5 px-4 text-right tabular-nums font-bold text-zinc-900 dark:text-white">{{ $row->actual ?? '—' }}</td>
+                                    <td class="py-3.5 px-4 text-right">
+                                        @php $ach = (float) $row->achievement; @endphp
+                                        <span class="tabular-nums font-bold {{ $ach >= 85 ? 'text-emerald-600' : ($ach >= 70 ? 'text-blue-600' : ($ach >= 50 ? 'text-amber-600' : 'text-red-500')) }}">
+                                            {{ number_format($ach, 0) }}%
+                                        </span>
                                     </td>
-                                    <td class="py-3 px-6 text-zinc-500 dark:text-zinc-400 text-xs max-w-xs truncate">{{ $row->feedback ?? '—' }}</td>
+                                    <td class="py-3.5 px-4">
+                                        <span class="inline-flex items-center px-2.5 py-1 text-[10px] font-bold rounded-lg {{ $badgeClass }}">{{ $badgeLabel }}</span>
+                                    </td>
+                                    <td class="py-3.5 pl-4 pr-6 text-zinc-500 dark:text-zinc-400 text-xs">
+                                        {{ $row->feedback ?? '—' }}
+                                    </td>
                                 </tr>
                             @endforeach
                         </tbody>
@@ -311,31 +346,46 @@
 
         {{-- ===== PERFORMANCE TIMELINE ===== --}}
         <div class="pulse-card">
-            <h3 class="text-sm font-bold text-zinc-900 dark:text-white mb-5 flex items-center gap-2">
-                <flux:icon.clock class="size-4 text-indigo-500" />
-                Performance Timeline
-            </h3>
+            <div class="flex items-center gap-2 mb-6">
+                <div class="flex size-6 items-center justify-center rounded-md bg-indigo-100 dark:bg-indigo-900/30">
+                    <flux:icon.clock class="size-3.5 text-indigo-600 dark:text-indigo-400" />
+                </div>
+                <h3 class="text-sm font-bold text-zinc-900 dark:text-white">Performance Timeline</h3>
+                @if($timelines->isNotEmpty())
+                    <span class="ml-auto text-xs text-zinc-400">{{ $timelines->count() }} {{ Str::plural('event', $timelines->count()) }}</span>
+                @endif
+            </div>
             @if($timelines->isEmpty())
-                <p class="text-sm text-zinc-400 text-center py-6">No timeline events recorded yet.</p>
+                <div class="flex flex-col items-center justify-center py-10 text-center">
+                    <flux:icon.clock class="size-10 text-zinc-200 dark:text-zinc-700 mb-3" />
+                    <p class="text-sm text-zinc-400">No timeline events recorded yet.</p>
+                </div>
             @else
-                <div class="space-y-0">
-                    @foreach($timelines as $event)
-                        @php $colorClass = $eventColorClasses[$event->eventColor()] ?? $eventColorClasses['zinc']; @endphp
-                        <div class="flex gap-4 {{ ! $loop->last ? 'pb-5 border-l border-zinc-100 dark:border-zinc-800 ml-4' : 'ml-4' }} relative">
-                            <div class="absolute -left-4 flex items-center justify-center size-8 rounded-full {{ $colorClass }} -translate-x-1/2">
-                                <flux:icon :icon="$event->eventIcon()" class="size-4" />
-                            </div>
-                            <div class="pl-6">
-                                <div class="flex items-center gap-2 flex-wrap">
-                                    <span class="text-sm font-semibold text-zinc-900 dark:text-white">{{ $event->title }}</span>
-                                    <span class="text-xs text-zinc-400">{{ $event->event_date?->format('d M Y') }}</span>
+                <div class="relative">
+                    {{-- Vertical connector line --}}
+                    <div class="absolute left-[15px] top-4 bottom-4 w-px bg-zinc-100 dark:bg-zinc-800"></div>
+
+                    <div class="space-y-1">
+                        @foreach($timelines as $event)
+                            @php $colorClass = $eventColorClasses[$event->eventColor()] ?? $eventColorClasses['zinc']; @endphp
+                            <div class="relative flex items-start gap-4 py-3">
+                                {{-- Icon dot (sits on the vertical line) --}}
+                                <div class="relative z-10 flex size-[30px] shrink-0 items-center justify-center rounded-full {{ $colorClass }} ring-2 ring-white dark:ring-zinc-900">
+                                    <flux:icon :name="$event->eventIcon()" class="size-3.5" />
                                 </div>
-                                @if($event->description)
-                                    <p class="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">{{ $event->description }}</p>
-                                @endif
+                                {{-- Content --}}
+                                <div class="flex-1 min-w-0 pt-0.5">
+                                    <div class="flex items-center gap-2 flex-wrap">
+                                        <span class="text-sm font-semibold text-zinc-900 dark:text-white leading-tight">{{ $event->title }}</span>
+                                        <span class="text-[11px] text-zinc-400 tabular-nums">{{ $event->event_date?->format('d M Y') }}</span>
+                                    </div>
+                                    @if($event->description)
+                                        <p class="text-xs text-zinc-500 dark:text-zinc-400 mt-1 leading-relaxed">{{ $event->description }}</p>
+                                    @endif
+                                </div>
                             </div>
-                        </div>
-                    @endforeach
+                        @endforeach
+                    </div>
                 </div>
             @endif
         </div>

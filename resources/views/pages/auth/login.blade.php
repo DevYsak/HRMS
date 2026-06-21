@@ -3,8 +3,8 @@
 
         {{-- Heading --}}
         <div class="text-center">
-            <h1 class="text-2xl font-bold text-zinc-900">Log in to your account</h1>
-            <p class="mt-1 text-sm text-zinc-500">Enter your email and password below to log in</p>
+            <h1 class="text-2xl font-bold text-zinc-900 dark:text-white">Log in to your account</h1>
+            <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Enter your email and password below to log in</p>
         </div>
 
         {{-- Session Status --}}

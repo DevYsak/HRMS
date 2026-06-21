@@ -156,6 +156,81 @@
     @endforeach
 </div>
 
+{{-- ─── ATTENDANCE ANALYTICS ─── --}}
+<div class="grid grid-cols-1 gap-4 lg:grid-cols-4 mb-5">
+    {{-- Attendance score --}}
+    <div class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <div class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Attendance Score</div>
+        @php $score = (int) ($analytics['attendance_score'] ?? 0); @endphp
+        <div class="mt-2 text-4xl font-black {{ $score >= 80 ? 'text-emerald-600' : ($score >= 60 ? 'text-amber-600' : 'text-rose-600') }}">{{ $score }}<span class="text-base text-zinc-400">/100</span></div>
+        <div class="mt-3 h-2 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+            <div class="h-full rounded-full {{ $score >= 80 ? 'bg-emerald-500' : ($score >= 60 ? 'bg-amber-500' : 'bg-rose-500') }}" style="width: {{ $score }}%"></div>
+        </div>
+    </div>
+    {{-- Shift compliance --}}
+    <div class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <div class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Shift Compliance</div>
+        <div class="mt-2 text-4xl font-black text-zinc-900 dark:text-white">{{ $analytics['shift_compliance'] ?? 0 }}%</div>
+        <div class="mt-2 text-[11px] text-zinc-400">on-time of working days</div>
+    </div>
+    {{-- Work pattern --}}
+    <div class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <div class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Work Pattern</div>
+        @php $off = (int) ($analytics['office_days'] ?? 0); $wfh = (int) ($analytics['wfh_days'] ?? 0); $tot = max(1, $off + $wfh); @endphp
+        <div class="mt-2 flex items-baseline gap-2 text-sm">
+            <span class="font-black text-zinc-900 dark:text-white">{{ $off }}</span><span class="text-xs text-zinc-400">office</span>
+            <span class="font-black text-blue-600">{{ $wfh }}</span><span class="text-xs text-zinc-400">WFH</span>
+        </div>
+        <div class="mt-3 flex h-2 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+            <div class="h-full bg-brand-500" style="width: {{ round($off / $tot * 100) }}%"></div>
+            <div class="h-full bg-blue-500" style="width: {{ round($wfh / $tot * 100) }}%"></div>
+        </div>
+    </div>
+    {{-- Break analytics --}}
+    <div class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <div class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Break Analytics</div>
+        <div class="mt-2 text-4xl font-black text-zinc-900 dark:text-white">{{ $analytics['avg_break'] ?? 0 }}<span class="text-base text-zinc-400">m</span></div>
+        <div class="mt-2 text-[11px] {{ ($analytics['excess_breaks'] ?? 0) > 0 ? 'text-amber-600' : 'text-zinc-400' }}">{{ $analytics['excess_breaks'] ?? 0 }} excess-break days</div>
+    </div>
+</div>
+
+{{-- Late arrival trend --}}
+<div class="mb-5 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+    <div class="mb-4 text-[10px] font-bold uppercase tracking-widest text-zinc-400">Late Arrival Trend (6 months)</div>
+    @php $maxLate = max(1, collect($analytics['late_trend'] ?? [])->max('late') ?: 1); @endphp
+    <div class="flex h-24 items-end justify-between gap-2">
+        @foreach($analytics['late_trend'] ?? [] as $pt)
+            <div class="flex flex-1 flex-col items-center gap-1">
+                <span class="text-[10px] font-bold text-zinc-500">{{ $pt['late'] }}</span>
+                <div class="w-full rounded-t bg-amber-400" style="height: {{ max(4, round($pt['late'] / $maxLate * 72)) }}px"></div>
+                <span class="text-[10px] text-zinc-400">{{ $pt['month'] }}</span>
+            </div>
+        @endforeach
+    </div>
+</div>
+
+{{-- ─── AI ATTENDANCE INSIGHTS (only when OPENAI_API_KEY is set) ─── --}}
+@if($aiEnabled)
+    <div class="mb-5 rounded-2xl border border-indigo-200 bg-gradient-to-br from-indigo-50 to-white p-5 shadow-sm dark:border-indigo-900/50 dark:from-indigo-950/20 dark:to-zinc-900">
+        <div class="mb-3 flex items-center justify-between gap-3">
+            <div class="flex items-center gap-2">
+                <span class="rounded-lg bg-indigo-100 p-1.5 dark:bg-indigo-900/40"><flux:icon.sparkles class="size-4 text-indigo-600 dark:text-indigo-400" /></span>
+                <h3 class="text-xs font-black uppercase tracking-[0.12em] text-zinc-600 dark:text-zinc-300">AI Attendance Insights</h3>
+            </div>
+            <button type="button" wire:click="generateAiInsight" wire:loading.attr="disabled" wire:target="generateAiInsight"
+                class="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-indigo-700 disabled:opacity-50">
+                <span wire:loading.remove wire:target="generateAiInsight">{{ $aiInsight ? 'Regenerate' : 'Generate' }}</span>
+                <span wire:loading wire:target="generateAiInsight">Analysing…</span>
+            </button>
+        </div>
+        @if($aiInsight)
+            <div class="whitespace-pre-line text-sm text-zinc-700 dark:text-zinc-200">{{ $aiInsight }}</div>
+        @else
+            <p class="text-xs text-zinc-400">Generate a plain-language summary of attendance anomalies, burnout risk and late-arrival patterns.</p>
+        @endif
+    </div>
+@endif
+
 {{-- ═══════════════════════════════════════════════
      MAIN BODY: Clock + Calendar
 ═══════════════════════════════════════════════ --}}

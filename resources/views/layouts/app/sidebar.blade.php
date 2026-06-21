@@ -19,6 +19,10 @@
         $isDir = $user->role?->value === 'director';
         $isSA = $user->isSuperAdmin();
 
+        // Premium primary accent — orange across all roles (#F97316).
+        $roleColor = '#f97316';
+        $roleLabel = $user->role?->label() ?? 'Member';
+
         $company = \App\Models\Company::first()
             ?? new \App\Models\Company(['name' => 'Pulse HRMS', 'primary_color' => '#f97316']);
 
@@ -70,12 +74,14 @@
         $searchLinks = $searchLinks->unique('route')->values();
     @endphp
 
-    <flux:sidebar sticky collapsible class="border-e border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+    <flux:sidebar sticky collapsible
+        style="--role-accent: {{ $roleColor }}; --color-accent: {{ $roleColor }}; --color-accent-content: {{ $roleColor }}; --color-accent-foreground: #ffffff;"
+        class="dark pulse-sidebar border-e border-white/5 bg-[#0F172A]">
 
         {{-- Brand --}}
         <flux:sidebar.brand :name="$company->name" :href="route('dashboard')" wire:navigate>
             <x-slot name="logo" class="flex aspect-square size-8 items-center justify-center rounded-lg"
-                style="background-color: {{ $company->primary_color ?? '#f97316' }}">
+                style="background-color: {{ $roleColor }}">
                 @if($company->logo)
                     <img src="{{ asset('storage/' . $company->logo) }}" class="size-6 object-contain"
                         alt="{{ $company->name }}">
@@ -86,6 +92,15 @@
                 @endif
             </x-slot>
         </flux:sidebar.brand>
+
+        {{-- Role chip — colored by the current user's role --}}
+        <div class="px-3 pb-1 pt-0.5 overflow-hidden whitespace-nowrap">
+            <span class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider"
+                style="color: {{ $roleColor }}; background-color: color-mix(in srgb, {{ $roleColor }} 14%, transparent);">
+                <span class="size-1.5 rounded-full" style="background-color: {{ $roleColor }}"></span>
+                {{ $roleLabel }}
+            </span>
+        </div>
 
         <flux:sidebar.nav class="px-2">
             @auth
@@ -399,21 +414,24 @@
                     ════════════════════════════════════════════ --}}
                 @else
 
-                    <flux:sidebar.item icon="squares-2x2" :href="route('dashboard')"
-                        :current="request()->routeIs('dashboard') && !request()->routeIs('dashboard.*')" wire:navigate>Dashboard
-                    </flux:sidebar.item>
-                    @if($isSA || $isDir)
-                        <flux:sidebar.item icon="chart-bar-square" :href="route('dashboard.executive')"
-                            :current="request()->routeIs('dashboard.executive')" wire:navigate>Executive View</flux:sidebar.item>
-                    @endif
-                    @if($isHr)
-                        <flux:sidebar.item icon="user-group" :href="route('dashboard.hr-admin')"
-                            :current="request()->routeIs('dashboard.hr-admin')" wire:navigate>HR Overview</flux:sidebar.item>
-                    @endif
-                    @if($user->isDepartmentHead())
-                        <flux:sidebar.item icon="building-office" :href="route('dashboard.department')"
-                            :current="request()->routeIs('dashboard.department')" wire:navigate>Department View</flux:sidebar.item>
-                    @endif
+                    {{-- WORKSPACE --}}
+                    <flux:sidebar.group heading="Workspace" icon="squares-2x2" :expandable="true" :expanded="true">
+                        <flux:sidebar.item icon="squares-2x2" :href="route('dashboard')"
+                            :current="request()->routeIs('dashboard') && !request()->routeIs('dashboard.*')" wire:navigate>Dashboard
+                        </flux:sidebar.item>
+                        @if($isSA || $isDir)
+                            <flux:sidebar.item icon="chart-bar-square" :href="route('dashboard.executive')"
+                                :current="request()->routeIs('dashboard.executive')" wire:navigate>Executive View</flux:sidebar.item>
+                        @endif
+                        @if($isHr)
+                            <flux:sidebar.item icon="user-group" :href="route('dashboard.hr-admin')"
+                                :current="request()->routeIs('dashboard.hr-admin')" wire:navigate>HR Overview</flux:sidebar.item>
+                        @endif
+                        @if($user->isDepartmentHead())
+                            <flux:sidebar.item icon="building-office" :href="route('dashboard.department')"
+                                :current="request()->routeIs('dashboard.department')" wire:navigate>Department View</flux:sidebar.item>
+                        @endif
+                    </flux:sidebar.group>
 
                     {{-- People --}}
                     @if($isHr)
@@ -462,83 +480,43 @@
                         </flux:sidebar.group>
                     @endif
 
-                    {{-- Attendance --}}
-                    <flux:sidebar.group heading="Attendance" icon="clock" :expandable="true"
-                        :expanded="request()->routeIs('attendance.my', 'attendance.team', 'attendance.employees', 'attendance.settings')">
-                        <flux:sidebar.item :href="route('attendance.my')" :current="request()->routeIs('attendance.my')"
-                            wire:navigate>My Attendance</flux:sidebar.item>
+                    {{-- TIME & ATTENDANCE --}}
+                    <flux:sidebar.group heading="Time & Attendance" icon="clock" :expandable="true"
+                        :expanded="request()->routeIs('attendance.*', 'time-off.*', 'overtime.*', 'wfh.*')">
+                        <flux:sidebar.item :href="route('attendance.my')" :current="request()->routeIs('attendance.my')" wire:navigate>My Attendance</flux:sidebar.item>
                         @if($isMgr || $user->hasPermission('approve_leave'))
-                            <flux:sidebar.item :href="route('attendance.team')" :current="request()->routeIs('attendance.team')"
-                                wire:navigate>Team Attendance</flux:sidebar.item>
+                            <flux:sidebar.item :href="route('attendance.team')" :current="request()->routeIs('attendance.team')" wire:navigate>Team Attendance</flux:sidebar.item>
                         @endif
                         @can('approve_leave')
-                            <flux:sidebar.item :href="route('attendance.employees')"
-                                :current="request()->routeIs('attendance.employees')" wire:navigate>All Attendance
-                            </flux:sidebar.item>
+                            <flux:sidebar.item :href="route('attendance.employees')" :current="request()->routeIs('attendance.employees')" wire:navigate>All Attendance</flux:sidebar.item>
                         @endcan
                         @can('manage_settings')
-                            <flux:sidebar.item :href="route('attendance.settings')"
-                                :current="request()->routeIs('attendance.settings')" wire:navigate>Attendance Settings
-                            </flux:sidebar.item>
+                            <flux:sidebar.item :href="route('attendance.settings')" :current="request()->routeIs('attendance.settings')" wire:navigate>Attendance Settings</flux:sidebar.item>
                         @endcan
-                    </flux:sidebar.group>
-
-                    {{-- Biometric --}}
-                    @can('manage_biometric')
-                        <flux:sidebar.group heading="Biometric" icon="finger-print" :expandable="true"
-                            :expanded="request()->routeIs('attendance.biometric', 'attendance.biometric-live')">
-                            <flux:sidebar.item :href="route('attendance.biometric-live')"
-                                :current="request()->routeIs('attendance.biometric-live')" wire:navigate>Live Punches
-                            </flux:sidebar.item>
-                            <flux:sidebar.item :href="route('attendance.biometric')"
-                                :current="request()->routeIs('attendance.biometric')" wire:navigate>Device Sync
-                            </flux:sidebar.item>
-                        </flux:sidebar.group>
-                    @endcan
-
-                    {{-- Leave Management --}}
-                    <flux:sidebar.group heading="Leave Management" icon="calendar-days" :expandable="true"
-                        :expanded="request()->routeIs('time-off.my', 'time-off.team', 'time-off.employees', 'time-off.encashments', 'time-off.settings')">
-                        <flux:sidebar.item :href="route('time-off.my')" :current="request()->routeIs('time-off.my')"
-                            wire:navigate>My Leave</flux:sidebar.item>
+                        @can('manage_biometric')
+                            <flux:sidebar.item :href="route('attendance.biometric-live')" :current="request()->routeIs('attendance.biometric-live')" wire:navigate>Biometric · Live</flux:sidebar.item>
+                            <flux:sidebar.item :href="route('attendance.biometric')" :current="request()->routeIs('attendance.biometric')" wire:navigate>Biometric · Sync</flux:sidebar.item>
+                        @endcan
+                        <flux:sidebar.item :href="route('time-off.my')" :current="request()->routeIs('time-off.my')" wire:navigate>My Leave</flux:sidebar.item>
                         @if($isMgr || $user->hasPermission('approve_leave'))
-                            <flux:sidebar.item :href="route('time-off.team')" :current="request()->routeIs('time-off.team')"
-                                wire:navigate>Team Leave</flux:sidebar.item>
+                            <flux:sidebar.item :href="route('time-off.team')" :current="request()->routeIs('time-off.team')" wire:navigate>Team Leave</flux:sidebar.item>
                         @endif
                         @can('approve_leave')
-                            <flux:sidebar.item :href="route('time-off.employees')"
-                                :current="request()->routeIs('time-off.employees')" wire:navigate>All Leave</flux:sidebar.item>
+                            <flux:sidebar.item :href="route('time-off.employees')" :current="request()->routeIs('time-off.employees')" wire:navigate>All Leave</flux:sidebar.item>
                         @endcan
                         @if($isFin || $isHr)
-                            <flux:sidebar.item :href="route('time-off.encashments')"
-                                :current="request()->routeIs('time-off.encashments')" wire:navigate>Encashment Requests
-                            </flux:sidebar.item>
+                            <flux:sidebar.item :href="route('time-off.encashments')" :current="request()->routeIs('time-off.encashments')" wire:navigate>Encashments</flux:sidebar.item>
                         @endif
                         @canany(['manage_leave_types', 'manage_leave_policies'])
-                            <flux:sidebar.item :href="route('time-off.settings')" :current="request()->routeIs('time-off.settings')"
-                                wire:navigate>Leave Settings</flux:sidebar.item>
+                            <flux:sidebar.item :href="route('time-off.settings')" :current="request()->routeIs('time-off.settings')" wire:navigate>Leave Settings</flux:sidebar.item>
                         @endcanany
-                    </flux:sidebar.group>
-
-                    {{-- Overtime --}}
-                    <flux:sidebar.group heading="Overtime" icon="bolt" :expandable="true"
-                        :expanded="request()->routeIs('overtime.my', 'overtime.manage')">
-                        <flux:sidebar.item :href="route('overtime.my')" :current="request()->routeIs('overtime.my')"
-                            wire:navigate>My Overtime</flux:sidebar.item>
+                        <flux:sidebar.item :href="route('overtime.my')" :current="request()->routeIs('overtime.my')" wire:navigate>My Overtime</flux:sidebar.item>
                         @can('approve_overtime')
-                            <flux:sidebar.item :href="route('overtime.manage')" :current="request()->routeIs('overtime.manage')"
-                                wire:navigate>Approve OT Requests</flux:sidebar.item>
+                            <flux:sidebar.item :href="route('overtime.manage')" :current="request()->routeIs('overtime.manage')" wire:navigate>Approve OT</flux:sidebar.item>
                         @endcan
-                    </flux:sidebar.group>
-
-                    {{-- Work From Home --}}
-                    <flux:sidebar.group heading="Work From Home" icon="home" :expandable="true"
-                        :expanded="request()->routeIs('wfh.my', 'wfh.manage')">
-                        <flux:sidebar.item :href="route('wfh.my')" :current="request()->routeIs('wfh.my')"
-                            wire:navigate>My WFH Requests</flux:sidebar.item>
+                        <flux:sidebar.item :href="route('wfh.my')" :current="request()->routeIs('wfh.my')" wire:navigate>My WFH</flux:sidebar.item>
                         @can('approve_wfh')
-                            <flux:sidebar.item :href="route('wfh.manage')" :current="request()->routeIs('wfh.manage')"
-                                wire:navigate>Approve WFH Requests</flux:sidebar.item>
+                            <flux:sidebar.item :href="route('wfh.manage')" :current="request()->routeIs('wfh.manage')" wire:navigate>Approve WFH</flux:sidebar.item>
                         @endcan
                     </flux:sidebar.group>
 
@@ -674,6 +652,13 @@
                     </flux:sidebar.item>
 
                 @endif
+
+                {{-- AI Assistant — shown for any role enabled in AI settings (all branches) --}}
+                @if(auth()->user() && app(\App\Services\AiAssistant::class)->enabledForUser(auth()->user()))
+                    <flux:sidebar.item icon="sparkles" :href="route('ai.assistant')" :current="request()->routeIs('ai.assistant')" wire:navigate>
+                        AI Assistant
+                    </flux:sidebar.item>
+                @endif
             @endauth
         </flux:sidebar.nav>
 
@@ -726,6 +711,7 @@
                     </div>
                     <flux:menu.separator />
                     <flux:menu.item :href="route('profile.edit')" icon="user" wire:navigate>Profile</flux:menu.item>
+                    <flux:menu.item :href="route('settings.preferences')" icon="adjustments-horizontal" wire:navigate>Preferences</flux:menu.item>
                     @can('manage_settings')
                         <flux:menu.item :href="route('settings.general')" icon="cog-6-tooth" wire:navigate>Settings
                         </flux:menu.item>
@@ -742,38 +728,75 @@
 
     </flux:sidebar>
 
-    {{-- TOP HEADER --}}
-    <flux:header class="border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+    {{-- TOP HEADER — premium, glassy, role-aware accent --}}
+    <flux:header
+        style="--color-accent: {{ $roleColor }}; --color-accent-content: {{ $roleColor }};"
+        class="border-b border-zinc-200/70 bg-white/75 backdrop-blur-xl dark:border-zinc-800/70 dark:bg-zinc-950/70">
         <flux:sidebar.toggle class="lg:hidden" icon="bars-2" inset="left" />
-        <div class="ms-2 hidden max-w-xs flex-1 items-center gap-2 lg:flex" x-data>
+
+        {{-- Search --}}
+        <div class="ms-2 hidden w-full max-w-sm flex-1 items-center gap-2 lg:flex" x-data>
             <flux:input placeholder="{{ __('Search anything...') }}" icon="magnifying-glass" size="sm"
                 class="w-full cursor-pointer" kbd="⌘ K" readonly @click="$flux.modal('global-search').show()" />
         </div>
+
         <flux:spacer />
-        <div class="flex items-center gap-1">
+
+        <div class="flex items-center gap-0.5">
+            {{-- Mobile search --}}
+            <flux:tooltip :content="__('Search')" position="bottom">
+                <flux:button x-data icon="magnifying-glass" variant="subtle" size="sm" square
+                    class="lg:hidden" @click="$flux.modal('global-search').show()" aria-label="{{ __('Search') }}" />
+            </flux:tooltip>
+
+            {{-- Dark / light toggle — single icon, no text --}}
+            <flux:tooltip :content="__('Toggle theme')" position="bottom">
+                <flux:button x-data x-on:click="$flux.dark = ! $flux.dark"
+                    variant="subtle" size="sm" square aria-label="{{ __('Toggle theme') }}">
+                    <flux:icon.moon x-show="!$flux.dark" x-cloak class="size-5" />
+                    <flux:icon.sun x-show="$flux.dark" x-cloak class="size-5" />
+                </flux:button>
+            </flux:tooltip>
+
+            {{-- Notifications --}}
             <livewire:notifications />
-        </div>
-        <flux:dropdown position="bottom" align="end">
-            <flux:profile :name="auth()->user()->name" :initials="auth()->user()->initials()"
-                class="ms-1 cursor-pointer" />
-            <flux:menu class="w-52">
-                <div class="flex items-center gap-2 px-2 py-2">
-                    <flux:avatar :initials="auth()->user()->initials()" size="sm" class="bg-brand-600 text-white" />
-                    <div class="min-w-0">
-                        <p class="truncate text-sm font-semibold">{{ auth()->user()->name }}</p>
-                        <p class="truncate text-xs text-zinc-500">{{ auth()->user()->email }}</p>
+
+            {{-- Divider --}}
+            <div class="mx-1.5 h-6 w-px bg-zinc-200 dark:bg-zinc-800"></div>
+
+            {{-- Profile --}}
+            <flux:dropdown position="bottom" align="end">
+                <button type="button"
+                    class="flex items-center gap-2.5 rounded-xl py-1 pe-2 ps-1 transition hover:bg-zinc-100 dark:hover:bg-zinc-800/60">
+                    <flux:avatar :initials="auth()->user()->initials()" size="sm"
+                        style="background-color: {{ $roleColor }}" class="text-white" />
+                    <div class="hidden text-start leading-tight sm:block">
+                        <div class="max-w-[120px] truncate text-[13px] font-bold text-zinc-900 dark:text-white">{{ auth()->user()->name }}</div>
+                        <div class="text-[10px] font-semibold uppercase tracking-wide" style="color: {{ $roleColor }}">{{ $roleLabel }}</div>
                     </div>
-                </div>
-                <flux:menu.separator />
-                <flux:menu.item :href="route('profile.edit')" icon="user" wire:navigate>Profile</flux:menu.item>
-                <flux:menu.separator />
-                <form method="POST" action="{{ route('logout') }}">
-                    @csrf
-                    <flux:menu.item as="button" type="submit" icon="arrow-right-start-on-rectangle" class="w-full">Log
-                        out</flux:menu.item>
-                </form>
-            </flux:menu>
-        </flux:dropdown>
+                    <flux:icon.chevron-down class="size-4 text-zinc-400" />
+                </button>
+                <flux:menu class="w-56">
+                    <div class="flex items-center gap-3 px-2 py-2">
+                        <flux:avatar :initials="auth()->user()->initials()" size="sm"
+                            style="background-color: {{ $roleColor }}" class="text-white" />
+                        <div class="min-w-0">
+                            <p class="truncate text-sm font-semibold">{{ auth()->user()->name }}</p>
+                            <p class="truncate text-xs text-zinc-500">{{ auth()->user()->email }}</p>
+                        </div>
+                    </div>
+                    <flux:menu.separator />
+                    <flux:menu.item :href="route('profile.edit')" icon="user" wire:navigate>Profile</flux:menu.item>
+                    <flux:menu.item :href="route('settings.preferences')" icon="adjustments-horizontal" wire:navigate>Preferences</flux:menu.item>
+                    <flux:menu.item :href="route('appearance.edit')" icon="paint-brush" wire:navigate>Appearance</flux:menu.item>
+                    <flux:menu.separator />
+                    <form method="POST" action="{{ route('logout') }}">
+                        @csrf
+                        <flux:menu.item as="button" type="submit" icon="arrow-right-start-on-rectangle" class="w-full">Log out</flux:menu.item>
+                    </form>
+                </flux:menu>
+            </flux:dropdown>
+        </div>
     </flux:header>
 
     {{ $slot }}
@@ -812,6 +835,11 @@
     </flux:modal>
 
     <flux:toast />
+
+    {{-- AI HR Copilot — renders nothing unless OPENAI_API_KEY is configured --}}
+    @auth
+        <livewire:ai-copilot />
+    @endauth
 
     @fluxScripts
 </body>

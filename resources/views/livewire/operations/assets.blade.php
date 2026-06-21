@@ -1,5 +1,5 @@
 <flux:main>
-        <div class="flex items-center justify-between mb-8">
+        <div class="pulse-action-bar">
             <div>
                 <flux:heading size="xl" level="1">{{ __('Company Assets') }}</flux:heading>
                 <flux:subheading>{{ __('Manage hardware, equipment, and other company assets assigned to employees.') }}</flux:subheading>
@@ -9,27 +9,27 @@
             </div>
         </div>
 
-        <flux:card class="p-0">
-            <div class="overflow-x-auto">
-                <table class="w-full text-sm text-left">
-                    <thead class="text-xs uppercase bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400">
+        <div class="pulse-card p-0 overflow-hidden">
+            <div class="pulse-table-wrap">
+                <table class="pulse-table">
+                    <thead>
                         <tr>
-                            <th class="px-6 py-4 font-medium">{{ __('Asset Name') }}</th>
-                            <th class="px-6 py-4 font-medium">{{ __('Type') }}</th>
-                            <th class="px-6 py-4 font-medium">{{ __('Assigned To') }}</th>
-                            <th class="px-6 py-4 font-medium">{{ __('Status') }}</th>
-                            <th class="px-6 py-4 font-medium text-right">{{ __('Actions') }}</th>
+                            <th class="pulse-th pl-6">{{ __('Asset Name') }}</th>
+                            <th class="pulse-th">{{ __('Type') }}</th>
+                            <th class="pulse-th">{{ __('Assigned To') }}</th>
+                            <th class="pulse-th">{{ __('Status') }}</th>
+                            <th class="pulse-th text-right pr-6">{{ __('Actions') }}</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-zinc-200 dark:divide-zinc-800">
+                    <tbody>
                         @forelse($assets as $asset)
-                            <tr class="hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition-colors">
-                                <td class="px-6 py-4">
+                            <tr>
+                                <td class="pulse-td pl-6">
                                     <div class="font-medium text-zinc-900 dark:text-zinc-100">{{ $asset->name }}</div>
                                     <div class="text-xs text-zinc-500">SN: {{ $asset->serial_number ?? 'N/A' }}</div>
                                 </td>
-                                <td class="px-6 py-4 text-zinc-600 dark:text-zinc-400 capitalize">{{ $asset->type }}</td>
-                                <td class="px-6 py-4">
+                                <td class="pulse-td capitalize">{{ $asset->type }}</td>
+                                <td class="pulse-td">
                                     @if($asset->employee)
                                         <div class="flex items-center gap-2">
                                             <flux:avatar size="xs" :initials="strtoupper(substr($asset->employee->user->name, 0, 1))" class="bg-brand-600 text-white" />
@@ -39,7 +39,7 @@
                                         <span class="text-zinc-400 italic">Unassigned</span>
                                     @endif
                                 </td>
-                                <td class="px-6 py-4">
+                                <td class="pulse-td">
                                     @if($asset->status->value === 'available')
                                         <flux:badge color="green" size="sm">Available</flux:badge>
                                     @elseif($asset->status->value === 'assigned')
@@ -50,7 +50,7 @@
                                         <flux:badge color="red" size="sm">Lost/Broken</flux:badge>
                                     @endif
                                 </td>
-                                <td class="px-6 py-4 text-right">
+                                <td class="pulse-td text-right pr-6">
                                     @if($asset->status->value === 'available')
                                         <flux:button variant="ghost" size="sm" wire:click="openAssignModal({{ $asset->id }})">Assign</flux:button>
                                     @elseif($asset->status->value === 'assigned')
@@ -62,7 +62,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="5" class="px-6 py-12 text-center text-zinc-500">
+                                <td colspan="5" class="pulse-table__empty">
                                     <flux:icon.computer-desktop class="size-8 mx-auto mb-3 text-zinc-400" />
                                     <p>{{ __('No assets found in the system.') }}</p>
                                 </td>
@@ -71,7 +71,7 @@
                     </tbody>
                 </table>
             </div>
-        </flux:card>
+        </div>
 
         @if($showCreateModal)
         <div class="fixed inset-0 z-50 flex items-center justify-center p-4"

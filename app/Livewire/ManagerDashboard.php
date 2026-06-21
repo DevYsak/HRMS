@@ -4,8 +4,10 @@ namespace App\Livewire;
 
 use App\Models\Attendance;
 use App\Models\Employee;
+use App\Models\EmployeeScorecard;
 use App\Models\LeaveRequest;
 use App\Models\OtRequest;
+use App\Models\PerformanceCycle;
 use App\Models\PerformanceReview;
 use App\Services\LeaveService;
 use Illuminate\Support\Carbon;
@@ -157,6 +159,19 @@ class ManagerDashboard extends Component
             ->whereYear('submitted_at', $year)
             ->count();
 
+        // --- Team KPI scores (latest performance cycle) ---
+        $latestCycle = PerformanceCycle::whereIn('status', ['active', 'completed', 'locked'])
+            ->latest('start_date')
+            ->first();
+        $teamKpis = ($latestCycle && $teamIds->isNotEmpty())
+            ? EmployeeScorecard::with('employee.user')
+                ->where('performance_cycle_id', $latestCycle->id)
+                ->whereIn('employee_id', $teamIds)
+                ->orderByDesc('final_score')
+                ->get()
+            : collect();
+        $teamAvgKpi = $teamKpis->isNotEmpty() ? round($teamKpis->avg('final_score'), 1) : null;
+
         return view('livewire.manager-dashboard', compact(
             'teamAttendanceList',
             'presentCount',
@@ -166,6 +181,9 @@ class ManagerDashboard extends Component
             'pendingOt',
             'reviewsPending',
             'reviewsSubmitted',
+            'teamKpis',
+            'teamAvgKpi',
+            'latestCycle',
         ))->layout('layouts.app', ['title' => 'Manager Dashboard']);
     }
 }

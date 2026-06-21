@@ -5,6 +5,8 @@
         $greeting = $hour < 12 ? 'Good Morning' : ($hour < 17 ? 'Good Afternoon' : 'Good Evening');
         $timeContext = $hour < 12 ? 'Start your day right.' : ($hour < 17 ? 'Keep the momentum going.' : 'Almost done for today.');
         $firstName = \Illuminate\Support\Str::of(auth()->user()->name)->explode(' ')->first();
+        // Payslip widgets temporarily hidden from dashboard enhancement (functionality untouched).
+        $showPayroll = false;
     @endphp
     {{-- ===== WELCOME BANNER ===== --}}
     <div class="pulse-hero">
@@ -12,7 +14,7 @@
         <div class="pointer-events-none absolute -bottom-10 -left-10 size-64 rounded-full blur-3xl" style="background:radial-gradient(circle,rgba(249,115,22,0.30),transparent 70%)"></div>
         <div class="pointer-events-none absolute top-0 right-0 size-48 rounded-full blur-3xl" style="background:radial-gradient(circle,rgba(249,115,22,0.08),transparent 70%)"></div>
 
-        <div class="relative flex items-center justify-between">
+        <div class="relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
                 <div class="flex items-center gap-2.5 mb-3">
                     <div class="inline-flex items-center gap-1.5 px-3 py-1 bg-white/10 border border-white/10 rounded-full">
@@ -49,10 +51,12 @@
                    class="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/10 transition rounded-xl text-sm text-white font-semibold">
                     <flux:icon.plus-circle class="size-4" /> Log OT
                 </a>
+                @if($showPayroll)
                 <a href="{{ route('payroll.payslips') }}" wire:navigate
                    class="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 border border-orange-400/50 transition rounded-xl text-sm text-white font-semibold shadow-lg shadow-orange-900/30">
                     <flux:icon.banknotes class="size-4" /> My Pay
                 </a>
+                @endif
             </div>
         </div>
     </div>
@@ -275,6 +279,7 @@
                     <div class="text-xs text-zinc-400">requests awaiting</div>
                 </div>
 
+                @if($showPayroll)
                 <div class="rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-4 flex flex-col gap-2">
                     <div class="flex items-center justify-between">
                         <span class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Net Salary</span>
@@ -298,6 +303,29 @@
                     <div class="text-3xl font-black text-zinc-900 dark:text-white">{{ $myPayslips->count() }}</div>
                     <div class="text-xs text-zinc-400">available to download</div>
                 </div>
+                @else
+                <div class="rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-4 flex flex-col gap-2">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">My KPI Score</span>
+                        <div class="size-7 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
+                            <flux:icon.chart-bar class="size-4 text-purple-600" />
+                        </div>
+                    </div>
+                    <div class="text-3xl font-black text-zinc-900 dark:text-white">{{ $myScorecard?->final_score ?? '—' }}</div>
+                    <div class="text-xs text-zinc-400">{{ $latestCycle?->name ?? 'Latest cycle' }}</div>
+                </div>
+
+                <div class="rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-4 flex flex-col gap-2">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">KPI Grade</span>
+                        <div class="size-7 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
+                            <flux:icon.academic-cap class="size-4 text-indigo-600" />
+                        </div>
+                    </div>
+                    <div class="text-3xl font-black text-zinc-900 dark:text-white">{{ $myScorecard?->grade ?? '—' }}</div>
+                    <div class="text-xs text-zinc-400">performance grade</div>
+                </div>
+                @endif
 
             </div>
 
@@ -389,7 +417,41 @@
                     @endif
                 </div>
 
+                {{-- Recent Notifications (payslips hidden) --}}
+                @unless($showPayroll)
+                <div class="rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-5">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-sm font-bold text-zinc-900 dark:text-white flex items-center gap-2">
+                            <flux:icon.bell class="size-4 text-amber-500" /> Recent Notifications
+                        </h3>
+                        <a href="{{ route('notifications.index') }}" wire:navigate
+                           class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-medium">View All →</a>
+                    </div>
+                    @if($recentNotifications->isEmpty())
+                        <div class="flex flex-col items-center py-8 text-zinc-400">
+                            <flux:icon.bell class="size-8 mb-2 opacity-30" />
+                            <p class="text-xs">No notifications yet.</p>
+                        </div>
+                    @else
+                        <div class="space-y-2">
+                            @foreach($recentNotifications as $note)
+                                <a href="{{ route('notifications.index') }}" wire:navigate
+                                   class="flex items-start gap-3 p-3 rounded-xl {{ is_null($note->read_at) ? 'bg-blue-50/50 dark:bg-blue-950/10' : 'bg-zinc-50 dark:bg-zinc-800/60' }}">
+                                    <div class="mt-1 size-2 rounded-full shrink-0 {{ is_null($note->read_at) ? 'bg-brand-500' : 'bg-zinc-300 dark:bg-zinc-600' }}"></div>
+                                    <div class="min-w-0 flex-1">
+                                        <div class="text-sm font-medium text-zinc-900 dark:text-white truncate">{{ $note->data['title'] ?? 'Notification' }}</div>
+                                        <div class="text-xs text-zinc-400 line-clamp-1">{{ $note->data['body'] ?? '' }}</div>
+                                    </div>
+                                    <span class="shrink-0 text-[10px] text-zinc-400">{{ $note->created_at->diffForHumans() }}</span>
+                                </a>
+                            @endforeach
+                        </div>
+                    @endif
+                </div>
+                @endunless
+
                 {{-- Recent Payslips --}}
+                @if($showPayroll)
                 <div class="rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-5">
                     <div class="flex items-center justify-between mb-4">
                         <h3 class="text-sm font-bold text-zinc-900 dark:text-white flex items-center gap-2">
@@ -430,6 +492,7 @@
                         </div>
                     @endif
                 </div>
+                @endif {{-- /payslips hidden --}}
 
             </div>
 

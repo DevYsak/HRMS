@@ -12,6 +12,7 @@ Route::middleware(['auth'])->group(function () {
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::livewire('settings/appearance', 'pages::settings.appearance')->name('appearance.edit');
+    Route::livewire('settings/preferences', 'pages::settings.preferences')->name('settings.preferences');
 
     Route::livewire('settings/security', 'pages::settings.security')
         ->middleware(
@@ -26,6 +27,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::livewire('settings/teams', 'pages::teams.index')->name('teams.index');
     Route::livewire('settings/holidays', 'pages::settings.holidays')->name('settings.holidays');
+    Route::livewire('settings/ai', 'pages::settings.ai')->name('settings.ai');
 
     Route::middleware(EnsureTeamMembership::class)->group(function () {
         Route::livewire('settings/teams/{team}', 'pages::teams.edit')->name('teams.edit');

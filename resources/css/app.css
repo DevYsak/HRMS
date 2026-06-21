@@ -8,6 +8,44 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Prevent Alpine x-show flash before init (e.g. theme toggle icons) */
+[x-cloak]{display:none !important;}
+
+/* ===================================================
+   Premium role-accent sidebar (Flux) — driven by the
+   --role-accent variable set per role on <flux:sidebar>.
+   =================================================== */
+[data-flux-sidebar] [data-flux-sidebar-item][data-current]{
+    background-color: color-mix(in srgb, var(--role-accent, #fe9a00) 12%, transparent) !important;
+    color: var(--role-accent, #fe9a00) !important;
+    border-color: color-mix(in srgb, var(--role-accent, #fe9a00) 28%, transparent) !important;
+    box-shadow: inset 3px 0 0 0 var(--role-accent, #fe9a00) !important;
+    font-weight: 600 !important;
+}
+[data-flux-sidebar] [data-flux-sidebar-item][data-current] svg{
+    color: var(--role-accent, #fe9a00) !important;
+}
+[data-flux-sidebar] [data-flux-sidebar-item]:not([data-current]):hover{
+    background-color: color-mix(in srgb, var(--role-accent, #fe9a00) 8%, transparent) !important;
+    color: var(--role-accent, #fe9a00) !important;
+}
+[data-flux-sidebar] [data-flux-sidebar-item]:not([data-current]):hover svg{
+    color: var(--role-accent, #fe9a00) !important;
+}
+
+/* Premium dark-navy sidebar — 280px on desktop when expanded */
+@media (min-width: 1024px) {
+    .pulse-sidebar[data-flux-sidebar-on-desktop]:not([data-flux-sidebar-collapsed-desktop]) {
+        width: 280px;
+    }
+}
+/* Active item on navy: keep a soft tinted pill, light label */
+.pulse-sidebar [data-flux-sidebar-item][data-current] {
+    background-color: color-mix(in srgb, var(--role-accent, #f97316) 18%, transparent) !important;
+}
+/* Subtle dividers/scroll on navy */
+.pulse-sidebar ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, .08); }
+
 /* ===================================================
    PULSE HRMS — Design Tokens (TailwindCSS v4 @theme)
    Primary Brand: #F97316 (Conexus Orange) | Sidebar: white
@@ -17,17 +55,17 @@
     /* Font */
     --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji';
 
-    /* Brand Palette — Conexus Orange #fe9a00 */
-    --color-brand-50: #fff8eb;
-    --color-brand-100: #fef0c7;
-    --color-brand-200: #fedf89;
-    --color-brand-300: #fec84b;
-    --color-brand-400: #fdb022;
-    --color-brand-500: #fe9a00;
-    --color-brand-600: #fe9a00;
-    --color-brand-700: #dc7a00;
-    --color-brand-800: #b45309;
-    --color-brand-900: #92400e;
+    /* Brand Palette — Conexus Orange #F97316 (premium primary) */
+    --color-brand-50: #fff7ed;
+    --color-brand-100: #ffedd5;
+    --color-brand-200: #fed7aa;
+    --color-brand-300: #fdba74;
+    --color-brand-400: #fb923c;
+    --color-brand-500: #f97316;
+    --color-brand-600: #ea580c;
+    --color-brand-700: #c2410c;
+    --color-brand-800: #9a3412;
+    --color-brand-900: #7c2d12;
 
     /* Neutral / Zinc scale */
     --color-zinc-50: #fafafa;
@@ -43,16 +81,22 @@
     --color-zinc-950: #0a0a0a;
 
     /* Flux accent override → Conexus Orange */
-    --color-accent: #fe9a00;
-    --color-accent-content: #fe9a00;
+    --color-accent: #f97316;
+    --color-accent-content: #ea580c;
     --color-accent-foreground: #ffffff;
+
+    /* Premium dark surface palette (deep navy) */
+    --color-ink-950: #0b0f19;
+    --color-ink-900: #111827;
+    --color-ink-800: #1a1f2e;
+    --color-ink-700: #232a3b;
 }
 
 /* Dark mode accent */
 @layer theme {
     .dark {
-        --color-accent: #fe9a00;
-        --color-accent-content: #fe9a00;
+        --color-accent: #f97316;
+        --color-accent-content: #fb923c;
         --color-accent-foreground: #ffffff;
     }
 }
@@ -259,5 +303,138 @@ select:focus[data-flux-control] {
 
     .badge-warning-closed {
         @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400;
+    }
+
+    /* ===================================================
+       Phase 2 — Unified component classes
+       Tables · Toolbars · Sticky action bars · Filters ·
+       Inputs · Pagination
+       (Mirror the utilities pages already use, so they are
+        drop-in replacements with identical rendering.)
+       =================================================== */
+
+    /* Sticky action bar — pins a page header (title + primary
+       actions) to the top of the scroll area on list pages.
+       Background matches flux:main (zinc-50 / zinc-950). */
+    .pulse-action-bar {
+        @apply sticky top-0 z-20 -mx-3 -mt-3 mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-zinc-200/70 bg-zinc-50/90 px-3 py-3 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/90 sm:-mx-6 sm:-mt-6 sm:mb-6 sm:px-6 sm:py-4;
+    }
+
+    /* Sticky form footer — pins Save / Cancel to the bottom of
+       form pages so primary actions are always reachable. */
+    .pulse-form-bar {
+        @apply sticky bottom-0 z-20 -mx-6 -mb-6 mt-6 flex items-center justify-end gap-3 border-t border-zinc-200/70 bg-white/90 px-6 py-4 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/90;
+    }
+
+    /* Toolbar row above a table (search + filters + actions). */
+    .pulse-toolbar {
+        @apply mb-5 flex flex-wrap items-center justify-between gap-3;
+    }
+
+    /* Filter cluster — wraps to multiple rows on mobile. */
+    .pulse-filters {
+        @apply flex flex-wrap items-center gap-2;
+    }
+
+    /* Horizontal scroll wrapper for wide tables (mobile-safe). */
+    .pulse-table-wrap {
+        @apply -mx-6 overflow-x-auto;
+    }
+
+    /* Data table — default body text color is set here so it is
+       INHERITED by cells; any cell's own text-* utility then wins
+       via the cascade without a specificity fight. */
+    .pulse-table {
+        @apply w-full text-sm text-zinc-600 dark:text-zinc-300;
+    }
+
+    .pulse-table thead tr {
+        @apply border-b border-zinc-100 dark:border-zinc-800;
+    }
+
+    .pulse-table tbody {
+        @apply divide-y divide-zinc-50 dark:divide-zinc-800/60;
+    }
+
+    .pulse-table tbody tr {
+        @apply transition-colors hover:bg-zinc-50/70 dark:hover:bg-zinc-800/30;
+    }
+
+    /* Cell classes are single-class (not descendant) selectors so
+       per-cell utility overrides (e.g. text-right!, pl-6) compose
+       without losing to specificity. Apply opt-in per cell. */
+    .pulse-th {
+        @apply pb-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500;
+    }
+
+    .pulse-td {
+        @apply py-3.5 pr-4 align-middle;
+    }
+
+    .pulse-table__empty {
+        @apply py-10 text-center text-sm text-zinc-500 dark:text-zinc-400;
+    }
+
+    /* Inputs / selects / search — unify the repeated field styles. */
+    .pulse-input,
+    .pulse-select {
+        @apply h-9 rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-800 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-brand-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100;
+    }
+
+    .pulse-search {
+        @apply h-9 rounded-lg border border-zinc-200 bg-white pl-9 pr-3 text-sm text-zinc-800 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-brand-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100;
+    }
+
+    /* Leading search icon, absolutely positioned inside a relative wrap. */
+    .pulse-search-icon {
+        @apply pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-400;
+    }
+
+    /* Pagination footer under a table. */
+    .pulse-pagination {
+        @apply mt-4 border-t border-zinc-100 pt-3 dark:border-zinc-800;
+    }
+
+    /* ===================================================
+       Phase 12 — Mobile Optimisation utilities
+       =================================================== */
+
+    /* Hero header: title+subtitle stack, buttons row wraps on mobile */
+    .pulse-hero-body {
+        @apply relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between;
+    }
+
+    /* Responsive breadcrumb — hide on tiny screens to save vertical space */
+    .pulse-breadcrumb {
+        @apply hidden sm:flex items-center gap-1.5 text-xs text-white/50 mb-1.5;
+    }
+
+    /* Hero action buttons: stack on mobile, row on sm+ */
+    .pulse-hero-actions {
+        @apply flex flex-wrap items-center gap-2;
+    }
+
+    /* Table column — hidden on mobile, shown sm+ */
+    .pulse-col-sm {
+        @apply hidden sm:table-cell;
+    }
+
+    /* Table column — hidden on mobile+tablet, shown lg+ */
+    .pulse-col-lg {
+        @apply hidden lg:table-cell;
+    }
+
+    /* Mobile-aware page wrapper: tighter padding on xs */
+    .pulse-page {
+        @apply p-3 sm:p-4 md:p-6 space-y-4 md:space-y-6;
+    }
+
+    /* KPI stat bar — responsive horizontal scroll on tiny screens */
+    .pulse-stat-bar {
+        @apply flex overflow-x-auto gap-0 border border-zinc-200 dark:border-zinc-800 rounded-xl bg-white dark:bg-zinc-900 mx-3 sm:mx-6 mb-4 divide-x divide-zinc-100 dark:divide-zinc-800;
+    }
+
+    .pulse-stat-bar__item {
+        @apply flex items-center gap-3 px-4 py-4 shrink-0 min-w-[140px] sm:min-w-0 sm:flex-1;
     }
 }

@@ -156,6 +156,126 @@
         </flux:select>
     </div>
 
+    {{-- ── Performer Segments ────────────────────────────────────────────────── --}}
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+        @php
+            $segments = [
+                ['title' => 'Top Performers', 'rows' => $topPerformers, 'badge' => 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400', 'empty' => 'No scores yet.'],
+                ['title' => 'At Risk', 'rows' => $atRisk, 'badge' => 'bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400', 'empty' => 'No scores yet.'],
+                ['title' => 'Promotion Ready', 'rows' => $promotionReady, 'badge' => 'bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400', 'empty' => 'None scoring 85+ this cycle.'],
+            ];
+        @endphp
+        @foreach($segments as $segment)
+            <div class="pulse-card">
+                <div class="mb-3 flex items-center justify-between">
+                    <h3 class="text-sm font-bold text-zinc-900 dark:text-white">{{ $segment['title'] }}</h3>
+                    <span class="rounded-full px-2 py-0.5 text-xs font-black {{ $segment['badge'] }}">{{ $segment['rows']->count() }}</span>
+                </div>
+                <div class="space-y-2">
+                    @forelse($segment['rows'] as $sc)
+                        <div class="flex items-center justify-between gap-3 border-b border-zinc-50 pb-2 last:border-0 last:pb-0 dark:border-zinc-800/60">
+                            <span class="truncate text-sm text-zinc-700 dark:text-zinc-200">{{ $sc->employee?->user?->name ?? '—' }}</span>
+                            <div class="flex items-center gap-2">
+                                @if($sc->grade)<span class="rounded-md bg-zinc-100 px-1.5 py-0.5 text-[10px] font-bold text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">{{ $sc->grade }}</span>@endif
+                                <span class="text-sm font-bold text-zinc-900 dark:text-white">{{ $sc->final_score }}</span>
+                            </div>
+                        </div>
+                    @empty
+                        <p class="py-6 text-center text-xs text-zinc-400">{{ $segment['empty'] }}</p>
+                    @endforelse
+                </div>
+            </div>
+        @endforeach
+    </div>
+
+    {{-- ── Goal progress · Department ranking · PIP risk ─────────────────────── --}}
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+        <div class="pulse-card">
+            <h3 class="text-sm font-bold text-zinc-900 dark:text-white mb-3">Goal Progress</h3>
+            <div class="flex items-end gap-3">
+                <div class="text-4xl font-black text-emerald-600">{{ $goalStats['percent'] }}%</div>
+                <div class="text-xs text-zinc-400 pb-1">{{ $goalStats['completed'] }}/{{ $goalStats['total'] }} goals completed</div>
+            </div>
+            <div class="mt-3 h-2 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                <div class="h-full rounded-full bg-emerald-500" style="width: {{ $goalStats['percent'] }}%"></div>
+            </div>
+        </div>
+
+        <div class="pulse-card">
+            <h3 class="text-sm font-bold text-zinc-900 dark:text-white mb-3">Department Ranking</h3>
+            <div class="space-y-2">
+                @forelse($deptRanking as $i => $dept)
+                    <div class="flex items-center justify-between gap-3 border-b border-zinc-50 pb-2 last:border-0 last:pb-0 dark:border-zinc-800/60">
+                        <span class="truncate text-sm text-zinc-700 dark:text-zinc-200"><span class="text-zinc-400">{{ $i + 1 }}.</span> {{ $dept['name'] }}</span>
+                        <span class="text-sm font-bold text-zinc-900 dark:text-white">{{ $dept['avg'] }}</span>
+                    </div>
+                @empty
+                    <p class="py-6 text-center text-xs text-zinc-400">No scores yet.</p>
+                @endforelse
+            </div>
+        </div>
+
+        <div class="pulse-card">
+            <div class="mb-3 flex items-center justify-between">
+                <h3 class="text-sm font-bold text-zinc-900 dark:text-white">PIP Risk</h3>
+                <span class="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-black text-rose-700 dark:bg-rose-950/40 dark:text-rose-400">{{ $pipRisk->count() }}</span>
+            </div>
+            <p class="mb-2 text-[11px] text-zinc-400">Below 50 for two consecutive cycles</p>
+            <div class="space-y-2">
+                @forelse($pipRisk as $sc)
+                    <div class="flex items-center justify-between gap-3 border-b border-zinc-50 pb-2 last:border-0 last:pb-0 dark:border-zinc-800/60">
+                        <span class="truncate text-sm text-zinc-700 dark:text-zinc-200">{{ $sc->employee?->user?->name ?? '—' }}</span>
+                        <span class="text-sm font-bold text-rose-600">{{ $sc->final_score }}</span>
+                    </div>
+                @empty
+                    <p class="py-6 text-center text-xs text-zinc-400">No at-risk employees.</p>
+                @endforelse
+            </div>
+        </div>
+    </div>
+
+    {{-- ── Department × Cycle Heatmap ─────────────────────────────────────────── --}}
+    @if($heatmapCycles->isNotEmpty())
+        <div class="pulse-card mb-6">
+            <h3 class="text-sm font-bold text-zinc-900 dark:text-white mb-4">Department &times; Cycle Heatmap</h3>
+            <div class="pulse-table-wrap">
+                <table class="pulse-table">
+                    <thead>
+                        <tr>
+                            <th class="pulse-th pl-6">Department</th>
+                            @foreach($heatmapCycles as $cy)
+                                <th class="pulse-th text-center!">{{ \Illuminate\Support\Str::limit($cy->name, 10) }}</th>
+                            @endforeach
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse($heatmap as $row)
+                            <tr>
+                                <td class="pulse-td pl-6 font-medium text-zinc-900 dark:text-white">{{ $row['department'] }}</td>
+                                @foreach($row['cells'] as $cell)
+                                    @php
+                                        $tone = is_null($cell)
+                                            ? 'bg-zinc-50 text-zinc-300 dark:bg-zinc-800/40 dark:text-zinc-600'
+                                            : ($cell >= 75
+                                                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400'
+                                                : ($cell >= 50
+                                                    ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400'
+                                                    : 'bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400'));
+                                    @endphp
+                                    <td class="pulse-td text-center!">
+                                        <span class="inline-flex min-w-10 justify-center rounded-md px-2 py-1 text-xs font-bold {{ $tone }}">{{ $cell ?? '—' }}</span>
+                                    </td>
+                                @endforeach
+                            </tr>
+                        @empty
+                            <tr><td colspan="{{ $heatmapCycles->count() + 1 }}" class="pulse-table__empty">No data.</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    @endif
+
     {{-- ── Scorecard Table ───────────────────────────────────────────────────── --}}
     <div class="pulse-card overflow-hidden p-0">
         <div class="overflow-x-auto">

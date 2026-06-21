@@ -4,7 +4,8 @@
     /**
      * Helper: returns [bg_class, text_class, dot_class] for a notification color string.
      */
-    function notifColorClasses(string $color = 'blue'): array {
+    if (! function_exists('notifColorClasses')) {
+        function notifColorClasses(string $color = 'blue'): array {
         return match($color) {
             'green'  => ['bg-emerald-50 dark:bg-emerald-950/20', 'text-emerald-600 dark:text-emerald-400', 'bg-emerald-500'],
             'red'    => ['bg-rose-50 dark:bg-rose-950/20',    'text-rose-600 dark:text-rose-400',    'bg-rose-500'],
@@ -14,9 +15,11 @@
             'zinc'   => ['bg-zinc-100 dark:bg-zinc-800',      'text-zinc-500 dark:text-zinc-400',    'bg-zinc-400'],
             default  => ['bg-blue-50 dark:bg-blue-950/20',    'text-blue-600 dark:text-blue-400',    'bg-blue-500'],
         };
+        }
     }
 
-    function notifTypeLabel(string $type): string {
+    if (! function_exists('notifTypeLabel')) {
+        function notifTypeLabel(string $type): string {
         return match($type) {
             'leave_request'            => 'Leave',
             'ot_request'               => 'Overtime',
@@ -36,6 +39,7 @@
             'reimbursement'            => 'Reimbursement',
             default                    => ucfirst(str_replace('_', ' ', $type)),
         };
+        }
     }
     @endphp
 
@@ -76,6 +80,23 @@
         </div>
     </div>
 
+    {{-- ─── VIEW TABS ─── --}}
+    <div class="flex w-fit items-center gap-1 rounded-xl border border-zinc-200 bg-white p-1 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <button wire:click="setView('inbox')"
+            class="rounded-lg px-4 py-1.5 text-sm font-bold transition-all
+                {{ $view === 'inbox' ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300' }}">
+            Inbox
+        </button>
+        @if($canViewReminders)
+            <button wire:click="setView('reminders')"
+                class="rounded-lg px-4 py-1.5 text-sm font-bold transition-all
+                    {{ $view === 'reminders' ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300' }}">
+                Reminders
+            </button>
+        @endif
+    </div>
+
+    @if($view === 'inbox')
     {{-- ─── FILTERS ─── --}}
     <div class="flex flex-wrap items-center gap-3">
         {{-- Read/Unread tabs --}}
@@ -104,7 +125,39 @@
                 {{ notifTypeLabel($type) }}
             </button>
         @endforeach
+
+        {{-- Priority filter --}}
+        <div class="flex items-center gap-1">
+            @foreach(['high' => 'High', 'normal' => 'Normal', 'low' => 'Low'] as $val => $label)
+                <button wire:click="setPriority('{{ $val }}')"
+                    class="rounded-full border px-3 py-1 text-xs font-bold transition-all
+                        {{ $priorityFilter === $val
+                            ? ($val === 'high' ? 'border-rose-500 bg-rose-500 text-white' : 'border-zinc-900 bg-zinc-900 text-white dark:border-white dark:bg-white dark:text-zinc-900')
+                            : 'border-zinc-200 bg-white text-zinc-500 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:border-zinc-600' }}">
+                    {{ $label }}
+                </button>
+            @endforeach
+        </div>
+
+        {{-- Date range --}}
+        <div class="flex items-center gap-2">
+            <input type="date" wire:model.live="dateFrom" aria-label="From date" class="pulse-input" />
+            <span class="text-xs text-zinc-400">&rarr;</span>
+            <input type="date" wire:model.live="dateTo" aria-label="To date" class="pulse-input" />
+        </div>
     </div>
+
+    {{-- ─── BULK ACTION BAR ─── --}}
+    @if(count($selected) > 0)
+        <div class="flex items-center justify-between gap-3 rounded-xl border border-brand-200 bg-brand-50 px-4 py-3 dark:border-brand-900/50 dark:bg-brand-900/20">
+            <span class="text-sm font-bold text-zinc-700 dark:text-zinc-200">{{ count($selected) }} selected</span>
+            <div class="flex items-center gap-2">
+                <flux:button wire:click="markSelectedRead" size="sm" variant="primary">Mark read</flux:button>
+                <flux:button wire:click="deleteSelected" wire:confirm="Delete selected notifications?" size="sm" variant="ghost" class="text-rose-600">Delete</flux:button>
+                <flux:button wire:click="clearSelection" size="sm" variant="ghost">Clear</flux:button>
+            </div>
+        </div>
+    @endif
 
     {{-- ─── NOTIFICATIONS LIST ─── --}}
     <div class="overflow-hidden rounded-2xl border border-zinc-100 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
@@ -124,6 +177,10 @@
 
             <div class="group relative flex items-start gap-4 border-b border-zinc-50 px-5 py-4 transition-colors last:border-b-0
                 {{ $isUnread ? 'bg-blue-50/30 dark:bg-blue-950/10' : 'hover:bg-zinc-50/60 dark:hover:bg-zinc-800/20' }}">
+
+                {{-- Bulk-select checkbox --}}
+                <input type="checkbox" value="{{ $notif->id }}" wire:model.live="selected" aria-label="Select notification"
+                    class="mt-2.5 size-4 shrink-0 cursor-pointer rounded border-zinc-300 text-brand-600 focus:ring-brand-600 dark:border-zinc-600 dark:bg-zinc-800" />
 
                 {{-- Unread dot --}}
                 @if($isUnread)
@@ -191,6 +248,11 @@
                                         {{ notifTypeLabel($type) }}
                                     </span>
                                 @endif
+                                @if(($notif->priority ?? 'normal') === 'high')
+                                    <span class="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-rose-600 dark:bg-rose-950/40 dark:text-rose-400">High</span>
+                                @elseif(($notif->priority ?? 'normal') === 'low')
+                                    <span class="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-zinc-400 dark:bg-zinc-800">Low</span>
+                                @endif
                             </div>
                         </div>
 
@@ -245,6 +307,85 @@
     {{-- Pagination --}}
     @if($notifications->hasPages())
         <div>{{ $notifications->links() }}</div>
+    @endif
+    @endif {{-- /inbox view --}}
+
+    {{-- ─── REMINDER CENTER ─── --}}
+    @if($view === 'reminders')
+        <div class="grid grid-cols-1 gap-5 lg:grid-cols-3">
+
+            {{-- Document expiries --}}
+            <div class="pulse-card">
+                <div class="mb-4 flex items-center justify-between">
+                    <h3 class="text-sm font-bold uppercase tracking-wider text-zinc-400">Document Expiries</h3>
+                    <span class="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-bold text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">{{ $reminders['documents']->count() }}</span>
+                </div>
+                <div class="space-y-3">
+                    @forelse($reminders['documents'] as $doc)
+                        @php $days = (int) round(now()->startOfDay()->diffInDays($doc->expires_at, false)); @endphp
+                        <div class="flex items-start justify-between gap-3 border-b border-zinc-50 pb-3 last:border-0 last:pb-0 dark:border-zinc-800/60">
+                            <div class="min-w-0">
+                                <p class="truncate text-sm font-bold text-zinc-900 dark:text-white">{{ $doc->title }}</p>
+                                <p class="text-xs text-zinc-400">{{ $doc->employee?->user?->name ?? 'Company-wide' }} · {{ ucfirst($doc->category) }}</p>
+                            </div>
+                            <span class="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wide
+                                {{ $days < 0 ? 'bg-rose-100 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400' : ($days <= 7 ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400' : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400') }}">
+                                {{ $days < 0 ? abs($days).'d overdue' : ($days === 0 ? 'Today' : 'in '.$days.'d') }}
+                            </span>
+                        </div>
+                    @empty
+                        <p class="py-6 text-center text-xs text-zinc-400">No documents expiring soon.</p>
+                    @endforelse
+                </div>
+            </div>
+
+            {{-- Probation reviews --}}
+            <div class="pulse-card">
+                <div class="mb-4 flex items-center justify-between">
+                    <h3 class="text-sm font-bold uppercase tracking-wider text-zinc-400">Probation Reviews</h3>
+                    <span class="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-bold text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">{{ $reminders['probations']->count() }}</span>
+                </div>
+                <div class="space-y-3">
+                    @forelse($reminders['probations'] as $emp)
+                        @php $days = (int) round(now()->startOfDay()->diffInDays($emp->probation_end_date, false)); @endphp
+                        <div class="flex items-start justify-between gap-3 border-b border-zinc-50 pb-3 last:border-0 last:pb-0 dark:border-zinc-800/60">
+                            <div class="min-w-0">
+                                <p class="truncate text-sm font-bold text-zinc-900 dark:text-white">{{ $emp->user?->name }}</p>
+                                <p class="text-xs text-zinc-400">{{ $emp->department?->name ?? '—' }}</p>
+                            </div>
+                            <span class="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wide
+                                {{ $days < 0 ? 'bg-rose-100 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400' : ($days <= 7 ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400' : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400') }}">
+                                {{ $days < 0 ? abs($days).'d overdue' : ($days === 0 ? 'Today' : 'in '.$days.'d') }}
+                            </span>
+                        </div>
+                    @empty
+                        <p class="py-6 text-center text-xs text-zinc-400">No probation reviews due.</p>
+                    @endforelse
+                </div>
+            </div>
+
+            {{-- Leave escalations --}}
+            <div class="pulse-card">
+                <div class="mb-4 flex items-center justify-between">
+                    <h3 class="text-sm font-bold uppercase tracking-wider text-zinc-400">Leave Escalations</h3>
+                    <span class="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-bold text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">{{ $reminders['escalations']->count() }}</span>
+                </div>
+                <div class="space-y-3">
+                    @forelse($reminders['escalations'] as $esc)
+                        <div class="flex items-start justify-between gap-3 border-b border-zinc-50 pb-3 last:border-0 last:pb-0 dark:border-zinc-800/60">
+                            <div class="min-w-0">
+                                <p class="truncate text-sm font-bold text-zinc-900 dark:text-white">{{ $esc->leaveRequest?->employee?->user?->name ?? 'Unknown' }}</p>
+                                <p class="text-xs text-zinc-400">{{ $esc->leaveRequest?->leaveType?->name ?? 'Leave' }} · {{ $esc->escalated_at?->diffForHumans() }}</p>
+                            </div>
+                            <span class="shrink-0 rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-rose-600 dark:bg-rose-950/40 dark:text-rose-400">Escalated</span>
+                        </div>
+                    @empty
+                        <p class="py-6 text-center text-xs text-zinc-400">No pending escalations.</p>
+                    @endforelse
+                </div>
+            </div>
+
+        </div>
     @endif
 
 </flux:main>

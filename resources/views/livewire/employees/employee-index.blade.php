@@ -15,7 +15,7 @@
         </div>
     @endif
 
-    <div class="pulse-page-header">
+    <div class="pulse-action-bar">
         <div>
             <h1 class="pulse-page-title">Employees</h1>
             <p class="pulse-page-subtitle">Manage your company's workforce</p>
@@ -26,33 +26,33 @@
     </div>
 
     <div class="pulse-card">
-        <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
-            <div class="flex items-center gap-2">
+        <div class="pulse-toolbar">
+            <div class="pulse-filters">
                 {{-- Search --}}
                 <div class="relative">
-                    <svg class="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                    <input wire:model.live.debounce.300ms="search" type="text" placeholder="Search employee" class="h-8 rounded-lg border border-zinc-200 bg-white pl-9 pr-3 text-sm text-zinc-800 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-brand-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100" />
+                    <svg class="pulse-search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                    <input wire:model.live.debounce.300ms="search" type="text" placeholder="Search employee" class="pulse-search" />
                 </div>
                 {{-- Filters --}}
-                <select wire:model.live="office_id" class="h-8 rounded-lg border border-zinc-200 bg-white px-2 text-xs text-zinc-600 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                <select wire:model.live="office_id" class="pulse-select">
                     <option value="">All Offices</option>
                     @foreach($offices as $office)
                         <option value="{{ $office->id }}">{{ $office->name }}</option>
                     @endforeach
                 </select>
-                <select wire:model.live="department_id" class="h-8 rounded-lg border border-zinc-200 bg-white px-2 text-xs text-zinc-600 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                <select wire:model.live="department_id" class="pulse-select">
                     <option value="">All Departments</option>
                     @foreach($departments as $dept)
                         <option value="{{ $dept->id }}">{{ $dept->name }}</option>
                     @endforeach
                 </select>
-                <select wire:model.live="job_title_id" class="h-8 rounded-lg border border-zinc-200 bg-white px-2 text-xs text-zinc-600 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                <select wire:model.live="job_title_id" class="pulse-select">
                     <option value="">All Job Titles</option>
                     @foreach($jobTitles as $title)
                         <option value="{{ $title->id }}">{{ $title->name }}</option>
                     @endforeach
                 </select>
-                <select wire:model.live="status" class="h-8 rounded-lg border border-zinc-200 bg-white px-2 text-xs text-zinc-600 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                <select wire:model.live="status" class="pulse-select">
                     <option value="">All Status</option>
                     @foreach(\App\Enums\EmployeeStatus::cases() as $case)
                         <option value="{{ $case->value }}">{{ $case->label() }}</option>
@@ -61,23 +61,23 @@
             </div>
         </div>
 
-        <div class="overflow-x-auto -mx-6">
-            <table class="w-full text-sm">
+        <div class="pulse-table-wrap">
+            <table class="pulse-table">
                 <thead>
-                    <tr class="border-b border-zinc-100 dark:border-zinc-800">
-                        <th class="pb-3 pl-6 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Employee</th>
-                        <th class="pb-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Emp ID</th>
-                        <th class="pb-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Job Title</th>
-                        <th class="pb-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Department</th>
-                        <th class="pb-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Shift</th>
-                        <th class="pb-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Status</th>
-                        <th class="pb-3 pr-6 text-right text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Actions</th>
+                    <tr>
+                        <th class="pulse-th pl-6">Employee</th>
+                        <th class="pulse-th pulse-col-sm">Emp ID</th>
+                        <th class="pulse-th pulse-col-sm">Job Title</th>
+                        <th class="pulse-th pulse-col-lg">Department</th>
+                        <th class="pulse-th pulse-col-lg">Shift</th>
+                        <th class="pulse-th">Status</th>
+                        <th class="pulse-th pr-6 text-right!">Actions</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-zinc-50 dark:divide-zinc-800/60">
+                <tbody>
                     @forelse($employees as $emp)
-                        <tr class="group hover:bg-zinc-50/70 dark:hover:bg-zinc-800/30 transition-colors">
-                            <td class="py-3.5 pl-6 pr-4">
+                        <tr class="group">
+                            <td class="pulse-td pl-6">
                                 <div class="flex items-center gap-3">
                                     @if($emp->photo)
                                         <img src="{{ asset('storage/'.$emp->photo) }}" class="size-8 rounded-full object-cover" />
@@ -92,21 +92,21 @@
                                     </div>
                                 </div>
                             </td>
-                            <td class="py-3.5 pr-4">
+                            <td class="pulse-td pulse-col-sm">
                                 <span class="font-mono text-xs font-bold text-zinc-700 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded-md">
                                     {{ $emp->employee_id ?? '—' }}
                                 </span>
                             </td>
-                            <td class="py-3.5 pr-4 text-sm text-zinc-600 dark:text-zinc-300">{{ $emp->jobTitle?->name ?? '—' }}</td>
-                            <td class="py-3.5 pr-4 text-sm text-zinc-600 dark:text-zinc-300">{{ $emp->department?->name ?? '—' }}</td>
-                            <td class="py-3.5 pr-4">
+                            <td class="pulse-td pulse-col-sm">{{ $emp->jobTitle?->name ?? '—' }}</td>
+                            <td class="pulse-td pulse-col-lg">{{ $emp->department?->name ?? '—' }}</td>
+                            <td class="pulse-td pulse-col-lg">
                                 @if($emp->shift)
                                     <span class="text-xs font-medium text-zinc-600 dark:text-zinc-400">{{ $emp->shift->name }}</span>
                                 @else
                                     <span class="text-xs text-zinc-300 dark:text-zinc-600">—</span>
                                 @endif
                             </td>
-                            <td class="py-3.5 pr-4">
+                            <td class="pulse-td">
                                 @php
                                     $sc = match($emp->status->value) {
                                         'active'    => 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400',
@@ -119,7 +119,7 @@
                                     {{ $emp->status->label() }}
                                 </span>
                             </td>
-                            <td class="py-3.5 pr-6 text-right">
+                            <td class="pulse-td pr-6 text-right!">
                                 <div class="flex items-center justify-end gap-2">
                                     <flux:button 
                                         href="{{ route('employees.edit', $emp->id) }}" 
@@ -143,14 +143,14 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="7" class="py-8 text-center text-zinc-500">No employees found.</td>
+                            <td colspan="7" class="pulse-table__empty">No employees found.</td>
                         </tr>
                     @endforelse
                 </tbody>
             </table>
         </div>
 
-        <div class="mt-4 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+        <div class="pulse-pagination">
             {{ $employees->links() }}
         </div>
     </div>

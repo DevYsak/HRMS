@@ -10,8 +10,10 @@ use App\Models\User;
 use App\Notifications\AttendanceRegularisationNotification;
 use App\Notifications\RegularisationReviewedNotification;
 use App\Services\AttendanceService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Response;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -25,6 +27,71 @@ class AllAttendance extends Component
 
     public $date = '';
 
+    public string $dateFrom = '';
+
+    public string $dateTo = '';
+
+    public function mount(): void
+    {
+        // Default to current week (Mon–Sun)
+        $this->dateFrom = Carbon::now()->startOfWeek()->format('Y-m-d');
+        $this->dateTo = Carbon::now()->endOfWeek()->format('Y-m-d');
+    }
+
+    public function previousWeek(): void
+    {
+        $this->dateFrom = Carbon::parse($this->dateFrom)->subWeek()->format('Y-m-d');
+        $this->dateTo = Carbon::parse($this->dateTo)->subWeek()->format('Y-m-d');
+        $this->resetPage();
+    }
+
+    public function nextWeek(): void
+    {
+        $this->dateFrom = Carbon::parse($this->dateFrom)->addWeek()->format('Y-m-d');
+        $this->dateTo = Carbon::parse($this->dateTo)->addWeek()->format('Y-m-d');
+        $this->resetPage();
+    }
+
+    public function thisWeek(): void
+    {
+        $this->dateFrom = Carbon::now()->startOfWeek()->format('Y-m-d');
+        $this->dateTo = Carbon::now()->endOfWeek()->format('Y-m-d');
+        $this->resetPage();
+    }
+
+    public function exportCsv()
+    {
+        abort_unless(Auth::user()->canApproveLeave(), 403);
+
+        $query = Attendance::query()->with('employee.user', 'employee.office')->whereHas('employee.user');
+
+        $this->applyFilters($query);
+
+        $rows = $query->latest('date')->get();
+
+        $csv = implode(',', ['Employee', 'Employee ID', 'Department', 'Date', 'Check In', 'Check Out', 'Work Hours', 'Status', 'Office'])."\n";
+
+        foreach ($rows as $log) {
+            $csv .= implode(',', [
+                '"'.($log->employee?->user?->name ?? '').'"',
+                '"'.($log->employee?->employee_id ?? '').'"',
+                '"'.($log->employee?->department?->name ?? '').'"',
+                '"'.($log->date?->format('d M Y') ?? '').'"',
+                '"'.($log->check_in?->format('H:i') ?? '').'"',
+                '"'.($log->check_out?->format('H:i') ?? '').'"',
+                '"'.($log->total_hours ?? '').'"',
+                '"'.($log->status ?? '').'"',
+                '"'.($log->employee?->office?->name ?? '').'"',
+            ])."\n";
+        }
+
+        $filename = 'attendance_'.($this->dateFrom ?: 'all').'_to_'.($this->dateTo ?: 'all').'.csv';
+
+        return Response::streamDownload(function () use ($csv) {
+            echo $csv;
+        }, $filename, ['Content-Type' => 'text/csv']);
+    }
+
     public function updatingSearch(): void
     {
         $this->resetPage();
@@ -36,6 +103,16 @@ class AllAttendance extends Component
     }
 
     public function updatingDate(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatingDateFrom(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatingDateTo(): void
     {
         $this->resetPage();
     }
@@ -188,20 +265,14 @@ class AllAttendance extends Component
         \Flux::toast('Regularisation request rejected.');
     }
 
-    public function render()
+    /** @param Builder<Attendance> $query */
+    protected function applyFilters($query): void
     {
-        abort_unless(Auth::user()->canApproveLeave(), 403);
-
-        $query = Attendance::query()->with('employee.user')->whereHas('employee.user');
-
         if ($this->search) {
             $search = $this->search;
             $query->where(function ($q) use ($search) {
-                $q->whereHas('employee.user', function ($q2) use ($search) {
-                    $q2->where('name', 'like', '%'.$search.'%');
-                })->orWhereHas('employee', function ($q2) use ($search) {
-                    $q2->where('employee_id', 'like', '%'.$search.'%');
-                });
+                $q->whereHas('employee.user', fn ($q2) => $q2->where('name', 'like', '%'.$search.'%'))
+                    ->orWhereHas('employee', fn ($q2) => $q2->where('employee_id', 'like', '%'.$search.'%'));
             });
         }
 
@@ -211,7 +282,23 @@ class AllAttendance extends Component
 
         if ($this->date) {
             $query->where('date', $this->date);
+        } elseif ($this->dateFrom || $this->dateTo) {
+            if ($this->dateFrom) {
+                $query->where('date', '>=', $this->dateFrom);
+            }
+            if ($this->dateTo) {
+                $query->where('date', '<=', $this->dateTo);
+            }
         }
+    }
+
+    public function render()
+    {
+        abort_unless(Auth::user()->canApproveLeave(), 403);
+
+        $query = Attendance::query()->with('employee.user')->whereHas('employee.user');
+
+        $this->applyFilters($query);
 
         $pendingRegularisations = AttendanceRegularisation::where('status', 'pending')
             ->with(['employee.user', 'attendance'])
@@ -238,11 +325,16 @@ class AllAttendance extends Component
             'late_pct' => $presentToday > 0 ? round(($lateToday / $presentToday) * 100, 1) : 0,
         ];
 
+        $weekLabel = $this->dateFrom && $this->dateTo
+            ? Carbon::parse($this->dateFrom)->format('d M').' – '.Carbon::parse($this->dateTo)->format('d M Y')
+            : 'All dates';
+
         return view('livewire.attendance.all-attendance', [
             'attendances' => $query->latest('date')->paginate(20),
             'pendingRegularisations' => $pendingRegularisations,
             'allEmployees' => Employee::with('user')->whereHas('user')->orderBy('id')->get(),
             'stats' => $stats,
+            'weekLabel' => $weekLabel,
         ])->layout('layouts.app', ['title' => 'Employee Attendance']);
     }
 }

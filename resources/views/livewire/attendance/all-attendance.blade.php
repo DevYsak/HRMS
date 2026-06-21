@@ -9,25 +9,27 @@
         </div>
         <div class="pointer-events-none absolute -bottom-10 -left-10 size-64 rounded-full blur-3xl"
             style="background:radial-gradient(circle,rgba(249,115,22,0.30),transparent 70%)"></div>
-        <div class="relative flex items-center justify-between gap-4">
+        <div class="pulse-hero-body">
             <div>
-                <div class="flex items-center gap-1.5 text-xs text-white/50 mb-1.5">
+                <div class="pulse-breadcrumb">
                     <span>Attendance</span>
                     <flux:icon.chevron-right class="size-3" />
                     <span class="text-white/80 font-semibold">Employees Attendance</span>
                 </div>
-                <h1 class="text-2xl font-black text-white tracking-tight">Employees Attendance</h1>
+                <h1 class="text-xl sm:text-2xl font-black text-white tracking-tight">Employees Attendance</h1>
                 <p class="text-sm text-white/55 mt-0.5">Today — {{ now()->format('l, d M Y') }}</p>
             </div>
-            <div class="flex items-center gap-2 shrink-0">
+            <div class="pulse-hero-actions">
                 <a href="{{ route('reports.attendance-summary', ['month' => now()->month, 'year' => now()->year]) }}"
                     target="_blank"
-                    class="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/10 text-white rounded-xl text-sm font-semibold transition">
-                    <flux:icon.arrow-down-tray class="size-4" /> Export
+                    class="flex items-center gap-2 px-3 sm:px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/10 text-white rounded-xl text-sm font-semibold transition">
+                    <flux:icon.arrow-down-tray class="size-4" />
+                    <span class="hidden sm:inline">Export</span>
                 </a>
                 <button wire:click="openMarkModal"
-                    class="flex items-center gap-2 px-4 py-2 bg-white text-orange-700 hover:bg-orange-50 rounded-xl text-sm font-bold transition shadow-sm">
-                    <flux:icon.pencil-square class="size-4" /> Mark Attendance
+                    class="flex items-center gap-2 px-3 sm:px-4 py-2 bg-white text-orange-700 hover:bg-orange-50 rounded-xl text-sm font-bold transition shadow-sm">
+                    <flux:icon.pencil-square class="size-4" />
+                    <span class="hidden sm:inline">Mark Attendance</span>
                 </button>
             </div>
         </div>
@@ -36,8 +38,8 @@
     {{-- ══════════════════════════════════════════
     KPI STATS BAR
     ══════════════════════════════════════════ --}}
-    <div
-        class="space-y-4 m-[30px] rounded-[10px] grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-0 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
+    {{-- KPI STATS BAR — horizontal scroll on mobile, full row on lg --}}
+    <div class="pulse-stat-bar">
         @php
             $kpis = [
                 ['label' => 'Total Employees', 'value' => $stats['total'], 'sub' => 'active workforce', 'color' => 'text-zinc-900 dark:text-white', 'icon' => 'users', 'bg' => 'bg-zinc-100 dark:bg-zinc-800'],
@@ -47,14 +49,13 @@
                 ['label' => 'Late Arrivals', 'value' => $stats['late'], 'sub' => $stats['late_pct'] . '% of present', 'color' => 'text-amber-500', 'icon' => 'exclamation-circle', 'bg' => 'bg-amber-50 dark:bg-amber-950/40'],
             ];
         @endphp
-        @foreach($kpis as $i => $kpi)
-            <div
-                class="flex items-center gap-3 px-5 py-5 {{ $i < 4 ? 'border-r border-zinc-100 dark:border-zinc-800' : '' }} {{ $i > 1 ? 'hidden sm:flex' : '' }} {{ $i > 2 ? 'hidden lg:flex' : '' }}">
-                <div class="size-10 rounded-xl {{ $kpi['bg'] }} flex items-center justify-center shrink-0">
-                    <flux:icon :name="$kpi['icon']" class="size-5 {{ $kpi['color'] }}" />
+        @foreach($kpis as $kpi)
+            <div class="pulse-stat-bar__item">
+                <div class="size-9 sm:size-10 rounded-xl {{ $kpi['bg'] }} flex items-center justify-center shrink-0">
+                    <flux:icon :name="$kpi['icon']" class="size-4 sm:size-5 {{ $kpi['color'] }}" />
                 </div>
                 <div>
-                    <div class="text-xl font-black {{ $kpi['color'] }} leading-none">{{ $kpi['value'] }}</div>
+                    <div class="text-lg sm:text-xl font-black {{ $kpi['color'] }} leading-none">{{ $kpi['value'] }}</div>
                     <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-1">{{ $kpi['label'] }}</div>
                     <div class="text-[10px] text-zinc-400 mt-0.5">{{ $kpi['sub'] }}</div>
                 </div>
@@ -149,12 +150,33 @@
         ══════════════════════════════════════════ --}}
         <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl px-5 py-3.5">
             <div class="flex flex-wrap items-center gap-3">
-                <flux:input wire:model.live.debounce.300ms="search" placeholder="Search employee name or ID..."
-                    icon="magnifying-glass" size="sm" class="w-60" />
 
-                <flux:input wire:model.live="date" type="date" size="sm" class="w-44" />
+                {{-- Week navigator --}}
+                <div class="flex items-center gap-1 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-1">
+                    <button wire:click="previousWeek" type="button"
+                        class="flex size-7 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-white hover:text-zinc-800 hover:shadow-sm dark:hover:bg-zinc-700 dark:hover:text-zinc-100">
+                        <flux:icon.chevron-left class="size-4" />
+                    </button>
+                    <button wire:click="thisWeek" type="button"
+                        class="px-3 py-1 text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:text-brand-600 transition min-w-[148px] text-center">
+                        {{ $weekLabel }}
+                    </button>
+                    <button wire:click="nextWeek" type="button"
+                        class="flex size-7 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-white hover:text-zinc-800 hover:shadow-sm dark:hover:bg-zinc-700 dark:hover:text-zinc-100">
+                        <flux:icon.chevron-right class="size-4" />
+                    </button>
+                </div>
 
-                <flux:select wire:model.live="status" placeholder="All Status" size="sm" class="w-40">
+                {{-- Specific date override --}}
+                <flux:input wire:model.live="date" type="date" size="sm" class="w-40"
+                    title="Pick a specific date (overrides week range)" />
+
+                {{-- Search --}}
+                <flux:input wire:model.live.debounce.300ms="search" placeholder="Search employee..."
+                    icon="magnifying-glass" size="sm" class="w-52" />
+
+                {{-- Status --}}
+                <flux:select wire:model.live="status" placeholder="All Status" size="sm" class="w-36">
                     <option value="">All Status</option>
                     <option value="on_time">On Time</option>
                     <option value="late">Late</option>
@@ -169,9 +191,14 @@
                     </button>
                 @endif
 
-                <div class="ml-auto text-xs text-zinc-400 font-medium">
-                    Showing {{ $attendances->firstItem() }}–{{ $attendances->lastItem() }} of
-                    {{ $attendances->total() }}
+                <div class="ml-auto flex items-center gap-3">
+                    <span class="text-xs text-zinc-400 font-medium">
+                        {{ $attendances->total() }} records
+                    </span>
+                    <button wire:click="exportCsv" type="button"
+                        class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs font-semibold text-zinc-600 dark:text-zinc-300 hover:border-brand-400 hover:text-brand-700 transition">
+                        <flux:icon.arrow-down-tray class="size-3.5" /> Export CSV
+                    </button>
                 </div>
             </div>
         </div>
@@ -184,30 +211,14 @@
                 <table class="w-full text-sm">
                     <thead>
                         <tr class="border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-950/40">
-                            <th
-                                class="py-3 pl-5 pr-4 text-left text-[10px] font-bold uppercase tracking-widest text-zinc-400 min-w-[180px]">
-                                Employee</th>
-                            <th
-                                class="py-3 pr-4 text-left text-[10px] font-bold uppercase tracking-widest text-zinc-400">
-                                Date</th>
-                            <th
-                                class="py-3 pr-4 text-left text-[10px] font-bold uppercase tracking-widest text-zinc-400">
-                                Check In</th>
-                            <th
-                                class="py-3 pr-4 text-left text-[10px] font-bold uppercase tracking-widest text-zinc-400">
-                                Check Out</th>
-                            <th
-                                class="py-3 pr-4 text-left text-[10px] font-bold uppercase tracking-widest text-zinc-400">
-                                Work Hrs</th>
-                            <th
-                                class="py-3 pr-4 text-left text-[10px] font-bold uppercase tracking-widest text-zinc-400">
-                                Status</th>
-                            <th
-                                class="py-3 pr-4 text-left text-[10px] font-bold uppercase tracking-widest text-zinc-400">
-                                Office</th>
-                            <th
-                                class="py-3 pr-5 text-left text-[10px] font-bold uppercase tracking-widest text-zinc-400">
-                                Att. %</th>
+                            <th class="py-3 pl-5 pr-4 text-left text-[10px] font-bold uppercase tracking-widest text-zinc-400 min-w-[160px]">Employee</th>
+                            <th class="py-3 pr-4 text-left text-[10px] font-bold uppercase tracking-widest text-zinc-400 pulse-col-sm">Date</th>
+                            <th class="py-3 pr-4 text-left text-[10px] font-bold uppercase tracking-widest text-zinc-400">Check In</th>
+                            <th class="py-3 pr-4 text-left text-[10px] font-bold uppercase tracking-widest text-zinc-400 pulse-col-sm">Check Out</th>
+                            <th class="py-3 pr-4 text-left text-[10px] font-bold uppercase tracking-widest text-zinc-400 pulse-col-lg">Work Hrs</th>
+                            <th class="py-3 pr-4 text-left text-[10px] font-bold uppercase tracking-widest text-zinc-400">Status</th>
+                            <th class="py-3 pr-4 text-left text-[10px] font-bold uppercase tracking-widest text-zinc-400 pulse-col-lg">Office</th>
+                            <th class="py-3 pr-5 text-left text-[10px] font-bold uppercase tracking-widest text-zinc-400 pulse-col-lg">Att. %</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-zinc-50 dark:divide-zinc-800/40">
@@ -273,7 +284,7 @@
                                 </td>
 
                                 {{-- Date --}}
-                                <td class="py-3.5 pr-4">
+                                <td class="py-3.5 pr-4 pulse-col-sm">
                                     <div class="text-sm font-medium text-zinc-700 dark:text-zinc-300">
                                         {{ $log->date->format('d M Y') }}
                                     </div>
@@ -294,7 +305,7 @@
                                 </td>
 
                                 {{-- Check Out --}}
-                                <td class="py-3.5 pr-4">
+                                <td class="py-3.5 pr-4 pulse-col-sm">
                                     @if($log->check_out)
                                         <div class="font-mono text-sm font-bold text-zinc-900 dark:text-white tabular-nums">
                                             {{ $log->check_out->format('H:i') }}
@@ -311,7 +322,7 @@
                                 </td>
 
                                 {{-- Work Hours --}}
-                                <td class="py-3.5 pr-4">
+                                <td class="py-3.5 pr-4 pulse-col-lg">
                                     @php $hrs = (float) $log->total_hours; @endphp
                                     <span
                                         class="text-sm font-black tabular-nums {{ $hrs >= 8 ? 'text-emerald-600' : ($hrs > 0 ? 'text-amber-600' : 'text-zinc-300 dark:text-zinc-600') }}">
@@ -328,12 +339,12 @@
                                 </td>
 
                                 {{-- Office --}}
-                                <td class="py-3.5 pr-4 text-xs text-zinc-500 dark:text-zinc-400 truncate max-w-[110px]">
+                                <td class="py-3.5 pr-4 text-xs text-zinc-500 dark:text-zinc-400 truncate max-w-[110px] pulse-col-lg">
                                     {{ $log->employee->office?->name ?? '—' }}
                                 </td>
 
                                 {{-- Attendance % --}}
-                                <td class="py-3.5 pr-5">
+                                <td class="py-3.5 pr-5 pulse-col-lg">
                                     <div class="flex items-center gap-2">
                                         <div
                                             class="flex-1 h-1.5 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden min-w-[40px]">

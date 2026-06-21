@@ -31,6 +31,7 @@ class DocumentExpiryNotification extends Notification
             'url' => '/documents',
             'icon' => 'document-text',
             'color' => 'amber',
+            'priority' => 'high',
         ];
     }
 }

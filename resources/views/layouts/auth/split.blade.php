@@ -65,7 +65,7 @@
         {{-- =====================================================
         RIGHT PANEL — Auth form (clean white)
         ===================================================== --}}
-        <div class="flex items-center justify-center px-8 py-12 bg-gray-50">
+        <div class="flex items-center justify-center px-8 py-12 bg-gray-50 dark:bg-zinc-900">
             <div class="w-full max-w-sm">
                 {{-- Mobile logo (shown only on small screens) --}}
                 <div class="mb-8 flex items-center gap-3 lg:hidden">
@@ -74,7 +74,7 @@
                             <path d="M4 3h3v7h10V3h3v18h-3v-8H7v8H4V3z" />
                         </svg>
                     </span>
-                    <span class="text-lg font-bold text-zinc-900">Pulse <span class="text-zinc-400 font-normal text-sm">by Conexus</span></span>
+                    <span class="text-lg font-bold text-zinc-900 dark:text-white">Pulse <span class="text-zinc-400 font-normal text-sm">by Conexus</span></span>
                 </div>
 
                 {{ $slot }}

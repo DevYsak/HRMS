@@ -184,7 +184,7 @@
 
             {{-- Tab bar --}}
             <div class="flex items-center gap-1 overflow-x-auto border-b border-zinc-100 px-6 pt-4 pb-0 dark:border-zinc-800">
-                @foreach(array_merge(['General', 'Personal', 'Job', 'Leave', 'Probation', 'Payroll', 'Documents', 'Activity'], in_array($employee->ot_tracking_source, ['nexflow', 'hybrid']) ? ['Nexflow'] : []) as $tab)
+                @foreach(array_merge(['General', 'Personal', 'Job', 'Attendance', 'Leave', 'OT', 'Performance', 'Warnings', 'PIP', 'Promotions', 'Timeline', 'Probation', 'Payroll', 'Documents', 'Activity'], in_array($employee->ot_tracking_source, ['nexflow', 'hybrid']) ? ['Nexflow'] : []) as $tab)
                     <button type="button" wire:click="setTab('{{ $tab }}')"
                         class="whitespace-nowrap border-b-2 pb-3 px-3 text-sm font-semibold transition-colors
                             {{ $activeTab === $tab
@@ -499,6 +499,191 @@
                                 </div>
                             @endif
 
+                        </div>
+
+                    {{-- ── Attendance Tab ── --}}
+                    @elseif($activeTab === 'Attendance')
+                        <div wire:key="tab-attendance" class="space-y-4">
+                            <div>
+                                <h3 class="text-base font-bold text-zinc-900 dark:text-white">Attendance</h3>
+                                <p class="mt-0.5 text-sm text-zinc-500">Most recent 30 attendance records</p>
+                            </div>
+                            <div class="pulse-table-wrap">
+                                <table class="pulse-table">
+                                    <thead><tr>
+                                        <th class="pulse-th pl-6">Date</th>
+                                        <th class="pulse-th">Check In</th>
+                                        <th class="pulse-th">Check Out</th>
+                                        <th class="pulse-th">Hours</th>
+                                        <th class="pulse-th">Flag</th>
+                                    </tr></thead>
+                                    <tbody>
+                                        @forelse($attendanceRecords as $rec)
+                                            <tr>
+                                                <td class="pulse-td pl-6 font-medium text-zinc-900 dark:text-white">{{ \Illuminate\Support\Carbon::parse($rec->date)->format('d M Y') }}</td>
+                                                <td class="pulse-td">{{ $rec->check_in?->format('H:i') ?? '—' }}</td>
+                                                <td class="pulse-td">{{ $rec->check_out?->format('H:i') ?? '—' }}</td>
+                                                <td class="pulse-td">{{ $rec->total_hours ? (float) $rec->total_hours : '—' }}</td>
+                                                <td class="pulse-td">
+                                                    @if($rec->is_late)<span class="badge-late">LATE</span>@else<span class="badge-on_time">ON TIME</span>@endif
+                                                </td>
+                                            </tr>
+                                        @empty
+                                            <tr><td colspan="5" class="pulse-table__empty">No attendance records.</td></tr>
+                                        @endforelse
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                    {{-- ── OT Tab ── --}}
+                    @elseif($activeTab === 'OT')
+                        <div wire:key="tab-ot" class="space-y-4">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <h3 class="text-base font-bold text-zinc-900 dark:text-white">Overtime</h3>
+                                    <p class="mt-0.5 text-sm text-zinc-500">Recorded OT hours</p>
+                                </div>
+                                <div class="text-right">
+                                    <div class="text-2xl font-black text-zinc-900 dark:text-white">{{ (float) $otRecords->sum('ot_hours') }}h</div>
+                                    <div class="text-[11px] text-zinc-400">total (last 30 records)</div>
+                                </div>
+                            </div>
+                            <div class="pulse-table-wrap">
+                                <table class="pulse-table">
+                                    <thead><tr>
+                                        <th class="pulse-th pl-6">Work Date</th>
+                                        <th class="pulse-th">OT Hours</th>
+                                    </tr></thead>
+                                    <tbody>
+                                        @forelse($otRecords as $ot)
+                                            <tr>
+                                                <td class="pulse-td pl-6 font-medium text-zinc-900 dark:text-white">{{ \Illuminate\Support\Carbon::parse($ot->work_date)->format('d M Y') }}</td>
+                                                <td class="pulse-td">{{ (float) $ot->ot_hours }}h</td>
+                                            </tr>
+                                        @empty
+                                            <tr><td colspan="2" class="pulse-table__empty">No overtime records.</td></tr>
+                                        @endforelse
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                    {{-- ── Performance Tab ── --}}
+                    @elseif($activeTab === 'Performance')
+                        <div wire:key="tab-performance" class="space-y-6">
+                            <div>
+                                <h3 class="text-base font-bold text-zinc-900 dark:text-white">Performance Trend</h3>
+                                <p class="mt-0.5 text-sm text-zinc-500">Review ratings and KPI scorecards over time</p>
+                            </div>
+                            @if($reviewHistory->isNotEmpty())
+                                <div class="flex flex-wrap gap-3">
+                                    @foreach($reviewHistory->take(8) as $rev)
+                                        <div class="rounded-xl border border-zinc-100 px-4 py-3 dark:border-zinc-800">
+                                            <div class="text-xs text-zinc-400">{{ $rev->cycle?->name ?? 'Cycle' }}</div>
+                                            <div class="text-xl font-black text-zinc-900 dark:text-white">{{ $rev->overall_rating ?? '—' }}<span class="text-xs text-zinc-400">/5</span></div>
+                                        </div>
+                                    @endforeach
+                                </div>
+                            @endif
+                            <div>
+                                <h4 class="mb-2 text-sm font-bold text-zinc-700 dark:text-zinc-300">KPI History</h4>
+                                <div class="pulse-table-wrap">
+                                    <table class="pulse-table">
+                                        <thead><tr>
+                                            <th class="pulse-th pl-6">Cycle</th>
+                                            <th class="pulse-th">Final Score</th>
+                                            <th class="pulse-th">Grade</th>
+                                        </tr></thead>
+                                        <tbody>
+                                            @forelse($kpiHistory as $sc)
+                                                <tr>
+                                                    <td class="pulse-td pl-6 font-medium text-zinc-900 dark:text-white">{{ $sc->cycle?->name ?? '—' }}</td>
+                                                    <td class="pulse-td">{{ $sc->final_score }}</td>
+                                                    <td class="pulse-td">{{ $sc->grade ?? '—' }}</td>
+                                                </tr>
+                                            @empty
+                                                <tr><td colspan="3" class="pulse-table__empty">No scorecards yet.</td></tr>
+                                            @endforelse
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                    {{-- ── Warnings Tab ── --}}
+                    @elseif($activeTab === 'Warnings')
+                        <div wire:key="tab-warnings" class="space-y-4">
+                            <h3 class="text-base font-bold text-zinc-900 dark:text-white">Warning Letters</h3>
+                            <div class="space-y-2">
+                                @forelse($warningHistory as $w)
+                                    <div class="flex items-center justify-between gap-3 rounded-xl border border-zinc-100 px-4 py-3 dark:border-zinc-800">
+                                        <div class="min-w-0">
+                                            <div class="text-sm font-semibold text-zinc-900 dark:text-white">{{ ucwords(str_replace('_', ' ', $w->warning_type)) }}</div>
+                                            <div class="text-xs text-zinc-400">{{ $w->issue_date ? \Illuminate\Support\Carbon::parse($w->issue_date)->format('d M Y') : '—' }}</div>
+                                        </div>
+                                        <span class="badge-warning-{{ $w->status }}">{{ strtoupper(str_replace('_', ' ', $w->status)) }}</span>
+                                    </div>
+                                @empty
+                                    <p class="py-8 text-center text-sm text-zinc-400">No warning letters.</p>
+                                @endforelse
+                            </div>
+                        </div>
+
+                    {{-- ── PIP Tab ── --}}
+                    @elseif($activeTab === 'PIP')
+                        <div wire:key="tab-pip" class="space-y-4">
+                            <h3 class="text-base font-bold text-zinc-900 dark:text-white">Performance Improvement Plans</h3>
+                            <div class="space-y-2">
+                                @forelse($pipHistory as $pip)
+                                    <div class="flex items-center justify-between gap-3 rounded-xl border border-zinc-100 px-4 py-3 dark:border-zinc-800">
+                                        <div class="min-w-0">
+                                            <div class="text-sm font-semibold text-zinc-900 dark:text-white">PIP · {{ $pip->start_date ? \Illuminate\Support\Carbon::parse($pip->start_date)->format('d M Y') : '—' }} &rarr; {{ $pip->end_date ? \Illuminate\Support\Carbon::parse($pip->end_date)->format('d M Y') : '—' }}</div>
+                                            @if($pip->outcome)<div class="text-xs text-zinc-400">Outcome: {{ ucfirst($pip->outcome) }}</div>@endif
+                                        </div>
+                                        <span class="rounded-full bg-zinc-100 px-2.5 py-0.5 text-[11px] font-bold uppercase text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">{{ str_replace('_', ' ', $pip->status) }}</span>
+                                    </div>
+                                @empty
+                                    <p class="py-8 text-center text-sm text-zinc-400">No PIP records.</p>
+                                @endforelse
+                            </div>
+                        </div>
+
+                    {{-- ── Promotions Tab ── --}}
+                    @elseif($activeTab === 'Promotions')
+                        <div wire:key="tab-promotions" class="space-y-4">
+                            <h3 class="text-base font-bold text-zinc-900 dark:text-white">Promotions &amp; Recommendations</h3>
+                            <div class="space-y-2">
+                                @forelse($promotionHistory as $promo)
+                                    <div class="flex items-center justify-between gap-3 rounded-xl border border-zinc-100 px-4 py-3 dark:border-zinc-800">
+                                        <div class="min-w-0">
+                                            <div class="text-sm font-semibold text-zinc-900 dark:text-white">{{ ucwords(str_replace('_', ' ', $promo->recommendation_type)) }}</div>
+                                            <div class="text-xs text-zinc-400">{{ $promo->current_role ?? '' }} @if($promo->proposed_role)&rarr; {{ $promo->proposed_role }}@endif</div>
+                                        </div>
+                                        <span class="rounded-full bg-zinc-100 px-2.5 py-0.5 text-[11px] font-bold uppercase text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">{{ str_replace('_', ' ', $promo->status) }}</span>
+                                    </div>
+                                @empty
+                                    <p class="py-8 text-center text-sm text-zinc-400">No promotion recommendations.</p>
+                                @endforelse
+                            </div>
+                        </div>
+
+                    {{-- ── Timeline Tab ── --}}
+                    @elseif($activeTab === 'Timeline')
+                        <div wire:key="tab-timeline" class="space-y-4">
+                            <h3 class="text-base font-bold text-zinc-900 dark:text-white">Career Timeline</h3>
+                            <div class="relative space-y-4 border-l border-zinc-200 pl-6 dark:border-zinc-700">
+                                @forelse($timeline as $event)
+                                    <div class="relative">
+                                        <span class="absolute -left-[26px] top-1 size-3 rounded-full bg-brand-500 ring-4 ring-white dark:ring-zinc-900"></span>
+                                        <div class="text-xs text-zinc-400">{{ $event->event_date ? \Illuminate\Support\Carbon::parse($event->event_date)->format('d M Y') : '' }}</div>
+                                        <div class="text-sm font-semibold text-zinc-900 dark:text-white">{{ $event->title }}</div>
+                                        @if($event->description)<div class="text-xs text-zinc-500">{{ $event->description }}</div>@endif
+                                    </div>
+                                @empty
+                                    <p class="py-8 text-center text-sm text-zinc-400">No timeline events.</p>
+                                @endforelse
+                            </div>
                         </div>
 
                     {{-- ── Probation Tab ── --}}

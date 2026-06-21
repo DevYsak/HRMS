@@ -36,33 +36,33 @@
         <div class="pulse-card border-brand-200 dark:border-brand-900/50 relative overflow-hidden">
             <div class="absolute top-0 left-0 w-1 h-full bg-brand-500"></div>
             <h3 class="text-lg font-bold text-zinc-900 dark:text-white mb-6">Pending Regularisation Requests</h3>
-            <div class="overflow-x-auto -mx-6">
-                <table class="w-full text-sm">
+            <div class="pulse-table-wrap">
+                <table class="pulse-table">
                     <thead>
-                        <tr class="border-b border-zinc-100 dark:border-zinc-800">
-                            <th class="pb-3 pl-6 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Employee</th>
-                            <th class="pb-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Date</th>
-                            <th class="pb-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Requested Time</th>
-                            <th class="pb-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Reason</th>
-                            <th class="pb-3 pr-6 text-right text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Action</th>
+                        <tr>
+                            <th class="pulse-th pl-6">Employee</th>
+                            <th class="pulse-th">Date</th>
+                            <th class="pulse-th">Requested Time</th>
+                            <th class="pulse-th">Reason</th>
+                            <th class="pulse-th pr-6 text-right!">Action</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-zinc-50 dark:divide-zinc-800/60">
+                    <tbody>
                         @foreach($pendingRegularisations as $req)
-                            <tr class="hover:bg-zinc-50/50 dark:hover:bg-zinc-800/20 transition-colors">
-                                <td class="py-3 pl-6 pr-4 font-medium text-zinc-900 dark:text-white">
+                            <tr>
+                                <td class="pulse-td pl-6 font-medium text-zinc-900 dark:text-white">
                                     {{ $req->employee->user->name }}
                                 </td>
-                                <td class="py-3 pr-4 text-zinc-600 dark:text-zinc-300">
+                                <td class="pulse-td">
                                     {{ \Carbon\Carbon::parse($req->work_date)->format('M d, Y') }}
                                 </td>
-                                <td class="py-3 pr-4">
+                                <td class="pulse-td">
                                     {{ \Carbon\Carbon::parse($req->requested_check_in)->format('H:i') }} - {{ \Carbon\Carbon::parse($req->requested_check_out)->format('H:i') }}
                                 </td>
-                                <td class="py-3 pr-4 text-zinc-500 truncate max-w-xs" title="{{ $req->reason }}">
+                                <td class="pulse-td text-zinc-500 truncate max-w-xs" title="{{ $req->reason }}">
                                     {{ $req->reason }}
                                 </td>
-                                <td class="py-3 pr-6 text-right">
+                                <td class="pulse-td pr-6 text-right!">
                                     <flux:button wire:click="openReviewModal({{ $req->id }})" size="xs" variant="primary">Review</flux:button>
                                 </td>
                             </tr>
@@ -77,51 +77,51 @@
     <div class="pulse-card">
         <h3 class="text-lg font-bold text-zinc-900 dark:text-white mb-6">Recent Activity</h3>
         
-        <div class="overflow-x-auto -mx-6">
-            <table class="w-full text-sm">
+        <div class="pulse-table-wrap">
+            <table class="pulse-table">
                 <thead>
-                    <tr class="border-b border-zinc-100 dark:border-zinc-800">
-                        <th class="pb-3 pl-6 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Employee</th>
-                        <th class="pb-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Date</th>
-                        <th class="pb-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Check In</th>
-                        <th class="pb-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Check Out</th>
-                        <th class="pb-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Status</th>
-                        <th class="pb-3 pr-6 text-right text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Total Hours</th>
+                    <tr>
+                        <th class="pulse-th pl-6">Employee</th>
+                        <th class="pulse-th">Date</th>
+                        <th class="pulse-th">Check In</th>
+                        <th class="pulse-th">Check Out</th>
+                        <th class="pulse-th">Status</th>
+                        <th class="pulse-th pr-6 text-right!">Total Hours</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-zinc-50 dark:divide-zinc-800/60">
                     @forelse($recentLogs as $log)
-                        <tr class="hover:bg-zinc-50/50 dark:hover:bg-zinc-800/20 transition-colors">
-                            <td class="py-4 pl-6 pr-4 font-medium text-zinc-900 dark:text-white">
+                        <tr>
+                            <td class="pulse-td pl-6 font-medium text-zinc-900 dark:text-white">
                                 {{ $log->employee->user->name }}
                             </td>
-                            <td class="py-4 pr-4 text-zinc-600 dark:text-zinc-300">
+                            <td class="pulse-td">
                                 {{ $log->date->format('M d, Y') }}
                             </td>
-                            <td class="py-4 pr-4">
+                            <td class="pulse-td">
                                 {{ $log->check_in->format('H:i') }}
                             </td>
-                            <td class="py-4 pr-4">
+                            <td class="pulse-td">
                                 {{ $log->check_out ? $log->check_out->format('H:i') : '--:--' }}
                             </td>
-                            <td class="py-4 pr-4">
+                            <td class="pulse-td">
                                 <span class="badge-{{ $log->status === 'on_time' ? $log->status : ($log->status === 'late' ? 'rejected' : 'manager') }}">
                                     {{ strtoupper($log->status) }}
                                 </span>
                             </td>
-                            <td class="py-4 pr-6 text-right font-bold text-zinc-900 dark:text-white">
+                            <td class="pulse-td pr-6 text-right! font-bold text-zinc-900 dark:text-white">
                                 {{ (float)$log->total_hours }}
                             </td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="6" class="py-12 text-center text-zinc-400">No activity logs found.</td>
+                            <td colspan="6" class="pulse-table__empty">No activity logs found.</td>
                         </tr>
                     @endforelse
                 </tbody>
             </table>
         </div>
-        <div class="mt-4 border-t border-zinc-50 pt-3 dark:border-zinc-800">
+        <div class="pulse-pagination">
             {{ $recentLogs->links() }}
         </div>
     </div>

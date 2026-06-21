@@ -6,6 +6,7 @@ use App\Models\Department;
 use App\Models\EmployeeScorecard;
 use App\Models\PerformanceCycle;
 use App\Models\PerformanceReviewScore;
+use App\Models\ReviewGoal;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
@@ -83,6 +84,11 @@ class KpiDashboard extends Component
                 ->toArray();
         }
 
+        // Performer segmentation (derived from the already-loaded, score-sorted scorecards)
+        $topPerformers = $scorecards->take(5)->values();
+        $atRisk = $scorecards->sortBy('final_score')->take(5)->values();
+        $promotionReady = $scorecards->filter(fn ($s) => (float) $s->final_score >= 85)->values();
+
         $departments = Department::orderBy('name')->get();
 
         // Cycle trend: last 4 cycles avg score
@@ -98,6 +104,78 @@ class KpiDashboard extends Component
             ])
             ->values();
 
+        // ── Department ranking (selected cycle, by average score) ──
+        $deptRanking = $scorecards
+            ->groupBy(fn ($s) => $s->employee?->department?->name ?? 'Unassigned')
+            ->map(fn ($group, $name) => [
+                'name' => $name,
+                'avg' => round($group->avg('final_score'), 1),
+                'count' => $group->count(),
+            ])
+            ->sortByDesc('avg')
+            ->values();
+
+        // ── Department × cycle heatmap (last 4 cycles, single grouped query) ──
+        $heatmapCycles = PerformanceCycle::whereIn('status', ['active', 'completed', 'locked'])
+            ->latest('start_date')
+            ->limit(4)
+            ->get()
+            ->reverse()
+            ->values();
+
+        $heatmapLookup = EmployeeScorecard::query()
+            ->whereIn('performance_cycle_id', $heatmapCycles->pluck('id'))
+            ->join('employees', 'employee_scorecards.employee_id', '=', 'employees.id')
+            ->selectRaw('employees.department_id, performance_cycle_id, AVG(final_score) as avg_score')
+            ->groupBy('employees.department_id', 'performance_cycle_id')
+            ->get()
+            ->groupBy('department_id');
+
+        $heatmap = $departments->map(fn ($dept) => [
+            'department' => $dept->name,
+            'cells' => $heatmapCycles->map(function ($cy) use ($heatmapLookup, $dept) {
+                $row = ($heatmapLookup[$dept->id] ?? collect())->firstWhere('performance_cycle_id', $cy->id);
+
+                return $row ? (int) round($row->avg_score) : null;
+            })->values(),
+        ])->values();
+
+        // ── PIP risk: below threshold in the selected AND previous cycle ──
+        $lowThreshold = 50;
+        $pipRisk = collect();
+        if ($this->selectedCycleId) {
+            $selectedCycle = PerformanceCycle::find($this->selectedCycleId);
+            $previousCycle = $selectedCycle
+                ? PerformanceCycle::whereIn('status', ['active', 'completed', 'locked'])
+                    ->where('start_date', '<', $selectedCycle->start_date)
+                    ->latest('start_date')
+                    ->first()
+                : null;
+
+            if ($previousCycle) {
+                $prevLowIds = EmployeeScorecard::where('performance_cycle_id', $previousCycle->id)
+                    ->where('final_score', '<', $lowThreshold)
+                    ->pluck('employee_id');
+
+                $pipRisk = $scorecards
+                    ->filter(fn ($s) => (float) $s->final_score < $lowThreshold && $prevLowIds->contains($s->employee_id))
+                    ->values();
+            }
+        }
+
+        // ── Goal progress for the selected cycle ──
+        $goalStats = ['total' => 0, 'completed' => 0, 'percent' => 0];
+        if ($this->selectedCycleId) {
+            $goalBase = ReviewGoal::whereHas('review', fn ($q) => $q->where('performance_cycle_id', $this->selectedCycleId));
+            $goalTotal = (clone $goalBase)->count();
+            $goalDone = (clone $goalBase)->where('is_completed', true)->count();
+            $goalStats = [
+                'total' => $goalTotal,
+                'completed' => $goalDone,
+                'percent' => $goalTotal > 0 ? (int) round($goalDone / $goalTotal * 100) : 0,
+            ];
+        }
+
         return view('livewire.performance.kpi-dashboard', [
             'cycles' => $cycles,
             'scorecards' => $scorecards,
@@ -108,6 +186,14 @@ class KpiDashboard extends Component
             'strengthWeakness' => $strengthWeakness,
             'departments' => $departments,
             'trendCycles' => $trendCycles,
+            'topPerformers' => $topPerformers,
+            'atRisk' => $atRisk,
+            'promotionReady' => $promotionReady,
+            'deptRanking' => $deptRanking,
+            'heatmap' => $heatmap,
+            'heatmapCycles' => $heatmapCycles,
+            'pipRisk' => $pipRisk,
+            'goalStats' => $goalStats,
         ])->layout('layouts.app', ['title' => 'KPI Dashboard']);
     }
 }

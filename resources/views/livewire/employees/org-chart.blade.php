@@ -23,17 +23,17 @@
     }">
 
     {{-- ─── HEADER ─── --}}
-    <div class="sticky top-0 z-20 border-b border-slate-200/80 bg-white/80 backdrop-blur-xl px-6 py-4 shadow-sm">
+    <div class="sticky top-0 z-20 border-b border-zinc-200/80 bg-white/90 backdrop-blur-xl px-6 py-4 shadow-sm dark:border-zinc-800/80 dark:bg-zinc-900/90">
         <div class="flex items-center justify-between">
             <div class="flex items-center gap-4">
-                <div class="flex size-10 items-center justify-center rounded-xl bg-indigo-600 shadow-lg shadow-indigo-200">
+                <div class="flex size-10 items-center justify-center rounded-xl bg-brand-500 shadow-lg shadow-brand-200/40 dark:shadow-brand-900/40">
                     <svg class="size-5 text-white" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0-1 3m8.5-3 1 3m0 0 .5 1.5m-.5-1.5h-9.5m0 0-.5 1.5m.75-9 3-3 2.148 2.148A12.061 12.061 0 0116.5 7.605" />
                     </svg>
                 </div>
                 <div>
-                    <h1 class="text-xl font-bold text-slate-900">Organizational Chart</h1>
-                    <p class="text-xs text-slate-500">Reporting structure & team hierarchy</p>
+                    <h1 class="pulse-page-title text-xl">Organizational Chart</h1>
+                    <p class="pulse-page-subtitle">Reporting structure &amp; team hierarchy</p>
                 </div>
             </div>
 
@@ -45,30 +45,30 @@
                     $deptCount  = $allEmps->pluck('department.name')->filter()->unique()->count();
                 @endphp
                 <div class="hidden sm:flex items-center gap-3">
-                    <div class="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5">
-                        <div class="size-2 rounded-full bg-indigo-500"></div>
-                        <span class="text-xs font-semibold text-slate-600">{{ $totalCount }} <span class="font-normal text-slate-400">employees</span></span>
+                    <div class="flex items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1.5 dark:border-zinc-700 dark:bg-zinc-800">
+                        <div class="size-2 rounded-full bg-brand-500"></div>
+                        <span class="text-xs font-semibold text-zinc-700 dark:text-zinc-200">{{ $totalCount }} <span class="font-normal text-zinc-400">employees</span></span>
                     </div>
-                    <div class="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5">
+                    <div class="flex items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1.5 dark:border-zinc-700 dark:bg-zinc-800">
                         <div class="size-2 rounded-full bg-violet-500"></div>
-                        <span class="text-xs font-semibold text-slate-600">{{ $deptCount }} <span class="font-normal text-slate-400">departments</span></span>
+                        <span class="text-xs font-semibold text-zinc-700 dark:text-zinc-200">{{ $deptCount }} <span class="font-normal text-zinc-400">departments</span></span>
                     </div>
                 </div>
 
                 {{-- Zoom controls --}}
-                <div class="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1">
+                <div class="flex items-center gap-1 rounded-lg border border-zinc-200 bg-zinc-50 p-1 dark:border-zinc-700 dark:bg-zinc-800">
                     <button @click="scale = Math.max(0.3, +(scale - 0.1).toFixed(1))"
-                        class="flex size-7 items-center justify-center rounded-md text-slate-500 transition hover:bg-white hover:text-slate-800 hover:shadow-sm">
+                        class="flex size-7 items-center justify-center rounded-md text-zinc-500 transition hover:bg-white hover:text-zinc-800 hover:shadow-sm dark:hover:bg-zinc-700 dark:hover:text-zinc-100">
                         <svg class="size-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14" /></svg>
                     </button>
-                    <span class="w-12 text-center text-xs font-bold tabular-nums text-slate-600" x-text="Math.round(scale * 100) + '%'"></span>
+                    <span class="w-12 text-center text-xs font-bold tabular-nums text-zinc-600 dark:text-zinc-300" x-text="Math.round(scale * 100) + '%'"></span>
                     <button @click="scale = Math.min(2, +(scale + 0.1).toFixed(1))"
-                        class="flex size-7 items-center justify-center rounded-md text-slate-500 transition hover:bg-white hover:text-slate-800 hover:shadow-sm">
+                        class="flex size-7 items-center justify-center rounded-md text-zinc-500 transition hover:bg-white hover:text-zinc-800 hover:shadow-sm dark:hover:bg-zinc-700 dark:hover:text-zinc-100">
                         <svg class="size-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
                     </button>
-                    <div class="mx-0.5 h-4 w-px bg-slate-200"></div>
+                    <div class="mx-0.5 h-4 w-px bg-zinc-200 dark:bg-zinc-700"></div>
                     <button @click="reset()"
-                        class="rounded-md px-2 py-1 text-[10px] font-semibold text-slate-500 transition hover:bg-white hover:text-slate-700 hover:shadow-sm">
+                        class="rounded-md px-2 py-1 text-[10px] font-semibold text-zinc-500 transition hover:bg-white hover:text-zinc-700 hover:shadow-sm dark:hover:bg-zinc-700 dark:hover:text-zinc-200">
                         Reset
                     </button>
                 </div>

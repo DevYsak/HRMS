@@ -12,6 +12,7 @@ use App\Models\ShiftSetting;
 use App\Models\User;
 use App\Notifications\AttendanceRegularisationNotification;
 use App\Notifications\RegularisationReviewedNotification;
+use App\Services\AiAssistant;
 use App\Services\AttendanceService;
 use Carbon\CarbonPeriod;
 use Illuminate\Support\Carbon;
@@ -40,6 +41,24 @@ class AttendanceTracker extends Component
         'absent' => 0,
     ];
 
+    /** Phase 6 attendance analytics (compliance, score, work pattern, breaks, late trend). */
+    public array $analytics = [
+        'shift_compliance' => 100,
+        'attendance_score' => 100,
+        'office_days' => 0,
+        'wfh_days' => 0,
+        'avg_break' => 0,
+        'excess_breaks' => 0,
+        'late_trend' => [],
+    ];
+
+    /** Phase 6 AI insights (only when OPENAI_API_KEY is configured). */
+    public bool $aiEnabled = false;
+
+    public bool $aiLoading = false;
+
+    public ?string $aiInsight = null;
+
     public $shiftLabel;
 
     public $calendarMonth;
@@ -67,6 +86,7 @@ class AttendanceTracker extends Component
     {
         $this->calendarMonth = Carbon::now()->startOfMonth();
         $this->attendanceSettings = AttendanceSetting::first();
+        $this->aiEnabled = Auth::user() ? app(AiAssistant::class)->enabledForUser(Auth::user()) : false;
         $this->loadData();
     }
 
@@ -259,6 +279,85 @@ class AttendanceTracker extends Component
             'leaves' => $leaves->count(),
             'absent' => $absentCount,
         ];
+
+        // ── Phase 6: Attendance analytics ────────────────────────────────
+        $present = $this->stats['present'];
+        $late = $this->stats['late'];
+        $workingBasis = $present + $absentCount;
+        $onTime = max(0, $present - $late);
+
+        $wfhDays = $attendances->filter(fn ($a) => $a->work_mode === 'wfh' || $a->status === 'remote')->count();
+        $officeDays = $attendances->count() - $wfhDays;
+
+        $excessBreaks = $attendances->where('break_minutes', '>', 60)->count();
+        $withBreaks = $attendances->where('break_minutes', '>', 0);
+        $avgBreak = $withBreaks->count() > 0 ? (int) round($withBreaks->avg('break_minutes')) : 0;
+
+        $onTimePct = $present > 0 ? ($onTime / $present) * 100 : 100;
+        $presentPct = $workingBasis > 0 ? ($present / $workingBasis) * 100 : 100;
+        $breakPct = max(0, 100 - min(100, $excessBreaks * 10));
+
+        // Late-arrival trend — fixed last-6-months window (independent of stats period)
+        $trendStart = Carbon::now()->subMonths(5)->startOfMonth();
+        $trendLate = Attendance::where('employee_id', $employee->id)
+            ->whereDate('date', '>=', $trendStart->toDateString())
+            ->where('is_late', true)
+            ->get(['date']);
+        $lateTrend = collect(range(0, 5))->map(function ($i) use ($trendStart, $trendLate) {
+            $m = $trendStart->copy()->addMonths($i);
+
+            return [
+                'month' => $m->format('M'),
+                'late' => $trendLate->filter(fn ($a) => $a->date->month === $m->month && $a->date->year === $m->year)->count(),
+            ];
+        })->values()->all();
+
+        $this->analytics = [
+            'shift_compliance' => $workingBasis > 0 ? (int) round($onTime / $workingBasis * 100) : 100,
+            'attendance_score' => (int) round($onTimePct * 0.6 + $presentPct * 0.25 + $breakPct * 0.15),
+            'office_days' => $officeDays,
+            'wfh_days' => $wfhDays,
+            'avg_break' => $avgBreak,
+            'excess_breaks' => $excessBreaks,
+            'late_trend' => $lateTrend,
+        ];
+    }
+
+    /**
+     * Generate plain-language AI insights from the computed analytics.
+     * No-op unless OPENAI_API_KEY is configured (panel is hidden otherwise).
+     */
+    public function generateAiInsight(): void
+    {
+        $ai = app(AiAssistant::class);
+        if (! Auth::user() || ! $ai->enabledForUser(Auth::user())) {
+            return;
+        }
+
+        $this->aiLoading = true;
+
+        $payload = [
+            'attendance_score' => $this->analytics['attendance_score'] ?? null,
+            'shift_compliance_pct' => $this->analytics['shift_compliance'] ?? null,
+            'present_days' => $this->stats['present'] ?? 0,
+            'late_days' => $this->stats['late'] ?? 0,
+            'absent_days' => $this->stats['absent'] ?? 0,
+            'office_days' => $this->analytics['office_days'] ?? 0,
+            'wfh_days' => $this->analytics['wfh_days'] ?? 0,
+            'avg_break_minutes' => $this->analytics['avg_break'] ?? 0,
+            'excess_break_days' => $this->analytics['excess_breaks'] ?? 0,
+            'late_trend_6m' => $this->analytics['late_trend'] ?? [],
+        ];
+
+        $system = 'You are an HR attendance analyst for a single company. Given one employee\'s attendance metrics, write 2-4 short bullet-point insights in plain language. Cover attendance anomalies, burnout risk (excess overtime combined with low break time or frequent late arrivals), and repeated late-arrival patterns. Be concise, factual and supportive. Do not invent data beyond what is provided.';
+
+        try {
+            $this->aiInsight = $ai->ask($system, json_encode($payload, JSON_PRETTY_PRINT));
+        } catch (\Throwable $e) {
+            $this->aiInsight = 'AI insights are temporarily unavailable. Please try again later.';
+        } finally {
+            $this->aiLoading = false;
+        }
     }
 
     public function startBreak()
