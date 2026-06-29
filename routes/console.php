@@ -109,6 +109,19 @@ Schedule::command('hrms:sync-biometric')
     ->withoutOverlapping()
     ->runInBackground();
 
+// Pull computed daily attendance from the Python engine → every 10 min during working hours
+Schedule::command('attendance:sync-engine')
+    ->everyTenMinutes()
+    ->between('07:00', '23:00')
+    ->withoutOverlapping()
+    ->runInBackground();
+
+// Nightly catch-up: re-sync the last 2 days (handles late punches / corrections) → 23:50 IST
+Schedule::command('attendance:sync-engine --days=2')
+    ->dailyAt('23:50')
+    ->withoutOverlapping()
+    ->runInBackground();
+
 // Push HRMS employee changes to biometric devices every 10 minutes (HRMS is master)
 Schedule::command('biometric:push-employees')
     ->everyTenMinutes()
