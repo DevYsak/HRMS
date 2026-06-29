@@ -1,4 +1,4 @@
-<flux:main class="bg-zinc-50 dark:bg-zinc-950 min-h-screen">
+<flux:main class="min-h-screen bg-[#FAFAFA] font-['DM_Sans'] dark:bg-[#0B1220]">
 
     @php
         $hour = now()->hour;
@@ -9,56 +9,29 @@
         $showPayroll = false;
     @endphp
     {{-- ===== WELCOME BANNER ===== --}}
-    <div class="pulse-hero">
-        <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_rgba(249,115,22,0.22),_transparent_65%)]"></div>
-        <div class="pointer-events-none absolute -bottom-10 -left-10 size-64 rounded-full blur-3xl" style="background:radial-gradient(circle,rgba(249,115,22,0.30),transparent 70%)"></div>
-        <div class="pointer-events-none absolute top-0 right-0 size-48 rounded-full blur-3xl" style="background:radial-gradient(circle,rgba(249,115,22,0.08),transparent 70%)"></div>
-
-        <div class="relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-                <div class="flex items-center gap-2.5 mb-3">
-                    <div class="inline-flex items-center gap-1.5 px-3 py-1 bg-white/10 border border-white/10 rounded-full">
-                        @if($hour < 12)
-                            <flux:icon.sun class="size-3 text-amber-300" />
-                            <span class="text-[11px] font-semibold text-white/70">Morning</span>
-                        @elseif($hour < 17)
-                            <flux:icon.sun class="size-3 text-orange-300" />
-                            <span class="text-[11px] font-semibold text-white/70">Afternoon</span>
-                        @else
-                            <flux:icon.moon class="size-3 text-indigo-300" />
-                            <span class="text-[11px] font-semibold text-white/70">Evening</span>
-                        @endif
-                    </div>
-                    <span class="text-white/40 text-xs">{{ now()->format('l, d F Y') }}</span>
-                </div>
-                <h1 class="text-3xl font-black text-white tracking-tight">
-                    {{ $greeting }}, {{ $firstName }}
-                </h1>
-                <p class="text-white/55 text-sm mt-1.5">{{ $timeContext }}</p>
-            </div>
-
-            {{-- Quick Action Chips --}}
-            <div class="hidden md:flex items-center gap-2">
+    <div class="p-4 pb-0 md:p-6 md:pb-0">
+        <x-pulse.dashboard-header :title="$greeting.', '.$firstName" :subtitle="$timeContext">
+            <x-slot:actions>
                 <a href="{{ route('attendance.my') }}" wire:navigate
-                   class="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/10 transition rounded-xl text-sm text-white font-semibold">
+                   class="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50 dark:border-white/10 dark:bg-white/5 dark:text-zinc-200 dark:hover:bg-white/10">
                     <flux:icon.clock class="size-4" /> Attendance
                 </a>
                 <a href="{{ route('time-off.my') }}" wire:navigate
-                   class="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/10 transition rounded-xl text-sm text-white font-semibold">
+                   class="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50 dark:border-white/10 dark:bg-white/5 dark:text-zinc-200 dark:hover:bg-white/10">
                     <flux:icon.calendar-days class="size-4" /> Apply Leave
                 </a>
                 <a href="{{ route('overtime.my') }}" wire:navigate
-                   class="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/10 transition rounded-xl text-sm text-white font-semibold">
+                   class="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50 dark:border-white/10 dark:bg-white/5 dark:text-zinc-200 dark:hover:bg-white/10">
                     <flux:icon.plus-circle class="size-4" /> Log OT
                 </a>
                 @if($showPayroll)
                 <a href="{{ route('payroll.payslips') }}" wire:navigate
-                   class="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 border border-orange-400/50 transition rounded-xl text-sm text-white font-semibold shadow-lg shadow-orange-900/30">
+                   class="inline-flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-brand-600">
                     <flux:icon.banknotes class="size-4" /> My Pay
                 </a>
                 @endif
-            </div>
-        </div>
+            </x-slot:actions>
+        </x-pulse.dashboard-header>
     </div>
 
     {{-- ===== MAIN 2-COLUMN LAYOUT ===== --}}

@@ -17,11 +17,11 @@ test('executive dashboard shows workforce analytics and hides payroll widgets', 
 
     Livewire::test(ExecutiveDashboard::class)
         ->assertOk()
-        ->assertSee('Attendance Today')
+        ->assertSee('Executive Summary')
         ->assertSee('Attrition')
-        ->assertSee('Promotions')
-        ->assertSee('Department Health')
-        ->assertSee('Alerts')
+        ->assertSee('Department Ranking')
+        ->assertSee('Organization Health')
+        ->assertSee('Risk Indicators')
         ->assertDontSee('Payroll Status');
 });
 

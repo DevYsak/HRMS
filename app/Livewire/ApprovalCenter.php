@@ -214,7 +214,7 @@ class ApprovalCenter extends Component
             : $rows->where('group', $this->filter)->sortByDesc('submitted')->values();
 
         return view('livewire.approval-center', [
-            'rows' => $filtered->take(3),
+            'rows' => $filtered->take(6),
             'visibleTotal' => $filtered->count(),
             'counts' => $counts,
         ]);

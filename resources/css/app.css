@@ -11,50 +11,68 @@
 /* Prevent Alpine x-show flash before init (e.g. theme toggle icons) */
 [x-cloak]{display:none !important;}
 
+/* Dashboard entrance — staggered rise for cards */
+@keyframes dashRise {
+    from { opacity: 0; transform: translateY(14px); }
+    to   { opacity: 1; transform: none; }
+}
+.dash-rise { animation: dashRise .55s cubic-bezier(.4, 0, .2, 1) both; }
+@media (prefers-reduced-motion: reduce) {
+    .dash-rise { animation: none; }
+}
+
 /* ===================================================
    Premium role-accent sidebar (Flux) — driven by the
    --role-accent variable set per role on <flux:sidebar>.
    =================================================== */
-/* Navy depth + 280px on desktop */
-.pulse-sidebar { background: linear-gradient(180deg, #0f172a 0%, #0b1120 100%) !important; }
+/* Cream professional surface + 290px on desktop */
+.pulse-sidebar { background: #FFF8F1 !important; }
 @media (min-width: 1024px) {
-    .pulse-sidebar[data-flux-sidebar-on-desktop]:not([data-flux-sidebar-collapsed-desktop]) { width: 280px; }
+    .pulse-sidebar[data-flux-sidebar-on-desktop]:not([data-flux-sidebar-collapsed-desktop]) { width: 290px; }
 }
 
-/* Base nav item — rounded, spaced, refined light label on navy */
+/* Section / group headings — muted warm grey */
+.pulse-sidebar [data-flux-sidebar-heading],
+.pulse-sidebar [data-flux-sidebar-group] [data-slot="heading"],
+.pulse-sidebar [data-flux-sidebar] [data-slot="heading"] {
+    color: #B9AFA4 !important;
+    font-weight: 700 !important;
+    letter-spacing: .1em !important;
+    text-transform: uppercase !important;
+}
+
+/* Base nav item — rounded, spaced, warm-grey label on cream */
 .pulse-sidebar [data-flux-sidebar-item] {
-    border-radius: 11px !important;
+    border-radius: 12px !important;
     margin-block: 2px !important;
     font-weight: 500 !important;
-    color: #cbd5e1 !important;
+    color: #6B7280 !important;
     transition: background-color .18s ease, color .18s ease, box-shadow .18s ease !important;
 }
-.pulse-sidebar [data-flux-sidebar-item] svg { color: #8b95a7 !important; }
+.pulse-sidebar [data-flux-sidebar-item] svg { color: #F59E0B !important; opacity: .92; }
 
-/* Hover — soft accent wash */
+/* Hover — soft peach wash */
 .pulse-sidebar [data-flux-sidebar-item]:not([data-current]):hover {
-    background-color: color-mix(in srgb, var(--role-accent, #f97316) 12%, transparent) !important;
-    color: #ffffff !important;
+    background-color: #FFF2E8 !important;
+    color: #111827 !important;
 }
 .pulse-sidebar [data-flux-sidebar-item]:not([data-current]):hover svg {
     color: var(--role-accent, #f97316) !important;
 }
 
-/* Active — orange glass pill with accent bar + soft glow */
+/* Active — soft orange pill with accent bar + glow */
 .pulse-sidebar [data-flux-sidebar-item][data-current] {
-    color: #ffffff !important;
+    color: #EA580C !important;
     border-color: transparent !important;
-    background: linear-gradient(90deg,
-        color-mix(in srgb, var(--role-accent, #f97316) 30%, transparent),
-        color-mix(in srgb, var(--role-accent, #f97316) 8%, transparent)) !important;
+    background: #FFF1E5 !important;
     box-shadow: inset 3px 0 0 0 var(--role-accent, #f97316),
-        0 6px 18px -8px color-mix(in srgb, var(--role-accent, #f97316) 80%, transparent) !important;
+        0 8px 18px -10px color-mix(in srgb, var(--role-accent, #f97316) 60%, transparent) !important;
     font-weight: 700 !important;
 }
-.pulse-sidebar [data-flux-sidebar-item][data-current] svg { color: var(--role-accent, #f97316) !important; }
+.pulse-sidebar [data-flux-sidebar-item][data-current] svg { color: var(--role-accent, #f97316) !important; opacity: 1; }
 
-/* Subtle scrollbar on navy */
-.pulse-sidebar ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, .10); border-radius: 8px; }
+/* Cream scrollbar */
+.pulse-sidebar ::-webkit-scrollbar-thumb { background: #EFE0D2; border-radius: 8px; }
 
 /* ===================================================
    PULSE HRMS — Design Tokens (TailwindCSS v4 @theme)
@@ -152,9 +170,9 @@ select:focus[data-flux-control] {
    =================================================== */
 @layer utilities {
 
-    /* Card */
+    /* Card — premium rounded surface (matches x-pulse.card) */
     .pulse-card {
-        @apply rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900;
+        @apply rounded-2xl border border-zinc-100 bg-white p-6 shadow-sm dark:border-white/5 dark:bg-ink-900;
     }
 
     /* Stat value */
@@ -428,3 +446,50 @@ select:focus[data-flux-control] {
         @apply flex items-center gap-3 px-4 py-4 shrink-0 min-w-[140px] sm:min-w-0 sm:flex-1;
     }
 }
+/* ════════════════════════════════════════════════════════════════
+   GLOBAL DARK/LIGHT THEME SYSTEM  (Flux toggles `.dark` on <html>)
+   Makes the cream sidebar + dashboards + chips respond to dark mode.
+   ApexCharts are themed in resources/js/app.js.
+   ════════════════════════════════════════════════════════════════ */
+
+/* ---- Sidebar (dark) ---- */
+.dark .pulse-sidebar { background: #111827 !important; border-color: #334155 !important; }
+.dark .pulse-sidebar [data-flux-sidebar-heading],
+.dark .pulse-sidebar [data-flux-sidebar-group] [data-slot="heading"],
+.dark .pulse-sidebar [data-flux-sidebar] [data-slot="heading"] { color: #64748B !important; }
+.dark .pulse-sidebar [data-flux-sidebar-item] { color: #CBD5E1 !important; }
+.dark .pulse-sidebar [data-flux-sidebar-item] svg { color: #FB923C !important; }
+.dark .pulse-sidebar [data-flux-sidebar-item]:not([data-current]):hover { background: #1F2937 !important; color: #F8FAFC !important; }
+.dark .pulse-sidebar [data-flux-sidebar-item][data-current] {
+    color: #FB923C !important;
+    background: rgba(249, 115, 22, .16) !important;
+    box-shadow: inset 3px 0 0 0 #f97316, 0 8px 18px -10px rgba(249, 115, 22, .5) !important;
+}
+.dark .pulse-sidebar [data-flux-sidebar-item][data-current] svg { color: #FB923C !important; }
+.dark .pulse-sidebar ::-webkit-scrollbar-thumb { background: #334155 !important; }
+
+/* ---- Dashboard surfaces (dark) — neutral classes used across the cream dashboards ---- */
+.dark .bg-\[\#FFFDF8\] { background-color: #0F172A !important; }
+.dark .bg-white         { background-color: #1E293B !important; }
+.dark .bg-white\/70     { background-color: rgba(30, 41, 59, .6) !important; }
+.dark .bg-\[\#FFF2E8\]  { background-color: #1F2937 !important; }
+.dark .bg-\[\#FFF1E5\]  { background-color: #1F2937 !important; }
+.dark .bg-\[\#F3E8DD\]  { background-color: #334155 !important; }
+.dark .bg-\[\#EFE4D7\]  { background-color: #334155 !important; }
+.dark .bg-\[\#FBF5EE\]  { background-color: #1F2937 !important; }
+
+.dark .border-\[\#F3E8DD\], .dark .border-\[\#F1E7DD\], .dark .ring-\[\#F3E8DD\] { border-color: #334155 !important; }
+.dark .ring-\[\#F3E8DD\] { --tw-ring-color: #334155 !important; }
+.dark .border-white\/70 { border-color: rgba(255, 255, 255, .08) !important; }
+
+.dark .text-\[\#111827\], .dark .text-\[\#1F2937\] { color: #F8FAFC !important; }
+.dark .text-\[\#6B7280\], .dark .text-\[\#374151\] { color: #CBD5E1 !important; }
+.dark .text-\[\#9CA3AF\], .dark .text-\[\#D8CCBE\], .dark .text-\[\#B9AFA4\], .dark .text-\[\#D1C7BD\], .dark .text-\[\#C7BDB1\] { color: #94A3B8 !important; }
+
+/* ---- Soft accent chips (dark) ---- */
+.dark .bg-orange-50 { background-color: rgba(249, 115, 22, .15) !important; }
+.dark .bg-green-50  { background-color: rgba(34, 197, 94, .15) !important; }
+.dark .bg-amber-50  { background-color: rgba(245, 158, 11, .15) !important; }
+.dark .bg-blue-50   { background-color: rgba(59, 130, 246, .15) !important; }
+.dark .bg-red-50    { background-color: rgba(239, 68, 68, .15) !important; }
+.dark .bg-violet-50 { background-color: rgba(139, 92, 246, .15) !important; }

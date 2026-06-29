@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Pulse by Conexus — Super Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+/* ===================== DESIGN TOKENS ===================== */
+:root{
+  --purple:#534AB7; --purple-600:#4840a0; --purple-glow:rgba(83,74,183,.45);
+  --teal:#1D9E75; --amber:#BA7517; --red:#E24B4A;
+
+  /* Light theme */
+  --bg:#f4f4fb;
+  --bg-grad-1:#ece9fb; --bg-grad-2:#f4f4fb;
+  --surface:#ffffff;
+  --surface-2:#fafaff;
+  --surface-inset:#f3f3fa;
+  --border:#e9e8f2;
+  --border-strong:#dcdbe9;
+  --text:#1a1830;
+  --text-2:#5b5972;
+  --text-3:#9694a8;
+  --shadow:0 1px 2px rgba(26,24,48,.04),0 8px 24px rgba(26,24,48,.06);
+  --shadow-lg:0 12px 40px rgba(26,24,48,.12);
+  --heat-empty:#edecf5;
+  --sidebar:#ffffff;
+  --sidebar-text:#5b5972;
+  --grid-line:rgba(26,24,48,.06);
+}
+[data-theme="dark"]{
+  --bg:#0c0b16;
+  --bg-grad-1:#161329; --bg-grad-2:#0c0b16;
+  --surface:#161526;
+  --surface-2:#1b1930;
+  --surface-inset:#100f1d;
+  --border:#262438;
+  --border-strong:#322f47;
+  --text:#f2f1f9;
+  --text-2:#a6a3bd;
+  --text-3:#6f6c87;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 12px 32px rgba(0,0,0,.35);
+  --shadow-lg:0 16px 50px rgba(0,0,0,.5);
+  --heat-empty:#211f33;
+  --sidebar:#100f1d;
+  --sidebar-text:#a6a3bd;
+  --grid-line:rgba(255,255,255,.05);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  font-family:'Plus Jakarta Sans',system-ui,sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  transition:background .5s ease,color .5s ease;
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+.mono{font-family:'JetBrains Mono',monospace}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:10px;border:3px solid var(--bg)}
+::selection{background:var(--purple);color:#fff}
+
+/* ===================== LAYOUT ===================== */
+.app{display:grid;grid-template-columns:264px 1fr;min-height:100vh}
+
+/* ===================== SIDEBAR ===================== */
+.sidebar{
+  background:var(--sidebar);
+  border-right:1px solid var(--border);
+  padding:22px 16px;
+  display:flex;flex-direction:column;gap:6px;
+  position:sticky;top:0;height:100vh;
+  transition:background .5s ease,border-color .5s ease,transform .35s cubic-bezier(.4,0,.2,1);
+  z-index:60;
+}
+.brand{display:flex;align-items:center;gap:12px;padding:6px 8px 22px}
+.brand-mark{
+  width:42px;height:42px;border-radius:13px;flex:none;
+  background:linear-gradient(135deg,var(--purple),#7a72d8);
+  display:grid;place-items:center;color:#fff;font-weight:800;font-size:20px;
+  box-shadow:0 8px 20px var(--purple-glow);position:relative;overflow:hidden;
+}
+.brand-mark::after{content:"";position:absolute;inset:0;background:linear-gradient(120deg,transparent 30%,rgba(255,255,255,.35) 50%,transparent 70%);transform:translateX(-120%);animation:sheen 5s ease-in-out infinite}
+@keyframes sheen{0%,60%{transform:translateX(-120%)}80%,100%{transform:translateX(120%)}}
+.brand-name{font-weight:800;font-size:16px;letter-spacing:-.3px;line-height:1.1}
+.brand-sub{font-size:11px;color:var(--text-3);font-weight:500}
+.nav-label{font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-3);padding:14px 12px 6px}
+.nav-item{
+  display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:12px;
+  color:var(--sidebar-text);font-weight:600;font-size:13.5px;cursor:pointer;
+  text-decoration:none;position:relative;transition:all .22s ease;
+}
+.nav-item svg{width:19px;height:19px;flex:none;stroke-width:2}
+.nav-item:hover{background:var(--surface-inset);color:var(--text)}
+.nav-item.active{background:linear-gradient(135deg,var(--purple),#6c63cf);color:#fff;box-shadow:0 8px 18px var(--purple-glow)}
+.nav-item.active::before{content:"";position:absolute;left:-16px;top:50%;transform:translateY(-50%);width:4px;height:22px;background:var(--purple);border-radius:0 4px 4px 0}
+.nav-badge{margin-left:auto;font-size:10px;font-weight:700;background:var(--red);color:#fff;padding:2px 7px;border-radius:20px}
+.nav-item.active .nav-badge{background:rgba(255,255,255,.25)}
+.sidebar-foot{margin-top:auto;padding-top:14px}
+.role-card{
+  display:flex;align-items:center;gap:11px;padding:12px;border-radius:14px;
+  background:var(--surface-inset);border:1px solid var(--border);
+}
+.role-avatar{width:38px;height:38px;border-radius:11px;flex:none;background:linear-gradient(135deg,var(--amber),#d99a3c);display:grid;place-items:center;color:#fff;font-weight:800}
+.role-name{font-size:13px;font-weight:700;line-height:1.2}
+.role-badge{display:inline-flex;align-items:center;gap:4px;font-size:9.5px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--purple);background:color-mix(in srgb,var(--purple) 14%,transparent);padding:2px 7px;border-radius:6px;margin-top:3px}
+[data-theme="dark"] .role-badge{color:#a7a0ee}
+
+/* ===================== MAIN ===================== */
+.main{min-width:0;display:flex;flex-direction:column}
+.topbar{
+  display:flex;align-items:center;gap:16px;padding:16px 28px;
+  position:sticky;top:0;z-index:50;
+  background:color-mix(in srgb,var(--bg) 82%,transparent);
+  backdrop-filter:blur(14px);border-bottom:1px solid var(--border);
+  transition:background .5s,border-color .5s;
+}
+.hamburger{display:none;background:var(--surface);border:1px solid var(--border);width:40px;height:40px;border-radius:11px;cursor:pointer;color:var(--text);align-items:center;justify-content:center}
+.search{flex:1;max-width:420px;position:relative}
+.search input{
+  width:100%;padding:11px 14px 11px 42px;border-radius:12px;border:1px solid var(--border);
+  background:var(--surface);color:var(--text);font-size:13.5px;font-family:inherit;transition:all .25s;
+}
+.search input:focus{outline:none;border-color:var(--purple);box-shadow:0 0 0 4px color-mix(in srgb,var(--purple) 15%,transparent)}
+.search svg{position:absolute;left:14px;top:50%;transform:translateY(-50%);width:18px;height:18px;color:var(--text-3)}
+.top-actions{margin-left:auto;display:flex;align-items:center;gap:10px}
+.icon-btn{
+  width:42px;height:42px;border-radius:12px;border:1px solid var(--border);background:var(--surface);
+  color:var(--text-2);cursor:pointer;display:grid;place-items:center;position:relative;transition:all .25s;
+}
+.icon-btn:hover{color:var(--text);transform:translateY(-2px);box-shadow:var(--shadow)}
+.icon-btn svg{width:19px;height:19px}
+.dot{position:absolute;top:9px;right:10px;width:8px;height:8px;border-radius:50%;background:var(--red);border:2px solid var(--surface)}
+/* theme toggle */
+.toggle{width:62px;height:34px;border-radius:20px;border:1px solid var(--border);background:var(--surface-inset);cursor:pointer;position:relative;transition:all .4s;flex:none}
+.toggle-knob{position:absolute;top:3px;left:3px;width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,var(--amber),#e0a23f);display:grid;place-items:center;transition:transform .45s cubic-bezier(.6,-.28,.34,1.4),background .4s;box-shadow:0 3px 8px rgba(0,0,0,.2)}
+[data-theme="dark"] .toggle-knob{transform:translateX(28px);background:linear-gradient(135deg,var(--purple),#7a72d8)}
+.toggle-knob svg{width:15px;height:15px;color:#fff}
+
+.content{padding:24px 28px 48px;display:flex;flex-direction:column;gap:22px}
+
+/* ===================== HERO ===================== */
+.hero{
+  position:relative;overflow:hidden;border-radius:26px;padding:38px 36px;color:#fff;
+  background:linear-gradient(125deg,#3f3795 0%,#534AB7 45%,#6f5bd0 100%);
+  box-shadow:0 20px 50px var(--purple-glow);
+  opacity:0;transform:translateY(16px);animation:rise .7s .05s forwards
+}
+.hero::before,.hero::after{content:"";position:absolute;border-radius:50%;filter:blur(50px);opacity:.55;animation:float 9s ease-in-out infinite}
+.hero::before{width:340px;height:340px;background:#1D9E75;top:-120px;right:-60px}
+.hero::after{width:280px;height:280px;background:#BA7517;bottom:-140px;left:25%;animation-delay:-4s}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.06) 1px,transparent 1px);background-size:42px 42px;mask-image:radial-gradient(circle at 70% 30%,#000,transparent 70%)}
+@keyframes float{0%,100%{transform:translate(0,0)}50%{transform:translate(-24px,22px)}}
+.hero-inner{position:relative;z-index:2;display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap;align-items:flex-end}
+.hero-eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.18);padding:6px 13px;border-radius:30px;backdrop-filter:blur(6px)}
+.live-pulse{width:8px;height:8px;border-radius:50%;background:#7ef0c0;box-shadow:0 0 0 0 rgba(126,240,192,.7);animation:pulse 1.8s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(126,240,192,.7)}70%{box-shadow:0 0 0 12px rgba(126,240,192,0)}100%{box-shadow:0 0 0 0 rgba(126,240,192,0)}}
+.hero h1{font-size:34px;font-weight:800;letter-spacing:-.8px;margin:16px 0 6px;line-height:1.05}
+.hero p{color:rgba(255,255,255,.78);font-size:14.5px;font-weight:500;max-width:440px}
+.clock-box{text-align:right}
+.clock{font-size:46px;font-weight:700;letter-spacing:-1px;line-height:1;text-shadow:0 2px 20px rgba(0,0,0,.2)}
+.clock .sec{font-size:22px;opacity:.7;vertical-align:super}
+.clock-date{color:rgba(255,255,255,.8);font-size:13.5px;font-weight:600;margin-top:8px}
+.hero-cta{display:flex;gap:12px;margin-top:22px}
+.btn{font-family:inherit;font-weight:700;font-size:13px;padding:12px 20px;border-radius:13px;border:none;cursor:pointer;display:inline-flex;align-items:center;gap:8px;transition:all .25s}
+.btn svg{width:16px;height:16px}
+.btn-light{background:#fff;color:var(--purple)}
+.btn-light:hover{transform:translateY(-2px);box-shadow:0 10px 24px rgba(0,0,0,.18)}
+.btn-glass{background:rgba(255,255,255,.14);color:#fff;border:1px solid rgba(255,255,255,.22)}
+.btn-glass:hover{background:rgba(255,255,255,.24)}
+
+/* ===================== METRICS ===================== */
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
+.metric{
+  background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:22px;
+  position:relative;overflow:hidden;box-shadow:var(--shadow);transition:transform .3s,box-shadow .3s,background .5s,border-color .5s;
+  opacity:0;transform:translateY(16px);animation:rise .6s forwards
+}
+.metric:nth-child(1){animation-delay:.12s}.metric:nth-child(2){animation-delay:.18s}.metric:nth-child(3){animation-delay:.24s}.metric:nth-child(4){animation-delay:.3s}
+.metric:hover{transform:translateY(-5px);box-shadow:var(--shadow-lg)}
+.metric::after{content:"";position:absolute;right:-30px;top:-30px;width:120px;height:120px;border-radius:50%;background:var(--accent);opacity:.08}
+.metric-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+.metric-icon{width:46px;height:46px;border-radius:13px;display:grid;place-items:center;background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--accent)}
+.metric-icon svg{width:22px;height:22px}
+.metric-trend{font-size:11.5px;font-weight:700;padding:4px 9px;border-radius:20px;display:inline-flex;align-items:center;gap:3px}
+.trend-up{color:var(--teal);background:color-mix(in srgb,var(--teal) 14%,transparent)}
+.trend-down{color:var(--red);background:color-mix(in srgb,var(--red) 14%,transparent)}
+.trend-flat{color:var(--text-2);background:var(--surface-inset)}
+.metric-value{font-size:38px;font-weight:800;letter-spacing:-1.5px;line-height:1}
+.metric-label{color:var(--text-2);font-size:13px;font-weight:600;margin-top:6px}
+.metric-foot{font-size:11.5px;color:var(--text-3);margin-top:12px;display:flex;align-items:center;gap:6px;font-weight:500}
+
+/* ===================== GRID / CARDS ===================== */
+.grid{display:grid;gap:18px}
+.g-2-1{grid-template-columns:1.7fr 1fr}
+.g-3{grid-template-columns:1.4fr 1fr 1fr}
+.card{
+  background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:22px;
+  box-shadow:var(--shadow);transition:background .5s,border-color .5s,transform .3s;
+  opacity:0;transform:translateY(16px);animation:rise .6s forwards;animation-delay:.2s
+}
+.card-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;gap:12px}
+.card-title{font-size:15.5px;font-weight:800;letter-spacing:-.3px;display:flex;align-items:center;gap:9px}
+.card-title .ti{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:color-mix(in srgb,var(--purple) 12%,transparent);color:var(--purple)}
+[data-theme="dark"] .card-title .ti{color:#a7a0ee}
+.card-title .ti svg{width:17px;height:17px}
+.card-sub{font-size:12px;color:var(--text-3);font-weight:500;margin-top:2px}
+.link{font-size:12px;font-weight:700;color:var(--purple);cursor:pointer;text-decoration:none;display:inline-flex;gap:4px;align-items:center}
+[data-theme="dark"] .link{color:#a7a0ee}
+.link:hover{gap:7px}
+
+/* ===================== HEATMAP ===================== */
+.heat{width:100%;border-collapse:separate;border-spacing:0 4px}
+.heat th{font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--text-3);text-align:center;padding-bottom:8px}
+.heat th:first-child{text-align:left}
+.heat td{padding:3px}
+.emp-cell{display:flex;align-items:center;gap:10px;min-width:150px}
+.emp-av{width:32px;height:32px;border-radius:9px;flex:none;display:grid;place-items:center;color:#fff;font-weight:700;font-size:12px}
+.emp-name{font-size:13px;font-weight:700;line-height:1.1}
+.emp-role{font-size:10.5px;color:var(--text-3);font-weight:500}
+.hcell{width:42px;height:34px;border-radius:8px;margin:0 auto;display:grid;place-items:center;transition:transform .18s;cursor:pointer;position:relative}
+.hcell:hover{transform:scale(1.18);z-index:3}
+.hcell svg{width:14px;height:14px}
+.h-present{background:color-mix(in srgb,var(--teal) 90%,#000);color:#fff}
+.h-present.lvl1{background:color-mix(in srgb,var(--teal) 55%,transparent)}
+.h-late{background:color-mix(in srgb,var(--amber) 85%,#000);color:#fff}
+.h-absent{background:color-mix(in srgb,var(--red) 80%,#000);color:#fff}
+.h-off{background:var(--heat-empty);color:var(--text-3)}
+.legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:16px;font-size:11.5px;font-weight:600;color:var(--text-2)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:13px;height:13px;border-radius:4px;display:inline-block}
+
+/* ===================== DONUT ===================== */
+.donut-wrap{position:relative;height:200px;display:grid;place-items:center}
+.donut-center{position:absolute;text-align:center;pointer-events:none}
+.donut-center .num{font-size:34px;font-weight:800;letter-spacing:-1px}
+.donut-center .lbl{font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:1px}
+.dept-list{display:flex;flex-direction:column;gap:11px;margin-top:18px}
+.dept-row{display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600}
+.dept-dot{width:11px;height:11px;border-radius:4px;flex:none}
+.dept-row .cnt{margin-left:auto;font-weight:800}
+.dept-row .pct{color:var(--text-3);font-size:11.5px;font-weight:600;width:38px;text-align:right}
+
+/* ===================== APPROVALS ===================== */
+.approval{display:flex;align-items:center;gap:13px;padding:13px;border-radius:14px;border:1px solid var(--border);margin-bottom:10px;transition:all .3s;background:var(--surface-2)}
+.approval:hover{border-color:var(--border-strong)}
+.approval.removing{opacity:0;transform:translateX(40px);height:0;padding:0;margin:0;border:0;overflow:hidden}
+.apv-av{width:38px;height:38px;border-radius:11px;flex:none;display:grid;place-items:center;color:#fff;font-weight:700;font-size:13px}
+.apv-info{min-width:0;flex:1}
+.apv-name{font-size:13.5px;font-weight:700;display:flex;align-items:center;gap:7px}
+.apv-tag{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;padding:2px 6px;border-radius:5px}
+.apv-meta{font-size:11.5px;color:var(--text-3);font-weight:500;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.apv-actions{display:flex;gap:7px;flex:none}
+.mini-btn{width:34px;height:34px;border-radius:10px;border:none;cursor:pointer;display:grid;place-items:center;transition:all .2s}
+.mini-btn svg{width:17px;height:17px}
+.ok{background:color-mix(in srgb,var(--teal) 15%,transparent);color:var(--teal)}
+.ok:hover{background:var(--teal);color:#fff;transform:scale(1.08)}
+.no{background:color-mix(in srgb,var(--red) 15%,transparent);color:var(--red)}
+.no:hover{background:var(--red);color:#fff;transform:scale(1.08)}
+.empty-state{text-align:center;padding:30px 0;color:var(--text-3);font-size:13px;font-weight:600;display:none}
+.empty-state svg{width:40px;height:40px;margin-bottom:10px;color:var(--teal)}
+
+/* ===================== ALERTS ===================== */
+.alert{display:flex;gap:12px;padding:13px 0;border-bottom:1px solid var(--border)}
+.alert:last-child{border-bottom:none}
+.alert-ic{width:36px;height:36px;border-radius:10px;flex:none;display:grid;place-items:center}
+.alert-ic svg{width:18px;height:18px}
+.a-red{background:color-mix(in srgb,var(--red) 14%,transparent);color:var(--red)}
+.a-amber{background:color-mix(in srgb,var(--amber) 16%,transparent);color:var(--amber)}
+.a-teal{background:color-mix(in srgb,var(--teal) 14%,transparent);color:var(--teal)}
+.a-purple{background:color-mix(in srgb,var(--purple) 14%,transparent);color:var(--purple)}
+.alert-body{flex:1;min-width:0}
+.alert-t{font-size:13px;font-weight:700}
+.alert-d{font-size:11.5px;color:var(--text-3);font-weight:500;margin-top:1px}
+.alert-pill{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;padding:3px 8px;border-radius:20px;align-self:center;flex:none}
+
+/* ===================== READINESS ===================== */
+.ready-item{margin-bottom:18px}
+.ready-item:last-child{margin-bottom:0}
+.ready-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:12.5px;font-weight:700}
+.ready-top .v{font-weight:800;font-family:'JetBrains Mono'}
+.bar{height:9px;border-radius:10px;background:var(--surface-inset);overflow:hidden}
+.bar-fill{height:100%;border-radius:10px;width:0;transition:width 1.4s cubic-bezier(.4,0,.1,1)}
+
+/* ===================== TREND ===================== */
+.trend-wrap{height:260px}
+
+@keyframes rise{to{opacity:1;transform:translateY(0)}}
+
+/* ===================== RESPONSIVE ===================== */
+@media(max-width:1100px){
+  .g-2-1,.g-3{grid-template-columns:1fr}
+  .metrics{grid-template-columns:repeat(2,1fr)}
+}
+@media(max-width:860px){
+  .app{grid-template-columns:1fr}
+  .sidebar{position:fixed;left:0;top:0;width:264px;transform:translateX(-100%);box-shadow:var(--shadow-lg)}
+  .sidebar.open{transform:translateX(0)}
+  .hamburger{display:flex}
+  .scrim{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:55;opacity:0;visibility:hidden;transition:.3s}
+  .scrim.show{opacity:1;visibility:visible}
+  .hero h1{font-size:26px}.clock{font-size:34px}
+  .clock-box{text-align:left;width:100%}
+}
+@media(max-width:560px){
+  .metrics{grid-template-columns:1fr}
+  .content{padding:16px}
+  .topbar{padding:12px 16px}.hero{padding:26px 22px}
+  .search{display:none}
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="brand-mark">P</div>
+      <div>
+        <div class="brand-name">Pulse</div>
+        <div class="brand-sub">by Conexus</div>
+      </div>
+    </div>
+
+    <div class="nav-label">Overview</div>
+    <a class="nav-item active"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>Dashboard</a>
+    <a class="nav-item"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 13h8V3H3zM13 21h8V11h-8zM3 21h8v-6H3zM13 9h8V3h-8z"/></svg>Executive View</a>
+    <a class="nav-item"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a7 7 0 0114 0v1"/></svg>People<span class="nav-badge">8</span></a>
+
+    <div class="nav-label">Operations</div>
+    <a class="nav-item"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Attendance</a>
+    <a class="nav-item"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>Approvals<span class="nav-badge">10</span></a>
+    <a class="nav-item"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 2l3 7h7l-5.5 4 2 7L12 16l-6.5 4 2-7L2 9h7z"/></svg>Performance</a>
+    <a class="nav-item"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Payroll</a>
+
+    <div class="nav-label">System</div>
+    <a class="nav-item"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 14l3-3 3 3 5-6"/></svg>Reports</a>
+    <a class="nav-item"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 00-.1-1.2l2-1.6-2-3.5-2.4 1a7 7 0 00-2-1.2l-.4-2.5h-4l-.4 2.5a7 7 0 00-2 1.2l-2.4-1-2 3.5 2 1.6A7 7 0 005 12a7 7 0 00.1 1.2l-2 1.6 2 3.5 2.4-1a7 7 0 002 1.2l.4 2.5h4l.4-2.5a7 7 0 002-1.2l2.4 1 2-3.5-2-1.6c.07-.4.1-.8.1-1.2z"/></svg>Settings</a>
+
+    <div class="sidebar-foot">
+      <div class="role-card">
+        <div class="role-avatar">M</div>
+        <div>
+          <div class="role-name">Mazhar</div>
+          <span class="role-badge"><svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 2l8 4v6c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6z"/></svg>Super Admin</span>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="scrim" id="scrim"></div>
+
+  <!-- ============ MAIN ============ -->
+  <div class="main">
+    <!-- topbar -->
+    <header class="topbar">
+      <button class="hamburger" id="hamburger"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
+      <div class="search">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+        <input type="text" placeholder="Search employees, requests, reports…" />
+      </div>
+      <div class="top-actions">
+        <button class="icon-btn"><span class="dot"></span><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 01-3.4 0"/></svg></button>
+        <div class="toggle" id="themeToggle" role="button" aria-label="Toggle theme">
+          <div class="toggle-knob">
+            <svg class="ic-sun" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4 12H2M22 12h-2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19"/></svg>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <div class="content">
+
+      <!-- ===== HERO ===== -->
+      <section class="hero">
+        <div class="hero-grid"></div>
+        <div class="hero-inner">
+          <div>
+            <span class="hero-eyebrow"><span class="live-pulse"></span>Live · System nominal</span>
+            <h1 id="greeting">Good Evening, Mazhar</h1>
+            <p>Here's your real-time command center. 8 active people, 10 approvals waiting, and compliance holding steady.</p>
+            <div class="hero-cta">
+              <button class="btn btn-light"><svg fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>Review Requests</button>
+              <button class="btn btn-glass"><svg fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Add Employee</button>
+            </div>
+          </div>
+          <div class="clock-box">
+            <div class="clock" id="clock">--:--<span class="sec">--</span></div>
+            <div class="clock-date" id="clockDate">—</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== METRICS ===== -->
+      <section class="metrics">
+        <div class="metric" style="--accent:var(--purple)">
+          <div class="metric-top">
+            <div class="metric-icon"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3 20v-1a6 6 0 0112 0v1"/><circle cx="17.5" cy="8.5" r="2.5"/><path d="M15 20v-.5a5 5 0 016.5-4.7"/></svg></div>
+            <span class="metric-trend trend-up">▲ 12%</span>
+          </div>
+          <div class="metric-value" data-count="8">0</div>
+          <div class="metric-label">Active Workforce</div>
+          <div class="metric-foot"><span class="live-pulse" style="background:var(--teal)"></span>All 8 checked in today</div>
+        </div>
+
+        <div class="metric" style="--accent:var(--amber)">
+          <div class="metric-top">
+            <div class="metric-icon"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg></div>
+            <span class="metric-trend trend-down">▲ 4 new</span>
+          </div>
+          <div class="metric-value" data-count="10">0</div>
+          <div class="metric-label">Approvals Queue</div>
+          <div class="metric-foot">10 leave · 0 OT requests</div>
+        </div>
+
+        <div class="metric" style="--accent:var(--teal)">
+          <div class="metric-top">
+            <div class="metric-icon"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M16 3l5 5-5 5M21 8H9M8 21l-5-5 5-5M3 16h12"/></svg></div>
+            <span class="metric-trend trend-flat">Stable</span>
+          </div>
+          <div class="metric-value" data-count="1">0</div>
+          <div class="metric-label">People Movement</div>
+          <div class="metric-foot">1 onboarding · 0 on probation</div>
+        </div>
+
+        <div class="metric" style="--accent:var(--red)">
+          <div class="metric-top">
+            <div class="metric-icon"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2l8 4v6c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6z"/><path d="M9 12l2 2 4-4"/></svg></div>
+            <span class="metric-trend trend-up">100%</span>
+          </div>
+          <div class="metric-value" data-count="0">0</div>
+          <div class="metric-label">Compliance Watch</div>
+          <div class="metric-foot">0 documents · 0 reviews due</div>
+        </div>
+      </section>
+
+      <!-- ===== HEATMAP + DONUT ===== -->
+      <section class="grid g-2-1">
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <div class="card-title"><span class="ti"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg></span>Team Attendance Heatmap</div>
+              <div class="card-sub">This week · 15–21 Jun 2026</div>
+            </div>
+            <a class="link">Full report →</a>
+          </div>
+          <div style="overflow-x:auto">
+            <table class="heat" id="heatmap">
+              <thead><tr><th>Employee</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th><th>Sun</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="legend">
+            <span><i style="background:color-mix(in srgb,var(--teal) 90%,#000)"></i>Present</span>
+            <span><i style="background:color-mix(in srgb,var(--amber) 85%,#000)"></i>Late</span>
+            <span><i style="background:color-mix(in srgb,var(--red) 80%,#000)"></i>Absent</span>
+            <span><i style="background:var(--heat-empty)"></i>Weekend / Off</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <div><div class="card-title"><span class="ti"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2a10 10 0 100 20 10 10 0 000-20z"/><path d="M12 2v10l7 5"/></svg></span>Workforce Composition</div>
+            <div class="card-sub">By department</div></div>
+          </div>
+          <div class="donut-wrap">
+            <canvas id="donut"></canvas>
+            <div class="donut-center"><div class="num">8</div><div class="lbl">Total</div></div>
+          </div>
+          <div class="dept-list" id="deptList"></div>
+        </div>
+      </section>
+
+      <!-- ===== APPROVALS + ALERTS + READINESS ===== -->
+      <section class="grid g-3">
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title"><span class="ti"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg></span>Pending Approvals</div>
+            <span class="metric-trend trend-down" id="apvCount">10 action</span>
+          </div>
+          <div id="approvalList"></div>
+          <div class="empty-state" id="apvEmpty">
+            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 12l3 3 5-6"/></svg>
+            <div>All caught up! Queue cleared.</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title"><span class="ti"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/></svg></span>Compliance & Alerts</div>
+          </div>
+          <div id="alertList"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title"><span class="ti"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 20V10M18 20V4M6 20v-4"/></svg></span>Operational Readiness</div>
+          </div>
+          <div id="readyList"></div>
+        </div>
+      </section>
+
+      <!-- ===== TREND ===== -->
+      <section class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title"><span class="ti"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 3v18h18"/><rect x="7" y="11" width="3" height="6"/><rect x="12" y="7" width="3" height="10"/><rect x="17" y="13" width="3" height="4"/></svg></span>Attendance Trend</div>
+            <div class="card-sub">Monthly attendance rate — last 6 months</div>
+          </div>
+          <a class="link">Export →</a>
+        </div>
+        <div class="trend-wrap"><canvas id="trend"></canvas></div>
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============ THEME ============ */
+const root=document.documentElement, toggle=document.getElementById('themeToggle');
+const knob=toggle.querySelector('.toggle-knob');
+const moonSVG='<svg fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/></svg>';
+const sunSVG='<svg fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4 12H2M22 12h-2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19"/></svg>';
+let theme=localStorage.getItem('pulse-theme')||'light';
+applyTheme(theme);
+toggle.addEventListener('click',()=>{theme=theme==='light'?'dark':'light';applyTheme(theme);localStorage.setItem('pulse-theme',theme);rebuildCharts();});
+function applyTheme(t){root.setAttribute('data-theme',t);knob.innerHTML=t==='dark'?moonSVG:sunSVG;}
+
+/* ============ SIDEBAR (mobile) ============ */
+const sb=document.getElementById('sidebar'),scrim=document.getElementById('scrim');
+document.getElementById('hamburger').addEventListener('click',()=>{sb.classList.add('open');scrim.classList.add('show');});
+scrim.addEventListener('click',()=>{sb.classList.remove('open');scrim.classList.remove('show');});
+document.querySelectorAll('.nav-item').forEach(n=>n.addEventListener('click',e=>{e.preventDefault();document.querySelector('.nav-item.active').classList.remove('active');n.classList.add('active');sb.classList.remove('open');scrim.classList.remove('show');}));
+
+/* ============ CLOCK + GREETING ============ */
+function tick(){
+  const d=new Date();
+  const h=d.getHours();
+  const hh=String(h).padStart(2,'0'),mm=String(d.getMinutes()).padStart(2,'0'),ss=String(d.getSeconds()).padStart(2,'0');
+  document.getElementById('clock').innerHTML=`${hh}:${mm}<span class="sec">${ss}</span>`;
+  document.getElementById('clockDate').textContent=d.toLocaleDateString('en-US',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  const g=h<12?'Good Morning':h<17?'Good Afternoon':'Good Evening';
+  document.getElementById('greeting').textContent=`${g}, Mazhar`;
+}
+tick();setInterval(tick,1000);
+
+/* ============ COUNTERS ============ */
+function runCounters(){
+  document.querySelectorAll('.metric-value').forEach(el=>{
+    const target=+el.dataset.count;let cur=0;const step=Math.max(1,Math.ceil(target/30));
+    if(target===0){el.textContent='0';return;}
+    const iv=setInterval(()=>{cur+=step;if(cur>=target){cur=target;clearInterval(iv);}el.textContent=cur;},28);
+  });
+}
+
+/* ============ HEATMAP ============ */
+const employees=[
+  {n:'Mazhar',r:'Super Admin',c:'#534AB7',row:['p','p','p','o','o','off','off']},
+  {n:'Shivani',r:'HR Admin',c:'#1D9E75',row:['p','late','p','o','o','off','off']},
+  {n:'Rustom',r:'Production',c:'#BA7517',row:['p','p','p','o','o','off','off']},
+  {n:'Nick',r:'Production',c:'#E24B4A',row:['late','p','p','o','o','off','off']},
+  {n:'Nikita',r:'IT',c:'#7a72d8',row:['p','p','p','o','o','off','off']},
+  {n:'Emad',r:'Production',c:'#1D9E75',row:['p','absent','p','o','o','off','off']},
+  {n:'Yogesh',r:'Admin',c:'#BA7517',row:['p','p','late','o','o','off','off']},
+  {n:'Mayuresh',r:'Production',c:'#534AB7',row:['p','p','p','o','o','off','off']},
+];
+const checkIc='<svg fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>';
+const lateIc='<svg fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l2 2"/></svg>';
+const absIc='<svg fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+const tb=document.querySelector('#heatmap tbody');
+employees.forEach((e,idx)=>{
+  const tr=document.createElement('tr');
+  let cells=`<td><div class="emp-cell"><div class="emp-av" style="background:${e.c}">${e.n[0]}</div><div><div class="emp-name">${e.n}</div><div class="emp-role">${e.r}</div></div></div></td>`;
+  e.row.forEach(s=>{
+    let cls='h-off',ic='',title='Off';
+    if(s==='p'){cls='h-present';ic=checkIc;title='Present';}
+    else if(s==='o'){cls='h-present lvl1';ic=checkIc;title='Present';}
+    else if(s==='late'){cls='h-late';ic=lateIc;title='Late';}
+    else if(s==='absent'){cls='h-absent';ic=absIc;title='Absent';}
+    cells+=`<td><div class="hcell ${cls}" title="${title}">${ic}</div></td>`;
+  });
+  tr.innerHTML=cells;tr.style.opacity=0;tr.style.transform='translateX(-10px)';tr.style.transition='all .4s';
+  tb.appendChild(tr);
+  setTimeout(()=>{tr.style.opacity=1;tr.style.transform='none';},300+idx*60);
+});
+
+/* ============ DEPT DONUT ============ */
+const depts=[
+  {name:'Production',count:4,color:'#534AB7'},
+  {name:'Admin',count:2,color:'#1D9E75'},
+  {name:'HR',count:1,color:'#BA7517'},
+  {name:'IT',count:1,color:'#E24B4A'},
+];
+const totalEmp=depts.reduce((a,d)=>a+d.count,0);
+const dl=document.getElementById('deptList');
+depts.forEach(d=>{
+  const row=document.createElement('div');row.className='dept-row';
+  row.innerHTML=`<span class="dept-dot" style="background:${d.color}"></span>${d.name}<span class="cnt">${d.count}</span><span class="pct">${Math.round(d.count/totalEmp*100)}%</span>`;
+  dl.appendChild(row);
+});
+
+/* ============ ALERTS ============ */
+const alerts=[
+  {ic:'a-red',t:'Pending leave approvals',d:'10 items awaiting action',pill:'Action',pc:'var(--red)'},
+  {ic:'a-teal',t:'Documents expiring (30d)',d:'0 items — all current',pill:'Clear',pc:'var(--teal)'},
+  {ic:'a-amber',t:'Probation reviews due',d:'0 approaching deadline',pill:'On track',pc:'var(--amber)'},
+  {ic:'a-amber',t:'Active warning letters',d:'2 open cases',pill:'Open',pc:'var(--amber)'},
+  {ic:'a-purple',t:'Promotions awaiting review',d:'1 in pipeline',pill:'Pipeline',pc:'var(--purple)'},
+];
+const warnIc='<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/></svg>';
+const docIc='<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>';
+const al=document.getElementById('alertList');
+alerts.forEach(a=>{
+  const div=document.createElement('div');div.className='alert';
+  div.innerHTML=`<div class="alert-ic ${a.ic}">${a.t.includes('Document')?docIc:warnIc}</div>
+    <div class="alert-body"><div class="alert-t">${a.t}</div><div class="alert-d">${a.d}</div></div>
+    <span class="alert-pill" style="color:${a.pc};background:color-mix(in srgb,${a.pc} 14%,transparent)">${a.pill}</span>`;
+  al.appendChild(div);
+});
+
+/* ============ READINESS ============ */
+const ready=[
+  {l:'Attendance Energy',v:88,c:'var(--teal)'},
+  {l:'Approval Pressure',v:80,c:'var(--amber)'},
+  {l:'Leave Load',v:34,c:'var(--purple)'},
+  {l:'Compliance Score',v:100,c:'var(--teal)'},
+  {l:'System Health',v:96,c:'var(--purple)'},
+];
+const rl=document.getElementById('readyList');
+ready.forEach(r=>{
+  const div=document.createElement('div');div.className='ready-item';
+  div.innerHTML=`<div class="ready-top"><span>${r.l}</span><span class="v">${r.v}%</span></div><div class="bar"><div class="bar-fill" style="background:${r.c}"></div></div>`;
+  rl.appendChild(div);
+  setTimeout(()=>div.querySelector('.bar-fill').style.width=r.v+'%',400);
+});
+
+/* ============ APPROVALS ============ */
+const approvals=[
+  {n:'Shivani Kale',type:'Leave',meta:'Casual Leave · 15–16 Jul',c:'#1D9E75',tc:'var(--teal)'},
+  {n:'Rustom Patel',type:'Overtime',meta:'3.5 hrs · 20 Jun',c:'#BA7517',tc:'var(--amber)'},
+  {n:'Nikita Rao',type:'Leave',meta:'Sick Leave · 13 Jun',c:'#534AB7',tc:'var(--purple)'},
+  {n:'Emad Khan',type:'WFH',meta:'Remote · 18–19 Jun',c:'#E24B4A',tc:'var(--red)'},
+  {n:'Yogesh Sakpal',type:'Leave',meta:'Earned Leave · 22 Jul',c:'#7a72d8',tc:'var(--purple)'},
+];
+const apvList=document.getElementById('approvalList');
+let openCount=10;
+function renderApprovals(){
+  apvList.innerHTML='';
+  approvals.forEach((a,i)=>{
+    const div=document.createElement('div');div.className='approval';
+    div.innerHTML=`<div class="apv-av" style="background:${a.c}">${a.n[0]}</div>
+      <div class="apv-info"><div class="apv-name">${a.n}<span class="apv-tag" style="color:${a.tc};background:color-mix(in srgb,${a.tc} 15%,transparent)">${a.type}</span></div>
+      <div class="apv-meta">${a.meta}</div></div>
+      <div class="apv-actions">
+        <button class="mini-btn ok" title="Approve"><svg fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg></button>
+        <button class="mini-btn no" title="Decline"><svg fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </div>`;
+    div.querySelector('.ok').addEventListener('click',()=>resolve(div,a.n,true));
+    div.querySelector('.no').addEventListener('click',()=>resolve(div,a.n,false));
+    apvList.appendChild(div);
+  });
+}
+function resolve(div,name,approved){
+  div.classList.add('removing');
+  openCount=Math.max(0,openCount-1);
+  document.getElementById('apvCount').textContent=openCount?openCount+' action':'cleared';
+  setTimeout(()=>{
+    div.remove();
+    if(!apvList.querySelector('.approval'))document.getElementById('apvEmpty').style.display='block';
+  },320);
+}
+renderApprovals();
+
+/* ============ CHARTS ============ */
+let donutChart,trendChart;
+function themeColors(){
+  const cs=getComputedStyle(root);
+  return{
+    text:cs.getPropertyValue('--text-2').trim(),
+    grid:cs.getPropertyValue('--grid-line').trim(),
+    surface:cs.getPropertyValue('--surface').trim()
+  };
+}
+function buildDonut(){
+  const t=themeColors();
+  const ctx=document.getElementById('donut');
+  donutChart=new Chart(ctx,{
+    type:'doughnut',
+    data:{labels:depts.map(d=>d.name),datasets:[{data:depts.map(d=>d.count),backgroundColor:depts.map(d=>d.color),borderColor:t.surface,borderWidth:4,hoverOffset:10,borderRadius:6}]},
+    options:{cutout:'72%',plugins:{legend:{display:false},tooltip:{backgroundColor:'#1a1830',padding:12,cornerRadius:10,callbacks:{label:c=>` ${c.label}: ${c.raw} (${Math.round(c.raw/totalEmp*100)}%)`}}},animation:{animateRotate:true,duration:1100}}
+  });
+}
+function buildTrend(){
+  const t=themeColors();
+  const ctx=document.getElementById('trend');
+  const g=ctx.getContext('2d').createLinearGradient(0,0,0,260);
+  g.addColorStop(0,'#534AB7');g.addColorStop(1,'rgba(83,74,183,.25)');
+  const g2=ctx.getContext('2d').createLinearGradient(0,0,0,260);
+  g2.addColorStop(0,'#1D9E75');g2.addColorStop(1,'rgba(29,158,117,.2)');
+  trendChart=new Chart(ctx,{
+    type:'bar',
+    data:{labels:['Jan','Feb','Mar','Apr','May','Jun'],datasets:[
+      {label:'Attendance %',data:[91,88,93,90,95,97],backgroundColor:g,borderRadius:{topLeft:8,topRight:8},borderSkipped:false,barPercentage:.55,categoryPercentage:.7},
+      {label:'On-time %',data:[84,80,88,85,90,93],backgroundColor:g2,borderRadius:{topLeft:8,topRight:8},borderSkipped:false,barPercentage:.55,categoryPercentage:.7}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'top',align:'end',labels:{color:t.text,usePointStyle:true,pointStyle:'circle',boxWidth:8,padding:18,font:{family:'Plus Jakarta Sans',weight:'600',size:12}}},
+        tooltip:{backgroundColor:'#1a1830',padding:12,cornerRadius:10}},
+      scales:{x:{grid:{display:false},border:{display:false},ticks:{color:t.text,font:{family:'Plus Jakarta Sans',weight:'600'}}},
+        y:{beginAtZero:true,max:100,grid:{color:t.grid},border:{display:false},ticks:{color:t.text,callback:v=>v+'%',font:{family:'Plus Jakarta Sans'},stepSize:25}}},
+      animation:{duration:1200,easing:'easeOutQuart'}}
+  });
+}
+function rebuildCharts(){donutChart?.destroy();trendChart?.destroy();buildDonut();buildTrend();}
+buildDonut();buildTrend();
+
+/* run counters once layout paints */
+window.addEventListener('load',()=>setTimeout(runCounters,300));
+</script>
+</body>
+</html>

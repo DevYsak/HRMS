@@ -1,30 +1,24 @@
-<div class="bg-zinc-50 dark:bg-zinc-950 min-h-screen">
+<div class="min-h-screen bg-[#FAFAFA] font-['DM_Sans'] dark:bg-[#0B1220]">
 
     {{-- Premium Header --}}
-    <div class="pulse-hero">
-        <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_rgba(249,115,22,0.22),_transparent_65%)]"></div>
-        <div class="pointer-events-none absolute -bottom-10 -left-10 size-64 rounded-full blur-3xl" style="background:radial-gradient(circle,rgba(249,115,22,0.30),transparent 70%)"></div>
-        <div class="relative flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div>
-                <p class="text-zinc-400 text-sm mb-1">{{ now()->format('l, jS F Y') }}</p>
-                <h1 class="text-2xl font-bold text-white tracking-tight">
-                    {{ $department ? $department->name . ' Department' : 'Department Dashboard' }}
-                </h1>
-                <p class="text-zinc-400 text-sm mt-1">Team attendance, leave & OT overview</p>
-            </div>
+    <div class="p-4 pb-0 md:p-6 md:pb-0">
+        <x-pulse.dashboard-header
+            :show-badge="false"
+            :title="$department ? $department->name.' Department' : 'Department Dashboard'"
+            subtitle="Team attendance, leave & OT overview">
             @if($department)
-                <div class="flex items-center gap-2">
+                <x-slot:actions>
                     <a href="{{ route('attendance.team') }}" wire:navigate
-                       class="flex items-center gap-2 px-4 py-2.5 bg-white/10 hover:bg-white/20 border border-white/10 text-white rounded-xl text-sm font-semibold transition-all">
+                       class="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50 dark:border-white/10 dark:bg-white/5 dark:text-zinc-200 dark:hover:bg-white/10">
                         <flux:icon.clock class="size-4" /> Attendance
                     </a>
                     <a href="{{ route('time-off.team') }}" wire:navigate
-                       class="flex items-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-700 border border-brand-500 text-white rounded-xl text-sm font-semibold transition-all shadow-lg shadow-brand-900/20">
+                       class="inline-flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-brand-600">
                         <flux:icon.calendar-days class="size-4" /> Leave Approvals
                     </a>
-                </div>
+                </x-slot:actions>
             @endif
-        </div>
+        </x-pulse.dashboard-header>
     </div>
 
     <div class="p-4 md:p-6 space-y-5">

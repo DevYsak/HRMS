@@ -76,18 +76,17 @@
 
     <flux:sidebar sticky collapsible
         style="--role-accent: {{ $roleColor }}; --color-accent: {{ $roleColor }}; --color-accent-content: {{ $roleColor }}; --color-accent-foreground: #ffffff;"
-        class="dark pulse-sidebar border-e border-white/5 bg-[#0F172A]">
+        class="pulse-sidebar border-e border-[#F3E8DD] bg-[#FFF8F1]">
 
         {{-- Brand --}}
         <flux:sidebar.brand :name="$company->name" :href="route('dashboard')" wire:navigate>
-            <x-slot name="logo" class="flex aspect-square size-8 items-center justify-center rounded-lg"
-                style="background-color: {{ $roleColor }}">
+            <x-slot name="logo" class="flex aspect-square size-9 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-orange-400 shadow-lg shadow-orange-500/30">
                 @if($company->logo)
                     <img src="{{ asset('storage/' . $company->logo) }}" class="size-6 object-contain"
                         alt="{{ $company->name }}">
                 @else
-                    <svg class="size-4 fill-white" viewBox="0 0 24 24">
-                        <path d="M4 3h3v7h10V3h3v18h-3v-8H7v8H4V3z" />
+                    <svg class="size-5 fill-white" viewBox="0 0 24 24">
+                        <path d="M13 2L4.5 13.5H11l-1 8.5 8.5-11.5H12l1-8.5z" />
                     </svg>
                 @endif
             </x-slot>
@@ -419,9 +418,13 @@
                         <flux:sidebar.item icon="squares-2x2" :href="route('dashboard')"
                             :current="request()->routeIs('dashboard') && !request()->routeIs('dashboard.*')" wire:navigate>Dashboard
                         </flux:sidebar.item>
-                        @if($isSA || $isDir)
+                        @if($isSA)
                             <flux:sidebar.item icon="chart-bar-square" :href="route('dashboard.executive')"
                                 :current="request()->routeIs('dashboard.executive')" wire:navigate>Executive View</flux:sidebar.item>
+                        @endif
+                        @if($isDir && Route::has('dashboard.director'))
+                            <flux:sidebar.item icon="presentation-chart-line" :href="route('dashboard.director')"
+                                :current="request()->routeIs('dashboard.director')" wire:navigate>Director Dashboard</flux:sidebar.item>
                         @endif
                         @if($isHr)
                             <flux:sidebar.item icon="user-group" :href="route('dashboard.hr-admin')"
@@ -688,24 +691,39 @@
             </flux:sidebar.nav>
         @endcan
 
+        {{-- Meet Pulse AI promo --}}
+        @if(Route::has('ai.assistant'))
+            <div class="px-3 pb-1 pt-1">
+                <div class="overflow-hidden rounded-2xl bg-gradient-to-br from-orange-500 to-orange-400 p-4 text-white shadow-lg shadow-orange-500/20">
+                    <div class="flex items-center gap-2 text-[13px] font-bold">
+                        <flux:icon.sparkles class="size-4" /> Meet Pulse AI
+                    </div>
+                    <p class="mt-1 text-[11px] leading-snug text-white/85">Get instant insights and automate HR tasks.</p>
+                    <a href="{{ route('ai.assistant') }}" wire:navigate
+                        class="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-white/95 px-3 py-2 text-xs font-bold text-orange-600 transition hover:bg-white">
+                        <flux:icon.cpu-chip class="size-4" /> Ask AI Assistant
+                    </a>
+                </div>
+            </div>
+        @endif
+
         {{-- User profile --}}
-        <div class="mt-1 border-t border-zinc-100 px-2 pb-2 pt-2 dark:border-zinc-800">
+        <div class="mt-1 border-t border-[#F3E8DD] px-3 pb-3 pt-3">
             <flux:dropdown position="top" align="start" class="w-full">
                 <button type="button"
-                    class="flex w-full items-center gap-3 rounded-xl p-2 text-left transition hover:bg-white/5">
+                    class="flex w-full items-center gap-3 rounded-2xl border border-[#F3E8DD] bg-white p-2.5 text-left shadow-sm transition hover:bg-[#FFF2E8]">
                     <div class="relative shrink-0">
-                        <div class="flex size-9 items-center justify-center rounded-xl text-[13px] font-bold text-white"
-                            style="background-color: {{ $roleColor }}">
+                        <div class="flex size-9 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-orange-400 text-[13px] font-bold text-white">
                             {{ auth()->user()->initials() }}
                         </div>
-                        <span class="absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-[#0F172A] bg-emerald-500"
+                        <span class="absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-white bg-emerald-500"
                             title="Online"></span>
                     </div>
                     <div class="min-w-0 flex-1">
-                        <div class="truncate text-[13px] font-bold text-white">{{ auth()->user()->name }}</div>
+                        <div class="truncate text-[13px] font-bold text-[#111827]">{{ auth()->user()->name }}</div>
                         <div class="truncate text-[11px] font-semibold" style="color: {{ $roleColor }}">{{ $roleLabel }}</div>
                     </div>
-                    <flux:icon.chevron-up-down class="size-4 shrink-0 text-slate-400" />
+                    <flux:icon.chevron-up-down class="size-4 shrink-0 text-[#9CA3AF]" />
                 </button>
                 <flux:menu class="w-56">
                     <div class="flex items-center gap-3 px-2 py-2">

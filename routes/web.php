@@ -204,6 +204,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Role-specific Dashboards
     // --------------------------------------------------
     Route::get('/dashboard/executive', ExecutiveDashboard::class)->name('dashboard.executive');
+    // Director landing — reuses the ExecutiveDashboard component (no new page/component).
+    Route::get('/dashboard/director', ExecutiveDashboard::class)->name('dashboard.director');
     Route::get('/dashboard/finance', FinanceDashboard::class)->name('dashboard.finance');
     Route::get('/dashboard/hr-admin', HrAdminDashboard::class)->name('dashboard.hr-admin');
     Route::get('/dashboard/manager', ManagerDashboard::class)->name('dashboard.manager');

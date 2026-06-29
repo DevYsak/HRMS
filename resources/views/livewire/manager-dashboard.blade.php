@@ -1,4 +1,4 @@
-<flux:main class="bg-zinc-50 dark:bg-zinc-950 min-h-screen">
+<flux:main class="min-h-screen bg-[#FAFAFA] font-['DM_Sans'] dark:bg-[#0B1220]">
 
     @php
         $hour = now()->hour;
@@ -7,49 +7,25 @@
         $timeContext = $hour < 12 ? 'Your team is ready — time to lead.' : ($hour < 17 ? 'Afternoon check-in — team overview below.' : 'End of day — review pending approvals.');
     @endphp
     {{-- ── HEADER ── --}}
-    <div class="pulse-hero">
-        <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_rgba(249,115,22,0.22),_transparent_65%)]"></div>
-        <div class="pointer-events-none absolute -bottom-10 -left-10 size-64 rounded-full blur-3xl" style="background:radial-gradient(circle,rgba(249,115,22,0.30),transparent 70%)"></div>
-        <div class="pointer-events-none absolute top-0 right-0 size-48 rounded-full blur-3xl" style="background:radial-gradient(circle,rgba(249,115,22,0.08),transparent 70%)"></div>
-        <div class="relative flex flex-col md:flex-row md:items-center md:justify-between gap-5">
-            <div>
-                <div class="flex items-center gap-2.5 mb-3">
-                    <div class="inline-flex items-center gap-1.5 px-3 py-1 bg-white/10 border border-white/10 rounded-full">
-                        @if($hour < 12)
-                            <flux:icon.sun class="size-3 text-amber-300" />
-                            <span class="text-[11px] font-semibold text-white/70">Morning</span>
-                        @elseif($hour < 17)
-                            <flux:icon.sun class="size-3 text-orange-300" />
-                            <span class="text-[11px] font-semibold text-white/70">Afternoon</span>
-                        @else
-                            <flux:icon.moon class="size-3 text-blue-300" />
-                            <span class="text-[11px] font-semibold text-white/70">Evening</span>
-                        @endif
-                    </div>
-                    <span class="text-white/40 text-xs">{{ now()->format('l, d F Y') }}</span>
-                </div>
-                <h1 class="text-3xl font-black text-white tracking-tight">{{ $greeting }}, {{ $firstName }}</h1>
-                <p class="text-white/55 text-sm mt-1.5">{{ $timeContext }}</p>
-            </div>
-            <div class="flex items-center gap-2">
+    <div class="p-4 pb-0 md:p-6 md:pb-0">
+        <x-pulse.dashboard-header :title="$greeting.', '.$firstName" :subtitle="$timeContext">
+            <x-slot:actions>
                 <a href="{{ route('time-off.team') }}" wire:navigate
-                   class="flex items-center gap-2 px-4 py-2.5 bg-white/10 hover:bg-white/20 border border-white/10 text-white rounded-xl text-sm font-semibold transition-all">
-                    <flux:icon.calendar-days class="size-4" />
-                    Leave Approvals
+                   class="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50 dark:border-white/10 dark:bg-white/5 dark:text-zinc-200 dark:hover:bg-white/10">
+                    <flux:icon.calendar-days class="size-4" /> Leave Approvals
                     @if($pendingLeaves->count())
-                        <span class="px-1.5 py-0.5 bg-amber-500 text-white text-[9px] font-black rounded-full">{{ $pendingLeaves->count() }}</span>
+                        <span class="rounded-full bg-amber-500 px-1.5 py-0.5 text-[9px] font-black text-white">{{ $pendingLeaves->count() }}</span>
                     @endif
                 </a>
                 <a href="{{ route('overtime.manage') }}" wire:navigate
-                   class="flex items-center gap-2 px-4 py-2.5 bg-white text-orange-700 hover:bg-orange-50 rounded-xl text-sm font-bold transition-all shadow-sm">
-                    <flux:icon.clock class="size-4" />
-                    OT Approvals
+                   class="inline-flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-brand-600">
+                    <flux:icon.clock class="size-4" /> OT Approvals
                     @if($pendingOt->count())
-                        <span class="px-1.5 py-0.5 bg-white/25 text-white text-[9px] font-black rounded-full">{{ $pendingOt->count() }}</span>
+                        <span class="rounded-full bg-white/25 px-1.5 py-0.5 text-[9px] font-black text-white">{{ $pendingOt->count() }}</span>
                     @endif
                 </a>
-            </div>
-        </div>
+            </x-slot:actions>
+        </x-pulse.dashboard-header>
     </div>
 
     <div class="p-4 md:p-6 space-y-5">
