@@ -4,6 +4,7 @@ namespace App\Livewire\Attendance;
 
 use App\Models\AttendanceDailySummary;
 use App\Models\Department;
+use App\Services\Biometric\EngineAttendanceSyncService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
@@ -46,6 +47,31 @@ class BiometricSummary extends Component
     public function today(): void
     {
         $this->date = now()->toDateString();
+        $this->resetPage();
+    }
+
+    /**
+     * On-demand "Quick Scan" — pull the very latest punches/attendance for the
+     * selected day from the engine immediately, instead of waiting for the cron.
+     */
+    public function syncNow(EngineAttendanceSyncService $service): void
+    {
+        abort_unless(Auth::user()->canApproveLeave(), 403);
+
+        $result = $service->syncDate($this->date);
+
+        if ($result['error'] !== null) {
+            \Flux::toast(text: $result['error'], variant: 'danger', heading: 'Scan failed');
+
+            return;
+        }
+
+        \Flux::toast(
+            text: "Scanned {$this->date}: {$result['synced']} updated, {$result['skipped']} skipped (no PIN).",
+            variant: 'success',
+            heading: 'Latest attendance pulled',
+        );
+
         $this->resetPage();
     }
 
@@ -110,6 +136,7 @@ class BiometricSummary extends Component
             'departments' => Department::orderBy('name')->pluck('name'),
             'statuses' => ['present', 'late', 'half_day', 'absent', 'leave', 'holiday', 'weekly_off'],
             'stats' => $stats,
+            'lastSynced' => $dayRows->max('synced_at'),
         ])->layout('layouts.app', ['title' => 'Biometric Attendance Summary']);
     }
 }

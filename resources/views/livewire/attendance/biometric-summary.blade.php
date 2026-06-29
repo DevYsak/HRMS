@@ -5,9 +5,15 @@
     <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
             <flux:heading size="xl">Biometric Attendance Summary</flux:heading>
-            <flux:subheading>Daily attendance calculated by the biometric engine and synced into HRMS.</flux:subheading>
+            <flux:subheading>
+                Daily attendance calculated by the biometric engine and synced into HRMS.
+                @if($lastSynced)
+                    <span class="ml-1 text-xs text-zinc-400">· Last synced {{ \Illuminate\Support\Carbon::parse($lastSynced)->format('d M, g:i A') }}</span>
+                @endif
+            </flux:subheading>
         </div>
         <div class="flex items-center gap-2">
+            <flux:button wire:click="syncNow" icon="bolt" variant="primary" size="sm">Quick Scan</flux:button>
             <flux:button wire:click="previousDay" icon="chevron-left" variant="ghost" size="sm">Prev</flux:button>
             <flux:button wire:click="today" variant="ghost" size="sm">Today</flux:button>
             <flux:button wire:click="nextDay" icon="chevron-right" variant="ghost" size="sm">Next</flux:button>

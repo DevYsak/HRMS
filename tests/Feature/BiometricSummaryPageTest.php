@@ -5,6 +5,7 @@ use App\Livewire\Attendance\BiometricSummary;
 use App\Models\AttendanceDailySummary;
 use App\Models\Employee;
 use App\Models\User;
+use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
 
 function syncedSummary(int $code, string $status = 'present', array $overrides = []): AttendanceDailySummary
@@ -75,4 +76,24 @@ test('biometric summary only shows the selected day', function () {
         ->call('previousDay')
         ->assertSee('PIN 52')
         ->assertDontSee('PIN 51');
+});
+
+test('quick scan pulls the latest attendance on demand', function () {
+    config(['services.biometric_app.url' => 'http://engine.test']);
+    $this->actingAs(User::factory()->create(['role' => UserRole::HrAdmin]));
+    Employee::factory()->create(['employee_code' => 17, 'manager_id' => null]);
+
+    Http::fake(['*/api/dashboard*' => Http::response(['table' => [
+        ['emp_id' => '17', 'first_punch' => '10:31:00', 'last_punch' => '17:40:00',
+            'working_min' => 273, 'break_min' => 157, 'overtime_min' => 0, 'late' => true, 'delay_min' => 1,
+            'punch_count' => 10, 'status' => 'Completed Shift'],
+    ]], 200)]);
+
+    Livewire::test(BiometricSummary::class)
+        ->set('date', '2026-06-29')
+        ->assertDontSee('PIN 17')   // nothing synced yet
+        ->call('syncNow')
+        ->assertSee('PIN 17');      // appears immediately after a quick scan
+
+    expect(AttendanceDailySummary::where('employee_code', 17)->where('date', '2026-06-29')->exists())->toBeTrue();
 });
