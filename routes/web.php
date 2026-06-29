@@ -10,6 +10,7 @@ use App\Livewire\Attendance\AllAttendance;
 use App\Livewire\Attendance\AttendanceSettings;
 use App\Livewire\Attendance\AttendanceTracker;
 use App\Livewire\Attendance\BiometricAttendance;
+use App\Livewire\Attendance\BiometricSummary;
 use App\Livewire\Attendance\BiometricSync;
 use App\Livewire\Attendance\TeamAttendance;
 use App\Livewire\Dashboard;
@@ -156,6 +157,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/settings', AttendanceSettings::class)->name('settings')->middleware('role:manage-settings');
         Route::get('/biometric', BiometricSync::class)->name('biometric')->middleware('role:manage-settings');
         Route::get('/biometric-live', BiometricAttendance::class)->name('biometric-live')->middleware('role:approve-leave');
+        Route::get('/biometric-summary', BiometricSummary::class)->name('biometric-summary')->middleware('role:approve-leave');
     });
 
     // --------------------------------------------------
