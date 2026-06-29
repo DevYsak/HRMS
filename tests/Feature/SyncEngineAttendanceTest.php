@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Attendance;
 use App\Models\AttendanceDailySummary;
 use App\Models\Employee;
 use Illuminate\Support\Facades\Http;
@@ -45,6 +46,17 @@ test('it pulls engine attendance and upserts a daily summary', function () {
     expect($row->raw_punch_count)->toBe(10);
     expect($row->first_punch->format('Y-m-d H:i:s'))->toBe('2026-06-29 10:31:00');
     expect($row->last_punch->format('H:i:s'))->toBe('17:40:00');
+
+    // It also writes the core attendances row so the standard pages show it.
+    $att = Attendance::where('employee_id', $yogesh->id)->where('date', '2026-06-29')->first();
+    expect($att)->not->toBeNull();
+    expect($att->check_in->format('H:i:s'))->toBe('10:31:00');
+    expect($att->check_out->format('H:i:s'))->toBe('17:40:00');
+    expect((float) $att->total_hours)->toBe(4.55);
+    expect($att->break_minutes)->toBe(157);
+    expect($att->status)->toBe('late');
+    expect($att->is_late)->toBeTrue();
+    expect($att->late_minutes)->toBe(1);
 });
 
 test('re-running the sync overwrites the same day (idempotent)', function () {

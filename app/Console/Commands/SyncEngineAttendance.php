@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Models\Attendance;
 use App\Models\AttendanceDailySummary;
 use App\Models\Employee;
 use Illuminate\Console\Command;
@@ -100,15 +101,23 @@ class SyncEngineAttendance extends Command
                 continue;
             }
 
+            $firstPunch = $this->punchDateTime($date, $row['first_punch'] ?? null);
+            $lastPunch = $this->punchDateTime($date, $row['last_punch'] ?? null);
+            $workingHours = round(((int) ($row['working_min'] ?? 0)) / 60, 2);
+            $breakMinutes = (int) ($row['break_min'] ?? 0);
+            $lateMinutes = (int) ($row['delay_min'] ?? 0);
+            $isLate = ! empty($row['late']);
+
+            // Rich biometric figures — backs the read-only Biometric Summary page.
             AttendanceDailySummary::updateOrCreate(
                 ['employee_id' => $employeeId, 'date' => $date],
                 [
                     'employee_code' => $code,
-                    'first_punch' => $this->punchDateTime($date, $row['first_punch'] ?? null),
-                    'last_punch' => $this->punchDateTime($date, $row['last_punch'] ?? null),
-                    'break_minutes' => (int) ($row['break_min'] ?? 0),
-                    'working_hours' => round(((int) ($row['working_min'] ?? 0)) / 60, 2),
-                    'late_minutes' => (int) ($row['delay_min'] ?? 0),
+                    'first_punch' => $firstPunch,
+                    'last_punch' => $lastPunch,
+                    'break_minutes' => $breakMinutes,
+                    'working_hours' => $workingHours,
+                    'late_minutes' => $lateMinutes,
                     'early_leave_minutes' => 0,
                     'overtime_minutes' => (int) ($row['overtime_min'] ?? 0),
                     'status' => $this->mapStatus($row),
@@ -117,6 +126,25 @@ class SyncEngineAttendance extends Command
                     'synced_at' => $now,
                 ]
             );
+
+            // Core attendance row so the standard pages (My/Team/All Attendance,
+            // profile tab, reports, payroll) reflect the engine data. Requires a
+            // punch-in since attendances.check_in is NOT NULL.
+            if ($firstPunch !== null) {
+                Attendance::updateOrCreate(
+                    ['employee_id' => $employeeId, 'date' => $date],
+                    [
+                        'check_in' => $firstPunch,
+                        'check_out' => $lastPunch,
+                        'total_hours' => $workingHours,
+                        'break_minutes' => $breakMinutes,
+                        'status' => $isLate ? 'late' : 'on_time',
+                        'is_late' => $isLate,
+                        'late_minutes' => $lateMinutes,
+                        'work_mode' => 'office',
+                    ]
+                );
+            }
 
             $synced++;
         }
