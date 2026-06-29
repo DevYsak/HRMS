@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AdmsController;
+use App\Http\Controllers\BiometricDashboardController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\DocumentUploadController;
 use App\Http\Controllers\PayslipController;
@@ -158,6 +159,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/biometric', BiometricSync::class)->name('biometric')->middleware('role:manage-settings');
         Route::get('/biometric-live', BiometricAttendance::class)->name('biometric-live')->middleware('role:approve-leave');
         Route::get('/biometric-summary', BiometricSummary::class)->name('biometric-summary')->middleware('role:approve-leave');
+
+        // Standalone v2 dashboard (Python-style UI, live engine data via same-origin proxy)
+        Route::middleware('role:approve-leave')->group(function () {
+            Route::get('/dashboard-v2', [BiometricDashboardController::class, 'index'])->name('dashboard-v2');
+            Route::get('/dashboard-v2/api/{path}', [BiometricDashboardController::class, 'proxy'])
+                ->where('path', '.*')->name('dashboard-v2.proxy');
+        });
     });
 
     // --------------------------------------------------
