@@ -22,6 +22,31 @@ test('employee edit page renders quick action and probation action buttons with 
         ->assertSeeHtml('wire:click="extendProbation"');
 });
 
+test('editing the biometric device id saves to employee_code and mirrors to biometric_id', function () {
+    $this->actingAs(User::factory()->create(['role' => UserRole::HrAdmin]));
+
+    $employee = Employee::factory()->create(['status' => 'active', 'employee_code' => null, 'biometric_id' => null]);
+
+    Livewire::test(EmployeeEdit::class, ['employee' => $employee])
+        ->set('employee_code', '25')
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $employee->refresh();
+    expect($employee->employee_code)->toBe(25);
+    expect($employee->biometric_id)->toBe('25');
+});
+
+test('edit form back-fills the PIN field from a legacy biometric_id', function () {
+    $this->actingAs(User::factory()->create(['role' => UserRole::HrAdmin]));
+
+    // Legacy record: PIN saved only to biometric_id, employee_code still null.
+    $employee = Employee::factory()->create(['status' => 'active', 'employee_code' => null, 'biometric_id' => '42']);
+
+    Livewire::test(EmployeeEdit::class, ['employee' => $employee])
+        ->assertSet('employee_code', '42');
+});
+
 test('employee profile 2.0 exposes the analytical tabs and panels', function () {
     $this->actingAs(User::factory()->create(['role' => UserRole::HrAdmin]));
 

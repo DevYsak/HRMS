@@ -57,7 +57,9 @@ class EmployeeEdit extends Component
     public $photo = null;
 
     // ── Employment ───────────────────────────────────────────────────────────
-    public string $biometric_id = '';
+    // Device PIN — the canonical biometric matching key (employee_code).
+    // Mirrored to biometric_id on save so every attendance ingestion path matches.
+    public string $employee_code = '';
 
     public string $office_id = '';
 
@@ -129,7 +131,9 @@ class EmployeeEdit extends Component
         $this->emergency_contact = $this->employee->emergency_contact ?? '';
 
         // Employment
-        $this->biometric_id = $this->employee->biometric_id ?? '';
+        // Prefer employee_code; fall back to legacy biometric_id so older records
+        // (PIN saved only to biometric_id) still display and self-heal on next save.
+        $this->employee_code = (string) ($this->employee->employee_code ?? $this->employee->biometric_id ?? '');
         $this->office_id = (string) ($this->employee->office_id ?? '');
         $this->department_id = (string) ($this->employee->department_id ?? '');
         $this->job_title_id = (string) ($this->employee->job_title_id ?? '');
@@ -174,7 +178,7 @@ class EmployeeEdit extends Component
             'emergency_contact' => 'nullable|string|max:255',
             'photo' => 'nullable|image|max:2048',
             // Employment
-            'biometric_id' => ['nullable', 'string', 'max:20', Rule::unique('employees', 'biometric_id')->ignore($this->employee->id)],
+            'employee_code' => ['nullable', 'integer', 'min:1', 'max:65535', Rule::unique('employees', 'employee_code')->ignore($this->employee->id)],
             'joining_date' => 'required|date',
             'shift_id' => 'nullable|exists:shift_settings,id',
             'ot_tracking_source' => 'required|in:biometric,manual,nexflow,hybrid',
@@ -199,7 +203,8 @@ class EmployeeEdit extends Component
 
         $this->employee->update([
             'employee_id' => $this->employee_id,
-            'biometric_id' => $this->biometric_id ?: null,
+            'employee_code' => $this->employee_code !== '' ? (int) $this->employee_code : null,
+            'biometric_id' => $this->employee_code !== '' ? $this->employee_code : null,
             'phone' => $this->phone ?: null,
             'date_of_birth' => $this->date_of_birth ?: null,
             'gender' => $this->gender ?: null,

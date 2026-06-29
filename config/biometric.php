@@ -18,6 +18,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Inbound Sync API
+    |--------------------------------------------------------------------------
+    | Shared secret the external Python attendance engine must send (header
+    | X-Api-Key, or Authorization: Bearer <key>) to call the /api/v1/* sync
+    | endpoints. This is the INBOUND key (Python → HRMS) and is distinct from
+    | services.biometric_app.key, which is the OUTBOUND key (HRMS → Python).
+    */
+    'api' => [
+        'key' => env('BIOMETRIC_SYNC_API_KEY'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Sync Settings
     |--------------------------------------------------------------------------
     */

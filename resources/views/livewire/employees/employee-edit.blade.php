@@ -357,9 +357,9 @@
                                     <option value="nexflow">Nexflow (IT/Dev/QA teams)</option>
                                     <option value="hybrid">Hybrid (both sources)</option>
                                 </flux:select>
-                                <flux:input wire:model="biometric_id" label="Biometric Device ID"
-                                    placeholder="e.g. 3"
-                                    description="Leave blank if not enrolled on the biometric device." />
+                                <flux:input wire:model="employee_code" type="number" min="1" max="65535" label="Biometric Device ID"
+                                    placeholder="e.g. 17"
+                                    description="Device PIN used to match biometric punches. Leave blank if not enrolled." />
                             </div>
                             <div class="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-100 pt-5 dark:border-zinc-800">
                                 <div class="flex items-center gap-1.5 text-xs text-zinc-400">

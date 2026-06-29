@@ -239,6 +239,8 @@ class EmployeeCreate extends Component
         $user->employee()->create([
             'employee_id' => $this->employee_id,
             'employee_code' => $this->employee_code !== '' ? (int) $this->employee_code : null,
+            // Mirror the PIN to legacy biometric_id so the device-push path also matches.
+            'biometric_id' => $this->employee_code !== '' ? $this->employee_code : null,
             'phone' => $this->phone ?: null,
             'date_of_birth' => $this->date_of_birth ?: null,
             'gender' => $this->gender ?: null,
