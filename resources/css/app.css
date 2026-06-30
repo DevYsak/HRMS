@@ -31,48 +31,62 @@
     .pulse-sidebar[data-flux-sidebar-on-desktop]:not([data-flux-sidebar-collapsed-desktop]) { width: 290px; }
 }
 
-/* Section / group headings — muted warm grey */
+/* Section / group headings — muted warm grey, compact + airy */
 .pulse-sidebar [data-flux-sidebar-heading],
 .pulse-sidebar [data-flux-sidebar-group] [data-slot="heading"],
 .pulse-sidebar [data-flux-sidebar] [data-slot="heading"] {
-    color: #B9AFA4 !important;
+    color: #B5A99B !important;
     font-weight: 700 !important;
-    letter-spacing: .1em !important;
+    font-size: 11px !important;
+    letter-spacing: .12em !important;
     text-transform: uppercase !important;
+    margin-top: 6px !important;
 }
 
-/* Base nav item — rounded, spaced, warm-grey label on cream */
+/* Base nav item — rounded, airy, warm label on cream */
 .pulse-sidebar [data-flux-sidebar-item] {
     border-radius: 12px !important;
-    margin-block: 2px !important;
+    margin-block: 3px !important;
     font-weight: 500 !important;
-    color: #6B7280 !important;
-    transition: background-color .18s ease, color .18s ease, box-shadow .18s ease !important;
+    color: #5C5349 !important;
+    transition: background-color .18s ease, color .18s ease, box-shadow .18s ease, transform .18s ease !important;
 }
-.pulse-sidebar [data-flux-sidebar-item] svg { color: #F59E0B !important; opacity: .92; }
+/* Icons — one cohesive orange hue, calm when idle */
+.pulse-sidebar [data-flux-sidebar-item] svg {
+    color: #FB923C !important;
+    opacity: .88;
+    transition: color .18s ease, transform .18s ease, opacity .18s ease !important;
+}
 
-/* Hover — soft peach wash */
+/* Hover — soft peach wash + gentle slide; icon lifts to accent */
 .pulse-sidebar [data-flux-sidebar-item]:not([data-current]):hover {
-    background-color: #FFF2E8 !important;
-    color: #111827 !important;
+    background-color: #FFF1E6 !important;
+    color: #1F2937 !important;
+    transform: translateX(2px);
 }
 .pulse-sidebar [data-flux-sidebar-item]:not([data-current]):hover svg {
     color: var(--role-accent, #f97316) !important;
+    opacity: 1;
+    transform: scale(1.1);
 }
 
-/* Active — soft orange pill with accent bar + glow */
+/* Active — orange pill, rounded accent bar + soft glow */
 .pulse-sidebar [data-flux-sidebar-item][data-current] {
     color: #EA580C !important;
     border-color: transparent !important;
-    background: #FFF1E5 !important;
+    background: linear-gradient(90deg, #FFE9D5 0%, #FFF5EC 100%) !important;
     box-shadow: inset 3px 0 0 0 var(--role-accent, #f97316),
-        0 8px 18px -10px color-mix(in srgb, var(--role-accent, #f97316) 60%, transparent) !important;
+        0 10px 22px -12px color-mix(in srgb, var(--role-accent, #f97316) 55%, transparent) !important;
     font-weight: 700 !important;
 }
 .pulse-sidebar [data-flux-sidebar-item][data-current] svg { color: var(--role-accent, #f97316) !important; opacity: 1; }
 
-/* Cream scrollbar */
-.pulse-sidebar ::-webkit-scrollbar-thumb { background: #EFE0D2; border-radius: 8px; }
+/* Refined thin scrollbar (cream) — Firefox props inherit from here */
+.pulse-sidebar { scrollbar-width: thin; scrollbar-color: #E7D4C2 transparent; }
+.pulse-sidebar ::-webkit-scrollbar { width: 6px; height: 6px; }
+.pulse-sidebar ::-webkit-scrollbar-track { background: transparent; }
+.pulse-sidebar ::-webkit-scrollbar-thumb { background: #E7D4C2; border-radius: 999px; }
+.pulse-sidebar ::-webkit-scrollbar-thumb:hover { background: #D9BFA6; }
 
 /* ===================================================
    PULSE HRMS — Design Tokens (TailwindCSS v4 @theme)
@@ -453,20 +467,23 @@ select:focus[data-flux-control] {
    ════════════════════════════════════════════════════════════════ */
 
 /* ---- Sidebar (dark) ---- */
-.dark .pulse-sidebar { background: #111827 !important; border-color: #334155 !important; }
+.dark .pulse-sidebar { background: #111827 !important; border-color: #334155 !important; scrollbar-color: #475569 transparent; }
 .dark .pulse-sidebar [data-flux-sidebar-heading],
 .dark .pulse-sidebar [data-flux-sidebar-group] [data-slot="heading"],
 .dark .pulse-sidebar [data-flux-sidebar] [data-slot="heading"] { color: #64748B !important; }
 .dark .pulse-sidebar [data-flux-sidebar-item] { color: #CBD5E1 !important; }
-.dark .pulse-sidebar [data-flux-sidebar-item] svg { color: #FB923C !important; }
-.dark .pulse-sidebar [data-flux-sidebar-item]:not([data-current]):hover { background: #1F2937 !important; color: #F8FAFC !important; }
+.dark .pulse-sidebar [data-flux-sidebar-item] svg { color: #FB923C !important; opacity: .9; }
+.dark .pulse-sidebar [data-flux-sidebar-item]:not([data-current]):hover { background: #1F2937 !important; color: #F8FAFC !important; transform: translateX(2px); }
+.dark .pulse-sidebar [data-flux-sidebar-item]:not([data-current]):hover svg { color: #FDBA74 !important; opacity: 1; transform: scale(1.1); }
 .dark .pulse-sidebar [data-flux-sidebar-item][data-current] {
     color: #FB923C !important;
     background: rgba(249, 115, 22, .16) !important;
-    box-shadow: inset 3px 0 0 0 #f97316, 0 8px 18px -10px rgba(249, 115, 22, .5) !important;
+    box-shadow: inset 3px 0 0 0 #f97316, 0 10px 22px -12px rgba(249, 115, 22, .5) !important;
 }
 .dark .pulse-sidebar [data-flux-sidebar-item][data-current] svg { color: #FB923C !important; }
-.dark .pulse-sidebar ::-webkit-scrollbar-thumb { background: #334155 !important; }
+.dark .pulse-sidebar ::-webkit-scrollbar-track { background: transparent !important; }
+.dark .pulse-sidebar ::-webkit-scrollbar-thumb { background: #475569 !important; }
+.dark .pulse-sidebar ::-webkit-scrollbar-thumb:hover { background: #64748B !important; }
 
 /* ---- Dashboard surfaces (dark) — neutral classes used across the cream dashboards ---- */
 .dark .bg-\[\#FFFDF8\] { background-color: #0F172A !important; }
