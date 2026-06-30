@@ -1,4 +1,4 @@
-<flux:main class="min-h-screen space-y-6 bg-[#FBF7F1] p-4 font-['DM_Sans'] dark:bg-[#0B1220] md:p-6">
+<flux:main class="min-h-screen space-y-6 bg-[#FBF7F1] p-4 dark:bg-[#0B1220] md:p-6">
 
     @php
         // ── Today's status label ──────────────────────────────────────────
@@ -32,6 +32,33 @@
 
         $donutSeries = $leaveBalances->map(fn ($b) => max(0, (float) ($b->allocated_days ?? 0) - (float) ($b->used_days ?? 0)))->values();
         $donutLabels = $leaveBalances->map(fn ($b) => $b->leaveType?->name ?? 'Leave')->values();
+        $donutHasData = $donutSeries->sum() > 0;
+
+        // ── ApexCharts option arrays (rendered via the shared <x-dashboard.chart> / bundled apexChart helper) ──
+        $attChart = [
+            'chart' => ['type' => 'area', 'height' => 300, 'toolbar' => ['show' => false], 'fontFamily' => 'inherit', 'animations' => ['enabled' => true, 'easing' => 'easeinout', 'speed' => 800]],
+            'colors' => ['#F97316'],
+            'dataLabels' => ['enabled' => false],
+            'stroke' => ['curve' => 'smooth', 'width' => 3],
+            'fill' => ['type' => 'gradient', 'gradient' => ['shadeIntensity' => 1, 'opacityFrom' => 0.4, 'opacityTo' => 0.02, 'stops' => [0, 90]]],
+            'grid' => ['borderColor' => '#F1E7DD', 'strokeDashArray' => 4, 'padding' => ['left' => 8, 'right' => 8]],
+            'xaxis' => ['categories' => $chartLabels->all(), 'labels' => ['style' => ['colors' => '#9CA3AF', 'fontSize' => '11px']], 'axisBorder' => ['show' => false], 'axisTicks' => ['show' => false], 'tickAmount' => 10],
+            'yaxis' => ['labels' => ['style' => ['colors' => '#9CA3AF', 'fontSize' => '11px']]],
+            'tooltip' => ['theme' => 'light'],
+            'series' => [['name' => 'Working hours', 'data' => $chartHours->all()]],
+        ];
+
+        $leaveDonut = [
+            'chart' => ['type' => 'donut', 'height' => 190, 'fontFamily' => 'inherit', 'animations' => ['enabled' => true, 'speed' => 700]],
+            'colors' => ['#F97316', '#10B981', '#6366F1', '#F59E0B', '#06B6D4', '#EC4899'],
+            'labels' => $donutLabels->all(),
+            'legend' => ['show' => false],
+            'dataLabels' => ['enabled' => false],
+            'stroke' => ['width' => 0],
+            'plotOptions' => ['pie' => ['donut' => ['size' => '74%']]],
+            'tooltip' => ['theme' => 'light'],
+            'series' => $donutSeries->map(fn ($v) => (float) $v)->all(),
+        ];
     @endphp
 
     {{-- ═══════════ HERO ═══════════ --}}
@@ -54,13 +81,18 @@
     {{-- ═══════════ ATTENDANCE CHART + LEAVE ═══════════ --}}
     <div class="grid grid-cols-1 gap-5 lg:grid-cols-3">
         <x-employee.section-card class="lg:col-span-2" title="Monthly Attendance Overview" icon="chart-bar" :href="route('attendance.my')" cta="Details">
-            <div wire:ignore>
-                <div id="emp-attendance-chart" class="-mb-2"></div>
-            </div>
+            @if($chartHours->sum() > 0)
+                <x-dashboard.chart :options="$attChart" id="emp-attendance" class="-mb-2 flex-1" />
+            @else
+                <div class="flex flex-1 flex-col items-center justify-center py-16 text-zinc-400">
+                    <flux:icon.chart-bar class="mb-2 size-10 opacity-30" />
+                    <p class="text-xs">No attendance recorded this month yet.</p>
+                </div>
+            @endif
         </x-employee.section-card>
 
         <x-employee.section-card title="Leave Summary" icon="calendar-days">
-            <x-employee.leave-summary :balances="$leaveBalances" :remaining="$totalLeaveRemaining" :allocated="$totalLeaveAllocated" :used="$totalLeaveUsed" />
+            <x-employee.leave-summary :balances="$leaveBalances" :remaining="$totalLeaveRemaining" :allocated="$totalLeaveAllocated" :used="$totalLeaveUsed" :donutOptions="$leaveDonut" :hasData="$donutHasData" />
         </x-employee.section-card>
     </div>
 
@@ -80,11 +112,11 @@
                         {{ strtoupper($latestPayslip->status) }}
                     </span>
                 </div>
-                <a href="{{ route('payroll.payslips') }}" wire:navigate class="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-bold text-zinc-700 transition hover:bg-zinc-50 dark:border-white/10 dark:bg-white/5 dark:text-zinc-200">
+                <a href="{{ route('payroll.payslips') }}" wire:navigate class="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-bold text-zinc-700 transition hover:bg-zinc-50 dark:border-white/10 dark:bg-white/5 dark:text-zinc-200">
                     <flux:icon.arrow-down-tray class="size-4" /> Download Payslip
                 </a>
             @else
-                <div class="flex flex-col items-center py-8 text-zinc-400">
+                <div class="flex flex-1 flex-col items-center justify-center py-8 text-zinc-400">
                     <flux:icon.banknotes class="mb-2 size-8 opacity-30" />
                     <p class="text-xs">No payslip generated yet.</p>
                 </div>
@@ -111,7 +143,7 @@
                     <div class="flex items-center justify-between"><span class="text-zinc-500">Cycle</span><span class="font-semibold text-zinc-700 dark:text-zinc-200">{{ $latestCycle?->name ?? '—' }}</span></div>
                 </div>
             </div>
-            <a href="{{ route('performance.my') }}" wire:navigate class="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-bold text-zinc-700 transition hover:bg-zinc-50 dark:border-white/10 dark:bg-white/5 dark:text-zinc-200">
+            <a href="{{ route('performance.my') }}" wire:navigate class="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-bold text-zinc-700 transition hover:bg-zinc-50 dark:border-white/10 dark:bg-white/5 dark:text-zinc-200">
                 View Details
             </a>
         </x-employee.section-card>
@@ -143,7 +175,7 @@
                 $activity = $activity->take(6);
             @endphp
             @if($activity->isEmpty())
-                <div class="flex flex-col items-center py-8 text-zinc-400"><flux:icon.sparkles class="mb-2 size-8 opacity-30" /><p class="text-xs">No recent activity.</p></div>
+                <div class="flex flex-1 flex-col items-center justify-center py-8 text-zinc-400"><flux:icon.sparkles class="mb-2 size-8 opacity-30" /><p class="text-xs">No recent activity.</p></div>
             @else
                 <div class="space-y-2">
                     @foreach($activity as $a)
@@ -160,7 +192,7 @@
         {{-- My Documents --}}
         <x-employee.section-card title="My Documents" icon="folder" :href="route('documents.index')">
             @if($myDocuments->isEmpty())
-                <div class="flex flex-col items-center py-8 text-zinc-400"><flux:icon.folder class="mb-2 size-8 opacity-30" /><p class="text-xs">No documents yet.</p></div>
+                <div class="flex flex-1 flex-col items-center justify-center py-8 text-zinc-400"><flux:icon.folder class="mb-2 size-8 opacity-30" /><p class="text-xs">No documents yet.</p></div>
             @else
                 <div class="space-y-2">
                     @foreach($myDocuments as $doc)
@@ -215,52 +247,4 @@
         </x-employee.section-card>
     </div>
 
-    @assets
-        <script src="https://cdn.jsdelivr.net/npm/apexcharts@3.49.1/dist/apexcharts.min.js"></script>
-    @endassets
-
-    @script
-    <script>
-        (() => {
-            const dark = document.documentElement.classList.contains('dark');
-            const axis = dark ? '#71717a' : '#a1a1aa';
-
-            // ── Monthly attendance — working hours area ──
-            const elArea = document.getElementById('emp-attendance-chart');
-            if (elArea && window.ApexCharts) {
-                elArea.innerHTML = '';
-                new ApexCharts(elArea, {
-                    chart: { type: 'area', height: 260, fontFamily: 'inherit', toolbar: { show: false }, animations: { enabled: true, easing: 'easeinout', speed: 800 } },
-                    series: [{ name: 'Working hours', data: @json($chartHours) }],
-                    xaxis: { categories: @json($chartLabels), labels: { style: { colors: axis, fontSize: '10px' } }, axisBorder: { show: false }, axisTicks: { show: false }, tickAmount: 10 },
-                    yaxis: { labels: { style: { colors: axis, fontSize: '10px' }, formatter: v => v + 'h' } },
-                    colors: ['#f97316'],
-                    stroke: { curve: 'smooth', width: 3 },
-                    fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.4, opacityTo: 0.02, stops: [0, 90] } },
-                    dataLabels: { enabled: false },
-                    grid: { borderColor: dark ? '#27272a' : '#f4f4f5', strokeDashArray: 4 },
-                    tooltip: { theme: dark ? 'dark' : 'light', y: { formatter: v => v + ' hrs' } },
-                }).render();
-            }
-
-            // ── Leave donut ──
-            const elDonut = document.getElementById('emp-leave-donut');
-            const dSeries = @json($donutSeries);
-            if (elDonut && window.ApexCharts && dSeries.length) {
-                elDonut.innerHTML = '';
-                new ApexCharts(elDonut, {
-                    chart: { type: 'donut', height: 180, fontFamily: 'inherit', animations: { enabled: true } },
-                    series: dSeries.map(Number),
-                    labels: @json($donutLabels),
-                    colors: ['#f97316', '#10b981', '#6366f1', '#f59e0b', '#06b6d4', '#ec4899'],
-                    legend: { show: false },
-                    dataLabels: { enabled: false },
-                    stroke: { width: 0 },
-                    plotOptions: { pie: { donut: { size: '72%' } } },
-                    tooltip: { theme: dark ? 'dark' : 'light', y: { formatter: v => v + ' days' } },
-                }).render();
-            }
-        })();
-    </script>
-    @endscript
 </flux:main>

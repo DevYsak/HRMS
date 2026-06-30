@@ -1,15 +1,23 @@
-@props(['balances', 'remaining' => 0, 'allocated' => 0, 'used' => 0])
+@props(['balances', 'remaining' => 0, 'allocated' => 0, 'used' => 0, 'donutOptions' => null, 'hasData' => false])
 
 @php
     $palette = ['#f97316', '#10b981', '#6366f1', '#f59e0b', '#06b6d4', '#ec4899'];
 @endphp
 
-<div class="flex flex-col items-center">
-    {{-- Donut (initialised by the dashboard ApexCharts script) --}}
-    <div class="relative">
-        <div wire:ignore id="emp-leave-donut" class="h-[180px] w-[180px]"></div>
+<div class="flex flex-1 flex-col items-center">
+    {{-- Donut (bundled ApexCharts via the shared chart component) --}}
+    <div class="relative mx-auto h-[190px] w-[190px]">
+        @if($hasData && $donutOptions)
+            <x-dashboard.chart :options="$donutOptions" id="emp-leave-donut" class="grid h-full w-full place-items-center" />
+        @else
+            <svg class="size-full -rotate-90" viewBox="0 0 36 36">
+                <circle cx="18" cy="18" r="15.9" fill="none" class="stroke-zinc-100 dark:stroke-zinc-800" stroke-width="3.2"></circle>
+                <circle cx="18" cy="18" r="15.9" fill="none" stroke="#f97316" stroke-width="3.2" stroke-linecap="round"
+                        stroke-dasharray="{{ $allocated > 0 ? min(100, ($remaining / max($allocated, 0.01)) * 100) : 0 }}, 100"></circle>
+            </svg>
+        @endif
         <div class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-            <span class="text-3xl font-black text-zinc-900 dark:text-white">{{ (int) $remaining }}</span>
+            <span class="text-3xl font-black text-zinc-900 dark:text-white">{{ rtrim(rtrim(number_format((float) $remaining, 1), '0'), '.') }}</span>
             <span class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Days Left</span>
         </div>
     </div>
@@ -35,7 +43,7 @@
     </div>
 
     <a href="{{ route('time-off.my') }}" wire:navigate
-       class="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600">
+       class="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600">
         <flux:icon.plus class="size-4" /> Apply Leave
     </a>
 </div>
