@@ -496,10 +496,6 @@
                         @can('manage_settings')
                             <flux:sidebar.item :href="route('attendance.settings')" :current="request()->routeIs('attendance.settings')" wire:navigate>Attendance Settings</flux:sidebar.item>
                         @endcan
-                        @can('manage_biometric')
-                            <flux:sidebar.item :href="route('attendance.biometric-live')" :current="request()->routeIs('attendance.biometric-live')" wire:navigate>Biometric · Live</flux:sidebar.item>
-                            <flux:sidebar.item :href="route('attendance.biometric')" :current="request()->routeIs('attendance.biometric')" wire:navigate>Biometric · Sync</flux:sidebar.item>
-                        @endcan
                         <flux:sidebar.item :href="route('time-off.my')" :current="request()->routeIs('time-off.my')" wire:navigate>My Leave</flux:sidebar.item>
                         @if($isMgr || $user->hasPermission('approve_leave'))
                             <flux:sidebar.item :href="route('time-off.team')" :current="request()->routeIs('time-off.team')" wire:navigate>Team Leave</flux:sidebar.item>

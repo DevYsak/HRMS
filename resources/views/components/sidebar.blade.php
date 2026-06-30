@@ -50,7 +50,6 @@
             ['People', [
                 ['Employees', 'id', $r('employees.index'), 'employees.*', null],
                 ['Attendance', 'clock', $r('attendance.employees'), 'attendance.employees', null],
-                ['Biometric', 'finger', $r('attendance.biometric'), 'attendance.biometric*', null],
                 ['Leave', 'calendar', $r('time-off.employees'), 'time-off.employees', $leaveBadge ?: null],
                 ['Overtime', 'bolt', $r('overtime.manage'), 'overtime.manage', null],
                 ['WFH', 'home-modern', $r('wfh.manage'), 'wfh.manage', null],
