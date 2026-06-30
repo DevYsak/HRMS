@@ -470,7 +470,7 @@ class Dashboard extends Component
         $lateCount = $monthAttendance->where('is_late', true)->count();
 
         $workingDaysElapsed = 0;
-        for ($d = $monthStart->copy(); $d->lte($today); $d->addDay()) {
+        for ($d = $monthStart->copy(); $d->lte($today); $d = $d->addDay()) {
             if (! $d->isWeekend()) {
                 $workingDaysElapsed++;
             }
@@ -488,7 +488,7 @@ class Dashboard extends Component
 
         // Daily working-hours series for the current month (area chart)
         $dailyHours = collect();
-        for ($d = $monthStart->copy(); $d->lte($today); $d->addDay()) {
+        for ($d = $monthStart->copy(); $d->lte($today); $d = $d->addDay()) {
             $rec = $monthAttendance->first(fn ($a) => Carbon::parse($a->date)->isSameDay($d));
             $dailyHours->push([
                 'label' => $d->format('d'),
