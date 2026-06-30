@@ -451,7 +451,93 @@ class Dashboard extends Component
         // Recent notifications feed (top 5)
         $recentNotifications = $user->notifications()->latest()->take(5)->get();
 
+        // ── Profile / team ─────────────────────────────────────────────────
+        $shift = $employee?->shift;
+        $shiftName = $shift?->name;
+        $department = $employee?->department?->name;
+        $designation = $employee?->jobTitle?->name;
+        $manager = $employee?->manager;
+
+        // ── This-month attendance metrics ──────────────────────────────────
+        $monthStart = now()->startOfMonth();
+        $monthAttendance = $employee
+            ? Attendance::where('employee_id', $employee->id)
+                ->whereBetween('date', [$monthStart->toDateString(), $today->toDateString()])
+                ->get()
+            : collect();
+
+        $presentDays = $monthAttendance->whereNotNull('check_in')->count();
+        $lateCount = $monthAttendance->where('is_late', true)->count();
+
+        $workingDaysElapsed = 0;
+        for ($d = $monthStart->copy(); $d->lte($today); $d->addDay()) {
+            if (! $d->isWeekend()) {
+                $workingDaysElapsed++;
+            }
+        }
+        $attendancePct = $workingDaysElapsed > 0 ? min(100, (int) round(($presentDays / $workingDaysElapsed) * 100)) : 0;
+
+        // Overtime hours this month (approved requests)
+        $otHours = $employee
+            ? (float) OtRequest::where('employee_id', $employee->id)
+                ->where('status', 'approved')
+                ->whereMonth('work_date', now()->month)
+                ->whereYear('work_date', now()->year)
+                ->sum('requested_hours')
+            : 0.0;
+
+        // Daily working-hours series for the current month (area chart)
+        $dailyHours = collect();
+        for ($d = $monthStart->copy(); $d->lte($today); $d->addDay()) {
+            $rec = $monthAttendance->first(fn ($a) => Carbon::parse($a->date)->isSameDay($d));
+            $dailyHours->push([
+                'label' => $d->format('d'),
+                'hours' => $rec && $rec->total_hours ? round((float) $rec->total_hours, 1) : 0,
+            ]);
+        }
+
+        // Minutes worked today (live-timer base)
+        $workedTodayMinutes = ($todayAttendance && $todayAttendance->check_in)
+            ? (int) ($todayAttendance->check_out ?? now())->diffInMinutes($todayAttendance->check_in)
+            : 0;
+
+        // ── Leave totals ───────────────────────────────────────────────────
+        $totalLeaveAllocated = (float) $leaveBalances->sum('allocated_days');
+        $totalLeaveUsed = (float) $leaveBalances->sum('used_days');
+        $totalLeaveRemaining = max(0, $totalLeaveAllocated - $totalLeaveUsed);
+
+        // ── My documents (own + company-wide policies) ─────────────────────
+        $myDocuments = $employee
+            ? Document::whereNull('parent_id')
+                ->where(function ($q) use ($employee) {
+                    $q->where('employee_id', $employee->id)
+                        ->orWhere('visibility', 'all')
+                        ->orWhere('category', 'policy');
+                })
+                ->latest()
+                ->take(6)
+                ->get()
+            : collect();
+
+        // ── Performance ────────────────────────────────────────────────────
+        $performanceScore = $myScorecard?->final_score;
+        $performanceGrade = $myScorecard?->grade;
+
+        // ── Upcoming holidays (next 4) ─────────────────────────────────────
+        $upcomingHolidays = PublicHoliday::where('date', '>=', $today)->orderBy('date')->take(4)->get();
+
+        // Quote of the day (rotates daily)
+        $quotes = [
+            'Great work leads to great results. Keep going!',
+            'Small steps every day add up to big results.',
+            'Focus on progress, not perfection.',
+            'Your effort today shapes tomorrow.',
+            'Consistency beats intensity — show up.',
+        ];
+        $quote = $quotes[now()->dayOfYear % count($quotes)];
+
         return view('livewire.employee-dashboard', compact(
+            'employee',
             'todayAttendance',
             'leaveBalances',
             'myOtRequests',
@@ -464,6 +550,26 @@ class Dashboard extends Component
             'myScorecard',
             'latestCycle',
             'recentNotifications',
+            'shift',
+            'shiftName',
+            'department',
+            'designation',
+            'manager',
+            'presentDays',
+            'lateCount',
+            'workingDaysElapsed',
+            'attendancePct',
+            'otHours',
+            'dailyHours',
+            'workedTodayMinutes',
+            'totalLeaveAllocated',
+            'totalLeaveUsed',
+            'totalLeaveRemaining',
+            'myDocuments',
+            'performanceScore',
+            'performanceGrade',
+            'upcomingHolidays',
+            'quote',
         ))->layout('layouts.app', ['title' => 'My Dashboard']);
     }
 }

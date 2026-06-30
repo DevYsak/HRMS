@@ -48,17 +48,18 @@ test('manager dashboard shows team KPI scores', function () {
         ->assertSee('Team KPI Scores');
 });
 
-test('employee dashboard shows my KPIs and notifications and hides payslips', function () {
+test('employee dashboard renders the redesigned self-service widgets', function () {
     $user = User::factory()->create(['role' => UserRole::Employee]);
     Employee::factory()->create(['user_id' => $user->id, 'status' => 'active']);
     $this->actingAs($user);
 
     Livewire::test(Dashboard::class)
         ->assertOk()
-        ->assertSee('My KPI Score')
-        ->assertSee('Recent Notifications')
-        ->assertDontSee('Recent Payslips')
-        ->assertDontSee('Net Salary');
+        ->assertSee('Monthly Attendance Overview')
+        ->assertSee('Leave Summary')
+        ->assertSee("Today's Timeline")
+        ->assertSee('Quick Actions')
+        ->assertSee('My Team');
 });
 
 test('kpi dashboard shows performer segments', function () {
