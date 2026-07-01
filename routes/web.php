@@ -18,6 +18,7 @@ use App\Livewire\Documents\DocumentManager;
 use App\Livewire\Employees\Directory;
 use App\Livewire\Employees\EmployeeCreate;
 use App\Livewire\Employees\EmployeeEdit;
+use App\Livewire\Employees\EmployeeImport;
 use App\Livewire\Employees\EmployeeIndex;
 use App\Livewire\Employees\FinanceEmployeeProfile;
 use App\Livewire\Employees\OrgChart;
@@ -124,6 +125,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // HR / admin only
         Route::middleware('role:manage-employees')->group(function () {
             Route::get('/create', EmployeeCreate::class)->name('create');
+            Route::get('/import', EmployeeImport::class)->name('import');
             Route::get('/{employee}/edit', EmployeeEdit::class)->name('edit');
             Route::get('/{employee}/probation', ProbationConfirmation::class)->name('probation');
             Route::get('/{employee}/onboarding', OnboardingChecklist::class)->name('onboarding');

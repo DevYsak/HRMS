@@ -444,6 +444,10 @@
                                 <flux:sidebar.item :href="route('employees.index')" :current="request()->routeIs('employees.index')"
                                     wire:navigate>Manage Employees</flux:sidebar.item>
                             @endif
+                            @if(Route::has('employees.import'))
+                                <flux:sidebar.item :href="route('employees.import')" :current="request()->routeIs('employees.import')"
+                                    wire:navigate>Import Employees</flux:sidebar.item>
+                            @endif
                             @if(Route::has('employees.onboarding-manager'))
                                 <flux:sidebar.item :href="route('employees.onboarding-manager')"
                                     :current="request()->routeIs('employees.onboarding-manager')" wire:navigate>Onboarding
