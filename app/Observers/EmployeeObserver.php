@@ -4,6 +4,7 @@ namespace App\Observers;
 
 use App\Models\AuditLog;
 use App\Models\Employee;
+use App\Services\LeaveBalanceService;
 use App\Services\OnboardingService;
 
 class EmployeeObserver
@@ -13,6 +14,11 @@ class EmployeeObserver
         AuditLog::record($employee, 'created', null, $employee->toArray());
 
         app(OnboardingService::class)->assignTemplate($employee);
+
+        // Auto-assign the default leave policy so every new hire (form, import,
+        // API or seeder) starts with balances — no manual step required.
+        // Idempotent (firstOrCreate); the create form may override specific types.
+        app(LeaveBalanceService::class)->initializeForEmployee($employee, now()->year);
     }
 
     public function updated(Employee $employee): void

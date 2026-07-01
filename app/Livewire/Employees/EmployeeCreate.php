@@ -305,23 +305,29 @@ class EmployeeCreate extends Component
 
         $this->js("setTimeout(() => { window.location = '".route('employees.index')."'; }, 2500)");
 
-        // Persist initial leave balances for current year (if provided)
+        // Override the auto-assigned defaults (seeded by EmployeeObserver) with any
+        // per-employee allocations entered on the form. updateOrCreate avoids
+        // colliding with the observer-seeded rows on the unique (employee, type, year) key.
         foreach (LeaveType::all() as $lt) {
             $allocated = isset($this->leave_allocations[$lt->id]) ? (float) $this->leave_allocations[$lt->id] : 0.0;
             if ($allocated <= 0) {
                 continue;
             }
 
-            LeaveBalance::create([
-                'employee_id' => $user->employee->id,
-                'leave_type_id' => $lt->id,
-                'year' => now()->year,
-                'allocated_days' => $allocated,
-                'used_days' => 0,
-                'carried_forward_days' => 0,
-                'encashed_days' => 0,
-                'comp_off_credits' => 0,
-            ]);
+            LeaveBalance::updateOrCreate(
+                [
+                    'employee_id' => $user->employee->id,
+                    'leave_type_id' => $lt->id,
+                    'year' => now()->year,
+                ],
+                [
+                    'allocated_days' => $allocated,
+                    'used_days' => 0,
+                    'carried_forward_days' => 0,
+                    'encashed_days' => 0,
+                    'comp_off_credits' => 0,
+                ],
+            );
         }
     }
 
