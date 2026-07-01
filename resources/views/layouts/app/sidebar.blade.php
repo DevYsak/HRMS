@@ -636,6 +636,8 @@
             <flux:sidebar.nav class="px-2 pb-1">
                 <flux:sidebar.group heading="Settings" icon="cog-6-tooth" :expandable="true"
                     :expanded="request()->routeIs('settings.*')">
+                    <flux:sidebar.item :href="route('settings.control-panel')" :current="request()->routeIs('settings.control-panel')"
+                        wire:navigate>Control Panel</flux:sidebar.item>
                     <flux:sidebar.item :href="route('settings.general')" :current="request()->routeIs('settings.general')"
                         wire:navigate>General</flux:sidebar.item>
                     @can('manage_roles')
