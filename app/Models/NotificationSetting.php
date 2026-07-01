@@ -62,9 +62,13 @@ class NotificationSetting extends Model
      */
     public static function cachedMap(): Collection
     {
-        return Cache::remember(self::CACHE_KEY, now()->addHour(), function () {
-            return self::query()->get()->keyBy('key');
-        });
+        // Fail-open even if the table has not been migrated yet: no settings
+        // means notifications send with their defaults (never breaks a send).
+        try {
+            return Cache::remember(self::CACHE_KEY, now()->addHour(), fn () => self::query()->get()->keyBy('key'));
+        } catch (\Throwable) {
+            return collect();
+        }
     }
 
     public static function flushCache(): void

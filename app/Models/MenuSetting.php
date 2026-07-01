@@ -40,7 +40,13 @@ class MenuSetting extends Model
      */
     public static function cachedMap(): Collection
     {
-        return Cache::remember(self::CACHE_KEY, now()->addHour(), fn () => self::query()->get()->keyBy('key'));
+        // Fail-open even if the table has not been migrated yet: a missing
+        // menu_settings table means "no overrides", not a broken sidebar.
+        try {
+            return Cache::remember(self::CACHE_KEY, now()->addHour(), fn () => self::query()->get()->keyBy('key'));
+        } catch (\Throwable) {
+            return collect();
+        }
     }
 
     public static function flushCache(): void
