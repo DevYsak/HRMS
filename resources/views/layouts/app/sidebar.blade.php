@@ -130,144 +130,104 @@
                         }
                     @endphp
 
-                    {{-- Dashboard --}}
-                    <flux:sidebar.item icon="home" :href="route('dashboard')" :current="request()->routeIs('dashboard')"
-                        wire:navigate>
-                        Dashboard
-                    </flux:sidebar.item>
+                    {{-- Employee menu — order/visibility/labels are admin-controllable
+                         (Settings > Sidebar Menu). Fail-open: unknown items show by default. --}}
+                    @php
+                        $employeeMenu = app(\App\Services\EmployeeMenu::class)->visible();
+                        $menuBadges = [
+                            'leave' => $pendingLeave,
+                            'overtime' => $pendingOt,
+                            'documents' => $pendingDocs,
+                            'inbox' => $unread,
+                        ];
+                    @endphp
 
-                    {{-- My Profile --}}
-                    <flux:sidebar.item icon="user-circle" :href="route('profile.edit')"
-                        :current="request()->routeIs('profile.edit')" wire:navigate>
-                        My Profile
-                    </flux:sidebar.item>
+                    @foreach($employeeMenu as $mi)
+                        @switch($mi['key'])
+                            @case('performance')
+                                <flux:sidebar.group :heading="$mi['label']" icon="arrow-trending-up" :expandable="true"
+                                    :expanded="request()->routeIs('performance.dashboard', 'performance.my', 'performance.my-warnings', 'performance.pip.my', 'performance.promotions.my')">
+                                    <flux:sidebar.item :href="route('performance.dashboard')" :current="request()->routeIs('performance.dashboard')"
+                                        wire:navigate>
+                                        My Performance
+                                    </flux:sidebar.item>
+                                    <flux:sidebar.item :href="route('performance.my')" :current="request()->routeIs('performance.my')"
+                                        wire:navigate>
+                                        My Review
+                                    </flux:sidebar.item>
+                                    <flux:sidebar.item :href="route('performance.my-warnings')"
+                                        :current="request()->routeIs('performance.my-warnings')" wire:navigate>
+                                        <div class="flex items-center gap-2">
+                                            My Warnings
+                                            @if($activeWarnings > 0)
+                                                <span
+                                                    class="inline-flex items-center justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white">{{ $activeWarnings > 9 ? '9+' : $activeWarnings }}</span>
+                                            @endif
+                                        </div>
+                                    </flux:sidebar.item>
+                                    <flux:sidebar.item :href="route('performance.pip.my')"
+                                        :current="request()->routeIs('performance.pip.my')" wire:navigate>
+                                        <div class="flex items-center gap-2">
+                                            My Improvement Plan
+                                            @if($hasActivePip)
+                                                <span
+                                                    class="inline-flex items-center justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white">1</span>
+                                            @endif
+                                        </div>
+                                    </flux:sidebar.item>
+                                    <flux:sidebar.item :href="route('performance.promotions.my')"
+                                        :current="request()->routeIs('performance.promotions.my')" wire:navigate>
+                                        My Promotions
+                                    </flux:sidebar.item>
+                                </flux:sidebar.group>
+                                @break
 
-                    {{-- Attendance --}}
-                    <flux:sidebar.item icon="clock" :href="route('attendance.my')" :current="request()->routeIs('attendance.my')"
-                        wire:navigate>
-                        Attendance
-                    </flux:sidebar.item>
+                            @case('development')
+                                <flux:sidebar.group :heading="$mi['label']" icon="academic-cap" :expandable="true"
+                                    :expanded="request()->routeIs('performance.goals', 'performance.my-kpis')">
+                                    <flux:sidebar.item :href="route('performance.goals')" :current="request()->routeIs('performance.goals')"
+                                        wire:navigate>
+                                        My Goals
+                                    </flux:sidebar.item>
+                                    <flux:sidebar.item :href="route('performance.my-kpis')"
+                                        :current="request()->routeIs('performance.my-kpis')" wire:navigate>
+                                        My KPIs
+                                    </flux:sidebar.item>
+                                </flux:sidebar.group>
+                                @break
 
-                    {{-- Leave --}}
-                    <flux:sidebar.item icon="calendar-days" :href="route('time-off.my')"
-                        :current="request()->routeIs('time-off.my')" wire:navigate>
-                        <div class="flex items-center gap-2">
-                            Leave
-                            @if($pendingLeave > 0)
-                                <span
-                                    class="inline-flex items-center justify-center rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold text-white">{{ $pendingLeave > 9 ? '9+' : $pendingLeave }}</span>
-                            @endif
-                        </div>
-                    </flux:sidebar.item>
+                            @case('payroll')
+                                {{-- reimbursements not shown (requires run-payroll, 403 for employee) --}}
+                                <flux:sidebar.group :heading="$mi['label']" icon="banknotes" :expandable="true"
+                                    :expanded="request()->routeIs('payroll.payslips', 'operations.expenses')">
+                                    <flux:sidebar.item :href="route('payroll.payslips')" :current="request()->routeIs('payroll.payslips')"
+                                        wire:navigate>
+                                        My Payslips
+                                    </flux:sidebar.item>
+                                    <flux:sidebar.item :href="route('operations.expenses')"
+                                        :current="request()->routeIs('operations.expenses')" wire:navigate>
+                                        Expense Claims
+                                    </flux:sidebar.item>
+                                </flux:sidebar.group>
+                                @break
 
-                    {{-- Work From Home --}}
-                    <flux:sidebar.item icon="home-modern" :href="route('wfh.my')" :current="request()->routeIs('wfh.my')"
-                        wire:navigate>
-                        Work From Home
-                    </flux:sidebar.item>
-
-                    {{-- Overtime --}}
-                    <flux:sidebar.item icon="bolt" :href="route('overtime.my')" :current="request()->routeIs('overtime.my')"
-                        wire:navigate>
-                        <div class="flex items-center gap-2">
-                            Overtime
-                            @if($pendingOt > 0)
-                                <span
-                                    class="inline-flex items-center justify-center rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold text-white">{{ $pendingOt > 9 ? '9+' : $pendingOt }}</span>
-                            @endif
-                            @if($showNexflow)
-                                <span
-                                    class="inline-flex items-center rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-bold text-violet-700 dark:bg-violet-500/20 dark:text-violet-300">Nexflow</span>
-                            @endif
-                        </div>
-                    </flux:sidebar.item>
-
-                    {{-- Performance --}}
-                    <flux:sidebar.group heading="Performance" icon="arrow-trending-up" :expandable="true"
-                        :expanded="request()->routeIs('performance.dashboard', 'performance.my', 'performance.my-warnings', 'performance.pip.my', 'performance.promotions.my')">
-                        <flux:sidebar.item :href="route('performance.dashboard')" :current="request()->routeIs('performance.dashboard')"
-                            wire:navigate>
-                            My Performance
-                        </flux:sidebar.item>
-                        <flux:sidebar.item :href="route('performance.my')" :current="request()->routeIs('performance.my')"
-                            wire:navigate>
-                            My Review
-                        </flux:sidebar.item>
-                        <flux:sidebar.item :href="route('performance.my-warnings')"
-                            :current="request()->routeIs('performance.my-warnings')" wire:navigate>
-                            <div class="flex items-center gap-2">
-                                My Warnings
-                                @if($activeWarnings > 0)
-                                    <span
-                                        class="inline-flex items-center justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white">{{ $activeWarnings > 9 ? '9+' : $activeWarnings }}</span>
-                                @endif
-                            </div>
-                        </flux:sidebar.item>
-                        <flux:sidebar.item :href="route('performance.pip.my')"
-                            :current="request()->routeIs('performance.pip.my')" wire:navigate>
-                            <div class="flex items-center gap-2">
-                                My Improvement Plan
-                                @if($hasActivePip)
-                                    <span
-                                        class="inline-flex items-center justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white">1</span>
-                                @endif
-                            </div>
-                        </flux:sidebar.item>
-                        <flux:sidebar.item :href="route('performance.promotions.my')"
-                            :current="request()->routeIs('performance.promotions.my')" wire:navigate>
-                            My Promotions
-                        </flux:sidebar.item>
-                    </flux:sidebar.group>
-
-                    {{-- Development --}}
-                    <flux:sidebar.group heading="Development" icon="academic-cap" :expandable="true"
-                        :expanded="request()->routeIs('performance.goals', 'performance.my-kpis')">
-                        <flux:sidebar.item :href="route('performance.goals')" :current="request()->routeIs('performance.goals')"
-                            wire:navigate>
-                            My Goals
-                        </flux:sidebar.item>
-                        <flux:sidebar.item :href="route('performance.my-kpis')"
-                            :current="request()->routeIs('performance.my-kpis')" wire:navigate>
-                            My KPIs
-                        </flux:sidebar.item>
-                    </flux:sidebar.group>
-
-                    {{-- Payroll — reimbursements not shown (requires run-payroll, 403 for employee) --}}
-                    <flux:sidebar.group heading="Payroll" icon="banknotes" :expandable="true"
-                        :expanded="request()->routeIs('payroll.payslips', 'operations.expenses')">
-                        <flux:sidebar.item :href="route('payroll.payslips')" :current="request()->routeIs('payroll.payslips')"
-                            wire:navigate>
-                            My Payslips
-                        </flux:sidebar.item>
-                        <flux:sidebar.item :href="route('operations.expenses')"
-                            :current="request()->routeIs('operations.expenses')" wire:navigate>
-                            Expense Claims
-                        </flux:sidebar.item>
-                    </flux:sidebar.group>
-
-                    {{-- Documents --}}
-                    <flux:sidebar.item icon="document-text" :href="route('documents.index')"
-                        :current="request()->routeIs('documents.*')" wire:navigate>
-                        <div class="flex items-center gap-2">
-                            Documents
-                            @if($pendingDocs > 0)
-                                <span
-                                    class="inline-flex items-center justify-center rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold text-white">{{ $pendingDocs > 9 ? '9+' : $pendingDocs }}</span>
-                            @endif
-                        </div>
-                    </flux:sidebar.item>
-
-                    {{-- Inbox --}}
-                    <flux:sidebar.item icon="inbox" href="{{ $inboxRoute }}" :current="request()->routeIs('notifications.*')"
-                        wire:navigate>
-                        <div class="flex items-center gap-2">
-                            Inbox
-                            @if($unread > 0)
-                                <span
-                                    class="inline-flex items-center justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white">{{ $unread > 9 ? '9+' : $unread }}</span>
-                            @endif
-                        </div>
-                    </flux:sidebar.item>
+                            @default
+                                @php $miHref = \Illuminate\Support\Facades\Route::has($mi['route'] ?? '') ? route($mi['route']) : '#'; @endphp
+                                <flux:sidebar.item :icon="$mi['icon']" :href="$miHref" :current="request()->routeIs($mi['active'])" wire:navigate>
+                                    <div class="flex items-center gap-2">
+                                        {{ $mi['label'] }}
+                                        @if(($mi['badge'] ?? null) && ($menuBadges[$mi['badge']] ?? 0) > 0)
+                                            <span
+                                                class="inline-flex items-center justify-center rounded-full {{ $mi['badge'] === 'inbox' ? 'bg-red-500' : 'bg-amber-500' }} px-1.5 py-0.5 text-[10px] font-bold text-white">{{ $menuBadges[$mi['badge']] > 9 ? '9+' : $menuBadges[$mi['badge']] }}</span>
+                                        @endif
+                                        @if($mi['key'] === 'overtime' && $showNexflow)
+                                            <span
+                                                class="inline-flex items-center rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-bold text-violet-700 dark:bg-violet-500/20 dark:text-violet-300">Nexflow</span>
+                                        @endif
+                                    </div>
+                                </flux:sidebar.item>
+                        @endswitch
+                    @endforeach
 
                     {{-- ════════════════════════════════════════════
                     MANAGER SIDEBAR
@@ -693,6 +653,8 @@
                         :current="request()->routeIs('settings.job-titles')" wire:navigate>Job Titles</flux:sidebar.item>
                     <flux:sidebar.item :href="route('settings.notifications')"
                         :current="request()->routeIs('settings.notifications')" wire:navigate>Notifications &amp; Email</flux:sidebar.item>
+                    <flux:sidebar.item :href="route('settings.menu')"
+                        :current="request()->routeIs('settings.menu')" wire:navigate>Sidebar Menu</flux:sidebar.item>
                     <flux:sidebar.item :href="route('settings.audit-log')"
                         :current="request()->routeIs('settings.audit-log')" wire:navigate>Audit Log</flux:sidebar.item>
                 </flux:sidebar.group>
