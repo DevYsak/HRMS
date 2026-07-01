@@ -2,12 +2,15 @@
 
 namespace App\Services;
 
+use App\Enums\EmployeeStatus;
 use App\Models\Employee;
+use App\Models\LeaveAllocationPolicy;
 use App\Models\LeaveBalance;
 use App\Models\LeaveBalanceAdjustment;
 use App\Models\LeaveRequest;
 use App\Models\LeaveType;
 use App\Models\User;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -42,6 +45,94 @@ class LeaveBalanceService
                 ],
             );
         }
+    }
+
+    /**
+     * Initialize leave balances using the conditional allocation policies, falling
+     * back to each leave type's uniform annual_allocation_days when no policy
+     * matches. Safe to call repeatedly (firstOrCreate).
+     */
+    public function initializeFromPolicy(Employee $employee, int $year): void
+    {
+        $types = LeaveType::whereNull('deleted_at')->get();
+        $policiesByType = LeaveAllocationPolicy::where('is_active', true)->get()->groupBy('leave_type_id');
+
+        foreach ($types as $type) {
+            $days = $this->resolveAllocation($employee, $type, $policiesByType->get($type->id) ?? collect());
+
+            if ($days === null || $days <= 0) {
+                continue;
+            }
+
+            LeaveBalance::firstOrCreate(
+                ['employee_id' => $employee->id, 'leave_type_id' => $type->id, 'year' => $year],
+                [
+                    'allocated_days' => $days,
+                    'used_days' => 0,
+                    'carried_forward_days' => 0,
+                    'encashed_days' => 0,
+                    'comp_off_credits' => 0,
+                ],
+            );
+        }
+    }
+
+    /**
+     * Resolve the default allocation for one leave type for a given employee:
+     * the most specific matching policy wins; otherwise the type's uniform
+     * annual_allocation_days (or null if that too is unset).
+     *
+     * @param  Collection<int, LeaveAllocationPolicy>  $policies
+     */
+    public function resolveAllocation(Employee $employee, LeaveType $type, Collection $policies): ?float
+    {
+        $matching = $policies->filter(fn (LeaveAllocationPolicy $p) => $this->policyMatches($p, $employee));
+
+        if ($matching->isNotEmpty()) {
+            $best = $matching->sortByDesc(fn (LeaveAllocationPolicy $p) => $p->specificity())->first();
+
+            return (float) $best->allocated_days;
+        }
+
+        return $type->annual_allocation_days !== null ? (float) $type->annual_allocation_days : null;
+    }
+
+    /** All non-null conditions on the policy must match the employee. */
+    private function policyMatches(LeaveAllocationPolicy $policy, Employee $employee): bool
+    {
+        if ($policy->department_id && $policy->department_id !== $employee->department_id) {
+            return false;
+        }
+        if ($policy->job_title_id && $policy->job_title_id !== $employee->job_title_id) {
+            return false;
+        }
+        if ($policy->employment_type_id && $policy->employment_type_id !== $employee->employment_type_id) {
+            return false;
+        }
+        if ($policy->gender && strtolower($policy->gender) !== strtolower((string) $employee->gender)) {
+            return false;
+        }
+        if ($policy->role && $policy->role !== ($employee->user?->role?->value)) {
+            return false;
+        }
+        if ($policy->min_service_months > 0) {
+            $months = $employee->joining_date
+                ? Carbon::parse($employee->joining_date)->diffInMonths(now())
+                : 0;
+            if ($months < $policy->min_service_months) {
+                return false;
+            }
+        }
+        if ($policy->requires_probation_complete) {
+            $status = $employee->status instanceof EmployeeStatus
+                ? $employee->status->value
+                : $employee->status;
+            if (\in_array($status, ['draft', 'onboarding', 'probation'], true)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**

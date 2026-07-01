@@ -473,6 +473,7 @@
                         @endif
                         @can('manage_settings')
                             <flux:sidebar.item :href="route('time-off.bulk-assign')" :current="request()->routeIs('time-off.bulk-assign')" wire:navigate>Bulk Leave</flux:sidebar.item>
+                            <flux:sidebar.item :href="route('time-off.leave-policies')" :current="request()->routeIs('time-off.leave-policies')" wire:navigate>Leave Policies</flux:sidebar.item>
                         @endcan
                         @canany(['manage_leave_types', 'manage_leave_policies'])
                             <flux:sidebar.item :href="route('time-off.settings')" :current="request()->routeIs('time-off.settings')" wire:navigate>Leave Settings</flux:sidebar.item>

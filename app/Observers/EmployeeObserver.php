@@ -15,10 +15,11 @@ class EmployeeObserver
 
         app(OnboardingService::class)->assignTemplate($employee);
 
-        // Auto-assign the default leave policy so every new hire (form, import,
-        // API or seeder) starts with balances — no manual step required.
-        // Idempotent (firstOrCreate); the create form may override specific types.
-        app(LeaveBalanceService::class)->initializeForEmployee($employee, now()->year);
+        // Auto-assign default leave so every new hire (form, import, API or
+        // seeder) starts with balances — no manual step required. Uses the
+        // conditional allocation policies, falling back to each type's uniform
+        // default when none match. Idempotent; the create form may still override.
+        app(LeaveBalanceService::class)->initializeFromPolicy($employee, now()->year);
     }
 
     public function updated(Employee $employee): void

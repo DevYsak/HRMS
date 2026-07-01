@@ -74,6 +74,7 @@ use App\Livewire\Settings\WorkModeManager;
 use App\Livewire\TimeOff\AllTimeOff;
 use App\Livewire\TimeOff\BulkLeaveAssignment;
 use App\Livewire\TimeOff\FinanceEncashments;
+use App\Livewire\TimeOff\LeaveAllocationPolicies;
 use App\Livewire\TimeOff\MyTimeOff;
 use App\Livewire\TimeOff\TeamTimeOff;
 use App\Livewire\TimeOff\TimeOffSettings;
@@ -148,6 +149,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         });
         Route::get('/encashments', FinanceEncashments::class)->name('encashments')->middleware('role:approve-finance');
         Route::get('/bulk-assign', BulkLeaveAssignment::class)->name('bulk-assign')->middleware('role:manage-settings');
+        Route::get('/leave-policies', LeaveAllocationPolicies::class)->name('leave-policies')->middleware('role:manage-settings');
         Route::get('/settings', TimeOffSettings::class)->name('settings')->middleware('role:manage-settings');
     });
 
