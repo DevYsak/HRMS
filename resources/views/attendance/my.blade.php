@@ -39,60 +39,104 @@
 {{-- ═══════════════════════════════════════════════
      HEADER
 ═══════════════════════════════════════════════ --}}
-<div class="pulse-hero">
-    <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_rgba(249,115,22,0.22),_transparent_65%)]"></div>
-    <div class="pointer-events-none absolute -bottom-10 -left-10 size-64 rounded-full blur-3xl" style="background:radial-gradient(circle,rgba(249,115,22,0.30),transparent 70%)"></div>
-    <div class="pointer-events-none absolute top-0 right-0 size-48 rounded-full blur-3xl" style="background:radial-gradient(circle,rgba(249,115,22,0.08),transparent 70%)"></div>
-    <div class="relative flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-            <div class="flex items-center gap-2 mb-2">
-                @if($todayAttendance && !$todayAttendance->check_out)
-                    <span class="inline-flex items-center gap-1.5 px-3 py-1 bg-brand-600/20 border border-brand-500/30 text-brand-400 rounded-full text-[11px] font-bold tracking-wider">
-                        <span class="w-1.5 h-1.5 bg-brand-400 rounded-full animate-pulse"></span> SHIFT ACTIVE
-                    </span>
-                @elseif($todayAttendance)
-                    <span class="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-600/20 border border-emerald-500/30 text-emerald-400 rounded-full text-[11px] font-bold tracking-wider">
-                        <flux:icon.check-circle class="size-3" /> SHIFT COMPLETE
-                    </span>
+@php
+    $emp = auth()->user()->employee;
+    $heroMode = \App\Enums\AttendanceMode::tryFromValue($todayAttendance->work_mode ?? $workMode);
+    $isIn = $todayAttendance && ! $todayAttendance->check_out;
+    $isDone = $todayAttendance && $todayAttendance->check_out;
+
+    $workedMin = 0;
+    if ($todayAttendance && $todayAttendance->check_in) {
+        $endT = $todayAttendance->check_out ?? now();
+        $workedMin = max(0, (int) $todayAttendance->check_in->diffInMinutes($endT) - (int) ($todayAttendance->break_minutes ?? 0));
+    }
+    $targetMin = (int) round((($shift->standard_hours ?? 9)) * 60);
+    $progress = $targetMin > 0 ? min(100, (int) round($workedMin / $targetMin * 100)) : 0;
+    $workedLabel = intdiv($workedMin, 60).'h '.str_pad((string) ($workedMin % 60), 2, '0', STR_PAD_LEFT).'m';
+    $targetLabel = intdiv($targetMin, 60).'h '.($targetMin % 60).'m';
+    $liveStart = $isIn ? $todayAttendance->check_in->timestamp : null;
+@endphp
+
+{{-- ═══════════════════════════════════════════════
+     HERO — live, mode-aware command card
+═══════════════════════════════════════════════ --}}
+<div class="relative overflow-hidden rounded-3xl bg-gradient-to-br from-zinc-900 via-zinc-900 to-black p-6 text-white shadow-xl md:p-8"
+     x-data="{ start: {{ $liveStart ?? 'null' }}, live: '{{ $workedLabel }}',
+        tick(){ if(this.start===null) return; const s=Math.floor(Date.now()/1000)-this.start; const h=Math.floor(s/3600),m=Math.floor((s%3600)/60); this.live=h+'h '+String(m).padStart(2,'0')+'m'; } }"
+     x-init="tick(); if(start!==null) setInterval(()=>tick(),1000)">
+    <div class="pointer-events-none absolute -right-20 -top-24 size-72 rounded-full blur-3xl" style="background:radial-gradient(circle, {{ $heroMode->hex() }}40, transparent 70%)"></div>
+    <div class="pointer-events-none absolute -bottom-20 left-1/4 size-64 rounded-full blur-3xl" style="background:radial-gradient(circle, {{ $heroMode->hex() }}18, transparent 70%)"></div>
+
+    <div class="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+        {{-- Identity --}}
+        <div class="flex items-start gap-4">
+            <div class="relative shrink-0">
+                @if($emp?->photo)
+                    <img src="{{ \Illuminate\Support\Facades\Storage::url($emp->photo) }}" alt="{{ auth()->user()->name }}"
+                        class="size-16 rounded-2xl object-cover ring-2 ring-white/10 md:size-[72px]">
                 @else
-                    <span class="inline-flex items-center gap-1.5 px-3 py-1 bg-zinc-700/50 border border-zinc-600/30 text-zinc-400 rounded-full text-[11px] font-bold tracking-wider">
-                        NOT CLOCKED IN
-                    </span>
+                    <div class="flex size-16 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-500 to-amber-400 text-xl font-black md:size-[72px]">{{ auth()->user()->initials() }}</div>
                 @endif
-                <span class="text-zinc-500 text-xs">{{ now()->format('l, jS F Y') }}</span>
+                <span class="absolute -bottom-1 -right-1 size-4 rounded-full border-2 border-zinc-900 {{ $isIn ? 'animate-pulse bg-emerald-500' : ($isDone ? 'bg-zinc-500' : 'bg-amber-500') }}"></span>
             </div>
-            <h1 class="text-3xl font-black text-white tracking-tight">My Attendance</h1>
-            <p class="text-zinc-400 text-sm mt-1">{{ $shiftLabel }}</p>
+            <div class="min-w-0">
+                <div class="mb-1 flex flex-wrap items-center gap-2">
+                    <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-bold tracking-wider" style="background: {{ $heroMode->hex() }}26; color: {{ $heroMode->hex() }}">
+                        <span class="size-1.5 rounded-full {{ $isIn ? 'animate-pulse' : '' }}" style="background: {{ $heroMode->hex() }}"></span>
+                        {{ $isIn ? strtoupper($heroMode->shortLabel()).' ACTIVE' : ($isDone ? 'COMPLETED' : 'NOT CLOCKED IN') }}
+                    </span>
+                    <span class="text-xs text-zinc-400">{{ now()->format('l, d M Y') }}</span>
+                </div>
+                <h1 class="flex items-center gap-2 text-2xl font-black tracking-tight md:text-3xl">
+                    <flux:icon :name="$heroMode->icon()" class="size-6" /> {{ ($isIn || $isDone) ? $heroMode->label() : 'My Attendance' }}
+                </h1>
+                <p class="mt-1 text-sm text-zinc-400">{{ $shiftLabel }}</p>
+                <div class="mt-3 flex flex-wrap gap-2">
+                    <span class="inline-flex items-center gap-1.5 rounded-lg bg-white/5 px-2.5 py-1 text-xs text-zinc-300"><flux:icon.map-pin class="size-3.5" /> {{ $heroMode->shortLabel() }}</span>
+                    @if($shift)<span class="inline-flex items-center gap-1.5 rounded-lg bg-white/5 px-2.5 py-1 text-xs text-zinc-300"><flux:icon.clock class="size-3.5" /> {{ $shift->name ?? 'Shift' }}</span>@endif
+                    @if($emp?->manager)<span class="inline-flex items-center gap-1.5 rounded-lg bg-white/5 px-2.5 py-1 text-xs text-zinc-300"><flux:icon.user class="size-3.5" /> {{ $emp->manager->name }}</span>@endif
+                </div>
+            </div>
         </div>
 
-        {{-- Attendance % + Actions --}}
-        <div class="flex items-center gap-4">
-            {{-- Big attendance % ring --}}
-            <div class="flex items-center gap-3 bg-white/8 border border-white/10 rounded-2xl px-5 py-3">
-                <div class="relative size-14">
-                    <svg viewBox="0 0 36 36" class="size-14 -rotate-90">
-                        <circle cx="18" cy="18" r="15.9" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="3"/>
-                        <circle cx="18" cy="18" r="15.9" fill="none"
-                            stroke="{{ $attPct >= 80 ? '#10b981' : ($attPct >= 60 ? '#f59e0b' : '#ef4444') }}"
-                            stroke-width="3"
-                            stroke-dasharray="{{ $attPct }}, 100"
-                            stroke-linecap="round"/>
-                    </svg>
-                    <div class="absolute inset-0 flex items-center justify-center">
-                        <span class="text-[11px] font-black text-white">{{ $attPct }}%</span>
-                    </div>
-                </div>
-                <div>
-                    <div class="text-white font-black text-lg leading-none">{{ $attPct }}%</div>
-                    <div class="text-zinc-400 text-[11px] mt-0.5">Attendance Rate</div>
-                    <div class="text-zinc-500 text-[10px]">{{ $presentCount }} / {{ $totalWorkingDays }} days</div>
+        {{-- Progress + actions --}}
+        <div class="flex items-center gap-5">
+            <div class="relative grid size-24 shrink-0 place-items-center">
+                <svg class="size-24 -rotate-90" viewBox="0 0 36 36">
+                    <circle cx="18" cy="18" r="15.9" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="3" />
+                    <circle cx="18" cy="18" r="15.9" fill="none" stroke="{{ $heroMode->hex() }}" stroke-width="3" stroke-linecap="round" stroke-dasharray="{{ $progress }}, 100" />
+                </svg>
+                <div class="absolute text-xl font-black">{{ $progress }}%</div>
+            </div>
+            <div>
+                <div class="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Today's Progress</div>
+                <div class="mt-0.5 text-lg font-black tabular-nums" x-text="live">{{ $workedLabel }}</div>
+                <div class="text-[11px] text-zinc-400">of {{ $targetLabel }} target</div>
+                <div class="mt-3 flex flex-wrap gap-2">
+                    @if(! $todayAttendance)
+                        <button wire:click="checkIn"
+                            class="inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold shadow-lg shadow-brand-500/20 transition hover:bg-brand-700 active:scale-95">
+                            <flux:icon.finger-print class="size-4" /> Clock In · {{ strtoupper($workMode) }}
+                        </button>
+                    @elseif(! $todayAttendance->check_out)
+                        @if($activeBreak)
+                            <button wire:click="endBreak" class="inline-flex items-center gap-1.5 rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-bold transition hover:bg-amber-600 active:scale-95"><flux:icon.play class="size-4" /> Resume</button>
+                        @else
+                            <button wire:click="startBreak" class="inline-flex items-center gap-1.5 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-bold transition hover:bg-white/20 active:scale-95"><flux:icon.pause class="size-4" /> Break</button>
+                        @endif
+                        <button wire:click="checkOut" wire:confirm="End your work day?"
+                            class="inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold transition hover:bg-brand-700 active:scale-95">
+                            <flux:icon.arrow-right-start-on-rectangle class="size-4" /> End Work Day
+                        </button>
+                    @else
+                        <span class="inline-flex items-center gap-1.5 rounded-xl bg-emerald-500/20 px-4 py-2.5 text-sm font-bold text-emerald-400"><flux:icon.check-badge class="size-4" /> Day complete</span>
+                    @endif
+                    <button @click="$flux.modal('regularisation-modal').show()"
+                        class="inline-flex items-center gap-1.5 rounded-xl bg-white/5 px-3 py-2.5 text-sm font-bold transition hover:bg-white/10" title="Regularise">
+                        <flux:icon.pencil-square class="size-4" />
+                    </button>
                 </div>
             </div>
-
-            <button @click="$flux.modal('regularisation-modal').show()"
-                class="flex items-center gap-2 px-4 py-2.5 bg-white/10 hover:bg-white/20 border border-white/10 text-white rounded-xl text-sm font-semibold transition-all">
-                <flux:icon.pencil-square class="size-4" /> Regularise
-            </button>
         </div>
     </div>
 </div>
@@ -401,42 +445,10 @@
                 </div>
             @endif
 
-            {{-- Action Buttons --}}
-            <div class="space-y-2">
-                @if(!$todayAttendance)
-                    <button wire:click="checkIn"
-                        class="w-full py-4 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-black text-sm shadow-lg shadow-brand-500/20 transition-all active:scale-95 flex items-center justify-center gap-2">
-                        <flux:icon.finger-print class="size-5" />
-                        Clock In · {{ strtoupper($workMode) }}
-                    </button>
-                @elseif(!$todayAttendance->check_out)
-                    <div class="grid grid-cols-2 gap-2">
-                        @if(!$activeBreak)
-                            <button wire:click="startBreak"
-                                class="py-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 rounded-xl font-bold text-sm hover:bg-amber-100 transition-all active:scale-95 flex items-center justify-center gap-1.5">
-                                <flux:icon.pause class="size-4" /> Break
-                            </button>
-                        @else
-                            <button wire:click="endBreak"
-                                class="py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold text-sm transition-all active:scale-95 animate-pulse flex items-center justify-center gap-1.5">
-                                <flux:icon.play class="size-4" /> Resume
-                            </button>
-                        @endif
-                        <button wire:click="checkOut"
-                            wire:confirm="Are you sure you want to clock out?"
-                            class="py-3 bg-zinc-900 dark:bg-zinc-700 hover:bg-black text-white rounded-xl font-bold text-sm transition-all active:scale-95 flex items-center justify-center gap-1.5">
-                            <flux:icon.arrow-right-start-on-rectangle class="size-4" /> Clock Out
-                        </button>
-                    </div>
-                @else
-                    <div class="py-4 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 text-center rounded-xl">
-                        <flux:icon.check-badge class="size-8 text-emerald-600 mx-auto mb-1" />
-                        <div class="font-bold text-emerald-800 dark:text-emerald-400 text-sm">Shift Completed</div>
-                        @php $diff = $todayAttendance->check_out->diff($todayAttendance->check_in); @endphp
-                        <div class="text-xs text-emerald-600 mt-0.5">{{ $diff->h }}h {{ $diff->i }}m total</div>
-                    </div>
-                @endif
-            </div>
+            {{-- Clock actions live in the hero card at the top --}}
+            @if(!$todayAttendance)
+                <p class="text-center text-[11px] text-zinc-400">Pick a mode, then use <span class="font-bold text-brand-600">Clock In</span> at the top of the page.</p>
+            @endif
 
             {{-- Shift Info --}}
             @if($shift)
