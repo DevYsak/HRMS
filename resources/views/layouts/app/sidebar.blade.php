@@ -841,6 +841,20 @@
 
     <flux:toast />
 
+    {{-- "View as" impersonation banner --}}
+    @if(session('impersonator_id'))
+        <div class="fixed inset-x-0 bottom-4 z-50 flex justify-center px-4">
+            <div class="flex items-center gap-3 rounded-full border border-amber-300 bg-amber-500 px-4 py-2 text-white shadow-lg shadow-amber-500/30">
+                <flux:icon.eye class="size-4" />
+                <span class="text-sm font-bold">Viewing as {{ auth()->user()->name }}</span>
+                <a href="{{ route('impersonate.stop') }}"
+                    class="rounded-full bg-white/95 px-3 py-1 text-xs font-black text-amber-700 transition hover:bg-white">
+                    Exit to admin
+                </a>
+            </div>
+        </div>
+    @endif
+
     {{-- AI HR Copilot — renders nothing unless OPENAI_API_KEY is configured --}}
     @auth
         <livewire:ai-copilot />

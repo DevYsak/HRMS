@@ -4,6 +4,7 @@ use App\Http\Controllers\AdmsController;
 use App\Http\Controllers\BiometricDashboardController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\DocumentUploadController;
+use App\Http\Controllers\ImpersonationController;
 use App\Http\Controllers\PayslipController;
 use App\Http\Controllers\ReportController;
 use App\Livewire\AiAssistantPage;
@@ -108,6 +109,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Dashboard
     Route::get('/', Dashboard::class)->name('dashboard');
+
+    // "View as" impersonation — Super Admin tests another user's experience.
+    // (stop is declared first so it isn't captured by the {user} binding)
+    Route::get('/impersonate/stop', [ImpersonationController::class, 'stop'])->name('impersonate.stop');
+    Route::get('/impersonate/{user}', [ImpersonationController::class, 'start'])->name('impersonate.start');
 
     // AI Assistant full page
     Route::get('/ai-assistant', AiAssistantPage::class)->name('ai.assistant');

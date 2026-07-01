@@ -121,12 +121,24 @@
                             </td>
                             <td class="pulse-td pr-6 text-right!">
                                 <div class="flex items-center justify-end gap-2">
-                                    <flux:button 
-                                        href="{{ route('employees.edit', $emp->id) }}" 
-                                        wire:navigate 
-                                        variant="ghost" 
-                                        size="sm" 
-                                        icon="pencil-square" 
+                                    @if(auth()->user()->isSuperAdmin() && $emp->user_id)
+                                        <flux:tooltip content="View as this employee">
+                                            <flux:button
+                                                href="{{ route('impersonate.start', $emp->user_id) }}"
+                                                variant="ghost"
+                                                size="sm"
+                                                icon="eye"
+                                                class="text-zinc-400 hover:text-amber-600"
+                                            />
+                                        </flux:tooltip>
+                                    @endif
+
+                                    <flux:button
+                                        href="{{ route('employees.edit', $emp->id) }}"
+                                        wire:navigate
+                                        variant="ghost"
+                                        size="sm"
+                                        icon="pencil-square"
                                         class="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
                                     />
                                     
