@@ -75,6 +75,9 @@ class AttendanceTracker extends Component
 
     public string $statsPeriod = 'this_month';
 
+    /** Daily working-hours series for the analytics charts (selected period). */
+    public array $chartDaily = [];
+
     // Regularisation form fields
     public string $regDate = '';
 
@@ -222,6 +225,7 @@ class AttendanceTracker extends Component
         }
 
         [$start, $end] = match ($this->statsPeriod) {
+            'this_week' => [Carbon::now()->startOfWeek(Carbon::SUNDAY), Carbon::now()->endOfWeek(Carbon::SATURDAY)],
             'last_month' => [Carbon::now()->subMonth()->startOfMonth(), Carbon::now()->subMonth()->endOfMonth()],
             '3_months' => [Carbon::now()->subMonths(2)->startOfMonth(), Carbon::now()->endOfMonth()],
             'year' => [Carbon::now()->startOfYear(), Carbon::now()->endOfMonth()],
@@ -334,6 +338,22 @@ class AttendanceTracker extends Component
             'late_trend' => $lateTrend,
             'mode_breakdown' => $modeBreakdown,
         ];
+
+        // ── Daily working-hours series for the trend chart (period up to today) ──
+        $seriesEnd = $end->copy()->min(Carbon::today());
+        $daily = [];
+        if ($start <= $seriesEnd) {
+            foreach (CarbonPeriod::create($start, $seriesEnd) as $d) {
+                $att = $attendanceDates->get($d->toDateString());
+                $hours = 0.0;
+                if ($att && $att->check_in && $att->check_out) {
+                    $mins = $att->check_in->diffInMinutes($att->check_out) - ($att->break_minutes ?? 0);
+                    $hours = round(max(0, $mins) / 60, 1);
+                }
+                $daily[] = ['label' => $d->format('d M'), 'hours' => $hours, 'late' => (bool) ($att?->is_late)];
+            }
+        }
+        $this->chartDaily = $daily;
     }
 
     /**

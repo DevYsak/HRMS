@@ -103,7 +103,7 @@
      PERIOD FILTER PILLS
 ═══════════════════════════════════════════════ --}}
 <div class="flex items-center gap-2 flex-wrap">
-    @foreach(['this_month' => 'This Month', 'last_month' => 'Last Month', '3_months' => '3 Months', 'year' => 'This Year'] as $val => $label)
+    @foreach(['this_week' => 'This Week', 'this_month' => 'This Month', 'last_month' => 'Last Month', '3_months' => '3 Months', 'year' => 'This Year'] as $val => $label)
         <button wire:click="$set('statsPeriod', '{{ $val }}')"
             class="px-4 py-1.5 rounded-xl text-xs font-bold border transition-all
                 {{ $statsPeriod === $val
@@ -204,19 +204,93 @@
     </div>
 </div>
 
-{{-- Late arrival trend --}}
-<div class="mb-5 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-    <div class="mb-4 text-[10px] font-bold uppercase tracking-widest text-zinc-400">Late Arrival Trend (6 months)</div>
-    @php $maxLate = max(1, collect($analytics['late_trend'] ?? [])->max('late') ?: 1); @endphp
-    <div class="flex h-24 items-end justify-between gap-2">
-        @foreach($analytics['late_trend'] ?? [] as $pt)
-            <div class="flex flex-1 flex-col items-center gap-1">
-                <span class="text-[10px] font-bold text-zinc-500">{{ $pt['late'] }}</span>
-                <div class="w-full rounded-t bg-amber-400" style="height: {{ max(4, round($pt['late'] / $maxLate * 72)) }}px"></div>
-                <span class="text-[10px] text-zinc-400">{{ $pt['month'] }}</span>
+{{-- ═══════════════════════════════════════════════
+     ANALYTICS CHARTS (ApexCharts)
+═══════════════════════════════════════════════ --}}
+@php
+    $modeBreakdown = $analytics['mode_breakdown'] ?? [];
+    $lateTrend = $analytics['late_trend'] ?? [];
+
+    $hoursChart = [
+        'chart' => ['type' => 'area', 'height' => 260, 'toolbar' => ['show' => false], 'fontFamily' => 'inherit', 'animations' => ['enabled' => true, 'easing' => 'easeinout', 'speed' => 800]],
+        'colors' => ['#F97316'],
+        'dataLabels' => ['enabled' => false],
+        'stroke' => ['curve' => 'smooth', 'width' => 3],
+        'fill' => ['type' => 'gradient', 'gradient' => ['shadeIntensity' => 1, 'opacityFrom' => 0.4, 'opacityTo' => 0.02, 'stops' => [0, 90]]],
+        'grid' => ['borderColor' => '#F1E7DD', 'strokeDashArray' => 4, 'padding' => ['left' => 8, 'right' => 8]],
+        'xaxis' => ['categories' => collect($chartDaily)->pluck('label')->all(), 'labels' => ['style' => ['colors' => '#9CA3AF', 'fontSize' => '10px'], 'hideOverlappingLabels' => true], 'axisBorder' => ['show' => false], 'axisTicks' => ['show' => false], 'tickAmount' => min(10, max(1, count($chartDaily)))],
+        'yaxis' => ['labels' => ['style' => ['colors' => '#9CA3AF', 'fontSize' => '10px']]],
+        'tooltip' => ['theme' => 'light'],
+        'series' => [['name' => 'Hours', 'data' => collect($chartDaily)->pluck('hours')->all()]],
+    ];
+
+    $modeDonut = [
+        'chart' => ['type' => 'donut', 'height' => 240, 'fontFamily' => 'inherit', 'animations' => ['enabled' => true, 'speed' => 700]],
+        'labels' => collect($modeBreakdown)->keys()->map(fn ($k) => \App\Enums\AttendanceMode::tryFromValue($k)->shortLabel())->all(),
+        'colors' => collect($modeBreakdown)->keys()->map(fn ($k) => \App\Enums\AttendanceMode::tryFromValue($k)->hex())->all(),
+        'series' => collect($modeBreakdown)->values()->map(fn ($v) => (int) $v)->all(),
+        'legend' => ['show' => false],
+        'dataLabels' => ['enabled' => false],
+        'stroke' => ['width' => 0],
+        'plotOptions' => ['pie' => ['donut' => ['size' => '72%']]],
+        'tooltip' => ['theme' => 'light'],
+    ];
+
+    $lateChart = [
+        'chart' => ['type' => 'bar', 'height' => 200, 'toolbar' => ['show' => false], 'fontFamily' => 'inherit', 'animations' => ['enabled' => true, 'speed' => 800]],
+        'colors' => ['#F59E0B'],
+        'plotOptions' => ['bar' => ['borderRadius' => 6, 'columnWidth' => '45%']],
+        'dataLabels' => ['enabled' => false],
+        'grid' => ['borderColor' => '#F1E7DD', 'strokeDashArray' => 4],
+        'xaxis' => ['categories' => collect($lateTrend)->pluck('month')->all(), 'labels' => ['style' => ['colors' => '#9CA3AF', 'fontSize' => '11px']], 'axisBorder' => ['show' => false], 'axisTicks' => ['show' => false]],
+        'yaxis' => ['labels' => ['style' => ['colors' => '#9CA3AF', 'fontSize' => '11px']]],
+        'tooltip' => ['theme' => 'light'],
+        'series' => [['name' => 'Late days', 'data' => collect($lateTrend)->pluck('late')->all()]],
+    ];
+@endphp
+
+<div class="grid grid-cols-1 gap-5 lg:grid-cols-3">
+    {{-- Working Hours Trend --}}
+    <div class="lg:col-span-2 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <div class="mb-2 flex items-center justify-between">
+            <div class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Working Hours Trend</div>
+            <div class="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-bold text-brand-600 dark:bg-brand-900/20">{{ ucwords(str_replace('_', ' ', $statsPeriod)) }}</div>
+        </div>
+        @if(count($chartDaily) > 0)
+            <x-dashboard.chart :options="$hoursChart" wire:key="hours-{{ $statsPeriod }}" class="-mb-2" />
+        @else
+            <div class="flex h-[260px] flex-col items-center justify-center text-zinc-300 dark:text-zinc-600">
+                <flux:icon.chart-bar class="mb-2 size-10" /><p class="text-xs">No hours logged in this period.</p>
             </div>
-        @endforeach
+        @endif
     </div>
+
+    {{-- Work Mode Split --}}
+    <div class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <div class="mb-2 text-[10px] font-bold uppercase tracking-widest text-zinc-400">Work Mode Split</div>
+        @if(!empty($modeBreakdown))
+            <x-dashboard.chart :options="$modeDonut" wire:key="mode-{{ $statsPeriod }}" class="grid place-items-center" />
+            <div class="mt-3 space-y-1.5">
+                @foreach($modeBreakdown as $mv => $count)
+                    @php $m = \App\Enums\AttendanceMode::tryFromValue($mv); @endphp
+                    <div class="flex items-center justify-between text-xs">
+                        <span class="flex items-center gap-2 text-zinc-600 dark:text-zinc-300"><span class="size-2.5 rounded-full {{ $m->dotClass() }}"></span>{{ $m->label() }}</span>
+                        <span class="font-bold text-zinc-900 dark:text-white">{{ $count }}</span>
+                    </div>
+                @endforeach
+            </div>
+        @else
+            <div class="flex h-[220px] flex-col items-center justify-center text-zinc-300 dark:text-zinc-600">
+                <flux:icon.chart-pie class="mb-2 size-10" /><p class="text-xs">No attendance yet.</p>
+            </div>
+        @endif
+    </div>
+</div>
+
+{{-- Late Arrival Trend --}}
+<div class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+    <div class="mb-2 text-[10px] font-bold uppercase tracking-widest text-zinc-400">Late Arrival Trend (6 months)</div>
+    <x-dashboard.chart :options="$lateChart" wire:key="late-trend" class="-mb-2" />
 </div>
 
 {{-- ─── AI ATTENDANCE INSIGHTS (only when OPENAI_API_KEY is set) ─── --}}
