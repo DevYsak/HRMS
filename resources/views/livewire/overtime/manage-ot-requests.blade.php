@@ -140,7 +140,7 @@
                     @forelse($requests as $req)
                         @php
                             $avatarColors = ['bg-violet-500','bg-indigo-500','bg-blue-500','bg-emerald-500','bg-brand-600','bg-rose-500','bg-amber-500','bg-teal-500'];
-                            $avatarColor  = $avatarColors[crc32($req->employee->user->name) % count($avatarColors)];
+                            $avatarColor  = $avatarColors[crc32(($req->employee?->user?->name ?? 'Unknown')) % count($avatarColors)];
                         @endphp
                         <tr class="group transition-colors hover:bg-zinc-50/70 dark:hover:bg-zinc-800/30" wire:key="mng-ot-{{ $req->id }}">
 
@@ -148,11 +148,11 @@
                             <td class="py-4 pl-6 pr-4 align-middle">
                                 <div class="flex items-center gap-3">
                                     <div class="flex size-9 shrink-0 items-center justify-center rounded-full {{ $avatarColor }} text-sm font-black text-white">
-                                        {{ strtoupper(substr($req->employee->user->name, 0, 1)) }}
+                                        {{ strtoupper(substr(($req->employee?->user?->name ?? 'Unknown'), 0, 1)) }}
                                     </div>
                                     <div>
-                                        <div class="font-semibold text-zinc-900 dark:text-white">{{ $req->employee->user->name }}</div>
-                                        <div class="text-xs text-zinc-400">{{ $req->employee->department?->name ?? 'No department' }}</div>
+                                        <div class="font-semibold text-zinc-900 dark:text-white">{{ ($req->employee?->user?->name ?? 'Unknown') }}</div>
+                                        <div class="text-xs text-zinc-400">{{ $req->employee?->department?->name ?? 'No department' }}</div>
                                     </div>
                                 </div>
                             </td>
@@ -324,7 +324,7 @@
             <div class="space-y-5">
                 <div>
                     <flux:heading size="lg">Edit OT Request</flux:heading>
-                    <flux:subheading>{{ $selectedRequest->employee->user->name }} — modify details before approving or rejecting</flux:subheading>
+                    <flux:subheading>{{ ($selectedRequest->employee?->user?->name ?? 'Unknown') }} — modify details before approving or rejecting</flux:subheading>
                 </div>
 
                 <div class="space-y-4">
@@ -389,7 +389,7 @@
                 <div class="flex items-start justify-between gap-4">
                     <div>
                         <flux:heading size="lg">OT Request Details</flux:heading>
-                        <flux:subheading>From {{ $selectedRequest->employee->user->name }}</flux:subheading>
+                        <flux:subheading>From {{ ($selectedRequest->employee?->user?->name ?? 'Unknown') }}</flux:subheading>
                     </div>
                     <span class="badge-{{ $selectedRequest->status }}">{{ strtoupper($selectedRequest->status) }}</span>
                 </div>
@@ -402,7 +402,7 @@
                         </div>
                         <div>
                             <p class="text-[11px] font-bold uppercase tracking-wide text-zinc-400">Department</p>
-                            <p class="mt-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{{ $selectedRequest->employee->department?->name ?? 'No department' }}</p>
+                            <p class="mt-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{{ $selectedRequest->employee?->department?->name ?? 'No department' }}</p>
                         </div>
                         <div>
                             <p class="text-[11px] font-bold uppercase tracking-wide text-zinc-400">OT window</p>
@@ -458,7 +458,7 @@
                         <flux:heading size="lg">
                             {{ $reviewAction === 'approve' ? 'Approve OT Request' : 'Reject OT Request' }}
                         </flux:heading>
-                        <flux:subheading>From {{ $selectedRequest->employee->user->name }}</flux:subheading>
+                        <flux:subheading>From {{ ($selectedRequest->employee?->user?->name ?? 'Unknown') }}</flux:subheading>
                     </div>
                     <span class="badge-{{ $selectedRequest->status }}">{{ strtoupper($selectedRequest->status) }}</span>
                 </div>
@@ -471,7 +471,7 @@
                         </div>
                         <div>
                             <p class="text-[11px] font-bold uppercase tracking-wide text-zinc-400">Department</p>
-                            <p class="mt-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{{ $selectedRequest->employee->department?->name ?? 'No department' }}</p>
+                            <p class="mt-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{{ $selectedRequest->employee?->department?->name ?? 'No department' }}</p>
                         </div>
                         <div>
                             <p class="text-[11px] font-bold uppercase tracking-wide text-zinc-400">OT window</p>

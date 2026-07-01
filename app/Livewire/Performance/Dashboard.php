@@ -37,7 +37,12 @@ class Dashboard extends Component
         $user = Auth::user();
         $employee = $user->employee;
 
-        abort_unless($employee, 403);
+        // Admins (e.g. Super Admin) may have no employee profile — show a
+        // friendly empty state instead of a hard 403.
+        if (! $employee) {
+            return view('livewire.performance.no-profile')
+                ->layout('layouts.app', ['title' => 'My Performance']);
+        }
 
         $cycles = PerformanceCycle::where(function ($q) use ($employee) {
             $q->whereHas('employeeKpis', fn ($qq) => $qq->where('employee_id', $employee->id))
