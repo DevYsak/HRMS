@@ -88,7 +88,10 @@ class User extends Authenticatable
 
     public function hasPermission(string $key): bool
     {
-        if ($this->assignedRole?->slug === 'super_admin') {
+        // Super Admins always have every permission — even if no DB role was
+        // ever linked to the account (role_id null). Without this, a manually
+        // created super admin loses all permission-gated menus/features.
+        if ($this->isSuperAdmin() || $this->assignedRole?->slug === 'super_admin') {
             return true;
         }
 
