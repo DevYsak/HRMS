@@ -4,16 +4,16 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Cache;
 
 /**
- * Admin override for one employee-sidebar item. Read through the cached map;
- * the cache is flushed automatically on save/delete.
+ * Admin override for one employee-sidebar item.
+ *
+ * Read directly (not cached): the table is tiny and read once per render, and a
+ * long-lived cache made saved changes reappear on the next request when the
+ * cache was not invalidated across workers.
  */
 class MenuSetting extends Model
 {
-    private const CACHE_KEY = 'menu_settings_map';
-
     protected $fillable = [
         'key',
         'label',
@@ -29,28 +29,18 @@ class MenuSetting extends Model
         ];
     }
 
-    protected static function booted(): void
-    {
-        static::saved(fn () => self::flushCache());
-        static::deleted(fn () => self::flushCache());
-    }
-
     /**
+     * Every override keyed by menu key. Fail-open if the table is absent
+     * (unmigrated) — returns an empty map so the sidebar uses its defaults.
+     *
      * @return Collection<string, self>
      */
-    public static function cachedMap(): Collection
+    public static function map(): Collection
     {
-        // Fail-open even if the table has not been migrated yet: a missing
-        // menu_settings table means "no overrides", not a broken sidebar.
         try {
-            return Cache::remember(self::CACHE_KEY, now()->addHour(), fn () => self::query()->get()->keyBy('key'));
+            return self::query()->get()->keyBy('key');
         } catch (\Throwable) {
             return collect();
         }
-    }
-
-    public static function flushCache(): void
-    {
-        Cache::forget(self::CACHE_KEY);
     }
 }

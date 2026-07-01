@@ -58,7 +58,6 @@ class MenuSettings extends Component
             );
         }
 
-        MenuSetting::flushCache();
         \Flux::toast('Employee sidebar menu saved.', variant: 'success');
     }
 

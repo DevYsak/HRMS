@@ -58,7 +58,7 @@ class EmployeeMenu
      */
     private function merged(): array
     {
-        $settings = MenuSetting::cachedMap();
+        $settings = MenuSetting::map();
 
         $items = [];
         foreach (self::CATALOG as $index => $item) {
