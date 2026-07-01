@@ -693,6 +693,8 @@
                         :current="request()->routeIs('settings.job-titles')" wire:navigate>Job Titles</flux:sidebar.item>
                     <flux:sidebar.item :href="route('settings.notifications')"
                         :current="request()->routeIs('settings.notifications')" wire:navigate>Notifications &amp; Email</flux:sidebar.item>
+                    <flux:sidebar.item :href="route('settings.audit-log')"
+                        :current="request()->routeIs('settings.audit-log')" wire:navigate>Audit Log</flux:sidebar.item>
                 </flux:sidebar.group>
             </flux:sidebar.nav>
         @endcan

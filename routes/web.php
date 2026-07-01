@@ -12,6 +12,7 @@ use App\Livewire\Attendance\AttendanceSettings;
 use App\Livewire\Attendance\AttendanceTracker;
 use App\Livewire\Attendance\BiometricSummary;
 use App\Livewire\Attendance\TeamAttendance;
+use App\Livewire\AuditLogViewer;
 use App\Livewire\Dashboard;
 use App\Livewire\DepartmentDashboard;
 use App\Livewire\Documents\DocumentManager;
@@ -366,6 +367,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // --------------------------------------------------
     Route::middleware('role:manage-settings')->prefix('settings')->name('settings.')->group(function () {
         Route::get('/departments', DepartmentManager::class)->name('departments');
+        Route::get('/audit-log', AuditLogViewer::class)->name('audit-log');
         Route::get('/roles', RoleManager::class)->name('roles');
         Route::get('/employment-types', EmploymentTypeManager::class)->name('employment-types');
         Route::get('/work-modes', WorkModeManager::class)->name('work-modes');
