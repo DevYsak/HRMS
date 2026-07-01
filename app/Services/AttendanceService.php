@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\AttendanceMode;
 use App\Models\Attendance;
 use App\Models\AttendanceRegularisation;
 use App\Models\BreakLog;
@@ -31,7 +32,7 @@ class AttendanceService
             'check_in_ip' => $payload['ip'] ?? request()->ip(),
             'check_in_lat' => $payload['lat'] ?? null,
             'check_in_lng' => $payload['lng'] ?? null,
-            'work_mode' => in_array($payload['work_mode'] ?? 'office', ['office', 'wfh'], true) ? $payload['work_mode'] : 'office',
+            'work_mode' => in_array($payload['work_mode'] ?? 'office', AttendanceMode::values(), true) ? $payload['work_mode'] : 'office',
             'status' => $isLate ? 'late' : 'on_time',
             'is_late' => $isLate,
             'late_minutes' => $lateMinutes,

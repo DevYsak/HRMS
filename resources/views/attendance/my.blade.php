@@ -176,15 +176,25 @@
     {{-- Work pattern --}}
     <div class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
         <div class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Work Pattern</div>
-        @php $off = (int) ($analytics['office_days'] ?? 0); $wfh = (int) ($analytics['wfh_days'] ?? 0); $tot = max(1, $off + $wfh); @endphp
-        <div class="mt-2 flex items-baseline gap-2 text-sm">
-            <span class="font-black text-zinc-900 dark:text-white">{{ $off }}</span><span class="text-xs text-zinc-400">office</span>
-            <span class="font-black text-blue-600">{{ $wfh }}</span><span class="text-xs text-zinc-400">WFH</span>
-        </div>
-        <div class="mt-3 flex h-2 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
-            <div class="h-full bg-brand-500" style="width: {{ round($off / $tot * 100) }}%"></div>
-            <div class="h-full bg-blue-500" style="width: {{ round($wfh / $tot * 100) }}%"></div>
-        </div>
+        @php $breakdown = $analytics['mode_breakdown'] ?? []; $totMode = max(1, array_sum($breakdown)); @endphp
+        @if(empty($breakdown))
+            <div class="mt-2 text-sm text-zinc-400">No attendance yet.</div>
+        @else
+            <div class="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm">
+                @foreach($breakdown as $mv => $count)
+                    @php $m = \App\Enums\AttendanceMode::tryFromValue($mv); @endphp
+                    <span class="inline-flex items-baseline gap-1">
+                        <span class="font-black text-zinc-900 dark:text-white">{{ $count }}</span>
+                        <span class="text-xs text-zinc-400">{{ $m->shortLabel() }}</span>
+                    </span>
+                @endforeach
+            </div>
+            <div class="mt-3 flex h-2 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                @foreach($breakdown as $mv => $count)
+                    <div class="h-full {{ \App\Enums\AttendanceMode::tryFromValue($mv)->dotClass() }}" style="width: {{ round($count / $totMode * 100) }}%"></div>
+                @endforeach
+            </div>
+        @endif
     </div>
     {{-- Break analytics --}}
     <div class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
@@ -279,9 +289,11 @@
                             <span>{{ $diff->h }}h {{ $diff->i }}m</span>
                         </div>
                     @endif
-                    <div class="flex items-center gap-1.5 mt-2 text-[10px] text-zinc-400">
-                        <flux:icon.map-pin class="size-3" />
-                        {{ strtoupper($todayAttendance->work_mode ?? 'office') }}
+                    @php $todayMode = \App\Enums\AttendanceMode::tryFromValue($todayAttendance->work_mode); @endphp
+                    <div class="mt-2">
+                        <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold {{ $todayMode->chipClass() }}">
+                            <flux:icon :name="$todayMode->icon()" class="size-3" /> {{ $todayMode->label() }}
+                        </span>
                     </div>
                 </div>
 
@@ -304,11 +316,11 @@
                 <div>
                     <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2">Work Mode</div>
                     <div class="grid grid-cols-2 gap-2">
-                        @foreach(['office' => ['icon' => 'building-office', 'label' => 'Office'], 'wfh' => ['icon' => 'home', 'label' => 'WFH']] as $val => $cfg)
-                            <button wire:click="$set('workMode', '{{ $val }}')"
-                                class="py-2.5 rounded-xl border text-sm font-bold transition-all {{ $workMode === $val ? 'bg-brand-600 border-brand-600 text-white' : 'bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-500 hover:border-zinc-300' }}">
-                                <flux:icon :name="$cfg['icon']" class="size-4 mx-auto mb-1" />
-                                {{ $cfg['label'] }}
+                        @foreach(\App\Enums\AttendanceMode::cases() as $mode)
+                            <button wire:click="$set('workMode', '{{ $mode->value }}')"
+                                class="py-2 rounded-xl border text-xs font-bold transition-all {{ $workMode === $mode->value ? 'bg-brand-600 border-brand-600 text-white' : 'bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-500 hover:border-zinc-300' }}">
+                                <flux:icon :name="$mode->icon()" class="size-4 mx-auto mb-1" />
+                                {{ $mode->shortLabel() }}
                             </button>
                         @endforeach
                     </div>
@@ -417,6 +429,11 @@
                                 : ['bg-white dark:bg-zinc-900 border-zinc-100 dark:border-zinc-800', '', 'text-zinc-400'],
                             default   => ['bg-white dark:bg-zinc-900 border-zinc-50 dark:border-zinc-800', '', 'text-zinc-300'],
                         };
+
+                        // Colour attended days by their attendance mode.
+                        if ($day['status'] === 'present' && ! empty($day['mode'])) {
+                            $dotColor = \App\Enums\AttendanceMode::tryFromValue($day['mode'])->dotClass();
+                        }
                     }
                 @endphp
                 <div class="aspect-square rounded-xl border flex flex-col items-center justify-center transition-all {{ $cellClass }}">
@@ -430,9 +447,17 @@
 
         {{-- Legend --}}
         <div class="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800 flex flex-wrap gap-3">
-            @foreach([['bg-emerald-500','Present'],['bg-amber-500','Late'],['bg-rose-400','Absent'],['bg-violet-500','Leave'],['bg-blue-500','Holiday'],['bg-brand-600','Today']] as [$c,$l])
+            @foreach([['bg-amber-500','Late'],['bg-rose-400','Absent'],['bg-violet-500','Leave'],['bg-blue-500','Holiday'],['bg-brand-600','Today']] as [$c,$l])
                 <div class="flex items-center gap-1.5 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">
                     <div class="w-2 h-2 rounded-full {{ $c }}"></div> {{ $l }}
+                </div>
+            @endforeach
+        </div>
+        {{-- Attendance-mode legend --}}
+        <div class="mt-2 flex flex-wrap gap-3">
+            @foreach(\App\Enums\AttendanceMode::cases() as $mode)
+                <div class="flex items-center gap-1.5 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">
+                    <div class="w-2 h-2 rounded-full {{ $mode->dotClass() }}"></div> {{ $mode->shortLabel() }}
                 </div>
             @endforeach
         </div>
@@ -474,7 +499,11 @@
                                 @else <span class="text-rose-400">--:--</span>
                                 @endif
                             </div>
-                            <div class="text-[9px] font-bold uppercase tracking-wider {{ $sc }}">{{ $sl }}</div>
+                            @php $rowMode = \App\Enums\AttendanceMode::tryFromValue($item->work_mode); @endphp
+                            <div class="flex items-center gap-1.5">
+                                <span class="text-[9px] font-bold uppercase tracking-wider {{ $sc }}">{{ $sl }}</span>
+                                <span class="inline-flex items-center rounded px-1 py-px text-[8px] font-bold uppercase tracking-wide {{ $rowMode->chipClass() }}">{{ $rowMode->shortLabel() }}</span>
+                            </div>
                         </div>
                         {{-- Hours --}}
                         <div class="text-right shrink-0">

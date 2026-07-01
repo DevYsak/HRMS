@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Attendance;
 
+use App\Enums\AttendanceMode;
 use App\Models\Attendance;
 use App\Models\AttendanceRegularisation;
 use App\Models\AttendanceSetting;
@@ -50,6 +51,7 @@ class AttendanceTracker extends Component
         'avg_break' => 0,
         'excess_breaks' => 0,
         'late_trend' => [],
+        'mode_breakdown' => [],
     ];
 
     /** Phase 6 AI insights (only when OPENAI_API_KEY is configured). */
@@ -170,6 +172,7 @@ class AttendanceTracker extends Component
                 'day' => $d->day,
                 'in_month' => $d->month === $start->month,
                 'status' => $status,
+                'mode' => isset($attendanceMap[$dateKey]) ? ($attendanceMap[$dateKey]->work_mode ?? 'office') : null,
                 'is_today' => $d->isToday(),
                 'is_holiday' => isset($holidayMap[$dateKey]),
             ];
@@ -289,6 +292,15 @@ class AttendanceTracker extends Component
         $wfhDays = $attendances->filter(fn ($a) => $a->work_mode === 'wfh' || $a->status === 'remote')->count();
         $officeDays = $attendances->count() - $wfhDays;
 
+        // Per-mode day counts across all supported attendance modes.
+        $modeBreakdown = [];
+        foreach (AttendanceMode::cases() as $mode) {
+            $count = $attendances->where('work_mode', $mode->value)->count();
+            if ($count > 0) {
+                $modeBreakdown[$mode->value] = $count;
+            }
+        }
+
         $excessBreaks = $attendances->where('break_minutes', '>', 60)->count();
         $withBreaks = $attendances->where('break_minutes', '>', 0);
         $avgBreak = $withBreaks->count() > 0 ? (int) round($withBreaks->avg('break_minutes')) : 0;
@@ -320,6 +332,7 @@ class AttendanceTracker extends Component
             'avg_break' => $avgBreak,
             'excess_breaks' => $excessBreaks,
             'late_trend' => $lateTrend,
+            'mode_breakdown' => $modeBreakdown,
         ];
     }
 
