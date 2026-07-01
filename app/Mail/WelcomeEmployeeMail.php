@@ -7,6 +7,7 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
+use Illuminate\Mail\Mailables\Headers;
 use Illuminate\Queue\SerializesModels;
 
 class WelcomeEmployeeMail extends Mailable
@@ -23,6 +24,12 @@ class WelcomeEmployeeMail extends Mailable
         return new Envelope(
             subject: 'Welcome to '.config('app.name').' — Your Login Credentials',
         );
+    }
+
+    public function headers(): Headers
+    {
+        // Lets the mail gate/logger trace this message back to its notification setting.
+        return new Headers(text: ['X-Notification-Key' => self::class]);
     }
 
     public function content(): Content

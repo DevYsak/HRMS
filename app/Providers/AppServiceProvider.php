@@ -4,10 +4,12 @@ namespace App\Providers;
 
 use App\Models\AttendanceRegularisation;
 use App\Models\DocumentAcknowledgement;
+use App\Models\EmailLog;
 use App\Models\Employee;
 use App\Models\EmployeeSalary;
 use App\Models\Incentive;
 use App\Models\LeaveRequest;
+use App\Models\NotificationSetting;
 use App\Models\OtRequest;
 use App\Models\Payroll;
 use App\Models\Payslip;
@@ -26,9 +28,13 @@ use App\Observers\PayslipObserver;
 use App\Observers\ReimbursementObserver;
 use App\Observers\UserObserver;
 use Carbon\CarbonImmutable;
+use Illuminate\Mail\Events\MessageSending;
+use Illuminate\Mail\Events\MessageSent;
 use Illuminate\Notifications\DatabaseNotification;
+use Illuminate\Notifications\Events\NotificationSending;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
@@ -60,6 +66,8 @@ class AppServiceProvider extends ServiceProvider
         $this->configureDefaults();
         $this->registerObservers();
         $this->configureNotificationPriority();
+        $this->configureNotificationGates();
+        $this->configureMailLogging();
 
         if (app()->environment('production')) {
             URL::forceScheme('https');
@@ -141,5 +149,99 @@ class AppServiceProvider extends ServiceProvider
                 ? $priority
                 : 'normal';
         });
+    }
+
+    /**
+     * Admin-controlled delivery gate. A single listener governs every
+     * Notification's channels via the notification_settings table.
+     *
+     * Fail-open by design: a missing/unknown setting always allows the send,
+     * so introducing this never silently stops an existing notification.
+     */
+    protected function configureNotificationGates(): void
+    {
+        Event::listen(function (NotificationSending $event): ?bool {
+            $setting = NotificationSetting::for($event->notification::class);
+
+            if (! $setting) {
+                return null; // no row → allow (preserves existing behaviour)
+            }
+
+            if ($event->channel === 'mail' && (! $setting->mail_enabled || ! $setting->is_automatic)) {
+                return false;
+            }
+
+            if ($event->channel === 'database' && ! $setting->database_enabled) {
+                return false;
+            }
+
+            return null;
+        });
+    }
+
+    /**
+     * Record every outgoing email in email_logs and gate admin-controlled
+     * Mailables (which bypass the notification system) by their stamped
+     * X-Notification-Key header.
+     */
+    protected function configureMailLogging(): void
+    {
+        Event::listen(function (MessageSending $event): ?bool {
+            $message = $event->message;
+            $key = $this->mailHeader($message, 'X-Notification-Key');
+
+            // Gate directly-sent Mailables (notifications are gated upstream).
+            if ($key !== null) {
+                $setting = NotificationSetting::for($key);
+                if ($setting && ! $setting->mail_enabled) {
+                    return false; // cancel send
+                }
+            }
+
+            $ids = [];
+            $subject = $message->getSubject();
+
+            foreach (($message->getTo() ?: []) as $address) {
+                $log = EmailLog::create([
+                    'notification_key' => $key,
+                    'to_email' => $address->getAddress(),
+                    'to_name' => $address->getName() ?: null,
+                    'subject' => $subject,
+                    'status' => 'sending',
+                ]);
+                $ids[] = $log->id;
+            }
+
+            if ($ids !== []) {
+                $message->getHeaders()->addTextHeader('X-Email-Log-Ids', implode(',', $ids));
+            }
+
+            return null;
+        });
+
+        Event::listen(function (MessageSent $event): void {
+            $ids = $this->mailHeader($event->message, 'X-Email-Log-Ids');
+
+            if ($ids === null) {
+                return;
+            }
+
+            EmailLog::whereIn('id', explode(',', $ids))
+                ->update(['status' => 'sent', 'sent_at' => now()]);
+        });
+    }
+
+    /**
+     * Read a single text header value off a Symfony email message, or null.
+     */
+    private function mailHeader(object $message, string $name): ?string
+    {
+        $headers = $message->getHeaders();
+
+        if (! $headers->has($name)) {
+            return null;
+        }
+
+        return $headers->get($name)?->getBodyAsString();
     }
 }

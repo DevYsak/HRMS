@@ -62,6 +62,7 @@ use App\Livewire\Performance\WarningLetters;
 use App\Livewire\Settings\DepartmentManager;
 use App\Livewire\Settings\EmploymentTypeManager;
 use App\Livewire\Settings\JobTitleManager;
+use App\Livewire\Settings\NotificationSettings;
 use App\Livewire\Settings\OnboardingTemplateManager;
 use App\Livewire\Settings\OnboardingTemplateTaskManager;
 use App\Livewire\Settings\RoleManager;
@@ -366,6 +367,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/work-modes', WorkModeManager::class)->name('work-modes');
         Route::get('/salary-cycles', SalaryCycleManager::class)->name('salary-cycles');
         Route::get('/job-titles', JobTitleManager::class)->name('job-titles');
+        Route::get('/notifications', NotificationSettings::class)->name('notifications');
         Route::get('/onboarding-templates', OnboardingTemplateManager::class)->name('onboarding-templates');
         Route::get('/onboarding-templates/{template}/tasks', OnboardingTemplateTaskManager::class)->name('onboarding-template-tasks');
     });

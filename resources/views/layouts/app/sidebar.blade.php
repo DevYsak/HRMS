@@ -492,6 +492,7 @@
                         @endif
                         @can('approve_leave')
                             <flux:sidebar.item :href="route('attendance.employees')" :current="request()->routeIs('attendance.employees')" wire:navigate>All Attendance</flux:sidebar.item>
+                            <flux:sidebar.item :href="route('attendance.biometric-summary')" :current="request()->routeIs('attendance.biometric-summary')" wire:navigate>Biometric Summary</flux:sidebar.item>
                         @endcan
                         @can('manage_settings')
                             <flux:sidebar.item :href="route('attendance.settings')" :current="request()->routeIs('attendance.settings')" wire:navigate>Attendance Settings</flux:sidebar.item>
@@ -683,6 +684,8 @@
                     </flux:sidebar.item>
                     <flux:sidebar.item :href="route('settings.job-titles')"
                         :current="request()->routeIs('settings.job-titles')" wire:navigate>Job Titles</flux:sidebar.item>
+                    <flux:sidebar.item :href="route('settings.notifications')"
+                        :current="request()->routeIs('settings.notifications')" wire:navigate>Notifications &amp; Email</flux:sidebar.item>
                 </flux:sidebar.group>
             </flux:sidebar.nav>
         @endcan
