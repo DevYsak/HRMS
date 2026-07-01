@@ -18,8 +18,9 @@ use App\Models\ShiftSetting;
 use App\Models\User;
 use App\Models\WorkMode;
 use App\Services\LeaveBalanceService;
+use App\Services\PasswordService;
 use App\Services\ProbationEngine;
-use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Validation\Rule;
@@ -33,6 +34,11 @@ class EmployeeEdit extends Component
     public Employee $employee;
 
     public string $activeTab = 'General';
+
+    // ── Temp-password reveal (shown once) ──
+    public bool $showCredentialsModal = false;
+
+    public string $generatedPassword = '';
 
     // ── Account ──────────────────────────────────────────────────────────────
     public string $name = '';
@@ -290,18 +296,20 @@ class EmployeeEdit extends Component
     {
         $this->authorize('update', $this->employee);
 
-        $tempPassword = 'Temp@'.rand(10000, 99999);
+        $user = $this->employee->user;
 
-        $this->employee->user->update(['password' => Hash::make($tempPassword)]);
+        // Secure random password (records history); replaces the old weak Temp@NNNNN.
+        $tempPassword = app(PasswordService::class)->resetPassword($user, null, Auth::user());
 
         try {
-            Mail::to($this->employee->user->email)->send(
-                new WelcomeEmployeeMail($this->employee->user, $tempPassword)
-            );
-            \Flux::toast('Temporary password set and emailed to '.$this->employee->user->email, variant: 'success');
+            Mail::to($user->email)->send(new WelcomeEmployeeMail($user, $tempPassword));
         } catch (\Throwable $e) {
-            \Flux::toast('Password reset but email failed: '.$e->getMessage(), variant: 'danger');
+            \Flux::toast('Password reset but email failed: '.$e->getMessage(), variant: 'warning');
         }
+
+        // Reveal once so HR/Admin can copy and share it.
+        $this->generatedPassword = $tempPassword;
+        $this->showCredentialsModal = true;
     }
 
     public function openEmailModal(): void

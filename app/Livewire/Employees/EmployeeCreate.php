@@ -20,6 +20,7 @@ use App\Models\User;
 use App\Models\WorkMode;
 use App\Notifications\WelcomeOnboardingNotification;
 use App\Services\OnboardingService;
+use App\Services\PasswordService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
@@ -35,6 +36,15 @@ use Livewire\WithFileUploads;
 class EmployeeCreate extends Component
 {
     use WithFileUploads;
+
+    // ── Post-create credential reveal (shown once to the admin) ──
+    public bool $showCredentialsModal = false;
+
+    public string $generatedPassword = '';
+
+    public string $newEmployeeName = '';
+
+    public string $newEmployeeEmail = '';
 
     // ── Account ──────────────────────────────────────────
     public string $name = '';
@@ -229,12 +239,16 @@ class EmployeeCreate extends Component
 
         $photoPath = $this->photo?->store('employee-photos', 'public');
 
+        $plainPassword = app(PasswordService::class)->generate();
+
         $user = User::create([
             'name' => $this->name,
             'email' => $this->email,
-            'password' => Hash::make('Password@123'),
+            'password' => Hash::make($plainPassword),
             'role' => UserRole::from($this->role),
         ]);
+
+        app(PasswordService::class)->recordHistory($user, $user->password, Auth::user());
 
         $user->employee()->create([
             'employee_id' => $this->employee_id,
@@ -289,21 +303,21 @@ class EmployeeCreate extends Component
         // Auto-complete account_create triggered onboarding tasks.
         app(OnboardingService::class)->autoComplete($user->employee, 'account_create', Auth::id());
 
-        // Send welcome email with credentials and onboarding notification
+        // Send welcome email with the real generated credentials. Admins can
+        // disable this via Settings > Notifications & Email (Welcome Email).
         try {
-            Mail::to($user->email)->send(new WelcomeEmployeeMail($user));
+            Mail::to($user->email)->send(new WelcomeEmployeeMail($user, $plainPassword));
         } catch (\Throwable) {
             // Mail failure should not block employee creation
         }
 
         $user->notify(new WelcomeOnboardingNotification($user->employee));
 
-        \Flux::toast(
-            text: "Employee {$this->name} added successfully. Welcome email sent to {$this->email}.",
-            variant: 'success',
-        );
-
-        $this->js("setTimeout(() => { window.location = '".route('employees.index')."'; }, 2500)");
+        // Reveal the generated password once so HR/Admin can copy it.
+        $this->newEmployeeName = $this->name;
+        $this->newEmployeeEmail = $this->email;
+        $this->generatedPassword = $plainPassword;
+        $this->showCredentialsModal = true;
 
         // Override the auto-assigned defaults (seeded by EmployeeObserver) with any
         // per-employee allocations entered on the form. updateOrCreate avoids

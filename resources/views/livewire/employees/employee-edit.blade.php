@@ -1045,4 +1045,27 @@
             </div>
         </div>
     @endif
+
+    {{-- One-time temporary-password reveal --}}
+    <flux:modal wire:model.self="showCredentialsModal" class="w-full max-w-md">
+        <div class="space-y-4"
+             x-data="{ copied: false, copy(t){ navigator.clipboard.writeText(t); this.copied = true; setTimeout(() => this.copied = false, 1500); } }">
+            <div class="flex items-center gap-2">
+                <flux:icon.key class="size-6 text-orange-500" />
+                <flux:heading size="lg">Temporary password set</flux:heading>
+            </div>
+            <flux:subheading>Emailed to {{ $employee->user->email }} (if the Welcome Email is enabled). Copy it to share directly.</flux:subheading>
+
+            <div class="flex items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-white/10 dark:bg-zinc-800/50">
+                <code class="rounded-lg bg-white px-2 py-1 font-mono text-sm text-zinc-900 dark:bg-zinc-900 dark:text-white">{{ $generatedPassword }}</code>
+                <button type="button" x-on:click="copy(@js($generatedPassword))"
+                    class="rounded-lg bg-orange-500 px-2.5 py-1 text-xs font-bold text-white transition hover:bg-orange-600"
+                    x-text="copied ? 'Copied!' : 'Copy'"></button>
+            </div>
+
+            <div class="flex justify-end">
+                <flux:button wire:click="$set('showCredentialsModal', false)" variant="primary">Done</flux:button>
+            </div>
+        </div>
+    </flux:modal>
 </flux:main>

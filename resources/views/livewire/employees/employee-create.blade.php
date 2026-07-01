@@ -243,4 +243,40 @@
             <flux:button type="submit" variant="primary" icon="user-plus">Create Employee</flux:button>
         </div>
     </form>
+
+    {{-- One-time credential reveal after creation --}}
+    <flux:modal wire:model.self="showCredentialsModal" class="w-full max-w-md">
+        <div class="space-y-4"
+             x-data="{ copied: false, copy(t){ navigator.clipboard.writeText(t); this.copied = true; setTimeout(() => this.copied = false, 1500); } }">
+            <div class="flex items-center gap-2">
+                <flux:icon.check-badge class="size-6 text-emerald-500" />
+                <flux:heading size="lg">Employee created</flux:heading>
+            </div>
+            <flux:subheading>Share these credentials with {{ $newEmployeeName }}. The password is shown only once.</flux:subheading>
+
+            <div class="space-y-2 rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-white/10 dark:bg-zinc-800/50">
+                <div class="flex items-center justify-between text-sm">
+                    <span class="text-zinc-500">Email</span>
+                    <span class="font-semibold text-zinc-900 dark:text-white">{{ $newEmployeeEmail }}</span>
+                </div>
+                <div class="flex items-center justify-between gap-3">
+                    <span class="text-sm text-zinc-500">Password</span>
+                    <div class="flex items-center gap-2">
+                        <code class="rounded-lg bg-white px-2 py-1 font-mono text-sm text-zinc-900 dark:bg-zinc-900 dark:text-white">{{ $generatedPassword }}</code>
+                        <button type="button" x-on:click="copy(@js($generatedPassword))"
+                            class="rounded-lg bg-orange-500 px-2.5 py-1 text-xs font-bold text-white transition hover:bg-orange-600"
+                            x-text="copied ? 'Copied!' : 'Copy'"></button>
+                    </div>
+                </div>
+            </div>
+
+            <p class="rounded-lg bg-amber-50 px-3 py-2 text-[11px] text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">
+                Copy it now — for security it can't be retrieved later. You can regenerate a new one from the employee's page.
+            </p>
+
+            <div class="flex justify-end">
+                <flux:button href="{{ route('employees.index') }}" wire:navigate variant="primary">Go to Employees</flux:button>
+            </div>
+        </div>
+    </flux:modal>
 </flux:main>
