@@ -20,6 +20,23 @@ use Illuminate\Support\Facades\Route;
 |   GET  /api/v1/holidays           public holidays (filter: year, country)
 |   GET  /api/v1/leaves             approved leaves (filter: from, to)
 |   POST /api/v1/attendance/sync    ingest engine-calculated daily summaries
+|
+| POST /api/v1/attendance/sync record fields (per record; batch under "records"
+| or a single bare record):
+|   employee_code*    int    device PIN
+|   date*             date
+|   first_punch       datetime|"HH:MM:SS"   day's first punch
+|   last_punch        datetime|"HH:MM:SS"   day's last punch
+|   first_punch_method  string   how the FIRST punch was verified
+|   last_punch_method   string   how the LAST punch was verified
+|   break_minutes, working_hours, late_minutes, early_leave_minutes,
+|   overtime_minutes, status, device_serial, raw_punch_count
+|
+| Punch method values (case-insensitive; see App\Enums\PunchMethod::fromDevice):
+|   Face          → "face" | "facial" | ZK verify 15/11
+|   ID Card       → "id_card" | "id" | "rfid" | "card" | ZK verify 3/4
+|   Physical Card → "physical_card" | "swipe" | "mag" | "mifare"
+|   Anything else (fingerprint, password, unknown) is stored as null → no chip.
 */
 Route::middleware('biometric.api')->prefix('v1')->name('api.v1.')->group(function () {
     Route::get('/employees', EmployeeSyncController::class)->name('employees');
