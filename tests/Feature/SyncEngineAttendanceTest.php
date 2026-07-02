@@ -173,3 +173,25 @@ test('a backfill with start after end fails cleanly', function () {
     $this->artisan('attendance:sync-engine', ['--from' => '2026-06-29', '--to' => '2026-06-27'])
         ->assertFailed();
 });
+
+test('a resilient rolling run continues past a failed day', function () {
+    $emp = Employee::factory()->create(['employee_code' => 34, 'manager_id' => null]);
+
+    Http::fake(function ($request) {
+        parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $q);
+        if (($q['date'] ?? '') === now()->toDateString()) {
+            return Http::response('down', 500); // today fails
+        }
+
+        return Http::response(['table' => [
+            ['emp_id' => '34', 'first_punch' => '09:00:00', 'last_punch' => '18:00:00',
+                'working_min' => 480, 'punch_count' => 2, 'status' => 'Completed Shift'],
+        ]], 200);
+    });
+
+    // Without --resilient this would abort on today; with it, the older days sync.
+    $this->artisan('attendance:sync-engine', ['--days' => 3, '--resilient' => true])
+        ->assertSuccessful();
+
+    expect(AttendanceDailySummary::where('employee_id', $emp->id)->count())->toBe(2);
+});

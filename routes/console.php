@@ -116,8 +116,9 @@ Schedule::command('attendance:sync-engine')
     ->withoutOverlapping()
     ->runInBackground();
 
-// Nightly catch-up: re-sync the last 2 days (handles late punches / corrections) → 23:50 IST
-Schedule::command('attendance:sync-engine --days=2')
+// Nightly catch-up: re-sync the last 14 days so short engine/network outages
+// or late corrections self-heal without a manual backfill → 23:50 IST
+Schedule::command('attendance:sync-engine --days=14 --resilient')
     ->dailyAt('23:50')
     ->withoutOverlapping()
     ->runInBackground();

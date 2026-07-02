@@ -23,7 +23,8 @@ class SyncEngineAttendance extends Command
                             {--date= : End date to sync (Y-m-d); defaults to today}
                             {--days=1 : Number of days back to sync, ending at --date}
                             {--from= : Backfill start date (Y-m-d); enables full-range mode}
-                            {--to= : Backfill end date (Y-m-d); defaults to today}';
+                            {--to= : Backfill end date (Y-m-d); defaults to today}
+                            {--resilient : Continue past a failed day instead of aborting (implied by --from)}';
 
     protected $description = 'Pull computed daily attendance from the Python biometric engine into HRMS.';
 
@@ -38,6 +39,7 @@ class SyncEngineAttendance extends Command
         }
 
         $isBackfill = (bool) $this->option('from');
+        $resilient = $isBackfill || $this->option('resilient');
         $totalSynced = 0;
         $totalSkipped = 0;
         $failedDates = [];
@@ -51,9 +53,9 @@ class SyncEngineAttendance extends Command
             if ($result['error'] !== null) {
                 $failedDates[$date] = $result['error'];
 
-                // Rolling mode preserves the original fail-fast behaviour so the
-                // scheduler surfaces an unreachable engine immediately.
-                if (! $isBackfill) {
+                // Non-resilient (rolling) runs preserve the original fail-fast
+                // behaviour so the scheduler surfaces an unreachable engine.
+                if (! $resilient) {
                     $this->error("  {$date}: {$result['error']}");
 
                     return self::FAILURE;
