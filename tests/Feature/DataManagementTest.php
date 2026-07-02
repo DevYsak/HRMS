@@ -59,6 +59,36 @@ test('deleteEmployee refuses to delete a super admin', function () {
     expect(Employee::find($target->id))->not->toBeNull();
 });
 
+test('bulkDeleteEmployees deletes many and skips protected accounts', function () {
+    $actor = purgeAdmin();
+    $e1 = Employee::factory()->create();
+    $e2 = Employee::factory()->create();
+    $admin = Employee::factory()->create();
+    $admin->user->update(['role' => UserRole::SuperAdmin]);
+
+    $result = app(DataPurgeService::class)->bulkDeleteEmployees([$e1->id, $e2->id, $admin->id], $actor);
+
+    expect($result['deleted'])->toBe(2);
+    expect($result['skipped'])->toBe(1);
+    expect(Employee::find($e1->id))->toBeNull();
+    expect(Employee::find($e2->id))->toBeNull();
+    expect(Employee::find($admin->id))->not->toBeNull();
+});
+
+test('deletableEmployees excludes super admins and the actor', function () {
+    $actor = purgeAdmin();
+    $actorEmp = Employee::factory()->create(['user_id' => $actor->id]);
+    $regular = Employee::factory()->create();
+    $sa = Employee::factory()->create();
+    $sa->user->update(['role' => UserRole::SuperAdmin]);
+
+    $ids = app(DataPurgeService::class)->deletableEmployees($actor)->pluck('id');
+
+    expect($ids->all())->toContain($regular->id);
+    expect($ids->all())->not->toContain($actorEmp->id);
+    expect($ids->all())->not->toContain($sa->id);
+});
+
 test('super admin can open data management; others cannot', function () {
     Livewire::actingAs(purgeAdmin())->test(DataManagement::class)->assertSee('Data Management');
 

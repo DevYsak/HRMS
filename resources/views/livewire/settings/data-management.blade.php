@@ -37,24 +37,50 @@
         </div>
     </div>
 
-    {{-- Delete one employee --}}
+    {{-- Employees --}}
     <div class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-zinc-900">
-        <h3 class="mb-1 text-sm font-bold text-zinc-900 dark:text-white">Delete a single employee (everywhere)</h3>
-        <p class="mb-3 text-xs text-zinc-400">Removes the employee, their user account, and all their attendance, leave, overtime, payroll, documents and notifications. Super Admins and your own account are protected.</p>
+        <h3 class="mb-1 text-sm font-bold text-zinc-900 dark:text-white">Employees</h3>
+        <p class="mb-3 text-xs text-zinc-400">Permanently removes the employee, their user account, and all their data (attendance, leave, overtime, payroll, documents, notifications). Super Admins and your own account are protected.</p>
 
-        <flux:input wire:model.live.debounce.300ms="employeeSearch" icon="magnifying-glass" placeholder="Search by name or email…" size="sm" class="max-w-md" />
+        {{-- Bulk: delete all --}}
+        <div class="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-rose-50 px-4 py-3 dark:bg-rose-950/20">
+            <div class="text-sm text-rose-700 dark:text-rose-300">
+                <b>{{ number_format($deletableCount) }}</b> employee(s) can be deleted (excludes Super Admins &amp; you).
+            </div>
+            <flux:button
+                wire:click="deleteAllEmployees"
+                wire:confirm.prompt="Permanently delete ALL {{ number_format($deletableCount) }} employees and their data? This cannot be undone. Type DELETE to confirm.|DELETE"
+                variant="danger" size="sm" icon="trash" :disabled="$deletableCount === 0">
+                Delete all employees
+            </flux:button>
+        </div>
+
+        {{-- Search + bulk-select --}}
+        <div class="flex flex-wrap items-center justify-between gap-2">
+            <flux:input wire:model.live.debounce.300ms="employeeSearch" icon="magnifying-glass" placeholder="Search by name or email…" size="sm" class="max-w-md" />
+            @if(count($selected) > 0)
+                <flux:button
+                    wire:click="deleteSelected"
+                    wire:confirm.prompt="Permanently delete {{ count($selected) }} selected employee(s) and their data? Type DELETE to confirm.|DELETE"
+                    variant="danger" size="sm" icon="trash">Delete selected ({{ count($selected) }})</flux:button>
+            @endif
+        </div>
 
         @if($employeeSearch !== '')
             <div class="mt-3 divide-y divide-zinc-100 rounded-xl border border-zinc-200 dark:divide-white/5 dark:border-white/10">
                 @forelse($employees as $emp)
                     <div class="flex items-center justify-between gap-3 px-4 py-2.5">
-                        <div class="min-w-0">
-                            <div class="truncate text-sm font-semibold text-zinc-900 dark:text-white">{{ $emp->user?->name ?? 'Employee #'.$emp->id }}</div>
-                            <div class="truncate text-xs text-zinc-400">{{ $emp->user?->email }} · {{ $emp->employee_id }}</div>
-                        </div>
+                        <label class="flex min-w-0 items-center gap-3">
+                            <input type="checkbox" wire:model.live="selected" value="{{ $emp->id }}"
+                                class="rounded border-zinc-300 text-rose-500 focus:ring-rose-400">
+                            <span class="min-w-0">
+                                <span class="block truncate text-sm font-semibold text-zinc-900 dark:text-white">{{ $emp->user?->name ?? 'Employee #'.$emp->id }}</span>
+                                <span class="block truncate text-xs text-zinc-400">{{ $emp->user?->email }} · {{ $emp->employee_id }}</span>
+                            </span>
+                        </label>
                         <flux:button
                             wire:click="deleteEmployee({{ $emp->id }})"
-                            wire:confirm.prompt="Permanently delete {{ $emp->user?->name ?? 'this employee' }} and ALL their data?\n\nThis cannot be undone. Type DELETE to confirm.|DELETE"
+                            wire:confirm.prompt="Permanently delete {{ $emp->user?->name ?? 'this employee' }} and ALL their data? Type DELETE to confirm.|DELETE"
                             variant="danger" size="xs" icon="trash">Delete</flux:button>
                     </div>
                 @empty

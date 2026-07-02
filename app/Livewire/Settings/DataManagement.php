@@ -15,9 +15,33 @@ class DataManagement extends Component
 {
     public string $employeeSearch = '';
 
+    /** @var array<int, int> selected employee ids */
+    public array $selected = [];
+
     public function mount(): void
     {
         abort_unless(auth()->user()?->isSuperAdmin(), 403);
+    }
+
+    public function deleteSelected(DataPurgeService $service): void
+    {
+        abort_unless(auth()->user()?->isSuperAdmin(), 403);
+
+        $result = $service->bulkDeleteEmployees($this->selected, auth()->user());
+        $this->selected = [];
+
+        \Flux::toast("Deleted {$result['deleted']} employee(s)".($result['skipped'] ? ", skipped {$result['skipped']} protected" : '').'.', variant: 'success');
+    }
+
+    public function deleteAllEmployees(DataPurgeService $service): void
+    {
+        abort_unless(auth()->user()?->isSuperAdmin(), 403);
+
+        $ids = $service->deletableEmployees(auth()->user())->pluck('id');
+        $result = $service->bulkDeleteEmployees($ids, auth()->user());
+        $this->selected = [];
+
+        \Flux::toast("Deleted {$result['deleted']} employee(s)".($result['skipped'] ? ", skipped {$result['skipped']} protected" : '').'.', variant: 'success');
     }
 
     public function purge(string $domain, DataPurgeService $service): void
@@ -61,6 +85,7 @@ class DataManagement extends Component
         return view('livewire.settings.data-management', [
             'domains' => app(DataPurgeService::class)->counts(),
             'employees' => $employees,
+            'deletableCount' => app(DataPurgeService::class)->deletableEmployees(auth()->user())->count(),
         ])->layout('layouts.app', ['title' => 'Data Management']);
     }
 }

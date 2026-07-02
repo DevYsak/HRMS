@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Employee;
 use App\Models\User;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -166,6 +167,52 @@ class DataPurgeService
         });
 
         Log::warning("[DataPurge] {$actor->email} permanently deleted employee #{$employeeId} (user #{$userId}).");
+    }
+
+    /**
+     * Employees that may be bulk-deleted — everyone except Super Admins and the
+     * actor's own account. (Employees without a user account are deletable.)
+     *
+     * @return Collection<int, Employee>
+     */
+    public function deletableEmployees(User $actor): Collection
+    {
+        return Employee::with('user')->get()->reject(function (Employee $e) use ($actor) {
+            $u = $e->user;
+
+            return $u && ($u->isSuperAdmin() || $u->id === $actor->id);
+        })->values();
+    }
+
+    /**
+     * Permanently delete many employees (cascade each). Protected accounts are
+     * skipped, not errored.
+     *
+     * @param  iterable<int|string>  $employeeIds
+     * @return array{deleted:int, skipped:int}
+     */
+    public function bulkDeleteEmployees(iterable $employeeIds, User $actor): array
+    {
+        $deleted = 0;
+        $skipped = 0;
+
+        foreach ($employeeIds as $id) {
+            $employee = Employee::with('user')->find($id);
+            if (! $employee) {
+                continue;
+            }
+
+            try {
+                $this->deleteEmployee($employee, $actor);
+                $deleted++;
+            } catch (\DomainException) {
+                $skipped++;
+            }
+        }
+
+        Log::warning("[DataPurge] {$actor->email} bulk-deleted {$deleted} employee(s), skipped {$skipped}.");
+
+        return ['deleted' => $deleted, 'skipped' => $skipped];
     }
 
     /**
