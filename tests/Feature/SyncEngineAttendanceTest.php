@@ -126,3 +126,50 @@ test('an unsupported verify mode is stored as null rather than a bad chip', func
     expect($att->check_in_method)->toBeNull();
     expect($att->check_out_method)->toBeNull();
 });
+
+test('a backfill syncs every date in the --from/--to range', function () {
+    $emp = Employee::factory()->create(['employee_code' => 31, 'manager_id' => null]);
+
+    Http::fake(function ($request) {
+        return Http::response(['table' => [
+            ['emp_id' => '31', 'first_punch' => '09:00:00', 'last_punch' => '18:00:00',
+                'working_min' => 480, 'break_min' => 0, 'overtime_min' => 0, 'late' => false, 'delay_min' => 0,
+                'punch_count' => 2, 'status' => 'Completed Shift'],
+        ]], 200);
+    });
+
+    $this->artisan('attendance:sync-engine', ['--from' => '2026-06-27', '--to' => '2026-06-29'])
+        ->assertSuccessful();
+
+    expect(AttendanceDailySummary::where('employee_id', $emp->id)->count())->toBe(3);
+    expect(Attendance::where('employee_id', $emp->id)->count())->toBe(3);
+});
+
+test('a backfill continues past a failed day instead of aborting', function () {
+    $emp = Employee::factory()->create(['employee_code' => 32, 'manager_id' => null]);
+
+    Http::fake(function ($request) {
+        parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $q);
+        if (($q['date'] ?? '') === '2026-06-28') {
+            return Http::response('boom', 500);
+        }
+
+        return Http::response(['table' => [
+            ['emp_id' => '32', 'first_punch' => '09:00:00', 'last_punch' => '18:00:00',
+                'working_min' => 480, 'punch_count' => 2, 'status' => 'Completed Shift'],
+        ]], 200);
+    });
+
+    $this->artisan('attendance:sync-engine', ['--from' => '2026-06-27', '--to' => '2026-06-29'])
+        ->assertSuccessful();
+
+    // 27th and 29th synced; 28th skipped because the engine errored that day.
+    expect(AttendanceDailySummary::where('employee_id', $emp->id)->count())->toBe(2);
+});
+
+test('a backfill with start after end fails cleanly', function () {
+    Http::fake(['*/api/dashboard*' => Http::response(['table' => []], 200)]);
+
+    $this->artisan('attendance:sync-engine', ['--from' => '2026-06-29', '--to' => '2026-06-27'])
+        ->assertFailed();
+});
