@@ -202,7 +202,11 @@
       "Bash(vendor/bin/pint tests/Feature/AttendanceModeTest.php --format agent)",
       "Bash(vendor/bin/pint app/Support/UserAgent.php app/Services/AttendanceService.php app/Models/Attendance.php app/Livewire/Attendance/AttendanceTracker.php tests/Unit/UserAgentTest.php tests/Feature/AttendanceModeTest.php database/migrations/2026_07_02_160222_add_punch_user_agents_to_attendances_table.php --format agent)",
       "Bash(vendor/bin/pint app/Services/AttendanceService.php --format agent)",
-      "Bash(vendor/bin/pint app/Enums/PunchMethod.php app/Services/Biometric/EngineAttendanceSyncService.php app/Http/Controllers/Api/V1/AttendanceSyncController.php app/Http/Requests/Api/V1/AttendanceSyncRequest.php app/Models/Attendance.php app/Models/AttendanceDailySummary.php app/Livewire/Attendance/AttendanceTracker.php tests/Unit/PunchMethodTest.php tests/Feature/SyncEngineAttendanceTest.php tests/Feature/BiometricAttendanceSyncApiTest.php database/migrations/2026_07_02_161612_add_punch_methods_to_attendance_tables.php --format agent)"
+      "Bash(vendor/bin/pint app/Enums/PunchMethod.php app/Services/Biometric/EngineAttendanceSyncService.php app/Http/Controllers/Api/V1/AttendanceSyncController.php app/Http/Requests/Api/V1/AttendanceSyncRequest.php app/Models/Attendance.php app/Models/AttendanceDailySummary.php app/Livewire/Attendance/AttendanceTracker.php tests/Unit/PunchMethodTest.php tests/Feature/SyncEngineAttendanceTest.php tests/Feature/BiometricAttendanceSyncApiTest.php database/migrations/2026_07_02_161612_add_punch_methods_to_attendance_tables.php --format agent)",
+      "Bash(vendor/bin/pint routes/api.php --format agent)",
+      "Bash(grep -n 'protected function computeStats\\\\|$start, $end\\\\] = match\\\\|$this->stats = \\\\[\\\\|late_trend'\\\\'' => $lateTrend' app/Livewire/Attendance/AttendanceTracker.php)",
+      "Bash(vendor/bin/pint app/Models/Task.php app/Livewire/Attendance/AttendanceTracker.php database/factories/TaskFactory.php database/migrations/2026_07_02_163127_create_tasks_table.php --format agent)",
+      "Bash(vendor/bin/pint tests/Feature/AttendanceTasksTest.php --format agent)"
     ],
     "additionalDirectories": [
       "C:\\Users\\91937\\Desktop\\xamp\\htdocs\\mahaigr-v2\\includes"

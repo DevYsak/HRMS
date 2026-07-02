@@ -363,6 +363,91 @@
     </div>
 </div>
 
+{{-- ═══════════════════════════════════════════════
+     TODAY'S TASKS
+═══════════════════════════════════════════════ --}}
+@php
+    $taskDone = collect($tasks)->whereNotNull('completed_at')->count();
+    $taskTotal = count($tasks);
+    $taskPct = $taskTotal > 0 ? round($taskDone / $taskTotal * 100) : 0;
+@endphp
+<div class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+    <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-2">
+            <span class="inline-flex size-8 items-center justify-center rounded-xl bg-brand-50 text-brand-600 dark:bg-brand-900/30">
+                <flux:icon.clipboard-document-check class="size-4" />
+            </span>
+            <div>
+                <div class="text-sm font-bold text-zinc-900 dark:text-white">Today's Tasks</div>
+                <div class="text-[11px] text-zinc-400">{{ $taskDone }} of {{ $taskTotal }} done today · {{ $tasksCompletedPeriod }} completed this period</div>
+            </div>
+        </div>
+        @if($taskTotal > 0)
+            <div class="flex items-center gap-2">
+                <div class="h-1.5 w-24 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                    <div class="h-full rounded-full bg-emerald-500 transition-all duration-700" style="width: {{ $taskPct }}%"></div>
+                </div>
+                <span class="text-xs font-black tabular-nums text-emerald-600">{{ $taskPct }}%</span>
+            </div>
+        @endif
+    </div>
+
+    {{-- Add task --}}
+    <form wire:submit.prevent="addTask" class="mb-3 flex flex-wrap items-center gap-2">
+        <input type="text" wire:model="newTask" placeholder="Add a task for today…" maxlength="255"
+            class="min-w-0 flex-1 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 placeholder:text-zinc-400 focus:border-brand-400 focus:ring-0 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">
+        <select wire:model="newTaskPriority"
+            class="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+        </select>
+        <button type="submit"
+            class="inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-brand-700 active:scale-95">
+            <flux:icon.plus class="size-4" /> Add
+        </button>
+    </form>
+    @error('newTask') <p class="mb-2 text-xs text-rose-500">{{ $message }}</p> @enderror
+
+    {{-- Task list --}}
+    <div class="space-y-1.5">
+        @forelse($tasks as $task)
+            @php
+                $done = $task->completed_at !== null;
+                $prio = match($task->priority) {
+                    'high' => ['text-rose-600 dark:text-rose-400', 'High'],
+                    'low' => ['text-zinc-400', 'Low'],
+                    default => ['text-amber-600 dark:text-amber-400', 'Medium'],
+                };
+            @endphp
+            <div wire:key="task-{{ $task->id }}"
+                class="group flex items-center gap-3 rounded-xl border px-3 py-2.5 transition
+                    {{ $done ? 'border-transparent bg-zinc-50 dark:bg-zinc-800/40' : 'border-zinc-100 hover:border-zinc-200 dark:border-zinc-800' }}">
+                <button type="button" wire:click="toggleTask({{ $task->id }})"
+                    class="flex size-5 shrink-0 items-center justify-center rounded-md border transition
+                        {{ $done ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-zinc-300 text-transparent hover:border-emerald-400 dark:border-zinc-600' }}">
+                    <flux:icon.check class="size-3.5" />
+                </button>
+                <span class="flex-1 truncate text-sm {{ $done ? 'text-zinc-400 line-through' : 'text-zinc-800 dark:text-zinc-100' }}">{{ $task->title }}</span>
+                @unless($done)
+                    <span class="shrink-0 text-[10px] font-bold uppercase tracking-wider {{ $prio[0] }}">{{ $prio[1] }}</span>
+                @else
+                    <span class="shrink-0 text-[10px] text-zinc-400">{{ $task->completed_at->format('h:i A') }}</span>
+                @endunless
+                <button type="button" wire:click="deleteTask({{ $task->id }})" wire:confirm="Delete this task?"
+                    class="shrink-0 text-zinc-300 opacity-0 transition hover:text-rose-500 group-hover:opacity-100">
+                    <flux:icon.trash class="size-4" />
+                </button>
+            </div>
+        @empty
+            <div class="flex flex-col items-center justify-center py-8 text-center text-zinc-300 dark:text-zinc-600">
+                <flux:icon.clipboard-document-list class="mb-2 size-9" />
+                <p class="text-xs">No tasks yet — add your first one above.</p>
+            </div>
+        @endforelse
+    </div>
+</div>
+
 {{-- ─── ATTENDANCE ANALYTICS ─── --}}
 <div class="grid grid-cols-1 gap-4 lg:grid-cols-4 mb-5">
     {{-- Attendance score --}}

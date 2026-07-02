@@ -11,6 +11,7 @@ use App\Models\BreakLog;
 use App\Models\LeaveRequest;
 use App\Models\PublicHoliday;
 use App\Models\ShiftSetting;
+use App\Models\Task;
 use App\Models\User;
 use App\Notifications\AttendanceRegularisationNotification;
 use App\Notifications\RegularisationReviewedNotification;
@@ -86,6 +87,17 @@ class AttendanceTracker extends Component
 
     /** Chronological punch/break events for today. */
     public array $todayTimeline = [];
+
+    /** Today's tasks for the logged-in employee. */
+    public $tasks = [];
+
+    /** New-task form fields. */
+    public string $newTask = '';
+
+    public string $newTaskPriority = 'medium';
+
+    /** Tasks completed within the selected stats period. */
+    public int $tasksCompletedPeriod = 0;
 
     // Regularisation form fields
     public string $regDate = '';
@@ -211,6 +223,61 @@ class AttendanceTracker extends Component
         // 9. This-week summary + today's punch/break timeline
         $this->weekSummary = $this->buildWeekSummary($employee);
         $this->todayTimeline = $this->buildTodayTimeline();
+
+        // 10. Today's tasks
+        $this->loadTasks($employee);
+    }
+
+    protected function loadTasks($employee): void
+    {
+        $this->tasks = Task::where('employee_id', $employee->id)
+            ->whereDate('date', Carbon::today()->toDateString())
+            ->orderByRaw('completed_at is null desc')
+            ->orderByDesc('id')
+            ->get();
+    }
+
+    public function addTask(): void
+    {
+        $employee = Auth::user()->employee;
+        if (! $employee) {
+            return;
+        }
+
+        $this->validate([
+            'newTask' => ['required', 'string', 'max:255'],
+            'newTaskPriority' => ['required', 'in:low,medium,high'],
+        ]);
+
+        Task::create([
+            'employee_id' => $employee->id,
+            'title' => trim($this->newTask),
+            'priority' => $this->newTaskPriority,
+            'date' => Carbon::today()->toDateString(),
+        ]);
+
+        $this->newTask = '';
+        $this->newTaskPriority = 'medium';
+        $this->loadData();
+    }
+
+    public function toggleTask(int $taskId): void
+    {
+        $employee = Auth::user()->employee;
+        $task = Task::where('employee_id', $employee?->id)->find($taskId);
+        if (! $task) {
+            return;
+        }
+
+        $task->update(['completed_at' => $task->completed_at ? null : Carbon::now()]);
+        $this->loadData();
+    }
+
+    public function deleteTask(int $taskId): void
+    {
+        $employee = Auth::user()->employee;
+        Task::where('employee_id', $employee?->id)->where('id', $taskId)->delete();
+        $this->loadData();
     }
 
     /**
@@ -363,6 +430,11 @@ class AttendanceTracker extends Component
             'year' => [Carbon::now()->startOfYear(), Carbon::now()->endOfMonth()],
             default => [Carbon::now()->startOfMonth(), Carbon::now()->endOfMonth()],
         };
+
+        $this->tasksCompletedPeriod = Task::where('employee_id', $employee->id)
+            ->completed()
+            ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
+            ->count();
 
         $attendances = Attendance::where('employee_id', $employee->id)
             ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
