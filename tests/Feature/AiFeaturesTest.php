@@ -51,17 +51,17 @@ test('attendance AI insights are gated by the OpenAI key', function () {
 
     config(['openai.api_key' => null]);
     Livewire::test(AttendanceTracker::class)
-        ->assertSet('aiEnabled', false)
-        ->assertDontSee('AI Attendance Insights');
+        ->assertSet('aiEnabled', false);
 
     config(['openai.api_key' => 'test-key']);
     enableAiSettings();
     OpenAI::fake([
         CreateResponse::fake(['choices' => [['message' => ['content' => 'FAKEINSIGHT']]]]),
     ]);
+    // The insights panel was removed from the redesigned attendance page,
+    // but the AI capability on the component remains functional.
     Livewire::test(AttendanceTracker::class)
         ->assertSet('aiEnabled', true)
-        ->assertSee('AI Attendance Insights')
         ->call('generateAiInsight')
         ->assertSet('aiInsight', 'FAKEINSIGHT');
 });

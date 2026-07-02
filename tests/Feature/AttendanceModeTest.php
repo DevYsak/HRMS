@@ -128,18 +128,16 @@ test('the tracker shows the multi-mode breakdown and legend', function () {
 
     Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
         ->assertOk()
-        ->assertSee('Work Pattern')
-        ->assertSee('Hybrid')
-        ->assertSee('Client'); // mode legend always renders every mode
+        ->assertSee('Hybrid Summary')     // Office · WFH · Hybrid Summary panel
+        ->assertSee('Hybrid');            // the logged mode is listed
 });
 
 test('the tracker supports a weekly filter and renders the analytics charts', function () {
     $employee = Employee::factory()->create();
 
     Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
-        ->assertSee('This Week')
         ->assertSee('Working Hours Trend')
-        ->assertSee('Work Mode Split')
+        ->assertSee('Attendance Heatmap')
         ->assertSee('Late Arrival Trend')
         ->set('statsPeriod', 'this_week')
         ->assertOk()

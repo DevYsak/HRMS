@@ -40,7 +40,7 @@ test('my attendance page shows the Phase 6 analytics panels', function () {
     Livewire::test(AttendanceTracker::class)
         ->assertSee('Attendance Score')
         ->assertSee('Shift Compliance')
-        ->assertSee('Work Pattern')
-        ->assertSee('Break Analytics')
+        ->assertSee('Working Hours Trend')
+        ->assertSee('Attendance Heatmap')
         ->assertSee('Late Arrival Trend');
 });

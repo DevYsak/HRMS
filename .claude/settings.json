@@ -209,7 +209,8 @@
       "Bash(vendor/bin/pint tests/Feature/AttendanceTasksTest.php --format agent)",
       "Bash(vendor/bin/pint app/Livewire/Employees/EmployeeEdit.php tests/Feature/EmployeeEditTest.php --format agent)",
       "Bash(vendor/bin/pint app/Console/Commands/SyncEngineAttendance.php tests/Feature/SyncEngineAttendanceTest.php --format agent)",
-      "Bash(vendor/bin/pint app/Console/Commands/SyncEngineAttendance.php --format agent)"
+      "Bash(vendor/bin/pint app/Console/Commands/SyncEngineAttendance.php --format agent)",
+      "Bash(vendor/bin/pint tests/Feature/AttendanceExperienceTest.php tests/Feature/AttendanceModeTest.php tests/Feature/AiFeaturesTest.php --format agent)"
     ],
     "additionalDirectories": [
       "C:\\Users\\91937\\Desktop\\xamp\\htdocs\\mahaigr-v2\\includes"
