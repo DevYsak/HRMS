@@ -33,14 +33,15 @@ import sqlite3
 # Path to the engine's SQLite DB. Override with env ADMS_DB if it isn't in CWD.
 DB_PATH = os.environ.get("ADMS_DB", "attendance.db")
 
-# Detected once on first call; hard-set these if detection guesses wrong.
-_SCHEMA = {"table": None, "pin": None, "time": None, "verify": None}
+# This engine's punches schema (from adms_log.py init_db). If your build differs,
+# just correct these four names — detection below is only a fallback.
+_SCHEMA = {"table": "punches", "pin": "emp_id", "time": "punch_dt", "verify": "verify"}
 
-# Candidate column names seen across ZKTeco / ADMS schemas.
-_PIN_COLS = ("pin", "userid", "user_id", "device_user_id", "enrollid",
-             "enroll_id", "badgenumber", "emp_id", "empid", "employee_id")
-_TIME_COLS = ("time", "punch_time", "punched_at", "checktime", "check_time",
-              "timestamp", "datetime", "log_time", "punchtime", "att_time")
+# Candidate column names seen across ZKTeco / ADMS schemas (fallback detection).
+_PIN_COLS = ("emp_id", "pin", "userid", "user_id", "device_user_id", "enrollid",
+             "enroll_id", "badgenumber", "empid", "employee_id")
+_TIME_COLS = ("punch_dt", "time", "punch_time", "punched_at", "checktime",
+              "check_time", "timestamp", "datetime", "log_time", "punchtime")
 
 
 def _detect(con):
