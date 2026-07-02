@@ -24,7 +24,7 @@ class EmployeeImport extends Component
 
     public string $mode = 'skip';           // skip | update
 
-    public bool $sendWelcome = true;
+    public bool $sendWelcome = false;
 
     /** @var array{rows:array, summary:array} */
     public array $parsed = [];

@@ -5,6 +5,7 @@ use App\Livewire\Employees\EmployeeImport;
 use App\Mail\WelcomeEmployeeMail;
 use App\Models\Employee;
 use App\Models\EmployeeImportLog;
+use App\Models\NotificationSetting;
 use App\Models\User;
 use App\Services\EmployeeImportService;
 use App\Services\SpreadsheetService;
@@ -124,7 +125,41 @@ test('an import log records the run', function () {
     expect(EmployeeImportLog::where('filename', 'run.xlsx')->where('imported', 1)->exists())->toBeTrue();
 });
 
-test('new hires receive a welcome email with generated credentials when enabled', function () {
+test('import does not email new hires by default', function () {
+    Mail::fake();
+    $actor = User::factory()->create();
+    $service = app(EmployeeImportService::class);
+
+    $parsed = $service->parse([
+        ['employee_id' => 'EMP-N', 'first_name' => 'Silent', 'email' => 'silent@example.com', 'joining_date' => '2026-07-01'],
+    ]);
+    $service->import($parsed, 'skip', $actor); // no sendWelcome → default off
+
+    Mail::assertNothingSent();
+});
+
+test('a disabled Welcome Email setting suppresses import emails even when opted in', function () {
+    Mail::fake();
+    NotificationSetting::create([
+        'key' => WelcomeEmployeeMail::class,
+        'label' => 'Welcome Email',
+        'group' => 'Onboarding',
+        'mail_enabled' => false,
+        'database_enabled' => true,
+        'is_automatic' => true,
+    ]);
+
+    $actor = User::factory()->create();
+    $service = app(EmployeeImportService::class);
+    $parsed = $service->parse([
+        ['employee_id' => 'EMP-D', 'first_name' => 'Blocked', 'email' => 'blocked@example.com', 'joining_date' => '2026-07-01'],
+    ]);
+    $service->import($parsed, 'skip', $actor, null, true); // opted in, but toggle off
+
+    Mail::assertNothingSent();
+});
+
+test('new hires receive a welcome email with generated credentials when opted in', function () {
     Mail::fake();
     $actor = User::factory()->create();
     $service = app(EmployeeImportService::class);

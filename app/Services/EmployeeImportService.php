@@ -10,6 +10,7 @@ use App\Models\Employee;
 use App\Models\EmployeeImportLog;
 use App\Models\EmploymentType;
 use App\Models\JobTitle;
+use App\Models\NotificationSetting;
 use App\Models\ShiftSetting;
 use App\Models\User;
 use Illuminate\Support\Carbon;
@@ -226,7 +227,7 @@ class EmployeeImportService
      * Persist a parsed preview. Skips error rows; honours skip/update mode for
      * existing employees. All inserts run in one transaction (rollback on error).
      */
-    public function import(array $parsed, string $mode, User $actor, ?string $filename = null, bool $sendWelcome = true): EmployeeImportLog
+    public function import(array $parsed, string $mode, User $actor, ?string $filename = null, bool $sendWelcome = false): EmployeeImportLog
     {
         $mode = $mode === 'update' ? 'update' : 'skip';
         $imported = 0;
@@ -296,7 +297,11 @@ class EmployeeImportService
         }
 
         // Deliver credentials after commit so a rollback never emails a phantom user.
-        if ($sendWelcome) {
+        // Only when explicitly opted-in AND the Welcome Email is enabled in
+        // Settings > Notifications & Email (a disabled toggle wins).
+        $welcomeEnabled = NotificationSetting::for(WelcomeEmployeeMail::class)?->mail_enabled ?? true;
+
+        if ($sendWelcome && $welcomeEnabled) {
             foreach ($newlyCreated as $entry) {
                 try {
                     Mail::to($entry['user']->email)->send(new WelcomeEmployeeMail($entry['user'], $entry['plain']));
