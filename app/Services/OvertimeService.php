@@ -52,6 +52,58 @@ class OvertimeService
     }
 
     /**
+     * Auto-file a pending OT request from an attendance row whose net hours
+     * exceed the employee's OT threshold. Used when an approved regularisation
+     * corrects a day into overtime. Mirrors the Nexflow auto-sync: bypasses the
+     * manual OT window (this is a system-triggered path), duplicate-guarded, and
+     * left pending so HR still approves the actual overtime.
+     */
+    public function autoCreateFromAttendance(Attendance $attendance, string $context = 'approved regularisation'): ?OtRequest
+    {
+        $employee = $attendance->employee;
+
+        if (! $employee || ! $attendance->date) {
+            return null;
+        }
+
+        $threshold = $this->getThresholdForEmployee($employee);
+        $netHours = (float) $attendance->total_hours;
+        $otHours = round(max(0, $netHours - $threshold), 2);
+
+        if ($otHours <= 0) {
+            return null;
+        }
+
+        $workDate = $attendance->date->toDateString();
+
+        $alreadyLogged = OtRequest::where('employee_id', $employee->id)
+            ->where('work_date', $workDate)
+            ->whereIn('status', ['pending', 'approved'])
+            ->exists();
+
+        if ($alreadyLogged) {
+            return null;
+        }
+
+        // Derive a synthetic OT window from shift start + threshold, same as Nexflow.
+        $shiftStartHour = (int) ($employee->shift?->start_time ? date('H', strtotime($employee->shift->start_time)) : 9);
+        $otStartTime = sprintf('%02d:00', ($shiftStartHour + (int) $threshold) % 24);
+        $otEndTime = date('H:i', strtotime($otStartTime) + ((int) round($otHours * 60) * 60));
+
+        return OtRequest::create([
+            'employee_id' => $employee->id,
+            'attendance_id' => $attendance->id,
+            'work_date' => $workDate,
+            'start_time' => $otStartTime,
+            'end_time' => $otEndTime,
+            'requested_hours' => $otHours,
+            'reason' => "Auto-detected from {$context}: net {$netHours}h worked, {$otHours}h OT.",
+            'status' => 'pending',
+            'source' => 'regularisation',
+        ]);
+    }
+
+    /**
      * Approve an OT request and materialise the OvertimeRecord.
      */
     public function approve(OtRequest $request, int $reviewerId, ?string $comment = null): OvertimeRecord

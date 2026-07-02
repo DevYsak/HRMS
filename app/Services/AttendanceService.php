@@ -107,18 +107,21 @@ class AttendanceService
                 'reviewed_at' => now(),
             ]);
 
+            $checkIn = Carbon::parse($regularisation->requested_check_in);
+            $checkOut = Carbon::parse($regularisation->requested_check_out);
+
+            // Seed check_in/out on create so regularising a fully-absent day
+            // (no existing attendance row) doesn't violate the NOT NULL columns.
             $attendance = $regularisation->attendance
-                ?? Attendance::firstOrCreate([
-                    'employee_id' => $regularisation->employee_id,
-                    'date' => $regularisation->work_date,
-                ]);
+                ?? Attendance::firstOrCreate(
+                    ['employee_id' => $regularisation->employee_id, 'date' => $regularisation->work_date],
+                    ['check_in' => $checkIn, 'check_out' => $checkOut, 'status' => 'on_time', 'work_mode' => 'office'],
+                );
 
             if (! $regularisation->attendance_id) {
                 $regularisation->update(['attendance_id' => $attendance->id]);
             }
 
-            $checkIn = Carbon::parse($regularisation->requested_check_in);
-            $checkOut = Carbon::parse($regularisation->requested_check_out);
             $grossMinutes = $checkIn->diffInMinutes($checkOut);
             $netMinutes = max(0, $grossMinutes - ((int) $attendance->break_minutes));
 
@@ -131,6 +134,10 @@ class AttendanceService
                 'late_minutes' => 0,
                 'missing_checkout' => false,
             ]);
+
+            // If the corrected day now exceeds the OT threshold, auto-file a
+            // pending OT request so overtime is recalculated for HR to approve.
+            app(OvertimeService::class)->autoCreateFromAttendance($attendance->fresh(['employee.shift']));
 
             return $attendance->fresh();
         });
