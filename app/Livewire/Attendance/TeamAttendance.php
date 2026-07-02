@@ -5,6 +5,7 @@ namespace App\Livewire\Attendance;
 use App\Models\Attendance;
 use App\Models\AttendanceRegularisation;
 use App\Models\AuditLog;
+use App\Models\LeaveRequest;
 use App\Notifications\RegularisationReviewedNotification;
 use App\Services\AttendanceService;
 use Illuminate\Support\Carbon;
@@ -74,7 +75,8 @@ class TeamAttendance extends Component
         abort_unless(Auth::user()->canApproveLeave(), 403);
 
         $manager = Auth::user()->employee;
-        $teamIds = $manager ? $manager->subordinates->pluck('id')->toArray() : [];
+        $teamMembers = $manager ? $manager->subordinates()->with('user')->get() : collect();
+        $teamIds = $teamMembers->pluck('id')->toArray();
 
         $currentlyIn = Attendance::whereIn('employee_id', $teamIds)
             ->where('date', Carbon::today())
@@ -82,6 +84,47 @@ class TeamAttendance extends Component
             ->whereNull('check_out')
             ->with('employee.user')
             ->get();
+
+        // ── Live board: today's status for every team member ──
+        $today = Carbon::today()->toDateString();
+        $attToday = Attendance::whereIn('employee_id', $teamIds)
+            ->where('date', $today)
+            ->with('activeBreak')
+            ->get()->keyBy('employee_id');
+        $onLeave = LeaveRequest::whereIn('employee_id', $teamIds)
+            ->where('status', 'approved')
+            ->whereDate('start_date', '<=', $today)
+            ->whereDate('end_date', '>=', $today)
+            ->pluck('employee_id')->flip();
+
+        $board = $teamMembers->map(function ($m) use ($attToday, $onLeave) {
+            $att = $attToday->get($m->id);
+            $status = match (true) {
+                isset($onLeave[$m->id]) => 'on_leave',
+                $att && $att->check_out => 'completed',
+                $att && $att->activeBreak => 'on_break',
+                (bool) $att => $att->is_late ? 'late' : 'working',
+                default => 'absent',
+            };
+
+            return [
+                'name' => $m->user?->name ?? '—',
+                'photo' => $m->photo,
+                'mode' => $att?->work_mode,
+                'status' => $status,
+                'since' => $att?->check_in?->format('h:i A'),
+            ];
+        })->sortBy(fn ($r) => ['working' => 0, 'late' => 1, 'on_break' => 2, 'completed' => 3, 'on_leave' => 4, 'absent' => 5][$r['status']] ?? 9)->values();
+
+        $active = $board->whereIn('status', ['working', 'late', 'on_break', 'completed']);
+        $boardStats = [
+            'working' => $board->whereIn('status', ['working', 'late', 'on_break'])->count(),
+            'office' => $active->where('mode', 'office')->count(),
+            'wfh' => $active->whereIn('mode', ['wfh', 'hybrid'])->count(),
+            'late' => $board->where('status', 'late')->count(),
+            'absent' => $board->where('status', 'absent')->count(),
+            'on_leave' => $board->where('status', 'on_leave')->count(),
+        ];
 
         $recentLogs = Attendance::whereIn('employee_id', $teamIds)
             ->with(['employee.user', 'regularisation'])
@@ -97,6 +140,8 @@ class TeamAttendance extends Component
             'currentlyIn' => $currentlyIn,
             'recentLogs' => $recentLogs,
             'pendingRegularisations' => $pendingRegularisations,
+            'board' => $board,
+            'boardStats' => $boardStats,
         ])->layout('layouts.app', ['title' => 'Team Attendance']);
     }
 }

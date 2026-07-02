@@ -6,6 +6,78 @@
         </div>
     </div>
 
+    {{-- ─── LIVE BOARD ─── --}}
+    <div class="space-y-4">
+        <div class="grid grid-cols-3 gap-3 sm:grid-cols-6">
+            @php
+                $cards = [
+                    ['label' => 'Working', 'value' => $boardStats['working'], 'color' => '#10b981', 'icon' => 'bolt'],
+                    ['label' => 'In Office', 'value' => $boardStats['office'], 'color' => '#3b82f6', 'icon' => 'building-office-2'],
+                    ['label' => 'WFH / Hybrid', 'value' => $boardStats['wfh'], 'color' => '#8b5cf6', 'icon' => 'home'],
+                    ['label' => 'Late', 'value' => $boardStats['late'], 'color' => '#f59e0b', 'icon' => 'exclamation-triangle'],
+                    ['label' => 'On Leave', 'value' => $boardStats['on_leave'], 'color' => '#6366f1', 'icon' => 'calendar-days'],
+                    ['label' => 'Absent', 'value' => $boardStats['absent'], 'color' => '#ef4444', 'icon' => 'user-minus'],
+                ];
+            @endphp
+            @foreach($cards as $c)
+                <div class="rounded-2xl border border-zinc-200 bg-white p-3.5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                    <span class="inline-flex size-8 items-center justify-center rounded-lg" style="background: {{ $c['color'] }}1a; color: {{ $c['color'] }};">
+                        <flux:icon :icon="$c['icon']" class="size-4" />
+                    </span>
+                    <div class="mt-2 text-2xl font-black tabular-nums text-zinc-900 dark:text-white">{{ $c['value'] }}</div>
+                    <div class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">{{ $c['label'] }}</div>
+                </div>
+            @endforeach
+        </div>
+
+        {{-- Roster --}}
+        <div class="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <div class="flex items-center justify-between border-b border-zinc-100 px-5 py-3 dark:border-zinc-800">
+                <h3 class="flex items-center gap-2 text-sm font-bold text-zinc-900 dark:text-white"><span class="size-2 animate-pulse rounded-full bg-emerald-500"></span> Live Board · {{ $board->count() }} team member{{ $board->count() === 1 ? '' : 's' }}</h3>
+                <span class="text-[10px] uppercase tracking-widest text-zinc-400">{{ now()->format('D, d M · h:i A') }}</span>
+            </div>
+            @if($board->isNotEmpty())
+                <div class="grid grid-cols-1 divide-y divide-zinc-50 sm:grid-cols-2 sm:divide-y-0 dark:divide-zinc-800/60">
+                    @foreach($board as $row)
+                        @php
+                            [$dot, $text, $label] = match($row['status']) {
+                                'working'   => ['bg-emerald-500 animate-pulse', 'text-emerald-600 dark:text-emerald-400', 'Working'],
+                                'late'      => ['bg-amber-500 animate-pulse', 'text-amber-600 dark:text-amber-400', 'Late'],
+                                'on_break'  => ['bg-amber-400', 'text-amber-600 dark:text-amber-400', 'On Break'],
+                                'completed' => ['bg-zinc-400', 'text-zinc-500', 'Completed'],
+                                'on_leave'  => ['bg-indigo-500', 'text-indigo-600 dark:text-indigo-400', 'On Leave'],
+                                default     => ['bg-rose-400', 'text-rose-500', 'Absent'],
+                            };
+                            $rowMode = $row['mode'] ? \App\Enums\AttendanceMode::tryFromValue($row['mode']) : null;
+                        @endphp
+                        <div class="flex items-center gap-3 px-5 py-3 hover:bg-zinc-50/60 dark:hover:bg-zinc-800/30">
+                            <div class="relative shrink-0">
+                                @if($row['photo'])
+                                    <img src="{{ \Storage::url($row['photo']) }}" alt="{{ $row['name'] }}" class="size-9 rounded-full object-cover">
+                                @else
+                                    <div class="flex size-9 items-center justify-center rounded-full bg-brand-600 text-xs font-bold text-white">{{ strtoupper(substr($row['name'], 0, 1)) }}</div>
+                                @endif
+                                <span class="absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-white dark:border-zinc-900 {{ $dot }}"></span>
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <div class="truncate text-sm font-bold text-zinc-900 dark:text-white">{{ $row['name'] }}</div>
+                                <div class="flex items-center gap-1.5 text-[11px]">
+                                    <span class="font-bold uppercase tracking-wider {{ $text }}">{{ $label }}</span>
+                                    @if($row['since'])<span class="text-zinc-400">· since {{ $row['since'] }}</span>@endif
+                                </div>
+                            </div>
+                            @if($rowMode)
+                                <span class="inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide {{ $rowMode->chipClass() }}">{{ $rowMode->shortLabel() }}</span>
+                            @endif
+                        </div>
+                    @endforeach
+                </div>
+            @else
+                <div class="py-8 text-center text-sm text-zinc-400">No direct reports to display.</div>
+            @endif
+        </div>
+    </div>
+
     {{-- Currently In Section --}}
     <div class="space-y-4">
         <h3 class="text-sm font-bold text-zinc-400 uppercase tracking-wider">Present Now ({{ $currentlyIn->count() }})</h3>
