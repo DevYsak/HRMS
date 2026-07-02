@@ -70,4 +70,22 @@ return [
         15 => 'Other',
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Verify Code → Tracked Punch Method
+    |--------------------------------------------------------------------------
+    | Maps this device's numeric verify code to a tracked App\Enums\PunchMethod
+    | value shown as a chip on the attendance UI. Device codes vary by model —
+    | these mirror the verify_types above (Card=3, Face=4 on the AIFACE-MAGNUM).
+    | Codes not listed here (e.g. 2=PIN, 15=Other) intentionally show no chip.
+    | When this map is non-empty it is authoritative for the device.
+    */
+    'verify_methods' => [
+        1 => 'fingerprint',
+        3 => 'id_card',
+        4 => 'face',
+        // If your device uses physical/swipe cards on a distinct code, add e.g.
+        // 5 => 'physical_card',
+    ],
+
 ];

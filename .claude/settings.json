@@ -219,7 +219,11 @@
       "Bash(vendor/bin/pint app/Enums/PunchMethod.php app/Livewire/Attendance/AttendanceTracker.php tests/Unit/PunchMethodTest.php tests/Feature/AttendanceModeTest.php --format agent)",
       "Bash(vendor/bin/pint app/Livewire/Attendance/AttendanceTracker.php app/Livewire/Attendance/AttendanceSettings.php app/Models/AttendanceSetting.php tests/Feature/AttendanceModeTest.php database/migrations/2026_07_02_223943_add_requires_photo_to_attendance_settings.php --format agent)",
       "Bash(vendor/bin/pint app/Livewire/Attendance/TeamAttendance.php tests/Feature/TeamAttendanceBoardTest.php --format agent)",
-      "Bash(vendor/bin/pint app/Models/WfhReport.php app/Livewire/Attendance/AttendanceTracker.php database/factories/WfhReportFactory.php database/migrations/2026_07_02_230215_create_wfh_reports_table.php tests/Feature/WfhReportTest.php --format agent)"
+      "Bash(vendor/bin/pint app/Models/WfhReport.php app/Livewire/Attendance/AttendanceTracker.php database/factories/WfhReportFactory.php database/migrations/2026_07_02_230215_create_wfh_reports_table.php tests/Feature/WfhReportTest.php --format agent)",
+      "Bash(grep -n 'function \\\\|ATTLOG\\\\|explode\\\\|verify\\\\|check_in\\\\|Attendance::\\\\|updateOrCreate\\\\|->create\\\\|\\\\$parts\\\\|\\\\$fields\\\\|status\\\\|punch' app/Http/Controllers/AdmsController.php)",
+      "Bash(grep -n 'Fillable\\\\|protected $fillable\\\\|guarded' app/Models/BiometricDevice.php)",
+      "Bash(sed -n '/Fillable\\(\\\\[/,/\\\\]\\)/p' app/Models/BiometricDevice.php)",
+      "Bash(vendor/bin/pint app/Services/Biometric/BiometricSyncService.php config/biometric.php tests/Feature/BiometricPunchMethodTest.php --format agent)"
     ],
     "additionalDirectories": [
       "C:\\Users\\91937\\Desktop\\xamp\\htdocs\\mahaigr-v2\\includes"

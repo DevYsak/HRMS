@@ -2,6 +2,7 @@
 
 namespace App\Services\Biometric;
 
+use App\Enums\PunchMethod;
 use App\Models\Attendance;
 use App\Models\BiometricDevice;
 use App\Models\BiometricLog;
@@ -363,12 +364,13 @@ class BiometricSyncService
         $employee = $log->employee;
         $punchedAt = Carbon::parse($log->punched_at);
         $date = $punchedAt->toDateString();
+        $method = $this->resolvePunchMethod($log->verify_type);
 
         if ($log->punch_type === 'check_in') {
-            $attendance = $this->resolveCheckIn($employee, $punchedAt, $date);
+            $attendance = $this->resolveCheckIn($employee, $punchedAt, $date, $method);
         } else {
             // check_out
-            $attendance = $this->resolveCheckOut($employee, $punchedAt, $date);
+            $attendance = $this->resolveCheckOut($employee, $punchedAt, $date, $method);
         }
 
         if ($attendance) {
@@ -381,17 +383,46 @@ class BiometricSyncService
     }
 
     /**
+     * Map a device verify code (ZKTeco) to a tracked punch method value.
+     * Device codes vary, so a config map (biometric.verify_methods) takes
+     * precedence; otherwise the standard aliases in PunchMethod are used.
+     */
+    private function resolvePunchMethod(int|string|null $verifyType): ?string
+    {
+        if ($verifyType === null || $verifyType === '') {
+            return null;
+        }
+
+        $map = config('biometric.verify_methods', []);
+
+        // A configured map is authoritative for the device — unmapped codes
+        // (e.g. PIN / Other) deliberately return null so no chip is shown.
+        if ($map !== []) {
+            return array_key_exists((int) $verifyType, $map)
+                ? PunchMethod::tryFrom((string) $map[(int) $verifyType])?->value
+                : null;
+        }
+
+        return PunchMethod::fromDevice($verifyType)?->value;
+    }
+
+    /**
      * Resolve check-in: create an attendance record if one doesn't exist for the day.
      * If one already exists (e.g. from manual entry), skip and mark processed.
      */
-    private function resolveCheckIn(Employee $employee, Carbon $punchedAt, string $date): ?Attendance
+    private function resolveCheckIn(Employee $employee, Carbon $punchedAt, string $date, ?string $method = null): ?Attendance
     {
         $existing = Attendance::where('employee_id', $employee->id)
             ->where('date', $date)
             ->first();
 
         if ($existing) {
-            // Already clocked in (possibly via web); preserve existing record.
+            // Already clocked in (possibly via web); preserve existing record but
+            // backfill the punch method if the device now tells us how.
+            if ($method && ! $existing->check_in_method) {
+                $existing->update(['check_in_method' => $method]);
+            }
+
             return $existing;
         }
 
@@ -411,6 +442,7 @@ class BiometricSyncService
             'employee_id' => $employee->id,
             'date' => $date,
             'check_in' => $punchedAt,
+            'check_in_method' => $method,
             'status' => $isLate ? 'late' : 'on_time',
             'is_late' => $isLate,
             'late_minutes' => $lateMinutes,
@@ -422,7 +454,7 @@ class BiometricSyncService
      * Resolve check-out: update the existing attendance record for the day.
      * If no check-in record exists (e.g. device only captured exit), create a minimal record.
      */
-    private function resolveCheckOut(Employee $employee, Carbon $punchedAt, string $date): ?Attendance
+    private function resolveCheckOut(Employee $employee, Carbon $punchedAt, string $date, ?string $method = null): ?Attendance
     {
         $attendance = Attendance::where('employee_id', $employee->id)
             ->where('date', $date)
@@ -434,6 +466,7 @@ class BiometricSyncService
                 'employee_id' => $employee->id,
                 'date' => $date,
                 'check_in' => $punchedAt,  // use checkout time as proxy check-in
+                'check_in_method' => $method,
                 'status' => 'on_time',
                 'work_mode' => 'office',
             ]);
@@ -448,6 +481,7 @@ class BiometricSyncService
 
         $attendance->update([
             'check_out' => $punchedAt,
+            'check_out_method' => $method,
             'total_hours' => $totalHours,
         ]);
 
