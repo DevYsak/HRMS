@@ -363,6 +363,16 @@ class EmployeeEdit extends Component
         \Flux::toast('Employee has been deactivated.', variant: 'warning');
     }
 
+    public function reactivate(): void
+    {
+        $this->authorize('update', $this->employee);
+
+        $this->employee->update(['status' => EmployeeStatus::Active]);
+        $this->status = EmployeeStatus::Active->value;
+
+        \Flux::toast('Employee has been reactivated.', variant: 'success');
+    }
+
     // ── Salary management ────────────────────────────────────────────────────
 
     public function openAddSalary(): void

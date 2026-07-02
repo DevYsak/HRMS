@@ -42,7 +42,13 @@
                             class="w-full px-4 py-2.5 text-left text-sm font-medium text-red-500 hover:bg-zinc-50 dark:hover:bg-zinc-700/60"
                         >Deactivate</button>
                     @else
-                        <span class="block w-full px-4 py-2.5 text-left text-sm font-medium text-zinc-300 dark:text-zinc-600 cursor-default">Already Inactive</span>
+                        <button
+                            type="button"
+                            wire:click="reactivate"
+                            wire:confirm="Reactivate this employee? Their status will be set to Active."
+                            @click="open = false"
+                            class="w-full px-4 py-2.5 text-left text-sm font-medium text-emerald-600 hover:bg-zinc-50 dark:text-emerald-400 dark:hover:bg-zinc-700/60"
+                        >Reactivate</button>
                     @endif
                 </div>
             </div>

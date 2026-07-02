@@ -22,6 +22,32 @@ test('employee edit page renders quick action and probation action buttons with 
         ->assertSeeHtml('wire:click="extendProbation"');
 });
 
+test('an inactive employee can be reactivated from the edit page', function () {
+    $this->actingAs(User::factory()->create(['role' => UserRole::HrAdmin]));
+
+    $employee = Employee::factory()->create(['status' => 'inactive']);
+
+    Livewire::test(EmployeeEdit::class, ['employee' => $employee])
+        ->assertSeeHtml('wire:click="reactivate"')
+        ->call('reactivate')
+        ->assertSet('status', 'active');
+
+    expect($employee->fresh()->status->value)->toBe('active');
+});
+
+test('an active employee shows deactivate, not reactivate', function () {
+    $this->actingAs(User::factory()->create(['role' => UserRole::HrAdmin]));
+
+    $employee = Employee::factory()->create(['status' => 'active']);
+
+    Livewire::test(EmployeeEdit::class, ['employee' => $employee])
+        ->assertSeeHtml('wire:click="deactivate"')
+        ->call('deactivate')
+        ->assertSet('status', 'inactive');
+
+    expect($employee->fresh()->status->value)->toBe('inactive');
+});
+
 test('editing the biometric device id saves to employee_code and mirrors to biometric_id', function () {
     $this->actingAs(User::factory()->create(['role' => UserRole::HrAdmin]));
 
