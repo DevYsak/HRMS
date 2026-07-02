@@ -2,12 +2,12 @@
 
 namespace App\Services\Biometric;
 
-use App\Enums\PunchMethod;
 use App\Models\Attendance;
 use App\Models\BiometricDevice;
 use App\Models\BiometricLog;
 use App\Models\Employee;
 use App\Services\AttendanceService;
+use App\Support\PunchMethodResolver;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -389,21 +389,7 @@ class BiometricSyncService
      */
     private function resolvePunchMethod(int|string|null $verifyType): ?string
     {
-        if ($verifyType === null || $verifyType === '') {
-            return null;
-        }
-
-        $map = config('biometric.verify_methods', []);
-
-        // A configured map is authoritative for the device — unmapped codes
-        // (e.g. PIN / Other) deliberately return null so no chip is shown.
-        if ($map !== []) {
-            return array_key_exists((int) $verifyType, $map)
-                ? PunchMethod::tryFrom((string) $map[(int) $verifyType])?->value
-                : null;
-        }
-
-        return PunchMethod::fromDevice($verifyType)?->value;
+        return PunchMethodResolver::value($verifyType);
     }
 
     /**

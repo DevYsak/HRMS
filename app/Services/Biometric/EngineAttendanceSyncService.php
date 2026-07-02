@@ -2,10 +2,10 @@
 
 namespace App\Services\Biometric;
 
-use App\Enums\PunchMethod;
 use App\Models\Attendance;
 use App\Models\AttendanceDailySummary;
 use App\Models\Employee;
+use App\Support\PunchMethodResolver;
 use Illuminate\Support\Facades\Http;
 
 /**
@@ -63,8 +63,8 @@ class EngineAttendanceSyncService
 
             $firstPunch = $this->punchDateTime($date, $row['first_punch'] ?? null);
             $lastPunch = $this->punchDateTime($date, $row['last_punch'] ?? null);
-            $firstMethod = PunchMethod::fromDevice($row['first_punch_method'] ?? $row['first_punch_verify'] ?? null)?->value;
-            $lastMethod = PunchMethod::fromDevice($row['last_punch_method'] ?? $row['last_punch_verify'] ?? null)?->value;
+            $firstMethod = PunchMethodResolver::value($row['first_punch_method'] ?? $row['first_punch_verify'] ?? null);
+            $lastMethod = PunchMethodResolver::value($row['last_punch_method'] ?? $row['last_punch_verify'] ?? null);
             $workingHours = round(((int) ($row['working_min'] ?? 0)) / 60, 2);
             $breakMinutes = (int) ($row['break_min'] ?? 0);
             $lateMinutes = (int) ($row['delay_min'] ?? 0);

@@ -223,7 +223,8 @@
       "Bash(grep -n 'function \\\\|ATTLOG\\\\|explode\\\\|verify\\\\|check_in\\\\|Attendance::\\\\|updateOrCreate\\\\|->create\\\\|\\\\$parts\\\\|\\\\$fields\\\\|status\\\\|punch' app/Http/Controllers/AdmsController.php)",
       "Bash(grep -n 'Fillable\\\\|protected $fillable\\\\|guarded' app/Models/BiometricDevice.php)",
       "Bash(sed -n '/Fillable\\(\\\\[/,/\\\\]\\)/p' app/Models/BiometricDevice.php)",
-      "Bash(vendor/bin/pint app/Services/Biometric/BiometricSyncService.php config/biometric.php tests/Feature/BiometricPunchMethodTest.php --format agent)"
+      "Bash(vendor/bin/pint app/Services/Biometric/BiometricSyncService.php config/biometric.php tests/Feature/BiometricPunchMethodTest.php --format agent)",
+      "Bash(vendor/bin/pint app/Support/PunchMethodResolver.php app/Services/Biometric/EngineAttendanceSyncService.php app/Services/Biometric/BiometricSyncService.php app/Http/Controllers/Api/V1/AttendanceSyncController.php tests/Unit/PunchMethodResolverTest.php tests/Feature/SyncEngineAttendanceTest.php --format agent)"
     ],
     "additionalDirectories": [
       "C:\\Users\\91937\\Desktop\\xamp\\htdocs\\mahaigr-v2\\includes"
