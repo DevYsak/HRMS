@@ -99,6 +99,12 @@ class AttendanceTracker extends Component
     /** Tasks completed within the selected stats period. */
     public int $tasksCompletedPeriod = 0;
 
+    /** Attendance-log filter by work mode ('' = all). */
+    public string $logMode = '';
+
+    /** Full punch detail for the detail modal (null when closed). */
+    public ?array $detail = null;
+
     // Regularisation form fields
     public string $regDate = '';
 
@@ -696,6 +702,51 @@ class AttendanceTracker extends Component
         Storage::disk('public')->put($path, $binary);
 
         return $path;
+    }
+
+    public function showPunchDetail(string $date): void
+    {
+        $employee = Auth::user()->employee;
+        $att = Attendance::where('employee_id', $employee?->id)->whereDate('date', $date)->first();
+
+        if (! $att) {
+            return;
+        }
+
+        $inMethod = PunchMethod::tryFrom((string) $att->check_in_method);
+        $outMethod = PunchMethod::tryFrom((string) $att->check_out_method);
+
+        $this->detail = [
+            'date' => $att->date->format('l, d M Y'),
+            'mode' => $att->work_mode,
+            'status' => $att->status,
+            'is_late' => (bool) $att->is_late,
+            'late_minutes' => (int) ($att->late_minutes ?? 0),
+            'break_minutes' => (int) ($att->break_minutes ?? 0),
+            'total_hours' => $att->total_hours,
+            'in' => [
+                'time' => $att->check_in?->format('h:i A'),
+                'method' => $inMethod?->label(),
+                'method_icon' => $inMethod?->icon(),
+                'photo' => $att->check_in_photo,
+                'lat' => $att->check_in_lat,
+                'lng' => $att->check_in_lng,
+                'ip' => $att->check_in_ip,
+                'device' => UserAgent::parse($att->check_in_user_agent)['label'],
+            ],
+            'out' => [
+                'time' => $att->check_out?->format('h:i A'),
+                'method' => $outMethod?->label(),
+                'method_icon' => $outMethod?->icon(),
+                'photo' => $att->check_out_photo,
+                'lat' => $att->check_out_lat,
+                'lng' => $att->check_out_lng,
+                'ip' => $att->check_out_ip,
+                'device' => UserAgent::parse($att->check_out_user_agent)['label'],
+            ],
+        ];
+
+        $this->dispatch('flux:modal:open', name: 'punch-detail');
     }
 
     public function openRegularisation($date)

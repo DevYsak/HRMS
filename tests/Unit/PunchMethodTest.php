@@ -14,8 +14,8 @@ test('it maps device aliases and ZK verify codes to tracked methods', function (
     'zk card code 3' => ['3', PunchMethod::IdCard],
     'physical_card' => ['physical_card', PunchMethod::PhysicalCard],
     'swipe alias' => ['swipe', PunchMethod::PhysicalCard],
-    'fingerprint is unsupported' => ['fingerprint', null],
-    'zk fingerprint code 1' => ['1', null],
+    'fingerprint word' => ['fingerprint', PunchMethod::Fingerprint],
+    'zk fingerprint code 1' => ['1', PunchMethod::Fingerprint],
     'password unsupported' => ['password', null],
 ]);
 
@@ -31,5 +31,5 @@ test('every case exposes display metadata', function () {
         expect($method->chipClass())->toContain('bg-');
     }
 
-    expect(PunchMethod::values())->toBe(['face', 'id_card', 'physical_card']);
+    expect(PunchMethod::values())->toBe(['face', 'fingerprint', 'id_card', 'physical_card']);
 });

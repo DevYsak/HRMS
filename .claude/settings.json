@@ -215,7 +215,8 @@
       "Bash(echo \"mysqld launch attempted, pid $!\")",
       "Bash(/c/xampp/mysql/bin/mysql.exe -uroot -e \"SELECT 1\")",
       "Bash(break)",
-      "Bash(vendor/bin/pint app/Services/OvertimeService.php app/Services/AttendanceService.php tests/Feature/RegularisationOvertimeTest.php database/migrations/2026_07_02_215943_add_regularisation_to_ot_source_enum.php --format agent)"
+      "Bash(vendor/bin/pint app/Services/OvertimeService.php app/Services/AttendanceService.php tests/Feature/RegularisationOvertimeTest.php database/migrations/2026_07_02_215943_add_regularisation_to_ot_source_enum.php --format agent)",
+      "Bash(vendor/bin/pint app/Enums/PunchMethod.php app/Livewire/Attendance/AttendanceTracker.php tests/Unit/PunchMethodTest.php tests/Feature/AttendanceModeTest.php --format agent)"
     ],
     "additionalDirectories": [
       "C:\\Users\\91937\\Desktop\\xamp\\htdocs\\mahaigr-v2\\includes"

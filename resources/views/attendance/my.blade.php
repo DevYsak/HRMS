@@ -547,12 +547,21 @@
      ATTENDANCE LOG — full width
 ═══════════════════════════════════════════════ --}}
 <div class="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-    <div class="flex items-center justify-between border-b border-zinc-100 px-5 py-3.5 dark:border-zinc-800">
+    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-100 px-5 py-3.5 dark:border-zinc-800">
         <h3 class="flex items-center gap-2 text-sm font-bold text-zinc-900 dark:text-white"><flux:icon.clock class="size-4 text-brand-500" /> Attendance Log</h3>
-        <span class="text-[10px] uppercase tracking-widest text-zinc-400">{{ $calendarMonth->format('M Y') }}</span>
+        <div class="flex items-center gap-2">
+            <select wire:model.live="logMode" class="rounded-lg border border-zinc-200 bg-white px-2.5 py-1 text-xs font-semibold text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+                <option value="">All modes</option>
+                @foreach(AttendanceMode::cases() as $mode)
+                    <option value="{{ $mode->value }}">{{ $mode->label() }}</option>
+                @endforeach
+            </select>
+            <span class="text-[10px] uppercase tracking-widest text-zinc-400">{{ $calendarMonth->format('M Y') }}</span>
+        </div>
     </div>
     <div class="overflow-x-auto">
-        @if(count($history) > 0)
+        @php $rows = $logMode !== '' ? collect($history)->where('work_mode', $logMode)->values() : collect($history); @endphp
+        @if($rows->count() > 0)
             <table class="w-full text-left">
                 <thead class="border-b border-zinc-100 bg-zinc-50/70 dark:border-zinc-800 dark:bg-zinc-800/40">
                     <tr class="text-[9px] font-bold uppercase tracking-widest text-zinc-400">
@@ -566,7 +575,7 @@
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-zinc-50 dark:divide-zinc-800/60">
-                    @foreach($history as $item)
+                    @foreach($rows as $item)
                         @php
                             $sc = match($item->status) { 'on_time' => 'text-emerald-600', 'late' => 'text-amber-600', default => 'text-zinc-400' };
                             $bg = match($item->status) { 'on_time' => 'bg-emerald-500', 'late' => 'bg-amber-500', default => 'bg-zinc-300 dark:bg-zinc-600' };
@@ -575,7 +584,8 @@
                             $rowMethod = PunchMethod::tryFrom((string) $item->check_in_method);
                             $isMissing = (! $item->check_out && ! $item->date->isToday()) || $item->missing_checkout;
                         @endphp
-                        <tr class="group transition-colors hover:bg-zinc-50/60 dark:hover:bg-zinc-800/30 {{ $isMissing ? 'bg-amber-50/40 dark:bg-amber-950/10' : '' }}">
+                        <tr wire:click="showPunchDetail('{{ $item->date->toDateString() }}')"
+                            class="group cursor-pointer transition-colors hover:bg-zinc-50/60 dark:hover:bg-zinc-800/30 {{ $isMissing ? 'bg-amber-50/40 dark:bg-amber-950/10' : '' }}">
                             <td class="px-5 py-2.5">
                                 <div class="flex items-center gap-2">
                                     <span class="size-1.5 shrink-0 rounded-full {{ $bg }}"></span>
@@ -609,7 +619,7 @@
                                     <span class="animate-pulse text-xs font-bold tabular-nums text-brand-600">{{ $df->h }}h {{ $df->i }}m</span>
                                 @else <span class="text-xs text-zinc-300">—</span>@endif
                                 @if($isMissing)
-                                    <button wire:click="openRegularisation('{{ $item->date->toDateString() }}')" class="block w-full text-right text-[9px] font-bold text-amber-600 hover:underline">Fix →</button>
+                                    <button wire:click.stop="openRegularisation('{{ $item->date->toDateString() }}')" class="block w-full text-right text-[9px] font-bold text-amber-600 hover:underline">Fix →</button>
                                 @endif
                             </td>
                             <td class="px-5 py-2.5 text-right">
@@ -623,12 +633,94 @@
                 </tbody>
             </table>
         @else
-            <div class="py-12 text-center text-sm text-zinc-400"><flux:icon.clock class="mx-auto mb-2 size-8 opacity-30" /> No records for {{ $calendarMonth->format('F Y') }}</div>
+            <div class="py-12 text-center text-sm text-zinc-400">
+                <flux:icon.clock class="mx-auto mb-2 size-8 opacity-30" />
+                @if($logMode !== '')
+                    No {{ AttendanceMode::tryFromValue($logMode)->label() }} records in {{ $calendarMonth->format('F Y') }}.
+                    <button wire:click="$set('logMode', '')" class="font-bold text-brand-600 hover:underline">Clear filter</button>
+                @else
+                    No records for {{ $calendarMonth->format('F Y') }}
+                @endif
+            </div>
         @endif
     </div>
 </div>
 
 </div>{{-- end spacing wrapper --}}
+
+{{-- ═══════════════════════════════════════════════
+     PUNCH DETAIL MODAL
+═══════════════════════════════════════════════ --}}
+<flux:modal name="punch-detail" class="max-w-lg">
+    @if($detail)
+        <div class="space-y-4">
+            <div class="flex items-center justify-between">
+                <div>
+                    <flux:heading size="lg">Punch Details</flux:heading>
+                    <flux:subheading>{{ $detail['date'] }}</flux:subheading>
+                </div>
+                @php $dMode = AttendanceMode::tryFromValue($detail['mode']); @endphp
+                <span class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold {{ $dMode->chipClass() }}">
+                    <flux:icon :icon="$dMode->icon()" class="size-3.5" /> {{ $dMode->label() }}
+                </span>
+            </div>
+
+            {{-- Summary --}}
+            <div class="grid grid-cols-4 gap-2 text-center">
+                <div class="rounded-xl bg-zinc-50 p-2.5 dark:bg-zinc-800/40">
+                    <div class="text-sm font-black text-zinc-900 dark:text-white">{{ $detail['total_hours'] ?? '—' }}<span class="text-[10px] text-zinc-400">h</span></div>
+                    <div class="text-[9px] font-bold uppercase tracking-wider text-zinc-400">Worked</div>
+                </div>
+                <div class="rounded-xl bg-zinc-50 p-2.5 dark:bg-zinc-800/40">
+                    <div class="text-sm font-black text-zinc-900 dark:text-white">{{ $detail['break_minutes'] }}<span class="text-[10px] text-zinc-400">m</span></div>
+                    <div class="text-[9px] font-bold uppercase tracking-wider text-zinc-400">Break</div>
+                </div>
+                <div class="rounded-xl bg-zinc-50 p-2.5 dark:bg-zinc-800/40">
+                    <div class="text-sm font-black {{ $detail['is_late'] ? 'text-amber-600' : 'text-emerald-600' }}">{{ $detail['is_late'] ? 'Late' : 'On Time' }}</div>
+                    <div class="text-[9px] font-bold uppercase tracking-wider text-zinc-400">Status</div>
+                </div>
+                <div class="rounded-xl bg-zinc-50 p-2.5 dark:bg-zinc-800/40">
+                    <div class="text-sm font-black text-zinc-900 dark:text-white">{{ $detail['is_late'] ? $detail['late_minutes'].'m' : '—' }}</div>
+                    <div class="text-[9px] font-bold uppercase tracking-wider text-zinc-400">Late by</div>
+                </div>
+            </div>
+
+            {{-- In / Out punch cards --}}
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                @foreach(['in' => 'Check In', 'out' => 'Check Out'] as $key => $title)
+                    @php $p = $detail[$key]; @endphp
+                    <div class="rounded-2xl border border-zinc-200 p-4 dark:border-zinc-800">
+                        <div class="mb-2 flex items-center justify-between">
+                            <span class="text-[10px] font-bold uppercase tracking-widest {{ $key === 'in' ? 'text-emerald-600' : 'text-zinc-500' }}">{{ $title }}</span>
+                            <span class="text-sm font-black tabular-nums text-zinc-900 dark:text-white">{{ $p['time'] ?? '—' }}</span>
+                        </div>
+                        @if($p['photo'])
+                            <a href="{{ Storage::url($p['photo']) }}" target="_blank">
+                                <img src="{{ Storage::url($p['photo']) }}" alt="Punch selfie" class="mb-2 h-24 w-full rounded-xl object-cover ring-1 ring-zinc-200 dark:ring-zinc-700">
+                            </a>
+                        @endif
+                        <div class="space-y-1.5 text-[11px]">
+                            @if($p['method'])
+                                <div class="flex items-center gap-1.5 text-zinc-600 dark:text-zinc-300"><flux:icon :icon="$p['method_icon']" class="size-3.5 text-zinc-400" /> {{ $p['method'] }}</div>
+                            @endif
+                            <div class="flex items-center gap-1.5 text-zinc-600 dark:text-zinc-300"><flux:icon.computer-desktop class="size-3.5 text-zinc-400" /> {{ $p['device'] }}</div>
+                            @if($p['ip'])
+                                <div class="flex items-center gap-1.5 text-zinc-500"><flux:icon.globe-alt class="size-3.5 text-zinc-400" /> {{ $p['ip'] }}</div>
+                            @endif
+                            @if($p['lat'] && $p['lng'])
+                                <a href="https://www.google.com/maps?q={{ $p['lat'] }},{{ $p['lng'] }}" target="_blank" rel="noopener" class="inline-flex items-center gap-1.5 font-semibold text-brand-600 hover:underline"><flux:icon.map-pin class="size-3.5" /> View location</a>
+                            @endif
+                        </div>
+                    </div>
+                @endforeach
+            </div>
+
+            <div class="flex justify-end pt-1">
+                <flux:button @click="$flux.modal('punch-detail').close()">Close</flux:button>
+            </div>
+        </div>
+    @endif
+</flux:modal>
 
 {{-- ═══════════════════════════════════════════════
      REGULARISATION MODAL

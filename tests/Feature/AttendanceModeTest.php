@@ -143,3 +143,50 @@ test('the tracker supports a weekly filter and renders the analytics charts', fu
         ->assertOk()
         ->assertSet('statsPeriod', 'this_week');
 });
+
+test('showPunchDetail loads the full punch detail for a day', function () {
+    $employee = Employee::factory()->create();
+    Attendance::create([
+        'employee_id' => $employee->id,
+        'date' => now()->startOfMonth()->addDays(2)->toDateString(),
+        'check_in' => now()->startOfMonth()->addDays(2)->setTime(9, 30),
+        'check_out' => now()->startOfMonth()->addDays(2)->setTime(18, 30),
+        'check_in_method' => 'face',
+        'check_out_method' => 'id_card',
+        'total_hours' => 9,
+        'status' => 'on_time',
+        'work_mode' => 'office',
+    ]);
+
+    Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
+        ->call('showPunchDetail', now()->startOfMonth()->addDays(2)->toDateString())
+        ->assertSet('detail.in.method', 'Face')
+        ->assertSet('detail.out.method', 'ID Card');
+});
+
+test('showPunchDetail ignores a date belonging to another employee', function () {
+    $me = Employee::factory()->create();
+    $other = Employee::factory()->create();
+    $date = now()->startOfMonth()->addDays(3)->toDateString();
+    Attendance::create([
+        'employee_id' => $other->id,
+        'date' => $date,
+        'check_in' => now()->startOfMonth()->addDays(3)->setTime(9, 0),
+        'status' => 'on_time',
+        'work_mode' => 'office',
+    ]);
+
+    Livewire::actingAs($me->user)->test(AttendanceTracker::class)
+        ->call('showPunchDetail', $date)
+        ->assertSet('detail', null);
+});
+
+test('the attendance log mode filter is a live property', function () {
+    $employee = Employee::factory()->create();
+
+    Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
+        ->assertSet('logMode', '')
+        ->set('logMode', 'wfh')
+        ->assertOk()
+        ->assertSet('logMode', 'wfh');
+});
