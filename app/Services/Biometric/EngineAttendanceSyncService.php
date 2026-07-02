@@ -2,6 +2,7 @@
 
 namespace App\Services\Biometric;
 
+use App\Enums\PunchMethod;
 use App\Models\Attendance;
 use App\Models\AttendanceDailySummary;
 use App\Models\Employee;
@@ -62,6 +63,8 @@ class EngineAttendanceSyncService
 
             $firstPunch = $this->punchDateTime($date, $row['first_punch'] ?? null);
             $lastPunch = $this->punchDateTime($date, $row['last_punch'] ?? null);
+            $firstMethod = PunchMethod::fromDevice($row['first_punch_method'] ?? $row['first_punch_verify'] ?? null)?->value;
+            $lastMethod = PunchMethod::fromDevice($row['last_punch_method'] ?? $row['last_punch_verify'] ?? null)?->value;
             $workingHours = round(((int) ($row['working_min'] ?? 0)) / 60, 2);
             $breakMinutes = (int) ($row['break_min'] ?? 0);
             $lateMinutes = (int) ($row['delay_min'] ?? 0);
@@ -74,6 +77,8 @@ class EngineAttendanceSyncService
                     'employee_code' => $code,
                     'first_punch' => $firstPunch,
                     'last_punch' => $lastPunch,
+                    'first_punch_method' => $firstMethod,
+                    'last_punch_method' => $lastMethod,
                     'break_minutes' => $breakMinutes,
                     'working_hours' => $workingHours,
                     'late_minutes' => $lateMinutes,
@@ -93,6 +98,8 @@ class EngineAttendanceSyncService
                     [
                         'check_in' => $firstPunch,
                         'check_out' => $lastPunch,
+                        'check_in_method' => $firstMethod,
+                        'check_out_method' => $lastMethod,
                         'total_hours' => $workingHours,
                         'break_minutes' => $breakMinutes,
                         'status' => $isLate ? 'late' : 'on_time',

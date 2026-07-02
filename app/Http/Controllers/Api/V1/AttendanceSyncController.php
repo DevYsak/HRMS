@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Enums\PunchMethod;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\AttendanceSyncRequest;
 use App\Models\AttendanceDailySummary;
@@ -52,6 +53,8 @@ class AttendanceSyncController extends Controller
                         'employee_code' => $code,
                         'first_punch' => $this->normalisePunch($record['first_punch'] ?? null, $date),
                         'last_punch' => $this->normalisePunch($record['last_punch'] ?? null, $date),
+                        'first_punch_method' => PunchMethod::fromDevice($record['first_punch_method'] ?? null)?->value,
+                        'last_punch_method' => PunchMethod::fromDevice($record['last_punch_method'] ?? null)?->value,
                         'break_minutes' => (int) ($record['break_minutes'] ?? 0),
                         'working_hours' => (float) ($record['working_hours'] ?? 0),
                         'late_minutes' => (int) ($record['late_minutes'] ?? 0),

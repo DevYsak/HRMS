@@ -43,6 +43,8 @@ class AttendanceSyncRequest extends FormRequest
             'records.*.date' => ['required', 'date'],
             'records.*.first_punch' => ['nullable', 'date'],
             'records.*.last_punch' => ['nullable', 'date'],
+            'records.*.first_punch_method' => ['nullable', 'string', 'max:30'],
+            'records.*.last_punch_method' => ['nullable', 'string', 'max:30'],
             'records.*.break_minutes' => ['nullable', 'integer', 'min:0'],
             'records.*.working_hours' => ['nullable', 'numeric', 'min:0'],
             'records.*.late_minutes' => ['nullable', 'integer', 'min:0'],

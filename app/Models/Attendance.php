@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
     'check_in_ip', 'check_out_ip',
     'check_in_photo', 'check_out_photo',
     'check_in_user_agent', 'check_out_user_agent',
+    'check_in_method', 'check_out_method',
     'check_in_lat', 'check_in_lng', 'check_out_lat', 'check_out_lng',
     'break_start', 'break_end', 'break_minutes',
     'status', 'work_mode', 'is_late', 'late_minutes',

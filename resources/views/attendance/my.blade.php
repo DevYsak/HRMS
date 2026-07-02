@@ -317,8 +317,13 @@
                         <div class="flex-1 -mt-0.5">
                             <div class="text-xs font-bold text-zinc-800 dark:text-zinc-100">{{ $ev['title'] }}</div>
                             <div class="text-[11px] tabular-nums text-zinc-400">{{ $ev['time'] }}</div>
-                            @if(! empty($ev['photo']) || (! empty($ev['lat']) && ! empty($ev['lng'])))
-                                <div class="mt-1.5 flex items-center gap-2">
+                            @if(! empty($ev['photo']) || (! empty($ev['lat']) && ! empty($ev['lng'])) || ! empty($ev['method']))
+                                <div class="mt-1.5 flex flex-wrap items-center gap-2">
+                                    @if(! empty($ev['method']))
+                                        <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold {{ $ev['method']->chipClass() }}">
+                                            <flux:icon :icon="$ev['method']->icon()" class="size-3" /> {{ $ev['method']->label() }}
+                                        </span>
+                                    @endif
                                     @if(! empty($ev['photo']))
                                         <a href="{{ \Storage::url($ev['photo']) }}" target="_blank" title="View punch photo">
                                             <img src="{{ \Storage::url($ev['photo']) }}" alt="Punch selfie"
@@ -782,9 +787,15 @@
                                                 class="block w-full text-right text-[9px] font-bold text-brand-600 hover:underline">Fix →</button>
                                         @endif
                                     </td>
-                                    {{-- Mode --}}
+                                    {{-- Mode + punch method --}}
                                     <td class="px-5 py-2.5 text-right">
                                         <span class="inline-flex items-center rounded px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide {{ $rowMode->chipClass() }}">{{ $rowMode->shortLabel() }}</span>
+                                        @php $rowMethod = \App\Enums\PunchMethod::tryFrom((string) $item->check_in_method); @endphp
+                                        @if($rowMethod)
+                                            <span class="mt-1 inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[8px] font-bold {{ $rowMethod->chipClass() }}" title="Punched via {{ $rowMethod->label() }}">
+                                                <flux:icon :icon="$rowMethod->icon()" class="size-2.5" /> {{ $rowMethod->label() }}
+                                            </span>
+                                        @endif
                                     </td>
                                 </tr>
                             @endforeach

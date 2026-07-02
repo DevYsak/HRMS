@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Fillable([
     'employee_id', 'employee_code', 'date',
     'first_punch', 'last_punch',
+    'first_punch_method', 'last_punch_method',
     'break_minutes', 'working_hours',
     'late_minutes', 'early_leave_minutes', 'overtime_minutes',
     'status', 'device_serial', 'raw_punch_count', 'synced_at',

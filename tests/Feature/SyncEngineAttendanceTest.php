@@ -88,3 +88,41 @@ test('it fails cleanly when the engine is unreachable', function () {
 
     expect(AttendanceDailySummary::count())->toBe(0);
 });
+
+test('it records the punch verification method (face in, card out)', function () {
+    $emp = Employee::factory()->create(['employee_code' => 21, 'manager_id' => null]);
+
+    fakeDashboard([
+        ['emp_id' => '21', 'name' => 'Mia', 'first_punch' => '09:02:00', 'last_punch' => '18:05:00',
+            'first_punch_method' => 'face', 'last_punch_method' => 'id_card',
+            'working_min' => 480, 'break_min' => 60, 'overtime_min' => 0, 'late' => false, 'delay_min' => 0,
+            'punch_count' => 6, 'status' => 'Completed Shift'],
+    ]);
+
+    $this->artisan('attendance:sync-engine', ['--date' => '2026-06-29'])->assertSuccessful();
+
+    $summary = AttendanceDailySummary::where('employee_id', $emp->id)->first();
+    expect($summary->first_punch_method)->toBe('face');
+    expect($summary->last_punch_method)->toBe('id_card');
+
+    $att = Attendance::where('employee_id', $emp->id)->where('date', '2026-06-29')->first();
+    expect($att->check_in_method)->toBe('face');
+    expect($att->check_out_method)->toBe('id_card');
+});
+
+test('an unsupported verify mode is stored as null rather than a bad chip', function () {
+    $emp = Employee::factory()->create(['employee_code' => 22, 'manager_id' => null]);
+
+    fakeDashboard([
+        ['emp_id' => '22', 'name' => 'Sam', 'first_punch' => '09:00:00', 'last_punch' => '18:00:00',
+            'first_punch_method' => 'fingerprint', 'last_punch_method' => '1',
+            'working_min' => 480, 'break_min' => 0, 'overtime_min' => 0, 'late' => false, 'delay_min' => 0,
+            'punch_count' => 2, 'status' => 'Completed Shift'],
+    ]);
+
+    $this->artisan('attendance:sync-engine', ['--date' => '2026-06-29'])->assertSuccessful();
+
+    $att = Attendance::where('employee_id', $emp->id)->first();
+    expect($att->check_in_method)->toBeNull();
+    expect($att->check_out_method)->toBeNull();
+});

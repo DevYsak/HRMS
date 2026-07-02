@@ -3,6 +3,7 @@
 namespace App\Livewire\Attendance;
 
 use App\Enums\AttendanceMode;
+use App\Enums\PunchMethod;
 use App\Models\Attendance;
 use App\Models\AttendanceRegularisation;
 use App\Models\AttendanceSetting;
@@ -301,6 +302,7 @@ class AttendanceTracker extends Component
             'lng' => $this->todayAttendance->check_in_lng,
             'photo' => $this->todayAttendance->check_in_photo,
             'device' => UserAgent::parse($this->todayAttendance->check_in_user_agent),
+            'method' => PunchMethod::tryFrom((string) $this->todayAttendance->check_in_method),
         ]];
 
         $breaks = BreakLog::where('attendance_id', $this->todayAttendance->id)
@@ -323,6 +325,7 @@ class AttendanceTracker extends Component
                 'lng' => $this->todayAttendance->check_out_lng,
                 'photo' => $this->todayAttendance->check_out_photo,
                 'device' => UserAgent::parse($this->todayAttendance->check_out_user_agent),
+                'method' => PunchMethod::tryFrom((string) $this->todayAttendance->check_out_method),
             ];
         }
 

@@ -170,6 +170,20 @@ test('attendance sync stores a batch of daily summaries', function () {
     expect(AttendanceDailySummary::where('employee_id', $b->id)->first()->status)->toBe('absent');
 });
 
+test('attendance sync records the punch verification method', function () {
+    $emp = Employee::factory()->create(['employee_code' => 310]);
+
+    $payload = ['records' => [
+        ['employee_code' => 310, 'date' => '2026-06-03', 'first_punch' => '2026-06-03 09:00:00', 'last_punch' => '2026-06-03 18:00:00', 'first_punch_method' => 'face', 'last_punch_method' => 'physical_card', 'status' => 'present'],
+    ]];
+
+    $this->postJson('/api/v1/attendance/sync', $payload, apiKey())->assertOk()->assertJsonPath('synced', 1);
+
+    $row = AttendanceDailySummary::where('employee_id', $emp->id)->first();
+    expect($row->first_punch_method)->toBe('face');
+    expect($row->last_punch_method)->toBe('physical_card');
+});
+
 test('attendance sync accepts a single bare record and is idempotent', function () {
     $employee = Employee::factory()->create(['employee_code' => 303]);
 
