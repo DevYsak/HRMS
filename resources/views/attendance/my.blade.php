@@ -240,6 +240,102 @@
     @endforeach
 </div>
 
+{{-- ═══════════════════════════════════════════════
+     THIS WEEK + TODAY'S TIMELINE
+═══════════════════════════════════════════════ --}}
+<div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
+    {{-- Weekly summary --}}
+    <div class="lg:col-span-2 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <div class="mb-4 flex items-center justify-between">
+            <div class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">This Week</div>
+            @php
+                $weekWorked = collect($weekSummary)->sum('hours');
+                $weekPresent = collect($weekSummary)->whereIn('status', ['present', 'late'])->count();
+            @endphp
+            <div class="text-[11px] font-semibold text-zinc-400">
+                <span class="text-zinc-900 dark:text-white">{{ $weekPresent }}</span> present ·
+                <span class="text-zinc-900 dark:text-white">{{ number_format($weekWorked, 1) }}h</span> logged
+            </div>
+        </div>
+        @php $weekMaxHours = max(1, collect($weekSummary)->max('hours') ?? 1); @endphp
+        <div class="grid grid-cols-7 gap-2">
+            @foreach($weekSummary as $wd)
+                @php
+                    [$barColor, $chip, $chipText] = match($wd['status']) {
+                        'present' => ['bg-emerald-500', 'bg-emerald-50 dark:bg-emerald-950/30', 'text-emerald-600 dark:text-emerald-400'],
+                        'late'    => ['bg-amber-500',   'bg-amber-50 dark:bg-amber-950/30',   'text-amber-600 dark:text-amber-400'],
+                        'leave'   => ['bg-violet-400',  'bg-violet-50 dark:bg-violet-950/30', 'text-violet-600 dark:text-violet-400'],
+                        'holiday' => ['bg-blue-400',    'bg-blue-50 dark:bg-blue-950/30',     'text-blue-600 dark:text-blue-400'],
+                        'weekend' => ['bg-zinc-200 dark:bg-zinc-700', 'bg-zinc-50 dark:bg-zinc-800/40', 'text-zinc-400'],
+                        'future'  => ['bg-zinc-100 dark:bg-zinc-800', 'bg-transparent', 'text-zinc-300 dark:text-zinc-600'],
+                        default   => ['bg-rose-300 dark:bg-rose-800', 'bg-rose-50/60 dark:bg-rose-950/20', 'text-rose-500'],
+                    };
+                    $barPct = $wd['hours'] > 0 ? max(8, round($wd['hours'] / $weekMaxHours * 100)) : 0;
+                @endphp
+                <div class="flex flex-col items-center gap-1.5 rounded-xl border p-2 transition-all
+                    {{ $wd['is_today'] ? 'border-brand-300 dark:border-brand-700 '.$chip : 'border-transparent '.$chip }}">
+                    <span class="text-[9px] font-bold uppercase tracking-wider {{ $wd['is_today'] ? 'text-brand-600' : 'text-zinc-400' }}">{{ $wd['label'] }}</span>
+                    <div class="flex h-16 w-full items-end justify-center">
+                        @if($barPct > 0)
+                            <div class="w-3 rounded-full {{ $barColor }} transition-all duration-700" style="height: {{ $barPct }}%"></div>
+                        @else
+                            <div class="mb-1 size-1.5 rounded-full {{ $barColor }}"></div>
+                        @endif
+                    </div>
+                    <span class="text-[10px] font-black tabular-nums {{ $chipText }}">
+                        {{ $wd['hours'] > 0 ? number_format($wd['hours'], 1) : '·' }}
+                    </span>
+                </div>
+            @endforeach
+        </div>
+    </div>
+
+    {{-- Today's timeline --}}
+    <div class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <div class="mb-4 flex items-center justify-between">
+            <div class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Today's Timeline</div>
+            <span class="text-[10px] font-semibold text-zinc-400">{{ now()->format('D, d M') }}</span>
+        </div>
+        @if(count($todayTimeline) > 0)
+            <div class="relative space-y-4 pl-1">
+                @foreach($todayTimeline as $i => $ev)
+                    @php
+                        [$dot, $ring] = match($ev['type']) {
+                            'in'     => ['bg-emerald-500', 'ring-emerald-500/20'],
+                            'late'   => ['bg-rose-500', 'ring-rose-500/20'],
+                            'break'  => ['bg-amber-500', 'ring-amber-500/20'],
+                            'resume' => ['bg-blue-500', 'ring-blue-500/20'],
+                            'out'    => ['bg-zinc-800 dark:bg-zinc-200', 'ring-zinc-500/20'],
+                            default  => ['bg-zinc-400', 'ring-zinc-500/20'],
+                        };
+                    @endphp
+                    <div class="relative flex items-start gap-3">
+                        @unless($loop->last)
+                            <span class="absolute left-[5px] top-4 h-full w-px bg-zinc-200 dark:bg-zinc-700"></span>
+                        @endunless
+                        <span class="mt-1 size-2.5 shrink-0 rounded-full ring-4 {{ $dot }} {{ $ring }}"></span>
+                        <div class="flex-1 -mt-0.5">
+                            <div class="text-xs font-bold text-zinc-800 dark:text-zinc-100">{{ $ev['title'] }}</div>
+                            <div class="text-[11px] tabular-nums text-zinc-400">{{ $ev['time'] }}</div>
+                        </div>
+                    </div>
+                @endforeach
+                @if($activeBreak)
+                    <div class="relative flex items-start gap-3">
+                        <span class="mt-1 size-2.5 shrink-0 animate-pulse rounded-full bg-amber-500 ring-4 ring-amber-500/20"></span>
+                        <div class="flex-1 -mt-0.5 text-xs font-bold text-amber-600 dark:text-amber-400">On break…</div>
+                    </div>
+                @endif
+            </div>
+        @else
+            <div class="flex h-40 flex-col items-center justify-center text-center text-zinc-300 dark:text-zinc-600">
+                <flux:icon.clock class="mb-2 size-9" />
+                <p class="text-xs">Not clocked in yet today.</p>
+            </div>
+        @endif
+    </div>
+</div>
+
 {{-- ─── ATTENDANCE ANALYTICS ─── --}}
 <div class="grid grid-cols-1 gap-4 lg:grid-cols-4 mb-5">
     {{-- Attendance score --}}
@@ -600,58 +696,76 @@
                 </h3>
                 <span class="text-[10px] text-zinc-400 uppercase tracking-widest">{{ $calendarMonth->format('M Y') }}</span>
             </div>
-            <div class="divide-y divide-zinc-50 dark:divide-zinc-800/60 overflow-y-auto" style="max-height: 320px;">
-                @forelse($history as $item)
-                    @php
-                        $sc = match($item->status) { 'on_time' => 'text-emerald-600', 'late' => 'text-amber-600', default => 'text-zinc-400' };
-                        $bg = match($item->status) { 'on_time' => 'bg-emerald-500', 'late' => 'bg-amber-500', default => 'bg-zinc-300 dark:bg-zinc-600' };
-                        $sl = match($item->status) { 'on_time' => 'On Time', 'late' => 'Late', default => ucfirst($item->status) };
-                    @endphp
-                    <div class="flex items-center gap-3 px-5 py-3 hover:bg-zinc-50/60 dark:hover:bg-zinc-800/30 transition-colors">
-                        {{-- Date badge --}}
-                        <div class="w-10 text-center shrink-0">
-                            <div class="text-sm font-black text-zinc-900 dark:text-white leading-none">{{ $item->date->format('d') }}</div>
-                            <div class="text-[9px] font-bold text-zinc-400 uppercase">{{ $item->date->format('D') }}</div>
-                        </div>
-                        {{-- Status dot --}}
-                        <div class="w-2 h-2 rounded-full {{ $bg }} shrink-0"></div>
-                        {{-- Times --}}
-                        <div class="flex-1 min-w-0">
-                            <div class="text-xs font-mono text-zinc-700 dark:text-zinc-300">
-                                {{ $item->check_in->format('H:i') }}
-                                →
-                                @if($item->check_out) {{ $item->check_out->format('H:i') }}
-                                @elseif($item->date->isToday()) <span class="text-brand-600 animate-pulse font-bold">live</span>
-                                @else <span class="text-rose-400">--:--</span>
-                                @endif
-                            </div>
-                            @php $rowMode = \App\Enums\AttendanceMode::tryFromValue($item->work_mode); @endphp
-                            <div class="flex items-center gap-1.5">
-                                <span class="text-[9px] font-bold uppercase tracking-wider {{ $sc }}">{{ $sl }}</span>
-                                <span class="inline-flex items-center rounded px-1 py-px text-[8px] font-bold uppercase tracking-wide {{ $rowMode->chipClass() }}">{{ $rowMode->shortLabel() }}</span>
-                            </div>
-                        </div>
-                        {{-- Hours --}}
-                        <div class="text-right shrink-0">
-                            @if($item->check_out)
-                                @php $d = $item->check_in->diff($item->check_out); @endphp
-                                <div class="text-xs font-bold {{ ($d->h + $d->d*24) >= 9 ? 'text-emerald-600' : 'text-zinc-700 dark:text-white' }}">{{ $d->h + $d->d*24 }}h {{ $d->i }}m</div>
-                            @elseif($item->date->isToday())
-                                @php $d = now()->diff($item->check_in); @endphp
-                                <div class="text-xs font-bold text-brand-600 animate-pulse">{{ $d->h }}h {{ $d->i }}m</div>
-                            @endif
-                            @if((!$item->check_out && !$item->date->isToday()) || $item->missing_checkout)
-                                <button wire:click="openRegularisation('{{ $item->date->toDateString() }}')"
-                                    class="text-[9px] font-bold text-brand-600 hover:underline">Fix →</button>
-                            @endif
-                        </div>
-                    </div>
-                @empty
-                    <div class="py-10 text-center text-zinc-400 text-sm">
-                        <flux:icon.clock class="size-8 mx-auto mb-2 opacity-30" />
+            <div class="overflow-y-auto" style="max-height: 340px;">
+                @if(count($history) > 0)
+                    <table class="w-full text-left">
+                        <thead class="sticky top-0 z-10 bg-white/95 backdrop-blur dark:bg-zinc-900/95">
+                            <tr class="text-[9px] font-bold uppercase tracking-widest text-zinc-400">
+                                <th class="px-5 py-2 font-bold">Date</th>
+                                <th class="py-2 font-bold">In / Out</th>
+                                <th class="py-2 text-right font-bold">Hours</th>
+                                <th class="px-5 py-2 text-right font-bold">Mode</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-zinc-50 dark:divide-zinc-800/60">
+                            @foreach($history as $item)
+                                @php
+                                    $sc = match($item->status) { 'on_time' => 'text-emerald-600', 'late' => 'text-amber-600', default => 'text-zinc-400' };
+                                    $bg = match($item->status) { 'on_time' => 'bg-emerald-500', 'late' => 'bg-amber-500', default => 'bg-zinc-300 dark:bg-zinc-600' };
+                                    $rowMode = \App\Enums\AttendanceMode::tryFromValue($item->work_mode);
+                                @endphp
+                                <tr class="group transition-colors hover:bg-zinc-50/60 dark:hover:bg-zinc-800/30">
+                                    {{-- Date --}}
+                                    <td class="px-5 py-2.5">
+                                        <div class="flex items-center gap-2">
+                                            <span class="size-1.5 shrink-0 rounded-full {{ $bg }}"></span>
+                                            <div>
+                                                <div class="text-xs font-black leading-none text-zinc-900 dark:text-white">{{ $item->date->format('d') }} {{ $item->date->format('M') }}</div>
+                                                <div class="text-[9px] font-bold uppercase text-zinc-400">{{ $item->date->format('D') }}</div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    {{-- In / Out --}}
+                                    <td class="py-2.5">
+                                        <div class="font-mono text-xs text-zinc-700 dark:text-zinc-300">
+                                            {{ $item->check_in->format('H:i') }} <span class="text-zinc-300 dark:text-zinc-600">→</span>
+                                            @if($item->check_out) {{ $item->check_out->format('H:i') }}
+                                            @elseif($item->date->isToday()) <span class="animate-pulse font-bold text-brand-600">live</span>
+                                            @else <span class="text-rose-400">--:--</span>
+                                            @endif
+                                        </div>
+                                        <span class="text-[9px] font-bold uppercase tracking-wider {{ $sc }}">{{ match($item->status) { 'on_time' => 'On Time', 'late' => 'Late', default => ucfirst($item->status) } }}</span>
+                                    </td>
+                                    {{-- Hours --}}
+                                    <td class="py-2.5 text-right">
+                                        @if($item->check_out)
+                                            @php $d = $item->check_in->diff($item->check_out); $h = $d->h + $d->d*24; @endphp
+                                            <span class="text-xs font-bold tabular-nums {{ $h >= 9 ? 'text-emerald-600' : 'text-zinc-700 dark:text-white' }}">{{ $h }}h {{ $d->i }}m</span>
+                                        @elseif($item->date->isToday())
+                                            @php $d = now()->diff($item->check_in); @endphp
+                                            <span class="animate-pulse text-xs font-bold tabular-nums text-brand-600">{{ $d->h }}h {{ $d->i }}m</span>
+                                        @else
+                                            <span class="text-xs text-zinc-300 dark:text-zinc-600">—</span>
+                                        @endif
+                                        @if((!$item->check_out && !$item->date->isToday()) || $item->missing_checkout)
+                                            <button wire:click="openRegularisation('{{ $item->date->toDateString() }}')"
+                                                class="block w-full text-right text-[9px] font-bold text-brand-600 hover:underline">Fix →</button>
+                                        @endif
+                                    </td>
+                                    {{-- Mode --}}
+                                    <td class="px-5 py-2.5 text-right">
+                                        <span class="inline-flex items-center rounded px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide {{ $rowMode->chipClass() }}">{{ $rowMode->shortLabel() }}</span>
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                @else
+                    <div class="py-10 text-center text-sm text-zinc-400">
+                        <flux:icon.clock class="mx-auto mb-2 size-8 opacity-30" />
                         No records for {{ $calendarMonth->format('F Y') }}
                     </div>
-                @endforelse
+                @endif
             </div>
         </div>
 

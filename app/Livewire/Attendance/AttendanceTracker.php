@@ -78,6 +78,12 @@ class AttendanceTracker extends Component
     /** Daily working-hours series for the analytics charts (selected period). */
     public array $chartDaily = [];
 
+    /** Current-week (Sun–Sat) day-by-day summary — independent of the calendar/period filters. */
+    public array $weekSummary = [];
+
+    /** Chronological punch/break events for today. */
+    public array $todayTimeline = [];
+
     // Regularisation form fields
     public string $regDate = '';
 
@@ -198,6 +204,115 @@ class AttendanceTracker extends Component
             })
             ->orderByDesc('start_date')
             ->first();
+
+        // 9. This-week summary + today's punch/break timeline
+        $this->weekSummary = $this->buildWeekSummary($employee);
+        $this->todayTimeline = $this->buildTodayTimeline();
+    }
+
+    /**
+     * Day-by-day summary for the current week (Sun–Sat), independent of the
+     * calendar month or the stats period filter.
+     *
+     * @return array<int, array{date:string, label:string, day:int, status:string, mode:?string, hours:float, is_today:bool, is_future:bool}>
+     */
+    protected function buildWeekSummary($employee): array
+    {
+        $weekStart = Carbon::today()->startOfWeek(Carbon::SUNDAY);
+        $weekEnd = $weekStart->copy()->endOfWeek(Carbon::SATURDAY);
+
+        $attendances = Attendance::where('employee_id', $employee->id)
+            ->whereBetween('date', [$weekStart->toDateString(), $weekEnd->toDateString()])
+            ->get()->keyBy(fn ($a) => $a->date->toDateString());
+
+        $leaves = LeaveRequest::where('employee_id', $employee->id)
+            ->where('status', 'approved')
+            ->where('start_date', '<=', $weekEnd->toDateString())
+            ->where('end_date', '>=', $weekStart->toDateString())
+            ->get();
+        $leaveDays = [];
+        foreach ($leaves as $l) {
+            foreach (CarbonPeriod::create($l->start_date, $l->end_date) as $d) {
+                $leaveDays[$d->toDateString()] = true;
+            }
+        }
+
+        $holidayDays = PublicHoliday::whereBetween('date', [$weekStart->toDateString(), $weekEnd->toDateString()])
+            ->get()->keyBy(fn ($h) => Carbon::parse($h->date)->toDateString());
+
+        $summary = [];
+        foreach (CarbonPeriod::create($weekStart, $weekEnd) as $d) {
+            $key = $d->toDateString();
+            $att = $attendances->get($key);
+            $hours = 0.0;
+            $status = 'absent';
+            $mode = null;
+
+            if ($att) {
+                $mode = $att->work_mode ?? 'office';
+                $status = ($att->status === 'late' || $att->is_late) ? 'late' : 'present';
+                if ($att->check_in && $att->check_out) {
+                    $mins = $att->check_in->diffInMinutes($att->check_out) - (int) ($att->break_minutes ?? 0);
+                    $hours = round(max(0, $mins) / 60, 1);
+                }
+            } elseif (isset($leaveDays[$key])) {
+                $status = 'leave';
+            } elseif ($holidayDays->has($key)) {
+                $status = 'holiday';
+            } elseif ($d->isWeekend()) {
+                $status = 'weekend';
+            } elseif ($d->isFuture()) {
+                $status = 'future';
+            }
+
+            $summary[] = [
+                'date' => $key,
+                'label' => $d->format('D'),
+                'day' => $d->day,
+                'status' => $status,
+                'mode' => $mode,
+                'hours' => $hours,
+                'is_today' => $d->isToday(),
+                'is_future' => $d->isFuture(),
+            ];
+        }
+
+        return $summary;
+    }
+
+    /**
+     * Chronological check-in / break / check-out events for today.
+     *
+     * @return array<int, array{time:string, title:string, type:string}>
+     */
+    protected function buildTodayTimeline(): array
+    {
+        if (! $this->todayAttendance || ! $this->todayAttendance->check_in) {
+            return [];
+        }
+
+        $events = [[
+            'time' => $this->todayAttendance->check_in->format('h:i A'),
+            'title' => 'Clocked in'.($this->todayAttendance->is_late ? ' (late)' : ''),
+            'type' => $this->todayAttendance->is_late ? 'late' : 'in',
+        ]];
+
+        $breaks = BreakLog::where('attendance_id', $this->todayAttendance->id)
+            ->orderBy('break_start')->get();
+        foreach ($breaks as $b) {
+            if ($b->break_start) {
+                $events[] = ['time' => Carbon::parse($b->break_start)->format('h:i A'), 'title' => 'Break started', 'type' => 'break'];
+            }
+            if ($b->break_end) {
+                $events[] = ['time' => Carbon::parse($b->break_end)->format('h:i A'), 'title' => 'Resumed work', 'type' => 'resume'];
+            }
+        }
+
+        if ($this->todayAttendance->check_out) {
+            $events[] = ['time' => $this->todayAttendance->check_out->format('h:i A'), 'title' => 'Clocked out', 'type' => 'out'];
+        }
+
+        return $events;
     }
 
     public function previousMonth()
