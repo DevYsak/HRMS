@@ -660,6 +660,10 @@
                         :current="request()->routeIs('settings.menu')" wire:navigate>Sidebar Menu</flux:sidebar.item>
                     <flux:sidebar.item :href="route('settings.audit-log')"
                         :current="request()->routeIs('settings.audit-log')" wire:navigate>Audit Log</flux:sidebar.item>
+                    @if(auth()->user()->isSuperAdmin())
+                        <flux:sidebar.item :href="route('settings.data-management')"
+                            :current="request()->routeIs('settings.data-management')" wire:navigate>Data Management</flux:sidebar.item>
+                    @endif
                 </flux:sidebar.group>
             </flux:sidebar.nav>
         @endcan

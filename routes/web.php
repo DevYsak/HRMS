@@ -63,6 +63,7 @@ use App\Livewire\Performance\ReviewCycles;
 use App\Livewire\Performance\TeamReviews;
 use App\Livewire\Performance\WarningLetters;
 use App\Livewire\Settings\ControlPanel;
+use App\Livewire\Settings\DataManagement;
 use App\Livewire\Settings\DepartmentManager;
 use App\Livewire\Settings\EmploymentTypeManager;
 use App\Livewire\Settings\JobTitleManager;
@@ -377,6 +378,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // --------------------------------------------------
     Route::middleware('role:manage-settings')->prefix('settings')->name('settings.')->group(function () {
         Route::get('/control-panel', ControlPanel::class)->name('control-panel');
+        Route::get('/data-management', DataManagement::class)->name('data-management');
         Route::get('/departments', DepartmentManager::class)->name('departments');
         Route::get('/audit-log', AuditLogViewer::class)->name('audit-log');
         Route::get('/roles', RoleManager::class)->name('roles');
