@@ -440,6 +440,66 @@
 </div>
 
 {{-- ═══════════════════════════════════════════════
+     WFH DAILY REPORT (only on WFH / Hybrid days)
+═══════════════════════════════════════════════ --}}
+@if(in_array($heroMode->value, ['wfh', 'hybrid'], true))
+    <div class="rounded-2xl border border-violet-200 bg-gradient-to-br from-violet-50/60 to-white p-5 shadow-sm dark:border-violet-900/40 dark:from-violet-950/20 dark:to-zinc-900">
+        <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+                <span class="inline-flex size-8 items-center justify-center rounded-xl bg-violet-100 text-violet-600 dark:bg-violet-900/40 dark:text-violet-300"><flux:icon.home class="size-4" /></span>
+                <div>
+                    <div class="text-sm font-bold text-zinc-900 dark:text-white">WFH Daily Report</div>
+                    <div class="text-[11px] text-zinc-400">{{ now()->format('l, d M Y') }}</div>
+                </div>
+            </div>
+            @if($wfhReport)
+                <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-bold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"><flux:icon.check class="size-3" /> Submitted {{ $wfhReport->created_at?->diffForHumans() }}</span>
+            @endif
+        </div>
+
+        <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <div class="md:col-span-2">
+                <label class="mb-1 block text-[11px] font-bold uppercase tracking-wider text-zinc-400">What did you work on today? <span class="text-rose-400">*</span></label>
+                <textarea wire:model="wfhForm.work_summary" rows="3" placeholder="Tasks, tickets, meetings…"
+                    class="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 placeholder:text-zinc-400 focus:border-violet-400 focus:ring-0 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"></textarea>
+                @error('wfhForm.work_summary')<p class="mt-1 text-xs text-rose-500">{{ $message }}</p>@enderror
+            </div>
+            <div>
+                <label class="mb-1 block text-[11px] font-bold uppercase tracking-wider text-zinc-400">Key achievements</label>
+                <textarea wire:model="wfhForm.achievements" rows="2" placeholder="Wins, things shipped…"
+                    class="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 placeholder:text-zinc-400 focus:border-violet-400 focus:ring-0 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"></textarea>
+            </div>
+            <div>
+                <label class="mb-1 block text-[11px] font-bold uppercase tracking-wider text-zinc-400">Blockers</label>
+                <textarea wire:model="wfhForm.blockers" rows="2" placeholder="Anything holding you up…"
+                    class="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 placeholder:text-zinc-400 focus:border-violet-400 focus:ring-0 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"></textarea>
+            </div>
+            <div class="md:col-span-2">
+                <label class="mb-1 block text-[11px] font-bold uppercase tracking-wider text-zinc-400">Plan for tomorrow</label>
+                <textarea wire:model="wfhForm.tomorrow_plan" rows="2" placeholder="Next up…"
+                    class="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 placeholder:text-zinc-400 focus:border-violet-400 focus:ring-0 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"></textarea>
+            </div>
+        </div>
+
+        @if($wfhReport?->manager_comment)
+            <div class="mt-3 rounded-xl border border-zinc-200 bg-white p-3 text-xs dark:border-zinc-700 dark:bg-zinc-900">
+                <div class="mb-1 font-bold uppercase tracking-wider text-zinc-400">Manager comment</div>
+                <p class="text-zinc-700 dark:text-zinc-200">{{ $wfhReport->manager_comment }}</p>
+            </div>
+        @endif
+
+        <div class="mt-3 flex justify-end">
+            <button wire:click="saveWfhReport" wire:loading.attr="disabled" wire:target="saveWfhReport"
+                class="inline-flex items-center gap-1.5 rounded-xl bg-violet-600 px-5 py-2 text-sm font-bold text-white transition hover:bg-violet-700 active:scale-95 disabled:opacity-50">
+                <flux:icon.paper-airplane class="size-4" />
+                <span wire:loading.remove wire:target="saveWfhReport">{{ $wfhReport ? 'Update Report' : 'Submit Report' }}</span>
+                <span wire:loading wire:target="saveWfhReport">Saving…</span>
+            </button>
+        </div>
+    </div>
+@endif
+
+{{-- ═══════════════════════════════════════════════
      CALENDAR (larger) + side panel
 ═══════════════════════════════════════════════ --}}
 <div class="grid grid-cols-1 gap-4 lg:grid-cols-12">

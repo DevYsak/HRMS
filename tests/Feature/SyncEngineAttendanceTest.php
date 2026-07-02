@@ -115,7 +115,7 @@ test('an unsupported verify mode is stored as null rather than a bad chip', func
 
     fakeDashboard([
         ['emp_id' => '22', 'name' => 'Sam', 'first_punch' => '09:00:00', 'last_punch' => '18:00:00',
-            'first_punch_method' => 'fingerprint', 'last_punch_method' => '1',
+            'first_punch_method' => 'password', 'last_punch_method' => '0',
             'working_min' => 480, 'break_min' => 0, 'overtime_min' => 0, 'late' => false, 'delay_min' => 0,
             'punch_count' => 2, 'status' => 'Completed Shift'],
     ]);

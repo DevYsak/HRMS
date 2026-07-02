@@ -13,6 +13,7 @@ use App\Models\PublicHoliday;
 use App\Models\ShiftSetting;
 use App\Models\Task;
 use App\Models\User;
+use App\Models\WfhReport;
 use App\Notifications\AttendanceRegularisationNotification;
 use App\Notifications\RegularisationReviewedNotification;
 use App\Services\AiAssistant;
@@ -98,6 +99,17 @@ class AttendanceTracker extends Component
 
     /** Tasks completed within the selected stats period. */
     public int $tasksCompletedPeriod = 0;
+
+    /** Today's WFH daily report (null until submitted). */
+    public $wfhReport = null;
+
+    /** WFH report form fields. */
+    public array $wfhForm = [
+        'work_summary' => '',
+        'achievements' => '',
+        'blockers' => '',
+        'tomorrow_plan' => '',
+    ];
 
     /** Attendance-log filter by work mode ('' = all). */
     public string $logMode = '';
@@ -232,6 +244,47 @@ class AttendanceTracker extends Component
 
         // 10. Today's tasks
         $this->loadTasks($employee);
+
+        // 11. Today's WFH report
+        $this->wfhReport = WfhReport::where('employee_id', $employee->id)
+            ->whereDate('date', Carbon::today()->toDateString())
+            ->first();
+        if ($this->wfhReport) {
+            $this->wfhForm = [
+                'work_summary' => $this->wfhReport->work_summary,
+                'achievements' => $this->wfhReport->achievements ?? '',
+                'blockers' => $this->wfhReport->blockers ?? '',
+                'tomorrow_plan' => $this->wfhReport->tomorrow_plan ?? '',
+            ];
+        }
+    }
+
+    public function saveWfhReport(): void
+    {
+        $employee = Auth::user()->employee;
+        if (! $employee) {
+            return;
+        }
+
+        $this->validate([
+            'wfhForm.work_summary' => ['required', 'string', 'min:5', 'max:5000'],
+            'wfhForm.achievements' => ['nullable', 'string', 'max:5000'],
+            'wfhForm.blockers' => ['nullable', 'string', 'max:5000'],
+            'wfhForm.tomorrow_plan' => ['nullable', 'string', 'max:5000'],
+        ]);
+
+        WfhReport::updateOrCreate(
+            ['employee_id' => $employee->id, 'date' => Carbon::today()->toDateString()],
+            [
+                'work_summary' => $this->wfhForm['work_summary'],
+                'achievements' => $this->wfhForm['achievements'] ?: null,
+                'blockers' => $this->wfhForm['blockers'] ?: null,
+                'tomorrow_plan' => $this->wfhForm['tomorrow_plan'] ?: null,
+            ],
+        );
+
+        $this->loadData();
+        \Flux::toast('WFH report submitted.', variant: 'success');
     }
 
     protected function loadTasks($employee): void
