@@ -18,6 +18,7 @@ use App\Services\AttendanceService;
 use Carbon\CarbonPeriod;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Component;
 
 class AttendanceTracker extends Component
@@ -283,7 +284,7 @@ class AttendanceTracker extends Component
     /**
      * Chronological check-in / break / check-out events for today.
      *
-     * @return array<int, array{time:string, title:string, type:string}>
+     * @return array<int, array{time:string, title:string, type:string, lat?:mixed, lng?:mixed, photo?:?string}>
      */
     protected function buildTodayTimeline(): array
     {
@@ -295,6 +296,9 @@ class AttendanceTracker extends Component
             'time' => $this->todayAttendance->check_in->format('h:i A'),
             'title' => 'Clocked in'.($this->todayAttendance->is_late ? ' (late)' : ''),
             'type' => $this->todayAttendance->is_late ? 'late' : 'in',
+            'lat' => $this->todayAttendance->check_in_lat,
+            'lng' => $this->todayAttendance->check_in_lng,
+            'photo' => $this->todayAttendance->check_in_photo,
         ]];
 
         $breaks = BreakLog::where('attendance_id', $this->todayAttendance->id)
@@ -309,7 +313,14 @@ class AttendanceTracker extends Component
         }
 
         if ($this->todayAttendance->check_out) {
-            $events[] = ['time' => $this->todayAttendance->check_out->format('h:i A'), 'title' => 'Clocked out', 'type' => 'out'];
+            $events[] = [
+                'time' => $this->todayAttendance->check_out->format('h:i A'),
+                'title' => 'Clocked out',
+                'type' => 'out',
+                'lat' => $this->todayAttendance->check_out_lat,
+                'lng' => $this->todayAttendance->check_out_lng,
+                'photo' => $this->todayAttendance->check_out_photo,
+            ];
         }
 
         return $events;
@@ -536,7 +547,7 @@ class AttendanceTracker extends Component
         \Flux::toast('Break ended. Welcome back!');
     }
 
-    public function checkIn($lat = null, $lng = null)
+    public function checkIn($lat = null, $lng = null, ?string $photo = null)
     {
         if ($this->todayAttendance) {
             return;
@@ -562,6 +573,7 @@ class AttendanceTracker extends Component
             'ip' => request()->ip(),
             'lat' => $lat,
             'lng' => $lng,
+            'photo' => $this->storePunchPhoto($employee, $photo, 'in'),
             'work_mode' => $this->workMode,
         ]);
 
@@ -569,7 +581,7 @@ class AttendanceTracker extends Component
         \Flux::toast('Clocked in successfully.');
     }
 
-    public function checkOut($lat = null, $lng = null)
+    public function checkOut($lat = null, $lng = null, ?string $photo = null)
     {
         if (! $this->todayAttendance || $this->todayAttendance->check_out) {
             return;
@@ -578,10 +590,34 @@ class AttendanceTracker extends Component
         $this->todayAttendance = app(AttendanceService::class)->checkOut($this->todayAttendance, [
             'lat' => $lat,
             'lng' => $lng,
+            'photo' => $this->storePunchPhoto(Auth::user()->employee, $photo, 'out'),
         ]);
 
         $this->loadData();
         \Flux::toast('Clocked out successfully. Good work today!');
+    }
+
+    /**
+     * Persist a base64 selfie captured at punch time and return its public path.
+     * Returns null when no (or an invalid) image is supplied — punching stays optional.
+     */
+    protected function storePunchPhoto($employee, ?string $dataUrl, string $which): ?string
+    {
+        if (! $employee || ! $dataUrl || ! str_starts_with($dataUrl, 'data:image')) {
+            return null;
+        }
+
+        [, $encoded] = array_pad(explode(',', $dataUrl, 2), 2, '');
+        $binary = base64_decode($encoded, true);
+
+        if ($binary === false || strlen($binary) > 2_000_000) {
+            return null;
+        }
+
+        $path = "attendance-photos/{$employee->id}/".now()->format('Ymd_His')."_{$which}.jpg";
+        Storage::disk('public')->put($path, $binary);
+
+        return $path;
     }
 
     public function openRegularisation($date)

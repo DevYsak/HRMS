@@ -32,6 +32,7 @@ class AttendanceService
             'check_in_ip' => $payload['ip'] ?? request()->ip(),
             'check_in_lat' => $payload['lat'] ?? null,
             'check_in_lng' => $payload['lng'] ?? null,
+            'check_in_photo' => $payload['photo'] ?? null,
             'work_mode' => in_array($payload['work_mode'] ?? 'office', AttendanceMode::values(), true) ? $payload['work_mode'] : 'office',
             'status' => $isLate ? 'late' : 'on_time',
             'is_late' => $isLate,
@@ -49,6 +50,7 @@ class AttendanceService
             'check_out_ip' => $payload['ip'] ?? request()->ip(),
             'check_out_lat' => $payload['lat'] ?? null,
             'check_out_lng' => $payload['lng'] ?? null,
+            'check_out_photo' => $payload['photo'] ?? null,
             'total_hours' => $totalHours,
         ]);
 

@@ -114,7 +114,7 @@
                 <div class="text-[11px] text-zinc-400">of {{ $targetLabel }} target</div>
                 <div class="mt-3 flex flex-wrap gap-2">
                     @if(! $todayAttendance)
-                        <button wire:click="checkIn"
+                        <button type="button" @click="$flux.modal('punch-capture').show(); $dispatch('open-punch', { action: 'in' })"
                             class="inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold shadow-lg shadow-brand-500/20 transition hover:bg-brand-700 active:scale-95">
                             <flux:icon.finger-print class="size-4" /> Clock In · {{ strtoupper($workMode) }}
                         </button>
@@ -124,7 +124,7 @@
                         @else
                             <button wire:click="startBreak" class="inline-flex items-center gap-1.5 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-bold transition hover:bg-white/20 active:scale-95"><flux:icon.pause class="size-4" /> Break</button>
                         @endif
-                        <button wire:click="checkOut" wire:confirm="End your work day?"
+                        <button type="button" @click="$flux.modal('punch-capture').show(); $dispatch('open-punch', { action: 'out' })"
                             class="inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold transition hover:bg-brand-700 active:scale-95">
                             <flux:icon.arrow-right-start-on-rectangle class="size-4" /> End Work Day
                         </button>
@@ -317,6 +317,22 @@
                         <div class="flex-1 -mt-0.5">
                             <div class="text-xs font-bold text-zinc-800 dark:text-zinc-100">{{ $ev['title'] }}</div>
                             <div class="text-[11px] tabular-nums text-zinc-400">{{ $ev['time'] }}</div>
+                            @if(! empty($ev['photo']) || (! empty($ev['lat']) && ! empty($ev['lng'])))
+                                <div class="mt-1.5 flex items-center gap-2">
+                                    @if(! empty($ev['photo']))
+                                        <a href="{{ \Storage::url($ev['photo']) }}" target="_blank" title="View punch photo">
+                                            <img src="{{ \Storage::url($ev['photo']) }}" alt="Punch selfie"
+                                                class="size-9 rounded-lg object-cover ring-1 ring-zinc-200 transition hover:ring-brand-400 dark:ring-zinc-700">
+                                        </a>
+                                    @endif
+                                    @if(! empty($ev['lat']) && ! empty($ev['lng']))
+                                        <a href="https://www.google.com/maps?q={{ $ev['lat'] }},{{ $ev['lng'] }}" target="_blank" rel="noopener"
+                                            class="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold text-zinc-600 transition hover:text-brand-600 dark:bg-zinc-800 dark:text-zinc-300">
+                                            <flux:icon.map-pin class="size-3" /> Location
+                                        </a>
+                                    @endif
+                                </div>
+                            @endif
                         </div>
                     </div>
                 @endforeach
@@ -818,6 +834,111 @@
             <flux:button @click="$flux.modal('regularisation-modal').close()">Cancel</flux:button>
             <flux:button wire:click="submitRegularisation" variant="primary">Submit Request</flux:button>
         </div>
+    </div>
+</flux:modal>
+
+{{-- ═══════════════════════════════════════════════
+     PUNCH CAPTURE MODAL — selfie + geolocation
+═══════════════════════════════════════════════ --}}
+<flux:modal name="punch-capture" class="max-w-md"
+    x-data="{
+        action: 'in', lat: null, lng: null, photo: null,
+        stream: null, status: 'idle', geoStatus: 'pending', busy: false,
+        async openCapture(action) {
+            this.action = action; this.photo = null; this.lat = null; this.lng = null;
+            this.geoStatus = 'pending'; this.busy = false;
+            this.getLocation();
+            await this.startCamera();
+        },
+        getLocation() {
+            if (! ('geolocation' in navigator)) { this.geoStatus = 'unavailable'; return; }
+            navigator.geolocation.getCurrentPosition(
+                p => { this.lat = +p.coords.latitude.toFixed(6); this.lng = +p.coords.longitude.toFixed(6); this.geoStatus = 'ok'; },
+                () => { this.geoStatus = 'denied'; },
+                { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
+            );
+        },
+        async startCamera() {
+            if (! navigator.mediaDevices || ! navigator.mediaDevices.getUserMedia) { this.status = 'nocamera'; return; }
+            try {
+                this.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+                this.status = 'camera';
+                this.$nextTick(() => { if (this.$refs.video) this.$refs.video.srcObject = this.stream; });
+            } catch (e) { this.status = 'nocamera'; }
+        },
+        capture() {
+            const v = this.$refs.video, c = this.$refs.canvas;
+            if (! v) return;
+            const w = 360, h = Math.round(w * (v.videoHeight || 480) / (v.videoWidth || 640));
+            c.width = w; c.height = h;
+            c.getContext('2d').drawImage(v, 0, 0, w, h);
+            this.photo = c.toDataURL('image/jpeg', 0.7);
+            this.stopCamera(); this.status = 'preview';
+        },
+        retake() { this.photo = null; this.startCamera(); },
+        stopCamera() { if (this.stream) { this.stream.getTracks().forEach(t => t.stop()); this.stream = null; } },
+        cleanup() { this.stopCamera(); this.status = 'idle'; this.busy = false; },
+        async submit() {
+            if (this.busy) return;
+            this.busy = true;
+            try {
+                if (this.action === 'in') { await this.$wire.checkIn(this.lat, this.lng, this.photo); }
+                else { await this.$wire.checkOut(this.lat, this.lng, this.photo); }
+            } finally {
+                this.cleanup();
+                this.$flux.modal('punch-capture').close();
+            }
+        }
+    }"
+    x-on:open-punch.window="openCapture($event.detail.action)"
+    x-on:close="cleanup()">
+    <div class="space-y-4">
+        <div>
+            <flux:heading size="lg" x-text="action === 'in' ? 'Clock In' : 'End Work Day'">Clock In</flux:heading>
+            <flux:subheading>Confirm with a quick selfie &amp; your location.</flux:subheading>
+        </div>
+
+        {{-- Camera / preview --}}
+        <div class="relative aspect-[4/3] w-full overflow-hidden rounded-2xl bg-zinc-900">
+            <video x-ref="video" autoplay playsinline muted x-show="status === 'camera'" class="h-full w-full object-cover"></video>
+            <img :src="photo" x-show="status === 'preview' && photo" class="h-full w-full object-cover" alt="Selfie preview">
+            <div x-show="status === 'idle'" class="absolute inset-0 flex items-center justify-center text-zinc-500">
+                <flux:icon.camera class="size-9 animate-pulse" />
+            </div>
+            <div x-show="status === 'nocamera'" class="absolute inset-0 flex flex-col items-center justify-center px-6 text-center text-zinc-400">
+                <flux:icon.video-camera-slash class="mb-2 size-9" />
+                <p class="text-xs">Camera unavailable — you can still clock in without a photo.</p>
+            </div>
+            <canvas x-ref="canvas" class="hidden"></canvas>
+        </div>
+
+        {{-- Location status --}}
+        <div class="flex items-center gap-2 rounded-xl bg-zinc-50 px-3 py-2 text-xs dark:bg-zinc-800/50">
+            <flux:icon.map-pin class="size-4 shrink-0"
+                ::class="geoStatus === 'ok' ? 'text-emerald-500' : (geoStatus === 'pending' ? 'text-zinc-400 animate-pulse' : 'text-amber-500')" />
+            <span x-show="geoStatus === 'pending'" class="text-zinc-400">Getting your location…</span>
+            <span x-show="geoStatus === 'ok'" class="font-semibold text-emerald-600 dark:text-emerald-400" x-text="'Location captured · ' + lat + ', ' + lng"></span>
+            <span x-show="geoStatus === 'denied'" class="text-amber-600 dark:text-amber-400">Location off — clocking in without it.</span>
+            <span x-show="geoStatus === 'unavailable'" class="text-amber-600 dark:text-amber-400">Location unavailable on this device.</span>
+        </div>
+
+        {{-- Actions --}}
+        <div class="flex items-center justify-between gap-2 pt-1">
+            <button type="button" @click="cleanup(); $flux.modal('punch-capture').close()"
+                class="rounded-xl px-4 py-2 text-sm font-bold text-zinc-500 transition hover:bg-zinc-100 dark:hover:bg-zinc-800">Cancel</button>
+            <div class="flex items-center gap-2">
+                <button type="button" x-show="status === 'preview'" @click="retake()"
+                    class="rounded-xl bg-zinc-100 px-4 py-2 text-sm font-bold text-zinc-600 transition hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-200">Retake</button>
+                <button type="button" x-show="status === 'camera'" @click="capture()"
+                    class="inline-flex items-center gap-1.5 rounded-xl bg-zinc-800 px-4 py-2 text-sm font-bold text-white transition hover:bg-zinc-900 dark:bg-zinc-700">
+                    <flux:icon.camera class="size-4" /> Capture
+                </button>
+                <button type="button" @click="submit()" x-bind:disabled="busy"
+                    class="inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-5 py-2 text-sm font-bold text-white shadow-lg shadow-brand-500/20 transition hover:bg-brand-700 disabled:opacity-50"
+                    x-text="busy ? 'Saving…' : (action === 'in' ? 'Clock In' : 'Clock Out')">Clock In</button>
+            </div>
+        </div>
+        <p class="text-center text-[10px] text-zinc-400">Photo &amp; location are optional — you can clock in without them.</p>
     </div>
 </flux:modal>
 

@@ -5,7 +5,9 @@ use App\Livewire\Attendance\AttendanceTracker;
 use App\Models\Attendance;
 use App\Models\Employee;
 use App\Models\ShiftSetting;
+use App\Models\User;
 use App\Services\AttendanceService;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 
 function dayShift(): ShiftSetting
@@ -36,6 +38,55 @@ test('an unknown work mode falls back to office', function () {
     $attendance = app(AttendanceService::class)->checkIn($employee, dayShift(), ['work_mode' => 'mars']);
 
     expect($attendance->work_mode)->toBe('office');
+});
+
+test('clocking in stores a punch selfie and geolocation', function () {
+    Storage::fake('public');
+    dayShift();
+    $user = User::factory()->create();
+    $employee = Employee::factory()->create(['user_id' => $user->id]);
+    $this->actingAs($user);
+
+    Livewire::test(AttendanceTracker::class)
+        ->call('checkIn', 12.9716, 77.5946, 'data:image/jpeg;base64,/9j/4AAQSkZJRg==');
+
+    $att = Attendance::where('employee_id', $employee->id)->firstOrFail();
+
+    expect((float) $att->check_in_lat)->toBe(12.9716);
+    expect((float) $att->check_in_lng)->toBe(77.5946);
+    expect($att->check_in_photo)->not->toBeNull();
+    Storage::disk('public')->assertExists($att->check_in_photo);
+});
+
+test('clocking in without a photo or location still works', function () {
+    Storage::fake('public');
+    dayShift();
+    $user = User::factory()->create();
+    $employee = Employee::factory()->create(['user_id' => $user->id]);
+    $this->actingAs($user);
+
+    Livewire::test(AttendanceTracker::class)->call('checkIn');
+
+    $att = Attendance::where('employee_id', $employee->id)->firstOrFail();
+
+    expect($att->check_in_photo)->toBeNull();
+    expect($att->check_in_lat)->toBeNull();
+});
+
+test('a non-image payload is rejected and no file is written', function () {
+    Storage::fake('public');
+    dayShift();
+    $user = User::factory()->create();
+    $employee = Employee::factory()->create(['user_id' => $user->id]);
+    $this->actingAs($user);
+
+    Livewire::test(AttendanceTracker::class)
+        ->call('checkIn', null, null, 'data:text/html;base64,PHNjcmlwdD4=');
+
+    $att = Attendance::where('employee_id', $employee->id)->firstOrFail();
+
+    expect($att->check_in_photo)->toBeNull();
+    expect(Storage::disk('public')->allFiles())->toBeEmpty();
 });
 
 test('clocking in from the tracker records the selected mode', function () {
