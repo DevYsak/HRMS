@@ -38,6 +38,7 @@ class AttendanceSettings extends Component
         'settings.shift_end' => 'required',
         'settings.requires_location' => 'boolean',
         'settings.requires_qr' => 'boolean',
+        'settings.requires_photo' => 'boolean',
     ];
 
     public function mount(): void

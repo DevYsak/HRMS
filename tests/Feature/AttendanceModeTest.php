@@ -3,6 +3,7 @@
 use App\Enums\AttendanceMode;
 use App\Livewire\Attendance\AttendanceTracker;
 use App\Models\Attendance;
+use App\Models\AttendanceSetting;
 use App\Models\Employee;
 use App\Models\ShiftSetting;
 use App\Models\User;
@@ -189,4 +190,36 @@ test('the attendance log mode filter is a live property', function () {
         ->set('logMode', 'wfh')
         ->assertOk()
         ->assertSet('logMode', 'wfh');
+});
+
+test('requires_location blocks clock-in without coordinates', function () {
+    dayShift();
+    AttendanceSetting::create(['shift_start' => '09:00', 'shift_end' => '18:00', 'requires_location' => true]);
+    $employee = Employee::factory()->create();
+
+    Livewire::actingAs($employee->user)->test(AttendanceTracker::class)->call('checkIn');
+
+    expect(Attendance::where('employee_id', $employee->id)->count())->toBe(0);
+});
+
+test('requires_photo blocks clock-in without a selfie', function () {
+    dayShift();
+    AttendanceSetting::create(['shift_start' => '09:00', 'shift_end' => '18:00', 'requires_photo' => true]);
+    $employee = Employee::factory()->create();
+
+    Livewire::actingAs($employee->user)->test(AttendanceTracker::class)->call('checkIn', 12.9, 77.5, null);
+
+    expect(Attendance::where('employee_id', $employee->id)->count())->toBe(0);
+});
+
+test('clock-in succeeds when required location and photo are supplied', function () {
+    Storage::fake('public');
+    dayShift();
+    AttendanceSetting::create(['shift_start' => '09:00', 'shift_end' => '18:00', 'requires_location' => true, 'requires_photo' => true]);
+    $employee = Employee::factory()->create();
+
+    Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
+        ->call('checkIn', 12.9, 77.5, 'data:image/jpeg;base64,/9j/4AAQSkZJRg==');
+
+    expect(Attendance::where('employee_id', $employee->id)->count())->toBe(1);
 });

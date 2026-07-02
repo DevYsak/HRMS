@@ -36,6 +36,8 @@
                 <div class="space-y-3 pt-2">
                     <flux:switch wire:model="settings.requires_location" label="Require Geolocation"
                         description="Block clock-in if location is not shared." />
+                    <flux:switch wire:model="settings.requires_photo" label="Require Selfie Photo"
+                        description="Block clock-in if a punch selfie is not captured." />
                     <flux:switch wire:model="settings.requires_qr" label="Require QR Scan"
                         description="Require scanning a physical QR code at the office." />
                 </div>

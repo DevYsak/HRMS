@@ -653,6 +653,19 @@ class AttendanceTracker extends Component
             return;
         }
 
+        // Enforce admin capture requirements (WFH/field discipline).
+        if ($this->attendanceSettings?->requires_location && ($lat === null || $lng === null)) {
+            \Flux::toast('Location is required to clock in — please allow location access and try again.', variant: 'danger');
+
+            return;
+        }
+
+        if ($this->attendanceSettings?->requires_photo && ! $photo) {
+            \Flux::toast('A selfie is required to clock in — please capture a photo and try again.', variant: 'danger');
+
+            return;
+        }
+
         $this->todayAttendance = app(AttendanceService::class)->checkIn($employee, $shift, [
             'ip' => request()->ip(),
             'lat' => $lat,
