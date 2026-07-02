@@ -350,7 +350,7 @@ class AttendanceTracker extends Component
                     $mins = $att->check_in->diffInMinutes($att->check_out) - ($att->break_minutes ?? 0);
                     $hours = round(max(0, $mins) / 60, 1);
                 }
-                $daily[] = ['label' => $d->format('d M'), 'hours' => $hours, 'late' => (bool) ($att?->is_late)];
+                $daily[] = ['label' => $d->format('d M'), 'hours' => $hours, 'break' => $att ? (int) ($att->break_minutes ?? 0) : 0, 'late' => (bool) ($att?->is_late)];
             }
         }
         $this->chartDaily = $daily;

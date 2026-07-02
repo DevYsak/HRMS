@@ -159,41 +159,81 @@
 </div>
 
 {{-- ═══════════════════════════════════════════════
-     CIRCULAR STAT CARDS (Keka style)
+     KPI CARDS — animated counters + inline sparklines
 ═══════════════════════════════════════════════ --}}
-<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-    @php
-        $statCards = [
-            ['label' => 'Present',    'value' => $presentCount,      'pct' => $attPct,   'color' => '#10b981', 'track' => '#d1fae5', 'dark_track' => '#064e3b'],
-            ['label' => 'Absent',     'value' => $absentCount,       'pct' => $absentPct,'color' => '#ef4444', 'track' => '#fee2e2', 'dark_track' => '#7f1d1d'],
-            ['label' => 'Late',       'value' => $lateCount,         'pct' => $latePct,  'color' => '#f59e0b', 'track' => '#fef3c7', 'dark_track' => '#78350f'],
-            ['label' => 'On Leave',   'value' => $leaveCount,        'pct' => 0,         'color' => '#8b5cf6', 'track' => '#ede9fe', 'dark_track' => '#4c1d95'],
-            ['label' => 'Hours',      'value' => $stats['hours'],    'pct' => 0,         'color' => '#3b82f6', 'track' => '#dbeafe', 'dark_track' => '#1e3a5f'],
-            ['label' => 'Working Days','value' => $totalWorkingDays, 'pct' => 100,       'color' => '#6b7280', 'track' => '#f3f4f6', 'dark_track' => '#1f2937'],
-        ];
-    @endphp
-    @foreach($statCards as $sc)
-        @php $pct = min(100, (float)($sc['pct'] ?? 0)); @endphp
-        <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4 flex flex-col items-center gap-2 shadow-sm hover:shadow-md transition-shadow">
-            {{-- SVG Ring --}}
-            <div class="relative size-16">
-                <svg viewBox="0 0 36 36" class="size-16 -rotate-90">
-                    <circle cx="18" cy="18" r="15.9" fill="none" stroke="{{ $sc['track'] }}" stroke-width="3"/>
-                    <circle cx="18" cy="18" r="15.9" fill="none"
-                        stroke="{{ $sc['color'] }}"
-                        stroke-width="3"
-                        stroke-dasharray="{{ $pct }}, 100"
-                        stroke-linecap="round"
-                        class="transition-all duration-700"/>
-                </svg>
-                <div class="absolute inset-0 flex items-center justify-center">
-                    <span class="text-sm font-black text-zinc-900 dark:text-white">{{ $sc['value'] }}</span>
-                </div>
+@php
+    /** Inline SVG sparkline from a numeric series. */
+    if (! function_exists('pulse_spark')) {
+        function pulse_spark(array $vals, string $color, bool $fill = true): string
+        {
+            $vals = array_values(array_map('floatval', $vals));
+            if (count($vals) < 2) {
+                $vals = count($vals) === 1 ? [$vals[0], $vals[0]] : [0, 0];
+            }
+            $w = 100;
+            $h = 30;
+            $max = max($vals);
+            $min = min($vals);
+            $range = ($max - $min) ?: 1;
+            $n = count($vals);
+            $pts = [];
+            foreach ($vals as $i => $v) {
+                $x = round($i / ($n - 1) * $w, 2);
+                $y = round($h - 3 - (($v - $min) / $range) * ($h - 6), 2);
+                $pts[] = "{$x},{$y}";
+            }
+            $line = implode(' ', $pts);
+            $svg = '<svg viewBox="0 0 '.$w.' '.$h.'" preserveAspectRatio="none" class="h-8 w-full overflow-visible">';
+            if ($fill) {
+                $svg .= '<polyline points="0,'.$h.' '.$line.' '.$w.','.$h.'" fill="'.$color.'" fill-opacity="0.10" stroke="none"/>';
+            }
+            $svg .= '<polyline points="'.$line.'" fill="none" stroke="'.$color.'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>';
+            [$lx, $ly] = explode(',', end($pts));
+            $svg .= '<circle cx="'.$lx.'" cy="'.$ly.'" r="2.5" fill="'.$color.'"/></svg>';
+
+            return $svg;
+        }
+    }
+
+    $hoursSeries = collect($chartDaily)->pluck('hours')->map(fn ($v) => (float) $v)->all();
+    $breakSeries = collect($chartDaily)->pluck('break')->map(fn ($v) => (float) $v)->all();
+    $lateSeries  = collect($analytics['late_trend'] ?? [])->pluck('late')->map(fn ($v) => (float) $v)->all();
+    $avgBreakMin = (int) ($analytics['avg_break'] ?? 0);
+
+    $kpis = [
+        ['label' => 'Working Hours', 'value' => $stats['hours'] ?? '0h', 'raw' => null,               'sub' => 'total this period',       'icon' => 'clock',              'color' => '#10b981', 'text' => 'text-emerald-600 dark:text-emerald-400', 'spark' => $hoursSeries],
+        ['label' => 'Avg Break',     'value' => null,                    'raw' => $avgBreakMin,        'suffix' => 'm', 'sub' => 'per working day',        'icon' => 'pause',              'color' => '#f59e0b', 'text' => 'text-amber-600 dark:text-amber-400',     'spark' => $breakSeries],
+        ['label' => 'Attendance',    'value' => null,                    'raw' => (float) $attPct,     'suffix' => '%', 'sub' => 'present rate',           'icon' => 'chart-pie',          'color' => '#6366f1', 'text' => 'text-indigo-600 dark:text-indigo-400',   'bar' => (float) $attPct],
+        ['label' => 'Present Days',  'value' => null,                    'raw' => (int) $presentCount, 'sub' => 'of '.$totalWorkingDays.' working days', 'icon' => 'check-badge',        'color' => '#3b82f6', 'text' => 'text-blue-600 dark:text-blue-400',       'bar' => $totalWorkingDays ? round($presentCount / $totalWorkingDays * 100) : 0],
+        ['label' => 'Late Arrivals', 'value' => null,                    'raw' => (int) $lateCount,    'sub' => 'this period',            'icon' => 'exclamation-triangle', 'color' => '#ef4444', 'text' => 'text-rose-600 dark:text-rose-400',       'spark' => $lateSeries],
+    ];
+@endphp
+<div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+    @foreach($kpis as $k)
+        <div class="group relative overflow-hidden rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900">
+            <div class="flex items-start justify-between">
+                <span class="inline-flex size-9 items-center justify-center rounded-xl" style="background: {{ $k['color'] }}1a; color: {{ $k['color'] }};">
+                    <flux:icon :icon="$k['icon']" class="size-4" />
+                </span>
+                <span class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">{{ $k['label'] }}</span>
             </div>
-            <div class="text-center">
-                <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest leading-tight">{{ $sc['label'] }}</div>
-                @if($sc['pct'] > 0)
-                    <div class="text-[9px] text-zinc-400 mt-0.5">{{ $pct }}%</div>
+
+            <div class="mt-3 text-2xl font-black tabular-nums text-zinc-900 dark:text-white">
+                @if($k['value'] !== null)
+                    {{ $k['value'] }}
+                @else
+                    <span x-data="{ n: 0 }" x-init="$nextTick(() => { let t = @js($k['raw']), s = 0, step = t/28 || t; let iv = setInterval(() => { s += step; if (s >= t) { s = t; clearInterval(iv); } n = @js(is_int($k['raw'])) ? Math.round(s) : Math.round(s*10)/10; }, 18); })" x-text="n">{{ $k['raw'] }}</span>{{ $k['suffix'] ?? '' }}
+                @endif
+            </div>
+            <div class="text-[11px] text-zinc-400">{{ $k['sub'] }}</div>
+
+            <div class="mt-2 h-8">
+                @if(! empty($k['spark']))
+                    {!! pulse_spark($k['spark'], $k['color']) !!}
+                @elseif(isset($k['bar']))
+                    <div class="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                        <div class="h-full rounded-full transition-all duration-700" style="width: {{ min(100, $k['bar']) }}%; background: {{ $k['color'] }};"></div>
+                    </div>
                 @endif
             </div>
         </div>
