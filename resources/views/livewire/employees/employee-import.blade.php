@@ -113,7 +113,14 @@
                                         'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400' => $row['status'] === 'error',
                                     ])>{{ ucfirst($row['status']) }}</span>
                                 </td>
-                                <td class="px-4 py-2 text-xs text-rose-500">{{ implode(' ', $row['errors']) }}</td>
+                                <td class="px-4 py-2 text-xs">
+                                    @if(! empty($row['errors']))
+                                        <span class="text-rose-500">{{ implode(' ', $row['errors']) }}</span>
+                                    @endif
+                                    @if(! empty($row['warnings']))
+                                        <span class="text-amber-600 dark:text-amber-400">{{ implode(' ', $row['warnings']) }}</span>
+                                    @endif
+                                </td>
                             </tr>
                         @endforeach
                     </tbody>

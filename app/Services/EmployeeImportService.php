@@ -94,7 +94,8 @@ class EmployeeImportService
 
             $summary['total']++;
             $line = $i + 2; // +1 for zero-index, +1 for the heading row
-            $errors = [];
+            $errors = [];   // block the row
+            $warnings = []; // row still imports; the unmatched field is left blank
 
             $email = Str::lower((string) $r['email']);
             $name = trim(implode(' ', array_filter([$r['first_name'], $r['middle_name'], $r['last_name']])));
@@ -150,16 +151,17 @@ class EmployeeImportService
                 $errors[] = "Status '{$r['status']}' is not recognised.";
             }
 
-            $departmentId = $this->resolveId($departments, $r['department'], 'Department', $errors);
-            $jobTitleId = $this->resolveId($jobTitles, $r['designation'], 'Designation', $errors);
-            $employmentTypeId = $this->resolveId($employmentTypes, $r['employment_type'], 'Employment type', $errors);
-            $shiftId = $this->resolveId($shifts, $r['shift'], 'Shift', $errors);
+            // Optional look-ups: unmatched values warn (and import blank) rather than block the row.
+            $departmentId = $this->resolveId($departments, $r['department'], 'Department', $warnings);
+            $jobTitleId = $this->resolveId($jobTitles, $r['designation'], 'Designation', $warnings);
+            $employmentTypeId = $this->resolveId($employmentTypes, $r['employment_type'], 'Employment type', $warnings);
+            $shiftId = $this->resolveId($shifts, $r['shift'], 'Shift', $warnings);
 
             $managerId = null;
             if ($r['reporting_manager'] !== '') {
                 $managerId = $managers[Str::lower($r['reporting_manager'])] ?? null;
                 if ($managerId === null) {
-                    $errors[] = "Reporting manager '{$r['reporting_manager']}' was not found (match by email).";
+                    $warnings[] = "Reporting manager '{$r['reporting_manager']}' was not found (left blank).";
                 }
             }
 
@@ -179,6 +181,7 @@ class EmployeeImportService
                 'line' => $line,
                 'status' => $status_,
                 'errors' => $errors,
+                'warnings' => $warnings,
                 'data' => [
                     'name' => $name,
                     'email' => $email,

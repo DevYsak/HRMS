@@ -40,6 +40,22 @@ test('parse classifies new, update and error rows', function () {
     expect($result['summary']['error'])->toBe(1);
 });
 
+test('an unknown employment type or manager warns but still imports the row', function () {
+    $service = app(EmployeeImportService::class);
+
+    $parsed = $service->parse([
+        ['employee_id' => 'EMP-W', 'first_name' => 'Warned', 'email' => 'warned@example.com', 'joining_date' => '2026-07-01', 'employment_type' => 'Full Time', 'reporting_manager' => 'nobody@example.com'],
+    ]);
+
+    expect($parsed['rows'][0]['status'])->toBe('new');          // not blocked
+    expect($parsed['rows'][0]['warnings'])->not->toBeEmpty();
+
+    $log = $service->import($parsed, 'skip', User::factory()->create());
+
+    expect($log->imported)->toBe(1);
+    expect(Employee::whereHas('user', fn ($q) => $q->where('email', 'warned@example.com'))->exists())->toBeTrue();
+});
+
 test('new employees require a unique employee id', function () {
     $result = app(EmployeeImportService::class)->parse([
         ['first_name' => 'NoId', 'email' => 'noid@example.com', 'joining_date' => '2026-07-01'],
