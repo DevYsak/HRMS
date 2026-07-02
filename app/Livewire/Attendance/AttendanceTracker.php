@@ -15,6 +15,7 @@ use App\Notifications\AttendanceRegularisationNotification;
 use App\Notifications\RegularisationReviewedNotification;
 use App\Services\AiAssistant;
 use App\Services\AttendanceService;
+use App\Support\UserAgent;
 use Carbon\CarbonPeriod;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -284,7 +285,7 @@ class AttendanceTracker extends Component
     /**
      * Chronological check-in / break / check-out events for today.
      *
-     * @return array<int, array{time:string, title:string, type:string, lat?:mixed, lng?:mixed, photo?:?string}>
+     * @return array<int, array{time:string, title:string, type:string, lat?:mixed, lng?:mixed, photo?:?string, device?:array}>
      */
     protected function buildTodayTimeline(): array
     {
@@ -299,6 +300,7 @@ class AttendanceTracker extends Component
             'lat' => $this->todayAttendance->check_in_lat,
             'lng' => $this->todayAttendance->check_in_lng,
             'photo' => $this->todayAttendance->check_in_photo,
+            'device' => UserAgent::parse($this->todayAttendance->check_in_user_agent),
         ]];
 
         $breaks = BreakLog::where('attendance_id', $this->todayAttendance->id)
@@ -320,6 +322,7 @@ class AttendanceTracker extends Component
                 'lat' => $this->todayAttendance->check_out_lat,
                 'lng' => $this->todayAttendance->check_out_lng,
                 'photo' => $this->todayAttendance->check_out_photo,
+                'device' => UserAgent::parse($this->todayAttendance->check_out_user_agent),
             ];
         }
 

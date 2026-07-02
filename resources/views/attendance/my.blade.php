@@ -331,6 +331,12 @@
                                             <flux:icon.map-pin class="size-3" /> Location
                                         </a>
                                     @endif
+                                    @if(! empty($ev['device']) && $ev['device']['browser'] !== 'Unknown')
+                                        <span class="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"
+                                            title="{{ $ev['device']['label'] }}">
+                                            <flux:icon :icon="$ev['device']['icon']" class="size-3" /> {{ $ev['device']['browser'] }}
+                                        </span>
+                                    @endif
                                 </div>
                             @endif
                         </div>
@@ -750,7 +756,15 @@
                                             @else <span class="text-rose-400">--:--</span>
                                             @endif
                                         </div>
-                                        <span class="text-[9px] font-bold uppercase tracking-wider {{ $sc }}">{{ match($item->status) { 'on_time' => 'On Time', 'late' => 'Late', default => ucfirst($item->status) } }}</span>
+                                        <div class="flex items-center gap-1.5">
+                                            <span class="text-[9px] font-bold uppercase tracking-wider {{ $sc }}">{{ match($item->status) { 'on_time' => 'On Time', 'late' => 'Late', default => ucfirst($item->status) } }}</span>
+                                            @php $dev = \App\Support\UserAgent::parse($item->check_in_user_agent); @endphp
+                                            @if($dev['browser'] !== 'Unknown')
+                                                <span class="inline-flex items-center gap-0.5 text-[9px] text-zinc-400" title="{{ $dev['label'] }}">
+                                                    <flux:icon :icon="$dev['icon']" class="size-2.5" /> {{ $dev['os'] }}
+                                                </span>
+                                            @endif
+                                        </div>
                                     </td>
                                     {{-- Hours --}}
                                     <td class="py-2.5 text-right">

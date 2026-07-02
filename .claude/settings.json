@@ -199,7 +199,9 @@
       "Bash(grep -nE 'Fillable|fillable|protected \\\\$fillable' app/Models/ShiftSetting.php)",
       "Bash(grep -n 'public\\\\|breaks\\\\|weekSummary\\\\|activeBreak\\\\|$this->stats\\\\|computeStats\\\\|history\\\\b' app/Livewire/Attendance/AttendanceTracker.php)",
       "Bash(vendor/bin/pint app/Livewire/Attendance/AttendanceTracker.php app/Services/AttendanceService.php app/Models/Attendance.php database/migrations/2026_07_02_153931_add_punch_photos_to_attendances_table.php --format agent)",
-      "Bash(vendor/bin/pint tests/Feature/AttendanceModeTest.php --format agent)"
+      "Bash(vendor/bin/pint tests/Feature/AttendanceModeTest.php --format agent)",
+      "Bash(vendor/bin/pint app/Support/UserAgent.php app/Services/AttendanceService.php app/Models/Attendance.php app/Livewire/Attendance/AttendanceTracker.php tests/Unit/UserAgentTest.php tests/Feature/AttendanceModeTest.php database/migrations/2026_07_02_160222_add_punch_user_agents_to_attendances_table.php --format agent)",
+      "Bash(vendor/bin/pint app/Services/AttendanceService.php --format agent)"
     ],
     "additionalDirectories": [
       "C:\\Users\\91937\\Desktop\\xamp\\htdocs\\mahaigr-v2\\includes"

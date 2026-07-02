@@ -7,6 +7,7 @@ use App\Models\Employee;
 use App\Models\ShiftSetting;
 use App\Models\User;
 use App\Services\AttendanceService;
+use App\Support\UserAgent;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 
@@ -38,6 +39,17 @@ test('an unknown work mode falls back to office', function () {
     $attendance = app(AttendanceService::class)->checkIn($employee, dayShift(), ['work_mode' => 'mars']);
 
     expect($attendance->work_mode)->toBe('office');
+});
+
+test('the attendance service records the punch user agent', function () {
+    $employee = Employee::factory()->create();
+
+    $attendance = app(AttendanceService::class)->checkIn($employee, dayShift(), [
+        'user_agent' => 'Mozilla/5.0 (Windows NT 10.0) Chrome/120.0 Safari/537.36',
+    ]);
+
+    expect($attendance->check_in_user_agent)->toContain('Chrome');
+    expect(UserAgent::parse($attendance->check_in_user_agent)['browser'])->toBe('Chrome');
 });
 
 test('clocking in stores a punch selfie and geolocation', function () {

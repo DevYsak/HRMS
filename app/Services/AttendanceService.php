@@ -33,7 +33,8 @@ class AttendanceService
             'check_in_lat' => $payload['lat'] ?? null,
             'check_in_lng' => $payload['lng'] ?? null,
             'check_in_photo' => $payload['photo'] ?? null,
-            'work_mode' => in_array($payload['work_mode'] ?? 'office', AttendanceMode::values(), true) ? $payload['work_mode'] : 'office',
+            'check_in_user_agent' => $payload['user_agent'] ?? request()->userAgent(),
+            'work_mode' => in_array($mode = $payload['work_mode'] ?? 'office', AttendanceMode::values(), true) ? $mode : 'office',
             'status' => $isLate ? 'late' : 'on_time',
             'is_late' => $isLate,
             'late_minutes' => $lateMinutes,
@@ -51,6 +52,7 @@ class AttendanceService
             'check_out_lat' => $payload['lat'] ?? null,
             'check_out_lng' => $payload['lng'] ?? null,
             'check_out_photo' => $payload['photo'] ?? null,
+            'check_out_user_agent' => $payload['user_agent'] ?? request()->userAgent(),
             'total_hours' => $totalHours,
         ]);
 
