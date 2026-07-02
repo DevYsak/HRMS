@@ -58,7 +58,7 @@ EDITS = [
     ),
     (
         "store_punch: insert values",
-        'device_sn, raw_status, verify,',
+        'dt_str, punch_date, device_sn, raw_status, verify,',
         'dt_str, punch_date, device_sn, raw_status,',
         'dt_str, punch_date, device_sn, raw_status, verify,',
     ),
