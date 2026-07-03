@@ -136,10 +136,19 @@ class AttendanceTracker extends Component
     /** Attendance-log filter by work mode ('' = all). */
     public string $logMode = '';
 
+    /** Custom analytics date range (activates statsPeriod = 'custom'). */
+    public ?string $rangeFrom = null;
+
+    public ?string $rangeTo = null;
+
     /** Full punch detail for the detail modal (null when closed). */
     public ?array $detail = null;
 
     // Regularisation form fields
+    public bool $regFixIn = false;
+
+    public bool $regFixOut = true;
+
     public string $regDate = '';
 
     public string $regCheckIn = '';
@@ -175,6 +184,7 @@ class AttendanceTracker extends Component
         // 2. Fetch all required data in consolidated queries
         $allAttendances = Attendance::where('employee_id', $employee->id)
             ->whereBetween('date', [$gridStart->toDateString(), $gridEnd->toDateString()])
+            ->with('regularisation')
             ->get();
 
         $leaves = LeaveRequest::where('employee_id', $employee->id)
@@ -516,9 +526,22 @@ class AttendanceTracker extends Component
             return [];
         }
 
+        // Devices often log one physical action twice (e.g. a card tap and a
+        // face verify seconds apart). Collapse punches within a 3-minute window
+        // into the first one so the in/out alternation reflects real movement.
+        $deduped = collect();
+        foreach ($punches as $p) {
+            $last = $deduped->last();
+            if ($last && $last->punched_at->diffInMinutes($p->punched_at) < 3) {
+                continue;
+            }
+            $deduped->push($p);
+        }
+        $punches = $deduped->values();
+
         $n = $punches->count();
 
-        return $punches->values()->map(function (AttendancePunch $p, int $i) use ($n, $punches) {
+        return $punches->map(function (AttendancePunch $p, int $i) use ($n, $punches) {
             $isEntry = $i % 2 === 0;                 // even index = entered / clocked in
             [$title, $type] = match (true) {
                 $i === 0 => ['Clocked in', 'in'],
@@ -698,7 +721,44 @@ class AttendanceTracker extends Component
 
     public function updatedStatsPeriod(): void
     {
+        $this->rangeFrom = null;
+        $this->rangeTo = null;
+        $this->loadData(); // restores the month-based log after a custom range
+    }
+
+    /** A custom From/To range drives every chart, insight and the log. */
+    public function updatedRangeFrom(): void
+    {
+        $this->applyCustomRange();
+    }
+
+    public function updatedRangeTo(): void
+    {
+        $this->applyCustomRange();
+    }
+
+    protected function applyCustomRange(): void
+    {
+        if (! $this->rangeFrom || ! $this->rangeTo) {
+            return;
+        }
+
+        if (Carbon::parse($this->rangeFrom)->gt(Carbon::parse($this->rangeTo))) {
+            [$this->rangeFrom, $this->rangeTo] = [$this->rangeTo, $this->rangeFrom];
+        }
+
+        $this->statsPeriod = 'custom';
         $this->computeStats();
+
+        // The Attendance Log follows the selected range too.
+        $employee = Auth::user()->employee;
+        if ($employee) {
+            $this->history = Attendance::where('employee_id', $employee->id)
+                ->whereBetween('date', [$this->rangeFrom, $this->rangeTo])
+                ->with('regularisation')
+                ->orderByDesc('date')
+                ->get();
+        }
     }
 
     protected function computeStats(): void
@@ -713,6 +773,10 @@ class AttendanceTracker extends Component
             'last_month' => [Carbon::now()->subMonth()->startOfMonth(), Carbon::now()->subMonth()->endOfMonth()],
             '3_months' => [Carbon::now()->subMonths(2)->startOfMonth(), Carbon::now()->endOfMonth()],
             'year' => [Carbon::now()->startOfYear(), Carbon::now()->endOfMonth()],
+            'custom' => [
+                Carbon::parse($this->rangeFrom ?? now()->startOfMonth()),
+                Carbon::parse($this->rangeTo ?? now()),
+            ],
             default => [Carbon::now()->startOfMonth(), Carbon::now()->endOfMonth()],
         };
 
@@ -1129,10 +1193,16 @@ class AttendanceTracker extends Component
     {
         $this->regDate = $date;
         $attendance = Attendance::where('employee_id', Auth::user()->employee->id)->where('date', $date)->first();
-        if ($attendance) {
-            $this->regCheckIn = $attendance->check_in?->format('H:i') ?? '';
-            $this->regCheckOut = $attendance->check_out?->format('H:i') ?? '';
+        $this->regCheckIn = $attendance?->check_in?->format('H:i') ?? '';
+        $this->regCheckOut = $attendance?->check_out?->format('H:i') ?? '';
+
+        // Pre-tick what's actually missing so the employee fixes only that.
+        $this->regFixIn = ! $attendance || ! $attendance->check_in;
+        $this->regFixOut = ! $attendance || ! $attendance->check_out;
+        if (! $this->regFixIn && ! $this->regFixOut) {
+            $this->regFixOut = true; // correcting an existing (wrong) punch
         }
+
         $this->dispatch('flux:modal:open', name: 'regularisation-modal');
     }
 
@@ -1140,46 +1210,68 @@ class AttendanceTracker extends Component
     {
         $this->validate([
             'regDate' => 'required|date',
-            'regCheckIn' => 'required',
-            'regCheckOut' => 'required',
+            'regCheckIn' => $this->regFixIn ? 'required' : 'nullable',
+            'regCheckOut' => $this->regFixOut ? 'required' : 'nullable',
             'regReason' => 'required|min:5',
+        ], [
+            'regCheckIn.required' => 'Enter the correct check-in time.',
+            'regCheckOut.required' => 'Enter the correct check-out time.',
         ]);
+
+        if (! $this->regFixIn && ! $this->regFixOut) {
+            \Flux::toast('Tick at least one punch to correct (check-in or check-out).', variant: 'warning');
+
+            return;
+        }
 
         $employee = Auth::user()->employee;
         $attendance = Attendance::where('employee_id', $employee->id)
             ->where('date', $this->regDate)
             ->first();
 
+        // Untouched punches keep their recorded time so approval only
+        // overrides what the employee asked to fix.
+        $requestedIn = $this->regFixIn
+            ? $this->regCheckIn
+            : ($attendance?->check_in?->format('H:i') ?? $this->regCheckIn);
+        $requestedOut = $this->regFixOut
+            ? $this->regCheckOut
+            : ($attendance?->check_out?->format('H:i') ?? $this->regCheckOut);
+
+        if (! $requestedIn || ! $requestedOut) {
+            \Flux::toast('Both times are needed — tick the missing punch and fill it in.', variant: 'warning');
+
+            return;
+        }
+
         $regularisation = AttendanceRegularisation::create([
             'employee_id' => $employee->id,
             'attendance_id' => $attendance?->id,
             'work_date' => $this->regDate,
-            'requested_check_in' => $this->regDate.' '.$this->regCheckIn.':00',
-            'requested_check_out' => $this->regDate.' '.$this->regCheckOut.':00',
+            'requested_check_in' => $this->regDate.' '.$requestedIn.':00',
+            'requested_check_out' => $this->regDate.' '.$requestedOut.':00',
             'reason' => $this->regReason,
             'status' => 'pending',
         ]);
 
-        // Notify manager (or HR) about the regularisation request
+        // Notify the manager AND HR/Admin so either can approve.
         $notification = new AttendanceRegularisationNotification(
             Auth::user()->name,
             Carbon::parse($this->regDate)->format('d M Y'),
             'pending',
         );
-        $manager = $employee->manager;
-        if ($manager) {
-            $manager->notify($notification);
-        } else {
-            User::whereIn('role', ['hr_admin', 'super_admin'])
-                ->each(fn ($hr) => $hr->notify($notification));
+        $approvers = User::whereIn('role', ['hr_admin', 'super_admin'])->get();
+        if ($employee->manager) {
+            $approvers->push($employee->manager);
         }
+        $approvers->unique('id')->each(fn ($u) => $u->notify($notification));
 
         // Notify the employee themselves so the request appears in their inbox
         Auth::user()->notify(new RegularisationReviewedNotification($regularisation));
 
-        $this->reset(['regDate', 'regCheckIn', 'regCheckOut', 'regReason']);
+        $this->reset(['regDate', 'regCheckIn', 'regCheckOut', 'regReason', 'regFixIn', 'regFixOut']);
         $this->dispatch('flux:modal:close', name: 'regularisation-modal');
-        \Flux::toast('Regularisation request submitted successfully.');
+        \Flux::toast('Regularisation request sent to your manager & HR for approval.');
     }
 
     protected function buildShiftLabel(): ?string

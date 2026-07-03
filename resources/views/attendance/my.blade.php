@@ -86,6 +86,12 @@
                     class="rounded-lg px-3 py-1.5 text-xs font-bold transition {{ $statsPeriod === $val ? 'bg-orange-500 text-white shadow' : 'text-zinc-500 hover:bg-orange-50' }}">{{ $label }}</button>
             @endforeach
         </div>
+        <div class="flex items-center gap-1.5 rounded-xl border {{ $statsPeriod === 'custom' ? 'border-orange-400 ring-1 ring-orange-200' : 'border-orange-100' }} bg-white px-2 py-1 shadow-sm">
+            <span class="text-[10px] font-bold uppercase tracking-wider {{ $statsPeriod === 'custom' ? 'text-orange-500' : 'text-zinc-400' }}">Custom</span>
+            <input type="date" wire:model.live="rangeFrom" class="w-[7.5rem] border-0 bg-transparent p-1 text-xs font-semibold text-zinc-600 focus:ring-0">
+            <span class="text-zinc-300">–</span>
+            <input type="date" wire:model.live="rangeTo" class="w-[7.5rem] border-0 bg-transparent p-1 text-xs font-semibold text-zinc-600 focus:ring-0">
+        </div>
         <button wire:click="exportLog" class="inline-flex items-center gap-1.5 rounded-xl border border-orange-100 bg-white px-3 py-2 text-xs font-bold text-zinc-600 shadow-sm transition hover:bg-orange-50"><flux:icon.arrow-down-tray class="size-4 text-orange-500" /> Export</button>
     </div>
 </div>
@@ -223,13 +229,15 @@
                 ['label' => 'Leave Balance', 'value' => rtrim(rtrim(number_format($leaveBalance, 1), '0'), '.'), 'icon' => 'calendar-days', 'color' => '#14b8a6', 'trend' => 'days'],
             ];
         @endphp
-        <div class="grid grid-cols-3 gap-2.5 md:grid-cols-5 xl:grid-cols-9">
+        <div class="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
             @foreach($health as $h)
-                <div class="rounded-2xl border border-zinc-100 bg-white p-3 transition hover:-translate-y-0.5 hover:shadow-md">
-                    <span class="inline-flex size-8 items-center justify-center rounded-xl" style="background: {{ $h['color'] }}1a; color: {{ $h['color'] }};"><flux:icon :icon="$h['icon']" class="size-4" /></span>
-                    <div class="mt-2 text-lg font-black leading-none tabular-nums text-zinc-900">{{ $h['value'] }}</div>
-                    <div class="mt-1 text-[9px] font-bold uppercase tracking-wide text-zinc-400">{{ $h['label'] }}</div>
-                    <div class="text-[9px] text-zinc-400">{{ $h['trend'] }}</div>
+                <div class="flex items-center gap-3 rounded-2xl border border-zinc-100 bg-white p-3 transition hover:-translate-y-0.5 hover:shadow-md">
+                    <span class="inline-flex size-9 shrink-0 items-center justify-center rounded-xl" style="background: {{ $h['color'] }}1a; color: {{ $h['color'] }};"><flux:icon :icon="$h['icon']" class="size-4" /></span>
+                    <div class="min-w-0">
+                        <div class="truncate text-base font-black leading-none tabular-nums text-zinc-900">{{ $h['value'] }}</div>
+                        <div class="mt-0.5 truncate text-[9px] font-bold uppercase tracking-wide text-zinc-400">{{ $h['label'] }}</div>
+                        <div class="truncate text-[9px] text-zinc-400">{{ $h['trend'] }}</div>
+                    </div>
                 </div>
             @endforeach
         </div>
@@ -290,7 +298,7 @@
 
 {{-- ═══════════════ JOURNEY + SHIFT PROGRESS + BIOMETRIC ═══════════════ --}}
 @php $journey = count($attendanceJourney) ? $attendanceJourney : $todayTimeline; $isJourney = count($attendanceJourney) > 0; @endphp
-<div class="grid grid-cols-1 gap-4 lg:grid-cols-12">
+<div class="grid grid-cols-1 items-start gap-4 lg:grid-cols-12">
     {{-- Attendance Journey --}}
     <div class="rounded-[18px] border border-orange-100/70 bg-white p-5 shadow-sm lg:col-span-5">
         <div class="mb-4 flex items-center justify-between">
@@ -298,7 +306,7 @@
             <button type="button" @click="$flux.modal('regularisation-modal').show()" class="text-[11px] font-bold text-orange-500 hover:underline">Request Regularization</button>
         </div>
         @if(count($journey) > 0)
-            <div class="relative space-y-3">
+            <div class="relative max-h-[430px] space-y-3 overflow-y-auto pr-1">
                 @foreach($journey as $ev)
                     @php
                         [$dot, $ic, $tint] = match($ev['type']) {
@@ -501,7 +509,11 @@
 {{-- ═══════════════ ATTENDANCE LOG ═══════════════ --}}
 <div class="overflow-hidden rounded-[18px] border border-orange-100/70 bg-white shadow-sm">
     <div class="flex flex-wrap items-center justify-between gap-3 border-b border-orange-100/70 px-5 py-3.5">
-        <h3 class="flex items-center gap-2 text-sm font-black text-zinc-900"><flux:icon.clock class="size-4 text-orange-500" /> Attendance Log</h3>
+        <h3 class="flex items-center gap-2 text-sm font-black text-zinc-900"><flux:icon.clock class="size-4 text-orange-500" /> Attendance Log
+            <span class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
+                · {{ $statsPeriod === 'custom' && $rangeFrom && $rangeTo ? \Carbon\Carbon::parse($rangeFrom)->format('d M').' – '.\Carbon\Carbon::parse($rangeTo)->format('d M Y') : $calendarMonth->format('M Y') }}
+            </span>
+        </h3>
         <div class="flex flex-wrap items-center gap-2">
             <select wire:model.live="logMode" class="rounded-lg border border-orange-100 bg-white px-2.5 py-1.5 text-xs font-semibold text-zinc-600">
                 <option value="">All modes</option>
@@ -543,7 +555,15 @@
                                 @forelse($rowMethods as $m)<span class="mr-1 inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px] font-bold {{ $m->chipClass() }}"><flux:icon :icon="$m->icon()" class="size-2.5" /> {{ $m->label() }}</span>@empty<span class="text-zinc-300">—</span>@endforelse
                             </td>
                             <td class="py-2.5 text-zinc-500">{{ $deviceName }}</td>
-                            <td class="py-2.5"><span class="rounded-full px-2 py-0.5 text-[9px] font-bold {{ $sc }}">{{ match($item->status) { 'on_time' => 'Present', 'late' => 'Late', default => ucfirst($item->status) } }}</span></td>
+                            <td class="py-2.5">
+                                <span class="rounded-full px-2 py-0.5 text-[9px] font-bold {{ $sc }}">{{ match($item->status) { 'on_time' => 'Present', 'late' => 'Late', default => ucfirst($item->status) } }}</span>
+                                @if($item->regularisation)
+                                    @php $regC = match($item->regularisation->status) { 'approved' => 'bg-blue-50 text-blue-600', 'rejected' => 'bg-rose-50 text-rose-500', default => 'bg-amber-50 text-amber-600' }; @endphp
+                                    <span class="mt-0.5 block w-fit rounded-full px-2 py-0.5 text-[8px] font-bold uppercase {{ $regC }}" title="Regularisation {{ $item->regularisation->status }}">
+                                        {{ $item->regularisation->status === 'approved' ? 'Regularized' : 'Reg. '.$item->regularisation->status }}
+                                    </span>
+                                @endif
+                            </td>
                             <td class="px-5 py-2.5 text-right"><span class="inline-flex items-center rounded px-1.5 py-0.5 text-[8px] font-bold uppercase {{ $rowMode->chipClass() }}">{{ $rowMode->shortLabel() }}</span></td>
                         </tr>
                     @endforeach
@@ -686,15 +706,36 @@
         </div>
         <div class="space-y-4">
             <flux:input wire:model="regDate" label="Date of Work" type="date" />
-            <div class="grid grid-cols-2 gap-4">
-                <flux:input wire:model="regCheckIn" label="Correct Check-in" type="time" />
-                <flux:input wire:model="regCheckOut" label="Correct Check-out" type="time" />
+
+            <div>
+                <div class="mb-2 text-sm font-medium text-zinc-700 dark:text-zinc-200">What needs correcting?</div>
+                <div class="grid grid-cols-2 gap-3">
+                    <label class="flex cursor-pointer items-center gap-2 rounded-xl border p-3 text-sm font-semibold transition {{ $regFixIn ? 'border-orange-400 bg-orange-50 text-orange-700' : 'border-zinc-200 text-zinc-500' }}">
+                        <input type="checkbox" wire:model.live="regFixIn" class="rounded border-zinc-300 text-orange-500 focus:ring-orange-400">
+                        Check-In missed / wrong
+                    </label>
+                    <label class="flex cursor-pointer items-center gap-2 rounded-xl border p-3 text-sm font-semibold transition {{ $regFixOut ? 'border-orange-400 bg-orange-50 text-orange-700' : 'border-zinc-200 text-zinc-500' }}">
+                        <input type="checkbox" wire:model.live="regFixOut" class="rounded border-zinc-300 text-orange-500 focus:ring-orange-400">
+                        Check-Out missed / wrong
+                    </label>
+                </div>
             </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <div class="{{ $regFixIn ? '' : 'pointer-events-none opacity-40' }}">
+                    <flux:input wire:model="regCheckIn" label="Correct Check-in" type="time" :disabled="! $regFixIn" />
+                </div>
+                <div class="{{ $regFixOut ? '' : 'pointer-events-none opacity-40' }}">
+                    <flux:input wire:model="regCheckOut" label="Correct Check-out" type="time" :disabled="! $regFixOut" />
+                </div>
+            </div>
+            <p class="text-[11px] text-zinc-400">Unticked punches keep their recorded time. On approval, working hours, overtime, score and payroll update automatically.</p>
+
             <flux:textarea wire:model="regReason" label="Reason" placeholder="e.g. Forgot to clock out, system glitch..." rows="3" />
         </div>
         <div class="flex justify-end gap-2 pt-2">
             <flux:button @click="$flux.modal('regularisation-modal').close()">Cancel</flux:button>
-            <flux:button wire:click="submitRegularisation" variant="primary">Submit Request</flux:button>
+            <flux:button wire:click="submitRegularisation" variant="primary">Send to Manager &amp; HR</flux:button>
         </div>
     </div>
 </flux:modal>

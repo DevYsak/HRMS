@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\AttendanceMode;
+use App\Enums\UserRole;
 use App\Livewire\Attendance\AttendanceTracker;
 use App\Models\Attendance;
 use App\Models\AttendanceDailySummary;
@@ -11,8 +12,10 @@ use App\Models\BiometricDevice;
 use App\Models\Employee;
 use App\Models\ShiftSetting;
 use App\Models\User;
+use App\Notifications\AttendanceRegularisationNotification;
 use App\Services\AttendanceService;
 use App\Support\UserAgent;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 
@@ -400,4 +403,75 @@ test('attendance insights are generated from real period data', function () {
         ->assertSet('insights', fn ($i) => count($i) >= 3
             && collect($i)->contains(fn ($x) => str_contains($x['text'], 'Average check-in'))
             && collect($i)->contains(fn ($x) => str_contains($x['text'], 'Break compliance')));
+});
+
+test('the journey collapses duplicate punches logged seconds apart', function () {
+    $employee = Employee::factory()->create();
+    foreach (['09:00:00', '09:00:40', '13:00:00', '13:45:00', '18:00:00', '18:01:10'] as $t) {
+        AttendancePunch::create([
+            'employee_id' => $employee->id,
+            'punched_at' => today()->toDateString().' '.$t,
+            'punch_date' => today(),
+            'method' => 'face',
+            'source' => 'biometric',
+        ]);
+    }
+
+    Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
+        ->assertSet('attendanceJourney', fn ($j) => count($j) === 4
+            && $j[0]['type'] === 'in' && $j[3]['type'] === 'out');
+});
+
+test('a custom date range drives the stats and the attendance log', function () {
+    $employee = Employee::factory()->create();
+    Attendance::create([
+        'employee_id' => $employee->id, 'date' => '2026-06-10',
+        'check_in' => '2026-06-10 09:00:00', 'check_out' => '2026-06-10 18:00:00',
+        'status' => 'on_time', 'work_mode' => 'office', 'total_hours' => 9,
+    ]);
+    Attendance::create([
+        'employee_id' => $employee->id, 'date' => today(),
+        'check_in' => today()->setTime(9, 0), 'check_out' => today()->setTime(18, 0),
+        'status' => 'on_time', 'work_mode' => 'office', 'total_hours' => 9,
+    ]);
+
+    Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
+        ->set('rangeFrom', '2026-06-01')
+        ->set('rangeTo', '2026-06-30')
+        ->assertSet('statsPeriod', 'custom')
+        ->assertSet('stats.present', 1)
+        ->assertSet('history', fn ($h) => count($h) === 1 && $h[0]->date->toDateString() === '2026-06-10')
+        // Switching back to a period tab restores the month log
+        ->set('statsPeriod', 'this_month')
+        ->assertSet('rangeFrom', null);
+});
+
+test('regularising only the check-out keeps the recorded check-in', function () {
+    Notification::fake();
+    $managerUser = User::factory()->create(['role' => UserRole::Manager]);
+    $hr = User::factory()->create(['role' => UserRole::HrAdmin]);
+    $employee = Employee::factory()->create(['manager_id' => $managerUser->id]);
+    $date = now()->startOfMonth()->addDays(6)->toDateString();
+    Attendance::create([
+        'employee_id' => $employee->id, 'date' => $date,
+        'check_in' => "$date 09:17:00", 'check_out' => null, 'missing_checkout' => true,
+        'status' => 'on_time', 'work_mode' => 'office',
+    ]);
+
+    Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
+        ->call('openRegularisation', $date)
+        ->assertSet('regFixIn', false)     // check-in exists → not pre-ticked
+        ->assertSet('regFixOut', true)     // check-out missing → pre-ticked
+        ->set('regCheckOut', '18:30')
+        ->set('regReason', 'Forgot to punch out at the gate')
+        ->call('submitRegularisation')
+        ->assertHasNoErrors();
+
+    $reg = AttendanceRegularisation::where('employee_id', $employee->id)->firstOrFail();
+    expect(Illuminate\Support\Carbon::parse($reg->requested_check_in)->format('H:i'))->toBe('09:17'); // untouched
+    expect(Illuminate\Support\Carbon::parse($reg->requested_check_out)->format('H:i'))->toBe('18:30');
+
+    // Manager AND HR are both notified.
+    Notification::assertSentTo($managerUser, AttendanceRegularisationNotification::class);
+    Notification::assertSentTo($hr, AttendanceRegularisationNotification::class);
 });
