@@ -287,3 +287,33 @@ test('the attendance journey classifies every punch in sequence', function () {
             && $j[2]['type'] === 'resume' && $j[3]['type'] === 'out'
             && $j[0]['method'] === 'face' && $j[1]['method'] === 'id_card');
 });
+
+test('smart alerts show the all-clear when the day is complete', function () {
+    $employee = Employee::factory()->create();
+    Attendance::create([
+        'employee_id' => $employee->id, 'date' => today(),
+        'check_in' => today()->setTime(9, 0), 'check_out' => today()->setTime(18, 0),
+        'status' => 'on_time', 'work_mode' => 'office', 'total_hours' => 9,
+    ]);
+
+    Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
+        ->assertSet('attendanceAlerts', [])
+        ->assertSee('No attendance issues today');
+});
+
+test('smart alerts flag a past missing check-out with a regularize action', function () {
+    $this->travelTo(Carbon\Carbon::parse('2026-07-20 10:00:00'));
+    $employee = Employee::factory()->create();
+    Attendance::create([
+        'employee_id' => $employee->id, 'date' => '2026-07-10',
+        'check_in' => '2026-07-10 09:00:00', 'check_out' => null,
+        'status' => 'on_time', 'work_mode' => 'office',
+    ]);
+
+    Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
+        ->assertSee('Missing Check-Out')
+        ->assertSee('Shift Progress')
+        ->assertSet('attendanceAlerts', fn ($a) => collect($a)->contains(fn ($x) => $x['type'] === 'missing_checkout'));
+
+    $this->travelBack();
+});

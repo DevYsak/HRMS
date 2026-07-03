@@ -148,27 +148,40 @@
 <div class="mt-4 space-y-4">
 
 {{-- ═══════════════════════════════════════════════
-     MISSING PUNCH WARNING (orange, prominent)
+     SMART ATTENDANCE ALERTS (permanent widget)
 ═══════════════════════════════════════════════ --}}
-@if($missingPunches->isNotEmpty())
-    <div class="flex flex-col gap-3 rounded-2xl border border-amber-300 bg-gradient-to-r from-amber-50 to-orange-50 p-4 shadow-sm dark:border-amber-800/60 dark:from-amber-950/30 dark:to-orange-950/20 sm:flex-row sm:items-center sm:justify-between">
-        <div class="flex items-start gap-3">
-            <span class="mt-0.5 inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white shadow-lg shadow-amber-500/30">
-                <flux:icon.exclamation-triangle class="size-5" />
-            </span>
-            <div>
-                <div class="text-sm font-black text-amber-900 dark:text-amber-200">{{ $missingPunches->count() }} missing punch{{ $missingPunches->count() > 1 ? 'es' : '' }} detected</div>
-                <div class="mt-0.5 text-xs text-amber-700 dark:text-amber-300/80">
-                    Incomplete on
-                    {{ $missingPunches->take(4)->map(fn($m) => $m->date->format('d M'))->implode(', ') }}{{ $missingPunches->count() > 4 ? ' +'.($missingPunches->count() - 4).' more' : '' }}.
-                    Regularise to correct working hours &amp; attendance.
-                </div>
+@if(empty($attendanceAlerts))
+    <div class="flex items-center gap-3 rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-white p-4 shadow-sm dark:border-emerald-900/40 dark:from-emerald-950/20 dark:to-zinc-900">
+        <span class="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500 text-white shadow-lg shadow-emerald-500/30"><flux:icon.check-badge class="size-5" /></span>
+        <div>
+            <div class="text-sm font-black text-emerald-900 dark:text-emerald-300">No attendance issues today</div>
+            <div class="text-xs text-emerald-700 dark:text-emerald-400/80">All your punches are complete and reconciled.</div>
+        </div>
+    </div>
+@else
+    <div class="rounded-2xl border border-amber-300 bg-gradient-to-r from-amber-50 to-orange-50 p-4 shadow-sm dark:border-amber-800/60 dark:from-amber-950/30 dark:to-orange-950/20">
+        <div class="flex items-center gap-3">
+            <span class="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white shadow-lg shadow-amber-500/30"><flux:icon.exclamation-triangle class="size-5" /></span>
+            <div class="flex-1">
+                <div class="text-sm font-black text-amber-900 dark:text-amber-200">{{ count($attendanceAlerts) }} attendance {{ \Illuminate\Support\Str::plural('alert', count($attendanceAlerts)) }}</div>
+                <div class="text-xs text-amber-700 dark:text-amber-300/80">Regularise to correct working hours, overtime &amp; attendance.</div>
             </div>
         </div>
-        <button wire:click="openRegularisation('{{ $missingPunches->first()->date->toDateString() }}')"
-            class="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-bold text-white shadow-md shadow-amber-500/30 transition hover:bg-amber-600 active:scale-95">
-            <flux:icon.pencil-square class="size-4" /> Request Regularization
-        </button>
+        <div class="mt-3 space-y-2">
+            @foreach($attendanceAlerts as $alert)
+                <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200/70 bg-white/70 px-3 py-2 dark:border-amber-900/40 dark:bg-zinc-900/50">
+                    <div class="flex items-center gap-2 text-xs">
+                        <flux:icon.exclamation-circle class="size-4 text-amber-500" />
+                        <span class="font-bold text-amber-900 dark:text-amber-200">{{ $alert['label'] }}</span>
+                        <span class="text-amber-700 dark:text-amber-300/70">· {{ $alert['detail'] }}</span>
+                    </div>
+                    <button wire:click="openRegularisation('{{ $alert['date'] }}')"
+                        class="inline-flex shrink-0 items-center gap-1 rounded-lg bg-amber-500 px-3 py-1 text-[11px] font-bold text-white transition hover:bg-amber-600 active:scale-95">
+                        <flux:icon.pencil-square class="size-3" /> Regularize
+                    </button>
+                </div>
+            @endforeach
+        </div>
     </div>
 @endif
 
@@ -478,6 +491,44 @@
                     <button type="button" @click="$flux.modal('regularisation-modal').show()" class="mt-2 text-[11px] font-bold text-brand-600 hover:underline">Request regularization →</button>
                 </div>
             @endif
+        </div>
+
+        {{-- Shift Progress --}}
+        @php
+            $remainingMin = max(0, $targetMin - $workedMin);
+            $expectedLogout = $shift && $shift->end_time ? \Carbon\Carbon::parse($shift->end_time)->format('g:i A') : '—';
+        @endphp
+        <div class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <div class="mb-3 flex items-center justify-between">
+                <div class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Shift Progress</div>
+                <span class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-bold {{ $isIn ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400' : ($isDone ? 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800' : 'bg-amber-50 text-amber-600 dark:bg-amber-950/30 dark:text-amber-400') }}">
+                    {{ $activeBreak ? 'On Break' : ($isIn ? 'Working' : ($isDone ? 'Completed' : 'Not In')) }}
+                </span>
+            </div>
+            <div class="mb-3">
+                <div class="mb-1 flex items-center justify-between text-[11px] text-zinc-400">
+                    <span>{{ $workedLabel }} worked</span><span>{{ $progress }}%</span>
+                </div>
+                <div class="h-2 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                    <div class="h-full rounded-full bg-brand-500 transition-all duration-700" style="width: {{ $progress }}%"></div>
+                </div>
+            </div>
+            <div class="grid grid-cols-3 gap-2 text-center">
+                @foreach([
+                    ['Start', $shift ? \Carbon\Carbon::parse($shift->start_time)->format('g:i A') : '—'],
+                    ['End', $shift ? \Carbon\Carbon::parse($shift->end_time)->format('g:i A') : '—'],
+                    ['Grace', ($shift->grace_minutes ?? 5).'m'],
+                    ['Remaining', intdiv($remainingMin, 60).'h '.($remainingMin % 60).'m'],
+                    ['Break Used', intdiv($breakMin, 60).'h '.($breakMin % 60).'m'],
+                    ['Overtime', intdiv($otMin, 60).'h '.($otMin % 60).'m'],
+                ] as [$k, $v])
+                    <div class="rounded-xl bg-zinc-50 p-2.5 dark:bg-zinc-800/40">
+                        <div class="text-[9px] font-bold uppercase tracking-wider text-zinc-400">{{ $k }}</div>
+                        <div class="mt-0.5 text-xs font-black text-zinc-800 dark:text-zinc-100">{{ $v }}</div>
+                    </div>
+                @endforeach
+            </div>
+            <div class="mt-2 text-center text-[11px] text-zinc-400">Expected logout <span class="font-bold text-zinc-600 dark:text-zinc-300">{{ $expectedLogout }}</span></div>
         </div>
 
         {{-- Monthly Analytics --}}

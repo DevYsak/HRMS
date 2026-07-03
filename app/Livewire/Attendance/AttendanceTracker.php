@@ -95,6 +95,9 @@ class AttendanceTracker extends Component
     /** Full Attendance Journey — every biometric punch for today, classified. */
     public array $attendanceJourney = [];
 
+    /** Smart Attendance Alerts — missing check-in/out/break, past & present. */
+    public array $attendanceAlerts = [];
+
     /** Today's tasks for the logged-in employee. */
     public $tasks = [];
 
@@ -254,6 +257,7 @@ class AttendanceTracker extends Component
         $this->weekSummary = $this->buildWeekSummary($employee);
         $this->todayTimeline = $this->buildTodayTimeline();
         $this->attendanceJourney = $this->buildAttendanceJourney($employee);
+        $this->attendanceAlerts = $this->buildAttendanceAlerts();
 
         // 10. Today's tasks
         $this->loadTasks($employee);
@@ -520,6 +524,69 @@ class AttendanceTracker extends Component
                 'lng' => $p->lng,
             ];
         })->all();
+    }
+
+    /**
+     * Smart Attendance Alerts — detect missing Check-In / Check-Out / Break End
+     * for today (once the shift is over) plus recent unresolved days. Empty when
+     * there are no issues (the widget then shows the all-clear state).
+     *
+     * @return array<int, array{type:string, label:string, detail:string, date:string}>
+     */
+    protected function buildAttendanceAlerts(): array
+    {
+        $alerts = [];
+        $today = Carbon::today();
+
+        $shiftEnd = ($this->shift && $this->shift->end_time)
+            ? Carbon::parse($this->shift->end_time)->setDate($today->year, $today->month, $today->day)
+            : $today->copy()->setTime(20, 0);
+        $shiftOver = now()->gt($shiftEnd);
+
+        // ── Today ──
+        if ($this->todayAttendance) {
+            if ($this->todayAttendance->check_in && ! $this->todayAttendance->check_out && $shiftOver) {
+                $alerts[] = [
+                    'type' => 'missing_checkout',
+                    'label' => 'Missing Check-Out',
+                    'detail' => 'Today · clocked in at '.$this->todayAttendance->check_in->format('h:i A'),
+                    'date' => $today->toDateString(),
+                ];
+            }
+
+            // Break parity from the journey: an unclosed break = missing return punch.
+            $breakStarts = collect($this->attendanceJourney)->where('type', 'break')->count();
+            $breakEnds = collect($this->attendanceJourney)->where('type', 'resume')->count();
+            if ($breakStarts > $breakEnds && $this->todayAttendance->check_out) {
+                $alerts[] = [
+                    'type' => 'missing_break_end',
+                    'label' => 'Missing Break End',
+                    'detail' => 'Today · a break-return punch was not recorded',
+                    'date' => $today->toDateString(),
+                ];
+            }
+        } elseif ($shiftOver && ! $today->isWeekend() && $this->workMode !== 'wfh') {
+            $alerts[] = [
+                'type' => 'missing_checkin',
+                'label' => 'Missing Check-In',
+                'detail' => 'No punch recorded for today',
+                'date' => $today->toDateString(),
+            ];
+        }
+
+        // ── Recent unresolved days (missing check-out) ──
+        foreach (collect($this->history)
+            ->filter(fn ($i) => (! $i->check_out && ! $i->date->isToday()) || $i->missing_checkout)
+            ->sortByDesc('date')->take(5) as $item) {
+            $alerts[] = [
+                'type' => 'missing_checkout',
+                'label' => 'Missing Check-Out',
+                'detail' => $item->date->format('D, d M').' · clocked in at '.$item->check_in->format('h:i A'),
+                'date' => $item->date->toDateString(),
+            ];
+        }
+
+        return $alerts;
     }
 
     public function previousMonth()
