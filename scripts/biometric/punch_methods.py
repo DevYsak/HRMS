@@ -90,20 +90,27 @@ def first_last_verify(pin, date):
 def all_punches(pin, date):
     """
     Every punch for `pin` on `date` as [{'time': 'YYYY-MM-DD HH:MM:SS',
-    'verify': <code>}, ...], chronological. Feeds the HRMS Attendance Journey.
-    Returns [] on any error so the dashboard never breaks.
+    'verify': <code>, 'device': <serial>}, ...], chronological. Feeds the
+    HRMS Attendance Journey. Returns [] on any error so the dashboard never
+    breaks. Includes the punching device's serial when the table has one.
     """
     try:
         con = sqlite3.connect(DB_PATH)
         _detect(con)
         s = _SCHEMA
+        cols = [c[1].lower() for c in con.execute("PRAGMA table_info(%s)" % s["table"])]
+        dev = next((c for c in ("device_sn", "device_serial", "sn", "device") if c in cols), None)
+        sel = "%s, %s%s" % (s["time"], s["verify"], (", " + dev) if dev else "")
         rows = con.execute(
-            "SELECT %s, %s FROM %s WHERE %s = ? AND substr(%s,1,10) = ? ORDER BY %s ASC"
-            % (s["time"], s["verify"], s["table"], s["pin"], s["time"], s["time"]),
+            "SELECT %s FROM %s WHERE %s = ? AND substr(%s,1,10) = ? ORDER BY %s ASC"
+            % (sel, s["table"], s["pin"], s["time"], s["time"]),
             (str(pin), str(date)),
         ).fetchall()
         con.close()
-        return [{"time": r[0], "verify": r[1]} for r in rows]
+        return [
+            {"time": r[0], "verify": r[1], "device": (r[2] if dev and len(r) > 2 else None)}
+            for r in rows
+        ]
     except Exception as e:
         print("punch_methods:", e)
         return []

@@ -5,6 +5,7 @@ use App\Livewire\Attendance\AttendanceTracker;
 use App\Models\Attendance;
 use App\Models\AttendanceDailySummary;
 use App\Models\AttendancePunch;
+use App\Models\AttendanceRegularisation;
 use App\Models\AttendanceSetting;
 use App\Models\BiometricDevice;
 use App\Models\Employee;
@@ -287,6 +288,7 @@ test('the attendance journey classifies every punch in sequence', function () {
 });
 
 test('smart alerts show the all-clear when the day is complete', function () {
+    dayShift(); // 09:00–18:00 — a full on-time day within shift raises nothing
     $employee = Employee::factory()->create();
     Attendance::create([
         'employee_id' => $employee->id, 'date' => today(),
@@ -314,4 +316,88 @@ test('smart alerts flag a past missing check-out with a regularize action', func
         ->assertSet('attendanceAlerts', fn ($a) => collect($a)->contains(fn ($x) => $x['type'] === 'missing_checkout'));
 
     $this->travelBack();
+});
+
+test('the journey classifies a midday gap as a lunch break with duration', function () {
+    $employee = Employee::factory()->create();
+    foreach (['09:00', '13:00', '13:45', '18:00'] as $t) {
+        AttendancePunch::create([
+            'employee_id' => $employee->id,
+            'punched_at' => today()->setTimeFromTimeString($t),
+            'punch_date' => today(),
+            'method' => 'face',
+            'source' => 'biometric',
+        ]);
+    }
+
+    Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
+        ->assertSet('attendanceJourney', fn ($j) => str_starts_with($j[1]['title'], 'Lunch break') && str_contains($j[1]['title'], '45m'));
+});
+
+test('showPunchDetail includes the full punch replay and audit history', function () {
+    $employee = Employee::factory()->create();
+    $reviewer = User::factory()->create(['name' => 'HR REVIEWER']);
+    $date = now()->startOfMonth()->addDays(5)->toDateString();
+
+    Attendance::create([
+        'employee_id' => $employee->id, 'date' => $date,
+        'check_in' => $date.' 09:00:00', 'check_out' => $date.' 18:00:00',
+        'status' => 'on_time', 'work_mode' => 'office', 'total_hours' => 9,
+    ]);
+    foreach (['09:00', '18:00'] as $t) {
+        AttendancePunch::create([
+            'employee_id' => $employee->id, 'punched_at' => "$date $t:00", 'punch_date' => $date,
+            'method' => 'face', 'source' => 'biometric', 'device_serial' => 'AIFACE',
+        ]);
+    }
+    AttendanceRegularisation::create([
+        'employee_id' => $employee->id, 'work_date' => $date,
+        'requested_check_in' => "$date 09:00:00", 'requested_check_out' => "$date 18:00:00",
+        'reason' => 'Forgot to punch out', 'status' => 'approved',
+        'reviewer_id' => $reviewer->id, 'reviewed_at' => now(),
+    ]);
+
+    Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
+        ->call('showPunchDetail', $date)
+        ->assertSet('detail.punches', fn ($p) => count($p) === 2 && $p[0]['device'] === 'AIFACE')
+        ->assertSet('detail.audits', fn ($a) => count($a) === 1 && $a[0]['status'] === 'approved' && $a[0]['reviewer'] === 'HR REVIEWER');
+});
+
+test('smart alerts flag late arrival and long break as info/action correctly', function () {
+    $employee = Employee::factory()->create();
+    Attendance::create([
+        'employee_id' => $employee->id, 'date' => today(),
+        'check_in' => today()->setTime(11, 30), 'check_out' => today()->setTime(19, 0),
+        'is_late' => true, 'late_minutes' => 55, 'status' => 'late', 'work_mode' => 'office',
+    ]);
+    foreach (['11:30', '13:00', '15:00', '19:00'] as $t) { // 2h break = long
+        AttendancePunch::create([
+            'employee_id' => $employee->id, 'punched_at' => today()->setTimeFromTimeString($t),
+            'punch_date' => today(), 'method' => 'face', 'source' => 'biometric',
+        ]);
+    }
+
+    Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
+        ->assertSet('attendanceAlerts', function ($alerts) {
+            $types = collect($alerts)->pluck('type');
+
+            return $types->contains('late_arrival') && $types->contains('long_break')
+                && collect($alerts)->firstWhere('type', 'long_break')['action'] === false;
+        });
+});
+
+test('attendance insights are generated from real period data', function () {
+    $employee = Employee::factory()->create();
+    Attendance::create([
+        'employee_id' => $employee->id, 'date' => now()->startOfMonth()->addDays(1),
+        'check_in' => now()->startOfMonth()->addDays(1)->setTime(9, 30),
+        'check_out' => now()->startOfMonth()->addDays(1)->setTime(18, 30),
+        'status' => 'on_time', 'work_mode' => 'office', 'total_hours' => 9, 'break_minutes' => 30,
+    ]);
+
+    Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
+        ->assertSee('Attendance Insights')
+        ->assertSet('insights', fn ($i) => count($i) >= 3
+            && collect($i)->contains(fn ($x) => str_contains($x['text'], 'Average check-in'))
+            && collect($i)->contains(fn ($x) => str_contains($x['text'], 'Break compliance')));
 });

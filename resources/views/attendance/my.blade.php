@@ -277,7 +277,11 @@
             @foreach($attendanceAlerts as $alert)
                 <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200/70 bg-white/80 px-3 py-2">
                     <div class="flex items-center gap-2 text-xs"><flux:icon.exclamation-circle class="size-4 text-amber-500" /><span class="font-bold text-amber-900">{{ $alert['label'] }}</span><span class="text-amber-700">· {{ $alert['detail'] }}</span></div>
-                    <button wire:click="openRegularisation('{{ $alert['date'] }}')" class="inline-flex shrink-0 items-center gap-1 rounded-lg bg-amber-500 px-3 py-1 text-[11px] font-bold text-white transition hover:bg-amber-600"><flux:icon.pencil-square class="size-3" /> Regularize</button>
+                    @if($alert['action'] ?? true)
+                        <button wire:click="openRegularisation('{{ $alert['date'] }}')" class="inline-flex shrink-0 items-center gap-1 rounded-lg bg-amber-500 px-3 py-1 text-[11px] font-bold text-white transition hover:bg-amber-600"><flux:icon.pencil-square class="size-3" /> Regularize</button>
+                    @else
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-amber-400">Info</span>
+                    @endif
                 </div>
             @endforeach
         </div>
@@ -457,6 +461,21 @@
     </div>
 </div>
 
+{{-- ═══════════════ ATTENDANCE INSIGHTS ═══════════════ --}}
+@if(count($insights) > 0)
+    <div class="rounded-[18px] border border-orange-100/70 bg-white p-5 shadow-sm">
+        <div class="mb-3 flex items-center gap-2"><span class="inline-flex size-8 items-center justify-center rounded-xl bg-orange-50 text-orange-500"><flux:icon.sparkles class="size-4" /></span><div class="text-sm font-black text-zinc-900">Attendance Insights</div><span class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">· {{ ucwords(str_replace('_', ' ', $statsPeriod)) }}</span></div>
+        <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            @foreach($insights as $ins)
+                <div class="flex items-center gap-2 rounded-xl {{ $ins['good'] ? 'bg-emerald-50/60' : 'bg-amber-50/60' }} px-3 py-2 text-xs">
+                    <flux:icon :icon="$ins['good'] ? 'check-circle' : 'exclamation-circle'" class="size-4 shrink-0 {{ $ins['good'] ? 'text-emerald-500' : 'text-amber-500' }}" />
+                    <span class="font-semibold {{ $ins['good'] ? 'text-emerald-800' : 'text-amber-800' }}">{{ $ins['text'] }}</span>
+                </div>
+            @endforeach
+        </div>
+    </div>
+@endif
+
 {{-- ═══════════════ WFH DAILY REPORT (WFH/Hybrid days only) ═══════════════ --}}
 @if(in_array($heroMode->value, ['wfh', 'hybrid'], true))
     <div class="rounded-[18px] border border-orange-100/70 bg-white p-5 shadow-sm">
@@ -603,6 +622,51 @@
                     </div>
                 @endforeach
             </div>
+
+            {{-- Attendance Replay — every raw punch of the day --}}
+            @if(! empty($detail['punches']))
+                <div>
+                    <div class="mb-2 text-[10px] font-bold uppercase tracking-widest text-zinc-400">Punch Timeline · {{ count($detail['punches']) }} punches</div>
+                    <div class="max-h-48 space-y-1.5 overflow-y-auto pr-1">
+                        @foreach($detail['punches'] as $i => $pp)
+                            <div class="flex items-center gap-2 rounded-lg bg-zinc-50 px-3 py-1.5 text-xs dark:bg-zinc-800/40">
+                                <span class="w-16 shrink-0 font-black tabular-nums text-zinc-900 dark:text-white">{{ $pp['time'] }}</span>
+                                @if($pp['method'])<span class="inline-flex items-center gap-1 text-zinc-600 dark:text-zinc-300"><flux:icon :icon="$pp['method_icon']" class="size-3.5 text-zinc-400" /> {{ $pp['method'] }}</span>@endif
+                                <span class="ml-auto flex items-center gap-2 text-[10px] text-zinc-400">
+                                    @if($pp['location'])<span>{{ $pp['location'] }}</span>@endif
+                                    @if($pp['device'])<span>{{ $pp['device'] }}</span>@endif
+                                    <span class="uppercase">{{ $pp['source'] }}</span>
+                                </span>
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
+            @endif
+
+            {{-- Audit History — regularisations touching this day --}}
+            @if(! empty($detail['audits']))
+                <div>
+                    <div class="mb-2 text-[10px] font-bold uppercase tracking-widest text-zinc-400">Audit History</div>
+                    <div class="space-y-2">
+                        @foreach($detail['audits'] as $audit)
+                            @php
+                                $ac = match($audit['status']) { 'approved' => 'bg-emerald-100 text-emerald-700', 'rejected' => 'bg-rose-100 text-rose-600', default => 'bg-amber-100 text-amber-700' };
+                            @endphp
+                            <div class="rounded-xl border border-zinc-100 p-3 text-xs dark:border-zinc-800">
+                                <div class="flex items-center justify-between">
+                                    <span class="font-bold text-zinc-800 dark:text-zinc-100">Corrected to {{ $audit['requested_in'] }} → {{ $audit['requested_out'] }}</span>
+                                    <span class="rounded-full px-2 py-0.5 text-[9px] font-bold uppercase {{ $ac }}">{{ $audit['status'] }}</span>
+                                </div>
+                                <div class="mt-1 text-zinc-500">“{{ $audit['reason'] }}”</div>
+                                <div class="mt-1 text-[10px] text-zinc-400">
+                                    Submitted {{ $audit['submitted_at'] }}
+                                    @if($audit['reviewer']) · {{ ucfirst($audit['status']) }} by {{ $audit['reviewer'] }} on {{ $audit['reviewed_at'] }}@endif
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
+            @endif
 
             <div class="flex justify-end pt-1">
                 <flux:button @click="$flux.modal('punch-detail').close()">Close</flux:button>

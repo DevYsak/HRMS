@@ -99,6 +99,9 @@ class AttendanceTracker extends Component
     /** Smart Attendance Alerts — missing check-in/out/break, past & present. */
     public array $attendanceAlerts = [];
 
+    /** Auto-generated plain-language attendance insights for the period. */
+    public array $insights = [];
+
     /** Today's tasks for the logged-in employee. */
     public $tasks = [];
 
@@ -261,24 +264,25 @@ class AttendanceTracker extends Component
         $this->weekSummary = $this->buildWeekSummary($employee);
         $this->todayTimeline = $this->buildTodayTimeline();
         $this->attendanceJourney = $this->buildAttendanceJourney($employee);
-        $this->attendanceAlerts = $this->buildAttendanceAlerts();
 
-        // 13. Total available leave balance (current year)
-        $this->leaveBalance = LeaveBalance::where('employee_id', $employee->id)
-            ->where('year', now()->year)
-            ->get()
-            ->sum(fn ($b) => $b->available() + (float) ($b->comp_off_credits ?? 0));
-
-        // 10. Today's tasks
-        $this->loadTasks($employee);
-
-        // 11. Biometric daily summary + device (punch count, source, sync, connection)
+        // 10. Biometric daily summary + device (needed by the alerts below)
         $this->todaySummary = AttendanceDailySummary::where('employee_id', $employee->id)
             ->whereDate('date', Carbon::today()->toDateString())
             ->first();
         $this->biometricDevice = BiometricDevice::query()
             ->orderByDesc('last_synced_at')
             ->first();
+
+        $this->attendanceAlerts = $this->buildAttendanceAlerts();
+
+        // 12. Total available leave balance (current year)
+        $this->leaveBalance = LeaveBalance::where('employee_id', $employee->id)
+            ->where('year', now()->year)
+            ->get()
+            ->sum(fn ($b) => $b->available() + (float) ($b->comp_off_credits ?? 0));
+
+        // 13. Today's tasks
+        $this->loadTasks($employee);
 
         // 11. Today's WFH report
         $this->wfhReport = WfhReport::where('employee_id', $employee->id)
@@ -514,7 +518,7 @@ class AttendanceTracker extends Component
 
         $n = $punches->count();
 
-        return $punches->values()->map(function (AttendancePunch $p, int $i) use ($n) {
+        return $punches->values()->map(function (AttendancePunch $p, int $i) use ($n, $punches) {
             $isEntry = $i % 2 === 0;                 // even index = entered / clocked in
             [$title, $type] = match (true) {
                 $i === 0 => ['Clocked in', 'in'],
@@ -522,6 +526,21 @@ class AttendanceTracker extends Component
                 $isEntry => ['Returned from break', 'resume'],
                 default => ['Break started', 'break'],
             };
+
+            // Classify a break by when it starts and how long until the return punch.
+            if ($type === 'break') {
+                $next = $punches->get($i + 1);
+                $gapMin = $next ? (int) $p->punched_at->diffInMinutes($next->punched_at) : null;
+                $hour = (int) $p->punched_at->format('G');
+                $kind = match (true) {
+                    $gapMin === null => 'Break (no return punch)',
+                    $gapMin > 90 => 'Long break',
+                    $hour >= 12 && $hour < 16 && $gapMin >= 20 => 'Lunch break',
+                    $gapMin < 20 => 'Tea break',
+                    default => 'Personal break',
+                };
+                $title = $kind.($gapMin !== null ? " · {$gapMin}m" : '');
+            }
 
             return [
                 'time' => $p->punched_at->format('h:i A'),
@@ -562,6 +581,7 @@ class AttendanceTracker extends Component
                     'label' => 'Missing Check-Out',
                     'detail' => 'Today · clocked in at '.$this->todayAttendance->check_in->format('h:i A'),
                     'date' => $today->toDateString(),
+                    'action' => true,
                 ];
             }
 
@@ -574,6 +594,56 @@ class AttendanceTracker extends Component
                     'label' => 'Missing Break End',
                     'detail' => 'Today · a break-return punch was not recorded',
                     'date' => $today->toDateString(),
+                    'action' => true,
+                ];
+            }
+
+            // Late arrival (informational — regularise if the punch was wrong).
+            if ($this->todayAttendance->is_late) {
+                $alerts[] = [
+                    'type' => 'late_arrival',
+                    'label' => 'Late Arrival',
+                    'detail' => 'Today · '.(int) ($this->todayAttendance->late_minutes ?? 0).'m past grace ('.$this->todayAttendance->check_in->format('h:i A').')',
+                    'date' => $today->toDateString(),
+                    'action' => true,
+                ];
+            }
+
+            // Early exit — clocked out noticeably before the shift end.
+            if ($this->todayAttendance->check_out && $this->todayAttendance->check_out->lt($shiftEnd->copy()->subMinutes(30))) {
+                $alerts[] = [
+                    'type' => 'early_exit',
+                    'label' => 'Early Exit',
+                    'detail' => 'Today · clocked out '.$this->todayAttendance->check_out->format('h:i A').' before shift end '.$shiftEnd->format('h:i A'),
+                    'date' => $today->toDateString(),
+                    'action' => true,
+                ];
+            }
+
+            // Long break (> 90m single gap, from the journey classification).
+            if (collect($this->attendanceJourney)->contains(fn ($e) => $e['type'] === 'break' && str_starts_with($e['title'], 'Long break'))) {
+                $alerts[] = [
+                    'type' => 'long_break',
+                    'label' => 'Long Break',
+                    'detail' => 'Today · a single break exceeded 90 minutes',
+                    'date' => $today->toDateString(),
+                    'action' => false,
+                ];
+            }
+
+            // Overtime worked today (informational).
+            $stdMin = (int) round((float) ($this->shift->standard_hours ?? 9) * 60);
+            $workedMin = $this->todayAttendance->check_out
+                ? max(0, (int) $this->todayAttendance->check_in->diffInMinutes($this->todayAttendance->check_out) - (int) ($this->todayAttendance->break_minutes ?? 0))
+                : 0;
+            if ($workedMin > $stdMin + 30) {
+                $otMin = $workedMin - $stdMin;
+                $alerts[] = [
+                    'type' => 'overtime',
+                    'label' => 'Overtime Worked',
+                    'detail' => 'Today · '.intdiv($otMin, 60).'h '.($otMin % 60).'m beyond your standard day',
+                    'date' => $today->toDateString(),
+                    'action' => false,
                 ];
             }
         } elseif ($shiftOver && ! $today->isWeekend() && $this->workMode !== 'wfh') {
@@ -582,6 +652,7 @@ class AttendanceTracker extends Component
                 'label' => 'Missing Check-In',
                 'detail' => 'No punch recorded for today',
                 'date' => $today->toDateString(),
+                'action' => true,
             ];
         }
 
@@ -594,6 +665,19 @@ class AttendanceTracker extends Component
                 'label' => 'Missing Check-Out',
                 'detail' => $item->date->format('D, d M').' · clocked in at '.$item->check_in->format('h:i A'),
                 'date' => $item->date->toDateString(),
+                'action' => true,
+            ];
+        }
+
+        // Biometric device offline (no sync in 30+ minutes on a working day).
+        $sync = $this->biometricDevice?->last_synced_at;
+        if ($sync && Carbon::parse($sync)->lt(now()->subMinutes(30)) && ! $today->isWeekend()) {
+            $alerts[] = [
+                'type' => 'device_offline',
+                'label' => 'Device Sync Delayed',
+                'detail' => 'Last biometric sync '.Carbon::parse($sync)->diffForHumans(),
+                'date' => $today->toDateString(),
+                'action' => false,
             ];
         }
 
@@ -759,6 +843,32 @@ class AttendanceTracker extends Component
             }
         }
         $this->chartDaily = $daily;
+
+        // ── Attendance Insights — auto-generated, plain-language, real data ──
+        $withIn = $attendances->filter(fn ($a) => $a->check_in);
+        $avgInMin = $withIn->count() > 0
+            ? (int) round($withIn->avg(fn ($a) => $a->check_in->hour * 60 + $a->check_in->minute))
+            : null;
+        $workedDays = collect($daily)->filter(fn ($d) => $d['hours'] > 0);
+        $avgHoursMin = $workedDays->count() > 0 ? (int) round($workedDays->avg('hours') * 60) : 0;
+        $breakOk = $attendances->count() > 0
+            ? (int) round(($attendances->count() - $excessBreaks) / $attendances->count() * 100)
+            : 100;
+        $missing = $attendances->filter(fn ($a) => (! $a->check_out && ! $a->date->isToday()) || $a->missing_checkout)->count();
+
+        $insights = [];
+        if ($present > 0) {
+            $insights[] = ['good' => $onTimePct >= 90, 'text' => $onTimePct >= 90 ? 'Excellent punctuality — '.round($onTimePct).'% on-time this period' : round($onTimePct).'% on-time — '.$late.' late arrival(s) this period'];
+        }
+        $insights[] = ['good' => $missing === 0, 'text' => $missing === 0 ? 'No missing punches this period' : $missing.' day(s) with a missing punch — regularise them'];
+        if ($avgInMin !== null) {
+            $insights[] = ['good' => true, 'text' => 'Average check-in '.sprintf('%02d:%02d', intdiv($avgInMin, 60), $avgInMin % 60).' '.($avgInMin < 720 ? 'AM' : 'PM')];
+        }
+        if ($avgHoursMin > 0) {
+            $insights[] = ['good' => $avgHoursMin >= (int) (($this->shift->standard_hours ?? 9) * 60 * 0.9), 'text' => 'Average working hours '.intdiv($avgHoursMin, 60).'h '.($avgHoursMin % 60).'m per day'];
+        }
+        $insights[] = ['good' => $breakOk >= 90, 'text' => 'Break compliance '.$breakOk.'%'.($excessBreaks > 0 ? ' — '.$excessBreaks.' excess-break day(s)' : '')];
+        $this->insights = $insights;
     }
 
     /**
@@ -982,6 +1092,34 @@ class AttendanceTracker extends Component
                 'ip' => $att->check_out_ip,
                 'device' => UserAgent::parse($att->check_out_user_agent)['label'],
             ],
+            // Attendance Replay — every raw punch of that day, chronological.
+            'punches' => AttendancePunch::where('employee_id', $employee->id)
+                ->whereDate('punch_date', $date)
+                ->orderBy('punched_at')
+                ->get()
+                ->map(fn (AttendancePunch $p) => [
+                    'time' => $p->punched_at->format('h:i A'),
+                    'method' => $p->methodEnum()?->label(),
+                    'method_icon' => $p->methodEnum()?->icon(),
+                    'source' => $p->source,
+                    'device' => $p->device_serial,
+                    'location' => $p->location,
+                ])->all(),
+            // Audit History — every regularisation touching this day.
+            'audits' => AttendanceRegularisation::where('employee_id', $employee->id)
+                ->whereDate('work_date', $date)
+                ->with('reviewer')
+                ->orderByDesc('created_at')
+                ->get()
+                ->map(fn ($r) => [
+                    'requested_in' => Carbon::parse($r->requested_check_in)->format('h:i A'),
+                    'requested_out' => Carbon::parse($r->requested_check_out)->format('h:i A'),
+                    'reason' => $r->reason,
+                    'status' => $r->status,
+                    'reviewer' => $r->reviewer?->name,
+                    'reviewed_at' => $r->reviewed_at?->format('d M Y h:i A'),
+                    'submitted_at' => $r->created_at?->format('d M Y h:i A'),
+                ])->all(),
         ];
 
         $this->dispatch('flux:modal:open', name: 'punch-detail');

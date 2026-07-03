@@ -264,7 +264,8 @@
       "Bash(grep -iB1 -A3 \"Undefined\\\\|ParseError\\\\|does not exist\\\\|Call to\\\\|Attempt to\\\\|jobTitle\\\\|View:\" \"C:\\\\Users\\\\91937\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-91937-Desktop-HRMS-pulse\\\\f276e640-5b8c-42ab-8de6-6b3c66a590c7\\\\tasks\\\\bsszfanve.output\")",
       "Bash(grep -vE \"^\\\\s*$\")",
       "Bash(grep -iE \"View:|Undefined|Error|exist|Call to|Attempt|:[0-9]+$|►|➜\")",
-      "Bash(vendor/bin/pint app/Livewire/Attendance/AttendanceTracker.php tests/Feature/AttendanceModeTest.php tests/Feature/AttendanceExperienceTest.php --format agent)"
+      "Bash(vendor/bin/pint app/Livewire/Attendance/AttendanceTracker.php tests/Feature/AttendanceModeTest.php tests/Feature/AttendanceExperienceTest.php --format agent)",
+      "Bash(grep -n 'this->chartDaily = $daily;' app/Livewire/Attendance/AttendanceTracker.php)"
     ],
     "additionalDirectories": [
       "C:\\Users\\91937\\Desktop\\xamp\\htdocs\\mahaigr-v2\\includes",
