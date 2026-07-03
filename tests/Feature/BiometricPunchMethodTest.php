@@ -27,8 +27,8 @@ function seedPunch(int $inVerify, int $outVerify): array
 }
 
 test('device verify codes are mapped to punch methods on the attendance (face in, card out)', function () {
-    // AIFACE-MAGNUM: 4 = Face, 3 = Card (per config/biometric.php verify_methods).
-    [$device, $employee] = seedPunch(inVerify: 4, outVerify: 3);
+    // AIFACE-MAGNUM (confirmed live): 15 = Face, 4 = Card.
+    [$device, $employee] = seedPunch(inVerify: 15, outVerify: 4);
 
     app(BiometricSyncService::class)->applyPendingLogs($device);
 
@@ -45,16 +45,6 @@ test('a fingerprint punch is mapped and a PIN punch shows no method', function (
     $att = Attendance::where('employee_id', $employee->id)->firstOrFail();
     expect($att->check_in_method)->toBe('fingerprint');
     expect($att->check_out_method)->toBeNull();
-});
-
-test('this device also reports face as verify code 15', function () {
-    [$device, $employee] = seedPunch(inVerify: 15, outVerify: 4);
-
-    app(BiometricSyncService::class)->applyPendingLogs($device);
-
-    $att = Attendance::where('employee_id', $employee->id)->firstOrFail();
-    expect($att->check_in_method)->toBe('face');   // 15 → Face on the AIFACE-MAGNUM
-    expect($att->check_out_method)->toBe('face');  // 4 → Face
 });
 
 test('an unmapped verify code (2 = PIN) shows no chip', function () {

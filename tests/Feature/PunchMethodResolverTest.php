@@ -4,20 +4,20 @@ use App\Enums\PunchMethod;
 use App\Support\PunchMethodResolver;
 
 beforeEach(function () {
-    // Device map: 3 = Card, 4 = Face, 1 = Fingerprint (AIFACE-MAGNUM).
-    config(['biometric.verify_methods' => [1 => 'fingerprint', 3 => 'id_card', 4 => 'face']]);
+    // AIFACE-MAGNUM (confirmed live): 15 = Face, 4 = Card, 1 = Fingerprint.
+    config(['biometric.verify_methods' => [1 => 'fingerprint', 4 => 'id_card', 15 => 'face']]);
 });
 
 test('numeric device codes use the authoritative config map', function () {
-    expect(PunchMethodResolver::resolve(4))->toBe(PunchMethod::Face);       // NOT the ZK-generic Card
-    expect(PunchMethodResolver::resolve(3))->toBe(PunchMethod::IdCard);
+    expect(PunchMethodResolver::resolve(15))->toBe(PunchMethod::Face);
+    expect(PunchMethodResolver::resolve(4))->toBe(PunchMethod::IdCard);     // 4 = Card on this device
     expect(PunchMethodResolver::resolve(1))->toBe(PunchMethod::Fingerprint);
-    expect(PunchMethodResolver::resolve('4'))->toBe(PunchMethod::Face);     // numeric string too
+    expect(PunchMethodResolver::resolve('15'))->toBe(PunchMethod::Face);    // numeric string too
 });
 
 test('unmapped numeric codes resolve to null when a device map is set', function () {
     expect(PunchMethodResolver::resolve(2))->toBeNull();  // PIN
-    expect(PunchMethodResolver::resolve(15))->toBeNull(); // Other
+    expect(PunchMethodResolver::resolve(3))->toBeNull();  // unused on this device
     expect(PunchMethodResolver::resolve(null))->toBeNull();
 });
 

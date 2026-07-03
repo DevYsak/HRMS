@@ -197,19 +197,19 @@ test('a resilient rolling run continues past a failed day', function () {
 });
 
 test('the engine pull maps raw device verify codes via the device map', function () {
-    // Device map: 4 = Face, 3 = Card. Engine sends the raw numeric verify.
-    config(['biometric.verify_methods' => [1 => 'fingerprint', 3 => 'id_card', 4 => 'face']]);
+    // AIFACE-MAGNUM (confirmed live): 15 = Face, 4 = Card. Engine sends raw verify.
+    config(['biometric.verify_methods' => [1 => 'fingerprint', 4 => 'id_card', 15 => 'face']]);
     $emp = Employee::factory()->create(['employee_code' => 41, 'manager_id' => null]);
 
     fakeDashboard([
         ['emp_id' => '41', 'first_punch' => '09:00:00', 'last_punch' => '18:00:00',
-            'first_punch_method' => 4, 'last_punch_method' => 3,
+            'first_punch_method' => 15, 'last_punch_method' => 4,
             'working_min' => 480, 'punch_count' => 2, 'status' => 'Completed Shift'],
     ]);
 
     $this->artisan('attendance:sync-engine', ['--date' => '2026-06-29'])->assertSuccessful();
 
     $att = Attendance::where('employee_id', $emp->id)->first();
-    expect($att->check_in_method)->toBe('face');   // code 4 → Face on this device
-    expect($att->check_out_method)->toBe('id_card'); // code 3 → Card
+    expect($att->check_in_method)->toBe('face');    // code 15 → Face on this device
+    expect($att->check_out_method)->toBe('id_card'); // code 4 → Card
 });

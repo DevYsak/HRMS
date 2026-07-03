@@ -65,8 +65,7 @@ return [
     'verify_types' => [
         1 => 'Fingerprint',
         2 => 'PIN',
-        3 => 'Card',
-        4 => 'Face',
+        4 => 'Card',
         15 => 'Face',
     ],
 
@@ -82,9 +81,8 @@ return [
     */
     'verify_methods' => [
         1 => 'fingerprint',
-        3 => 'id_card',
-        4 => 'face',
-        15 => 'face',   // AIFACE-MAGNUM reports a face scan as both 4 and 15
+        4 => 'id_card',   // Card tap — confirmed live: verify 4 = card
+        15 => 'face',     // Face scan — confirmed live: verify 15 = face
         // If your device uses physical/swipe cards on a distinct code, add e.g.
         // 5 => 'physical_card',
     ],
