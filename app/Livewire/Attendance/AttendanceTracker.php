@@ -127,6 +127,9 @@ class AttendanceTracker extends Component
     /** The biometric device (name, connection, last sync). */
     public $biometricDevice = null;
 
+    /** Recent engine sync history (date, synced time, punch count). */
+    public array $syncHistory = [];
+
     /** Today's WFH daily report (null until submitted). */
     public $wfhReport = null;
 
@@ -290,6 +293,18 @@ class AttendanceTracker extends Component
         $this->biometricDevice = BiometricDevice::query()
             ->orderByDesc('last_synced_at')
             ->first();
+
+        // Recent engine sync history for the Biometric Status widget.
+        $this->syncHistory = AttendanceDailySummary::where('employee_id', $employee->id)
+            ->whereNotNull('synced_at')
+            ->orderByDesc('date')
+            ->limit(5)
+            ->get(['date', 'synced_at', 'raw_punch_count'])
+            ->map(fn ($s) => [
+                'date' => $s->date->format('d M'),
+                'synced' => $s->synced_at->format('h:i A'),
+                'punches' => (int) $s->raw_punch_count,
+            ])->all();
 
         $this->attendanceAlerts = $this->buildAttendanceAlerts();
 

@@ -467,33 +467,110 @@
     </div>
 
     {{-- Biometric Status --}}
+    @php
+        // Connection tiers from sync recency: green <30m, orange <2h, red beyond.
+        $syncAge = $lastSync ? (int) \Carbon\Carbon::parse($lastSync)->diffInMinutes(now()) : null;
+        [$connBadge, $connDot, $connLabel, $bars] = match (true) {
+            $syncAge !== null && $syncAge < 30 => ['bg-emerald-100 text-emerald-700', 'bg-emerald-500 animate-pulse', 'Online', 4],
+            $syncAge !== null && $syncAge < 120 => ['bg-amber-100 text-amber-700', 'bg-amber-500 animate-pulse', 'Sync Delayed', 2],
+            default => ['bg-rose-100 text-rose-600', 'bg-rose-500', 'Offline', 0],
+        };
+        $health = match (true) {
+            $bars >= 4 && ($biometricDevice?->last_ping_status !== 'failed') => ['Healthy', 'text-emerald-600'],
+            $bars >= 2 => ['Degraded', 'text-amber-600'],
+            default => ['Unreachable', 'text-rose-500'],
+        };
+        $serial = $sum?->device_serial ?? collect($attendanceJourney)->pluck('device')->filter()->first() ?? '—';
+        // Punch sources seen today: biometric methods + web + manual (approved correction).
+        $sources = $punchMethods->map(fn ($m) => ['label' => $m->label(), 'icon' => $m->icon(), 'class' => $m->chipClass()])->values()->all();
+        if ($todayAttendance?->check_in_user_agent) {
+            $sources[] = ['label' => 'Web', 'icon' => 'computer-desktop', 'class' => 'bg-zinc-100 text-zinc-600'];
+        }
+        if ($todayAttendance?->regularisation?->status === 'approved') {
+            $sources[] = ['label' => 'Manual', 'icon' => 'pencil-square', 'class' => 'bg-zinc-800 text-white'];
+        }
+    @endphp
     <div class="rounded-[18px] border border-orange-100/70 bg-white p-5 shadow-sm lg:col-span-4">
         <div class="mb-3 flex items-center justify-between">
             <div class="text-sm font-black text-zinc-900">Biometric Status</div>
-            <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-bold {{ $connected ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700' }}"><span class="size-1.5 rounded-full {{ $connected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500' }}"></span>{{ $connected ? 'Online' : 'Offline' }}</span>
+            <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-bold {{ $connBadge }}"><span class="size-1.5 rounded-full {{ $connDot }}"></span>{{ $connLabel }}</span>
         </div>
-        <div class="flex items-start gap-4">
-            <div class="flex-1 space-y-1.5 text-xs">
-                @foreach([
-                    ['Machine', $deviceName],
-                    ['Last Sync', $lastSync ? \Carbon\Carbon::parse($lastSync)->format('h:i A') : '—'],
-                    ['Firmware', $biometricDevice?->firmware ?? '—'],
-                    ['Punch Source', $punchSource],
-                    ["Today's Punches", $totalPunches ?: '—'],
-                    ['Location', $emp?->office?->name ?? 'Head Office'],
-                ] as [$k, $v])
-                    <div class="flex items-center justify-between"><span class="text-zinc-400">{{ $k }}</span><span class="font-bold text-zinc-800">{{ $v }}</span></div>
+
+        {{-- Device identity + signal --}}
+        <div class="mb-3 flex items-center gap-3 rounded-2xl border border-orange-100 bg-gradient-to-br from-orange-50/60 to-white p-3">
+            <div class="grid size-12 shrink-0 place-items-center rounded-xl bg-white shadow-sm"><flux:icon.finger-print class="size-6 text-orange-400" /></div>
+            <div class="min-w-0 flex-1">
+                <div class="truncate text-xs font-black text-zinc-900">{{ $deviceName }}</div>
+                <div class="truncate text-[10px] text-zinc-400">SN {{ $serial }}{{ $biometricDevice?->firmware ? ' · FW '.$biometricDevice->firmware : '' }} · {{ $emp?->office?->name ?? 'Head Office' }}</div>
+            </div>
+            {{-- Signal bars (sync freshness) --}}
+            <div class="flex items-end gap-0.5" title="Sync freshness{{ $syncAge !== null ? ' · last '.$syncAge.'m ago' : '' }}">
+                @foreach([1, 2, 3, 4] as $b)
+                    <span class="w-1 rounded-sm {{ $b <= $bars ? 'bg-emerald-500' : 'bg-zinc-200' }}" style="height: {{ 4 + $b * 3 }}px"></span>
                 @endforeach
             </div>
-            <div class="grid size-20 shrink-0 place-items-center rounded-2xl border border-orange-100 bg-gradient-to-br from-orange-50 to-white">
-                <flux:icon.finger-print class="size-10 text-orange-400" />
-            </div>
         </div>
-        @if($punchMethods->isNotEmpty())
-            <div class="mt-2 flex flex-wrap gap-1.5">
-                @foreach($punchMethods as $m)
-                    <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold {{ $m->chipClass() }}"><flux:icon :icon="$m->icon()" class="size-3" /> {{ $m->label() }}</span>
-                @endforeach
+
+        {{-- Stats --}}
+        <div class="mb-3 grid grid-cols-2 gap-1.5 text-xs">
+            @foreach([
+                ['Last Sync', $lastSync ? \Carbon\Carbon::parse($lastSync)->format('h:i A') : '—'],
+                ['Device Health', null],
+                ["Today's Punches", $totalPunches ?: '—'],
+                ['Successful', $totalPunches ?: '—'],
+                ['Failed', $totalPunches ? '0 reported' : '—'],
+                ['Last Sync Count', $biometricDevice?->last_sync_count ?? '—'],
+            ] as [$k, $v])
+                <div class="flex items-center justify-between rounded-lg bg-zinc-50/70 px-2.5 py-1.5">
+                    <span class="text-zinc-400">{{ $k }}</span>
+                    @if($k === 'Device Health')
+                        <span class="font-bold {{ $health[1] }}">{{ $health[0] }}</span>
+                    @else
+                        <span class="font-bold text-zinc-800">{{ $v }}</span>
+                    @endif
+                </div>
+            @endforeach
+        </div>
+
+        {{-- Punch sources today --}}
+        @if(! empty($sources))
+            <div class="mb-3">
+                <div class="mb-1.5 text-[9px] font-bold uppercase tracking-widest text-zinc-400">Punch Source</div>
+                <div class="flex flex-wrap gap-1.5">
+                    @foreach($sources as $s)
+                        <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold {{ $s['class'] }}"><flux:icon :icon="$s['icon']" class="size-3" /> {{ $s['label'] }}</span>
+                    @endforeach
+                </div>
+            </div>
+        @endif
+
+        {{-- Today's activity (punch ticks) --}}
+        @if(count($attendanceJourney) > 0)
+            <div class="mb-3">
+                <div class="mb-1.5 text-[9px] font-bold uppercase tracking-widest text-zinc-400">Today's Activity</div>
+                <div class="flex flex-wrap items-center gap-1">
+                    @foreach($attendanceJourney as $jev)
+                        @php $tickC = match($jev['type']) { 'in' => 'bg-emerald-500', 'out' => 'bg-rose-500', 'break' => 'bg-orange-400', 'resume' => 'bg-blue-400', default => 'bg-zinc-300' }; @endphp
+                        <span class="size-2 rounded-full {{ $tickC }} transition-transform hover:scale-150" title="{{ $jev['time'] }} · {{ $jev['title'] }}"></span>
+                        @unless($loop->last)<span class="h-px w-2 bg-zinc-200"></span>@endunless
+                    @endforeach
+                </div>
+            </div>
+        @endif
+
+        {{-- Sync history --}}
+        @if(! empty($syncHistory))
+            <div>
+                <div class="mb-1.5 text-[9px] font-bold uppercase tracking-widest text-zinc-400">Sync History</div>
+                <div class="space-y-1">
+                    @foreach($syncHistory as $sh)
+                        <div class="flex items-center justify-between rounded-lg px-2 py-1 text-[10px] odd:bg-orange-50/40">
+                            <span class="font-bold text-zinc-700">{{ $sh['date'] }}</span>
+                            <span class="text-zinc-400">{{ $sh['punches'] }} punches</span>
+                            <span class="inline-flex items-center gap-1 font-semibold text-emerald-600"><flux:icon.check class="size-3" /> {{ $sh['synced'] }}</span>
+                        </div>
+                    @endforeach
+                </div>
             </div>
         @endif
     </div>

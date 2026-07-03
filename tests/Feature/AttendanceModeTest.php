@@ -266,7 +266,8 @@ test('the punch summary and biometric status show the biometric daily figures', 
         ->assertSee('Biometric Status')
         ->assertSee('Punch Source')
         ->assertSee('ESSL MB20')
-        ->assertSee('Face + ID Card');
+        ->assertSee('Face')        // rendered as separate source chips now
+        ->assertSee('ID Card');
 });
 
 test('the attendance journey classifies every punch in sequence', function () {
@@ -572,4 +573,25 @@ test('AI insight stats compute averages, streak, prediction and suggestions', fu
                 && $s['prediction'] >= 0 && $s['prediction'] <= 100
                 && count($s['suggestions']) >= 2;
         });
+});
+
+test('biometric status shows sync history, serial and health tiers', function () {
+    $employee = Employee::factory()->create();
+    BiometricDevice::create(['name' => 'ESSL MB20', 'ip_address' => '10.0.0.9', 'port' => 4370, 'timeout_seconds' => 5, 'last_synced_at' => now()->subMinutes(5), 'last_sync_count' => 42]);
+    foreach ([0, 1] as $back) {
+        AttendanceDailySummary::create([
+            'employee_id' => $employee->id, 'employee_code' => 900 + $back, 'date' => today()->subDays($back),
+            'first_punch' => today()->subDays($back)->setTime(9, 0), 'last_punch' => today()->subDays($back)->setTime(18, 0),
+            'break_minutes' => 30, 'working_hours' => 8.5, 'late_minutes' => 0, 'overtime_minutes' => 0,
+            'status' => 'present', 'device_serial' => 'MB20-SER-77', 'raw_punch_count' => 6, 'synced_at' => now()->subMinutes(10 + $back),
+        ]);
+    }
+
+    Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
+        ->assertOk()
+        ->assertSee('Sync History')
+        ->assertSee('MB20-SER-77')
+        ->assertSee('Device Health')
+        ->assertSee('Online')
+        ->assertSet('syncHistory', fn ($h) => count($h) === 2 && $h[0]['punches'] === 6);
 });
