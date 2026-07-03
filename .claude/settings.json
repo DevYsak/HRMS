@@ -224,10 +224,39 @@
       "Bash(grep -n 'Fillable\\\\|protected $fillable\\\\|guarded' app/Models/BiometricDevice.php)",
       "Bash(sed -n '/Fillable\\(\\\\[/,/\\\\]\\)/p' app/Models/BiometricDevice.php)",
       "Bash(vendor/bin/pint app/Services/Biometric/BiometricSyncService.php config/biometric.php tests/Feature/BiometricPunchMethodTest.php --format agent)",
-      "Bash(vendor/bin/pint app/Support/PunchMethodResolver.php app/Services/Biometric/EngineAttendanceSyncService.php app/Services/Biometric/BiometricSyncService.php app/Http/Controllers/Api/V1/AttendanceSyncController.php tests/Unit/PunchMethodResolverTest.php tests/Feature/SyncEngineAttendanceTest.php --format agent)"
+      "Bash(vendor/bin/pint app/Support/PunchMethodResolver.php app/Services/Biometric/EngineAttendanceSyncService.php app/Services/Biometric/BiometricSyncService.php app/Http/Controllers/Api/V1/AttendanceSyncController.php tests/Unit/PunchMethodResolverTest.php tests/Feature/SyncEngineAttendanceTest.php --format agent)",
+      "Bash(python -m py_compile scripts/biometric/punch_methods.py)",
+      "Bash(python -m py_compile scripts/biometric/apply_verify_patch.py)",
+      "PowerShell(php artisan make:livewire Settings/MailCenter --no-interaction)",
+      "PowerShell(php artisan make:test MailCenterTest --pest --no-interaction)",
+      "PowerShell(php artisan migrate --no-interaction 2>&1)",
+      "PowerShell(Get-Service | Where-Object { $_.Name -match 'mysql|maria' } | Select-Object Name, Status, StartType; Get-Process mysqld -ErrorAction SilentlyContinue | Select-Object Id, ProcessName)",
+      "PowerShell(Start-Process -FilePath \"C:\\\\xampp\\\\mysql\\\\bin\\\\mysqld.exe\" -ArgumentList \"--defaults-file=C:\\\\xampp\\\\mysql\\\\bin\\\\my.ini\" -WindowStyle Hidden)",
+      "PowerShell(\"started mysqld\")",
+      "PowerShell($ok=$false; foreach \\($i in 1..15\\) { $r = Test-NetConnection -ComputerName 127.0.0.1 -Port 3306 -WarningAction SilentlyContinue; if \\($r.TcpTestSucceeded\\) { $ok=$true; break }; Start-Sleep -Milliseconds 800 }; if \\($ok\\) { \"mysql up\" } else { \"mysql still down\" })",
+      "PowerShell(vendor/bin/pint --dirty --format agent 2>&1)",
+      "PowerShell(php artisan test --compact --filter=MailCenterTest 2>&1)",
+      "PowerShell(php artisan test --compact --filter=\"NotificationSettingsTest|ControlPanelTest|AiFeaturesTest|DocumentUploadNotificationTest\" 2>&1)",
+      "PowerShell(php artisan route:list --path=mail-center --except-vendor 2>&1)",
+      "PowerShell(Get-Process mysqld -ErrorAction SilentlyContinue)",
+      "PowerShell(Get-NetTCPConnection -LocalPort 3306 -State Listen -ErrorAction SilentlyContinue)",
+      "PowerShell(\"---port 3306 owner---\")",
+      "PowerShell(Start-Sleep -Seconds 1; \"port 3306 still listening? \" + \\(Test-NetConnection 127.0.0.1 -Port 3306 -WarningAction SilentlyContinue\\).TcpTestSucceeded; \"mysqld running? \" + [bool]\\(Get-Process mysqld -ErrorAction SilentlyContinue\\))",
+      "PowerShell(php artisan test --compact --filter=\"MailBroadcastTest|NotificationSettingsTest|ControlPanelTest\" 2>&1)",
+      "Bash(cd \"c:/Users/91937/Desktop/HRMS/pulse\" && echo \"=== current branch ===\" && git branch --show-current && echo \"=== last 3 commits ===\" && git log --oneline -3 && echo \"=== markers present in blade? ===\" && grep -c \"toggleMasterMail\\\\|Compose & Send\\\\|Outgoing email is\" resources/views/livewire/settings/notification-settings.blade.php && echo \"=== caches on disk ===\" && ls -la bootstrap/cache/*.php 2>/dev/null; echo \"compiled views:\"; ls resources/../storage/framework/views/ 2>/dev/null | wc -l)",
+      "Read(//c/Users/91937/Desktop/HRMS/pulse/storage/framework/views/**)",
+      "PowerShell(php artisan view:clear 2>&1)",
+      "PowerShell(php artisan route:clear 2>&1)",
+      "PowerShell(php artisan config:clear 2>&1)",
+      "Bash(git fetch *)",
+      "Bash(git rev-list *)",
+      "Bash(git merge *)",
+      "PowerShell(php artisan test --compact --filter=MailBroadcastTest 2>&1)",
+      "Bash(vendor/bin/pint tests/Feature/BiometricPunchMethodTest.php config/biometric.php --format agent)"
     ],
     "additionalDirectories": [
-      "C:\\Users\\91937\\Desktop\\xamp\\htdocs\\mahaigr-v2\\includes"
+      "C:\\Users\\91937\\Desktop\\xamp\\htdocs\\mahaigr-v2\\includes",
+      "C:\\Users\\91937\\Desktop\\HRMS\\pulse\\resources\\views\\components\\settings"
     ]
   }
 }

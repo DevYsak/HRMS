@@ -67,7 +67,7 @@ return [
         2 => 'PIN',
         3 => 'Card',
         4 => 'Face',
-        15 => 'Other',
+        15 => 'Face',
     ],
 
     /*
@@ -84,6 +84,7 @@ return [
         1 => 'fingerprint',
         3 => 'id_card',
         4 => 'face',
+        15 => 'face',   // AIFACE-MAGNUM reports a face scan as both 4 and 15
         // If your device uses physical/swipe cards on a distinct code, add e.g.
         // 5 => 'physical_card',
     ],
