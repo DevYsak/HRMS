@@ -305,32 +305,59 @@
 @php $journey = count($attendanceJourney) ? $attendanceJourney : $todayTimeline; $isJourney = count($attendanceJourney) > 0; @endphp
 <div class="grid grid-cols-1 items-start gap-4 lg:grid-cols-12">
     {{-- Attendance Journey --}}
+    @php
+        $jFirst = $todayAttendance?->check_in ?? $sum?->first_punch;
+        $jLast = $todayAttendance?->check_out ?? $sum?->last_punch;
+    @endphp
     <div class="rounded-[18px] border border-orange-100/70 bg-white p-5 shadow-sm lg:col-span-5">
         <div class="mb-4 flex items-center justify-between">
-            <div class="text-sm font-black text-zinc-900">Today's Attendance Journey</div>
+            <div class="flex items-center gap-2">
+                <div class="text-sm font-black text-zinc-900">Today's Attendance Journey</div>
+                @if(count($journey))<span class="rounded-full bg-orange-50 px-2 py-0.5 text-[10px] font-bold text-orange-500">{{ count($journey) }} events</span>@endif
+            </div>
             <button type="button" @click="$flux.modal('regularisation-modal').show()" class="text-[11px] font-bold text-orange-500 hover:underline">Request Regularization</button>
         </div>
         @if(count($journey) > 0)
-            <div class="relative max-h-[430px] space-y-3 overflow-y-auto pr-1">
+            <div class="relative max-h-[430px] overflow-y-auto pr-1" wire:loading.class="opacity-40" wire:target="statsPeriod,rangeFrom,rangeTo">
                 @foreach($journey as $ev)
                     @php
-                        [$dot, $ic, $tint] = match($ev['type']) {
-                            'in'     => ['bg-emerald-500', 'arrow-right-end-on-rectangle', 'text-emerald-600'],
-                            'late'   => ['bg-rose-500', 'exclamation-triangle', 'text-rose-600'],
-                            'break'  => ['bg-orange-500', 'pause', 'text-orange-600'],
-                            'resume' => ['bg-blue-500', 'play', 'text-blue-600'],
-                            'out'    => ['bg-zinc-800', 'arrow-left-start-on-rectangle', 'text-zinc-700'],
-                            default  => ['bg-zinc-400', 'clock', 'text-zinc-500'],
+                        [$dot, $ic, $tint, $cardTint] = match($ev['type']) {
+                            'in'     => ['bg-emerald-500', 'arrow-right-end-on-rectangle', 'text-emerald-600', 'border-emerald-100 bg-emerald-50/40'],
+                            'late'   => ['bg-rose-500', 'exclamation-triangle', 'text-rose-600', 'border-rose-100 bg-rose-50/40'],
+                            'break'  => ['bg-orange-500', 'pause', 'text-orange-600', 'border-orange-100 bg-orange-50/40'],
+                            'resume' => ['bg-blue-500', 'play', 'text-blue-600', 'border-blue-100 bg-blue-50/40'],
+                            'out'    => ['bg-rose-600', 'arrow-left-start-on-rectangle', 'text-rose-700', 'border-rose-100 bg-rose-50/30'],
+                            default  => ['bg-zinc-400', 'clock', 'text-zinc-500', 'border-zinc-100 bg-zinc-50/60'],
                         };
                         $evMethod = ($ev['method'] ?? null) instanceof PunchMethod ? $ev['method'] : PunchMethod::tryFrom((string) ($ev['method'] ?? ''));
+                        $gap = $ev['gap_min'] ?? null;
+                        $gapLabel = $gap !== null ? ($gap >= 60 ? intdiv($gap, 60).'h '.($gap % 60).'m' : $gap.' mins') : null;
+                        $hasDetail = ! empty($ev['lat']) || ! empty($ev['verify']) || ! empty($ev['source']);
                     @endphp
-                    <div class="relative flex items-start gap-3">
+
+                    {{-- Duration connector from previous event --}}
+                    @if(! $loop->first && $gapLabel)
+                        <div class="relative ml-[15px] flex items-center gap-2 py-1 pl-6">
+                            <span class="absolute left-0 top-0 h-full w-px bg-orange-100"></span>
+                            <flux:icon.arrow-down class="size-3 text-orange-300" />
+                            <span class="rounded-full bg-orange-50 px-2 py-0.5 text-[9px] font-bold text-orange-500">{{ $gapLabel }}</span>
+                            <span class="text-[9px] text-zinc-400">
+                                {{ in_array($ev['type'], ['resume']) ? 'break duration' : (in_array($ev['type'], ['break', 'out']) ? 'since last entry' : 'since previous') }}
+                            </span>
+                        </div>
+                    @endif
+
+                    <div x-data="{ x: false }" class="relative flex items-start gap-3 {{ $loop->first ? '' : 'mt-1' }}">
                         @unless($loop->last)<span class="absolute left-[15px] top-9 h-[calc(100%-4px)] w-px bg-orange-100"></span>@endunless
                         <span class="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-full {{ $dot }} text-white shadow"><flux:icon :icon="$ic" class="size-4" /></span>
-                        <div class="flex-1 rounded-xl border border-zinc-100 bg-zinc-50/60 px-3 py-2">
+                        <div @click="x = !x" role="button" tabindex="0" @keydown.enter="x = !x"
+                            class="flex-1 cursor-pointer rounded-xl border {{ $cardTint }} px-3 py-2 text-left transition duration-200 hover:-translate-y-0.5 hover:shadow-md">
                             <div class="flex items-center justify-between">
                                 <span class="text-sm font-black tabular-nums text-zinc-900">{{ $ev['time'] }}</span>
-                                <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] font-bold text-emerald-700">Success</span>
+                                <span class="flex items-center gap-1.5">
+                                    <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] font-bold text-emerald-700">Success</span>
+                                    @if($hasDetail)<flux:icon.chevron-down class="size-3 text-zinc-400 transition-transform" ::class="x ? 'rotate-180' : ''" />@endif
+                                </span>
                             </div>
                             <div class="text-xs font-bold {{ $tint }}">{{ $evMethod?->label() ?? $ev['title'] }}</div>
                             <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] text-zinc-400">
@@ -338,6 +365,16 @@
                                 @if(! empty($ev['location']))<span class="inline-flex items-center gap-0.5"><flux:icon.map-pin class="size-3" /> {{ $ev['location'] }}</span>@endif
                                 @if(! empty($ev['device']) && is_string($ev['device']))<span class="inline-flex items-center gap-0.5"><flux:icon.cpu-chip class="size-3" /> {{ $ev['device'] }}</span>@endif
                             </div>
+                            @if($hasDetail)
+                                <div x-show="x" x-transition:enter="transition duration-200 ease-out" x-transition:enter-start="-translate-y-1 opacity-0" x-transition:enter-end="translate-y-0 opacity-100"
+                                    class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-zinc-100 pt-1.5 text-[10px] text-zinc-500">
+                                    @if(! empty($ev['source']))<span class="uppercase tracking-wide">{{ $ev['source'] === 'web' ? 'Web Punch' : ucfirst($ev['source']) }}</span>@endif
+                                    @if(! empty($ev['verify']))<span>Verify code {{ $ev['verify'] }}</span>@endif
+                                    @if(! empty($ev['lat']) && ! empty($ev['lng']))
+                                        <a href="https://www.google.com/maps?q={{ $ev['lat'] }},{{ $ev['lng'] }}" target="_blank" rel="noopener" class="inline-flex items-center gap-1 font-semibold text-orange-500 hover:underline" @click.stop><flux:icon.map-pin class="size-3" /> {{ $ev['lat'] }}, {{ $ev['lng'] }}</a>
+                                    @endif
+                                </div>
+                            @endif
                         </div>
                     </div>
                 @endforeach
@@ -345,30 +382,67 @@
         @else
             <div class="flex h-32 flex-col items-center justify-center text-center text-zinc-300"><flux:icon.clock class="mb-2 size-8" /><p class="text-xs">No punches recorded today.</p></div>
         @endif
-        <div class="mt-4 grid grid-cols-4 gap-2 border-t border-zinc-100 pt-3 text-center">
-            <div><div class="text-sm font-black text-zinc-900">{{ $workedLabel }}</div><div class="text-[9px] font-bold uppercase text-zinc-400">Working</div></div>
-            <div><div class="text-sm font-black text-zinc-900">{{ $breakMin }}m</div><div class="text-[9px] font-bold uppercase text-zinc-400">Break</div></div>
-            <div><div class="text-sm font-black text-zinc-900">{{ intdiv($otMinTotal,60) }}h {{ $otMinTotal%60 }}m</div><div class="text-[9px] font-bold uppercase text-zinc-400">Overtime</div></div>
-            <div><span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">{{ $isDone ? 'Completed' : ($isIn ? 'Working' : '—') }}</span></div>
+        {{-- Today's Summary footer --}}
+        <div class="mt-4 grid grid-cols-4 gap-x-2 gap-y-3 border-t border-zinc-100 pt-3 text-center">
+            @foreach([
+                ['Working', $workedLabel],
+                ['Break', $breakMin >= 60 ? intdiv($breakMin, 60).'h '.($breakMin % 60).'m' : $breakMin.'m'],
+                ['Overtime', intdiv($otMinTotal, 60).'h '.($otMinTotal % 60).'m'],
+                ['Punches', $totalPunches ?: (count($attendanceJourney) ?: '—')],
+                ['First Punch', $jFirst ? \Carbon\Carbon::parse($jFirst)->format('h:i A') : '—'],
+                ['Last Punch', $jLast ? \Carbon\Carbon::parse($jLast)->format('h:i A') : '—'],
+                ['Score', $score.'/100'],
+            ] as [$k, $v])
+                <div><div class="text-sm font-black tabular-nums text-zinc-900">{{ $v }}</div><div class="text-[9px] font-bold uppercase text-zinc-400">{{ $k }}</div></div>
+            @endforeach
+            <div class="grid place-items-center"><span class="inline-flex items-center gap-1 rounded-full {{ $isDone ? 'bg-rose-100 text-rose-600' : ($isIn ? 'bg-emerald-100 text-emerald-700' : 'bg-zinc-100 text-zinc-500') }} px-2 py-0.5 text-[10px] font-bold">{{ $isDone ? 'Completed' : ($isIn ? 'Working' : '—') }}</span></div>
         </div>
     </div>
 
     {{-- Shift Progress --}}
-    <div class="rounded-[18px] border border-orange-100/70 bg-white p-5 shadow-sm lg:col-span-3">
-        <div class="mb-3 text-sm font-black text-zinc-900">Shift Progress</div>
-        <div class="mb-3 flex justify-center">
+    @php
+        [$stBg, $stDot, $stLabel] = match(true) {
+            (bool) $activeBreak => ['bg-orange-100 text-orange-700', 'bg-orange-500 animate-pulse', 'On Break'],
+            $isIn && ($todayAttendance?->is_late) => ['bg-amber-100 text-amber-700', 'bg-amber-500 animate-pulse', 'Working · Late'],
+            $isIn => ['bg-emerald-100 text-emerald-700', 'bg-emerald-500 animate-pulse', 'Working'],
+            $isDone => ['bg-rose-100 text-rose-600', 'bg-rose-500', 'Shift Completed'],
+            $heroMode->value === 'wfh' => ['bg-violet-100 text-violet-700', 'bg-violet-500', 'WFH · Not In'],
+            default => ['bg-zinc-800 text-white', 'bg-zinc-400', 'Absent / Not In'],
+        };
+    @endphp
+    <div class="rounded-[18px] border border-orange-100/70 bg-white p-5 shadow-sm lg:col-span-3"
+        x-data="{ p: 0 }" x-init="setTimeout(() => p = {{ $progress }}, 150)">
+        <div class="mb-3 flex items-center justify-between">
+            <div class="text-sm font-black text-zinc-900">Shift Progress</div>
+            <span class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-bold {{ $stBg }}"><span class="size-1.5 rounded-full {{ $stDot }}"></span>{{ $stLabel }}</span>
+        </div>
+
+        {{-- Live clock --}}
+        <div class="mb-3 flex items-center justify-center gap-2 rounded-xl bg-orange-50/60 py-1.5 text-xs">
+            <flux:icon.clock class="size-3.5 text-orange-400" />
+            <span class="font-black tabular-nums text-zinc-800" x-text="currentTime"></span>
+            <span class="text-[10px] text-zinc-400">IST</span>
+        </div>
+
+        {{-- Animated ring --}}
+        <div class="mb-1 flex justify-center">
             <div class="relative grid size-32 place-items-center">
                 <svg class="size-32 -rotate-90" viewBox="0 0 36 36">
                     <circle cx="18" cy="18" r="15.9" fill="none" stroke="#FFEDD5" stroke-width="3" />
-                    <circle cx="18" cy="18" r="15.9" fill="none" stroke="#F97316" stroke-width="3" stroke-linecap="round" stroke-dasharray="{{ $progress }}, 100" />
+                    <circle cx="18" cy="18" r="15.9" fill="none" stroke="#F97316" stroke-width="3" stroke-linecap="round"
+                        class="transition-all duration-1000 ease-out" :stroke-dasharray="p + ', 100'" stroke-dasharray="0, 100" />
                 </svg>
                 <div class="absolute text-center">
-                    <div class="text-[9px] font-bold uppercase text-zinc-400">Remaining</div>
-                    <div class="text-lg font-black text-zinc-900">{{ intdiv($remainingMin,60) }}h {{ $remainingMin%60 }}m</div>
-                    <div class="text-[9px] text-zinc-400">of {{ $targetLabel }}</div>
+                    <div class="text-2xl font-black tabular-nums text-zinc-900">{{ $progress }}%</div>
+                    <div class="text-[8px] font-bold uppercase tracking-wider text-zinc-400">Shift Completed</div>
                 </div>
             </div>
         </div>
+        <div class="mb-3 grid grid-cols-2 gap-2 text-center">
+            <div class="rounded-xl bg-emerald-50/70 py-1.5"><div class="text-xs font-black tabular-nums text-emerald-700">{{ $workedLabel }}</div><div class="text-[8px] font-bold uppercase tracking-wider text-emerald-600/70">Worked</div></div>
+            <div class="rounded-xl bg-orange-50/70 py-1.5"><div class="text-xs font-black tabular-nums text-orange-600">{{ intdiv($remainingMin,60) }}h {{ $remainingMin%60 }}m</div><div class="text-[8px] font-bold uppercase tracking-wider text-orange-500/70">Remaining</div></div>
+        </div>
+
         <div class="space-y-1.5 text-xs">
             @foreach([
                 ['Shift Start', $shift ? \Carbon\Carbon::parse($shift->start_time)->format('g:i A') : '—'],
@@ -380,7 +454,10 @@
             ] as [$k, $v])
                 <div class="flex items-center justify-between"><span class="text-zinc-400">{{ $k }}</span><span class="font-bold text-zinc-800">{{ $v }}</span></div>
             @endforeach
-            <div class="flex items-center justify-between border-t border-zinc-100 pt-2"><span class="text-zinc-400">Status</span><span class="inline-flex items-center gap-1 font-bold {{ $isIn ? 'text-emerald-600' : 'text-zinc-500' }}"><span class="size-1.5 rounded-full {{ $isIn ? 'bg-emerald-500' : 'bg-zinc-400' }}"></span>{{ $activeBreak ? 'On Break' : ($isIn ? 'Working' : ($isDone ? 'Completed' : 'Not In')) }}</span></div>
+            <div class="flex items-center justify-between border-t border-zinc-100 pt-2">
+                <span class="text-zinc-400">Mode</span>
+                <span class="inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-bold uppercase {{ $heroMode->chipClass() }}">{{ $heroMode->label() }}</span>
+            </div>
         </div>
     </div>
 

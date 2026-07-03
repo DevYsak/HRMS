@@ -475,3 +475,37 @@ test('regularising only the check-out keeps the recorded check-in', function () 
     Notification::assertSentTo($managerUser, AttendanceRegularisationNotification::class);
     Notification::assertSentTo($hr, AttendanceRegularisationNotification::class);
 });
+
+test('journey events carry the duration from the previous punch', function () {
+    $employee = Employee::factory()->create();
+    foreach (['09:00', '13:00', '13:37', '18:00'] as $t) {
+        AttendancePunch::create([
+            'employee_id' => $employee->id,
+            'punched_at' => today()->setTimeFromTimeString($t),
+            'punch_date' => today(),
+            'method' => 'face',
+            'source' => 'biometric',
+        ]);
+    }
+
+    Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
+        ->assertSet('attendanceJourney', fn ($j) => $j[0]['gap_min'] === null
+            && $j[1]['gap_min'] === 240      // 09:00 → 13:00
+            && $j[2]['gap_min'] === 37       // break duration
+            && $j[3]['gap_min'] === 263);
+});
+
+test('insights include longest break, best day and total overtime', function () {
+    $employee = Employee::factory()->create();
+    $d = now()->startOfMonth()->addDays(2); // a Wednesday-or-whatever weekday
+    Attendance::create([
+        'employee_id' => $employee->id, 'date' => $d->toDateString(),
+        'check_in' => $d->copy()->setTime(9, 0), 'check_out' => $d->copy()->setTime(19, 30),
+        'status' => 'on_time', 'work_mode' => 'office', 'total_hours' => 10.5, 'break_minutes' => 42,
+    ]);
+
+    Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
+        ->assertSet('insights', fn ($i) => collect($i)->contains(fn ($x) => str_contains($x['text'], 'Longest break 42 mins'))
+            && collect($i)->contains(fn ($x) => str_contains($x['text'], 'Best attendance day: '.$d->format('l')))
+            && collect($i)->contains(fn ($x) => str_contains($x['text'], 'Total overtime')));
+});

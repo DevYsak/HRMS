@@ -580,6 +580,9 @@ class AttendanceTracker extends Component
                 $title = $kind.($gapMin !== null ? " · {$gapMin}m" : '');
             }
 
+            // Minutes since the previous kept punch (shown as "↓ 37 mins").
+            $prev = $i > 0 ? $punches->get($i - 1) : null;
+
             return [
                 'time' => $p->punched_at->format('h:i A'),
                 'title' => $title,
@@ -590,6 +593,8 @@ class AttendanceTracker extends Component
                 'device' => $p->device_serial,
                 'lat' => $p->lat,
                 'lng' => $p->lng,
+                'gap_min' => $prev ? (int) $prev->punched_at->diffInMinutes($p->punched_at) : null,
+                'verify' => $p->verify_raw,
             ];
         })->all();
     }
@@ -1044,6 +1049,24 @@ class AttendanceTracker extends Component
             $insights[] = ['good' => $avgHoursMin >= (int) (($this->shift->standard_hours ?? 9) * 60 * 0.9), 'text' => 'Average working hours '.intdiv($avgHoursMin, 60).'h '.($avgHoursMin % 60).'m per day'];
         }
         $insights[] = ['good' => $breakOk >= 90, 'text' => 'Break compliance '.$breakOk.'%'.($excessBreaks > 0 ? ' — '.$excessBreaks.' excess-break day(s)' : '')];
+
+        $longestBreak = (int) $attendances->max('break_minutes');
+        if ($longestBreak > 0) {
+            $insights[] = ['good' => $longestBreak <= 60, 'text' => 'Longest break '.($longestBreak >= 60 ? intdiv($longestBreak, 60).'h '.($longestBreak % 60).'m' : $longestBreak.' mins')];
+        }
+
+        $bestDay = $withIn->groupBy(fn ($a) => $a->date->format('l'))
+            ->map->count()->sortDesc()->keys()->first();
+        if ($bestDay) {
+            $insights[] = ['good' => true, 'text' => 'Best attendance day: '.$bestDay];
+        }
+
+        $stdH = (float) ($this->shift->standard_hours ?? 9);
+        $totalOtMin = (int) round(collect($daily)->sum(fn ($d) => max(0, (float) $d['hours'] - $stdH)) * 60);
+        if ($totalOtMin > 0) {
+            $insights[] = ['good' => true, 'text' => 'Total overtime '.intdiv($totalOtMin, 60).'h '.($totalOtMin % 60).'m this period'];
+        }
+
         $this->insights = $insights;
     }
 
