@@ -59,7 +59,6 @@ class ControlPanel extends Component
                 'icon' => 'megaphone',
                 'items' => [
                     ['label' => 'Notifications & Email', 'description' => 'Control every email', 'icon' => 'envelope', 'route' => 'settings.notifications'],
-                    ['label' => 'Mail Center', 'description' => 'Master switch & broadcasts', 'icon' => 'paper-airplane', 'route' => 'settings.mail-center'],
                     ['label' => 'Audit Log', 'description' => 'Every change, who & when', 'icon' => 'document-chart-bar', 'route' => 'settings.audit-log'],
                     ['label' => 'AI Assistant', 'description' => 'Provider & access', 'icon' => 'cpu-chip', 'route' => 'settings.ai'],
                 ],

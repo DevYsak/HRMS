@@ -6,9 +6,55 @@
             <flux:heading size="xl">Notifications &amp; Email</flux:heading>
             <flux:subheading>Control every transactional email and in-app notification.</flux:subheading>
         </div>
-        <flux:button wire:click="syncCatalog" icon="arrow-path" variant="ghost" size="sm">
-            Re-scan types
-        </flux:button>
+        <div class="flex items-center gap-2">
+            <flux:button wire:click="openCompose" icon="paper-airplane" variant="primary" size="sm">
+                Compose &amp; Send
+            </flux:button>
+            <flux:button wire:click="syncCatalog" icon="arrow-path" variant="ghost" size="sm">
+                Re-scan types
+            </flux:button>
+        </div>
+    </div>
+
+    {{-- Master mail switch --}}
+    <div @class([
+        'rounded-2xl border p-5 shadow-sm transition',
+        'border-emerald-200 bg-emerald-50/60 dark:border-emerald-500/20 dark:bg-emerald-900/10' => $mailEnabled,
+        'border-rose-200 bg-rose-50/60 dark:border-rose-500/20 dark:bg-rose-900/10' => ! $mailEnabled,
+    ])>
+        <div class="flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-start gap-3">
+                <flux:icon.envelope @class([
+                    'mt-0.5 size-6',
+                    'text-emerald-500' => $mailEnabled,
+                    'text-rose-500' => ! $mailEnabled,
+                ]) />
+                <div>
+                    <h3 class="text-sm font-bold text-zinc-900 dark:text-white">
+                        Outgoing email is {{ $mailEnabled ? 'ENABLED' : 'PAUSED' }}
+                    </h3>
+                    <p class="mt-0.5 max-w-xl text-xs text-zinc-500 dark:text-zinc-400">
+                        This master switch controls <b>every</b> email the system sends — the notifications
+                        below, and any broadcast you compose. Turn it off to pause all mail instantly.
+                    </p>
+                </div>
+            </div>
+
+            {{-- One-shot enable/disable button --}}
+            <button type="button" wire:click="toggleMasterMail"
+                @class([
+                    'relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition',
+                    'bg-emerald-500' => $mailEnabled,
+                    'bg-zinc-300 dark:bg-zinc-600' => ! $mailEnabled,
+                ])
+                aria-label="Toggle all outgoing email">
+                <span @class([
+                    'inline-block size-5 transform rounded-full bg-white shadow transition',
+                    'translate-x-6' => $mailEnabled,
+                    'translate-x-1' => ! $mailEnabled,
+                ])></span>
+            </button>
+        </div>
     </div>
 
     {{-- Status cards: SMTP + Queue + Test --}}
@@ -168,6 +214,93 @@
             </table>
         @endif
     </div>
+
+    {{-- Compose & send broadcast modal --}}
+    <flux:modal wire:model.self="showComposeModal" class="w-full max-w-2xl">
+        <div class="space-y-4">
+            <div>
+                <flux:heading size="lg">Compose &amp; Send</flux:heading>
+                <flux:subheading>Send a one-off email to selected employees.</flux:subheading>
+            </div>
+
+            @if(! $mailEnabled)
+                <p class="rounded-lg bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700 dark:bg-rose-900/20 dark:text-rose-300">
+                    Outgoing email is paused by the master switch above. Enable it to send.
+                </p>
+            @endif
+
+            {{-- Draft with AI (only when AI is configured) --}}
+            @if($aiEnabled)
+                <div class="rounded-xl border border-orange-200 bg-orange-50/60 p-3 dark:border-orange-500/20 dark:bg-orange-900/10">
+                    <flux:field>
+                        <flux:label class="!text-xs !font-bold !uppercase !tracking-wide !text-orange-600 dark:!text-orange-400">
+                            Draft with AI
+                        </flux:label>
+                        <div class="flex items-start gap-2">
+                            <flux:input wire:model="aiPrompt" size="sm"
+                                placeholder="e.g. remind everyone the office is closed Friday for Diwali" />
+                            <flux:button wire:click="draftWithAi" variant="primary" size="sm" icon="sparkles"
+                                class="shrink-0" wire:loading.attr="disabled" wire:target="draftWithAi">
+                                <span wire:loading.remove wire:target="draftWithAi">Draft</span>
+                                <span wire:loading wire:target="draftWithAi">Writing…</span>
+                            </flux:button>
+                        </div>
+                        <flux:error name="aiPrompt" />
+                    </flux:field>
+                </div>
+            @endif
+
+            <flux:input wire:model="composeSubject" label="Subject" placeholder="Email subject" />
+            <flux:error name="composeSubject" />
+            <flux:textarea wire:model="composeBody" label="Message" rows="7"
+                placeholder="Write your message to the team…" />
+            <flux:error name="composeBody" />
+
+            {{-- Recipients --}}
+            <div class="rounded-xl border border-zinc-200 dark:border-white/10">
+                <div class="flex items-center justify-between border-b border-zinc-100 px-4 py-2.5 dark:border-white/5">
+                    <span class="text-xs font-bold uppercase tracking-wide text-zinc-500">
+                        Recipients ({{ count($selectedRecipients) }})
+                    </span>
+                    <flux:checkbox wire:model.live="selectAllRecipients" label="Select all" />
+                </div>
+                <div class="p-3">
+                    <flux:input wire:model.live.debounce.300ms="recipientSearch" icon="magnifying-glass"
+                        placeholder="Search employees…" size="sm" />
+                </div>
+                <div class="max-h-56 divide-y divide-zinc-100 overflow-y-auto dark:divide-white/5">
+                    @forelse($recipientList as $u)
+                        <label class="flex cursor-pointer items-center gap-3 px-4 py-2 transition hover:bg-zinc-50/60 dark:hover:bg-zinc-800/30">
+                            <flux:checkbox wire:model.live="selectedRecipients" value="{{ $u->id }}" />
+                            <div class="min-w-0 flex-1">
+                                <div class="truncate text-sm font-semibold text-zinc-900 dark:text-white">{{ $u->name }}</div>
+                                <div class="truncate text-[11px] text-zinc-400">
+                                    {{ $u->email }}
+                                    @if($u->employee?->department)
+                                        · {{ $u->employee->department->name }}
+                                    @endif
+                                </div>
+                            </div>
+                        </label>
+                    @empty
+                        <p class="px-4 py-6 text-center text-sm text-zinc-400">No employees with an email found.</p>
+                    @endforelse
+                </div>
+                <div class="px-4 pb-1">
+                    <flux:error name="selectedRecipients" />
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-2">
+                <flux:button wire:click="$set('showComposeModal', false)" variant="ghost">Cancel</flux:button>
+                <flux:button wire:click="sendBroadcast" variant="primary" icon="paper-airplane"
+                    :disabled="! $mailEnabled" wire:loading.attr="disabled" wire:target="sendBroadcast">
+                    <span wire:loading.remove wire:target="sendBroadcast">Send broadcast</span>
+                    <span wire:loading wire:target="sendBroadcast">Sending…</span>
+                </flux:button>
+            </div>
+        </div>
+    </flux:modal>
 
     {{-- Edit template modal --}}
     <flux:modal wire:model.self="showEditModal" class="w-full max-w-lg">

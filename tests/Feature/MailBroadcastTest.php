@@ -1,7 +1,7 @@
 <?php
 
 use App\Enums\UserRole;
-use App\Livewire\Settings\MailCenter;
+use App\Livewire\Settings\NotificationSettings;
 use App\Mail\CustomBroadcastMail;
 use App\Models\AiSetting;
 use App\Models\EmailLog;
@@ -14,7 +14,7 @@ use OpenAI\Laravel\Facades\OpenAI;
 use OpenAI\Responses\Chat\CreateResponse;
 
 /** Create a user with an employee record and a known email. */
-function employeeWithEmail(string $email): User
+function broadcastRecipient(string $email): User
 {
     return User::factory()
         ->has(Employee::factory(), 'employee')
@@ -50,18 +50,19 @@ test('with the master switch on, outgoing email is logged and sent', function ()
     expect(EmailLog::where('notification_key', 'system.killswitch-test')->count())->toBe(1);
 });
 
-// ── Authorization ────────────────────────────────────────────────────────────
+// ── Notifications & Email page ───────────────────────────────────────────────
 
-test('an hr admin can open the mail center', function () {
+test('an hr admin sees the master switch and compose button', function () {
     Livewire::actingAs(User::factory()->create(['role' => UserRole::HrAdmin]))
-        ->test(MailCenter::class)
+        ->test(NotificationSettings::class)
         ->assertOk()
-        ->assertSee('Mail Center');
+        ->assertSee('Outgoing email is ENABLED')
+        ->assertSee('Compose & Send');
 });
 
-test('a regular employee cannot open the mail center', function () {
+test('a regular employee cannot open the notifications page', function () {
     Livewire::actingAs(User::factory()->create(['role' => UserRole::Employee]))
-        ->test(MailCenter::class)
+        ->test(NotificationSettings::class)
         ->assertForbidden();
 });
 
@@ -69,9 +70,9 @@ test('a regular employee cannot open the mail center', function () {
 
 test('an admin can flip the master switch with one click', function () {
     Livewire::actingAs(User::factory()->create(['role' => UserRole::SuperAdmin]))
-        ->test(MailCenter::class)
+        ->test(NotificationSettings::class)
         ->assertSet('mailEnabled', true)
-        ->call('toggleMaster')
+        ->call('toggleMasterMail')
         ->assertSet('mailEnabled', false);
 
     expect(MailSetting::current()->mail_enabled)->toBeFalse();
@@ -80,14 +81,14 @@ test('an admin can flip the master switch with one click', function () {
 // ── Recipient selection ──────────────────────────────────────────────────────
 
 test('select all picks every employee that has an email', function () {
-    employeeWithEmail('a@example.com');
-    employeeWithEmail('b@example.com');
-    employeeWithEmail('c@example.com');
+    broadcastRecipient('a@example.com');
+    broadcastRecipient('b@example.com');
+    broadcastRecipient('c@example.com');
 
     Livewire::actingAs(User::factory()->create(['role' => UserRole::HrAdmin]))
-        ->test(MailCenter::class)
-        ->set('selectAll', true)
-        ->assertCount('selected', 3);
+        ->test(NotificationSettings::class)
+        ->set('selectAllRecipients', true)
+        ->assertCount('selectedRecipients', 3);
 });
 
 // ── Broadcast send ───────────────────────────────────────────────────────────
@@ -95,15 +96,15 @@ test('select all picks every employee that has an email', function () {
 test('a broadcast is sent to every selected recipient', function () {
     Mail::fake();
 
-    $a = employeeWithEmail('a@example.com');
-    $b = employeeWithEmail('b@example.com');
+    $a = broadcastRecipient('a@example.com');
+    $b = broadcastRecipient('b@example.com');
 
     Livewire::actingAs(User::factory()->create(['role' => UserRole::HrAdmin]))
-        ->test(MailCenter::class)
-        ->set('subject', 'Team Update')
-        ->set('body', 'Hello everyone.')
-        ->set('selected', [(string) $a->id, (string) $b->id])
-        ->call('send');
+        ->test(NotificationSettings::class)
+        ->set('composeSubject', 'Team Update')
+        ->set('composeBody', 'Hello everyone.')
+        ->set('selectedRecipients', [(string) $a->id, (string) $b->id])
+        ->call('sendBroadcast');
 
     Mail::assertSent(CustomBroadcastMail::class, 2);
     Mail::assertSent(CustomBroadcastMail::class, fn ($mail) => $mail->hasTo('a@example.com'));
@@ -112,26 +113,26 @@ test('a broadcast is sent to every selected recipient', function () {
 
 test('a broadcast requires a subject, body and at least one recipient', function () {
     Livewire::actingAs(User::factory()->create(['role' => UserRole::HrAdmin]))
-        ->test(MailCenter::class)
-        ->set('subject', '')
-        ->set('body', '')
-        ->set('selected', [])
-        ->call('send')
-        ->assertHasErrors(['subject', 'body', 'selected']);
+        ->test(NotificationSettings::class)
+        ->set('composeSubject', '')
+        ->set('composeBody', '')
+        ->set('selectedRecipients', [])
+        ->call('sendBroadcast')
+        ->assertHasErrors(['composeSubject', 'composeBody', 'selectedRecipients']);
 });
 
 test('no broadcast is sent while the master switch is off', function () {
     Mail::fake();
     MailSetting::current()->update(['mail_enabled' => false]);
 
-    $a = employeeWithEmail('a@example.com');
+    $a = broadcastRecipient('a@example.com');
 
     Livewire::actingAs(User::factory()->create(['role' => UserRole::HrAdmin]))
-        ->test(MailCenter::class)
-        ->set('subject', 'Team Update')
-        ->set('body', 'Hello everyone.')
-        ->set('selected', [(string) $a->id])
-        ->call('send');
+        ->test(NotificationSettings::class)
+        ->set('composeSubject', 'Team Update')
+        ->set('composeBody', 'Hello everyone.')
+        ->set('selectedRecipients', [(string) $a->id])
+        ->call('sendBroadcast');
 
     Mail::assertNothingSent();
 });
@@ -151,9 +152,9 @@ test('draft with ai fills the subject and body from the assistant', function () 
     ]);
 
     Livewire::actingAs(User::factory()->create(['role' => UserRole::HrAdmin]))
-        ->test(MailCenter::class)
+        ->test(NotificationSettings::class)
         ->set('aiPrompt', 'tell everyone the office is closed friday')
         ->call('draftWithAi')
-        ->assertSet('subject', 'Office Closed Friday')
-        ->assertSet('body', 'Dear team, the office will be closed on Friday.');
+        ->assertSet('composeSubject', 'Office Closed Friday')
+        ->assertSet('composeBody', 'Dear team, the office will be closed on Friday.');
 });

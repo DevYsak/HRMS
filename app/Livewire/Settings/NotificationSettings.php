@@ -2,10 +2,16 @@
 
 namespace App\Livewire\Settings;
 
+use App\Mail\CustomBroadcastMail;
 use App\Models\EmailLog;
+use App\Models\MailSetting;
 use App\Models\NotificationSetting;
+use App\Models\User;
+use App\Services\AiAssistant;
 use App\Services\Notifications\NotificationCatalog;
+use Illuminate\Contracts\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Livewire\Component;
@@ -31,10 +37,216 @@ class NotificationSettings extends Component
     // ── Test email ──────────────────────────────────────────────────────────────
     public string $testEmail = '';
 
+    // ── Master mail switch ───────────────────────────────────────────────────────
+    public bool $mailEnabled = true;
+
+    // ── Compose & send broadcast ─────────────────────────────────────────────────
+    public bool $showComposeModal = false;
+
+    public string $composeSubject = '';
+
+    public string $composeBody = '';
+
+    public string $aiPrompt = '';
+
+    public string $recipientSearch = '';
+
+    /** @var array<int, string> selected user ids */
+    public array $selectedRecipients = [];
+
+    public bool $selectAllRecipients = false;
+
     public function mount(): void
     {
         $this->authorize('manage-settings');
         $this->testEmail = (string) (auth()->user()?->email ?? '');
+        $this->mailEnabled = MailSetting::current()->mail_enabled;
+    }
+
+    /**
+     * Flip the global master kill switch for all outgoing email.
+     */
+    public function toggleMasterMail(): void
+    {
+        $this->authorize('manage-settings');
+
+        $setting = MailSetting::current();
+        $setting->update(['mail_enabled' => ! $setting->mail_enabled]);
+        $this->mailEnabled = $setting->mail_enabled;
+
+        \Flux::toast(
+            $this->mailEnabled ? 'All outgoing email is now enabled.' : 'All outgoing email is now paused.',
+            variant: $this->mailEnabled ? 'success' : 'warning',
+        );
+    }
+
+    /**
+     * Open a clean compose modal for a one-off broadcast.
+     */
+    public function openCompose(): void
+    {
+        $this->authorize('manage-settings');
+
+        $this->reset([
+            'composeSubject', 'composeBody', 'aiPrompt',
+            'selectedRecipients', 'selectAllRecipients', 'recipientSearch',
+        ]);
+        $this->resetValidation();
+        $this->showComposeModal = true;
+    }
+
+    /**
+     * Keep the selection in sync when the "select all" box is toggled.
+     */
+    public function updatedSelectAllRecipients(bool $value): void
+    {
+        $this->selectedRecipients = $value
+            ? $this->recipientQuery()->pluck('id')->map(fn ($id): string => (string) $id)->all()
+            : [];
+    }
+
+    /**
+     * Draft a subject + body from a short instruction using the AI assistant.
+     */
+    public function draftWithAi(): void
+    {
+        $this->authorize('manage-settings');
+
+        $this->validate(
+            ['aiPrompt' => ['required', 'string', 'max:500']],
+            [],
+            ['aiPrompt' => 'instruction'],
+        );
+
+        $ai = app(AiAssistant::class);
+        $user = Auth::user();
+
+        if (! $ai->enabledForUser($user)) {
+            \Flux::toast('AI assistant is not enabled. Configure it in Settings → AI Assistant.', variant: 'danger');
+
+            return;
+        }
+
+        $system = 'You draft internal company emails for an HR team. '
+            .'Return ONLY a JSON object with exactly two string keys: "subject" and "body". '
+            .'The subject must be under 120 characters. The body should be a warm, professional, '
+            .'ready-to-send announcement addressed to "Dear team," and signed off from the HR team. '
+            .'Do not wrap the JSON in code fences and do not use markdown or placeholders.';
+
+        try {
+            $draft = $this->parseAiDraft($ai->ask($system, trim($this->aiPrompt)));
+        } catch (\Throwable) {
+            \Flux::toast('AI could not draft that right now. Please try again.', variant: 'danger');
+
+            return;
+        }
+
+        if ($draft === null) {
+            \Flux::toast('AI returned an unexpected response. Please try again.', variant: 'danger');
+
+            return;
+        }
+
+        $this->composeSubject = $draft['subject'];
+        $this->composeBody = $draft['body'];
+
+        \Flux::toast('Draft ready — review and edit before sending.', variant: 'success');
+    }
+
+    /**
+     * Parse the AI's JSON reply into a subject/body pair, tolerating stray code
+     * fences the model may add.
+     *
+     * @return array{subject: string, body: string}|null
+     */
+    protected function parseAiDraft(string $raw): ?array
+    {
+        $clean = trim((string) preg_replace('/^```(?:json)?|```$/m', '', trim($raw)));
+        $data = json_decode($clean, true);
+
+        if (is_array($data) && isset($data['subject'], $data['body'])) {
+            return [
+                'subject' => trim((string) $data['subject']),
+                'body' => trim((string) $data['body']),
+            ];
+        }
+
+        return null;
+    }
+
+    /**
+     * Send the composed broadcast to every selected recipient.
+     */
+    public function sendBroadcast(): void
+    {
+        $this->authorize('manage-settings');
+
+        $this->validate(
+            [
+                'composeSubject' => ['required', 'string', 'max:255'],
+                'composeBody' => ['required', 'string', 'max:5000'],
+                'selectedRecipients' => ['required', 'array', 'min:1'],
+            ],
+            [],
+            ['selectedRecipients' => 'recipients'],
+        );
+
+        if (! MailSetting::current()->mail_enabled) {
+            \Flux::toast('Outgoing email is paused by the master switch. Enable it before sending.', variant: 'danger');
+
+            return;
+        }
+
+        $users = User::query()
+            ->whereIn('id', $this->selectedRecipients)
+            ->whereNotNull('email')
+            ->get(['id', 'name', 'email']);
+
+        $sent = 0;
+        $failed = 0;
+
+        foreach ($users as $recipient) {
+            try {
+                Mail::to($recipient->email, $recipient->name)
+                    ->send(new CustomBroadcastMail($this->composeSubject, $this->composeBody));
+                $sent++;
+            } catch (\Throwable) {
+                $failed++;
+            }
+        }
+
+        $this->showComposeModal = false;
+        $this->reset([
+            'composeSubject', 'composeBody', 'aiPrompt',
+            'selectedRecipients', 'selectAllRecipients', 'recipientSearch',
+        ]);
+
+        \Flux::toast(
+            $failed === 0
+                ? "Broadcast sent to {$sent} recipient(s)."
+                : "Sent to {$sent}, {$failed} failed. Check the email log below.",
+            variant: $failed === 0 ? 'success' : 'warning',
+        );
+    }
+
+    /**
+     * Base query for selectable recipients: every employee-linked user that has
+     * an email address, regardless of employment status, filtered by search.
+     *
+     * @return Builder<User>
+     */
+    protected function recipientQuery(): Builder
+    {
+        return User::query()
+            ->whereHas('employee')
+            ->whereNotNull('email')
+            ->when($this->recipientSearch !== '', function (Builder $q): void {
+                $q->where(function (Builder $w): void {
+                    $w->where('name', 'like', '%'.$this->recipientSearch.'%')
+                        ->orWhere('email', 'like', '%'.$this->recipientSearch.'%');
+                });
+            })
+            ->orderBy('name');
     }
 
     /**
@@ -165,7 +377,13 @@ class NotificationSettings extends Component
 
         $logs = EmailLog::query()->latest()->limit(20)->get();
 
-        return view('livewire.settings.notification-settings', compact('settings', 'queue', 'smtp', 'logs'))
+        $recipientList = $this->recipientQuery()
+            ->with(['employee:id,user_id,department_id', 'employee.department:id,name'])
+            ->get(['id', 'name', 'email']);
+
+        $aiEnabled = Auth::user() ? app(AiAssistant::class)->enabledForUser(Auth::user()) : false;
+
+        return view('livewire.settings.notification-settings', compact('settings', 'queue', 'smtp', 'logs', 'recipientList', 'aiEnabled'))
             ->layout('layouts.app', ['title' => 'Notifications & Email']);
     }
 
