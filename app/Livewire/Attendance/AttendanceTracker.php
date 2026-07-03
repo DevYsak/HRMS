@@ -5,8 +5,10 @@ namespace App\Livewire\Attendance;
 use App\Enums\AttendanceMode;
 use App\Enums\PunchMethod;
 use App\Models\Attendance;
+use App\Models\AttendanceDailySummary;
 use App\Models\AttendanceRegularisation;
 use App\Models\AttendanceSetting;
+use App\Models\BiometricDevice;
 use App\Models\BreakLog;
 use App\Models\LeaveRequest;
 use App\Models\PublicHoliday;
@@ -99,6 +101,12 @@ class AttendanceTracker extends Component
 
     /** Tasks completed within the selected stats period. */
     public int $tasksCompletedPeriod = 0;
+
+    /** Today's biometric daily summary (raw punch count, device, sync). */
+    public $todaySummary = null;
+
+    /** The biometric device (name, connection, last sync). */
+    public $biometricDevice = null;
 
     /** Today's WFH daily report (null until submitted). */
     public $wfhReport = null;
@@ -244,6 +252,14 @@ class AttendanceTracker extends Component
 
         // 10. Today's tasks
         $this->loadTasks($employee);
+
+        // 11. Biometric daily summary + device (punch count, source, sync, connection)
+        $this->todaySummary = AttendanceDailySummary::where('employee_id', $employee->id)
+            ->whereDate('date', Carbon::today()->toDateString())
+            ->first();
+        $this->biometricDevice = BiometricDevice::query()
+            ->orderByDesc('last_synced_at')
+            ->first();
 
         // 11. Today's WFH report
         $this->wfhReport = WfhReport::where('employee_id', $employee->id)

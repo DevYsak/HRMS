@@ -252,7 +252,8 @@
       "Bash(git rev-list *)",
       "Bash(git merge *)",
       "PowerShell(php artisan test --compact --filter=MailBroadcastTest 2>&1)",
-      "Bash(vendor/bin/pint tests/Feature/BiometricPunchMethodTest.php config/biometric.php --format agent)"
+      "Bash(vendor/bin/pint tests/Feature/BiometricPunchMethodTest.php config/biometric.php --format agent)",
+      "Bash(grep -iA6 \"Failed asserting\\\\|does not\\\\|unable\")"
     ],
     "additionalDirectories": [
       "C:\\Users\\91937\\Desktop\\xamp\\htdocs\\mahaigr-v2\\includes",

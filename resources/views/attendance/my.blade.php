@@ -198,6 +198,59 @@
     @endforeach
 </div>
 
+{{-- ═══════════════════════════════════════════════
+     TODAY'S PUNCH SUMMARY (biometric daily summary)
+═══════════════════════════════════════════════ --}}
+@php
+    $sum = $todaySummary;
+    $inM  = PunchMethod::tryFrom((string) ($todayAttendance->check_in_method ?? $sum?->first_punch_method));
+    $outM = PunchMethod::tryFrom((string) ($todayAttendance->check_out_method ?? $sum?->last_punch_method));
+    $punchMethods = collect([$inM, $outM])->filter()->unique();
+    $punchSource = $punchMethods->isNotEmpty() ? $punchMethods->map->label()->implode(' + ') : '—';
+    $firstPunch = $todayAttendance?->check_in ?? $sum?->first_punch;
+    $lastPunch  = $todayAttendance?->check_out ?? $sum?->last_punch;
+    $totalPunches = (int) ($sum?->raw_punch_count ?? 0);
+    $breakMin = (int) ($todayAttendance->break_minutes ?? $sum?->break_minutes ?? 0);
+    $otMin    = (int) ($sum?->overtime_minutes ?? 0);
+    $deviceName = $biometricDevice?->name ?? $sum?->device_serial ?? '—';
+    $lastSync = $biometricDevice?->last_synced_at ?? $sum?->synced_at;
+    $connected = $lastSync && \Carbon\Carbon::parse($lastSync)->gt(now()->subMinutes(30));
+    $stat = fn ($label, $value, $sub = null) => ['label' => $label, 'value' => $value, 'sub' => $sub];
+    $punchStats = [
+        $stat('First Punch', $firstPunch ? \Carbon\Carbon::parse($firstPunch)->format('h:i A') : '--:--', $inM?->label()),
+        $stat('Last Punch', $lastPunch ? \Carbon\Carbon::parse($lastPunch)->format('h:i A') : '--:--', $outM?->label()),
+        $stat('Total Punches', $totalPunches ?: '—'),
+        $stat('Working Hours', $stats['hours'] ?? '0h'),
+        $stat('Break Time', intdiv($breakMin, 60).'h '.($breakMin % 60).'m'),
+        $stat('Overtime', intdiv($otMin, 60).'h '.($otMin % 60).'m'),
+        $stat('Punch Source', $punchSource),
+        $stat('Device', $deviceName),
+    ];
+@endphp
+<div class="rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-100 px-5 py-3 dark:border-zinc-800">
+        <h3 class="flex items-center gap-2 text-sm font-bold text-zinc-900 dark:text-white"><flux:icon.finger-print class="size-4 text-brand-500" /> Today's Punch Summary</h3>
+        <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-bold {{ $connected ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400' : 'bg-amber-50 text-amber-600 dark:bg-amber-950/30 dark:text-amber-400' }}">
+            <span class="size-1.5 rounded-full {{ $connected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500' }}"></span>
+            {{ $connected ? 'Connected' : 'Sync pending' }}
+        </span>
+    </div>
+    <div class="grid grid-cols-2 divide-x divide-y divide-zinc-100 sm:grid-cols-4 lg:grid-cols-8 dark:divide-zinc-800">
+        @foreach($punchStats as $ps)
+            <div class="p-4">
+                <div class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">{{ $ps['label'] }}</div>
+                <div class="mt-1 truncate text-base font-black text-zinc-900 dark:text-white" title="{{ $ps['value'] }}">{{ $ps['value'] }}</div>
+                @if($ps['sub'])<div class="text-[10px] font-semibold text-brand-600">{{ $ps['sub'] }}</div>@endif
+            </div>
+        @endforeach
+    </div>
+    @if($lastSync)
+        <div class="border-t border-zinc-100 px-5 py-2 text-[11px] text-zinc-400 dark:border-zinc-800">
+            Last sync <span class="font-semibold text-zinc-600 dark:text-zinc-300">{{ \Carbon\Carbon::parse($lastSync)->format('h:i A') }}</span> · Device <span class="font-semibold text-zinc-600 dark:text-zinc-300">{{ $deviceName }}</span>
+        </div>
+    @endif
+</div>
+
 {{-- Period filter --}}
 <div class="flex items-center gap-2 overflow-x-auto pb-1">
     <span class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Period</span>
@@ -556,8 +609,30 @@
         </div>
     </div>
 
-    {{-- Shift details + holidays --}}
+    {{-- Shift details + biometric status + holidays --}}
     <div class="space-y-4 lg:col-span-4">
+        {{-- Biometric Status --}}
+        <div class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <div class="mb-3 flex items-center justify-between">
+                <div class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Biometric Status</div>
+                <span class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-bold {{ $connected ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400' : 'bg-amber-50 text-amber-600 dark:bg-amber-950/30 dark:text-amber-400' }}">
+                    <span class="size-1.5 rounded-full {{ $connected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500' }}"></span> {{ $connected ? 'Connected' : 'Sync pending' }}
+                </span>
+            </div>
+            <div class="space-y-2 text-xs">
+                <div class="flex items-center justify-between"><span class="text-zinc-400">Device</span><span class="font-bold text-zinc-800 dark:text-zinc-200">{{ $deviceName }}</span></div>
+                <div class="flex items-center justify-between"><span class="text-zinc-400">Last Sync</span><span class="font-bold text-zinc-800 dark:text-zinc-200">{{ $lastSync ? \Carbon\Carbon::parse($lastSync)->format('h:i A') : '—' }}</span></div>
+                <div class="flex items-center justify-between"><span class="text-zinc-400">Punch Source</span><span class="font-bold text-zinc-800 dark:text-zinc-200">{{ $punchSource }}</span></div>
+                @if($punchMethods->isNotEmpty())
+                    <div class="flex flex-wrap gap-1.5 pt-1">
+                        @foreach($punchMethods as $m)
+                            <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold {{ $m->chipClass() }}"><flux:icon :icon="$m->icon()" class="size-3" /> {{ $m->label() }}</span>
+                        @endforeach
+                    </div>
+                @endif
+            </div>
+        </div>
+
         <div class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
             <div class="mb-3 text-[10px] font-bold uppercase tracking-widest text-zinc-400">Shift Details</div>
             @if($shift)

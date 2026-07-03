@@ -3,7 +3,9 @@
 use App\Enums\AttendanceMode;
 use App\Livewire\Attendance\AttendanceTracker;
 use App\Models\Attendance;
+use App\Models\AttendanceDailySummary;
 use App\Models\AttendanceSetting;
+use App\Models\BiometricDevice;
 use App\Models\Employee;
 use App\Models\ShiftSetting;
 use App\Models\User;
@@ -241,4 +243,24 @@ test('the attendance log shows both check-in and check-out methods when they dif
         ->assertOk()
         ->assertSee('Face')
         ->assertSee('ID Card');
+});
+
+test('the punch summary and biometric status show the biometric daily figures', function () {
+    $employee = Employee::factory()->create();
+    BiometricDevice::create(['name' => 'ESSL MB20', 'ip_address' => '10.0.0.9', 'port' => 4370, 'timeout_seconds' => 5, 'last_synced_at' => now()]);
+    AttendanceDailySummary::create([
+        'employee_id' => $employee->id, 'employee_code' => 777, 'date' => today(),
+        'first_punch' => now()->setTime(9, 2), 'last_punch' => now()->setTime(18, 15),
+        'first_punch_method' => 'face', 'last_punch_method' => 'id_card',
+        'break_minutes' => 32, 'working_hours' => 7.3, 'late_minutes' => 0, 'overtime_minutes' => 18,
+        'status' => 'present', 'raw_punch_count' => 4, 'synced_at' => now(),
+    ]);
+
+    Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
+        ->assertOk()
+        ->assertSee('Punch Summary')
+        ->assertSee('Total Punches')
+        ->assertSee('ESSL MB20')
+        ->assertSee('Biometric Status')
+        ->assertSee('Face + ID Card');
 });
