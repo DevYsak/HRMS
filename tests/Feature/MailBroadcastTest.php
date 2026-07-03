@@ -137,6 +137,13 @@ test('no broadcast is sent while the master switch is off', function () {
     Mail::assertNothingSent();
 });
 
+test('the broadcast email is exactly the composed body with no forced signature', function () {
+    $rendered = (new CustomBroadcastMail('Subject', 'This is the entire message body.'))->render();
+
+    expect($rendered)->toContain('This is the entire message body.')
+        ->and($rendered)->not->toContain('Thanks,'); // old hardcoded footer is gone
+});
+
 // ── Draft with AI ────────────────────────────────────────────────────────────
 
 test('draft with ai fills the subject and body from the assistant', function () {
