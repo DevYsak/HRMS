@@ -67,6 +67,7 @@ use App\Livewire\Settings\DataManagement;
 use App\Livewire\Settings\DepartmentManager;
 use App\Livewire\Settings\EmploymentTypeManager;
 use App\Livewire\Settings\JobTitleManager;
+use App\Livewire\Settings\MailCenter;
 use App\Livewire\Settings\MenuSettings;
 use App\Livewire\Settings\NotificationSettings;
 use App\Livewire\Settings\OnboardingTemplateManager;
@@ -388,6 +389,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/job-titles', JobTitleManager::class)->name('job-titles');
         Route::get('/menu', MenuSettings::class)->name('menu');
         Route::get('/notifications', NotificationSettings::class)->name('notifications');
+        Route::get('/mail-center', MailCenter::class)->name('mail-center');
         Route::get('/onboarding-templates', OnboardingTemplateManager::class)->name('onboarding-templates');
         Route::get('/onboarding-templates/{template}/tasks', OnboardingTemplateTaskManager::class)->name('onboarding-template-tasks');
     });

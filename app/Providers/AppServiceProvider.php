@@ -9,6 +9,7 @@ use App\Models\Employee;
 use App\Models\EmployeeSalary;
 use App\Models\Incentive;
 use App\Models\LeaveRequest;
+use App\Models\MailSetting;
 use App\Models\NotificationSetting;
 use App\Models\OtRequest;
 use App\Models\Payroll;
@@ -188,6 +189,14 @@ class AppServiceProvider extends ServiceProvider
     {
         Event::listen(function (MessageSending $event): ?bool {
             $message = $event->message;
+
+            // Global master kill switch — cancels every outgoing message
+            // (transactional notifications AND directly-sent Mailables).
+            // Fail-open: a config/schema error never blocks all mail.
+            if (! $this->globalMailEnabled()) {
+                return false;
+            }
+
             $key = $this->mailHeader($message, 'X-Notification-Key');
 
             // Gate directly-sent Mailables (notifications are gated upstream).
@@ -229,6 +238,20 @@ class AppServiceProvider extends ServiceProvider
             EmailLog::whereIn('id', explode(',', $ids))
                 ->update(['status' => 'sent', 'sent_at' => now()]);
         });
+    }
+
+    /**
+     * Whether the global master mail switch is on. Fail-open: any error reading
+     * the setting (e.g. missing table during migration) allows the send so a
+     * config problem can never silently block every outgoing email.
+     */
+    private function globalMailEnabled(): bool
+    {
+        try {
+            return MailSetting::mailEnabled();
+        } catch (\Throwable) {
+            return true;
+        }
     }
 
     /**

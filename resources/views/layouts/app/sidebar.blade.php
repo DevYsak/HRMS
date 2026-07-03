@@ -656,6 +656,8 @@
                         :current="request()->routeIs('settings.job-titles')" wire:navigate>Job Titles</flux:sidebar.item>
                     <flux:sidebar.item :href="route('settings.notifications')"
                         :current="request()->routeIs('settings.notifications')" wire:navigate>Notifications &amp; Email</flux:sidebar.item>
+                    <flux:sidebar.item :href="route('settings.mail-center')"
+                        :current="request()->routeIs('settings.mail-center')" wire:navigate>Mail Center</flux:sidebar.item>
                     <flux:sidebar.item :href="route('settings.menu')"
                         :current="request()->routeIs('settings.menu')" wire:navigate>Sidebar Menu</flux:sidebar.item>
                     <flux:sidebar.item :href="route('settings.audit-log')"
