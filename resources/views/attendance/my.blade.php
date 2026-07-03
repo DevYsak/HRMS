@@ -248,18 +248,23 @@
         <div class="mb-3 text-sm font-black text-zinc-900">Quick Actions</div>
         <div class="grid grid-cols-2 gap-2">
             @php
+                $canApprove = auth()->user()->canApproveLeave();
+                // Gated pages only for managers/HR; employees get working equivalents.
                 $qa = [
-                    ['Attendance History', 'clock', 'attendance.employees'],
-                    ['Apply Leave', 'calendar-days', 'leaves.index'],
-                    ['Regularization', 'pencil-square', null],
-                    ['Download Report', 'arrow-down-tray', null],
-                    ['View Calendar', 'calendar', null],
-                    ['My Team', 'users', 'attendance.team'],
+                    ['Attendance History', 'clock', $canApprove && \Route::has('attendance.employees') ? route('attendance.employees') : '#attendance-log', null],
+                    ['Apply Leave', 'calendar-days', \Route::has('time-off.my') ? route('time-off.my') : '#', null],
+                    ['Regularization', 'pencil-square', '#', 'regularise'],
+                    ['Download Report', 'arrow-down-tray', '#', 'export'],
+                    ['My Overtime', 'bolt', \Route::has('overtime.my') ? route('overtime.my') : '#', null],
+                    $canApprove && \Route::has('attendance.team')
+                        ? ['My Team', 'users', route('attendance.team'), null]
+                        : ['WFH Requests', 'home', \Route::has('wfh.my') ? route('wfh.my') : '#attendance-log', null],
                 ];
             @endphp
-            @foreach($qa as [$label, $icon, $route])
-                @php $href = $route && \Route::has($route) ? route($route) : null; @endphp
-                <a @if($href) href="{{ $href }}" @else href="#" @if($label==='Regularization') @click.prevent="$flux.modal('regularisation-modal').show()" @endif @endif
+            @foreach($qa as [$label, $icon, $href, $action])
+                <a href="{{ $href }}"
+                    @if($action === 'regularise') @click.prevent="$flux.modal('regularisation-modal').show()" @endif
+                    @if($action === 'export') wire:click.prevent="exportLog" @endif
                     class="flex flex-col items-center gap-1.5 rounded-xl border border-zinc-100 bg-white p-3 text-center transition hover:-translate-y-0.5 hover:border-orange-200 hover:shadow">
                     <span class="inline-flex size-8 items-center justify-center rounded-lg bg-orange-50 text-orange-500"><flux:icon :icon="$icon" class="size-4" /></span>
                     <span class="text-[10px] font-bold text-zinc-600">{{ $label }}</span>
@@ -507,7 +512,7 @@
 @endif
 
 {{-- ═══════════════ ATTENDANCE LOG ═══════════════ --}}
-<div class="overflow-hidden rounded-[18px] border border-orange-100/70 bg-white shadow-sm">
+<div id="attendance-log" class="overflow-hidden rounded-[18px] border border-orange-100/70 bg-white shadow-sm scroll-mt-6">
     <div class="flex flex-wrap items-center justify-between gap-3 border-b border-orange-100/70 px-5 py-3.5">
         <h3 class="flex items-center gap-2 text-sm font-black text-zinc-900"><flux:icon.clock class="size-4 text-orange-500" /> Attendance Log
             <span class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">

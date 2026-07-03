@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Notifications\AttendanceRegularisationNotification;
 use App\Notifications\RegularisationReviewedNotification;
 use App\Services\AttendanceService;
+use Carbon\CarbonPeriod;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -320,20 +321,38 @@ class AllAttendance extends Component
             'absent' => $absentToday,
             'on_time' => $onTimeToday,
             'late' => $lateToday,
+            'wfh' => $todayRecords->whereIn('work_mode', ['wfh', 'hybrid'])->count(),
             'present_pct' => $totalActive > 0 ? round(($presentToday / $totalActive) * 100, 1) : 0,
             'absent_pct' => $totalActive > 0 ? round(($absentToday / $totalActive) * 100, 1) : 0,
             'late_pct' => $presentToday > 0 ? round(($lateToday / $presentToday) * 100, 1) : 0,
         ];
+
+        // Presence trend across the selected range (drives the overview chart).
+        $trend = [];
+        if ($this->dateFrom && $this->dateTo) {
+            $byDay = Attendance::whereBetween('date', [$this->dateFrom, $this->dateTo])
+                ->get(['date', 'is_late'])
+                ->groupBy(fn ($a) => $a->date->toDateString());
+            foreach (CarbonPeriod::create($this->dateFrom, $this->dateTo) as $d) {
+                $day = $byDay->get($d->toDateString(), collect());
+                $trend[] = [
+                    'label' => $d->format('d M'),
+                    'present' => $day->count(),
+                    'late' => $day->where('is_late', true)->count(),
+                ];
+            }
+        }
 
         $weekLabel = $this->dateFrom && $this->dateTo
             ? Carbon::parse($this->dateFrom)->format('d M').' – '.Carbon::parse($this->dateTo)->format('d M Y')
             : 'All dates';
 
         return view('livewire.attendance.all-attendance', [
-            'attendances' => $query->latest('date')->paginate(20),
+            'attendances' => $query->latest('date')->paginate(15),
             'pendingRegularisations' => $pendingRegularisations,
             'allEmployees' => Employee::with('user')->whereHas('user')->orderBy('id')->get(),
             'stats' => $stats,
+            'trend' => $trend,
             'weekLabel' => $weekLabel,
         ])->layout('layouts.app', ['title' => 'Employee Attendance']);
     }
