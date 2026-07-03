@@ -87,6 +87,28 @@ def first_last_verify(pin, date):
         return None, None
 
 
+def all_punches(pin, date):
+    """
+    Every punch for `pin` on `date` as [{'time': 'YYYY-MM-DD HH:MM:SS',
+    'verify': <code>}, ...], chronological. Feeds the HRMS Attendance Journey.
+    Returns [] on any error so the dashboard never breaks.
+    """
+    try:
+        con = sqlite3.connect(DB_PATH)
+        _detect(con)
+        s = _SCHEMA
+        rows = con.execute(
+            "SELECT %s, %s FROM %s WHERE %s = ? AND substr(%s,1,10) = ? ORDER BY %s ASC"
+            % (s["time"], s["verify"], s["table"], s["pin"], s["time"], s["time"]),
+            (str(pin), str(date)),
+        ).fetchall()
+        con.close()
+        return [{"time": r[0], "verify": r[1]} for r in rows]
+    except Exception as e:
+        print("punch_methods:", e)
+        return []
+
+
 if __name__ == "__main__":
     # Quick self-check: python3 punch_methods.py <pin> <YYYY-MM-DD>
     import sys

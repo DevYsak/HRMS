@@ -98,6 +98,22 @@ EDITS = [
         '        entry["last_punch_method"] = _lv\n'
         '        table.append(entry)',
     ),
+    (
+        "build_dashboard: import all_punches (Attendance Journey)",
+        'import all_punches',
+        'from punch_methods import first_last_verify',
+        'from punch_methods import all_punches, first_last_verify',
+    ),
+    (
+        "build_dashboard: attach every punch to the row",
+        'entry["punches"]',
+        '        entry["last_punch_method"] = _lv\n        table.append(entry)',
+        '        entry["last_punch_method"] = _lv\n'
+        '        _punches = all_punches(emp_id, date_str)\n'
+        '        if _punches:\n'
+        '            entry["punches"] = _punches\n'
+        '        table.append(entry)',
+    ),
 ]
 
 
