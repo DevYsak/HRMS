@@ -28,6 +28,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Livewire\Component;
 
 class AttendanceTracker extends Component
@@ -102,6 +103,9 @@ class AttendanceTracker extends Component
 
     /** Auto-generated plain-language attendance insights for the period. */
     public array $insights = [];
+
+    /** AI Attendance Insights — stat cards, trends, prediction & suggestions. */
+    public array $insightStats = [];
 
     /** Today's tasks for the logged-in employee. */
     public $tasks = [];
@@ -1078,6 +1082,84 @@ class AttendanceTracker extends Component
         }
 
         $this->insights = $insights;
+
+        // ── AI Attendance Insights — stat cards, trends, prediction, suggestions ──
+        $withOut = $attendances->filter(fn ($a) => $a->check_out);
+        $avgOutMin = $withOut->count() > 0
+            ? (int) round($withOut->avg(fn ($a) => $a->check_out->hour * 60 + $a->check_out->minute))
+            : null;
+
+        $longestDay = collect($daily)->sortByDesc('hours')->first();
+
+        // Longest run of worked days without a late mark (working days only).
+        $streak = 0;
+        $run = 0;
+        foreach ($daily as $d) {
+            if ($d['hours'] > 0 && ! $d['late']) {
+                $run++;
+                $streak = max($streak, $run);
+            } elseif ($d['hours'] > 0) {
+                $run = 0;
+            }
+        }
+
+        // Prediction: attendance % if every remaining working day is attended.
+        $fullWorkDays = max(1, (int) $start->diffInDaysFiltered(fn ($d) => ! $d->isSunday(), $end->copy()->endOfDay()));
+        $remainingDays = Carbon::tomorrow()->lte($end)
+            ? (int) Carbon::tomorrow()->diffInDaysFiltered(fn ($d) => ! $d->isSunday(), $end->copy()->endOfDay())
+            : 0;
+        $predictedPct = min(100, (int) round(($present + $remainingDays) / $fullWorkDays * 100));
+
+        // Trend vs the previous period of the same length.
+        $periodDays = max(1, (int) $start->diffInDays($end) + 1);
+        $prevStart = $start->copy()->subDays($periodDays);
+        $prevEnd = $start->copy()->subDay();
+        $prev = Attendance::where('employee_id', $employee->id)
+            ->whereBetween('date', [$prevStart->toDateString(), $prevEnd->toDateString()])
+            ->when($this->analyticsMode !== '', fn ($q) => $q->where('work_mode', $this->analyticsMode))
+            ->get(['check_in', 'is_late']);
+        $prevPresent = $prev->whereNotNull('check_in')->count();
+        $prevLate = $prev->where('is_late', true)->count();
+
+        $fmtTime = fn (?int $m) => $m === null ? null : sprintf('%02d:%02d %s', (intdiv($m, 60) % 12) ?: 12, $m % 60, $m < 720 ? 'AM' : 'PM');
+
+        $suggestions = [];
+        $suggestions[] = $this->analytics['attendance_score'] >= 85
+            ? ['good' => true, 'text' => 'Great attendance — keep it up']
+            : ['good' => false, 'text' => 'Focus on attendance consistency this period'];
+        if ($avgBreak > 60) {
+            $suggestions[] = ['good' => false, 'text' => 'Improve break duration — average exceeds 60 minutes'];
+        }
+        if ($late > 0 && $this->shift?->start_time) {
+            $suggestions[] = ['good' => false, 'text' => 'Arrive before '.Carbon::parse($this->shift->start_time)->addMinutes((int) ($this->shift->grace_minutes ?? 5))->format('g:i A').' to stay on time'];
+        } else {
+            $suggestions[] = ['good' => true, 'text' => 'Perfect punctuality this period'];
+        }
+        $attPctNow = $workingBasis > 0 ? round($present / $workingBasis * 100) : 100;
+        $suggestions[] = $attPctNow >= 98
+            ? ['good' => true, 'text' => 'Maintain attendance above 98%']
+            : ['good' => false, 'text' => 'Target 98%+ attendance — currently '.$attPctNow.'%'];
+        if ($missing > 0) {
+            $suggestions[] = ['good' => false, 'text' => 'Regularise '.$missing.' missing punch '.Str::plural('day', $missing)];
+        }
+
+        $this->insightStats = [
+            'score' => (int) $this->analytics['attendance_score'],
+            'avg_in' => $fmtTime($avgInMin),
+            'avg_out' => $fmtTime($avgOutMin),
+            'avg_break' => $avgBreak,
+            'avg_hours' => $avgHoursMin > 0 ? intdiv($avgHoursMin, 60).'h '.($avgHoursMin % 60).'m' : null,
+            'best_day' => $bestDay,
+            'longest_day' => $longestDay && $longestDay['hours'] > 0 ? $longestDay['hours'].'h · '.$longestDay['label'] : null,
+            'longest_break' => $longestBreak > 0 ? ($longestBreak >= 60 ? intdiv($longestBreak, 60).'h '.($longestBreak % 60).'m' : $longestBreak.'m') : null,
+            'streak' => $streak,
+            'late_count' => $late,
+            'missing_count' => $missing,
+            'prediction' => $predictedPct,
+            'present_trend' => $present - $prevPresent,
+            'late_trend' => $late - $prevLate,
+            'suggestions' => $suggestions,
+        ];
     }
 
     /**

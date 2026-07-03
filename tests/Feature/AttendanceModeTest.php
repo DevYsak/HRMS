@@ -549,3 +549,27 @@ test('the analytics mode filter narrows the period stats', function () {
         ->set('analyticsMode', '')
         ->assertSet('stats.present', 2);
 });
+
+test('AI insight stats compute averages, streak, prediction and suggestions', function () {
+    $employee = Employee::factory()->create();
+    foreach ([1, 2] as $day) {
+        Attendance::create([
+            'employee_id' => $employee->id, 'date' => now()->startOfMonth()->addDays($day),
+            'check_in' => now()->startOfMonth()->addDays($day)->setTime(9, 30),
+            'check_out' => now()->startOfMonth()->addDays($day)->setTime(18, 30),
+            'status' => 'on_time', 'work_mode' => 'office', 'total_hours' => 9, 'break_minutes' => 30,
+        ]);
+    }
+
+    Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
+        ->assertSee('AI Attendance Insights')
+        ->assertSee('Suggestions')
+        ->assertSet('insightStats', function ($s) {
+            return $s['avg_in'] === '09:30 AM'
+                && $s['avg_out'] === '06:30 PM'
+                && $s['streak'] >= 2
+                && $s['late_count'] === 0
+                && $s['prediction'] >= 0 && $s['prediction'] <= 100
+                && count($s['suggestions']) >= 2;
+        });
+});

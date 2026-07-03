@@ -724,18 +724,83 @@
     </div>
 </div>
 
-{{-- ═══════════════ ATTENDANCE INSIGHTS ═══════════════ --}}
-@if(count($insights) > 0)
+{{-- ═══════════════ AI ATTENDANCE INSIGHTS ═══════════════ --}}
+@if(! empty($insightStats))
+    @php
+        $ai = $insightStats;
+        $trendChip = function ($delta, bool $goodWhenUp = true) {
+            if ($delta === null || $delta === 0) { return null; }
+            $up = $delta > 0;
+            $good = $up === $goodWhenUp;
+
+            return ['icon' => $up ? 'arrow-trending-up' : 'arrow-trending-down',
+                'class' => $good ? 'text-emerald-600' : 'text-rose-500',
+                'text' => ($up ? '+' : '').$delta.' vs prev'];
+        };
+        $aiCards = [
+            ['Attendance Score', $ai['score'].'/100', 'shield-check', '#10b981', $trendChip($ai['present_trend'])],
+            ['Average Check-in', $ai['avg_in'] ?? '—', 'arrow-right-end-on-rectangle', '#F97316', null],
+            ['Average Check-out', $ai['avg_out'] ?? '—', 'arrow-left-start-on-rectangle', '#ef4444', null],
+            ['Average Break', $ai['avg_break'] ? $ai['avg_break'].'m' : '—', 'pause', '#0ea5e9', null],
+            ['Avg Working Hours', $ai['avg_hours'] ?? '—', 'clock', '#6366f1', null],
+            ['Best Attendance Day', $ai['best_day'] ?? '—', 'star', '#f59e0b', null],
+            ['Longest Working Day', $ai['longest_day'] ?? '—', 'bolt', '#8b5cf6', null],
+            ['Longest Break', $ai['longest_break'] ?? '—', 'moon', '#14b8a6', null],
+            ['Perfect Streak', $ai['streak'].' '.\Illuminate\Support\Str::plural('day', $ai['streak']), 'fire', '#f97316', null],
+            ['Late Count', $ai['late_count'], 'exclamation-triangle', $ai['late_count'] ? '#f59e0b' : '#10b981', $trendChip($ai['late_trend'], false)],
+            ['Missing Punches', $ai['missing_count'], 'flag', $ai['missing_count'] ? '#ef4444' : '#10b981', null],
+            ['Attendance Prediction', $ai['prediction'].'%', 'sparkles', '#F97316', null],
+        ];
+    @endphp
     <div class="rounded-[18px] border border-orange-100/70 bg-white p-5 shadow-sm">
-        <div class="mb-3 flex items-center gap-2"><span class="inline-flex size-8 items-center justify-center rounded-xl bg-orange-50 text-orange-500"><flux:icon.sparkles class="size-4" /></span><div class="text-sm font-black text-zinc-900">Attendance Insights</div><span class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">· {{ ucwords(str_replace('_', ' ', $statsPeriod)) }}</span></div>
-        <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
-            @foreach($insights as $ins)
-                <div class="flex items-center gap-2 rounded-xl {{ $ins['good'] ? 'bg-emerald-50/60' : 'bg-amber-50/60' }} px-3 py-2 text-xs">
-                    <flux:icon :icon="$ins['good'] ? 'check-circle' : 'exclamation-circle'" class="size-4 shrink-0 {{ $ins['good'] ? 'text-emerald-500' : 'text-amber-500' }}" />
-                    <span class="font-semibold {{ $ins['good'] ? 'text-emerald-800' : 'text-amber-800' }}">{{ $ins['text'] }}</span>
+        <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+                <span class="inline-flex size-8 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-amber-400 text-white shadow"><flux:icon.sparkles class="size-4" /></span>
+                <div class="text-sm font-black text-zinc-900">AI Attendance Insights</div>
+                <span class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">· {{ ucwords(str_replace('_', ' ', $statsPeriod)) }}</span>
+            </div>
+            <span class="rounded-full bg-orange-50 px-2.5 py-1 text-[10px] font-bold text-orange-500">Predicted {{ $ai['prediction'] }}% by period end</span>
+        </div>
+
+        {{-- Stat cards --}}
+        <div class="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-6">
+            @foreach($aiCards as [$label, $value, $icon, $color, $trend])
+                <div class="rounded-2xl border border-zinc-100 bg-gradient-to-b from-white to-orange-50/30 p-3 transition duration-200 hover:-translate-y-0.5 hover:shadow-md">
+                    <span class="inline-flex size-8 items-center justify-center rounded-xl" style="background: {{ $color }}1a; color: {{ $color }};"><flux:icon :icon="$icon" class="size-4" /></span>
+                    <div class="mt-2 truncate text-base font-black leading-none tabular-nums text-zinc-900" title="{{ $value }}">{{ $value }}</div>
+                    <div class="mt-1 truncate text-[9px] font-bold uppercase tracking-wide text-zinc-400">{{ $label }}</div>
+                    @if($trend)
+                        <div class="mt-0.5 flex items-center gap-1 text-[9px] font-bold {{ $trend['class'] }}"><flux:icon :icon="$trend['icon']" class="size-3" /> {{ $trend['text'] }}</div>
+                    @endif
                 </div>
             @endforeach
         </div>
+
+        {{-- Suggestions --}}
+        @if(! empty($ai['suggestions']))
+            <div class="mt-4 border-t border-orange-100/70 pt-3">
+                <div class="mb-2 text-[10px] font-bold uppercase tracking-widest text-zinc-400">Suggestions</div>
+                <div class="flex flex-wrap gap-2">
+                    @foreach($ai['suggestions'] as $s)
+                        <span class="inline-flex items-center gap-1.5 rounded-full {{ $s['good'] ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700' }} px-3 py-1.5 text-xs font-semibold">
+                            <flux:icon :icon="$s['good'] ? 'check-circle' : 'light-bulb'" class="size-3.5 {{ $s['good'] ? 'text-emerald-500' : 'text-amber-500' }}" /> {{ $s['text'] }}
+                        </span>
+                    @endforeach
+                </div>
+            </div>
+        @endif
+
+        {{-- Detailed observations (existing generated insights) --}}
+        @if(count($insights) > 0)
+            <div class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                @foreach($insights as $ins)
+                    <div class="flex items-center gap-2 rounded-xl {{ $ins['good'] ? 'bg-emerald-50/60' : 'bg-amber-50/60' }} px-3 py-2 text-xs">
+                        <flux:icon :icon="$ins['good'] ? 'check-circle' : 'exclamation-circle'" class="size-4 shrink-0 {{ $ins['good'] ? 'text-emerald-500' : 'text-amber-500' }}" />
+                        <span class="font-semibold {{ $ins['good'] ? 'text-emerald-800' : 'text-amber-800' }}">{{ $ins['text'] }}</span>
+                    </div>
+                @endforeach
+            </div>
+        @endif
     </div>
 @endif
 
