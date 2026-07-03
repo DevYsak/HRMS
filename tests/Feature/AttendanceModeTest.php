@@ -4,6 +4,7 @@ use App\Enums\AttendanceMode;
 use App\Livewire\Attendance\AttendanceTracker;
 use App\Models\Attendance;
 use App\Models\AttendanceDailySummary;
+use App\Models\AttendancePunch;
 use App\Models\AttendanceSetting;
 use App\Models\BiometricDevice;
 use App\Models\Employee;
@@ -263,4 +264,26 @@ test('the punch summary and biometric status show the biometric daily figures', 
         ->assertSee('ESSL MB20')
         ->assertSee('Biometric Status')
         ->assertSee('Face + ID Card');
+});
+
+test('the attendance journey classifies every punch in sequence', function () {
+    $employee = Employee::factory()->create();
+    foreach ([['09:00', 'face'], ['13:00', 'id_card'], ['13:40', 'id_card'], ['18:00', 'face']] as [$t, $m]) {
+        AttendancePunch::create([
+            'employee_id' => $employee->id,
+            'punched_at' => today()->setTimeFromTimeString($t),
+            'punch_date' => today(),
+            'method' => $m,
+            'source' => 'biometric',
+        ]);
+    }
+
+    Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
+        ->assertOk()
+        ->assertSee('Attendance Journey')
+        ->assertSee('4 punches')
+        ->assertSet('attendanceJourney', fn ($j) => count($j) === 4
+            && $j[0]['type'] === 'in' && $j[1]['type'] === 'break'
+            && $j[2]['type'] === 'resume' && $j[3]['type'] === 'out'
+            && $j[0]['method'] === 'face' && $j[1]['method'] === 'id_card');
 });

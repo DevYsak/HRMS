@@ -396,15 +396,19 @@
     {{-- RIGHT — live widgets (4/12) --}}
     <div class="space-y-4 lg:col-span-4">
 
-        {{-- Today's Timeline (vertical, colour-coded) --}}
+        {{-- Attendance Journey (vertical, colour-coded, every punch) --}}
+        @php
+            $timeline = count($attendanceJourney) ? $attendanceJourney : $todayTimeline;
+            $isJourney = count($attendanceJourney) > 0;
+        @endphp
         <div class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
             <div class="mb-4 flex items-center justify-between">
-                <div class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Today's Timeline</div>
-                <span class="text-[10px] font-semibold text-zinc-400">{{ now()->format('D, d M') }}</span>
+                <div class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">{{ $isJourney ? 'Attendance Journey' : "Today's Timeline" }}</div>
+                <span class="text-[10px] font-semibold text-zinc-400">{{ $isJourney ? count($timeline).' punches · ' : '' }}{{ now()->format('D, d M') }}</span>
             </div>
-            @if(count($todayTimeline) > 0)
+            @if(count($timeline) > 0)
                 <div class="relative space-y-4 pl-1">
-                    @foreach($todayTimeline as $ev)
+                    @foreach($timeline as $ev)
                         @php
                             [$dot, $ring] = match($ev['type']) {
                                 'in'     => ['bg-emerald-500', 'ring-emerald-500/20'],
@@ -414,6 +418,10 @@
                                 'out'    => ['bg-zinc-800 dark:bg-zinc-200', 'ring-zinc-500/20'],
                                 default  => ['bg-zinc-400', 'ring-zinc-500/20'],
                             };
+                            // 'method' may be an enum (fallback timeline) or a string value (journey).
+                            $evMethod = ($ev['method'] ?? null) instanceof PunchMethod
+                                ? $ev['method']
+                                : PunchMethod::tryFrom((string) ($ev['method'] ?? ''));
                         @endphp
                         <div class="relative flex items-start gap-3">
                             @unless($loop->last && ! $activeBreak)
@@ -423,11 +431,16 @@
                             <div class="flex-1 -mt-0.5">
                                 <div class="text-xs font-bold text-zinc-800 dark:text-zinc-100">{{ $ev['title'] }}</div>
                                 <div class="text-[11px] tabular-nums text-zinc-400">{{ $ev['time'] }}</div>
-                                @if(! empty($ev['photo']) || (! empty($ev['lat']) && ! empty($ev['lng'])) || ! empty($ev['method']))
+                                @if(! empty($ev['photo']) || (! empty($ev['lat']) && ! empty($ev['lng'])) || $evMethod || ! empty($ev['location']))
                                     <div class="mt-1.5 flex flex-wrap items-center gap-2">
-                                        @if(! empty($ev['method']))
-                                            <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold {{ $ev['method']->chipClass() }}">
-                                                <flux:icon :icon="$ev['method']->icon()" class="size-3" /> {{ $ev['method']->label() }}
+                                        @if($evMethod)
+                                            <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold {{ $evMethod->chipClass() }}">
+                                                <flux:icon :icon="$evMethod->icon()" class="size-3" /> {{ $evMethod->label() }}
+                                            </span>
+                                        @endif
+                                        @if(! empty($ev['location']))
+                                            <span class="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+                                                <flux:icon.building-office-2 class="size-3" /> {{ $ev['location'] }}
                                             </span>
                                         @endif
                                         @if(! empty($ev['photo']))

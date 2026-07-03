@@ -6,6 +6,7 @@ use App\Enums\AttendanceMode;
 use App\Enums\PunchMethod;
 use App\Models\Attendance;
 use App\Models\AttendanceDailySummary;
+use App\Models\AttendancePunch;
 use App\Models\AttendanceRegularisation;
 use App\Models\AttendanceSetting;
 use App\Models\BiometricDevice;
@@ -90,6 +91,9 @@ class AttendanceTracker extends Component
 
     /** Chronological punch/break events for today. */
     public array $todayTimeline = [];
+
+    /** Full Attendance Journey — every biometric punch for today, classified. */
+    public array $attendanceJourney = [];
 
     /** Today's tasks for the logged-in employee. */
     public $tasks = [];
@@ -249,6 +253,7 @@ class AttendanceTracker extends Component
         // 9. This-week summary + today's punch/break timeline
         $this->weekSummary = $this->buildWeekSummary($employee);
         $this->todayTimeline = $this->buildTodayTimeline();
+        $this->attendanceJourney = $this->buildAttendanceJourney($employee);
 
         // 10. Today's tasks
         $this->loadTasks($employee);
@@ -472,6 +477,49 @@ class AttendanceTracker extends Component
         }
 
         return $events;
+    }
+
+    /**
+     * Full Attendance Journey — every individual biometric punch of the day,
+     * classified into Clock In / Break Start / Break End / Clock Out by the
+     * alternating in→out sequence. Empty when no per-punch data has synced
+     * (the timeline then falls back to first/last via buildTodayTimeline()).
+     *
+     * @return array<int, array{time:string, title:string, type:string, method:?PunchMethod, source:?string, location:?string, lat:mixed, lng:mixed}>
+     */
+    protected function buildAttendanceJourney($employee): array
+    {
+        $punches = AttendancePunch::where('employee_id', $employee->id)
+            ->whereDate('punch_date', Carbon::today()->toDateString())
+            ->orderBy('punched_at')
+            ->get();
+
+        if ($punches->isEmpty()) {
+            return [];
+        }
+
+        $n = $punches->count();
+
+        return $punches->values()->map(function (AttendancePunch $p, int $i) use ($n) {
+            $isEntry = $i % 2 === 0;                 // even index = entered / clocked in
+            [$title, $type] = match (true) {
+                $i === 0 => ['Clocked in', 'in'],
+                $i === $n - 1 && ! $isEntry => ['Clocked out', 'out'],
+                $isEntry => ['Returned from break', 'resume'],
+                default => ['Break started', 'break'],
+            };
+
+            return [
+                'time' => $p->punched_at->format('h:i A'),
+                'title' => $title,
+                'type' => $type,
+                'method' => $p->methodEnum()?->value,   // string (Livewire-safe)
+                'source' => $p->source,
+                'location' => $p->location,
+                'lat' => $p->lat,
+                'lng' => $p->lng,
+            ];
+        })->all();
     }
 
     public function previousMonth()

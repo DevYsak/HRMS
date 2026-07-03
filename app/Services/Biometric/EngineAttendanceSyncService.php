@@ -4,6 +4,7 @@ namespace App\Services\Biometric;
 
 use App\Models\Attendance;
 use App\Models\AttendanceDailySummary;
+use App\Models\AttendancePunch;
 use App\Models\Employee;
 use App\Support\PunchMethodResolver;
 use Illuminate\Support\Facades\Http;
@@ -110,6 +111,9 @@ class EngineAttendanceSyncService
                 );
             }
 
+            // Every individual punch (Attendance Journey) — when the engine sends them.
+            $this->syncPunches($employeeId, $code, $date, $row['punches'] ?? [], $row['device_serial'] ?? null);
+
             $synced++;
         }
 
@@ -120,6 +124,46 @@ class EngineAttendanceSyncService
     private function punchDateTime(string $date, ?string $time): ?string
     {
         return $time ? "{$date} {$time}" : null;
+    }
+
+    /**
+     * Upsert every individual punch of the day for the Attendance Journey.
+     * Accepts the engine's `punches` array of {time|punch_dt, verify|method,
+     * source?, device?, location?, lat?, lng?}. Idempotent on (employee, time).
+     *
+     * @param  array<int, array<string, mixed>>  $punches
+     */
+    private function syncPunches(int $employeeId, ?int $code, string $date, array $punches, ?string $deviceSerial): void
+    {
+        foreach ($punches as $p) {
+            if (! is_array($p)) {
+                continue;
+            }
+
+            $raw = trim((string) ($p['time'] ?? $p['punch_dt'] ?? ''));
+            if ($raw === '') {
+                continue;
+            }
+
+            // Time-only ("09:02:00") → anchor to the date; full datetime → as-is.
+            $punchedAt = strlen($raw) <= 8 ? "{$date} {$raw}" : $raw;
+            $rawVerify = $p['verify'] ?? $p['method'] ?? $p['verify_type'] ?? null;
+
+            AttendancePunch::updateOrCreate(
+                ['employee_id' => $employeeId, 'punched_at' => $punchedAt],
+                [
+                    'employee_code' => $code,
+                    'punch_date' => $date,
+                    'method' => PunchMethodResolver::value($rawVerify),
+                    'verify_raw' => $rawVerify !== null && $rawVerify !== '' ? (string) $rawVerify : null,
+                    'source' => $p['source'] ?? 'biometric',
+                    'device_serial' => $p['device'] ?? $deviceSerial,
+                    'location' => $p['location'] ?? null,
+                    'lat' => $p['lat'] ?? null,
+                    'lng' => $p['lng'] ?? null,
+                ]
+            );
+        }
     }
 
     /** Normalise the engine's status into HRMS's vocabulary. */
