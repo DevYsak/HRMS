@@ -509,3 +509,43 @@ test('insights include longest break, best day and total overtime', function () 
             && collect($i)->contains(fn ($x) => str_contains($x['text'], 'Best attendance day: '.$d->format('l')))
             && collect($i)->contains(fn ($x) => str_contains($x['text'], 'Total overtime')));
 });
+
+test('the analytics grid renders all enterprise panels', function () {
+    $employee = Employee::factory()->create();
+    Attendance::create([
+        'employee_id' => $employee->id, 'date' => now()->startOfMonth()->addDays(1),
+        'check_in' => now()->startOfMonth()->addDays(1)->setTime(9, 0),
+        'check_out' => now()->startOfMonth()->addDays(1)->setTime(19, 30),
+        'status' => 'on_time', 'work_mode' => 'office', 'total_hours' => 10.5, 'break_minutes' => 40,
+    ]);
+
+    Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
+        ->assertOk()
+        ->assertSee('Attendance Analytics')
+        ->assertSee('Monthly Attendance')
+        ->assertSee('Late Arrival Trend')
+        ->assertSee('Break Analysis')
+        ->assertSee('Office vs WFH vs Hybrid')
+        ->assertSee('Overtime Trend')
+        ->assertSee('Productivity Score')
+        ->assertSee('Attendance Heatmap');
+});
+
+test('the analytics mode filter narrows the period stats', function () {
+    $employee = Employee::factory()->create();
+    foreach ([['office', 1], ['wfh', 2]] as [$mode, $day]) {
+        Attendance::create([
+            'employee_id' => $employee->id, 'date' => now()->startOfMonth()->addDays($day),
+            'check_in' => now()->startOfMonth()->addDays($day)->setTime(9, 0),
+            'check_out' => now()->startOfMonth()->addDays($day)->setTime(18, 0),
+            'status' => 'on_time', 'work_mode' => $mode, 'total_hours' => 9,
+        ]);
+    }
+
+    Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
+        ->assertSet('stats.present', 2)
+        ->set('analyticsMode', 'wfh')
+        ->assertSet('stats.present', 1)
+        ->set('analyticsMode', '')
+        ->assertSet('stats.present', 2);
+});

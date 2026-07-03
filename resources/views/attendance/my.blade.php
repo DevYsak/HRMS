@@ -81,11 +81,16 @@
     <div class="flex flex-wrap items-center gap-2">
         <span class="inline-flex items-center gap-2 rounded-xl border border-orange-100 bg-white px-3 py-2 text-xs font-semibold text-zinc-600 shadow-sm"><flux:icon.calendar-days class="size-4 text-orange-500" /> {{ now()->format('d F Y') }}</span>
         <div class="flex items-center gap-1 rounded-xl border border-orange-100 bg-white p-1 shadow-sm">
-            @foreach(['this_week' => 'This Week', 'this_month' => 'This Month', '3_months' => '3 Months', 'year' => 'Year'] as $val => $label)
+            @foreach(['today' => 'Today', 'this_week' => 'Week', 'this_month' => 'Month', '3_months' => '3 Months', 'year' => 'Year'] as $val => $label)
                 <button wire:click="$set('statsPeriod', '{{ $val }}')"
                     class="rounded-lg px-3 py-1.5 text-xs font-bold transition {{ $statsPeriod === $val ? 'bg-orange-500 text-white shadow' : 'text-zinc-500 hover:bg-orange-50' }}">{{ $label }}</button>
             @endforeach
         </div>
+        <select wire:model.live="analyticsMode" title="Filter analytics by work mode"
+            class="rounded-xl border {{ $analyticsMode !== '' ? 'border-orange-400 ring-1 ring-orange-200' : 'border-orange-100' }} bg-white px-2.5 py-2 text-xs font-bold text-zinc-600 shadow-sm focus:border-orange-400 focus:ring-0">
+            <option value="">All modes</option>
+            @foreach(AttendanceMode::cases() as $mode)<option value="{{ $mode->value }}">{{ $mode->label() }}</option>@endforeach
+        </select>
         <div class="flex items-center gap-1.5 rounded-xl border {{ $statsPeriod === 'custom' ? 'border-orange-400 ring-1 ring-orange-200' : 'border-orange-100' }} bg-white px-2 py-1 shadow-sm">
             <span class="text-[10px] font-bold uppercase tracking-wider {{ $statsPeriod === 'custom' ? 'text-orange-500' : 'text-zinc-400' }}">Custom</span>
             <input type="date" wire:model.live="rangeFrom" class="w-[7.5rem] border-0 bg-transparent p-1 text-xs font-semibold text-zinc-600 focus:ring-0">
@@ -494,60 +499,228 @@
     </div>
 </div>
 
-{{-- ═══════════════ ANALYTICS ═══════════════ --}}
+{{-- ═══════════════ ATTENDANCE ANALYTICS (enterprise grid) ═══════════════ --}}
 @php
+    $ck = $statsPeriod.'-'.$analyticsMode.'-'.($rangeFrom ?? '').'-'.($rangeTo ?? '');
     $axis = ['labels' => ['style' => ['colors' => '#9CA3AF', 'fontSize' => '10px']], 'axisBorder' => ['show' => false], 'axisTicks' => ['show' => false]];
+    $baseChart = fn (string $type, int $h) => ['type' => $type, 'height' => $h, 'toolbar' => ['show' => false], 'fontFamily' => 'inherit', 'animations' => ['enabled' => true, 'speed' => 700]];
+    $labels = collect($chartDaily)->pluck('label')->all();
+    $tick = min(8, max(1, count($chartDaily)));
+
+    // 1 · Working Hours Trend — smooth line
     $hoursChart = [
-        'chart' => ['type' => 'area', 'height' => 220, 'toolbar' => ['show' => false], 'fontFamily' => 'inherit', 'animations' => ['enabled' => true, 'speed' => 700]],
+        'chart' => $baseChart('line', 220),
         'colors' => ['#F97316'], 'dataLabels' => ['enabled' => false], 'stroke' => ['curve' => 'smooth', 'width' => 3],
-        'fill' => ['type' => 'gradient', 'gradient' => ['shadeIntensity' => 1, 'opacityFrom' => 0.35, 'opacityTo' => 0.02, 'stops' => [0, 90]]],
+        'markers' => ['size' => 0, 'hover' => ['size' => 5]],
         'grid' => ['borderColor' => '#F3E8DD', 'strokeDashArray' => 4],
-        'xaxis' => array_merge($axis, ['categories' => collect($chartDaily)->pluck('label')->all(), 'tickAmount' => min(8, max(1, count($chartDaily)))]),
+        'xaxis' => array_merge($axis, ['categories' => $labels, 'tickAmount' => $tick]),
         'yaxis' => ['labels' => ['style' => ['colors' => '#9CA3AF', 'fontSize' => '10px']]], 'tooltip' => ['theme' => 'light'],
         'series' => [['name' => 'Hours', 'data' => collect($chartDaily)->pluck('hours')->all()]],
     ];
+
+    // 2 · Attendance Score Trend — area
     $scoreSeries = collect($chartDaily)->map(fn($d) => min(100, (int) round(((float) $d['hours']) / max(1, $stdHours) * 100)))->all();
     $scoreChart = [
-        'chart' => ['type' => 'area', 'height' => 220, 'toolbar' => ['show' => false], 'fontFamily' => 'inherit', 'animations' => ['enabled' => true, 'speed' => 700]],
+        'chart' => $baseChart('area', 220),
         'colors' => ['#8b5cf6'], 'dataLabels' => ['enabled' => false], 'stroke' => ['curve' => 'smooth', 'width' => 3],
         'fill' => ['type' => 'gradient', 'gradient' => ['shadeIntensity' => 1, 'opacityFrom' => 0.3, 'opacityTo' => 0.02, 'stops' => [0, 90]]],
         'grid' => ['borderColor' => '#F3E8DD', 'strokeDashArray' => 4],
-        'xaxis' => array_merge($axis, ['categories' => collect($chartDaily)->pluck('label')->all(), 'tickAmount' => min(8, max(1, count($chartDaily)))]),
+        'xaxis' => array_merge($axis, ['categories' => $labels, 'tickAmount' => $tick]),
         'yaxis' => ['max' => 100, 'labels' => ['style' => ['colors' => '#9CA3AF', 'fontSize' => '10px']]], 'tooltip' => ['theme' => 'light'],
         'series' => [['name' => 'Score', 'data' => $scoreSeries]],
     ];
+
+    // 3 · Weekly Attendance — Mon–Sun column, coloured by status
+    $weekColors = collect($weekSummary)->map(fn ($wd) => match($wd['status']) {
+        'present' => '#10b981', 'late' => '#f59e0b', 'leave' => '#8b5cf6', 'holiday' => '#3b82f6',
+        'weekend' => '#d4d4d8', 'future' => '#e4e4e7', default => '#f43f5e',
+    })->all();
+    $weeklyChart = [
+        'chart' => $baseChart('bar', 200),
+        'colors' => $weekColors,
+        'plotOptions' => ['bar' => ['borderRadius' => 5, 'columnWidth' => '55%', 'distributed' => true]],
+        'dataLabels' => ['enabled' => false], 'legend' => ['show' => false],
+        'grid' => ['borderColor' => '#F3E8DD', 'strokeDashArray' => 4],
+        'xaxis' => array_merge($axis, ['categories' => collect($weekSummary)->pluck('label')->all()]),
+        'yaxis' => ['labels' => ['style' => ['colors' => '#9CA3AF', 'fontSize' => '10px']]], 'tooltip' => ['theme' => 'light'],
+        'series' => [['name' => 'Hours', 'data' => collect($weekSummary)->map(fn ($wd) => round((float) $wd['hours'], 1))->all()]],
+    ];
+
+    // 4 · Monthly Attendance — Present / Late / Absent donut
+    $monthlyDonut = [
+        'chart' => $baseChart('donut', 210),
+        'labels' => ['On-time', 'Late', 'Absent'],
+        'colors' => ['#10b981', '#f59e0b', '#ef4444'],
+        'series' => [$onTimeCount, $lateCount, (int) ($stats['absent'] ?? 0)],
+        'legend' => ['position' => 'bottom', 'fontSize' => '11px', 'labels' => ['colors' => '#9CA3AF']],
+        'dataLabels' => ['enabled' => false], 'stroke' => ['width' => 0],
+        'plotOptions' => ['pie' => ['donut' => ['size' => '70%', 'labels' => ['show' => true, 'total' => ['show' => true, 'label' => 'Days', 'fontSize' => '11px', 'color' => '#9CA3AF']]]]],
+        'tooltip' => ['theme' => 'light'],
+    ];
+
+    // 5 · Late Arrival Trend — column (fixed 6-month window)
+    $lateTrend = $analytics['late_trend'] ?? [];
+    $lateChart = [
+        'chart' => $baseChart('bar', 200),
+        'colors' => ['#F59E0B'], 'plotOptions' => ['bar' => ['borderRadius' => 5, 'columnWidth' => '45%']],
+        'dataLabels' => ['enabled' => false], 'grid' => ['borderColor' => '#F3E8DD', 'strokeDashArray' => 4],
+        'xaxis' => array_merge($axis, ['categories' => collect($lateTrend)->pluck('month')->all()]),
+        'yaxis' => ['labels' => ['style' => ['colors' => '#9CA3AF', 'fontSize' => '10px']]], 'tooltip' => ['theme' => 'light'],
+        'series' => [['name' => 'Late days', 'data' => collect($lateTrend)->pluck('late')->all()]],
+    ];
+
+    // 6 · Break Analysis — daily break minutes + average line
+    $breakVals = collect($chartDaily)->pluck('break');
+    $avgBreakLine = (int) ($analytics['avg_break'] ?? 0);
+    $longBreaks = $breakVals->filter(fn ($b) => $b > 60)->count();
+    $shortBreaks = $breakVals->filter(fn ($b) => $b > 0 && $b < 20)->count();
+    $breakChart = [
+        'chart' => $baseChart('bar', 200),
+        'colors' => ['#0ea5e9'], 'plotOptions' => ['bar' => ['borderRadius' => 4, 'columnWidth' => '55%']],
+        'dataLabels' => ['enabled' => false], 'grid' => ['borderColor' => '#F3E8DD', 'strokeDashArray' => 4],
+        'annotations' => ['yaxis' => [['y' => $avgBreakLine, 'borderColor' => '#F97316', 'strokeDashArray' => 5, 'label' => ['text' => 'Avg '.$avgBreakLine.'m', 'style' => ['color' => '#F97316', 'background' => '#FFF7ED', 'fontSize' => '10px']]]]],
+        'xaxis' => array_merge($axis, ['categories' => $labels, 'tickAmount' => $tick]),
+        'yaxis' => ['labels' => ['style' => ['colors' => '#9CA3AF', 'fontSize' => '10px']]], 'tooltip' => ['theme' => 'light'],
+        'series' => [['name' => 'Break (min)', 'data' => $breakVals->all()]],
+    ];
+
+    // 7 · Office vs WFH vs Hybrid — horizontal bars
+    $modeBreakdown = $analytics['mode_breakdown'] ?? [];
+    $modeChart = [
+        'chart' => $baseChart('bar', 200),
+        'colors' => collect($modeBreakdown)->keys()->map(fn ($k) => AttendanceMode::tryFromValue($k)->hex())->all(),
+        'plotOptions' => ['bar' => ['horizontal' => true, 'borderRadius' => 5, 'barHeight' => '55%', 'distributed' => true]],
+        'dataLabels' => ['enabled' => true, 'style' => ['fontSize' => '11px']], 'legend' => ['show' => false],
+        'grid' => ['borderColor' => '#F3E8DD', 'strokeDashArray' => 4],
+        'xaxis' => array_merge($axis, ['categories' => collect($modeBreakdown)->keys()->map(fn ($k) => AttendanceMode::tryFromValue($k)->label())->all()]),
+        'yaxis' => ['labels' => ['style' => ['colors' => '#9CA3AF', 'fontSize' => '10px']]], 'tooltip' => ['theme' => 'light'],
+        'series' => [['name' => 'Days', 'data' => collect($modeBreakdown)->values()->map(fn ($v) => (int) $v)->all()]],
+    ];
+
+    // 9 · Overtime Trend — daily hours beyond the standard day
+    $otSeries = collect($chartDaily)->map(fn ($d) => round(max(0, (float) $d['hours'] - $stdHours), 1))->all();
+    $otChart = [
+        'chart' => $baseChart('area', 200),
+        'colors' => ['#8b5cf6'], 'dataLabels' => ['enabled' => false], 'stroke' => ['curve' => 'smooth', 'width' => 2.5],
+        'fill' => ['type' => 'gradient', 'gradient' => ['shadeIntensity' => 1, 'opacityFrom' => 0.3, 'opacityTo' => 0.02, 'stops' => [0, 90]]],
+        'grid' => ['borderColor' => '#F3E8DD', 'strokeDashArray' => 4],
+        'xaxis' => array_merge($axis, ['categories' => $labels, 'tickAmount' => $tick]),
+        'yaxis' => ['labels' => ['style' => ['colors' => '#9CA3AF', 'fontSize' => '10px']]], 'tooltip' => ['theme' => 'light'],
+        'series' => [['name' => 'OT hours', 'data' => $otSeries]],
+    ];
+
+    // 10 · Productivity Score — worked vs expected across the period
+    $expectedMin = max(1, $totalWorkingDays * $stdHours * 60);
+    $workedTotalMin = (int) round(collect($chartDaily)->sum('hours') * 60);
+    $productivity = min(100, (int) round($workedTotalMin / $expectedMin * 100));
+    $productivityChart = [
+        'chart' => $baseChart('radialBar', 210),
+        'colors' => ['#F97316'],
+        'plotOptions' => ['radialBar' => [
+            'hollow' => ['size' => '62%'],
+            'track' => ['background' => '#FFEDD5'],
+            'dataLabels' => ['name' => ['show' => true, 'fontSize' => '11px', 'color' => '#9CA3AF', 'offsetY' => 18], 'value' => ['fontSize' => '26px', 'fontWeight' => 800, 'color' => '#18181b', 'offsetY' => -12]],
+        ]],
+        'labels' => ['Productivity'],
+        'series' => [$productivity],
+    ];
+
+    // 8 · Heatmap intensity (GitHub-style, CSS)
+    $heatColor = fn ($h) => match (true) {
+        $h <= 0 => 'bg-zinc-100',
+        $h < 4 => 'bg-orange-200',
+        $h < 7 => 'bg-orange-300',
+        $h < $stdHours => 'bg-orange-400',
+        default => 'bg-orange-600',
+    };
 @endphp
-<div class="grid grid-cols-1 gap-4 lg:grid-cols-12">
-    <div class="rounded-[18px] border border-orange-100/70 bg-white p-5 shadow-sm lg:col-span-5">
-        <div class="mb-1 flex items-center justify-between"><div class="text-sm font-black text-zinc-900">Working Hours Trend</div><span class="rounded-full bg-orange-50 px-2 py-0.5 text-[10px] font-bold text-orange-500">{{ ucwords(str_replace('_', ' ', $statsPeriod)) }}</span></div>
-        @if(count($chartDaily) > 0)<x-dashboard.chart :options="$hoursChart" id="hours-chart" wire:key="hours-{{ $statsPeriod }}" class="-mb-2" />@else<div class="flex h-[220px] items-center justify-center text-xs text-zinc-300">No data.</div>@endif
+
+<div class="flex items-center justify-between">
+    <div class="flex items-center gap-2">
+        <span class="inline-flex size-8 items-center justify-center rounded-xl bg-orange-50 text-orange-500"><flux:icon.chart-bar class="size-4" /></span>
+        <div class="text-sm font-black text-zinc-900">Attendance Analytics</div>
+        <span class="rounded-full bg-orange-50 px-2 py-0.5 text-[10px] font-bold text-orange-500">{{ ucwords(str_replace('_', ' ', $statsPeriod)) }}{{ $analyticsMode !== '' ? ' · '.AttendanceMode::tryFromValue($analyticsMode)->label() : '' }}</span>
     </div>
-    <div class="rounded-[18px] border border-orange-100/70 bg-white p-5 shadow-sm lg:col-span-3">
-        <div class="mb-3 text-sm font-black text-zinc-900">Weekly Attendance</div>
-        <div class="grid grid-cols-3 gap-2">
-            @foreach($weekSummary as $wd)
-                @php
-                    [$bg, $tx, $lbl] = match($wd['status']) {
-                        'present' => ['bg-emerald-50', 'text-emerald-600', 'Present'],
-                        'late'    => ['bg-amber-50', 'text-amber-600', 'Late'],
-                        'leave'   => ['bg-violet-50', 'text-violet-600', 'Leave'],
-                        'holiday' => ['bg-blue-50', 'text-blue-600', 'Holiday'],
-                        'weekend' => ['bg-zinc-50', 'text-zinc-400', 'Off'],
-                        'future'  => ['bg-zinc-50/50', 'text-zinc-300', '—'],
-                        default   => ['bg-rose-50', 'text-rose-500', 'Absent'],
-                    };
-                @endphp
-                <div class="rounded-xl {{ $bg }} p-2 text-center {{ $wd['is_today'] ? 'ring-2 ring-orange-300' : '' }}">
-                    <div class="text-[9px] font-bold uppercase text-zinc-400">{{ $wd['label'] }}</div>
-                    <div class="text-xs font-black text-zinc-800">{{ $wd['hours'] > 0 ? number_format($wd['hours'], 1).'h' : '·' }}</div>
-                    <div class="text-[8px] font-bold {{ $tx }}">{{ $lbl }}</div>
-                </div>
-            @endforeach
+    @if($analyticsMode !== '')
+        <button wire:click="$set('analyticsMode', '')" class="text-[11px] font-bold text-orange-500 hover:underline">Clear mode filter</button>
+    @endif
+</div>
+
+<div class="grid grid-cols-1 gap-4 lg:grid-cols-12" wire:loading.class="opacity-50" wire:target="statsPeriod,analyticsMode,rangeFrom,rangeTo">
+    {{-- Row 1 --}}
+    <div class="rounded-[18px] border border-orange-100/70 bg-white p-5 shadow-sm transition hover:shadow-md lg:col-span-5">
+        <div class="mb-1 text-sm font-black text-zinc-900">Working Hours Trend</div>
+        @if(count($chartDaily) > 0)<x-dashboard.chart :options="$hoursChart" id="hours-chart" wire:key="hours-{{ $ck }}" class="-mb-2" />@else<div class="flex h-[220px] items-center justify-center text-xs text-zinc-300">No data in this period.</div>@endif
+    </div>
+    <div class="rounded-[18px] border border-orange-100/70 bg-white p-5 shadow-sm transition hover:shadow-md lg:col-span-3">
+        <div class="mb-1 text-sm font-black text-zinc-900">Monthly Attendance</div>
+        @if($presentCount + ($stats['absent'] ?? 0) > 0)<x-dashboard.chart :options="$monthlyDonut" id="monthly-donut" wire:key="donut-{{ $ck }}" class="grid place-items-center" />@else<div class="flex h-[210px] items-center justify-center text-xs text-zinc-300">No data.</div>@endif
+        <div class="mt-1 grid grid-cols-3 gap-1 text-center text-[9px] font-bold">
+            <span class="text-emerald-600">{{ $attPct }}% Present</span>
+            <span class="text-amber-600">{{ $presentCount > 0 ? round($lateCount / $presentCount * 100) : 0 }}% Late</span>
+            <span class="text-rose-500">{{ $totalWorkingDays > 0 ? round(($stats['absent'] ?? 0) / $totalWorkingDays * 100) : 0 }}% Absent</span>
         </div>
     </div>
-    <div class="rounded-[18px] border border-orange-100/70 bg-white p-5 shadow-sm lg:col-span-4">
+    <div class="rounded-[18px] border border-orange-100/70 bg-white p-5 shadow-sm transition hover:shadow-md lg:col-span-4">
         <div class="mb-1 text-sm font-black text-zinc-900">Attendance Score Trend</div>
-        @if(count($chartDaily) > 0)<x-dashboard.chart :options="$scoreChart" id="score-chart" wire:key="score-{{ $statsPeriod }}" class="-mb-2" />@else<div class="flex h-[220px] items-center justify-center text-xs text-zinc-300">No data.</div>@endif
+        @if(count($chartDaily) > 0)<x-dashboard.chart :options="$scoreChart" id="score-chart" wire:key="score-{{ $ck }}" class="-mb-2" />@else<div class="flex h-[220px] items-center justify-center text-xs text-zinc-300">No data.</div>@endif
+    </div>
+
+    {{-- Row 2 --}}
+    <div class="rounded-[18px] border border-orange-100/70 bg-white p-5 shadow-sm transition hover:shadow-md lg:col-span-4">
+        <div class="mb-1 flex items-center justify-between">
+            <div class="text-sm font-black text-zinc-900">Weekly Attendance</div>
+            <div class="flex gap-1.5 text-[8px] font-bold">
+                <span class="text-emerald-600">● Present</span><span class="text-amber-600">● Late</span><span class="text-violet-600">● Leave</span><span class="text-blue-600">● Holiday</span>
+            </div>
+        </div>
+        <x-dashboard.chart :options="$weeklyChart" id="weekly-chart" wire:key="weekly-{{ $ck }}" class="-mb-2" />
+    </div>
+    <div class="rounded-[18px] border border-orange-100/70 bg-white p-5 shadow-sm transition hover:shadow-md lg:col-span-4">
+        <div class="mb-1 text-sm font-black text-zinc-900">Late Arrival Trend <span class="text-[10px] font-bold text-zinc-400">· 6 months</span></div>
+        <x-dashboard.chart :options="$lateChart" id="late-chart" wire:key="late-{{ $ck }}" class="-mb-2" />
+    </div>
+    <div class="rounded-[18px] border border-orange-100/70 bg-white p-5 shadow-sm transition hover:shadow-md lg:col-span-4">
+        <div class="mb-1 flex items-center justify-between">
+            <div class="text-sm font-black text-zinc-900">Break Analysis</div>
+            <div class="flex gap-2 text-[9px] font-bold text-zinc-400"><span>Avg <strong class="text-sky-600">{{ $avgBreakLine }}m</strong></span><span>Long <strong class="text-amber-600">{{ $longBreaks }}</strong></span><span>Short <strong class="text-emerald-600">{{ $shortBreaks }}</strong></span></div>
+        </div>
+        @if(count($chartDaily) > 0)<x-dashboard.chart :options="$breakChart" id="break-chart" wire:key="break-{{ $ck }}" class="-mb-2" />@else<div class="flex h-[200px] items-center justify-center text-xs text-zinc-300">No data.</div>@endif
+    </div>
+
+    {{-- Row 3 --}}
+    <div class="rounded-[18px] border border-orange-100/70 bg-white p-5 shadow-sm transition hover:shadow-md lg:col-span-4">
+        <div class="mb-1 text-sm font-black text-zinc-900">Office vs WFH vs Hybrid</div>
+        @if(! empty($modeBreakdown))<x-dashboard.chart :options="$modeChart" id="mode-chart" wire:key="mode-{{ $ck }}" class="-mb-2" />@else<div class="flex h-[200px] items-center justify-center text-xs text-zinc-300">No attendance yet.</div>@endif
+    </div>
+    <div class="rounded-[18px] border border-orange-100/70 bg-white p-5 shadow-sm transition hover:shadow-md lg:col-span-5">
+        <div class="mb-1 text-sm font-black text-zinc-900">Overtime Trend</div>
+        @if(count($chartDaily) > 0)<x-dashboard.chart :options="$otChart" id="ot-chart" wire:key="ot-{{ $ck }}" class="-mb-2" />@else<div class="flex h-[200px] items-center justify-center text-xs text-zinc-300">No data.</div>@endif
+    </div>
+    <div class="rounded-[18px] border border-orange-100/70 bg-white p-5 shadow-sm transition hover:shadow-md lg:col-span-3">
+        <div class="mb-1 text-sm font-black text-zinc-900">Productivity Score</div>
+        <x-dashboard.chart :options="$productivityChart" id="productivity-chart" wire:key="prod-{{ $ck }}" class="grid place-items-center" />
+        <div class="text-center text-[10px] text-zinc-400">worked vs expected ({{ $totalWorkingDays }} working days × {{ $stdHours }}h)</div>
+    </div>
+
+    {{-- Row 4 · Heatmap --}}
+    <div class="rounded-[18px] border border-orange-100/70 bg-white p-5 shadow-sm transition hover:shadow-md lg:col-span-12">
+        <div class="mb-3 flex items-center justify-between">
+            <div class="text-sm font-black text-zinc-900">Attendance Heatmap <span class="text-[10px] font-bold text-zinc-400">· hours per day</span></div>
+            <div class="flex items-center gap-1 text-[10px] text-zinc-400">Less
+                <span class="size-2.5 rounded-sm bg-zinc-100"></span><span class="size-2.5 rounded-sm bg-orange-200"></span><span class="size-2.5 rounded-sm bg-orange-400"></span><span class="size-2.5 rounded-sm bg-orange-600"></span>
+            More</div>
+        </div>
+        @if(count($chartDaily) > 0)
+            <div class="flex flex-wrap gap-1.5">
+                @foreach($chartDaily as $d)
+                    <div class="size-6 rounded-md {{ $heatColor((float) $d['hours']) }} transition-transform hover:scale-125"
+                        title="{{ $d['label'] }} · {{ $d['hours'] }}h{{ $d['late'] ? ' · late' : '' }}"></div>
+                @endforeach
+            </div>
+        @else
+            <div class="py-6 text-center text-xs text-zinc-300">No data for this period.</div>
+        @endif
     </div>
 </div>
 

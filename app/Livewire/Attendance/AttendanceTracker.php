@@ -137,6 +137,9 @@ class AttendanceTracker extends Component
     /** Attendance-log filter by work mode ('' = all). */
     public string $logMode = '';
 
+    /** Analytics filter by work mode ('' = all) — narrows every chart/insight. */
+    public string $analyticsMode = '';
+
     /** Custom analytics date range (activates statsPeriod = 'custom'). */
     public ?string $rangeFrom = null;
 
@@ -842,6 +845,11 @@ class AttendanceTracker extends Component
         $this->loadData(); // restores the month-based log after a custom range
     }
 
+    public function updatedAnalyticsMode(): void
+    {
+        $this->computeStats();
+    }
+
     /** A custom From/To range drives every chart, insight and the log. */
     public function updatedRangeFrom(): void
     {
@@ -886,6 +894,7 @@ class AttendanceTracker extends Component
         }
 
         [$start, $end] = match ($this->statsPeriod) {
+            'today' => [Carbon::today(), Carbon::today()],
             'this_week' => [Carbon::now()->startOfWeek(Carbon::SUNDAY), Carbon::now()->endOfWeek(Carbon::SATURDAY)],
             'last_month' => [Carbon::now()->subMonth()->startOfMonth(), Carbon::now()->subMonth()->endOfMonth()],
             '3_months' => [Carbon::now()->subMonths(2)->startOfMonth(), Carbon::now()->endOfMonth()],
@@ -904,6 +913,7 @@ class AttendanceTracker extends Component
 
         $attendances = Attendance::where('employee_id', $employee->id)
             ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
+            ->when($this->analyticsMode !== '', fn ($q) => $q->where('work_mode', $this->analyticsMode))
             ->get();
 
         $leaves = LeaveRequest::where('employee_id', $employee->id)
