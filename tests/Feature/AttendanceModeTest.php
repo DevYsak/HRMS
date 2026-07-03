@@ -223,3 +223,22 @@ test('clock-in succeeds when required location and photo are supplied', function
 
     expect(Attendance::where('employee_id', $employee->id)->count())->toBe(1);
 });
+
+test('the attendance log shows both check-in and check-out methods when they differ', function () {
+    $employee = Employee::factory()->create();
+    Attendance::create([
+        'employee_id' => $employee->id,
+        'date' => now()->startOfMonth()->addDays(4)->toDateString(),
+        'check_in' => now()->startOfMonth()->addDays(4)->setTime(9, 0),
+        'check_out' => now()->startOfMonth()->addDays(4)->setTime(18, 0),
+        'check_in_method' => 'face',
+        'check_out_method' => 'id_card',
+        'status' => 'on_time',
+        'work_mode' => 'office',
+    ]);
+
+    Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
+        ->assertOk()
+        ->assertSee('Face')
+        ->assertSee('ID Card');
+});

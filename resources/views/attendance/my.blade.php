@@ -641,7 +641,10 @@
                             $bg = match($item->status) { 'on_time' => 'bg-emerald-500', 'late' => 'bg-amber-500', default => 'bg-zinc-300 dark:bg-zinc-600' };
                             $rowMode = AttendanceMode::tryFromValue($item->work_mode);
                             $dev = UserAgent::parse($item->check_in_user_agent);
-                            $rowMethod = PunchMethod::tryFrom((string) $item->check_in_method);
+                            $inMethod = PunchMethod::tryFrom((string) $item->check_in_method);
+                            $outMethod = PunchMethod::tryFrom((string) $item->check_out_method);
+                            // Show in-method, plus out-method when it differs (e.g. Face in / Card out).
+                            $rowMethods = collect([$inMethod, $outMethod])->filter()->unique();
                             $isMissing = (! $item->check_out && ! $item->date->isToday()) || $item->missing_checkout;
                         @endphp
                         <tr wire:click="showPunchDetail('{{ $item->date->toDateString() }}')"
@@ -683,10 +686,12 @@
                                 @endif
                             </td>
                             <td class="px-5 py-2.5 text-right">
-                                <span class="inline-flex items-center rounded px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide {{ $rowMode->chipClass() }}">{{ $rowMode->shortLabel() }}</span>
-                                @if($rowMethod)
-                                    <span class="ml-1 inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[8px] font-bold {{ $rowMethod->chipClass() }}" title="Punched via {{ $rowMethod->label() }}"><flux:icon :icon="$rowMethod->icon()" class="size-2.5" /> {{ $rowMethod->label() }}</span>
-                                @endif
+                                <div class="flex flex-wrap items-center justify-end gap-1">
+                                    <span class="inline-flex items-center rounded px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide {{ $rowMode->chipClass() }}">{{ $rowMode->shortLabel() }}</span>
+                                    @foreach($rowMethods as $m)
+                                        <span class="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[8px] font-bold {{ $m->chipClass() }}" title="Punched via {{ $m->label() }}"><flux:icon :icon="$m->icon()" class="size-2.5" /> {{ $m->label() }}</span>
+                                    @endforeach
+                                </div>
                             </td>
                         </tr>
                     @endforeach
