@@ -25,6 +25,7 @@ use App\Services\AttendanceService;
 use App\Support\UserAgent;
 use Carbon\CarbonPeriod;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Component;
@@ -285,6 +286,9 @@ class AttendanceTracker extends Component
 
         $this->attendanceAlerts = $this->buildAttendanceAlerts();
 
+        // 11b. Day-grouped punch timeline for the log section
+        $this->buildLogTimeline($employee);
+
         // 12. Total available leave balance (current year)
         $this->leaveBalance = LeaveBalance::where('employee_id', $employee->id)
             ->where('year', now()->year)
@@ -522,6 +526,17 @@ class AttendanceTracker extends Component
             ->orderBy('punched_at')
             ->get();
 
+        return $this->classifyPunches($punches);
+    }
+
+    /**
+     * Dedupe + classify a day's raw punches into timeline events.
+     * Shared by today's Journey and the Punch Timeline history.
+     *
+     * @param  Collection<int, AttendancePunch>  $punches
+     */
+    protected function classifyPunches($punches): array
+    {
         if ($punches->isEmpty()) {
             return [];
         }
@@ -577,6 +592,102 @@ class AttendanceTracker extends Component
                 'lng' => $p->lng,
             ];
         })->all();
+    }
+
+    /** Punch Timeline history — every visible day's punches as classified events. */
+    public array $logTimeline = [];
+
+    /**
+     * Build the day-grouped Punch Timeline for the Attendance Log section:
+     * one entry per history day with its classified punch events. Days without
+     * per-punch rows (web punches / pre-journey data) synthesise events from
+     * the attendance record + its break logs so nothing renders empty.
+     */
+    protected function buildLogTimeline($employee): void
+    {
+        $history = collect($this->history);
+        if ($history->isEmpty()) {
+            $this->logTimeline = [];
+
+            return;
+        }
+
+        $dates = $history->map(fn ($i) => $i->date->toDateString())->all();
+        $punchesByDay = AttendancePunch::where('employee_id', $employee->id)
+            ->whereIn('punch_date', $dates)
+            ->orderBy('punched_at')
+            ->get()
+            ->groupBy(fn ($p) => $p->punch_date->toDateString());
+        $breaksByAttendance = BreakLog::whereIn('attendance_id', $history->pluck('id'))
+            ->orderBy('break_start')
+            ->get()
+            ->groupBy('attendance_id');
+
+        $this->logTimeline = $history->map(function ($item) use ($punchesByDay, $breaksByAttendance) {
+            $key = $item->date->toDateString();
+            $events = $this->classifyPunches($punchesByDay->get($key, collect()));
+
+            // Fallback: synthesise from the attendance row + break logs.
+            if ($events === [] && $item->check_in) {
+                $ua = UserAgent::parse($item->check_in_user_agent);
+                $events[] = [
+                    'time' => $item->check_in->format('h:i A'),
+                    'title' => 'Clocked in'.($item->is_late ? ' (late)' : ''),
+                    'type' => $item->is_late ? 'late' : 'in',
+                    'method' => PunchMethod::tryFrom((string) $item->check_in_method)?->value,
+                    'source' => $item->check_in_user_agent ? 'web' : 'biometric',
+                    'location' => null,
+                    'device' => $ua['browser'] !== 'Unknown' ? $ua['label'] : null,
+                    'lat' => $item->check_in_lat,
+                    'lng' => $item->check_in_lng,
+                    'ip' => $item->check_in_ip,
+                    'photo' => $item->check_in_photo,
+                ];
+                foreach ($breaksByAttendance->get($item->id, collect()) as $b) {
+                    if ($b->break_start) {
+                        $events[] = ['time' => Carbon::parse($b->break_start)->format('h:i A'), 'title' => 'Break started', 'type' => 'break', 'method' => null, 'source' => 'web', 'location' => null, 'device' => null, 'lat' => null, 'lng' => null];
+                    }
+                    if ($b->break_end) {
+                        $events[] = ['time' => Carbon::parse($b->break_end)->format('h:i A'), 'title' => 'Returned from break', 'type' => 'resume', 'method' => null, 'source' => 'web', 'location' => null, 'device' => null, 'lat' => null, 'lng' => null];
+                    }
+                }
+                if ($item->check_out) {
+                    $uaOut = UserAgent::parse($item->check_out_user_agent);
+                    $events[] = [
+                        'time' => $item->check_out->format('h:i A'),
+                        'title' => 'Clocked out',
+                        'type' => 'out',
+                        'method' => PunchMethod::tryFrom((string) $item->check_out_method)?->value,
+                        'source' => $item->check_out_user_agent ? 'web' : 'biometric',
+                        'location' => null,
+                        'device' => $uaOut['browser'] !== 'Unknown' ? $uaOut['label'] : null,
+                        'lat' => $item->check_out_lat,
+                        'lng' => $item->check_out_lng,
+                        'ip' => $item->check_out_ip,
+                        'photo' => $item->check_out_photo,
+                    ];
+                }
+            }
+
+            $workedMin = ($item->check_in && $item->check_out)
+                ? max(0, (int) $item->check_in->diffInMinutes($item->check_out) - (int) ($item->break_minutes ?? 0))
+                : 0;
+
+            return [
+                'date' => $key,
+                'label' => $item->date->format('d M Y'),
+                'dayname' => $item->date->format('l'),
+                'is_today' => $item->date->isToday(),
+                'status' => $item->status,
+                'is_late' => (bool) $item->is_late,
+                'mode' => $item->work_mode,
+                'worked' => $workedMin > 0 ? intdiv($workedMin, 60).'h '.($workedMin % 60).'m' : null,
+                'break' => (int) ($item->break_minutes ?? 0),
+                'missing' => (! $item->check_out && ! $item->date->isToday()) || $item->missing_checkout,
+                'reg_status' => $item->regularisation?->status,
+                'events' => $events,
+            ];
+        })->values()->all();
     }
 
     /**
@@ -758,6 +869,7 @@ class AttendanceTracker extends Component
                 ->with('regularisation')
                 ->orderByDesc('date')
                 ->get();
+            $this->buildLogTimeline($employee);
         }
     }
 

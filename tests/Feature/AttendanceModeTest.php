@@ -136,8 +136,8 @@ test('the tracker shows the multi-mode breakdown and legend', function () {
 
     Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
         ->assertOk()
-        ->assertSee('Attendance Log')
-        ->assertSee('Hybrid');            // the mode appears (log chip / filter)
+        ->assertSee('Punch In / Out Timeline')
+        ->assertSee('Hybrid');            // the mode appears (timeline chip / filter)
 });
 
 test('the tracker supports a weekly filter and renders the analytics charts', function () {

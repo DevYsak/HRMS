@@ -511,10 +511,10 @@
     </div>
 @endif
 
-{{-- ═══════════════ ATTENDANCE LOG ═══════════════ --}}
+{{-- ═══════════════ PUNCH IN / OUT TIMELINE ═══════════════ --}}
 <div id="attendance-log" class="overflow-hidden rounded-[18px] border border-orange-100/70 bg-white shadow-sm scroll-mt-6">
     <div class="flex flex-wrap items-center justify-between gap-3 border-b border-orange-100/70 px-5 py-3.5">
-        <h3 class="flex items-center gap-2 text-sm font-black text-zinc-900"><flux:icon.clock class="size-4 text-orange-500" /> Attendance Log
+        <h3 class="flex items-center gap-2 text-sm font-black text-zinc-900"><flux:icon.clock class="size-4 text-orange-500" /> Punch In / Out Timeline
             <span class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
                 · {{ $statsPeriod === 'custom' && $rangeFrom && $rangeTo ? \Carbon\Carbon::parse($rangeFrom)->format('d M').' – '.\Carbon\Carbon::parse($rangeTo)->format('d M Y') : $calendarMonth->format('M Y') }}
             </span>
@@ -527,57 +527,136 @@
             <button wire:click="exportLog" class="inline-flex items-center gap-1.5 rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-orange-600"><flux:icon.arrow-down-tray class="size-3.5" /> Export</button>
         </div>
     </div>
-    <div class="overflow-x-auto">
-        @php $rows = $logMode !== '' ? collect($history)->where('work_mode', $logMode)->values() : collect($history); @endphp
-        @if($rows->count() > 0)
-            <table class="w-full text-left">
-                <thead class="sticky top-0 z-10 border-b border-orange-100/70 bg-orange-50/40">
-                    <tr class="text-[9px] font-bold uppercase tracking-widest text-zinc-400">
-                        <th class="px-5 py-2.5">Date</th><th class="py-2.5">Shift</th><th class="py-2.5">Check In</th><th class="py-2.5">Check Out</th><th class="py-2.5">Break</th><th class="py-2.5">Working Hrs</th><th class="py-2.5">OT</th><th class="py-2.5">Punch Method</th><th class="py-2.5">Device</th><th class="py-2.5">Status</th><th class="px-5 py-2.5 text-right">Mode</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-zinc-50">
-                    @foreach($rows as $item)
-                        @php
-                            $sc = match($item->status) { 'on_time' => 'text-emerald-600 bg-emerald-50', 'late' => 'text-amber-600 bg-amber-50', default => 'text-zinc-500 bg-zinc-50' };
-                            $rowMode = AttendanceMode::tryFromValue($item->work_mode);
-                            $inMethod = PunchMethod::tryFrom((string) $item->check_in_method);
-                            $outMethod = PunchMethod::tryFrom((string) $item->check_out_method);
-                            $rowMethods = collect([$inMethod, $outMethod])->filter()->unique();
-                            $isMissing = (! $item->check_out && ! $item->date->isToday()) || $item->missing_checkout;
-                            $df = $item->check_out ? $item->check_in->diff($item->check_out) : null;
-                            $wh = $df ? ($df->h + $df->d*24).'h '.$df->i.'m' : ($item->date->isToday() ? 'live' : '—');
-                        @endphp
-                        <tr wire:click="showPunchDetail('{{ $item->date->toDateString() }}')" class="cursor-pointer text-xs transition hover:bg-orange-50/40 {{ $isMissing ? 'bg-amber-50/40' : '' }}">
-                            <td class="px-5 py-2.5"><div class="font-black text-zinc-900">{{ $item->date->format('d M Y') }}</div><div class="text-[9px] text-zinc-400">{{ $item->date->format('l') }}</div></td>
-                            <td class="py-2.5 text-zinc-500">{{ $shift ? \Carbon\Carbon::parse($shift->start_time)->format('g:i A').' - '.\Carbon\Carbon::parse($shift->end_time)->format('g:i A') : '—' }}</td>
-                            <td class="py-2.5 font-mono text-zinc-700">{{ $item->check_in->format('h:i A') }}</td>
-                            <td class="py-2.5 font-mono">@if($item->check_out)<span class="text-zinc-700">{{ $item->check_out->format('h:i A') }}</span>@elseif($item->date->isToday())<span class="font-bold text-orange-500">live</span>@else<span class="font-bold text-amber-500">missing</span>@endif</td>
-                            <td class="py-2.5 text-zinc-500">{{ (int) ($item->break_minutes ?? 0) }}m</td>
-                            <td class="py-2.5 font-bold tabular-nums text-zinc-800">{{ $wh }}</td>
-                            <td class="py-2.5 text-zinc-500">{{ $df && ($df->h + $df->d*24) > $stdHours ? round(($df->h + $df->d*24 + $df->i/60) - $stdHours).'h' : '0m' }}</td>
-                            <td class="py-2.5">
-                                @forelse($rowMethods as $m)<span class="mr-1 inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px] font-bold {{ $m->chipClass() }}"><flux:icon :icon="$m->icon()" class="size-2.5" /> {{ $m->label() }}</span>@empty<span class="text-zinc-300">—</span>@endforelse
-                            </td>
-                            <td class="py-2.5 text-zinc-500">{{ $deviceName }}</td>
-                            <td class="py-2.5">
-                                <span class="rounded-full px-2 py-0.5 text-[9px] font-bold {{ $sc }}">{{ match($item->status) { 'on_time' => 'Present', 'late' => 'Late', default => ucfirst($item->status) } }}</span>
-                                @if($item->regularisation)
-                                    @php $regC = match($item->regularisation->status) { 'approved' => 'bg-blue-50 text-blue-600', 'rejected' => 'bg-rose-50 text-rose-500', default => 'bg-amber-50 text-amber-600' }; @endphp
-                                    <span class="mt-0.5 block w-fit rounded-full px-2 py-0.5 text-[8px] font-bold uppercase {{ $regC }}" title="Regularisation {{ $item->regularisation->status }}">
-                                        {{ $item->regularisation->status === 'approved' ? 'Regularized' : 'Reg. '.$item->regularisation->status }}
-                                    </span>
-                                @endif
-                            </td>
-                            <td class="px-5 py-2.5 text-right"><span class="inline-flex items-center rounded px-1.5 py-0.5 text-[8px] font-bold uppercase {{ $rowMode->chipClass() }}">{{ $rowMode->shortLabel() }}</span></td>
-                        </tr>
-                    @endforeach
-                </tbody>
-            </table>
-        @else
-            <div class="py-12 text-center text-sm text-zinc-400"><flux:icon.clock class="mx-auto mb-2 size-8 opacity-30" /> No records for {{ $calendarMonth->format('F Y') }}</div>
-        @endif
-    </div>
+
+    @php $days = $logMode !== '' ? collect($logTimeline)->where('mode', $logMode)->values() : collect($logTimeline); @endphp
+    @if($days->count() > 0)
+        <div class="divide-y divide-orange-50">
+            @foreach($days as $day)
+                @php
+                    [$dayBadge, $dayLabel] = match(true) {
+                        $day['is_late'] => ['bg-amber-50 text-amber-600', 'Late'],
+                        $day['status'] === 'on_time' => ['bg-emerald-50 text-emerald-600', 'Present'],
+                        default => ['bg-zinc-50 text-zinc-500', ucfirst($day['status'] ?? '—')],
+                    };
+                    $dayMode = AttendanceMode::tryFromValue($day['mode'] ?? 'office');
+                @endphp
+                <div x-data="{ open: {{ $day['is_today'] ? 'true' : 'false' }} }" class="{{ $day['missing'] ? 'bg-amber-50/30' : '' }}">
+                    {{-- Day header --}}
+                    <button type="button" @click="open = !open" class="flex w-full flex-wrap items-center gap-3 px-5 py-3 text-left transition hover:bg-orange-50/40">
+                        <flux:icon.chevron-right class="size-4 shrink-0 text-zinc-400 transition-transform" ::class="open ? 'rotate-90' : ''" />
+                        <div class="min-w-[7.5rem]">
+                            <div class="text-xs font-black text-zinc-900">{{ $day['label'] }} @if($day['is_today'])<span class="text-orange-500">· Today</span>@endif</div>
+                            <div class="text-[9px] text-zinc-400">{{ $day['dayname'] }}</div>
+                        </div>
+                        <span class="rounded-full px-2 py-0.5 text-[9px] font-bold {{ $dayBadge }}">{{ $dayLabel }}</span>
+                        <span class="inline-flex items-center rounded px-1.5 py-0.5 text-[8px] font-bold uppercase {{ $dayMode->chipClass() }}">{{ $dayMode->shortLabel() }}</span>
+                        @if($day['reg_status'])
+                            @php $regC = match($day['reg_status']) { 'approved' => 'bg-blue-50 text-blue-600', 'rejected' => 'bg-rose-50 text-rose-500', default => 'bg-amber-50 text-amber-600' }; @endphp
+                            <span class="rounded-full px-2 py-0.5 text-[8px] font-bold uppercase {{ $regC }}">{{ $day['reg_status'] === 'approved' ? 'Regularized' : 'Reg. '.$day['reg_status'] }}</span>
+                        @endif
+                        <span class="ml-auto flex items-center gap-3 text-[10px] text-zinc-400">
+                            <span>{{ count($day['events']) }} {{ \Illuminate\Support\Str::plural('punch', count($day['events'])) }}</span>
+                            @if($day['worked'])<span class="font-bold text-zinc-700">{{ $day['worked'] }}</span>@endif
+                            <span class="rounded-lg p-1 text-zinc-400 transition hover:bg-orange-100 hover:text-orange-600" wire:click.stop="showPunchDetail('{{ $day['date'] }}')" title="Full day details"><flux:icon.eye class="size-4" /></span>
+                        </span>
+                    </button>
+
+                    <div x-show="open" x-transition:enter="transition duration-200 ease-out" x-transition:enter-start="-translate-y-1 opacity-0" x-transition:enter-end="translate-y-0 opacity-100" class="px-5 pb-4">
+                        {{-- Missing punch banner --}}
+                        @if($day['missing'])
+                            <div class="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-300 bg-gradient-to-r from-amber-50 to-orange-50 px-3 py-2">
+                                <div class="flex items-center gap-2 text-xs">
+                                    <flux:icon.exclamation-triangle class="size-4 text-amber-500" />
+                                    <span class="font-black text-amber-900">Missing Clock Out</span>
+                                    @if($day['worked'])<span class="text-amber-700">· Worked {{ $day['worked'] }}</span>@endif
+                                </div>
+                                <button wire:click="openRegularisation('{{ $day['date'] }}')" class="inline-flex items-center gap-1 rounded-lg bg-amber-500 px-3 py-1 text-[11px] font-bold text-white transition hover:bg-amber-600"><flux:icon.pencil-square class="size-3" /> Request Regularization</button>
+                            </div>
+                        @endif
+
+                        {{-- Vertical punch timeline --}}
+                        @if(count($day['events']) > 0)
+                            <div class="relative ml-2 space-y-2.5">
+                                @foreach($day['events'] as $ev)
+                                    @php
+                                        [$dot, $ic] = match($ev['type']) {
+                                            'in'     => ['bg-emerald-500', 'arrow-right-end-on-rectangle'],
+                                            'late'   => ['bg-rose-500', 'exclamation-triangle'],
+                                            'break'  => ['bg-orange-500', 'pause'],
+                                            'resume' => ['bg-blue-500', 'play'],
+                                            'out'    => ['bg-rose-600', 'arrow-left-start-on-rectangle'],
+                                            default  => ['bg-zinc-400', 'clock'],
+                                        };
+                                        $evMethod = PunchMethod::tryFrom((string) ($ev['method'] ?? ''));
+                                        $srcLabel = $evMethod?->label() ?? match($ev['source'] ?? '') { 'web' => 'Web Punch', 'mobile' => 'Mobile GPS', 'manual' => 'Manual Approval', default => 'Biometric' };
+                                        $hasHover = ! empty($ev['lat']) || ! empty($ev['ip']) || ! empty($ev['photo']) || ! empty($ev['device']);
+                                    @endphp
+                                    <div class="group/event relative flex items-start gap-3">
+                                        @unless($loop->last)<span class="absolute left-[13px] top-8 h-[calc(100%-6px)] w-px bg-orange-100"></span>@endunless
+                                        <span class="mt-0.5 inline-flex size-7 shrink-0 items-center justify-center rounded-full {{ $dot }} text-white shadow"><flux:icon :icon="$ic" class="size-3.5" /></span>
+                                        <div class="flex-1 rounded-xl border border-zinc-100 bg-zinc-50/60 px-3 py-2 transition group-hover/event:border-orange-200 group-hover/event:bg-white group-hover/event:shadow-sm">
+                                            <div class="flex flex-wrap items-center gap-x-3 gap-y-0.5">
+                                                <span class="text-sm font-black tabular-nums text-zinc-900">{{ $ev['time'] }}</span>
+                                                @if($evMethod)
+                                                    <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-bold {{ $evMethod->chipClass() }}"><flux:icon :icon="$evMethod->icon()" class="size-3" /> {{ $evMethod->label() }}</span>
+                                                @else
+                                                    <span class="text-[10px] font-bold text-zinc-500">{{ $srcLabel }}</span>
+                                                @endif
+                                                <span class="text-[10px] text-zinc-400">{{ $ev['title'] }}</span>
+                                                <span class="ml-auto inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] font-bold text-emerald-700">Success</span>
+                                            </div>
+                                            <div class="mt-0.5 flex flex-wrap items-center gap-x-3 text-[10px] text-zinc-400">
+                                                @if(! empty($ev['device']) && is_string($ev['device']))<span class="inline-flex items-center gap-0.5"><flux:icon.cpu-chip class="size-3" /> {{ $ev['device'] }}</span>@endif
+                                                @if(! empty($ev['location']))<span class="inline-flex items-center gap-0.5"><flux:icon.map-pin class="size-3" /> {{ $ev['location'] }}</span>@endif
+                                            </div>
+                                            @if($hasHover)
+                                                <div class="mt-1.5 hidden flex-wrap items-center gap-2 border-t border-zinc-100 pt-1.5 text-[10px] text-zinc-500 group-hover/event:flex">
+                                                    @if(! empty($ev['lat']) && ! empty($ev['lng']))
+                                                        <a href="https://www.google.com/maps?q={{ $ev['lat'] }},{{ $ev['lng'] }}" target="_blank" rel="noopener" class="inline-flex items-center gap-1 font-semibold text-orange-500 hover:underline"><flux:icon.map-pin class="size-3" /> {{ $ev['lat'] }}, {{ $ev['lng'] }}</a>
+                                                    @endif
+                                                    @if(! empty($ev['ip']))<span class="inline-flex items-center gap-1"><flux:icon.globe-alt class="size-3" /> {{ $ev['ip'] }}</span>@endif
+                                                    @if(! empty($ev['photo']))
+                                                        <a href="{{ Storage::url($ev['photo']) }}" target="_blank" class="inline-flex items-center gap-1 font-semibold text-orange-500 hover:underline"><flux:icon.camera class="size-3" /> Photo verification</a>
+                                                    @endif
+                                                </div>
+                                            @endif
+                                        </div>
+                                    </div>
+                                @endforeach
+                            </div>
+                        @else
+                            <div class="rounded-xl bg-zinc-50 px-3 py-3 text-center text-xs text-zinc-400">No punches recorded for this day.</div>
+                        @endif
+                    </div>
+                </div>
+            @endforeach
+        </div>
+    @else
+        <div class="py-12 text-center text-sm text-zinc-400"><flux:icon.clock class="mx-auto mb-2 size-8 opacity-30" /> No records for {{ $calendarMonth->format('F Y') }}</div>
+    @endif
+
+    {{-- Today's Summary footer --}}
+    @if($todayAttendance)
+        @php
+            $firstPunch = $todayAttendance->check_in ?? $sum?->first_punch;
+            $lastPunch = $todayAttendance->check_out ?? $sum?->last_punch;
+        @endphp
+        <div class="grid grid-cols-3 gap-2 border-t border-orange-100/70 bg-orange-50/30 px-5 py-3 sm:grid-cols-6">
+            @foreach([
+                ['Working Hours', $workedLabel],
+                ['Break Time', intdiv($breakMin, 60) > 0 ? intdiv($breakMin, 60).'h '.($breakMin % 60).'m' : $breakMin.'m'],
+                ['Overtime', intdiv($otMinTotal, 60).'h '.($otMinTotal % 60).'m'],
+                ['Total Punches', $totalPunches ?: count($attendanceJourney) ?: '—'],
+                ['First Punch', $firstPunch ? \Carbon\Carbon::parse($firstPunch)->format('h:i A') : '—'],
+                ['Last Punch', $lastPunch ? \Carbon\Carbon::parse($lastPunch)->format('h:i A') : '—'],
+            ] as [$k, $v])
+                <div class="text-center">
+                    <div class="text-sm font-black tabular-nums text-zinc-900">{{ $v }}</div>
+                    <div class="text-[9px] font-bold uppercase tracking-wider text-zinc-400">{{ $k }}</div>
+                </div>
+            @endforeach
+        </div>
+    @endif
     <div class="border-t border-orange-100/70 px-5 py-2 text-center text-[11px] text-zinc-400">All times are based on your shift timezone (IST)</div>
 </div>
 
