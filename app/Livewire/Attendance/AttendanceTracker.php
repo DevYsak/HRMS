@@ -11,6 +11,7 @@ use App\Models\AttendanceRegularisation;
 use App\Models\AttendanceSetting;
 use App\Models\BiometricDevice;
 use App\Models\BreakLog;
+use App\Models\LeaveBalance;
 use App\Models\LeaveRequest;
 use App\Models\PublicHoliday;
 use App\Models\ShiftSetting;
@@ -108,6 +109,9 @@ class AttendanceTracker extends Component
 
     /** Tasks completed within the selected stats period. */
     public int $tasksCompletedPeriod = 0;
+
+    /** Total available leave balance (current year, all types). */
+    public float $leaveBalance = 0;
 
     /** Today's biometric daily summary (raw punch count, device, sync). */
     public $todaySummary = null;
@@ -258,6 +262,12 @@ class AttendanceTracker extends Component
         $this->todayTimeline = $this->buildTodayTimeline();
         $this->attendanceJourney = $this->buildAttendanceJourney($employee);
         $this->attendanceAlerts = $this->buildAttendanceAlerts();
+
+        // 13. Total available leave balance (current year)
+        $this->leaveBalance = LeaveBalance::where('employee_id', $employee->id)
+            ->where('year', now()->year)
+            ->get()
+            ->sum(fn ($b) => $b->available() + (float) ($b->comp_off_credits ?? 0));
 
         // 10. Today's tasks
         $this->loadTasks($employee);
@@ -520,6 +530,7 @@ class AttendanceTracker extends Component
                 'method' => $p->methodEnum()?->value,   // string (Livewire-safe)
                 'source' => $p->source,
                 'location' => $p->location,
+                'device' => $p->device_serial,
                 'lat' => $p->lat,
                 'lng' => $p->lng,
             ];
@@ -899,6 +910,36 @@ class AttendanceTracker extends Component
         Storage::disk('public')->put($path, $binary);
 
         return $path;
+    }
+
+    /** Stream the visible attendance log as a CSV download. */
+    public function exportLog()
+    {
+        $rows = collect($this->history);
+        if ($this->logMode !== '') {
+            $rows = $rows->where('work_mode', $this->logMode);
+        }
+
+        $filename = 'attendance-'.$this->calendarMonth->format('Y-m').'.csv';
+
+        return response()->streamDownload(function () use ($rows) {
+            $out = fopen('php://output', 'w');
+            fputcsv($out, ['Date', 'Check In', 'Check Out', 'Break (min)', 'Total Hours', 'Status', 'Mode', 'In Method', 'Out Method']);
+            foreach ($rows as $r) {
+                fputcsv($out, [
+                    $r->date->toDateString(),
+                    $r->check_in?->format('H:i'),
+                    $r->check_out?->format('H:i'),
+                    (int) ($r->break_minutes ?? 0),
+                    $r->total_hours,
+                    $r->status,
+                    $r->work_mode,
+                    $r->check_in_method,
+                    $r->check_out_method,
+                ]);
+            }
+            fclose($out);
+        }, $filename, ['Content-Type' => 'text/csv']);
     }
 
     public function showPunchDetail(string $date): void

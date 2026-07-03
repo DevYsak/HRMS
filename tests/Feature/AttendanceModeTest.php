@@ -132,8 +132,8 @@ test('the tracker shows the multi-mode breakdown and legend', function () {
 
     Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
         ->assertOk()
-        ->assertSee('Hybrid Summary')     // Office · WFH · Hybrid Summary panel
-        ->assertSee('Hybrid');            // the logged mode is listed
+        ->assertSee('Attendance Log')
+        ->assertSee('Hybrid');            // the mode appears (log chip / filter)
 });
 
 test('the tracker supports a weekly filter and renders the analytics charts', function () {
@@ -141,8 +141,8 @@ test('the tracker supports a weekly filter and renders the analytics charts', fu
 
     Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
         ->assertSee('Working Hours Trend')
-        ->assertSee('Attendance Heatmap')
-        ->assertSee('Late Arrival Trend')
+        ->assertSee('Attendance Score Trend')
+        ->assertSee('Weekly Attendance')
         ->set('statsPeriod', 'this_week')
         ->assertOk()
         ->assertSet('statsPeriod', 'this_week');
@@ -259,10 +259,9 @@ test('the punch summary and biometric status show the biometric daily figures', 
 
     Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
         ->assertOk()
-        ->assertSee('Punch Summary')
-        ->assertSee('Total Punches')
-        ->assertSee('ESSL MB20')
         ->assertSee('Biometric Status')
+        ->assertSee('Punch Source')
+        ->assertSee('ESSL MB20')
         ->assertSee('Face + ID Card');
 });
 
@@ -281,7 +280,6 @@ test('the attendance journey classifies every punch in sequence', function () {
     Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
         ->assertOk()
         ->assertSee('Attendance Journey')
-        ->assertSee('4 punches')
         ->assertSet('attendanceJourney', fn ($j) => count($j) === 4
             && $j[0]['type'] === 'in' && $j[1]['type'] === 'break'
             && $j[2]['type'] === 'resume' && $j[3]['type'] === 'out'
