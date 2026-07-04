@@ -86,6 +86,16 @@ class User extends Authenticatable
         return $this->belongsTo(Role::class, 'role_id');
     }
 
+    /**
+     * The role name to display — the real custom role name when one is
+     * assigned (e.g. "Operations Manager"), falling back to the legacy
+     * enum label for accounts without a DB role linked yet.
+     */
+    public function displayRoleName(): string
+    {
+        return $this->assignedRole?->name ?? $this->role?->label() ?? 'Member';
+    }
+
     public function hasPermission(string $key): bool
     {
         // Super Admins always have every permission — even if no DB role was

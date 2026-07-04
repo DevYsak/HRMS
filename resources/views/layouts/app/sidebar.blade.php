@@ -21,7 +21,7 @@
 
         // Premium primary accent — orange across all roles (#F97316).
         $roleColor = '#f97316';
-        $roleLabel = $user->role?->label() ?? 'Member';
+        $roleLabel = $user->displayRoleName();
 
         $company = \App\Models\Company::first()
             ?? new \App\Models\Company(['name' => 'Pulse HRMS', 'primary_color' => '#f97316']);

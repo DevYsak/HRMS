@@ -12,6 +12,7 @@ use App\Models\EmploymentType;
 use App\Models\JobTitle;
 use App\Models\LeaveType;
 use App\Models\Office;
+use App\Models\Role;
 use App\Models\SalaryComponent;
 use App\Models\SalaryCycle;
 use App\Models\ShiftSetting;
@@ -45,7 +46,7 @@ class EmployeeEdit extends Component
 
     public string $email = '';
 
-    public string $role = '';
+    public string $roleId = '';
 
     // ── Personal profile ─────────────────────────────────────────────────────
     public string $employee_id = '';
@@ -126,7 +127,9 @@ class EmployeeEdit extends Component
         // Account
         $this->name = $this->employee->user->name;
         $this->email = $this->employee->user->email;
-        $this->role = $this->employee->user->role->value;
+        $this->roleId = (string) ($this->employee->user->role_id
+            ?? Role::where('slug', $this->employee->user->role->value)->value('id')
+            ?? '');
 
         // Personal
         $this->employee_id = $this->employee->employee_id ?? '';
@@ -174,7 +177,7 @@ class EmployeeEdit extends Component
             // Account
             'name' => 'required|string|max:255',
             'email' => ['required', 'email', Rule::unique('users', 'email')->ignore($this->employee->user_id)],
-            'role' => ['required', Rule::in(array_column(UserRole::cases(), 'value'))],
+            'roleId' => ['required', Rule::exists('roles', 'id')->where('is_active', true)],
             // Personal
             'employee_id' => ['required', 'string', Rule::unique('employees', 'employee_id')->ignore($this->employee->id)],
             'phone' => 'nullable|string|max:30',
@@ -197,10 +200,13 @@ class EmployeeEdit extends Component
             'notice_period_end_date' => 'nullable|date',
         ]);
 
+        $chosenRole = Role::findOrFail($this->roleId);
+
         $this->employee->user->update([
             'name' => $this->name,
             'email' => $this->email,
-            'role' => UserRole::from($this->role),
+            'role' => $chosenRole->legacyBucket(),
+            'role_id' => $chosenRole->id,
         ]);
 
         $photoPath = $this->photo
@@ -575,7 +581,7 @@ class EmployeeEdit extends Component
                 UserRole::SuperAdmin, UserRole::HrAdmin,
                 UserRole::Director, UserRole::Manager,
             ])->where('id', '!=', $this->employee->user_id)->get(),
-            'roles' => UserRole::cases(),
+            'roles' => Role::where('is_active', true)->orderBy('name')->get(),
             'statuses' => EmployeeStatus::cases(),
             'employmentTypes' => EmploymentType::active()->get(),
             'workModes' => WorkMode::active()->get(),

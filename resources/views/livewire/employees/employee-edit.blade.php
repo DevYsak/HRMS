@@ -225,9 +225,9 @@
                             <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
                                 <flux:input wire:model="name" label="Full Name" icon="user" required />
                                 <flux:input wire:model="email" type="email" label="Email Address" icon="envelope" required />
-                                <flux:select wire:model="role" label="System Role">
-                                    @foreach($roles as $roleCase)
-                                        <option value="{{ $roleCase->value }}">{{ $roleCase->label() }}</option>
+                                <flux:select wire:model="roleId" label="System Role">
+                                    @foreach($roles as $roleOption)
+                                        <option value="{{ $roleOption->id }}">{{ $roleOption->name }}</option>
                                     @endforeach
                                 </flux:select>
                                 <flux:input wire:model="employee_id" label="Employee ID" icon="identification" placeholder="CNX-0001" required />

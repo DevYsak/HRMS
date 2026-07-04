@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\UserRole;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -49,5 +50,32 @@ class Role extends Model
     public function flushPermissionCache(): void
     {
         Cache::forget("role_{$this->id}_permission_keys");
+    }
+
+    /**
+     * The legacy UserRole bucket this role maps to, for sidebar navigation
+     * branching (which is still keyed to the fixed 6-case enum, not the
+     * DB role/permission system). A built-in role (slug matches an enum
+     * case) maps 1:1. A genuinely custom role — the whole point of the
+     * Role Manager — has no enum case, so it's bucketed by what its
+     * permissions imply, broadest capability first. Real feature gates
+     * everywhere else still check hasPermission()/the real role, so this
+     * only decides which sidebar section a custom-role user lands in.
+     */
+    public function legacyBucket(): UserRole
+    {
+        if ($known = UserRole::tryFrom($this->slug)) {
+            return $known;
+        }
+
+        $keys = $this->permissionKeys();
+
+        return match (true) {
+            in_array('manage_settings', $keys, true) || in_array('manage_employees', $keys, true) => UserRole::HrAdmin,
+            in_array('approve_finance', $keys, true) || in_array('run_payroll', $keys, true) => UserRole::Finance,
+            in_array('approve_leave', $keys, true) || in_array('approve_overtime', $keys, true)
+                || in_array('approve_wfh', $keys, true) || in_array('approve_regularisation', $keys, true) => UserRole::Manager,
+            default => UserRole::Employee,
+        };
     }
 }
