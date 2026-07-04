@@ -14,6 +14,7 @@
             <span class="min-w-[3rem] px-1 text-center text-xs font-black text-zinc-700">{{ $year }}</span>
             <button wire:click="setYear({{ $year + 1 }})" class="flex size-7 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-orange-50 hover:text-orange-500"><flux:icon.chevron-right class="size-4" /></button>
         </div>
+        <a href="{{ route('settings.holiday-pay') }}" class="inline-flex items-center gap-1.5 rounded-xl border border-orange-100 bg-white px-3 py-2 text-xs font-bold text-zinc-600 shadow-sm transition hover:bg-orange-50"><flux:icon.banknotes class="size-4 text-orange-500" /> Pay Policy</a>
         <button wire:click="exportCsv" class="inline-flex items-center gap-1.5 rounded-xl border border-orange-100 bg-white px-3 py-2 text-xs font-bold text-zinc-600 shadow-sm transition hover:bg-orange-50"><flux:icon.arrow-down-tray class="size-4 text-orange-500" /> Export</button>
         <button wire:click="openCreate" class="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 px-4 py-2 text-xs font-bold text-white shadow-lg shadow-orange-300/40 transition hover:shadow-xl"><flux:icon.plus class="size-4" /> Add Holiday</button>
     </div>

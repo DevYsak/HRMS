@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Attendance;
 use App\Models\AuditLog;
 use App\Models\Employee;
+use App\Models\HolidayPaySetting;
 use App\Models\HolidayWorkRequest;
 use App\Models\OtRequest;
 use App\Models\PublicHoliday;
@@ -47,8 +48,19 @@ class HolidayWorkService
             throw new \DomainException('You already have a holiday-work request for this date.');
         }
 
+        $settings = HolidayPaySetting::current();
         $location = $data['work_location'] ?? 'office';
-        $payType = $data['pay_type'] ?? 'overtime';
+        $payType = $data['pay_type'] ?? $settings->default_pay_type;
+
+        if (! in_array($payType, HolidayPaySetting::ALL_PAY_TYPES, true)) {
+            $payType = $settings->default_pay_type;
+        }
+        if (! $settings->isPayTypeAllowed($payType)) {
+            $labels = HolidayPaySetting::payTypeLabels();
+            throw new \DomainException(
+                ($labels[$payType] ?? $payType).' is not an available pay type under the current holiday pay policy.'
+            );
+        }
 
         $request = HolidayWorkRequest::create([
             'employee_id' => $employee->id,
@@ -61,7 +73,7 @@ class HolidayWorkService
             'manager_id' => $data['manager_id'] ?? $employee->manager_id,
             'comments' => $data['comments'] ?? null,
             'attachment_path' => $data['attachment_path'] ?? null,
-            'pay_type' => in_array($payType, ['overtime', 'comp_off', 'double_pay', 'extra_leave', 'half_day'], true) ? $payType : 'overtime',
+            'pay_type' => $payType,
             'status' => 'pending',
         ]);
 
@@ -116,7 +128,11 @@ class HolidayWorkService
                 ],
             );
 
-            // Materialise pay. On a holiday, all worked hours are overtime.
+            // Materialise pay per the current Holiday Pay policy. On a holiday,
+            // all worked hours are overtime; double_pay applies the configured
+            // rate multiplier on top.
+            $settings = HolidayPaySetting::current();
+
             if (in_array($request->pay_type, ['overtime', 'double_pay'], true)) {
                 $ot = OtRequest::create([
                     'employee_id' => $employee->id,
@@ -129,11 +145,29 @@ class HolidayWorkService
                     'status' => 'pending',
                     'source' => 'holiday',
                 ]);
-                $this->overtime->approve($ot, $reviewerId, $comment ?: 'Auto-approved with holiday-work request.');
+                $record = $this->overtime->approve($ot, $reviewerId, $comment ?: 'Auto-approved with holiday-work request.');
+
+                // OvertimeService::calculateOtHours() treats a linked attendance
+                // as "hours beyond a standard shift", which doesn't apply here —
+                // on a holiday the entire worked duration is overtime. Recompute
+                // ot_hours as the full requested hours, then apply the configured
+                // OT rate override and/or double-pay multiplier.
+                $otHours = round($hours, 2);
+                $rate = $settings->ot_rate_per_hour !== null ? (float) $settings->ot_rate_per_hour : (float) $record->rate_per_hour;
+                if ($request->pay_type === 'double_pay') {
+                    $rate *= (float) $settings->double_pay_multiplier;
+                }
+                $record->update([
+                    'ot_hours' => $otHours,
+                    'rate_per_hour' => $rate,
+                    'ot_amount' => round($otHours * $rate, 2),
+                ]);
             } elseif ($request->pay_type === 'comp_off') {
-                $this->leave->creditCompOff($employee, $date, $request->work_location === 'client_site' ? 1.0 : 1.0);
+                $this->leave->creditCompOff($employee, $date, (float) $settings->comp_off_days_per_holiday);
             } elseif ($request->pay_type === 'extra_leave') {
-                $this->leave->creditCompOff($employee, $date, 1.0);
+                $this->leave->creditCompOff($employee, $date, (float) $settings->extra_leave_days_per_holiday);
+            } elseif ($request->pay_type === 'half_day') {
+                $this->leave->creditCompOff($employee, $date, (float) $settings->half_day_comp_off_days);
             }
 
             $request->update([

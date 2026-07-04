@@ -813,12 +813,11 @@
                             <flux:input wire:model="hw_project" label="Project" placeholder="Optional" />
                             <div>
                                 <flux:label>Pay Type</flux:label>
+                                @php $hwPayLabels = App\Models\HolidayPaySetting::payTypeLabels(); @endphp
                                 <select wire:model="hw_pay_type" class="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm focus:border-orange-400 focus:ring-0 dark:bg-zinc-800">
-                                    <option value="overtime">Overtime</option>
-                                    <option value="comp_off">Comp Off</option>
-                                    <option value="double_pay">Double Pay</option>
-                                    <option value="extra_leave">Extra Leave</option>
-                                    <option value="half_day">Half Day</option>
+                                    @foreach($holidayPaySettings->enabledPayTypes() as $val)
+                                        <option value="{{ $val }}">{{ $hwPayLabels[$val] ?? ucfirst($val) }}</option>
+                                    @endforeach
                                 </select>
                             </div>
                         </div>

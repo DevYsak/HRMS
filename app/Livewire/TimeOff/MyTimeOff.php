@@ -3,6 +3,7 @@
 namespace App\Livewire\TimeOff;
 
 use App\Models\DecemberMandatoryDay;
+use App\Models\HolidayPaySetting;
 use App\Models\LeaveBalance;
 use App\Models\LeaveEncashment;
 use App\Models\LeaveType;
@@ -208,7 +209,7 @@ class MyTimeOff extends Component
         $this->reset(['hw_date', 'hw_reason', 'hw_location', 'hw_hours', 'hw_project', 'hw_comments', 'hw_pay_type']);
         $this->hw_location = 'office';
         $this->hw_hours = 8;
-        $this->hw_pay_type = 'overtime';
+        $this->hw_pay_type = HolidayPaySetting::current()->default_pay_type;
         $this->hw_date = $date ?? '';
         $this->resetValidation();
         $this->showHolidayWork = true;
@@ -660,6 +661,7 @@ class MyTimeOff extends Component
             'upcomingHolidays' => $upcomingHolidays,
             'mandatoryDays' => $mandatoryDays,
             'rangeHolidays' => $rangeHolidays,
+            'holidayPaySettings' => HolidayPaySetting::current(),
         ])->layout('layouts.app', ['title' => 'My Time Off']);
     }
 }
