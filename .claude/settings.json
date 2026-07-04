@@ -280,7 +280,9 @@
       "Bash(vendor/bin/pint app/Livewire/Holidays/ManageHolidays.php app/Models/PublicHoliday.php app/Enums/HolidayType.php database/factories/PublicHolidayFactory.php tests/Feature/HolidayManagementTest.php --format agent)",
       "Bash(vendor/bin/pint app/ database/ --dirty --format agent)",
       "Bash(grep -n 'public function submitRequest\\\\|function rules\\\\|DomainException\\\\|addError\\\\|start_date\\\\|end_date\\\\|resolveEmployee\\\\|$employee\\\\b\\\\|calculateLeaveDays\\\\|holidays' app/Livewire/TimeOff/MyTimeOff.php)",
-      "Bash(grep -n \"^use App\\\\\\\\\\\\\\\\Models\\\\|^use App\\\\\\\\\\\\\\\\\" app/Services/LeaveService.php)"
+      "Bash(grep -n \"^use App\\\\\\\\\\\\\\\\Models\\\\|^use App\\\\\\\\\\\\\\\\\" app/Services/LeaveService.php)",
+      "Bash(grep -n 'match \\($this->tab\\)\\\\|match \\($type\\)\\\\|'\\\\''regularisation'\\\\'' =>\\\\|'\\\\''leave'\\\\'' =>\\\\|'\\\\''wfh'\\\\'' =>\\\\|'\\\\''overtime'\\\\'' =>\\\\|protected function decide\\\\|protected function approveByType\\\\|protected function rejectByType\\\\|protected function pendingQuery\\\\|protected function normalise\\\\|'\\\\''counts'\\\\''\\\\|=> AttendanceRegularisation::where' app/Livewire/Attendance/CommandCenter.php)",
+      "Bash(vendor/bin/pint app/Services/HolidayWorkService.php app/Models/HolidayWorkRequest.php app/Notifications/HolidayWorkRequestNotification.php app/Livewire/Attendance/CommandCenter.php app/Livewire/TimeOff/MyTimeOff.php database/factories/HolidayWorkRequestFactory.php tests/Feature/HolidayWorkTest.php --format agent)"
     ],
     "additionalDirectories": [
       "C:\\Users\\91937\\Desktop\\xamp\\htdocs\\mahaigr-v2\\includes",

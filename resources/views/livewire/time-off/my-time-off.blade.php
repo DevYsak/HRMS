@@ -752,9 +752,13 @@
             </div>
             <div class="space-y-1.5">
                 @forelse($upcomingHolidays as $h)
-                    <div class="flex items-center justify-between text-sm">
+                    <div class="group flex items-center justify-between gap-2 text-sm">
                         <span class="truncate text-zinc-700 dark:text-zinc-200">{{ $h->name }}</span>
-                        <span class="shrink-0 text-xs text-zinc-400">{{ $h->date->format('d M') }}</span>
+                        <span class="flex shrink-0 items-center gap-2">
+                            <button type="button" wire:click="openHolidayWork('{{ $h->date->toDateString() }}')"
+                                class="rounded-lg px-1.5 py-0.5 text-[10px] font-bold text-orange-500 opacity-0 transition hover:bg-orange-50 group-hover:opacity-100" title="Request to work this holiday">Work</button>
+                            <span class="text-xs text-zinc-400">{{ $h->date->format('d M') }}</span>
+                        </span>
                     </div>
                 @empty
                     <p class="text-xs text-zinc-400">No upcoming public holidays.</p>
@@ -771,7 +775,63 @@
                     </div>
                 @endif
             </div>
+            <button type="button" wire:click="openHolidayWork"
+                class="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-orange-200 bg-orange-50/60 px-3 py-2 text-xs font-bold text-orange-600 transition hover:bg-orange-100">
+                <flux:icon.briefcase class="size-4" /> Request to Work on Holiday
+            </button>
         </div>
+
+        {{-- Holiday Work Request modal --}}
+        @if($showHolidayWork)
+            <div class="fixed inset-0 z-50 flex items-center justify-center p-4" x-data x-on:keydown.escape.window="$wire.set('showHolidayWork', false)">
+                <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="$wire.set('showHolidayWork', false)"></div>
+                <div class="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl ring ring-black/5 dark:bg-zinc-900">
+                    <div class="mb-4 flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <span class="inline-flex size-8 items-center justify-center rounded-xl bg-teal-50 text-teal-600"><flux:icon.briefcase class="size-4" /></span>
+                            <flux:heading size="lg">Request to Work on Holiday</flux:heading>
+                        </div>
+                        <button @click="$wire.set('showHolidayWork', false)" class="text-zinc-400 hover:text-zinc-600"><flux:icon.x-mark class="size-5" /></button>
+                    </div>
+                    <div class="space-y-3">
+                        <flux:input wire:model="hw_date" type="date" label="Holiday Date" />
+                        @error('hw_date')<p class="text-xs text-rose-500">{{ $message }}</p>@enderror
+                        <flux:textarea wire:model="hw_reason" label="Reason" rows="2" placeholder="Why do you need to work this holiday?" />
+                        @error('hw_reason')<p class="text-xs text-rose-500">{{ $message }}</p>@enderror
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <flux:label>Work Location</flux:label>
+                                <select wire:model="hw_location" class="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm focus:border-orange-400 focus:ring-0 dark:bg-zinc-800">
+                                    <option value="office">Office</option>
+                                    <option value="wfh">Work From Home</option>
+                                    <option value="client_site">Client Site</option>
+                                </select>
+                            </div>
+                            <flux:input wire:model="hw_hours" type="number" step="0.5" min="0.5" max="24" label="Expected Hours" />
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <flux:input wire:model="hw_project" label="Project" placeholder="Optional" />
+                            <div>
+                                <flux:label>Pay Type</flux:label>
+                                <select wire:model="hw_pay_type" class="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm focus:border-orange-400 focus:ring-0 dark:bg-zinc-800">
+                                    <option value="overtime">Overtime</option>
+                                    <option value="comp_off">Comp Off</option>
+                                    <option value="double_pay">Double Pay</option>
+                                    <option value="extra_leave">Extra Leave</option>
+                                    <option value="half_day">Half Day</option>
+                                </select>
+                            </div>
+                        </div>
+                        <flux:textarea wire:model="hw_comments" label="Comments" rows="2" placeholder="Optional" />
+                        <p class="text-[11px] text-zinc-400">On approval this records a holiday-worked attendance and your chosen pay (overtime record or comp-off credit).</p>
+                    </div>
+                    <div class="mt-5 flex justify-end gap-2">
+                        <button @click="$wire.set('showHolidayWork', false)" class="rounded-xl border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-600 transition hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300">Cancel</button>
+                        <flux:button wire:click="submitHolidayWork" variant="primary">Send to Manager &amp; HR</flux:button>
+                    </div>
+                </div>
+            </div>
+        @endif
 
         {{-- Policy Explorer --}}
         <div x-data="{ open: true }" class="rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">

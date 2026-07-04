@@ -26,9 +26,10 @@
         'leave' => ['Pending Leave', 'calendar-days', '#8b5cf6'],
         'wfh' => ['Pending WFH', 'home', '#3b82f6'],
         'overtime' => ['Pending Overtime', 'bolt', '#f59e0b'],
+        'holiday' => ['Holiday Work', 'briefcase', '#14b8a6'],
     ];
 @endphp
-<div class="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+<div class="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-7">
     @foreach($tabs as $key => [$label, $icon, $color])
         <button wire:click="$set('tab', '{{ $key }}')"
             class="flex items-center gap-3 rounded-[18px] border p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md {{ $tab === $key ? 'border-orange-400 bg-white ring-1 ring-orange-200' : 'border-orange-100/70 bg-white' }}">

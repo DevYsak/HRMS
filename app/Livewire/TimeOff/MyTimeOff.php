@@ -9,6 +9,7 @@ use App\Models\LeaveType;
 use App\Models\PublicHoliday;
 use App\Models\User;
 use App\Notifications\LeaveEncashmentNotification;
+use App\Services\HolidayWorkService;
 use App\Services\LeaveService;
 use Carbon\Carbon;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -31,6 +32,23 @@ class MyTimeOff extends Component
     public string $start_date = '';
 
     public string $end_date = '';
+
+    // Holiday-work request ("Request to Work on Holiday")
+    public bool $showHolidayWork = false;
+
+    public string $hw_date = '';
+
+    public string $hw_reason = '';
+
+    public string $hw_location = 'office';
+
+    public float $hw_hours = 8;
+
+    public string $hw_project = '';
+
+    public string $hw_comments = '';
+
+    public string $hw_pay_type = 'overtime';
 
     public bool $is_half_day = false;
 
@@ -182,6 +200,55 @@ class MyTimeOff extends Component
         $this->showRequestModal = false;
         $this->resetErrorBag();
         $this->resetValidation();
+    }
+
+    // ── Holiday Work ("Request to Work on Holiday") ──────────────────────────
+    public function openHolidayWork(?string $date = null): void
+    {
+        $this->reset(['hw_date', 'hw_reason', 'hw_location', 'hw_hours', 'hw_project', 'hw_comments', 'hw_pay_type']);
+        $this->hw_location = 'office';
+        $this->hw_hours = 8;
+        $this->hw_pay_type = 'overtime';
+        $this->hw_date = $date ?? '';
+        $this->resetValidation();
+        $this->showHolidayWork = true;
+    }
+
+    public function submitHolidayWork(HolidayWorkService $service): void
+    {
+        $this->validate([
+            'hw_date' => 'required|date',
+            'hw_reason' => 'required|string|min:5',
+            'hw_location' => 'required|in:office,wfh,client_site',
+            'hw_hours' => 'required|numeric|min:0.5|max:24',
+            'hw_pay_type' => 'required|in:overtime,comp_off,double_pay,extra_leave,half_day',
+        ]);
+
+        $employee = Auth::user()->employee;
+        if (! $employee) {
+            \Flux::toast('You do not have an active employee profile. Contact HR.', variant: 'danger');
+
+            return;
+        }
+
+        try {
+            $service->submit($employee, [
+                'work_date' => $this->hw_date,
+                'reason' => $this->hw_reason,
+                'work_location' => $this->hw_location,
+                'expected_hours' => $this->hw_hours,
+                'project' => $this->hw_project ?: null,
+                'comments' => $this->hw_comments ?: null,
+                'pay_type' => $this->hw_pay_type,
+            ]);
+        } catch (\DomainException $e) {
+            $this->addError('hw_date', $e->getMessage());
+
+            return;
+        }
+
+        $this->showHolidayWork = false;
+        \Flux::toast('Holiday-work request sent to your manager & HR for approval.', variant: 'success');
     }
 
     public function submitRequest(): void

@@ -4,6 +4,7 @@ namespace App\Livewire\Attendance;
 
 use App\Models\AttendanceRegularisation;
 use App\Models\AuditLog;
+use App\Models\HolidayWorkRequest;
 use App\Models\LeaveRequest;
 use App\Models\OtRequest;
 use App\Models\WfhRequest;
@@ -11,6 +12,7 @@ use App\Notifications\OtRequestNotification;
 use App\Notifications\RegularisationReviewedNotification;
 use App\Notifications\WfhRequestNotification;
 use App\Services\AttendanceService;
+use App\Services\HolidayWorkService;
 use App\Services\LeaveService;
 use App\Services\OvertimeService;
 use App\Services\WfhService;
@@ -148,6 +150,7 @@ class CommandCenter extends Component
             'leave' => $this->decideLeave($id, 'approved'),
             'wfh' => $this->decideWfh($id, 'approved'),
             'overtime' => $this->decideOvertime($id, 'approved'),
+            'holiday' => $this->decideHolidayWork($id, 'approved'),
             default => null,
         };
     }
@@ -159,6 +162,7 @@ class CommandCenter extends Component
             'leave' => $this->decideLeave($id, 'rejected', $comment),
             'wfh' => $this->decideWfh($id, 'rejected', $comment),
             'overtime' => $this->decideOvertime($id, 'rejected', $comment),
+            'holiday' => $this->decideHolidayWork($id, 'rejected', $comment),
             default => null,
         };
     }
@@ -227,6 +231,20 @@ class CommandCenter extends Component
         $request->employee->user?->notify(new OtRequestNotification($request->fresh()));
     }
 
+    protected function decideHolidayWork(int $id, string $decision, ?string $comment = null): void
+    {
+        $request = HolidayWorkRequest::with('employee.user')->findOrFail($id);
+        if (! $request->isPending()) {
+            throw new \DomainException('Already reviewed.');
+        }
+
+        // HolidayWorkService materialises the holiday-worked attendance + pay
+        // and notifies the employee.
+        $decision === 'approved'
+            ? app(HolidayWorkService::class)->approve($request, Auth::id(), $comment)
+            : app(HolidayWorkService::class)->reject($request, Auth::id(), $comment ?? '');
+    }
+
     // ── Data ─────────────────────────────────────────────────────────────────
 
     protected function pendingQuery()
@@ -235,6 +253,7 @@ class CommandCenter extends Component
             'leave' => LeaveRequest::query()->with(['employee.user', 'leaveType'])->where('status', 'pending'),
             'wfh' => WfhRequest::query()->with('employee.user')->where('status', 'pending'),
             'overtime' => OtRequest::query()->with('employee.user')->where('status', 'pending'),
+            'holiday' => HolidayWorkRequest::query()->with(['employee.user', 'holiday'])->where('status', 'pending'),
             default => AttendanceRegularisation::query()->with('employee.user')->where('status', 'pending'),
         };
 
@@ -268,6 +287,13 @@ class CommandCenter extends Component
                 'employee' => $item->employee?->user?->name ?? '—',
                 'when' => Carbon::parse($item->work_date)->format('d M Y'),
                 'detail' => 'OT '.$item->requested_hours.'h · '.$item->start_time.'–'.$item->end_time,
+                'reason' => $item->reason,
+            ],
+            'holiday' => [
+                'id' => $item->id,
+                'employee' => $item->employee?->user?->name ?? '—',
+                'when' => Carbon::parse($item->work_date)->format('d M Y'),
+                'detail' => 'Work on '.($item->holiday?->name ?? 'holiday').' · '.$item->expected_hours.'h · '.$item->payTypeLabel(),
                 'reason' => $item->reason,
             ],
             default => [
@@ -324,6 +350,7 @@ class CommandCenter extends Component
             'leave' => LeaveRequest::where('status', 'pending')->count(),
             'wfh' => WfhRequest::where('status', 'pending')->count(),
             'overtime' => OtRequest::where('status', 'pending')->count(),
+            'holiday' => HolidayWorkRequest::where('status', 'pending')->count(),
         ];
         $decided = [
             'approved' => AttendanceRegularisation::where('status', 'approved')->count()
