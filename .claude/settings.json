@@ -276,7 +276,9 @@
       "Bash(vendor/bin/pint app/Services/AttendanceService.php tests/Feature/RegularisationOvertimeTest.php --format agent)",
       "Bash(cat app/Notifications/Concerns/SendsMailChannel.php)",
       "Bash(grep -l \"ShouldQueue\" app/Notifications/RegularisationReviewedNotification.php app/Notifications/AttendanceRegularisationNotification.php)",
-      "Bash(MAIL_MAILER=log php artisan tinker --execute ' *)"
+      "Bash(MAIL_MAILER=log php artisan tinker --execute ' *)",
+      "Bash(vendor/bin/pint app/Livewire/Holidays/ManageHolidays.php app/Models/PublicHoliday.php app/Enums/HolidayType.php database/factories/PublicHolidayFactory.php tests/Feature/HolidayManagementTest.php --format agent)",
+      "Bash(vendor/bin/pint app/ database/ --dirty --format agent)"
     ],
     "additionalDirectories": [
       "C:\\Users\\91937\\Desktop\\xamp\\htdocs\\mahaigr-v2\\includes",

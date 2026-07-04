@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\EnsureTeamMembership;
+use App\Livewire\Holidays\ManageHolidays;
 use Illuminate\Support\Facades\Route;
 use Laravel\Fortify\Features;
 
@@ -26,7 +27,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('security.edit');
 
     Route::livewire('settings/teams', 'pages::teams.index')->name('teams.index');
-    Route::livewire('settings/holidays', 'pages::settings.holidays')->name('settings.holidays');
+    // Holiday Management (extends the former thin date+name page at the same URL/name).
+    Route::get('settings/holidays', ManageHolidays::class)->name('settings.holidays');
     Route::livewire('settings/ai', 'pages::settings.ai')->name('settings.ai');
 
     Route::middleware(EnsureTeamMembership::class)->group(function () {
