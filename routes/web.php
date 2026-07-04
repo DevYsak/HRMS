@@ -170,6 +170,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/team', TeamAttendance::class)->name('team');
             Route::get('/employees', AllAttendance::class)->name('employees');
             Route::get('/command-center', \App\Livewire\Attendance\CommandCenter::class)->name('command-center');
+            Route::get('/reports', \App\Livewire\Attendance\AttendanceReports::class)->name('reports');
         });
         Route::get('/settings', AttendanceSettings::class)->name('settings')->middleware('role:manage-settings');
         Route::get('/biometric-summary', BiometricSummary::class)->name('biometric-summary')->middleware('role:approve-leave');
@@ -362,6 +363,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/employee-lifecycle.csv', [ReportController::class, 'employeeLifecycleCsv'])
             ->name('employee-lifecycle')
             ->middleware('role:manage-employees');
+
+        // Enterprise attendance reports (13 types) — CSV + PDF, shared builder
+        Route::middleware('role:approve-leave')->group(function () {
+            Route::get('/attendance-report.csv', [ReportController::class, 'attendanceReportCsv'])
+                ->name('attendance-report-csv');
+            Route::get('/attendance-report.pdf', [ReportController::class, 'attendanceReportPdf'])
+                ->name('attendance-report-pdf');
+        });
     });
 
     // --------------------------------------------------

@@ -15,6 +15,7 @@ use App\Models\PerformanceReview;
 use App\Models\PipRecord;
 use App\Models\PromotionRecommendation;
 use App\Models\WarningLetter;
+use App\Services\AttendanceReportBuilder;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -23,6 +24,58 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ReportController extends Controller
 {
+    /**
+     * Read the shared filter set from the request for the attendance report
+     * builder (used by both the CSV and PDF exports).
+     *
+     * @return array<string,mixed>
+     */
+    private function attendanceReportFilters(Request $request): array
+    {
+        return [
+            'from' => $request->string('from')->toString() ?: null,
+            'to' => $request->string('to')->toString() ?: null,
+            'department_id' => $request->integer('department_id') ?: null,
+            'office_id' => $request->integer('office_id') ?: null,
+            'shift_id' => $request->integer('shift_id') ?: null,
+            'employee_id' => $request->integer('employee_id') ?: null,
+            'mode' => $request->string('mode')->toString() ?: null,
+        ];
+    }
+
+    /** Enterprise attendance report → CSV (Excel-compatible), full result set. */
+    public function attendanceReportCsv(Request $request, AttendanceReportBuilder $builder): StreamedResponse
+    {
+        $type = $request->string('type', 'daily')->toString();
+        $report = $builder->build($type, $this->attendanceReportFilters($request));
+
+        $filename = 'attendance-'.$type.'-'.now()->format('Ymd').'.csv';
+
+        return response()->streamDownload(function () use ($report) {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, $report['columns']);
+            foreach ($report['rows'] as $row) {
+                fputcsv($handle, $row);
+            }
+            fclose($handle);
+        }, $filename, ['Content-Type' => 'text/csv']);
+    }
+
+    /** Enterprise attendance report → PDF, full result set (portrait/landscape by width). */
+    public function attendanceReportPdf(Request $request, AttendanceReportBuilder $builder): Response
+    {
+        $type = $request->string('type', 'daily')->toString();
+        $report = $builder->build($type, $this->attendanceReportFilters($request));
+
+        $orientation = count($report['columns']) > 8 ? 'landscape' : 'portrait';
+        $pdf = Pdf::loadView('reports.attendance', [
+            'report' => $report,
+            'generatedAt' => now()->format('d M Y, h:i A'),
+        ])->setPaper('a4', $orientation);
+
+        return $pdf->download('attendance-'.$type.'-'.now()->format('Ymd').'.pdf');
+    }
+
     public function payrollSummaryPdf(Request $request): Response
     {
         $month = (int) $request->integer('month', now()->month);
