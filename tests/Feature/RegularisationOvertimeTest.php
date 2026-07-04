@@ -4,6 +4,7 @@ use App\Models\Attendance;
 use App\Models\AttendanceRegularisation;
 use App\Models\Employee;
 use App\Models\OtRequest;
+use App\Models\OvertimeRecord;
 use App\Models\User;
 use App\Services\AttendanceService;
 use App\Services\OvertimeService;
@@ -71,7 +72,7 @@ test('autoCreateFromAttendance does not duplicate an existing OT request for the
     expect(OtRequest::where('employee_id', $employee->id)->count())->toBe(1);
 });
 
-test('approving a regularisation into overtime auto-files a pending OT request', function () {
+test('approving a regularisation into overtime auto-approves the OT and materialises the record', function () {
     $employee = Employee::factory()->create();
     $reviewer = User::factory()->create();
     $attendance = Attendance::create([
@@ -102,8 +103,12 @@ test('approving a regularisation into overtime auto-files a pending OT request',
     $ot = OtRequest::where('employee_id', $employee->id)->where('work_date', '2026-06-18')->first();
     expect($ot)->not->toBeNull();
     expect($ot->source)->toBe('regularisation');
-    expect($ot->status)->toBe('pending');
+    expect($ot->status)->toBe('approved');           // auto-approved now
+    expect($ot->reviewer_id)->toBe($reviewer->id);   // by the same HR reviewer
     expect((float) $ot->requested_hours)->toBe(3.0);
+
+    // The approved OT materialises an OvertimeRecord for payroll.
+    expect(OvertimeRecord::where('ot_request_id', $ot->id)->exists())->toBeTrue();
 });
 
 test('approving a regularisation within the threshold files no OT', function () {

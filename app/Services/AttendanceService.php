@@ -135,9 +135,14 @@ class AttendanceService
                 'missing_checkout' => false,
             ]);
 
-            // If the corrected day now exceeds the OT threshold, auto-file a
-            // pending OT request so overtime is recalculated for HR to approve.
-            app(OvertimeService::class)->autoCreateFromAttendance($attendance->fresh(['employee.shift']));
+            // If the corrected day now exceeds the OT threshold, file the OT
+            // request and auto-approve it under the same reviewer so overtime
+            // flows straight to payroll — approving the regularisation approves
+            // the overtime it produced (materialises the OvertimeRecord).
+            $otRequest = app(OvertimeService::class)->autoCreateFromAttendance($attendance->fresh(['employee.shift']));
+            if ($otRequest) {
+                app(OvertimeService::class)->approve($otRequest, $reviewerId, 'Auto-approved with attendance regularisation.');
+            }
 
             return $attendance->fresh();
         });
