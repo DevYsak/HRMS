@@ -268,7 +268,8 @@
       "Bash(grep -n 'this->chartDaily = $daily;' app/Livewire/Attendance/AttendanceTracker.php)",
       "Bash(vendor/bin/pint tests/Feature/AllAttendanceTest.php --format agent)",
       "Bash(vendor/bin/pint app/Livewire/Attendance/AttendanceTracker.php tests/Feature/AttendanceModeTest.php --format agent)",
-      "Bash(awk -F: '$1 > 305 && $1 < 470')"
+      "Bash(awk -F: '$1 > 305 && $1 < 470')",
+      "Bash(vendor/bin/pint app/Livewire/Attendance/CommandCenter.php tests/Feature/AttendanceCommandCenterTest.php --format agent)"
     ],
     "additionalDirectories": [
       "C:\\Users\\91937\\Desktop\\xamp\\htdocs\\mahaigr-v2\\includes",

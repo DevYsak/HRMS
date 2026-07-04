@@ -22,6 +22,7 @@
             <span class="text-[10px] font-bold uppercase tracking-wider {{ $date ? 'text-orange-500' : 'text-zinc-400' }}">Day</span>
             <input type="date" wire:model.live="date" class="w-[8rem] border-0 bg-transparent p-1 text-xs font-semibold text-zinc-600 focus:ring-0">
         </div>
+        <a href="{{ route('attendance.command-center') }}" class="inline-flex items-center gap-1.5 rounded-xl border border-orange-100 bg-white px-3 py-2 text-xs font-bold text-zinc-600 shadow-sm transition hover:bg-orange-50"><flux:icon.bolt class="size-4 text-orange-500" /> Command Center</a>
         <button wire:click="exportCsv" type="button" class="inline-flex items-center gap-1.5 rounded-xl border border-orange-100 bg-white px-3 py-2 text-xs font-bold text-zinc-600 shadow-sm transition hover:bg-orange-50"><flux:icon.arrow-down-tray class="size-4 text-orange-500" /> Export CSV</button>
         <button wire:click="openMarkModal" type="button" class="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 px-4 py-2 text-xs font-bold text-white shadow-lg shadow-orange-300/40 transition hover:shadow-xl"><flux:icon.pencil-square class="size-4" /> Mark Attendance</button>
     </div>

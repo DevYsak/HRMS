@@ -169,6 +169,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::middleware('role:approve-leave')->group(function () {
             Route::get('/team', TeamAttendance::class)->name('team');
             Route::get('/employees', AllAttendance::class)->name('employees');
+            Route::get('/command-center', \App\Livewire\Attendance\CommandCenter::class)->name('command-center');
         });
         Route::get('/settings', AttendanceSettings::class)->name('settings')->middleware('role:manage-settings');
         Route::get('/biometric-summary', BiometricSummary::class)->name('biometric-summary')->middleware('role:approve-leave');
