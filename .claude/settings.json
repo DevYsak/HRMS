@@ -273,7 +273,10 @@
       "Bash(vendor/bin/pint app/Services/AttendanceReportBuilder.php app/Livewire/Attendance/AttendanceReports.php app/Http/Controllers/ReportController.php tests/Feature/AttendanceReportsTest.php --format agent)",
       "Bash(vendor/bin/pint app/Livewire/Attendance/ExecutiveAttendance.php tests/Feature/ExecutiveAttendanceTest.php --format agent)",
       "Bash(vendor/bin/pint app/Livewire/Attendance/BiometricControl.php tests/Feature/BiometricControlTest.php --format agent)",
-      "Bash(vendor/bin/pint app/Services/AttendanceService.php tests/Feature/RegularisationOvertimeTest.php --format agent)"
+      "Bash(vendor/bin/pint app/Services/AttendanceService.php tests/Feature/RegularisationOvertimeTest.php --format agent)",
+      "Bash(cat app/Notifications/Concerns/SendsMailChannel.php)",
+      "Bash(grep -l \"ShouldQueue\" app/Notifications/RegularisationReviewedNotification.php app/Notifications/AttendanceRegularisationNotification.php)",
+      "Bash(MAIL_MAILER=log php artisan tinker --execute ' *)"
     ],
     "additionalDirectories": [
       "C:\\Users\\91937\\Desktop\\xamp\\htdocs\\mahaigr-v2\\includes",

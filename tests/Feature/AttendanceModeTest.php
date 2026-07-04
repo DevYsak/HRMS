@@ -595,3 +595,29 @@ test('biometric status shows sync history, serial and health tiers', function ()
         ->assertSee('Online')
         ->assertSet('syncHistory', fn ($h) => count($h) === 2 && $h[0]['punches'] === 6);
 });
+
+test('a failing mail transport does not break the regularisation submit', function () {
+    dayShift();
+    $employee = Employee::factory()->create(['manager_id' => null]);
+    $date = today()->toDateString();
+    Attendance::create([
+        'employee_id' => $employee->id, 'date' => $date,
+        'check_in' => "$date 09:15:00", 'check_out' => null, 'missing_checkout' => true,
+        'status' => 'on_time', 'work_mode' => 'office',
+    ]);
+
+    // Simulate a broken SMTP transport on the server — notification mail throws.
+    config(['mail.default' => 'no-such-mailer']);
+
+    Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
+        ->set('regDate', $date)
+        ->set('regFixOut', true)->set('regFixIn', false)
+        ->set('regCheckOut', '18:30')
+        ->set('regReason', 'Forgot to punch out at the gate')
+        ->call('submitRegularisation')
+        ->assertHasNoErrors()
+        ->assertOk();
+
+    // The request is saved even though the mail send failed.
+    expect(AttendanceRegularisation::where('employee_id', $employee->id)->where('work_date', $date)->exists())->toBeTrue();
+});

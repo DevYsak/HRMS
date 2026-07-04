@@ -1496,20 +1496,28 @@ class AttendanceTracker extends Component
             'status' => 'pending',
         ]);
 
-        // Notify the manager AND HR/Admin so either can approve.
-        $notification = new AttendanceRegularisationNotification(
-            Auth::user()->name,
-            Carbon::parse($this->regDate)->format('d M Y'),
-            'pending',
-        );
-        $approvers = User::whereIn('role', ['hr_admin', 'super_admin'])->get();
-        if ($employee->manager) {
-            $approvers->push($employee->manager);
-        }
-        $approvers->unique('id')->each(fn ($u) => $u->notify($notification));
+        // Notify the manager AND HR/Admin so either can approve. Notifications
+        // are best-effort: the request is already saved, so a mail-transport
+        // failure (e.g. SMTP timeout) must not 500 the employee's submit. The
+        // in-app database channel is written before mail, so the inbox still
+        // updates even when the email send throws.
+        try {
+            $notification = new AttendanceRegularisationNotification(
+                Auth::user()->name,
+                Carbon::parse($this->regDate)->format('d M Y'),
+                'pending',
+            );
+            $approvers = User::whereIn('role', ['hr_admin', 'super_admin'])->get();
+            if ($employee->manager) {
+                $approvers->push($employee->manager);
+            }
+            $approvers->unique('id')->each(fn ($u) => $u->notify($notification));
 
-        // Notify the employee themselves so the request appears in their inbox
-        Auth::user()->notify(new RegularisationReviewedNotification($regularisation));
+            // Notify the employee themselves so the request appears in their inbox
+            Auth::user()->notify(new RegularisationReviewedNotification($regularisation));
+        } catch (\Throwable $e) {
+            report($e); // logged for diagnosis; the regularisation is saved regardless
+        }
 
         $this->reset(['regDate', 'regCheckIn', 'regCheckOut', 'regReason', 'regFixIn', 'regFixOut']);
         $this->dispatch('flux:modal:close', name: 'regularisation-modal');
