@@ -485,8 +485,12 @@ class MyTimeOff extends Component
         $gridStart = $monthStart->copy()->startOfWeek(Carbon::MONDAY);
         $gridEnd = $monthEnd->copy()->endOfWeek(Carbon::SUNDAY);
 
-        $holidays = PublicHoliday::whereBetween('date', [$gridStart->toDateString(), $gridEnd->toDateString()])
+        $holidays = PublicHoliday::query()
+            ->active()
+            ->whereBetween('date', [$gridStart->toDateString(), $gridEnd->toDateString()])
+            ->when($employee, fn ($q) => $q->forEmployee($employee))
             ->get()
+            ->when($employee, fn ($c) => $c->filter->appliesToEmployee($employee))
             ->keyBy(fn ($h) => $h->date->toDateString());
 
         $calendarRequests = $employee
@@ -529,6 +533,27 @@ class MyTimeOff extends Component
             'label' => $csl?->leaveType->name ?? 'CSL',
         ];
 
+        // ── Live holiday warning for the currently selected leave range ──
+        $rangeHolidays = collect();
+        if ($employee && $this->start_date && $this->end_date) {
+            try {
+                $rs = Carbon::parse($this->start_date);
+                $re = Carbon::parse($this->end_date);
+                if ($rs->lte($re)) {
+                    $rangeHolidays = PublicHoliday::query()
+                        ->active()
+                        ->whereBetween('date', [$rs->toDateString(), $re->toDateString()])
+                        ->forEmployee($employee)
+                        ->orderBy('date')
+                        ->get()
+                        ->filter->appliesToEmployee($employee)
+                        ->values();
+                }
+            } catch (\Throwable) {
+                // Invalid partial date input — no warning.
+            }
+        }
+
         // ── Holiday planner: upcoming public holidays + December mandatory days ──
         $upcomingHolidays = PublicHoliday::whereDate('date', '>=', now()->toDateString())
             ->orderBy('date')
@@ -567,6 +592,7 @@ class MyTimeOff extends Component
             'forecast' => $forecast,
             'upcomingHolidays' => $upcomingHolidays,
             'mandatoryDays' => $mandatoryDays,
+            'rangeHolidays' => $rangeHolidays,
         ])->layout('layouts.app', ['title' => 'My Time Off']);
     }
 }

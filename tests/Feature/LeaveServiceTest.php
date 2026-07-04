@@ -5,6 +5,8 @@ use App\Models\Employee;
 use App\Models\LeaveBalance;
 use App\Models\LeaveRequest;
 use App\Models\LeaveType;
+use App\Models\Office;
+use App\Models\PublicHoliday;
 use App\Models\User;
 use App\Services\LeaveService;
 use Illuminate\Support\Carbon;
@@ -296,4 +298,60 @@ it('skips weekends when sandwich policy is disabled', function () {
     );
 
     expect($days)->toBe(6.0); // Mon, Tue, Wed, Thu, Fri, Mon = 6
+});
+
+// ─── Holiday blocking (Phase 2) ────────────────────────────────────────────────
+
+it('blocks a leave request that overlaps a company holiday', function () {
+    $employee = leaveEmployee();
+    $type = paidLeaveType();
+    PublicHoliday::factory()->create([
+        'name' => 'Independence Day', 'date' => '2026-08-15', 'country' => 'IN', 'is_active' => true,
+        'office_id' => null, 'department_id' => null,
+    ]);
+
+    expect(fn () => app(LeaveService::class)->submitRequest(
+        $employee, $type, '2026-08-14', '2026-08-16', 'trip', requestedLeaveStatus: 'unpaid',
+    ))->toThrow(DomainException::class, 'already a company holiday');
+});
+
+it('allows leave that does not overlap any holiday', function () {
+    $employee = leaveEmployee();
+    $type = paidLeaveType();
+    PublicHoliday::factory()->create(['date' => '2026-08-15', 'country' => 'IN', 'is_active' => true]);
+
+    $request = app(LeaveService::class)->submitRequest(
+        $employee, $type, '2026-08-18', '2026-08-19', 'ok', requestedLeaveStatus: 'unpaid',
+    );
+
+    expect($request->status)->toBe('pending');
+});
+
+it('does not block when the holiday belongs to a different branch', function () {
+    $office = Office::factory()->create();
+    $otherOffice = Office::factory()->create();
+    $employee = leaveEmployee(['office_id' => $otherOffice->id]);
+    $type = paidLeaveType();
+    PublicHoliday::factory()->create([
+        'name' => 'Branch Day', 'date' => '2026-08-15', 'country' => 'IN', 'is_active' => true,
+        'office_id' => $office->id, // only $office, not the employee's branch
+    ]);
+
+    $request = app(LeaveService::class)->submitRequest(
+        $employee, $type, '2026-08-14', '2026-08-16', 'ok', requestedLeaveStatus: 'unpaid',
+    );
+
+    expect($request->status)->toBe('pending');
+});
+
+it('ignores archived holidays when blocking leave', function () {
+    $employee = leaveEmployee();
+    $type = paidLeaveType();
+    PublicHoliday::factory()->archived()->create(['date' => '2026-08-15', 'country' => 'IN']);
+
+    $request = app(LeaveService::class)->submitRequest(
+        $employee, $type, '2026-08-15', '2026-08-15', 'ok', requestedLeaveStatus: 'unpaid',
+    );
+
+    expect($request->status)->toBe('pending');
 });

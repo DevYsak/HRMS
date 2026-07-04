@@ -278,7 +278,9 @@
       "Bash(grep -l \"ShouldQueue\" app/Notifications/RegularisationReviewedNotification.php app/Notifications/AttendanceRegularisationNotification.php)",
       "Bash(MAIL_MAILER=log php artisan tinker --execute ' *)",
       "Bash(vendor/bin/pint app/Livewire/Holidays/ManageHolidays.php app/Models/PublicHoliday.php app/Enums/HolidayType.php database/factories/PublicHolidayFactory.php tests/Feature/HolidayManagementTest.php --format agent)",
-      "Bash(vendor/bin/pint app/ database/ --dirty --format agent)"
+      "Bash(vendor/bin/pint app/ database/ --dirty --format agent)",
+      "Bash(grep -n 'public function submitRequest\\\\|function rules\\\\|DomainException\\\\|addError\\\\|start_date\\\\|end_date\\\\|resolveEmployee\\\\|$employee\\\\b\\\\|calculateLeaveDays\\\\|holidays' app/Livewire/TimeOff/MyTimeOff.php)",
+      "Bash(grep -n \"^use App\\\\\\\\\\\\\\\\Models\\\\|^use App\\\\\\\\\\\\\\\\\" app/Services/LeaveService.php)"
     ],
     "additionalDirectories": [
       "C:\\Users\\91937\\Desktop\\xamp\\htdocs\\mahaigr-v2\\includes",

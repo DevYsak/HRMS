@@ -10,6 +10,7 @@ use App\Models\LeaveEncashment;
 use App\Models\LeavePaymentAuditLog;
 use App\Models\LeaveRequest;
 use App\Models\LeaveType;
+use App\Models\PublicHoliday;
 use App\Models\User;
 use App\Notifications\LeaveEncashmentNotification;
 use App\Notifications\LeaveMonthlyAccrualNotification;
@@ -45,6 +46,22 @@ class LeaveService
         }
 
         return $total;
+    }
+
+    /**
+     * The first active company holiday within [start, end] that applies to
+     * the given employee (respecting branch/department/employee scope), or
+     * null. Used to block leave that overlaps a holiday.
+     */
+    public function holidayWithinRange(Employee $employee, Carbon $start, Carbon $end): ?PublicHoliday
+    {
+        return PublicHoliday::query()
+            ->active()
+            ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
+            ->forEmployee($employee)
+            ->orderBy('date')
+            ->get()
+            ->first(fn (PublicHoliday $h) => $h->appliesToEmployee($employee));
     }
 
     /**
@@ -99,6 +116,15 @@ class LeaveService
         // Notice period restriction
         if ($leaveType->notice_period_restricted && $employee->status === EmployeeStatus::NoticePeriod) {
             throw new \DomainException("'{$leaveType->name}' is not available during notice period.");
+        }
+
+        // Company holiday block — leave cannot include a holiday that applies
+        // to this employee (branch/department/employee scope respected).
+        $holiday = $this->holidayWithinRange($employee, $start, $end);
+        if ($holiday) {
+            throw new \DomainException(
+                Carbon::parse($holiday->date)->format('d M Y')." ({$holiday->name}) is already a company holiday. Please exclude it from your leave dates."
+            );
         }
 
         // Max consecutive days

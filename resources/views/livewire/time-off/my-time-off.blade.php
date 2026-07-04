@@ -934,9 +934,24 @@
 
                         {{-- Dates --}}
                         <div class="grid grid-cols-2 gap-4">
-                            <flux:input wire:model="start_date" type="date" label="Start Date" required />
-                            <flux:input wire:model="end_date" type="date" label="End Date" required />
+                            <flux:input wire:model.live="start_date" type="date" label="Start Date" required />
+                            <flux:input wire:model.live="end_date" type="date" label="End Date" required />
                         </div>
+
+                        {{-- Company holiday warning — holidays cannot be included in leave --}}
+                        @if($rangeHolidays->isNotEmpty())
+                            <div class="flex items-start gap-2.5 rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2.5 dark:border-rose-900/40 dark:bg-rose-950/20">
+                                <flux:icon.exclamation-triangle class="mt-0.5 size-4 shrink-0 text-rose-500" />
+                                <div class="text-xs">
+                                    <p class="font-bold text-rose-800 dark:text-rose-300">This date is already a company holiday.</p>
+                                    <p class="mt-0.5 text-rose-600 dark:text-rose-400">
+                                        Your range includes
+                                        @foreach($rangeHolidays as $rh)<span class="font-semibold">{{ \Carbon\Carbon::parse($rh->date)->format('d M') }} ({{ $rh->name }})</span>@if(! $loop->last), @endif @endforeach.
+                                        Please exclude {{ $rangeHolidays->count() === 1 ? 'it' : 'them' }} from your leave dates.
+                                    </p>
+                                </div>
+                            </div>
+                        @endif
 
                         {{-- Half Day --}}
                         @if(!$selectedType || $selectedType->allow_half_day)
@@ -1036,9 +1051,9 @@
                         <div class="flex justify-end gap-3 pt-2">
                             <button type="button" @click="$wire.closeRequestModal()"
                                 class="px-4 py-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-600 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors">Cancel</button>
-                            <button type="submit" wire:loading.attr="disabled" wire:target="submitRequest,attachment"
-                                class="inline-flex items-center gap-2 px-5 py-2 text-sm font-bold text-white bg-brand-600 hover:bg-brand-700 rounded-xl transition-colors disabled:opacity-60">
-                                <span wire:loading.remove wire:target="submitRequest,attachment">Submit Request</span>
+                            <button type="submit" wire:loading.attr="disabled" wire:target="submitRequest,attachment" @disabled($rangeHolidays->isNotEmpty())
+                                class="inline-flex items-center gap-2 px-5 py-2 text-sm font-bold text-white bg-brand-600 hover:bg-brand-700 rounded-xl transition-colors disabled:cursor-not-allowed disabled:opacity-60">
+                                <span wire:loading.remove wire:target="submitRequest,attachment">{{ $rangeHolidays->isNotEmpty() ? 'Holiday in range' : 'Submit Request' }}</span>
                                 <span wire:loading wire:target="submitRequest,attachment">Submitting...</span>
                             </button>
                         </div>
