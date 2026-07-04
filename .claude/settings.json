@@ -271,7 +271,8 @@
       "Bash(awk -F: '$1 > 305 && $1 < 470')",
       "Bash(vendor/bin/pint app/Livewire/Attendance/CommandCenter.php tests/Feature/AttendanceCommandCenterTest.php --format agent)",
       "Bash(vendor/bin/pint app/Services/AttendanceReportBuilder.php app/Livewire/Attendance/AttendanceReports.php app/Http/Controllers/ReportController.php tests/Feature/AttendanceReportsTest.php --format agent)",
-      "Bash(vendor/bin/pint app/Livewire/Attendance/ExecutiveAttendance.php tests/Feature/ExecutiveAttendanceTest.php --format agent)"
+      "Bash(vendor/bin/pint app/Livewire/Attendance/ExecutiveAttendance.php tests/Feature/ExecutiveAttendanceTest.php --format agent)",
+      "Bash(vendor/bin/pint app/Livewire/Attendance/BiometricControl.php tests/Feature/BiometricControlTest.php --format agent)"
     ],
     "additionalDirectories": [
       "C:\\Users\\91937\\Desktop\\xamp\\htdocs\\mahaigr-v2\\includes",
