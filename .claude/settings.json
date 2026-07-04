@@ -296,7 +296,15 @@
       "Bash(grep -n '$balances\\\\|foreach\\($requests\\\\|@foreach\\($balances\\\\|status ===\\\\|'\\\\''pending_hr'\\\\''\\\\|status_label\\\\|statusLabel' resources/views/livewire/time-off/my-time-off.blade.php)",
       "Bash(vendor/bin/pint app/Services/LeaveService.php app/Livewire/TimeOff/MyTimeOff.php app/Livewire/TimeOff/AllTimeOff.php app/Livewire/TimeOff/TeamTimeOff.php app/Models/LeaveAttachment.php app/Models/LeaveRequest.php app/Notifications/LeaveRequestNotification.php --format agent)",
       "Bash(vendor/bin/pint tests/Feature/LeaveAttachmentAndMoreInfoTest.php --format agent)",
-      "Bash(vendor/bin/pint app/ database/ resources/ --dirty --format agent)"
+      "Bash(vendor/bin/pint app/ database/ resources/ --dirty --format agent)",
+      "Bash(grep -n '^use App\\\\\\\\\\\\|public string $role\\\\|'\\\\''role'\\\\'' =>\\\\|UserRole::' app/Livewire/Employees/EmployeeCreate.php)",
+      "Bash(grep -n 'public string $role\\\\b\\\\|this->role = \\\\|this->role =' app/Livewire/Employees/EmployeeCreate.php)",
+      "Bash(grep -n \"UserRole::\\\\|^use Illuminate\\\\\\\\\\\\\\\\Validation\\\\\\\\\\\\\\\\Rule\" app/Livewire/Employees/EmployeeCreate.php)",
+      "Bash(grep -n '$this->role\\\\b\\\\|\\\\$role\\\\b' app/Livewire/Employees/EmployeeCreate.php)",
+      "Bash(grep -n '$role\\\\b' resources/views/livewire/employees/employee-create.blade.php)",
+      "Bash(grep -n 'public string $status\\\\|public string $ot_tracking_source' app/Livewire/Employees/EmployeeCreate.php)",
+      "Bash(vendor/bin/pint app/Livewire/Employees/EmployeeCreate.php tests/Feature/EmployeeCreateRoleTest.php --format agent)",
+      "Bash(vendor/bin/pint app/ --dirty --format agent)"
     ],
     "additionalDirectories": [
       "C:\\Users\\91937\\Desktop\\xamp\\htdocs\\mahaigr-v2\\includes",

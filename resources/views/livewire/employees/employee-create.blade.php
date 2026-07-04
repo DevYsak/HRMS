@@ -20,9 +20,9 @@
                 <flux:input wire:model="name" label="Full Name" placeholder="e.g. John Doe" required />
                 <flux:input wire:model="email" type="email" label="Email Address" placeholder="e.g. john@conexus.com"
                     required />
-                <flux:select wire:model="role" label="System Role">
-                    @foreach($roles as $roleCase)
-                        <option value="{{ $roleCase->value }}">{{ $roleCase->label() }}</option>
+                <flux:select wire:model="roleId" label="System Role">
+                    @foreach($roles as $roleOption)
+                        <option value="{{ $roleOption->id }}">{{ $roleOption->name }}</option>
                     @endforeach
                 </flux:select>
             </div>

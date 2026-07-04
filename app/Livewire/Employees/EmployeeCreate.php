@@ -13,6 +13,7 @@ use App\Models\LeaveBalance;
 use App\Models\LeaveType;
 use App\Models\Office;
 use App\Models\ProbationSetting;
+use App\Models\Role;
 use App\Models\SalaryCycle;
 use App\Models\SalaryStructure;
 use App\Models\ShiftSetting;
@@ -51,7 +52,7 @@ class EmployeeCreate extends Component
 
     public string $email = '';
 
-    public string $role = 'employee';
+    public string $roleId = '';
 
     // ── Personal profile (§3.1) ──────────────────────────
     public string $employee_id = '';
@@ -139,6 +140,8 @@ class EmployeeCreate extends Component
         $this->employee_id = 'CNX-'.str_pad($lastId + 1, 4, '0', STR_PAD_LEFT);
 
         // Pre-select defaults
+        $this->roleId = (string) (Role::where('slug', 'employee')->where('is_active', true)->value('id') ?? '');
+
         $defaultCycle = SalaryCycle::where('is_default', true)->where('is_active', true)->first()
             ?? SalaryCycle::where('is_active', true)->first();
         $this->salary_cycle_id = (string) ($defaultCycle?->id ?? '');
@@ -201,7 +204,7 @@ class EmployeeCreate extends Component
         $this->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', Rule::unique('users', 'email')->whereNull('deleted_at')],
-            'role' => ['required', 'string'],
+            'roleId' => ['required', Rule::exists('roles', 'id')->where('is_active', true)],
             'employee_id' => ['required', 'string', 'unique:employees,employee_id'],
             'employee_code' => ['nullable', 'integer', 'min:1', 'max:65535', 'unique:employees,employee_code'],
             'phone' => ['nullable', 'string', 'max:30'],
@@ -240,12 +243,14 @@ class EmployeeCreate extends Component
         $photoPath = $this->photo?->store('employee-photos', 'public');
 
         $plainPassword = app(PasswordService::class)->generate();
+        $chosenRole = Role::findOrFail($this->roleId);
 
         $user = User::create([
             'name' => $this->name,
             'email' => $this->email,
             'password' => Hash::make($plainPassword),
-            'role' => UserRole::from($this->role),
+            'role' => $chosenRole->legacyBucket(),
+            'role_id' => $chosenRole->id,
         ]);
 
         app(PasswordService::class)->recordHistory($user, $user->password, Auth::user());
@@ -358,7 +363,7 @@ class EmployeeCreate extends Component
                 UserRole::Director,
                 UserRole::Manager,
             ])->get(),
-            'roles' => UserRole::cases(),
+            'roles' => Role::where('is_active', true)->orderBy('name')->get(),
             'statuses' => EmployeeStatus::cases(),
             'employmentTypes' => EmploymentType::active()->get(),
             'workModes' => WorkMode::active()->get(),
