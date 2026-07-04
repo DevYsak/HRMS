@@ -4,11 +4,14 @@ namespace App\Notifications;
 
 use App\Models\OtRequest;
 use App\Notifications\Concerns\SendsMailChannel;
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Notification;
+use Illuminate\Queue\SerializesModels;
 
-class OtRequestNotification extends Notification
+class OtRequestNotification extends Notification implements ShouldQueue
 {
-    use SendsMailChannel;
+    use Queueable, SendsMailChannel, SerializesModels;
 
     public function __construct(public readonly OtRequest $otRequest) {}
 

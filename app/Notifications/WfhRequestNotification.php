@@ -4,11 +4,14 @@ namespace App\Notifications;
 
 use App\Models\WfhRequest;
 use App\Notifications\Concerns\SendsMailChannel;
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Notification;
+use Illuminate\Queue\SerializesModels;
 
-class WfhRequestNotification extends Notification
+class WfhRequestNotification extends Notification implements ShouldQueue
 {
-    use SendsMailChannel;
+    use Queueable, SendsMailChannel, SerializesModels;
 
     public function __construct(public readonly WfhRequest $wfhRequest) {}
 

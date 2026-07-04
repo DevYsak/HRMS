@@ -3,11 +3,13 @@
 namespace App\Notifications;
 
 use App\Notifications\Concerns\SendsMailChannel;
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Notification;
 
-class AttendanceRegularisationNotification extends Notification
+class AttendanceRegularisationNotification extends Notification implements ShouldQueue
 {
-    use SendsMailChannel;
+    use Queueable, SendsMailChannel;
 
     public function __construct(
         public readonly string $employeeName,

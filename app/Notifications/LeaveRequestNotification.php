@@ -4,11 +4,14 @@ namespace App\Notifications;
 
 use App\Models\LeaveRequest;
 use App\Notifications\Concerns\SendsMailChannel;
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Notification;
+use Illuminate\Queue\SerializesModels;
 
-class LeaveRequestNotification extends Notification
+class LeaveRequestNotification extends Notification implements ShouldQueue
 {
-    use SendsMailChannel;
+    use Queueable, SendsMailChannel, SerializesModels;
 
     public function __construct(public readonly LeaveRequest $leaveRequest) {}
 

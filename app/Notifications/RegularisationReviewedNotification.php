@@ -5,11 +5,14 @@ namespace App\Notifications;
 use App\Models\AttendanceRegularisation;
 use App\Notifications\Concerns\SendsMailChannel;
 use Carbon\Carbon;
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Notification;
+use Illuminate\Queue\SerializesModels;
 
-class RegularisationReviewedNotification extends Notification
+class RegularisationReviewedNotification extends Notification implements ShouldQueue
 {
-    use SendsMailChannel;
+    use Queueable, SendsMailChannel, SerializesModels;
 
     public function __construct(public AttendanceRegularisation $regularisation) {}
 
