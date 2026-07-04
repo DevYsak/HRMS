@@ -88,7 +88,7 @@ class TeamTimeOff extends Component
     {
         abort_unless(Auth::user()->canApproveLeave(), 403);
 
-        $req = LeaveRequest::with(['employee.user', 'leaveType', 'paymentAuditLogs.changedByUser'])->findOrFail($id);
+        $req = LeaveRequest::with(['employee.user', 'leaveType', 'paymentAuditLogs.changedByUser', 'reviewer', 'hrReviewer', 'attachments'])->findOrFail($id);
 
         $this->selectedRequestId = $id;
         $this->selectedRequest = $req;
@@ -122,6 +122,33 @@ class TeamTimeOff extends Component
         ]);
 
         $this->updateStatus('rejected');
+    }
+
+    /** Ask the employee for more information instead of deciding outright. */
+    public function requestMoreInfo(): void
+    {
+        $this->validate([
+            'reviewer_comment' => ['required', 'min:5'],
+        ], [
+            'reviewer_comment.required' => 'A comment is required to explain what information is needed.',
+        ]);
+
+        abort_unless($this->selectedRequestId !== null, 422);
+        abort_unless(Auth::user()->canApproveLeave(), 403);
+
+        $leaveRequest = LeaveRequest::findOrFail($this->selectedRequestId);
+
+        try {
+            app(LeaveService::class)->requestMoreInfo($leaveRequest, Auth::id(), $this->reviewer_comment);
+        } catch (\DomainException $exception) {
+            $this->addError('reviewer_comment', $exception->getMessage());
+
+            return;
+        }
+
+        $this->closeReviewModal();
+        \Flux::toast('More information requested from the employee.', variant: 'warning');
+        $this->resetPage();
     }
 
     public function closeReviewModal(): void

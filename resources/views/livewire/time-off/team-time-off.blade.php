@@ -467,6 +467,64 @@
                         <p class="text-xs text-zinc-400 mb-1">Employee's reason:</p>
                         <p class="text-sm text-zinc-700 italic dark:text-zinc-300">"{{ $selectedRequest->reason }}"</p>
                     </div>
+
+                    {{-- Documents --}}
+                    @if($selectedRequest->attachments->isNotEmpty())
+                        <div class="pt-2 border-t border-zinc-200 dark:border-zinc-700">
+                            <p class="text-xs text-zinc-400 mb-1">Documents:</p>
+                            <div class="space-y-1">
+                                @foreach($selectedRequest->attachments as $att)
+                                    <a href="{{ asset('storage/'.$att->path) }}" target="_blank" download
+                                        class="flex items-center gap-1.5 text-xs text-indigo-600 dark:text-indigo-400 hover:underline">
+                                        <flux:icon :name="$att->icon()" class="size-3.5" />
+                                        {{ $att->typeLabel() }} <span class="text-zinc-400">({{ $att->humanSize() }})</span>
+                                    </a>
+                                @endforeach
+                            </div>
+                        </div>
+                    @elseif($selectedRequest->attachment_path)
+                        <div class="pt-2 border-t border-zinc-200 dark:border-zinc-700">
+                            <a href="{{ asset('storage/'.$selectedRequest->attachment_path) }}" target="_blank"
+                                class="flex items-center gap-1.5 text-xs text-indigo-600 dark:text-indigo-400 hover:underline">
+                                <flux:icon.paper-clip class="size-3.5" /> View Attachment
+                            </a>
+                        </div>
+                    @endif
+                </div>
+
+                {{-- Approval Timeline --}}
+                <div>
+                    <h4 class="text-xs font-bold text-zinc-500 uppercase tracking-wide mb-3">Approval Timeline</h4>
+                    <div class="space-y-3">
+                        <div class="flex items-start gap-3">
+                            <div class="size-2 rounded-full bg-indigo-500 mt-1.5 shrink-0"></div>
+                            <div>
+                                <div class="text-xs font-semibold text-zinc-700 dark:text-zinc-300">Submitted</div>
+                                <div class="text-[11px] text-zinc-400">{{ $selectedRequest->created_at->format('d M Y, h:i A') }}</div>
+                            </div>
+                        </div>
+                        @if($selectedRequest->reviewer)
+                            <div class="flex items-start gap-3">
+                                <div class="size-2 rounded-full {{ in_array($selectedRequest->status, ['approved', 'pending_hr']) ? 'bg-emerald-500' : 'bg-red-500' }} mt-1.5 shrink-0"></div>
+                                <div>
+                                    <div class="text-xs font-semibold text-zinc-700 dark:text-zinc-300">{{ $selectedRequest->status === 'pending_hr' ? 'Manager Approved → Pending HR' : ucfirst(str_replace('_', ' ', $selectedRequest->status)) }}</div>
+                                    <div class="text-[11px] text-zinc-400">by {{ $selectedRequest->reviewer->name }}</div>
+                                    @if($selectedRequest->reviewer_comment)
+                                        <div class="text-[11px] text-zinc-500 italic">"{{ $selectedRequest->reviewer_comment }}"</div>
+                                    @endif
+                                </div>
+                            </div>
+                        @endif
+                        @if($selectedRequest->hrReviewer)
+                            <div class="flex items-start gap-3">
+                                <div class="size-2 rounded-full bg-emerald-500 mt-1.5 shrink-0"></div>
+                                <div>
+                                    <div class="text-xs font-semibold text-zinc-700 dark:text-zinc-300">HR Approved</div>
+                                    <div class="text-[11px] text-zinc-400">by {{ $selectedRequest->hrReviewer->name }} · {{ $selectedRequest->hr_reviewed_at?->format('d M Y, h:i A') }}</div>
+                                </div>
+                            </div>
+                        @endif
+                    </div>
                 </div>
 
                 {{-- Error --}}
@@ -499,6 +557,12 @@
                         class="flex-1 px-4 py-2 text-sm font-semibold text-red-600 bg-red-50 border border-red-200 rounded-xl hover:bg-red-100 transition-colors disabled:opacity-60 dark:bg-red-950/30 dark:border-red-800 dark:text-red-400">
                         <span wire:loading.remove wire:target="reject">Reject</span>
                         <span wire:loading wire:target="reject">Rejecting…</span>
+                    </button>
+                    <button type="button" wire:click="requestMoreInfo"
+                        wire:loading.attr="disabled" wire:target="requestMoreInfo"
+                        title="Ask the employee for more information"
+                        class="px-3 py-2 text-sm font-semibold text-orange-600 bg-orange-50 border border-orange-200 rounded-xl hover:bg-orange-100 transition-colors disabled:opacity-60 dark:bg-orange-950/30 dark:border-orange-800 dark:text-orange-400">
+                        <flux:icon.question-mark-circle class="size-4" />
                     </button>
                     <button type="button" wire:click="approve"
                         wire:loading.attr="disabled" wire:target="approve"

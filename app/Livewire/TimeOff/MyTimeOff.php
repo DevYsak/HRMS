@@ -4,6 +4,7 @@ namespace App\Livewire\TimeOff;
 
 use App\Models\DecemberMandatoryDay;
 use App\Models\HolidayPaySetting;
+use App\Models\HolidayWorkRequest;
 use App\Models\LeaveBalance;
 use App\Models\LeaveEncashment;
 use App\Models\LeaveType;
@@ -61,7 +62,28 @@ class MyTimeOff extends Component
 
     public string $employee_remarks = '';
 
+    /** Legacy single attachment slot — kept for any external reference to $attachment. */
     public $attachment = null;
+
+    // Categorised attachments (each previewed before submit).
+    public $attachmentMedical = null;
+
+    public $attachmentManagerLetter = null;
+
+    public $attachmentDoctorCertificate = null;
+
+    public $attachmentTravelTicket = null;
+
+    public $attachmentSupporting = null;
+
+    public $attachmentVoiceNote = null;
+
+    // ---- Resubmission (after "more information requested") ----
+    public ?int $resubmitId = null;
+
+    public string $resubmit_reason = '';
+
+    public $resubmitAttachment = null;
 
     // ---- Filters ----
     public string $filterStatus = '';
@@ -157,8 +179,6 @@ class MyTimeOff extends Component
 
     protected function rules(): array
     {
-        $leaveType = LeaveType::find($this->leave_type_id);
-
         return [
             'leave_type_id' => 'required|exists:leave_types,id',
             'start_date' => 'required|date|after_or_equal:today',
@@ -168,8 +188,12 @@ class MyTimeOff extends Component
             'requested_leave_status' => 'required|in:paid,unpaid',
             'reason' => 'required|min:5',
             'employee_remarks' => 'nullable|string|max:1000',
-            'attachment' => ($leaveType?->attachment_required ? 'required' : 'nullable')
-                .'|nullable|file|max:5120|mimes:pdf,jpg,jpeg,png',
+            'attachmentMedical' => 'nullable|file|max:10240|mimes:pdf,jpg,jpeg,png,zip',
+            'attachmentManagerLetter' => 'nullable|file|max:10240|mimes:pdf,jpg,jpeg,png,zip',
+            'attachmentDoctorCertificate' => 'nullable|file|max:10240|mimes:pdf,jpg,jpeg,png,zip',
+            'attachmentTravelTicket' => 'nullable|file|max:10240|mimes:pdf,jpg,jpeg,png,zip',
+            'attachmentSupporting' => 'nullable|file|max:10240|mimes:pdf,jpg,jpeg,png,zip',
+            'attachmentVoiceNote' => 'nullable|file|max:10240|mimes:mp3,wav,ogg,m4a,mp4,webm',
             'encash_leave_type_id' => $this->showEncashModal
                 ? 'required|exists:leave_types,id'
                 : 'nullable',
@@ -189,6 +213,8 @@ class MyTimeOff extends Component
             'leave_type_id', 'start_date', 'end_date', 'is_half_day',
             'half_day_period', 'requested_leave_status', 'reason',
             'employee_remarks', 'attachment',
+            'attachmentMedical', 'attachmentManagerLetter', 'attachmentDoctorCertificate',
+            'attachmentTravelTicket', 'attachmentSupporting', 'attachmentVoiceNote',
         ]);
         $this->resetErrorBag();
         $this->resetValidation();
@@ -267,10 +293,34 @@ class MyTimeOff extends Component
 
         $leaveType = LeaveType::findOrFail($this->leave_type_id);
 
-        // Store attachment
-        $attachmentPath = null;
-        if ($this->attachment) {
-            $attachmentPath = $this->attachment->store('leave-attachments', 'public');
+        // Store every categorised attachment slot that was filled, with a
+        // preview-friendly type tag for each.
+        $slots = [
+            'medical_certificate' => $this->attachmentMedical,
+            'manager_letter' => $this->attachmentManagerLetter,
+            'doctor_certificate' => $this->attachmentDoctorCertificate,
+            'travel_ticket' => $this->attachmentTravelTicket,
+            'supporting_document' => $this->attachmentSupporting,
+            'voice_note' => $this->attachmentVoiceNote,
+        ];
+        $attachmentsPayload = [];
+        foreach ($slots as $type => $file) {
+            if (! $file) {
+                continue;
+            }
+            $attachmentsPayload[] = [
+                'type' => $type,
+                'path' => $file->store('leave-attachments', 'public'),
+                'original_name' => $file->getClientOriginalName(),
+                'mime_type' => $file->getMimeType(),
+                'size' => $file->getSize(),
+            ];
+        }
+
+        if ($leaveType->attachment_required && $attachmentsPayload === []) {
+            $this->addError('attachmentMedical', "An attachment is required for '{$leaveType->name}'.");
+
+            return;
         }
 
         try {
@@ -283,8 +333,9 @@ class MyTimeOff extends Component
                 $this->is_half_day,
                 $this->half_day_period ?: null,
                 $this->requested_leave_status,
-                $attachmentPath,
+                null,
                 $this->employee_remarks ?: null,
+                $attachmentsPayload,
             );
         } catch (\DomainException $exception) {
             $this->addError('request', $exception->getMessage());
@@ -307,6 +358,68 @@ class MyTimeOff extends Component
         $this->closeRequestModal();
         \Flux::toast('Leave request submitted successfully.');
         $this->resetPage();
+    }
+
+    // ================================================================
+    // Resubmit ("more information requested")
+    // ================================================================
+
+    public function openResubmit(int $id): void
+    {
+        $employee = Auth::user()->employee;
+        $request = $employee?->leaveRequests()->where('status', 'more_info_requested')->find($id);
+        if (! $request) {
+            return;
+        }
+
+        $this->resubmitId = $id;
+        $this->resubmit_reason = $request->reason;
+        $this->resubmitAttachment = null;
+        $this->resetErrorBag();
+    }
+
+    public function closeResubmit(): void
+    {
+        $this->resubmitId = null;
+        $this->resetErrorBag();
+    }
+
+    public function submitResubmit(LeaveService $service): void
+    {
+        $this->validate([
+            'resubmit_reason' => 'required|min:5',
+            'resubmitAttachment' => 'nullable|file|max:10240|mimes:pdf,jpg,jpeg,png,zip',
+        ]);
+
+        $employee = Auth::user()->employee;
+        $request = $employee?->leaveRequests()->where('status', 'more_info_requested')->find($this->resubmitId);
+        if (! $request) {
+            $this->closeResubmit();
+
+            return;
+        }
+
+        $attachments = [];
+        if ($this->resubmitAttachment) {
+            $attachments[] = [
+                'type' => 'supporting_document',
+                'path' => $this->resubmitAttachment->store('leave-attachments', 'public'),
+                'original_name' => $this->resubmitAttachment->getClientOriginalName(),
+                'mime_type' => $this->resubmitAttachment->getMimeType(),
+                'size' => $this->resubmitAttachment->getSize(),
+            ];
+        }
+
+        try {
+            $service->resubmit($request, $this->resubmit_reason, $attachments);
+        } catch (\DomainException $e) {
+            $this->addError('resubmit_reason', $e->getMessage());
+
+            return;
+        }
+
+        $this->closeResubmit();
+        \Flux::toast('Request resubmitted for review.', variant: 'success');
     }
 
     // ================================================================
@@ -409,7 +522,7 @@ class MyTimeOff extends Component
             : collect();
 
         $requests = $employee
-            ? $employee->leaveRequests()->with(['leaveType', 'reviewer', 'hrReviewer', 'paymentAuditLogs.changedByUser'])
+            ? $employee->leaveRequests()->with(['leaveType', 'reviewer', 'hrReviewer', 'paymentAuditLogs.changedByUser', 'attachments'])
                 ->when($this->filterStatus, fn ($q) => $q->where('status', $this->filterStatus))
                 ->when($this->filterTypeId, fn ($q) => $q->where('leave_type_id', $this->filterTypeId))
                 ->when($this->search, fn ($q) => $q->where(function ($q2) {
@@ -662,6 +775,12 @@ class MyTimeOff extends Component
             'mandatoryDays' => $mandatoryDays,
             'rangeHolidays' => $rangeHolidays,
             'holidayPaySettings' => HolidayPaySetting::current(),
+            'holidayWorkedCount' => $employee
+                ? HolidayWorkRequest::where('employee_id', $employee->id)
+                    ->where('status', 'approved')
+                    ->whereYear('work_date', now()->year)
+                    ->count()
+                : 0,
         ])->layout('layouts.app', ['title' => 'My Time Off']);
     }
 }

@@ -237,6 +237,13 @@
                 'color' => '#f59e0b',
                 'sub' => $pendingCount > 0 ? 'Awaiting approval' : 'All caught up',
             ],
+            [
+                'label' => 'Holiday Worked',
+                'value' => $holidayWorkedCount,
+                'icon' => 'briefcase',
+                'color' => '#14b8a6',
+                'sub' => $holidayWorkedCount > 0 ? 'Approved this year' : 'None this year',
+            ],
         ];
     @endphp
     <div class="pulse-margin grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -560,6 +567,7 @@
                                             'pending' => ['bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400', 'clock', 'Pending'],
                                             'pending_hr' => ['bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400', 'clock', 'Pending HR'],
                                             'cancelled' => ['bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400', 'x-circle', 'Cancelled'],
+                                            'more_info_requested' => ['bg-orange-50 text-orange-700 dark:bg-orange-900/20 dark:text-orange-400', 'question-mark-circle', 'More Info Needed'],
                                             default => ['bg-zinc-50 text-zinc-700', 'question-mark-circle', $req->status],
                                         };
                                     @endphp
@@ -568,6 +576,19 @@
                                         <flux:icon :name="$statusIcon" class="size-3" />
                                         {{ $statusLabel }}
                                     </span>
+                                    @if($req->status === 'more_info_requested' && $req->reviewer_comment)
+                                        <p class="mt-1 max-w-[220px] truncate text-[10px] italic text-orange-500" title="{{ $req->reviewer_comment }}">“{{ $req->reviewer_comment }}”</p>
+                                    @endif
+                                    @if($req->attachments->isNotEmpty())
+                                        <div class="mt-1 flex flex-wrap gap-1">
+                                            @foreach($req->attachments as $att)
+                                                <a href="{{ asset('storage/'.$att->path) }}" target="_blank" title="{{ $att->typeLabel() }}: {{ $att->original_name }}"
+                                                    class="inline-flex items-center gap-1 rounded bg-zinc-50 px-1.5 py-0.5 text-[9px] font-semibold text-zinc-500 hover:bg-zinc-100 dark:bg-zinc-800 dark:text-zinc-400">
+                                                    <flux:icon :name="$att->icon()" class="size-2.5" /> {{ $att->typeLabel() }}
+                                                </a>
+                                            @endforeach
+                                        </div>
+                                    @endif
                                 </td>
                                 <td class="px-4 py-4">
                                     @if($req->reviewer)
@@ -589,6 +610,13 @@
                                     <div class="flex items-center justify-end gap-3">
                                         <span
                                             class="text-xs font-medium text-zinc-400">{{ $req->created_at->format('d M Y') }}</span>
+                                        @if($req->status === 'more_info_requested')
+                                            <button wire:click="openResubmit({{ $req->id }})"
+                                                class="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold text-orange-600 bg-orange-50 hover:bg-orange-100 dark:bg-orange-900/20 dark:text-orange-400 rounded-lg transition-colors">
+                                                <flux:icon.pencil-square class="size-3" />
+                                                Provide Info
+                                            </button>
+                                        @endif
                                         @if(in_array($req->status, ['pending', 'pending_hr', 'approved']))
                                             <button wire:click="cancelRequest({{ $req->id }})"
                                                 wire:confirm="Cancel this leave request?"
@@ -827,6 +855,36 @@
                     <div class="mt-5 flex justify-end gap-2">
                         <button @click="$wire.set('showHolidayWork', false)" class="rounded-xl border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-600 transition hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300">Cancel</button>
                         <flux:button wire:click="submitHolidayWork" variant="primary">Send to Manager &amp; HR</flux:button>
+                    </div>
+                </div>
+            </div>
+        @endif
+
+        {{-- Resubmit ("more information requested") modal --}}
+        @if($resubmitId)
+            <div class="fixed inset-0 z-50 flex items-center justify-center p-4" x-data x-on:keydown.escape.window="$wire.closeResubmit()">
+                <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="$wire.closeResubmit()"></div>
+                <div class="relative w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl ring ring-black/5 dark:bg-zinc-900">
+                    <div class="mb-4 flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <span class="inline-flex size-8 items-center justify-center rounded-xl bg-orange-50 text-orange-600"><flux:icon.question-mark-circle class="size-4" /></span>
+                            <flux:heading size="lg">Provide More Information</flux:heading>
+                        </div>
+                        <button @click="$wire.closeResubmit()" class="text-zinc-400 hover:text-zinc-600"><flux:icon.x-mark class="size-5" /></button>
+                    </div>
+                    <div class="space-y-3">
+                        <flux:textarea wire:model="resubmit_reason" label="Updated Reason" rows="3" />
+                        @error('resubmit_reason')<p class="text-xs text-rose-500">{{ $message }}</p>@enderror
+                        <div>
+                            <label class="mb-1 block text-xs font-semibold text-zinc-500 dark:text-zinc-400">Additional Attachment (optional)</label>
+                            <input type="file" wire:model="resubmitAttachment" accept=".pdf,.jpg,.jpeg,.png,.zip"
+                                class="block w-full text-xs text-zinc-500 file:mr-2 file:rounded-lg file:border-0 file:bg-orange-50 file:px-2.5 file:py-1.5 file:text-xs file:font-bold file:text-orange-600 hover:file:bg-orange-100 dark:text-zinc-400">
+                            @error('resubmitAttachment')<p class="mt-1 text-xs text-rose-500">{{ $message }}</p>@enderror
+                        </div>
+                    </div>
+                    <div class="mt-5 flex justify-end gap-2">
+                        <button @click="$wire.closeResubmit()" class="rounded-xl border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-600 transition hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300">Cancel</button>
+                        <flux:button wire:click="submitResubmit" variant="primary">Resubmit for Review</flux:button>
                     </div>
                 </div>
             </div>
@@ -1081,24 +1139,59 @@
                         <flux:textarea wire:model="employee_remarks" label="Additional Remarks"
                             placeholder="Any other notes for the approver (optional)..." rows="2" />
 
-                        {{-- Attachment --}}
-                        @if($selectedType?->attachment_required)
-                            <flux:field>
+                        {{-- Attachments — categorised, each previewed before submit --}}
+                        <div class="rounded-xl border border-zinc-100 bg-zinc-50/60 p-4 dark:border-zinc-800 dark:bg-zinc-900/40">
+                            <div class="mb-2 flex items-center justify-between">
                                 <flux:label>
-                                    Attachment <span class="text-red-500">*</span>
-                                    <span class="ml-1 text-xs font-normal text-zinc-400">(PDF, JPG, PNG — max 5 MB)</span>
+                                    Attachments
+                                    @if($selectedType?->attachment_required)<span class="text-red-500">*</span>@endif
                                 </flux:label>
-                                <flux:input wire:model="attachment" type="file" accept=".pdf,.jpg,.jpeg,.png" />
-                                @error('attachment') <flux:error>{{ $message }}</flux:error> @enderror
-                            </flux:field>
-                        @elseif($selectedType)
-                            <flux:field>
-                                <flux:label>Attachment <span class="ml-1 text-xs font-normal text-zinc-400">(optional — PDF,
-                                        JPG, PNG)</span></flux:label>
-                                <flux:input wire:model="attachment" type="file" accept=".pdf,.jpg,.jpeg,.png" />
-                                @error('attachment') <flux:error>{{ $message }}</flux:error> @enderror
-                            </flux:field>
-                        @endif
+                                <span class="text-[10px] font-semibold text-zinc-400">PDF, image or ZIP — max 10 MB each</span>
+                            </div>
+                            @error('attachmentMedical') <flux:error class="mb-2">{{ $message }}</flux:error> @enderror
+                            @php
+                                $attachmentSlots = [
+                                    ['attachmentMedical', 'Medical Certificate', $attachmentMedical],
+                                    ['attachmentManagerLetter', 'Manager Letter', $attachmentManagerLetter],
+                                    ['attachmentDoctorCertificate', 'Doctor Certificate', $attachmentDoctorCertificate],
+                                    ['attachmentTravelTicket', 'Travel Ticket', $attachmentTravelTicket],
+                                    ['attachmentSupporting', 'Supporting Document', $attachmentSupporting],
+                                ];
+                            @endphp
+                            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                @foreach($attachmentSlots as [$prop, $label, $file])
+                                    <div>
+                                        <label class="mb-1 block text-xs font-semibold text-zinc-500 dark:text-zinc-400">{{ $label }}</label>
+                                        <input type="file" wire:model="{{ $prop }}" accept=".pdf,.jpg,.jpeg,.png,.zip"
+                                            class="block w-full text-xs text-zinc-500 file:mr-2 file:rounded-lg file:border-0 file:bg-orange-50 file:px-2.5 file:py-1.5 file:text-xs file:font-bold file:text-orange-600 hover:file:bg-orange-100 dark:text-zinc-400">
+                                        @error($prop) <flux:error>{{ $message }}</flux:error> @enderror
+                                        {{-- Preview --}}
+                                        @if($file)
+                                            <div class="mt-1.5 flex items-center gap-2 rounded-lg bg-white px-2 py-1.5 text-[11px] dark:bg-zinc-800">
+                                                @if(str_starts_with($file->getMimeType() ?? '', 'image/'))
+                                                    <img src="{{ $file->temporaryUrl() }}" class="size-8 rounded object-cover" alt="preview">
+                                                @else
+                                                    <flux:icon.document-text class="size-4 shrink-0 text-orange-400" />
+                                                @endif
+                                                <span class="truncate text-zinc-600 dark:text-zinc-300">{{ $file->getClientOriginalName() }}</span>
+                                            </div>
+                                        @endif
+                                    </div>
+                                @endforeach
+                                <div>
+                                    <label class="mb-1 block text-xs font-semibold text-zinc-500 dark:text-zinc-400">Voice Note <span class="font-normal text-zinc-400">(optional)</span></label>
+                                    <input type="file" wire:model="attachmentVoiceNote" accept=".mp3,.wav,.ogg,.m4a"
+                                        class="block w-full text-xs text-zinc-500 file:mr-2 file:rounded-lg file:border-0 file:bg-orange-50 file:px-2.5 file:py-1.5 file:text-xs file:font-bold file:text-orange-600 hover:file:bg-orange-100 dark:text-zinc-400">
+                                    @error('attachmentVoiceNote') <flux:error>{{ $message }}</flux:error> @enderror
+                                    @if($attachmentVoiceNote)
+                                        <div class="mt-1.5 flex items-center gap-2 rounded-lg bg-white px-2 py-1.5 text-[11px] dark:bg-zinc-800">
+                                            <flux:icon.microphone class="size-4 shrink-0 text-orange-400" />
+                                            <span class="truncate text-zinc-600 dark:text-zinc-300">{{ $attachmentVoiceNote->getClientOriginalName() }}</span>
+                                        </div>
+                                    @endif
+                                </div>
+                            </div>
+                        </div>
 
                         @error('request')
                             <div

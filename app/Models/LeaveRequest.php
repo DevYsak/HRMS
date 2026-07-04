@@ -60,6 +60,11 @@ class LeaveRequest extends Model
         return $this->belongsTo(User::class, 'payment_status_changed_by');
     }
 
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(LeaveAttachment::class);
+    }
+
     public function escalations(): HasMany
     {
         return $this->hasMany(LeaveEscalation::class);

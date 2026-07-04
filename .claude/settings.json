@@ -289,7 +289,14 @@
       "Bash(vendor/bin/pint tests/Feature/HolidayWorkTest.php app/Livewire/Holidays/HolidayPaySettings.php --format agent)",
       "Bash(grep -n 'public string $role\\\\|'\\\\''roles'\\\\'' =>\\\\|'\\\\''role'\\\\'' =>' app/Livewire/Employees/EmployeeEdit.php)",
       "Bash(grep -n '$this->role = ' app/Livewire/Employees/EmployeeEdit.php)",
-      "Bash(vendor/bin/pint app/Models/Role.php app/Models/User.php app/Livewire/Employees/EmployeeEdit.php tests/Feature/CustomRoleAssignmentTest.php --format agent)"
+      "Bash(vendor/bin/pint app/Models/Role.php app/Models/User.php app/Livewire/Employees/EmployeeEdit.php tests/Feature/CustomRoleAssignmentTest.php --format agent)",
+      "Bash(grep -n ''\\\\''pending'\\\\''\\\\|'\\\\''approved'\\\\''\\\\|'\\\\''rejected'\\\\''\\\\|'\\\\''cancelled'\\\\''\\\\|'\\\\''withdrawn'\\\\''\\\\|match \\($this' app/Notifications/LeaveRequestNotification.php)",
+      "Bash(grep -n \"^use App\\\\\\\\\\\\\\\\Services\\\\\\\\\\\\\\\\LeaveService\" app/Livewire/TimeOff/MyTimeOff.php)",
+      "Bash(grep -n \"use App\\\\\\\\\\\\\\\\Services\" app/Livewire/TimeOff/MyTimeOff.php)",
+      "Bash(grep -n '$balances\\\\|foreach\\($requests\\\\|@foreach\\($balances\\\\|status ===\\\\|'\\\\''pending_hr'\\\\''\\\\|status_label\\\\|statusLabel' resources/views/livewire/time-off/my-time-off.blade.php)",
+      "Bash(vendor/bin/pint app/Services/LeaveService.php app/Livewire/TimeOff/MyTimeOff.php app/Livewire/TimeOff/AllTimeOff.php app/Livewire/TimeOff/TeamTimeOff.php app/Models/LeaveAttachment.php app/Models/LeaveRequest.php app/Notifications/LeaveRequestNotification.php --format agent)",
+      "Bash(vendor/bin/pint tests/Feature/LeaveAttachmentAndMoreInfoTest.php --format agent)",
+      "Bash(vendor/bin/pint app/ database/ resources/ --dirty --format agent)"
     ],
     "additionalDirectories": [
       "C:\\Users\\91937\\Desktop\\xamp\\htdocs\\mahaigr-v2\\includes",

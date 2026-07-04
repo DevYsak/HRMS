@@ -61,6 +61,15 @@ class LeaveRequestNotification extends Notification implements ShouldQueue
                 'icon' => 'x-circle',
                 'color' => 'orange',
             ],
+            'more_info_requested' => [
+                'type' => 'leave_request',
+                'title' => 'More Information Needed',
+                'body' => "Your {$type} request for {$days} day(s) needs more information before it can be reviewed.",
+                'action' => 'Respond',
+                'url' => $myUrl,
+                'icon' => 'question-mark-circle',
+                'color' => 'amber',
+            ],
             default => [
                 'type' => 'leave_request',
                 'title' => 'Leave Rejected',

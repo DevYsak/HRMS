@@ -79,9 +79,18 @@ class LeaveService
         string $requestedLeaveStatus = 'paid',
         ?string $attachmentPath = null,
         ?string $employeeRemarks = null,
+        array $attachments = [],
     ): LeaveRequest {
         $start = Carbon::parse($startDate);
         $end = Carbon::parse($endDate);
+
+        // Back-compat: if the caller only passed the new multi-attachment
+        // array, mirror its first file into attachment_path so the existing
+        // attachment_required check and any single-attachment consumer
+        // (reports, the AllTimeOff/TeamTimeOff legacy link) keep working.
+        if ($attachmentPath === null && $attachments !== []) {
+            $attachmentPath = $attachments[0]['path'] ?? null;
+        }
 
         // ── Policy Validations ────────────────────────────────────────────────
 
@@ -184,6 +193,19 @@ class LeaveService
             'status' => 'pending',
         ]);
 
+        foreach ($attachments as $file) {
+            if (empty($file['path'])) {
+                continue;
+            }
+            $request->attachments()->create([
+                'type' => $file['type'] ?? 'supporting_document',
+                'path' => $file['path'],
+                'original_name' => $file['original_name'] ?? basename($file['path']),
+                'mime_type' => $file['mime_type'] ?? null,
+                'size' => $file['size'] ?? 0,
+            ]);
+        }
+
         // Notify approvers
         $request->load(['employee.user', 'leaveType']);
         $manager = $employee->manager;
@@ -267,6 +289,73 @@ class LeaveService
 
             return $fresh;
         });
+    }
+
+    /**
+     * Manager/HR asks the employee for more information instead of deciding
+     * outright. Does not touch balances (nothing was ever deducted for a
+     * request that was never approved). The employee resubmits via
+     * resubmit(), which returns it to 'pending' for a fresh review.
+     */
+    public function requestMoreInfo(LeaveRequest $leaveRequest, int $reviewerId, string $comment): LeaveRequest
+    {
+        if (! in_array($leaveRequest->status, ['pending', 'pending_hr'], true)) {
+            throw new \DomainException('Only a pending leave request can have more information requested.');
+        }
+
+        $leaveRequest->update([
+            'status' => 'more_info_requested',
+            'reviewer_id' => $reviewerId,
+            'reviewer_comment' => $comment,
+        ]);
+
+        $fresh = $leaveRequest->fresh(['employee.user', 'leaveType']);
+        $fresh->employee->user->notify(new LeaveRequestNotification($fresh));
+
+        return $fresh;
+    }
+
+    /**
+     * Employee resubmits a request that had more information requested:
+     * updates the reason, appends any new attachments, and returns it to
+     * 'pending' for a fresh review cycle (clearing the prior reviewer note).
+     *
+     * @param  array<int, array{type:string,path:string,original_name:string,mime_type:?string,size:int}>  $newAttachments
+     */
+    public function resubmit(LeaveRequest $leaveRequest, string $reason, array $newAttachments = []): LeaveRequest
+    {
+        if ($leaveRequest->status !== 'more_info_requested') {
+            throw new \DomainException('Only a request awaiting more information can be resubmitted.');
+        }
+
+        $leaveRequest->update([
+            'reason' => $reason,
+            'status' => 'pending',
+            'reviewer_id' => null,
+            'reviewer_comment' => null,
+        ]);
+
+        foreach ($newAttachments as $file) {
+            if (empty($file['path'])) {
+                continue;
+            }
+            $leaveRequest->attachments()->create([
+                'type' => $file['type'] ?? 'supporting_document',
+                'path' => $file['path'],
+                'original_name' => $file['original_name'] ?? basename($file['path']),
+                'mime_type' => $file['mime_type'] ?? null,
+                'size' => $file['size'] ?? 0,
+            ]);
+        }
+
+        $fresh = $leaveRequest->fresh(['employee.user', 'leaveType']);
+        $manager = $fresh->employee->manager;
+        if ($manager) {
+            $manager->notify(new LeaveRequestNotification($fresh));
+        }
+        User::whereIn('role', ['hr_admin', 'super_admin'])->each(fn ($hr) => $hr->notify(new LeaveRequestNotification($fresh)));
+
+        return $fresh;
     }
 
     /**

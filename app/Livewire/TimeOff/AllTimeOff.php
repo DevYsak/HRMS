@@ -181,7 +181,7 @@ class AllTimeOff extends Component
 
         $this->viewingRequest = LeaveRequest::with([
             'employee.user', 'employee.department', 'leaveType', 'reviewer',
-            'hrReviewer', 'paymentAuditLogs.changedByUser',
+            'hrReviewer', 'paymentAuditLogs.changedByUser', 'attachments',
         ])->findOrFail($this->viewingId);
 
         \Flux::toast('Leave approved successfully.', variant: 'success');
@@ -211,10 +211,39 @@ class AllTimeOff extends Component
 
         $this->viewingRequest = LeaveRequest::with([
             'employee.user', 'employee.department', 'leaveType', 'reviewer',
-            'hrReviewer', 'paymentAuditLogs.changedByUser',
+            'hrReviewer', 'paymentAuditLogs.changedByUser', 'attachments',
         ])->findOrFail($this->viewingId);
 
         \Flux::toast('Leave rejected.', variant: 'danger');
+    }
+
+    /** Ask the employee for more information instead of deciding outright. */
+    public function requestMoreInfo(): void
+    {
+        $this->validate(
+            ['panelReviewComment' => ['required', 'min:5']],
+            ['panelReviewComment.required' => 'A comment is required to explain what information is needed.'],
+        );
+
+        abort_unless($this->viewingId !== null, 422);
+        abort_unless(Auth::user()->canApproveLeave(), 403);
+
+        $request = LeaveRequest::findOrFail($this->viewingId);
+
+        try {
+            app(LeaveService::class)->requestMoreInfo($request, Auth::id(), $this->panelReviewComment);
+        } catch (\DomainException $exception) {
+            $this->addError('panelReviewComment', $exception->getMessage());
+
+            return;
+        }
+
+        $this->viewingRequest = LeaveRequest::with([
+            'employee.user', 'employee.department', 'leaveType', 'reviewer',
+            'hrReviewer', 'paymentAuditLogs.changedByUser', 'attachments',
+        ])->findOrFail($this->viewingId);
+
+        \Flux::toast('More information requested from the employee.', variant: 'warning');
     }
 
     /** Apply HR payment status override on an already-open request. */
@@ -245,7 +274,7 @@ class AllTimeOff extends Component
 
         $this->viewingRequest = LeaveRequest::with([
             'employee.user', 'employee.department', 'leaveType', 'reviewer',
-            'hrReviewer', 'paymentAuditLogs.changedByUser',
+            'hrReviewer', 'paymentAuditLogs.changedByUser', 'attachments',
         ])->findOrFail($this->viewingId);
 
         $this->panelShowHrOverride = false;

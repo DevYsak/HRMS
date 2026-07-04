@@ -346,7 +346,20 @@
                                 </div>
                             @endif
 
-                            @if($viewingRequest->attachment_path)
+                            @if($viewingRequest->attachments->isNotEmpty())
+                                <div>
+                                    <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-wide mb-1">Documents</div>
+                                    <div class="space-y-1">
+                                        @foreach($viewingRequest->attachments as $att)
+                                            <a href="{{ asset('storage/'.$att->path) }}" target="_blank" download
+                                                class="flex items-center gap-1.5 text-xs text-indigo-600 dark:text-indigo-400 hover:underline">
+                                                <flux:icon :name="$att->icon()" class="size-3.5" />
+                                                {{ $att->typeLabel() }} <span class="text-zinc-400">({{ $att->humanSize() }})</span>
+                                            </a>
+                                        @endforeach
+                                    </div>
+                                </div>
+                            @elseif($viewingRequest->attachment_path)
                                 <a href="{{ asset('storage/'.$viewingRequest->attachment_path) }}" target="_blank"
                                     class="flex items-center gap-1.5 text-xs text-indigo-600 dark:text-indigo-400 hover:underline">
                                     <flux:icon.paper-clip class="size-3.5" />
@@ -504,6 +517,12 @@
                                 <flux:icon.x-circle class="size-4" />
                                 <span wire:loading.remove wire:target="quickReject">Reject</span>
                                 <span wire:loading wire:target="quickReject">Rejecting…</span>
+                            </button>
+                            <button type="button" wire:click="requestMoreInfo"
+                                wire:loading.attr="disabled" wire:target="requestMoreInfo"
+                                title="Ask the employee for more information"
+                                class="inline-flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-bold text-orange-600 bg-orange-50 hover:bg-orange-100 dark:bg-orange-900/20 dark:text-orange-400 rounded-xl transition-colors disabled:opacity-60">
+                                <flux:icon.question-mark-circle class="size-4" />
                             </button>
                         </div>
                     @else
