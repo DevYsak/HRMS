@@ -140,6 +140,38 @@
     @endif
 </div>
 
+{{-- ═══════════════ QUEUE WORKER HEALTH ═══════════════ --}}
+@php
+    [$qBadge, $qDot, $qLabel] = $queueOnline
+        ? ['bg-emerald-100 text-emerald-700', 'bg-emerald-500 animate-pulse', 'Online']
+        : ['bg-rose-100 text-rose-600', 'bg-rose-500', 'Offline'];
+@endphp
+<div class="mb-4 rounded-[18px] border {{ $queueOnline ? 'border-orange-100/70 bg-white' : 'border-rose-300 bg-rose-50/40' }} p-4 shadow-sm">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-3">
+            <span class="inline-flex size-10 shrink-0 items-center justify-center rounded-xl {{ $queueOnline ? 'bg-orange-50 text-orange-500' : 'bg-rose-100 text-rose-500' }}"><flux:icon.cog-6-tooth class="size-5" wire:loading.class="animate-spin" wire:target="$refresh" /></span>
+            <div>
+                <div class="flex items-center gap-2">
+                    <span class="text-sm font-black text-zinc-900">Queue Worker</span>
+                    <span class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-bold {{ $qBadge }}"><span class="size-1.5 rounded-full {{ $qDot }}"></span>{{ $qLabel }}</span>
+                </div>
+                <div class="text-[11px] text-zinc-500">
+                    @if($queueOnline)
+                        Last heartbeat {{ $queueHeartbeat }} · emails are being delivered in the background
+                    @else
+                        No heartbeat in the last 3 minutes — queued emails are not being sent. Start the worker on the server.
+                    @endif
+                </div>
+            </div>
+        </div>
+        <div class="flex items-center gap-3">
+            <div class="text-center"><div class="text-lg font-black tabular-nums {{ $queuePending > 20 ? 'text-amber-600' : 'text-zinc-900' }}">{{ $queuePending }}</div><div class="text-[9px] font-bold uppercase tracking-wide text-zinc-400">Pending</div></div>
+            <div class="text-center"><div class="text-lg font-black tabular-nums {{ $queueFailed > 0 ? 'text-rose-500' : 'text-zinc-900' }}">{{ $queueFailed }}</div><div class="text-[9px] font-bold uppercase tracking-wide text-zinc-400">Failed</div></div>
+            <button wire:click="$refresh" class="inline-flex items-center gap-1.5 rounded-xl border border-orange-100 bg-white px-3 py-2 text-xs font-bold text-zinc-600 shadow-sm transition hover:bg-orange-50"><flux:icon.arrow-path class="size-4 text-orange-500" wire:loading.class="animate-spin" wire:target="$refresh" /> Refresh</button>
+        </div>
+    </div>
+</div>
+
 {{-- ═══════════════ SYNC LOGS + CAPABILITY NOTE ═══════════════ --}}
 <div class="grid grid-cols-1 gap-4 lg:grid-cols-12">
     <div class="overflow-hidden rounded-[18px] border border-orange-100/70 bg-white shadow-sm lg:col-span-8">

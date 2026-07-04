@@ -129,6 +129,12 @@ Schedule::command('biometric:push-employees')
     ->withoutOverlapping()
     ->runInBackground();
 
+// Queue-worker liveness heartbeat — a running worker stamps queue:heartbeat_at
+// each minute; the admin Queue Worker indicator reads it. → every minute
+Schedule::job(new \App\Jobs\QueueHeartbeat)
+    ->everyMinute()
+    ->withoutOverlapping();
+
 // Phase 1A — Employee Lifecycle Engine
 // Auto-advance date-driven transitions (notice period end → resigned) → 00:30 daily
 Schedule::command('hrms:process-lifecycle-transitions')

@@ -8,6 +8,8 @@ use App\Models\BiometricDevice;
 use App\Services\Biometric\EngineAttendanceSyncService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Response;
 use Livewire\Component;
 
@@ -169,7 +171,7 @@ class BiometricControl extends Component
         $anyOnline = $devices->contains(fn ($d) => $d['state'] === 'online')
             || AttendanceDailySummary::whereNotNull('synced_at')->where('synced_at', '>=', now()->subMinutes(30))->exists();
 
-        return view('livewire.attendance.biometric-control', [
+        return view('livewire.attendance.biometric-control', array_merge([
             'devices' => $devices->all(),
             'discovered' => $discovered->all(),
             'methods' => $methods,
@@ -178,6 +180,33 @@ class BiometricControl extends Component
             'logs' => $logs,
             'anyOnline' => $anyOnline,
             'dateLabel' => $date->isToday() ? 'Today' : $date->format('d M Y'),
-        ])->layout('layouts.app', ['title' => 'Biometric Control Center']);
+        ], $this->queueStatus()))->layout('layouts.app', ['title' => 'Biometric Control Center']);
+    }
+
+    /**
+     * Queue-worker health for the admin indicator: online when the heartbeat
+     * job (scheduled every minute) was processed within the last 3 minutes.
+     *
+     * @return array{queueOnline:bool, queuePending:int, queueFailed:int, queueHeartbeat:?string}
+     */
+    protected function queueStatus(): array
+    {
+        $beatAt = Cache::get('queue:heartbeat_at');
+        $online = $beatAt !== null && (int) $beatAt >= now()->subMinutes(3)->timestamp;
+
+        try {
+            $pending = (int) DB::table('jobs')->count();
+            $failed = (int) DB::table('failed_jobs')->count();
+        } catch (\Throwable) {
+            $pending = 0;
+            $failed = 0;
+        }
+
+        return [
+            'queueOnline' => $online,
+            'queuePending' => $pending,
+            'queueFailed' => $failed,
+            'queueHeartbeat' => $beatAt ? Carbon::createFromTimestamp($beatAt)->diffForHumans() : null,
+        ];
     }
 }

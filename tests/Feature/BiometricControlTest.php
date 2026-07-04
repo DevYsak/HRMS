@@ -1,11 +1,13 @@
 <?php
 
 use App\Enums\UserRole;
+use App\Jobs\QueueHeartbeat;
 use App\Livewire\Attendance\BiometricControl;
 use App\Models\AttendancePunch;
 use App\Models\BiometricDevice;
 use App\Models\Employee;
 use App\Models\User;
+use Illuminate\Support\Facades\Cache;
 use Livewire\Livewire;
 
 test('a regular employee cannot open the biometric control center', function () {
@@ -64,4 +66,32 @@ test('the offline alert shows when nothing has synced recently', function () {
     Livewire::actingAs($hr)->test(BiometricControl::class)
         ->assertViewHas('anyOnline', false)
         ->assertSee('No biometric device has synced');
+});
+
+test('the queue worker indicator shows online when the heartbeat is fresh', function () {
+    $hr = User::factory()->create(['role' => UserRole::HrAdmin]);
+    Cache::put('queue:heartbeat_at', now()->timestamp, now()->addMinutes(30));
+
+    Livewire::actingAs($hr)->test(BiometricControl::class)
+        ->assertOk()
+        ->assertSee('Queue Worker')
+        ->assertViewHas('queueOnline', true)
+        ->assertSee('Online');
+});
+
+test('the queue worker indicator shows offline when the heartbeat is stale', function () {
+    $hr = User::factory()->create(['role' => UserRole::HrAdmin]);
+    Cache::put('queue:heartbeat_at', now()->subMinutes(10)->timestamp, now()->addMinutes(30));
+
+    Livewire::actingAs($hr)->test(BiometricControl::class)
+        ->assertViewHas('queueOnline', false)
+        ->assertSee('queued emails are not being sent');
+});
+
+test('the heartbeat job stamps the liveness timestamp', function () {
+    Cache::forget('queue:heartbeat_at');
+
+    (new QueueHeartbeat)->handle();
+
+    expect(Cache::get('queue:heartbeat_at'))->not->toBeNull();
 });
