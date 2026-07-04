@@ -128,3 +128,32 @@ test('quick approve from the drawer updates the attendance and clears the pendin
     expect($att->fresh()->check_out?->format('H:i'))->toBe('18:00');
     expect($att->fresh()->missing_checkout)->toBeFalse();
 });
+
+test('the sidebar exposes the HR attendance tools with a pending badge', function () {
+    $hr = User::factory()->create(['role' => UserRole::HrAdmin]);
+    $employee = Employee::factory()->create(['status' => 'active']);
+    $date = today()->subDays(2)->toDateString();
+    AttendanceRegularisation::create([
+        'employee_id' => $employee->id, 'work_date' => $date,
+        'requested_check_in' => "$date 09:00:00", 'requested_check_out' => "$date 18:00:00",
+        'reason' => 'Missed punch', 'status' => 'pending',
+    ]);
+
+    $this->actingAs($hr)
+        ->get(route('attendance.employees'))
+        ->assertOk()
+        ->assertSee('Command Center')
+        ->assertSee('Attendance Reports')
+        ->assertSee('Executive View')
+        ->assertSee('Biometric Control');
+});
+
+test('a pure employee does not see the HR attendance tools in the sidebar', function () {
+    $employee = Employee::factory()->create();
+
+    $this->actingAs($employee->user)
+        ->get(route('attendance.my'))
+        ->assertOk()
+        ->assertDontSee('Command Center')
+        ->assertDontSee('Attendance Reports');
+});

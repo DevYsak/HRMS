@@ -32,6 +32,14 @@
         // Pure employee — no management abilities at all
         $pureEmployee = $isEmp && !$isMgr && !$isHr && !$isFin && !$isDir;
 
+        // Command Center badge — all pending attendance approvals (approvers only).
+        $pendingApprovals = $user->canApproveLeave()
+            ? \App\Models\AttendanceRegularisation::where('status', 'pending')->count()
+                + \App\Models\LeaveRequest::where('status', 'pending')->count()
+                + \App\Models\WfhRequest::where('status', 'pending')->count()
+                + \App\Models\OtRequest::where('status', 'pending')->count()
+            : 0;
+
         $searchLinks = collect([
             ['label' => 'Dashboard', 'route' => route('dashboard'), 'caption' => 'Home overview'],
             ['label' => 'My Attendance', 'route' => route('attendance.my'), 'caption' => 'Daily check-in and attendance'],
@@ -456,6 +464,10 @@
                         @endif
                         @can('approve_leave')
                             <flux:sidebar.item :href="route('attendance.employees')" :current="request()->routeIs('attendance.employees')" wire:navigate>All Attendance</flux:sidebar.item>
+                            <flux:sidebar.item :href="route('attendance.command-center')" :current="request()->routeIs('attendance.command-center')" :badge="$pendingApprovals ?: null" badge-color="amber" wire:navigate>Command Center</flux:sidebar.item>
+                            <flux:sidebar.item :href="route('attendance.reports')" :current="request()->routeIs('attendance.reports')" wire:navigate>Attendance Reports</flux:sidebar.item>
+                            <flux:sidebar.item :href="route('attendance.executive')" :current="request()->routeIs('attendance.executive')" wire:navigate>Executive View</flux:sidebar.item>
+                            <flux:sidebar.item :href="route('attendance.biometric-control')" :current="request()->routeIs('attendance.biometric-control')" wire:navigate>Biometric Control</flux:sidebar.item>
                             <flux:sidebar.item :href="route('attendance.biometric-summary')" :current="request()->routeIs('attendance.biometric-summary')" wire:navigate>Biometric Summary</flux:sidebar.item>
                         @endcan
                         @can('manage_settings')
