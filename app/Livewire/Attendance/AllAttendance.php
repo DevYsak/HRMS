@@ -3,9 +3,12 @@
 namespace App\Livewire\Attendance;
 
 use App\Models\Attendance;
+use App\Models\AttendancePunch;
 use App\Models\AttendanceRegularisation;
 use App\Models\AuditLog;
+use App\Models\BreakLog;
 use App\Models\Employee;
+use App\Models\LeaveBalance;
 use App\Models\User;
 use App\Notifications\AttendanceRegularisationNotification;
 use App\Notifications\RegularisationReviewedNotification;
@@ -196,6 +199,130 @@ class AllAttendance extends Component
 
         $this->showMarkModal = false;
         \Flux::toast("Attendance regularisation submitted for {$employee->user->name}. Pending manager approval.");
+    }
+
+    // ── Employee 360 Drawer ──────────────────────────────────────────────────
+    public ?int $drawerEmployeeId = null;
+
+    /** @var array<string, mixed> */
+    public array $drawer = [];
+
+    public function openEmployeeDrawer(int $employeeId): void
+    {
+        abort_unless(Auth::user()->canApproveLeave(), 403);
+
+        $employee = Employee::with(['user', 'department', 'jobTitle', 'manager', 'office', 'shift'])
+            ->findOrFail($employeeId);
+
+        $today = Carbon::today();
+        $monthStart = $today->copy()->startOfMonth();
+        $month = Attendance::where('employee_id', $employee->id)
+            ->whereBetween('date', [$monthStart->toDateString(), $today->toDateString()])
+            ->orderByDesc('date')
+            ->get();
+
+        $workDays = max(1, (int) $monthStart->diffInDaysFiltered(fn ($d) => ! $d->isSunday(), $today->copy()->endOfDay()));
+        $present = $month->whereNotNull('check_in')->count();
+        $late = $month->where('is_late', true)->count();
+        $onTimePct = $present > 0 ? round(($present - $late) / $present * 100) : 100;
+        $presentPct = min(100, round($present / $workDays * 100));
+
+        $todayAtt = $month->firstWhere(fn ($a) => $a->date->isToday());
+        $stdMin = (int) round((float) ($employee->shift->standard_hours ?? 9) * 60);
+        $workedMin = 0;
+        if ($todayAtt?->check_in) {
+            $workedMin = max(0, (int) $todayAtt->check_in->diffInMinutes($todayAtt->check_out ?? now()) - (int) ($todayAtt->break_minutes ?? 0));
+        }
+        $onBreak = $todayAtt
+            ? BreakLog::where('attendance_id', $todayAtt->id)->whereNull('break_end')->exists()
+            : false;
+
+        $punches = AttendancePunch::where('employee_id', $employee->id)
+            ->whereDate('punch_date', $today->toDateString())
+            ->orderBy('punched_at')
+            ->get();
+
+        $this->drawer = [
+            'name' => $employee->user?->name ?? '—',
+            'photo' => $employee->photo,
+            'code' => $employee->employee_id ?? ($employee->employee_code ? 'PIN '.$employee->employee_code : '—'),
+            'department' => $employee->department?->name ?? '—',
+            'designation' => $employee->jobTitle?->name ?? $employee->jobTitle?->title ?? '—',
+            'manager' => $employee->manager?->name ?? '—',
+            'office' => $employee->office?->name ?? '—',
+            'attendance_pct' => $presentPct,
+            'on_time_pct' => $onTimePct,
+            'score' => (int) round($onTimePct * 0.6 + $presentPct * 0.4),
+            'late_count' => $late,
+            'leave_balance' => LeaveBalance::where('employee_id', $employee->id)
+                ->where('year', now()->year)->get()
+                ->sum(fn ($b) => $b->available() + (float) ($b->comp_off_credits ?? 0)),
+            'status' => $onBreak ? 'On Break' : ($todayAtt?->check_out ? 'Completed' : ($todayAtt ? 'Working' : 'Not In')),
+            'today' => $todayAtt ? [
+                'in' => $todayAtt->check_in?->format('h:i A'),
+                'out' => $todayAtt->check_out?->format('h:i A'),
+                'worked' => intdiv($workedMin, 60).'h '.($workedMin % 60).'m',
+                'break' => (int) ($todayAtt->break_minutes ?? 0),
+                'overtime' => max(0, $workedMin - $stdMin) > 0 ? intdiv($workedMin - $stdMin, 60).'h '.(($workedMin - $stdMin) % 60).'m' : '0m',
+                'mode' => $todayAtt->work_mode,
+                'is_late' => (bool) $todayAtt->is_late,
+                'device' => $punches->pluck('device_serial')->filter()->unique()->implode(', ') ?: null,
+                'location' => $punches->pluck('location')->filter()->unique()->implode(', ') ?: ($employee->office?->name ?? null),
+            ] : null,
+            'punches' => $punches->map(fn ($p) => [
+                'time' => $p->punched_at->format('h:i A'),
+                'method' => $p->methodEnum()?->label(),
+                'icon' => $p->methodEnum()?->icon() ?? 'clock',
+            ])->all(),
+            'late_history' => $month->where('is_late', true)->take(5)->map(fn ($a) => [
+                'date' => $a->date->format('d M'), 'mins' => (int) ($a->late_minutes ?? 0),
+            ])->values()->all(),
+            'break_history' => $month->filter(fn ($a) => (int) ($a->break_minutes ?? 0) > 0)->take(5)->map(fn ($a) => [
+                'date' => $a->date->format('d M'), 'mins' => (int) $a->break_minutes,
+            ])->values()->all(),
+            'history' => $month->take(7)->map(fn ($a) => [
+                'date' => $a->date->format('d M'),
+                'in' => $a->check_in?->format('H:i'),
+                'out' => $a->check_out?->format('H:i'),
+                'hours' => $a->total_hours,
+                'status' => $a->status,
+            ])->values()->all(),
+            'pending' => AttendanceRegularisation::where('employee_id', $employee->id)
+                ->where('status', 'pending')->orderByDesc('work_date')->get()
+                ->map(fn ($r) => [
+                    'id' => $r->id,
+                    'date' => Carbon::parse($r->work_date)->format('d M Y'),
+                    'window' => Carbon::parse($r->requested_check_in)->format('H:i').' → '.Carbon::parse($r->requested_check_out)->format('H:i'),
+                    'reason' => $r->reason,
+                ])->all(),
+        ];
+        $this->drawerEmployeeId = $employeeId;
+    }
+
+    public function closeDrawer(): void
+    {
+        $this->drawerEmployeeId = null;
+        $this->drawer = [];
+    }
+
+    /** One-click approve from the drawer; rejection goes via the review modal (comment required). */
+    public function quickApproveRegularisation(int $id): void
+    {
+        abort_unless(Auth::user()->canApproveLeave(), 403);
+
+        $request = AttendanceRegularisation::with('employee.user')->findOrFail($id);
+        if ($request->status !== 'pending') {
+            return;
+        }
+
+        $attendance = app(AttendanceService::class)->approveRegularisation($request, Auth::id());
+        AuditLog::record($attendance, 'regularised', $attendance->toArray(), null);
+        $request->employee->user?->notify(new RegularisationReviewedNotification($request));
+
+        \Flux::toast('Regularisation approved — hours & attendance updated.');
+        if ($this->drawerEmployeeId) {
+            $this->openEmployeeDrawer($this->drawerEmployeeId); // refresh drawer data
+        }
     }
 
     public function openReviewModal(int $id): void

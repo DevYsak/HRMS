@@ -165,7 +165,7 @@
                             $methods = collect([$inMethod, $outMethod])->filter()->unique();
                             $hrs = (float) $log->total_hours;
                         @endphp
-                        <tr class="text-xs transition hover:bg-orange-50/40">
+                        <tr wire:click="openEmployeeDrawer({{ $log->employee_id }})" class="cursor-pointer text-xs transition hover:bg-orange-50/40">
                             <td class="px-5 py-2.5">
                                 <div class="flex items-center gap-2.5">
                                     <div class="flex size-8 shrink-0 items-center justify-center rounded-xl bg-orange-100 text-[10px] font-black text-orange-600">{{ $initials }}</div>
@@ -216,6 +216,165 @@
 </div>
 
 </div>{{-- /space-y --}}
+
+{{-- ══════════════════════════════════════════
+EMPLOYEE 360 DRAWER (480px, right)
+══════════════════════════════════════════ --}}
+@if($drawerEmployeeId && ! empty($drawer))
+    <div class="fixed inset-0 z-40" x-data="{ show: false }" x-init="requestAnimationFrame(() => show = true)"
+         x-on:keydown.escape.window="$wire.closeDrawer()">
+        <div class="absolute inset-0 bg-black/30 backdrop-blur-sm transition-opacity duration-300"
+             :class="show ? 'opacity-100' : 'opacity-0'" @click="$wire.closeDrawer()"></div>
+
+        <aside class="absolute right-0 top-0 flex h-full w-[480px] max-w-full flex-col bg-[#FFF8F3] shadow-2xl transition-transform duration-300 ease-out"
+               :class="show ? 'translate-x-0' : 'translate-x-full'">
+
+            {{-- Header --}}
+            <div class="flex items-start justify-between gap-3 border-b border-orange-100 bg-white px-5 py-4">
+                <div class="flex items-center gap-3">
+                    @if($drawer['photo'])
+                        <img src="{{ \Storage::url($drawer['photo']) }}" alt="{{ $drawer['name'] }}" class="size-12 rounded-2xl object-cover ring-2 ring-orange-100">
+                    @else
+                        <div class="flex size-12 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-500 to-amber-400 text-sm font-black text-white">{{ collect(explode(' ', $drawer['name']))->map(fn($n) => $n[0] ?? '')->take(2)->join('') }}</div>
+                    @endif
+                    <div class="min-w-0">
+                        <div class="truncate text-sm font-black text-zinc-900">{{ $drawer['name'] }}</div>
+                        <div class="text-[10px] text-zinc-400">{{ $drawer['code'] }} · {{ $drawer['designation'] }}</div>
+                        <div class="mt-0.5 flex flex-wrap gap-x-3 text-[10px] text-zinc-500">
+                            <span class="inline-flex items-center gap-1"><flux:icon.building-office-2 class="size-3 text-orange-400" /> {{ $drawer['department'] }}</span>
+                            <span class="inline-flex items-center gap-1"><flux:icon.user class="size-3 text-orange-400" /> {{ $drawer['manager'] }}</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    @php
+                        [$dBadge, $dDot] = match($drawer['status']) {
+                            'Working' => ['bg-emerald-100 text-emerald-700', 'bg-emerald-500 animate-pulse'],
+                            'On Break' => ['bg-orange-100 text-orange-700', 'bg-orange-500 animate-pulse'],
+                            'Completed' => ['bg-rose-100 text-rose-600', 'bg-rose-500'],
+                            default => ['bg-zinc-100 text-zinc-500', 'bg-zinc-400'],
+                        };
+                    @endphp
+                    <span class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-bold {{ $dBadge }}"><span class="size-1.5 rounded-full {{ $dDot }}"></span>{{ $drawer['status'] }}</span>
+                    <button type="button" @click="$wire.closeDrawer()" class="rounded-lg p-1 text-zinc-400 transition hover:bg-orange-50 hover:text-zinc-600"><flux:icon.x-mark class="size-5" /></button>
+                </div>
+            </div>
+
+            {{-- Body --}}
+            <div class="flex-1 space-y-3 overflow-y-auto p-4">
+
+                {{-- KPI row --}}
+                <div class="grid grid-cols-4 gap-2">
+                    @foreach([
+                        ['Attendance', $drawer['attendance_pct'].'%', '#10b981'],
+                        ['Score', $drawer['score'].'/100', '#F97316'],
+                        ['Late (mo.)', $drawer['late_count'], $drawer['late_count'] ? '#f59e0b' : '#10b981'],
+                        ['Leave Bal.', rtrim(rtrim(number_format($drawer['leave_balance'], 1), '0'), '.'), '#14b8a6'],
+                    ] as [$k, $v, $c])
+                        <div class="rounded-xl border border-orange-100/70 bg-white p-2.5 text-center shadow-sm">
+                            <div class="text-sm font-black tabular-nums" style="color: {{ $c }}">{{ $v }}</div>
+                            <div class="text-[8px] font-bold uppercase tracking-wider text-zinc-400">{{ $k }}</div>
+                        </div>
+                    @endforeach
+                </div>
+
+                {{-- Today --}}
+                <div class="rounded-2xl border border-orange-100/70 bg-white p-4 shadow-sm">
+                    <div class="mb-2 text-[10px] font-bold uppercase tracking-widest text-zinc-400">Today</div>
+                    @if($drawer['today'])
+                        <div class="grid grid-cols-3 gap-2 text-center">
+                            @foreach([
+                                ['In', $drawer['today']['in'] ?? '—'], ['Out', $drawer['today']['out'] ?? 'live'],
+                                ['Worked', $drawer['today']['worked']], ['Break', $drawer['today']['break'].'m'],
+                                ['Overtime', $drawer['today']['overtime']], ['Mode', strtoupper($drawer['today']['mode'] ?? '—')],
+                            ] as [$k, $v])
+                                <div class="rounded-lg bg-orange-50/50 px-2 py-1.5"><div class="text-xs font-black tabular-nums text-zinc-900">{{ $v }}</div><div class="text-[8px] font-bold uppercase text-zinc-400">{{ $k }}</div></div>
+                            @endforeach
+                        </div>
+                        <div class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-zinc-500">
+                            @if($drawer['today']['device'])<span class="inline-flex items-center gap-1"><flux:icon.cpu-chip class="size-3 text-orange-400" /> {{ $drawer['today']['device'] }}</span>@endif
+                            @if($drawer['today']['location'])<span class="inline-flex items-center gap-1"><flux:icon.map-pin class="size-3 text-orange-400" /> {{ $drawer['today']['location'] }}</span>@endif
+                            @if($drawer['today']['is_late'])<span class="font-bold text-amber-600">Late today</span>@endif
+                        </div>
+                    @else
+                        <p class="text-xs text-zinc-400">No punch recorded today.</p>
+                    @endif
+                </div>
+
+                {{-- Today's timeline --}}
+                @if(! empty($drawer['punches']))
+                    <div class="rounded-2xl border border-orange-100/70 bg-white p-4 shadow-sm">
+                        <div class="mb-2 text-[10px] font-bold uppercase tracking-widest text-zinc-400">Today's Punches · {{ count($drawer['punches']) }}</div>
+                        <div class="max-h-36 space-y-1 overflow-y-auto">
+                            @foreach($drawer['punches'] as $p)
+                                <div class="flex items-center gap-2 rounded-lg bg-zinc-50/70 px-2.5 py-1 text-xs">
+                                    <flux:icon :icon="$p['icon']" class="size-3.5 text-orange-400" />
+                                    <span class="font-black tabular-nums text-zinc-800">{{ $p['time'] }}</span>
+                                    <span class="text-[10px] text-zinc-400">{{ $p['method'] ?? 'Punch' }}</span>
+                                </div>
+                            @endforeach
+                        </div>
+                    </div>
+                @endif
+
+                {{-- Pending regularizations --}}
+                @if(! empty($drawer['pending']))
+                    <div class="rounded-2xl border border-amber-300 bg-gradient-to-r from-amber-50 to-orange-50 p-4 shadow-sm">
+                        <div class="mb-2 text-[10px] font-bold uppercase tracking-widest text-amber-700">Pending Regularization · {{ count($drawer['pending']) }}</div>
+                        <div class="space-y-2">
+                            @foreach($drawer['pending'] as $pr)
+                                <div class="rounded-xl border border-amber-200/70 bg-white/80 p-2.5">
+                                    <div class="flex items-center justify-between text-xs">
+                                        <span class="font-black text-zinc-900">{{ $pr['date'] }}</span>
+                                        <span class="font-mono font-bold text-amber-700">{{ $pr['window'] }}</span>
+                                    </div>
+                                    <p class="mt-0.5 truncate text-[10px] italic text-zinc-400">“{{ $pr['reason'] }}”</p>
+                                    <div class="mt-1.5 flex gap-1.5">
+                                        <button wire:click="quickApproveRegularisation({{ $pr['id'] }})" class="inline-flex items-center gap-1 rounded-lg bg-emerald-500 px-2.5 py-1 text-[10px] font-bold text-white transition hover:bg-emerald-600"><flux:icon.check class="size-3" /> Approve</button>
+                                        <button wire:click="openReviewModal({{ $pr['id'] }})" class="inline-flex items-center gap-1 rounded-lg bg-rose-500 px-2.5 py-1 text-[10px] font-bold text-white transition hover:bg-rose-600"><flux:icon.x-mark class="size-3" /> Reject</button>
+                                        <button wire:click="openReviewModal({{ $pr['id'] }})" class="inline-flex items-center gap-1 rounded-lg border border-zinc-200 bg-white px-2.5 py-1 text-[10px] font-bold text-zinc-600 transition hover:bg-zinc-50"><flux:icon.pencil-square class="size-3" /> Edit</button>
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+                    </div>
+                @endif
+
+                {{-- Late + break history --}}
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="rounded-2xl border border-orange-100/70 bg-white p-3 shadow-sm">
+                        <div class="mb-1.5 text-[9px] font-bold uppercase tracking-widest text-zinc-400">Late History</div>
+                        @forelse($drawer['late_history'] as $lh)
+                            <div class="flex items-center justify-between py-0.5 text-[11px]"><span class="text-zinc-600">{{ $lh['date'] }}</span><span class="font-bold text-amber-600">+{{ $lh['mins'] }}m</span></div>
+                        @empty<p class="text-[10px] text-emerald-600">No late arrivals 🎉</p>@endforelse
+                    </div>
+                    <div class="rounded-2xl border border-orange-100/70 bg-white p-3 shadow-sm">
+                        <div class="mb-1.5 text-[9px] font-bold uppercase tracking-widest text-zinc-400">Break History</div>
+                        @forelse($drawer['break_history'] as $bh)
+                            <div class="flex items-center justify-between py-0.5 text-[11px]"><span class="text-zinc-600">{{ $bh['date'] }}</span><span class="font-bold {{ $bh['mins'] > 60 ? 'text-amber-600' : 'text-zinc-800' }}">{{ $bh['mins'] }}m</span></div>
+                        @empty<p class="text-[10px] text-zinc-400">No breaks recorded.</p>@endforelse
+                    </div>
+                </div>
+
+                {{-- Attendance history --}}
+                <div class="rounded-2xl border border-orange-100/70 bg-white p-4 shadow-sm">
+                    <div class="mb-2 text-[10px] font-bold uppercase tracking-widest text-zinc-400">Attendance History · last 7</div>
+                    <div class="space-y-1">
+                        @forelse($drawer['history'] as $h)
+                            @php $hc = match($h['status']) { 'on_time' => 'text-emerald-600', 'late' => 'text-amber-600', default => 'text-zinc-400' }; @endphp
+                            <div class="flex items-center justify-between rounded-lg px-2 py-1 text-[11px] odd:bg-orange-50/40">
+                                <span class="w-12 font-bold text-zinc-700">{{ $h['date'] }}</span>
+                                <span class="font-mono tabular-nums text-zinc-600">{{ $h['in'] ?? '—' }} → {{ $h['out'] ?? '—' }}</span>
+                                <span class="font-black tabular-nums text-zinc-800">{{ $h['hours'] ? number_format((float) $h['hours'], 1).'h' : '—' }}</span>
+                                <span class="text-[9px] font-bold uppercase {{ $hc }}">{{ str_replace('_', ' ', $h['status']) }}</span>
+                            </div>
+                        @empty<p class="text-[10px] text-zinc-400">No records this month.</p>@endforelse
+                    </div>
+                </div>
+            </div>
+        </aside>
+    </div>
+@endif
 
 {{-- ══════════════════════════════════════════
 REVIEW REGULARISATION MODAL
