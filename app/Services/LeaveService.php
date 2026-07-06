@@ -127,6 +127,16 @@ class LeaveService
             throw new \DomainException("'{$leaveType->name}' is not available during notice period.");
         }
 
+        // Weekend block — Saturdays and Sundays are non-working days and can't
+        // be picked as leave. Weekends that merely fall inside a longer range
+        // (e.g. a Fri→Mon leave) are fine — they're simply not counted.
+        if ($start->isWeekend()) {
+            throw new \DomainException($start->format('l, d M Y').' is a weekend (non-working day) — please pick a working day as your start date.');
+        }
+        if ($end->isWeekend()) {
+            throw new \DomainException($end->format('l, d M Y').' is a weekend (non-working day) — please pick a working day as your end date.');
+        }
+
         // Company holiday block — leave cannot include a holiday that applies
         // to this employee (branch/department/employee scope respected).
         $holiday = $this->holidayWithinRange($employee, $start, $end);
@@ -276,6 +286,7 @@ class LeaveService
             ]);
 
             if ($resolvedStatus === 'approved') {
+                $leaveRequest->update(['approved_at' => now()]);
                 $this->checkOverlapAndDeductBalance($leaveRequest, $employee, $data, $newDays);
             }
 
@@ -293,67 +304,70 @@ class LeaveService
 
     /**
      * Manager/HR asks the employee for more information instead of deciding
-     * outright. Does not touch balances (nothing was ever deducted for a
-     * request that was never approved). The employee resubmits via
-     * resubmit(), which returns it to 'pending' for a fresh review.
+     * outright — opens the conversation with the reviewer's message. Balances
+     * are untouched (nothing was ever deducted). The employee replies via
+     * postMessage(), which returns it to 'pending' for a fresh review.
      */
-    public function requestMoreInfo(LeaveRequest $leaveRequest, int $reviewerId, string $comment): LeaveRequest
+    public function requestMoreInfo(LeaveRequest $leaveRequest, int $reviewerId, string $comment, ?string $attachmentPath = null, ?string $attachmentName = null): LeaveRequest
     {
         if (! in_array($leaveRequest->status, ['pending', 'pending_hr'], true)) {
             throw new \DomainException('Only a pending leave request can have more information requested.');
         }
 
-        $leaveRequest->update([
-            'status' => 'more_info_requested',
-            'reviewer_id' => $reviewerId,
-            'reviewer_comment' => $comment,
-        ]);
+        $reviewer = User::findOrFail($reviewerId);
 
-        $fresh = $leaveRequest->fresh(['employee.user', 'leaveType']);
-        $fresh->employee->user->notify(new LeaveRequestNotification($fresh));
-
-        return $fresh;
+        return $this->postMessage($leaveRequest, $reviewer, $comment, $attachmentPath, $attachmentName);
     }
 
     /**
-     * Employee resubmits a request that had more information requested:
-     * updates the reason, appends any new attachments, and returns it to
-     * 'pending' for a fresh review cycle (clearing the prior reviewer note).
-     *
-     * @param  array<int, array{type:string,path:string,original_name:string,mime_type:?string,size:int}>  $newAttachments
+     * Post a message to a leave request's conversation thread and move the
+     * request along the clarification loop:
+     *   - a reviewer posting on a pending/pending_hr request  → more_info_requested
+     *   - the employee replying on a more_info_requested one  → back to pending
+     *   - anyone posting on an already-decided request         → message only
+     * Notifies the other party. Either the body or an attachment must be present.
      */
-    public function resubmit(LeaveRequest $leaveRequest, string $reason, array $newAttachments = []): LeaveRequest
+    public function postMessage(LeaveRequest $leaveRequest, User $sender, ?string $body, ?string $attachmentPath = null, ?string $attachmentName = null): LeaveRequest
     {
-        if ($leaveRequest->status !== 'more_info_requested') {
-            throw new \DomainException('Only a request awaiting more information can be resubmitted.');
+        $body = $body !== null ? trim($body) : null;
+        if (($body === null || $body === '') && $attachmentPath === null) {
+            throw new \DomainException('Add a message or an attachment before sending.');
         }
 
-        $leaveRequest->update([
-            'reason' => $reason,
-            'status' => 'pending',
-            'reviewer_id' => null,
-            'reviewer_comment' => null,
+        $leaveRequest->messages()->create([
+            'user_id' => $sender->id,
+            'body' => $body ?: null,
+            'attachment_path' => $attachmentPath,
+            'attachment_name' => $attachmentName,
         ]);
 
-        foreach ($newAttachments as $file) {
-            if (empty($file['path'])) {
-                continue;
-            }
-            $leaveRequest->attachments()->create([
-                'type' => $file['type'] ?? 'supporting_document',
-                'path' => $file['path'],
-                'original_name' => $file['original_name'] ?? basename($file['path']),
-                'mime_type' => $file['mime_type'] ?? null,
-                'size' => $file['size'] ?? 0,
+        $employeeUserId = $leaveRequest->employee?->user_id;
+        $isEmployee = $sender->id === $employeeUserId;
+
+        if (! $isEmployee && in_array($leaveRequest->status, ['pending', 'pending_hr'], true)) {
+            // Reviewer is asking for clarification.
+            $leaveRequest->update([
+                'status' => 'more_info_requested',
+                'reviewer_id' => $sender->id,
+                'reviewer_comment' => $body ?: $leaveRequest->reviewer_comment,
             ]);
+        } elseif ($isEmployee && $leaveRequest->status === 'more_info_requested') {
+            // Employee has responded — send it back for a fresh review.
+            $leaveRequest->update(['status' => 'pending']);
         }
 
         $fresh = $leaveRequest->fresh(['employee.user', 'leaveType']);
-        $manager = $fresh->employee->manager;
-        if ($manager) {
-            $manager->notify(new LeaveRequestNotification($fresh));
+
+        // Notify the other side.
+        if ($isEmployee) {
+            $manager = $fresh->employee->manager;
+            $manager?->notify(new LeaveRequestNotification($fresh));
+            User::whereIn('role', ['hr_admin', 'super_admin'])
+                ->when($manager, fn ($q) => $q->where('id', '!=', $manager->id))
+                ->each(fn ($hr) => $hr->notify(new LeaveRequestNotification($fresh)));
+        } else {
+            $fresh->employee->user?->notify(new LeaveRequestNotification($fresh));
         }
-        User::whereIn('role', ['hr_admin', 'super_admin'])->each(fn ($hr) => $hr->notify(new LeaveRequestNotification($fresh)));
 
         return $fresh;
     }
@@ -387,6 +401,10 @@ class LeaveService
                 'hr_reviewed_at' => now(),
                 'approved_leave_status' => $effectiveStatus,
             ];
+
+            if ($decision === 'approved') {
+                $updateData['approved_at'] = now();
+            }
 
             // Write payment audit log when HR overrides from requested status
             if ($approvedLeaveStatus && $approvedLeaveStatus !== $leaveRequest->requested_leave_status) {
@@ -935,6 +953,7 @@ class LeaveService
                 'requested_leave_status' => 'unpaid',
                 'approved_leave_status' => 'unpaid',
                 'status' => 'approved',
+                'approved_at' => now(),
             ]);
 
             $flagged++;

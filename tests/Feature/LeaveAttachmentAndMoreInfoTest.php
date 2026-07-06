@@ -8,6 +8,7 @@ use App\Models\LeaveAttachment;
 use App\Models\LeaveRequest;
 use App\Models\LeaveType;
 use App\Models\User;
+use App\Notifications\LeaveRequestNotification;
 use App\Services\LeaveService;
 use Illuminate\Support\Facades\Notification;
 use Livewire\Livewire;
@@ -47,22 +48,38 @@ function lamLeaveType(array $overrides = []): LeaveType
     ], $overrides));
 }
 
-test('submitRequest persists multiple categorised attachments and mirrors the first into attachment_path', function () {
+test('submitRequest persists the single supporting attachment and mirrors it into attachment_path', function () {
     Notification::fake();
     $employee = lamEmployee();
     $type = lamLeaveType();
 
+    // 2026-09-10 is a Thursday (a working day).
     $request = app(LeaveService::class)->submitRequest(
         $employee, $type, '2026-09-10', '2026-09-10', 'sick', requestedLeaveStatus: 'unpaid',
         attachments: [
-            ['type' => 'medical_certificate', 'path' => 'leave-attachments/med.pdf', 'original_name' => 'med.pdf', 'mime_type' => 'application/pdf', 'size' => 1024],
-            ['type' => 'supporting_document', 'path' => 'leave-attachments/sup.jpg', 'original_name' => 'sup.jpg', 'mime_type' => 'image/jpeg', 'size' => 2048],
+            ['type' => 'supporting_document', 'path' => 'leave-attachments/sup.pdf', 'original_name' => 'sup.pdf', 'mime_type' => 'application/pdf', 'size' => 1024],
         ],
     );
 
-    expect($request->attachment_path)->toBe('leave-attachments/med.pdf');
-    expect(LeaveAttachment::where('leave_request_id', $request->id)->count())->toBe(2);
-    expect(LeaveAttachment::where('leave_request_id', $request->id)->where('type', 'medical_certificate')->exists())->toBeTrue();
+    expect($request->attachment_path)->toBe('leave-attachments/sup.pdf');
+    expect(LeaveAttachment::where('leave_request_id', $request->id)->count())->toBe(1);
+});
+
+test('submitRequest blocks a weekend start or end date', function () {
+    Notification::fake();
+    $employee = lamEmployee();
+    $type = lamLeaveType();
+
+    // 2026-09-12 is a Saturday, 2026-09-13 a Sunday.
+    expect(fn () => app(LeaveService::class)->submitRequest($employee, $type, '2026-09-12', '2026-09-12', 'x', requestedLeaveStatus: 'unpaid'))
+        ->toThrow(DomainException::class, 'weekend');
+
+    expect(fn () => app(LeaveService::class)->submitRequest($employee, $type, '2026-09-13', '2026-09-13', 'x', requestedLeaveStatus: 'unpaid'))
+        ->toThrow(DomainException::class, 'weekend');
+
+    // A Friday→Monday range is fine — the weekend inside it is simply not counted.
+    $ok = app(LeaveService::class)->submitRequest($employee, $type, '2026-09-11', '2026-09-14', 'trip', requestedLeaveStatus: 'unpaid');
+    expect($ok->status)->toBe('pending');
 });
 
 test('requestMoreInfo moves a pending request to more_info_requested and blocks on non-pending', function () {
@@ -70,6 +87,7 @@ test('requestMoreInfo moves a pending request to more_info_requested and blocks 
     $employee = lamEmployee();
     $reviewer = User::factory()->create();
     $type = lamLeaveType();
+    // 2026-09-11 is a Friday.
     $request = app(LeaveService::class)->submitRequest($employee, $type, '2026-09-11', '2026-09-11', 'trip', requestedLeaveStatus: 'unpaid');
 
     $fresh = app(LeaveService::class)->requestMoreInfo($request, $reviewer->id, 'Please attach a travel ticket');
@@ -81,25 +99,63 @@ test('requestMoreInfo moves a pending request to more_info_requested and blocks 
         ->toThrow(DomainException::class, 'Only a pending leave request');
 });
 
-test('resubmit returns a more_info_requested request to pending and appends a new attachment', function () {
+test('postMessage runs the two-way clarification loop', function () {
     Notification::fake();
     $employee = lamEmployee();
-    $reviewer = User::factory()->create();
+    $reviewerUser = User::factory()->create();
+    $employeeUser = $employee->user;
     $type = lamLeaveType();
-    $request = app(LeaveService::class)->submitRequest($employee, $type, '2026-09-12', '2026-09-12', 'trip', requestedLeaveStatus: 'unpaid');
-    app(LeaveService::class)->requestMoreInfo($request, $reviewer->id, 'Need a ticket');
+    // 2026-09-14 is a Monday.
+    $request = app(LeaveService::class)->submitRequest($employee, $type, '2026-09-14', '2026-09-14', 'trip', requestedLeaveStatus: 'unpaid');
 
-    $fresh = app(LeaveService::class)->resubmit($request->fresh(), 'trip, ticket attached', [
-        ['type' => 'travel_ticket', 'path' => 'leave-attachments/ticket.pdf', 'original_name' => 'ticket.pdf', 'mime_type' => 'application/pdf', 'size' => 500],
-    ]);
+    // Reviewer asks for clarification → more_info_requested.
+    $afterReviewer = app(LeaveService::class)->postMessage($request, $reviewerUser, 'Need a ticket', 'leave-attachments/ask.pdf', 'ask.pdf');
+    expect($afterReviewer->status)->toBe('more_info_requested');
 
-    expect($fresh->status)->toBe('pending');
-    expect($fresh->reason)->toBe('trip, ticket attached');
-    expect($fresh->reviewer_id)->toBeNull();
-    expect(LeaveAttachment::where('leave_request_id', $fresh->id)->where('type', 'travel_ticket')->exists())->toBeTrue();
+    // Employee replies with a message + attachment → back to pending.
+    $afterEmployee = app(LeaveService::class)->postMessage($request->fresh(), $employeeUser, 'Ticket attached', 'leave-attachments/ticket.pdf', 'ticket.pdf');
+    expect($afterEmployee->status)->toBe('pending');
+    expect($request->messages()->count())->toBe(2);
 
-    expect(fn () => app(LeaveService::class)->resubmit($fresh, 'x'))
-        ->toThrow(DomainException::class, 'awaiting more information');
+    // An empty message with no attachment is rejected.
+    expect(fn () => app(LeaveService::class)->postMessage($request->fresh(), $employeeUser, '   ', null, null))
+        ->toThrow(DomainException::class, 'Add a message or an attachment');
+});
+
+test('an employee can message HR on a rejected request without changing its status', function () {
+    Notification::fake();
+    $employee = lamEmployee();
+    $employeeUser = $employee->user;
+    $hr = User::factory()->create(['role' => UserRole::HrAdmin]);
+    $type = lamLeaveType();
+    // 2026-09-18 is a Friday.
+    $request = app(LeaveService::class)->submitRequest($employee, $type, '2026-09-18', '2026-09-18', 'trip', requestedLeaveStatus: 'unpaid');
+    $request->update(['status' => 'rejected', 'reviewer_comment' => 'Not enough balance', 'reviewer_id' => $hr->id]);
+
+    $fresh = app(LeaveService::class)->postMessage($request->fresh(), $employeeUser, 'Please reconsider — attached proof', 'leave-attachments/proof.pdf', 'proof.pdf');
+
+    // Status is untouched (appeal channel only), but the message is stored and HR/admin are notified.
+    expect($fresh->status)->toBe('rejected');
+    expect($request->messages()->count())->toBe(1);
+    Notification::assertSentTo($hr, LeaveRequestNotification::class);
+});
+
+test('AllTimeOff can post a conversation message from the review panel', function () {
+    Notification::fake();
+    $hr = User::factory()->create(['role' => UserRole::HrAdmin]);
+    $employee = lamEmployee();
+    $type = lamLeaveType();
+    // 2026-09-15 is a Tuesday.
+    $request = app(LeaveService::class)->submitRequest($employee, $type, '2026-09-15', '2026-09-15', 'trip', requestedLeaveStatus: 'unpaid');
+
+    Livewire::actingAs($hr)->test(AllTimeOff::class)
+        ->call('viewRequest', $request->id)
+        ->set('panelMessage', 'Please attach supporting documents')
+        ->call('postPanelMessage')
+        ->assertHasNoErrors();
+
+    expect($request->fresh()->status)->toBe('more_info_requested');
+    expect($request->messages()->count())->toBe(1);
 });
 
 test('AllTimeOff can request more information from the review panel', function () {
@@ -107,7 +163,8 @@ test('AllTimeOff can request more information from the review panel', function (
     $hr = User::factory()->create(['role' => UserRole::HrAdmin]);
     $employee = lamEmployee();
     $type = lamLeaveType();
-    $request = app(LeaveService::class)->submitRequest($employee, $type, '2026-09-13', '2026-09-13', 'trip', requestedLeaveStatus: 'unpaid');
+    // 2026-09-16 is a Wednesday.
+    $request = app(LeaveService::class)->submitRequest($employee, $type, '2026-09-16', '2026-09-16', 'trip', requestedLeaveStatus: 'unpaid');
 
     Livewire::actingAs($hr)->test(AllTimeOff::class)
         ->call('viewRequest', $request->id)
@@ -123,7 +180,8 @@ test('TeamTimeOff can request more information from the review modal', function 
     $manager = User::factory()->create(['role' => UserRole::Manager]);
     $employee = lamEmployee(['manager_id' => $manager->id]);
     $type = lamLeaveType();
-    $request = app(LeaveService::class)->submitRequest($employee, $type, '2026-09-14', '2026-09-14', 'trip', requestedLeaveStatus: 'unpaid');
+    // 2026-09-17 is a Thursday.
+    $request = app(LeaveService::class)->submitRequest($employee, $type, '2026-09-17', '2026-09-17', 'trip', requestedLeaveStatus: 'unpaid');
 
     Livewire::actingAs($manager)->test(TeamTimeOff::class)
         ->call('selectRequest', $request->id)

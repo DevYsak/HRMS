@@ -10,10 +10,12 @@ use App\Services\LeaveService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 use Livewire\WithPagination;
 
 class TeamTimeOff extends Component
 {
+    use WithFileUploads;
     use WithPagination;
 
     /** Team leave calendar month (Y-m); empty = current month. */
@@ -28,6 +30,11 @@ class TeamTimeOff extends Component
     protected $queryString = ['selectedRequestId'];
 
     public string $reviewer_comment = '';
+
+    // Conversation composer
+    public string $panelMessage = '';
+
+    public $panelMessageAttachment = null;
 
     // HR override fields
     public string $hr_override_status = '';
@@ -88,7 +95,7 @@ class TeamTimeOff extends Component
     {
         abort_unless(Auth::user()->canApproveLeave(), 403);
 
-        $req = LeaveRequest::with(['employee.user', 'leaveType', 'paymentAuditLogs.changedByUser', 'reviewer', 'hrReviewer', 'attachments'])->findOrFail($id);
+        $req = LeaveRequest::with(['employee.user', 'leaveType', 'paymentAuditLogs.changedByUser', 'reviewer', 'hrReviewer', 'attachments', 'messages.user'])->findOrFail($id);
 
         $this->selectedRequestId = $id;
         $this->selectedRequest = $req;
@@ -151,11 +158,51 @@ class TeamTimeOff extends Component
         $this->resetPage();
     }
 
+    /** Post a free-form message (optionally with an attachment) into the leave conversation. */
+    public function postPanelMessage(LeaveService $service): void
+    {
+        abort_unless($this->selectedRequestId !== null, 422);
+        abort_unless(Auth::user()->canApproveLeave(), 403);
+
+        $this->validate([
+            'panelMessage' => 'nullable|string|max:2000',
+            'panelMessageAttachment' => 'nullable|file|max:500|mimes:pdf,jpg,jpeg,png',
+        ]);
+
+        $leaveRequest = LeaveRequest::findOrFail($this->selectedRequestId);
+
+        $path = null;
+        $name = null;
+        if ($this->panelMessageAttachment) {
+            $path = $this->panelMessageAttachment->store('leave-attachments', 'public');
+            $name = $this->panelMessageAttachment->getClientOriginalName();
+        }
+
+        try {
+            $service->postMessage($leaveRequest, Auth::user(), $this->panelMessage ?: null, $path, $name);
+        } catch (\DomainException $exception) {
+            $this->addError('panelMessage', $exception->getMessage());
+
+            return;
+        }
+
+        $this->panelMessage = '';
+        $this->panelMessageAttachment = null;
+        $this->selectedRequest = LeaveRequest::with([
+            'employee.user', 'leaveType', 'paymentAuditLogs.changedByUser',
+            'reviewer', 'hrReviewer', 'attachments', 'messages.user',
+        ])->findOrFail($this->selectedRequestId);
+
+        \Flux::toast('Message sent to the employee.', variant: 'success');
+    }
+
     public function closeReviewModal(): void
     {
         $this->showReviewModal = false;
         $this->selectedRequestId = null;
         $this->selectedRequest = null;
+        $this->panelMessage = '';
+        $this->panelMessageAttachment = null;
         $this->hr_override_status = '';
         $this->hr_remark = '';
         $this->showHrOverride = false;

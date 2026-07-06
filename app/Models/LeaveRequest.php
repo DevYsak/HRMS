@@ -15,7 +15,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     'requested_leave_status', 'approved_leave_status',
     'payment_status_changed_by', 'payment_status_changed_at', 'payment_status_change_reason',
     'hr_remark', 'attachment_path',
-    'status',
+    'status', 'approved_at',
     'reviewer_id', 'reviewer_comment',
     'hr_reviewer_id', 'hr_reviewer_comment', 'hr_reviewed_at',
 ])]
@@ -31,6 +31,7 @@ class LeaveRequest extends Model
             'is_half_day' => 'boolean',
             'payment_status_changed_at' => 'datetime',
             'hr_reviewed_at' => 'datetime',
+            'approved_at' => 'datetime',
             'days' => 'decimal:2',
         ];
     }
@@ -63,6 +64,11 @@ class LeaveRequest extends Model
     public function attachments(): HasMany
     {
         return $this->hasMany(LeaveAttachment::class);
+    }
+
+    public function messages(): HasMany
+    {
+        return $this->hasMany(LeaveMessage::class);
     }
 
     public function escalations(): HasMany

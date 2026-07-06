@@ -106,7 +106,7 @@ it('blocks a new MDL request when a pending MDL already exists on overlapping da
     pendingMdl($employee, '2026-08-01', '2026-08-31');
 
     expect(fn () => app(LeaveService::class)->submitRequest(
-        $employee, mdlType(), '2026-08-15', '2026-08-15', 'test', requestedLeaveStatus: 'unpaid',
+        $employee, mdlType(), '2026-08-19', '2026-08-19', 'test', requestedLeaveStatus: 'unpaid',
     ))->toThrow(DomainException::class, 'pending leave');
 });
 

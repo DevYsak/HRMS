@@ -9,10 +9,12 @@ use App\Models\LeaveType;
 use App\Services\LeaveService;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 use Livewire\WithPagination;
 
 class AllTimeOff extends Component
 {
+    use WithFileUploads;
     use WithPagination;
 
     // Filters
@@ -36,6 +38,11 @@ class AllTimeOff extends Component
     public ?LeaveRequest $viewingRequest = null;
 
     public string $panelReviewComment = '';
+
+    // Conversation composer (panel)
+    public string $panelMessage = '';
+
+    public $panelMessageAttachment = null;
 
     // HR override (panel)
     public string $panelHrOverrideStatus = '';
@@ -112,6 +119,7 @@ class AllTimeOff extends Component
         $this->viewingRequest = LeaveRequest::with([
             'employee.user', 'employee.department', 'leaveType',
             'reviewer', 'hrReviewer', 'paymentAuditLogs.changedByUser',
+            'attachments', 'messages.user',
         ])->findOrFail($id);
 
         $this->panelReviewComment = '';
@@ -130,6 +138,8 @@ class AllTimeOff extends Component
         $this->viewingId = null;
         $this->viewingRequest = null;
         $this->panelReviewComment = '';
+        $this->panelMessage = '';
+        $this->panelMessageAttachment = null;
         $this->panelHrOverrideStatus = '';
         $this->panelHrRemark = '';
         $this->panelShowHrOverride = false;
@@ -181,7 +191,7 @@ class AllTimeOff extends Component
 
         $this->viewingRequest = LeaveRequest::with([
             'employee.user', 'employee.department', 'leaveType', 'reviewer',
-            'hrReviewer', 'paymentAuditLogs.changedByUser', 'attachments',
+            'hrReviewer', 'paymentAuditLogs.changedByUser', 'attachments', 'messages.user',
         ])->findOrFail($this->viewingId);
 
         \Flux::toast('Leave approved successfully.', variant: 'success');
@@ -211,7 +221,7 @@ class AllTimeOff extends Component
 
         $this->viewingRequest = LeaveRequest::with([
             'employee.user', 'employee.department', 'leaveType', 'reviewer',
-            'hrReviewer', 'paymentAuditLogs.changedByUser', 'attachments',
+            'hrReviewer', 'paymentAuditLogs.changedByUser', 'attachments', 'messages.user',
         ])->findOrFail($this->viewingId);
 
         \Flux::toast('Leave rejected.', variant: 'danger');
@@ -240,10 +250,49 @@ class AllTimeOff extends Component
 
         $this->viewingRequest = LeaveRequest::with([
             'employee.user', 'employee.department', 'leaveType', 'reviewer',
-            'hrReviewer', 'paymentAuditLogs.changedByUser', 'attachments',
+            'hrReviewer', 'paymentAuditLogs.changedByUser', 'attachments', 'messages.user',
         ])->findOrFail($this->viewingId);
 
         \Flux::toast('More information requested from the employee.', variant: 'warning');
+    }
+
+    /** Post a free-form message (optionally with an attachment) into the leave conversation. */
+    public function postPanelMessage(LeaveService $service): void
+    {
+        abort_unless($this->viewingId !== null, 422);
+        abort_unless(Auth::user()->canApproveLeave(), 403);
+
+        $this->validate([
+            'panelMessage' => 'nullable|string|max:2000',
+            'panelMessageAttachment' => 'nullable|file|max:500|mimes:pdf,jpg,jpeg,png',
+        ]);
+
+        $request = LeaveRequest::findOrFail($this->viewingId);
+
+        $path = null;
+        $name = null;
+        if ($this->panelMessageAttachment) {
+            $path = $this->panelMessageAttachment->store('leave-attachments', 'public');
+            $name = $this->panelMessageAttachment->getClientOriginalName();
+        }
+
+        try {
+            $service->postMessage($request, Auth::user(), $this->panelMessage ?: null, $path, $name);
+        } catch (\DomainException $exception) {
+            $this->addError('panelMessage', $exception->getMessage());
+
+            return;
+        }
+
+        $this->panelMessage = '';
+        $this->panelMessageAttachment = null;
+
+        $this->viewingRequest = LeaveRequest::with([
+            'employee.user', 'employee.department', 'leaveType', 'reviewer',
+            'hrReviewer', 'paymentAuditLogs.changedByUser', 'attachments', 'messages.user',
+        ])->findOrFail($this->viewingId);
+
+        \Flux::toast('Message sent to the employee.', variant: 'success');
     }
 
     /** Apply HR payment status override on an already-open request. */
@@ -274,7 +323,7 @@ class AllTimeOff extends Component
 
         $this->viewingRequest = LeaveRequest::with([
             'employee.user', 'employee.department', 'leaveType', 'reviewer',
-            'hrReviewer', 'paymentAuditLogs.changedByUser', 'attachments',
+            'hrReviewer', 'paymentAuditLogs.changedByUser', 'attachments', 'messages.user',
         ])->findOrFail($this->viewingId);
 
         $this->panelShowHrOverride = false;

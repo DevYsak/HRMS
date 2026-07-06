@@ -527,6 +527,49 @@
                     </div>
                 </div>
 
+                {{-- Conversation with the employee --}}
+                <div>
+                    <h4 class="mb-3 text-xs font-bold uppercase tracking-wide text-zinc-500">Conversation</h4>
+                    @php $meId = auth()->id(); @endphp
+                    <div class="mb-3 space-y-2">
+                        @forelse($selectedRequest->messages->sortBy('created_at') as $msg)
+                            @php $mine = $msg->user_id === $meId; @endphp
+                            <div class="flex {{ $mine ? 'justify-end' : 'justify-start' }}">
+                                <div class="max-w-[85%] rounded-xl px-3 py-2 text-xs {{ $mine ? 'bg-indigo-600 text-white' : 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200' }}">
+                                    <div class="mb-0.5 flex items-center gap-2 text-[9px] font-bold uppercase tracking-wide {{ $mine ? 'text-indigo-100' : 'text-zinc-400' }}">
+                                        <span>{{ $mine ? 'You' : ($msg->user?->name ?? 'Employee') }}</span>
+                                        <span class="font-medium normal-case">{{ $msg->created_at->format('d M, H:i') }}</span>
+                                    </div>
+                                    @if($msg->body)<p class="whitespace-pre-line leading-snug">{{ $msg->body }}</p>@endif
+                                    @if($msg->attachment_path)
+                                        <a href="{{ asset('storage/'.$msg->attachment_path) }}" target="_blank"
+                                            class="mt-1 inline-flex items-center gap-1 rounded-lg px-1.5 py-0.5 text-[10px] font-semibold {{ $mine ? 'bg-white/20 text-white hover:bg-white/30' : 'bg-white text-indigo-600 hover:bg-zinc-50 dark:bg-zinc-700 dark:text-indigo-300' }}">
+                                            <flux:icon.paper-clip class="size-2.5" /> {{ $msg->attachment_name ?? 'Attachment' }}
+                                        </a>
+                                    @endif
+                                </div>
+                            </div>
+                        @empty
+                            <p class="text-[11px] text-zinc-400">No messages yet. Send a note if you need clarification.</p>
+                        @endforelse
+                    </div>
+                    <div class="space-y-2 rounded-xl border border-zinc-100 bg-zinc-50/60 p-2.5 dark:border-zinc-800 dark:bg-zinc-900/40">
+                        <textarea wire:model="panelMessage" rows="2" placeholder="Message the employee…"
+                            class="w-full resize-none rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-700 placeholder-zinc-400 transition-colors focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-400/30 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"></textarea>
+                        @error('panelMessage')<p class="text-xs text-red-500">{{ $message }}</p>@enderror
+                        <div class="flex items-center justify-between gap-2">
+                            <div class="min-w-0 flex-1">
+                                <input type="file" wire:model="panelMessageAttachment" accept=".pdf,.jpg,.jpeg,.png"
+                                    class="block w-full text-[11px] text-zinc-500 file:mr-2 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-2 file:py-1 file:text-[11px] file:font-bold file:text-indigo-600 hover:file:bg-indigo-100 dark:text-zinc-400">
+                                @error('panelMessageAttachment')<p class="mt-1 text-xs text-red-500">{{ $message }}</p>@enderror
+                            </div>
+                            <button type="button" wire:click="postPanelMessage" wire:loading.attr="disabled" wire:target="postPanelMessage,panelMessageAttachment"
+                                class="shrink-0 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-indigo-700 disabled:opacity-60">Send</button>
+                        </div>
+                        <p class="text-[10px] text-zinc-400">PDF or image — max 500 KB. Sending on a pending request marks it “More Info Needed”.</p>
+                    </div>
+                </div>
+
                 {{-- Error --}}
                 @error('form.leave_type_id')
                     <div class="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700 dark:bg-red-950/30 dark:border-red-800 dark:text-red-400">
