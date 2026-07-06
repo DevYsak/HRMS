@@ -86,11 +86,8 @@
                     class="rounded-lg px-3 py-1.5 text-xs font-bold transition {{ $statsPeriod === $val ? 'bg-orange-500 text-white shadow' : 'text-zinc-500 hover:bg-orange-50' }}">{{ $label }}</button>
             @endforeach
         </div>
-        <select wire:model.live="analyticsMode" title="Filter analytics by work mode"
-            class="rounded-xl border {{ $analyticsMode !== '' ? 'border-orange-400 ring-1 ring-orange-200' : 'border-orange-100' }} bg-white px-2.5 py-2 text-xs font-bold text-zinc-600 shadow-sm focus:border-orange-400 focus:ring-0">
-            <option value="">All modes</option>
-            @foreach(AttendanceMode::cases() as $mode)<option value="{{ $mode->value }}">{{ $mode->label() }}</option>@endforeach
-        </select>
+        <x-clean-select model="analyticsMode" :live="true"
+            :options="[['value' => '', 'label' => 'All modes'], ...collect(AttendanceMode::cases())->map(fn ($mode) => ['value' => $mode->value, 'label' => $mode->label()])->all()]" />
         <div class="flex items-center gap-1.5 rounded-xl border {{ $statsPeriod === 'custom' ? 'border-orange-400 ring-1 ring-orange-200' : 'border-orange-100' }} bg-white px-2 py-1 shadow-sm">
             <span class="text-[10px] font-bold uppercase tracking-wider {{ $statsPeriod === 'custom' ? 'text-orange-500' : 'text-zinc-400' }}">Custom</span>
             <input type="date" wire:model.live="rangeFrom" class="w-[7.5rem] border-0 bg-transparent p-1 text-xs font-semibold text-zinc-600 focus:ring-0">
@@ -912,10 +909,8 @@
             </span>
         </h3>
         <div class="flex flex-wrap items-center gap-2">
-            <select wire:model.live="logMode" class="rounded-lg border border-orange-100 bg-white px-2.5 py-1.5 text-xs font-semibold text-zinc-600">
-                <option value="">All modes</option>
-                @foreach(AttendanceMode::cases() as $mode)<option value="{{ $mode->value }}">{{ $mode->label() }}</option>@endforeach
-            </select>
+            <x-clean-select model="logMode" :live="true"
+                :options="[['value' => '', 'label' => 'All modes'], ...collect(AttendanceMode::cases())->map(fn ($mode) => ['value' => $mode->value, 'label' => $mode->label()])->all()]" />
             <button wire:click="exportLog" class="inline-flex items-center gap-1.5 rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-orange-600"><flux:icon.arrow-down-tray class="size-3.5" /> Export</button>
         </div>
     </div>

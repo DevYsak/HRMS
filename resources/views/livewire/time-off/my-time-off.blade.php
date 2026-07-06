@@ -845,27 +845,23 @@
                         <flux:textarea wire:model="hw_reason" label="Reason" rows="2" placeholder="Why do you need to work this holiday?" />
                         @error('hw_reason')<p class="text-xs text-rose-500">{{ $message }}</p>@enderror
                         <div class="grid grid-cols-2 gap-3">
-                            <div>
-                                <flux:label>Work Location</flux:label>
-                                <select wire:model="hw_location" class="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm focus:border-orange-400 focus:ring-0 dark:bg-zinc-800">
-                                    <option value="office">Office</option>
-                                    <option value="wfh">Work From Home</option>
-                                    <option value="client_site">Client Site</option>
-                                </select>
-                            </div>
+                            <x-clean-select
+                                model="hw_location"
+                                label="Work Location"
+                                :live="false"
+                                :options="[['value' => 'office', 'label' => 'Office'], ['value' => 'wfh', 'label' => 'Work From Home'], ['value' => 'client_site', 'label' => 'Client Site']]"
+                            />
                             <flux:input wire:model="hw_hours" type="number" step="0.5" min="0.5" max="24" label="Expected Hours" />
                         </div>
                         <div class="grid grid-cols-2 gap-3">
                             <flux:input wire:model="hw_project" label="Project" placeholder="Optional" />
-                            <div>
-                                <flux:label>Pay Type</flux:label>
-                                @php $hwPayLabels = App\Models\HolidayPaySetting::payTypeLabels(); @endphp
-                                <select wire:model="hw_pay_type" class="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm focus:border-orange-400 focus:ring-0 dark:bg-zinc-800">
-                                    @foreach($holidayPaySettings->enabledPayTypes() as $val)
-                                        <option value="{{ $val }}">{{ $hwPayLabels[$val] ?? ucfirst($val) }}</option>
-                                    @endforeach
-                                </select>
-                            </div>
+                            @php $hwPayLabels = App\Models\HolidayPaySetting::payTypeLabels(); @endphp
+                            <x-clean-select
+                                model="hw_pay_type"
+                                label="Pay Type"
+                                :live="false"
+                                :options="collect($holidayPaySettings->enabledPayTypes())->map(fn ($val) => ['value' => $val, 'label' => $hwPayLabels[$val] ?? ucfirst($val)])->all()"
+                            />
                         </div>
                         <flux:textarea wire:model="hw_comments" label="Comments" rows="2" placeholder="Optional" />
                         <p class="text-[11px] text-zinc-400">On approval this records a holiday-worked attendance and your chosen pay (overtime record or comp-off credit).</p>
@@ -1099,12 +1095,14 @@
                     <form wire:submit="submitRequest" class="space-y-5">
 
                         {{-- Leave Type --}}
-                        <flux:select wire:model.live="leave_type_id" label="Leave Type" placeholder="Select type..."
-                            required>
-                            @foreach($leaveTypes as $type)
-                                <option value="{{ $type->id }}">{{ $type->name }}</option>
-                            @endforeach
-                        </flux:select>
+                        <x-clean-select
+                            model="leave_type_id"
+                            label="Leave Type"
+                            placeholder="Select type…"
+                            :required="true"
+                            :options="$leaveTypes->map(fn ($t) => ['value' => $t->id, 'label' => $t->name])->all()"
+                        />
+                        @error('leave_type_id') <flux:error>{{ $message }}</flux:error> @enderror
 
                         {{-- Balance preview for selected type --}}
                         @if($selectedType && $selectedBalance)

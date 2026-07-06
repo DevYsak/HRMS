@@ -336,13 +336,8 @@
                 <div
                     class="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between gap-4">
                     <h3 class="font-bold text-zinc-900 dark:text-white">Payslip History</h3>
-                    <select wire:model.live="filterYear"
-                        class="text-xs font-semibold text-zinc-700 dark:text-zinc-300 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-400/30">
-                        <option value="">All Years</option>
-                        @foreach(range(now()->year, now()->year - 3) as $y)
-                            <option value="{{ $y }}">{{ $y }}</option>
-                        @endforeach
-                    </select>
+                    <x-clean-select model="filterYear" :live="true"
+                        :options="array_merge([['value' => '', 'label' => 'All Years']], collect(range(now()->year, now()->year - 3))->map(fn ($y) => ['value' => $y, 'label' => $y])->all())" />
                 </div>
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm">

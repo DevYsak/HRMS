@@ -104,23 +104,12 @@
                     </div>
 
                     {{-- Leave Type --}}
-                    <select wire:model.live="leave_type_id"
-                        class="h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-sm text-zinc-600 dark:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-brand-400/30 focus:border-brand-400 transition-colors">
-                        <option value="">All Leave Types</option>
-                        @foreach($leaveTypes as $lt)
-                            <option value="{{ $lt->id }}">{{ $lt->name }}</option>
-                        @endforeach
-                    </select>
+                    <x-clean-select model="leave_type_id" :live="true"
+                        :options="array_merge([['value' => '', 'label' => 'All Leave Types']], $leaveTypes->map(fn ($lt) => ['value' => $lt->id, 'label' => $lt->name])->all())" />
 
                     {{-- Status --}}
-                    <select wire:model.live="status"
-                        class="h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-sm text-zinc-600 dark:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-brand-400/30 focus:border-brand-400 transition-colors">
-                        <option value="">All Statuses</option>
-                        <option value="pending">Pending</option>
-                        <option value="approved">Approved</option>
-                        <option value="rejected">Rejected</option>
-                        <option value="cancelled">Cancelled</option>
-                    </select>
+                    <x-clean-select model="status" :live="true"
+                        :options="[['value' => '', 'label' => 'All Statuses'], ['value' => 'pending', 'label' => 'Pending'], ['value' => 'approved', 'label' => 'Approved'], ['value' => 'rejected', 'label' => 'Rejected'], ['value' => 'cancelled', 'label' => 'Cancelled']]" />
 
                     {{-- Date Range --}}
                     <div class="flex items-center gap-1.5 h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-sm">
@@ -237,12 +226,8 @@
                     <div class="flex items-center gap-4">
                         <div class="flex items-center gap-2">
                             <span class="text-xs text-zinc-400">Per page</span>
-                            <select wire:model.live="perPage"
-                                class="text-xs font-semibold text-zinc-700 dark:text-zinc-300 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-400/30">
-                                <option value="10">10</option>
-                                <option value="25">25</option>
-                                <option value="50">50</option>
-                            </select>
+                            <x-clean-select model="perPage" :live="true"
+                                :options="[['value' => '10', 'label' => '10'], ['value' => '25', 'label' => '25'], ['value' => '50', 'label' => '50']]" />
                         </div>
                         {{ $requests->links('vendor.pagination.simple-tailwind') }}
                     </div>
@@ -617,18 +602,11 @@
                 @enderror
 
                 <form wire:submit="saveManage" class="space-y-4">
-                    <flux:select wire:model="form.status" label="Request Status">
-                        <option value="pending">Pending</option>
-                        <option value="approved">Approved</option>
-                        <option value="rejected">Rejected</option>
-                        <option value="cancelled">Cancelled</option>
-                    </flux:select>
+                    <x-clean-select model="form.status" label="Request Status" :live="false"
+                        :options="[['value' => 'pending', 'label' => 'Pending'], ['value' => 'approved', 'label' => 'Approved'], ['value' => 'rejected', 'label' => 'Rejected'], ['value' => 'cancelled', 'label' => 'Cancelled']]" />
 
-                    <flux:select wire:model="form.leave_type_id" label="Leave Type">
-                        @foreach($leaveTypes as $type)
-                            <option value="{{ $type->id }}">{{ $type->name }} ({{ $type->is_paid ? 'Paid' : 'Unpaid' }})</option>
-                        @endforeach
-                    </flux:select>
+                    <x-clean-select model="form.leave_type_id" label="Leave Type" :live="false"
+                        :options="$leaveTypes->map(fn ($type) => ['value' => $type->id, 'label' => $type->name.' ('.($type->is_paid ? 'Paid' : 'Unpaid').')'])->all()" />
 
                     <div class="grid grid-cols-2 gap-4">
                         <flux:input wire:model="form.start_date" type="date" label="Start Date" required />
@@ -686,21 +664,13 @@
 
                 <form wire:submit="submitNewRequest" class="space-y-4">
                     <div>
-                        <flux:select wire:model="newForm.employee_id" label="Employee">
-                            <option value="">Select employee…</option>
-                            @foreach($allEmployees as $emp)
-                                <option value="{{ $emp->id }}">{{ $emp->user->name }} ({{ $emp->employee_id ?? $emp->id }})</option>
-                            @endforeach
-                        </flux:select>
+                        <x-clean-select model="newForm.employee_id" label="Employee" placeholder="Select employee…" :live="false"
+                            :options="$allEmployees->map(fn ($emp) => ['value' => $emp->id, 'label' => $emp->user->name.' ('.($emp->employee_id ?? $emp->id).')'])->all()" />
                         @error('newForm.employee_id') <p class="mt-1 text-xs text-red-500">{{ $message }}</p> @enderror
                     </div>
 
-                    <flux:select wire:model="newForm.leave_type_id" label="Leave Type">
-                        <option value="">Select type…</option>
-                        @foreach($leaveTypes as $lt)
-                            <option value="{{ $lt->id }}">{{ $lt->name }}</option>
-                        @endforeach
-                    </flux:select>
+                    <x-clean-select model="newForm.leave_type_id" label="Leave Type" placeholder="Select type…" :live="false"
+                        :options="$leaveTypes->map(fn ($lt) => ['value' => $lt->id, 'label' => $lt->name])->all()" />
 
                     <div class="grid grid-cols-2 gap-4">
                         <flux:input wire:model="newForm.start_date" type="date" label="Start Date" required />

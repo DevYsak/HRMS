@@ -62,27 +62,22 @@
             <input wire:model.live.debounce.300ms="filterSearch" type="text" placeholder="Search documents…"
                 class="pl-9 pr-4 h-9 rounded-lg border border-zinc-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 w-64 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100" />
         </div>
-        <select wire:model.live="filterCategory"
-            class="h-9 rounded-lg border border-zinc-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100">
-            <option value="">All Categories</option>
-            <option value="policy">Policy</option>
-            <option value="contract">Contract</option>
-            <option value="payslip">Payslip</option>
-            <option value="personal">My Documents</option>
-            <option value="warning_letter">Warning Letters</option>
-            <option value="pip">Improvement Plans</option>
-            <option value="promotion">Promotions</option>
-            <option value="performance_review">Performance Reviews</option>
-            <option value="other">Other</option>
-        </select>
+        <x-clean-select model="filterCategory" :live="true"
+            :options="[
+                ['value' => '', 'label' => 'All Categories'],
+                ['value' => 'policy', 'label' => 'Policy'],
+                ['value' => 'contract', 'label' => 'Contract'],
+                ['value' => 'payslip', 'label' => 'Payslip'],
+                ['value' => 'personal', 'label' => 'My Documents'],
+                ['value' => 'warning_letter', 'label' => 'Warning Letters'],
+                ['value' => 'pip', 'label' => 'Improvement Plans'],
+                ['value' => 'promotion', 'label' => 'Promotions'],
+                ['value' => 'performance_review', 'label' => 'Performance Reviews'],
+                ['value' => 'other', 'label' => 'Other'],
+            ]" />
         @if($canManage)
-            <select wire:model.live="filterEmployee"
-                class="h-9 rounded-lg border border-zinc-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100">
-                <option value="">All Employees</option>
-                @foreach($employees as $emp)
-                    <option value="{{ $emp->id }}">{{ $emp->user?->name }}</option>
-                @endforeach
-            </select>
+            <x-clean-select model="filterEmployee" :live="true"
+                :options="array_merge([['value' => '', 'label' => 'All Employees']], collect($employees)->map(fn ($emp) => ['value' => $emp->id, 'label' => $emp->user?->name])->all())" />
             <div class="flex items-center gap-1.5">
                 <span class="text-xs font-medium text-zinc-400">Expiry</span>
                 <input type="date" wire:model.live="filterExpiringFrom" aria-label="Expiring from"

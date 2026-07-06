@@ -228,14 +228,8 @@
             <h2 class="mb-4 text-sm font-black uppercase tracking-widest text-zinc-400">Fetch Enrolled Users from Device</h2>
             <div class="flex flex-col gap-3 sm:flex-row sm:items-end">
                 <div class="flex-1">
-                    <label class="mb-1 block text-xs font-bold text-zinc-500 uppercase tracking-wider">Select Device</label>
-                    <select wire:model="usersDeviceId"
-                        class="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 shadow-sm focus:border-brand-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white">
-                        <option value="">— Choose device —</option>
-                        @foreach($this->devices as $device)
-                            <option value="{{ $device->id }}">{{ $device->name }} ({{ $device->ip_address }})</option>
-                        @endforeach
-                    </select>
+                    <x-clean-select model="usersDeviceId" label="Select Device" placeholder="— Choose device —" :live="false"
+                        :options="collect($this->devices)->map(fn ($device) => ['value' => $device->id, 'label' => $device->name.' ('.$device->ip_address.')'])->all()" />
                 </div>
                 <flux:button wire:click="fetchDeviceUsers" variant="primary" icon="users"
                     wire:loading.attr="disabled" wire:target="fetchDeviceUsers">

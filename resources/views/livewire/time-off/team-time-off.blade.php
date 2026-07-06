@@ -233,30 +233,14 @@
 
                     {{-- Leave Type --}}
                     <div class="space-y-2">
-                        <label class="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Leave Type</label>
-                        <select
-                            wire:model="filterLeaveType"
-                            class="w-full px-3 py-2.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-sm text-zinc-700 dark:text-zinc-300 font-medium focus:outline-none focus:ring-2 focus:ring-brand-400/30 focus:border-brand-400 transition-colors"
-                        >
-                            <option value="">All Leave Types</option>
-                            @foreach($leaveTypes as $lt)
-                                <option value="{{ $lt->id }}">{{ $lt->name }}</option>
-                            @endforeach
-                        </select>
+                        <x-clean-select model="filterLeaveType" label="Leave Type" :live="false"
+                            :options="array_merge([['value' => '', 'label' => 'All Leave Types']], $leaveTypes->map(fn ($lt) => ['value' => $lt->id, 'label' => $lt->name])->all())" />
                     </div>
 
                     {{-- Status --}}
                     <div class="space-y-2">
-                        <label class="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Status</label>
-                        <select
-                            wire:model="filterStatus"
-                            class="w-full px-3 py-2.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-sm text-zinc-700 dark:text-zinc-300 font-medium focus:outline-none focus:ring-2 focus:ring-brand-400/30 focus:border-brand-400 transition-colors"
-                        >
-                            <option value="">All Status</option>
-                            <option value="pending">Pending</option>
-                            <option value="approved">Approved</option>
-                            <option value="rejected">Rejected</option>
-                        </select>
+                        <x-clean-select model="filterStatus" label="Status" :live="false"
+                            :options="[['value' => '', 'label' => 'All Status'], ['value' => 'pending', 'label' => 'Pending'], ['value' => 'approved', 'label' => 'Approved'], ['value' => 'rejected', 'label' => 'Rejected']]" />
                     </div>
 
                     {{-- Buttons --}}
@@ -391,14 +375,8 @@
                 <div class="flex items-center gap-4">
                     <div class="flex items-center gap-2">
                         <span class="text-xs text-zinc-400">Per page</span>
-                        <select
-                            wire:model.live="perPage"
-                            class="text-xs font-semibold text-zinc-700 dark:text-zinc-300 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-400/30"
-                        >
-                            <option value="10">10</option>
-                            <option value="25">25</option>
-                            <option value="50">50</option>
-                        </select>
+                        <x-clean-select model="perPage" :live="true"
+                            :options="[['value' => '10', 'label' => '10'], ['value' => '25', 'label' => '25'], ['value' => '50', 'label' => '50']]" />
                     </div>
                     <div class="flex items-center gap-1">
                         {{ $history->links('vendor.pagination.simple-tailwind') }}

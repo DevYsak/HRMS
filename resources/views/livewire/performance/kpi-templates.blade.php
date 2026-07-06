@@ -84,35 +84,33 @@
                         </flux:field>
                         <flux:field>
                             <flux:label>Applies To</flux:label>
-                            <flux:select wire:model.live="applies_to_type">
-                                <flux:select.option value="global">Global (All Employees)</flux:select.option>
-                                <flux:select.option value="department">Department</flux:select.option>
-                                <flux:select.option value="designation">Designation</flux:select.option>
-                                <flux:select.option value="role">Role</flux:select.option>
-                                <flux:select.option value="employment_type">Employment Type</flux:select.option>
-                                <flux:select.option value="branch">Branch / Office</flux:select.option>
-                            </flux:select>
+                            <x-clean-select model="applies_to_type" :live="true"
+                                :options="[
+                                    ['value' => 'global', 'label' => 'Global (All Employees)'],
+                                    ['value' => 'department', 'label' => 'Department'],
+                                    ['value' => 'designation', 'label' => 'Designation'],
+                                    ['value' => 'role', 'label' => 'Role'],
+                                    ['value' => 'employment_type', 'label' => 'Employment Type'],
+                                    ['value' => 'branch', 'label' => 'Branch / Office'],
+                                ]" />
                         </flux:field>
                         @if($applies_to_type === 'department')
                             <flux:field>
                                 <flux:label>Department</flux:label>
-                                <flux:select wire:model="applies_to_id">
-                                    <flux:select.option value="">— Select Department —</flux:select.option>
-                                    @foreach($departments as $dept)
-                                        <flux:select.option value="{{ $dept->id }}">{{ $dept->name }}</flux:select.option>
-                                    @endforeach
-                                </flux:select>
+                                <x-clean-select model="applies_to_id" :live="false"
+                                    :options="array_merge([['value' => '', 'label' => '— Select Department —']], collect($departments)->map(fn ($dept) => ['value' => $dept->id, 'label' => $dept->name])->all())" />
                             </flux:field>
                         @endif
                         <flux:field>
                             <flux:label>Review Cycle</flux:label>
-                            <flux:select wire:model="cycle_type">
-                                <flux:select.option value="monthly">Monthly</flux:select.option>
-                                <flux:select.option value="quarterly">Quarterly</flux:select.option>
-                                <flux:select.option value="half_yearly">Half Yearly</flux:select.option>
-                                <flux:select.option value="annual">Annual</flux:select.option>
-                                <flux:select.option value="custom">Custom</flux:select.option>
-                            </flux:select>
+                            <x-clean-select model="cycle_type" :live="false"
+                                :options="[
+                                    ['value' => 'monthly', 'label' => 'Monthly'],
+                                    ['value' => 'quarterly', 'label' => 'Quarterly'],
+                                    ['value' => 'half_yearly', 'label' => 'Half Yearly'],
+                                    ['value' => 'annual', 'label' => 'Annual'],
+                                    ['value' => 'custom', 'label' => 'Custom'],
+                                ]" />
                         </flux:field>
                         <div class="flex items-center gap-3 pt-6">
                             <flux:checkbox wire:model="is_active" id="is_active" />
@@ -209,17 +207,15 @@
                                             </div>
                                             {{-- Scoring type --}}
                                             <div class="col-span-3">
-                                                <select
-                                                    wire:model="categories.{{ $ci }}.components.{{ $ki }}.scoring_type"
-                                                    class="w-full text-xs bg-zinc-100 dark:bg-zinc-800 border-0 rounded-lg px-2 py-1.5 text-zinc-700 dark:text-zinc-300 outline-none"
-                                                >
-                                                    <option value="manual">Manual</option>
-                                                    <option value="auto_attendance">Auto (Attendance)</option>
-                                                    <option value="auto_punctuality">Auto (Punctuality)</option>
-                                                    <option value="auto_leave">Auto (Leave)</option>
-                                                    <option value="auto_productivity">Auto (Productivity)</option>
-                                                    <option value="auto_shift_compliance">Auto (Shift)</option>
-                                                </select>
+                                                <x-clean-select model="categories.{{ $ci }}.components.{{ $ki }}.scoring_type" :live="false"
+                                                    :options="[
+                                                        ['value' => 'manual', 'label' => 'Manual'],
+                                                        ['value' => 'auto_attendance', 'label' => 'Auto (Attendance)'],
+                                                        ['value' => 'auto_punctuality', 'label' => 'Auto (Punctuality)'],
+                                                        ['value' => 'auto_leave', 'label' => 'Auto (Leave)'],
+                                                        ['value' => 'auto_productivity', 'label' => 'Auto (Productivity)'],
+                                                        ['value' => 'auto_shift_compliance', 'label' => 'Auto (Shift)'],
+                                                    ]" />
                                             </div>
                                             {{-- Weight % --}}
                                             <div class="col-span-2 flex items-center gap-1">

@@ -83,15 +83,8 @@
                         class="w-full h-9 pl-9 pr-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-sm text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-brand-400/30 focus:border-brand-400 transition-colors"
                     />
                 </div>
-                <select wire:model.live="filterStatus"
-                    class="h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-sm text-zinc-600 dark:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-brand-400/30 transition-colors">
-                    <option value="">All Statuses</option>
-                    <option value="pending">Pending HR</option>
-                    <option value="pending_finance">Pending Finance</option>
-                    <option value="approved">Approved</option>
-                    <option value="rejected">Rejected</option>
-                    <option value="processed">Processed</option>
-                </select>
+                <x-clean-select model="filterStatus" :live="true"
+                    :options="[['value' => '', 'label' => 'All Statuses'], ['value' => 'pending', 'label' => 'Pending HR'], ['value' => 'pending_finance', 'label' => 'Pending Finance'], ['value' => 'approved', 'label' => 'Approved'], ['value' => 'rejected', 'label' => 'Rejected'], ['value' => 'processed', 'label' => 'Processed']]" />
             </div>
 
             {{-- Table --}}

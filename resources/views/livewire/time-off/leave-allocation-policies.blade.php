@@ -81,11 +81,8 @@
 
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
-                    <label class="{{ $labelClass }}">Leave type *</label>
-                    <select wire:model="leave_type_id" class="{{ $selectClass }}">
-                        <option value="">Select…</option>
-                        @foreach($leaveTypes as $lt)<option value="{{ $lt->id }}">{{ $lt->name }}</option>@endforeach
-                    </select>
+                    <x-clean-select model="leave_type_id" label="Leave type" :required="true" placeholder="Select…" :live="false"
+                        :options="$leaveTypes->map(fn ($lt) => ['value' => $lt->id, 'label' => $lt->name])->all()" />
                     @error('leave_type_id')<p class="mt-1 text-xs text-rose-500">{{ $message }}</p>@enderror
                 </div>
                 <div>
@@ -99,41 +96,24 @@
                 <p class="mb-3 text-[11px] font-bold uppercase tracking-wider text-zinc-400">Conditions (leave blank for “anyone”)</p>
                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
-                        <label class="{{ $labelClass }}">Department</label>
-                        <select wire:model="department_id" class="{{ $selectClass }}">
-                            <option value="">Any</option>
-                            @foreach($departments as $d)<option value="{{ $d->id }}">{{ $d->name }}</option>@endforeach
-                        </select>
+                        <x-clean-select model="department_id" label="Department" :live="false"
+                            :options="array_merge([['value' => '', 'label' => 'Any']], $departments->map(fn ($d) => ['value' => $d->id, 'label' => $d->name])->all())" />
                     </div>
                     <div>
-                        <label class="{{ $labelClass }}">Designation</label>
-                        <select wire:model="job_title_id" class="{{ $selectClass }}">
-                            <option value="">Any</option>
-                            @foreach($jobTitles as $j)<option value="{{ $j->id }}">{{ $j->name }}</option>@endforeach
-                        </select>
+                        <x-clean-select model="job_title_id" label="Designation" :live="false"
+                            :options="array_merge([['value' => '', 'label' => 'Any']], $jobTitles->map(fn ($j) => ['value' => $j->id, 'label' => $j->name])->all())" />
                     </div>
                     <div>
-                        <label class="{{ $labelClass }}">Employment type</label>
-                        <select wire:model="employment_type_id" class="{{ $selectClass }}">
-                            <option value="">Any</option>
-                            @foreach($employmentTypes as $t)<option value="{{ $t->id }}">{{ $t->name }}</option>@endforeach
-                        </select>
+                        <x-clean-select model="employment_type_id" label="Employment type" :live="false"
+                            :options="array_merge([['value' => '', 'label' => 'Any']], $employmentTypes->map(fn ($t) => ['value' => $t->id, 'label' => $t->name])->all())" />
                     </div>
                     <div>
-                        <label class="{{ $labelClass }}">Role</label>
-                        <select wire:model="role" class="{{ $selectClass }}">
-                            <option value="">Any</option>
-                            @foreach($roles as $r)<option value="{{ $r->value }}">{{ $r->label() }}</option>@endforeach
-                        </select>
+                        <x-clean-select model="role" label="Role" :live="false"
+                            :options="array_merge([['value' => '', 'label' => 'Any']], collect($roles)->map(fn ($r) => ['value' => $r->value, 'label' => $r->label()])->all())" />
                     </div>
                     <div>
-                        <label class="{{ $labelClass }}">Gender</label>
-                        <select wire:model="gender" class="{{ $selectClass }}">
-                            <option value="">Any</option>
-                            <option value="male">Male</option>
-                            <option value="female">Female</option>
-                            <option value="other">Other</option>
-                        </select>
+                        <x-clean-select model="gender" label="Gender" :live="false"
+                            :options="[['value' => '', 'label' => 'Any'], ['value' => 'male', 'label' => 'Male'], ['value' => 'female', 'label' => 'Female'], ['value' => 'other', 'label' => 'Other']]" />
                     </div>
                     <div>
                         <label class="{{ $labelClass }}">Min. service (months)</label>

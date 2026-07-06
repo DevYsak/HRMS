@@ -34,30 +34,14 @@
                     <input wire:model.live.debounce.300ms="search" type="text" placeholder="Search employee" class="pulse-search" />
                 </div>
                 {{-- Filters --}}
-                <select wire:model.live="office_id" class="pulse-select">
-                    <option value="">All Offices</option>
-                    @foreach($offices as $office)
-                        <option value="{{ $office->id }}">{{ $office->name }}</option>
-                    @endforeach
-                </select>
-                <select wire:model.live="department_id" class="pulse-select">
-                    <option value="">All Departments</option>
-                    @foreach($departments as $dept)
-                        <option value="{{ $dept->id }}">{{ $dept->name }}</option>
-                    @endforeach
-                </select>
-                <select wire:model.live="job_title_id" class="pulse-select">
-                    <option value="">All Job Titles</option>
-                    @foreach($jobTitles as $title)
-                        <option value="{{ $title->id }}">{{ $title->name }}</option>
-                    @endforeach
-                </select>
-                <select wire:model.live="status" class="pulse-select">
-                    <option value="">All Status</option>
-                    @foreach(\App\Enums\EmployeeStatus::cases() as $case)
-                        <option value="{{ $case->value }}">{{ $case->label() }}</option>
-                    @endforeach
-                </select>
+                <x-clean-select model="office_id" :live="true"
+                    :options="array_merge([['value' => '', 'label' => 'All Offices']], $offices->map(fn ($office) => ['value' => $office->id, 'label' => $office->name])->all())" />
+                <x-clean-select model="department_id" :live="true"
+                    :options="array_merge([['value' => '', 'label' => 'All Departments']], $departments->map(fn ($dept) => ['value' => $dept->id, 'label' => $dept->name])->all())" />
+                <x-clean-select model="job_title_id" :live="true"
+                    :options="array_merge([['value' => '', 'label' => 'All Job Titles']], $jobTitles->map(fn ($title) => ['value' => $title->id, 'label' => $title->name])->all())" />
+                <x-clean-select model="status" :live="true"
+                    :options="array_merge([['value' => '', 'label' => 'All Status']], collect(\App\Enums\EmployeeStatus::cases())->map(fn ($case) => ['value' => $case->value, 'label' => $case->label()])->all())" />
             </div>
         </div>
 

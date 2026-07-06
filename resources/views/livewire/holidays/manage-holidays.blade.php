@@ -38,19 +38,12 @@
         @endforeach
     </div>
     <div class="ml-auto flex flex-wrap items-center gap-2">
-        <select wire:model.live="filterType" class="rounded-lg border border-orange-100 bg-white px-2.5 py-1.5 text-xs font-semibold text-zinc-600 focus:border-orange-400 focus:ring-0">
-            <option value="">All types</option>
-            @foreach($types as $t)<option value="{{ $t['value'] }}">{{ $t['label'] }}</option>@endforeach
-        </select>
-        <select wire:model.live="filterOffice" class="rounded-lg border border-orange-100 bg-white px-2.5 py-1.5 text-xs font-semibold text-zinc-600 focus:border-orange-400 focus:ring-0">
-            <option value="">All branches</option>
-            @foreach($offices as $o)<option value="{{ $o->id }}">{{ $o->name }}</option>@endforeach
-        </select>
-        <select wire:model.live="filterStatus" class="rounded-lg border border-orange-100 bg-white px-2.5 py-1.5 text-xs font-semibold text-zinc-600 focus:border-orange-400 focus:ring-0">
-            <option value="active">Active</option>
-            <option value="archived">Archived</option>
-            <option value="all">All</option>
-        </select>
+        <x-clean-select model="filterType" :live="true"
+            :options="array_merge([['value' => '', 'label' => 'All types']], collect($types)->map(fn ($t) => ['value' => $t['value'], 'label' => $t['label']])->all())" />
+        <x-clean-select model="filterOffice" :live="true"
+            :options="array_merge([['value' => '', 'label' => 'All branches']], collect($offices)->map(fn ($o) => ['value' => $o->id, 'label' => $o->name])->all())" />
+        <x-clean-select model="filterStatus" :live="true"
+            :options="[['value' => 'active', 'label' => 'Active'], ['value' => 'archived', 'label' => 'Archived'], ['value' => 'all', 'label' => 'All']]" />
     </div>
 </div>
 
@@ -180,10 +173,8 @@
                     <div class="col-span-2"><flux:input wire:model="form.name" label="Holiday Name" placeholder="e.g. Diwali" /></div>
                     <flux:input wire:model="form.date" type="date" label="Date" />
                     <div>
-                        <flux:label>Type</flux:label>
-                        <select wire:model="form.holiday_type" class="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm focus:border-orange-400 focus:ring-0">
-                            @foreach($types as $t)<option value="{{ $t['value'] }}">{{ $t['label'] }}</option>@endforeach
-                        </select>
+                        <x-clean-select model="form.holiday_type" label="Type" :live="false"
+                            :options="collect($types)->map(fn ($t) => ['value' => $t['value'], 'label' => $t['label']])->all()" />
                     </div>
                     <flux:input wire:model="form.category" label="Category" placeholder="Optional" />
                     <div>
@@ -191,18 +182,12 @@
                         <input type="color" wire:model="form.color" class="mt-1 h-9 w-full cursor-pointer rounded-xl border border-zinc-200 bg-white p-1">
                     </div>
                     <div>
-                        <flux:label>Branch / Office</flux:label>
-                        <select wire:model="form.office_id" class="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm focus:border-orange-400 focus:ring-0">
-                            <option value="">All branches</option>
-                            @foreach($offices as $o)<option value="{{ $o->id }}">{{ $o->name }}</option>@endforeach
-                        </select>
+                        <x-clean-select model="form.office_id" label="Branch / Office" :live="false"
+                            :options="array_merge([['value' => '', 'label' => 'All branches']], collect($offices)->map(fn ($o) => ['value' => $o->id, 'label' => $o->name])->all())" />
                     </div>
                     <div>
-                        <flux:label>Department</flux:label>
-                        <select wire:model="form.department_id" class="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm focus:border-orange-400 focus:ring-0">
-                            <option value="">All departments</option>
-                            @foreach($departments as $d)<option value="{{ $d->id }}">{{ $d->name }}</option>@endforeach
-                        </select>
+                        <x-clean-select model="form.department_id" label="Department" :live="false"
+                            :options="array_merge([['value' => '', 'label' => 'All departments']], collect($departments)->map(fn ($d) => ['value' => $d->id, 'label' => $d->name])->all())" />
                     </div>
                     <div class="col-span-2"><flux:textarea wire:model="form.description" label="Description" rows="2" placeholder="Optional notes" /></div>
                 </div>

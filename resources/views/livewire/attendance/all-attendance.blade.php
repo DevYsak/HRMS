@@ -123,13 +123,14 @@
                 <input type="text" wire:model.live.debounce.300ms="search" placeholder="Search employee…"
                     class="w-48 rounded-lg border border-orange-100 bg-white py-1.5 pl-8 pr-2.5 text-xs font-semibold text-zinc-600 placeholder:text-zinc-400 focus:border-orange-400 focus:ring-0">
             </div>
-            <select wire:model.live="status" class="rounded-lg border border-orange-100 bg-white px-2.5 py-1.5 text-xs font-semibold text-zinc-600 focus:border-orange-400 focus:ring-0">
-                <option value="">All status</option>
-                <option value="on_time">On Time</option>
-                <option value="late">Late</option>
-                <option value="remote">Remote</option>
-                <option value="absent">Absent</option>
-            </select>
+            <x-clean-select model="status" :live="true"
+                :options="[
+                    ['value' => '', 'label' => 'All status'],
+                    ['value' => 'on_time', 'label' => 'On Time'],
+                    ['value' => 'late', 'label' => 'Late'],
+                    ['value' => 'remote', 'label' => 'Remote'],
+                    ['value' => 'absent', 'label' => 'Absent'],
+                ]" />
             @if($search || $date || $status)
                 <button wire:click="$set('search','');$set('date','');$set('status','')" class="inline-flex items-center gap-1 rounded-lg bg-zinc-100 px-2.5 py-1.5 text-xs font-bold text-zinc-500 transition hover:bg-zinc-200"><flux:icon.x-mark class="size-3.5" /> Reset</button>
             @endif
@@ -465,11 +466,8 @@ HR MARK ATTENDANCE MODAL
                     <p class="text-xs leading-relaxed text-amber-700">This creates a <strong>Regularisation Request</strong> sent to the employee's <strong>Line Manager</strong> for approval.</p>
                 </div>
                 <div class="space-y-4">
-                    <flux:select wire:model="markEmployeeId" label="Employee" placeholder="Select employee..." required>
-                        @foreach($allEmployees as $emp)
-                            <option value="{{ $emp->id }}">{{ $emp->user->name }} ({{ $emp->employee_id ?? 'No ID' }})</option>
-                        @endforeach
-                    </flux:select>
+                    <x-clean-select model="markEmployeeId" label="Employee" placeholder="Select employee..." :live="false" :required="true"
+                        :options="collect($allEmployees)->map(fn ($emp) => ['value' => $emp->id, 'label' => $emp->user->name.' ('.($emp->employee_id ?? 'No ID').')'])->all()" />
                     <flux:input wire:model="markDate" type="date" label="Date of Attendance" max="{{ now()->format('Y-m-d') }}" required />
                     <div class="grid grid-cols-2 gap-4">
                         <flux:input wire:model="markCheckIn" type="time" label="Check-in Time" required />

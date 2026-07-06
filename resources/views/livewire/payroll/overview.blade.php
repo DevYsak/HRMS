@@ -139,13 +139,8 @@
                     <p class="text-xs text-zinc-500 mt-0.5">{{ $recentPayrolls->count() }} runs{{ $filterYear ? ' in ' . $filterYear : '' }}</p>
                 </div>
                 <div class="flex items-center gap-3">
-                    <select wire:model.live="filterYear"
-                        class="text-xs font-semibold text-zinc-700 dark:text-zinc-300 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-400/30">
-                        <option value="">All Years</option>
-                        @foreach(range(now()->year, now()->year - 3) as $y)
-                            <option value="{{ $y }}">{{ $y }}</option>
-                        @endforeach
-                    </select>
+                    <x-clean-select model="filterYear" :live="true"
+                        :options="array_merge([['value' => '', 'label' => 'All Years']], collect(range(now()->year, now()->year - 3))->map(fn ($y) => ['value' => $y, 'label' => $y])->all())" />
                     <a href="{{ route('payroll.process') }}" wire:navigate
                        class="inline-flex items-center gap-1 text-xs font-semibold text-brand-600 hover:text-brand-700 transition-colors">
                         View all <flux:icon.arrow-right class="size-3.5" />

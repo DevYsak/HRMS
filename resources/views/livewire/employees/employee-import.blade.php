@@ -26,11 +26,8 @@
             </div>
             <div class="space-y-3">
                 <div>
-                    <label class="mb-1 block text-[11px] font-bold uppercase tracking-wider text-zinc-400">Existing employees</label>
-                    <select wire:model="mode" class="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-100">
-                        <option value="skip">Skip (leave unchanged)</option>
-                        <option value="update">Update from file</option>
-                    </select>
+                    <x-clean-select model="mode" label="Existing employees" :live="false"
+                        :options="[['value' => 'skip', 'label' => 'Skip (leave unchanged)'], ['value' => 'update', 'label' => 'Update from file']]" />
                 </div>
                 <label class="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
                     <input type="checkbox" wire:model="sendWelcome" class="rounded border-zinc-300 text-orange-500 focus:ring-orange-400">

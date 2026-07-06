@@ -38,41 +38,29 @@
             <input type="date" wire:model.live="to" class="w-full rounded-lg border border-orange-100 bg-white px-2.5 py-1.5 text-xs font-semibold text-zinc-600 focus:border-orange-400 focus:ring-0">
         </div>
         <div>
-            <label class="mb-1 block text-[10px] font-bold uppercase tracking-wider text-zinc-400">Department</label>
-            <select wire:model.live="departmentId" class="w-full rounded-lg border border-orange-100 bg-white px-2.5 py-1.5 text-xs font-semibold text-zinc-600 focus:border-orange-400 focus:ring-0">
-                <option value="">All</option>
-                @foreach($departments as $d)<option value="{{ $d->id }}">{{ $d->name }}</option>@endforeach
-            </select>
+            <x-clean-select model="departmentId" label="Department" :live="true"
+                :options="[['value' => '', 'label' => 'All'], ...collect($departments)->map(fn ($d) => ['value' => $d->id, 'label' => $d->name])->all()]" />
         </div>
         <div>
-            <label class="mb-1 block text-[10px] font-bold uppercase tracking-wider text-zinc-400">Branch / Office</label>
-            <select wire:model.live="officeId" class="w-full rounded-lg border border-orange-100 bg-white px-2.5 py-1.5 text-xs font-semibold text-zinc-600 focus:border-orange-400 focus:ring-0">
-                <option value="">All</option>
-                @foreach($offices as $o)<option value="{{ $o->id }}">{{ $o->name }}</option>@endforeach
-            </select>
+            <x-clean-select model="officeId" label="Branch / Office" :live="true"
+                :options="[['value' => '', 'label' => 'All'], ...collect($offices)->map(fn ($o) => ['value' => $o->id, 'label' => $o->name])->all()]" />
         </div>
         <div>
-            <label class="mb-1 block text-[10px] font-bold uppercase tracking-wider text-zinc-400">Shift</label>
-            <select wire:model.live="shiftId" class="w-full rounded-lg border border-orange-100 bg-white px-2.5 py-1.5 text-xs font-semibold text-zinc-600 focus:border-orange-400 focus:ring-0">
-                <option value="">All</option>
-                @foreach($shifts as $s)<option value="{{ $s->id }}">{{ $s->name }}</option>@endforeach
-            </select>
+            <x-clean-select model="shiftId" label="Shift" :live="true"
+                :options="[['value' => '', 'label' => 'All'], ...collect($shifts)->map(fn ($s) => ['value' => $s->id, 'label' => $s->name])->all()]" />
         </div>
         <div>
-            <label class="mb-1 block text-[10px] font-bold uppercase tracking-wider text-zinc-400">Employee</label>
-            <select wire:model.live="employeeId" class="w-full rounded-lg border border-orange-100 bg-white px-2.5 py-1.5 text-xs font-semibold text-zinc-600 focus:border-orange-400 focus:ring-0">
-                <option value="">All</option>
-                @foreach($employees as $e)<option value="{{ $e->id }}">{{ $e->user->name }}</option>@endforeach
-            </select>
+            <x-clean-select model="employeeId" label="Employee" :live="true"
+                :options="[['value' => '', 'label' => 'All'], ...collect($employees)->map(fn ($e) => ['value' => $e->id, 'label' => $e->user->name])->all()]" />
         </div>
         <div>
-            <label class="mb-1 block text-[10px] font-bold uppercase tracking-wider text-zinc-400">Mode</label>
-            <select wire:model.live="mode" class="w-full rounded-lg border border-orange-100 bg-white px-2.5 py-1.5 text-xs font-semibold text-zinc-600 focus:border-orange-400 focus:ring-0">
-                <option value="">All</option>
-                <option value="office">Office</option>
-                <option value="wfh">WFH</option>
-                <option value="hybrid">Hybrid</option>
-            </select>
+            <x-clean-select model="mode" label="Mode" :live="true"
+                :options="[
+                    ['value' => '', 'label' => 'All'],
+                    ['value' => 'office', 'label' => 'Office'],
+                    ['value' => 'wfh', 'label' => 'WFH'],
+                    ['value' => 'hybrid', 'label' => 'Hybrid'],
+                ]" />
         </div>
     </div>
 </div>

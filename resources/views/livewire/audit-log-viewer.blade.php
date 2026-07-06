@@ -18,14 +18,10 @@
         <div class="lg:col-span-2">
             <input type="text" wire:model.live.debounce.300ms="search" placeholder="Search by user…" class="{{ $selectClass }}">
         </div>
-        <select wire:model.live="action" class="{{ $selectClass }}">
-            <option value="">All actions</option>
-            @foreach($actions as $a)<option value="{{ $a }}">{{ ucfirst($a) }}</option>@endforeach
-        </select>
-        <select wire:model.live="model" class="{{ $selectClass }}">
-            <option value="">All models</option>
-            @foreach($modelTypes as $t)<option value="{{ $t }}">{{ class_basename($t) }}</option>@endforeach
-        </select>
+        <x-clean-select model="action" :live="true"
+            :options="array_merge([['value' => '', 'label' => 'All actions']], collect($actions)->map(fn ($a) => ['value' => $a, 'label' => ucfirst($a)])->all())" />
+        <x-clean-select model="model" :live="true"
+            :options="array_merge([['value' => '', 'label' => 'All models']], collect($modelTypes)->map(fn ($t) => ['value' => $t, 'label' => class_basename($t)])->all())" />
         <input type="date" wire:model.live="from" class="{{ $selectClass }}" title="From">
         <input type="date" wire:model.live="to" class="{{ $selectClass }}" title="To">
     </div>

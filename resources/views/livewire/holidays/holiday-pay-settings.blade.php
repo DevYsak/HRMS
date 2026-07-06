@@ -27,10 +27,8 @@
         @error('enabledTypes')<p class="mt-2 text-xs text-rose-500">{{ $message }}</p>@enderror
 
         <div class="mt-4">
-            <flux:label>Default Pay Type</flux:label>
-            <select wire:model="defaultPayType" class="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm focus:border-orange-400 focus:ring-0">
-                @foreach($payTypeLabels as $val => $label)<option value="{{ $val }}">{{ $label }}</option>@endforeach
-            </select>
+            <x-clean-select model="defaultPayType" label="Default Pay Type" :live="false"
+                :options="collect($payTypeLabels)->map(fn ($label, $val) => ['value' => $val, 'label' => $label])->values()->all()" />
             @error('defaultPayType')<p class="mt-1 text-xs text-rose-500">{{ $message }}</p>@enderror
         </div>
     </div>

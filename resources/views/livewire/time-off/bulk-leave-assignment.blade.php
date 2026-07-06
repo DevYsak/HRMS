@@ -21,46 +21,28 @@
 
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div>
-                <label class="{{ $labelClass }}">Department</label>
-                <select wire:model.live="department_id" class="{{ $selectClass }}">
-                    <option value="">All</option>
-                    @foreach($departments as $d)<option value="{{ $d->id }}">{{ $d->name }}</option>@endforeach
-                </select>
+                <x-clean-select model="department_id" label="Department" :live="true"
+                    :options="array_merge([['value' => '', 'label' => 'All']], $departments->map(fn ($d) => ['value' => $d->id, 'label' => $d->name])->all())" />
             </div>
             <div>
-                <label class="{{ $labelClass }}">Designation</label>
-                <select wire:model.live="job_title_id" class="{{ $selectClass }}">
-                    <option value="">All</option>
-                    @foreach($jobTitles as $j)<option value="{{ $j->id }}">{{ $j->name }}</option>@endforeach
-                </select>
+                <x-clean-select model="job_title_id" label="Designation" :live="true"
+                    :options="array_merge([['value' => '', 'label' => 'All']], $jobTitles->map(fn ($j) => ['value' => $j->id, 'label' => $j->name])->all())" />
             </div>
             <div>
-                <label class="{{ $labelClass }}">Shift</label>
-                <select wire:model.live="shift_id" class="{{ $selectClass }}">
-                    <option value="">All</option>
-                    @foreach($shifts as $s)<option value="{{ $s->id }}">{{ $s->name }}</option>@endforeach
-                </select>
+                <x-clean-select model="shift_id" label="Shift" :live="true"
+                    :options="array_merge([['value' => '', 'label' => 'All']], $shifts->map(fn ($s) => ['value' => $s->id, 'label' => $s->name])->all())" />
             </div>
             <div>
-                <label class="{{ $labelClass }}">Branch / Office</label>
-                <select wire:model.live="office_id" class="{{ $selectClass }}">
-                    <option value="">All</option>
-                    @foreach($offices as $o)<option value="{{ $o->id }}">{{ $o->name }}</option>@endforeach
-                </select>
+                <x-clean-select model="office_id" label="Branch / Office" :live="true"
+                    :options="array_merge([['value' => '', 'label' => 'All']], $offices->map(fn ($o) => ['value' => $o->id, 'label' => $o->name])->all())" />
             </div>
             <div>
-                <label class="{{ $labelClass }}">Employment Type</label>
-                <select wire:model.live="employment_type_id" class="{{ $selectClass }}">
-                    <option value="">All</option>
-                    @foreach($employmentTypes as $t)<option value="{{ $t->id }}">{{ $t->name }}</option>@endforeach
-                </select>
+                <x-clean-select model="employment_type_id" label="Employment Type" :live="true"
+                    :options="array_merge([['value' => '', 'label' => 'All']], $employmentTypes->map(fn ($t) => ['value' => $t->id, 'label' => $t->name])->all())" />
             </div>
             <div>
-                <label class="{{ $labelClass }}">Status</label>
-                <select wire:model.live="status" class="{{ $selectClass }}">
-                    <option value="">All</option>
-                    @foreach($statuses as $st)<option value="{{ $st->value }}">{{ $st->label() }}</option>@endforeach
-                </select>
+                <x-clean-select model="status" label="Status" :live="true"
+                    :options="array_merge([['value' => '', 'label' => 'All']], collect($statuses)->map(fn ($st) => ['value' => $st->value, 'label' => $st->label()])->all())" />
             </div>
             <div>
                 <label class="{{ $labelClass }}">Joined from</label>
@@ -79,21 +61,13 @@
 
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div>
-                <label class="{{ $labelClass }}">Leave type</label>
-                <select wire:model="leave_type_id" class="{{ $selectClass }}">
-                    <option value="">Select…</option>
-                    @foreach($leaveTypes as $lt)<option value="{{ $lt->id }}">{{ $lt->name }}</option>@endforeach
-                </select>
+                <x-clean-select model="leave_type_id" label="Leave type" placeholder="Select…" :live="false"
+                    :options="$leaveTypes->map(fn ($lt) => ['value' => $lt->id, 'label' => $lt->name])->all()" />
                 @error('leave_type_id')<p class="mt-1 text-xs text-rose-500">{{ $message }}</p>@enderror
             </div>
             <div>
-                <label class="{{ $labelClass }}">Action</label>
-                <select wire:model.live="action" class="{{ $selectClass }}">
-                    <option value="assign">Set to (assign)</option>
-                    <option value="increase">Increase by</option>
-                    <option value="decrease">Decrease by</option>
-                    <option value="reset">Reset to default</option>
-                </select>
+                <x-clean-select model="action" label="Action" :live="true"
+                    :options="[['value' => 'assign', 'label' => 'Set to (assign)'], ['value' => 'increase', 'label' => 'Increase by'], ['value' => 'decrease', 'label' => 'Decrease by'], ['value' => 'reset', 'label' => 'Reset to default']]" />
             </div>
             <div>
                 <label class="{{ $labelClass }}">Days</label>

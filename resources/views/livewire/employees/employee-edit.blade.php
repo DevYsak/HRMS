@@ -225,11 +225,8 @@
                             <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
                                 <flux:input wire:model="name" label="Full Name" icon="user" required />
                                 <flux:input wire:model="email" type="email" label="Email Address" icon="envelope" required />
-                                <flux:select wire:model="roleId" label="System Role">
-                                    @foreach($roles as $roleOption)
-                                        <option value="{{ $roleOption->id }}">{{ $roleOption->name }}</option>
-                                    @endforeach
-                                </flux:select>
+                                <x-clean-select model="roleId" label="System Role" :live="false"
+                                    :options="$roles->map(fn ($roleOption) => ['value' => $roleOption->id, 'label' => $roleOption->name])->all()" />
                                 <flux:input wire:model="employee_id" label="Employee ID" icon="identification" placeholder="CNX-0001" required />
                             </div>
                             <div class="flex items-center gap-2 rounded-xl bg-indigo-50 px-4 py-3 text-sm text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-300">
@@ -258,13 +255,8 @@
                             <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
                                 <flux:input wire:model="phone" label="Phone Number" icon="phone" placeholder="+91 98765 43210" />
                                 <flux:input wire:model="date_of_birth" type="date" label="Date of Birth" />
-                                <flux:select wire:model="gender" label="Gender">
-                                    <option value="">Select…</option>
-                                    <option value="male">Male</option>
-                                    <option value="female">Female</option>
-                                    <option value="other">Other</option>
-                                    <option value="prefer_not_to_say">Prefer not to say</option>
-                                </flux:select>
+                                <x-clean-select model="gender" label="Gender" :live="false" placeholder="Select…"
+                                    :options="[['value' => 'male', 'label' => 'Male'], ['value' => 'female', 'label' => 'Female'], ['value' => 'other', 'label' => 'Other'], ['value' => 'prefer_not_to_say', 'label' => 'Prefer not to say']]" />
                                 <flux:input wire:model="emergency_contact" label="Emergency Contact" icon="phone-arrow-up-right" placeholder="Name & phone" />
                             </div>
                             <flux:textarea wire:model="address" label="Residential Address" rows="2" placeholder="Full residential address" />
@@ -301,68 +293,29 @@
                             <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
                                 <flux:input wire:model="joining_date" type="date" label="Joining Date" required />
                                 <flux:input wire:model="probation_end_date" type="date" label="Probation End Date" />
-                                <flux:select wire:model="status" label="Current Status">
-                                    @foreach($statuses as $case)
-                                        <option value="{{ $case->value }}">{{ $case->label() }}</option>
-                                    @endforeach
-                                </flux:select>
-                                <flux:select wire:model="employment_type_id" label="Employment Type">
-                                    <option value="">Select Employment Type…</option>
-                                    @foreach($employmentTypes as $type)
-                                        <option value="{{ $type->id }}">{{ $type->name }}</option>
-                                    @endforeach
-                                </flux:select>
-                                <flux:select wire:model="work_mode_id" label="Work Mode">
-                                    <option value="">Select Work Mode…</option>
-                                    @foreach($workModes as $mode)
-                                        <option value="{{ $mode->id }}">{{ $mode->name }}</option>
-                                    @endforeach
-                                </flux:select>
-                                <flux:select wire:model="office_id" label="Office">
-                                    <option value="">Select Office…</option>
-                                    @foreach($offices as $office)
-                                        <option value="{{ $office->id }}">{{ $office->name }}</option>
-                                    @endforeach
-                                </flux:select>
-                                <flux:select wire:model="department_id" label="Department">
-                                    <option value="">Select Department…</option>
-                                    @foreach($departments as $dept)
-                                        <option value="{{ $dept->id }}">{{ $dept->name }}</option>
-                                    @endforeach
-                                </flux:select>
-                                <flux:select wire:model="job_title_id" label="Job Title">
-                                    <option value="">Select Job Title…</option>
-                                    @foreach($jobTitles as $title)
-                                        <option value="{{ $title->id }}">{{ $title->name }}</option>
-                                    @endforeach
-                                </flux:select>
-                                <flux:select wire:model="manager_id" label="Line Manager">
-                                    <option value="">Select Manager…</option>
-                                    @foreach($managers as $mgr)
-                                        <option value="{{ $mgr->id }}">{{ $mgr->name }} ({{ ucfirst($mgr->role->value) }})</option>
-                                    @endforeach
-                                </flux:select>
-                                <flux:select wire:model="shift_id" label="Shift">
-                                    <option value="">No Shift Assigned</option>
-                                    @foreach($shifts as $shift)
-                                        <option value="{{ $shift->id }}">
-                                            {{ $shift->name }} — {{ \Illuminate\Support\Carbon::parse($shift->start_time)->format('g:i A') }} to {{ \Illuminate\Support\Carbon::parse($shift->end_time)->format('g:i A') }} (Grace: {{ $shift->grace_minutes }}m)
-                                        </option>
-                                    @endforeach
-                                </flux:select>
-                                <flux:select wire:model="salary_cycle_id" label="Salary Cycle">
-                                    <option value="">Select Salary Cycle…</option>
-                                    @foreach($salaryCycles as $cycle)
-                                        <option value="{{ $cycle->id }}">{{ $cycle->name }}</option>
-                                    @endforeach
-                                </flux:select>
-                                <flux:select wire:model.live="ot_tracking_source" label="OT Tracking Source"
-                                    description="Nexflow/Hybrid enables the Nexflow tab and sync.">
-                                    <option value="biometric">Biometric (standard attendance)</option>
-                                    <option value="manual">Manual (HR-entered)</option>
-                                    <option value="nexflow">Nexflow (IT/Dev/QA teams)</option>
-                                    <option value="hybrid">Hybrid (both sources)</option>
-                                </flux:select>
+                                <x-clean-select model="status" label="Current Status" :live="false"
+                                    :options="collect($statuses)->map(fn ($case) => ['value' => $case->value, 'label' => $case->label()])->all()" />
+                                <x-clean-select model="employment_type_id" label="Employment Type" :live="false" placeholder="Select Employment Type…"
+                                    :options="$employmentTypes->map(fn ($type) => ['value' => $type->id, 'label' => $type->name])->all()" />
+                                <x-clean-select model="work_mode_id" label="Work Mode" :live="false" placeholder="Select Work Mode…"
+                                    :options="$workModes->map(fn ($mode) => ['value' => $mode->id, 'label' => $mode->name])->all()" />
+                                <x-clean-select model="office_id" label="Office" :live="false" placeholder="Select Office…"
+                                    :options="$offices->map(fn ($office) => ['value' => $office->id, 'label' => $office->name])->all()" />
+                                <x-clean-select model="department_id" label="Department" :live="false" placeholder="Select Department…"
+                                    :options="$departments->map(fn ($dept) => ['value' => $dept->id, 'label' => $dept->name])->all()" />
+                                <x-clean-select model="job_title_id" label="Job Title" :live="false" placeholder="Select Job Title…"
+                                    :options="$jobTitles->map(fn ($title) => ['value' => $title->id, 'label' => $title->name])->all()" />
+                                <x-clean-select model="manager_id" label="Line Manager" :live="false" placeholder="Select Manager…"
+                                    :options="$managers->map(fn ($mgr) => ['value' => $mgr->id, 'label' => $mgr->name.' ('.ucfirst($mgr->role->value).')'])->all()" />
+                                <x-clean-select model="shift_id" label="Shift" :live="false" placeholder="No Shift Assigned"
+                                    :options="$shifts->map(fn ($shift) => ['value' => $shift->id, 'label' => $shift->name.' — '.\Illuminate\Support\Carbon::parse($shift->start_time)->format('g:i A').' to '.\Illuminate\Support\Carbon::parse($shift->end_time)->format('g:i A').' (Grace: '.$shift->grace_minutes.'m)'])->all()" />
+                                <x-clean-select model="salary_cycle_id" label="Salary Cycle" :live="false" placeholder="Select Salary Cycle…"
+                                    :options="$salaryCycles->map(fn ($cycle) => ['value' => $cycle->id, 'label' => $cycle->name])->all()" />
+                                <div>
+                                    <x-clean-select model="ot_tracking_source" label="OT Tracking Source" :live="true"
+                                        :options="[['value' => 'biometric', 'label' => 'Biometric (standard attendance)'], ['value' => 'manual', 'label' => 'Manual (HR-entered)'], ['value' => 'nexflow', 'label' => 'Nexflow (IT/Dev/QA teams)'], ['value' => 'hybrid', 'label' => 'Hybrid (both sources)']]" />
+                                    <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Nexflow/Hybrid enables the Nexflow tab and sync.</p>
+                                </div>
                                 <flux:input wire:model="employee_code" type="number" min="1" max="65535" label="Biometric Device ID"
                                     placeholder="e.g. 17"
                                     description="Device PIN used to match biometric punches. Leave blank if not enrolled." />
@@ -390,12 +343,8 @@
                                 </div>
                                 <div class="flex items-center gap-2">
                                     {{-- Year selector --}}
-                                    <select wire:model.live="leaveBalanceYear"
-                                        class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-1.5 text-sm text-zinc-700 dark:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-indigo-400/40">
-                                        @foreach([now()->year - 1, now()->year, now()->year + 1] as $yr)
-                                            <option value="{{ $yr }}">{{ $yr }}</option>
-                                        @endforeach
-                                    </select>
+                                    <x-clean-select model="leaveBalanceYear" :live="true"
+                                        :options="collect([now()->year - 1, now()->year, now()->year + 1])->map(fn ($yr) => ['value' => $yr, 'label' => $yr])->all()" />
                                     @if($canManageLeaveBalance)
                                         <flux:button wire:click="openManageLeaveModal" variant="primary" icon="adjustments-horizontal" size="sm">
                                             Manage Balance
@@ -862,16 +811,11 @@
 
                                 <div class="space-y-4">
                                     <flux:field>
-                                        <flux:label>Component</flux:label>
-                                        <flux:select wire:model="salaryComponentId">
-                                            <option value="">Select component…</option>
-                                            @foreach($salaryComponents->where('type', 'earning') as $sc)
-                                                <option value="{{ $sc->id }}">{{ $sc->name }} (Earning)</option>
-                                            @endforeach
-                                            @foreach($salaryComponents->where('type', 'deduction') as $sc)
-                                                <option value="{{ $sc->id }}">{{ $sc->name }} (Deduction)</option>
-                                            @endforeach
-                                        </flux:select>
+                                        <x-clean-select model="salaryComponentId" label="Component" :live="false" placeholder="Select component…"
+                                            :options="array_merge(
+                                                $salaryComponents->where('type', 'earning')->map(fn ($sc) => ['value' => $sc->id, 'label' => $sc->name.' (Earning)'])->values()->all(),
+                                                $salaryComponents->where('type', 'deduction')->map(fn ($sc) => ['value' => $sc->id, 'label' => $sc->name.' (Deduction)'])->values()->all()
+                                            )" />
                                         @error('salaryComponentId') <flux:error>{{ $message }}</flux:error> @enderror
                                     </flux:field>
 
@@ -947,13 +891,8 @@
                 <div class="space-y-4">
                     {{-- Leave Type --}}
                     <flux:field>
-                        <flux:label>Leave Type <span class="text-red-500">*</span></flux:label>
-                        <flux:select wire:model="leaveAdjustTypeId">
-                            <option value="">Select leave type…</option>
-                            @foreach($adjustableLeaveTypes as $lt)
-                                <option value="{{ $lt->id }}">{{ $lt->name }}</option>
-                            @endforeach
-                        </flux:select>
+                        <x-clean-select model="leaveAdjustTypeId" label="Leave Type" :required="true" :live="false" placeholder="Select leave type…"
+                            :options="$adjustableLeaveTypes->map(fn ($lt) => ['value' => $lt->id, 'label' => $lt->name])->all()" />
                         @error('leaveAdjustTypeId') <flux:error>{{ $message }}</flux:error> @enderror
                     </flux:field>
 
