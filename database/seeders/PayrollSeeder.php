@@ -3,8 +3,8 @@
 namespace Database\Seeders;
 
 use App\Models\Employee;
-use App\Models\SalaryComponent;
 use App\Models\EmployeeSalary;
+use App\Models\SalaryComponent;
 use Illuminate\Database\Seeder;
 
 class PayrollSeeder extends Seeder
@@ -14,18 +14,25 @@ class PayrollSeeder extends Seeder
      */
     public function run(): void
     {
-        // 1. Create standard salary components
+        // 1. Standard salary components. Statutory heads carry the codes/flags
+        //    the SalaryCalculationService uses to compute EPF/ESI/PT/TDS to
+        //    policy (see App\Services\StatutoryService).
         $components = [
-            ['name' => 'Basic Salary', 'type' => 'earning', 'is_fixed' => true, 'default_amount' => 50000],
-            ['name' => 'HRA', 'type' => 'earning', 'is_fixed' => true, 'default_amount' => 20000],
-            ['name' => 'Special Allowance', 'type' => 'earning', 'is_fixed' => true, 'default_amount' => 10000],
-            ['name' => 'Professional Tax', 'type' => 'deduction', 'is_fixed' => true, 'default_amount' => 200],
-            ['name' => 'Provident Fund (PF)', 'type' => 'deduction', 'is_fixed' => true, 'default_amount' => 1800],
-            ['name' => 'Health Insurance', 'type' => 'deduction', 'is_fixed' => true, 'default_amount' => 1500],
+            ['name' => 'Basic Salary', 'code' => 'BASIC', 'type' => 'earning', 'component_type' => 'earning', 'is_fixed' => true, 'default_amount' => 50000, 'is_taxable' => true, 'display_order' => 1],
+            ['name' => 'HRA', 'code' => 'HRA', 'type' => 'earning', 'component_type' => 'earning', 'is_fixed' => true, 'default_amount' => 20000, 'is_taxable' => true, 'display_order' => 2],
+            ['name' => 'Special Allowance', 'code' => 'SPECIAL', 'type' => 'earning', 'component_type' => 'earning', 'is_fixed' => true, 'default_amount' => 10000, 'is_taxable' => true, 'display_order' => 3],
+            ['name' => 'Provident Fund (PF)', 'code' => 'PF', 'type' => 'deduction', 'component_type' => 'deduction', 'is_fixed' => true, 'default_amount' => 1800, 'is_pf_applicable' => true, 'display_order' => 1],
+            ['name' => 'ESI', 'code' => 'ESI', 'type' => 'deduction', 'component_type' => 'deduction', 'is_fixed' => false, 'default_amount' => 0, 'is_esi_applicable' => true, 'display_order' => 2],
+            ['name' => 'Professional Tax', 'code' => 'PROFESSIONAL_TAX', 'type' => 'deduction', 'component_type' => 'deduction', 'is_fixed' => true, 'default_amount' => 200, 'display_order' => 3],
+            ['name' => 'Income Tax (TDS)', 'code' => 'TDS', 'type' => 'deduction', 'component_type' => 'deduction', 'is_fixed' => false, 'default_amount' => 0, 'display_order' => 4],
+            ['name' => 'Health Insurance', 'code' => 'HEALTH_INS', 'type' => 'deduction', 'component_type' => 'deduction', 'is_fixed' => true, 'default_amount' => 1500, 'display_order' => 5],
         ];
 
+        // updateOrCreate keyed on name (stable across existing installs) so
+        // re-seeding backfills the codes/flags onto components created before
+        // statutory support existed, and adds ESI / TDS where missing.
         foreach ($components as $comp) {
-            SalaryComponent::firstOrCreate(['name' => $comp['name']], $comp);
+            SalaryComponent::updateOrCreate(['name' => $comp['name']], $comp);
         }
 
         // 2. Assign components to some employees for testing

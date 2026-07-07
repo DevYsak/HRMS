@@ -12,6 +12,7 @@ use App\Models\LeaveBalance;
 use App\Models\User;
 use App\Notifications\AttendanceRegularisationNotification;
 use App\Notifications\RegularisationReviewedNotification;
+use App\Services\Attendance\PunchClassifier;
 use App\Services\AttendanceService;
 use Carbon\CarbonPeriod;
 use Illuminate\Database\Eloquent\Builder;
@@ -237,10 +238,23 @@ class AllAttendance extends Component
             ? BreakLog::where('attendance_id', $todayAtt->id)->whereNull('break_end')->exists()
             : false;
 
-        $punches = AttendancePunch::where('employee_id', $employee->id)
+        $rawPunches = AttendancePunch::where('employee_id', $employee->id)
             ->whereDate('punch_date', $today->toDateString())
             ->orderBy('punched_at')
             ->get();
+
+        // Collapse device noise/duplicates and derive the real break minutes
+        // from the punch stream (the engine's stored break_minutes can be wrong
+        // when a stray verify flips the in/out pairing).
+        $classifier = app(PunchClassifier::class);
+        $punches = $classifier->dedupe($rawPunches);
+        $breakMin = $rawPunches->isNotEmpty()
+            ? $classifier->breakMinutes($rawPunches)
+            : (int) ($todayAtt->break_minutes ?? 0);
+
+        if ($todayAtt?->check_in) {
+            $workedMin = max(0, (int) $todayAtt->check_in->diffInMinutes($todayAtt->check_out ?? now()) - $breakMin);
+        }
 
         $this->drawer = [
             'name' => $employee->user?->name ?? '—',
@@ -262,7 +276,7 @@ class AllAttendance extends Component
                 'in' => $todayAtt->check_in?->format('h:i A'),
                 'out' => $todayAtt->check_out?->format('h:i A'),
                 'worked' => intdiv($workedMin, 60).'h '.($workedMin % 60).'m',
-                'break' => (int) ($todayAtt->break_minutes ?? 0),
+                'break' => $breakMin,
                 'overtime' => max(0, $workedMin - $stdMin) > 0 ? intdiv($workedMin - $stdMin, 60).'h '.(($workedMin - $stdMin) % 60).'m' : '0m',
                 'mode' => $todayAtt->work_mode,
                 'is_late' => (bool) $todayAtt->is_late,

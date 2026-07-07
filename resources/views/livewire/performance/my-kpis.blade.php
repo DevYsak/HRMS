@@ -57,14 +57,14 @@
             <div class="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800 flex items-center gap-6">
                 @php
                     $gradeColors = [
-                        'a_plus' => 'text-green-600 bg-green-100',
-                        'a'      => 'text-emerald-600 bg-emerald-100',
-                        'b'      => 'text-blue-600 bg-blue-100',
-                        'c'      => 'text-amber-600 bg-amber-100',
-                        'd'      => 'text-red-600 bg-red-100',
+                        'a_plus' => 'text-green-600 bg-green-100 dark:text-green-400 dark:bg-green-900/30',
+                        'a'      => 'text-emerald-600 bg-emerald-100 dark:text-emerald-400 dark:bg-emerald-900/30',
+                        'b'      => 'text-blue-600 bg-blue-100 dark:text-blue-400 dark:bg-blue-900/30',
+                        'c'      => 'text-amber-600 bg-amber-100 dark:text-amber-400 dark:bg-amber-900/30',
+                        'd'      => 'text-red-600 bg-red-100 dark:text-red-400 dark:bg-red-900/30',
                     ];
                     $gradeLabels = ['a_plus' => 'A+', 'a' => 'A', 'b' => 'B', 'c' => 'C', 'd' => 'D'];
-                    $gc = $gradeColors[$scorecard->grade] ?? 'text-zinc-600 bg-zinc-100';
+                    $gc = $gradeColors[$scorecard->grade] ?? 'text-zinc-600 bg-zinc-100 dark:text-zinc-300 dark:bg-zinc-800';
                     $gl = $gradeLabels[$scorecard->grade] ?? strtoupper($scorecard->grade);
                 @endphp
                 <div>
@@ -111,7 +111,7 @@
                             'missed'      => 'text-red-600 bg-red-100 dark:bg-red-900/30',
                         ];
                         $statusLabels = ['not_started' => 'Not Started', 'in_progress' => 'In Progress', 'achieved' => 'Achieved', 'missed' => 'Missed'];
-                        $sc = $statusColors[$kpi->status] ?? 'text-zinc-400 bg-zinc-100';
+                        $sc = $statusColors[$kpi->status] ?? 'text-zinc-400 bg-zinc-100 dark:bg-zinc-800';
                         $sl = $statusLabels[$kpi->status] ?? $kpi->status;
                         $pct = min((float) $kpi->progress_percent, 100);
                         $barColor = $pct >= 100 ? 'bg-green-400' : ($pct >= 50 ? 'bg-indigo-400' : ($pct > 0 ? 'bg-amber-400' : 'bg-zinc-200 dark:bg-zinc-700'));

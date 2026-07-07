@@ -2,6 +2,7 @@
 
 use App\Models\Attendance;
 use App\Models\AttendanceDailySummary;
+use App\Models\AttendancePunch;
 use App\Models\Employee;
 use Illuminate\Support\Facades\Http;
 
@@ -127,6 +128,32 @@ test('an unsupported verify mode is stored as null rather than a bad chip', func
     expect($att->check_out_method)->toBeNull();
 });
 
+test('break and working are re-derived from the punch stream, overriding a bad engine break_min', function () {
+    $emp = Employee::factory()->create(['employee_code' => 77, 'manager_id' => null]);
+
+    // The engine reports a wrong 130-minute break, but the raw punch stream —
+    // with a stray verify at 13:20 and duplicate reads — really only holds two
+    // tea breaks totalling 17 minutes (10 + 7).
+    $punchTimes = ['10:27:00', '13:17:00', '13:20:00', '13:27:00', '13:27:00', '14:16:00', '14:23:00', '14:23:00', '15:35:00', '15:38:00'];
+
+    Http::fake(fn () => Http::response(['table' => [[
+        'emp_id' => '77', 'first_punch' => '10:27:00', 'last_punch' => '15:38:00',
+        'working_min' => 181, 'break_min' => 130, 'overtime_min' => 0, 'late' => false, 'delay_min' => 0,
+        'punch_count' => count($punchTimes), 'status' => 'Completed Shift',
+        'punches' => array_map(fn ($t) => ['time' => $t, 'verify' => 'face'], $punchTimes),
+    ]]], 200));
+
+    $this->artisan('attendance:sync-engine', ['--date' => '2026-06-29'])->assertSuccessful();
+
+    $att = Attendance::where('employee_id', $emp->id)->first();
+    // 130 → 17, re-derived from the deduped punch stream.
+    expect($att->break_minutes)->toBe(17)
+        // gross 10:27→15:38 = 311m, minus 17m break = 294m → 4.90h.
+        ->and((float) $att->total_hours)->toBe(4.9);
+
+    expect(AttendanceDailySummary::where('employee_id', $emp->id)->first()->break_minutes)->toBe(17);
+});
+
 test('a backfill syncs every date in the --from/--to range', function () {
     $emp = Employee::factory()->create(['employee_code' => 31, 'manager_id' => null]);
 
@@ -231,7 +258,7 @@ test('the engine pull ingests every individual punch into the journey', function
 
     $this->artisan('attendance:sync-engine', ['--date' => '2026-06-29'])->assertSuccessful();
 
-    $punches = App\Models\AttendancePunch::where('employee_id', $emp->id)->orderBy('punched_at')->get();
+    $punches = AttendancePunch::where('employee_id', $emp->id)->orderBy('punched_at')->get();
     expect($punches)->toHaveCount(4);
     expect($punches->first()->method)->toBe('face');
     expect($punches->get(1)->method)->toBe('id_card');
@@ -251,5 +278,5 @@ test('re-syncing punches is idempotent (no duplicates)', function () {
     $this->artisan('attendance:sync-engine', ['--date' => '2026-06-29'])->assertSuccessful();
     $this->artisan('attendance:sync-engine', ['--date' => '2026-06-29'])->assertSuccessful();
 
-    expect(App\Models\AttendancePunch::where('employee_id', $emp->id)->count())->toBe(2);
+    expect(AttendancePunch::where('employee_id', $emp->id)->count())->toBe(2);
 });

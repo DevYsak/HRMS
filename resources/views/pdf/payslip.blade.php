@@ -180,6 +180,21 @@ body   { font-family: 'DejaVu Sans', Arial, sans-serif; font-size: 10px; color: 
 .sc-amt-n { font-size: 17px; font-weight: 900; color: {{ $green }}; line-height: 1.25; margin-top: 2px; }
 .sc-sub   { font-size: 7.5px; color: #9ca3af; margin-top: 2px; }
 
+/* ── SALARY COMPARISON (this vs previous month) ── */
+.cmp-wrap  { padding: 2px 0 8px; }
+.cmp-tbl   { width: 100%; border-collapse: collapse; margin-top: 8px; border: 1px solid #e5e7eb; table-layout: fixed; }
+.cmp-th    { font-size: 8px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.4px; color: #6b7280;
+             padding: 7px 12px; background: #f9fafb; border-bottom: 1.5px solid #e5e7eb; text-align: right; }
+.cmp-th-l  { text-align: left; }
+.cmp-th-c  { color: {{ $orange }}; }
+.cmp-td    { font-size: 9.5px; padding: 6.5px 12px; text-align: right; font-weight: 700; color: #111; border-bottom: 1px solid #f9fafb; }
+.cmp-td-l  { text-align: left; font-weight: 600; color: #374151; }
+.cmp-td-c  { background: #fff7ed; }
+.cmp-up    { color: #16a34a; }
+.cmp-dn    { color: #dc2626; }
+.cmp-flat  { color: #9ca3af; }
+.cmp-note  { font-size: 8px; color: #9ca3af; font-style: italic; margin-top: 5px; }
+
 /* ── EARNINGS TABLE ── */
 .tbl-wrap { padding: 0 0 12px; }
 .sal-tbl  { width: 100%; border-collapse: collapse; margin-top: 12px; table-layout: fixed; border: 1px solid #e5e7eb; }
@@ -355,6 +370,53 @@ body   { font-family: 'DejaVu Sans', Arial, sans-serif; font-size: 10px; color: 
 </div>
 
 <div class="page">
+
+{{-- ══ SALARY COMPARISON — this month vs previous month ══ --}}
+@php
+    $curDate  = Carbon::parse("1 {$payroll->month} {$payroll->year}");
+    $prevDate = $curDate->copy()->subMonth();
+    $prevPayslip = \App\Models\Payslip::whereHas('payroll', fn ($q) => $q
+            ->where('month', $prevDate->format('F'))
+            ->where('year', $prevDate->year)
+            ->where('cycle', $payroll->cycle))
+        ->where('employee_id', $employee->id)
+        ->latest('id')->first();
+    $curLabel  = $curDate->format('M Y');
+    $prevLabel = $prevDate->format('M Y');
+    $cmpRows = [
+        ['Gross Earnings',   (float) ($prevPayslip->gross_salary ?? 0),    (float) $payslip->gross_salary,    false],
+        ['Total Deductions', (float) ($prevPayslip->total_deductions ?? 0),(float) $payslip->total_deductions, true],
+        ['Net Pay',          (float) ($prevPayslip->net_salary ?? 0),      (float) $payslip->net_salary,      false],
+    ];
+@endphp
+<div class="cmp-wrap">
+    <div class="att-head" style="border-top:none;padding-top:2px;">Salary Comparison &mdash; {{ $prevLabel }} vs {{ $curLabel }}</div>
+    <table class="cmp-tbl" cellpadding="0" cellspacing="0">
+        <thead><tr>
+            <th class="cmp-th cmp-th-l">Particulars</th>
+            <th class="cmp-th">{{ $prevLabel }}</th>
+            <th class="cmp-th cmp-th-c">{{ $curLabel }}</th>
+            <th class="cmp-th">Change</th>
+        </tr></thead>
+        <tbody>
+        @foreach($cmpRows as [$label, $prev, $cur, $deductionRow])
+            @php
+                $delta = round($cur - $prev, 2);
+                // For deductions a rise is unfavourable (red); for earnings/net a rise is favourable (green).
+                $cls = $delta == 0 ? 'cmp-flat' : (($deductionRow ? $delta < 0 : $delta > 0) ? 'cmp-up' : 'cmp-dn');
+                $sign = $delta > 0 ? '+' : ($delta < 0 ? '-' : '');
+            @endphp
+            <tr>
+                <td class="cmp-td cmp-td-l">{{ $label }}</td>
+                <td class="cmp-td">{{ $prevPayslip ? 'Rs.'.number_format($prev, 2) : '—' }}</td>
+                <td class="cmp-td cmp-td-c">Rs.{{ number_format($cur, 2) }}</td>
+                <td class="cmp-td {{ $prevPayslip ? $cls : 'cmp-flat' }}">{{ $prevPayslip ? $sign.'Rs.'.number_format(abs($delta), 2) : '—' }}</td>
+            </tr>
+        @endforeach
+        </tbody>
+    </table>
+    @unless($prevPayslip)<div class="cmp-note">No payslip on record for {{ $prevLabel }} — comparison will populate from next cycle.</div>@endunless
+</div>
 
 {{-- ══ EARNINGS & DEDUCTIONS ══ --}}
 <div class="tbl-wrap">

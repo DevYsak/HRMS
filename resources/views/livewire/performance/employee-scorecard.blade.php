@@ -2,7 +2,7 @@
     <div class="pulse-page-header">
         <div>
             <div class="flex items-center gap-3">
-                <flux:button href="{{ route('performance.my-review') }}" wire:navigate variant="ghost" size="sm" icon="arrow-left" class="mr-2" />
+                <flux:button href="{{ route('performance.my') }}" wire:navigate variant="ghost" size="sm" icon="arrow-left" class="mr-2" />
                 <h1 class="pulse-page-title">Performance Scorecard</h1>
             </div>
             <p class="pulse-page-subtitle">Finalized assessment results for {{ $review->performanceCycle?->name ?? '—' }}</p>

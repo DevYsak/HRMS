@@ -21,6 +21,7 @@ use App\Models\WfhReport;
 use App\Notifications\AttendanceRegularisationNotification;
 use App\Notifications\RegularisationReviewedNotification;
 use App\Services\AiAssistant;
+use App\Services\Attendance\PunchClassifier;
 use App\Services\AttendanceService;
 use App\Support\UserAgent;
 use Carbon\CarbonPeriod;
@@ -563,18 +564,10 @@ class AttendanceTracker extends Component
             return [];
         }
 
-        // Devices often log one physical action twice (e.g. a card tap and a
-        // face verify seconds apart). Collapse punches within a 3-minute window
-        // into the first one so the in/out alternation reflects real movement.
-        $deduped = collect();
-        foreach ($punches as $p) {
-            $last = $deduped->last();
-            if ($last && $last->punched_at->diffInMinutes($p->punched_at) < 3) {
-                continue;
-            }
-            $deduped->push($p);
-        }
-        $punches = $deduped->values();
+        // Collapse device noise (repeated reads / a card tap plus a face verify
+        // seconds apart) into real presence events via the shared classifier, so
+        // a stray punch can't flip the in/out alternation into a phantom break.
+        $punches = app(PunchClassifier::class)->dedupe(collect($punches));
 
         $n = $punches->count();
 
