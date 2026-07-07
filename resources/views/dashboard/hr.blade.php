@@ -1,4 +1,4 @@
-<flux:main class="min-h-screen space-y-6 bg-[#FFFDF8] p-4 font-['Inter'] md:p-6">
+<flux:main class="min-h-screen space-y-6 bg-[#FFFDF8] dark:bg-[#0B1220] p-4 font-['Inter'] md:p-6">
     <style>@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');</style>
 
     @php
@@ -122,13 +122,13 @@
         // ── KPI cards (8) ──
         $hrKpis = [
             ['label' => 'New Joiners', 'value' => $newEmployeesCount, 'icon' => 'user-plus', 'accent' => 'green', 'delta' => 0, 'dir' => 'flat', 'compare' => 'this month', 'spark' => $spark(max($newEmployeesCount, 1))],
-            ['label' => 'Present Today', 'value' => $presentToday, 'icon' => 'check-circle', 'accent' => 'green', 'delta' => $attendancePercent, 'dir' => 'up', 'compare' => 'of '.$totalActive.' active', 'spark' => $spark(max($presentToday, 1))],
+            ['label' => 'Present Today', 'value' => $presentToday, 'icon' => 'check-circle', 'accent' => 'green', 'delta' => 0, 'dir' => 'flat', 'compare' => $attendancePercent.'% of '.$totalActive.' active', 'spark' => $spark(max($presentToday, 1))],
             ['label' => 'On Leave', 'value' => $onLeaveTodayCount, 'icon' => 'calendar-days', 'accent' => 'blue', 'delta' => 0, 'dir' => 'flat', 'compare' => 'out today', 'spark' => $spark(max($onLeaveTodayCount, 1))],
             ['label' => 'Regularization', 'value' => $pendingRegularisations, 'icon' => 'pencil-square', 'accent' => 'amber', 'delta' => 0, 'dir' => 'flat', 'compare' => 'pending review', 'spark' => $spark(max($pendingRegularisations, 1))],
             ['label' => 'Probation', 'value' => $probation, 'icon' => 'academic-cap', 'accent' => 'orange', 'delta' => 0, 'dir' => 'flat', 'compare' => $confirmationDue.' due soon', 'spark' => $spark(max($probation, 1))],
             ['label' => 'Doc Verification', 'value' => $docVerifyPending, 'icon' => 'document-check', 'accent' => 'red', 'delta' => 0, 'dir' => 'flat', 'compare' => 'awaiting ack', 'spark' => $spark(max($docVerifyPending, 1))],
-            ['label' => 'Open HR Requests', 'value' => $totalPending, 'icon' => 'inbox-stack', 'accent' => 'red', 'delta' => 5, 'dir' => 'up', 'compare' => 'across modules', 'spark' => $spark(max($totalPending, 1))],
-            ['label' => 'Satisfaction', 'value' => $satisfaction.'%', 'icon' => 'face-smile', 'accent' => 'violet', 'delta' => 2, 'dir' => 'up', 'compare' => 'engagement index', 'spark' => $spark($satisfaction, 0.08)],
+            ['label' => 'Open HR Requests', 'value' => $totalPending, 'icon' => 'inbox-stack', 'accent' => 'red', 'delta' => 0, 'dir' => 'flat', 'compare' => 'across modules', 'spark' => $spark(max($totalPending, 1))],
+            ['label' => 'Satisfaction', 'value' => $satisfaction.'%', 'icon' => 'face-smile', 'accent' => 'violet', 'delta' => 0, 'dir' => 'flat', 'compare' => 'engagement index', 'spark' => $spark($satisfaction, 0.08)],
         ];
 
         // ── Chart configs ──
@@ -195,26 +195,26 @@
     @endphp
 
     {{-- ══ HERO ══ --}}
-    <div class="dash-rise relative overflow-hidden rounded-2xl border border-[#F3E8DD] bg-gradient-to-r from-[#FFF8F1] via-white to-[#FFF2E8] dark:from-[#0F172A] dark:via-[#111827] dark:to-[#1E293B] p-6 shadow-sm md:p-7">
+    <div class="dash-rise relative overflow-hidden rounded-2xl border border-[#F3E8DD] dark:border-white/10 bg-gradient-to-r from-[#FFF8F1] via-white to-[#FFF2E8] dark:from-[#0F172A] dark:via-[#111827] dark:to-[#1E293B] p-6 shadow-sm md:p-7">
         <div class="pointer-events-none absolute -right-10 -top-16 size-64 rounded-full bg-orange-500/10 blur-3xl"></div>
         <div class="relative flex flex-col items-start justify-between gap-6 lg:flex-row lg:items-center">
             <div>
-                <div class="mb-2 inline-flex items-center gap-2 rounded-full border border-[#F3E8DD] bg-white px-3 py-1 text-[11px] font-semibold text-[#6B7280]">
+                <div class="mb-2 inline-flex items-center gap-2 rounded-full border border-[#F3E8DD] dark:border-white/10 bg-white dark:bg-zinc-900 px-3 py-1 text-[11px] font-semibold text-[#6B7280] dark:text-zinc-400">
                     <flux:icon.user-group class="size-3.5 text-orange-500" /> HR Operations · {{ now()->format('l, d M Y') }}
                 </div>
-                <h1 class="text-[28px] font-extrabold tracking-tight text-[#111827]">{{ $greeting }}, {{ $firstName }} 👋</h1>
-                <p class="mt-1 text-sm text-[#6B7280]">{{ $newEmployeesCount }} new joiner(s) this month · {{ $totalPending }} HR tasks need your attention.</p>
+                <h1 class="text-[28px] font-extrabold tracking-tight text-[#111827] dark:text-white">{{ $greeting }}, {{ $firstName }} 👋</h1>
+                <p class="mt-1 text-sm text-[#6B7280] dark:text-zinc-400">{{ $newEmployeesCount }} new joiner(s) this month · {{ $totalPending }} HR tasks need your attention.</p>
                 <div class="mt-4 flex flex-wrap items-center gap-2.5">
                     <a href="{{ $r('employees.create') }}" wire:navigate class="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-orange-400 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-orange-500/25 transition hover:shadow-lg"><flux:icon.plus class="size-4" /> Add Employee</a>
-                    <a href="{{ $r('time-off.employees') }}" wire:navigate class="inline-flex items-center gap-2 rounded-xl border border-[#F3E8DD] bg-white px-4 py-2.5 text-sm font-semibold text-[#6B7280] transition hover:bg-[#FFF2E8] hover:text-orange-500"><flux:icon.calendar-days class="size-4" /> Leave Requests</a>
-                    <a href="{{ $r('attendance.employees') }}" wire:navigate class="inline-flex items-center gap-2 rounded-xl border border-[#F3E8DD] bg-white px-4 py-2.5 text-sm font-semibold text-[#6B7280] transition hover:bg-[#FFF2E8] hover:text-orange-500"><flux:icon.clock class="size-4" /> Attendance</a>
+                    <a href="{{ $r('time-off.employees') }}" wire:navigate class="inline-flex items-center gap-2 rounded-xl border border-[#F3E8DD] dark:border-white/10 bg-white dark:bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-[#6B7280] dark:text-zinc-400 transition hover:bg-[#FFF2E8] hover:text-orange-500"><flux:icon.calendar-days class="size-4" /> Leave Requests</a>
+                    <a href="{{ $r('attendance.employees') }}" wire:navigate class="inline-flex items-center gap-2 rounded-xl border border-[#F3E8DD] dark:border-white/10 bg-white dark:bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-[#6B7280] dark:text-zinc-400 transition hover:bg-[#FFF2E8] hover:text-orange-500"><flux:icon.clock class="size-4" /> Attendance</a>
                 </div>
             </div>
             <div class="flex items-center gap-3">
                 @foreach([['Company Health', $satisfaction.'%', 'heart'], ['Present', $attendancePercent.'%', 'check-circle']] as [$l, $v, $i])
-                    <div class="flex items-center gap-3 rounded-2xl border border-white/70 bg-white/70 px-4 py-3 shadow-sm backdrop-blur">
+                    <div class="flex items-center gap-3 rounded-2xl border border-white/70 bg-white/70 dark:border-white/10 dark:bg-white/5 px-4 py-3 shadow-sm backdrop-blur">
                         <div class="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-orange-400 text-white"><flux:icon :name="$i" class="size-5" /></div>
-                        <div><div class="text-lg font-extrabold leading-none text-[#111827]" x-data="countUp(@js($v))" x-text="display">{{ $v }}</div><div class="text-[11px] font-medium text-[#6B7280]">{{ $l }}</div></div>
+                        <div><div class="text-lg font-extrabold leading-none text-[#111827] dark:text-white" x-data="countUp(@js($v))" x-text="display">{{ $v }}</div><div class="text-[11px] font-medium text-[#6B7280] dark:text-zinc-400">{{ $l }}</div></div>
                     </div>
                 @endforeach
             </div>
@@ -234,7 +234,7 @@
     <div class="grid grid-cols-1 gap-6 lg:grid-cols-12">
         <x-dashboard.hr.section-card class="dash-rise lg:col-span-8" title="Attendance Overview" subtitle="Daily rate · last 6 months" icon="chart-bar">
             <x-slot:actions>
-                <div class="flex flex-wrap items-center gap-3 text-[11px] font-semibold text-[#6B7280]">
+                <div class="flex flex-wrap items-center gap-3 text-[11px] font-semibold text-[#6B7280] dark:text-zinc-400">
                     <span class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-green-500"></span>Present {{ $presentToday }}</span>
                     <span class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-amber-500"></span>Late {{ $lateToday }}</span>
                     <span class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-red-400"></span>Absent {{ $absentToday }}</span>
@@ -244,7 +244,7 @@
             <x-dashboard.chart :options="$attChart" />
             <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
                 @foreach([['Present %', $attendancePercent.'%', 'green'], ['Late', $lateToday, 'amber'], ['Office', $officeToday, 'orange'], ['Work From Home', $wfhToday, 'blue']] as [$l, $v, $t])
-                    <div class="rounded-xl border border-[#F3E8DD] bg-[#FFFDF8] p-3 text-center"><div class="text-xl font-extrabold {{ $toneText[$t] }}">{{ $v }}</div><div class="text-[11px] font-medium text-[#6B7280]">{{ $l }}</div></div>
+                    <div class="rounded-xl border border-[#F3E8DD] dark:border-white/10 bg-[#FFFDF8] dark:bg-white/5 p-3 text-center"><div class="text-xl font-extrabold {{ $toneText[$t] }}">{{ $v }}</div><div class="text-[11px] font-medium text-[#6B7280] dark:text-zinc-400">{{ $l }}</div></div>
                 @endforeach
             </div>
         </x-dashboard.hr.section-card>
@@ -252,8 +252,8 @@
         <x-dashboard.hr.section-card class="dash-rise flex flex-col lg:col-span-4" title="Attendance Compliance" subtitle="Coverage health" icon="shield-check">
             <x-dashboard.chart :options="$gauge" />
             <div class="mt-auto grid grid-cols-2 gap-3 pt-2">
-                <div class="rounded-xl bg-green-50 p-3 text-center"><div class="text-base font-extrabold text-green-600">{{ $attendanceHealth >= 85 ? 'Healthy' : 'Watch' }}</div><div class="text-[11px] font-medium text-[#6B7280]">Status</div></div>
-                <div class="rounded-xl bg-amber-50 p-3 text-center"><div class="text-base font-extrabold text-amber-600">{{ $lateToday }}</div><div class="text-[11px] font-medium text-[#6B7280]">Late today</div></div>
+                <div class="rounded-xl bg-green-50 p-3 text-center"><div class="text-base font-extrabold text-green-600">{{ $attendanceHealth >= 85 ? 'Healthy' : 'Watch' }}</div><div class="text-[11px] font-medium text-[#6B7280] dark:text-zinc-400">Status</div></div>
+                <div class="rounded-xl bg-amber-50 p-3 text-center"><div class="text-base font-extrabold text-amber-600">{{ $lateToday }}</div><div class="text-[11px] font-medium text-[#6B7280] dark:text-zinc-400">Late today</div></div>
             </div>
         </x-dashboard.hr.section-card>
     </div>
@@ -268,18 +268,18 @@
                 <x-dashboard.hr.stat-tile label="Rejected" :value="$leaveRejectedMonth" icon="x-circle" accent="red" sub="this month" />
                 <x-dashboard.hr.stat-tile label="On Leave Today" :value="$onLeaveTodayCount" icon="calendar-days" accent="blue" sub="out today" />
             </div>
-            <div class="mt-3 rounded-xl border border-[#F3E8DD] bg-[#FFFDF8] p-4">
-                <div class="mb-2 text-[11px] font-bold uppercase tracking-wide text-[#9CA3AF]">Recent pending requests</div>
+            <div class="mt-3 rounded-xl border border-[#F3E8DD] dark:border-white/10 bg-[#FFFDF8] dark:bg-white/5 p-4">
+                <div class="mb-2 text-[11px] font-bold uppercase tracking-wide text-[#9CA3AF] dark:text-zinc-500">Recent pending requests</div>
                 <div class="space-y-2">
                     @forelse($pendingLeaveRequests->take(3) as $lr)
-                        <div class="flex items-center justify-between rounded-lg bg-white p-2.5 ring-1 ring-[#F3E8DD]">
+                        <div class="flex items-center justify-between rounded-lg bg-white p-2.5 ring-1 dark:bg-zinc-800 ring-[#F3E8DD] dark:ring-white/10">
                             <div class="flex items-center gap-2.5"><span class="flex size-7 items-center justify-center rounded-full bg-orange-50 text-[10px] font-bold text-orange-600">{{ \Illuminate\Support\Str::of($lr->employee?->user?->name ?? 'U')->explode(' ')->take(2)->map(fn ($p) => $p[0] ?? '')->implode('') }}</span>
-                                <div><div class="text-xs font-semibold text-[#111827]">{{ $lr->employee?->user?->name ?? 'Unknown' }}</div><div class="text-[10px] text-[#6B7280]">{{ $lr->leaveType?->name ?? 'Leave' }} · {{ $lr->days }}d</div></div>
+                                <div><div class="text-xs font-semibold text-[#111827] dark:text-white">{{ $lr->employee?->user?->name ?? 'Unknown' }}</div><div class="text-[10px] text-[#6B7280] dark:text-zinc-400">{{ $lr->leaveType?->name ?? 'Leave' }} · {{ $lr->days }}d</div></div>
                             </div>
                             <a href="{{ $r('time-off.employees') }}" wire:navigate class="rounded-lg bg-green-500 px-2.5 py-1 text-[10px] font-bold text-white transition hover:bg-green-600">Review</a>
                         </div>
                     @empty
-                        <p class="py-3 text-center text-xs text-[#9CA3AF]">No pending leave requests.</p>
+                        <p class="py-3 text-center text-xs text-[#9CA3AF] dark:text-zinc-500">No pending leave requests.</p>
                     @endforelse
                 </div>
             </div>
@@ -307,16 +307,16 @@
         <x-dashboard.hr.section-card class="dash-rise lg:col-span-5" title="Hiring & Onboarding" subtitle="Joiners · last 6 months" icon="user-plus" accent="green">
             <x-dashboard.chart :options="$hireCol" />
             <div class="mt-3 grid grid-cols-3 gap-3">
-                <div class="rounded-xl border border-[#F3E8DD] bg-[#FFFDF8] p-3 text-center"><div class="text-lg font-extrabold text-green-600">{{ $newEmployeesCount }}</div><div class="text-[10px] font-medium text-[#6B7280]">Joining This Month</div></div>
-                <div class="rounded-xl border border-[#F3E8DD] bg-[#FFFDF8] p-3 text-center"><div class="text-lg font-extrabold text-orange-600">{{ $onboarding }}</div><div class="text-[10px] font-medium text-[#6B7280]">In Onboarding</div></div>
-                <div class="rounded-xl border border-[#F3E8DD] bg-[#FFFDF8] p-3 text-center"><div class="text-lg font-extrabold text-amber-600">{{ $onboardingOpen }}</div><div class="text-[10px] font-medium text-[#6B7280]">Open Tasks</div></div>
+                <div class="rounded-xl border border-[#F3E8DD] dark:border-white/10 bg-[#FFFDF8] dark:bg-white/5 p-3 text-center"><div class="text-lg font-extrabold text-green-600">{{ $newEmployeesCount }}</div><div class="text-[10px] font-medium text-[#6B7280] dark:text-zinc-400">Joining This Month</div></div>
+                <div class="rounded-xl border border-[#F3E8DD] dark:border-white/10 bg-[#FFFDF8] dark:bg-white/5 p-3 text-center"><div class="text-lg font-extrabold text-orange-600">{{ $onboarding }}</div><div class="text-[10px] font-medium text-[#6B7280] dark:text-zinc-400">In Onboarding</div></div>
+                <div class="rounded-xl border border-[#F3E8DD] dark:border-white/10 bg-[#FFFDF8] dark:bg-white/5 p-3 text-center"><div class="text-lg font-extrabold text-amber-600">{{ $onboardingOpen }}</div><div class="text-[10px] font-medium text-[#6B7280] dark:text-zinc-400">Open Tasks</div></div>
             </div>
         </x-dashboard.hr.section-card>
 
         <x-dashboard.hr.section-card class="dash-rise lg:col-span-7" title="Department Overview" subtitle="Headcount &amp; attendance" icon="building-office-2" accent="blue">
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>@if($deptDist->isNotEmpty())<x-dashboard.chart :options="$donut" />@else<p class="py-12 text-center text-sm text-[#9CA3AF]">No data.</p>@endif</div>
-                <div>@if($deptAttendance->isNotEmpty())<x-dashboard.chart :options="$deptBar" />@else<p class="py-12 text-center text-sm text-[#9CA3AF]">No data.</p>@endif</div>
+                <div>@if($deptDist->isNotEmpty())<x-dashboard.chart :options="$donut" />@else<p class="py-12 text-center text-sm text-[#9CA3AF] dark:text-zinc-500">No data.</p>@endif</div>
+                <div>@if($deptAttendance->isNotEmpty())<x-dashboard.chart :options="$deptBar" />@else<p class="py-12 text-center text-sm text-[#9CA3AF] dark:text-zinc-500">No data.</p>@endif</div>
             </div>
         </x-dashboard.hr.section-card>
     </div>
@@ -327,9 +327,9 @@
             <x-slot:actions><span class="rounded-full bg-orange-50 px-3 py-1 text-xs font-bold text-orange-500">{{ $totalPending }} total</span></x-slot:actions>
             <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 @foreach($pendingApprovals as $pa)
-                    <a href="{{ $pa['href'] }}" wire:navigate class="rounded-xl border border-[#F3E8DD] bg-[#FFFDF8] p-4 transition hover:-translate-y-0.5 hover:border-orange-200 hover:shadow-md">
-                        <div class="text-2xl font-extrabold {{ $pa['count'] > 0 ? 'text-orange-500' : 'text-[#D8CCBE]' }}">{{ $pa['count'] }}</div>
-                        <div class="mt-1 text-xs font-semibold text-[#6B7280]">{{ $pa['label'] }}</div>
+                    <a href="{{ $pa['href'] }}" wire:navigate class="rounded-xl border border-[#F3E8DD] dark:border-white/10 bg-[#FFFDF8] dark:bg-white/5 p-4 transition hover:-translate-y-0.5 hover:border-orange-200 hover:shadow-md">
+                        <div class="text-2xl font-extrabold {{ $pa['count'] > 0 ? 'text-orange-500' : 'text-[#D8CCBE] dark:text-zinc-600' }}">{{ $pa['count'] }}</div>
+                        <div class="mt-1 text-xs font-semibold text-[#6B7280] dark:text-zinc-400">{{ $pa['label'] }}</div>
                     </a>
                 @endforeach
             </div>
@@ -345,9 +345,9 @@
                     ['Attendance Report', 'clock', 'attendance.employees', 'amber'],
                     ['Leave Report', 'calendar-days', 'time-off.employees', 'blue'],
                 ] as [$l, $i, $route, $t])
-                    <a href="{{ $r($route) }}" wire:navigate class="group flex items-center gap-3 rounded-xl border border-[#F3E8DD] bg-[#FFFDF8] p-3 transition hover:-translate-y-0.5 hover:border-orange-200 hover:shadow-md">
+                    <a href="{{ $r($route) }}" wire:navigate class="group flex items-center gap-3 rounded-xl border border-[#F3E8DD] dark:border-white/10 bg-[#FFFDF8] dark:bg-white/5 p-3 transition hover:-translate-y-0.5 hover:border-orange-200 hover:shadow-md">
                         <div class="flex size-9 items-center justify-center rounded-lg {{ $toneSoft[$t] }} transition group-hover:scale-110"><flux:icon :name="$i" class="size-[18px]" /></div>
-                        <span class="text-xs font-semibold text-[#111827]">{{ $l }}</span>
+                        <span class="text-xs font-semibold text-[#111827] dark:text-white">{{ $l }}</span>
                     </a>
                 @endforeach
             </div>
@@ -361,14 +361,14 @@
             <div class="max-h-[320px] space-y-3 overflow-y-auto pr-1">
                 @forelse($recentAuditLogs->take(8) as $log)
                     @php $dot = ['created' => 'bg-green-500', 'updated' => 'bg-blue-500', 'deleted' => 'bg-red-500'][$log->action] ?? 'bg-orange-500'; @endphp
-                    <div class="flex items-center gap-3 rounded-xl border border-[#F3E8DD] bg-[#FFFDF8] p-3">
+                    <div class="flex items-center gap-3 rounded-xl border border-[#F3E8DD] dark:border-white/10 bg-[#FFFDF8] dark:bg-white/5 p-3">
                         <span class="size-2.5 shrink-0 rounded-full {{ $dot }}"></span>
-                        <span class="flex size-8 shrink-0 items-center justify-center rounded-full bg-white text-[10px] font-bold text-orange-500 ring-1 ring-[#F3E8DD]">{{ \Illuminate\Support\Str::of($log->user?->name ?? 'System')->explode(' ')->take(2)->map(fn ($p) => $p[0] ?? '')->implode('') }}</span>
-                        <p class="min-w-0 flex-1 truncate text-sm text-[#6B7280]"><span class="font-semibold text-[#111827]">{{ $log->user?->name ?? 'System' }}</span> {{ $log->display_action }}</p>
-                        <span class="shrink-0 text-[11px] font-medium text-[#9CA3AF]">{{ $log->created_at?->diffForHumans(null, true) }}</span>
+                        <span class="flex size-8 shrink-0 items-center justify-center rounded-full bg-white text-[10px] font-bold text-orange-500 dark:bg-zinc-800 ring-1 ring-[#F3E8DD] dark:ring-white/10">{{ \Illuminate\Support\Str::of($log->user?->name ?? 'System')->explode(' ')->take(2)->map(fn ($p) => $p[0] ?? '')->implode('') }}</span>
+                        <p class="min-w-0 flex-1 truncate text-sm text-[#6B7280] dark:text-zinc-400"><span class="font-semibold text-[#111827] dark:text-white">{{ $log->user?->name ?? 'System' }}</span> {{ $log->display_action }}</p>
+                        <span class="shrink-0 text-[11px] font-medium text-[#9CA3AF] dark:text-zinc-500">{{ $log->created_at?->diffForHumans(null, true) }}</span>
                     </div>
                 @empty
-                    <p class="py-8 text-center text-sm text-[#9CA3AF]">No recent activity.</p>
+                    <p class="py-8 text-center text-sm text-[#9CA3AF] dark:text-zinc-500">No recent activity.</p>
                 @endforelse
             </div>
         </x-dashboard.hr.section-card>
@@ -382,9 +382,9 @@
                         ['Probation Reviews', $confirmationDue, 'academic-cap', $confirmationDue > 0 ? 'blue' : 'green'],
                         ['Active Warnings', $activeWarnings, 'exclamation-triangle', $activeWarnings > 0 ? 'amber' : 'green'],
                     ] as [$l, $v, $i, $t])
-                        <div class="rounded-xl border border-[#F3E8DD] bg-[#FFFDF8] p-4">
-                            <div class="flex items-center justify-between"><span class="flex size-9 items-center justify-center rounded-lg {{ $toneSoft[$t] }}"><flux:icon :name="$i" class="size-[18px]" /></span><span class="text-2xl font-extrabold {{ $v > 0 ? $toneText[$t] : 'text-[#D8CCBE]' }}">{{ $v }}</span></div>
-                            <div class="mt-2 text-xs font-semibold text-[#6B7280]">{{ $l }}</div>
+                        <div class="rounded-xl border border-[#F3E8DD] dark:border-white/10 bg-[#FFFDF8] dark:bg-white/5 p-4">
+                            <div class="flex items-center justify-between"><span class="flex size-9 items-center justify-center rounded-lg {{ $toneSoft[$t] }}"><flux:icon :name="$i" class="size-[18px]" /></span><span class="text-2xl font-extrabold {{ $v > 0 ? $toneText[$t] : 'text-[#D8CCBE] dark:text-zinc-600' }}">{{ $v }}</span></div>
+                            <div class="mt-2 text-xs font-semibold text-[#6B7280] dark:text-zinc-400">{{ $l }}</div>
                         </div>
                     @endforeach
                 </div>
@@ -393,22 +393,22 @@
             <x-dashboard.hr.section-card title="Celebrations" subtitle="Birthdays &amp; anniversaries" icon="cake" accent="violet">
                 <div class="space-y-2.5">
                     @foreach($upcomingBirthdays->take(3) as $b)
-                        <div class="flex items-center gap-3 rounded-xl border border-[#F3E8DD] bg-[#FFFDF8] p-2.5">
+                        <div class="flex items-center gap-3 rounded-xl border border-[#F3E8DD] dark:border-white/10 bg-[#FFFDF8] dark:bg-white/5 p-2.5">
                             <span class="flex size-8 items-center justify-center rounded-lg bg-orange-50 text-orange-500"><flux:icon.cake class="size-4" /></span>
-                            <div class="min-w-0 flex-1"><div class="truncate text-sm font-semibold text-[#111827]">{{ $b['name'] }}</div><div class="text-[10px] text-[#6B7280]">Birthday · {{ $b['dept'] ?: 'Team' }}</div></div>
-                            <span class="rounded-lg bg-white px-2 py-1 text-[10px] font-bold text-orange-500 ring-1 ring-[#F3E8DD]">{{ $b['is_today'] ? 'Today' : 'in '.$b['days'].'d' }}</span>
+                            <div class="min-w-0 flex-1"><div class="truncate text-sm font-semibold text-[#111827] dark:text-white">{{ $b['name'] }}</div><div class="text-[10px] text-[#6B7280] dark:text-zinc-400">Birthday · {{ $b['dept'] ?: 'Team' }}</div></div>
+                            <span class="rounded-lg bg-white px-2 py-1 text-[10px] font-bold dark:bg-zinc-800 text-orange-500 ring-1 ring-[#F3E8DD] dark:ring-white/10">{{ $b['is_today'] ? 'Today' : 'in '.$b['days'].'d' }}</span>
                         </div>
                     @endforeach
                     @forelse($anniversaries as $a)
-                        <div class="flex items-center gap-3 rounded-xl border border-[#F3E8DD] bg-[#FFFDF8] p-2.5">
+                        <div class="flex items-center gap-3 rounded-xl border border-[#F3E8DD] dark:border-white/10 bg-[#FFFDF8] dark:bg-white/5 p-2.5">
                             <span class="flex size-8 items-center justify-center rounded-lg bg-violet-50 text-violet-600"><flux:icon.trophy class="size-4" /></span>
-                            <div class="min-w-0 flex-1"><div class="truncate text-sm font-semibold text-[#111827]">{{ $a['name'] }}</div><div class="text-[10px] text-[#6B7280]">{{ $a['years'] }}y work anniversary</div></div>
-                            <span class="rounded-lg bg-white px-2 py-1 text-[10px] font-bold text-violet-600 ring-1 ring-[#F3E8DD]">{{ $a['days'] === 0 ? 'Today' : 'in '.$a['days'].'d' }}</span>
+                            <div class="min-w-0 flex-1"><div class="truncate text-sm font-semibold text-[#111827] dark:text-white">{{ $a['name'] }}</div><div class="text-[10px] text-[#6B7280] dark:text-zinc-400">{{ $a['years'] }}y work anniversary</div></div>
+                            <span class="rounded-lg bg-white px-2 py-1 text-[10px] font-bold dark:bg-zinc-800 text-violet-600 ring-1 ring-[#F3E8DD] dark:ring-white/10">{{ $a['days'] === 0 ? 'Today' : 'in '.$a['days'].'d' }}</span>
                         </div>
                     @empty
                     @endforelse
                     @if($upcomingBirthdays->isEmpty() && $anniversaries->isEmpty())
-                        <p class="py-3 text-center text-xs text-[#9CA3AF]">No upcoming celebrations.</p>
+                        <p class="py-3 text-center text-xs text-[#9CA3AF] dark:text-zinc-500">No upcoming celebrations.</p>
                     @endif
                 </div>
             </x-dashboard.hr.section-card>
@@ -426,9 +426,9 @@
                     'tooltip' => ['enabled' => false], 'series' => [['name' => $m['label'], 'data' => array_map('floatval', $m['series'])]],
                 ];
             @endphp
-            <div class="dash-rise rounded-2xl border border-[#F3E8DD] bg-white p-4 shadow-sm transition hover:-translate-y-1 hover:shadow-lg">
-                <div class="text-[11px] font-semibold uppercase tracking-wide text-[#9CA3AF]">{{ $m['label'] }}</div>
-                <div class="mt-1 text-xl font-extrabold text-[#111827]" x-data="countUp(@js((string) $m['value']))" x-text="display">{{ $m['value'] }}</div>
+            <div class="dash-rise rounded-2xl border border-[#F3E8DD] dark:border-white/10 bg-white dark:bg-zinc-900 p-4 shadow-sm transition hover:-translate-y-1 hover:shadow-lg">
+                <div class="text-[11px] font-semibold uppercase tracking-wide text-[#9CA3AF] dark:text-zinc-500">{{ $m['label'] }}</div>
+                <div class="mt-1 text-xl font-extrabold text-[#111827] dark:text-white" x-data="countUp(@js((string) $m['value']))" x-text="display">{{ $m['value'] }}</div>
                 <x-dashboard.chart :options="$mini" class="mt-1" />
             </div>
         @endforeach
