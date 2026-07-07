@@ -62,28 +62,28 @@
     <flux:card class="space-y-4">
         <flux:heading size="lg" icon="document-duplicate">Recent Payslips</flux:heading>
         <flux:table>
-            <flux:columns>
-                <flux:column>Month</flux:column>
-                <flux:column>Gross</flux:column>
-                <flux:column>Deductions</flux:column>
-                <flux:column>Net Pay</flux:column>
-                <flux:column>Status</flux:column>
-            </flux:columns>
-            <flux:rows>
+            <flux:table.columns>
+                <flux:table.column>Month</flux:table.column>
+                <flux:table.column>Gross</flux:table.column>
+                <flux:table.column>Deductions</flux:table.column>
+                <flux:table.column>Net Pay</flux:table.column>
+                <flux:table.column>Status</flux:table.column>
+            </flux:table.columns>
+            <flux:table.rows>
                 @forelse($payslips as $payslip)
-                    <flux:row>
-                        <flux:cell>{{ $payslip->payroll->month }} {{ $payslip->payroll->year }}</flux:cell>
-                        <flux:cell>₹{{ number_format($payslip->gross_salary, 2) }}</flux:cell>
-                        <flux:cell>₹{{ number_format($payslip->total_deductions, 2) }}</flux:cell>
-                        <flux:cell class="font-semibold text-green-600">₹{{ number_format($payslip->net_salary, 2) }}</flux:cell>
-                        <flux:cell><flux:badge color="{{ $payslip->status === 'paid' ? 'green' : 'yellow' }}">{{ ucfirst($payslip->status) }}</flux:badge></flux:cell>
-                    </flux:row>
+                    <flux:table.row>
+                        <flux:table.cell>{{ $payslip->payroll->month }} {{ $payslip->payroll->year }}</flux:table.cell>
+                        <flux:table.cell>₹{{ number_format($payslip->gross_salary, 2) }}</flux:table.cell>
+                        <flux:table.cell>₹{{ number_format($payslip->total_deductions, 2) }}</flux:table.cell>
+                        <flux:table.cell class="font-semibold text-green-600">₹{{ number_format($payslip->net_salary, 2) }}</flux:table.cell>
+                        <flux:table.cell><flux:badge color="{{ $payslip->status === 'paid' ? 'green' : 'yellow' }}">{{ ucfirst($payslip->status) }}</flux:badge></flux:table.cell>
+                    </flux:table.row>
                 @empty
-                    <flux:row>
-                        <flux:cell colspan="5" class="text-center text-zinc-400">No payslips found.</flux:cell>
-                    </flux:row>
+                    <flux:table.row>
+                        <flux:table.cell colspan="5" class="text-center text-zinc-400">No payslips found.</flux:table.cell>
+                    </flux:table.row>
                 @endforelse
-            </flux:rows>
+            </flux:table.rows>
         </flux:table>
         {{ $payslips->links() }}
     </flux:card>
