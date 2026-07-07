@@ -70,146 +70,157 @@
     $expectedLogout = ($shift && $shift->end_time) ? \Carbon\Carbon::parse($shift->end_time)->format('g:i A') : '—';
 @endphp
 
-{{-- ═══════════════ HEADER ═══════════════ --}}
-<div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+
+{{-- ══════════════ REDESIGNED HERO (Pulse Attendance · slice 1) ══════════════ --}}
+<style>
+.pa{--pa-surface:#fff;--pa-surface-2:#F7F6F3;--pa-surface-3:#F0EEEA;--pa-border:#EAE8E4;--pa-border-2:#DDD9D3;
+  --pa-ink:#1B1A18;--pa-muted:#6C6862;--pa-faint:#9A958E;--pa-accent:#5B5BD6;--pa-accent-ink:#4B4ACF;--pa-accent-soft:#EDEDFB;
+  --pa-present:#0F9D6E;--pa-present-soft:#E4F6EE;--pa-warn:#B45309;--pa-warn-soft:#FBEFDD;--pa-danger:#D64545;--pa-danger-soft:#FBEBEB;
+  --pa-ring:rgba(91,91,214,.32);--pa-ease:cubic-bezier(.32,.72,0,1);
+  color:var(--pa-ink);font-variant-numeric:tabular-nums}
+.dark .pa{--pa-surface:#151517;--pa-surface-2:#1B1B1E;--pa-surface-3:#222226;--pa-border:#26262B;--pa-border-2:#33333A;
+  --pa-ink:#F1EFEC;--pa-muted:#A29C93;--pa-faint:#726D66;--pa-accent:#8B8BF0;--pa-accent-ink:#A5A5F5;--pa-accent-soft:#20203A;
+  --pa-present:#34D399;--pa-present-soft:#122A22;--pa-warn:#F0A94B;--pa-warn-soft:#2C2113;--pa-danger:#F17878;--pa-danger-soft:#2C1717;--pa-ring:rgba(139,139,240,.4)}
+.pa .num{font-variant-numeric:tabular-nums}
+.pa-cmd{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.pa-cmd h1{margin:0;font-size:21px;font-weight:680;letter-spacing:-.02em;color:var(--pa-ink)}
+.pa-cmd p{margin:2px 0 0;color:var(--pa-muted);font-size:13px}
+.pa-seg{display:inline-flex;background:var(--pa-surface-2);border:1px solid var(--pa-border);border-radius:10px;padding:3px}
+.pa-seg button{border:0;background:transparent;color:var(--pa-muted);font-size:12.5px;font-weight:560;padding:5px 11px;border-radius:7px;transition:all .16s var(--pa-ease)}
+.pa-seg button.on{background:var(--pa-surface);color:var(--pa-ink);box-shadow:0 1px 2px rgba(0,0,0,.06);font-weight:620}
+.pa-pill{display:inline-flex;align-items:center;gap:7px;height:36px;padding:0 13px;border-radius:10px;border:1px solid var(--pa-border-2);
+  background:var(--pa-surface);color:var(--pa-ink);font-size:13px;font-weight:560;transition:all .16s var(--pa-ease)}
+.pa-pill:hover{background:var(--pa-surface-2);border-color:var(--pa-faint);transform:translateY(-1px)}
+.pa-primary{display:inline-flex;align-items:center;gap:7px;height:36px;padding:0 15px;border-radius:10px;border:1px solid var(--pa-accent-ink);
+  background:var(--pa-accent);color:#fff;font-size:13px;font-weight:600;box-shadow:0 1px 2px var(--pa-ring);transition:all .16s var(--pa-ease)}
+.pa-primary:hover{filter:brightness(1.06);box-shadow:0 4px 14px var(--pa-ring);transform:translateY(-1px)}
+.pa-hero{display:grid;grid-template-columns:1.15fr 1fr 1.15fr;gap:1px;background:var(--pa-border);border:1px solid var(--pa-border);
+  border-radius:20px;overflow:hidden;box-shadow:0 2px 4px rgba(28,27,26,.04),0 8px 24px rgba(28,27,26,.06)}
+.dark .pa-hero{box-shadow:0 2px 4px rgba(0,0,0,.3),0 10px 28px rgba(0,0,0,.5)}
+.pa-hero>div{background:var(--pa-surface);padding:20px 22px}
+.pa-status{display:inline-flex;align-items:center;gap:7px;font-weight:640;font-size:12px;padding:5px 10px;border-radius:20px}
+.pa-status.work{background:var(--pa-present-soft);color:var(--pa-present)}
+.pa-status.done{background:var(--pa-surface-3);color:var(--pa-muted)}
+.pa-status.out{background:var(--pa-warn-soft);color:var(--pa-warn)}
+.pa-status .beat{width:7px;height:7px;border-radius:50%;background:currentColor;animation:pabeat 1.8s var(--pa-ease) infinite}
+@keyframes pabeat{0%,100%{box-shadow:0 0 0 0 currentColor}70%{box-shadow:0 0 0 6px transparent}}
+.pa-worked{font-size:33px;font-weight:720;letter-spacing:-.03em;margin:14px 0 2px;color:var(--pa-ink)}
+.pa-cap{font-size:12.5px;color:var(--pa-muted)}
+.pa-io{display:flex;gap:22px;margin-top:16px}
+.pa-io .k{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--pa-faint);font-weight:640}
+.pa-io .v{font-size:15px;font-weight:640;margin-top:2px;color:var(--pa-ink)}
+.pa-io .m{font-size:11px;color:var(--pa-faint)}
+.pa-ringwrap{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
+.pa-ring{position:relative;width:148px;height:148px}
+.pa-ring svg{transform:rotate(-90deg)}
+.pa-ring .trk{fill:none;stroke:var(--pa-surface-3);stroke-width:11}
+.pa-ring .prg{fill:none;stroke:var(--pa-accent);stroke-width:11;stroke-linecap:round;stroke-dasharray:408;
+  stroke-dashoffset:408;animation:padraw 1.2s var(--pa-ease) forwards}
+.pa-ring .mid{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.pa-ring .pct{font-size:29px;font-weight:720;letter-spacing:-.03em;color:var(--pa-ink)}
+.pa-ring .pl{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--pa-faint);font-weight:640}
+.pa-shiftmeta{display:flex;justify-content:space-between;width:100%;margin-top:12px;font-size:11.5px}
+.pa-shiftmeta b{display:block;font-size:13.5px;font-weight:640;color:var(--pa-ink);margin-top:1px}
+.pa-shiftmeta .f{color:var(--pa-faint)}
+.pa-acts{display:flex;flex-direction:column;gap:9px;justify-content:center}
+.pa-actlbl{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--pa-faint);font-weight:640;margin-bottom:2px}
+.pa-action{display:flex;align-items:center;gap:11px;padding:11px 13px;border-radius:11px;border:1px solid var(--pa-border);
+  background:var(--pa-surface);text-align:left;width:100%;transition:all .16s var(--pa-ease);color:var(--pa-ink)}
+.pa-action:hover{border-color:var(--pa-faint);background:var(--pa-surface-2);transform:translateY(-1px)}
+.pa-action[disabled]{opacity:.45;pointer-events:none}
+.pa-action .ic{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;flex:0 0 auto}
+.pa-action .t{font-weight:600;font-size:13px}.pa-action .d{font-size:11px;color:var(--pa-faint)}
+.pa-ic-pres{background:var(--pa-present-soft);color:var(--pa-present)}.pa-ic-warn{background:var(--pa-warn-soft);color:var(--pa-warn)}
+.pa-ic-iris{background:var(--pa-accent-soft);color:var(--pa-accent-ink)}.pa-ic-danger{background:var(--pa-danger-soft);color:var(--pa-danger)}
+@keyframes padraw{to{stroke-dashoffset:{{ round(408 - (408 * $progress / 100), 1) }}}}
+@media(max-width:1024px){.pa-hero{grid-template-columns:1fr 1fr}.pa-actwrap{grid-column:1/-1;border-top:1px solid var(--pa-border)}}
+@media(max-width:640px){.pa-hero{grid-template-columns:1fr}.pa-ringwrap{order:-1}}
+@media(prefers-reduced-motion:reduce){.pa-ring .prg{animation:none;stroke-dashoffset:{{ round(408 - (408 * $progress / 100), 1) }}}}
+</style>
+
+<div class="pa">
+  {{-- Command bar --}}
+  <div class="pa-cmd">
+    <div style="flex:1;min-width:200px">
+      <h1>{{ now()->format('l, d M Y') }}</h1>
+      <p>{{ $shift ? 'You\'re on the '.($shift->name ?? 'assigned').' shift · '.\Carbon\Carbon::parse($shift->start_time)->format('g:i A').' – '.\Carbon\Carbon::parse($shift->end_time)->format('g:i A').' IST' : 'No shift assigned' }}</p>
+    </div>
+    <div class="pa-seg" role="tablist" aria-label="Range">
+      @foreach(['today' => 'Today', 'this_week' => 'Week', 'this_month' => 'Month'] as $val => $label)
+        <button wire:click="$set('statsPeriod', '{{ $val }}')" class="{{ $statsPeriod === $val ? 'on' : '' }}">{{ $label }}</button>
+      @endforeach
+    </div>
+    <x-clean-select model="analyticsMode" :live="true"
+      :options="[['value' => '', 'label' => 'All modes'], ...collect(AttendanceMode::cases())->map(fn ($mode) => ['value' => $mode->value, 'label' => $mode->label()])->all()]" />
+    <button wire:click="exportLog" class="pa-pill"><flux:icon.arrow-down-tray class="size-4" /> Export</button>
+    <button type="button" @click="$flux.modal('regularisation-modal').show()" class="pa-primary"><flux:icon.pencil-square class="size-4" /> Fix a punch</button>
+  </div>
+
+  {{-- Today hero --}}
+  <section class="pa-hero"
+      x-data="{ start: {{ $liveStart ?? 'null' }}, live: '{{ $workedLabel }}',
+        tick(){ if(this.start===null) return; const s=Math.floor(Date.now()/1000)-this.start; const h=Math.floor(s/3600),m=Math.floor((s%3600)/60); this.live=h+'h '+String(m).padStart(2,'0')+'m'; } }"
+      x-init="tick(); if(start!==null) setInterval(()=>tick(),1000)">
+    {{-- status + worked --}}
     <div>
-        <h1 class="text-2xl font-black tracking-tight text-zinc-900 dark:text-white">My Attendance</h1>
-        <div class="mt-0.5 flex items-center gap-1.5 text-xs text-zinc-400">
-            <span>Dashboard</span><flux:icon.chevron-right class="size-3" /><span>Attendance</span><flux:icon.chevron-right class="size-3" /><span class="font-semibold text-orange-500">My Attendance</span>
-        </div>
+      @if($isIn)
+        <span class="pa-status work"><span class="beat"></span>On shift · working now</span>
+      @elseif($isDone)
+        <span class="pa-status done"><flux:icon.check-circle class="size-4" /> Checked out for the day</span>
+      @else
+        <span class="pa-status out"><flux:icon.moon class="size-4" /> Not clocked in yet</span>
+      @endif
+      <div class="pa-worked num" x-text="live">{{ $workedLabel }}</div>
+      <div class="pa-cap">{{ $todayAttendance?->check_in ? 'Worked today · started at '.$todayAttendance->check_in->format('h:i A') : 'Clock in to start your day' }}</div>
+      <div class="pa-io">
+        <div><div class="k">Clock in</div><div class="v num">{{ $todayAttendance?->check_in?->format('h:i A') ?? '—' }}</div><div class="m">{{ $inM?->label() ?? 'Biometric' }}{{ $todayAttendance && ! $todayAttendance->is_late ? ' · on time' : ($todayAttendance?->is_late ? ' · late' : '') }}</div></div>
+        <div><div class="k">Break</div><div class="v num">{{ $breakMin }}m</div><div class="m">{{ $activeBreak ? 'on break' : 'within policy' }}</div></div>
+        <div><div class="k">Overtime</div><div class="v num">{{ $otHours > 0 ? $otHours.'h' : '0m' }}</div><div class="m">{{ $otHours > 0 ? 'this period' : 'within shift' }}</div></div>
+      </div>
     </div>
-    <div class="flex flex-wrap items-center gap-2">
-        <span class="inline-flex items-center gap-2 rounded-xl border border-orange-100 bg-white dark:bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-600 dark:text-zinc-300 shadow-sm"><flux:icon.calendar-days class="size-4 text-orange-500" /> {{ now()->format('d F Y') }}</span>
-        <div class="flex items-center gap-1 rounded-xl border border-orange-100 bg-white dark:bg-zinc-900 p-1 shadow-sm">
-            @foreach(['today' => 'Today', 'this_week' => 'Week', 'this_month' => 'Month', '3_months' => '3 Months', 'year' => 'Year'] as $val => $label)
-                <button wire:click="$set('statsPeriod', '{{ $val }}')"
-                    class="rounded-lg px-3 py-1.5 text-xs font-bold transition {{ $statsPeriod === $val ? 'bg-orange-500 text-white shadow' : 'text-zinc-500 dark:text-zinc-400 hover:bg-orange-50' }}">{{ $label }}</button>
-            @endforeach
-        </div>
-        <x-clean-select model="analyticsMode" :live="true"
-            :options="[['value' => '', 'label' => 'All modes'], ...collect(AttendanceMode::cases())->map(fn ($mode) => ['value' => $mode->value, 'label' => $mode->label()])->all()]" />
-        <div class="flex items-center gap-1.5 rounded-xl border {{ $statsPeriod === 'custom' ? 'border-orange-400 ring-1 ring-orange-200' : 'border-orange-100' }} bg-white dark:bg-zinc-900 px-2 py-1 shadow-sm">
-            <span class="text-[10px] font-bold uppercase tracking-wider {{ $statsPeriod === 'custom' ? 'text-orange-500' : 'text-zinc-400' }}">Custom</span>
-            <input type="date" wire:model.live="rangeFrom" class="w-[7.5rem] border-0 bg-transparent p-1 text-xs font-semibold text-zinc-600 dark:text-zinc-300 focus:ring-0">
-            <span class="text-zinc-300">–</span>
-            <input type="date" wire:model.live="rangeTo" class="w-[7.5rem] border-0 bg-transparent p-1 text-xs font-semibold text-zinc-600 dark:text-zinc-300 focus:ring-0">
-        </div>
-        <button wire:click="exportLog" class="inline-flex items-center gap-1.5 rounded-xl border border-orange-100 bg-white dark:bg-zinc-900 px-3 py-2 text-xs font-bold text-zinc-600 dark:text-zinc-300 shadow-sm transition hover:bg-orange-50"><flux:icon.arrow-down-tray class="size-4 text-orange-500" /> Export</button>
+    {{-- ring --}}
+    <div class="pa-ringwrap">
+      <div class="pa-ring">
+        <svg width="148" height="148" viewBox="0 0 148 148"><circle class="trk" cx="74" cy="74" r="65"/><circle class="prg" cx="74" cy="74" r="65"/></svg>
+        <div class="mid"><div class="pct num">{{ $progress }}%</div><div class="pl">Shift done</div></div>
+      </div>
+      <div class="pa-shiftmeta">
+        <div><span class="f">Ends</span><b class="num">{{ $expectedLogout }}</b></div>
+        <div style="text-align:right"><span class="f">Left</span><b class="num">{{ intdiv($remainingMin,60) }}h {{ $remainingMin%60 }}m</b></div>
+      </div>
     </div>
+    {{-- actions --}}
+    <div class="pa-actwrap"><div class="pa-acts">
+      <div class="pa-actlbl">Quick actions</div>
+      @if(! $todayAttendance)
+        <button type="button" class="pa-action" @click="$flux.modal('punch-capture').show(); $dispatch('open-punch', { action: 'in' })">
+          <span class="ic pa-ic-pres"><flux:icon.arrow-right-end-on-rectangle class="size-4" /></span>
+          <div><div class="t">Clock in</div><div class="d">Selfie + location check-in</div></div></button>
+      @elseif($isIn)
+        <button type="button" class="pa-action" @click="$flux.modal('punch-capture').show(); $dispatch('open-punch', { action: 'out' })">
+          <span class="ic pa-ic-danger"><flux:icon.arrow-left-start-on-rectangle class="size-4" /></span>
+          <div><div class="t">Clock out</div><div class="d">End your day at {{ $expectedLogout }}</div></div></button>
+      @else
+        <button type="button" class="pa-action" disabled>
+          <span class="ic pa-ic-pres"><flux:icon.check-circle class="size-4" /></span>
+          <div><div class="t">Day complete</div><div class="d">Clocked out · see you tomorrow</div></div></button>
+      @endif
+      @if($activeBreak)
+        <button type="button" wire:click="endBreak" class="pa-action">
+          <span class="ic pa-ic-pres"><flux:icon.play class="size-4" /></span>
+          <div><div class="t">End break</div><div class="d">Resume your working timer</div></div></button>
+      @else
+        <button type="button" wire:click="startBreak" class="pa-action" @if(! $isIn) disabled @endif>
+          <span class="ic pa-ic-warn"><flux:icon.pause class="size-4" /></span>
+          <div><div class="t">Start break</div><div class="d">Pause your working timer</div></div></button>
+      @endif
+      <button type="button" class="pa-action" @click="$flux.modal('regularisation-modal').show()">
+        <span class="ic pa-ic-iris"><flux:icon.pencil-square class="size-4" /></span>
+        <div><div class="t">Regularize a punch</div><div class="d">Missed or wrong time? Fix it</div></div></button>
+    </div></div>
+  </section>
 </div>
 
-{{-- ═══════════════ HERO (glassmorphism) ═══════════════ --}}
-<div class="relative mb-4 overflow-hidden rounded-[22px] border border-white/70 bg-gradient-to-br from-white/90 via-orange-50/70 to-orange-100/40 p-6 shadow-xl shadow-orange-200/30 backdrop-blur-xl"
-     x-data="{ start: {{ $liveStart ?? 'null' }}, live: '{{ $workedLabel }}',
-        tick(){ if(this.start===null) return; const s=Math.floor(Date.now()/1000)-this.start; const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60; this.live=String(h).padStart(2,'0')+'h '+String(m).padStart(2,'0')+'m '+String(sec).padStart(2,'0')+'s'; } }"
-     x-init="tick(); if(start!==null) setInterval(()=>tick(),1000)">
-    <div class="pointer-events-none absolute -right-16 -top-24 size-64 rounded-full bg-orange-300/30 blur-3xl"></div>
-    <div class="relative grid grid-cols-1 gap-6 lg:grid-cols-12 lg:items-center">
-        {{-- Identity --}}
-        <div class="lg:col-span-5">
-            <div class="flex items-center gap-4">
-                <div class="relative shrink-0">
-                    @if($emp?->photo)
-                        <img src="{{ Storage::url($emp->photo) }}" alt="{{ auth()->user()->name }}" class="size-20 rounded-2xl object-cover ring-4 ring-white shadow-lg">
-                    @else
-                        <div class="flex size-20 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-500 to-amber-400 text-2xl font-black text-white shadow-lg">{{ auth()->user()->initials() }}</div>
-                    @endif
-                    <span class="absolute -bottom-1 -right-1 size-5 rounded-full border-4 border-white {{ $isIn ? 'animate-pulse bg-emerald-500' : ($isDone ? 'bg-zinc-400' : 'bg-amber-500') }}"></span>
-                </div>
-                <div class="min-w-0">
-                    <div class="flex items-center gap-1.5">
-                        <h2 class="truncate text-xl font-black text-zinc-900 dark:text-white">{{ auth()->user()->name }}</h2>
-                        <flux:icon.check-badge class="size-5 text-orange-500" />
-                    </div>
-                    <div class="text-sm text-zinc-500 dark:text-zinc-400">{{ $emp?->employee_code ? 'EMP'.str_pad((string) $emp->employee_code, 5, '0', STR_PAD_LEFT) : '' }} · {{ $emp?->jobTitle?->name ?? $emp?->jobTitle?->title ?? 'Employee' }}</div>
-                    <div class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
-                        <span class="inline-flex items-center gap-1"><flux:icon.building-office-2 class="size-3.5 text-orange-400" /> {{ $emp?->department?->name ?? '—' }}</span>
-                        @if($emp?->manager)<span class="inline-flex items-center gap-1"><flux:icon.user class="size-3.5 text-orange-400" /> {{ $emp->manager->name }} (Manager)</span>@endif
-                    </div>
-                </div>
-            </div>
-            <div class="mt-4 grid grid-cols-3 gap-2">
-                <div class="rounded-xl bg-white/70 dark:bg-zinc-900/70 p-2.5 shadow-sm">
-                    <div class="text-[9px] font-bold uppercase tracking-wider text-zinc-400">Shift Time</div>
-                    <div class="text-[11px] font-black text-zinc-800 dark:text-zinc-100">{{ $shift ? \Carbon\Carbon::parse($shift->start_time)->format('g:i A').' - '.\Carbon\Carbon::parse($shift->end_time)->format('g:i A') : '—' }}</div>
-                </div>
-                <div class="rounded-xl bg-white/70 dark:bg-zinc-900/70 p-2.5 shadow-sm">
-                    <div class="text-[9px] font-bold uppercase tracking-wider text-zinc-400">Attendance Mode</div>
-                    <div class="text-[11px] font-black text-zinc-800 dark:text-zinc-100">{{ $heroMode->label() }}</div>
-                </div>
-                <div class="rounded-xl bg-white/70 dark:bg-zinc-900/70 p-2.5 shadow-sm">
-                    <div class="text-[9px] font-bold uppercase tracking-wider text-zinc-400">Grace Time</div>
-                    <div class="text-[11px] font-black text-zinc-800 dark:text-zinc-100">{{ $shift->grace_minutes ?? 5 }} mins</div>
-                </div>
-            </div>
-        </div>
-
-        {{-- Live timer --}}
-        <div class="lg:col-span-4">
-            <div class="rounded-2xl bg-white/60 dark:bg-zinc-900/60 p-4 shadow-sm">
-                <div class="mb-1 flex items-center gap-2">
-                    <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-emerald-700">
-                        <span class="size-1.5 rounded-full bg-emerald-500 {{ $isIn ? 'animate-pulse' : '' }}"></span>{{ $isIn ? 'Working' : ($isDone ? 'Completed' : 'Not In') }}
-                    </span>
-                    @if($todayAttendance)<span class="text-[11px] text-zinc-400">since {{ $todayAttendance->check_in->format('h:i A') }}</span>@endif
-                </div>
-                <div class="text-3xl font-black tabular-nums text-zinc-900 dark:text-white" x-text="live">{{ $workedLabel }}</div>
-                <div class="text-[11px] text-zinc-400">Current Working Time</div>
-                <div class="mt-3 h-2 w-full overflow-hidden rounded-full bg-orange-100">
-                    <div class="h-full rounded-full bg-gradient-to-r from-orange-500 to-amber-400 transition-all duration-700" style="width: {{ $progress }}%"></div>
-                </div>
-                <div class="mt-1.5 flex justify-between text-[10px] text-zinc-400">
-                    <span>Remaining: <strong class="text-zinc-600 dark:text-zinc-300">{{ intdiv($remainingMin, 60) }}h {{ $remainingMin % 60 }}m</strong></span>
-                    <span>Expected Logout: <strong class="text-zinc-600 dark:text-zinc-300">{{ $expectedLogout }}</strong></span>
-                </div>
-            </div>
-        </div>
-
-        {{-- Ring + score --}}
-        <div class="lg:col-span-3">
-            <div class="flex items-center gap-4">
-                <div class="relative grid size-24 shrink-0 place-items-center">
-                    <svg class="size-24 -rotate-90" viewBox="0 0 36 36">
-                        <circle cx="18" cy="18" r="15.9" fill="none" stroke="#FFEDD5" stroke-width="3.5" />
-                        <circle cx="18" cy="18" r="15.9" fill="none" stroke="#F97316" stroke-width="3.5" stroke-linecap="round" stroke-dasharray="{{ $progress }}, 100" />
-                    </svg>
-                    <div class="absolute text-center">
-                        <div class="text-xl font-black text-zinc-900 dark:text-white">{{ $progress }}%</div>
-                        <div class="text-[8px] font-bold uppercase text-zinc-400">Progress</div>
-                    </div>
-                </div>
-                <div>
-                    <div class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Attendance Score</div>
-                    <div class="text-2xl font-black text-zinc-900 dark:text-white">{{ $score }}<span class="text-sm text-zinc-400">/100</span></div>
-                    <span class="mt-1 inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">{{ $score >= 80 ? 'Excellent' : ($score >= 60 ? 'Good' : 'Needs Focus') }}</span>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    {{-- Action buttons --}}
-    <div class="relative mt-5 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
-        @if(! $todayAttendance)
-            <button type="button" @click="$flux.modal('punch-capture').show(); $dispatch('open-punch', { action: 'in' })" class="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-white dark:bg-zinc-900 py-3 text-sm font-bold text-emerald-600 shadow-sm transition hover:bg-emerald-50 hover:shadow"><flux:icon.arrow-right-end-on-rectangle class="size-5" /> Clock In</button>
-        @else
-            <span class="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 py-3 text-sm font-bold text-zinc-400"><flux:icon.check-circle class="size-5" /> Clocked In</span>
-        @endif
-        @if($isIn)
-            <button type="button" @click="$flux.modal('punch-capture').show(); $dispatch('open-punch', { action: 'out' })" class="inline-flex items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white dark:bg-zinc-900 py-3 text-sm font-bold text-rose-500 shadow-sm transition hover:bg-rose-50 hover:shadow"><flux:icon.arrow-left-start-on-rectangle class="size-5" /> Clock Out</button>
-        @else
-            <span class="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 py-3 text-sm font-bold text-zinc-400"><flux:icon.arrow-left-start-on-rectangle class="size-5" /> Clock Out</span>
-        @endif
-        @if($isIn && ! $activeBreak)
-            <button wire:click="startBreak" class="inline-flex items-center justify-center gap-2 rounded-xl border border-orange-200 bg-orange-50 py-3 text-sm font-bold text-orange-600 shadow-sm transition hover:bg-orange-100"><flux:icon.pause class="size-5" /> Start Break</button>
-        @elseif($activeBreak)
-            <button wire:click="endBreak" class="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-300 bg-amber-500 py-3 text-sm font-bold text-white shadow transition hover:bg-amber-600"><flux:icon.play class="size-5" /> End Break</button>
-        @else
-            <span class="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 py-3 text-sm font-bold text-zinc-400"><flux:icon.pause class="size-5" /> Start Break</span>
-        @endif
-        <span class="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 py-3 text-sm font-bold text-zinc-400"><flux:icon.play class="size-5" /> End Break</span>
-        <button type="button" @click="$flux.modal('regularisation-modal').show()" class="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 py-3 text-sm font-bold text-white shadow-lg shadow-orange-300/40 transition hover:shadow-xl"><flux:icon.pencil-square class="size-5" /> Request Regularization</button>
-    </div>
-</div>
 
 <div class="space-y-4">
 
