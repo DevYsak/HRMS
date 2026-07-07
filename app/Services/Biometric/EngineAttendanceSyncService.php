@@ -6,7 +6,9 @@ use App\Models\Attendance;
 use App\Models\AttendanceDailySummary;
 use App\Models\AttendancePunch;
 use App\Models\Employee;
+use App\Services\Attendance\PunchClassifier;
 use App\Support\PunchMethodResolver;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 
 /**
@@ -14,8 +16,10 @@ use Illuminate\Support\Facades\Http;
  * engine (GET /api/dashboard?date=) and upserts it into HRMS.
  *
  * Shared by the scheduled command (attendance:sync-engine) and the on-demand
- * "Quick Scan" button on the Biometric Summary page. HRMS never recalculates —
- * it stores exactly what the engine computed; rows are matched by employee_code.
+ * "Quick Scan" button on the Biometric Summary page. Rows are matched by
+ * employee_code. HRMS stores the engine's figures as-is, EXCEPT break minutes
+ * and working hours, which are re-derived from the raw punch stream when it is
+ * available (the engine's break_min mis-pairs on noisy/duplicate punches).
  */
 class EngineAttendanceSyncService
 {
@@ -114,6 +118,11 @@ class EngineAttendanceSyncService
             // Every individual punch (Attendance Journey) — when the engine sends them.
             $this->syncPunches($employeeId, $code, $date, $row['punches'] ?? [], $row['device_serial'] ?? null);
 
+            // When we have the raw punch stream, derive break/working from it —
+            // it is more reliable than the engine's break_min, which mis-pairs
+            // when a stray verify punch flips the in/out alternation.
+            $this->reconcileFromPunches($employeeId, $date, $firstPunch, $lastPunch);
+
             $synced++;
         }
 
@@ -164,6 +173,40 @@ class EngineAttendanceSyncService
                 ]
             );
         }
+    }
+
+    /**
+     * Recompute break minutes and working hours from the day's actual punch
+     * stream (via the shared PunchClassifier) and overwrite the engine-supplied
+     * figures. Only runs when there are enough punches for breaks to matter
+     * (in + at least one break pair); otherwise the engine values stand.
+     */
+    private function reconcileFromPunches(int $employeeId, string $date, ?string $firstPunch, ?string $lastPunch): void
+    {
+        if ($firstPunch === null) {
+            return;
+        }
+
+        $punches = AttendancePunch::where('employee_id', $employeeId)
+            ->whereDate('punch_date', $date)
+            ->orderBy('punched_at')
+            ->get();
+
+        if ($punches->count() < 3) {
+            return;
+        }
+
+        $breakMinutes = app(PunchClassifier::class)->breakMinutes($punches);
+        $grossMinutes = $lastPunch !== null
+            ? (int) Carbon::parse($firstPunch)->diffInMinutes(Carbon::parse($lastPunch))
+            : 0;
+        $workingHours = round(max(0, $grossMinutes - $breakMinutes) / 60, 2);
+
+        Attendance::where('employee_id', $employeeId)->whereDate('date', $date)
+            ->update(['break_minutes' => $breakMinutes, 'total_hours' => $workingHours]);
+
+        AttendanceDailySummary::where('employee_id', $employeeId)->whereDate('date', $date)
+            ->update(['break_minutes' => $breakMinutes, 'working_hours' => $workingHours]);
     }
 
     /** Normalise the engine's status into HRMS's vocabulary. */
