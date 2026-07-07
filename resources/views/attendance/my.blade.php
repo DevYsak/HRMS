@@ -314,7 +314,7 @@
     </div>
 @endif
 
-{{-- ═══════════════ JOURNEY + SHIFT PROGRESS + BIOMETRIC ═══════════════ --}}
+{{-- ═══════════════ TODAY'S ATTENDANCE JOURNEY ═══════════════ --}}
 @php $journey = count($attendanceJourney) ? $attendanceJourney : $todayTimeline; $isJourney = count($attendanceJourney) > 0; @endphp
 <div class="grid grid-cols-1 items-start gap-4 lg:grid-cols-12">
     {{-- Attendance Journey --}}
@@ -322,7 +322,7 @@
         $jFirst = $todayAttendance?->check_in ?? $sum?->first_punch;
         $jLast = $todayAttendance?->check_out ?? $sum?->last_punch;
     @endphp
-    <div class="rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 p-5 shadow-sm lg:col-span-5">
+    <div class="rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 p-5 shadow-sm lg:col-span-12">
         <div class="mb-4 flex items-center justify-between">
             <div class="flex items-center gap-2">
                 <div class="text-sm font-black text-zinc-900 dark:text-white">Today's Attendance Journey</div>
@@ -410,177 +410,6 @@
             @endforeach
             <div class="grid place-items-center"><span class="inline-flex items-center gap-1 rounded-full {{ $isDone ? 'bg-rose-100 text-rose-600' : ($isIn ? 'bg-emerald-100 text-emerald-700' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400') }} px-2 py-0.5 text-[10px] font-bold">{{ $isDone ? 'Completed' : ($isIn ? 'Working' : '—') }}</span></div>
         </div>
-    </div>
-
-    {{-- Shift Progress --}}
-    @php
-        [$stBg, $stDot, $stLabel] = match(true) {
-            (bool) $activeBreak => ['bg-orange-100 text-orange-700', 'bg-orange-500 animate-pulse', 'On Break'],
-            $isIn && ($todayAttendance?->is_late) => ['bg-amber-100 text-amber-700', 'bg-amber-500 animate-pulse', 'Working · Late'],
-            $isIn => ['bg-emerald-100 text-emerald-700', 'bg-emerald-500 animate-pulse', 'Working'],
-            $isDone => ['bg-rose-100 text-rose-600', 'bg-rose-500', 'Shift Completed'],
-            $heroMode->value === 'wfh' => ['bg-violet-100 text-violet-700', 'bg-violet-500', 'WFH · Not In'],
-            default => ['bg-zinc-800 text-white', 'bg-zinc-400', 'Absent / Not In'],
-        };
-    @endphp
-    <div class="rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 p-5 shadow-sm lg:col-span-3"
-        x-data="{ p: 0 }" x-init="setTimeout(() => p = {{ $progress }}, 150)">
-        <div class="mb-3 flex items-center justify-between">
-            <div class="text-sm font-black text-zinc-900 dark:text-white">Shift Progress</div>
-            <span class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-bold {{ $stBg }}"><span class="size-1.5 rounded-full {{ $stDot }}"></span>{{ $stLabel }}</span>
-        </div>
-
-        {{-- Live clock --}}
-        <div class="mb-3 flex items-center justify-center gap-2 rounded-xl bg-orange-50/60 py-1.5 text-xs">
-            <flux:icon.clock class="size-3.5 text-orange-400" />
-            <span class="font-black tabular-nums text-zinc-800 dark:text-zinc-100" x-text="currentTime"></span>
-            <span class="text-[10px] text-zinc-400">IST</span>
-        </div>
-
-        {{-- Animated ring --}}
-        <div class="mb-1 flex justify-center">
-            <div class="relative grid size-32 place-items-center">
-                <svg class="size-32 -rotate-90" viewBox="0 0 36 36">
-                    <circle cx="18" cy="18" r="15.9" fill="none" stroke="#FFEDD5" stroke-width="3" />
-                    <circle cx="18" cy="18" r="15.9" fill="none" stroke="#F97316" stroke-width="3" stroke-linecap="round"
-                        class="transition-all duration-1000 ease-out" :stroke-dasharray="p + ', 100'" stroke-dasharray="0, 100" />
-                </svg>
-                <div class="absolute text-center">
-                    <div class="text-2xl font-black tabular-nums text-zinc-900 dark:text-white">{{ $progress }}%</div>
-                    <div class="text-[8px] font-bold uppercase tracking-wider text-zinc-400">Shift Completed</div>
-                </div>
-            </div>
-        </div>
-        <div class="mb-3 grid grid-cols-2 gap-2 text-center">
-            <div class="rounded-xl bg-emerald-50/70 py-1.5"><div class="text-xs font-black tabular-nums text-emerald-700">{{ $workedLabel }}</div><div class="text-[8px] font-bold uppercase tracking-wider text-emerald-600/70">Worked</div></div>
-            <div class="rounded-xl bg-orange-50/70 py-1.5"><div class="text-xs font-black tabular-nums text-orange-600">{{ intdiv($remainingMin,60) }}h {{ $remainingMin%60 }}m</div><div class="text-[8px] font-bold uppercase tracking-wider text-orange-500/70">Remaining</div></div>
-        </div>
-
-        <div class="space-y-1.5 text-xs">
-            @foreach([
-                ['Shift Start', $shift ? \Carbon\Carbon::parse($shift->start_time)->format('g:i A') : '—'],
-                ['Shift End', $shift ? \Carbon\Carbon::parse($shift->end_time)->format('g:i A') : '—'],
-                ['Expected Logout', $expectedLogout],
-                ['Break Used', $breakMin.'m / '.(int) ($shift->break_duration ?? 60).'m'],
-                ['Grace Time', ($shift->grace_minutes ?? 5).'m'],
-                ['Overtime', intdiv($otMinTotal,60).'h '.($otMinTotal%60).'m'],
-            ] as [$k, $v])
-                <div class="flex items-center justify-between"><span class="text-zinc-400">{{ $k }}</span><span class="font-bold text-zinc-800 dark:text-zinc-100">{{ $v }}</span></div>
-            @endforeach
-            <div class="flex items-center justify-between border-t border-zinc-100 dark:border-zinc-800 pt-2">
-                <span class="text-zinc-400">Mode</span>
-                <span class="inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-bold uppercase {{ $heroMode->chipClass() }}">{{ $heroMode->label() }}</span>
-            </div>
-        </div>
-    </div>
-
-    {{-- Biometric Status --}}
-    @php
-        // Connection tiers from sync recency: green <30m, orange <2h, red beyond.
-        $syncAge = $lastSync ? (int) \Carbon\Carbon::parse($lastSync)->diffInMinutes(now()) : null;
-        [$connBadge, $connDot, $connLabel, $bars] = match (true) {
-            $syncAge !== null && $syncAge < 30 => ['bg-emerald-100 text-emerald-700', 'bg-emerald-500 animate-pulse', 'Online', 4],
-            $syncAge !== null && $syncAge < 120 => ['bg-amber-100 text-amber-700', 'bg-amber-500 animate-pulse', 'Sync Delayed', 2],
-            default => ['bg-rose-100 text-rose-600', 'bg-rose-500', 'Offline', 0],
-        };
-        $health = match (true) {
-            $bars >= 4 && ($biometricDevice?->last_ping_status !== 'failed') => ['Healthy', 'text-emerald-600'],
-            $bars >= 2 => ['Degraded', 'text-amber-600'],
-            default => ['Unreachable', 'text-rose-500'],
-        };
-        $serial = $sum?->device_serial ?? collect($attendanceJourney)->pluck('device')->filter()->first() ?? '—';
-        // Punch sources seen today: biometric methods + web + manual (approved correction).
-        $sources = $punchMethods->map(fn ($m) => ['label' => $m->label(), 'icon' => $m->icon(), 'class' => $m->chipClass()])->values()->all();
-        if ($todayAttendance?->check_in_user_agent) {
-            $sources[] = ['label' => 'Web', 'icon' => 'computer-desktop', 'class' => 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300'];
-        }
-        if ($todayAttendance?->regularisation?->status === 'approved') {
-            $sources[] = ['label' => 'Manual', 'icon' => 'pencil-square', 'class' => 'bg-zinc-800 text-white'];
-        }
-    @endphp
-    <div class="rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 p-5 shadow-sm lg:col-span-4">
-        <div class="mb-3 flex items-center justify-between">
-            <div class="text-sm font-black text-zinc-900 dark:text-white">Biometric Status</div>
-            <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-bold {{ $connBadge }}"><span class="size-1.5 rounded-full {{ $connDot }}"></span>{{ $connLabel }}</span>
-        </div>
-
-        {{-- Device identity + signal --}}
-        <div class="mb-3 flex items-center gap-3 rounded-2xl border border-orange-100 bg-gradient-to-br from-orange-50/60 to-white p-3">
-            <div class="grid size-12 shrink-0 place-items-center rounded-xl bg-white dark:bg-zinc-900 shadow-sm"><flux:icon.finger-print class="size-6 text-orange-400" /></div>
-            <div class="min-w-0 flex-1">
-                <div class="truncate text-xs font-black text-zinc-900 dark:text-white">{{ $deviceName }}</div>
-                <div class="truncate text-[10px] text-zinc-400">SN {{ $serial }}{{ $biometricDevice?->firmware ? ' · FW '.$biometricDevice->firmware : '' }} · {{ $emp?->office?->name ?? 'Head Office' }}</div>
-            </div>
-            {{-- Signal bars (sync freshness) --}}
-            <div class="flex items-end gap-0.5" title="Sync freshness{{ $syncAge !== null ? ' · last '.$syncAge.'m ago' : '' }}">
-                @foreach([1, 2, 3, 4] as $b)
-                    <span class="w-1 rounded-sm {{ $b <= $bars ? 'bg-emerald-500' : 'bg-zinc-200' }}" style="height: {{ 4 + $b * 3 }}px"></span>
-                @endforeach
-            </div>
-        </div>
-
-        {{-- Stats --}}
-        <div class="mb-3 grid grid-cols-2 gap-1.5 text-xs">
-            @foreach([
-                ['Last Sync', $lastSync ? \Carbon\Carbon::parse($lastSync)->format('h:i A') : '—'],
-                ['Device Health', null],
-                ["Today's Punches", $totalPunches ?: '—'],
-                ['Successful', $totalPunches ?: '—'],
-                ['Failed', $totalPunches ? '0 reported' : '—'],
-                ['Last Sync Count', $biometricDevice?->last_sync_count ?? '—'],
-            ] as [$k, $v])
-                <div class="flex items-center justify-between rounded-lg bg-zinc-50/70 dark:bg-zinc-800/40 px-2.5 py-1.5">
-                    <span class="text-zinc-400">{{ $k }}</span>
-                    @if($k === 'Device Health')
-                        <span class="font-bold {{ $health[1] }}">{{ $health[0] }}</span>
-                    @else
-                        <span class="font-bold text-zinc-800 dark:text-zinc-100">{{ $v }}</span>
-                    @endif
-                </div>
-            @endforeach
-        </div>
-
-        {{-- Punch sources today --}}
-        @if(! empty($sources))
-            <div class="mb-3">
-                <div class="mb-1.5 text-[9px] font-bold uppercase tracking-widest text-zinc-400">Punch Source</div>
-                <div class="flex flex-wrap gap-1.5">
-                    @foreach($sources as $s)
-                        <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold {{ $s['class'] }}"><flux:icon :icon="$s['icon']" class="size-3" /> {{ $s['label'] }}</span>
-                    @endforeach
-                </div>
-            </div>
-        @endif
-
-        {{-- Today's activity (punch ticks) --}}
-        @if(count($attendanceJourney) > 0)
-            <div class="mb-3">
-                <div class="mb-1.5 text-[9px] font-bold uppercase tracking-widest text-zinc-400">Today's Activity</div>
-                <div class="flex flex-wrap items-center gap-1">
-                    @foreach($attendanceJourney as $jev)
-                        @php $tickC = match($jev['type']) { 'in' => 'bg-emerald-500', 'out' => 'bg-rose-500', 'break' => 'bg-orange-400', 'resume' => 'bg-blue-400', default => 'bg-zinc-300' }; @endphp
-                        <span class="size-2 rounded-full {{ $tickC }} transition-transform hover:scale-150" title="{{ $jev['time'] }} · {{ $jev['title'] }}"></span>
-                        @unless($loop->last)<span class="h-px w-2 bg-zinc-200"></span>@endunless
-                    @endforeach
-                </div>
-            </div>
-        @endif
-
-        {{-- Sync history --}}
-        @if(! empty($syncHistory))
-            <div>
-                <div class="mb-1.5 text-[9px] font-bold uppercase tracking-widest text-zinc-400">Sync History</div>
-                <div class="space-y-1">
-                    @foreach($syncHistory as $sh)
-                        <div class="flex items-center justify-between rounded-lg px-2 py-1 text-[10px] odd:bg-orange-50/40">
-                            <span class="font-bold text-zinc-700 dark:text-zinc-200">{{ $sh['date'] }}</span>
-                            <span class="text-zinc-400">{{ $sh['punches'] }} punches</span>
-                            <span class="inline-flex items-center gap-1 font-semibold text-emerald-600"><flux:icon.check class="size-3" /> {{ $sh['synced'] }}</span>
-                        </div>
-                    @endforeach
-                </div>
-            </div>
-        @endif
     </div>
 </div>
 
