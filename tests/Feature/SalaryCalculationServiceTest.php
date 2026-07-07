@@ -165,6 +165,87 @@ test('legacy employees with no payroll settings row behave like the old fixed en
         ->and($result->net)->toBe(50000.0);
 });
 
+// ─── Statutory computation (Indian payroll) ───────────────────────────────────
+
+function enableSettings(Employee $employee, array $flags): void
+{
+    EmployeePayrollSettings::create(array_merge(
+        EmployeePayrollSettings::defaults($employee->id)->toArray(),
+        array_merge(['employee_id' => $employee->id], $flags),
+    ));
+}
+
+test('PF is 12% of actual basic when basic is below the 15k ceiling', function () {
+    $employee = payrollEmployee();
+    $basic = payrollComponent(['name' => 'Basic Salary', 'code' => 'BASIC', 'component_type' => 'earning', 'display_order' => 1]);
+    $pf = payrollComponent(['name' => 'Provident Fund (PF)', 'type' => 'deduction', 'code' => 'PF', 'component_type' => 'deduction', 'is_pf_applicable' => true, 'display_order' => 1]);
+
+    assignSalary($employee, $basic, 12000);
+    assignSalary($employee, $pf, 1800); // configured amount ignored — statutory recomputes
+    enableSettings($employee, ['pf_enabled' => true]);
+
+    $result = app(SalaryCalculationService::class)->calculate($employee, Carbon::parse('2026-06-01'), Carbon::parse('2026-06-30'), '2026-06', draftPayroll());
+
+    expect(collect($result->deductionItems)->firstWhere('name', 'Provident Fund (PF)')['amount'])->toBe(1440.0)
+        ->and($result->net)->toBe(10560.0);
+});
+
+test('ESI is deducted at 0.75% only within the 21k gross ceiling', function () {
+    $employee = payrollEmployee();
+    $basic = payrollComponent(['name' => 'Basic Salary', 'code' => 'BASIC', 'component_type' => 'earning', 'display_order' => 1]);
+    $esi = payrollComponent(['name' => 'ESI', 'type' => 'deduction', 'code' => 'ESI', 'component_type' => 'deduction', 'is_esi_applicable' => true, 'display_order' => 1]);
+
+    assignSalary($employee, $basic, 18000);
+    assignSalary($employee, $esi, 0);
+    enableSettings($employee, ['esi_enabled' => true]);
+
+    $result = app(SalaryCalculationService::class)->calculate($employee, Carbon::parse('2026-06-01'), Carbon::parse('2026-06-30'), '2026-06', draftPayroll());
+
+    expect(collect($result->deductionItems)->firstWhere('name', 'ESI')['amount'])->toBe(135.0); // ceil(18000 * 0.75%)
+});
+
+test('ESI is skipped when gross exceeds the 21k ceiling', function () {
+    $employee = payrollEmployee();
+    $basic = payrollComponent(['name' => 'Basic Salary', 'code' => 'BASIC', 'component_type' => 'earning', 'display_order' => 1]);
+    $esi = payrollComponent(['name' => 'ESI', 'type' => 'deduction', 'code' => 'ESI', 'component_type' => 'deduction', 'is_esi_applicable' => true, 'display_order' => 1]);
+
+    assignSalary($employee, $basic, 30000);
+    assignSalary($employee, $esi, 0);
+    enableSettings($employee, ['esi_enabled' => true]);
+
+    $result = app(SalaryCalculationService::class)->calculate($employee, Carbon::parse('2026-06-01'), Carbon::parse('2026-06-30'), '2026-06', draftPayroll());
+
+    expect(collect($result->deductionItems)->firstWhere('name', 'ESI')['amount'])->toBe(0.0);
+});
+
+test('Maharashtra professional tax deducts 200 in a normal month', function () {
+    $employee = payrollEmployee(['gender' => 'male']);
+    $basic = payrollComponent(['name' => 'Basic Salary', 'code' => 'BASIC', 'component_type' => 'earning', 'display_order' => 1]);
+    $pt = payrollComponent(['name' => 'Professional Tax', 'type' => 'deduction', 'code' => 'PROFESSIONAL_TAX', 'component_type' => 'deduction', 'display_order' => 2]);
+
+    assignSalary($employee, $basic, 30000);
+    assignSalary($employee, $pt, 0);
+    enableSettings($employee, ['professional_tax_enabled' => true]);
+
+    $result = app(SalaryCalculationService::class)->calculate($employee, Carbon::parse('2026-06-01'), Carbon::parse('2026-06-30'), '2026-06', draftPayroll());
+
+    expect(collect($result->deductionItems)->firstWhere('name', 'Professional Tax')['amount'])->toBe(200.0);
+});
+
+test('TDS is deducted for a high earner under the new regime', function () {
+    $employee = payrollEmployee(['gender' => 'male']);
+    $basic = payrollComponent(['name' => 'Basic Salary', 'code' => 'BASIC', 'component_type' => 'earning', 'display_order' => 1]);
+    $tds = payrollComponent(['name' => 'Income Tax (TDS)', 'type' => 'deduction', 'code' => 'TDS', 'component_type' => 'deduction', 'display_order' => 3]);
+
+    assignSalary($employee, $basic, 200000); // 24L annual projection
+    assignSalary($employee, $tds, 0);
+    enableSettings($employee, ['tds_enabled' => true]);
+
+    $result = app(SalaryCalculationService::class)->calculate($employee, Carbon::parse('2026-06-01'), Carbon::parse('2026-06-30'), '2026-06', draftPayroll());
+
+    expect(collect($result->deductionItems)->firstWhere('name', 'Income Tax (TDS)')['amount'])->toBe(24375.0);
+});
+
 test('PayrollService generateDraft produces payslips using the dynamic engine', function () {
     $employee = payrollEmployee();
     $processor = User::factory()->create();

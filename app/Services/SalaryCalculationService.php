@@ -20,6 +20,7 @@ class SalaryCalculationService
         protected LwpService $lwpService,
         protected IncentiveService $incentiveService,
         protected ReimbursementService $reimbursementService,
+        protected StatutoryService $statutoryService,
     ) {}
 
     public function calculate(
@@ -99,7 +100,8 @@ class SalaryCalculationService
 
         foreach ($deductionRows as $row) {
             $component = $row->component;
-            $amount = $this->resolveComponentAmount($component, $row, $context, $settings, $earningsSum);
+            $amount = $this->resolveStatutoryAmount($component, $context, $earningsSum, $cycleEnd, $employee)
+                ?? $this->resolveComponentAmount($component, $row, $context, $settings, $earningsSum);
 
             // Statutory gates
             if ($component->is_pf_applicable && ! $settings->pf_enabled) {
@@ -129,9 +131,12 @@ class SalaryCalculationService
 
         foreach ($employerContributionRows as $row) {
             $component = $row->component;
-            $amount = $this->resolveComponentAmount($component, $row, $context, $settings, $earningsSum);
+            $amount = $this->resolveStatutoryAmount($component, $context, $earningsSum, $cycleEnd, $employee, true)
+                ?? $this->resolveComponentAmount($component, $row, $context, $settings, $earningsSum);
 
             if ($component->is_pf_applicable && ! $settings->pf_enabled) {
+                $amount = 0.0;
+            } elseif ($component->is_esi_applicable && ! $settings->esi_enabled) {
                 $amount = 0.0;
             }
 
@@ -269,6 +274,56 @@ class SalaryCalculationService
             employerContributionItems: $employerContributionItems,
             otRecords: $otRecords,
         );
+    }
+
+    /**
+     * Compute the statutory amount for a component when it is a recognised
+     * statutory head (EPF, ESI, Professional Tax, TDS). Returns null for
+     * non-statutory components so the caller falls back to the normal
+     * fixed/percentage/formula resolution.
+     *
+     * Statutory heads are identified by the SAME predicate the enable/disable
+     * gates use, so computation and gating stay consistent. The per-employee
+     * gates (pf_enabled, esi_enabled, …) still zero the amount afterwards when
+     * the head is switched off for that employee.
+     */
+    private function resolveStatutoryAmount(
+        SalaryComponent $component,
+        array $context,
+        float $grossWage,
+        Carbon $cycleEnd,
+        Employee $employee,
+        bool $employerSide = false,
+    ): ?float {
+        // PF wage = Basic + DA, capped inside the statutory service.
+        $pfWage = (float) (($context['BASIC'] ?? 0.0) + ($context['DA'] ?? 0.0));
+
+        if ($component->is_pf_applicable) {
+            return $employerSide
+                ? $this->statutoryService->providentFundEmployer($pfWage)
+                : $this->statutoryService->providentFundEmployee($pfWage);
+        }
+
+        if ($component->is_esi_applicable) {
+            return $employerSide
+                ? $this->statutoryService->esiEmployer($grossWage)
+                : $this->statutoryService->esiEmployee($grossWage);
+        }
+
+        // Professional Tax and TDS are employee-side deductions only.
+        if (! $employerSide && in_array($component->code, ['PROFESSIONAL_TAX', 'PT'], true)) {
+            return $this->statutoryService->professionalTaxMaharashtra(
+                $grossWage,
+                (int) $cycleEnd->month,
+                strtolower((string) $employee->gender) === 'female',
+            );
+        }
+
+        if (! $employerSide && $component->code === 'TDS') {
+            return $this->statutoryService->monthlyTds($grossWage);
+        }
+
+        return null;
     }
 
     /**
