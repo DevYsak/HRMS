@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\AttendanceMode;
 use App\Models\Attendance;
+use App\Models\AttendancePunch;
 use App\Models\AttendanceRegularisation;
 use App\Models\BreakLog;
 use App\Models\DecemberMandatoryDay;
@@ -107,8 +108,12 @@ class AttendanceService
                 'reviewed_at' => now(),
             ]);
 
-            $checkIn = Carbon::parse($regularisation->requested_check_in);
-            $checkOut = Carbon::parse($regularisation->requested_check_out);
+            // requested_check_in/out are TIME columns — anchor them to the work
+            // date so the corrected punch/attendance lands on the right day (not
+            // "today" when the regularisation is loaded fresh from the DB).
+            $workDate = Carbon::parse($regularisation->work_date)->toDateString();
+            $checkIn = Carbon::parse($workDate.' '.Carbon::parse($regularisation->requested_check_in)->format('H:i:s'));
+            $checkOut = Carbon::parse($workDate.' '.Carbon::parse($regularisation->requested_check_out)->format('H:i:s'));
 
             // Seed check_in/out on create so regularising a fully-absent day
             // (no existing attendance row) doesn't violate the NOT NULL columns.
@@ -125,15 +130,24 @@ class AttendanceService
             $grossMinutes = $checkIn->diffInMinutes($checkOut);
             $netMinutes = max(0, $grossMinutes - ((int) $attendance->break_minutes));
 
-            $attendance->update([
+            $attendance->update(array_filter([
                 'check_in' => $checkIn,
                 'check_out' => $checkOut,
+                'check_in_method' => $regularisation->check_in_method,
+                'check_out_method' => $regularisation->check_out_method,
                 'total_hours' => round($netMinutes / 60, 2),
                 'status' => 'on_time',
                 'is_late' => false,
                 'late_minutes' => 0,
                 'missing_checkout' => false,
-            ]);
+            ], fn ($v) => $v !== null));
+
+            // Write the corrected in/out into the punch journey (with the
+            // declared method) so the employee's Attendance Journey reflects the
+            // approved fix — not just the summary times. Without this the journey
+            // is built purely from biometric punches and the correction is
+            // invisible to the employee even though the admin summary shows it.
+            $this->writeRegularisedPunches($regularisation, $checkIn, $checkOut);
 
             // If the corrected day now exceeds the OT threshold, file the OT
             // request and auto-approve it under the same reviewer so overtime
@@ -146,6 +160,33 @@ class AttendanceService
 
             return $attendance->fresh();
         });
+    }
+
+    /**
+     * Upsert the corrected check-in / check-out as journey punches so an
+     * approved regularisation appears in the employee's Attendance Journey.
+     * Keyed on (employee, punched_at) for idempotency and tagged
+     * source='regularisation' so it is distinguishable from device punches.
+     * Near-duplicate device punches (a few seconds off) are harmless — the
+     * PunchClassifier collapses them when the journey is rendered.
+     */
+    private function writeRegularisedPunches(AttendanceRegularisation $regularisation, Carbon $checkIn, Carbon $checkOut): void
+    {
+        $employee = $regularisation->employee;
+        $date = Carbon::parse($regularisation->work_date)->toDateString();
+
+        foreach ([[$checkIn, $regularisation->check_in_method], [$checkOut, $regularisation->check_out_method]] as [$time, $method]) {
+            AttendancePunch::updateOrCreate(
+                ['employee_id' => $regularisation->employee_id, 'punched_at' => $time],
+                [
+                    'employee_code' => $employee?->employee_code,
+                    'punch_date' => $date,
+                    'method' => $method ?: 'id_card',
+                    'verify_raw' => $method,
+                    'source' => 'regularisation',
+                ],
+            );
+        }
     }
 
     public function rejectRegularisation(AttendanceRegularisation $regularisation, int $reviewerId, string $comment): AttendanceRegularisation

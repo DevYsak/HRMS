@@ -1200,7 +1200,21 @@
                     <flux:input wire:model="regCheckOut" label="Correct Check-out" type="time" :disabled="! $regFixOut" />
                 </div>
             </div>
-            <p class="text-[11px] text-zinc-400">Unticked punches keep their recorded time. On approval, working hours, overtime, score and payroll update automatically.</p>
+            <div class="grid grid-cols-2 gap-4">
+                <div class="{{ $regFixIn ? '' : 'pointer-events-none opacity-40' }}">
+                    <flux:select wire:model="regCheckInMethod" label="Check-in via" :disabled="! $regFixIn">
+                        <flux:select.option value="id_card">ID Card</flux:select.option>
+                        <flux:select.option value="face">Face</flux:select.option>
+                    </flux:select>
+                </div>
+                <div class="{{ $regFixOut ? '' : 'pointer-events-none opacity-40' }}">
+                    <flux:select wire:model="regCheckOutMethod" label="Check-out via" :disabled="! $regFixOut">
+                        <flux:select.option value="id_card">ID Card</flux:select.option>
+                        <flux:select.option value="face">Face</flux:select.option>
+                    </flux:select>
+                </div>
+            </div>
+            <p class="text-[11px] text-zinc-400">Unticked punches keep their recorded time. On approval, working hours, overtime, score and payroll update automatically — and the corrected punch appears in your Attendance Journey with the method you pick above.</p>
 
             <flux:textarea wire:model="regReason" label="Reason" placeholder="e.g. Forgot to clock out, system glitch..." rows="3" />
         </div>

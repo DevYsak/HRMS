@@ -167,6 +167,11 @@ class AttendanceTracker extends Component
 
     public string $regCheckOut = '';
 
+    /** Punch method the corrected check-in / check-out was actually made with. */
+    public string $regCheckInMethod = 'id_card';
+
+    public string $regCheckOutMethod = 'id_card';
+
     public string $regReason = '';
 
     public function mount()
@@ -1485,6 +1490,8 @@ class AttendanceTracker extends Component
             'work_date' => $this->regDate,
             'requested_check_in' => $this->regDate.' '.$requestedIn.':00',
             'requested_check_out' => $this->regDate.' '.$requestedOut.':00',
+            'check_in_method' => in_array($this->regCheckInMethod, ['face', 'id_card'], true) ? $this->regCheckInMethod : 'id_card',
+            'check_out_method' => in_array($this->regCheckOutMethod, ['face', 'id_card'], true) ? $this->regCheckOutMethod : 'id_card',
             'reason' => $this->regReason,
             'status' => 'pending',
         ]);

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -12,6 +13,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'work_date',
     'requested_check_in',
     'requested_check_out',
+    'check_in_method',
+    'check_out_method',
     'reason',
     'status',
     'reviewer_id',
@@ -23,7 +26,7 @@ class AttendanceRegularisation extends Model
     protected function casts(): array
     {
         return [
-            'work_date'   => 'date',
+            'work_date' => 'date',
             'reviewed_at' => 'datetime',
         ];
     }
@@ -43,8 +46,8 @@ class AttendanceRegularisation extends Model
         return $this->belongsTo(User::class, 'reviewer_id');
     }
 
-    /** @return \Illuminate\Database\Eloquent\Builder<static> */
-    public function scopePending(\Illuminate\Database\Eloquent\Builder $query): \Illuminate\Database\Eloquent\Builder
+    /** @return Builder<static> */
+    public function scopePending(Builder $query): Builder
     {
         return $query->where('status', 'pending');
     }
