@@ -3,7 +3,7 @@
 @use('App\Support\UserAgent')
 @use('Illuminate\Support\Facades\Storage')
 
-<flux:main class="min-h-screen bg-[#FFF8F3] p-4 md:p-6" x-data="{
+<flux:main class="min-h-screen bg-[#FFF8F3] dark:bg-white/5 p-4 md:p-6" x-data="{
     currentTime: '',
     updateClock() { this.currentTime = new Date().toLocaleTimeString('en-IN', { hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit' }); }
 }" x-init="updateClock(); setInterval(() => updateClock(), 1000)">
@@ -73,28 +73,28 @@
 {{-- ═══════════════ HEADER ═══════════════ --}}
 <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
     <div>
-        <h1 class="text-2xl font-black tracking-tight text-zinc-900">My Attendance</h1>
+        <h1 class="text-2xl font-black tracking-tight text-zinc-900 dark:text-white">My Attendance</h1>
         <div class="mt-0.5 flex items-center gap-1.5 text-xs text-zinc-400">
             <span>Dashboard</span><flux:icon.chevron-right class="size-3" /><span>Attendance</span><flux:icon.chevron-right class="size-3" /><span class="font-semibold text-orange-500">My Attendance</span>
         </div>
     </div>
     <div class="flex flex-wrap items-center gap-2">
-        <span class="inline-flex items-center gap-2 rounded-xl border border-orange-100 bg-white px-3 py-2 text-xs font-semibold text-zinc-600 shadow-sm"><flux:icon.calendar-days class="size-4 text-orange-500" /> {{ now()->format('d F Y') }}</span>
-        <div class="flex items-center gap-1 rounded-xl border border-orange-100 bg-white p-1 shadow-sm">
+        <span class="inline-flex items-center gap-2 rounded-xl border border-orange-100 bg-white dark:bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-600 dark:text-zinc-300 shadow-sm"><flux:icon.calendar-days class="size-4 text-orange-500" /> {{ now()->format('d F Y') }}</span>
+        <div class="flex items-center gap-1 rounded-xl border border-orange-100 bg-white dark:bg-zinc-900 p-1 shadow-sm">
             @foreach(['today' => 'Today', 'this_week' => 'Week', 'this_month' => 'Month', '3_months' => '3 Months', 'year' => 'Year'] as $val => $label)
                 <button wire:click="$set('statsPeriod', '{{ $val }}')"
-                    class="rounded-lg px-3 py-1.5 text-xs font-bold transition {{ $statsPeriod === $val ? 'bg-orange-500 text-white shadow' : 'text-zinc-500 hover:bg-orange-50' }}">{{ $label }}</button>
+                    class="rounded-lg px-3 py-1.5 text-xs font-bold transition {{ $statsPeriod === $val ? 'bg-orange-500 text-white shadow' : 'text-zinc-500 dark:text-zinc-400 hover:bg-orange-50' }}">{{ $label }}</button>
             @endforeach
         </div>
         <x-clean-select model="analyticsMode" :live="true"
             :options="[['value' => '', 'label' => 'All modes'], ...collect(AttendanceMode::cases())->map(fn ($mode) => ['value' => $mode->value, 'label' => $mode->label()])->all()]" />
-        <div class="flex items-center gap-1.5 rounded-xl border {{ $statsPeriod === 'custom' ? 'border-orange-400 ring-1 ring-orange-200' : 'border-orange-100' }} bg-white px-2 py-1 shadow-sm">
+        <div class="flex items-center gap-1.5 rounded-xl border {{ $statsPeriod === 'custom' ? 'border-orange-400 ring-1 ring-orange-200' : 'border-orange-100' }} bg-white dark:bg-zinc-900 px-2 py-1 shadow-sm">
             <span class="text-[10px] font-bold uppercase tracking-wider {{ $statsPeriod === 'custom' ? 'text-orange-500' : 'text-zinc-400' }}">Custom</span>
-            <input type="date" wire:model.live="rangeFrom" class="w-[7.5rem] border-0 bg-transparent p-1 text-xs font-semibold text-zinc-600 focus:ring-0">
+            <input type="date" wire:model.live="rangeFrom" class="w-[7.5rem] border-0 bg-transparent p-1 text-xs font-semibold text-zinc-600 dark:text-zinc-300 focus:ring-0">
             <span class="text-zinc-300">–</span>
-            <input type="date" wire:model.live="rangeTo" class="w-[7.5rem] border-0 bg-transparent p-1 text-xs font-semibold text-zinc-600 focus:ring-0">
+            <input type="date" wire:model.live="rangeTo" class="w-[7.5rem] border-0 bg-transparent p-1 text-xs font-semibold text-zinc-600 dark:text-zinc-300 focus:ring-0">
         </div>
-        <button wire:click="exportLog" class="inline-flex items-center gap-1.5 rounded-xl border border-orange-100 bg-white px-3 py-2 text-xs font-bold text-zinc-600 shadow-sm transition hover:bg-orange-50"><flux:icon.arrow-down-tray class="size-4 text-orange-500" /> Export</button>
+        <button wire:click="exportLog" class="inline-flex items-center gap-1.5 rounded-xl border border-orange-100 bg-white dark:bg-zinc-900 px-3 py-2 text-xs font-bold text-zinc-600 dark:text-zinc-300 shadow-sm transition hover:bg-orange-50"><flux:icon.arrow-down-tray class="size-4 text-orange-500" /> Export</button>
     </div>
 </div>
 
@@ -118,49 +118,49 @@
                 </div>
                 <div class="min-w-0">
                     <div class="flex items-center gap-1.5">
-                        <h2 class="truncate text-xl font-black text-zinc-900">{{ auth()->user()->name }}</h2>
+                        <h2 class="truncate text-xl font-black text-zinc-900 dark:text-white">{{ auth()->user()->name }}</h2>
                         <flux:icon.check-badge class="size-5 text-orange-500" />
                     </div>
-                    <div class="text-sm text-zinc-500">{{ $emp?->employee_code ? 'EMP'.str_pad((string) $emp->employee_code, 5, '0', STR_PAD_LEFT) : '' }} · {{ $emp?->jobTitle?->name ?? $emp?->jobTitle?->title ?? 'Employee' }}</div>
-                    <div class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500">
+                    <div class="text-sm text-zinc-500 dark:text-zinc-400">{{ $emp?->employee_code ? 'EMP'.str_pad((string) $emp->employee_code, 5, '0', STR_PAD_LEFT) : '' }} · {{ $emp?->jobTitle?->name ?? $emp?->jobTitle?->title ?? 'Employee' }}</div>
+                    <div class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
                         <span class="inline-flex items-center gap-1"><flux:icon.building-office-2 class="size-3.5 text-orange-400" /> {{ $emp?->department?->name ?? '—' }}</span>
                         @if($emp?->manager)<span class="inline-flex items-center gap-1"><flux:icon.user class="size-3.5 text-orange-400" /> {{ $emp->manager->name }} (Manager)</span>@endif
                     </div>
                 </div>
             </div>
             <div class="mt-4 grid grid-cols-3 gap-2">
-                <div class="rounded-xl bg-white/70 p-2.5 shadow-sm">
+                <div class="rounded-xl bg-white/70 dark:bg-zinc-900/70 p-2.5 shadow-sm">
                     <div class="text-[9px] font-bold uppercase tracking-wider text-zinc-400">Shift Time</div>
-                    <div class="text-[11px] font-black text-zinc-800">{{ $shift ? \Carbon\Carbon::parse($shift->start_time)->format('g:i A').' - '.\Carbon\Carbon::parse($shift->end_time)->format('g:i A') : '—' }}</div>
+                    <div class="text-[11px] font-black text-zinc-800 dark:text-zinc-100">{{ $shift ? \Carbon\Carbon::parse($shift->start_time)->format('g:i A').' - '.\Carbon\Carbon::parse($shift->end_time)->format('g:i A') : '—' }}</div>
                 </div>
-                <div class="rounded-xl bg-white/70 p-2.5 shadow-sm">
+                <div class="rounded-xl bg-white/70 dark:bg-zinc-900/70 p-2.5 shadow-sm">
                     <div class="text-[9px] font-bold uppercase tracking-wider text-zinc-400">Attendance Mode</div>
-                    <div class="text-[11px] font-black text-zinc-800">{{ $heroMode->label() }}</div>
+                    <div class="text-[11px] font-black text-zinc-800 dark:text-zinc-100">{{ $heroMode->label() }}</div>
                 </div>
-                <div class="rounded-xl bg-white/70 p-2.5 shadow-sm">
+                <div class="rounded-xl bg-white/70 dark:bg-zinc-900/70 p-2.5 shadow-sm">
                     <div class="text-[9px] font-bold uppercase tracking-wider text-zinc-400">Grace Time</div>
-                    <div class="text-[11px] font-black text-zinc-800">{{ $shift->grace_minutes ?? 5 }} mins</div>
+                    <div class="text-[11px] font-black text-zinc-800 dark:text-zinc-100">{{ $shift->grace_minutes ?? 5 }} mins</div>
                 </div>
             </div>
         </div>
 
         {{-- Live timer --}}
         <div class="lg:col-span-4">
-            <div class="rounded-2xl bg-white/60 p-4 shadow-sm">
+            <div class="rounded-2xl bg-white/60 dark:bg-zinc-900/60 p-4 shadow-sm">
                 <div class="mb-1 flex items-center gap-2">
                     <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-emerald-700">
                         <span class="size-1.5 rounded-full bg-emerald-500 {{ $isIn ? 'animate-pulse' : '' }}"></span>{{ $isIn ? 'Working' : ($isDone ? 'Completed' : 'Not In') }}
                     </span>
                     @if($todayAttendance)<span class="text-[11px] text-zinc-400">since {{ $todayAttendance->check_in->format('h:i A') }}</span>@endif
                 </div>
-                <div class="text-3xl font-black tabular-nums text-zinc-900" x-text="live">{{ $workedLabel }}</div>
+                <div class="text-3xl font-black tabular-nums text-zinc-900 dark:text-white" x-text="live">{{ $workedLabel }}</div>
                 <div class="text-[11px] text-zinc-400">Current Working Time</div>
                 <div class="mt-3 h-2 w-full overflow-hidden rounded-full bg-orange-100">
                     <div class="h-full rounded-full bg-gradient-to-r from-orange-500 to-amber-400 transition-all duration-700" style="width: {{ $progress }}%"></div>
                 </div>
                 <div class="mt-1.5 flex justify-between text-[10px] text-zinc-400">
-                    <span>Remaining: <strong class="text-zinc-600">{{ intdiv($remainingMin, 60) }}h {{ $remainingMin % 60 }}m</strong></span>
-                    <span>Expected Logout: <strong class="text-zinc-600">{{ $expectedLogout }}</strong></span>
+                    <span>Remaining: <strong class="text-zinc-600 dark:text-zinc-300">{{ intdiv($remainingMin, 60) }}h {{ $remainingMin % 60 }}m</strong></span>
+                    <span>Expected Logout: <strong class="text-zinc-600 dark:text-zinc-300">{{ $expectedLogout }}</strong></span>
                 </div>
             </div>
         </div>
@@ -174,13 +174,13 @@
                         <circle cx="18" cy="18" r="15.9" fill="none" stroke="#F97316" stroke-width="3.5" stroke-linecap="round" stroke-dasharray="{{ $progress }}, 100" />
                     </svg>
                     <div class="absolute text-center">
-                        <div class="text-xl font-black text-zinc-900">{{ $progress }}%</div>
+                        <div class="text-xl font-black text-zinc-900 dark:text-white">{{ $progress }}%</div>
                         <div class="text-[8px] font-bold uppercase text-zinc-400">Progress</div>
                     </div>
                 </div>
                 <div>
                     <div class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Attendance Score</div>
-                    <div class="text-2xl font-black text-zinc-900">{{ $score }}<span class="text-sm text-zinc-400">/100</span></div>
+                    <div class="text-2xl font-black text-zinc-900 dark:text-white">{{ $score }}<span class="text-sm text-zinc-400">/100</span></div>
                     <span class="mt-1 inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">{{ $score >= 80 ? 'Excellent' : ($score >= 60 ? 'Good' : 'Needs Focus') }}</span>
                 </div>
             </div>
@@ -190,23 +190,23 @@
     {{-- Action buttons --}}
     <div class="relative mt-5 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
         @if(! $todayAttendance)
-            <button type="button" @click="$flux.modal('punch-capture').show(); $dispatch('open-punch', { action: 'in' })" class="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-white py-3 text-sm font-bold text-emerald-600 shadow-sm transition hover:bg-emerald-50 hover:shadow"><flux:icon.arrow-right-end-on-rectangle class="size-5" /> Clock In</button>
+            <button type="button" @click="$flux.modal('punch-capture').show(); $dispatch('open-punch', { action: 'in' })" class="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-white dark:bg-zinc-900 py-3 text-sm font-bold text-emerald-600 shadow-sm transition hover:bg-emerald-50 hover:shadow"><flux:icon.arrow-right-end-on-rectangle class="size-5" /> Clock In</button>
         @else
-            <span class="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-white py-3 text-sm font-bold text-zinc-400"><flux:icon.check-circle class="size-5" /> Clocked In</span>
+            <span class="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 py-3 text-sm font-bold text-zinc-400"><flux:icon.check-circle class="size-5" /> Clocked In</span>
         @endif
         @if($isIn)
-            <button type="button" @click="$flux.modal('punch-capture').show(); $dispatch('open-punch', { action: 'out' })" class="inline-flex items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white py-3 text-sm font-bold text-rose-500 shadow-sm transition hover:bg-rose-50 hover:shadow"><flux:icon.arrow-left-start-on-rectangle class="size-5" /> Clock Out</button>
+            <button type="button" @click="$flux.modal('punch-capture').show(); $dispatch('open-punch', { action: 'out' })" class="inline-flex items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white dark:bg-zinc-900 py-3 text-sm font-bold text-rose-500 shadow-sm transition hover:bg-rose-50 hover:shadow"><flux:icon.arrow-left-start-on-rectangle class="size-5" /> Clock Out</button>
         @else
-            <span class="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-white py-3 text-sm font-bold text-zinc-400"><flux:icon.arrow-left-start-on-rectangle class="size-5" /> Clock Out</span>
+            <span class="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 py-3 text-sm font-bold text-zinc-400"><flux:icon.arrow-left-start-on-rectangle class="size-5" /> Clock Out</span>
         @endif
         @if($isIn && ! $activeBreak)
             <button wire:click="startBreak" class="inline-flex items-center justify-center gap-2 rounded-xl border border-orange-200 bg-orange-50 py-3 text-sm font-bold text-orange-600 shadow-sm transition hover:bg-orange-100"><flux:icon.pause class="size-5" /> Start Break</button>
         @elseif($activeBreak)
             <button wire:click="endBreak" class="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-300 bg-amber-500 py-3 text-sm font-bold text-white shadow transition hover:bg-amber-600"><flux:icon.play class="size-5" /> End Break</button>
         @else
-            <span class="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-white py-3 text-sm font-bold text-zinc-400"><flux:icon.pause class="size-5" /> Start Break</span>
+            <span class="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 py-3 text-sm font-bold text-zinc-400"><flux:icon.pause class="size-5" /> Start Break</span>
         @endif
-        <span class="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-white py-3 text-sm font-bold text-zinc-400"><flux:icon.play class="size-5" /> End Break</span>
+        <span class="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 py-3 text-sm font-bold text-zinc-400"><flux:icon.play class="size-5" /> End Break</span>
         <button type="button" @click="$flux.modal('regularisation-modal').show()" class="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 py-3 text-sm font-bold text-white shadow-lg shadow-orange-300/40 transition hover:shadow-xl"><flux:icon.pencil-square class="size-5" /> Request Regularization</button>
     </div>
 </div>
@@ -216,8 +216,8 @@
 {{-- ═══════════════ ATTENDANCE HEALTH + QUICK ACTIONS ═══════════════ --}}
 <div class="grid grid-cols-1 gap-4 lg:grid-cols-12">
     {{-- Health strip --}}
-    <div class="rounded-[18px] border border-orange-100/70 bg-white p-5 shadow-sm lg:col-span-9">
-        <div class="mb-3 text-sm font-black text-zinc-900">Attendance Health</div>
+    <div class="rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 p-5 shadow-sm lg:col-span-9">
+        <div class="mb-3 text-sm font-black text-zinc-900 dark:text-white">Attendance Health</div>
         @php
             $health = [
                 ['label' => 'Attendance %', 'value' => $attPct.'%', 'icon' => 'chart-pie', 'color' => '#F97316', 'trend' => '↑ '.$attPct.'%'],
@@ -233,10 +233,10 @@
         @endphp
         <div class="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
             @foreach($health as $h)
-                <div class="flex items-center gap-3 rounded-2xl border border-zinc-100 bg-white p-3 transition hover:-translate-y-0.5 hover:shadow-md">
+                <div class="flex items-center gap-3 rounded-2xl border border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3 transition hover:-translate-y-0.5 hover:shadow-md">
                     <span class="inline-flex size-9 shrink-0 items-center justify-center rounded-xl" style="background: {{ $h['color'] }}1a; color: {{ $h['color'] }};"><flux:icon :icon="$h['icon']" class="size-4" /></span>
                     <div class="min-w-0">
-                        <div class="truncate text-base font-black leading-none tabular-nums text-zinc-900">{{ $h['value'] }}</div>
+                        <div class="truncate text-base font-black leading-none tabular-nums text-zinc-900 dark:text-white">{{ $h['value'] }}</div>
                         <div class="mt-0.5 truncate text-[9px] font-bold uppercase tracking-wide text-zinc-400">{{ $h['label'] }}</div>
                         <div class="truncate text-[9px] text-zinc-400">{{ $h['trend'] }}</div>
                     </div>
@@ -246,8 +246,8 @@
     </div>
 
     {{-- Quick actions --}}
-    <div class="rounded-[18px] border border-orange-100/70 bg-white p-5 shadow-sm lg:col-span-3">
-        <div class="mb-3 text-sm font-black text-zinc-900">Quick Actions</div>
+    <div class="rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 p-5 shadow-sm lg:col-span-3">
+        <div class="mb-3 text-sm font-black text-zinc-900 dark:text-white">Quick Actions</div>
         <div class="grid grid-cols-2 gap-2">
             @php
                 $canApprove = auth()->user()->canApproveLeave();
@@ -267,9 +267,9 @@
                 <a href="{{ $href }}"
                     @if($action === 'regularise') @click.prevent="$flux.modal('regularisation-modal').show()" @endif
                     @if($action === 'export') wire:click.prevent="exportLog" @endif
-                    class="flex flex-col items-center gap-1.5 rounded-xl border border-zinc-100 bg-white p-3 text-center transition hover:-translate-y-0.5 hover:border-orange-200 hover:shadow">
+                    class="flex flex-col items-center gap-1.5 rounded-xl border border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3 text-center transition hover:-translate-y-0.5 hover:border-orange-200 hover:shadow">
                     <span class="inline-flex size-8 items-center justify-center rounded-lg bg-orange-50 text-orange-500"><flux:icon :icon="$icon" class="size-4" /></span>
-                    <span class="text-[10px] font-bold text-zinc-600">{{ $label }}</span>
+                    <span class="text-[10px] font-bold text-zinc-600 dark:text-zinc-300">{{ $label }}</span>
                 </a>
             @endforeach
         </div>
@@ -290,7 +290,7 @@
         </div>
         <div class="mt-3 space-y-2">
             @foreach($attendanceAlerts as $alert)
-                <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200/70 bg-white/80 px-3 py-2">
+                <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200/70 bg-white/80 dark:bg-zinc-900/80 px-3 py-2">
                     <div class="flex items-center gap-2 text-xs"><flux:icon.exclamation-circle class="size-4 text-amber-500" /><span class="font-bold text-amber-900">{{ $alert['label'] }}</span><span class="text-amber-700">· {{ $alert['detail'] }}</span></div>
                     @if($alert['action'] ?? true)
                         <button wire:click="openRegularisation('{{ $alert['date'] }}')" class="inline-flex shrink-0 items-center gap-1 rounded-lg bg-amber-500 px-3 py-1 text-[11px] font-bold text-white transition hover:bg-amber-600"><flux:icon.pencil-square class="size-3" /> Regularize</button>
@@ -311,10 +311,10 @@
         $jFirst = $todayAttendance?->check_in ?? $sum?->first_punch;
         $jLast = $todayAttendance?->check_out ?? $sum?->last_punch;
     @endphp
-    <div class="rounded-[18px] border border-orange-100/70 bg-white p-5 shadow-sm lg:col-span-5">
+    <div class="rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 p-5 shadow-sm lg:col-span-5">
         <div class="mb-4 flex items-center justify-between">
             <div class="flex items-center gap-2">
-                <div class="text-sm font-black text-zinc-900">Today's Attendance Journey</div>
+                <div class="text-sm font-black text-zinc-900 dark:text-white">Today's Attendance Journey</div>
                 @if(count($journey))<span class="rounded-full bg-orange-50 px-2 py-0.5 text-[10px] font-bold text-orange-500">{{ count($journey) }} events</span>@endif
             </div>
             <button type="button" @click="$flux.modal('regularisation-modal').show()" class="text-[11px] font-bold text-orange-500 hover:underline">Request Regularization</button>
@@ -329,7 +329,7 @@
                             'break'  => ['bg-orange-500', 'pause', 'text-orange-600', 'border-orange-100 bg-orange-50/40'],
                             'resume' => ['bg-blue-500', 'play', 'text-blue-600', 'border-blue-100 bg-blue-50/40'],
                             'out'    => ['bg-rose-600', 'arrow-left-start-on-rectangle', 'text-rose-700', 'border-rose-100 bg-rose-50/30'],
-                            default  => ['bg-zinc-400', 'clock', 'text-zinc-500', 'border-zinc-100 bg-zinc-50/60'],
+                            default  => ['bg-zinc-400', 'clock', 'text-zinc-500 dark:text-zinc-400', 'border-zinc-100 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-800/40'],
                         };
                         $evMethod = ($ev['method'] ?? null) instanceof PunchMethod ? $ev['method'] : PunchMethod::tryFrom((string) ($ev['method'] ?? ''));
                         $gap = $ev['gap_min'] ?? null;
@@ -355,7 +355,7 @@
                         <div @click="x = !x" role="button" tabindex="0" @keydown.enter="x = !x"
                             class="flex-1 cursor-pointer rounded-xl border {{ $cardTint }} px-3 py-2 text-left transition duration-200 hover:-translate-y-0.5 hover:shadow-md">
                             <div class="flex items-center justify-between">
-                                <span class="text-sm font-black tabular-nums text-zinc-900">{{ $ev['time'] }}</span>
+                                <span class="text-sm font-black tabular-nums text-zinc-900 dark:text-white">{{ $ev['time'] }}</span>
                                 <span class="flex items-center gap-1.5">
                                     <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] font-bold text-emerald-700">Success</span>
                                     @if($hasDetail)<flux:icon.chevron-down class="size-3 text-zinc-400 transition-transform" ::class="x ? 'rotate-180' : ''" />@endif
@@ -369,7 +369,7 @@
                             </div>
                             @if($hasDetail)
                                 <div x-show="x" x-transition:enter="transition duration-200 ease-out" x-transition:enter-start="-translate-y-1 opacity-0" x-transition:enter-end="translate-y-0 opacity-100"
-                                    class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-zinc-100 pt-1.5 text-[10px] text-zinc-500">
+                                    class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-zinc-100 dark:border-zinc-800 pt-1.5 text-[10px] text-zinc-500 dark:text-zinc-400">
                                     @if(! empty($ev['source']))<span class="uppercase tracking-wide">{{ $ev['source'] === 'web' ? 'Web Punch' : ucfirst($ev['source']) }}</span>@endif
                                     @if(! empty($ev['verify']))<span>Verify code {{ $ev['verify'] }}</span>@endif
                                     @if(! empty($ev['lat']) && ! empty($ev['lng']))
@@ -385,7 +385,7 @@
             <div class="flex h-32 flex-col items-center justify-center text-center text-zinc-300"><flux:icon.clock class="mb-2 size-8" /><p class="text-xs">No punches recorded today.</p></div>
         @endif
         {{-- Today's Summary footer --}}
-        <div class="mt-4 grid grid-cols-4 gap-x-2 gap-y-3 border-t border-zinc-100 pt-3 text-center">
+        <div class="mt-4 grid grid-cols-4 gap-x-2 gap-y-3 border-t border-zinc-100 dark:border-zinc-800 pt-3 text-center">
             @foreach([
                 ['Working', $workedLabel],
                 ['Break', $breakMin >= 60 ? intdiv($breakMin, 60).'h '.($breakMin % 60).'m' : $breakMin.'m'],
@@ -395,9 +395,9 @@
                 ['Last Punch', $jLast ? \Carbon\Carbon::parse($jLast)->format('h:i A') : '—'],
                 ['Score', $score.'/100'],
             ] as [$k, $v])
-                <div><div class="text-sm font-black tabular-nums text-zinc-900">{{ $v }}</div><div class="text-[9px] font-bold uppercase text-zinc-400">{{ $k }}</div></div>
+                <div><div class="text-sm font-black tabular-nums text-zinc-900 dark:text-white">{{ $v }}</div><div class="text-[9px] font-bold uppercase text-zinc-400">{{ $k }}</div></div>
             @endforeach
-            <div class="grid place-items-center"><span class="inline-flex items-center gap-1 rounded-full {{ $isDone ? 'bg-rose-100 text-rose-600' : ($isIn ? 'bg-emerald-100 text-emerald-700' : 'bg-zinc-100 text-zinc-500') }} px-2 py-0.5 text-[10px] font-bold">{{ $isDone ? 'Completed' : ($isIn ? 'Working' : '—') }}</span></div>
+            <div class="grid place-items-center"><span class="inline-flex items-center gap-1 rounded-full {{ $isDone ? 'bg-rose-100 text-rose-600' : ($isIn ? 'bg-emerald-100 text-emerald-700' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400') }} px-2 py-0.5 text-[10px] font-bold">{{ $isDone ? 'Completed' : ($isIn ? 'Working' : '—') }}</span></div>
         </div>
     </div>
 
@@ -412,17 +412,17 @@
             default => ['bg-zinc-800 text-white', 'bg-zinc-400', 'Absent / Not In'],
         };
     @endphp
-    <div class="rounded-[18px] border border-orange-100/70 bg-white p-5 shadow-sm lg:col-span-3"
+    <div class="rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 p-5 shadow-sm lg:col-span-3"
         x-data="{ p: 0 }" x-init="setTimeout(() => p = {{ $progress }}, 150)">
         <div class="mb-3 flex items-center justify-between">
-            <div class="text-sm font-black text-zinc-900">Shift Progress</div>
+            <div class="text-sm font-black text-zinc-900 dark:text-white">Shift Progress</div>
             <span class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-bold {{ $stBg }}"><span class="size-1.5 rounded-full {{ $stDot }}"></span>{{ $stLabel }}</span>
         </div>
 
         {{-- Live clock --}}
         <div class="mb-3 flex items-center justify-center gap-2 rounded-xl bg-orange-50/60 py-1.5 text-xs">
             <flux:icon.clock class="size-3.5 text-orange-400" />
-            <span class="font-black tabular-nums text-zinc-800" x-text="currentTime"></span>
+            <span class="font-black tabular-nums text-zinc-800 dark:text-zinc-100" x-text="currentTime"></span>
             <span class="text-[10px] text-zinc-400">IST</span>
         </div>
 
@@ -435,7 +435,7 @@
                         class="transition-all duration-1000 ease-out" :stroke-dasharray="p + ', 100'" stroke-dasharray="0, 100" />
                 </svg>
                 <div class="absolute text-center">
-                    <div class="text-2xl font-black tabular-nums text-zinc-900">{{ $progress }}%</div>
+                    <div class="text-2xl font-black tabular-nums text-zinc-900 dark:text-white">{{ $progress }}%</div>
                     <div class="text-[8px] font-bold uppercase tracking-wider text-zinc-400">Shift Completed</div>
                 </div>
             </div>
@@ -454,9 +454,9 @@
                 ['Grace Time', ($shift->grace_minutes ?? 5).'m'],
                 ['Overtime', intdiv($otMinTotal,60).'h '.($otMinTotal%60).'m'],
             ] as [$k, $v])
-                <div class="flex items-center justify-between"><span class="text-zinc-400">{{ $k }}</span><span class="font-bold text-zinc-800">{{ $v }}</span></div>
+                <div class="flex items-center justify-between"><span class="text-zinc-400">{{ $k }}</span><span class="font-bold text-zinc-800 dark:text-zinc-100">{{ $v }}</span></div>
             @endforeach
-            <div class="flex items-center justify-between border-t border-zinc-100 pt-2">
+            <div class="flex items-center justify-between border-t border-zinc-100 dark:border-zinc-800 pt-2">
                 <span class="text-zinc-400">Mode</span>
                 <span class="inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-bold uppercase {{ $heroMode->chipClass() }}">{{ $heroMode->label() }}</span>
             </div>
@@ -481,23 +481,23 @@
         // Punch sources seen today: biometric methods + web + manual (approved correction).
         $sources = $punchMethods->map(fn ($m) => ['label' => $m->label(), 'icon' => $m->icon(), 'class' => $m->chipClass()])->values()->all();
         if ($todayAttendance?->check_in_user_agent) {
-            $sources[] = ['label' => 'Web', 'icon' => 'computer-desktop', 'class' => 'bg-zinc-100 text-zinc-600'];
+            $sources[] = ['label' => 'Web', 'icon' => 'computer-desktop', 'class' => 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300'];
         }
         if ($todayAttendance?->regularisation?->status === 'approved') {
             $sources[] = ['label' => 'Manual', 'icon' => 'pencil-square', 'class' => 'bg-zinc-800 text-white'];
         }
     @endphp
-    <div class="rounded-[18px] border border-orange-100/70 bg-white p-5 shadow-sm lg:col-span-4">
+    <div class="rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 p-5 shadow-sm lg:col-span-4">
         <div class="mb-3 flex items-center justify-between">
-            <div class="text-sm font-black text-zinc-900">Biometric Status</div>
+            <div class="text-sm font-black text-zinc-900 dark:text-white">Biometric Status</div>
             <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-bold {{ $connBadge }}"><span class="size-1.5 rounded-full {{ $connDot }}"></span>{{ $connLabel }}</span>
         </div>
 
         {{-- Device identity + signal --}}
         <div class="mb-3 flex items-center gap-3 rounded-2xl border border-orange-100 bg-gradient-to-br from-orange-50/60 to-white p-3">
-            <div class="grid size-12 shrink-0 place-items-center rounded-xl bg-white shadow-sm"><flux:icon.finger-print class="size-6 text-orange-400" /></div>
+            <div class="grid size-12 shrink-0 place-items-center rounded-xl bg-white dark:bg-zinc-900 shadow-sm"><flux:icon.finger-print class="size-6 text-orange-400" /></div>
             <div class="min-w-0 flex-1">
-                <div class="truncate text-xs font-black text-zinc-900">{{ $deviceName }}</div>
+                <div class="truncate text-xs font-black text-zinc-900 dark:text-white">{{ $deviceName }}</div>
                 <div class="truncate text-[10px] text-zinc-400">SN {{ $serial }}{{ $biometricDevice?->firmware ? ' · FW '.$biometricDevice->firmware : '' }} · {{ $emp?->office?->name ?? 'Head Office' }}</div>
             </div>
             {{-- Signal bars (sync freshness) --}}
@@ -518,12 +518,12 @@
                 ['Failed', $totalPunches ? '0 reported' : '—'],
                 ['Last Sync Count', $biometricDevice?->last_sync_count ?? '—'],
             ] as [$k, $v])
-                <div class="flex items-center justify-between rounded-lg bg-zinc-50/70 px-2.5 py-1.5">
+                <div class="flex items-center justify-between rounded-lg bg-zinc-50/70 dark:bg-zinc-800/40 px-2.5 py-1.5">
                     <span class="text-zinc-400">{{ $k }}</span>
                     @if($k === 'Device Health')
                         <span class="font-bold {{ $health[1] }}">{{ $health[0] }}</span>
                     @else
-                        <span class="font-bold text-zinc-800">{{ $v }}</span>
+                        <span class="font-bold text-zinc-800 dark:text-zinc-100">{{ $v }}</span>
                     @endif
                 </div>
             @endforeach
@@ -562,7 +562,7 @@
                 <div class="space-y-1">
                     @foreach($syncHistory as $sh)
                         <div class="flex items-center justify-between rounded-lg px-2 py-1 text-[10px] odd:bg-orange-50/40">
-                            <span class="font-bold text-zinc-700">{{ $sh['date'] }}</span>
+                            <span class="font-bold text-zinc-700 dark:text-zinc-200">{{ $sh['date'] }}</span>
                             <span class="text-zinc-400">{{ $sh['punches'] }} punches</span>
                             <span class="inline-flex items-center gap-1 font-semibold text-emerald-600"><flux:icon.check class="size-3" /> {{ $sh['synced'] }}</span>
                         </div>
@@ -701,7 +701,7 @@
 
     // 8 · Heatmap intensity (GitHub-style, CSS)
     $heatColor = fn ($h) => match (true) {
-        $h <= 0 => 'bg-zinc-100',
+        $h <= 0 => 'bg-zinc-100 dark:bg-zinc-800',
         $h < 4 => 'bg-orange-200',
         $h < 7 => 'bg-orange-300',
         $h < $stdHours => 'bg-orange-400',
@@ -712,7 +712,7 @@
 <div class="flex items-center justify-between">
     <div class="flex items-center gap-2">
         <span class="inline-flex size-8 items-center justify-center rounded-xl bg-orange-50 text-orange-500"><flux:icon.chart-bar class="size-4" /></span>
-        <div class="text-sm font-black text-zinc-900">Attendance Analytics</div>
+        <div class="text-sm font-black text-zinc-900 dark:text-white">Attendance Analytics</div>
         <span class="rounded-full bg-orange-50 px-2 py-0.5 text-[10px] font-bold text-orange-500">{{ ucwords(str_replace('_', ' ', $statsPeriod)) }}{{ $analyticsMode !== '' ? ' · '.AttendanceMode::tryFromValue($analyticsMode)->label() : '' }}</span>
     </div>
     @if($analyticsMode !== '')
@@ -722,12 +722,12 @@
 
 <div class="grid grid-cols-1 gap-4 lg:grid-cols-12" wire:loading.class="opacity-50" wire:target="statsPeriod,analyticsMode,rangeFrom,rangeTo">
     {{-- Row 1 --}}
-    <div class="rounded-[18px] border border-orange-100/70 bg-white p-5 shadow-sm transition hover:shadow-md lg:col-span-5">
-        <div class="mb-1 text-sm font-black text-zinc-900">Working Hours Trend</div>
+    <div class="rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 p-5 shadow-sm transition hover:shadow-md lg:col-span-5">
+        <div class="mb-1 text-sm font-black text-zinc-900 dark:text-white">Working Hours Trend</div>
         @if(count($chartDaily) > 0)<x-dashboard.chart :options="$hoursChart" id="hours-chart" wire:key="hours-{{ $ck }}" class="-mb-2" />@else<div class="flex h-[220px] items-center justify-center text-xs text-zinc-300">No data in this period.</div>@endif
     </div>
-    <div class="rounded-[18px] border border-orange-100/70 bg-white p-5 shadow-sm transition hover:shadow-md lg:col-span-3">
-        <div class="mb-1 text-sm font-black text-zinc-900">Monthly Attendance</div>
+    <div class="rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 p-5 shadow-sm transition hover:shadow-md lg:col-span-3">
+        <div class="mb-1 text-sm font-black text-zinc-900 dark:text-white">Monthly Attendance</div>
         @if($presentCount + ($stats['absent'] ?? 0) > 0)<x-dashboard.chart :options="$monthlyDonut" id="monthly-donut" wire:key="donut-{{ $ck }}" class="grid place-items-center" />@else<div class="flex h-[210px] items-center justify-center text-xs text-zinc-300">No data.</div>@endif
         <div class="mt-1 grid grid-cols-3 gap-1 text-center text-[9px] font-bold">
             <span class="text-emerald-600">{{ $attPct }}% Present</span>
@@ -735,54 +735,54 @@
             <span class="text-rose-500">{{ $totalWorkingDays > 0 ? round(($stats['absent'] ?? 0) / $totalWorkingDays * 100) : 0 }}% Absent</span>
         </div>
     </div>
-    <div class="rounded-[18px] border border-orange-100/70 bg-white p-5 shadow-sm transition hover:shadow-md lg:col-span-4">
-        <div class="mb-1 text-sm font-black text-zinc-900">Attendance Score Trend</div>
+    <div class="rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 p-5 shadow-sm transition hover:shadow-md lg:col-span-4">
+        <div class="mb-1 text-sm font-black text-zinc-900 dark:text-white">Attendance Score Trend</div>
         @if(count($chartDaily) > 0)<x-dashboard.chart :options="$scoreChart" id="score-chart" wire:key="score-{{ $ck }}" class="-mb-2" />@else<div class="flex h-[220px] items-center justify-center text-xs text-zinc-300">No data.</div>@endif
     </div>
 
     {{-- Row 2 --}}
-    <div class="rounded-[18px] border border-orange-100/70 bg-white p-5 shadow-sm transition hover:shadow-md lg:col-span-4">
+    <div class="rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 p-5 shadow-sm transition hover:shadow-md lg:col-span-4">
         <div class="mb-1 flex items-center justify-between">
-            <div class="text-sm font-black text-zinc-900">Weekly Attendance</div>
+            <div class="text-sm font-black text-zinc-900 dark:text-white">Weekly Attendance</div>
             <div class="flex gap-1.5 text-[8px] font-bold">
                 <span class="text-emerald-600">● Present</span><span class="text-amber-600">● Late</span><span class="text-violet-600">● Leave</span><span class="text-blue-600">● Holiday</span>
             </div>
         </div>
         <x-dashboard.chart :options="$weeklyChart" id="weekly-chart" wire:key="weekly-{{ $ck }}" class="-mb-2" />
     </div>
-    <div class="rounded-[18px] border border-orange-100/70 bg-white p-5 shadow-sm transition hover:shadow-md lg:col-span-4">
-        <div class="mb-1 text-sm font-black text-zinc-900">Late Arrival Trend <span class="text-[10px] font-bold text-zinc-400">· 6 months</span></div>
+    <div class="rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 p-5 shadow-sm transition hover:shadow-md lg:col-span-4">
+        <div class="mb-1 text-sm font-black text-zinc-900 dark:text-white">Late Arrival Trend <span class="text-[10px] font-bold text-zinc-400">· 6 months</span></div>
         <x-dashboard.chart :options="$lateChart" id="late-chart" wire:key="late-{{ $ck }}" class="-mb-2" />
     </div>
-    <div class="rounded-[18px] border border-orange-100/70 bg-white p-5 shadow-sm transition hover:shadow-md lg:col-span-4">
+    <div class="rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 p-5 shadow-sm transition hover:shadow-md lg:col-span-4">
         <div class="mb-1 flex items-center justify-between">
-            <div class="text-sm font-black text-zinc-900">Break Analysis</div>
+            <div class="text-sm font-black text-zinc-900 dark:text-white">Break Analysis</div>
             <div class="flex gap-2 text-[9px] font-bold text-zinc-400"><span>Avg <strong class="text-sky-600">{{ $avgBreakLine }}m</strong></span><span>Long <strong class="text-amber-600">{{ $longBreaks }}</strong></span><span>Short <strong class="text-emerald-600">{{ $shortBreaks }}</strong></span></div>
         </div>
         @if(count($chartDaily) > 0)<x-dashboard.chart :options="$breakChart" id="break-chart" wire:key="break-{{ $ck }}" class="-mb-2" />@else<div class="flex h-[200px] items-center justify-center text-xs text-zinc-300">No data.</div>@endif
     </div>
 
     {{-- Row 3 --}}
-    <div class="rounded-[18px] border border-orange-100/70 bg-white p-5 shadow-sm transition hover:shadow-md lg:col-span-4">
-        <div class="mb-1 text-sm font-black text-zinc-900">Office vs WFH vs Hybrid</div>
+    <div class="rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 p-5 shadow-sm transition hover:shadow-md lg:col-span-4">
+        <div class="mb-1 text-sm font-black text-zinc-900 dark:text-white">Office vs WFH vs Hybrid</div>
         @if(! empty($modeBreakdown))<x-dashboard.chart :options="$modeChart" id="mode-chart" wire:key="mode-{{ $ck }}" class="-mb-2" />@else<div class="flex h-[200px] items-center justify-center text-xs text-zinc-300">No attendance yet.</div>@endif
     </div>
-    <div class="rounded-[18px] border border-orange-100/70 bg-white p-5 shadow-sm transition hover:shadow-md lg:col-span-5">
-        <div class="mb-1 text-sm font-black text-zinc-900">Overtime Trend</div>
+    <div class="rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 p-5 shadow-sm transition hover:shadow-md lg:col-span-5">
+        <div class="mb-1 text-sm font-black text-zinc-900 dark:text-white">Overtime Trend</div>
         @if(count($chartDaily) > 0)<x-dashboard.chart :options="$otChart" id="ot-chart" wire:key="ot-{{ $ck }}" class="-mb-2" />@else<div class="flex h-[200px] items-center justify-center text-xs text-zinc-300">No data.</div>@endif
     </div>
-    <div class="rounded-[18px] border border-orange-100/70 bg-white p-5 shadow-sm transition hover:shadow-md lg:col-span-3">
-        <div class="mb-1 text-sm font-black text-zinc-900">Productivity Score</div>
+    <div class="rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 p-5 shadow-sm transition hover:shadow-md lg:col-span-3">
+        <div class="mb-1 text-sm font-black text-zinc-900 dark:text-white">Productivity Score</div>
         <x-dashboard.chart :options="$productivityChart" id="productivity-chart" wire:key="prod-{{ $ck }}" class="grid place-items-center" />
         <div class="text-center text-[10px] text-zinc-400">worked vs expected ({{ $totalWorkingDays }} working days × {{ $stdHours }}h)</div>
     </div>
 
     {{-- Row 4 · Heatmap --}}
-    <div class="rounded-[18px] border border-orange-100/70 bg-white p-5 shadow-sm transition hover:shadow-md lg:col-span-12">
+    <div class="rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 p-5 shadow-sm transition hover:shadow-md lg:col-span-12">
         <div class="mb-3 flex items-center justify-between">
-            <div class="text-sm font-black text-zinc-900">Attendance Heatmap <span class="text-[10px] font-bold text-zinc-400">· hours per day</span></div>
+            <div class="text-sm font-black text-zinc-900 dark:text-white">Attendance Heatmap <span class="text-[10px] font-bold text-zinc-400">· hours per day</span></div>
             <div class="flex items-center gap-1 text-[10px] text-zinc-400">Less
-                <span class="size-2.5 rounded-sm bg-zinc-100"></span><span class="size-2.5 rounded-sm bg-orange-200"></span><span class="size-2.5 rounded-sm bg-orange-400"></span><span class="size-2.5 rounded-sm bg-orange-600"></span>
+                <span class="size-2.5 rounded-sm bg-zinc-100 dark:bg-zinc-800"></span><span class="size-2.5 rounded-sm bg-orange-200"></span><span class="size-2.5 rounded-sm bg-orange-400"></span><span class="size-2.5 rounded-sm bg-orange-600"></span>
             More</div>
         </div>
         @if(count($chartDaily) > 0)
@@ -826,11 +826,11 @@
             ['Attendance Prediction', $ai['prediction'].'%', 'sparkles', '#F97316', null],
         ];
     @endphp
-    <div class="rounded-[18px] border border-orange-100/70 bg-white p-5 shadow-sm">
+    <div class="rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 p-5 shadow-sm">
         <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
             <div class="flex items-center gap-2">
                 <span class="inline-flex size-8 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-amber-400 text-white shadow"><flux:icon.sparkles class="size-4" /></span>
-                <div class="text-sm font-black text-zinc-900">AI Attendance Insights</div>
+                <div class="text-sm font-black text-zinc-900 dark:text-white">AI Attendance Insights</div>
                 <span class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">· {{ ucwords(str_replace('_', ' ', $statsPeriod)) }}</span>
             </div>
             <span class="rounded-full bg-orange-50 px-2.5 py-1 text-[10px] font-bold text-orange-500">Predicted {{ $ai['prediction'] }}% by period end</span>
@@ -839,9 +839,9 @@
         {{-- Stat cards --}}
         <div class="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-6">
             @foreach($aiCards as [$label, $value, $icon, $color, $trend])
-                <div class="rounded-2xl border border-zinc-100 bg-gradient-to-b from-white to-orange-50/30 p-3 transition duration-200 hover:-translate-y-0.5 hover:shadow-md">
+                <div class="rounded-2xl border border-zinc-100 dark:border-zinc-800 bg-gradient-to-b from-white to-orange-50/30 p-3 transition duration-200 hover:-translate-y-0.5 hover:shadow-md">
                     <span class="inline-flex size-8 items-center justify-center rounded-xl" style="background: {{ $color }}1a; color: {{ $color }};"><flux:icon :icon="$icon" class="size-4" /></span>
-                    <div class="mt-2 truncate text-base font-black leading-none tabular-nums text-zinc-900" title="{{ $value }}">{{ $value }}</div>
+                    <div class="mt-2 truncate text-base font-black leading-none tabular-nums text-zinc-900 dark:text-white" title="{{ $value }}">{{ $value }}</div>
                     <div class="mt-1 truncate text-[9px] font-bold uppercase tracking-wide text-zinc-400">{{ $label }}</div>
                     @if($trend)
                         <div class="mt-0.5 flex items-center gap-1 text-[9px] font-bold {{ $trend['class'] }}"><flux:icon :icon="$trend['icon']" class="size-3" /> {{ $trend['text'] }}</div>
@@ -880,19 +880,19 @@
 
 {{-- ═══════════════ WFH DAILY REPORT (WFH/Hybrid days only) ═══════════════ --}}
 @if(in_array($heroMode->value, ['wfh', 'hybrid'], true))
-    <div class="rounded-[18px] border border-orange-100/70 bg-white p-5 shadow-sm">
+    <div class="rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 p-5 shadow-sm">
         <div class="mb-3 flex items-center justify-between">
-            <div class="flex items-center gap-2"><span class="inline-flex size-8 items-center justify-center rounded-xl bg-violet-50 text-violet-600"><flux:icon.home class="size-4" /></span><div class="text-sm font-black text-zinc-900">WFH Daily Report</div></div>
+            <div class="flex items-center gap-2"><span class="inline-flex size-8 items-center justify-center rounded-xl bg-violet-50 text-violet-600"><flux:icon.home class="size-4" /></span><div class="text-sm font-black text-zinc-900 dark:text-white">WFH Daily Report</div></div>
             @if($wfhReport)<span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-bold text-emerald-700"><flux:icon.check class="size-3" /> Submitted</span>@endif
         </div>
         <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
             <div class="md:col-span-2">
                 <label class="mb-1 block text-[11px] font-bold uppercase tracking-wider text-zinc-400">What did you work on today? <span class="text-rose-400">*</span></label>
-                <textarea wire:model="wfhForm.work_summary" rows="2" placeholder="Tasks, tickets, meetings…" class="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm focus:border-orange-400 focus:ring-0"></textarea>
+                <textarea wire:model="wfhForm.work_summary" rows="2" placeholder="Tasks, tickets, meetings…" class="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-2 text-sm focus:border-orange-400 focus:ring-0"></textarea>
                 @error('wfhForm.work_summary')<p class="mt-1 text-xs text-rose-500">{{ $message }}</p>@enderror
             </div>
-            <div><label class="mb-1 block text-[11px] font-bold uppercase tracking-wider text-zinc-400">Achievements</label><textarea wire:model="wfhForm.achievements" rows="2" class="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm focus:border-orange-400 focus:ring-0"></textarea></div>
-            <div><label class="mb-1 block text-[11px] font-bold uppercase tracking-wider text-zinc-400">Blockers</label><textarea wire:model="wfhForm.blockers" rows="2" class="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm focus:border-orange-400 focus:ring-0"></textarea></div>
+            <div><label class="mb-1 block text-[11px] font-bold uppercase tracking-wider text-zinc-400">Achievements</label><textarea wire:model="wfhForm.achievements" rows="2" class="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-2 text-sm focus:border-orange-400 focus:ring-0"></textarea></div>
+            <div><label class="mb-1 block text-[11px] font-bold uppercase tracking-wider text-zinc-400">Blockers</label><textarea wire:model="wfhForm.blockers" rows="2" class="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-2 text-sm focus:border-orange-400 focus:ring-0"></textarea></div>
         </div>
         <div class="mt-3 flex justify-end">
             <button wire:click="saveWfhReport" class="inline-flex items-center gap-1.5 rounded-xl bg-violet-600 px-5 py-2 text-sm font-bold text-white transition hover:bg-violet-700"><flux:icon.paper-airplane class="size-4" /> {{ $wfhReport ? 'Update Report' : 'Submit Report' }}</button>
@@ -901,9 +901,9 @@
 @endif
 
 {{-- ═══════════════ PUNCH IN / OUT TIMELINE ═══════════════ --}}
-<div id="attendance-log" class="overflow-hidden rounded-[18px] border border-orange-100/70 bg-white shadow-sm scroll-mt-6">
+<div id="attendance-log" class="overflow-hidden rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 shadow-sm scroll-mt-6">
     <div class="flex flex-wrap items-center justify-between gap-3 border-b border-orange-100/70 px-5 py-3.5">
-        <h3 class="flex items-center gap-2 text-sm font-black text-zinc-900"><flux:icon.clock class="size-4 text-orange-500" /> Punch In / Out Timeline
+        <h3 class="flex items-center gap-2 text-sm font-black text-zinc-900 dark:text-white"><flux:icon.clock class="size-4 text-orange-500" /> Punch In / Out Timeline
             <span class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
                 · {{ $statsPeriod === 'custom' && $rangeFrom && $rangeTo ? \Carbon\Carbon::parse($rangeFrom)->format('d M').' – '.\Carbon\Carbon::parse($rangeTo)->format('d M Y') : $calendarMonth->format('M Y') }}
             </span>
@@ -923,7 +923,7 @@
                     [$dayBadge, $dayLabel] = match(true) {
                         $day['is_late'] => ['bg-amber-50 text-amber-600', 'Late'],
                         $day['status'] === 'on_time' => ['bg-emerald-50 text-emerald-600', 'Present'],
-                        default => ['bg-zinc-50 text-zinc-500', ucfirst($day['status'] ?? '—')],
+                        default => ['bg-zinc-50 dark:bg-zinc-800/50 text-zinc-500 dark:text-zinc-400', ucfirst($day['status'] ?? '—')],
                     };
                     $dayMode = AttendanceMode::tryFromValue($day['mode'] ?? 'office');
                 @endphp
@@ -932,7 +932,7 @@
                     <button type="button" @click="open = !open" class="flex w-full flex-wrap items-center gap-3 px-5 py-3 text-left transition hover:bg-orange-50/40">
                         <flux:icon.chevron-right class="size-4 shrink-0 text-zinc-400 transition-transform" ::class="open ? 'rotate-90' : ''" />
                         <div class="min-w-[7.5rem]">
-                            <div class="text-xs font-black text-zinc-900">{{ $day['label'] }} @if($day['is_today'])<span class="text-orange-500">· Today</span>@endif</div>
+                            <div class="text-xs font-black text-zinc-900 dark:text-white">{{ $day['label'] }} @if($day['is_today'])<span class="text-orange-500">· Today</span>@endif</div>
                             <div class="text-[9px] text-zinc-400">{{ $day['dayname'] }}</div>
                         </div>
                         <span class="rounded-full px-2 py-0.5 text-[9px] font-bold {{ $dayBadge }}">{{ $dayLabel }}</span>
@@ -943,7 +943,7 @@
                         @endif
                         <span class="ml-auto flex items-center gap-3 text-[10px] text-zinc-400">
                             <span>{{ count($day['events']) }} {{ \Illuminate\Support\Str::plural('punch', count($day['events'])) }}</span>
-                            @if($day['worked'])<span class="font-bold text-zinc-700">{{ $day['worked'] }}</span>@endif
+                            @if($day['worked'])<span class="font-bold text-zinc-700 dark:text-zinc-200">{{ $day['worked'] }}</span>@endif
                             <span class="rounded-lg p-1 text-zinc-400 transition hover:bg-orange-100 hover:text-orange-600" wire:click.stop="showPunchDetail('{{ $day['date'] }}')" title="Full day details"><flux:icon.eye class="size-4" /></span>
                         </span>
                     </button>
@@ -981,13 +981,13 @@
                                     <div class="group/event relative flex items-start gap-3">
                                         @unless($loop->last)<span class="absolute left-[13px] top-8 h-[calc(100%-6px)] w-px bg-orange-100"></span>@endunless
                                         <span class="mt-0.5 inline-flex size-7 shrink-0 items-center justify-center rounded-full {{ $dot }} text-white shadow"><flux:icon :icon="$ic" class="size-3.5" /></span>
-                                        <div class="flex-1 rounded-xl border border-zinc-100 bg-zinc-50/60 px-3 py-2 transition group-hover/event:border-orange-200 group-hover/event:bg-white group-hover/event:shadow-sm">
+                                        <div class="flex-1 rounded-xl border border-zinc-100 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-800/40 px-3 py-2 transition group-hover/event:border-orange-200 group-hover/event:bg-white group-hover/event:shadow-sm">
                                             <div class="flex flex-wrap items-center gap-x-3 gap-y-0.5">
-                                                <span class="text-sm font-black tabular-nums text-zinc-900">{{ $ev['time'] }}</span>
+                                                <span class="text-sm font-black tabular-nums text-zinc-900 dark:text-white">{{ $ev['time'] }}</span>
                                                 @if($evMethod)
                                                     <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-bold {{ $evMethod->chipClass() }}"><flux:icon :icon="$evMethod->icon()" class="size-3" /> {{ $evMethod->label() }}</span>
                                                 @else
-                                                    <span class="text-[10px] font-bold text-zinc-500">{{ $srcLabel }}</span>
+                                                    <span class="text-[10px] font-bold text-zinc-500 dark:text-zinc-400">{{ $srcLabel }}</span>
                                                 @endif
                                                 <span class="text-[10px] text-zinc-400">{{ $ev['title'] }}</span>
                                                 <span class="ml-auto inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] font-bold text-emerald-700">Success</span>
@@ -997,7 +997,7 @@
                                                 @if(! empty($ev['location']))<span class="inline-flex items-center gap-0.5"><flux:icon.map-pin class="size-3" /> {{ $ev['location'] }}</span>@endif
                                             </div>
                                             @if($hasHover)
-                                                <div class="mt-1.5 hidden flex-wrap items-center gap-2 border-t border-zinc-100 pt-1.5 text-[10px] text-zinc-500 group-hover/event:flex">
+                                                <div class="mt-1.5 hidden flex-wrap items-center gap-2 border-t border-zinc-100 dark:border-zinc-800 pt-1.5 text-[10px] text-zinc-500 dark:text-zinc-400 group-hover/event:flex">
                                                     @if(! empty($ev['lat']) && ! empty($ev['lng']))
                                                         <a href="https://www.google.com/maps?q={{ $ev['lat'] }},{{ $ev['lng'] }}" target="_blank" rel="noopener" class="inline-flex items-center gap-1 font-semibold text-orange-500 hover:underline"><flux:icon.map-pin class="size-3" /> {{ $ev['lat'] }}, {{ $ev['lng'] }}</a>
                                                     @endif
@@ -1012,7 +1012,7 @@
                                 @endforeach
                             </div>
                         @else
-                            <div class="rounded-xl bg-zinc-50 px-3 py-3 text-center text-xs text-zinc-400">No punches recorded for this day.</div>
+                            <div class="rounded-xl bg-zinc-50 dark:bg-zinc-800/50 px-3 py-3 text-center text-xs text-zinc-400">No punches recorded for this day.</div>
                         @endif
                     </div>
                 </div>
@@ -1038,7 +1038,7 @@
                 ['Last Punch', $lastPunch ? \Carbon\Carbon::parse($lastPunch)->format('h:i A') : '—'],
             ] as [$k, $v])
                 <div class="text-center">
-                    <div class="text-sm font-black tabular-nums text-zinc-900">{{ $v }}</div>
+                    <div class="text-sm font-black tabular-nums text-zinc-900 dark:text-white">{{ $v }}</div>
                     <div class="text-[9px] font-bold uppercase tracking-wider text-zinc-400">{{ $k }}</div>
                 </div>
             @endforeach
@@ -1067,19 +1067,19 @@
             </div>
 
             <div class="grid grid-cols-4 gap-2 text-center">
-                <div class="rounded-xl bg-zinc-50 p-2.5 dark:bg-zinc-800/40">
+                <div class="rounded-xl bg-zinc-50 dark:bg-zinc-800/50 p-2.5 dark:bg-zinc-800/40">
                     <div class="text-sm font-black text-zinc-900 dark:text-white">{{ $detail['total_hours'] ?? '—' }}<span class="text-[10px] text-zinc-400">h</span></div>
                     <div class="text-[9px] font-bold uppercase tracking-wider text-zinc-400">Worked</div>
                 </div>
-                <div class="rounded-xl bg-zinc-50 p-2.5 dark:bg-zinc-800/40">
+                <div class="rounded-xl bg-zinc-50 dark:bg-zinc-800/50 p-2.5 dark:bg-zinc-800/40">
                     <div class="text-sm font-black text-zinc-900 dark:text-white">{{ $detail['break_minutes'] }}<span class="text-[10px] text-zinc-400">m</span></div>
                     <div class="text-[9px] font-bold uppercase tracking-wider text-zinc-400">Break</div>
                 </div>
-                <div class="rounded-xl bg-zinc-50 p-2.5 dark:bg-zinc-800/40">
+                <div class="rounded-xl bg-zinc-50 dark:bg-zinc-800/50 p-2.5 dark:bg-zinc-800/40">
                     <div class="text-sm font-black {{ $detail['is_late'] ? 'text-amber-600' : 'text-emerald-600' }}">{{ $detail['is_late'] ? 'Late' : 'On Time' }}</div>
                     <div class="text-[9px] font-bold uppercase tracking-wider text-zinc-400">Status</div>
                 </div>
-                <div class="rounded-xl bg-zinc-50 p-2.5 dark:bg-zinc-800/40">
+                <div class="rounded-xl bg-zinc-50 dark:bg-zinc-800/50 p-2.5 dark:bg-zinc-800/40">
                     <div class="text-sm font-black text-zinc-900 dark:text-white">{{ $detail['is_late'] ? $detail['late_minutes'].'m' : '—' }}</div>
                     <div class="text-[9px] font-bold uppercase tracking-wider text-zinc-400">Late by</div>
                 </div>
@@ -1088,9 +1088,9 @@
             <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 @foreach(['in' => 'Check In', 'out' => 'Check Out'] as $key => $title)
                     @php $p = $detail[$key]; @endphp
-                    <div class="rounded-2xl border border-zinc-200 p-4 dark:border-zinc-800">
+                    <div class="rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4 dark:border-zinc-800">
                         <div class="mb-2 flex items-center justify-between">
-                            <span class="text-[10px] font-bold uppercase tracking-widest {{ $key === 'in' ? 'text-emerald-600' : 'text-zinc-500' }}">{{ $title }}</span>
+                            <span class="text-[10px] font-bold uppercase tracking-widest {{ $key === 'in' ? 'text-emerald-600' : 'text-zinc-500 dark:text-zinc-400' }}">{{ $title }}</span>
                             <span class="text-sm font-black tabular-nums text-zinc-900 dark:text-white">{{ $p['time'] ?? '—' }}</span>
                         </div>
                         @if($p['photo'])
@@ -1104,7 +1104,7 @@
                             @endif
                             <div class="flex items-center gap-1.5 text-zinc-600 dark:text-zinc-300"><flux:icon.computer-desktop class="size-3.5 text-zinc-400" /> {{ $p['device'] }}</div>
                             @if($p['ip'])
-                                <div class="flex items-center gap-1.5 text-zinc-500"><flux:icon.globe-alt class="size-3.5 text-zinc-400" /> {{ $p['ip'] }}</div>
+                                <div class="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400"><flux:icon.globe-alt class="size-3.5 text-zinc-400" /> {{ $p['ip'] }}</div>
                             @endif
                             @if($p['lat'] && $p['lng'])
                                 <a href="https://www.google.com/maps?q={{ $p['lat'] }},{{ $p['lng'] }}" target="_blank" rel="noopener" class="inline-flex items-center gap-1.5 font-semibold text-orange-500 hover:underline"><flux:icon.map-pin class="size-3.5" /> View location</a>
@@ -1120,7 +1120,7 @@
                     <div class="mb-2 text-[10px] font-bold uppercase tracking-widest text-zinc-400">Punch Timeline · {{ count($detail['punches']) }} punches</div>
                     <div class="max-h-48 space-y-1.5 overflow-y-auto pr-1">
                         @foreach($detail['punches'] as $i => $pp)
-                            <div class="flex items-center gap-2 rounded-lg bg-zinc-50 px-3 py-1.5 text-xs dark:bg-zinc-800/40">
+                            <div class="flex items-center gap-2 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 px-3 py-1.5 text-xs dark:bg-zinc-800/40">
                                 <span class="w-16 shrink-0 font-black tabular-nums text-zinc-900 dark:text-white">{{ $pp['time'] }}</span>
                                 @if($pp['method'])<span class="inline-flex items-center gap-1 text-zinc-600 dark:text-zinc-300"><flux:icon :icon="$pp['method_icon']" class="size-3.5 text-zinc-400" /> {{ $pp['method'] }}</span>@endif
                                 <span class="ml-auto flex items-center gap-2 text-[10px] text-zinc-400">
@@ -1143,12 +1143,12 @@
                             @php
                                 $ac = match($audit['status']) { 'approved' => 'bg-emerald-100 text-emerald-700', 'rejected' => 'bg-rose-100 text-rose-600', default => 'bg-amber-100 text-amber-700' };
                             @endphp
-                            <div class="rounded-xl border border-zinc-100 p-3 text-xs dark:border-zinc-800">
+                            <div class="rounded-xl border border-zinc-100 dark:border-zinc-800 p-3 text-xs dark:border-zinc-800">
                                 <div class="flex items-center justify-between">
                                     <span class="font-bold text-zinc-800 dark:text-zinc-100">Corrected to {{ $audit['requested_in'] }} → {{ $audit['requested_out'] }}</span>
                                     <span class="rounded-full px-2 py-0.5 text-[9px] font-bold uppercase {{ $ac }}">{{ $audit['status'] }}</span>
                                 </div>
-                                <div class="mt-1 text-zinc-500">“{{ $audit['reason'] }}”</div>
+                                <div class="mt-1 text-zinc-500 dark:text-zinc-400">“{{ $audit['reason'] }}”</div>
                                 <div class="mt-1 text-[10px] text-zinc-400">
                                     Submitted {{ $audit['submitted_at'] }}
                                     @if($audit['reviewer']) · {{ ucfirst($audit['status']) }} by {{ $audit['reviewer'] }} on {{ $audit['reviewed_at'] }}@endif
@@ -1181,11 +1181,11 @@
             <div>
                 <div class="mb-2 text-sm font-medium text-zinc-700 dark:text-zinc-200">What needs correcting?</div>
                 <div class="grid grid-cols-2 gap-3">
-                    <label class="flex cursor-pointer items-center gap-2 rounded-xl border p-3 text-sm font-semibold transition {{ $regFixIn ? 'border-orange-400 bg-orange-50 text-orange-700' : 'border-zinc-200 text-zinc-500' }}">
+                    <label class="flex cursor-pointer items-center gap-2 rounded-xl border p-3 text-sm font-semibold transition {{ $regFixIn ? 'border-orange-400 bg-orange-50 text-orange-700' : 'border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400' }}">
                         <input type="checkbox" wire:model.live="regFixIn" class="rounded border-zinc-300 text-orange-500 focus:ring-orange-400">
                         Check-In missed / wrong
                     </label>
-                    <label class="flex cursor-pointer items-center gap-2 rounded-xl border p-3 text-sm font-semibold transition {{ $regFixOut ? 'border-orange-400 bg-orange-50 text-orange-700' : 'border-zinc-200 text-zinc-500' }}">
+                    <label class="flex cursor-pointer items-center gap-2 rounded-xl border p-3 text-sm font-semibold transition {{ $regFixOut ? 'border-orange-400 bg-orange-50 text-orange-700' : 'border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400' }}">
                         <input type="checkbox" wire:model.live="regFixOut" class="rounded border-zinc-300 text-orange-500 focus:ring-orange-400">
                         Check-Out missed / wrong
                     </label>
@@ -1275,7 +1275,7 @@
         <div class="relative aspect-[4/3] w-full overflow-hidden rounded-2xl bg-zinc-900">
             <video x-ref="video" autoplay playsinline muted x-show="status === 'camera'" class="h-full w-full object-cover"></video>
             <img :src="photo" x-show="status === 'preview' && photo" class="h-full w-full object-cover" alt="Selfie preview">
-            <div x-show="status === 'idle'" class="absolute inset-0 flex items-center justify-center text-zinc-500">
+            <div x-show="status === 'idle'" class="absolute inset-0 flex items-center justify-center text-zinc-500 dark:text-zinc-400">
                 <flux:icon.camera class="size-9 animate-pulse" />
             </div>
             <div x-show="status === 'nocamera'" class="absolute inset-0 flex flex-col items-center justify-center px-6 text-center text-zinc-400">
@@ -1285,7 +1285,7 @@
             <canvas x-ref="canvas" class="hidden"></canvas>
         </div>
 
-        <div class="flex items-center gap-2 rounded-xl bg-zinc-50 px-3 py-2 text-xs dark:bg-zinc-800/50">
+        <div class="flex items-center gap-2 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 px-3 py-2 text-xs dark:bg-zinc-800/50">
             <flux:icon.map-pin class="size-4 shrink-0"
                 ::class="geoStatus === 'ok' ? 'text-emerald-500' : (geoStatus === 'pending' ? 'text-zinc-400 animate-pulse' : 'text-amber-500')" />
             <span x-show="geoStatus === 'pending'" class="text-zinc-400">Getting your location…</span>
@@ -1296,10 +1296,10 @@
 
         <div class="flex items-center justify-between gap-2 pt-1">
             <button type="button" @click="cleanup(); $flux.modal('punch-capture').close()"
-                class="rounded-xl px-4 py-2 text-sm font-bold text-zinc-500 transition hover:bg-zinc-100 dark:hover:bg-zinc-800">Cancel</button>
+                class="rounded-xl px-4 py-2 text-sm font-bold text-zinc-500 dark:text-zinc-400 transition hover:bg-zinc-100 dark:bg-zinc-800 dark:hover:bg-zinc-800">Cancel</button>
             <div class="flex items-center gap-2">
                 <button type="button" x-show="status === 'preview'" @click="retake()"
-                    class="rounded-xl bg-zinc-100 px-4 py-2 text-sm font-bold text-zinc-600 transition hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-200">Retake</button>
+                    class="rounded-xl bg-zinc-100 dark:bg-zinc-800 px-4 py-2 text-sm font-bold text-zinc-600 dark:text-zinc-300 transition hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-200">Retake</button>
                 <button type="button" x-show="status === 'camera'" @click="capture()"
                     class="inline-flex items-center gap-1.5 rounded-xl bg-zinc-800 px-4 py-2 text-sm font-bold text-white transition hover:bg-zinc-900 dark:bg-zinc-700">
                     <flux:icon.camera class="size-4" /> Capture

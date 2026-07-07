@@ -1,4 +1,4 @@
-<flux:main class="min-h-screen bg-zinc-50 dark:bg-zinc-950 p-6 space-y-5" x-data="{ tab: 'requests' }">
+<flux:main class="min-h-screen bg-zinc-50 dark:bg-zinc-800/50 dark:bg-zinc-950 p-6 space-y-5" x-data="{ tab: 'requests' }">
 
     {{-- â"€â"€â"€ HERO HEADER â"€â"€â"€ --}}
     <div class="pulse-hero shadow-xl">
@@ -13,7 +13,7 @@
         <div class="relative flex flex-col sm:flex-row sm:items-center justify-between gap-6">
             <div>
                 <div
-                    class="mb-3 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 backdrop-blur-sm">
+                    class="mb-3 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 dark:bg-zinc-900/10 px-3 py-1 backdrop-blur-sm">
                     <div class="size-1.5 animate-pulse rounded-full bg-orange-200"></div>
                     <span class="text-[11px] font-bold uppercase tracking-[0.18em] text-orange-100">Leave
                         Management</span>
@@ -25,13 +25,13 @@
             <div class="flex shrink-0 flex-wrap items-center gap-3">
                 @if($encashableTypes->isNotEmpty())
                     <button @click="$flux.modal('encashment-modal').show()"
-                        class="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-white/25 bg-white/15 px-4 py-2.5 text-sm font-bold text-white backdrop-blur-sm transition-all hover:bg-white/25">
+                        class="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-white/25 bg-white/15 dark:bg-zinc-900/15 px-4 py-2.5 text-sm font-bold text-white backdrop-blur-sm transition-all hover:bg-white/25">
                         <flux:icon.banknotes class="size-4 shrink-0" />
                         <span>Encash Leave</span>
                     </button>
                 @endif
                 <button wire:click="openRequestModal"
-                    class="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-black text-orange-700 shadow-lg shadow-black/20 transition-all hover:bg-violet-50">
+                    class="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-white dark:bg-zinc-900 px-5 py-2.5 text-sm font-black text-orange-700 shadow-lg shadow-black/20 transition-all hover:bg-violet-50">
                     <flux:icon.plus class="size-4 shrink-0" />
                     <span>Apply for Leave</span>
                 </button>
@@ -56,7 +56,7 @@
             </div>
             <div class="flex shrink-0 items-center gap-2">
                 <a href="#recent-requests" @click="tab = 'requests'"
-                    class="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-bold text-amber-700 transition-colors hover:bg-amber-100 dark:border-amber-800/50 dark:bg-zinc-900 dark:text-amber-300 dark:hover:bg-amber-900/30">
+                    class="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-amber-300 bg-white dark:bg-zinc-900 px-3 py-1.5 text-xs font-bold text-amber-700 transition-colors hover:bg-amber-100 dark:border-amber-800/50 dark:bg-zinc-900 dark:text-amber-300 dark:hover:bg-amber-900/30">
                     <flux:icon.eye class="size-3" />
                     View Requests
                 </a>
@@ -99,7 +99,7 @@
                     $color = $matchedStyle['color'] ?? ($balance->leaveType->color ?? '#7c3aed');
                     $typeIcon = $matchedStyle['icon'] ?? 'calendar-days';
                 @endphp
-                <div class="group overflow-hidden rounded-2xl bg-white shadow-sm border dark:bg-zinc-900 dark:border-zinc-800 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
+                <div class="group overflow-hidden rounded-2xl bg-white dark:bg-zinc-900 shadow-sm border dark:bg-zinc-900 dark:border-zinc-800 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
                     style="border-color: {{ $color }}40">
 
                     {{-- Colored top band --}}
@@ -122,12 +122,12 @@
                             {{-- Low balance warning --}}
                             @if($isLow && $available > 0)
                                 <span
-                                    class="mt-0.5 inline-flex items-center gap-1 rounded-full bg-white/25 px-2 py-0.5 text-[10px] font-bold text-white">
+                                    class="mt-0.5 inline-flex items-center gap-1 rounded-full bg-white/25 dark:bg-zinc-900/25 px-2 py-0.5 text-[10px] font-bold text-white">
                                     ⚠ Low
                                 </span>
                             @elseif($available === 0.0 && $allocated > 0)
                                 <span
-                                    class="mt-0.5 inline-flex items-center gap-1 rounded-full bg-white/25 px-2 py-0.5 text-[10px] font-bold text-white">
+                                    class="mt-0.5 inline-flex items-center gap-1 rounded-full bg-white/25 dark:bg-zinc-900/25 px-2 py-0.5 text-[10px] font-bold text-white">
                                     No balance
                                 </span>
                             @endif
@@ -145,11 +145,11 @@
                         {{-- Breakdown grid: 3 rows, always visible --}}
                         <div class="grid grid-cols-3 gap-x-2 text-center text-[11px]">
                             <div>
-                                <p class="font-bold text-zinc-900 dark:text-zinc-100">{{ (int) $allocated }}</p>
+                                <p class="font-bold text-zinc-900 dark:text-white dark:text-zinc-100">{{ (int) $allocated }}</p>
                                 <p class="text-zinc-400">Allocated</p>
                             </div>
                             <div>
-                                <p class="font-bold text-zinc-900 dark:text-zinc-100">{{ (float) $used }}</p>
+                                <p class="font-bold text-zinc-900 dark:text-white dark:text-zinc-100">{{ (float) $used }}</p>
                                 <p class="text-zinc-400">Used</p>
                             </div>
                             <div>
@@ -187,8 +187,8 @@
                 </div>
             @empty
                 <div
-                    class="col-span-full rounded-2xl border border-dashed border-zinc-200 p-10 text-center dark:border-zinc-800">
-                    <flux:icon.calendar-days class="mx-auto mb-3 size-10 text-zinc-200 dark:text-zinc-700" />
+                    class="col-span-full rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-800 p-10 text-center dark:border-zinc-800">
+                    <flux:icon.calendar-days class="mx-auto mb-3 size-10 text-zinc-200 dark:text-zinc-700 dark:text-zinc-200" />
                     <p class="text-sm font-medium text-zinc-400">No leave balances found. Contact HR to set up your leave
                         account.</p>
                 </div>
@@ -249,7 +249,7 @@
     <div class="pulse-margin grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         @foreach($statCards as $stat)
             <div
-                class="rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900">
+                class="rounded-2xl border border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900">
                 <div class="flex items-center justify-between">
                     <div class="flex size-10 items-center justify-center rounded-xl"
                         style="background: {{ $stat['color'] }}1a">
@@ -268,7 +268,7 @@
                             </span>
                         @else
                             <span
-                                class="inline-flex items-center gap-0.5 rounded-full bg-zinc-50 px-2 py-0.5 text-[10px] font-bold text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                                class="inline-flex items-center gap-0.5 rounded-full bg-zinc-50 dark:bg-zinc-800/50 px-2 py-0.5 text-[10px] font-bold text-zinc-500 dark:text-zinc-400 dark:bg-zinc-800 dark:text-zinc-400">
                                 <flux:icon.minus class="size-3" /> 0d
                             </span>
                         @endif
@@ -295,7 +295,7 @@
     <div class="pulse-margin grid grid-cols-1 gap-4 lg:grid-cols-3">
 
         {{-- â"€â"€ Weekly Pattern â"€â"€ --}}
-        <div class=" rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <div class=" rounded-2xl border border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
             <div class="mb-1 flex items-center justify-between">
                 <div class="flex items-center gap-2">
                     <div class="rounded-lg bg-violet-50 p-1.5 dark:bg-violet-900/20">
@@ -311,7 +311,7 @@
 
             @if($totalUsed === 0)
                 <div class="flex flex-col items-center justify-center py-6 text-center">
-                    <flux:icon.calendar class="size-8 mb-2 text-zinc-200 dark:text-zinc-700" />
+                    <flux:icon.calendar class="size-8 mb-2 text-zinc-200 dark:text-zinc-700 dark:text-zinc-200" />
                     <p class="text-xs font-medium text-zinc-400">No approved leave taken yet this year.</p>
                 </div>
             @else
@@ -334,7 +334,7 @@
                                 title="{{ $dayLabels[$i] }}: {{ $count }} day(s)">
                             </div>
                             <span
-                                class="text-[9px] font-bold uppercase {{ $count > 0 ? 'text-zinc-600 dark:text-zinc-300' : 'text-zinc-300 dark:text-zinc-600' }}">{{ $d }}</span>
+                                class="text-[9px] font-bold uppercase {{ $count > 0 ? 'text-zinc-600 dark:text-zinc-300' : 'text-zinc-300 dark:text-zinc-600 dark:text-zinc-300' }}">{{ $d }}</span>
                         </div>
                     @endforeach
                 </div>
@@ -342,7 +342,7 @@
         </div>
 
         {{-- â"€â"€ Leave Distribution â"€â"€ --}}
-        <div class="rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <div class="rounded-2xl border border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
             <div class="mb-1 flex items-center gap-2">
                 <div class="rounded-lg bg-violet-50 p-1.5 dark:bg-violet-900/20">
                     <flux:icon.chart-pie class="size-4 text-violet-600 dark:text-violet-400" />
@@ -354,7 +354,7 @@
 
             @if($balances->isEmpty())
                 <div class="flex flex-col items-center justify-center py-6 text-center">
-                    <flux:icon.chart-pie class="size-8 mb-2 text-zinc-200 dark:text-zinc-700" />
+                    <flux:icon.chart-pie class="size-8 mb-2 text-zinc-200 dark:text-zinc-700 dark:text-zinc-200" />
                     <p class="text-xs font-medium text-zinc-400">No leave balances found.</p>
                 </div>
             @else
@@ -371,9 +371,9 @@
                                 <div class="flex items-center gap-1.5">
                                     <div class="size-2 rounded-full shrink-0" style="background: {{ $color }}"></div>
                                     <span
-                                        class="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300">{{ $bal->leaveType->name }}</span>
+                                        class="text-[11px] font-semibold text-zinc-700 dark:text-zinc-200 dark:text-zinc-300">{{ $bal->leaveType->name }}</span>
                                 </div>
-                                <span class="text-[11px] text-zinc-500">
+                                <span class="text-[11px] text-zinc-500 dark:text-zinc-400">
                                     <span class="font-bold text-zinc-900 dark:text-white">{{ (int) $used }}</span> /
                                     {{ (int) $alloc }}d
                                 </span>
@@ -389,7 +389,7 @@
         </div>
 
         {{-- â"€â"€ Monthly Trend â"€â"€ --}}
-        <div class="rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <div class="rounded-2xl border border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
             <div class="mb-1 flex items-center justify-between">
                 <div class="flex items-center gap-2">
                     <div class="rounded-lg bg-violet-50 p-1.5 dark:bg-violet-900/20">
@@ -404,7 +404,7 @@
 
             @if(array_sum($monthlyStats) === 0)
                 <div class="flex flex-col items-center justify-center py-6 text-center">
-                    <flux:icon.chart-bar class="size-8 mb-2 text-zinc-200 dark:text-zinc-700" />
+                    <flux:icon.chart-bar class="size-8 mb-2 text-zinc-200 dark:text-zinc-700 dark:text-zinc-200" />
                     <p class="text-xs font-medium text-zinc-400">No leave data for {{ now()->year }} yet.</p>
                 </div>
             @else
@@ -426,7 +426,7 @@
                                 style="height: {{ $barH }}%; min-height: 4px; background: {{ $days > 0 ? '#7c3aed' : '#f4f4f5' }}; {{ $isCurrent && $days > 0 ? 'box-shadow: 0 0 0 2px #7c3aed40;' : '' }}">
                             </div>
                             <span
-                                class="text-[8px] font-bold {{ $isCurrent ? 'text-violet-600 dark:text-violet-400' : 'text-zinc-300 dark:text-zinc-600' }}">
+                                class="text-[8px] font-bold {{ $isCurrent ? 'text-violet-600 dark:text-violet-400' : 'text-zinc-300 dark:text-zinc-600 dark:text-zinc-300' }}">
                                 {{ substr($monthShort[$mi], 0, 1) }}
                             </span>
                         </div>
@@ -438,19 +438,19 @@
 
     {{-- â"€â"€â"€ HISTORY SECTION â"€â"€â"€ --}}
     <div id="recent-requests"
-        class="pulse-margin overflow-hidden rounded-2xl border border-zinc-100 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900 scroll-mt-6">
+        class="pulse-margin overflow-hidden rounded-2xl border border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 scroll-mt-6">
 
         {{-- Tab Nav --}}
         <div
-            class="flex items-center gap-1 border-b border-zinc-100 bg-zinc-50/50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950/30">
+            class="flex items-center gap-1 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950/30">
             <button @click="tab = 'requests'"
-                :class="tab === 'requests' ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'"
+                :class="tab === 'requests' ? 'bg-white dark:bg-zinc-900 dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm' : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:text-zinc-200 dark:hover:text-zinc-300'"
                 class="flex items-center gap-2 rounded-xl px-5 py-2 text-sm font-bold transition-all">
                 <flux:icon.document-text class="size-3.5" />
                 Leave Applications
             </button>
             <button @click="tab = 'encashments'"
-                :class="tab === 'encashments' ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'"
+                :class="tab === 'encashments' ? 'bg-white dark:bg-zinc-900 dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm' : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:text-zinc-200 dark:hover:text-zinc-300'"
                 class="flex items-center gap-2 rounded-xl px-5 py-2 text-sm font-bold transition-all">
                 <flux:icon.banknotes class="size-3.5" />
                 Encashment History
@@ -485,7 +485,7 @@
                 </flux:select>
                 @if($filterStatus || $filterTypeId || $search)
                     <button wire:click="$set('filterStatus', ''); $set('filterTypeId', ''); $set('search', '')"
-                        class="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 underline">Clear</button>
+                        class="text-xs text-zinc-400 hover:text-zinc-600 dark:text-zinc-300 dark:hover:text-zinc-300 underline">Clear</button>
                 @endif
             </div>
             @php
@@ -503,7 +503,7 @@
                                 Leave Type</th>
                             <th class="px-4 py-3 text-[10px] font-black uppercase tracking-[0.12em] text-zinc-400">
                                 <button wire:click="sortBy('start_date')"
-                                    class="inline-flex cursor-pointer items-center gap-1 transition-colors hover:text-zinc-600 dark:hover:text-zinc-300">
+                                    class="inline-flex cursor-pointer items-center gap-1 transition-colors hover:text-zinc-600 dark:text-zinc-300 dark:hover:text-zinc-300">
                                     Date Range
                                     <flux:icon :name="$sortIcon('start_date')" class="size-3" />
                                 </button>
@@ -511,7 +511,7 @@
                             <th
                                 class="px-4 py-3 text-center text-[10px] font-black uppercase tracking-[0.12em] text-zinc-400">
                                 <button wire:click="sortBy('days')"
-                                    class="inline-flex cursor-pointer items-center gap-1 transition-colors hover:text-zinc-600 dark:hover:text-zinc-300">
+                                    class="inline-flex cursor-pointer items-center gap-1 transition-colors hover:text-zinc-600 dark:text-zinc-300 dark:hover:text-zinc-300">
                                     Duration
                                     <flux:icon :name="$sortIcon('days')" class="size-3" />
                                 </button>
@@ -523,7 +523,7 @@
                             <th
                                 class="py-3 pr-6 text-right text-[10px] font-black uppercase tracking-[0.12em] text-zinc-400">
                                 <button wire:click="sortBy('created_at')"
-                                    class="inline-flex cursor-pointer items-center gap-1 transition-colors hover:text-zinc-600 dark:hover:text-zinc-300">
+                                    class="inline-flex cursor-pointer items-center gap-1 transition-colors hover:text-zinc-600 dark:text-zinc-300 dark:hover:text-zinc-300">
                                     Applied On
                                     <flux:icon :name="$sortIcon('created_at')" class="size-3" />
                                 </button>
@@ -543,11 +543,11 @@
                                         <div class="size-2.5 rounded-full shadow-sm"
                                             style="background-color: {{ $req->leaveType->color }}"></div>
                                         <span
-                                            class="text-sm font-bold text-zinc-800 dark:text-zinc-200">{{ $req->leaveType->name }}</span>
+                                            class="text-sm font-bold text-zinc-800 dark:text-zinc-100 dark:text-zinc-200">{{ $req->leaveType->name }}</span>
                                     </div>
                                 </td>
                                 <td class="px-4 py-4">
-                                    <div class="flex items-center gap-1.5 text-sm text-zinc-600 dark:text-zinc-400">
+                                    <div class="flex items-center gap-1.5 text-sm text-zinc-600 dark:text-zinc-300 dark:text-zinc-400">
                                         <span class="font-semibold">{{ $req->start_date->format('d M') }}</span>
                                         <flux:icon.arrow-long-right class="inline size-3 opacity-30" />
                                         <span class="font-semibold">{{ $req->end_date->format('d M, Y') }}</span>
@@ -555,7 +555,7 @@
                                 </td>
                                 <td class="px-4 py-4 text-center">
                                     <span
-                                        class="inline-flex items-center justify-center rounded-lg bg-zinc-50 px-2.5 py-1 text-xs font-black text-zinc-900 dark:bg-zinc-800 dark:text-white">
+                                        class="inline-flex items-center justify-center rounded-lg bg-zinc-50 dark:bg-zinc-800/50 px-2.5 py-1 text-xs font-black text-zinc-900 dark:text-white dark:bg-zinc-800 dark:text-white">
                                         {{ (float) $req->days }} {{ Str::plural('day', (float) $req->days == 1 ? 1 : 2) }}
                                     </span>
                                 </td>
@@ -566,9 +566,9 @@
                                             'rejected' => ['bg-rose-50 text-rose-700 dark:bg-rose-900/20 dark:text-rose-400', 'x-circle', 'Rejected'],
                                             'pending' => ['bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400', 'clock', 'Pending'],
                                             'pending_hr' => ['bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400', 'clock', 'Pending HR'],
-                                            'cancelled' => ['bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400', 'x-circle', 'Cancelled'],
+                                            'cancelled' => ['bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 dark:bg-zinc-800 dark:text-zinc-400', 'x-circle', 'Cancelled'],
                                             'more_info_requested' => ['bg-orange-50 text-orange-700 dark:bg-orange-900/20 dark:text-orange-400', 'question-mark-circle', 'More Info Needed'],
-                                            default => ['bg-zinc-50 text-zinc-700', 'question-mark-circle', $req->status],
+                                            default => ['bg-zinc-50 dark:bg-zinc-800/50 text-zinc-700 dark:text-zinc-200', 'question-mark-circle', $req->status],
                                         };
                                     @endphp
                                     <span
@@ -585,7 +585,7 @@
                                         <div class="mt-1 flex flex-wrap gap-1">
                                             @foreach($req->attachments as $att)
                                                 <a href="{{ asset('storage/'.$att->path) }}" target="_blank" title="{{ $att->typeLabel() }}: {{ $att->original_name }}"
-                                                    class="inline-flex items-center gap-1 rounded bg-zinc-50 px-1.5 py-0.5 text-[9px] font-semibold text-zinc-500 hover:bg-zinc-100 dark:bg-zinc-800 dark:text-zinc-400">
+                                                    class="inline-flex items-center gap-1 rounded bg-zinc-50 dark:bg-zinc-800/50 px-1.5 py-0.5 text-[9px] font-semibold text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:bg-zinc-800 dark:text-zinc-400">
                                                     <flux:icon :name="$att->icon()" class="size-2.5" /> {{ $att->typeLabel() }}
                                                 </a>
                                             @endforeach
@@ -599,7 +599,7 @@
                                                 class="flex size-7 items-center justify-center rounded-full bg-gradient-to-br from-violet-400 to-indigo-500 text-[9px] font-black uppercase text-white shadow-sm">
                                                 {{ collect(explode(' ', $req->reviewer->name))->map(fn($n) => $n[0])->take(2)->join('') }}
                                             </div>
-                                            <span class="text-xs font-medium text-zinc-500">{{ $req->reviewer->name }}</span>
+                                            <span class="text-xs font-medium text-zinc-500 dark:text-zinc-400">{{ $req->reviewer->name }}</span>
                                         </div>
                                     @else
                                         <div class="flex items-center gap-1.5 text-[10px] font-bold text-zinc-400">
@@ -653,11 +653,11 @@
                                         <div
                                             class="flex size-14 items-center justify-center rounded-2xl bg-zinc-50 dark:bg-zinc-800">
                                             <flux:icon.document-magnifying-glass
-                                                class="size-7 text-zinc-300 dark:text-zinc-600" />
+                                                class="size-7 text-zinc-300 dark:text-zinc-600 dark:text-zinc-300" />
                                         </div>
                                         <div>
                                             <p class="text-sm font-bold text-zinc-400">No leave applications yet</p>
-                                            <p class="mt-0.5 text-xs text-zinc-300 dark:text-zinc-600">Click "Apply for
+                                            <p class="mt-0.5 text-xs text-zinc-300 dark:text-zinc-600 dark:text-zinc-300">Click "Apply for
                                                 Leave" to get started.</p>
                                         </div>
                                     </div>
@@ -702,12 +702,12 @@
                                         <div class="size-2.5 rounded-full"
                                             style="background-color: {{ $enc->leaveType->color }}"></div>
                                         <span
-                                            class="text-sm font-bold text-zinc-800 dark:text-zinc-200">{{ $enc->leaveType->name }}</span>
+                                            class="text-sm font-bold text-zinc-800 dark:text-zinc-100 dark:text-zinc-200">{{ $enc->leaveType->name }}</span>
                                     </div>
                                 </td>
                                 <td class="px-4 py-4 text-center">
                                     <span
-                                        class="inline-flex size-7 items-center justify-center rounded-lg bg-zinc-50 text-sm font-black text-zinc-900 dark:bg-zinc-800 dark:text-white">
+                                        class="inline-flex size-7 items-center justify-center rounded-lg bg-zinc-50 dark:bg-zinc-800/50 text-sm font-black text-zinc-900 dark:text-white dark:bg-zinc-800 dark:text-white">
                                         {{ (float) $enc->requested_days }}
                                     </span>
                                 </td>
@@ -717,7 +717,7 @@
                                             'approved', 'processed' => ['bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400', 'check-circle'],
                                             'rejected' => ['bg-rose-50 text-rose-700 dark:bg-rose-900/20 dark:text-rose-400', 'x-circle'],
                                             'pending' => ['bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400', 'clock'],
-                                            default => ['bg-zinc-50 text-zinc-700', 'question-mark-circle'],
+                                            default => ['bg-zinc-50 dark:bg-zinc-800/50 text-zinc-700 dark:text-zinc-200', 'question-mark-circle'],
                                         };
                                     @endphp
                                     <span
@@ -728,7 +728,7 @@
                                 </td>
                                 <td class="px-4 py-4">
                                     <div
-                                        class="inline-flex items-center gap-1.5 rounded-lg bg-zinc-50 px-2.5 py-1 text-xs font-bold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+                                        class="inline-flex items-center gap-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 px-2.5 py-1 text-xs font-bold text-zinc-600 dark:text-zinc-300 dark:bg-zinc-800 dark:text-zinc-400">
                                         <flux:icon.calendar class="size-3" />
                                         {{ $enc->payout_month ? Carbon::parse($enc->payout_month)->format('M Y') : '--' }}
                                     </div>
@@ -740,7 +740,7 @@
                                                 class="flex size-7 items-center justify-center rounded-full bg-gradient-to-br from-violet-400 to-indigo-500 text-[9px] font-black uppercase text-white shadow-sm">
                                                 {{ collect(explode(' ', $enc->reviewer->name))->map(fn($n) => $n[0])->take(2)->join('') }}
                                             </div>
-                                            <span class="text-xs font-medium text-zinc-500">{{ $enc->reviewer->name }}</span>
+                                            <span class="text-xs font-medium text-zinc-500 dark:text-zinc-400">{{ $enc->reviewer->name }}</span>
                                         </div>
                                     @else
                                         <div class="flex items-center gap-1.5 text-[10px] font-bold text-zinc-400">
@@ -756,7 +756,7 @@
                                     <div class="flex flex-col items-center gap-3">
                                         <div
                                             class="flex size-14 items-center justify-center rounded-2xl bg-zinc-50 dark:bg-zinc-800">
-                                            <flux:icon.banknotes class="size-7 text-zinc-300 dark:text-zinc-600" />
+                                            <flux:icon.banknotes class="size-7 text-zinc-300 dark:text-zinc-600 dark:text-zinc-300" />
                                         </div>
                                         <p class="text-sm font-bold text-zinc-400">No encashment requests yet.</p>
                                     </div>
@@ -772,7 +772,7 @@
     {{-- ─── LEAVE FORECAST · HOLIDAY PLANNER · POLICY EXPLORER ─── --}}
     <div class="pulse-margin grid grid-cols-1 gap-4 lg:grid-cols-3">
         {{-- Leave Forecast --}}
-        <div class="rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <div class="rounded-2xl border border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
             <div class="mb-3 flex items-center gap-2">
                 <div class="rounded-lg bg-sky-50 p-1.5 dark:bg-sky-900/20"><flux:icon.chart-bar class="size-4 text-sky-600 dark:text-sky-400" /></div>
                 <h3 class="text-xs font-black uppercase tracking-[0.12em] text-zinc-600 dark:text-zinc-300">Leave Forecast</h3>
@@ -791,7 +791,7 @@
         </div>
 
         {{-- Holiday Planner --}}
-        <div class="rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <div class="rounded-2xl border border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
             <div class="mb-3 flex items-center gap-2">
                 <div class="rounded-lg bg-rose-50 p-1.5 dark:bg-rose-900/20"><flux:icon.calendar class="size-4 text-rose-600 dark:text-rose-400" /></div>
                 <h3 class="text-xs font-black uppercase tracking-[0.12em] text-zinc-600 dark:text-zinc-300">Holiday Planner</h3>
@@ -810,7 +810,7 @@
                     <p class="text-xs text-zinc-400">No upcoming public holidays.</p>
                 @endforelse
                 @if($mandatoryDays->isNotEmpty())
-                    <div class="mt-2 border-t border-zinc-100 pt-2 dark:border-zinc-800">
+                    <div class="mt-2 border-t border-zinc-100 dark:border-zinc-800 pt-2 dark:border-zinc-800">
                         <p class="mb-1 text-[10px] font-bold uppercase tracking-wide text-amber-600">December Mandatory</p>
                         @foreach($mandatoryDays as $m)
                             <div class="flex items-center justify-between text-sm">
@@ -831,13 +831,13 @@
         @if($showHolidayWork)
             <div class="fixed inset-0 z-50 flex items-center justify-center p-4" x-data x-on:keydown.escape.window="$wire.set('showHolidayWork', false)">
                 <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="$wire.set('showHolidayWork', false)"></div>
-                <div class="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl ring ring-black/5 dark:bg-zinc-900">
+                <div class="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white dark:bg-zinc-900 p-6 shadow-xl ring ring-black/5 dark:bg-zinc-900">
                     <div class="mb-4 flex items-center justify-between">
                         <div class="flex items-center gap-2">
                             <span class="inline-flex size-8 items-center justify-center rounded-xl bg-teal-50 text-teal-600"><flux:icon.briefcase class="size-4" /></span>
                             <flux:heading size="lg">Request to Work on Holiday</flux:heading>
                         </div>
-                        <button @click="$wire.set('showHolidayWork', false)" class="text-zinc-400 hover:text-zinc-600"><flux:icon.x-mark class="size-5" /></button>
+                        <button @click="$wire.set('showHolidayWork', false)" class="text-zinc-400 hover:text-zinc-600 dark:text-zinc-300"><flux:icon.x-mark class="size-5" /></button>
                     </div>
                     <div class="space-y-3">
                         <flux:input wire:model="hw_date" type="date" label="Holiday Date" />
@@ -867,7 +867,7 @@
                         <p class="text-[11px] text-zinc-400">On approval this records a holiday-worked attendance and your chosen pay (overtime record or comp-off credit).</p>
                     </div>
                     <div class="mt-5 flex justify-end gap-2">
-                        <button @click="$wire.set('showHolidayWork', false)" class="rounded-xl border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-600 transition hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300">Cancel</button>
+                        <button @click="$wire.set('showHolidayWork', false)" class="rounded-xl border border-zinc-200 dark:border-zinc-800 px-4 py-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300 transition hover:bg-zinc-50 dark:bg-zinc-800/50 dark:border-zinc-700 dark:text-zinc-300">Cancel</button>
                         <flux:button wire:click="submitHolidayWork" variant="primary">Send to Manager &amp; HR</flux:button>
                     </div>
                 </div>
@@ -878,8 +878,8 @@
         @if($conversationId && $conversationRequest)
             <div class="fixed inset-0 z-50 flex items-center justify-center p-4" x-data x-on:keydown.escape.window="$wire.closeConversation()">
                 <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="$wire.closeConversation()"></div>
-                <div class="relative flex max-h-[85vh] w-full max-w-lg flex-col rounded-2xl bg-white shadow-xl ring ring-black/5 dark:bg-zinc-900">
-                    <div class="flex items-center justify-between border-b border-zinc-100 p-5 dark:border-zinc-800">
+                <div class="relative flex max-h-[85vh] w-full max-w-lg flex-col rounded-2xl bg-white dark:bg-zinc-900 shadow-xl ring ring-black/5 dark:bg-zinc-900">
+                    <div class="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 p-5 dark:border-zinc-800">
                         <div class="flex items-center gap-2">
                             <span class="inline-flex size-8 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-400"><flux:icon.chat-bubble-left-right class="size-4" /></span>
                             <div>
@@ -887,7 +887,7 @@
                                 <p class="text-[11px] text-zinc-400">{{ $conversationRequest->leaveType?->name }} · {{ $conversationRequest->start_date->format('d M') }}–{{ $conversationRequest->end_date->format('d M Y') }}</p>
                             </div>
                         </div>
-                        <button @click="$wire.closeConversation()" class="text-zinc-400 hover:text-zinc-600"><flux:icon.x-mark class="size-5" /></button>
+                        <button @click="$wire.closeConversation()" class="text-zinc-400 hover:text-zinc-600 dark:text-zinc-300"><flux:icon.x-mark class="size-5" /></button>
                     </div>
 
                     {{-- Context banner: rejection remark / more-info prompt --}}
@@ -912,7 +912,7 @@
                         @forelse($conversationRequest->messages->sortBy('created_at') as $msg)
                             @php $mine = $msg->user_id === $meId; @endphp
                             <div class="flex {{ $mine ? 'justify-end' : 'justify-start' }}">
-                                <div class="max-w-[80%] rounded-2xl px-3.5 py-2.5 text-sm {{ $mine ? 'bg-indigo-600 text-white' : 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200' }}">
+                                <div class="max-w-[80%] rounded-2xl px-3.5 py-2.5 text-sm {{ $mine ? 'bg-indigo-600 text-white' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 dark:bg-zinc-800 dark:text-zinc-200' }}">
                                     <div class="mb-0.5 flex items-center gap-2 text-[10px] font-bold uppercase tracking-wide {{ $mine ? 'text-indigo-100' : 'text-zinc-400' }}">
                                         <span>{{ $mine ? 'You' : ($msg->user?->name ?? 'HR') }}</span>
                                         <span class="font-medium normal-case">{{ $msg->created_at->format('d M, H:i') }}</span>
@@ -922,7 +922,7 @@
                                     @endif
                                     @if($msg->attachment_path)
                                         <a href="{{ asset('storage/'.$msg->attachment_path) }}" target="_blank"
-                                            class="mt-1.5 inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold {{ $mine ? 'bg-white/20 text-white hover:bg-white/30' : 'bg-white text-indigo-600 hover:bg-zinc-50 dark:bg-zinc-700 dark:text-indigo-300' }}">
+                                            class="mt-1.5 inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold {{ $mine ? 'bg-white/20 dark:bg-zinc-900/20 text-white hover:bg-white/30' : 'bg-white dark:bg-zinc-900 text-indigo-600 hover:bg-zinc-50 dark:bg-zinc-800/50 dark:bg-zinc-700 dark:text-indigo-300' }}">
                                             <flux:icon.paper-clip class="size-3" /> {{ $msg->attachment_name ?? 'Attachment' }}
                                         </a>
                                     @endif
@@ -934,16 +934,16 @@
                     </div>
 
                     {{-- Composer --}}
-                    <div class="space-y-2 border-t border-zinc-100 p-4 dark:border-zinc-800">
+                    <div class="space-y-2 border-t border-zinc-100 dark:border-zinc-800 p-4 dark:border-zinc-800">
                         <flux:textarea wire:model="conversation_body" rows="2" placeholder="Write a message…" />
                         @error('conversation_body')<p class="text-xs text-rose-500">{{ $message }}</p>@enderror
                         <div class="flex items-center justify-between gap-2">
                             <div class="min-w-0 flex-1">
                                 <input type="file" wire:model="conversation_attachment" accept=".pdf,.jpg,.jpeg,.png"
-                                    class="block w-full text-xs text-zinc-500 file:mr-2 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-2.5 file:py-1.5 file:text-xs file:font-bold file:text-indigo-600 hover:file:bg-indigo-100 dark:text-zinc-400">
+                                    class="block w-full text-xs text-zinc-500 dark:text-zinc-400 file:mr-2 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-2.5 file:py-1.5 file:text-xs file:font-bold file:text-indigo-600 hover:file:bg-indigo-100 dark:text-zinc-400">
                                 @error('conversation_attachment')<p class="mt-1 text-xs text-rose-500">{{ $message }}</p>@enderror
                                 @if($conversation_attachment)
-                                    <p class="mt-1 truncate text-[11px] text-zinc-500">{{ $conversation_attachment->getClientOriginalName() }}</p>
+                                    <p class="mt-1 truncate text-[11px] text-zinc-500 dark:text-zinc-400">{{ $conversation_attachment->getClientOriginalName() }}</p>
                                 @endif
                             </div>
                             <flux:button wire:click="postConversationMessage" variant="primary" class="shrink-0">Send</flux:button>
@@ -955,7 +955,7 @@
         @endif
 
         {{-- Policy Explorer --}}
-        <div x-data="{ open: true }" class="rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <div x-data="{ open: true }" class="rounded-2xl border border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
             <button type="button" @click="open = !open" class="flex w-full items-center justify-between gap-2">
                 <span class="flex items-center gap-2">
                     <span class="rounded-lg bg-indigo-50 p-1.5 dark:bg-indigo-900/20"><flux:icon.book-open class="size-4 text-indigo-600 dark:text-indigo-400" /></span>
@@ -976,7 +976,7 @@
 
     {{-- ─── LEAVE CALENDAR WIDGET ─── --}}
     <div
-        class="pulse-margin rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        class="pulse-margin rounded-2xl border border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
         <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div class="flex items-center gap-2">
                 <div class="rounded-lg bg-violet-50 p-1.5 dark:bg-violet-900/20">
@@ -986,15 +986,15 @@
             </div>
             <div class="flex items-center gap-1.5">
                 <button wire:click="previousCalendarMonth"
-                    class="flex size-7 cursor-pointer items-center justify-center rounded-lg border border-zinc-200 text-zinc-500 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800">
+                    class="flex size-7 cursor-pointer items-center justify-center rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 transition-colors hover:bg-zinc-50 dark:bg-zinc-800/50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800">
                     <flux:icon.chevron-left class="size-3.5" />
                 </button>
                 <button wire:click="goToCurrentCalendarMonth"
-                    class="cursor-pointer rounded-lg px-3 py-1 text-xs font-black text-zinc-700 transition-colors hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-800">
+                    class="cursor-pointer rounded-lg px-3 py-1 text-xs font-black text-zinc-700 dark:text-zinc-200 transition-colors hover:bg-zinc-50 dark:bg-zinc-800/50 dark:text-zinc-200 dark:hover:bg-zinc-800">
                     {{ $calendarLabel }}
                 </button>
                 <button wire:click="nextCalendarMonth"
-                    class="flex size-7 cursor-pointer items-center justify-center rounded-lg border border-zinc-200 text-zinc-500 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800">
+                    class="flex size-7 cursor-pointer items-center justify-center rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 transition-colors hover:bg-zinc-50 dark:bg-zinc-800/50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800">
                     <flux:icon.chevron-right class="size-3.5" />
                 </button>
             </div>
@@ -1010,7 +1010,7 @@
             <span class="inline-flex items-center gap-1.5"><span class="size-2.5 rounded-full bg-rose-500"></span>
                 Holiday</span>
             <span class="inline-flex items-center gap-1.5"><span
-                    class="size-2.5 rounded-sm border border-zinc-200 bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800"></span>
+                    class="size-2.5 rounded-sm border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-800 dark:border-zinc-700 dark:bg-zinc-800"></span>
                 Weekend</span>
         </div>
 
@@ -1028,7 +1028,7 @@
                     $cellClasses = 'relative flex flex-col items-center justify-center rounded-xl py-2.5 text-xs font-bold transition-colors';
 
                     if (!$day['isCurrentMonth']) {
-                        $cellClasses .= ' text-zinc-300 dark:text-zinc-700';
+                        $cellClasses .= ' text-zinc-300 dark:text-zinc-700 dark:text-zinc-200';
                     } elseif ($day['holiday']) {
                         $cellClasses .= ' bg-rose-50 text-rose-700 dark:bg-rose-900/20 dark:text-rose-400';
                     } elseif ($day['approved']) {
@@ -1036,9 +1036,9 @@
                     } elseif ($day['pending']) {
                         $cellClasses .= ' bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400';
                     } elseif ($day['isWeekend']) {
-                        $cellClasses .= ' bg-zinc-50 text-zinc-400 dark:bg-zinc-800/50 dark:text-zinc-500';
+                        $cellClasses .= ' bg-zinc-50 dark:bg-zinc-800/50 text-zinc-400 dark:bg-zinc-800/50 dark:text-zinc-500 dark:text-zinc-400';
                     } else {
-                        $cellClasses .= ' text-zinc-700 dark:text-zinc-300';
+                        $cellClasses .= ' text-zinc-700 dark:text-zinc-200 dark:text-zinc-300';
                     }
 
                     if ($day['isToday']) {
@@ -1066,9 +1066,9 @@
             x-on:keydown.escape.window="$wire.closeRequestModal()">
             <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="$wire.closeRequestModal()"></div>
             <div
-                class="relative w-full max-w-lg bg-white dark:bg-zinc-800 rounded-2xl shadow-xl ring ring-black/5 dark:ring-zinc-700 p-6 max-h-[90vh] overflow-y-auto">
+                class="relative w-full max-w-lg bg-white dark:bg-zinc-900 dark:bg-zinc-800 rounded-2xl shadow-xl ring ring-black/5 dark:ring-zinc-700 p-6 max-h-[90vh] overflow-y-auto">
                 <button type="button" @click="$wire.closeRequestModal()"
-                    class="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors">
+                    class="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 dark:text-zinc-300 dark:hover:text-zinc-200 transition-colors">
                     <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                     </svg>
@@ -1171,23 +1171,23 @@
                         {{-- Half Day --}}
                         @if(!$selectedType || $selectedType->allow_half_day)
                             <div
-                                class="rounded-xl border border-zinc-200 bg-zinc-50/50 px-4 py-3 dark:border-zinc-700 dark:bg-zinc-800/30 space-y-3">
+                                class="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 px-4 py-3 dark:border-zinc-700 dark:bg-zinc-800/30 space-y-3">
                                 <div class="flex items-center gap-3">
                                     <flux:checkbox wire:model.live="is_half_day" id="half_day_toggle" />
                                     <label for="half_day_toggle"
-                                        class="cursor-pointer text-sm font-semibold text-zinc-900 dark:text-zinc-100">Half-Day
+                                        class="cursor-pointer text-sm font-semibold text-zinc-900 dark:text-white dark:text-zinc-100">Half-Day
                                         Leave <span class="text-xs font-normal text-zinc-400">(deducts 0.5 days)</span></label>
                                 </div>
                                 @if($is_half_day)
                                     <div class="flex gap-4 pl-7">
                                         <label
-                                            class="flex items-center gap-2 cursor-pointer text-sm text-zinc-700 dark:text-zinc-300">
+                                            class="flex items-center gap-2 cursor-pointer text-sm text-zinc-700 dark:text-zinc-200 dark:text-zinc-300">
                                             <input type="radio" wire:model="half_day_period" value="first_half"
                                                 class="accent-indigo-600" />
                                             First Half
                                         </label>
                                         <label
-                                            class="flex items-center gap-2 cursor-pointer text-sm text-zinc-700 dark:text-zinc-300">
+                                            class="flex items-center gap-2 cursor-pointer text-sm text-zinc-700 dark:text-zinc-200 dark:text-zinc-300">
                                             <input type="radio" wire:model="half_day_period" value="second_half"
                                                 class="accent-indigo-600" />
                                             Second Half
@@ -1203,12 +1203,12 @@
                         {{-- Paid / Unpaid choice --}}
                         @if($selectedType && ($selectedType->allow_paid_request || $selectedType->allow_unpaid_request))
                             <div
-                                class="rounded-xl border border-zinc-200 bg-zinc-50/50 px-4 py-3 dark:border-zinc-700 dark:bg-zinc-800/30">
-                                <p class="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">Leave Payment Type</p>
+                                class="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 px-4 py-3 dark:border-zinc-700 dark:bg-zinc-800/30">
+                                <p class="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-200 dark:text-zinc-300">Leave Payment Type</p>
                                 <div class="flex gap-4">
                                     @if($selectedType->allow_paid_request)
                                         <label
-                                            class="flex items-center gap-2 cursor-pointer text-sm text-zinc-700 dark:text-zinc-300">
+                                            class="flex items-center gap-2 cursor-pointer text-sm text-zinc-700 dark:text-zinc-200 dark:text-zinc-300">
                                             <input type="radio" wire:model="requested_leave_status" value="paid"
                                                 class="accent-indigo-600" />
                                             <span class="font-medium text-emerald-600 dark:text-emerald-400">Paid Leave</span>
@@ -1216,7 +1216,7 @@
                                     @endif
                                     @if($selectedType->allow_unpaid_request)
                                         <label
-                                            class="flex items-center gap-2 cursor-pointer text-sm text-zinc-700 dark:text-zinc-300">
+                                            class="flex items-center gap-2 cursor-pointer text-sm text-zinc-700 dark:text-zinc-200 dark:text-zinc-300">
                                             <input type="radio" wire:model="requested_leave_status" value="unpaid"
                                                 class="accent-indigo-600" />
                                             <span class="font-medium text-amber-600 dark:text-amber-400">Unpaid Leave</span>
@@ -1238,7 +1238,7 @@
                             placeholder="Any other notes for the approver (optional)..." rows="2" />
 
                         {{-- Attachment — one supporting document, previewed before submit --}}
-                        <div class="rounded-xl border border-zinc-100 bg-zinc-50/60 p-4 dark:border-zinc-800 dark:bg-zinc-900/40">
+                        <div class="rounded-xl border border-zinc-100 dark:border-zinc-800 bg-zinc-50/60 p-4 dark:border-zinc-800 dark:bg-zinc-900/40">
                             <div class="mb-2 flex items-center justify-between">
                                 <flux:label>
                                     Attachment
@@ -1247,10 +1247,10 @@
                                 <span class="text-[10px] font-semibold text-zinc-400">PDF or image — max 500 KB</span>
                             </div>
                             <input type="file" wire:model="attachment" accept=".pdf,.jpg,.jpeg,.png"
-                                class="block w-full text-xs text-zinc-500 file:mr-2 file:rounded-lg file:border-0 file:bg-orange-50 file:px-2.5 file:py-1.5 file:text-xs file:font-bold file:text-orange-600 hover:file:bg-orange-100 dark:text-zinc-400">
+                                class="block w-full text-xs text-zinc-500 dark:text-zinc-400 file:mr-2 file:rounded-lg file:border-0 file:bg-orange-50 file:px-2.5 file:py-1.5 file:text-xs file:font-bold file:text-orange-600 hover:file:bg-orange-100 dark:text-zinc-400">
                             @error('attachment') <flux:error>{{ $message }}</flux:error> @enderror
                             @if($attachment)
-                                <div class="mt-1.5 flex items-center gap-2 rounded-lg bg-white px-2 py-1.5 text-[11px] dark:bg-zinc-800">
+                                <div class="mt-1.5 flex items-center gap-2 rounded-lg bg-white dark:bg-zinc-900 px-2 py-1.5 text-[11px] dark:bg-zinc-800">
                                     @if(str_starts_with($attachment->getMimeType() ?? '', 'image/'))
                                         <img src="{{ $attachment->temporaryUrl() }}" class="size-8 rounded object-cover" alt="preview">
                                     @else
@@ -1271,7 +1271,7 @@
 
                         <div class="flex justify-end gap-3 pt-2">
                             <button type="button" @click="$wire.closeRequestModal()"
-                                class="px-4 py-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-600 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors">Cancel</button>
+                                class="px-4 py-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-800 dark:border-zinc-600 rounded-xl hover:bg-zinc-50 dark:bg-zinc-800/50 dark:hover:bg-zinc-700 transition-colors">Cancel</button>
                             <button type="submit" wire:loading.attr="disabled" wire:target="submitRequest,attachment" @disabled($rangeHolidays->isNotEmpty() || $rangeWeekendDays->isNotEmpty())
                                 class="inline-flex items-center gap-2 px-5 py-2 text-sm font-bold text-white bg-brand-600 hover:bg-brand-700 rounded-xl transition-colors disabled:cursor-not-allowed disabled:opacity-60">
                                 <span wire:loading.remove wire:target="submitRequest,attachment">{{ $rangeHolidays->isNotEmpty() ? 'Holiday in range' : ($rangeWeekendDays->isNotEmpty() ? 'Weekend selected' : 'Submit Request') }}</span>
@@ -1319,13 +1319,13 @@
                         <div>
                             <span class="text-zinc-400 block mb-0.5">Carry-forward available</span>
                             <span
-                                class="font-bold text-zinc-800 dark:text-zinc-200">{{ $selectedEncashType->cf_available }}d</span>
+                                class="font-bold text-zinc-800 dark:text-zinc-100 dark:text-zinc-200">{{ $selectedEncashType->cf_available }}d</span>
                         </div>
                         @if($selectedEncashType->allow_current_year_encashment)
                             <div>
                                 <span class="text-zinc-400 block mb-0.5">Current-year available</span>
                                 <span
-                                    class="font-bold text-zinc-800 dark:text-zinc-200">{{ $selectedEncashType->cy_available }}d</span>
+                                    class="font-bold text-zinc-800 dark:text-zinc-100 dark:text-zinc-200">{{ $selectedEncashType->cy_available }}d</span>
                             </div>
                         @endif
                         <div>
@@ -1337,14 +1337,14 @@
                             <div>
                                 <span class="text-zinc-400 block mb-0.5">Remaining cap this year</span>
                                 <span
-                                    class="font-bold text-zinc-800 dark:text-zinc-200">{{ $selectedEncashType->remaining_cap }}d</span>
+                                    class="font-bold text-zinc-800 dark:text-zinc-100 dark:text-zinc-200">{{ $selectedEncashType->remaining_cap }}d</span>
                             </div>
                         @endif
                         @if($selectedEncashType->encashment_rate_multiplier != 1.00)
                             <div>
                                 <span class="text-zinc-400 block mb-0.5">Rate multiplier</span>
                                 <span
-                                    class="font-bold text-zinc-800 dark:text-zinc-200">{{ number_format($selectedEncashType->encashment_rate_multiplier, 2) }}×</span>
+                                    class="font-bold text-zinc-800 dark:text-zinc-100 dark:text-zinc-200">{{ number_format($selectedEncashType->encashment_rate_multiplier, 2) }}×</span>
                             </div>
                         @endif
                     </div>
@@ -1366,7 +1366,7 @@
 
             <div class="flex justify-end gap-2">
                 <button type="button" x-on:click="$flux.modal('encashment-modal').close()"
-                    class="px-4 py-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-600 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors">
+                    class="px-4 py-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-800 dark:border-zinc-600 rounded-xl hover:bg-zinc-50 dark:bg-zinc-800/50 dark:hover:bg-zinc-700 transition-colors">
                     Cancel
                 </button>
                 <flux:button wire:click="submitEncashment()" variant="primary">Submit Request</flux:button>
