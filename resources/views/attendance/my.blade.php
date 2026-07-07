@@ -314,103 +314,98 @@
     </div>
 @endif
 
-{{-- ═══════════════ TODAY'S ATTENDANCE JOURNEY ═══════════════ --}}
-@php $journey = count($attendanceJourney) ? $attendanceJourney : $todayTimeline; $isJourney = count($attendanceJourney) > 0; @endphp
-<div class="grid grid-cols-1 items-start gap-4 lg:grid-cols-12">
-    {{-- Attendance Journey --}}
-    @php
-        $jFirst = $todayAttendance?->check_in ?? $sum?->first_punch;
-        $jLast = $todayAttendance?->check_out ?? $sum?->last_punch;
-    @endphp
-    <div class="rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 p-5 shadow-sm lg:col-span-12">
-        <div class="mb-4 flex items-center justify-between">
-            <div class="flex items-center gap-2">
-                <div class="text-sm font-black text-zinc-900 dark:text-white">Today's Attendance Journey</div>
-                @if(count($journey))<span class="rounded-full bg-orange-50 px-2 py-0.5 text-[10px] font-bold text-orange-500">{{ count($journey) }} events</span>@endif
-            </div>
-            <button type="button" @click="$flux.modal('regularisation-modal').show()" class="text-[11px] font-bold text-orange-500 hover:underline">Request Regularization</button>
-        </div>
-        @if(count($journey) > 0)
-            <div class="relative max-h-[430px] overflow-y-auto pr-1" wire:loading.class="opacity-40" wire:target="statsPeriod,rangeFrom,rangeTo">
-                @foreach($journey as $ev)
-                    @php
-                        [$dot, $ic, $tint, $cardTint] = match($ev['type']) {
-                            'in'     => ['bg-emerald-500', 'arrow-right-end-on-rectangle', 'text-emerald-600', 'border-emerald-100 bg-emerald-50/40'],
-                            'late'   => ['bg-rose-500', 'exclamation-triangle', 'text-rose-600', 'border-rose-100 bg-rose-50/40'],
-                            'break'  => ['bg-orange-500', 'pause', 'text-orange-600', 'border-orange-100 bg-orange-50/40'],
-                            'resume' => ['bg-blue-500', 'play', 'text-blue-600', 'border-blue-100 bg-blue-50/40'],
-                            'out'    => ['bg-rose-600', 'arrow-left-start-on-rectangle', 'text-rose-700', 'border-rose-100 bg-rose-50/30'],
-                            default  => ['bg-zinc-400', 'clock', 'text-zinc-500 dark:text-zinc-400', 'border-zinc-100 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-800/40'],
-                        };
-                        $evMethod = ($ev['method'] ?? null) instanceof PunchMethod ? $ev['method'] : PunchMethod::tryFrom((string) ($ev['method'] ?? ''));
-                        $gap = $ev['gap_min'] ?? null;
-                        $gapLabel = $gap !== null ? ($gap >= 60 ? intdiv($gap, 60).'h '.($gap % 60).'m' : $gap.' mins') : null;
-                        $hasDetail = ! empty($ev['lat']) || ! empty($ev['verify']) || ! empty($ev['source']);
-                    @endphp
-
-                    {{-- Duration connector from previous event --}}
-                    @if(! $loop->first && $gapLabel)
-                        <div class="relative ml-[15px] flex items-center gap-2 py-1 pl-6">
-                            <span class="absolute left-0 top-0 h-full w-px bg-orange-100"></span>
-                            <flux:icon.arrow-down class="size-3 text-orange-300" />
-                            <span class="rounded-full bg-orange-50 px-2 py-0.5 text-[9px] font-bold text-orange-500">{{ $gapLabel }}</span>
-                            <span class="text-[9px] text-zinc-400">
-                                {{ in_array($ev['type'], ['resume']) ? 'break duration' : (in_array($ev['type'], ['break', 'out']) ? 'since last entry' : 'since previous') }}
-                            </span>
-                        </div>
-                    @endif
-
-                    <div x-data="{ x: false }" class="relative flex items-start gap-3 {{ $loop->first ? '' : 'mt-1' }}">
-                        @unless($loop->last)<span class="absolute left-[15px] top-9 h-[calc(100%-4px)] w-px bg-orange-100"></span>@endunless
-                        <span class="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-full {{ $dot }} text-white shadow"><flux:icon :icon="$ic" class="size-4" /></span>
-                        <div @click="x = !x" role="button" tabindex="0" @keydown.enter="x = !x"
-                            class="flex-1 cursor-pointer rounded-xl border {{ $cardTint }} px-3 py-2 text-left transition duration-200 hover:-translate-y-0.5 hover:shadow-md">
-                            <div class="flex items-center justify-between">
-                                <span class="text-sm font-black tabular-nums text-zinc-900 dark:text-white">{{ $ev['time'] }}</span>
-                                <span class="flex items-center gap-1.5">
-                                    <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] font-bold text-emerald-700">Success</span>
-                                    @if($hasDetail)<flux:icon.chevron-down class="size-3 text-zinc-400 transition-transform" ::class="x ? 'rotate-180' : ''" />@endif
-                                </span>
-                            </div>
-                            <div class="text-xs font-bold {{ $tint }}">{{ $evMethod?->label() ?? $ev['title'] }}</div>
-                            <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] text-zinc-400">
-                                <span>{{ $ev['title'] }}</span>
-                                @if(! empty($ev['location']))<span class="inline-flex items-center gap-0.5"><flux:icon.map-pin class="size-3" /> {{ $ev['location'] }}</span>@endif
-                                @if(! empty($ev['device']) && is_string($ev['device']))<span class="inline-flex items-center gap-0.5"><flux:icon.cpu-chip class="size-3" /> {{ $ev['device'] }}</span>@endif
-                            </div>
-                            @if($hasDetail)
-                                <div x-show="x" x-transition:enter="transition duration-200 ease-out" x-transition:enter-start="-translate-y-1 opacity-0" x-transition:enter-end="translate-y-0 opacity-100"
-                                    class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-zinc-100 dark:border-zinc-800 pt-1.5 text-[10px] text-zinc-500 dark:text-zinc-400">
-                                    @if(! empty($ev['source']))<span class="uppercase tracking-wide">{{ $ev['source'] === 'web' ? 'Web Punch' : ucfirst($ev['source']) }}</span>@endif
-                                    @if(! empty($ev['verify']))<span>Verify code {{ $ev['verify'] }}</span>@endif
-                                    @if(! empty($ev['lat']) && ! empty($ev['lng']))
-                                        <a href="https://www.google.com/maps?q={{ $ev['lat'] }},{{ $ev['lng'] }}" target="_blank" rel="noopener" class="inline-flex items-center gap-1 font-semibold text-orange-500 hover:underline" @click.stop><flux:icon.map-pin class="size-3" /> {{ $ev['lat'] }}, {{ $ev['lng'] }}</a>
-                                    @endif
-                                </div>
-                            @endif
-                        </div>
-                    </div>
-                @endforeach
-            </div>
-        @else
-            <div class="flex h-32 flex-col items-center justify-center text-center text-zinc-300"><flux:icon.clock class="mb-2 size-8" /><p class="text-xs">No punches recorded today.</p></div>
-        @endif
-        {{-- Today's Summary footer --}}
-        <div class="mt-4 grid grid-cols-4 gap-x-2 gap-y-3 border-t border-zinc-100 dark:border-zinc-800 pt-3 text-center">
-            @foreach([
-                ['Working', $workedLabel],
-                ['Break', $breakMin >= 60 ? intdiv($breakMin, 60).'h '.($breakMin % 60).'m' : $breakMin.'m'],
-                ['Overtime', intdiv($otMinTotal, 60).'h '.($otMinTotal % 60).'m'],
-                ['Punches', $totalPunches ?: (count($attendanceJourney) ?: '—')],
-                ['First Punch', $jFirst ? \Carbon\Carbon::parse($jFirst)->format('h:i A') : '—'],
-                ['Last Punch', $jLast ? \Carbon\Carbon::parse($jLast)->format('h:i A') : '—'],
-                ['Score', $score.'/100'],
-            ] as [$k, $v])
-                <div><div class="text-sm font-black tabular-nums text-zinc-900 dark:text-white">{{ $v }}</div><div class="text-[9px] font-bold uppercase text-zinc-400">{{ $k }}</div></div>
-            @endforeach
-            <div class="grid place-items-center"><span class="inline-flex items-center gap-1 rounded-full {{ $isDone ? 'bg-rose-100 text-rose-600' : ($isIn ? 'bg-emerald-100 text-emerald-700' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400') }} px-2 py-0.5 text-[10px] font-bold">{{ $isDone ? 'Completed' : ($isIn ? 'Working' : '—') }}</span></div>
-        </div>
+{{-- ═══════════════ TODAY'S ATTENDANCE JOURNEY (slice 2b) ═══════════════ --}}
+@php $journey = count($attendanceJourney) ? $attendanceJourney : $todayTimeline; @endphp
+<style>
+.pa-jcard{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:16px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.pa-jhead{display:flex;align-items:center;gap:10px;padding:15px 18px 6px}
+.pa-jhead h3{margin:0;font-size:14px;font-weight:640;color:var(--pa-ink)}
+.pa-jhead .sub{font-size:12px;color:var(--pa-faint)}
+.pa-jlink{margin-left:auto;color:var(--pa-accent-ink);font-weight:600;font-size:12px;background:none;border:0}
+.pa-jlink:hover{text-decoration:underline}
+.pa-tl{padding:4px 18px 14px;max-height:440px;overflow-y:auto}
+.pa-tl-item{display:grid;grid-template-columns:56px 26px 1fr;align-items:start}
+.pa-tl-time{font-size:12.5px;font-weight:640;text-align:right;padding:8px 12px 0 0;white-space:nowrap;color:var(--pa-ink);font-variant-numeric:tabular-nums}
+.pa-tl-time small{display:block;font-size:10px;color:var(--pa-faint);font-weight:500}
+.pa-tl-rail{position:relative;display:flex;justify-content:center}
+.pa-tl-dot{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;z-index:2;margin-top:6px;border:2px solid var(--pa-surface);box-shadow:0 0 0 1px var(--pa-border);color:#fff}
+.pa-tl-line{position:absolute;top:26px;bottom:-8px;width:2px;background:var(--pa-border);left:50%;transform:translateX(-50%)}
+.pa-tl-body{padding:6px 0 12px 12px;min-width:0}
+.pa-tl-c{background:var(--pa-surface-2);border:1px solid var(--pa-border);border-radius:11px;padding:9px 12px;cursor:pointer;transition:all .16s var(--pa-ease);text-align:left;width:100%}
+.pa-tl-c:hover{border-color:var(--pa-border-2);background:var(--pa-surface);transform:translateX(2px)}
+.pa-tl-t{font-weight:600;font-size:13.5px;display:flex;align-items:center;justify-content:space-between;gap:8px;color:var(--pa-ink)}
+.pa-tl-meta{font-size:11.5px;color:var(--pa-faint);margin-top:3px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.pa-tl-meta .mi{display:inline-flex;align-items:center;gap:3px}
+.pa-tl-more{margin-top:7px;border-top:1px solid var(--pa-border);padding-top:7px;font-size:11px;color:var(--pa-muted);display:flex;flex-wrap:wrap;gap:10px}
+.pa-b{font-size:10px;font-weight:640;padding:2px 8px;border-radius:20px;white-space:nowrap}
+.pa-b-pres{background:var(--pa-present-soft);color:var(--pa-present)}.pa-b-warn{background:var(--pa-warn-soft);color:var(--pa-warn)}
+.pa-b-dan{background:var(--pa-danger-soft);color:var(--pa-danger)}.pa-b-iris{background:var(--pa-accent-soft);color:var(--pa-accent-ink)}
+.pa-d-pres{background:var(--pa-present)}.pa-d-warn{background:var(--pa-warn)}.pa-d-dan{background:var(--pa-danger)}.pa-d-iris{background:var(--pa-accent)}.pa-d-mut{background:var(--pa-faint)}
+.pa-gap{font-size:11px;color:var(--pa-faint);display:flex;align-items:center;gap:8px;padding:1px 0 1px 56px}
+.pa-gap .ln{flex:1;height:1px;background:repeating-linear-gradient(90deg,var(--pa-border) 0 4px,transparent 4px 8px)}
+.pa-tl-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:var(--pa-faint);padding:44px 0}
+.pa-live-dot{width:9px;height:9px;border-radius:50%;background:var(--pa-accent);animation:pabeat 1.8s var(--pa-ease) infinite}
+</style>
+<div class="pa" style="margin-top:18px">
+  <div class="pa-jcard">
+    <div class="pa-jhead">
+      <div><h3>Today's attendance journey</h3><div class="sub">{{ count($journey) ? count($journey).' events · de-duplicated' : 'No punches yet' }}</div></div>
+      <button type="button" class="pa-jlink" @click="$flux.modal('regularisation-modal').show()">Fix a punch →</button>
     </div>
+    @if(count($journey) > 0)
+      <div class="pa-tl" wire:loading.class="opacity-40" wire:target="statsPeriod,rangeFrom,rangeTo">
+        @foreach($journey as $ev)
+          @php
+            [$dcls, $ic, $btint, $blabel] = match($ev['type']) {
+              'in'     => ['pa-d-pres', 'check',    'pa-b-pres', ($todayAttendance && $todayAttendance->is_late) ? 'Late' : 'On time'],
+              'late'   => ['pa-d-dan',  'exclamation-triangle', 'pa-b-dan', 'Late'],
+              'break'  => ['pa-d-warn', 'pause',    'pa-b-warn', 'Break'],
+              'resume' => ['pa-d-iris', 'play',     'pa-b-iris', 'Back'],
+              'out'    => ['pa-d-dan',  'arrow-left-start-on-rectangle', 'pa-b-dan', 'Clocked out'],
+              default  => ['pa-d-mut',  'clock',    '',          ''],
+            };
+            $evMethod = ($ev['method'] ?? null) instanceof PunchMethod ? $ev['method'] : PunchMethod::tryFrom((string) ($ev['method'] ?? ''));
+            $gap = $ev['gap_min'] ?? null;
+            $gapLabel = $gap !== null ? ($gap >= 60 ? intdiv($gap, 60).'h '.($gap % 60).'m' : $gap.'m') : null;
+            $hasDetail = ! empty($ev['lat']) || ! empty($ev['verify']) || ! empty($ev['source']);
+          @endphp
+          @if(! $loop->first && $gapLabel)
+            <div class="pa-gap"><span class="ln"></span>{{ in_array($ev['type'], ['resume']) ? 'break '.$gapLabel : 'worked '.$gapLabel }}<span class="ln"></span></div>
+          @endif
+          <div class="pa-tl-item" x-data="{ x:false }">
+            <div class="pa-tl-time">{{ \Illuminate\Support\Str::before($ev['time'], ' ') }}<small>{{ \Illuminate\Support\Str::after($ev['time'], ' ') }}</small></div>
+            <div class="pa-tl-rail"><span class="pa-tl-dot {{ $dcls }}"><flux:icon :icon="$ic" class="size-3.5" /></span>@unless($loop->last)<span class="pa-tl-line"></span>@endunless</div>
+            <div class="pa-tl-body">
+              <button type="button" class="pa-tl-c" @if($hasDetail) @click="x=!x" @endif>
+                <div class="pa-tl-t"><span>{{ $ev['title'] }}</span>@if($blabel)<span class="pa-b {{ $btint }}">{{ $blabel }}</span>@endif</div>
+                <div class="pa-tl-meta">
+                  @if($evMethod)<span class="mi"><flux:icon :icon="$evMethod->icon() ?? 'finger-print'" class="size-3" /> {{ $evMethod->label() }}</span>@endif
+                  @if(! empty($ev['location']))<span class="mi"><flux:icon.map-pin class="size-3" /> {{ $ev['location'] }}</span>@endif
+                  @if($hasDetail)<span class="mi" style="margin-left:auto"><flux:icon.chevron-down class="size-3" ::class="x ? 'rotate-180' : ''" /></span>@endif
+                </div>
+                @if($hasDetail)
+                  <div x-show="x" x-collapse class="pa-tl-more">
+                    @if(! empty($ev['source']))<span style="text-transform:uppercase;letter-spacing:.04em">{{ $ev['source'] === 'web' ? 'Web punch' : ucfirst($ev['source']) }}</span>@endif
+                    @if(! empty($ev['verify']))<span>Verify {{ $ev['verify'] }}</span>@endif
+                    @if(! empty($ev['lat']) && ! empty($ev['lng']))<a href="https://www.google.com/maps?q={{ $ev['lat'] }},{{ $ev['lng'] }}" target="_blank" rel="noopener" style="color:var(--pa-accent-ink);font-weight:600" @click.stop>View on map</a>@endif
+                  </div>
+                @endif
+              </button>
+            </div>
+          </div>
+        @endforeach
+        @if($isIn)
+          <div class="pa-tl-item">
+            <div class="pa-tl-time" style="color:var(--pa-accent-ink)">now</div>
+            <div class="pa-tl-rail"><span class="pa-tl-dot" style="background:var(--pa-accent-soft);box-shadow:0 0 0 1px var(--pa-accent)"><span class="pa-live-dot"></span></span></div>
+            <div class="pa-tl-body"><div class="pa-tl-c" style="border-style:dashed;cursor:default"><div class="pa-tl-t"><span>Currently working</span><span class="pa-b pa-b-iris">Live</span></div></div></div>
+          </div>
+        @endif
+      </div>
+    @else
+      <div class="pa-tl-empty"><flux:icon.clock class="mb-2 size-8" style="opacity:.4" /><p style="font-size:12px;margin:0">No punches recorded today.</p></div>
+    @endif
+  </div>
 </div>
 
 {{-- ═══════════════ ATTENDANCE ANALYTICS (enterprise grid) ═══════════════ --}}
