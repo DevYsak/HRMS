@@ -17,9 +17,10 @@ use Illuminate\Support\Facades\Http;
  *
  * Shared by the scheduled command (attendance:sync-engine) and the on-demand
  * "Quick Scan" button on the Biometric Summary page. Rows are matched by
- * employee_code. HRMS stores the engine's figures as-is, EXCEPT break minutes
- * and working hours, which are re-derived from the raw punch stream when it is
- * available (the engine's break_min mis-pairs on noisy/duplicate punches).
+ * employee_code. The engine pairs real device IN/OUT direction, so its
+ * working_min / break_min / inside figures are stored as-is; HRMS only
+ * re-derives them from the raw punch stream when the engine sends no totals
+ * (its own naive time-based dedup would otherwise corrupt the engine's math).
  */
 class EngineAttendanceSyncService
 {
@@ -75,6 +76,17 @@ class EngineAttendanceSyncService
             $lateMinutes = (int) ($row['delay_min'] ?? 0);
             $isLate = ! empty($row['late']);
 
+            // The engine reports whether the employee is currently inside (its
+            // last punch is an IN with no matching OUT). When inside, the last
+            // punch is NOT a clock-out, so leave check_out open.
+            $inside = ! empty($row['inside']);
+            $checkOut = $inside ? null : $lastPunch;
+
+            // The engine pairs real device IN/OUT direction, so its break_min /
+            // working_min are authoritative. Only fall back to deriving them from
+            // HRMS's punch stream when the engine sent no totals at all.
+            $engineProvidedTotals = array_key_exists('working_min', $row) || array_key_exists('break_min', $row);
+
             // Rich biometric figures — backs the read-only Biometric Summary page.
             AttendanceDailySummary::updateOrCreate(
                 ['employee_id' => $employeeId, 'date' => $date],
@@ -102,7 +114,7 @@ class EngineAttendanceSyncService
                     ['employee_id' => $employeeId, 'date' => $date],
                     [
                         'check_in' => $firstPunch,
-                        'check_out' => $lastPunch,
+                        'check_out' => $checkOut,
                         'check_in_method' => $firstMethod,
                         'check_out_method' => $lastMethod,
                         'total_hours' => $workingHours,
@@ -118,10 +130,14 @@ class EngineAttendanceSyncService
             // Every individual punch (Attendance Journey) — when the engine sends them.
             $this->syncPunches($employeeId, $code, $date, $row['punches'] ?? [], $row['device_serial'] ?? null);
 
-            // When we have the raw punch stream, derive break/working from it —
-            // it is more reliable than the engine's break_min, which mis-pairs
-            // when a stray verify punch flips the in/out alternation.
-            $this->reconcileFromPunches($employeeId, $date, $firstPunch, $lastPunch);
+            // Only derive break/working from HRMS's own punch stream when the
+            // engine sent no totals. The engine pairs real device direction, so
+            // when it provides break_min/working_min they are authoritative —
+            // re-deriving here (naive time-based dedup + alternation) corrupts
+            // them, e.g. an 18m break becoming 114m.
+            if (! $engineProvidedTotals) {
+                $this->reconcileFromPunches($employeeId, $date, $firstPunch, $lastPunch);
+            }
 
             $synced++;
         }
