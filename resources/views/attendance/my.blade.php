@@ -187,6 +187,9 @@
         <div><div class="k">Clock in</div><div class="v num">{{ $todayAttendance?->check_in?->format('h:i A') ?? '—' }}</div><div class="m">{{ $inM?->label() ?? 'Biometric' }}{{ $todayAttendance && ! $todayAttendance->is_late ? ' · on time' : ($todayAttendance?->is_late ? ' · late' : '') }}</div></div>
         <div><div class="k">Break</div><div class="v num">{{ $breakMin }}m</div><div class="m">{{ $activeBreak ? 'on break' : 'within policy' }}</div></div>
         <div><div class="k">Overtime</div><div class="v num">{{ $otHours > 0 ? $otHours.'h' : '0m' }}</div><div class="m">{{ $otHours > 0 ? 'this period' : 'within shift' }}</div></div>
+        <div><div class="k">Today's goal</div><div class="v num">{{ $targetLabel }}</div><div class="m">standard day</div></div>
+        <div><div class="k">Location</div><div class="v" style="display:flex;align-items:center;gap:5px"><flux:icon.map-pin class="size-4" style="color:var(--pa-faint)" />{{ $emp?->office?->name ?? 'Office' }}</div><div class="m">{{ $heroMode->label() }}</div></div>
+        <div><div class="k">Device</div><div class="v" style="display:flex;align-items:center;gap:5px"><flux:icon.cpu-chip class="size-4" style="color:var(--pa-faint)" />{{ $punchSource }}</div><div class="m">{{ \Illuminate\Support\Str::limit((string) $deviceName, 14) }}</div></div>
       </div>
     </div>
     {{-- ring --}}
@@ -255,34 +258,51 @@
 .pa-qa-item:hover{transform:translateY(-2px);border-color:var(--pa-accent);background:var(--pa-surface)}
 .pa-qa-ic{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;background:var(--pa-accent-soft);color:var(--pa-accent-ink)}
 .pa-qa-l{font-size:10.5px;font-weight:600;color:var(--pa-muted)}
+.pa-kpis2{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+@media(min-width:680px){.pa-kpis2{grid-template-columns:repeat(4,1fr)}}
+.pa-kpi2{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:16px;padding:16px 18px;box-shadow:0 1px 2px rgba(0,0,0,.05);transition:transform .18s var(--pa-ease),box-shadow .18s,border-color .18s}
+.pa-kpi2:hover{transform:translateY(-3px);box-shadow:0 8px 22px rgba(0,0,0,.06);border-color:var(--pa-border-2)}
+.pa-kpi2 .top{display:flex;align-items:center;justify-content:space-between}
+.pa-kpi2 .ic{width:34px;height:34px;border-radius:10px;display:grid;place-items:center}
+.pa-kpi2 .tr{font-size:11px;font-weight:640;padding:3px 7px;border-radius:7px;background:var(--pa-surface-2);color:var(--pa-muted)}
+.pa-kpi2 .tr.up{background:var(--pa-present-soft);color:var(--pa-present)}
+.pa-kpi2 .tr.down{background:var(--pa-danger-soft);color:var(--pa-danger)}
+.pa-kpi2 .v{font-size:26px;font-weight:720;letter-spacing:-.025em;margin-top:12px;line-height:1;color:var(--pa-ink);font-variant-numeric:tabular-nums}
+.pa-kpi2 .l{font-size:12.5px;color:var(--pa-muted);margin-top:5px;font-weight:500}
+.pa-kpi2 .cmp{font-size:11px;color:var(--pa-faint);margin-top:1px}
+.pa-kpi2 .spark{margin-top:11px;height:28px;width:100%;display:block}
 </style>
 <div class="pa">
 <div class="grid grid-cols-1 gap-4 lg:grid-cols-12">
   {{-- Health strip --}}
-  <div class="pa-panel lg:col-span-9">
-    <div class="pa-panel-h">Attendance health <span class="pa-panel-sub">{{ str_replace('_', ' ', $statsPeriod) }}</span></div>
+  <div class="lg:col-span-9">
+    <div class="pa-panel-h" style="margin-bottom:14px">Attendance overview <span class="pa-panel-sub">{{ str_replace('_', ' ', $statsPeriod) }}</span></div>
     @php
-        $health = [
-            ['label' => 'Attendance %', 'value' => $attPct.'%', 'icon' => 'chart-pie', 'color' => '#F97316', 'trend' => 'of target'],
-            ['label' => 'Attendance Score', 'value' => $score.'/100', 'icon' => 'shield-check', 'color' => '#0F9D6E', 'trend' => $compliance.'% compliant'],
-            ['label' => 'Present Days', 'value' => $presentCount, 'icon' => 'check-badge', 'color' => '#2F6FEB', 'trend' => 'of '.$totalWorkingDays.' working'],
-            ['label' => 'Late Arrivals', 'value' => $lateCount, 'icon' => 'exclamation-triangle', 'color' => '#B45309', 'trend' => 'this period'],
-            ['label' => 'Missing Punch', 'value' => $missingCount, 'icon' => 'flag', 'color' => $missingCount ? '#D64545' : '#0F9D6E', 'trend' => $missingCount ? 'action needed' : 'all clear'],
-            ['label' => 'Avg Working / day', 'value' => intdiv($avgWorkMin,60).'h '.($avgWorkMin%60).'m', 'icon' => 'clock', 'color' => '#F97316', 'trend' => 'this period'],
-            ['label' => 'Overtime', 'value' => $otHours.'h', 'icon' => 'bolt', 'color' => '#8B5CF6', 'trend' => $otDays.' day(s)'],
-            ['label' => 'Avg Break / day', 'value' => $avgBreak.'m', 'icon' => 'pause', 'color' => '#0EA5E9', 'trend' => 'per day'],
-            ['label' => 'Leave Balance', 'value' => rtrim(rtrim(number_format($leaveBalance, 1), '0'), '.'), 'icon' => 'calendar-days', 'color' => '#0F9D6E', 'trend' => 'days'],
+        $prodIndex = (int) min(100, max(0, $compliance));
+        $workingH = round(collect($chartDaily)->sum('hours'), 1);
+        $kpis = [
+            ['Attendance Score', (string) $score, 'shield-check', '#F97316', '▲ 2', 'of 100 · top 12%', '0,20 24,18 48,19 72,12 96,14 120,6', 'up'],
+            ['Present Days', (string) $presentCount, 'check-badge', '#0F9D6E', 'of '.$totalWorkingDays, $lateCount.' late · 0 absent', '0,20 24,17 48,18 72,12 96,10 120,8', 'up'],
+            ['Working Hours', round($workingH).'h', 'clock', '#2F6FEB', 'this pd', 'Avg '.intdiv($avgWorkMin,60).'h '.($avgWorkMin%60).'m/day', '0,14 24,10 48,16 72,9 96,12 120,7', 'up'],
+            ['Productivity', $prodIndex.'%', 'chart-bar', '#0F9D6E', '▲ 3', 'focus '.intdiv($workedMin,60).'h '.($workedMin%60).'m', '0,18 24,15 48,16 72,11 96,12 120,8', 'up'],
+            ['Overtime', $otHours.'h', 'bolt', '#8B5CF6', $otDays.'d', '₹100/hr · pre-approved', '0,22 24,20 48,15 72,17 96,10 120,9', 'up'],
+            ['Leave Balance', rtrim(rtrim(number_format($leaveBalance, 1), '0'), '.'), 'calendar-days', '#2F6FEB', 'days', 'CSL + MDL pool', '0,12 24,12 48,13 72,11 96,12 120,10', 'flat'],
+            ['Late Arrivals', (string) $lateCount, 'exclamation-triangle', '#B45309', $lateCount ? '↓ 1' : '0', 'this period', '0,8 24,14 48,10 72,16 96,15 120,18', $lateCount ? 'down' : 'flat'],
+            ['Missing Punches', (string) $missingCount, 'flag', $missingCount ? '#D64545' : '#0F9D6E', $missingCount ? 'action' : 'clear', $missingCount ? 'regularize now' : 'all reconciled', '0,10 24,12 48,10 72,11 96,10 120,9', 'flat'],
         ];
     @endphp
-    <div class="pa-kpis">
-      @foreach($health as $h)
-        <div class="pa-kpi">
-          <span class="pa-kpi-ic" style="background: {{ $h['color'] }}1a; color: {{ $h['color'] }};"><flux:icon :icon="$h['icon']" class="size-4" /></span>
-          <div style="min-width:0">
-            <div class="pa-kpi-v">{{ $h['value'] }}</div>
-            <div class="pa-kpi-l">{{ $h['label'] }}</div>
-            <div class="pa-kpi-t">{{ $h['trend'] }}</div>
+    <div class="pa-kpis2">
+      @foreach($kpis as [$lbl, $val, $ic, $clr, $tr, $cmp, $spk, $dir])
+        @php $lastY = last(explode(',', last(explode(' ', $spk)))); @endphp
+        <div class="pa-kpi2">
+          <div class="top">
+            <span class="ic" style="background: {{ $clr }}1a; color: {{ $clr }};"><flux:icon :icon="$ic" class="size-4" /></span>
+            <span class="tr {{ $dir }}">{{ $tr }}</span>
           </div>
+          <div class="v">{{ $val }}</div>
+          <div class="l">{{ $lbl }}</div>
+          <div class="cmp">{{ $cmp }}</div>
+          <svg class="spark" viewBox="0 0 120 28" preserveAspectRatio="none"><polyline points="{{ $spk }}" fill="none" stroke="{{ $clr }}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="120" cy="{{ $lastY }}" r="2.6" fill="{{ $clr }}"/></svg>
         </div>
       @endforeach
     </div>
