@@ -3,6 +3,7 @@
 use App\Enums\UserRole;
 use App\Livewire\Attendance\AllAttendance;
 use App\Models\Attendance;
+use App\Models\AttendanceDailySummary;
 use App\Models\AttendancePunch;
 use App\Models\AttendanceRegularisation;
 use App\Models\Employee;
@@ -100,6 +101,46 @@ test('HR can open the Employee 360 drawer with full profile data', function () {
         ->assertSee('Attendance History')
         ->call('closeDrawer')
         ->assertSet('drawerEmployeeId', null);
+});
+
+test('the drawer trusts the engine daily summary over incomplete local punches', function () {
+    // Mayuresh scenario: the engine synced 11 punches → 6h / 18m, still inside.
+    // HRMS only received a partial punch stream that mis-pairs to 4h22m / 114m.
+    $hr = User::factory()->create(['role' => UserRole::HrAdmin]);
+    $empUser = User::factory()->create(['name' => 'ENGINE PERSON']);
+    $employee = Employee::factory()->create(['user_id' => $empUser->id, 'status' => 'active']);
+
+    // Partial/incorrect local data (the last punch is really a live IN).
+    Attendance::create([
+        'employee_id' => $employee->id, 'date' => today(),
+        'check_in' => today()->setTime(10, 19), 'check_out' => today()->setTime(16, 36),
+        'status' => 'late', 'is_late' => true, 'work_mode' => 'office', 'break_minutes' => 114,
+    ]);
+    foreach (['10:19', '12:56', '13:19', '13:30', '15:02', '16:34'] as $t) {
+        AttendancePunch::create([
+            'employee_id' => $employee->id, 'punched_at' => today()->setTimeFromTimeString($t),
+            'punch_date' => today(), 'method' => 'id_card', 'source' => 'biometric', 'device_serial' => 'TDBD25',
+        ]);
+    }
+
+    // Engine's authoritative summary — the source of truth.
+    AttendanceDailySummary::create([
+        'employee_id' => $employee->id, 'employee_code' => $employee->employee_code ?? 16,
+        'date' => today(), 'first_punch' => today()->setTime(10, 19), 'last_punch' => today()->setTime(16, 36),
+        'first_punch_method' => 'id_card', 'last_punch_method' => 'face',
+        'break_minutes' => 18, 'working_hours' => 6.0, 'late_minutes' => 189,
+        'overtime_minutes' => 0, 'status' => 'in_office', 'device_serial' => 'TDBD25',
+        'raw_punch_count' => 11, 'synced_at' => now(),
+    ]);
+
+    Livewire::actingAs($hr)->test(AllAttendance::class)
+        ->call('openEmployeeDrawer', $employee->id)
+        ->assertSet('drawer.today.worked', '6h 0m')      // engine, not 4h 22m
+        ->assertSet('drawer.today.break', 18)            // engine, not 114
+        ->assertSet('drawer.today.out', null)            // odd punch count → still inside
+        ->assertSet('drawer.status', 'Working')          // not "Completed"
+        ->assertSet('drawer.punch_count', 11)            // engine count
+        ->assertSet('drawer.punches_partial', true);     // only 6 of 11 held locally
 });
 
 test('quick approve from the drawer updates the attendance and clears the pending item', function () {

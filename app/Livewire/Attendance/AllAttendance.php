@@ -3,6 +3,7 @@
 namespace App\Livewire\Attendance;
 
 use App\Models\Attendance;
+use App\Models\AttendanceDailySummary;
 use App\Models\AttendancePunch;
 use App\Models\AttendanceRegularisation;
 use App\Models\AuditLog;
@@ -230,10 +231,6 @@ class AllAttendance extends Component
 
         $todayAtt = $month->firstWhere(fn ($a) => $a->date->isToday());
         $stdMin = (int) round((float) ($employee->shift->standard_hours ?? 9) * 60);
-        $workedMin = 0;
-        if ($todayAtt?->check_in) {
-            $workedMin = max(0, (int) $todayAtt->check_in->diffInMinutes($todayAtt->check_out ?? now()) - (int) ($todayAtt->break_minutes ?? 0));
-        }
         $onBreak = $todayAtt
             ? BreakLog::where('attendance_id', $todayAtt->id)->whereNull('break_end')->exists()
             : false;
@@ -242,18 +239,37 @@ class AllAttendance extends Component
             ->whereDate('punch_date', $today->toDateString())
             ->orderBy('punched_at')
             ->get();
-
-        // Collapse device noise/duplicates and derive the real break minutes
-        // from the punch stream (the engine's stored break_minutes can be wrong
-        // when a stray verify flips the in/out pairing).
         $classifier = app(PunchClassifier::class);
         $punches = $classifier->dedupe($rawPunches);
-        $breakMin = $rawPunches->isNotEmpty()
-            ? $classifier->breakMinutes($rawPunches)
-            : (int) ($todayAtt->break_minutes ?? 0);
 
-        if ($todayAtt?->check_in) {
-            $workedMin = max(0, (int) $todayAtt->check_in->diffInMinutes($todayAtt->check_out ?? now()) - $breakMin);
+        // The Python engine pairs real IN/OUT direction and is the source of
+        // truth for today's figures. Trust its synced daily summary over
+        // re-deriving from HRMS's local — and often incomplete — punch stream
+        // (alternation-based math mis-pairs when punches are missing). An odd
+        // engine punch count means the last punch is an IN → still inside.
+        $summary = AttendanceDailySummary::where('employee_id', $employee->id)
+            ->whereDate('date', $today->toDateString())
+            ->first();
+        $engineSynced = $summary && $summary->synced_at;
+        $stillInside = $engineSynced && ((int) $summary->raw_punch_count) % 2 === 1;
+
+        if ($engineSynced) {
+            $workedMin = (int) round((float) $summary->working_hours * 60);
+            $breakMin = (int) $summary->break_minutes;
+            $todayIn = $summary->first_punch?->format('h:i A');
+            $todayOut = $stillInside ? null : $summary->last_punch?->format('h:i A');
+            $punchCount = (int) $summary->raw_punch_count;
+        } else {
+            $breakMin = $rawPunches->isNotEmpty()
+                ? $classifier->breakMinutes($rawPunches)
+                : (int) ($todayAtt->break_minutes ?? 0);
+            $workedMin = 0;
+            if ($todayAtt?->check_in) {
+                $workedMin = max(0, (int) $todayAtt->check_in->diffInMinutes($todayAtt->check_out ?? now()) - $breakMin);
+            }
+            $todayIn = $todayAtt?->check_in?->format('h:i A');
+            $todayOut = $todayAtt?->check_out?->format('h:i A');
+            $punchCount = $punches->count();
         }
 
         $this->drawer = [
@@ -271,18 +287,26 @@ class AllAttendance extends Component
             'leave_balance' => LeaveBalance::where('employee_id', $employee->id)
                 ->where('year', now()->year)->get()
                 ->sum(fn ($b) => $b->available() + (float) ($b->comp_off_credits ?? 0)),
-            'status' => $onBreak ? 'On Break' : ($todayAtt?->check_out ? 'Completed' : ($todayAtt ? 'Working' : 'Not In')),
-            'today' => $todayAtt ? [
-                'in' => $todayAtt->check_in?->format('h:i A'),
-                'out' => $todayAtt->check_out?->format('h:i A'),
+            'status' => $onBreak
+                ? 'On Break'
+                : ($engineSynced
+                    ? ($stillInside ? 'Working' : ($todayOut ? 'Completed' : ($punchCount > 0 ? 'Working' : 'Not In')))
+                    : ($todayAtt?->check_out ? 'Completed' : ($todayAtt ? 'Working' : 'Not In'))),
+            'today' => ($todayAtt || $engineSynced) ? [
+                'in' => $todayIn,
+                'out' => $todayOut,
                 'worked' => intdiv($workedMin, 60).'h '.($workedMin % 60).'m',
                 'break' => $breakMin,
-                'overtime' => max(0, $workedMin - $stdMin) > 0 ? intdiv($workedMin - $stdMin, 60).'h '.(($workedMin - $stdMin) % 60).'m' : '0m',
-                'mode' => $todayAtt->work_mode,
-                'is_late' => (bool) $todayAtt->is_late,
-                'device' => $punches->pluck('device_serial')->filter()->unique()->implode(', ') ?: null,
+                'overtime' => ($otMin = $engineSynced ? (int) $summary->overtime_minutes : max(0, $workedMin - $stdMin)) > 0
+                    ? intdiv($otMin, 60).'h '.($otMin % 60).'m'
+                    : '0m',
+                'mode' => $todayAtt?->work_mode ?? 'office',
+                'is_late' => (bool) ($todayAtt?->is_late ?? ($engineSynced && $summary->late_minutes > 0)),
+                'device' => $punches->pluck('device_serial')->filter()->unique()->implode(', ') ?: ($engineSynced ? $summary->device_serial : null),
                 'location' => $punches->pluck('location')->filter()->unique()->implode(', ') ?: ($employee->office?->name ?? null),
             ] : null,
+            'punch_count' => $punchCount,
+            'punches_partial' => $engineSynced && $punches->count() < $punchCount,
             'punches' => $punches->map(fn ($p) => [
                 'time' => $p->punched_at->format('h:i A'),
                 'method' => $p->methodEnum()?->label(),

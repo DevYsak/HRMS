@@ -318,7 +318,12 @@ EMPLOYEE 360 DRAWER (480px, right)
                 {{-- Today's timeline --}}
                 @if(! empty($drawer['punches']))
                     <div class="rounded-2xl border border-orange-100/70 bg-white dark:bg-zinc-900 p-4 shadow-sm">
-                        <div class="mb-2 text-[10px] font-bold uppercase tracking-widest text-zinc-400">Today's Punches · {{ count($drawer['punches']) }}</div>
+                        <div class="mb-2 text-[10px] font-bold uppercase tracking-widest text-zinc-400">Today's Punches · {{ $drawer['punch_count'] ?? count($drawer['punches']) }}</div>
+                        @if(! empty($drawer['punches_partial']))
+                            <div class="mb-2 flex items-center gap-1.5 rounded-lg bg-amber-50 px-2.5 py-1 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
+                                <flux:icon.information-circle class="size-3.5" /> Showing {{ count($drawer['punches']) }} synced punches — full stream in the v2 dashboard.
+                            </div>
+                        @endif
                         <div class="max-h-36 space-y-1 overflow-y-auto">
                             @foreach($drawer['punches'] as $p)
                                 <div class="flex items-center gap-2 rounded-lg bg-zinc-50/70 px-2.5 py-1 text-xs">
