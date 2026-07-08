@@ -225,66 +225,87 @@
 <div class="space-y-4">
 
 {{-- ═══════════════ ATTENDANCE HEALTH + QUICK ACTIONS ═══════════════ --}}
+{{-- ═══════════════ ATTENDANCE HEALTH + QUICK ACTIONS (slice 4a) ═══════════════ --}}
+<style>
+.pa-panel{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:16px;box-shadow:0 1px 2px rgba(0,0,0,.05);padding:16px 18px}
+.pa-panel-h{font-size:14px;font-weight:640;color:var(--pa-ink);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.pa-panel-sub{margin-left:auto;font-size:11px;font-weight:500;color:var(--pa-faint);text-transform:capitalize}
+.pa-kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+@media(min-width:640px){.pa-kpis{grid-template-columns:repeat(3,1fr)}}
+@media(min-width:1024px){.pa-kpis{grid-template-columns:repeat(5,1fr)}}
+.pa-kpi{display:flex;align-items:center;gap:11px;border:1px solid var(--pa-border);background:var(--pa-surface-2);border-radius:13px;padding:11px 12px;transition:all .16s var(--pa-ease)}
+.pa-kpi:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(0,0,0,.06);border-color:var(--pa-border-2)}
+.pa-kpi-ic{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;flex:0 0 auto}
+.pa-kpi-v{font-size:16px;font-weight:700;letter-spacing:-.02em;color:var(--pa-ink);line-height:1;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pa-kpi-l{font-size:9.5px;font-weight:640;text-transform:uppercase;letter-spacing:.05em;color:var(--pa-muted);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pa-kpi-t{font-size:9.5px;color:var(--pa-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pa-qa{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.pa-qa-item{display:flex;flex-direction:column;align-items:center;gap:7px;border:1px solid var(--pa-border);background:var(--pa-surface-2);border-radius:12px;padding:12px 8px;text-align:center;text-decoration:none;transition:all .16s var(--pa-ease)}
+.pa-qa-item:hover{transform:translateY(-2px);border-color:var(--pa-accent);background:var(--pa-surface)}
+.pa-qa-ic{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;background:var(--pa-accent-soft);color:var(--pa-accent-ink)}
+.pa-qa-l{font-size:10.5px;font-weight:600;color:var(--pa-muted)}
+</style>
+<div class="pa">
 <div class="grid grid-cols-1 gap-4 lg:grid-cols-12">
-    {{-- Health strip --}}
-    <div class="rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 p-5 shadow-sm lg:col-span-9">
-        <div class="mb-3 text-sm font-black text-zinc-900 dark:text-white">Attendance Health</div>
-        @php
-            $health = [
-                ['label' => 'Attendance %', 'value' => $attPct.'%', 'icon' => 'chart-pie', 'color' => '#F97316', 'trend' => '↑ '.$attPct.'%'],
-                ['label' => 'Attendance Score', 'value' => $score.'/100', 'icon' => 'shield-check', 'color' => '#10b981', 'trend' => '↑ '.$compliance.'%'],
-                ['label' => 'Present Days', 'value' => $presentCount, 'icon' => 'check-badge', 'color' => '#3b82f6', 'trend' => 'of '.$totalWorkingDays.' working'],
-                ['label' => 'Late Arrivals', 'value' => $lateCount, 'icon' => 'exclamation-triangle', 'color' => '#f59e0b', 'trend' => 'this period'],
-                ['label' => 'Missing Punch', 'value' => $missingCount, 'icon' => 'flag', 'color' => $missingCount ? '#ef4444' : '#10b981', 'trend' => $missingCount ? 'action needed' : 'all clear'],
-                ['label' => 'Avg Working / day', 'value' => intdiv($avgWorkMin,60).'h '.($avgWorkMin%60).'m', 'icon' => 'clock', 'color' => '#6366f1', 'trend' => 'this period'],
-                ['label' => 'Overtime', 'value' => $otHours.'h', 'icon' => 'bolt', 'color' => '#8b5cf6', 'trend' => $otDays.' day(s)'],
-                ['label' => 'Avg Break / day', 'value' => $avgBreak.'m', 'icon' => 'pause', 'color' => '#0ea5e9', 'trend' => 'per day'],
-                ['label' => 'Leave Balance', 'value' => rtrim(rtrim(number_format($leaveBalance, 1), '0'), '.'), 'icon' => 'calendar-days', 'color' => '#14b8a6', 'trend' => 'days'],
-            ];
-        @endphp
-        <div class="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
-            @foreach($health as $h)
-                <div class="flex items-center gap-3 rounded-2xl border border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3 transition hover:-translate-y-0.5 hover:shadow-md">
-                    <span class="inline-flex size-9 shrink-0 items-center justify-center rounded-xl" style="background: {{ $h['color'] }}1a; color: {{ $h['color'] }};"><flux:icon :icon="$h['icon']" class="size-4" /></span>
-                    <div class="min-w-0">
-                        <div class="truncate text-base font-black leading-none tabular-nums text-zinc-900 dark:text-white">{{ $h['value'] }}</div>
-                        <div class="mt-0.5 truncate text-[9px] font-bold uppercase tracking-wide text-zinc-400">{{ $h['label'] }}</div>
-                        <div class="truncate text-[9px] text-zinc-400">{{ $h['trend'] }}</div>
-                    </div>
-                </div>
-            @endforeach
+  {{-- Health strip --}}
+  <div class="pa-panel lg:col-span-9">
+    <div class="pa-panel-h">Attendance health <span class="pa-panel-sub">{{ str_replace('_', ' ', $statsPeriod) }}</span></div>
+    @php
+        $health = [
+            ['label' => 'Attendance %', 'value' => $attPct.'%', 'icon' => 'chart-pie', 'color' => '#5B5BD6', 'trend' => 'of target'],
+            ['label' => 'Attendance Score', 'value' => $score.'/100', 'icon' => 'shield-check', 'color' => '#0F9D6E', 'trend' => $compliance.'% compliant'],
+            ['label' => 'Present Days', 'value' => $presentCount, 'icon' => 'check-badge', 'color' => '#2F6FEB', 'trend' => 'of '.$totalWorkingDays.' working'],
+            ['label' => 'Late Arrivals', 'value' => $lateCount, 'icon' => 'exclamation-triangle', 'color' => '#B45309', 'trend' => 'this period'],
+            ['label' => 'Missing Punch', 'value' => $missingCount, 'icon' => 'flag', 'color' => $missingCount ? '#D64545' : '#0F9D6E', 'trend' => $missingCount ? 'action needed' : 'all clear'],
+            ['label' => 'Avg Working / day', 'value' => intdiv($avgWorkMin,60).'h '.($avgWorkMin%60).'m', 'icon' => 'clock', 'color' => '#5B5BD6', 'trend' => 'this period'],
+            ['label' => 'Overtime', 'value' => $otHours.'h', 'icon' => 'bolt', 'color' => '#8B5CF6', 'trend' => $otDays.' day(s)'],
+            ['label' => 'Avg Break / day', 'value' => $avgBreak.'m', 'icon' => 'pause', 'color' => '#0EA5E9', 'trend' => 'per day'],
+            ['label' => 'Leave Balance', 'value' => rtrim(rtrim(number_format($leaveBalance, 1), '0'), '.'), 'icon' => 'calendar-days', 'color' => '#0F9D6E', 'trend' => 'days'],
+        ];
+    @endphp
+    <div class="pa-kpis">
+      @foreach($health as $h)
+        <div class="pa-kpi">
+          <span class="pa-kpi-ic" style="background: {{ $h['color'] }}1a; color: {{ $h['color'] }};"><flux:icon :icon="$h['icon']" class="size-4" /></span>
+          <div style="min-width:0">
+            <div class="pa-kpi-v">{{ $h['value'] }}</div>
+            <div class="pa-kpi-l">{{ $h['label'] }}</div>
+            <div class="pa-kpi-t">{{ $h['trend'] }}</div>
+          </div>
         </div>
+      @endforeach
     </div>
+  </div>
 
-    {{-- Quick actions --}}
-    <div class="rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 p-5 shadow-sm lg:col-span-3">
-        <div class="mb-3 text-sm font-black text-zinc-900 dark:text-white">Quick Actions</div>
-        <div class="grid grid-cols-2 gap-2">
-            @php
-                $canApprove = auth()->user()->canApproveLeave();
-                // Gated pages only for managers/HR; employees get working equivalents.
-                $qa = [
-                    ['Attendance History', 'clock', $canApprove && \Route::has('attendance.employees') ? route('attendance.employees') : '#attendance-log', null],
-                    ['Apply Leave', 'calendar-days', \Route::has('time-off.my') ? route('time-off.my') : '#', null],
-                    ['Regularization', 'pencil-square', '#', 'regularise'],
-                    ['Download Report', 'arrow-down-tray', '#', 'export'],
-                    ['My Overtime', 'bolt', \Route::has('overtime.my') ? route('overtime.my') : '#', null],
-                    $canApprove && \Route::has('attendance.team')
-                        ? ['My Team', 'users', route('attendance.team'), null]
-                        : ['WFH Requests', 'home', \Route::has('wfh.my') ? route('wfh.my') : '#attendance-log', null],
-                ];
-            @endphp
-            @foreach($qa as [$label, $icon, $href, $action])
-                <a href="{{ $href }}"
-                    @if($action === 'regularise') @click.prevent="$flux.modal('regularisation-modal').show()" @endif
-                    @if($action === 'export') wire:click.prevent="exportLog" @endif
-                    class="flex flex-col items-center gap-1.5 rounded-xl border border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3 text-center transition hover:-translate-y-0.5 hover:border-orange-200 hover:shadow">
-                    <span class="inline-flex size-8 items-center justify-center rounded-lg bg-orange-50 text-orange-500"><flux:icon :icon="$icon" class="size-4" /></span>
-                    <span class="text-[10px] font-bold text-zinc-600 dark:text-zinc-300">{{ $label }}</span>
-                </a>
-            @endforeach
-        </div>
+  {{-- Quick actions --}}
+  <div class="pa-panel lg:col-span-3">
+    <div class="pa-panel-h">Quick actions</div>
+    @php
+        $canApprove = auth()->user()->canApproveLeave();
+        $qa = [
+            ['Attendance History', 'clock', $canApprove && \Route::has('attendance.employees') ? route('attendance.employees') : '#attendance-log', null],
+            ['Apply Leave', 'calendar-days', \Route::has('time-off.my') ? route('time-off.my') : '#', null],
+            ['Regularization', 'pencil-square', '#', 'regularise'],
+            ['Download Report', 'arrow-down-tray', '#', 'export'],
+            ['My Overtime', 'bolt', \Route::has('overtime.my') ? route('overtime.my') : '#', null],
+            $canApprove && \Route::has('attendance.team')
+                ? ['My Team', 'users', route('attendance.team'), null]
+                : ['WFH Requests', 'home', \Route::has('wfh.my') ? route('wfh.my') : '#attendance-log', null],
+        ];
+    @endphp
+    <div class="pa-qa">
+      @foreach($qa as [$label, $icon, $href, $action])
+        <a href="{{ $href }}"
+           @if($action === 'regularise') @click.prevent="$flux.modal('regularisation-modal').show()" @endif
+           @if($action === 'export') wire:click.prevent="exportLog" @endif
+           class="pa-qa-item">
+          <span class="pa-qa-ic"><flux:icon :icon="$icon" class="size-4" /></span>
+          <span class="pa-qa-l">{{ $label }}</span>
+        </a>
+      @endforeach
     </div>
+  </div>
+</div>
 </div>
 
 {{-- ═══════════════ SMART ALERTS ═══════════════ --}}
@@ -294,7 +315,7 @@
         <div><div class="text-sm font-black text-emerald-900">No attendance issues today</div><div class="text-xs text-emerald-700">All your punches are complete and reconciled.</div></div>
     </div>
 @else
-    <div class="rounded-[18px] border border-amber-300 bg-gradient-to-r from-amber-50 to-orange-50 p-4 shadow-sm">
+    <div class="rounded-[18px] border border-amber-300 bg-amber-50 dark:bg-amber-900/15 p-4 shadow-sm">
         <div class="flex items-center gap-3">
             <span class="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white shadow-lg shadow-amber-200"><flux:icon.exclamation-triangle class="size-5" /></span>
             <div><div class="text-sm font-black text-amber-900">{{ count($attendanceAlerts) }} attendance {{ \Illuminate\Support\Str::plural('alert', count($attendanceAlerts)) }}</div><div class="text-xs text-amber-700">Regularise to correct working hours, overtime &amp; attendance.</div></div>
@@ -786,7 +807,7 @@
                     <div x-show="open" x-transition:enter="transition duration-200 ease-out" x-transition:enter-start="-translate-y-1 opacity-0" x-transition:enter-end="translate-y-0 opacity-100" class="px-5 pb-4">
                         {{-- Missing punch banner --}}
                         @if($day['missing'])
-                            <div class="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-300 bg-gradient-to-r from-amber-50 to-orange-50 px-3 py-2">
+                            <div class="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-900/15 px-3 py-2">
                                 <div class="flex items-center gap-2 text-xs">
                                     <flux:icon.exclamation-triangle class="size-4 text-amber-500" />
                                     <span class="font-black text-amber-900">Missing Clock Out</span>

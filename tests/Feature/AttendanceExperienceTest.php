@@ -38,7 +38,7 @@ test('my attendance page shows the Phase 6 analytics panels', function () {
     ]);
 
     Livewire::test(AttendanceTracker::class)
-        ->assertSee('Attendance Health')
+        ->assertSee('Attendance health')
         ->assertSee('Attendance Score')
         ->assertSee('Working Hours Trend')
         ->assertSee('Attendance Score Trend')
