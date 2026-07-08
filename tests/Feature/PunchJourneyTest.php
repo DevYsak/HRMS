@@ -1,6 +1,7 @@
 <?php
 
 use App\Livewire\Attendance\AttendanceTracker;
+use App\Models\AttendanceDailySummary;
 use App\Models\AttendancePunch;
 use App\Models\Employee;
 use App\Models\User;
@@ -102,6 +103,40 @@ test('a past day with an unmatched IN is flagged as a missing punch', function (
     expect($pj['missing_out'])->toBeTrue()
         ->and($pj['live'])->toBeFalse()
         ->and(collect($pj['nodes'])->last()['type'])->toBe('missing');
+});
+
+test('engine-directed punches pair by real IN/OUT, not alternation', function () {
+    // Mayuresh's noisy stream: a 12:58 return two minutes after a 12:56 exit, and
+    // a triple 13:30 cluster. Alternation + dedup mangles this into a huge phantom
+    // break; the engine's real direction pairs it into an 18-minute break.
+    $rows = [
+        ['10:19:28', 'in'], ['12:56:29', 'out'], ['12:58:41', 'in'], ['13:19:11', 'out'],
+        ['13:30:30', 'in'], ['13:30:33', 'out'], ['13:30:35', 'in'], ['15:02:45', 'out'],
+        ['15:04:53', 'in'], ['16:34:25', 'out'],
+    ];
+    foreach ($rows as [$t, $dir]) {
+        AttendancePunch::factory()->create([
+            'employee_id' => $this->employee->id,
+            'punched_at' => Carbon::today()->setTimeFromTimeString($t),
+            'punch_date' => Carbon::today()->toDateString(),
+            'direction' => $dir,
+        ]);
+    }
+    AttendanceDailySummary::create([
+        'employee_id' => $this->employee->id, 'employee_code' => 16, 'date' => Carbon::today(),
+        'first_punch' => Carbon::today()->setTime(10, 19), 'last_punch' => Carbon::today()->setTime(16, 34),
+        'break_minutes' => 18, 'working_hours' => 5.98, 'raw_punch_count' => 10, 'synced_at' => now(),
+    ]);
+
+    $pj = Livewire::test(AttendanceTracker::class)->get('punchJourney');
+
+    expect($pj['session_count'])->toBe(5)          // five real sessions, not 2-3 mangled ones
+        ->and($pj['duplicate_count'])->toBe(0)      // nothing dropped as "noise"
+        ->and($pj['break_minutes'])->toBe(18)       // engine truth, not a phantom 3h31m
+        ->and($pj['working_minutes'])->toBe(359)    // 5.98h from the engine summary
+        ->and($pj['live'])->toBeFalse()
+        ->and(collect($pj['nodes'])->pluck('dir')->all())
+        ->toBe(['IN', 'OUT', 'IN', 'OUT', 'IN', 'OUT', 'IN', 'OUT', 'IN', 'OUT']);
 });
 
 test('the enterprise timeline renders the attendance card and session summary', function () {

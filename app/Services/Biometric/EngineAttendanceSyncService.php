@@ -127,8 +127,9 @@ class EngineAttendanceSyncService
                 );
             }
 
-            // Every individual punch (Attendance Journey) — when the engine sends them.
-            $this->syncPunches($employeeId, $code, $date, $row['punches'] ?? [], $row['device_serial'] ?? null);
+            // Every individual punch (Attendance Journey) — when the engine sends
+            // them, tagged with the engine's real IN/OUT direction (from events).
+            $this->syncPunches($employeeId, $code, $date, $row['punches'] ?? [], $row['events'] ?? [], $row['device_serial'] ?? null);
 
             // Only derive break/working from HRMS's own punch stream when the
             // engine sent no totals. The engine pairs real device direction, so
@@ -154,12 +155,28 @@ class EngineAttendanceSyncService
     /**
      * Upsert every individual punch of the day for the Attendance Journey.
      * Accepts the engine's `punches` array of {time|punch_dt, verify|method,
-     * source?, device?, location?, lat?, lng?}. Idempotent on (employee, time).
+     * source?, device?, location?, lat?, lng?} and its `events` array of
+     * {time, type} — the engine's authoritative IN/OUT direction, matched to a
+     * punch by its time. Idempotent on (employee, time).
      *
      * @param  array<int, array<string, mixed>>  $punches
+     * @param  array<int, array<string, mixed>>  $events
      */
-    private function syncPunches(int $employeeId, ?int $code, string $date, array $punches, ?string $deviceSerial): void
+    private function syncPunches(int $employeeId, ?int $code, string $date, array $punches, array $events, ?string $deviceSerial): void
     {
+        // Map "HH:MM:SS" → in|out from the engine's directional events.
+        $directionByTime = [];
+        foreach ($events as $e) {
+            if (! is_array($e)) {
+                continue;
+            }
+            $t = Carbon::parse(trim((string) ($e['time'] ?? '')))->format('H:i:s');
+            $type = strtolower((string) ($e['type'] ?? ''));
+            if ($type === 'in' || $type === 'out') {
+                $directionByTime[$t] = $type;
+            }
+        }
+
         foreach ($punches as $p) {
             if (! is_array($p)) {
                 continue;
@@ -173,6 +190,7 @@ class EngineAttendanceSyncService
             // Time-only ("09:02:00") → anchor to the date; full datetime → as-is.
             $punchedAt = strlen($raw) <= 8 ? "{$date} {$raw}" : $raw;
             $rawVerify = $p['verify'] ?? $p['method'] ?? $p['verify_type'] ?? null;
+            $direction = $directionByTime[Carbon::parse($punchedAt)->format('H:i:s')] ?? null;
 
             AttendancePunch::updateOrCreate(
                 ['employee_id' => $employeeId, 'punched_at' => $punchedAt],
@@ -180,6 +198,7 @@ class EngineAttendanceSyncService
                     'employee_code' => $code,
                     'punch_date' => $date,
                     'method' => PunchMethodResolver::value($rawVerify),
+                    'direction' => $direction,
                     'verify_raw' => $rawVerify !== null && $rawVerify !== '' ? (string) $rawVerify : null,
                     'source' => $p['source'] ?? 'biometric',
                     'device_serial' => $p['device'] ?? $deviceSerial,

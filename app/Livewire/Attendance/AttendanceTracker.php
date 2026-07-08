@@ -672,25 +672,31 @@ class AttendanceTracker extends Component
             ->orderBy('punched_at')
             ->get();
 
-        return $this->assemblePunchJourney($raw, $today);
+        $summary = AttendanceDailySummary::where('employee_id', $employee->id)
+            ->whereDate('date', $today->toDateString())
+            ->first();
+
+        return $this->assemblePunchJourney($raw, $today, $summary);
     }
 
     /**
-     * Pair a day's raw punches into neutral IN/OUT nodes and work sessions.
+     * Pair a day's punches into neutral IN/OUT nodes and work sessions.
      *
-     * Direction is inferred by alternation (the devices don't tag in/out):
-     * even survivors are IN, odd are OUT. An odd survivor count means the final
-     * IN has no OUT — a live session when the day is today, otherwise a missing
-     * punch that needs regularisation.
+     * When the engine has tagged real IN/OUT direction on the punches, sessions
+     * are paired from that truth (an IN opens a session, the next OUT closes it)
+     * — no dedup, no alternation guessing, no "duplicate" punches. When a synced
+     * engine summary exists, its working/break totals are treated as
+     * authoritative for the headline figures. Falls back to the legacy
+     * dedupe + alternation only for punches with no direction (web/manual).
+     *
+     * It never labels *why* someone stepped out — only neutral IN/OUT.
      *
      * @param  Collection<int, AttendancePunch>  $raw
      * @return array<string, mixed>
      */
-    protected function assemblePunchJourney($raw, Carbon $day): array
+    protected function assemblePunchJourney($raw, Carbon $day, ?AttendanceDailySummary $summary = null): array
     {
-        $rawCount = $raw->count();
-
-        if ($rawCount === 0) {
+        if ($raw->count() === 0) {
             return [
                 'nodes' => [], 'sessions' => [], 'first_in' => null, 'last_out' => null,
                 'raw_count' => 0, 'kept_count' => 0, 'duplicate_count' => 0,
@@ -700,20 +706,42 @@ class AttendanceTracker extends Component
             ];
         }
 
-        $kept = app(PunchClassifier::class)->dedupe(collect($raw))->values();
-        $n = $kept->count();
+        $hasDirection = $raw->contains(fn (AttendancePunch $p) => in_array($p->direction, ['in', 'out'], true));
+
+        return $hasDirection
+            ? $this->assembleFromDirection($raw->sortBy('punched_at')->values(), $day, $summary)
+            : $this->assembleFromAlternation($raw, $day);
+    }
+
+    /**
+     * Build the journey from the engine's real IN/OUT direction tags.
+     *
+     * @param  Collection<int, AttendancePunch>  $punches
+     * @return array<string, mixed>
+     */
+    protected function assembleFromDirection($punches, Carbon $day, ?AttendanceDailySummary $summary): array
+    {
+        $n = $punches->count();
         $isToday = $day->isToday();
-        $lastIsIn = $n % 2 === 1;              // odd survivors → trailing IN
-        $live = $lastIsIn && $isToday;
-        $missingOut = $lastIsIn && ! $isToday;
+        $trailingIn = $punches->last()->direction === 'in';
+        $live = $trailingIn && $isToday;
+        $missingOut = $trailingIn && ! $isToday;
+
+        // Index of the final OUT — for the "last out" node styling.
+        $lastOutIndex = null;
+        foreach ($punches as $i => $p) {
+            if ($p->direction === 'out') {
+                $lastOutIndex = $i;
+            }
+        }
 
         // ── Neutral IN/OUT nodes ────────────────────────────────────────────
-        $nodes = $kept->map(function (AttendancePunch $p, int $i) use ($n, $live) {
-            $isIn = $i % 2 === 0;
+        $nodes = $punches->map(function (AttendancePunch $p, int $i) use ($n, $live, $lastOutIndex) {
+            $isIn = $p->direction !== 'out';
             $type = match (true) {
-                $i === 0 => 'first_in',
                 $live && $i === $n - 1 => 'live',
-                $i === $n - 1 && ! $isIn => 'last_out',
+                $isIn && $i === 0 => 'first_in',
+                ! $isIn && $i === $lastOutIndex => 'last_out',
                 $isIn => 'in',
                 default => 'out',
             };
@@ -722,7 +750,7 @@ class AttendanceTracker extends Component
             return [
                 'time' => $p->punched_at->format('h:i A'),
                 'time_short' => $p->punched_at->format('g:i'),
-                'ts_ms' => (int) ($p->punched_at->getTimestampMs()),
+                'ts_ms' => (int) $p->punched_at->getTimestampMs(),
                 'dir' => $isIn ? 'IN' : 'OUT',
                 'type' => $type,
                 'method' => $method?->value,
@@ -737,7 +765,6 @@ class AttendanceTracker extends Component
             ];
         })->all();
 
-        // Past-day missing OUT → append a synthetic placeholder node.
         if ($missingOut) {
             $nodes[] = [
                 'time' => '—', 'time_short' => '—', 'ts_ms' => null, 'dir' => 'OUT',
@@ -747,7 +774,144 @@ class AttendanceTracker extends Component
             ];
         }
 
-        // ── Auto-paired sessions ────────────────────────────────────────────
+        // ── Sessions: an IN opens, the next OUT closes ──────────────────────
+        $sessions = [];
+        $workingMinutes = 0;
+        $breakMinutes = 0;
+        $openIn = null;
+        $prevOut = null;
+        foreach ($punches as $p) {
+            if ($p->direction !== 'out') {           // IN
+                if ($openIn === null) {
+                    $openIn = $p;
+                    if ($prevOut !== null) {
+                        $breakMinutes += (int) $prevOut->punched_at->diffInMinutes($p->punched_at);
+                    }
+                }
+
+                continue;
+            }
+            // OUT closes the open session.
+            if ($openIn !== null) {
+                $mins = (int) $openIn->punched_at->diffInMinutes($p->punched_at);
+                $workingMinutes += $mins;
+                $sessions[] = [
+                    'index' => count($sessions) + 1,
+                    'in' => $openIn->punched_at->format('h:i A'),
+                    'out' => $p->punched_at->format('h:i A'),
+                    'minutes' => $mins,
+                    'label' => $this->minutesToHm($mins),
+                    'live' => false,
+                ];
+                $openIn = null;
+                $prevOut = $p;
+            }
+        }
+
+        // Trailing open IN → a live session (today) or a missing punch (past).
+        $liveStartMs = null;
+        $liveStartLabel = null;
+        $liveElapsed = 0;
+        if ($openIn !== null && $live) {
+            $liveElapsed = (int) $openIn->punched_at->diffInMinutes(now());
+            $liveStartMs = (int) $openIn->punched_at->getTimestampMs();
+            $liveStartLabel = $openIn->punched_at->format('h:i A');
+            if ($prevOut !== null) {
+                $breakMinutes += (int) $prevOut->punched_at->diffInMinutes($openIn->punched_at);
+            }
+            $sessions[] = [
+                'index' => count($sessions) + 1,
+                'in' => $liveStartLabel,
+                'out' => null,
+                'minutes' => $liveElapsed,
+                'label' => $this->minutesToHm($liveElapsed),
+                'live' => true,
+            ];
+        }
+
+        // The engine's synced summary is the authoritative headline total.
+        if ($summary && $summary->synced_at) {
+            $workingMinutes = (int) round((float) $summary->working_hours * 60);
+            $breakMinutes = (int) $summary->break_minutes;
+        }
+
+        $lastOut = $lastOutIndex !== null ? $punches->get($lastOutIndex) : null;
+
+        return [
+            'nodes' => $nodes,
+            'sessions' => $sessions,
+            'first_in' => $punches->first()->punched_at->format('h:i A'),
+            'last_out' => (! $trailingIn && $lastOut) ? $lastOut->punched_at->format('h:i A') : null,
+            'raw_count' => $n,
+            'kept_count' => $n,
+            'duplicate_count' => 0,             // engine direction → nothing dropped
+            'working_minutes' => $workingMinutes,
+            'break_minutes' => $breakMinutes,
+            'session_count' => count($sessions),
+            'live' => $live,
+            'live_start_ms' => $liveStartMs,
+            'live_start_label' => $liveStartLabel,
+            'live_elapsed_minutes' => $liveElapsed,
+            'missing_out' => $missingOut,
+        ];
+    }
+
+    /**
+     * Legacy fallback for punches with no engine direction (web/manual): dedupe
+     * device noise and alternate IN → OUT. An odd survivor count means the final
+     * IN has no OUT — a live session today, otherwise a missing punch.
+     *
+     * @param  Collection<int, AttendancePunch>  $raw
+     * @return array<string, mixed>
+     */
+    protected function assembleFromAlternation($raw, Carbon $day): array
+    {
+        $rawCount = $raw->count();
+        $kept = app(PunchClassifier::class)->dedupe(collect($raw))->values();
+        $n = $kept->count();
+        $isToday = $day->isToday();
+        $lastIsIn = $n % 2 === 1;
+        $live = $lastIsIn && $isToday;
+        $missingOut = $lastIsIn && ! $isToday;
+
+        $nodes = $kept->map(function (AttendancePunch $p, int $i) use ($n, $live) {
+            $isIn = $i % 2 === 0;
+            $type = match (true) {
+                $i === 0 => 'first_in',
+                $live && $i === $n - 1 => 'live',
+                $i === $n - 1 && ! $isIn => 'last_out',
+                $isIn => 'in',
+                default => 'out',
+            };
+            $method = $p->methodEnum();
+
+            return [
+                'time' => $p->punched_at->format('h:i A'),
+                'time_short' => $p->punched_at->format('g:i'),
+                'ts_ms' => (int) $p->punched_at->getTimestampMs(),
+                'dir' => $isIn ? 'IN' : 'OUT',
+                'type' => $type,
+                'method' => $method?->value,
+                'method_label' => $method?->label(),
+                'method_icon' => $method?->icon() ?? 'finger-print',
+                'device' => $p->device_serial,
+                'location' => $p->location,
+                'verify' => $p->verify_raw,
+                'source' => $p->source,
+                'lat' => $p->lat,
+                'lng' => $p->lng,
+            ];
+        })->all();
+
+        if ($missingOut) {
+            $nodes[] = [
+                'time' => '—', 'time_short' => '—', 'ts_ms' => null, 'dir' => 'OUT',
+                'type' => 'missing', 'method' => null, 'method_label' => null,
+                'method_icon' => 'exclamation-triangle', 'device' => null,
+                'location' => null, 'verify' => null, 'source' => null, 'lat' => null, 'lng' => null,
+            ];
+        }
+
         $sessions = [];
         $workingMinutes = 0;
         for ($i = 0; $i < $n - 1; $i += 2) {
@@ -765,7 +929,6 @@ class AttendanceTracker extends Component
             ];
         }
 
-        // Live session — the trailing IN with no OUT yet (today only).
         $liveStartMs = null;
         $liveStartLabel = null;
         $liveElapsed = 0;
@@ -785,7 +948,6 @@ class AttendanceTracker extends Component
             ];
         }
 
-        // ── Break minutes = time OUTSIDE between consecutive sessions ────────
         $breakMinutes = 0;
         for ($i = 1; $i < $n - 1; $i += 2) {
             $out = $kept->get($i);
@@ -889,6 +1051,61 @@ class AttendanceTracker extends Component
         })->all();
     }
 
+    /**
+     * Neutral IN/OUT events for the Punch In/Out Timeline — never labels a gap
+     * as lunch/tea/break (the device only knows a punch happened, not why).
+     * Uses the engine's real direction when present, else dedupe + alternation.
+     *
+     * @param  Collection<int, AttendancePunch>  $punches
+     * @return array<int, array<string, mixed>>
+     */
+    protected function neutralDayEvents($punches): array
+    {
+        if ($punches->isEmpty()) {
+            return [];
+        }
+
+        $ordered = collect($punches)->sortBy('punched_at')->values();
+        $hasDirection = $ordered->contains(fn (AttendancePunch $p) => in_array($p->direction, ['in', 'out'], true));
+
+        if (! $hasDirection) {
+            $ordered = app(PunchClassifier::class)->dedupe($ordered)->values();
+        }
+
+        $n = $ordered->count();
+        $lastOutIndex = null;
+        if ($hasDirection) {
+            foreach ($ordered as $i => $p) {
+                if ($p->direction === 'out') {
+                    $lastOutIndex = $i;
+                }
+            }
+        }
+
+        return $ordered->map(function (AttendancePunch $p, int $i) use ($n, $ordered, $hasDirection, $lastOutIndex) {
+            $isIn = $hasDirection ? ($p->direction !== 'out') : ($i % 2 === 0);
+            $isLastOut = $hasDirection ? ($i === $lastOutIndex) : ($i === $n - 1);
+            $title = $isIn
+                ? ($i === 0 ? 'Clocked in' : 'Punch in')
+                : ($isLastOut ? 'Clocked out' : 'Punch out');
+            $prev = $i > 0 ? $ordered->get($i - 1) : null;
+
+            return [
+                'time' => $p->punched_at->format('h:i A'),
+                'title' => $title,
+                'type' => $isIn ? 'in' : 'out',
+                'method' => $p->methodEnum()?->value,
+                'source' => $p->source,
+                'location' => $p->location,
+                'device' => $p->device_serial,
+                'lat' => $p->lat,
+                'lng' => $p->lng,
+                'gap_min' => $prev ? (int) $prev->punched_at->diffInMinutes($p->punched_at) : null,
+                'verify' => $p->verify_raw,
+            ];
+        })->all();
+    }
+
     /** Punch Timeline history — every visible day's punches as classified events. */
     public array $logTimeline = [];
 
@@ -920,7 +1137,7 @@ class AttendanceTracker extends Component
 
         $this->logTimeline = $history->map(function ($item) use ($punchesByDay, $breaksByAttendance) {
             $key = $item->date->toDateString();
-            $events = $this->classifyPunches($punchesByDay->get($key, collect()));
+            $events = $this->neutralDayEvents($punchesByDay->get($key, collect()));
 
             // Fallback: synthesise from the attendance row + break logs.
             if ($events === [] && $item->check_in) {

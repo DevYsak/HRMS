@@ -308,6 +308,32 @@ test('the engine pull ingests every individual punch into the journey', function
     expect($punches->first()->punched_at->format('Y-m-d H:i'))->toBe('2026-06-29 09:02');
 });
 
+test('the engine pull tags each punch with its real IN/OUT direction', function () {
+    $emp = Employee::factory()->create(['employee_code' => 53, 'manager_id' => null]);
+
+    fakeDashboard([
+        ['emp_id' => '53', 'first_punch' => '09:00:00', 'last_punch' => '18:00:00',
+            'working_min' => 480, 'break_min' => 30, 'punch_count' => 4, 'status' => 'Completed Shift',
+            'events' => [
+                ['time' => '09:00:00', 'type' => 'IN'],
+                ['time' => '13:00:00', 'type' => 'OUT'],
+                ['time' => '13:30:00', 'type' => 'IN'],
+                ['time' => '18:00:00', 'type' => 'OUT'],
+            ],
+            'punches' => [
+                ['time' => '09:00:00', 'verify' => 15],
+                ['time' => '13:00:00', 'verify' => 4],
+                ['time' => '13:30:00', 'verify' => 4],
+                ['time' => '18:00:00', 'verify' => 15],
+            ]],
+    ]);
+
+    $this->artisan('attendance:sync-engine', ['--date' => '2026-06-29'])->assertSuccessful();
+
+    $punches = AttendancePunch::where('employee_id', $emp->id)->orderBy('punched_at')->get();
+    expect($punches->pluck('direction')->all())->toBe(['in', 'out', 'in', 'out']);
+});
+
 test('re-syncing punches is idempotent (no duplicates)', function () {
     $emp = Employee::factory()->create(['employee_code' => 52, 'manager_id' => null]);
 
