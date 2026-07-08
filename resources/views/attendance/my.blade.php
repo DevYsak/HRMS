@@ -88,6 +88,10 @@
 .pa-seg{display:inline-flex;background:var(--pa-surface-2);border:1px solid var(--pa-border);border-radius:10px;padding:3px}
 .pa-seg button{border:0;background:transparent;color:var(--pa-muted);font-size:12.5px;font-weight:560;padding:5px 11px;border-radius:7px;transition:all .16s var(--pa-ease)}
 .pa-seg button.on{background:var(--pa-surface);color:var(--pa-ink);box-shadow:0 1px 2px rgba(0,0,0,.06);font-weight:620}
+.pa-range{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 11px;border:1px solid var(--pa-border-2);border-radius:10px;background:var(--pa-surface);color:var(--pa-muted);transition:all .16s var(--pa-ease)}
+.pa-range.on{border-color:var(--pa-accent);box-shadow:0 0 0 3px var(--pa-ring);color:var(--pa-accent-ink)}
+.pa-range input{border:0;background:transparent;color:var(--pa-ink);font-size:12px;font-family:inherit;outline:0;width:116px;font-variant-numeric:tabular-nums}
+.pa-range .lbl{font-size:9.5px;font-weight:640;text-transform:uppercase;letter-spacing:.05em}
 .pa-pill{display:inline-flex;align-items:center;gap:7px;height:36px;padding:0 13px;border-radius:10px;border:1px solid var(--pa-border-2);
   background:var(--pa-surface);color:var(--pa-ink);font-size:13px;font-weight:560;transition:all .16s var(--pa-ease)}
 .pa-pill:hover{background:var(--pa-surface-2);border-color:var(--pa-faint);transform:translateY(-1px)}
@@ -149,6 +153,13 @@
       @foreach(['today' => 'Today', 'this_week' => 'Week', 'this_month' => 'Month'] as $val => $label)
         <button wire:click="$set('statsPeriod', '{{ $val }}')" class="{{ $statsPeriod === $val ? 'on' : '' }}">{{ $label }}</button>
       @endforeach
+    </div>
+    {{-- Custom date range — filters punch count, logs & analytics for the picked span --}}
+    <div class="pa-range {{ $statsPeriod === 'custom' ? 'on' : '' }}" title="Filter punches & logs by date range">
+      <flux:icon.calendar-days class="size-3.5" />
+      <input type="date" wire:model.live="rangeFrom" aria-label="From date" max="{{ now()->toDateString() }}">
+      <span class="lbl">to</span>
+      <input type="date" wire:model.live="rangeTo" aria-label="To date" max="{{ now()->toDateString() }}">
     </div>
     <x-clean-select model="analyticsMode" :live="true"
       :options="[['value' => '', 'label' => 'All modes'], ...collect(AttendanceMode::cases())->map(fn ($mode) => ['value' => $mode->value, 'label' => $mode->label()])->all()]" />

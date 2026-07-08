@@ -131,6 +131,15 @@
                     ['value' => 'remote', 'label' => 'Remote'],
                     ['value' => 'absent', 'label' => 'Absent'],
                 ]" />
+            {{-- Date range — filter the punch logs for an arbitrary span --}}
+            <div class="flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2 py-1" title="Filter logs by date range">
+                <flux:icon.calendar-days class="size-3.5 text-zinc-400" />
+                <input type="date" wire:model.live="dateFrom" max="{{ now()->toDateString() }}" aria-label="From date"
+                    class="w-[7.5rem] border-0 bg-transparent p-0.5 text-xs font-semibold tabular-nums text-zinc-600 dark:text-zinc-300 focus:ring-0">
+                <span class="text-zinc-300">–</span>
+                <input type="date" wire:model.live="dateTo" max="{{ now()->toDateString() }}" aria-label="To date"
+                    class="w-[7.5rem] border-0 bg-transparent p-0.5 text-xs font-semibold tabular-nums text-zinc-600 dark:text-zinc-300 focus:ring-0">
+            </div>
             @if($search || $date || $status)
                 <button wire:click="$set('search','');$set('date','');$set('status','')" class="inline-flex items-center gap-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 px-2.5 py-1.5 text-xs font-bold text-zinc-500 dark:text-zinc-400 transition hover:bg-zinc-200"><flux:icon.x-mark class="size-3.5" /> Reset</button>
             @endif
