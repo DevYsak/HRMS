@@ -22,7 +22,7 @@ use App\Models\WfhReport;
 use App\Notifications\AttendanceRegularisationNotification;
 use App\Notifications\RegularisationReviewedNotification;
 use App\Services\AiAssistant;
-use App\Services\Attendance\PunchClassifier;
+use App\Services\Attendance\PunchTimeline as PunchTimelineEngine;
 use App\Services\AttendanceService;
 use App\Support\UserAgent;
 use Carbon\CarbonPeriod;
@@ -96,12 +96,6 @@ class AttendanceTracker extends Component
 
     /** Current-week (Sun–Sat) day-by-day summary — independent of the calendar/period filters. */
     public array $weekSummary = [];
-
-    /** Chronological punch/break events for today. */
-    public array $todayTimeline = [];
-
-    /** Full Attendance Journey — every biometric punch for today, classified. */
-    public array $attendanceJourney = [];
 
     /**
      * Session-based punch journey for the enterprise timeline: neutral IN/OUT
@@ -318,8 +312,6 @@ class AttendanceTracker extends Component
 
         // 9. This-week summary + today's punch/break timeline
         $this->weekSummary = $this->buildWeekSummary($employee);
-        $this->todayTimeline = $this->buildTodayTimeline();
-        $this->attendanceJourney = $this->buildAttendanceJourney($employee);
         $this->punchJourney = $this->buildPunchJourney($employee);
         $this->loadStreakAndBenchmark($employee);
 
@@ -595,80 +587,10 @@ class AttendanceTracker extends Component
     }
 
     /**
-     * Chronological check-in / break / check-out events for today.
-     *
-     * @return array<int, array{time:string, title:string, type:string, lat?:mixed, lng?:mixed, photo?:?string, device?:array}>
-     */
-    protected function buildTodayTimeline(): array
-    {
-        if (! $this->todayAttendance || ! $this->todayAttendance->check_in) {
-            return [];
-        }
-
-        $events = [[
-            'time' => $this->todayAttendance->check_in->format('h:i A'),
-            'title' => 'Clocked in'.($this->todayAttendance->is_late ? ' (late)' : ''),
-            'type' => $this->todayAttendance->is_late ? 'late' : 'in',
-            'lat' => $this->todayAttendance->check_in_lat,
-            'lng' => $this->todayAttendance->check_in_lng,
-            'photo' => $this->todayAttendance->check_in_photo,
-            'device' => UserAgent::parse($this->todayAttendance->check_in_user_agent),
-            'method' => PunchMethod::tryFrom((string) $this->todayAttendance->check_in_method),
-        ]];
-
-        $breaks = BreakLog::where('attendance_id', $this->todayAttendance->id)
-            ->orderBy('break_start')->get();
-        foreach ($breaks as $b) {
-            if ($b->break_start) {
-                $events[] = ['time' => Carbon::parse($b->break_start)->format('h:i A'), 'title' => 'Break started', 'type' => 'break'];
-            }
-            if ($b->break_end) {
-                $events[] = ['time' => Carbon::parse($b->break_end)->format('h:i A'), 'title' => 'Resumed work', 'type' => 'resume'];
-            }
-        }
-
-        if ($this->todayAttendance->check_out) {
-            $events[] = [
-                'time' => $this->todayAttendance->check_out->format('h:i A'),
-                'title' => 'Clocked out',
-                'type' => 'out',
-                'lat' => $this->todayAttendance->check_out_lat,
-                'lng' => $this->todayAttendance->check_out_lng,
-                'photo' => $this->todayAttendance->check_out_photo,
-                'device' => UserAgent::parse($this->todayAttendance->check_out_user_agent),
-                'method' => PunchMethod::tryFrom((string) $this->todayAttendance->check_out_method),
-            ];
-        }
-
-        return $events;
-    }
-
-    /**
-     * Full Attendance Journey — every individual biometric punch of the day,
-     * classified into Clock In / Break Start / Break End / Clock Out by the
-     * alternating in→out sequence. Empty when no per-punch data has synced
-     * (the timeline then falls back to first/last via buildTodayTimeline()).
-     *
-     * @return array<int, array{time:string, title:string, type:string, method:?PunchMethod, source:?string, location:?string, lat:mixed, lng:mixed}>
-     */
-    protected function buildAttendanceJourney($employee): array
-    {
-        $punches = AttendancePunch::where('employee_id', $employee->id)
-            ->whereDate('punch_date', Carbon::today()->toDateString())
-            ->orderBy('punched_at')
-            ->get();
-
-        return $this->classifyPunches($punches);
-    }
-
-    /**
-     * Session-based punch journey for the enterprise horizontal timeline.
-     *
-     * Unlike the classified Journey, this NEVER labels a gap as a break/lunch —
-     * the biometric stream only knows a punch happened, not why the employee
-     * stepped out. It surfaces neutral IN/OUT nodes, auto-pairs them into work
-     * sessions, and derives working / break minutes, duplicates, a live timer,
-     * and missing-punch flags.
+     * Today's processed punch journey — delegated entirely to the shared
+     * PunchTimeline engine (the single source of truth for attendance
+     * processing). Duplicates, device conflicts, session pairing, totals and
+     * missing-punch flags all come from that one place.
      */
     protected function buildPunchJourney($employee): array
     {
@@ -686,503 +608,14 @@ class AttendanceTracker extends Component
     }
 
     /**
-     * Pair a day's punches into neutral IN/OUT nodes and work sessions.
-     *
-     * When the engine has tagged real IN/OUT direction on the punches, sessions
-     * are paired from that truth (an IN opens a session, the next OUT closes it)
-     * — no dedup, no alternation guessing, no "duplicate" punches. When a synced
-     * engine summary exists, its working/break totals are treated as
-     * authoritative for the headline figures. Falls back to the legacy
-     * dedupe + alternation only for punches with no direction (web/manual).
-     *
-     * It never labels *why* someone stepped out — only neutral IN/OUT.
+     * Thin wrapper over the PunchTimeline engine (kept as a seam for tests).
      *
      * @param  Collection<int, AttendancePunch>  $raw
      * @return array<string, mixed>
      */
     protected function assemblePunchJourney($raw, Carbon $day, ?AttendanceDailySummary $summary = null): array
     {
-        if ($raw->count() === 0) {
-            return [
-                'nodes' => [], 'sessions' => [], 'first_in' => null, 'last_out' => null,
-                'raw_count' => 0, 'kept_count' => 0, 'duplicate_count' => 0,
-                'working_minutes' => 0, 'break_minutes' => 0, 'session_count' => 0,
-                'live' => false, 'live_start_ms' => null, 'live_start_label' => null,
-                'live_elapsed_minutes' => 0, 'missing_out' => false, 'needs_regularization' => false,
-            ];
-        }
-
-        $hasDirection = $raw->contains(fn (AttendancePunch $p) => in_array($p->direction, ['in', 'out'], true));
-
-        return $hasDirection
-            ? $this->assembleFromDirection($raw->sortBy('punched_at')->values(), $day, $summary)
-            : $this->assembleFromAlternation($raw, $day);
-    }
-
-    /**
-     * Build the journey from the engine's real IN/OUT direction tags.
-     *
-     * @param  Collection<int, AttendancePunch>  $punches
-     * @return array<string, mixed>
-     */
-    /** Same-direction reads closer than this are duplicate device noise (seconds). */
-    protected const DUP_WINDOW_SECONDS = 60;
-
-    protected function assembleFromDirection($punches, Carbon $day, ?AttendanceDailySummary $summary): array
-    {
-        $isToday = $day->isToday();
-
-        // 1 ── Collapse same-direction duplicate reads (IN→IN / OUT→OUT within
-        // the window). Raw rows stay in the DB; they simply never reach the
-        // timeline or the calculations. A same-direction pair *beyond* the
-        // window is a missing punch (handled below), not a duplicate.
-        $clean = collect();
-        $duplicateCount = 0;
-        foreach ($punches as $p) {
-            $prev = $clean->last();
-            if ($prev && $prev->direction === $p->direction
-                && $prev->punched_at->diffInSeconds($p->punched_at) <= self::DUP_WINDOW_SECONDS) {
-                $duplicateCount++;
-
-                continue;
-            }
-            $clean->push($p);
-        }
-        $clean = $clean->values();
-        $n = $clean->count();
-
-        $trailingIn = $clean->last()->direction === 'in';
-        $live = $trailingIn && $isToday;
-        $missingTrailingOut = $trailingIn && ! $isToday;
-
-        $lastOutIndex = null;
-        foreach ($clean as $i => $p) {
-            if ($p->direction === 'out') {
-                $lastOutIndex = $i;
-            }
-        }
-
-        // 2 ── Nodes, inserting a ⚠ missing marker wherever two same-direction
-        // punches sit back-to-back (IN→IN = missing OUT, OUT→OUT = missing IN).
-        $nodes = [];
-        $needsRegularization = false;
-        $prevDir = null;
-        foreach ($clean as $i => $p) {
-            if ($prevDir !== null && $p->direction === $prevDir) {
-                $needsRegularization = true;
-                $nodes[] = $this->missingNode($prevDir === 'in' ? 'OUT' : 'IN');
-            }
-            $isIn = $p->direction !== 'out';
-            $type = match (true) {
-                $live && $i === $n - 1 => 'live',
-                $isIn && $i === 0 => 'first_in',
-                ! $isIn && $i === $lastOutIndex => 'last_out',
-                $isIn => 'in',
-                default => 'out',
-            };
-            $nodes[] = $this->punchNode($p, $type, $isIn);
-            $prevDir = $p->direction;
-        }
-        if ($missingTrailingOut) {
-            $needsRegularization = true;
-            $nodes[] = $this->missingNode('OUT');
-        }
-
-        // 3 ── Sessions: an IN opens, the next OUT closes. A second same-direction
-        // punch breaks the session (a missing punch) — never auto-paired.
-        $sessions = [];
-        $workingMinutes = 0;
-        $breakMinutes = 0;
-        $openIn = null;
-        $prevOut = null;
-        foreach ($clean as $p) {
-            if ($p->direction !== 'out') {           // IN
-                if ($openIn === null) {
-                    $openIn = $p;
-                    if ($prevOut !== null) {
-                        $breakMinutes += (int) $prevOut->punched_at->diffInMinutes($p->punched_at);
-                    }
-                } else {
-                    // IN while a session is open → the previous IN has no OUT.
-                    $sessions[] = $this->incompleteSession(count($sessions) + 1, $openIn, null);
-                    $openIn = $p;
-                }
-
-                continue;
-            }
-            // OUT
-            if ($openIn !== null) {
-                $mins = (int) $openIn->punched_at->diffInMinutes($p->punched_at);
-                $workingMinutes += $mins;
-                $sessions[] = [
-                    'index' => count($sessions) + 1,
-                    'in' => $openIn->punched_at->format('h:i A'),
-                    'out' => $p->punched_at->format('h:i A'),
-                    'minutes' => $mins,
-                    'label' => $this->minutesToHm($mins),
-                    'live' => false,
-                    'missing' => false,
-                ];
-                $openIn = null;
-                $prevOut = $p;
-            } else {
-                // OUT with no open IN → missing IN.
-                $sessions[] = $this->incompleteSession(count($sessions) + 1, null, $p);
-                $prevOut = $p;
-            }
-        }
-
-        // Trailing open IN → live (today) or an incomplete/missing session (past).
-        $liveStartMs = null;
-        $liveStartLabel = null;
-        $liveElapsed = 0;
-        if ($openIn !== null) {
-            if ($live) {
-                $liveElapsed = (int) $openIn->punched_at->diffInMinutes(now());
-                $liveStartMs = (int) $openIn->punched_at->getTimestampMs();
-                $liveStartLabel = $openIn->punched_at->format('h:i A');
-                if ($prevOut !== null) {
-                    $breakMinutes += (int) $prevOut->punched_at->diffInMinutes($openIn->punched_at);
-                }
-                $sessions[] = [
-                    'index' => count($sessions) + 1,
-                    'in' => $liveStartLabel,
-                    'out' => null,
-                    'minutes' => $liveElapsed,
-                    'label' => $this->minutesToHm($liveElapsed),
-                    'live' => true,
-                    'missing' => false,
-                ];
-            } else {
-                $sessions[] = $this->incompleteSession(count($sessions) + 1, $openIn, null);
-            }
-        }
-
-        // The engine's synced summary is the authoritative headline total.
-        if ($summary && $summary->synced_at) {
-            $workingMinutes = (int) round((float) $summary->working_hours * 60);
-            $breakMinutes = (int) $summary->break_minutes;
-        }
-
-        $lastOut = $lastOutIndex !== null ? $clean->get($lastOutIndex) : null;
-
-        return [
-            'nodes' => $nodes,
-            'sessions' => $sessions,
-            'first_in' => $clean->first()->punched_at->format('h:i A'),
-            'last_out' => (! $trailingIn && $lastOut) ? $lastOut->punched_at->format('h:i A') : null,
-            'raw_count' => $punches->count(),
-            'kept_count' => $n,
-            'duplicate_count' => $duplicateCount,
-            'working_minutes' => $workingMinutes,
-            'break_minutes' => $breakMinutes,
-            'session_count' => count($sessions),
-            'live' => $live,
-            'live_start_ms' => $liveStartMs,
-            'live_start_label' => $liveStartLabel,
-            'live_elapsed_minutes' => $liveElapsed,
-            'missing_out' => $missingTrailingOut,
-            'needs_regularization' => $needsRegularization,
-        ];
-    }
-
-    /** A single timeline node for a real punch. */
-    protected function punchNode(AttendancePunch $p, string $type, bool $isIn): array
-    {
-        $method = $p->methodEnum();
-
-        return [
-            'time' => $p->punched_at->format('h:i A'),
-            'time_short' => $p->punched_at->format('g:i'),
-            'ts_ms' => (int) $p->punched_at->getTimestampMs(),
-            'dir' => $isIn ? 'IN' : 'OUT',
-            'type' => $type,
-            'method' => $method?->value,
-            'method_label' => $method?->label(),
-            'method_icon' => $method?->icon() ?? 'finger-print',
-            'device' => $p->device_serial,
-            'location' => $p->location,
-            'verify' => $p->verify_raw,
-            'source' => $p->source,
-            'lat' => $p->lat,
-            'lng' => $p->lng,
-        ];
-    }
-
-    /** A ⚠ placeholder node for a detected missing punch of the given direction. */
-    protected function missingNode(string $dir): array
-    {
-        return [
-            'time' => '—', 'time_short' => '—', 'ts_ms' => null, 'dir' => $dir,
-            'type' => 'missing', 'method' => null, 'method_label' => null,
-            'method_icon' => 'exclamation-triangle', 'device' => null,
-            'location' => null, 'verify' => null, 'source' => null, 'lat' => null, 'lng' => null,
-        ];
-    }
-
-    /** A session missing one of its punches — never auto-paired, flagged for regularisation. */
-    protected function incompleteSession(int $index, ?AttendancePunch $in, ?AttendancePunch $out): array
-    {
-        return [
-            'index' => $index,
-            'in' => $in?->punched_at->format('h:i A'),
-            'out' => $out?->punched_at->format('h:i A'),
-            'minutes' => 0,
-            'label' => 'Missing '.($in ? 'OUT' : 'IN'),
-            'live' => false,
-            'missing' => true,
-        ];
-    }
-
-    /**
-     * Legacy fallback for punches with no engine direction (web/manual): dedupe
-     * device noise and alternate IN → OUT. An odd survivor count means the final
-     * IN has no OUT — a live session today, otherwise a missing punch.
-     *
-     * @param  Collection<int, AttendancePunch>  $raw
-     * @return array<string, mixed>
-     */
-    protected function assembleFromAlternation($raw, Carbon $day): array
-    {
-        $rawCount = $raw->count();
-        $kept = app(PunchClassifier::class)->dedupe(collect($raw))->values();
-        $n = $kept->count();
-        $isToday = $day->isToday();
-        $lastIsIn = $n % 2 === 1;
-        $live = $lastIsIn && $isToday;
-        $missingOut = $lastIsIn && ! $isToday;
-
-        $nodes = $kept->map(function (AttendancePunch $p, int $i) use ($n, $live) {
-            $isIn = $i % 2 === 0;
-            $type = match (true) {
-                $i === 0 => 'first_in',
-                $live && $i === $n - 1 => 'live',
-                $i === $n - 1 && ! $isIn => 'last_out',
-                $isIn => 'in',
-                default => 'out',
-            };
-            $method = $p->methodEnum();
-
-            return [
-                'time' => $p->punched_at->format('h:i A'),
-                'time_short' => $p->punched_at->format('g:i'),
-                'ts_ms' => (int) $p->punched_at->getTimestampMs(),
-                'dir' => $isIn ? 'IN' : 'OUT',
-                'type' => $type,
-                'method' => $method?->value,
-                'method_label' => $method?->label(),
-                'method_icon' => $method?->icon() ?? 'finger-print',
-                'device' => $p->device_serial,
-                'location' => $p->location,
-                'verify' => $p->verify_raw,
-                'source' => $p->source,
-                'lat' => $p->lat,
-                'lng' => $p->lng,
-            ];
-        })->all();
-
-        if ($missingOut) {
-            $nodes[] = [
-                'time' => '—', 'time_short' => '—', 'ts_ms' => null, 'dir' => 'OUT',
-                'type' => 'missing', 'method' => null, 'method_label' => null,
-                'method_icon' => 'exclamation-triangle', 'device' => null,
-                'location' => null, 'verify' => null, 'source' => null, 'lat' => null, 'lng' => null,
-            ];
-        }
-
-        $sessions = [];
-        $workingMinutes = 0;
-        for ($i = 0; $i < $n - 1; $i += 2) {
-            $in = $kept->get($i);
-            $out = $kept->get($i + 1);
-            $mins = (int) $in->punched_at->diffInMinutes($out->punched_at);
-            $workingMinutes += $mins;
-            $sessions[] = [
-                'index' => count($sessions) + 1,
-                'in' => $in->punched_at->format('h:i A'),
-                'out' => $out->punched_at->format('h:i A'),
-                'minutes' => $mins,
-                'label' => $this->minutesToHm($mins),
-                'live' => false,
-            ];
-        }
-
-        $liveStartMs = null;
-        $liveStartLabel = null;
-        $liveElapsed = 0;
-        if ($live) {
-            $liveIn = $kept->get($n - 1);
-            $liveElapsed = (int) $liveIn->punched_at->diffInMinutes(now());
-            $workingMinutes += $liveElapsed;
-            $liveStartMs = (int) $liveIn->punched_at->getTimestampMs();
-            $liveStartLabel = $liveIn->punched_at->format('h:i A');
-            $sessions[] = [
-                'index' => count($sessions) + 1,
-                'in' => $liveStartLabel,
-                'out' => null,
-                'minutes' => $liveElapsed,
-                'label' => $this->minutesToHm($liveElapsed),
-                'live' => true,
-            ];
-        }
-
-        $breakMinutes = 0;
-        for ($i = 1; $i < $n - 1; $i += 2) {
-            $out = $kept->get($i);
-            $nextIn = $kept->get($i + 1);
-            if ($out && $nextIn) {
-                $breakMinutes += (int) $out->punched_at->diffInMinutes($nextIn->punched_at);
-            }
-        }
-
-        $firstIn = $kept->first();
-        $lastPaired = $lastIsIn ? $kept->get($n - 2) : $kept->get($n - 1);
-
-        return [
-            'nodes' => $nodes,
-            'sessions' => $sessions,
-            'first_in' => $firstIn?->punched_at->format('h:i A'),
-            'last_out' => (! $lastIsIn && $lastPaired) ? $lastPaired->punched_at->format('h:i A') : null,
-            'raw_count' => $rawCount,
-            'kept_count' => $n,
-            'duplicate_count' => max(0, $rawCount - $n),
-            'working_minutes' => $workingMinutes,
-            'break_minutes' => $breakMinutes,
-            'session_count' => count($sessions),
-            'live' => $live,
-            'live_start_ms' => $liveStartMs,
-            'live_start_label' => $liveStartLabel,
-            'live_elapsed_minutes' => $liveElapsed,
-            'missing_out' => $missingOut,
-            'needs_regularization' => $missingOut,
-        ];
-    }
-
-    /** Format a minute count as "9h 00m" (or "45m" under an hour). */
-    protected function minutesToHm(int $minutes): string
-    {
-        if ($minutes < 60) {
-            return $minutes.'m';
-        }
-
-        return intdiv($minutes, 60).'h '.str_pad((string) ($minutes % 60), 2, '0', STR_PAD_LEFT).'m';
-    }
-
-    /**
-     * Dedupe + classify a day's raw punches into timeline events.
-     * Shared by today's Journey and the Punch Timeline history.
-     *
-     * @param  Collection<int, AttendancePunch>  $punches
-     */
-    protected function classifyPunches($punches): array
-    {
-        if ($punches->isEmpty()) {
-            return [];
-        }
-
-        // Collapse device noise (repeated reads / a card tap plus a face verify
-        // seconds apart) into real presence events via the shared classifier, so
-        // a stray punch can't flip the in/out alternation into a phantom break.
-        $punches = app(PunchClassifier::class)->dedupe(collect($punches));
-
-        $n = $punches->count();
-
-        return $punches->map(function (AttendancePunch $p, int $i) use ($n, $punches) {
-            $isEntry = $i % 2 === 0;                 // even index = entered / clocked in
-            [$title, $type] = match (true) {
-                $i === 0 => ['Clocked in', 'in'],
-                $i === $n - 1 && ! $isEntry => ['Clocked out', 'out'],
-                $isEntry => ['Returned from break', 'resume'],
-                default => ['Break started', 'break'],
-            };
-
-            // Classify a break by when it starts and how long until the return punch.
-            if ($type === 'break') {
-                $next = $punches->get($i + 1);
-                $gapMin = $next ? (int) $p->punched_at->diffInMinutes($next->punched_at) : null;
-                $hour = (int) $p->punched_at->format('G');
-                $kind = match (true) {
-                    $gapMin === null => 'Break (no return punch)',
-                    $gapMin > 90 => 'Long break',
-                    $hour >= 12 && $hour < 16 && $gapMin >= 20 => 'Lunch break',
-                    $gapMin < 20 => 'Tea break',
-                    default => 'Personal break',
-                };
-                $title = $kind.($gapMin !== null ? " · {$gapMin}m" : '');
-            }
-
-            // Minutes since the previous kept punch (shown as "↓ 37 mins").
-            $prev = $i > 0 ? $punches->get($i - 1) : null;
-
-            return [
-                'time' => $p->punched_at->format('h:i A'),
-                'title' => $title,
-                'type' => $type,
-                'method' => $p->methodEnum()?->value,   // string (Livewire-safe)
-                'source' => $p->source,
-                'location' => $p->location,
-                'device' => $p->device_serial,
-                'lat' => $p->lat,
-                'lng' => $p->lng,
-                'gap_min' => $prev ? (int) $prev->punched_at->diffInMinutes($p->punched_at) : null,
-                'verify' => $p->verify_raw,
-            ];
-        })->all();
-    }
-
-    /**
-     * Neutral IN/OUT events for the Punch In/Out Timeline — never labels a gap
-     * as lunch/tea/break (the device only knows a punch happened, not why).
-     * Uses the engine's real direction when present, else dedupe + alternation.
-     *
-     * @param  Collection<int, AttendancePunch>  $punches
-     * @return array<int, array<string, mixed>>
-     */
-    protected function neutralDayEvents($punches): array
-    {
-        if ($punches->isEmpty()) {
-            return [];
-        }
-
-        $ordered = collect($punches)->sortBy('punched_at')->values();
-        $hasDirection = $ordered->contains(fn (AttendancePunch $p) => in_array($p->direction, ['in', 'out'], true));
-
-        if (! $hasDirection) {
-            $ordered = app(PunchClassifier::class)->dedupe($ordered)->values();
-        }
-
-        $n = $ordered->count();
-        $lastOutIndex = null;
-        if ($hasDirection) {
-            foreach ($ordered as $i => $p) {
-                if ($p->direction === 'out') {
-                    $lastOutIndex = $i;
-                }
-            }
-        }
-
-        return $ordered->map(function (AttendancePunch $p, int $i) use ($n, $ordered, $hasDirection, $lastOutIndex) {
-            $isIn = $hasDirection ? ($p->direction !== 'out') : ($i % 2 === 0);
-            $isLastOut = $hasDirection ? ($i === $lastOutIndex) : ($i === $n - 1);
-            $title = $isIn
-                ? ($i === 0 ? 'Clocked in' : 'Punch in')
-                : ($isLastOut ? 'Clocked out' : 'Punch out');
-            $prev = $i > 0 ? $ordered->get($i - 1) : null;
-
-            return [
-                'time' => $p->punched_at->format('h:i A'),
-                'title' => $title,
-                'type' => $isIn ? 'in' : 'out',
-                'method' => $p->methodEnum()?->value,
-                'source' => $p->source,
-                'location' => $p->location,
-                'device' => $p->device_serial,
-                'lat' => $p->lat,
-                'lng' => $p->lng,
-                'gap_min' => $prev ? (int) $prev->punched_at->diffInMinutes($p->punched_at) : null,
-                'verify' => $p->verify_raw,
-            ];
-        })->all();
+        return app(PunchTimelineEngine::class)->process(collect($raw), $day, $summary);
     }
 
     /** Punch Timeline history — every visible day's punches as classified events. */
@@ -1216,7 +649,7 @@ class AttendanceTracker extends Component
 
         $this->logTimeline = $history->map(function ($item) use ($punchesByDay, $breaksByAttendance) {
             $key = $item->date->toDateString();
-            $events = $this->neutralDayEvents($punchesByDay->get($key, collect()));
+            $events = app(PunchTimelineEngine::class)->neutralEvents($punchesByDay->get($key, collect()));
 
             // Fallback: synthesise from the attendance row + break logs.
             if ($events === [] && $item->check_in) {
@@ -1300,24 +733,15 @@ class AttendanceTracker extends Component
 
         // ── Today ──
         if ($this->todayAttendance) {
-            if ($this->todayAttendance->check_in && ! $this->todayAttendance->check_out && $shiftOver) {
+            // Today's missing punches are owned by the Attendance Journey banner
+            // (single place per issue) — only alert here when the journey has no
+            // punch data to surface it itself.
+            $journeyOwnsToday = ($this->punchJourney['raw_count'] ?? 0) > 0;
+            if (! $journeyOwnsToday && $this->todayAttendance->check_in && ! $this->todayAttendance->check_out && $shiftOver) {
                 $alerts[] = [
                     'type' => 'missing_checkout',
                     'label' => 'Missing Check-Out',
                     'detail' => 'Today · clocked in at '.$this->todayAttendance->check_in->format('h:i A'),
-                    'date' => $today->toDateString(),
-                    'action' => true,
-                ];
-            }
-
-            // Break parity from the journey: an unclosed break = missing return punch.
-            $breakStarts = collect($this->attendanceJourney)->where('type', 'break')->count();
-            $breakEnds = collect($this->attendanceJourney)->where('type', 'resume')->count();
-            if ($breakStarts > $breakEnds && $this->todayAttendance->check_out) {
-                $alerts[] = [
-                    'type' => 'missing_break_end',
-                    'label' => 'Missing Break End',
-                    'detail' => 'Today · a break-return punch was not recorded',
                     'date' => $today->toDateString(),
                     'action' => true,
                 ];
@@ -1345,22 +769,13 @@ class AttendanceTracker extends Component
                 ];
             }
 
-            // Long break (> 90m single gap, from the journey classification).
-            if (collect($this->attendanceJourney)->contains(fn ($e) => $e['type'] === 'break' && str_starts_with($e['title'], 'Long break'))) {
-                $alerts[] = [
-                    'type' => 'long_break',
-                    'label' => 'Long Break',
-                    'detail' => 'Today · a single break exceeded 90 minutes',
-                    'date' => $today->toDateString(),
-                    'action' => false,
-                ];
-            }
-
-            // Overtime worked today (informational).
+            // Overtime worked today — from validated sessions, never raw events.
             $stdMin = (int) round((float) ($this->shift->standard_hours ?? 9) * 60);
-            $workedMin = $this->todayAttendance->check_out
-                ? max(0, (int) $this->todayAttendance->check_in->diffInMinutes($this->todayAttendance->check_out) - (int) ($this->todayAttendance->break_minutes ?? 0))
-                : 0;
+            $workedMin = $journeyOwnsToday
+                ? (int) ($this->punchJourney['working_minutes'] ?? 0)
+                : ($this->todayAttendance->check_out
+                    ? max(0, (int) $this->todayAttendance->check_in->diffInMinutes($this->todayAttendance->check_out) - (int) ($this->todayAttendance->break_minutes ?? 0))
+                    : 0);
             if ($workedMin > $stdMin + 30) {
                 $otMin = $workedMin - $stdMin;
                 $alerts[] = [
@@ -1992,7 +1407,7 @@ class AttendanceTracker extends Component
                 ])->all(),
         ];
 
-        $this->dispatch('flux:modal:open', name: 'punch-detail');
+        $this->modal('punch-detail')->show();
     }
 
     public function openRegularisation($date)
@@ -2009,7 +1424,7 @@ class AttendanceTracker extends Component
             $this->regFixOut = true; // correcting an existing (wrong) punch
         }
 
-        $this->dispatch('flux:modal:open', name: 'regularisation-modal');
+        $this->modal('regularisation-modal')->show();
     }
 
     public function submitRegularisation()

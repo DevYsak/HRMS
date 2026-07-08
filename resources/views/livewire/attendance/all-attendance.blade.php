@@ -315,24 +315,61 @@ EMPLOYEE 360 DRAWER (480px, right)
                     @endif
                 </div>
 
-                {{-- Today's timeline --}}
+                {{-- Processed timeline (single source of truth) + raw device audit log --}}
                 @if(! empty($drawer['punches']))
-                    <div class="rounded-2xl border border-orange-100/70 bg-white dark:bg-zinc-900 p-4 shadow-sm">
-                        <div class="mb-2 text-[10px] font-bold uppercase tracking-widest text-zinc-400">Today's Punches · {{ $drawer['punch_count'] ?? count($drawer['punches']) }}</div>
+                    <div class="rounded-2xl border border-orange-100/70 bg-white dark:bg-zinc-900 p-4 shadow-sm" x-data="{ showRaw: false }">
+                        <div class="mb-2 flex items-center justify-between">
+                            <span class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Processed Timeline · {{ $drawer['punch_count'] ?? count($drawer['punches']) }} punches</span>
+                            @if(! empty($drawer['needs_regularization']))<span class="rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-bold uppercase text-amber-700">Needs Regularization</span>@endif
+                        </div>
                         @if(! empty($drawer['punches_partial']))
                             <div class="mb-2 flex items-center gap-1.5 rounded-lg bg-amber-50 px-2.5 py-1 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
-                                <flux:icon.information-circle class="size-3.5" /> Showing {{ count($drawer['punches']) }} synced punches — full stream in the v2 dashboard.
+                                <flux:icon.information-circle class="size-3.5" /> Partial local stream — full stream in the v2 dashboard.
                             </div>
                         @endif
                         <div class="max-h-36 space-y-1 overflow-y-auto">
                             @foreach($drawer['punches'] as $p)
-                                <div class="flex items-center gap-2 rounded-lg bg-zinc-50/70 px-2.5 py-1 text-xs">
-                                    <flux:icon :icon="$p['icon']" class="size-3.5 text-orange-400" />
+                                @php $isMiss = ($p['type'] ?? '') === 'missing'; @endphp
+                                <div class="flex items-center gap-2 rounded-lg {{ $isMiss ? 'bg-amber-50 dark:bg-amber-500/10' : 'bg-zinc-50/70 dark:bg-zinc-800/40' }} px-2.5 py-1 text-xs">
+                                    <flux:icon :icon="$p['icon']" class="size-3.5 {{ $isMiss ? 'text-amber-500' : 'text-orange-400' }}" />
                                     <span class="font-black tabular-nums text-zinc-800 dark:text-zinc-100">{{ $p['time'] }}</span>
-                                    <span class="text-[10px] text-zinc-400">{{ $p['method'] ?? 'Punch' }}</span>
+                                    <span class="rounded-full px-1.5 py-0.5 text-[9px] font-bold {{ $isMiss ? 'bg-amber-100 text-amber-700' : (($p['dir'] ?? '') === 'IN' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700') }}">{{ $isMiss ? 'MISSING '.$p['dir'] : $p['dir'] }}</span>
+                                    <span class="text-[10px] text-zinc-400">{{ $p['method'] ?? '' }}</span>
                                 </div>
                             @endforeach
                         </div>
+                        {{-- Validated sessions --}}
+                        @if(! empty($drawer['sessions']))
+                            <div class="mt-2 border-t border-zinc-100 dark:border-zinc-800 pt-2 space-y-0.5">
+                                @foreach($drawer['sessions'] as $s)
+                                    <div class="flex items-center justify-between text-[10px] {{ ! empty($s['missing']) ? 'text-amber-600 font-semibold' : 'text-zinc-500 dark:text-zinc-400' }}">
+                                        <span>Session {{ $s['index'] }} · {{ $s['in'] ?? '⚠' }} → {{ $s['out'] ?? (! empty($s['live']) ? 'now' : '⚠') }}</span>
+                                        <span class="font-bold">{{ $s['label'] }}{{ ! empty($s['live']) ? ' · live' : '' }}</span>
+                                    </div>
+                                @endforeach
+                            </div>
+                        @endif
+                        {{-- Raw device log — audit only --}}
+                        @if(! empty($drawer['raw_punches']))
+                            <button type="button" @click="showRaw = !showRaw" class="mt-2 flex w-full items-center justify-between border-t border-zinc-100 dark:border-zinc-800 pt-2 text-[10px] font-bold uppercase tracking-widest text-zinc-400 hover:text-orange-500">
+                                <span>Raw device log · {{ count($drawer['raw_punches']) }} events
+                                    @if(($drawer['duplicate_count'] ?? 0) + ($drawer['conflict_count'] ?? 0) > 0)
+                                        <span class="ml-1 normal-case tracking-normal font-semibold text-zinc-400">({{ $drawer['duplicate_count'] }} dup · {{ $drawer['conflict_count'] }} retry merged)</span>
+                                    @endif
+                                </span>
+                                <flux:icon.chevron-down class="size-3.5" ::class="showRaw ? 'rotate-180' : ''" />
+                            </button>
+                            <div x-show="showRaw" x-collapse class="mt-1 max-h-40 space-y-0.5 overflow-y-auto">
+                                @foreach($drawer['raw_punches'] as $rp)
+                                    <div class="flex items-center gap-2 rounded px-2 py-1 text-[10px] {{ $rp['flag'] === 'kept' ? 'bg-zinc-50/60 dark:bg-zinc-800/30' : 'bg-zinc-50/30 dark:bg-zinc-800/10 opacity-60' }}" @if($rp['note']) title="{{ $rp['note'] }}" @endif>
+                                        <span class="font-mono font-bold tabular-nums text-zinc-700 dark:text-zinc-200">{{ $rp['time'] }}</span>
+                                        @if($rp['direction'])<span class="uppercase text-zinc-400">{{ $rp['direction'] }}</span>@endif
+                                        <span class="text-zinc-400">{{ $rp['method'] }}</span>
+                                        <span class="ml-auto rounded-full px-1.5 py-0.5 text-[8px] font-bold uppercase {{ $rp['flag'] === 'kept' ? 'bg-emerald-100 text-emerald-700' : ($rp['flag'] === 'retry' ? 'bg-violet-100 text-violet-700' : 'bg-zinc-200 text-zinc-500 dark:bg-zinc-700 dark:text-zinc-300') }}">{{ $rp['flag'] }}</span>
+                                    </div>
+                                @endforeach
+                            </div>
+                        @endif
                     </div>
                 @endif
 

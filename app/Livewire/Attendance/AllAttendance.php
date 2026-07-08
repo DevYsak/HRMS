@@ -13,7 +13,7 @@ use App\Models\LeaveBalance;
 use App\Models\User;
 use App\Notifications\AttendanceRegularisationNotification;
 use App\Notifications\RegularisationReviewedNotification;
-use App\Services\Attendance\PunchClassifier;
+use App\Services\Attendance\PunchTimeline;
 use App\Services\AttendanceService;
 use Carbon\CarbonPeriod;
 use Illuminate\Database\Eloquent\Builder;
@@ -239,23 +239,20 @@ class AllAttendance extends Component
             ->whereDate('punch_date', $today->toDateString())
             ->orderBy('punched_at')
             ->get();
-        $classifier = app(PunchClassifier::class);
-        // The engine already sends its real, paired punch stream, so the drawer
-        // lists every punch verbatim — applying HRMS's noise dedup here would
-        // hide legitimate session-boundary punches (e.g. a 16:36 IN two minutes
-        // after a 16:34 OUT). Dedup is only used for the no-engine break fallback.
-        $punches = $rawPunches;
 
-        // The Python engine pairs real IN/OUT direction and is the source of
-        // truth for today's figures. Trust its synced daily summary over
-        // re-deriving from HRMS's local — and often incomplete — punch stream
-        // (alternation-based math mis-pairs when punches are missing). An odd
-        // engine punch count means the last punch is an IN → still inside.
+        // ONE processed timeline from the shared PunchTimeline engine — the
+        // same single source of truth the employee page renders from. It
+        // merges duplicates/device conflicts, pairs validated sessions and
+        // annotates every raw event for the admin audit view. A synced engine
+        // summary stays authoritative for the headline totals.
         $summary = AttendanceDailySummary::where('employee_id', $employee->id)
             ->whereDate('date', $today->toDateString())
             ->first();
         $engineSynced = $summary && $summary->synced_at;
-        $stillInside = $engineSynced && ((int) $summary->raw_punch_count) % 2 === 1;
+        $processed = app(PunchTimeline::class)->process($rawPunches, $today, $summary);
+        $stillInside = $engineSynced
+            ? ((int) $summary->raw_punch_count) % 2 === 1
+            : $processed['live'];
 
         if ($engineSynced) {
             $workedMin = (int) round((float) $summary->working_hours * 60);
@@ -263,17 +260,21 @@ class AllAttendance extends Component
             $todayIn = $summary->first_punch?->format('h:i A');
             $todayOut = $stillInside ? null : $summary->last_punch?->format('h:i A');
             $punchCount = (int) $summary->raw_punch_count;
+        } elseif ($rawPunches->isNotEmpty()) {
+            $workedMin = (int) $processed['working_minutes'];
+            $breakMin = (int) $processed['break_minutes'];
+            $todayIn = $processed['first_in'];
+            $todayOut = $processed['last_out'];
+            $punchCount = (int) $processed['raw_count'];
         } else {
-            $breakMin = $rawPunches->isNotEmpty()
-                ? $classifier->breakMinutes($rawPunches)
-                : (int) ($todayAtt->break_minutes ?? 0);
+            $breakMin = (int) ($todayAtt->break_minutes ?? 0);
             $workedMin = 0;
             if ($todayAtt?->check_in) {
                 $workedMin = max(0, (int) $todayAtt->check_in->diffInMinutes($todayAtt->check_out ?? now()) - $breakMin);
             }
             $todayIn = $todayAtt?->check_in?->format('h:i A');
             $todayOut = $todayAtt?->check_out?->format('h:i A');
-            $punchCount = $punches->count();
+            $punchCount = 0;
         }
 
         $this->drawer = [
@@ -306,16 +307,25 @@ class AllAttendance extends Component
                     : '0m',
                 'mode' => $todayAtt?->work_mode ?? 'office',
                 'is_late' => (bool) ($todayAtt?->is_late ?? ($engineSynced && $summary->late_minutes > 0)),
-                'device' => $punches->pluck('device_serial')->filter()->unique()->implode(', ') ?: ($engineSynced ? $summary->device_serial : null),
-                'location' => $punches->pluck('location')->filter()->unique()->implode(', ') ?: ($employee->office?->name ?? null),
+                'device' => $rawPunches->pluck('device_serial')->filter()->unique()->implode(', ') ?: ($engineSynced ? $summary->device_serial : null),
+                'location' => $rawPunches->pluck('location')->filter()->unique()->implode(', ') ?: ($employee->office?->name ?? null),
             ] : null,
             'punch_count' => $punchCount,
-            'punches_partial' => $engineSynced && $punches->count() < $punchCount,
-            'punches' => $punches->map(fn ($p) => [
-                'time' => $p->punched_at->format('h:i A'),
-                'method' => $p->methodEnum()?->label(),
-                'icon' => $p->methodEnum()?->icon() ?? 'clock',
+            'punches_partial' => $engineSynced && $rawPunches->count() < $punchCount,
+            // Processed timeline (what employees see) — validated IN/OUT only.
+            'punches' => collect($processed['nodes'])->map(fn ($n) => [
+                'time' => $n['time'],
+                'dir' => $n['dir'],
+                'type' => $n['type'],
+                'method' => $n['method_label'],
+                'icon' => $n['method_icon'] ?? 'clock',
             ])->all(),
+            'sessions' => $processed['sessions'],
+            'duplicate_count' => (int) $processed['duplicate_count'],
+            'conflict_count' => (int) $processed['conflict_count'],
+            'needs_regularization' => (bool) $processed['needs_regularization'],
+            // Raw device log (HR/admin audit only) — every event, annotated.
+            'raw_punches' => $processed['raw_events'],
             'late_history' => $month->where('is_late', true)->take(5)->map(fn ($a) => [
                 'date' => $a->date->format('d M'), 'mins' => (int) ($a->late_minutes ?? 0),
             ])->values()->all(),

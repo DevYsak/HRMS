@@ -130,13 +130,57 @@ test('engine-directed punches pair by real IN/OUT, not alternation', function ()
 
     $pj = Livewire::test(AttendanceTracker::class)->get('punchJourney');
 
-    expect($pj['session_count'])->toBe(5)          // five real sessions, not 2-3 mangled ones
-        ->and($pj['duplicate_count'])->toBe(0)      // nothing dropped as "noise"
+    // The 13:30:30/33/35 cluster is a device conflict (flip-flop within 60s) —
+    // merged to ONE punch, so no phantom 0-minute session.
+    expect($pj['session_count'])->toBe(4)
+        ->and($pj['conflict_count'])->toBe(1)       // 13:30:33 OUT flip-flop merged
+        ->and($pj['duplicate_count'])->toBe(1)      // 13:30:35 IN re-read merged
         ->and($pj['break_minutes'])->toBe(18)       // engine truth, not a phantom 3h31m
         ->and($pj['working_minutes'])->toBe(359)    // 5.98h from the engine summary
         ->and($pj['live'])->toBeFalse()
+        ->and($pj['needs_regularization'])->toBeFalse()
         ->and(collect($pj['nodes'])->pluck('dir')->all())
-        ->toBe(['IN', 'OUT', 'IN', 'OUT', 'IN', 'OUT', 'IN', 'OUT', 'IN', 'OUT']);
+        ->toBe(['IN', 'OUT', 'IN', 'OUT', 'IN', 'OUT', 'IN', 'OUT']);
+});
+
+test('a Face + Card double verify merges as one punch, never a phantom session', function () {
+    $rows = [['09:00:00', 'in', 'face'], ['09:00:12', 'in', 'id_card'], ['18:00:00', 'out', 'face']];
+    foreach ($rows as [$t, $dir, $method]) {
+        AttendancePunch::factory()->create([
+            'employee_id' => $this->employee->id,
+            'punched_at' => Carbon::today()->setTimeFromTimeString($t),
+            'punch_date' => Carbon::today()->toDateString(),
+            'direction' => $dir, 'method' => $method,
+        ]);
+    }
+
+    $pj = Livewire::test(AttendanceTracker::class)->get('punchJourney');
+
+    expect($pj['kept_count'])->toBe(2)
+        ->and($pj['conflict_count'])->toBe(1)       // Card retry merged into the Face punch
+        ->and($pj['session_count'])->toBe(1)
+        ->and($pj['working_minutes'])->toBe(540)
+        ->and($pj['needs_regularization'])->toBeFalse();
+});
+
+test('an accidental re-punch straight after checkout cannot open a new session', function () {
+    $rows = [['09:00:00', 'in'], ['18:00:00', 'out'], ['18:00:40', 'in']];
+    foreach ($rows as [$t, $dir]) {
+        AttendancePunch::factory()->create([
+            'employee_id' => $this->employee->id,
+            'punched_at' => Carbon::today()->setTimeFromTimeString($t),
+            'punch_date' => Carbon::today()->toDateString(),
+            'direction' => $dir,
+        ]);
+    }
+
+    $pj = Livewire::test(AttendanceTracker::class)->get('punchJourney');
+
+    expect($pj['session_count'])->toBe(1)           // the stray 18:00:40 IN is merged noise
+        ->and($pj['live'])->toBeFalse()             // NOT "currently working"
+        ->and($pj['conflict_count'])->toBe(1)
+        ->and($pj['last_out'])->toBe('06:00 PM')
+        ->and($pj['working_minutes'])->toBe(540);
 });
 
 /** Insert a directional punch (in|out) for the acting employee at today's H:i:s. */

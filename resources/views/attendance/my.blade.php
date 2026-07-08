@@ -42,8 +42,12 @@
     $heroMode = AttendanceMode::tryFromValue($todayAttendance->work_mode ?? $workMode);
     $isIn   = $todayAttendance && ! $todayAttendance->check_out;
     $isDone = $todayAttendance && $todayAttendance->check_out;
+    // Working minutes come ONLY from validated sessions (PunchTimeline engine)
+    // when punch data exists; the attendance row is just the web-punch fallback.
     $workedMin = 0;
-    if ($todayAttendance && $todayAttendance->check_in) {
+    if (($punchJourney['raw_count'] ?? 0) > 0) {
+        $workedMin = (int) $punchJourney['working_minutes'];
+    } elseif ($todayAttendance && $todayAttendance->check_in) {
         $endT = $todayAttendance->check_out ?? now();
         $workedMin = max(0, (int) $todayAttendance->check_in->diffInMinutes($endT) - (int) ($todayAttendance->break_minutes ?? 0));
     }
@@ -60,8 +64,10 @@
     $outM = PunchMethod::tryFrom((string) ($todayAttendance->check_out_method ?? $sum?->last_punch_method));
     $punchMethods = collect([$inM, $outM])->filter()->unique();
     $punchSource = $punchMethods->isNotEmpty() ? $punchMethods->map->label()->implode(' + ') : '—';
-    $breakMin = (int) ($todayAttendance->break_minutes ?? $sum?->break_minutes ?? 0);
-    $totalPunches = (int) ($sum?->raw_punch_count ?? count($attendanceJourney));
+    $breakMin = ($punchJourney['raw_count'] ?? 0) > 0
+        ? (int) $punchJourney['break_minutes']
+        : (int) ($todayAttendance->break_minutes ?? $sum?->break_minutes ?? 0);
+    $totalPunches = (int) ($sum?->raw_punch_count ?? ($punchJourney['raw_count'] ?? 0));
     $deviceName = $biometricDevice?->name ?? $sum?->device_serial ?? '—';
     $lastSync = $biometricDevice?->last_synced_at ?? $sum?->synced_at;
     $connected = (bool) ($lastSync && \Carbon\Carbon::parse($lastSync)->gt(now()->subMinutes(30)));
@@ -274,7 +280,7 @@
       @else
         <button type="button" class="pa-h-cta" wire:click="startBreak" @if(! $isIn) disabled @endif><span class="ic pa-ic-warn"><flux:icon.pause class="size-4" /></span><div><div class="t">Start break</div><div class="d">Pause timer</div></div></button>
       @endif
-      <button type="button" class="pa-h-cta" @click="$flux.modal('regularisation-modal').show()"><span class="ic pa-ic-iris"><flux:icon.pencil-square class="size-4" /></span><div><div class="t">Regularize</div><div class="d">Fix a punch</div></div></button>
+      <button type="button" class="pa-h-cta" wire:click="openRegularisation('{{ today()->toDateString() }}')"><span class="ic pa-ic-iris"><flux:icon.pencil-square class="size-4" /></span><div><div class="t">Regularize</div><div class="d">Fix a punch</div></div></button>
       <div class="pa-smart">
         <div class="h"><flux:icon.sparkles class="size-4" /> Smart status</div>
         <p>{{ $isIn ? "On track — ".intdiv($remainingMin,60)."h ".($remainingMin%60)."m to your ".$targetLabel." goal." : ($isDone ? "Day complete — great work today!" : "Clock in by ".$heroSuggIn." to stay on time.") }}</p>
@@ -445,7 +451,7 @@
   <div class="pa-qastrip">
     @foreach($qa as [$label, $icon, $href, $action])
       <a href="{{ $href }}"
-         @if($action === 'regularise') @click.prevent="$flux.modal('regularisation-modal').show()" @endif
+         @if($action === 'regularise') wire:click.prevent="openRegularisation('{{ today()->toDateString() }}')" @endif
          @if($action === 'export') wire:click.prevent="exportLog" @endif
          class="pa-qas"><span class="ic"><flux:icon :icon="$icon" class="size-4" /></span>{{ $label }}</a>
     @endforeach
@@ -635,7 +641,7 @@
         <h3>Attendance journey</h3>
         <div class="sub">{{ $hasPunch ? $pj['session_count'].' '.\Illuminate\Support\Str::plural('session', $pj['session_count']).' · '.$pj['raw_count'].' '.\Illuminate\Support\Str::plural('punch', $pj['raw_count']) : 'No punches recorded today' }}</div>
       </div>
-      <button type="button" class="fixlink" @click="$flux.modal('regularisation-modal').show()">Fix a punch →</button>
+      <button type="button" class="fixlink" wire:click="openRegularisation('{{ today()->toDateString() }}')">Fix a punch →</button>
     </div>
 
     {{-- Attendance stat card --}}
@@ -666,7 +672,7 @@
       <div class="pa-regbar">
         <span class="ic"><flux:icon.exclamation-triangle class="size-4" /></span>
         <div class="tx"><b>A missing punch was detected in today's attendance.</b> Working hours can't be finalised until it's corrected — please submit a regularization request.</div>
-        <button type="button" class="cta" @click="$flux.modal('regularisation-modal').show()"><flux:icon.pencil-square class="size-3.5" /> Request Regularization</button>
+        <button type="button" class="cta" wire:click="openRegularisation('{{ today()->toDateString() }}')"><flux:icon.pencil-square class="size-3.5" /> Request Regularization</button>
       </div>
     @endif
 
@@ -1233,7 +1239,7 @@
                 ['Working Hours', $workedLabel],
                 ['Break Time', intdiv($breakMin, 60) > 0 ? intdiv($breakMin, 60).'h '.($breakMin % 60).'m' : $breakMin.'m'],
                 ['Overtime', intdiv($otMinTotal, 60).'h '.($otMinTotal % 60).'m'],
-                ['Total Punches', $totalPunches ?: count($attendanceJourney) ?: '—'],
+                ['Total Punches', $totalPunches ?: '—'],
                 ['First Punch', $firstPunch ? \Carbon\Carbon::parse($firstPunch)->format('h:i A') : '—'],
                 ['Last Punch', $lastPunch ? \Carbon\Carbon::parse($lastPunch)->format('h:i A') : '—'],
             ] as [$k, $v])
@@ -1369,74 +1375,88 @@
 {{-- ═══════════════════════════════════════════════
      REGULARISATION MODAL
 ═══════════════════════════════════════════════ --}}
-<flux:modal name="regularisation-modal" class="max-w-md">
+<flux:modal name="regularisation-modal" class="max-w-lg">
     <div class="space-y-5">
-        <div>
-            <flux:heading size="lg">Regularisation Request</flux:heading>
-            <flux:subheading>Request a correction for a missing or wrong punch. HR approval auto-updates your hours &amp; attendance.</flux:subheading>
+        <div class="flex items-start gap-3">
+            <span class="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-orange-100 text-orange-600"><flux:icon.pencil-square class="size-5" /></span>
+            <div>
+                <flux:heading size="lg">Request Regularization</flux:heading>
+                <flux:subheading>Fix a missing or wrong punch. Raw device logs stay untouched — the correction applies only after final approval.</flux:subheading>
+            </div>
         </div>
-        <div class="space-y-4">
-            <flux:input wire:model="regDate" label="Date of Work" type="date" />
 
-            <div>
-                <div class="mb-2 text-sm font-medium text-zinc-700 dark:text-zinc-200">What needs correcting?</div>
-                <div class="grid grid-cols-2 gap-3">
-                    <label class="flex cursor-pointer items-center gap-2 rounded-xl border p-3 text-sm font-semibold transition {{ $regFixIn ? 'border-orange-400 bg-orange-50 text-orange-700' : 'border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400' }}">
-                        <input type="checkbox" wire:model.live="regFixIn" class="rounded border-zinc-300 text-orange-500 focus:ring-orange-400">
-                        Check-In missed / wrong
-                    </label>
-                    <label class="flex cursor-pointer items-center gap-2 rounded-xl border p-3 text-sm font-semibold transition {{ $regFixOut ? 'border-orange-400 bg-orange-50 text-orange-700' : 'border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400' }}">
-                        <input type="checkbox" wire:model.live="regFixOut" class="rounded border-zinc-300 text-orange-500 focus:ring-orange-400">
-                        Check-Out missed / wrong
-                    </label>
-                </div>
-            </div>
+        {{-- 1 · When --}}
+        <div>
+            <div class="mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-zinc-400"><span class="inline-flex size-4 items-center justify-center rounded-full bg-orange-100 text-[9px] text-orange-600">1</span> Which day?</div>
+            <flux:input wire:model="regDate" type="date" />
+        </div>
 
-            <div class="grid grid-cols-2 gap-4">
-                <div class="{{ $regFixIn ? '' : 'pointer-events-none opacity-40' }}">
-                    <flux:input wire:model="regCheckIn" label="Correct Check-in" type="time" :disabled="! $regFixIn" />
-                </div>
-                <div class="{{ $regFixOut ? '' : 'pointer-events-none opacity-40' }}">
-                    <flux:input wire:model="regCheckOut" label="Correct Check-out" type="time" :disabled="! $regFixOut" />
-                </div>
+        {{-- 2 · Which punch --}}
+        <div>
+            <div class="mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-zinc-400"><span class="inline-flex size-4 items-center justify-center rounded-full bg-orange-100 text-[9px] text-orange-600">2</span> Which punch is missing or wrong?</div>
+            <div class="grid grid-cols-2 gap-3">
+                <label class="flex cursor-pointer items-center gap-2.5 rounded-xl border p-3 transition {{ $regFixIn ? 'border-orange-400 bg-orange-50 dark:bg-orange-500/10' : 'border-zinc-200 dark:border-zinc-800' }}">
+                    <input type="checkbox" wire:model.live="regFixIn" class="rounded border-zinc-300 text-orange-500 focus:ring-orange-400">
+                    <span class="flex items-center gap-1.5 text-sm font-semibold {{ $regFixIn ? 'text-orange-700 dark:text-orange-400' : 'text-zinc-500 dark:text-zinc-400' }}"><flux:icon.arrow-right-end-on-rectangle class="size-4" /> IN punch</span>
+                </label>
+                <label class="flex cursor-pointer items-center gap-2.5 rounded-xl border p-3 transition {{ $regFixOut ? 'border-orange-400 bg-orange-50 dark:bg-orange-500/10' : 'border-zinc-200 dark:border-zinc-800' }}">
+                    <input type="checkbox" wire:model.live="regFixOut" class="rounded border-zinc-300 text-orange-500 focus:ring-orange-400">
+                    <span class="flex items-center gap-1.5 text-sm font-semibold {{ $regFixOut ? 'text-orange-700 dark:text-orange-400' : 'text-zinc-500 dark:text-zinc-400' }}"><flux:icon.arrow-left-start-on-rectangle class="size-4" /> OUT punch</span>
+                </label>
             </div>
-            <div class="grid grid-cols-2 gap-4">
-                <div class="{{ $regFixIn ? '' : 'pointer-events-none opacity-40' }}">
-                    <flux:select wire:model="regCheckInMethod" label="Check-in via" :disabled="! $regFixIn">
-                        <flux:select.option value="id_card">ID Card</flux:select.option>
-                        <flux:select.option value="face">Face</flux:select.option>
+        </div>
+
+        {{-- 3 · Expected time + method --}}
+        <div>
+            <div class="mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-zinc-400"><span class="inline-flex size-4 items-center justify-center rounded-full bg-orange-100 text-[9px] text-orange-600">3</span> Expected time</div>
+            <div class="grid grid-cols-2 gap-3">
+                <div class="space-y-2 {{ $regFixIn ? '' : 'pointer-events-none opacity-40' }}">
+                    <flux:input wire:model="regCheckIn" label="IN at" type="time" :disabled="! $regFixIn" />
+                    <flux:select wire:model="regCheckInMethod" :disabled="! $regFixIn">
+                        <flux:select.option value="id_card">via ID Card</flux:select.option>
+                        <flux:select.option value="face">via Face</flux:select.option>
                     </flux:select>
                 </div>
-                <div class="{{ $regFixOut ? '' : 'pointer-events-none opacity-40' }}">
-                    <flux:select wire:model="regCheckOutMethod" label="Check-out via" :disabled="! $regFixOut">
-                        <flux:select.option value="id_card">ID Card</flux:select.option>
-                        <flux:select.option value="face">Face</flux:select.option>
+                <div class="space-y-2 {{ $regFixOut ? '' : 'pointer-events-none opacity-40' }}">
+                    <flux:input wire:model="regCheckOut" label="OUT at" type="time" :disabled="! $regFixOut" />
+                    <flux:select wire:model="regCheckOutMethod" :disabled="! $regFixOut">
+                        <flux:select.option value="id_card">via ID Card</flux:select.option>
+                        <flux:select.option value="face">via Face</flux:select.option>
                     </flux:select>
                 </div>
             </div>
-            <p class="text-[11px] text-zinc-400">Unticked punches keep their recorded time. On approval, working hours, overtime, score and payroll update automatically — and the corrected punch appears in your Attendance Journey with the method you pick above.</p>
+            <p class="mt-1.5 text-[11px] text-zinc-400">Unticked punches keep their recorded time.</p>
+        </div>
 
-            <flux:textarea wire:model="regReason" label="Reason" placeholder="e.g. Forgot to clock out, system glitch..." rows="3" />
-
-            <div>
-                <label class="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-200">Attachment <span class="text-xs font-normal text-zinc-400">(optional — gate pass, screenshot, medical slip)</span></label>
+        {{-- 4 · Why --}}
+        <div>
+            <div class="mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-zinc-400"><span class="inline-flex size-4 items-center justify-center rounded-full bg-orange-100 text-[9px] text-orange-600">4</span> Reason &amp; proof</div>
+            <flux:textarea wire:model="regReason" placeholder="e.g. Forgot to clock out — left through the loading gate…" rows="2" />
+            @error('regReason')<p class="mt-1 text-xs text-rose-500">{{ $message }}</p>@enderror
+            <div class="mt-2">
                 <input type="file" wire:model="regAttachment" accept=".jpg,.jpeg,.png,.webp,.pdf"
                        class="block w-full cursor-pointer rounded-xl border border-zinc-200 dark:border-zinc-800 text-sm text-zinc-500 file:mr-3 file:cursor-pointer file:rounded-l-xl file:border-0 file:bg-orange-50 file:px-4 file:py-2.5 file:text-sm file:font-semibold file:text-orange-600 hover:file:bg-orange-100" />
+                <p class="mt-1 text-[11px] text-zinc-400">Optional — gate pass, screenshot or medical slip (jpg/png/pdf, max 5 MB).</p>
                 <div wire:loading wire:target="regAttachment" class="mt-1 text-xs text-orange-500">Uploading…</div>
                 @if($regAttachment)<div class="mt-1 flex items-center gap-1.5 text-xs font-semibold text-emerald-600"><flux:icon.check-circle class="size-3.5" /> {{ $regAttachment->getClientOriginalName() }}</div>@endif
                 @error('regAttachment')<p class="mt-1 text-xs text-rose-500">{{ $message }}</p>@enderror
             </div>
+        </div>
 
-            <div class="rounded-xl bg-zinc-50 dark:bg-zinc-800/50 px-3 py-2.5">
-                <div class="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-zinc-400">Approval flow</div>
-                <div class="flex items-center gap-1.5 text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
-                    Pending <flux:icon.chevron-right class="size-3 text-zinc-300" /> Manager <flux:icon.chevron-right class="size-3 text-zinc-300" /> HR <flux:icon.chevron-right class="size-3 text-zinc-300" /> Admin <flux:icon.chevron-right class="size-3 text-zinc-300" /> <span class="text-emerald-600">Approved</span>
-                </div>
+        {{-- Approval flow --}}
+        <div class="rounded-xl bg-zinc-50 dark:bg-zinc-800/50 px-3 py-2.5">
+            <div class="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-zinc-400">What happens next</div>
+            <div class="flex items-center gap-1.5 text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
+                Manager <flux:icon.chevron-right class="size-3 text-zinc-300" /> HR <flux:icon.chevron-right class="size-3 text-zinc-300" /> Admin <flux:icon.chevron-right class="size-3 text-zinc-300" /> <span class="text-emerald-600">Approved — hours recalculated</span>
             </div>
         </div>
-        <div class="flex justify-end gap-2 pt-2">
+
+        <div class="flex justify-end gap-2 border-t border-zinc-100 dark:border-zinc-800 pt-3">
             <flux:button @click="$flux.modal('regularisation-modal').close()">Cancel</flux:button>
-            <flux:button wire:click="submitRegularisation" variant="primary" wire:loading.attr="disabled" wire:target="regAttachment,submitRegularisation">Submit Request</flux:button>
+            <flux:button wire:click="submitRegularisation" variant="primary" wire:loading.attr="disabled" wire:target="regAttachment,submitRegularisation">
+                <span wire:loading.remove wire:target="submitRegularisation">Submit Request</span>
+                <span wire:loading wire:target="submitRegularisation">Submitting…</span>
+            </flux:button>
         </div>
     </div>
 </flux:modal>
