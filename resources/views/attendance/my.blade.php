@@ -74,13 +74,13 @@
 {{-- ══════════════ REDESIGNED HERO (Pulse Attendance · slice 1) ══════════════ --}}
 <style>
 .pa{--pa-surface:#fff;--pa-surface-2:#F7F6F3;--pa-surface-3:#F0EEEA;--pa-border:#EAE8E4;--pa-border-2:#DDD9D3;
-  --pa-ink:#1B1A18;--pa-muted:#6C6862;--pa-faint:#9A958E;--pa-accent:#5B5BD6;--pa-accent-ink:#4B4ACF;--pa-accent-soft:#EDEDFB;
+  --pa-ink:#1B1A18;--pa-muted:#6C6862;--pa-faint:#9A958E;--pa-accent:#F97316;--pa-accent-ink:#EA580C;--pa-accent-soft:#FFF1E7;
   --pa-present:#0F9D6E;--pa-present-soft:#E4F6EE;--pa-warn:#B45309;--pa-warn-soft:#FBEFDD;--pa-danger:#D64545;--pa-danger-soft:#FBEBEB;
-  --pa-ring:rgba(91,91,214,.32);--pa-ease:cubic-bezier(.32,.72,0,1);
+  --pa-ring:rgba(249,115,22,.32);--pa-ease:cubic-bezier(.32,.72,0,1);
   color:var(--pa-ink);font-variant-numeric:tabular-nums}
 .dark .pa{--pa-surface:#151517;--pa-surface-2:#1B1B1E;--pa-surface-3:#222226;--pa-border:#26262B;--pa-border-2:#33333A;
-  --pa-ink:#F1EFEC;--pa-muted:#A29C93;--pa-faint:#726D66;--pa-accent:#8B8BF0;--pa-accent-ink:#A5A5F5;--pa-accent-soft:#20203A;
-  --pa-present:#34D399;--pa-present-soft:#122A22;--pa-warn:#F0A94B;--pa-warn-soft:#2C2113;--pa-danger:#F17878;--pa-danger-soft:#2C1717;--pa-ring:rgba(139,139,240,.4)}
+  --pa-ink:#F1EFEC;--pa-muted:#A29C93;--pa-faint:#726D66;--pa-accent:#FB923C;--pa-accent-ink:#FDBA74;--pa-accent-soft:#2A1710;
+  --pa-present:#34D399;--pa-present-soft:#122A22;--pa-warn:#F0A94B;--pa-warn-soft:#2C2113;--pa-danger:#F17878;--pa-danger-soft:#2C1717;--pa-ring:rgba(251,146,60,.4)}
 .pa .num{font-variant-numeric:tabular-nums}
 .pa-cmd{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
 .pa-cmd h1{margin:0;font-size:21px;font-weight:680;letter-spacing:-.02em;color:var(--pa-ink)}
@@ -263,12 +263,12 @@
     <div class="pa-panel-h">Attendance health <span class="pa-panel-sub">{{ str_replace('_', ' ', $statsPeriod) }}</span></div>
     @php
         $health = [
-            ['label' => 'Attendance %', 'value' => $attPct.'%', 'icon' => 'chart-pie', 'color' => '#5B5BD6', 'trend' => 'of target'],
+            ['label' => 'Attendance %', 'value' => $attPct.'%', 'icon' => 'chart-pie', 'color' => '#F97316', 'trend' => 'of target'],
             ['label' => 'Attendance Score', 'value' => $score.'/100', 'icon' => 'shield-check', 'color' => '#0F9D6E', 'trend' => $compliance.'% compliant'],
             ['label' => 'Present Days', 'value' => $presentCount, 'icon' => 'check-badge', 'color' => '#2F6FEB', 'trend' => 'of '.$totalWorkingDays.' working'],
             ['label' => 'Late Arrivals', 'value' => $lateCount, 'icon' => 'exclamation-triangle', 'color' => '#B45309', 'trend' => 'this period'],
             ['label' => 'Missing Punch', 'value' => $missingCount, 'icon' => 'flag', 'color' => $missingCount ? '#D64545' : '#0F9D6E', 'trend' => $missingCount ? 'action needed' : 'all clear'],
-            ['label' => 'Avg Working / day', 'value' => intdiv($avgWorkMin,60).'h '.($avgWorkMin%60).'m', 'icon' => 'clock', 'color' => '#5B5BD6', 'trend' => 'this period'],
+            ['label' => 'Avg Working / day', 'value' => intdiv($avgWorkMin,60).'h '.($avgWorkMin%60).'m', 'icon' => 'clock', 'color' => '#F97316', 'trend' => 'this period'],
             ['label' => 'Overtime', 'value' => $otHours.'h', 'icon' => 'bolt', 'color' => '#8B5CF6', 'trend' => $otDays.' day(s)'],
             ['label' => 'Avg Break / day', 'value' => $avgBreak.'m', 'icon' => 'pause', 'color' => '#0EA5E9', 'trend' => 'per day'],
             ['label' => 'Leave Balance', 'value' => rtrim(rtrim(number_format($leaveBalance, 1), '0'), '.'), 'icon' => 'calendar-days', 'color' => '#0F9D6E', 'trend' => 'days'],
@@ -520,7 +520,7 @@
     // 1 · Working Hours Trend — smooth line
     $hoursChart = [
         'chart' => $baseChart('line', 220),
-        'colors' => ['#5B5BD6'], 'dataLabels' => ['enabled' => false], 'stroke' => ['curve' => 'smooth', 'width' => 3],
+        'colors' => ['#F97316'], 'dataLabels' => ['enabled' => false], 'stroke' => ['curve' => 'smooth', 'width' => 3],
         'markers' => ['size' => 0, 'hover' => ['size' => 5]],
         'grid' => ['borderColor' => '#F3E8DD', 'strokeDashArray' => 4],
         'xaxis' => array_merge($axis, ['categories' => $labels, 'tickAmount' => $tick]),
@@ -588,7 +588,7 @@
         'chart' => $baseChart('bar', 200),
         'colors' => ['#0ea5e9'], 'plotOptions' => ['bar' => ['borderRadius' => 4, 'columnWidth' => '55%']],
         'dataLabels' => ['enabled' => false], 'grid' => ['borderColor' => '#F3E8DD', 'strokeDashArray' => 4],
-        'annotations' => ['yaxis' => [['y' => $avgBreakLine, 'borderColor' => '#5B5BD6', 'strokeDashArray' => 5, 'label' => ['text' => 'Avg '.$avgBreakLine.'m', 'style' => ['color' => '#5B5BD6', 'background' => '#FFF7ED', 'fontSize' => '10px']]]]],
+        'annotations' => ['yaxis' => [['y' => $avgBreakLine, 'borderColor' => '#F97316', 'strokeDashArray' => 5, 'label' => ['text' => 'Avg '.$avgBreakLine.'m', 'style' => ['color' => '#F97316', 'background' => '#FFF7ED', 'fontSize' => '10px']]]]],
         'xaxis' => array_merge($axis, ['categories' => $labels, 'tickAmount' => $tick]),
         'yaxis' => ['labels' => ['style' => ['colors' => '#9CA3AF', 'fontSize' => '10px']]], 'tooltip' => ['theme' => 'light'],
         'series' => [['name' => 'Break (min)', 'data' => $breakVals->all()]],
@@ -625,10 +625,10 @@
     $productivity = min(100, (int) round($workedTotalMin / $expectedMin * 100));
     $productivityChart = [
         'chart' => $baseChart('radialBar', 210),
-        'colors' => ['#5B5BD6'],
+        'colors' => ['#F97316'],
         'plotOptions' => ['radialBar' => [
             'hollow' => ['size' => '62%'],
-            'track' => ['background' => '#E0E7FF'],
+            'track' => ['background' => '#FFEDD5'],
             'dataLabels' => ['name' => ['show' => true, 'fontSize' => '11px', 'color' => '#9CA3AF', 'offsetY' => 18], 'value' => ['fontSize' => '26px', 'fontWeight' => 800, 'color' => '#18181b', 'offsetY' => -12]],
         ]],
         'labels' => ['Productivity'],
@@ -638,21 +638,21 @@
     // 8 · Heatmap intensity (GitHub-style, CSS)
     $heatColor = fn ($h) => match (true) {
         $h <= 0 => 'bg-zinc-100 dark:bg-zinc-800',
-        $h < 4 => 'bg-indigo-200',
-        $h < 7 => 'bg-indigo-300',
-        $h < $stdHours => 'bg-indigo-400',
-        default => 'bg-indigo-600',
+        $h < 4 => 'bg-orange-200',
+        $h < 7 => 'bg-orange-300',
+        $h < $stdHours => 'bg-orange-400',
+        default => 'bg-orange-600',
     };
 @endphp
 
 <div class="flex items-center justify-between">
     <div class="flex items-center gap-2">
-        <span class="inline-flex size-8 items-center justify-center rounded-xl bg-indigo-50 text-indigo-500"><flux:icon.chart-bar class="size-4" /></span>
+        <span class="inline-flex size-8 items-center justify-center rounded-xl bg-orange-50 text-orange-500"><flux:icon.chart-bar class="size-4" /></span>
         <div class="text-sm font-black text-zinc-900 dark:text-white">Attendance Analytics</div>
-        <span class="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-500">{{ ucwords(str_replace('_', ' ', $statsPeriod)) }}{{ $analyticsMode !== '' ? ' · '.AttendanceMode::tryFromValue($analyticsMode)->label() : '' }}</span>
+        <span class="rounded-full bg-orange-50 px-2 py-0.5 text-[10px] font-bold text-orange-500">{{ ucwords(str_replace('_', ' ', $statsPeriod)) }}{{ $analyticsMode !== '' ? ' · '.AttendanceMode::tryFromValue($analyticsMode)->label() : '' }}</span>
     </div>
     @if($analyticsMode !== '')
-        <button wire:click="$set('analyticsMode', '')" class="text-[11px] font-bold text-indigo-500 hover:underline">Clear mode filter</button>
+        <button wire:click="$set('analyticsMode', '')" class="text-[11px] font-bold text-orange-500 hover:underline">Clear mode filter</button>
     @endif
 </div>
 
@@ -718,7 +718,7 @@
         <div class="mb-3 flex items-center justify-between">
             <div class="text-sm font-black text-zinc-900 dark:text-white">Attendance Heatmap <span class="text-[10px] font-bold text-zinc-400">· hours per day</span></div>
             <div class="flex items-center gap-1 text-[10px] text-zinc-400">Less
-                <span class="size-2.5 rounded-sm bg-zinc-100 dark:bg-zinc-800"></span><span class="size-2.5 rounded-sm bg-indigo-200"></span><span class="size-2.5 rounded-sm bg-indigo-400"></span><span class="size-2.5 rounded-sm bg-indigo-600"></span>
+                <span class="size-2.5 rounded-sm bg-zinc-100 dark:bg-zinc-800"></span><span class="size-2.5 rounded-sm bg-orange-200"></span><span class="size-2.5 rounded-sm bg-orange-400"></span><span class="size-2.5 rounded-sm bg-orange-600"></span>
             More</div>
         </div>
         @if(count($chartDaily) > 0)
@@ -749,33 +749,33 @@
         };
         $aiCards = [
             ['Attendance Score', $ai['score'].'/100', 'shield-check', '#10b981', $trendChip($ai['present_trend'])],
-            ['Average Check-in', $ai['avg_in'] ?? '—', 'arrow-right-end-on-rectangle', '#5B5BD6', null],
+            ['Average Check-in', $ai['avg_in'] ?? '—', 'arrow-right-end-on-rectangle', '#F97316', null],
             ['Average Check-out', $ai['avg_out'] ?? '—', 'arrow-left-start-on-rectangle', '#ef4444', null],
             ['Average Break', $ai['avg_break'] ? $ai['avg_break'].'m' : '—', 'pause', '#0ea5e9', null],
             ['Avg Working Hours', $ai['avg_hours'] ?? '—', 'clock', '#6366f1', null],
             ['Best Attendance Day', $ai['best_day'] ?? '—', 'star', '#f59e0b', null],
             ['Longest Working Day', $ai['longest_day'] ?? '—', 'bolt', '#8b5cf6', null],
             ['Longest Break', $ai['longest_break'] ?? '—', 'moon', '#14b8a6', null],
-            ['Perfect Streak', $ai['streak'].' '.\Illuminate\Support\Str::plural('day', $ai['streak']), 'fire', '#5B5BD6', null],
+            ['Perfect Streak', $ai['streak'].' '.\Illuminate\Support\Str::plural('day', $ai['streak']), 'fire', '#F97316', null],
             ['Late Count', $ai['late_count'], 'exclamation-triangle', $ai['late_count'] ? '#f59e0b' : '#10b981', $trendChip($ai['late_trend'], false)],
             ['Missing Punches', $ai['missing_count'], 'flag', $ai['missing_count'] ? '#ef4444' : '#10b981', null],
-            ['Attendance Prediction', $ai['prediction'].'%', 'sparkles', '#5B5BD6', null],
+            ['Attendance Prediction', $ai['prediction'].'%', 'sparkles', '#F97316', null],
         ];
     @endphp
     <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm">
         <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
             <div class="flex items-center gap-2">
-                <span class="inline-flex size-8 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-amber-400 text-white shadow"><flux:icon.sparkles class="size-4" /></span>
+                <span class="inline-flex size-8 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-amber-400 text-white shadow"><flux:icon.sparkles class="size-4" /></span>
                 <div class="text-sm font-black text-zinc-900 dark:text-white">AI Attendance Insights</div>
                 <span class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">· {{ ucwords(str_replace('_', ' ', $statsPeriod)) }}</span>
             </div>
-            <span class="rounded-full bg-indigo-50 px-2.5 py-1 text-[10px] font-bold text-indigo-500">Predicted {{ $ai['prediction'] }}% by period end</span>
+            <span class="rounded-full bg-orange-50 px-2.5 py-1 text-[10px] font-bold text-orange-500">Predicted {{ $ai['prediction'] }}% by period end</span>
         </div>
 
         {{-- Stat cards --}}
         <div class="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-6">
             @foreach($aiCards as [$label, $value, $icon, $color, $trend])
-                <div class="rounded-2xl border border-zinc-100 dark:border-zinc-800 bg-gradient-to-b from-white to-indigo-50/30 p-3 transition duration-200 hover:-translate-y-0.5 hover:shadow-md">
+                <div class="rounded-2xl border border-zinc-100 dark:border-zinc-800 bg-gradient-to-b from-white to-orange-50/30 p-3 transition duration-200 hover:-translate-y-0.5 hover:shadow-md">
                     <span class="inline-flex size-8 items-center justify-center rounded-xl" style="background: {{ $color }}1a; color: {{ $color }};"><flux:icon :icon="$icon" class="size-4" /></span>
                     <div class="mt-2 truncate text-base font-black leading-none tabular-nums text-zinc-900 dark:text-white" title="{{ $value }}">{{ $value }}</div>
                     <div class="mt-1 truncate text-[9px] font-bold uppercase tracking-wide text-zinc-400">{{ $label }}</div>
@@ -824,11 +824,11 @@
         <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
             <div class="md:col-span-2">
                 <label class="mb-1 block text-[11px] font-bold uppercase tracking-wider text-zinc-400">What did you work on today? <span class="text-rose-400">*</span></label>
-                <textarea wire:model="wfhForm.work_summary" rows="2" placeholder="Tasks, tickets, meetings…" class="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-2 text-sm focus:border-indigo-400 focus:ring-0"></textarea>
+                <textarea wire:model="wfhForm.work_summary" rows="2" placeholder="Tasks, tickets, meetings…" class="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-2 text-sm focus:border-orange-400 focus:ring-0"></textarea>
                 @error('wfhForm.work_summary')<p class="mt-1 text-xs text-rose-500">{{ $message }}</p>@enderror
             </div>
-            <div><label class="mb-1 block text-[11px] font-bold uppercase tracking-wider text-zinc-400">Achievements</label><textarea wire:model="wfhForm.achievements" rows="2" class="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-2 text-sm focus:border-indigo-400 focus:ring-0"></textarea></div>
-            <div><label class="mb-1 block text-[11px] font-bold uppercase tracking-wider text-zinc-400">Blockers</label><textarea wire:model="wfhForm.blockers" rows="2" class="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-2 text-sm focus:border-indigo-400 focus:ring-0"></textarea></div>
+            <div><label class="mb-1 block text-[11px] font-bold uppercase tracking-wider text-zinc-400">Achievements</label><textarea wire:model="wfhForm.achievements" rows="2" class="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-2 text-sm focus:border-orange-400 focus:ring-0"></textarea></div>
+            <div><label class="mb-1 block text-[11px] font-bold uppercase tracking-wider text-zinc-400">Blockers</label><textarea wire:model="wfhForm.blockers" rows="2" class="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-2 text-sm focus:border-orange-400 focus:ring-0"></textarea></div>
         </div>
         <div class="mt-3 flex justify-end">
             <button wire:click="saveWfhReport" class="inline-flex items-center gap-1.5 rounded-xl bg-violet-600 px-5 py-2 text-sm font-bold text-white transition hover:bg-violet-700"><flux:icon.paper-airplane class="size-4" /> {{ $wfhReport ? 'Update Report' : 'Submit Report' }}</button>
@@ -839,7 +839,7 @@
 {{-- ═══════════════ PUNCH IN / OUT TIMELINE ═══════════════ --}}
 <div id="attendance-log" class="overflow-hidden rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm scroll-mt-6">
     <div class="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200/70 dark:border-zinc-800 px-5 py-3.5">
-        <h3 class="flex items-center gap-2 text-sm font-black text-zinc-900 dark:text-white"><flux:icon.clock class="size-4 text-indigo-500" /> Punch In / Out Timeline
+        <h3 class="flex items-center gap-2 text-sm font-black text-zinc-900 dark:text-white"><flux:icon.clock class="size-4 text-orange-500" /> Punch In / Out Timeline
             <span class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
                 · {{ $statsPeriod === 'custom' && $rangeFrom && $rangeTo ? \Carbon\Carbon::parse($rangeFrom)->format('d M').' – '.\Carbon\Carbon::parse($rangeTo)->format('d M Y') : $calendarMonth->format('M Y') }}
             </span>
@@ -847,13 +847,13 @@
         <div class="flex flex-wrap items-center gap-2">
             <x-clean-select model="logMode" :live="true"
                 :options="[['value' => '', 'label' => 'All modes'], ...collect(AttendanceMode::cases())->map(fn ($mode) => ['value' => $mode->value, 'label' => $mode->label()])->all()]" />
-            <button wire:click="exportLog" class="inline-flex items-center gap-1.5 rounded-lg bg-indigo-500 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-indigo-600"><flux:icon.arrow-down-tray class="size-3.5" /> Export</button>
+            <button wire:click="exportLog" class="inline-flex items-center gap-1.5 rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-orange-600"><flux:icon.arrow-down-tray class="size-3.5" /> Export</button>
         </div>
     </div>
 
     @php $days = $logMode !== '' ? collect($logTimeline)->where('mode', $logMode)->values() : collect($logTimeline); @endphp
     @if($days->count() > 0)
-        <div class="divide-y divide-indigo-50">
+        <div class="divide-y divide-orange-50">
             @foreach($days as $day)
                 @php
                     [$dayBadge, $dayLabel] = match(true) {
@@ -865,10 +865,10 @@
                 @endphp
                 <div x-data="{ open: {{ $day['is_today'] ? 'true' : 'false' }} }" class="{{ $day['missing'] ? 'bg-amber-50/30' : '' }}">
                     {{-- Day header --}}
-                    <button type="button" @click="open = !open" class="flex w-full flex-wrap items-center gap-3 px-5 py-3 text-left transition hover:bg-indigo-50/40">
+                    <button type="button" @click="open = !open" class="flex w-full flex-wrap items-center gap-3 px-5 py-3 text-left transition hover:bg-orange-50/40">
                         <flux:icon.chevron-right class="size-4 shrink-0 text-zinc-400 transition-transform" ::class="open ? 'rotate-90' : ''" />
                         <div class="min-w-[7.5rem]">
-                            <div class="text-xs font-black text-zinc-900 dark:text-white">{{ $day['label'] }} @if($day['is_today'])<span class="text-indigo-500">· Today</span>@endif</div>
+                            <div class="text-xs font-black text-zinc-900 dark:text-white">{{ $day['label'] }} @if($day['is_today'])<span class="text-orange-500">· Today</span>@endif</div>
                             <div class="text-[9px] text-zinc-400">{{ $day['dayname'] }}</div>
                         </div>
                         <span class="rounded-full px-2 py-0.5 text-[9px] font-bold {{ $dayBadge }}">{{ $dayLabel }}</span>
@@ -880,7 +880,7 @@
                         <span class="ml-auto flex items-center gap-3 text-[10px] text-zinc-400">
                             <span>{{ count($day['events']) }} {{ \Illuminate\Support\Str::plural('punch', count($day['events'])) }}</span>
                             @if($day['worked'])<span class="font-bold text-zinc-700 dark:text-zinc-200">{{ $day['worked'] }}</span>@endif
-                            <span class="rounded-lg p-1 text-zinc-400 transition hover:bg-indigo-100 hover:text-indigo-600" wire:click.stop="showPunchDetail('{{ $day['date'] }}')" title="Full day details"><flux:icon.eye class="size-4" /></span>
+                            <span class="rounded-lg p-1 text-zinc-400 transition hover:bg-orange-100 hover:text-orange-600" wire:click.stop="showPunchDetail('{{ $day['date'] }}')" title="Full day details"><flux:icon.eye class="size-4" /></span>
                         </span>
                     </button>
 
@@ -905,7 +905,7 @@
                                         [$dot, $ic] = match($ev['type']) {
                                             'in'     => ['bg-emerald-500', 'arrow-right-end-on-rectangle'],
                                             'late'   => ['bg-rose-500', 'exclamation-triangle'],
-                                            'break'  => ['bg-indigo-500', 'pause'],
+                                            'break'  => ['bg-orange-500', 'pause'],
                                             'resume' => ['bg-blue-500', 'play'],
                                             'out'    => ['bg-rose-600', 'arrow-left-start-on-rectangle'],
                                             default  => ['bg-zinc-400', 'clock'],
@@ -915,9 +915,9 @@
                                         $hasHover = ! empty($ev['lat']) || ! empty($ev['ip']) || ! empty($ev['photo']) || ! empty($ev['device']);
                                     @endphp
                                     <div class="group/event relative flex items-start gap-3">
-                                        @unless($loop->last)<span class="absolute left-[13px] top-8 h-[calc(100%-6px)] w-px bg-indigo-100"></span>@endunless
+                                        @unless($loop->last)<span class="absolute left-[13px] top-8 h-[calc(100%-6px)] w-px bg-orange-100"></span>@endunless
                                         <span class="mt-0.5 inline-flex size-7 shrink-0 items-center justify-center rounded-full {{ $dot }} text-white shadow"><flux:icon :icon="$ic" class="size-3.5" /></span>
-                                        <div class="flex-1 rounded-xl border border-zinc-100 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-800/40 px-3 py-2 transition group-hover/event:border-indigo-200 group-hover/event:bg-white group-hover/event:shadow-sm">
+                                        <div class="flex-1 rounded-xl border border-zinc-100 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-800/40 px-3 py-2 transition group-hover/event:border-orange-200 group-hover/event:bg-white group-hover/event:shadow-sm">
                                             <div class="flex flex-wrap items-center gap-x-3 gap-y-0.5">
                                                 <span class="text-sm font-black tabular-nums text-zinc-900 dark:text-white">{{ $ev['time'] }}</span>
                                                 @if($evMethod)
@@ -935,11 +935,11 @@
                                             @if($hasHover)
                                                 <div class="mt-1.5 hidden flex-wrap items-center gap-2 border-t border-zinc-100 dark:border-zinc-800 pt-1.5 text-[10px] text-zinc-500 dark:text-zinc-400 group-hover/event:flex">
                                                     @if(! empty($ev['lat']) && ! empty($ev['lng']))
-                                                        <a href="https://www.google.com/maps?q={{ $ev['lat'] }},{{ $ev['lng'] }}" target="_blank" rel="noopener" class="inline-flex items-center gap-1 font-semibold text-indigo-500 hover:underline"><flux:icon.map-pin class="size-3" /> {{ $ev['lat'] }}, {{ $ev['lng'] }}</a>
+                                                        <a href="https://www.google.com/maps?q={{ $ev['lat'] }},{{ $ev['lng'] }}" target="_blank" rel="noopener" class="inline-flex items-center gap-1 font-semibold text-orange-500 hover:underline"><flux:icon.map-pin class="size-3" /> {{ $ev['lat'] }}, {{ $ev['lng'] }}</a>
                                                     @endif
                                                     @if(! empty($ev['ip']))<span class="inline-flex items-center gap-1"><flux:icon.globe-alt class="size-3" /> {{ $ev['ip'] }}</span>@endif
                                                     @if(! empty($ev['photo']))
-                                                        <a href="{{ Storage::url($ev['photo']) }}" target="_blank" class="inline-flex items-center gap-1 font-semibold text-indigo-500 hover:underline"><flux:icon.camera class="size-3" /> Photo verification</a>
+                                                        <a href="{{ Storage::url($ev['photo']) }}" target="_blank" class="inline-flex items-center gap-1 font-semibold text-orange-500 hover:underline"><flux:icon.camera class="size-3" /> Photo verification</a>
                                                     @endif
                                                 </div>
                                             @endif
@@ -964,7 +964,7 @@
             $firstPunch = $todayAttendance->check_in ?? $sum?->first_punch;
             $lastPunch = $todayAttendance->check_out ?? $sum?->last_punch;
         @endphp
-        <div class="grid grid-cols-3 gap-2 border-t border-zinc-200/70 dark:border-zinc-800 bg-indigo-50/30 px-5 py-3 sm:grid-cols-6">
+        <div class="grid grid-cols-3 gap-2 border-t border-zinc-200/70 dark:border-zinc-800 bg-orange-50/30 px-5 py-3 sm:grid-cols-6">
             @foreach([
                 ['Working Hours', $workedLabel],
                 ['Break Time', intdiv($breakMin, 60) > 0 ? intdiv($breakMin, 60).'h '.($breakMin % 60).'m' : $breakMin.'m'],
@@ -1043,7 +1043,7 @@
                                 <div class="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400"><flux:icon.globe-alt class="size-3.5 text-zinc-400" /> {{ $p['ip'] }}</div>
                             @endif
                             @if($p['lat'] && $p['lng'])
-                                <a href="https://www.google.com/maps?q={{ $p['lat'] }},{{ $p['lng'] }}" target="_blank" rel="noopener" class="inline-flex items-center gap-1.5 font-semibold text-indigo-500 hover:underline"><flux:icon.map-pin class="size-3.5" /> View location</a>
+                                <a href="https://www.google.com/maps?q={{ $p['lat'] }},{{ $p['lng'] }}" target="_blank" rel="noopener" class="inline-flex items-center gap-1.5 font-semibold text-orange-500 hover:underline"><flux:icon.map-pin class="size-3.5" /> View location</a>
                             @endif
                         </div>
                     </div>
@@ -1117,12 +1117,12 @@
             <div>
                 <div class="mb-2 text-sm font-medium text-zinc-700 dark:text-zinc-200">What needs correcting?</div>
                 <div class="grid grid-cols-2 gap-3">
-                    <label class="flex cursor-pointer items-center gap-2 rounded-xl border p-3 text-sm font-semibold transition {{ $regFixIn ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400' }}">
-                        <input type="checkbox" wire:model.live="regFixIn" class="rounded border-zinc-300 text-indigo-500 focus:ring-indigo-400">
+                    <label class="flex cursor-pointer items-center gap-2 rounded-xl border p-3 text-sm font-semibold transition {{ $regFixIn ? 'border-orange-400 bg-orange-50 text-orange-700' : 'border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400' }}">
+                        <input type="checkbox" wire:model.live="regFixIn" class="rounded border-zinc-300 text-orange-500 focus:ring-orange-400">
                         Check-In missed / wrong
                     </label>
-                    <label class="flex cursor-pointer items-center gap-2 rounded-xl border p-3 text-sm font-semibold transition {{ $regFixOut ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400' }}">
-                        <input type="checkbox" wire:model.live="regFixOut" class="rounded border-zinc-300 text-indigo-500 focus:ring-indigo-400">
+                    <label class="flex cursor-pointer items-center gap-2 rounded-xl border p-3 text-sm font-semibold transition {{ $regFixOut ? 'border-orange-400 bg-orange-50 text-orange-700' : 'border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400' }}">
+                        <input type="checkbox" wire:model.live="regFixOut" class="rounded border-zinc-300 text-orange-500 focus:ring-orange-400">
                         Check-Out missed / wrong
                     </label>
                 </div>
@@ -1255,7 +1255,7 @@
                     <flux:icon.camera class="size-4" /> Capture
                 </button>
                 <button type="button" @click="submit()" x-bind:disabled="busy"
-                    class="inline-flex items-center gap-1.5 rounded-xl bg-indigo-500 px-5 py-2 text-sm font-bold text-white shadow-lg shadow-indigo-300/40 transition hover:bg-indigo-600 disabled:opacity-50"
+                    class="inline-flex items-center gap-1.5 rounded-xl bg-orange-500 px-5 py-2 text-sm font-bold text-white shadow-lg shadow-orange-300/40 transition hover:bg-orange-600 disabled:opacity-50"
                     x-text="busy ? 'Saving…' : (action === 'in' ? 'Clock In' : 'Clock Out')">Clock In</button>
             </div>
         </div>
