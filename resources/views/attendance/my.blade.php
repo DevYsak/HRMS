@@ -480,7 +480,6 @@
 @endif
 
 {{-- ═══════════════ TODAY'S ATTENDANCE JOURNEY (slice 2b) ═══════════════ --}}
-@php $journey = count($attendanceJourney) ? $attendanceJourney : $todayTimeline; @endphp
 <style>
 .pa-jcard{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:16px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
 .pa-jhead{display:flex;align-items:center;gap:10px;padding:15px 18px 6px}
@@ -534,69 +533,189 @@
 .pa-bm .fill{height:100%;border-radius:6px}
 .pa-bm .val{font-size:12px;font-weight:640;width:34px;text-align:right;color:var(--pa-ink);font-variant-numeric:tabular-nums}
 </style>
-<div class="pa" style="margin-top:18px">
-  <div class="pa-work">
-  <div class="pa-jcard">
-    <div class="pa-jhead">
-      <div><h3>Today's attendance journey</h3><div class="sub">{{ count($journey) ? count($journey).' events · de-duplicated' : 'No punches yet' }}</div></div>
-      <button type="button" class="pa-jlink" @click="$flux.modal('regularisation-modal').show()">Fix a punch →</button>
+{{-- ═══ Enterprise punch timeline (session-based · neutral IN/OUT · GSAP) ═══ --}}
+<style>
+.pa-jsec{margin-top:18px}
+.pa-jcard2{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:20px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.pa-jhead2{display:flex;align-items:center;gap:12px;padding:18px 22px 14px}
+.pa-jhead2 h3{margin:0;font-size:15px;font-weight:680;letter-spacing:-.01em;color:var(--pa-ink)}
+.pa-jhead2 .sub{font-size:12px;color:var(--pa-faint);margin-top:2px}
+.pa-jhead2 .fixlink{margin-left:auto;color:var(--pa-accent-ink);font-weight:620;font-size:12.5px;background:none;border:0;cursor:pointer}
+.pa-jhead2 .fixlink:hover{text-decoration:underline}
+/* Attendance stat card */
+.pa-acard{display:grid;grid-template-columns:1.5fr repeat(5,1fr);gap:0;border-top:1px solid var(--pa-border);border-bottom:1px solid var(--pa-border);background:var(--pa-surface-2)}
+@media(max-width:900px){.pa-acard{grid-template-columns:1fr 1fr 1fr}}
+.pa-atile{padding:16px 20px;border-right:1px solid var(--pa-border)}
+.pa-atile:last-child{border-right:0}
+.pa-atile .lbl{font-size:10.5px;font-weight:640;text-transform:uppercase;letter-spacing:.07em;color:var(--pa-faint);display:flex;align-items:center;gap:6px}
+.pa-atile .val{font-size:19px;font-weight:720;letter-spacing:-.02em;color:var(--pa-ink);margin-top:6px;font-variant-numeric:tabular-nums}
+.pa-atile.hero .val{font-size:30px;font-weight:760}
+.pa-atile .sub2{font-size:11px;color:var(--pa-muted);margin-top:2px}
+.pa-livebadge{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:720;text-transform:uppercase;letter-spacing:.05em;color:var(--pa-present);background:var(--pa-present-soft);padding:2px 8px;border-radius:20px;vertical-align:middle;margin-left:8px}
+.pa-livebadge .dot{width:6px;height:6px;border-radius:50%;background:var(--pa-present);animation:pabeat 1.6s var(--pa-ease) infinite}
+/* Horizontal timeline */
+.pa-hz-scroll{overflow-x:auto;overflow-y:hidden;padding:0 10px}
+.pa-hz-track{position:relative;display:flex;align-items:flex-start;gap:8px;padding:104px 34px 26px;min-width:max-content;margin:0 auto}
+.pa-hz-rail{position:absolute;left:76px;right:76px;top:124px;height:3px;border-radius:3px;background:var(--pa-border);z-index:0}
+.pa-hz-rail-fill{position:absolute;left:76px;top:124px;height:3px;border-radius:3px;width:0;background:linear-gradient(90deg,var(--pa-present),#3B82F6 40%,#F59E0B 72%,var(--pa-danger));z-index:1}
+.pa-hz-node{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;min-width:84px;flex:0 0 auto}
+.pa-hz-dot{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;color:#fff;border:3px solid var(--pa-surface);box-shadow:0 2px 8px rgba(24,24,27,.14);cursor:default;transition:box-shadow .16s}
+.pa-hz-node:hover .pa-hz-dot{box-shadow:0 4px 16px rgba(24,24,27,.24)}
+.pa-hz-dot.t-first_in{background:var(--pa-present)}
+.pa-hz-dot.t-in{background:#3B82F6}
+.pa-hz-dot.t-out{background:#F59E0B}
+.pa-hz-dot.t-last_out{background:var(--pa-danger)}
+.pa-hz-dot.t-live{background:var(--pa-present);box-shadow:0 0 0 6px var(--pa-present-soft)}
+.pa-hz-dot.t-missing{background:var(--pa-surface);border:2px dashed var(--pa-faint);color:var(--pa-faint);box-shadow:none}
+.pa-hz-time{font-size:13px;font-weight:680;color:var(--pa-ink);margin-top:10px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.pa-hz-dir{font-size:10px;font-weight:720;letter-spacing:.06em;margin-top:3px;padding:1px 8px;border-radius:20px}
+.pa-hz-dir.d-in{color:var(--pa-present);background:var(--pa-present-soft)}
+.pa-hz-dir.d-out{color:var(--pa-danger);background:var(--pa-danger-soft)}
+/* tooltip */
+.pa-hz-tip{position:absolute;bottom:calc(100% - 84px);left:50%;transform:translate(-50%,-8px) scale(.96);transform-origin:bottom center;width:200px;background:var(--pa-ink);color:var(--pa-surface);border-radius:12px;padding:11px 13px;font-size:11.5px;line-height:1.5;box-shadow:0 12px 30px rgba(24,24,27,.28);opacity:0;pointer-events:none;transition:opacity .16s var(--pa-ease),transform .16s var(--pa-ease);z-index:20}
+.pa-hz-tip::after{content:"";position:absolute;top:100%;left:50%;transform:translateX(-50%);border:6px solid transparent;border-top-color:var(--pa-ink)}
+.pa-hz-node:hover .pa-hz-tip{opacity:1;transform:translate(-50%,0) scale(1)}
+.pa-hz-tip .tt{font-size:13px;font-weight:720;margin-bottom:5px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.pa-hz-tip .tr{display:flex;align-items:center;gap:6px;opacity:.82}
+.pa-hz-tip .tr .k{width:78px;opacity:.7;flex:0 0 auto}
+.pa-hz-tip a{color:#93C5FD;font-weight:640}
+/* live banner */
+.pa-livebar{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin:0 22px 18px;padding:14px 18px;border-radius:14px;background:linear-gradient(135deg,var(--pa-present-soft),var(--pa-surface));border:1px solid var(--pa-present-soft)}
+.pa-livebar .lw{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:680;color:var(--pa-present)}
+.pa-livebar .lw .dot{width:9px;height:9px;border-radius:50%;background:var(--pa-present);animation:pabeat 1.6s var(--pa-ease) infinite}
+.pa-livebar .el{margin-left:auto;font-size:24px;font-weight:760;letter-spacing:-.02em;color:var(--pa-ink);font-variant-numeric:tabular-nums}
+.pa-livebar .st{font-size:12px;color:var(--pa-muted)}
+/* bottom grid: sessions + rail */
+.pa-jgrid{display:grid;grid-template-columns:1.35fr 1fr;gap:18px;margin-top:18px}
+@media(max-width:960px){.pa-jgrid{grid-template-columns:1fr}}
+.pa-sesscard{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:16px;padding:16px 18px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.pa-sesscard .sh{font-size:13.5px;font-weight:660;color:var(--pa-ink);display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.pa-srow{display:grid;grid-template-columns:78px 1fr auto;align-items:center;gap:12px;padding:11px 0;border-top:1px solid var(--pa-border)}
+.pa-srow:first-of-type{border-top:0}
+.pa-srow .sn{font-size:11px;font-weight:680;text-transform:uppercase;letter-spacing:.05em;color:var(--pa-faint)}
+.pa-srow .sp{font-size:13px;font-weight:600;color:var(--pa-ink);font-variant-numeric:tabular-nums}
+.pa-srow .sd{font-size:14px;font-weight:720;color:var(--pa-ink);font-variant-numeric:tabular-nums;text-align:right}
+.pa-srow.live .sd{color:var(--pa-present)}
+.pa-stot{display:flex;align-items:center;justify-content:space-between;margin-top:12px;padding-top:13px;border-top:2px solid var(--pa-border)}
+.pa-stot .tl{font-size:12px;font-weight:640;color:var(--pa-muted)}
+.pa-stot .tv{font-size:20px;font-weight:760;letter-spacing:-.02em;color:var(--pa-ink);font-variant-numeric:tabular-nums}
+.pa-snote{margin-top:12px;font-size:11.5px;color:var(--pa-faint);display:flex;align-items:center;gap:7px}
+.pa-swarn{margin-top:12px;font-size:12px;font-weight:600;color:var(--pa-danger);background:var(--pa-danger-soft);padding:9px 12px;border-radius:10px;display:flex;align-items:center;gap:8px}
+.pa-hz-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:var(--pa-faint);padding:52px 0}
+/* legend */
+.pa-hz-leg{display:flex;gap:16px;flex-wrap:wrap;padding:12px 22px 18px;border-top:1px solid var(--pa-border)}
+.pa-hz-leg span{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:560;color:var(--pa-muted)}
+.pa-hz-leg i{width:10px;height:10px;border-radius:50%;display:inline-block}
+</style>
+@php
+    $pj = $punchJourney;
+    $hasPunch = ($pj['raw_count'] ?? 0) > 0;
+    $fmt = function ($m) { $m = (int) $m; return $m < 60 ? $m.'m' : intdiv($m, 60).'h '.str_pad((string) ($m % 60), 2, '0', STR_PAD_LEFT).'m'; };
+@endphp
+<div class="pa pa-jsec" x-data="punchTimeline({ live: {{ $pj['live'] ? 'true' : 'false' }}, startedAtMs: {{ $pj['live_start_ms'] ?? 'null' }} })">
+  <div class="pa-jcard2">
+    <div class="pa-jhead2">
+      <div>
+        <h3>Attendance journey</h3>
+        <div class="sub">{{ $hasPunch ? $pj['session_count'].' '.\Illuminate\Support\Str::plural('session', $pj['session_count']).' · '.$pj['raw_count'].' '.\Illuminate\Support\Str::plural('punch', $pj['raw_count']) : 'No punches recorded today' }}</div>
+      </div>
+      <button type="button" class="fixlink" @click="$flux.modal('regularisation-modal').show()">Fix a punch →</button>
     </div>
-    @if(count($journey) > 0)
-      <div class="pa-tl" wire:loading.class="opacity-40" wire:target="statsPeriod,rangeFrom,rangeTo">
-        @foreach($journey as $ev)
-          @php
-            [$dcls, $ic, $btint, $blabel] = match($ev['type']) {
-              'in'     => ['pa-d-pres', 'check',    'pa-b-pres', ($todayAttendance && $todayAttendance->is_late) ? 'Late' : 'On time'],
-              'late'   => ['pa-d-dan',  'exclamation-triangle', 'pa-b-dan', 'Late'],
-              'break'  => ['pa-d-warn', 'pause',    'pa-b-warn', 'Break'],
-              'resume' => ['pa-d-iris', 'play',     'pa-b-iris', 'Back'],
-              'out'    => ['pa-d-dan',  'arrow-left-start-on-rectangle', 'pa-b-dan', 'Clocked out'],
-              default  => ['pa-d-mut',  'clock',    '',          ''],
-            };
-            $evMethod = ($ev['method'] ?? null) instanceof PunchMethod ? $ev['method'] : PunchMethod::tryFrom((string) ($ev['method'] ?? ''));
-            $gap = $ev['gap_min'] ?? null;
-            $gapLabel = $gap !== null ? ($gap >= 60 ? intdiv($gap, 60).'h '.($gap % 60).'m' : $gap.'m') : null;
-            $hasDetail = ! empty($ev['lat']) || ! empty($ev['verify']) || ! empty($ev['source']);
-          @endphp
-          @if(! $loop->first && $gapLabel)
-            <div class="pa-gap"><span class="ln"></span>{{ in_array($ev['type'], ['resume']) ? 'break '.$gapLabel : 'worked '.$gapLabel }}<span class="ln"></span></div>
-          @endif
-          <div class="pa-tl-item" x-data="{ x:false }">
-            <div class="pa-tl-time">{{ \Illuminate\Support\Str::before($ev['time'], ' ') }}<small>{{ \Illuminate\Support\Str::after($ev['time'], ' ') }}</small></div>
-            <div class="pa-tl-rail"><span class="pa-tl-dot {{ $dcls }}"><flux:icon :icon="$ic" class="size-3.5" /></span>@unless($loop->last)<span class="pa-tl-line"></span>@endunless</div>
-            <div class="pa-tl-body">
-              <button type="button" class="pa-tl-c" @if($hasDetail) @click="x=!x" @endif>
-                <div class="pa-tl-t"><span>{{ $ev['title'] }}</span>@if($blabel)<span class="pa-b {{ $btint }}">{{ $blabel }}</span>@endif</div>
-                <div class="pa-tl-meta">
-                  @if($evMethod)<span class="mi"><flux:icon :icon="$evMethod->icon() ?? 'finger-print'" class="size-3" /> {{ $evMethod->label() }}</span>@endif
-                  @if(! empty($ev['location']))<span class="mi"><flux:icon.map-pin class="size-3" /> {{ $ev['location'] }}</span>@endif
-                  @if($hasDetail)<span class="mi" style="margin-left:auto"><flux:icon.chevron-down class="size-3" ::class="x ? 'rotate-180' : ''" /></span>@endif
-                </div>
-                @if($hasDetail)
-                  <div x-show="x" x-collapse class="pa-tl-more">
-                    @if(! empty($ev['source']))<span style="text-transform:uppercase;letter-spacing:.04em">{{ $ev['source'] === 'web' ? 'Web punch' : ucfirst($ev['source']) }}</span>@endif
-                    @if(! empty($ev['verify']))<span>Verify {{ $ev['verify'] }}</span>@endif
-                    @if(! empty($ev['lat']) && ! empty($ev['lng']))<a href="https://www.google.com/maps?q={{ $ev['lat'] }},{{ $ev['lng'] }}" target="_blank" rel="noopener" style="color:var(--pa-accent-ink);font-weight:600" @click.stop>View on map</a>@endif
-                  </div>
+
+    {{-- Attendance stat card --}}
+    <div class="pa-acard">
+      <div class="pa-atile hero">
+        <div class="lbl"><flux:icon.clock class="size-3.5" /> Working today</div>
+        <div class="val">{{ $hasPunch ? $fmt($pj['working_minutes']) : '—' }}
+          @if($pj['live'])<span class="pa-livebadge"><span class="dot"></span>Live</span>@endif
+        </div>
+      </div>
+      <div class="pa-atile"><div class="lbl">Started</div><div class="val">{{ $pj['first_in'] ? \Illuminate\Support\Str::before($pj['first_in'], ' ') : '—' }}</div><div class="sub2">{{ $pj['first_in'] ? \Illuminate\Support\Str::after($pj['first_in'], ' ') : 'not yet' }}</div></div>
+      <div class="pa-atile"><div class="lbl">Current session</div><div class="val">@if($pj['live'])<span x-text="elapsed">{{ $fmt($pj['live_elapsed_minutes']) }}</span>@else{{ $hasPunch && count($pj['sessions']) ? end($pj['sessions'])['label'] : '—' }}@endif</div></div>
+      <div class="pa-atile"><div class="lbl">Punches</div><div class="val">{{ $pj['raw_count'] }}</div>@if($pj['duplicate_count'] > 0)<div class="sub2">{{ $pj['duplicate_count'] }} duplicate ignored</div>@endif</div>
+      <div class="pa-atile"><div class="lbl">First in</div><div class="val">{{ $pj['first_in'] ? \Illuminate\Support\Str::before($pj['first_in'], ' ') : '—' }}</div></div>
+      <div class="pa-atile"><div class="lbl">Break</div><div class="val">{{ $fmt($pj['break_minutes']) }}</div></div>
+    </div>
+
+    @if($pj['live'])
+      <div class="pa-livebar">
+        <div class="lw"><span class="dot"></span>Currently working</div>
+        <div class="st">Started {{ $pj['live_start_label'] }}</div>
+        <div class="el" x-text="elapsed">{{ $fmt($pj['live_elapsed_minutes']) }}</div>
+      </div>
+    @endif
+
+    {{-- Horizontal punch timeline --}}
+    @if($hasPunch)
+      <div class="pa-hz-scroll" wire:loading.class="opacity-40" wire:target="statsPeriod,rangeFrom,rangeTo">
+        <div class="pa-hz-track">
+          <div class="pa-hz-rail"></div>
+          <div class="pa-hz-rail-fill" data-tl-progress></div>
+          @foreach($pj['nodes'] as $node)
+            @php
+              $isMissing = $node['type'] === 'missing';
+              $nodeIcon = $isMissing ? 'exclamation-triangle' : ($node['dir'] === 'IN' ? 'arrow-right-end-on-rectangle' : 'arrow-left-start-on-rectangle');
+            @endphp
+            <div class="pa-hz-node" data-tl-node>
+              <div class="pa-hz-tip">
+                <div class="tt"><span>{{ $node['time'] }}</span><span>{{ $isMissing ? 'Missing' : $node['dir'] }}</span></div>
+                @if($isMissing)
+                  <div class="tr">No matching punch — needs regularization.</div>
+                @else
+                  @if($node['method_label'])<div class="tr"><span class="k">Authentication</span><flux:icon :icon="$node['method_icon']" class="size-3" /> {{ $node['method_label'] }}</div>@endif
+                  @if($node['device'])<div class="tr"><span class="k">Machine</span>{{ $node['device'] }}</div>@endif
+                  @if($node['location'])<div class="tr"><span class="k">Gate</span>{{ $node['location'] }}</div>@endif
+                  @if($node['verify'])<div class="tr"><span class="k">Verify</span>{{ $node['verify'] }}</div>@endif
+                  @if($node['source'])<div class="tr"><span class="k">Source</span>{{ $node['source'] === 'web' ? 'Web punch' : ucfirst($node['source']) }}</div>@endif
+                  @if(! empty($node['lat']) && ! empty($node['lng']))<div class="tr"><a href="https://www.google.com/maps?q={{ $node['lat'] }},{{ $node['lng'] }}" target="_blank" rel="noopener">View on map →</a></div>@endif
                 @endif
-              </button>
+              </div>
+              <div class="pa-hz-dot t-{{ $node['type'] }}" @if($node['type'] === 'live') data-tl-live @endif><flux:icon :icon="$nodeIcon" class="size-4" /></div>
+              <div class="pa-hz-time">{{ $node['time'] }}</div>
+              <div class="pa-hz-dir d-{{ strtolower($node['dir']) }}">{{ $node['dir'] }}</div>
             </div>
-          </div>
-        @endforeach
-        @if($isIn)
-          <div class="pa-tl-item">
-            <div class="pa-tl-time" style="color:var(--pa-accent-ink)">now</div>
-            <div class="pa-tl-rail"><span class="pa-tl-dot" style="background:var(--pa-accent-soft);box-shadow:0 0 0 1px var(--pa-accent)"><span class="pa-live-dot"></span></span></div>
-            <div class="pa-tl-body"><div class="pa-tl-c" style="border-style:dashed;cursor:default"><div class="pa-tl-t"><span>Currently working</span><span class="pa-b pa-b-iris">Live</span></div></div></div>
-          </div>
-        @endif
+          @endforeach
+        </div>
+      </div>
+      <div class="pa-hz-leg">
+        <span><i style="background:var(--pa-present)"></i> First in</span>
+        <span><i style="background:#3B82F6"></i> In</span>
+        <span><i style="background:#F59E0B"></i> Out</span>
+        <span><i style="background:var(--pa-danger)"></i> Last out</span>
+        @if($pj['live'])<span><i style="background:var(--pa-present)"></i> Live</span>@endif
+        @if($pj['missing_out'])<span><i style="background:var(--pa-faint)"></i> Missing</span>@endif
       </div>
     @else
-      <div class="pa-tl-empty"><flux:icon.clock class="mb-2 size-8" style="opacity:.4" /><p style="font-size:12px;margin:0">No punches recorded today.</p></div>
+      <div class="pa-hz-empty"><flux:icon.clock class="mb-2 size-8" style="opacity:.4" /><p style="font-size:12.5px;margin:0">No punches recorded today.</p></div>
     @endif
-  </div>{{-- /pa-jcard --}}
+  </div>{{-- /pa-jcard2 --}}
 
-  {{-- Right rail: streak · smart insights · benchmark (slice 3) --}}
+  {{-- Session summary + streak/benchmark rail --}}
+  <div class="pa-jgrid">
+    <div class="pa-sesscard">
+      <div class="sh"><flux:icon.squares-2x2 class="size-4 text-orange-500" /> Session summary</div>
+      @if($hasPunch && count($pj['sessions']))
+        @foreach($pj['sessions'] as $s)
+          <div class="pa-srow {{ $s['live'] ? 'live' : '' }}">
+            <span class="sn">Session {{ $s['index'] }}</span>
+            <span class="sp">{{ \Illuminate\Support\Str::before($s['in'], ' ') }} → {{ $s['out'] ? \Illuminate\Support\Str::before($s['out'], ' ') : 'now' }}</span>
+            <span class="sd">{{ $s['label'] }}{{ $s['live'] ? ' · live' : '' }}</span>
+          </div>
+        @endforeach
+        <div class="pa-stot"><span class="tl">Total working hours</span><span class="tv">{{ $fmt($pj['working_minutes']) }}</span></div>
+        <div class="pa-stot" style="border-top:1px solid var(--pa-border);padding-top:11px;margin-top:11px"><span class="tl">Total break</span><span class="tv" style="font-size:16px;color:var(--pa-muted)">{{ $fmt($pj['break_minutes']) }}</span></div>
+        @if($pj['missing_out'])
+          <div class="pa-swarn"><flux:icon.exclamation-triangle class="size-4" /> Missing OUT punch — this day needs regularization.</div>
+        @endif
+        @if($pj['duplicate_count'] > 0)
+          <div class="pa-snote"><flux:icon.funnel class="size-3.5" /> {{ $pj['duplicate_count'] }} duplicate {{ \Illuminate\Support\Str::plural('punch', $pj['duplicate_count']) }} detected and ignored in calculations.</div>
+        @endif
+      @else
+        <p style="font-size:12.5px;color:var(--pa-faint);margin:0">No sessions yet — your first punch starts session 1.</p>
+      @endif
+    </div>
+
+  {{-- Right rail: streak · benchmark (slice 3) --}}
   <div class="pa-rail">
     <div class="pa-rc pa-streak">
       <div style="display:flex;align-items:center;gap:12px">
@@ -625,7 +744,7 @@
       </p>
     </div>
   </div>{{-- /pa-rail --}}
-  </div>{{-- /pa-work --}}
+  </div>{{-- /pa-jgrid --}}
 </div>
 
 {{-- ═══════════════ ATTENDANCE ANALYTICS (enterprise grid) ═══════════════ --}}

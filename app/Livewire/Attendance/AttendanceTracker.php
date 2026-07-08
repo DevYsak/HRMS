@@ -100,6 +100,15 @@ class AttendanceTracker extends Component
     /** Full Attendance Journey — every biometric punch for today, classified. */
     public array $attendanceJourney = [];
 
+    /**
+     * Session-based punch journey for the enterprise timeline: neutral IN/OUT
+     * nodes, auto-paired work sessions, live/missing/duplicate flags. Never
+     * guesses the reason for an OUT.
+     *
+     * @var array<string, mixed>
+     */
+    public array $punchJourney = [];
+
     /** Smart Attendance Alerts — missing check-in/out/break, past & present. */
     public array $attendanceAlerts = [];
 
@@ -305,6 +314,7 @@ class AttendanceTracker extends Component
         $this->weekSummary = $this->buildWeekSummary($employee);
         $this->todayTimeline = $this->buildTodayTimeline();
         $this->attendanceJourney = $this->buildAttendanceJourney($employee);
+        $this->punchJourney = $this->buildPunchJourney($employee);
         $this->loadStreakAndBenchmark($employee);
 
         // 10. Biometric daily summary + device (needed by the alerts below)
@@ -643,6 +653,178 @@ class AttendanceTracker extends Component
             ->get();
 
         return $this->classifyPunches($punches);
+    }
+
+    /**
+     * Session-based punch journey for the enterprise horizontal timeline.
+     *
+     * Unlike the classified Journey, this NEVER labels a gap as a break/lunch —
+     * the biometric stream only knows a punch happened, not why the employee
+     * stepped out. It surfaces neutral IN/OUT nodes, auto-pairs them into work
+     * sessions, and derives working / break minutes, duplicates, a live timer,
+     * and missing-punch flags.
+     */
+    protected function buildPunchJourney($employee): array
+    {
+        $today = Carbon::today();
+        $raw = AttendancePunch::where('employee_id', $employee->id)
+            ->whereDate('punch_date', $today->toDateString())
+            ->orderBy('punched_at')
+            ->get();
+
+        return $this->assemblePunchJourney($raw, $today);
+    }
+
+    /**
+     * Pair a day's raw punches into neutral IN/OUT nodes and work sessions.
+     *
+     * Direction is inferred by alternation (the devices don't tag in/out):
+     * even survivors are IN, odd are OUT. An odd survivor count means the final
+     * IN has no OUT — a live session when the day is today, otherwise a missing
+     * punch that needs regularisation.
+     *
+     * @param  Collection<int, AttendancePunch>  $raw
+     * @return array<string, mixed>
+     */
+    protected function assemblePunchJourney($raw, Carbon $day): array
+    {
+        $rawCount = $raw->count();
+
+        if ($rawCount === 0) {
+            return [
+                'nodes' => [], 'sessions' => [], 'first_in' => null, 'last_out' => null,
+                'raw_count' => 0, 'kept_count' => 0, 'duplicate_count' => 0,
+                'working_minutes' => 0, 'break_minutes' => 0, 'session_count' => 0,
+                'live' => false, 'live_start_ms' => null, 'live_start_label' => null,
+                'live_elapsed_minutes' => 0, 'missing_out' => false,
+            ];
+        }
+
+        $kept = app(PunchClassifier::class)->dedupe(collect($raw))->values();
+        $n = $kept->count();
+        $isToday = $day->isToday();
+        $lastIsIn = $n % 2 === 1;              // odd survivors → trailing IN
+        $live = $lastIsIn && $isToday;
+        $missingOut = $lastIsIn && ! $isToday;
+
+        // ── Neutral IN/OUT nodes ────────────────────────────────────────────
+        $nodes = $kept->map(function (AttendancePunch $p, int $i) use ($n, $live) {
+            $isIn = $i % 2 === 0;
+            $type = match (true) {
+                $i === 0 => 'first_in',
+                $live && $i === $n - 1 => 'live',
+                $i === $n - 1 && ! $isIn => 'last_out',
+                $isIn => 'in',
+                default => 'out',
+            };
+            $method = $p->methodEnum();
+
+            return [
+                'time' => $p->punched_at->format('h:i A'),
+                'time_short' => $p->punched_at->format('g:i'),
+                'ts_ms' => (int) ($p->punched_at->getTimestampMs()),
+                'dir' => $isIn ? 'IN' : 'OUT',
+                'type' => $type,
+                'method' => $method?->value,
+                'method_label' => $method?->label(),
+                'method_icon' => $method?->icon() ?? 'finger-print',
+                'device' => $p->device_serial,
+                'location' => $p->location,
+                'verify' => $p->verify_raw,
+                'source' => $p->source,
+                'lat' => $p->lat,
+                'lng' => $p->lng,
+            ];
+        })->all();
+
+        // Past-day missing OUT → append a synthetic placeholder node.
+        if ($missingOut) {
+            $nodes[] = [
+                'time' => '—', 'time_short' => '—', 'ts_ms' => null, 'dir' => 'OUT',
+                'type' => 'missing', 'method' => null, 'method_label' => null,
+                'method_icon' => 'exclamation-triangle', 'device' => null,
+                'location' => null, 'verify' => null, 'source' => null, 'lat' => null, 'lng' => null,
+            ];
+        }
+
+        // ── Auto-paired sessions ────────────────────────────────────────────
+        $sessions = [];
+        $workingMinutes = 0;
+        for ($i = 0; $i < $n - 1; $i += 2) {
+            $in = $kept->get($i);
+            $out = $kept->get($i + 1);
+            $mins = (int) $in->punched_at->diffInMinutes($out->punched_at);
+            $workingMinutes += $mins;
+            $sessions[] = [
+                'index' => count($sessions) + 1,
+                'in' => $in->punched_at->format('h:i A'),
+                'out' => $out->punched_at->format('h:i A'),
+                'minutes' => $mins,
+                'label' => $this->minutesToHm($mins),
+                'live' => false,
+            ];
+        }
+
+        // Live session — the trailing IN with no OUT yet (today only).
+        $liveStartMs = null;
+        $liveStartLabel = null;
+        $liveElapsed = 0;
+        if ($live) {
+            $liveIn = $kept->get($n - 1);
+            $liveElapsed = (int) $liveIn->punched_at->diffInMinutes(now());
+            $workingMinutes += $liveElapsed;
+            $liveStartMs = (int) $liveIn->punched_at->getTimestampMs();
+            $liveStartLabel = $liveIn->punched_at->format('h:i A');
+            $sessions[] = [
+                'index' => count($sessions) + 1,
+                'in' => $liveStartLabel,
+                'out' => null,
+                'minutes' => $liveElapsed,
+                'label' => $this->minutesToHm($liveElapsed),
+                'live' => true,
+            ];
+        }
+
+        // ── Break minutes = time OUTSIDE between consecutive sessions ────────
+        $breakMinutes = 0;
+        for ($i = 1; $i < $n - 1; $i += 2) {
+            $out = $kept->get($i);
+            $nextIn = $kept->get($i + 1);
+            if ($out && $nextIn) {
+                $breakMinutes += (int) $out->punched_at->diffInMinutes($nextIn->punched_at);
+            }
+        }
+
+        $firstIn = $kept->first();
+        $lastPaired = $lastIsIn ? $kept->get($n - 2) : $kept->get($n - 1);
+
+        return [
+            'nodes' => $nodes,
+            'sessions' => $sessions,
+            'first_in' => $firstIn?->punched_at->format('h:i A'),
+            'last_out' => (! $lastIsIn && $lastPaired) ? $lastPaired->punched_at->format('h:i A') : null,
+            'raw_count' => $rawCount,
+            'kept_count' => $n,
+            'duplicate_count' => max(0, $rawCount - $n),
+            'working_minutes' => $workingMinutes,
+            'break_minutes' => $breakMinutes,
+            'session_count' => count($sessions),
+            'live' => $live,
+            'live_start_ms' => $liveStartMs,
+            'live_start_label' => $liveStartLabel,
+            'live_elapsed_minutes' => $liveElapsed,
+            'missing_out' => $missingOut,
+        ];
+    }
+
+    /** Format a minute count as "9h 00m" (or "45m" under an hour). */
+    protected function minutesToHm(int $minutes): string
+    {
+        if ($minutes < 60) {
+            return $minutes.'m';
+        }
+
+        return intdiv($minutes, 60).'h '.str_pad((string) ($minutes % 60), 2, '0', STR_PAD_LEFT).'m';
     }
 
     /**
