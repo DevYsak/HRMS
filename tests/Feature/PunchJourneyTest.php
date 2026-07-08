@@ -139,6 +139,57 @@ test('engine-directed punches pair by real IN/OUT, not alternation', function ()
         ->toBe(['IN', 'OUT', 'IN', 'OUT', 'IN', 'OUT', 'IN', 'OUT', 'IN', 'OUT']);
 });
 
+/** Insert a directional punch (in|out) for the acting employee at today's H:i:s. */
+function dirPunch(int $employeeId, string $time, string $dir): void
+{
+    $at = Carbon::today()->setTimeFromTimeString($time);
+    AttendancePunch::factory()->create([
+        'employee_id' => $employeeId, 'punched_at' => $at,
+        'punch_date' => $at->toDateString(), 'direction' => $dir,
+    ]);
+}
+
+test('same-direction duplicate reads within the window are ignored, raw kept', function () {
+    dirPunch($this->employee->id, '09:00:00', 'in');
+    dirPunch($this->employee->id, '09:00:20', 'in');  // duplicate IN, 20s later
+    dirPunch($this->employee->id, '17:00:00', 'out');
+
+    $pj = Livewire::test(AttendanceTracker::class)->get('punchJourney');
+
+    expect($pj['raw_count'])->toBe(3)          // all three rows still exist
+        ->and($pj['duplicate_count'])->toBe(1)  // the 09:00:20 read is suppressed
+        ->and($pj['session_count'])->toBe(1)
+        ->and($pj['needs_regularization'])->toBeFalse()
+        ->and(collect($pj['nodes'])->where('type', 'missing'))->toHaveCount(0);
+});
+
+test('IN then IN beyond the window is a missing OUT, flagged for regularization', function () {
+    dirPunch($this->employee->id, '10:19:00', 'in');
+    dirPunch($this->employee->id, '12:58:00', 'in');  // missing OUT between
+    dirPunch($this->employee->id, '18:00:00', 'out');
+
+    $pj = Livewire::test(AttendanceTracker::class)->get('punchJourney');
+
+    expect($pj['needs_regularization'])->toBeTrue()
+        ->and($pj['duplicate_count'])->toBe(0)      // not a duplicate — a real gap
+        ->and(collect($pj['nodes'])->pluck('type')->all())
+        ->toBe(['first_in', 'missing', 'in', 'last_out'])
+        ->and(collect($pj['nodes'])->firstWhere('type', 'missing')['dir'])->toBe('OUT');
+});
+
+test('OUT then OUT beyond the window is a missing IN', function () {
+    dirPunch($this->employee->id, '09:00:00', 'in');
+    dirPunch($this->employee->id, '13:00:00', 'out');
+    dirPunch($this->employee->id, '18:00:00', 'out');  // missing IN between
+
+    $pj = Livewire::test(AttendanceTracker::class)->get('punchJourney');
+
+    expect($pj['needs_regularization'])->toBeTrue()
+        ->and(collect($pj['nodes'])->pluck('dir')->all())
+        ->toBe(['IN', 'OUT', 'IN', 'OUT'])   // synthetic missing IN inserted
+        ->and(collect($pj['nodes'])->firstWhere('type', 'missing')['dir'])->toBe('IN');
+});
+
 test('the enterprise timeline renders the attendance card and session summary', function () {
     punchAt($this->employee->id, '09:02'); // in
     punchAt($this->employee->id, '18:18'); // out

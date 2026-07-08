@@ -566,7 +566,20 @@
 .pa-hz-dot.t-out{background:#F59E0B}
 .pa-hz-dot.t-last_out{background:var(--pa-danger)}
 .pa-hz-dot.t-live{background:var(--pa-present);box-shadow:0 0 0 6px var(--pa-present-soft)}
-.pa-hz-dot.t-missing{background:var(--pa-surface);border:2px dashed var(--pa-faint);color:var(--pa-faint);box-shadow:none}
+.pa-hz-dot.t-missing{background:var(--pa-warn-soft);border:2px dashed var(--pa-warn);color:var(--pa-warn);box-shadow:none;animation:pashake 2.4s var(--pa-ease) infinite}
+@keyframes pashake{0%,88%,100%{transform:translateX(0)}90%{transform:translateX(-2.5px)}92%{transform:translateX(2.5px)}94%{transform:translateX(-2px)}96%{transform:translateX(2px)}98%{transform:translateX(-1px)}}
+@media(prefers-reduced-motion:reduce){.pa-hz-dot.t-missing{animation:none}}
+.pa-hz-node.miss .pa-hz-time{color:var(--pa-warn)}
+.pa-hz-dir.d-missing{color:var(--pa-warn);background:var(--pa-warn-soft)}
+/* Needs-regularization banner */
+.pa-regbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:0 22px 16px;padding:13px 16px;border-radius:14px;background:var(--pa-warn-soft);border:1px solid var(--pa-warn)}
+.pa-regbar .ic{width:34px;height:34px;border-radius:10px;background:var(--pa-warn);color:#fff;display:grid;place-items:center;flex:0 0 auto}
+.pa-regbar .tx{font-size:12.5px;color:var(--pa-ink);line-height:1.45}
+.pa-regbar .tx b{font-weight:680}
+.pa-regbar .cta{margin-left:auto;display:inline-flex;align-items:center;gap:7px;background:var(--pa-warn);color:#fff;border:0;border-radius:10px;padding:9px 15px;font-size:12.5px;font-weight:640;cursor:pointer;white-space:nowrap}
+.pa-regbar .cta:hover{filter:brightness(.95)}
+.pa-srow.miss .sd{color:var(--pa-warn)}
+.pa-srow.miss .sp{color:var(--pa-warn)}
 .pa-hz-time{font-size:13px;font-weight:680;color:var(--pa-ink);margin-top:10px;font-variant-numeric:tabular-nums;white-space:nowrap}
 .pa-hz-dir{font-size:10px;font-weight:720;letter-spacing:.06em;margin-top:3px;padding:1px 8px;border-radius:20px}
 .pa-hz-dir.d-in{color:var(--pa-present);background:var(--pa-present-soft)}
@@ -645,6 +658,15 @@
       </div>
     @endif
 
+    {{-- Missing-punch notification --}}
+    @if(! empty($pj['needs_regularization']))
+      <div class="pa-regbar">
+        <span class="ic"><flux:icon.exclamation-triangle class="size-4" /></span>
+        <div class="tx"><b>A missing punch was detected in today's attendance.</b> Working hours can't be finalised until it's corrected — please submit a regularization request.</div>
+        <button type="button" class="cta" @click="$flux.modal('regularisation-modal').show()"><flux:icon.pencil-square class="size-3.5" /> Request Regularization</button>
+      </div>
+    @endif
+
     {{-- Horizontal punch timeline --}}
     @if($hasPunch)
       <div class="pa-hz-scroll" wire:loading.class="opacity-40" wire:target="statsPeriod,rangeFrom,rangeTo">
@@ -656,9 +678,9 @@
               $isMissing = $node['type'] === 'missing';
               $nodeIcon = $isMissing ? 'exclamation-triangle' : ($node['dir'] === 'IN' ? 'arrow-right-end-on-rectangle' : 'arrow-left-start-on-rectangle');
             @endphp
-            <div class="pa-hz-node" data-tl-node>
+            <div class="pa-hz-node {{ $isMissing ? 'miss' : '' }}" data-tl-node>
               <div class="pa-hz-tip">
-                <div class="tt"><span>{{ $node['time'] }}</span><span>{{ $isMissing ? 'Missing' : $node['dir'] }}</span></div>
+                <div class="tt"><span>{{ $node['time'] }}</span><span>{{ $isMissing ? 'Missing '.$node['dir'] : $node['dir'] }}</span></div>
                 @if($isMissing)
                   <div class="tr">No matching punch — needs regularization.</div>
                 @else
@@ -672,7 +694,7 @@
               </div>
               <div class="pa-hz-dot t-{{ $node['type'] }}" @if($node['type'] === 'live') data-tl-live @endif><flux:icon :icon="$nodeIcon" class="size-4" /></div>
               <div class="pa-hz-time">{{ $node['time'] }}</div>
-              <div class="pa-hz-dir d-{{ strtolower($node['dir']) }}">{{ $node['dir'] }}</div>
+              <div class="pa-hz-dir {{ $isMissing ? 'd-missing' : 'd-'.strtolower($node['dir']) }}">{{ $isMissing ? 'MISSING' : $node['dir'] }}</div>
             </div>
           @endforeach
         </div>
@@ -683,7 +705,7 @@
         <span><i style="background:#F59E0B"></i> Out</span>
         <span><i style="background:var(--pa-danger)"></i> Last out</span>
         @if($pj['live'])<span><i style="background:var(--pa-present)"></i> Live</span>@endif
-        @if($pj['missing_out'])<span><i style="background:var(--pa-faint)"></i> Missing</span>@endif
+        @if(! empty($pj['needs_regularization']))<span><i style="background:var(--pa-warn)"></i> Missing punch</span>@endif
       </div>
     @else
       <div class="pa-hz-empty"><flux:icon.clock class="mb-2 size-8" style="opacity:.4" /><p style="font-size:12.5px;margin:0">No punches recorded today.</p></div>
@@ -696,10 +718,11 @@
       <div class="sh"><flux:icon.squares-2x2 class="size-4 text-orange-500" /> Session summary</div>
       @if($hasPunch && count($pj['sessions']))
         @foreach($pj['sessions'] as $s)
-          <div class="pa-srow {{ $s['live'] ? 'live' : '' }}">
+          @php $miss = ! empty($s['missing']); @endphp
+          <div class="pa-srow {{ $s['live'] ? 'live' : '' }} {{ $miss ? 'miss' : '' }}">
             <span class="sn">Session {{ $s['index'] }}</span>
-            <span class="sp">{{ \Illuminate\Support\Str::before($s['in'], ' ') }} → {{ $s['out'] ? \Illuminate\Support\Str::before($s['out'], ' ') : 'now' }}</span>
-            <span class="sd">{{ $s['label'] }}{{ $s['live'] ? ' · live' : '' }}</span>
+            <span class="sp">{{ $s['in'] ? \Illuminate\Support\Str::before($s['in'], ' ') : '⚠ missing' }} → {{ $s['out'] ? \Illuminate\Support\Str::before($s['out'], ' ') : ($miss ? '⚠ missing' : 'now') }}</span>
+            <span class="sd">{{ $miss ? $s['label'] : $s['label'].($s['live'] ? ' · live' : '') }}</span>
           </div>
         @endforeach
         <div class="pa-stot"><span class="tl">Total working hours</span><span class="tv">{{ $fmt($pj['working_minutes']) }}</span></div>

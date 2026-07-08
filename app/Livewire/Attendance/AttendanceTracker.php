@@ -702,7 +702,7 @@ class AttendanceTracker extends Component
                 'raw_count' => 0, 'kept_count' => 0, 'duplicate_count' => 0,
                 'working_minutes' => 0, 'break_minutes' => 0, 'session_count' => 0,
                 'live' => false, 'live_start_ms' => null, 'live_start_label' => null,
-                'live_elapsed_minutes' => 0, 'missing_out' => false,
+                'live_elapsed_minutes' => 0, 'missing_out' => false, 'needs_regularization' => false,
             ];
         }
 
@@ -719,24 +719,53 @@ class AttendanceTracker extends Component
      * @param  Collection<int, AttendancePunch>  $punches
      * @return array<string, mixed>
      */
+    /** Same-direction reads closer than this are duplicate device noise (seconds). */
+    protected const DUP_WINDOW_SECONDS = 60;
+
     protected function assembleFromDirection($punches, Carbon $day, ?AttendanceDailySummary $summary): array
     {
-        $n = $punches->count();
         $isToday = $day->isToday();
-        $trailingIn = $punches->last()->direction === 'in';
-        $live = $trailingIn && $isToday;
-        $missingOut = $trailingIn && ! $isToday;
 
-        // Index of the final OUT — for the "last out" node styling.
+        // 1 ── Collapse same-direction duplicate reads (IN→IN / OUT→OUT within
+        // the window). Raw rows stay in the DB; they simply never reach the
+        // timeline or the calculations. A same-direction pair *beyond* the
+        // window is a missing punch (handled below), not a duplicate.
+        $clean = collect();
+        $duplicateCount = 0;
+        foreach ($punches as $p) {
+            $prev = $clean->last();
+            if ($prev && $prev->direction === $p->direction
+                && $prev->punched_at->diffInSeconds($p->punched_at) <= self::DUP_WINDOW_SECONDS) {
+                $duplicateCount++;
+
+                continue;
+            }
+            $clean->push($p);
+        }
+        $clean = $clean->values();
+        $n = $clean->count();
+
+        $trailingIn = $clean->last()->direction === 'in';
+        $live = $trailingIn && $isToday;
+        $missingTrailingOut = $trailingIn && ! $isToday;
+
         $lastOutIndex = null;
-        foreach ($punches as $i => $p) {
+        foreach ($clean as $i => $p) {
             if ($p->direction === 'out') {
                 $lastOutIndex = $i;
             }
         }
 
-        // ── Neutral IN/OUT nodes ────────────────────────────────────────────
-        $nodes = $punches->map(function (AttendancePunch $p, int $i) use ($n, $live, $lastOutIndex) {
+        // 2 ── Nodes, inserting a ⚠ missing marker wherever two same-direction
+        // punches sit back-to-back (IN→IN = missing OUT, OUT→OUT = missing IN).
+        $nodes = [];
+        $needsRegularization = false;
+        $prevDir = null;
+        foreach ($clean as $i => $p) {
+            if ($prevDir !== null && $p->direction === $prevDir) {
+                $needsRegularization = true;
+                $nodes[] = $this->missingNode($prevDir === 'in' ? 'OUT' : 'IN');
+            }
             $isIn = $p->direction !== 'out';
             $type = match (true) {
                 $live && $i === $n - 1 => 'live',
@@ -745,53 +774,37 @@ class AttendanceTracker extends Component
                 $isIn => 'in',
                 default => 'out',
             };
-            $method = $p->methodEnum();
-
-            return [
-                'time' => $p->punched_at->format('h:i A'),
-                'time_short' => $p->punched_at->format('g:i'),
-                'ts_ms' => (int) $p->punched_at->getTimestampMs(),
-                'dir' => $isIn ? 'IN' : 'OUT',
-                'type' => $type,
-                'method' => $method?->value,
-                'method_label' => $method?->label(),
-                'method_icon' => $method?->icon() ?? 'finger-print',
-                'device' => $p->device_serial,
-                'location' => $p->location,
-                'verify' => $p->verify_raw,
-                'source' => $p->source,
-                'lat' => $p->lat,
-                'lng' => $p->lng,
-            ];
-        })->all();
-
-        if ($missingOut) {
-            $nodes[] = [
-                'time' => '—', 'time_short' => '—', 'ts_ms' => null, 'dir' => 'OUT',
-                'type' => 'missing', 'method' => null, 'method_label' => null,
-                'method_icon' => 'exclamation-triangle', 'device' => null,
-                'location' => null, 'verify' => null, 'source' => null, 'lat' => null, 'lng' => null,
-            ];
+            $nodes[] = $this->punchNode($p, $type, $isIn);
+            $prevDir = $p->direction;
+        }
+        if ($missingTrailingOut) {
+            $needsRegularization = true;
+            $nodes[] = $this->missingNode('OUT');
         }
 
-        // ── Sessions: an IN opens, the next OUT closes ──────────────────────
+        // 3 ── Sessions: an IN opens, the next OUT closes. A second same-direction
+        // punch breaks the session (a missing punch) — never auto-paired.
         $sessions = [];
         $workingMinutes = 0;
         $breakMinutes = 0;
         $openIn = null;
         $prevOut = null;
-        foreach ($punches as $p) {
+        foreach ($clean as $p) {
             if ($p->direction !== 'out') {           // IN
                 if ($openIn === null) {
                     $openIn = $p;
                     if ($prevOut !== null) {
                         $breakMinutes += (int) $prevOut->punched_at->diffInMinutes($p->punched_at);
                     }
+                } else {
+                    // IN while a session is open → the previous IN has no OUT.
+                    $sessions[] = $this->incompleteSession(count($sessions) + 1, $openIn, null);
+                    $openIn = $p;
                 }
 
                 continue;
             }
-            // OUT closes the open session.
+            // OUT
             if ($openIn !== null) {
                 $mins = (int) $openIn->punched_at->diffInMinutes($p->punched_at);
                 $workingMinutes += $mins;
@@ -802,31 +815,41 @@ class AttendanceTracker extends Component
                     'minutes' => $mins,
                     'label' => $this->minutesToHm($mins),
                     'live' => false,
+                    'missing' => false,
                 ];
                 $openIn = null;
+                $prevOut = $p;
+            } else {
+                // OUT with no open IN → missing IN.
+                $sessions[] = $this->incompleteSession(count($sessions) + 1, null, $p);
                 $prevOut = $p;
             }
         }
 
-        // Trailing open IN → a live session (today) or a missing punch (past).
+        // Trailing open IN → live (today) or an incomplete/missing session (past).
         $liveStartMs = null;
         $liveStartLabel = null;
         $liveElapsed = 0;
-        if ($openIn !== null && $live) {
-            $liveElapsed = (int) $openIn->punched_at->diffInMinutes(now());
-            $liveStartMs = (int) $openIn->punched_at->getTimestampMs();
-            $liveStartLabel = $openIn->punched_at->format('h:i A');
-            if ($prevOut !== null) {
-                $breakMinutes += (int) $prevOut->punched_at->diffInMinutes($openIn->punched_at);
+        if ($openIn !== null) {
+            if ($live) {
+                $liveElapsed = (int) $openIn->punched_at->diffInMinutes(now());
+                $liveStartMs = (int) $openIn->punched_at->getTimestampMs();
+                $liveStartLabel = $openIn->punched_at->format('h:i A');
+                if ($prevOut !== null) {
+                    $breakMinutes += (int) $prevOut->punched_at->diffInMinutes($openIn->punched_at);
+                }
+                $sessions[] = [
+                    'index' => count($sessions) + 1,
+                    'in' => $liveStartLabel,
+                    'out' => null,
+                    'minutes' => $liveElapsed,
+                    'label' => $this->minutesToHm($liveElapsed),
+                    'live' => true,
+                    'missing' => false,
+                ];
+            } else {
+                $sessions[] = $this->incompleteSession(count($sessions) + 1, $openIn, null);
             }
-            $sessions[] = [
-                'index' => count($sessions) + 1,
-                'in' => $liveStartLabel,
-                'out' => null,
-                'minutes' => $liveElapsed,
-                'label' => $this->minutesToHm($liveElapsed),
-                'live' => true,
-            ];
         }
 
         // The engine's synced summary is the authoritative headline total.
@@ -835,16 +858,16 @@ class AttendanceTracker extends Component
             $breakMinutes = (int) $summary->break_minutes;
         }
 
-        $lastOut = $lastOutIndex !== null ? $punches->get($lastOutIndex) : null;
+        $lastOut = $lastOutIndex !== null ? $clean->get($lastOutIndex) : null;
 
         return [
             'nodes' => $nodes,
             'sessions' => $sessions,
-            'first_in' => $punches->first()->punched_at->format('h:i A'),
+            'first_in' => $clean->first()->punched_at->format('h:i A'),
             'last_out' => (! $trailingIn && $lastOut) ? $lastOut->punched_at->format('h:i A') : null,
-            'raw_count' => $n,
+            'raw_count' => $punches->count(),
             'kept_count' => $n,
-            'duplicate_count' => 0,             // engine direction → nothing dropped
+            'duplicate_count' => $duplicateCount,
             'working_minutes' => $workingMinutes,
             'break_minutes' => $breakMinutes,
             'session_count' => count($sessions),
@@ -852,7 +875,56 @@ class AttendanceTracker extends Component
             'live_start_ms' => $liveStartMs,
             'live_start_label' => $liveStartLabel,
             'live_elapsed_minutes' => $liveElapsed,
-            'missing_out' => $missingOut,
+            'missing_out' => $missingTrailingOut,
+            'needs_regularization' => $needsRegularization,
+        ];
+    }
+
+    /** A single timeline node for a real punch. */
+    protected function punchNode(AttendancePunch $p, string $type, bool $isIn): array
+    {
+        $method = $p->methodEnum();
+
+        return [
+            'time' => $p->punched_at->format('h:i A'),
+            'time_short' => $p->punched_at->format('g:i'),
+            'ts_ms' => (int) $p->punched_at->getTimestampMs(),
+            'dir' => $isIn ? 'IN' : 'OUT',
+            'type' => $type,
+            'method' => $method?->value,
+            'method_label' => $method?->label(),
+            'method_icon' => $method?->icon() ?? 'finger-print',
+            'device' => $p->device_serial,
+            'location' => $p->location,
+            'verify' => $p->verify_raw,
+            'source' => $p->source,
+            'lat' => $p->lat,
+            'lng' => $p->lng,
+        ];
+    }
+
+    /** A ⚠ placeholder node for a detected missing punch of the given direction. */
+    protected function missingNode(string $dir): array
+    {
+        return [
+            'time' => '—', 'time_short' => '—', 'ts_ms' => null, 'dir' => $dir,
+            'type' => 'missing', 'method' => null, 'method_label' => null,
+            'method_icon' => 'exclamation-triangle', 'device' => null,
+            'location' => null, 'verify' => null, 'source' => null, 'lat' => null, 'lng' => null,
+        ];
+    }
+
+    /** A session missing one of its punches — never auto-paired, flagged for regularisation. */
+    protected function incompleteSession(int $index, ?AttendancePunch $in, ?AttendancePunch $out): array
+    {
+        return [
+            'index' => $index,
+            'in' => $in?->punched_at->format('h:i A'),
+            'out' => $out?->punched_at->format('h:i A'),
+            'minutes' => 0,
+            'label' => 'Missing '.($in ? 'OUT' : 'IN'),
+            'live' => false,
+            'missing' => true,
         ];
     }
 
@@ -976,6 +1048,7 @@ class AttendanceTracker extends Component
             'live_start_label' => $liveStartLabel,
             'live_elapsed_minutes' => $liveElapsed,
             'missing_out' => $missingOut,
+            'needs_regularization' => $missingOut,
         ];
     }
 
