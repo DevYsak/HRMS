@@ -32,9 +32,12 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 
 class AttendanceTracker extends Component
 {
+    use WithFileUploads;
+
     public $todayAttendance;
 
     /** Active BreakLog record (null when not on break). */
@@ -196,6 +199,9 @@ class AttendanceTracker extends Component
     public string $regCheckOutMethod = 'id_card';
 
     public string $regReason = '';
+
+    /** Optional supporting document (gate pass, medical slip, screenshot…). */
+    public $regAttachment = null;
 
     public function mount()
     {
@@ -2013,9 +2019,11 @@ class AttendanceTracker extends Component
             'regCheckIn' => $this->regFixIn ? 'required' : 'nullable',
             'regCheckOut' => $this->regFixOut ? 'required' : 'nullable',
             'regReason' => 'required|min:5',
+            'regAttachment' => 'nullable|file|max:5120|mimes:jpg,jpeg,png,pdf,webp',
         ], [
             'regCheckIn.required' => 'Enter the correct check-in time.',
             'regCheckOut.required' => 'Enter the correct check-out time.',
+            'regAttachment.max' => 'The attachment may not exceed 5 MB.',
         ]);
 
         if (! $this->regFixIn && ! $this->regFixOut) {
@@ -2053,7 +2061,9 @@ class AttendanceTracker extends Component
             'check_in_method' => in_array($this->regCheckInMethod, ['face', 'id_card'], true) ? $this->regCheckInMethod : 'id_card',
             'check_out_method' => in_array($this->regCheckOutMethod, ['face', 'id_card'], true) ? $this->regCheckOutMethod : 'id_card',
             'reason' => $this->regReason,
+            'attachment_path' => $this->regAttachment?->store('regularisation-attachments', 'public'),
             'status' => 'pending',
+            'stage' => 'manager_review',
         ]);
 
         // Notify the manager AND HR/Admin so either can approve. Notifications
@@ -2079,7 +2089,7 @@ class AttendanceTracker extends Component
             report($e); // logged for diagnosis; the regularisation is saved regardless
         }
 
-        $this->reset(['regDate', 'regCheckIn', 'regCheckOut', 'regReason', 'regFixIn', 'regFixOut']);
+        $this->reset(['regDate', 'regCheckIn', 'regCheckOut', 'regReason', 'regFixIn', 'regFixOut', 'regAttachment']);
         $this->dispatch('flux:modal:close', name: 'regularisation-modal');
         \Flux::toast('Regularisation request sent to your manager & HR for approval.');
     }

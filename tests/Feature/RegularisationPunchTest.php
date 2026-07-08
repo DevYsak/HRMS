@@ -23,7 +23,7 @@ function pendingRegularisation(Employee $employee, array $overrides = []): Atten
 
 test('approving a regularisation writes the corrected punches into the journey with the chosen method', function () {
     $employee = Employee::factory()->create(['user_id' => User::factory()->create()->id, 'employee_code' => 55, 'status' => 'active']);
-    $reviewer = User::factory()->create(['role' => 'hr_admin']);
+    $reviewer = User::factory()->create(['role' => 'super_admin']);
 
     $attendance = app(AttendanceService::class)->approveRegularisation(pendingRegularisation($employee), $reviewer->id);
 
@@ -50,7 +50,7 @@ test('approving a regularisation writes the corrected punches into the journey w
 
 test('re-approving the same regularisation does not duplicate journey punches', function () {
     $employee = Employee::factory()->create(['user_id' => User::factory()->create()->id, 'employee_code' => 56, 'status' => 'active']);
-    $reviewer = User::factory()->create(['role' => 'hr_admin']);
+    $reviewer = User::factory()->create(['role' => 'super_admin']);
     $reg = pendingRegularisation($employee);
 
     app(AttendanceService::class)->approveRegularisation($reg, $reviewer->id);

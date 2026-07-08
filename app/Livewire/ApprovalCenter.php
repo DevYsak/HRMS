@@ -172,7 +172,7 @@ class ApprovalCenter extends Component
                 [$pl, $pc] = $this->priority($r->created_at);
                 $rows->push([
                     'type' => 'regularisation', 'group' => 'attendance', 'id' => $r->id,
-                    'type_label' => 'Regularisation',
+                    'type_label' => 'Regularisation · '.$r->stageLabel(),
                     'name' => $r->employee->user->name,
                     'dept' => $r->employee->department?->name ?? '—',
                     'date' => $r->work_date?->format('d M Y') ?? '—',

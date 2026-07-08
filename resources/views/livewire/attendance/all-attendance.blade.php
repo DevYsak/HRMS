@@ -345,7 +345,10 @@ EMPLOYEE 360 DRAWER (480px, right)
                                 <div class="rounded-xl border border-amber-200/70 bg-white/80 dark:bg-zinc-900/80 p-2.5">
                                     <div class="flex items-center justify-between text-xs">
                                         <span class="font-black text-zinc-900 dark:text-white">{{ $pr['date'] }}</span>
-                                        <span class="font-mono font-bold text-amber-700">{{ $pr['window'] }}</span>
+                                        <span class="flex items-center gap-1.5">
+                                            @if(! empty($pr['stage']))<span class="rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-700">{{ $pr['stage'] }}</span>@endif
+                                            <span class="font-mono font-bold text-amber-700">{{ $pr['window'] }}</span>
+                                        </span>
                                     </div>
                                     <p class="mt-0.5 truncate text-[10px] italic text-zinc-400">“{{ $pr['reason'] }}”</p>
                                     <div class="mt-1.5 flex gap-1.5">
@@ -436,6 +439,33 @@ REVIEW REGULARISATION MODAL
                         <div class="border-t border-orange-100 pt-2">
                             <p class="mb-1 text-[10px] uppercase tracking-wider text-zinc-400">Reason</p>
                             <p class="text-xs italic text-zinc-700 dark:text-zinc-200">"{{ $activeRequest->reason }}"</p>
+                        </div>
+                        @if($activeRequest->attachment_path)
+                            <div class="flex items-center justify-between border-t border-orange-100 pt-2">
+                                <span class="text-[10px] uppercase tracking-wider text-zinc-400">Attachment</span>
+                                <a href="{{ \Illuminate\Support\Facades\Storage::url($activeRequest->attachment_path) }}" target="_blank" rel="noopener" class="inline-flex items-center gap-1 text-xs font-bold text-orange-600 hover:underline"><flux:icon.paper-clip class="size-3.5" /> View document</a>
+                            </div>
+                        @endif
+                        {{-- Approval chain progress --}}
+                        <div class="border-t border-orange-100 pt-2">
+                            <p class="mb-1.5 text-[10px] uppercase tracking-wider text-zinc-400">Approval Flow · currently at <b class="text-orange-600">{{ $activeRequest->stageLabel() }}</b></p>
+                            @php $stageNum = \App\Models\AttendanceRegularisation::STAGES[$activeRequest->stage ?? 'manager_review'] ?? 1; @endphp
+                            <div class="flex items-center gap-1.5">
+                                @foreach(['Manager', 'HR', 'Admin'] as $i => $st)
+                                    <span class="flex-1 rounded-full px-2 py-1 text-center text-[10px] font-bold {{ $activeRequest->status === 'approved' || $stageNum > $i + 1 ? 'bg-emerald-100 text-emerald-700' : ($stageNum === $i + 1 && $activeRequest->status === 'pending' ? 'bg-orange-100 text-orange-700 ring-1 ring-orange-300' : 'bg-zinc-100 text-zinc-400 dark:bg-zinc-800') }}">{{ $st }}</span>
+                                    @if($i < 2)<flux:icon.chevron-right class="size-3 shrink-0 text-zinc-300" />@endif
+                                @endforeach
+                            </div>
+                            @if(! empty($activeRequest->approval_trail))
+                                <div class="mt-2 space-y-1">
+                                    @foreach($activeRequest->approval_trail as $step)
+                                        <div class="flex items-center gap-1.5 text-[10px] text-zinc-500 dark:text-zinc-400">
+                                            <flux:icon :icon="($step['action'] ?? '') === 'approved' ? 'check-circle' : 'x-circle'" class="size-3 {{ ($step['action'] ?? '') === 'approved' ? 'text-emerald-500' : 'text-rose-500' }}" />
+                                            <b>{{ $step['name'] ?? 'Reviewer' }}</b> {{ $step['action'] ?? '' }} at {{ str_replace('_', ' ', $step['stage'] ?? '') }} · {{ \Carbon\Carbon::parse($step['at'])->format('d M h:i A') }}
+                                        </div>
+                                    @endforeach
+                                </div>
+                            @endif
                         </div>
                     </div>
                     <flux:textarea wire:model="reviewComment"

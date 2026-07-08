@@ -43,15 +43,21 @@ class TeamAttendance extends Component
             Auth::id(),
             $this->reviewComment ?: null,
         );
+        $this->activeRequest->refresh();
 
-        // Log original
-        AuditLog::record($attendance, 'regularised', $attendance->toArray(), null);
+        if ($attendance) {
+            AuditLog::record($attendance, 'regularised', $attendance->toArray(), null);
+            \Flux::toast('Regularisation request approved.');
+        } else {
+            \Flux::toast($this->activeRequest->status === 'pending'
+                ? 'Approved at your stage — now awaiting '.$this->activeRequest->stageLabel().'.'
+                : 'Regularisation updated.');
+        }
 
         $this->activeRequest->employee->user->notify(new RegularisationReviewedNotification($this->activeRequest));
 
         $this->showReviewModal = false;
         $this->activeRequest = null;
-        \Flux::toast('Regularisation request approved.');
     }
 
     public function rejectRegularisation()

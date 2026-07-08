@@ -176,7 +176,9 @@ class CommandCenter extends Component
 
         if ($decision === 'approved') {
             $attendance = app(AttendanceService::class)->approveRegularisation($request, Auth::id(), $comment);
-            AuditLog::record($attendance, 'regularised', $attendance->toArray(), null);
+            if ($attendance) {                    // null = advanced a stage, not yet final
+                AuditLog::record($attendance, 'regularised', $attendance->toArray(), null);
+            }
         } else {
             app(AttendanceService::class)->rejectRegularisation($request, Auth::id(), $comment ?? '');
         }

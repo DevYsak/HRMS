@@ -111,6 +111,12 @@ document.addEventListener('alpine:init', () => {
                 tl.fromTo(rail, { width: '0%' }, { width: '100%', duration: 0.9, ease: 'power2.inOut' }, 0);
             }
             tl.to(nodes, { opacity: 1, scale: 1, duration: 0.4, ease: 'back.out(2)', stagger: 0.08 }, 0.15);
+            // Approved-regularization punches land with a distinct elastic pop so the
+            // employee sees the correction arrive in the timeline.
+            const regs = this.$root.querySelectorAll('[data-tl-reg] .pa-hz-dot');
+            if (regs.length) {
+                tl.fromTo(regs, { scale: 0.3 }, { scale: 1, duration: 0.9, ease: 'elastic.out(1, 0.45)' }, '>-0.1');
+            }
             tl.add(() => { if (live) this.pulse(live); });
         },
         pulse(el) {

@@ -580,6 +580,9 @@
 .pa-regbar .cta:hover{filter:brightness(.95)}
 .pa-srow.miss .sd{color:var(--pa-warn)}
 .pa-srow.miss .sp{color:var(--pa-warn)}
+/* Approved-regularization punch: emerald ring so the corrected punch reads as verified */
+.pa-hz-node.reg .pa-hz-dot{box-shadow:0 0 0 3px var(--pa-present-soft),0 2px 8px rgba(24,24,27,.14)}
+.pa-hz-node.reg .pa-hz-time::after{content:"✓";margin-left:4px;color:var(--pa-present);font-weight:800}
 .pa-hz-time{font-size:13px;font-weight:680;color:var(--pa-ink);margin-top:10px;font-variant-numeric:tabular-nums;white-space:nowrap}
 .pa-hz-dir{font-size:10px;font-weight:720;letter-spacing:.06em;margin-top:3px;padding:1px 8px;border-radius:20px}
 .pa-hz-dir.d-in{color:var(--pa-present);background:var(--pa-present-soft)}
@@ -678,7 +681,7 @@
               $isMissing = $node['type'] === 'missing';
               $nodeIcon = $isMissing ? 'exclamation-triangle' : ($node['dir'] === 'IN' ? 'arrow-right-end-on-rectangle' : 'arrow-left-start-on-rectangle');
             @endphp
-            <div class="pa-hz-node {{ $isMissing ? 'miss' : '' }}" data-tl-node>
+            <div class="pa-hz-node {{ $isMissing ? 'miss' : '' }} {{ ($node['source'] ?? '') === 'regularisation' ? 'reg' : '' }}" data-tl-node @if(($node['source'] ?? '') === 'regularisation') data-tl-reg @endif>
               <div class="pa-hz-tip">
                 <div class="tt"><span>{{ $node['time'] }}</span><span>{{ $isMissing ? 'Missing '.$node['dir'] : $node['dir'] }}</span></div>
                 @if($isMissing)
@@ -1414,10 +1417,26 @@
             <p class="text-[11px] text-zinc-400">Unticked punches keep their recorded time. On approval, working hours, overtime, score and payroll update automatically — and the corrected punch appears in your Attendance Journey with the method you pick above.</p>
 
             <flux:textarea wire:model="regReason" label="Reason" placeholder="e.g. Forgot to clock out, system glitch..." rows="3" />
+
+            <div>
+                <label class="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-200">Attachment <span class="text-xs font-normal text-zinc-400">(optional — gate pass, screenshot, medical slip)</span></label>
+                <input type="file" wire:model="regAttachment" accept=".jpg,.jpeg,.png,.webp,.pdf"
+                       class="block w-full cursor-pointer rounded-xl border border-zinc-200 dark:border-zinc-800 text-sm text-zinc-500 file:mr-3 file:cursor-pointer file:rounded-l-xl file:border-0 file:bg-orange-50 file:px-4 file:py-2.5 file:text-sm file:font-semibold file:text-orange-600 hover:file:bg-orange-100" />
+                <div wire:loading wire:target="regAttachment" class="mt-1 text-xs text-orange-500">Uploading…</div>
+                @if($regAttachment)<div class="mt-1 flex items-center gap-1.5 text-xs font-semibold text-emerald-600"><flux:icon.check-circle class="size-3.5" /> {{ $regAttachment->getClientOriginalName() }}</div>@endif
+                @error('regAttachment')<p class="mt-1 text-xs text-rose-500">{{ $message }}</p>@enderror
+            </div>
+
+            <div class="rounded-xl bg-zinc-50 dark:bg-zinc-800/50 px-3 py-2.5">
+                <div class="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-zinc-400">Approval flow</div>
+                <div class="flex items-center gap-1.5 text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
+                    Pending <flux:icon.chevron-right class="size-3 text-zinc-300" /> Manager <flux:icon.chevron-right class="size-3 text-zinc-300" /> HR <flux:icon.chevron-right class="size-3 text-zinc-300" /> Admin <flux:icon.chevron-right class="size-3 text-zinc-300" /> <span class="text-emerald-600">Approved</span>
+                </div>
+            </div>
         </div>
         <div class="flex justify-end gap-2 pt-2">
             <flux:button @click="$flux.modal('regularisation-modal').close()">Cancel</flux:button>
-            <flux:button wire:click="submitRegularisation" variant="primary">Send to Manager &amp; HR</flux:button>
+            <flux:button wire:click="submitRegularisation" variant="primary" wire:loading.attr="disabled" wire:target="regAttachment,submitRegularisation">Submit Request</flux:button>
         </div>
     </div>
 </flux:modal>

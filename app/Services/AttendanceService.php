@@ -11,6 +11,7 @@ use App\Models\DecemberMandatoryDay;
 use App\Models\Employee;
 use App\Models\PublicHoliday;
 use App\Models\ShiftSetting;
+use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -98,13 +99,59 @@ class AttendanceService
         return $activeBreak->fresh();
     }
 
-    public function approveRegularisation(AttendanceRegularisation $regularisation, int $reviewerId, ?string $comment = null): Attendance
+    /**
+     * Advance a regularisation through the approval chain
+     * (Manager Review → HR Review → Admin Approval → Approved).
+     *
+     * Each reviewer clears every stage their role covers: a manager clears
+     * manager_review, HR clears through hr_review, a super admin finalises.
+     * Attendance is only touched at FINAL approval — raw biometric logs are
+     * never modified, and every action lands in the approval_trail audit.
+     *
+     * Returns the updated Attendance at final approval, null when the request
+     * merely advanced a stage (or the reviewer can't act at the current stage).
+     */
+    public function approveRegularisation(AttendanceRegularisation $regularisation, int $reviewerId, ?string $comment = null): ?Attendance
     {
-        return DB::transaction(function () use ($regularisation, $reviewerId, $comment) {
+        if ($regularisation->status !== 'pending') {
+            return $regularisation->attendance;
+        }
+
+        $reviewer = User::find($reviewerId);
+        $level = $this->approvalLevel($reviewer);
+        $currentStage = $regularisation->stage ?: 'manager_review';
+        $current = AttendanceRegularisation::STAGES[$currentStage] ?? 1;
+
+        // Can't act at a stage above the reviewer's role.
+        if ($level < $current) {
+            return null;
+        }
+
+        $trail = $regularisation->approval_trail ?? [];
+        $trail[] = [
+            'stage' => $currentStage,
+            'action' => 'approved',
+            'by' => $reviewerId,
+            'name' => $reviewer?->name,
+            'comment' => $comment,
+            'at' => now()->toDateTimeString(),
+        ];
+
+        // Not the final authority yet → advance to the next stage and stop.
+        if ($level < 3) {
+            $nextStage = array_search($level + 1, AttendanceRegularisation::STAGES, true);
+            $regularisation->update(['stage' => $nextStage, 'approval_trail' => $trail]);
+
+            return null;
+        }
+
+        return DB::transaction(function () use ($regularisation, $reviewerId, $comment, $trail) {
             $regularisation->update([
                 'status' => 'approved',
+                'stage' => 'admin_approval',
                 'reviewer_id' => $reviewerId,
                 'reviewer_comment' => $comment,
+                'approval_trail' => $trail,
                 'reviewed_at' => now(),
             ]);
 
@@ -175,13 +222,14 @@ class AttendanceService
         $employee = $regularisation->employee;
         $date = Carbon::parse($regularisation->work_date)->toDateString();
 
-        foreach ([[$checkIn, $regularisation->check_in_method], [$checkOut, $regularisation->check_out_method]] as [$time, $method]) {
+        foreach ([[$checkIn, $regularisation->check_in_method, 'in'], [$checkOut, $regularisation->check_out_method, 'out']] as [$time, $method, $direction]) {
             AttendancePunch::updateOrCreate(
                 ['employee_id' => $regularisation->employee_id, 'punched_at' => $time],
                 [
                     'employee_code' => $employee?->employee_code,
                     'punch_date' => $date,
                     'method' => $method ?: 'id_card',
+                    'direction' => $direction,   // pairs correctly in the direction-based timeline
                     'verify_raw' => $method,
                     'source' => 'regularisation',
                 ],
@@ -189,16 +237,39 @@ class AttendanceService
         }
     }
 
+    /** A rejection at ANY stage ends the workflow; the action joins the audit trail. */
     public function rejectRegularisation(AttendanceRegularisation $regularisation, int $reviewerId, string $comment): AttendanceRegularisation
     {
+        $trail = $regularisation->approval_trail ?? [];
+        $trail[] = [
+            'stage' => $regularisation->stage ?: 'manager_review',
+            'action' => 'rejected',
+            'by' => $reviewerId,
+            'name' => User::find($reviewerId)?->name,
+            'comment' => $comment,
+            'at' => now()->toDateTimeString(),
+        ];
+
         $regularisation->update([
             'status' => 'rejected',
             'reviewer_id' => $reviewerId,
             'reviewer_comment' => $comment,
+            'approval_trail' => $trail,
             'reviewed_at' => now(),
         ]);
 
         return $regularisation->fresh();
+    }
+
+    /** Workflow authority: super admin finalises (3), HR clears through hr_review (2), managers clear manager_review (1). */
+    protected function approvalLevel(?User $user): int
+    {
+        return match (true) {
+            $user === null => 1,
+            $user->isSuperAdmin() || $user->assignedRole?->slug === 'super_admin' => 3,
+            $user->isHrAdmin() => 2,
+            default => 1,
+        };
     }
 
     protected function creditCompOffIfEligible(Attendance $attendance, Carbon $date): void

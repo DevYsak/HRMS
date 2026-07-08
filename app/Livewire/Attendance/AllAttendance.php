@@ -336,6 +336,7 @@ class AllAttendance extends Component
                     'date' => Carbon::parse($r->work_date)->format('d M Y'),
                     'window' => Carbon::parse($r->requested_check_in)->format('H:i').' → '.Carbon::parse($r->requested_check_out)->format('H:i'),
                     'reason' => $r->reason,
+                    'stage' => $r->stageLabel(),
                 ])->all(),
         ];
         $this->drawerEmployeeId = $employeeId;
@@ -358,10 +359,18 @@ class AllAttendance extends Component
         }
 
         $attendance = app(AttendanceService::class)->approveRegularisation($request, Auth::id());
-        AuditLog::record($attendance, 'regularised', $attendance->toArray(), null);
+        $request->refresh();
+
+        if ($attendance) {
+            AuditLog::record($attendance, 'regularised', $attendance->toArray(), null);
+            \Flux::toast('Regularisation approved — hours & attendance updated.');
+        } else {
+            \Flux::toast($request->status === 'pending'
+                ? 'Approved at your stage — now awaiting '.$request->stageLabel().'.'
+                : 'Regularisation updated.');
+        }
         $request->employee->user?->notify(new RegularisationReviewedNotification($request));
 
-        \Flux::toast('Regularisation approved — hours & attendance updated.');
         if ($this->drawerEmployeeId) {
             $this->openEmployeeDrawer($this->drawerEmployeeId); // refresh drawer data
         }
@@ -401,14 +410,21 @@ class AllAttendance extends Component
             Auth::id(),
             $this->reviewComment ?: null,
         );
+        $this->activeRequest->refresh();
 
-        AuditLog::record($attendance, 'regularised', $attendance->toArray(), null);
+        if ($attendance) {
+            AuditLog::record($attendance, 'regularised', $attendance->toArray(), null);
+            \Flux::toast('Regularisation request approved.');
+        } else {
+            \Flux::toast($this->activeRequest->status === 'pending'
+                ? 'Approved at your stage — now awaiting '.$this->activeRequest->stageLabel().'.'
+                : 'Regularisation updated.');
+        }
 
         $this->activeRequest->employee->user->notify(new RegularisationReviewedNotification($this->activeRequest));
 
         $this->showReviewModal = false;
         $this->activeRequest = null;
-        \Flux::toast('Regularisation request approved.');
     }
 
     public function rejectRegularisation(): void
