@@ -11,6 +11,7 @@ use App\Models\AttendanceRegularisation;
 use App\Models\AttendanceSetting;
 use App\Models\BiometricDevice;
 use App\Models\BreakLog;
+use App\Models\Employee;
 use App\Models\LeaveBalance;
 use App\Models\LeaveRequest;
 use App\Models\PublicHoliday;
@@ -121,6 +122,19 @@ class AttendanceTracker extends Component
 
     /** Total available leave balance (current year, all types). */
     public float $leaveBalance = 0;
+
+    /** On-time streak + peer benchmarking for the redesigned right rail. */
+    public int $onTimeStreak = 0;
+
+    public int $bestStreak = 0;
+
+    public int $myOnTimeRate = 100;
+
+    public int $teamOnTimeRate = 0;
+
+    public int $companyOnTimeRate = 0;
+
+    public ?string $teamName = null;
 
     /** Today's biometric daily summary (raw punch count, device, sync). */
     public $todaySummary = null;
@@ -291,6 +305,7 @@ class AttendanceTracker extends Component
         $this->weekSummary = $this->buildWeekSummary($employee);
         $this->todayTimeline = $this->buildTodayTimeline();
         $this->attendanceJourney = $this->buildAttendanceJourney($employee);
+        $this->loadStreakAndBenchmark($employee);
 
         // 10. Biometric daily summary + device (needed by the alerts below)
         $this->todaySummary = AttendanceDailySummary::where('employee_id', $employee->id)
@@ -426,6 +441,79 @@ class AttendanceTracker extends Component
      *
      * @return array<int, array{date:string, label:string, day:int, status:string, mode:?string, hours:float, is_today:bool, is_future:bool}>
      */
+    /**
+     * On-time streak (consecutive on-time working days back from the latest
+     * one) plus this-month on-time rate for the employee, their department and
+     * the company — powers the redesigned right rail (streak + benchmark).
+     */
+    protected function loadStreakAndBenchmark($employee): void
+    {
+        $recent = Attendance::where('employee_id', $employee->id)
+            ->where('date', '>=', now()->subDays(150)->toDateString())
+            ->get(['date', 'is_late', 'check_in'])
+            ->keyBy(fn ($a) => Carbon::parse($a->date)->toDateString());
+
+        // Best run of on-time days across the window.
+        $best = 0;
+        $run = 0;
+        foreach ($recent->sortKeys() as $a) {
+            if ($a->check_in && ! $a->is_late) {
+                $run++;
+                $best = max($best, $run);
+            } else {
+                $run = 0;
+            }
+        }
+
+        // Current streak: walk working days backward until a late/absent day.
+        $streak = 0;
+        $cursor = Carbon::today();
+        if (! isset($recent[$cursor->toDateString()])) {
+            $cursor->subDay(); // today not punched yet — start from yesterday
+        }
+        for ($i = 0; $i < 150; $i++) {
+            if ($cursor->isSunday()) {
+                $cursor->subDay();
+
+                continue;
+            }
+            $a = $recent[$cursor->toDateString()] ?? null;
+            if ($a && $a->check_in && ! $a->is_late) {
+                $streak++;
+            } elseif ($cursor->lt(Carbon::today())) {
+                break; // a past working day that was late, incomplete, or absent
+            }
+            $cursor->subDay();
+        }
+
+        $this->onTimeStreak = $streak;
+        $this->bestStreak = max($best, $streak);
+
+        // On-time rate = on-time / present, this month.
+        $monthStart = now()->startOfMonth()->toDateString();
+        $rate = function (array $ids) use ($monthStart): int {
+            if ($ids === []) {
+                return 0;
+            }
+            $base = Attendance::whereIn('employee_id', $ids)->where('date', '>=', $monthStart)->whereNotNull('check_in');
+            $present = (clone $base)->count();
+            if ($present === 0) {
+                return 0;
+            }
+            $late = (clone $base)->where('is_late', true)->count();
+
+            return (int) round(($present - $late) / $present * 100);
+        };
+
+        $this->myOnTimeRate = $rate([$employee->id]);
+        $teamIds = $employee->department_id
+            ? Employee::where('department_id', $employee->department_id)->where('status', 'active')->pluck('id')->all()
+            : [$employee->id];
+        $this->teamOnTimeRate = $rate($teamIds);
+        $this->companyOnTimeRate = $rate(Employee::where('status', 'active')->pluck('id')->all());
+        $this->teamName = $employee->department?->name;
+    }
+
     protected function buildWeekSummary($employee): array
     {
         $weekStart = Carbon::today()->startOfWeek(Carbon::SUNDAY);

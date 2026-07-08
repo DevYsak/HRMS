@@ -366,8 +366,32 @@
 .pa-gap .ln{flex:1;height:1px;background:repeating-linear-gradient(90deg,var(--pa-border) 0 4px,transparent 4px 8px)}
 .pa-tl-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:var(--pa-faint);padding:44px 0}
 .pa-live-dot{width:9px;height:9px;border-radius:50%;background:var(--pa-accent);animation:pabeat 1.8s var(--pa-ease) infinite}
+.pa-work{display:grid;grid-template-columns:1.55fr 1fr;gap:18px;align-items:start}
+@media(max-width:960px){.pa-work{grid-template-columns:1fr}}
+.pa-rail{display:flex;flex-direction:column;gap:18px}
+.pa-rc{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:16px;padding:16px 18px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.pa-rc-h{font-size:13.5px;font-weight:640;color:var(--pa-ink);display:flex;align-items:center;gap:8px}
+.pa-rc-sub{font-size:11px;color:var(--pa-faint);font-weight:500}
+.pa-streak{background:linear-gradient(140deg,rgba(234,106,44,.08),var(--pa-surface))}
+.pa-flame{width:44px;height:44px;border-radius:12px;background:linear-gradient(150deg,#F7A34B,#EA6A2C);display:grid;place-items:center;color:#fff;box-shadow:0 4px 14px rgba(234,106,44,.28);flex:0 0 auto}
+.pa-streak-n{font-size:27px;font-weight:720;letter-spacing:-.03em;line-height:1;color:var(--pa-ink)}
+.pa-streak-l{font-size:12px;color:var(--pa-muted)}
+.pa-streak-week{display:flex;gap:6px;margin-top:14px}
+.pa-sd{flex:1;height:6px;border-radius:4px;background:var(--pa-surface-3)}
+.pa-sd.on{background:#EA6A2C}
+.pa-ins{display:flex;gap:10px;padding:10px 0;border-top:1px solid var(--pa-border)}
+.pa-ins:first-of-type{border-top:0}
+.pa-ins .mk{width:22px;height:22px;border-radius:6px;display:grid;place-items:center;flex:0 0 auto;margin-top:1px}
+.pa-ins p{margin:0;font-size:12.5px;line-height:1.45;color:var(--pa-ink)}
+.pa-bm{display:flex;align-items:center;gap:10px;margin-top:11px}
+.pa-bm .who{font-size:12px;width:70px;color:var(--pa-muted)}
+.pa-bm.me .who{color:var(--pa-ink);font-weight:640}
+.pa-bm .bar{flex:1;height:8px;border-radius:6px;background:var(--pa-surface-3);overflow:hidden}
+.pa-bm .fill{height:100%;border-radius:6px}
+.pa-bm .val{font-size:12px;font-weight:640;width:34px;text-align:right;color:var(--pa-ink);font-variant-numeric:tabular-nums}
 </style>
 <div class="pa" style="margin-top:18px">
+  <div class="pa-work">
   <div class="pa-jcard">
     <div class="pa-jhead">
       <div><h3>Today's attendance journey</h3><div class="sub">{{ count($journey) ? count($journey).' events · de-duplicated' : 'No punches yet' }}</div></div>
@@ -426,7 +450,52 @@
     @else
       <div class="pa-tl-empty"><flux:icon.clock class="mb-2 size-8" style="opacity:.4" /><p style="font-size:12px;margin:0">No punches recorded today.</p></div>
     @endif
-  </div>
+  </div>{{-- /pa-jcard --}}
+
+  {{-- Right rail: streak · smart insights · benchmark (slice 3) --}}
+  <div class="pa-rail">
+    <div class="pa-rc pa-streak">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div class="pa-flame"><flux:icon.fire class="size-6" /></div>
+        <div><div class="pa-streak-n">{{ $onTimeStreak }} {{ \Illuminate\Support\Str::plural('day', $onTimeStreak) }}</div><div class="pa-streak-l">On-time streak</div></div>
+      </div>
+      <div class="pa-streak-week">
+        @for($i = 0; $i < 7; $i++)<span class="pa-sd {{ $i < min($onTimeStreak, 7) ? 'on' : '' }}"></span>@endfor
+      </div>
+      <p style="margin:12px 0 0;font-size:12px;color:var(--pa-muted)">
+        @if($onTimeStreak > 0 && $onTimeStreak >= $bestStreak) New personal best — keep it alive!
+        @elseif($bestStreak > $onTimeStreak) {{ $bestStreak - $onTimeStreak }} more on-time {{ \Illuminate\Support\Str::plural('day', $bestStreak - $onTimeStreak) }} beats your record of {{ $bestStreak }}.
+        @else Clock in on time to start a streak. @endif
+      </p>
+    </div>
+
+    <div class="pa-rc">
+      <div class="pa-rc-h"><span style="width:26px;height:26px;border-radius:7px;background:linear-gradient(145deg,var(--pa-accent),var(--pa-accent-ink));display:grid;place-items:center;color:#fff"><flux:icon.sparkles class="size-4" /></span> Smart insights</div>
+      <div style="margin-top:6px">
+        @forelse(collect($insights)->take(4) as $ins)
+          <div class="pa-ins">
+            <span class="mk" style="background:{{ ($ins['good'] ?? true) ? 'var(--pa-present-soft)' : 'var(--pa-warn-soft)' }};color:{{ ($ins['good'] ?? true) ? 'var(--pa-present)' : 'var(--pa-warn)' }}"><flux:icon :icon="($ins['good'] ?? true) ? 'check' : 'exclamation-triangle'" class="size-3" /></span>
+            <p>{{ $ins['text'] }}</p>
+          </div>
+        @empty
+          <p style="font-size:12px;color:var(--pa-faint);padding:8px 0;margin:0">Insights appear as your attendance builds up.</p>
+        @endforelse
+      </div>
+    </div>
+
+    <div class="pa-rc">
+      <div class="pa-rc-h">How you compare <span class="pa-rc-sub" style="margin-left:auto">{{ $teamName ? 'vs '.$teamName : 'this month' }}</span></div>
+      <div class="pa-bm me"><span class="who">You</span><div class="bar"><div class="fill" style="width:{{ $myOnTimeRate }}%;background:var(--pa-accent)"></div></div><span class="val">{{ $myOnTimeRate }}%</span></div>
+      @if($teamName)<div class="pa-bm"><span class="who">Team avg</span><div class="bar"><div class="fill" style="width:{{ $teamOnTimeRate }}%;background:var(--pa-faint)"></div></div><span class="val">{{ $teamOnTimeRate }}%</span></div>@endif
+      <div class="pa-bm"><span class="who">Company</span><div class="bar"><div class="fill" style="width:{{ $companyOnTimeRate }}%;background:var(--pa-faint)"></div></div><span class="val">{{ $companyOnTimeRate }}%</span></div>
+      @php $bench = $teamName ? $teamOnTimeRate : $companyOnTimeRate; $above = $myOnTimeRate - $bench; @endphp
+      <p style="margin:12px 0 0;font-size:12px;font-weight:560;display:flex;align-items:center;gap:6px;color:{{ $above >= 0 ? 'var(--pa-present)' : 'var(--pa-warn)' }}">
+        <flux:icon :icon="$above >= 0 ? 'arrow-trending-up' : 'arrow-trending-down'" class="size-4" />
+        {{ $above >= 0 ? 'On-time rate '.$above.'% above your '.($teamName ? 'team' : 'company') : abs($above).'% below — aim to arrive earlier' }}
+      </p>
+    </div>
+  </div>{{-- /pa-rail --}}
+  </div>{{-- /pa-work --}}
 </div>
 
 {{-- ═══════════════ ATTENDANCE ANALYTICS (enterprise grid) ═══════════════ --}}
