@@ -42,7 +42,7 @@ test('my attendance page shows the Phase 6 analytics panels', function () {
         ->assertSee('Attendance Score')
         ->assertSee('Working Hours Trend')
         ->assertSee('Attendance Score Trend')
-        // Redesigned "Today" hero (replaced the old Shift Progress + Biometric cards).
-        ->assertSee('Shift done')
+        // Redesigned hero + signature AI Coach panel + relocated quick actions.
+        ->assertSee('AI Attendance Coach')
         ->assertSee('Quick actions');
 });
