@@ -240,7 +240,11 @@ class AllAttendance extends Component
             ->orderBy('punched_at')
             ->get();
         $classifier = app(PunchClassifier::class);
-        $punches = $classifier->dedupe($rawPunches);
+        // The engine already sends its real, paired punch stream, so the drawer
+        // lists every punch verbatim — applying HRMS's noise dedup here would
+        // hide legitimate session-boundary punches (e.g. a 16:36 IN two minutes
+        // after a 16:34 OUT). Dedup is only used for the no-engine break fallback.
+        $punches = $rawPunches;
 
         // The Python engine pairs real IN/OUT direction and is the source of
         // truth for today's figures. Trust its synced daily summary over

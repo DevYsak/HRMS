@@ -143,6 +143,31 @@ test('the drawer trusts the engine daily summary over incomplete local punches',
         ->assertSet('drawer.punches_partial', true);     // only 6 of 11 held locally
 });
 
+test('the drawer lists every synced punch, including near-adjacent ones', function () {
+    // 16:36 is a real session-boundary IN two minutes after a 16:34 OUT — the
+    // old noise dedup dropped it from the list; the engine keeps it, so we must.
+    $hr = User::factory()->create(['role' => UserRole::HrAdmin]);
+    $employee = Employee::factory()->create(['status' => 'active']);
+    foreach (['09:00', '16:34', '16:36'] as $t) {
+        AttendancePunch::create([
+            'employee_id' => $employee->id, 'punched_at' => today()->setTimeFromTimeString($t),
+            'punch_date' => today(), 'method' => 'id_card', 'source' => 'biometric', 'device_serial' => 'TDBD25',
+        ]);
+    }
+    AttendanceDailySummary::create([
+        'employee_id' => $employee->id, 'employee_code' => $employee->employee_code ?? 16,
+        'date' => today(), 'first_punch' => today()->setTime(9, 0), 'last_punch' => today()->setTime(16, 36),
+        'break_minutes' => 5, 'working_hours' => 7.5, 'raw_punch_count' => 3, 'status' => 'in_office',
+        'synced_at' => now(),
+    ]);
+
+    Livewire::actingAs($hr)->test(AllAttendance::class)
+        ->call('openEmployeeDrawer', $employee->id)
+        ->assertSet('drawer.punches', fn ($p) => count($p) === 3
+            && collect($p)->pluck('time')->contains('04:36 PM'))
+        ->assertSet('drawer.punches_partial', false);    // 3 local == 3 engine
+});
+
 test('quick approve from the drawer updates the attendance and clears the pending item', function () {
     Notification::fake();
     $hr = User::factory()->create(['role' => UserRole::HrAdmin]);
