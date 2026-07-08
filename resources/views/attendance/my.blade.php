@@ -319,6 +319,58 @@
 </div>
 </div>
 
+{{-- ═══════════════ AI ATTENDANCE COACH (premium · signature) ═══════════════ --}}
+@php
+    $aiRisk = ($lateCount >= 3 || $missingCount >= 2)
+        ? ['High', 'var(--pa-danger)']
+        : (($lateCount >= 1 || $missingCount >= 1) ? ['Medium', 'var(--pa-warn)'] : ['Low', 'var(--pa-present)']);
+    $aiForecast = (int) min(100, max($attPct, $score));
+    $aiProd = (int) $compliance;
+    $aiOtPred = round($otHours * 1.2, 1);
+    $suggIn = $shift ? \Carbon\Carbon::parse($shift->start_time)->subMinutes(10)->format('g:i A') : '10:20 AM';
+@endphp
+<style>
+.pa-ai{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:18px;padding:24px 26px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.pa-ai-h{display:flex;align-items:center;gap:12px}
+.pa-ai-badge{width:36px;height:36px;border-radius:11px;background:linear-gradient(145deg,var(--pa-accent),var(--pa-accent-ink));display:grid;place-items:center;color:#fff;box-shadow:0 4px 14px var(--pa-ring);flex:0 0 auto}
+.pa-ai-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-top:18px}
+@media(min-width:900px){.pa-ai-grid{grid-template-columns:repeat(4,1fr)}}
+.pa-ci{border:1px solid var(--pa-border);background:var(--pa-surface-2);border-radius:16px;padding:15px 16px;transition:transform .16s var(--pa-ease),box-shadow .16s}
+.pa-ci:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(0,0,0,.05)}
+.pa-ci .m{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;margin-bottom:10px}
+.pa-ci .t{font-size:13px;font-weight:560;line-height:1.4;color:var(--pa-ink)}
+.pa-preds{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-top:14px}
+@media(min-width:900px){.pa-preds{grid-template-columns:repeat(4,1fr)}}
+.pa-pred{border:1px dashed var(--pa-accent);background:var(--pa-accent-soft);border-radius:16px;padding:14px 16px}
+.pa-pred .k{font-size:11px;color:var(--pa-accent-ink);font-weight:640;text-transform:uppercase;letter-spacing:.04em}
+.pa-pred .v{font-size:22px;font-weight:720;margin-top:4px;color:var(--pa-ink);font-variant-numeric:tabular-nums}
+</style>
+<div class="pa">
+  <div class="pa-ai">
+    <div class="pa-ai-h">
+      <span class="pa-ai-badge"><flux:icon.sparkles class="size-5" /></span>
+      <div style="flex:1"><h3 style="font-size:18px;font-weight:640;color:var(--pa-ink);margin:0">AI Attendance Coach</h3><div style="font-size:12px;color:var(--pa-faint)">Predictions &amp; personalized guidance from your patterns</div></div>
+      <span style="background:var(--pa-accent-soft);color:var(--pa-accent-ink);font-size:11px;font-weight:640;padding:4px 10px;border-radius:20px;white-space:nowrap">AI</span>
+    </div>
+    <div class="pa-ai-grid">
+      @forelse(collect($insights)->take(4) as $ins)
+        <div class="pa-ci">
+          <span class="m" style="background:{{ ($ins['good'] ?? true) ? 'var(--pa-present-soft)' : 'var(--pa-warn-soft)' }};color:{{ ($ins['good'] ?? true) ? 'var(--pa-present)' : 'var(--pa-warn)' }}"><flux:icon :icon="($ins['good'] ?? true) ? 'check' : 'exclamation-triangle'" class="size-3.5" /></span>
+          <div class="t">{{ $ins['text'] }}</div>
+        </div>
+      @empty
+        <div class="pa-ci"><span class="m" style="background:var(--pa-accent-soft);color:var(--pa-accent-ink)"><flux:icon.clock class="size-3.5" /></span><div class="t">Suggested clock-in by <b>{{ $suggIn }}</b> to clear the {{ $shift->grace_minutes ?? 5 }}-min grace.</div></div>
+      @endforelse
+    </div>
+    <div class="pa-preds">
+      <div class="pa-pred"><div class="k">Monthly forecast</div><div class="v">{{ $aiForecast }}%</div></div>
+      <div class="pa-pred"><div class="k">Productivity index</div><div class="v">{{ $aiProd }}%</div></div>
+      <div class="pa-pred"><div class="k">Overtime (pred.)</div><div class="v">{{ $aiOtPred }}h</div></div>
+      <div class="pa-pred"><div class="k">Attendance risk</div><div class="v" style="color:{{ $aiRisk[1] }}">{{ $aiRisk[0] }}</div></div>
+    </div>
+  </div>
+</div>
+
 {{-- ═══════════════ SMART ALERTS ═══════════════ --}}
 @if(empty($attendanceAlerts))
     <div class="flex items-center gap-3 rounded-[18px] border border-emerald-200 bg-gradient-to-r from-emerald-50 to-white p-4 shadow-sm">
@@ -478,20 +530,6 @@
         @elseif($bestStreak > $onTimeStreak) {{ $bestStreak - $onTimeStreak }} more on-time {{ \Illuminate\Support\Str::plural('day', $bestStreak - $onTimeStreak) }} beats your record of {{ $bestStreak }}.
         @else Clock in on time to start a streak. @endif
       </p>
-    </div>
-
-    <div class="pa-rc">
-      <div class="pa-rc-h"><span style="width:26px;height:26px;border-radius:7px;background:linear-gradient(145deg,var(--pa-accent),var(--pa-accent-ink));display:grid;place-items:center;color:#fff"><flux:icon.sparkles class="size-4" /></span> Smart insights</div>
-      <div style="margin-top:6px">
-        @forelse(collect($insights)->take(4) as $ins)
-          <div class="pa-ins">
-            <span class="mk" style="background:{{ ($ins['good'] ?? true) ? 'var(--pa-present-soft)' : 'var(--pa-warn-soft)' }};color:{{ ($ins['good'] ?? true) ? 'var(--pa-present)' : 'var(--pa-warn)' }}"><flux:icon :icon="($ins['good'] ?? true) ? 'check' : 'exclamation-triangle'" class="size-3" /></span>
-            <p>{{ $ins['text'] }}</p>
-          </div>
-        @empty
-          <p style="font-size:12px;color:var(--pa-faint);padding:8px 0;margin:0">Insights appear as your attendance builds up.</p>
-        @endforelse
-      </div>
     </div>
 
     <div class="pa-rc">
