@@ -216,6 +216,8 @@ class AllAttendance extends Component
         $employee = Employee::with(['user', 'department', 'jobTitle', 'manager', 'office', 'shift'])
             ->findOrFail($employeeId);
 
+        abort_unless(Auth::user()->coversEmployee($employee), 403);
+
         $today = Carbon::today();
         $monthStart = $today->copy()->startOfMonth();
         $month = Attendance::where('employee_id', $employee->id)
@@ -364,6 +366,7 @@ class AllAttendance extends Component
         abort_unless(Auth::user()->canApproveLeave(), 403);
 
         $request = AttendanceRegularisation::with('employee.user')->findOrFail($id);
+        abort_unless($request->employee && Auth::user()->coversEmployee($request->employee), 403);
         if ($request->status !== 'pending') {
             return;
         }
@@ -391,6 +394,7 @@ class AllAttendance extends Component
         abort_unless(Auth::user()->canApproveLeave(), 403);
 
         $this->activeRequest = AttendanceRegularisation::with('employee.user', 'attendance', 'reviewer')->findOrFail($id);
+        abort_unless($this->activeRequest->employee && Auth::user()->coversEmployee($this->activeRequest->employee), 403);
         $this->reviewComment = '';
         $this->regularisationLocked = false;
         $this->lockedByName = '';
@@ -492,19 +496,27 @@ class AllAttendance extends Component
     {
         abort_unless(Auth::user()->canApproveLeave(), 403);
 
+        // Department/shift scope: HR with a scope only sees their employees.
+        $scopeIds = Auth::user()->accessibleEmployeeIds();
+        $scoped = fn ($q) => $q->when($scopeIds !== null, fn ($qq) => $qq->whereIn('employee_id', $scopeIds));
+
         $query = Attendance::query()->with('employee.user')->whereHas('employee.user');
+        $scoped($query);
 
         $this->applyFilters($query);
 
-        $pendingRegularisations = AttendanceRegularisation::where('status', 'pending')
-            ->with(['employee.user', 'attendance'])
-            ->whereHas('employee.user')
-            ->get();
+        $pendingRegularisations = $scoped(
+            AttendanceRegularisation::where('status', 'pending')
+                ->with(['employee.user', 'attendance'])
+                ->whereHas('employee.user')
+        )->get();
 
         // KPI stats for today
         $today = Carbon::today();
-        $totalActive = Employee::where('status', 'active')->count();
-        $todayRecords = Attendance::where('date', $today)->get();
+        $totalActive = Employee::where('status', 'active')
+            ->when($scopeIds !== null, fn ($q) => $q->whereIn('id', $scopeIds))
+            ->count();
+        $todayRecords = $scoped(Attendance::where('date', $today))->get();
         $presentToday = $todayRecords->whereNotNull('check_in')->count();
         $lateToday = $todayRecords->where('is_late', true)->count();
         $onTimeToday = $presentToday - $lateToday;
@@ -525,8 +537,8 @@ class AllAttendance extends Component
         // Presence trend across the selected range (drives the overview chart).
         $trend = [];
         if ($this->dateFrom && $this->dateTo) {
-            $byDay = Attendance::whereBetween('date', [$this->dateFrom, $this->dateTo])
-                ->get(['date', 'is_late'])
+            $byDay = $scoped(Attendance::whereBetween('date', [$this->dateFrom, $this->dateTo]))
+                ->get(['date', 'is_late', 'employee_id'])
                 ->groupBy(fn ($a) => $a->date->toDateString());
             foreach (CarbonPeriod::create($this->dateFrom, $this->dateTo) as $d) {
                 $day = $byDay->get($d->toDateString(), collect());
@@ -545,7 +557,9 @@ class AllAttendance extends Component
         return view('livewire.attendance.all-attendance', [
             'attendances' => $query->latest('date')->paginate(15),
             'pendingRegularisations' => $pendingRegularisations,
-            'allEmployees' => Employee::with('user')->whereHas('user')->orderBy('id')->get(),
+            'allEmployees' => Employee::with('user')->whereHas('user')
+                ->when($scopeIds !== null, fn ($q) => $q->whereIn('id', $scopeIds))
+                ->orderBy('id')->get(),
             'stats' => $stats,
             'trend' => $trend,
             'weekLabel' => $weekLabel,

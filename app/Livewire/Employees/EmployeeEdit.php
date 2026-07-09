@@ -48,6 +48,12 @@ class EmployeeEdit extends Component
 
     public string $roleId = '';
 
+    /** HR/manager access scope — empty = company-wide. @var array<int> */
+    public array $scopeDepartments = [];
+
+    /** @var array<int> */
+    public array $scopeShifts = [];
+
     // ── Personal profile ─────────────────────────────────────────────────────
     public string $employee_id = '';
 
@@ -130,6 +136,8 @@ class EmployeeEdit extends Component
         $this->roleId = (string) ($this->employee->user->role_id
             ?? Role::where('slug', $this->employee->user->role->value)->value('id')
             ?? '');
+        $this->scopeDepartments = array_map('intval', $this->employee->user->scope_departments ?? []);
+        $this->scopeShifts = array_map('intval', $this->employee->user->scope_shifts ?? []);
 
         // Personal
         $this->employee_id = $this->employee->employee_id ?? '';
@@ -202,11 +210,17 @@ class EmployeeEdit extends Component
 
         $chosenRole = Role::findOrFail($this->roleId);
 
+        // HR/manager access scope only applies to approver roles; it's cleared
+        // for everyone else so a normal employee can never carry a stray scope.
+        $scopesApply = in_array($chosenRole->legacyBucket()->value, ['hr_admin', 'manager'], true);
+
         $this->employee->user->update([
             'name' => $this->name,
             'email' => $this->email,
             'role' => $chosenRole->legacyBucket(),
             'role_id' => $chosenRole->id,
+            'scope_departments' => $scopesApply && $this->scopeDepartments ? array_map('intval', $this->scopeDepartments) : null,
+            'scope_shifts' => $scopesApply && $this->scopeShifts ? array_map('intval', $this->scopeShifts) : null,
         ]);
 
         $photoPath = $this->photo

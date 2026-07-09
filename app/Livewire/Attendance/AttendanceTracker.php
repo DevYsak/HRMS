@@ -1520,7 +1520,10 @@ class AttendanceTracker extends Component
                 Carbon::parse($this->regDate)->format('d M Y'),
                 'pending',
             );
-            $approvers = User::whereIn('role', ['hr_admin', 'super_admin'])->get();
+            // Route to HR whose department/shift scope covers this employee
+            // (company-wide HR + super admins always included), plus the manager.
+            $approvers = User::whereIn('role', ['hr_admin', 'super_admin'])->get()
+                ->filter(fn ($u) => $u->coversEmployee($employee));
             if ($employee->manager) {
                 $approvers->push($employee->manager);
             }
@@ -1533,7 +1536,7 @@ class AttendanceTracker extends Component
         }
 
         $this->reset(['regDate', 'regCheckIn', 'regCheckOut', 'regReason', 'regFixIn', 'regFixOut', 'regAttachment']);
-        $this->dispatch('flux:modal:close', name: 'regularisation-modal');
+        $this->modal('regularisation-modal')->close();
         \Flux::toast('Regularisation request sent to your manager & HR for approval.');
     }
 

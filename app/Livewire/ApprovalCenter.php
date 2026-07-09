@@ -166,8 +166,10 @@ class ApprovalCenter extends Component
         }
 
         if ($canLeave) {
+            $scopeIds = $user->accessibleEmployeeIds();   // null = company-wide
             foreach (AttendanceRegularisation::where('status', 'pending')
                 ->with('employee.user', 'employee.department')
+                ->when($scopeIds !== null, fn ($q) => $q->whereIn('employee_id', $scopeIds))
                 ->whereHas('employee.user')->latest()->get() as $r) {
                 [$pl, $pc] = $this->priority($r->created_at);
                 $rows->push([
