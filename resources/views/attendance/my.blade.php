@@ -225,10 +225,26 @@
     @media(max-width:1024px){.pa-hero2{grid-template-columns:1fr 1fr}.pa-hR{grid-column:1/-1;border-left:0;border-top:1px solid var(--pa-border);flex-direction:row;flex-wrap:wrap}.pa-hR .pa-h-cta{flex:1;min-width:160px}.pa-smart{flex-basis:100%}}
     @media(max-width:680px){.pa-hero2{grid-template-columns:1fr}.pa-hC{border-left:0;border-top:1px solid var(--pa-border)}.pa-h-timer{font-size:48px}}
   </style>
+  @php
+      // Live hero ticker counts VALIDATED working time (engine sessions), not
+      // raw elapsed-since-check-in: closed-session minutes + the running
+      // session. Web-punch fallback: elapsed since check-in minus breaks.
+      $heroLiveStartMs = null;
+      $heroBaseMin = $workedMin;
+      if (($punchJourney['raw_count'] ?? 0) > 0) {
+          if ($punchJourney['live']) {
+              $heroLiveStartMs = $punchJourney['live_start_ms'];
+              $heroBaseMin = $workedMin - (int) $punchJourney['live_elapsed_minutes'];
+          }
+      } elseif ($isIn && $todayAttendance?->check_in) {
+          $heroLiveStartMs = $todayAttendance->check_in->getTimestampMs();
+          $heroBaseMin = -$breakMin;
+      }
+  @endphp
   <section class="pa-hero2"
-      x-data="{ start: {{ $liveStart ?? 'null' }}, live: '{{ $workedLabel }}',
-        tick(){ if(this.start===null) return; const s=Math.floor(Date.now()/1000)-this.start; const h=Math.floor(s/3600),m=Math.floor((s%3600)/60); this.live=h+'h '+String(m).padStart(2,'0')+'m'; } }"
-      x-init="tick(); if(start!==null) setInterval(()=>tick(),1000)">
+      x-data="{ baseMin: {{ $heroBaseMin }}, startMs: {{ $heroLiveStartMs ?? 'null' }}, live: '{{ $workedLabel }}',
+        tick(){ if(this.startMs===null) return; const t=Math.max(0,this.baseMin+Math.floor((Date.now()-this.startMs)/60000)); this.live=Math.floor(t/60)+'h '+String(t%60).padStart(2,'0')+'m'; } }"
+      x-init="tick(); if(startMs!==null) setInterval(()=>tick(),1000)">
     {{-- LEFT · 45% --}}
     <div class="pa-hL">
       <div class="pa-h-greet">{{ $heroGreet }},</div>
@@ -344,10 +360,10 @@
             ['Missing Punches', (string) $missingCount, 'flag', $missingCount ? '#D64545' : '#0F9D6E', $missingCount ? 'action' : 'clear', $missingCount ? 'regularize now' : 'all reconciled', '0,10 24,12 48,10 72,11 96,10 120,9', 'flat'],
         ];
     @endphp
-    <div class="pa-kpis2">
+    <div class="pa-kpis2" data-reveal>
       @foreach($kpis as [$lbl, $val, $ic, $clr, $tr, $cmp, $spk, $dir])
         @php $lastY = last(explode(',', last(explode(' ', $spk)))); @endphp
-        <div class="pa-kpi2">
+        <div class="pa-kpi2" data-reveal-item>
           <div class="top">
             <span class="ic" style="background: {{ $clr }}1a; color: {{ $clr }};"><flux:icon :icon="$ic" class="size-4" /></span>
             <span class="tr {{ $dir }}">{{ $tr }}</span>
@@ -407,7 +423,7 @@
 .pa-qas .ic{width:30px;height:30px;border-radius:9px;background:var(--pa-accent-soft);color:var(--pa-accent-ink);display:grid;place-items:center}
 </style>
 <div class="pa">
-  <div class="pa-copilot">
+  <div class="pa-copilot" data-reveal>
     <div class="head">
       <span class="avatar"><flux:icon.sparkles /></span>
       <div style="flex:1"><div class="title">AI Attendance Coach</div><div class="sub">Your personal attendance assistant</div></div>
@@ -448,7 +464,7 @@
 @endphp
 <div class="pa">
   <div class="pa-panel-h" style="margin-bottom:14px;font-size:15px">Quick actions <span class="pa-panel-sub">jump to the tasks you use most</span></div>
-  <div class="pa-qastrip">
+  <div class="pa-qastrip" data-reveal>
     @foreach($qa as [$label, $icon, $href, $action])
       <a href="{{ $href }}"
          @if($action === 'regularise') wire:click.prevent="openRegularisation('{{ today()->toDateString() }}')" @endif
@@ -722,7 +738,7 @@
   </div>{{-- /pa-jcard2 --}}
 
   {{-- Session summary + streak/benchmark rail --}}
-  <div class="pa-jgrid">
+  <div class="pa-jgrid" data-reveal>
     <div class="pa-sesscard">
       <div class="sh"><flux:icon.squares-2x2 class="size-4 text-orange-500" /> Session summary</div>
       @if($hasPunch && count($pj['sessions']))
@@ -926,7 +942,7 @@
     @endif
 </div>
 
-<div class="grid grid-cols-1 gap-4 lg:grid-cols-12" wire:loading.class="opacity-50" wire:target="statsPeriod,analyticsMode,rangeFrom,rangeTo">
+<div class="grid grid-cols-1 gap-4 lg:grid-cols-12" data-reveal wire:loading.class="opacity-50" wire:target="statsPeriod,analyticsMode,rangeFrom,rangeTo">
     {{-- Row 1 --}}
     <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm transition hover:shadow-md lg:col-span-5">
         <div class="mb-1 text-sm font-black text-zinc-900 dark:text-white">Working Hours Trend</div>

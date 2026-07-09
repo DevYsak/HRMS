@@ -27,6 +27,34 @@ const applyChartTheme = (config, dark) => {
     return config;
 };
 
+/**
+ * Enterprise scroll-reveal: any [data-reveal] section fades/slides up with GSAP
+ * as it enters the viewport (once). Respects prefers-reduced-motion; elements
+ * simply stay visible when GSAP or the observer is unavailable.
+ */
+const initReveals = () => {
+    const g = window.gsap;
+    if (!g || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const els = document.querySelectorAll('[data-reveal]:not([data-revealed])');
+    if (!els.length) return;
+    const io = new IntersectionObserver((entries) => {
+        entries.forEach((e) => {
+            if (!e.isIntersecting) return;
+            io.unobserve(e.target);
+            const children = e.target.querySelectorAll('[data-reveal-item]');
+            if (children.length) {
+                g.fromTo(e.target, { opacity: 0 }, { opacity: 1, duration: 0.35 });
+                g.fromTo(children, { opacity: 0, y: 22 }, { opacity: 1, y: 0, duration: 0.55, ease: 'power3.out', stagger: 0.06 });
+            } else {
+                g.fromTo(e.target, { opacity: 0, y: 26 }, { opacity: 1, y: 0, duration: 0.65, ease: 'power3.out' });
+            }
+        });
+    }, { threshold: 0.1 });
+    els.forEach((el) => { el.setAttribute('data-revealed', '1'); io.observe(el); });
+};
+document.addEventListener('DOMContentLoaded', initReveals);
+document.addEventListener('livewire:navigated', initReveals);
+
 document.addEventListener('alpine:init', () => {
     const Alpine = window.Alpine;
 

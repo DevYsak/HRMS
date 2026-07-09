@@ -618,6 +618,26 @@ class AttendanceTracker extends Component
         return app(PunchTimelineEngine::class)->process(collect($raw), $day, $summary);
     }
 
+    /** Memoised today's-minutes result (one-element array so null is cacheable). */
+    protected ?array $todayValidatedCache = null;
+
+    /**
+     * Today's working minutes from validated sessions — used by the period
+     * stats and daily chart, which otherwise report 0h while the day is open.
+     * Null when no punch data exists (pure web-punch fallback applies).
+     */
+    protected function todayValidatedMinutes($employee): ?int
+    {
+        if ($this->todayValidatedCache === null) {
+            $journey = $this->punchJourney !== [] ? $this->punchJourney : $this->buildPunchJourney($employee);
+            $this->todayValidatedCache = [
+                ($journey['raw_count'] ?? 0) > 0 ? (int) $journey['working_minutes'] : null,
+            ];
+        }
+
+        return $this->todayValidatedCache[0];
+    }
+
     /** Punch Timeline history — every visible day's punches as classified events. */
     public array $logTimeline = [];
 
@@ -949,7 +969,13 @@ class AttendanceTracker extends Component
             }
         }
 
-        $totalMinutes = $attendances->sum(function ($a) {
+        // Today's minutes come from validated sessions (the day is usually still
+        // open, so check_in→check_out math would report 0h all day long).
+        $todayEngineMin = $this->todayValidatedMinutes($employee);
+        $totalMinutes = $attendances->sum(function ($a) use ($todayEngineMin) {
+            if ($a->date->isToday() && $todayEngineMin !== null) {
+                return $todayEngineMin;
+            }
             if ($a->check_in && $a->check_out) {
                 return $a->check_in->diffInMinutes($a->check_out) - ($a->break_minutes ?? 0);
             }
@@ -1024,7 +1050,9 @@ class AttendanceTracker extends Component
             foreach (CarbonPeriod::create($start, $seriesEnd) as $d) {
                 $att = $attendanceDates->get($d->toDateString());
                 $hours = 0.0;
-                if ($att && $att->check_in && $att->check_out) {
+                if ($d->isToday() && $todayEngineMin !== null) {
+                    $hours = round(max(0, $todayEngineMin) / 60, 1);   // validated sessions, live-inclusive
+                } elseif ($att && $att->check_in && $att->check_out) {
                     $mins = $att->check_in->diffInMinutes($att->check_out) - ($att->break_minutes ?? 0);
                     $hours = round(max(0, $mins) / 60, 1);
                 }
