@@ -130,12 +130,12 @@ test('engine-directed punches pair by real IN/OUT, not alternation', function ()
 
     $pj = Livewire::test(AttendanceTracker::class)->get('punchJourney');
 
-    // 13:30:30 IN + 13:30:33 OUT (3s, opposite) is a reader bounce — both edges
-    // dropped; 13:30:35 IN survives. Four clean sessions, no phantom.
+    // 13:30:30 IN + 13:30:33 OUT (3s, opposite) is a reader flip-flop — ONE
+    // edge kept (the IN, which alternates after the 13:19 OUT); 13:30:35 IN is a
+    // same-direction duplicate. Four clean sessions.
     expect($pj['session_count'])->toBe(4)
-        ->and($pj['bounce_count'])->toBe(1)         // the 13:30:30/33 in-out blip
-        ->and($pj['conflict_count'])->toBe(0)
-        ->and($pj['duplicate_count'])->toBe(0)
+        ->and($pj['conflict_count'])->toBe(1)       // the 13:30:33 flip-flop echo
+        ->and($pj['duplicate_count'])->toBe(1)      // the 13:30:35 re-read
         ->and($pj['break_minutes'])->toBe(18)       // engine truth, not a phantom 3h31m
         ->and($pj['working_minutes'])->toBe(359)    // 5.98h from the engine summary
         ->and($pj['live'])->toBeFalse()
@@ -144,9 +144,10 @@ test('engine-directed punches pair by real IN/OUT, not alternation', function ()
         ->toBe(['IN', 'OUT', 'IN', 'OUT', 'IN', 'OUT', 'IN', 'OUT']);
 });
 
-test('a one-second IN then OUT is a reader bounce — both dropped, no phantom missing punch', function () {
-    // The exact case from the drawer: 10:28:59 IN + 10:29:00 OUT one second
-    // apart. Old behaviour kept the IN and orphaned it into a "Missing OUT".
+test('a one-second IN then OUT keeps ONE edge — the real arrival, never both', function () {
+    // The exact drawer case: 10:28:59 IN + 10:29:00 OUT one second apart. It is
+    // one physical tap — keep the IN (the arrival), drop the echo. The genuine
+    // missing OUT before the 13:50 re-entry is flagged, never invented.
     $rows = [
         ['10:28:59', 'in', 'face'],
         ['10:29:00', 'out', 'face'],
@@ -164,13 +165,36 @@ test('a one-second IN then OUT is a reader bounce — both dropped, no phantom m
 
     $pj = Livewire::test(AttendanceTracker::class)->get('punchJourney');
 
-    expect($pj['bounce_count'])->toBe(1)
-        ->and($pj['needs_regularization'])->toBeFalse()   // no more phantom Missing OUT
-        ->and($pj['missing_out'])->toBeFalse()
-        ->and($pj['session_count'])->toBe(1)
-        ->and($pj['working_minutes'])->toBe(3)            // 13:50:07 → 13:54:04, clean
-        ->and(collect($pj['nodes'])->pluck('type')->all())->toBe(['first_in', 'last_out'])
-        ->and($pj['raw_count'])->toBe(4);                 // raw log still holds all 4
+    expect($pj['conflict_count'])->toBe(1)                // 10:29:00 echo merged, not both dropped
+        ->and($pj['kept_count'])->toBe(3)                // IN@10:28, IN@13:50, OUT@13:54
+        ->and($pj['first_in'])->toBe('10:28 AM')         // the real arrival survives
+        ->and($pj['needs_regularization'])->toBeTrue()   // genuine missing OUT is flagged
+        ->and($pj['raw_count'])->toBe(4);                // raw log still holds all 4
+});
+
+test('a real 6pm OUT that bounces an IN keeps the OUT, not the echo', function () {
+    // Data-loss guard: dropping both would delete the whole 9-6 day.
+    $rows = [
+        ['09:00:00', 'in', 'face'],
+        ['18:00:00', 'out', 'face'],
+        ['18:00:02', 'in', 'face'],   // reader echo — must NOT survive
+    ];
+    foreach ($rows as [$t, $dir, $method]) {
+        AttendancePunch::factory()->create([
+            'employee_id' => $this->employee->id,
+            'punched_at' => Carbon::today()->setTimeFromTimeString($t),
+            'punch_date' => Carbon::today()->toDateString(),
+            'direction' => $dir, 'method' => $method,
+        ]);
+    }
+
+    $pj = Livewire::test(AttendanceTracker::class)->get('punchJourney');
+
+    expect($pj['session_count'])->toBe(1)
+        ->and($pj['last_out'])->toBe('06:00 PM')          // the real departure survives
+        ->and($pj['live'])->toBeFalse()
+        ->and($pj['needs_regularization'])->toBeFalse()
+        ->and($pj['working_minutes'])->toBe(540);         // full 9-hour day intact
 });
 
 test('a Face + Card double verify merges as one punch, never a phantom session', function () {

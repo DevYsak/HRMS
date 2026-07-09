@@ -32,17 +32,12 @@ use Illuminate\Support\Collection;
  */
 class PunchTimeline
 {
-    /** Punches closer than this to the previous kept punch are merged noise. */
-    public const MERGE_WINDOW_SECONDS = 60;
-
     /**
-     * An opposite-direction pair within this window is a reader "bounce" — one
-     * physical tap the device recorded as both an IN and an OUT edge. It's
-     * net-zero presence (in-then-out blip, or out-then-in without really
-     * leaving), so BOTH edges are dropped rather than keeping one and orphaning
-     * it into a phantom missing punch.
+     * Two punches within this window are the same physical action recorded
+     * twice (a repeated read, a Face+Card re-verify, or a reader flip-flop that
+     * logs one tap as both an IN and an OUT edge). One is kept, the other merged.
      */
-    public const BOUNCE_WINDOW_SECONDS = 5;
+    public const MERGE_WINDOW_SECONDS = 60;
 
     /**
      * Process one day's raw punches into the canonical timeline payload.
@@ -57,12 +52,12 @@ class PunchTimeline
         }
 
         $ordered = $raw->sortBy('punched_at')->values();
-        [$kept, $rawEvents, $duplicateCount, $conflictCount, $bounceCount] = $this->mergeNoise($ordered);
+        [$kept, $rawEvents, $duplicateCount, $conflictCount] = $this->mergeNoise($ordered);
 
         $hasDirection = $kept->contains(fn (AttendancePunch $p) => in_array($p->direction, ['in', 'out'], true));
         $directions = $this->resolveDirections($kept, $hasDirection);
 
-        return $this->assemble($kept, $directions, $ordered->count(), $rawEvents, $duplicateCount, $conflictCount, $bounceCount, $day, $summary);
+        return $this->assemble($kept, $directions, $ordered->count(), $rawEvents, $duplicateCount, $conflictCount, $day, $summary);
     }
 
     /**
@@ -114,75 +109,76 @@ class PunchTimeline
 
     /**
      * Collapse device noise into kept punches and annotate EVERY raw punch for
-     * the HR/admin audit view. Two passes:
+     * the HR/admin audit view. Two punches within the merge window are the same
+     * physical action recorded twice — KEEP EXACTLY ONE, never both, never none:
      *
-     *  1. Reader bounces — an opposite-direction pair within BOUNCE_WINDOW_SECONDS
-     *     is one physical tap the device double-fired as both edges. Net-zero
-     *     presence, so BOTH are dropped (never kept-and-orphaned into a phantom
-     *     missing punch, e.g. a 10:28:59 IN + 10:29:00 OUT one second apart).
-     *  2. The survivors collapse same-tap noise inside the wider merge window:
-     *     same direction + method = duplicate read; a different method or a
-     *     slower flip-flop = an authentication retry / device conflict.
+     *  - Same direction (or same method) → a duplicate read; keep the first.
+     *  - Opposite direction → a reader flip-flop (one tap logged as both an IN
+     *    and an OUT edge, e.g. 10:28:59 IN + 10:29:00 OUT). Keep the single edge
+     *    whose direction keeps the day alternating with the punch before the
+     *    pair — so a real 6 pm OUT that bounces an IN keeps the OUT, and a
+     *    morning IN that bounces an OUT keeps the IN. Drop only the echo.
      *
      * @param  Collection<int, AttendancePunch>  $ordered
-     * @return array{0: Collection<int, AttendancePunch>, 1: array<int, array<string, mixed>>, 2: int, 3: int, 4: int}
+     * @return array{0: Collection<int, AttendancePunch>, 1: array<int, array<string, mixed>>, 2: int, 3: int}
      */
     protected function mergeNoise(Collection $ordered): array
     {
-        $arr = $ordered->values();
-        $n = $arr->count();
-
-        // ── Pass 1 — flag reader-bounce pairs (drop both edges) ─────────────
-        $bounced = [];
-        $bounces = 0;
-        for ($i = 0; $i < $n - 1;) {
-            $a = $arr[$i];
-            $b = $arr[$i + 1];
-            $opposite = $a->direction !== null && $b->direction !== null && $a->direction !== $b->direction;
-            if ($opposite && (int) $a->punched_at->diffInSeconds($b->punched_at) <= self::BOUNCE_WINDOW_SECONDS) {
-                $bounced[spl_object_id($a)] = true;
-                $bounced[spl_object_id($b)] = true;
-                $bounces++;
-                $i += 2;   // consume the pair
-            } else {
-                $i++;
-            }
-        }
-
-        // ── Pass 2 — collapse duplicates / device conflicts among survivors ──
         $kept = collect();
-        $rawEvents = [];
+        $flag = [];               // spl_object_id => [flag, note]
         $duplicates = 0;
         $conflicts = 0;
 
-        foreach ($arr as $p) {
-            if (isset($bounced[spl_object_id($p)])) {
-                $rawEvents[] = $this->annotate($p, 'bounce', 'Reader bounce — single tap double-read as IN and OUT; both edges dropped');
-
-                continue;
-            }
-
+        foreach ($ordered as $p) {
             $prev = $kept->last();
-            $withinWindow = $prev && $prev->punched_at->diffInSeconds($p->punched_at) <= self::MERGE_WINDOW_SECONDS;
+            $withinWindow = $prev && (int) $prev->punched_at->diffInSeconds($p->punched_at) <= self::MERGE_WINDOW_SECONDS;
 
             if ($withinWindow) {
-                $sameDirection = $prev->direction === null || $p->direction === null || $prev->direction === $p->direction;
-                $sameMethod = (string) $prev->method === (string) $p->method;
-                $isConflict = ! $sameDirection || ! $sameMethod;
-                $isConflict ? $conflicts++ : $duplicates++;
+                $opposite = $prev->direction !== null && $p->direction !== null && $prev->direction !== $p->direction;
 
-                $rawEvents[] = $this->annotate($p, $isConflict ? 'retry' : 'duplicate', $isConflict
-                    ? 'Authentication retry / device conflict — merged into the '.$prev->punched_at->format('h:i:s A').' punch'
-                    : 'Duplicate read — same punch registered again within '.self::MERGE_WINDOW_SECONDS.'s');
+                if ($opposite) {
+                    $conflicts++;
+                    // Which single edge keeps the sequence alternating?
+                    $before = $kept->count() >= 2 ? $kept->get($kept->count() - 2) : null;
+                    $wantDir = $before ? ($before->direction === 'in' ? 'out' : 'in') : 'in';
+
+                    if ($p->direction === $wantDir && $prev->direction !== $wantDir) {
+                        // The later edge fits better — swap it in for the first.
+                        $kept->pop();
+                        $flag[spl_object_id($prev)] = ['retry', 'Reader flip-flop — replaced by the '.$p->punched_at->format('h:i:s A').' edge'];
+                        $kept->push($p);
+                        $flag[spl_object_id($p)] = ['kept', null];
+                    } else {
+                        // The first edge fits — drop this echo.
+                        $flag[spl_object_id($p)] = ['retry', 'Reader flip-flop — single tap double-read; kept the '.$prev->punched_at->format('h:i:s A').' edge'];
+                    }
+
+                    continue;
+                }
+
+                // Same direction within the window → duplicate read (or a
+                // Face+Card re-verify when the method differs). Keep the first.
+                $sameMethod = (string) $prev->method === (string) $p->method;
+                $sameMethod ? $duplicates++ : $conflicts++;
+                $flag[spl_object_id($p)] = $sameMethod
+                    ? ['duplicate', 'Duplicate read — same punch registered again within '.self::MERGE_WINDOW_SECONDS.'s']
+                    : ['retry', 'Authentication retry — merged into the '.$prev->punched_at->format('h:i:s A').' punch'];
 
                 continue;
             }
 
             $kept->push($p);
-            $rawEvents[] = $this->annotate($p, 'kept', null);
+            $flag[spl_object_id($p)] = ['kept', null];
         }
 
-        return [$kept->values(), $rawEvents, $duplicates, $conflicts, $bounces];
+        // Annotate every raw punch in chronological order for the audit view.
+        $rawEvents = $ordered->map(function (AttendancePunch $p) use ($flag) {
+            [$f, $note] = $flag[spl_object_id($p)] ?? ['kept', null];
+
+            return $this->annotate($p, $f, $note);
+        })->all();
+
+        return [$kept->values(), $rawEvents, $duplicates, $conflicts];
     }
 
     /**
@@ -211,21 +207,9 @@ class PunchTimeline
      * @param  array<int, array<string, mixed>>  $rawEvents
      * @return array<string, mixed>
      */
-    protected function assemble(Collection $kept, array $directions, int $rawCount, array $rawEvents, int $duplicateCount, int $conflictCount, int $bounceCount, Carbon $day, ?AttendanceDailySummary $summary): array
+    protected function assemble(Collection $kept, array $directions, int $rawCount, array $rawEvents, int $duplicateCount, int $conflictCount, Carbon $day, ?AttendanceDailySummary $summary): array
     {
         $n = $kept->count();
-
-        // Every punch was noise (e.g. a lone reader bounce) — nothing to pair.
-        if ($n === 0) {
-            return array_merge($this->emptyResult(), [
-                'raw_events' => $rawEvents,
-                'raw_count' => $rawCount,
-                'duplicate_count' => $duplicateCount,
-                'conflict_count' => $conflictCount,
-                'bounce_count' => $bounceCount,
-            ]);
-        }
-
         $isToday = $day->isToday();
         $trailingIn = $directions[$n - 1] === 'in';
         $live = $trailingIn && $isToday;
@@ -350,7 +334,6 @@ class PunchTimeline
             'kept_count' => $n,
             'duplicate_count' => $duplicateCount,
             'conflict_count' => $conflictCount,
-            'bounce_count' => $bounceCount,
             'working_minutes' => $workingMinutes,
             'break_minutes' => $breakMinutes,
             'session_count' => count($sessions),
@@ -442,7 +425,7 @@ class PunchTimeline
     {
         return [
             'nodes' => [], 'sessions' => [], 'raw_events' => [], 'first_in' => null, 'last_out' => null,
-            'raw_count' => 0, 'kept_count' => 0, 'duplicate_count' => 0, 'conflict_count' => 0, 'bounce_count' => 0,
+            'raw_count' => 0, 'kept_count' => 0, 'duplicate_count' => 0, 'conflict_count' => 0,
             'working_minutes' => 0, 'break_minutes' => 0, 'session_count' => 0,
             'live' => false, 'live_start_ms' => null, 'live_start_label' => null,
             'live_elapsed_minutes' => 0, 'missing_out' => false, 'needs_regularization' => false,

@@ -755,7 +755,7 @@
         @if($pj['missing_out'])
           <div class="pa-swarn"><flux:icon.exclamation-triangle class="size-4" /> Missing OUT punch — this day needs regularization.</div>
         @endif
-        @php $noise = ($pj['duplicate_count'] ?? 0) + ($pj['conflict_count'] ?? 0) + ($pj['bounce_count'] ?? 0); @endphp
+        @php $noise = ($pj['duplicate_count'] ?? 0) + ($pj['conflict_count'] ?? 0); @endphp
         @if($noise > 0)
           <div class="pa-snote"><flux:icon.funnel class="size-3.5" /> {{ $noise }} duplicate/double {{ \Illuminate\Support\Str::plural('punch', $noise) }} detected and ignored in calculations.</div>
         @endif
