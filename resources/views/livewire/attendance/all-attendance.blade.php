@@ -353,8 +353,8 @@ EMPLOYEE 360 DRAWER (480px, right)
                         @if(! empty($drawer['raw_punches']))
                             <button type="button" @click="showRaw = !showRaw" class="mt-2 flex w-full items-center justify-between border-t border-zinc-100 dark:border-zinc-800 pt-2 text-[10px] font-bold uppercase tracking-widest text-zinc-400 hover:text-orange-500">
                                 <span>Raw device log · {{ count($drawer['raw_punches']) }} events
-                                    @if(($drawer['duplicate_count'] ?? 0) + ($drawer['conflict_count'] ?? 0) > 0)
-                                        <span class="ml-1 normal-case tracking-normal font-semibold text-zinc-400">({{ $drawer['duplicate_count'] }} dup · {{ $drawer['conflict_count'] }} retry merged)</span>
+                                    @if(($drawer['duplicate_count'] ?? 0) + ($drawer['conflict_count'] ?? 0) + ($drawer['bounce_count'] ?? 0) > 0)
+                                        <span class="ml-1 normal-case tracking-normal font-semibold text-zinc-400">({{ $drawer['duplicate_count'] }} dup · {{ $drawer['conflict_count'] }} retry · {{ $drawer['bounce_count'] ?? 0 }} bounce merged)</span>
                                     @endif
                                 </span>
                                 <flux:icon.chevron-down class="size-3.5" ::class="showRaw ? 'rotate-180' : ''" />
@@ -365,7 +365,7 @@ EMPLOYEE 360 DRAWER (480px, right)
                                         <span class="font-mono font-bold tabular-nums text-zinc-700 dark:text-zinc-200">{{ $rp['time'] }}</span>
                                         @if($rp['direction'])<span class="uppercase text-zinc-400">{{ $rp['direction'] }}</span>@endif
                                         <span class="text-zinc-400">{{ $rp['method'] }}</span>
-                                        <span class="ml-auto rounded-full px-1.5 py-0.5 text-[8px] font-bold uppercase {{ $rp['flag'] === 'kept' ? 'bg-emerald-100 text-emerald-700' : ($rp['flag'] === 'retry' ? 'bg-violet-100 text-violet-700' : 'bg-zinc-200 text-zinc-500 dark:bg-zinc-700 dark:text-zinc-300') }}">{{ $rp['flag'] }}</span>
+                                        <span class="ml-auto rounded-full px-1.5 py-0.5 text-[8px] font-bold uppercase {{ $rp['flag'] === 'kept' ? 'bg-emerald-100 text-emerald-700' : ($rp['flag'] === 'retry' ? 'bg-violet-100 text-violet-700' : ($rp['flag'] === 'bounce' ? 'bg-amber-100 text-amber-700' : 'bg-zinc-200 text-zinc-500 dark:bg-zinc-700 dark:text-zinc-300')) }}">{{ $rp['flag'] }}</span>
                                     </div>
                                 @endforeach
                             </div>
