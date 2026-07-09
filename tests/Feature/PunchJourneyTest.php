@@ -23,7 +23,10 @@ afterEach(function () {
     Carbon::setTestNow();
 });
 
-/** Insert a punch for the acting employee at today's H:i. */
+/**
+ * Insert a punch with no method, so direction comes from alternation (these
+ * tests predate the Face=IN / Card=OUT method-direction mapping).
+ */
 function punchAt(int $employeeId, string $time): void
 {
     $at = Carbon::today()->setTimeFromTimeString($time);
@@ -31,6 +34,20 @@ function punchAt(int $employeeId, string $time): void
         'employee_id' => $employeeId,
         'punched_at' => $at,
         'punch_date' => $at->toDateString(),
+        'method' => null,
+    ]);
+}
+
+/** Insert a punch by verification method (face → IN, id_card → OUT on this device). */
+function methodPunch(int $employeeId, string $time, string $method): void
+{
+    $at = Carbon::today()->setTimeFromTimeString($time);
+    AttendancePunch::factory()->create([
+        'employee_id' => $employeeId,
+        'punched_at' => $at,
+        'punch_date' => $at->toDateString(),
+        'method' => $method,
+        'direction' => null,   // direction is derived from method
     ]);
 }
 
@@ -119,7 +136,7 @@ test('engine-directed punches pair by real IN/OUT, not alternation', function ()
             'employee_id' => $this->employee->id,
             'punched_at' => Carbon::today()->setTimeFromTimeString($t),
             'punch_date' => Carbon::today()->toDateString(),
-            'direction' => $dir,
+            'direction' => $dir, 'method' => null,
         ]);
     }
     AttendanceDailySummary::create([
@@ -149,17 +166,17 @@ test('a one-second IN then OUT keeps ONE edge — the real arrival, never both',
     // one physical tap — keep the IN (the arrival), drop the echo. The genuine
     // missing OUT before the 13:50 re-entry is flagged, never invented.
     $rows = [
-        ['10:28:59', 'in', 'face'],
-        ['10:29:00', 'out', 'face'],
-        ['13:50:07', 'in', 'id_card'],
-        ['13:54:04', 'out', 'face'],
+        ['10:28:59', 'in'],
+        ['10:29:00', 'out'],
+        ['13:50:07', 'in'],
+        ['13:54:04', 'out'],
     ];
-    foreach ($rows as [$t, $dir, $method]) {
+    foreach ($rows as [$t, $dir]) {
         AttendancePunch::factory()->create([
             'employee_id' => $this->employee->id,
             'punched_at' => Carbon::today()->setTimeFromTimeString($t),
             'punch_date' => Carbon::today()->toDateString(),
-            'direction' => $dir, 'method' => $method,
+            'direction' => $dir, 'method' => null,
         ]);
     }
 
@@ -175,16 +192,16 @@ test('a one-second IN then OUT keeps ONE edge — the real arrival, never both',
 test('a real 6pm OUT that bounces an IN keeps the OUT, not the echo', function () {
     // Data-loss guard: dropping both would delete the whole 9-6 day.
     $rows = [
-        ['09:00:00', 'in', 'face'],
-        ['18:00:00', 'out', 'face'],
-        ['18:00:02', 'in', 'face'],   // reader echo — must NOT survive
+        ['09:00:00', 'in'],
+        ['18:00:00', 'out'],
+        ['18:00:02', 'in'],   // reader echo — must NOT survive
     ];
-    foreach ($rows as [$t, $dir, $method]) {
+    foreach ($rows as [$t, $dir]) {
         AttendancePunch::factory()->create([
             'employee_id' => $this->employee->id,
             'punched_at' => Carbon::today()->setTimeFromTimeString($t),
             'punch_date' => Carbon::today()->toDateString(),
-            'direction' => $dir, 'method' => $method,
+            'direction' => $dir, 'method' => null,
         ]);
     }
 
@@ -197,24 +214,28 @@ test('a real 6pm OUT that bounces an IN keeps the OUT, not the echo', function (
         ->and($pj['working_minutes'])->toBe(540);         // full 9-hour day intact
 });
 
-test('a Face + Card double verify merges as one punch, never a phantom session', function () {
-    $rows = [['09:00:00', 'in', 'face'], ['09:00:12', 'in', 'id_card'], ['18:00:00', 'out', 'face']];
-    foreach ($rows as [$t, $dir, $method]) {
-        AttendancePunch::factory()->create([
-            'employee_id' => $this->employee->id,
-            'punched_at' => Carbon::today()->setTimeFromTimeString($t),
-            'punch_date' => Carbon::today()->toDateString(),
-            'direction' => $dir, 'method' => $method,
-        ]);
+test('direction is taken from the verification method — Face = IN, Card = OUT', function () {
+    // The reported drawer record: the engine mis-tags face punches as OUT, but
+    // on this device Face = IN and Card = OUT. Method wins, so the day pairs
+    // cleanly with no phantom missing punch.
+    $rows = [
+        ['10:28:59', 'face'],     // IN
+        ['10:29:00', 'face'],     // IN — duplicate read, dropped
+        ['13:50:07', 'id_card'],  // OUT
+        ['13:54:04', 'face'],     // IN
+        ['15:02:43', 'id_card'],  // OUT
+    ];
+    foreach ($rows as [$t, $method]) {
+        methodPunch($this->employee->id, $t, $method);
     }
 
     $pj = Livewire::test(AttendanceTracker::class)->get('punchJourney');
 
-    expect($pj['kept_count'])->toBe(2)
-        ->and($pj['conflict_count'])->toBe(1)       // Card retry merged into the Face punch
-        ->and($pj['session_count'])->toBe(1)
-        ->and($pj['working_minutes'])->toBe(540)
-        ->and($pj['needs_regularization'])->toBeFalse();
+    expect(collect($pj['nodes'])->pluck('dir')->all())->toBe(['IN', 'OUT', 'IN', 'OUT'])
+        ->and($pj['duplicate_count'])->toBe(1)           // the 10:29:00 face re-read
+        ->and($pj['session_count'])->toBe(2)             // 10:28→13:50 and 13:54→15:02
+        ->and($pj['needs_regularization'])->toBeFalse()  // no more phantom Missing OUT
+        ->and($pj['working_minutes'])->toBe(201 + 68);   // 3h21m + 1h08m
 });
 
 test('an accidental re-punch straight after checkout cannot open a new session', function () {
@@ -224,7 +245,7 @@ test('an accidental re-punch straight after checkout cannot open a new session',
             'employee_id' => $this->employee->id,
             'punched_at' => Carbon::today()->setTimeFromTimeString($t),
             'punch_date' => Carbon::today()->toDateString(),
-            'direction' => $dir,
+            'direction' => $dir, 'method' => null,
         ]);
     }
 
@@ -237,13 +258,13 @@ test('an accidental re-punch straight after checkout cannot open a new session',
         ->and($pj['working_minutes'])->toBe(540);
 });
 
-/** Insert a directional punch (in|out) for the acting employee at today's H:i:s. */
+/** Insert a directional punch (in|out) with no method, so direction is taken from the tag. */
 function dirPunch(int $employeeId, string $time, string $dir): void
 {
     $at = Carbon::today()->setTimeFromTimeString($time);
     AttendancePunch::factory()->create([
         'employee_id' => $employeeId, 'punched_at' => $at,
-        'punch_date' => $at->toDateString(), 'direction' => $dir,
+        'punch_date' => $at->toDateString(), 'direction' => $dir, 'method' => null,
     ]);
 }
 

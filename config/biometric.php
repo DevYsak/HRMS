@@ -87,4 +87,23 @@ return [
         // 5 => 'physical_card',
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Punch method → IN/OUT direction
+    |--------------------------------------------------------------------------
+    | On this deployment the biometric engine's IN/OUT event tag is unreliable,
+    | but the verification METHOD is a dependable direction signal: employees
+    | Face-scan to enter and tap a Card to leave (there is no other OUT option).
+    | When a punch's method appears here, this mapping is authoritative for its
+    | direction — overriding the engine tag. Methods not listed fall back to the
+    | engine tag, then to alternation. Set to an empty array to trust the engine
+    | tag everywhere instead.
+    */
+    'method_direction' => [
+        'face' => 'in',
+        'fingerprint' => 'in',
+        'id_card' => 'out',
+        'physical_card' => 'out',
+    ],
+
 ];

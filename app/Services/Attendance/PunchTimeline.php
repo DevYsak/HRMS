@@ -54,7 +54,7 @@ class PunchTimeline
         $ordered = $raw->sortBy('punched_at')->values();
         [$kept, $rawEvents, $duplicateCount, $conflictCount] = $this->mergeNoise($ordered);
 
-        $hasDirection = $kept->contains(fn (AttendancePunch $p) => in_array($p->direction, ['in', 'out'], true));
+        $hasDirection = $kept->contains(fn (AttendancePunch $p) => $this->effectiveDirection($p) !== null);
         $directions = $this->resolveDirections($kept, $hasDirection);
 
         return $this->assemble($kept, $directions, $ordered->count(), $rawEvents, $duplicateCount, $conflictCount, $day, $summary);
@@ -75,7 +75,7 @@ class PunchTimeline
 
         $ordered = $punches->sortBy('punched_at')->values();
         [$kept] = $this->mergeNoise($ordered);
-        $hasDirection = $kept->contains(fn (AttendancePunch $p) => in_array($p->direction, ['in', 'out'], true));
+        $hasDirection = $kept->contains(fn (AttendancePunch $p) => $this->effectiveDirection($p) !== null);
         $directions = $this->resolveDirections($kept, $hasDirection);
 
         $n = $kept->count();
@@ -134,15 +134,18 @@ class PunchTimeline
             $withinWindow = $prev && (int) $prev->punched_at->diffInSeconds($p->punched_at) <= self::MERGE_WINDOW_SECONDS;
 
             if ($withinWindow) {
-                $opposite = $prev->direction !== null && $p->direction !== null && $prev->direction !== $p->direction;
+                $prevDir = $this->effectiveDirection($prev);
+                $curDir = $this->effectiveDirection($p);
+                $opposite = $prevDir !== null && $curDir !== null && $prevDir !== $curDir;
 
                 if ($opposite) {
                     $conflicts++;
                     // Which single edge keeps the sequence alternating?
                     $before = $kept->count() >= 2 ? $kept->get($kept->count() - 2) : null;
-                    $wantDir = $before ? ($before->direction === 'in' ? 'out' : 'in') : 'in';
+                    $beforeDir = $before ? $this->effectiveDirection($before) : null;
+                    $wantDir = $beforeDir === 'in' ? 'out' : 'in';
 
-                    if ($p->direction === $wantDir && $prev->direction !== $wantDir) {
+                    if ($curDir === $wantDir && $prevDir !== $wantDir) {
                         // The later edge fits better — swap it in for the first.
                         $kept->pop();
                         $flag[spl_object_id($prev)] = ['retry', 'Reader flip-flop — replaced by the '.$p->punched_at->format('h:i:s A').' edge'];
@@ -182,20 +185,33 @@ class PunchTimeline
     }
 
     /**
-     * Real direction per kept punch: the engine's tag when present, otherwise
-     * alternation (even = IN, odd = OUT).
+     * A punch's true IN/OUT direction. The verification method is the primary
+     * signal (config biometric.method_direction — e.g. Face = IN, Card = OUT on
+     * this deployment, where the engine's own IN/OUT tag mis-labels face punches
+     * as OUT). Falls back to the engine's stored tag, then null (undecided).
+     */
+    protected function effectiveDirection(AttendancePunch $p): ?string
+    {
+        $map = config('biometric.method_direction', []);
+        $method = (string) $p->method;
+        if ($method !== '' && isset($map[$method]) && in_array($map[$method], ['in', 'out'], true)) {
+            return $map[$method];
+        }
+
+        return in_array($p->direction, ['in', 'out'], true) ? $p->direction : null;
+    }
+
+    /**
+     * Real direction per kept punch: method-derived when known, then the
+     * engine's tag, otherwise alternation (even = IN, odd = OUT).
      *
      * @param  Collection<int, AttendancePunch>  $kept
      * @return array<int, string>
      */
     protected function resolveDirections(Collection $kept, bool $hasDirection): array
     {
-        return $kept->map(function (AttendancePunch $p, int $i) use ($hasDirection) {
-            if ($hasDirection && in_array($p->direction, ['in', 'out'], true)) {
-                return $p->direction;
-            }
-
-            return $i % 2 === 0 ? 'in' : 'out';
+        return $kept->map(function (AttendancePunch $p, int $i) {
+            return $this->effectiveDirection($p) ?? ($i % 2 === 0 ? 'in' : 'out');
         })->all();
     }
 

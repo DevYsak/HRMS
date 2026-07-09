@@ -119,7 +119,7 @@ test('the drawer trusts the engine daily summary over incomplete local punches',
     foreach (['10:19', '12:56', '13:19', '13:30', '15:02', '16:34'] as $t) {
         AttendancePunch::create([
             'employee_id' => $employee->id, 'punched_at' => today()->setTimeFromTimeString($t),
-            'punch_date' => today(), 'method' => 'id_card', 'source' => 'biometric', 'device_serial' => 'TDBD25',
+            'punch_date' => today(), 'method' => null, 'source' => 'biometric', 'device_serial' => 'TDBD25',
         ]);
     }
 
@@ -151,7 +151,7 @@ test('the drawer lists every synced punch, including near-adjacent ones', functi
     foreach (['09:00', '16:34', '16:36'] as $t) {
         AttendancePunch::create([
             'employee_id' => $employee->id, 'punched_at' => today()->setTimeFromTimeString($t),
-            'punch_date' => today(), 'method' => 'id_card', 'source' => 'biometric', 'device_serial' => 'TDBD25',
+            'punch_date' => today(), 'method' => null, 'source' => 'biometric', 'device_serial' => 'TDBD25',
         ]);
     }
     AttendanceDailySummary::create([
