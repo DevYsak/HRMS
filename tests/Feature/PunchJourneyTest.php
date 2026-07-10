@@ -161,6 +161,31 @@ test('engine-directed punches pair by real IN/OUT, not alternation', function ()
         ->toBe(['IN', 'OUT', 'IN', 'OUT', 'IN', 'OUT', 'IN', 'OUT']);
 });
 
+test('a Card OUT seconds after a Face IN is a real departure, not a flip-flop', function () {
+    // EMP015 case: a compulsory Card OUT 51s after the Face IN was wrongly
+    // merged away, leaving two INs and a phantom Missing OUT. Different methods
+    // = two real actions → keep both.
+    $rows = [
+        ['09:59:22', 'face'],     // IN
+        ['09:59:24', 'face'],     // IN — duplicate read, dropped
+        ['10:00:13', 'id_card'],  // OUT — real card departure, MUST survive
+        ['10:02:31', 'face'],     // IN — returned
+        ['10:02:32', 'face'],     // IN — duplicate read, dropped
+    ];
+    foreach ($rows as [$t, $method]) {
+        methodPunch($this->employee->id, $t, $method);
+    }
+
+    $pj = Livewire::test(AttendanceTracker::class)->get('punchJourney');
+
+    expect($pj['needs_regularization'])->toBeFalse()   // no phantom Missing OUT
+        ->and($pj['duplicate_count'])->toBe(2)          // the two face re-reads
+        ->and($pj['conflict_count'])->toBe(0)           // the card OUT is NOT a flip-flop
+        ->and(collect($pj['nodes'])->pluck('dir')->all())->toBe(['IN', 'OUT', 'IN'])
+        ->and($pj['live'])->toBeTrue()                  // the trailing 10:02 IN
+        ->and($pj['session_count'])->toBe(2);
+});
+
 test('a one-second IN then OUT keeps ONE edge — the real arrival, never both', function () {
     // The exact drawer case: 10:28:59 IN + 10:29:00 OUT one second apart. It is
     // one physical tap — keep the IN (the arrival), drop the echo. The genuine

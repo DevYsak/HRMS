@@ -137,8 +137,13 @@ class PunchTimeline
                 $prevDir = $this->effectiveDirection($prev);
                 $curDir = $this->effectiveDirection($p);
                 $opposite = $prevDir !== null && $curDir !== null && $prevDir !== $curDir;
+                $sameMethod = (string) $prev->method === (string) $p->method;
 
-                if ($opposite) {
+                // A flip-flop is ONE reader firing both edges of a single tap —
+                // so it must be the SAME method. A Face IN next to a Card OUT is
+                // two distinct real actions (Card OUT is compulsory here), even
+                // seconds apart: keep both.
+                if ($opposite && $sameMethod) {
                     $conflicts++;
                     // Which single edge keeps the sequence alternating?
                     $before = $kept->count() >= 2 ? $kept->get($kept->count() - 2) : null;
@@ -159,15 +164,18 @@ class PunchTimeline
                     continue;
                 }
 
-                // Same direction within the window → duplicate read (or a
-                // Face+Card re-verify when the method differs). Keep the first.
-                $sameMethod = (string) $prev->method === (string) $p->method;
-                $sameMethod ? $duplicates++ : $conflicts++;
-                $flag[spl_object_id($p)] = $sameMethod
-                    ? ['duplicate', 'Duplicate read — same punch registered again within '.self::MERGE_WINDOW_SECONDS.'s']
-                    : ['retry', 'Authentication retry — merged into the '.$prev->punched_at->format('h:i:s A').' punch'];
+                // Same direction within the window → a duplicate read (or a
+                // Face+Card re-verify of the same edge when the method differs).
+                if (! $opposite) {
+                    $sameMethod ? $duplicates++ : $conflicts++;
+                    $flag[spl_object_id($p)] = $sameMethod
+                        ? ['duplicate', 'Duplicate read — same punch registered again within '.self::MERGE_WINDOW_SECONDS.'s']
+                        : ['retry', 'Authentication retry — merged into the '.$prev->punched_at->format('h:i:s A').' punch'];
 
-                continue;
+                    continue;
+                }
+
+                // Opposite direction, different method → two real actions; keep both.
             }
 
             $kept->push($p);
@@ -415,7 +423,9 @@ class PunchTimeline
     {
         return [
             'time' => $p->punched_at->format('h:i:s A'),
-            'direction' => $p->direction,
+            // The resolved direction (method-derived), so a Face punch never
+            // shows a misleading "OUT" the audit view would then keep.
+            'direction' => $this->effectiveDirection($p),
             'method' => $p->methodEnum()?->label() ?? ucfirst((string) $p->method) ?: null,
             'method_icon' => $p->methodEnum()?->icon() ?? 'clock',
             'device' => $p->device_serial,
