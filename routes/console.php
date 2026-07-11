@@ -19,6 +19,12 @@ Schedule::command('hrms:escalate-leaves')
     ->withoutOverlapping()
     ->runInBackground();
 
+// Release approval claim-locks idle for 2+ hours (multi-HR routing) → hourly
+Schedule::command('hrms:release-stale-claims')
+    ->hourly()
+    ->withoutOverlapping()
+    ->runInBackground();
+
 // Flag today's missing check-outs → 21:00 IST (IT shift ends 19:30 + 1 hr buffer; spec §7)
 Schedule::command('hrms:flag-missing-checkouts')
     ->dailyAt('21:00')

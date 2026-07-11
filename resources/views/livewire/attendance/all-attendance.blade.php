@@ -388,11 +388,17 @@ EMPLOYEE 360 DRAWER (480px, right)
                                         </span>
                                     </div>
                                     <p class="mt-0.5 truncate text-[10px] italic text-zinc-400">“{{ $pr['reason'] }}”</p>
-                                    <div class="mt-1.5 flex gap-1.5">
-                                        <button wire:click="quickApproveRegularisation({{ $pr['id'] }})" class="inline-flex items-center gap-1 rounded-lg bg-emerald-500 px-2.5 py-1 text-[10px] font-bold text-white transition hover:bg-emerald-600"><flux:icon.check class="size-3" /> Approve</button>
-                                        <button wire:click="openReviewModal({{ $pr['id'] }})" class="inline-flex items-center gap-1 rounded-lg bg-rose-500 px-2.5 py-1 text-[10px] font-bold text-white transition hover:bg-rose-600"><flux:icon.x-mark class="size-3" /> Reject</button>
-                                        <button wire:click="openReviewModal({{ $pr['id'] }})" class="inline-flex items-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1 text-[10px] font-bold text-zinc-600 dark:text-zinc-300 transition hover:bg-zinc-50 dark:bg-zinc-800/50"><flux:icon.pencil-square class="size-3" /> Edit</button>
-                                    </div>
+                                    @if(! empty($pr['handled_by']))
+                                        <div class="mt-1.5 inline-flex items-center gap-1.5 rounded-lg bg-sky-50 px-2.5 py-1 text-[10px] font-bold text-sky-700 dark:bg-sky-500/10 dark:text-sky-400">
+                                            <flux:icon.lock-closed class="size-3" /> Being handled by {{ $pr['handled_by'] }}
+                                        </div>
+                                    @else
+                                        <div class="mt-1.5 flex gap-1.5">
+                                            <button wire:click="quickApproveRegularisation({{ $pr['id'] }})" class="inline-flex items-center gap-1 rounded-lg bg-emerald-500 px-2.5 py-1 text-[10px] font-bold text-white transition hover:bg-emerald-600"><flux:icon.check class="size-3" /> Approve</button>
+                                            <button wire:click="openReviewModal({{ $pr['id'] }})" class="inline-flex items-center gap-1 rounded-lg bg-rose-500 px-2.5 py-1 text-[10px] font-bold text-white transition hover:bg-rose-600"><flux:icon.x-mark class="size-3" /> Reject</button>
+                                            <button wire:click="openReviewModal({{ $pr['id'] }})" class="inline-flex items-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1 text-[10px] font-bold text-zinc-600 dark:text-zinc-300 transition hover:bg-zinc-50 dark:bg-zinc-800/50"><flux:icon.pencil-square class="size-3" /> Edit</button>
+                                        </div>
+                                    @endif
                                 </div>
                             @endforeach
                         </div>
@@ -440,10 +446,10 @@ REVIEW REGULARISATION MODAL
 ══════════════════════════════════════════ --}}
 @if($showReviewModal)
     <div class="fixed inset-0 z-50 flex items-center justify-center p-4"
-         x-data x-on:keydown.escape.window="$wire.set('showReviewModal', false)">
-        <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="$wire.set('showReviewModal', false)"></div>
+         x-data x-on:keydown.escape.window="$wire.closeReviewModal()">
+        <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="$wire.closeReviewModal()"></div>
         <div class="relative max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white dark:bg-zinc-900 p-6 shadow-xl ring ring-black/5">
-            <button type="button" @click="$wire.set('showReviewModal', false)" class="absolute right-4 top-4 text-zinc-400 transition-colors hover:text-zinc-600 dark:text-zinc-300">
+            <button type="button" @click="$wire.closeReviewModal()" class="absolute right-4 top-4 text-zinc-400 transition-colors hover:text-zinc-600 dark:text-zinc-300">
                 <flux:icon.x-mark class="size-5" />
             </button>
 
@@ -512,7 +518,7 @@ REVIEW REGULARISATION MODAL
                         <p class="text-xs text-red-500">{{ $message }}</p>
                     @enderror
                     <div class="flex justify-end gap-2 border-t border-zinc-100 dark:border-zinc-800 pt-3">
-                        <button type="button" @click="$wire.set('showReviewModal', false)" class="rounded-xl border border-zinc-200 dark:border-zinc-800 px-4 py-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300 transition-colors hover:bg-zinc-50 dark:bg-zinc-800/50">Cancel</button>
+                        <button type="button" @click="$wire.closeReviewModal()" class="rounded-xl border border-zinc-200 dark:border-zinc-800 px-4 py-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300 transition-colors hover:bg-zinc-50 dark:bg-zinc-800/50">Cancel</button>
                         <flux:button wire:click="rejectRegularisation" variant="ghost" class="!text-red-600 hover:!bg-red-50">Reject</flux:button>
                         <flux:button wire:click="approveRegularisation" variant="primary">Approve</flux:button>
                     </div>

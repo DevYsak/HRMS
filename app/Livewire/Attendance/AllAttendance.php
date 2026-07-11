@@ -13,6 +13,7 @@ use App\Models\LeaveBalance;
 use App\Models\User;
 use App\Notifications\AttendanceRegularisationNotification;
 use App\Notifications\RegularisationReviewedNotification;
+use App\Services\Approvals\ClaimLockService;
 use App\Services\Attendance\PunchTimeline;
 use App\Services\AttendanceService;
 use Carbon\CarbonPeriod;
@@ -345,13 +346,14 @@ class AllAttendance extends Component
                 'status' => $a->status,
             ])->values()->all(),
             'pending' => AttendanceRegularisation::where('employee_id', $employee->id)
-                ->where('status', 'pending')->orderByDesc('work_date')->get()
+                ->where('status', 'pending')->with('claimer')->orderByDesc('work_date')->get()
                 ->map(fn ($r) => [
                     'id' => $r->id,
                     'date' => Carbon::parse($r->work_date)->format('d M Y'),
                     'window' => Carbon::parse($r->requested_check_in)->format('H:i').' → '.Carbon::parse($r->requested_check_out)->format('H:i'),
                     'reason' => $r->reason,
                     'stage' => $r->stageLabel(),
+                    'handled_by' => app(ClaimLockService::class)->heldByOther($r, Auth::id()) ? $r->claimer?->name : null,
                 ])->all(),
         ];
         $this->drawerEmployeeId = $employeeId;
@@ -374,7 +376,15 @@ class AllAttendance extends Component
             return;
         }
 
+        // Claim-lock: another HR is actively handling this request.
+        if (app(ClaimLockService::class)->heldByOther($request, Auth::id())) {
+            \Flux::toast('Being handled by '.($request->claimer?->name ?? 'another HR admin').' — no action needed.', variant: 'warning');
+
+            return;
+        }
+
         $attendance = app(AttendanceService::class)->approveRegularisation($request, Auth::id());
+        app(ClaimLockService::class)->release($request);
         $request->refresh();
 
         if ($attendance) {
@@ -396,8 +406,20 @@ class AllAttendance extends Component
     {
         abort_unless(Auth::user()->canApproveLeave(), 403);
 
-        $this->activeRequest = AttendanceRegularisation::with('employee.user', 'attendance', 'reviewer')->findOrFail($id);
+        $this->activeRequest = AttendanceRegularisation::with('employee.user', 'attendance', 'reviewer', 'claimer')->findOrFail($id);
         abort_unless($this->activeRequest->employee && Auth::user()->coversEmployee($this->activeRequest->employee), 403);
+
+        // Claim-lock: first in-scope HR to open a pending request claims it;
+        // anyone else is told who's on it instead of getting the modal.
+        if ($this->activeRequest->status === 'pending') {
+            if (! app(ClaimLockService::class)->claim($this->activeRequest, Auth::id())) {
+                \Flux::toast('Being handled by '.($this->activeRequest->claimer?->name ?? 'another HR admin').' — no action needed.', variant: 'warning');
+                $this->activeRequest = null;
+
+                return;
+            }
+        }
+
         $this->reviewComment = '';
         $this->regularisationLocked = false;
         $this->lockedByName = '';
@@ -440,6 +462,18 @@ class AllAttendance extends Component
 
         $this->activeRequest->employee->user->notify(new RegularisationReviewedNotification($this->activeRequest));
 
+        app(ClaimLockService::class)->release($this->activeRequest);
+        $this->showReviewModal = false;
+        $this->activeRequest = null;
+    }
+
+    /** Close the review modal without deciding — releases this HR's claim. */
+    public function closeReviewModal(): void
+    {
+        if ($this->activeRequest && (int) $this->activeRequest->claimed_by === Auth::id()) {
+            app(ClaimLockService::class)->release($this->activeRequest);
+        }
+
         $this->showReviewModal = false;
         $this->activeRequest = null;
     }
@@ -463,6 +497,7 @@ class AllAttendance extends Component
 
         $this->activeRequest->employee->user->notify(new RegularisationReviewedNotification($this->activeRequest));
 
+        app(ClaimLockService::class)->release($this->activeRequest);
         $this->showReviewModal = false;
         $this->activeRequest = null;
         \Flux::toast('Regularisation request rejected.');

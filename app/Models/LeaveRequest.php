@@ -28,6 +28,7 @@ class LeaveRequest extends Model
         return [
             'start_date' => 'date',
             'end_date' => 'date',
+            'claimed_at' => 'datetime',
             'is_half_day' => 'boolean',
             'payment_status_changed_at' => 'datetime',
             'hr_reviewed_at' => 'datetime',
@@ -102,5 +103,11 @@ class LeaveRequest extends Model
         return $this->approved_leave_status
             ?? $this->requested_leave_status
             ?? ($this->leaveType?->is_paid ? 'paid' : 'unpaid');
+    }
+
+    /** The HR admin currently handling this request (claim-lock). */
+    public function claimer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'claimed_by');
     }
 }

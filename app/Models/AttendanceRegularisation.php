@@ -35,6 +35,7 @@ class AttendanceRegularisation extends Model
             'work_date' => 'date',
             'reviewed_at' => 'datetime',
             'approval_trail' => 'array',
+            'claimed_at' => 'datetime',
         ];
     }
 
@@ -74,5 +75,11 @@ class AttendanceRegularisation extends Model
     public function scopePending(Builder $query): Builder
     {
         return $query->where('status', 'pending');
+    }
+
+    /** The HR admin currently handling this request (claim-lock). */
+    public function claimer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'claimed_by');
     }
 }
