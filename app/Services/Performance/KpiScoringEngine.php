@@ -11,6 +11,7 @@ use App\Models\PerformanceCycle;
 use App\Models\PerformanceReview;
 use App\Models\PerformanceReviewScore;
 use App\Models\PerformanceTemplate;
+use App\Models\ReviewParticipantScore;
 use Illuminate\Support\Facades\DB;
 
 class KpiScoringEngine
@@ -83,8 +84,13 @@ class KpiScoringEngine
                         $leaveImpact = $autoVal;
                     }
                 } else {
-                    // Use hr_score > manager_score > self_score as effective
-                    $effective = $score->hr_score ?? $score->manager_score ?? $score->self_score ?? 0.0;
+                    // HR override first, then the multi-reviewer composite
+                    // (Phase D), then the legacy manager/self fallbacks.
+                    $effective = $score->hr_score
+                        ?? $this->participantComposite($review, $component->id)
+                        ?? $score->manager_score
+                        ?? $score->self_score
+                        ?? 0.0;
                     $weighted = round($effective * $component->weight_percent / 100, 4);
                     $score->update(['final_score' => $effective, 'weighted_score' => $weighted]);
                 }
@@ -113,6 +119,36 @@ class KpiScoringEngine
 
             return $scorecard;
         });
+    }
+
+    /**
+     * Weighted composite of all submitted participants' scores for one
+     * component (v4 Phase D): Σ(score × weight) / Σ(weight), renormalised
+     * over the participants who actually scored it. Null when no participant
+     * data exists so callers can fall back to the legacy wide columns.
+     */
+    private function participantComposite(PerformanceReview $review, int $componentId): ?float
+    {
+        $rows = ReviewParticipantScore::query()
+            ->where('component_id', $componentId)
+            ->whereNotNull('score')
+            ->whereHas('participant', fn ($q) => $q
+                ->where('performance_review_id', $review->id)
+                ->where('status', 'submitted'))
+            ->with('participant')
+            ->get();
+
+        if ($rows->isEmpty()) {
+            return null;
+        }
+
+        $weightSum = (float) $rows->sum(fn ($r) => $r->participant->weight_percent);
+
+        if ($weightSum <= 0) {
+            return null;
+        }
+
+        return round($rows->sum(fn ($r) => $r->score * $r->participant->weight_percent) / $weightSum, 2);
     }
 
     // ── Raw data helpers ──────────────────────────────────────────────────────

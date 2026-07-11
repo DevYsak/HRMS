@@ -65,6 +65,7 @@ use App\Livewire\Performance\MyPromotions;
 use App\Livewire\Performance\MyReview;
 use App\Livewire\Performance\MyWarnings;
 use App\Livewire\Performance\PerformanceCycles;
+use App\Livewire\Performance\ReviewTasks;
 use App\Livewire\Performance\TeamReviews;
 use App\Livewire\Performance\WarningLetters;
 use App\Livewire\Settings\ControlPanel;
@@ -254,6 +255,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/goals', Goals::class)->name('goals');
         Route::get('/my-kpis', MyKpis::class)->name('my-kpis');
         Route::get('/scorecard/{id}', EmployeeScorecard::class)->name('scorecard');
+
+        // Multi-reviewer queue — anyone can be a participant (team lead, dept head, additional)
+        Route::get('/review-tasks', ReviewTasks::class)->name('review-tasks');
 
         // Managers, Directors, HR, Finance can see team reviews
         Route::get('/team', TeamReviews::class)->name('team')->middleware('role:review-performance');

@@ -163,6 +163,16 @@
                                         wire:navigate>
                                         My Review
                                     </flux:sidebar.item>
+                                    @php $pendingReviewTasks = \App\Models\ReviewParticipant::where('reviewer_id', auth()->id())->where('status', 'pending')->count(); @endphp
+                                    @if($pendingReviewTasks > 0)
+                                        <flux:sidebar.item :href="route('performance.review-tasks')"
+                                            :current="request()->routeIs('performance.review-tasks')" wire:navigate>
+                                            <div class="flex items-center gap-2">
+                                                Review Tasks
+                                                <span class="inline-flex items-center justify-center rounded-full bg-violet-500 px-1.5 py-0.5 text-[10px] font-bold text-white">{{ $pendingReviewTasks > 9 ? '9+' : $pendingReviewTasks }}</span>
+                                            </div>
+                                        </flux:sidebar.item>
+                                    @endif
                                     <flux:sidebar.item :href="route('performance.my-warnings')"
                                         :current="request()->routeIs('performance.my-warnings')" wire:navigate>
                                         <div class="flex items-center gap-2">
@@ -296,6 +306,16 @@
                             wire:navigate>My Performance</flux:sidebar.item>
                         <flux:sidebar.item :href="route('performance.my')" :current="request()->routeIs('performance.my')"
                             wire:navigate>My Review</flux:sidebar.item>
+                        @php $pendingReviewTasks = \App\Models\ReviewParticipant::where('reviewer_id', auth()->id())->where('status', 'pending')->count(); @endphp
+                        @if($pendingReviewTasks > 0)
+                            <flux:sidebar.item :href="route('performance.review-tasks')"
+                                :current="request()->routeIs('performance.review-tasks')" wire:navigate>
+                                <div class="flex items-center gap-2">
+                                    Review Tasks
+                                    <span class="inline-flex items-center justify-center rounded-full bg-violet-500 px-1.5 py-0.5 text-[10px] font-bold text-white">{{ $pendingReviewTasks > 9 ? '9+' : $pendingReviewTasks }}</span>
+                                </div>
+                            </flux:sidebar.item>
+                        @endif
                         <flux:sidebar.item :href="route('performance.goals')" :current="request()->routeIs('performance.goals')"
                             wire:navigate>My Goals</flux:sidebar.item>
                         <flux:sidebar.item :href="route('performance.my-kpis')"
@@ -540,6 +560,16 @@
                             wire:navigate>My Performance</flux:sidebar.item>
                         <flux:sidebar.item :href="route('performance.my')" :current="request()->routeIs('performance.my')"
                             wire:navigate>My Review</flux:sidebar.item>
+                        @php $pendingReviewTasks = \App\Models\ReviewParticipant::where('reviewer_id', auth()->id())->where('status', 'pending')->count(); @endphp
+                        @if($pendingReviewTasks > 0)
+                            <flux:sidebar.item :href="route('performance.review-tasks')"
+                                :current="request()->routeIs('performance.review-tasks')" wire:navigate>
+                                <div class="flex items-center gap-2">
+                                    Review Tasks
+                                    <span class="inline-flex items-center justify-center rounded-full bg-violet-500 px-1.5 py-0.5 text-[10px] font-bold text-white">{{ $pendingReviewTasks > 9 ? '9+' : $pendingReviewTasks }}</span>
+                                </div>
+                            </flux:sidebar.item>
+                        @endif
                         <flux:sidebar.item :href="route('performance.goals')" :current="request()->routeIs('performance.goals')"
                             wire:navigate>My Goals</flux:sidebar.item>
                         <flux:sidebar.item :href="route('performance.my-kpis')"
