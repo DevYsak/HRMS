@@ -2,6 +2,7 @@
 
 namespace App\Livewire;
 
+use App\Livewire\Concerns\HandlesClaimLock;
 use App\Models\AttendanceRegularisation;
 use App\Models\LeaveEncashment;
 use App\Models\LeaveRequest;
@@ -12,6 +13,7 @@ use App\Services\AttendanceService;
 use App\Services\LeaveService;
 use App\Services\OvertimeService;
 use Carbon\CarbonInterface;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
@@ -25,6 +27,20 @@ use Livewire\Component;
  */
 class ApprovalCenter extends Component
 {
+    use HandlesClaimLock;
+
+    /** Block the action when another reviewer is actively handling the request. */
+    protected function guardClaim(Model $request): bool
+    {
+        if ($this->claimHeldByOther($request)) {
+            \Flux::toast('Being handled by '.($request->claimer?->name ?? 'another reviewer').' — no action needed.', variant: 'warning');
+
+            return false;
+        }
+
+        return true;
+    }
+
     public string $filter = 'all';
 
     public function setFilter(string $filter): void
@@ -51,7 +67,10 @@ class ApprovalCenter extends Component
             switch ($type) {
                 case 'leave':
                     abort_unless($user->canApproveLeave(), 403);
-                    $req = LeaveRequest::findOrFail($id);
+                    $req = LeaveRequest::with('claimer')->findOrFail($id);
+                    if (! $this->guardClaim($req)) {
+                        return;
+                    }
                     $form = [
                         'leave_type_id' => $req->leave_type_id,
                         'start_date' => $req->start_date->format('Y-m-d'),
@@ -64,7 +83,10 @@ class ApprovalCenter extends Component
 
                 case 'ot':
                     abort_unless($user->canApproveOt(), 403);
-                    $req = OtRequest::findOrFail($id);
+                    $req = OtRequest::with('claimer')->findOrFail($id);
+                    if (! $this->guardClaim($req)) {
+                        return;
+                    }
                     if ($action === 'approved') {
                         app(OvertimeService::class)->approve($req, $user->id);
                     } else {
@@ -75,7 +97,10 @@ class ApprovalCenter extends Component
 
                 case 'regularisation':
                     abort_unless($user->canApproveLeave(), 403);
-                    $req = AttendanceRegularisation::findOrFail($id);
+                    $req = AttendanceRegularisation::with('claimer')->findOrFail($id);
+                    if (! $this->guardClaim($req)) {
+                        return;
+                    }
                     if ($action === 'approved') {
                         app(AttendanceService::class)->approveRegularisation($req, $user->id);
                     } else {
@@ -86,7 +111,10 @@ class ApprovalCenter extends Component
 
                 case 'encashment':
                     abort_unless($user->canApproveFinance(), 403);
-                    $enc = LeaveEncashment::findOrFail($id);
+                    $enc = LeaveEncashment::with('claimer')->findOrFail($id);
+                    if (! $this->guardClaim($enc)) {
+                        return;
+                    }
                     if ($action === 'approved') {
                         app(LeaveService::class)->approveEncashment($user, $enc, $comment);
                     } else {

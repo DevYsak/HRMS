@@ -2,6 +2,7 @@
 
 namespace App\Livewire\TimeOff;
 
+use App\Livewire\Concerns\HandlesClaimLock;
 use App\Models\LeaveEncashment;
 use App\Services\LeaveService;
 use Illuminate\Support\Facades\Auth;
@@ -10,6 +11,7 @@ use Livewire\WithPagination;
 
 class FinanceEncashments extends Component
 {
+    use HandlesClaimLock;
     use WithPagination;
 
     public string $filterStatus = '';
@@ -34,6 +36,12 @@ class FinanceEncashments extends Component
 
     public function openReview(int $id, string $action): void
     {
+        // Claim the HR-stage request so a second HR can't process it too.
+        $encashment = LeaveEncashment::with('claimer')->findOrFail($id);
+        if (! $this->claimForReview($encashment)) {
+            return;
+        }
+
         $this->reviewingId = $id;
         $this->reviewAction = $action;
         $this->reviewComment = '';
@@ -72,6 +80,7 @@ class FinanceEncashments extends Component
             \Flux::toast($e->getMessage(), variant: 'danger');
         }
 
+        $this->releaseClaim($encashment);
         $this->showReviewModal = false;
         $this->reset(['reviewingId', 'reviewAction', 'reviewComment']);
     }

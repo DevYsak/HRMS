@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Overtime;
 
+use App\Livewire\Concerns\HandlesClaimLock;
 use App\Models\OtRequest;
 use App\Notifications\OtRequestNotification;
 use App\Services\OvertimeService;
@@ -11,6 +12,7 @@ use Livewire\WithPagination;
 
 class ManageOtRequests extends Component
 {
+    use HandlesClaimLock;
     use WithPagination;
 
     public string $filterStatus = '';
@@ -105,7 +107,14 @@ class ManageOtRequests extends Component
     public function openReview(int $id, string $action): void
     {
         $this->checkOtPermission();
-        $this->selectedRequest = OtRequest::with(['employee.user', 'employee.department', 'attendance'])->findOrFail($id);
+        $this->selectedRequest = OtRequest::with(['employee.user', 'employee.department', 'attendance', 'claimer'])->findOrFail($id);
+
+        if (! $this->claimForReview($this->selectedRequest)) {
+            $this->selectedRequest = null;
+
+            return;
+        }
+
         $this->reviewingId = $id;
         $this->reviewAction = $action;
         $this->reviewComment = $this->selectedRequest->reviewer_comment ?? '';
@@ -126,10 +135,17 @@ class ManageOtRequests extends Component
                 : 'nullable|max:500',
         ]);
 
-        $request = OtRequest::with(['employee.user', 'attendance'])->findOrFail($this->reviewingId);
+        $request = OtRequest::with(['employee.user', 'attendance', 'claimer'])->findOrFail($this->reviewingId);
 
         if (! $request->isPending()) {
             \Flux::toast('This request has already been reviewed.', variant: 'warning');
+            $this->closeReviewModal();
+
+            return;
+        }
+
+        if ($this->claimHeldByOther($request)) {
+            \Flux::toast('Being handled by '.($request->claimer?->name ?? 'another reviewer').' — no action needed.', variant: 'warning');
             $this->closeReviewModal();
 
             return;
@@ -153,12 +169,21 @@ class ManageOtRequests extends Component
             new OtRequestNotification($request->fresh())
         );
 
+        $this->releaseClaim($request);
         $this->closeReviewModal();
         $this->resetPage();
     }
 
     public function closeReviewModal(): void
     {
+        // Backing out without deciding frees the claim for the other reviewers.
+        if ($this->reviewingId) {
+            $req = OtRequest::find($this->reviewingId);
+            if ($req && (int) $req->claimed_by === Auth::id()) {
+                $this->releaseClaim($req);
+            }
+        }
+
         $this->reset(['showReviewModal', 'showEditModal', 'reviewingId', 'reviewAction', 'reviewComment', 'selectedRequest', 'editWorkDate', 'editStartTime', 'editEndTime', 'editReason']);
         $this->dispatch('modal-close', name: 'review-ot-modal');
         $this->dispatch('modal-close', name: 'edit-ot-modal');

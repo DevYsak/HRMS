@@ -1,9 +1,12 @@
 <?php
 
 use App\Enums\UserRole;
+use App\Livewire\ApprovalCenter;
 use App\Livewire\Attendance\AllAttendance;
+use App\Livewire\Overtime\ManageOtRequests;
 use App\Models\AttendanceRegularisation;
 use App\Models\Employee;
+use App\Models\OtRequest;
 use App\Models\User;
 use App\Services\Approvals\ClaimLockService;
 use Livewire\Livewire;
@@ -129,4 +132,46 @@ test('a stale claim no longer blocks another HR from taking over', function () {
         ->assertSet('showReviewModal', true);
 
     expect($reg->fresh()->claimed_by)->toBe($hrB->id);
+});
+
+test('opening an OT request for review claims it against other reviewers', function () {
+    $mgrA = User::factory()->create(['role' => UserRole::Manager]);
+    $mgrB = User::factory()->create(['role' => UserRole::Manager]);
+    $employee = Employee::factory()->create(['status' => 'active']);
+    $date = today()->subDay()->toDateString();
+    $ot = OtRequest::create([
+        'employee_id' => $employee->id, 'work_date' => $date,
+        'start_time' => "$date 19:30:00", 'end_time' => "$date 21:30:00",
+        'requested_hours' => 2, 'reason' => 'Release deploy.', 'status' => 'pending',
+    ]);
+
+    Livewire::actingAs($mgrA)->test(ManageOtRequests::class)
+        ->call('openReview', $ot->id, 'approve')
+        ->assertSet('showReviewModal', true);
+
+    expect($ot->fresh()->claimed_by)->toBe($mgrA->id);
+
+    // Manager B cannot open the same request.
+    Livewire::actingAs($mgrB)->test(ManageOtRequests::class)
+        ->call('openReview', $ot->id, 'approve')
+        ->assertSet('showReviewModal', false);
+
+    expect($ot->fresh()->claimed_by)->toBe($mgrA->id);
+});
+
+test('the Approval Center respects a claim held by another reviewer', function () {
+    $hrA = User::factory()->create(['role' => UserRole::HrAdmin]);
+    $hrB = User::factory()->create(['role' => UserRole::HrAdmin]);
+    $employee = Employee::factory()->create(['status' => 'active']);
+    $reg = pendingReg($employee);
+
+    // HR A is actively handling it (fresh claim).
+    $reg->forceFill(['claimed_by' => $hrA->id, 'claimed_at' => now()])->save();
+
+    // HR B tries to approve straight from the Approval Center — blocked.
+    Livewire::actingAs($hrB)->test(ApprovalCenter::class)
+        ->call('approve', 'regularisation', $reg->id);
+
+    expect($reg->fresh()->status)->toBe('pending')
+        ->and($reg->fresh()->claimed_by)->toBe($hrA->id);
 });
