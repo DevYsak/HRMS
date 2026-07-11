@@ -64,7 +64,7 @@ use App\Livewire\Performance\MyPip;
 use App\Livewire\Performance\MyPromotions;
 use App\Livewire\Performance\MyReview;
 use App\Livewire\Performance\MyWarnings;
-use App\Livewire\Performance\ReviewCycles;
+use App\Livewire\Performance\PerformanceCycles;
 use App\Livewire\Performance\TeamReviews;
 use App\Livewire\Performance\WarningLetters;
 use App\Livewire\Settings\ControlPanel;
@@ -261,7 +261,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // HR / admin only — all reviews and cycle management
         Route::middleware('role:manage-employees')->group(function () {
             Route::get('/employees', AllReviews::class)->name('employees');
-            Route::get('/cycles', ReviewCycles::class)->name('cycles');
+            Route::get('/cycles', PerformanceCycles::class)->name('cycles');
             Route::get('/kpi-dashboard', KpiDashboard::class)->name('kpi-dashboard');
             Route::get('/kpi-templates', KpiTemplates::class)->name('kpi-templates');
             Route::get('/warnings/manage', WarningLetters::class)->name('warnings.manage');

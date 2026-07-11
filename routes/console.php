@@ -73,11 +73,8 @@ Schedule::command('hrms:check-newhire-checkin')
     ->withoutOverlapping()
     ->runInBackground();
 
-// Notify employees + managers if QBR review due within 7 days → Monday 09:00
-Schedule::command('hrms:send-review-reminders')
-    ->weeklyOn(1, '09:00')
-    ->withoutOverlapping()
-    ->runInBackground();
+// Legacy hrms:send-review-reminders retired with the ReviewCycle cutover —
+// hrms:check-review-cycle-reminders covers active performance cycles.
 
 // Delete notifications older than 90 days → Sunday midnight
 Schedule::command('hrms:prune-notifications')

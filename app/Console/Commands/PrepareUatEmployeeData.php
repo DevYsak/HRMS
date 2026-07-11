@@ -14,7 +14,6 @@ use App\Models\Payslip;
 use App\Models\PerformanceComponent;
 use App\Models\PerformanceCycle;
 use App\Models\PerformanceReview;
-use App\Models\ReviewCycle;
 use App\Models\User;
 use App\Notifications\KpiAssignedNotification;
 use App\Notifications\LeaveRequestNotification;
@@ -327,10 +326,8 @@ class PrepareUatEmployeeData extends Command
                 ? Employee::where('user_id', $employee->manager_id)->first()
                 : null;
 
-            $reviewCycle = ReviewCycle::where('status', 'active')->first();
-
             $review = PerformanceReview::create([
-                'review_cycle_id' => $reviewCycle?->id,
+                'review_cycle_id' => null,
                 'performance_cycle_id' => $activeCycle->id,
                 'template_id' => $activeCycle->template_id,
                 'employee_id' => $employee->id,
