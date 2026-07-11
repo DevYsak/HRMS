@@ -9,9 +9,13 @@ use App\Http\Controllers\PayslipController;
 use App\Http\Controllers\ReportController;
 use App\Livewire\AiAssistantPage;
 use App\Livewire\Attendance\AllAttendance;
+use App\Livewire\Attendance\AttendanceReports;
 use App\Livewire\Attendance\AttendanceSettings;
 use App\Livewire\Attendance\AttendanceTracker;
+use App\Livewire\Attendance\BiometricControl;
 use App\Livewire\Attendance\BiometricSummary;
+use App\Livewire\Attendance\CommandCenter;
+use App\Livewire\Attendance\ExecutiveAttendance;
 use App\Livewire\Attendance\TeamAttendance;
 use App\Livewire\AuditLogViewer;
 use App\Livewire\Dashboard;
@@ -25,6 +29,7 @@ use App\Livewire\Employees\EmployeeIndex;
 use App\Livewire\Employees\FinanceEmployeeProfile;
 use App\Livewire\Employees\OrgChart;
 use App\Livewire\Employees\ProbationConfirmation;
+use App\Livewire\Employees\TeamManagement;
 use App\Livewire\ExecutiveDashboard;
 use App\Livewire\FinanceDashboard;
 use App\Livewire\HrAdminDashboard;
@@ -135,6 +140,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         // HR / admin only
         Route::middleware('role:manage-employees')->group(function () {
+            Route::get('/teams', TeamManagement::class)->name('teams');
             Route::get('/create', EmployeeCreate::class)->name('create');
             Route::get('/import', EmployeeImport::class)->name('import');
             Route::get('/{employee}/edit', EmployeeEdit::class)->name('edit');
@@ -169,10 +175,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::middleware('role:approve-leave')->group(function () {
             Route::get('/team', TeamAttendance::class)->name('team');
             Route::get('/employees', AllAttendance::class)->name('employees');
-            Route::get('/command-center', \App\Livewire\Attendance\CommandCenter::class)->name('command-center');
-            Route::get('/reports', \App\Livewire\Attendance\AttendanceReports::class)->name('reports');
-            Route::get('/executive', \App\Livewire\Attendance\ExecutiveAttendance::class)->name('executive');
-            Route::get('/biometric-control', \App\Livewire\Attendance\BiometricControl::class)->name('biometric-control');
+            Route::get('/command-center', CommandCenter::class)->name('command-center');
+            Route::get('/reports', AttendanceReports::class)->name('reports');
+            Route::get('/executive', ExecutiveAttendance::class)->name('executive');
+            Route::get('/biometric-control', BiometricControl::class)->name('biometric-control');
         });
         Route::get('/settings', AttendanceSettings::class)->name('settings')->middleware('role:manage-settings');
         Route::get('/biometric-summary', BiometricSummary::class)->name('biometric-summary')->middleware('role:approve-leave');
