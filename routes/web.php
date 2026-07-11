@@ -55,6 +55,7 @@ use App\Livewire\Performance\AllReviews;
 use App\Livewire\Performance\Dashboard as PerformanceDashboard;
 use App\Livewire\Performance\EmployeeScorecard;
 use App\Livewire\Performance\Goals;
+use App\Livewire\Performance\IncrementCenter;
 use App\Livewire\Performance\KpiDashboard;
 use App\Livewire\Performance\KpiTemplates;
 use App\Livewire\Performance\ManagePips;
@@ -89,7 +90,9 @@ use App\Livewire\TimeOff\TeamTimeOff;
 use App\Livewire\TimeOff\TimeOffSettings;
 use App\Livewire\Wfh\ManageWfhRequests;
 use App\Livewire\Wfh\MyWfhRequests;
+use App\Models\IncrementProposal;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Fortify\Features;
 
 // ======================================================
@@ -259,6 +262,18 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // Multi-reviewer queue — anyone can be a participant (team lead, dept head, additional)
         Route::get('/review-tasks', ReviewTasks::class)->name('review-tasks');
 
+        // Increment letter download — own letter, or HR/admin
+        Route::get('/increments/letter/{proposal}', function (IncrementProposal $proposal) {
+            $user = auth()->user();
+            abort_unless($user->canManageEmployees() || $proposal->employee?->user_id === $user->id, 403);
+            abort_unless($proposal->letter_path && Storage::disk('local')->exists($proposal->letter_path), 404);
+
+            return Storage::disk('local')->download(
+                $proposal->letter_path,
+                "increment-letter-{$proposal->cycle->financial_year}.pdf",
+            );
+        })->name('increments.letter');
+
         // Managers, Directors, HR, Finance can see team reviews
         Route::get('/team', TeamReviews::class)->name('team')->middleware('role:review-performance');
 
@@ -266,6 +281,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::middleware('role:manage-employees')->group(function () {
             Route::get('/employees', AllReviews::class)->name('employees');
             Route::get('/cycles', PerformanceCycles::class)->name('cycles');
+            Route::get('/increments', IncrementCenter::class)->name('increments');
             Route::get('/kpi-dashboard', KpiDashboard::class)->name('kpi-dashboard');
             Route::get('/kpi-templates', KpiTemplates::class)->name('kpi-templates');
             Route::get('/warnings/manage', WarningLetters::class)->name('warnings.manage');

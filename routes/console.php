@@ -73,8 +73,18 @@ Schedule::command('hrms:check-newhire-checkin')
     ->withoutOverlapping()
     ->runInBackground();
 
-// Legacy hrms:send-review-reminders retired with the ReviewCycle cutover —
-// hrms:check-review-cycle-reminders covers active performance cycles.
+// Nudge reviewers with pending multi-reviewer submissions → Monday 09:00
+// (legacy hrms:send-review-reminders retired with the ReviewCycle cutover)
+Schedule::command('hrms:remind-review-participants')
+    ->weeklyOn(1, '09:00')
+    ->withoutOverlapping()
+    ->runInBackground();
+
+// Remind HR to open the July increment cycle → June 1, 09:00
+Schedule::command('hrms:open-increment-cycle-reminder')
+    ->yearlyOn(6, 1, '09:00')
+    ->withoutOverlapping()
+    ->runInBackground();
 
 // Delete notifications older than 90 days → Sunday midnight
 Schedule::command('hrms:prune-notifications')

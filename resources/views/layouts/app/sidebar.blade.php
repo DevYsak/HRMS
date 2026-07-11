@@ -595,6 +595,10 @@
                             <flux:sidebar.item :href="route('performance.cycles')"
                                 :current="request()->routeIs('performance.cycles')" wire:navigate>Review Cycles</flux:sidebar.item>
                         @endcan
+                        @can('manage_employees')
+                            <flux:sidebar.item :href="route('performance.increments')"
+                                :current="request()->routeIs('performance.increments')" wire:navigate>Increment Center</flux:sidebar.item>
+                        @endcan
                         @can('manage_scorecards')
                             <flux:sidebar.item :href="route('performance.kpi-dashboard')"
                                 :current="request()->routeIs('performance.kpi-dashboard')" wire:navigate>KPI Dashboard
