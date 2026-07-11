@@ -340,12 +340,10 @@ class PunchTimeline
 
         $workingMinutes += $liveElapsed;
 
-        // A synced engine summary is the authoritative headline total.
-        if ($summary && $summary->synced_at) {
-            $workingMinutes = (int) round((float) $summary->working_hours * 60);
-            $breakMinutes = (int) $summary->break_minutes;
-        }
-
+        // Working / break come only from these validated sessions. The engine's
+        // synced summary is NOT trusted for totals — on this device it mis-pairs
+        // (Face punches tagged OUT), reporting e.g. 21m worked / 191m break for a
+        // day these sessions correctly total to 4h+.
         $lastOut = $lastOutIndex !== null ? $kept->get($lastOutIndex) : null;
 
         return [

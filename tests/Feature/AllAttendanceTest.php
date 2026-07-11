@@ -91,56 +91,51 @@ test('HR can open the Employee 360 drawer with full profile data', function () {
         'employee_id' => $employee->id, 'punched_at' => today()->setTime(9, 5),
         'punch_date' => today(), 'method' => 'face', 'source' => 'biometric', 'device_serial' => 'MB20',
     ]);
+    AttendancePunch::create([
+        'employee_id' => $employee->id, 'punched_at' => today()->setTime(18, 0),
+        'punch_date' => today(), 'method' => 'id_card', 'source' => 'biometric', 'device_serial' => 'MB20',
+    ]);
 
     Livewire::actingAs($hr)->test(AllAttendance::class)
         ->call('openEmployeeDrawer', $employee->id)
         ->assertSet('drawerEmployeeId', $employee->id)
         ->assertSet('drawer.name', 'DRAWER PERSON')
         ->assertSet('drawer.status', 'Completed')
-        ->assertSet('drawer.punches', fn ($p) => count($p) === 1 && $p[0]['method'] === 'Face')
+        ->assertSet('drawer.punches', fn ($p) => count($p) === 2 && $p[0]['method'] === 'Face' && $p[1]['method'] === 'ID Card')
         ->assertSee('Attendance History')
         ->call('closeDrawer')
         ->assertSet('drawerEmployeeId', null);
 });
 
-test('the drawer trusts the engine daily summary over incomplete local punches', function () {
-    // Mayuresh scenario: the engine synced 11 punches → 6h / 18m, still inside.
-    // HRMS only received a partial punch stream that mis-pairs to 4h22m / 114m.
+test('the drawer computes worked/break from validated sessions, not the wrong engine summary', function () {
+    // EMP005 scenario: the engine's summary mis-pairs this device (Face tagged
+    // OUT), reporting 21m worked / 191m break. The validated Face=IN / Card=OUT
+    // sessions are the truth: 10:27→13:24 and 13:44→13:57 = 3h10m, 20m break.
     $hr = User::factory()->create(['role' => UserRole::HrAdmin]);
-    $empUser = User::factory()->create(['name' => 'ENGINE PERSON']);
+    $empUser = User::factory()->create(['name' => 'SESSION PERSON']);
     $employee = Employee::factory()->create(['user_id' => $empUser->id, 'status' => 'active']);
 
-    // Partial/incorrect local data (the last punch is really a live IN).
-    Attendance::create([
-        'employee_id' => $employee->id, 'date' => today(),
-        'check_in' => today()->setTime(10, 19), 'check_out' => today()->setTime(16, 36),
-        'status' => 'late', 'is_late' => true, 'work_mode' => 'office', 'break_minutes' => 114,
-    ]);
-    foreach (['10:19', '12:56', '13:19', '13:30', '15:02', '16:34'] as $t) {
+    foreach ([['10:27:00', 'face'], ['13:24:00', 'id_card'], ['13:44:00', 'face'], ['13:57:00', 'id_card']] as [$t, $method]) {
         AttendancePunch::create([
             'employee_id' => $employee->id, 'punched_at' => today()->setTimeFromTimeString($t),
-            'punch_date' => today(), 'method' => null, 'source' => 'biometric', 'device_serial' => 'TDBD25',
+            'punch_date' => today(), 'method' => $method, 'source' => 'biometric', 'device_serial' => 'TDBD25',
         ]);
     }
 
-    // Engine's authoritative summary — the source of truth.
+    // The engine's WRONG summary — must be ignored for the totals.
     AttendanceDailySummary::create([
-        'employee_id' => $employee->id, 'employee_code' => $employee->employee_code ?? 16,
-        'date' => today(), 'first_punch' => today()->setTime(10, 19), 'last_punch' => today()->setTime(16, 36),
-        'first_punch_method' => 'id_card', 'last_punch_method' => 'face',
-        'break_minutes' => 18, 'working_hours' => 6.0, 'late_minutes' => 189,
-        'overtime_minutes' => 0, 'status' => 'in_office', 'device_serial' => 'TDBD25',
-        'raw_punch_count' => 11, 'synced_at' => now(),
+        'employee_id' => $employee->id, 'employee_code' => $employee->employee_code ?? 5,
+        'date' => today(), 'first_punch' => today()->setTime(10, 27), 'last_punch' => today()->setTime(13, 57),
+        'break_minutes' => 191, 'working_hours' => 0.35, 'overtime_minutes' => 0,
+        'status' => 'present', 'device_serial' => 'TDBD25', 'raw_punch_count' => 4, 'synced_at' => now(),
     ]);
 
     Livewire::actingAs($hr)->test(AllAttendance::class)
         ->call('openEmployeeDrawer', $employee->id)
-        ->assertSet('drawer.today.worked', '6h 0m')      // engine, not 4h 22m
-        ->assertSet('drawer.today.break', 18)            // engine, not 114
-        ->assertSet('drawer.today.out', null)            // odd punch count → still inside
-        ->assertSet('drawer.status', 'Working')          // not "Completed"
-        ->assertSet('drawer.punch_count', 11)            // engine count
-        ->assertSet('drawer.punches_partial', true);     // only 6 of 11 held locally
+        ->assertSet('drawer.today.worked', '3h 10m')     // sessions, not the summary's 0h 21m
+        ->assertSet('drawer.today.break', 20)            // real gap, not 191
+        ->assertSet('drawer.today.out', '01:57 PM')      // last Card OUT
+        ->assertSet('drawer.status', 'Completed');
 });
 
 test('the drawer lists every synced punch, including near-adjacent ones', function () {

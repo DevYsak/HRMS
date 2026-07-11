@@ -153,8 +153,8 @@ test('engine-directed punches pair by real IN/OUT, not alternation', function ()
     expect($pj['session_count'])->toBe(4)
         ->and($pj['conflict_count'])->toBe(1)       // the 13:30:33 flip-flop echo
         ->and($pj['duplicate_count'])->toBe(1)      // the 13:30:35 re-read
-        ->and($pj['break_minutes'])->toBe(18)       // engine truth, not a phantom 3h31m
-        ->and($pj['working_minutes'])->toBe(359)    // 5.98h from the engine summary
+        ->and($pj['break_minutes'])->toBe(15)       // computed from real gaps, not the engine
+        ->and($pj['working_minutes'])->toBe(358)    // sum of the four validated sessions
         ->and($pj['live'])->toBeFalse()
         ->and($pj['needs_regularization'])->toBeFalse()
         ->and(collect($pj['nodes'])->pluck('dir')->all())

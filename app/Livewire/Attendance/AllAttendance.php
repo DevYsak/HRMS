@@ -243,32 +243,35 @@ class AllAttendance extends Component
             ->get();
 
         // ONE processed timeline from the shared PunchTimeline engine — the
-        // same single source of truth the employee page renders from. It
-        // merges duplicates/device conflicts, pairs validated sessions and
-        // annotates every raw event for the admin audit view. A synced engine
-        // summary stays authoritative for the headline totals.
+        // single source of truth the employee page also renders from. It merges
+        // duplicates/device conflicts, pairs validated sessions and annotates
+        // every raw event for the audit view. Worked/break come from these
+        // validated sessions, NOT the engine's summary (which mis-pairs this
+        // device). The summary is only the fallback when no punches synced.
         $summary = AttendanceDailySummary::where('employee_id', $employee->id)
             ->whereDate('date', $today->toDateString())
             ->first();
         $engineSynced = $summary && $summary->synced_at;
         $processed = app(PunchTimeline::class)->process($rawPunches, $today, $summary);
-        $stillInside = $engineSynced
-            ? ((int) $summary->raw_punch_count) % 2 === 1
-            : $processed['live'];
 
-        if ($engineSynced) {
+        if ($rawPunches->isNotEmpty()) {
+            $stillInside = $processed['live'];
+            $workedMin = (int) $processed['working_minutes'];
+            $breakMin = (int) $processed['break_minutes'];
+            $todayIn = $processed['first_in'];
+            $todayOut = $processed['last_out'];
+            // Show the engine's punch count when it's higher (a sync gap), so the
+            // "partial" note still fires; otherwise the count we actually paired.
+            $punchCount = max((int) $processed['raw_count'], $engineSynced ? (int) $summary->raw_punch_count : 0);
+        } elseif ($engineSynced) {
+            $stillInside = ((int) $summary->raw_punch_count) % 2 === 1;
             $workedMin = (int) round((float) $summary->working_hours * 60);
             $breakMin = (int) $summary->break_minutes;
             $todayIn = $summary->first_punch?->format('h:i A');
             $todayOut = $stillInside ? null : $summary->last_punch?->format('h:i A');
             $punchCount = (int) $summary->raw_punch_count;
-        } elseif ($rawPunches->isNotEmpty()) {
-            $workedMin = (int) $processed['working_minutes'];
-            $breakMin = (int) $processed['break_minutes'];
-            $todayIn = $processed['first_in'];
-            $todayOut = $processed['last_out'];
-            $punchCount = (int) $processed['raw_count'];
         } else {
+            $stillInside = false;
             $breakMin = (int) ($todayAtt->break_minutes ?? 0);
             $workedMin = 0;
             if ($todayAtt?->check_in) {
@@ -296,15 +299,15 @@ class AllAttendance extends Component
                 ->sum(fn ($b) => $b->available() + (float) ($b->comp_off_credits ?? 0)),
             'status' => $onBreak
                 ? 'On Break'
-                : ($engineSynced
-                    ? ($stillInside ? 'Working' : ($todayOut ? 'Completed' : ($punchCount > 0 ? 'Working' : 'Not In')))
-                    : ($todayAtt?->check_out ? 'Completed' : ($todayAtt ? 'Working' : 'Not In'))),
-            'today' => ($todayAtt || $engineSynced) ? [
+                : ($stillInside
+                    ? 'Working'
+                    : ($todayOut ? 'Completed' : (($punchCount > 0 || $todayAtt) ? 'Working' : 'Not In'))),
+            'today' => ($todayAtt || $engineSynced || $rawPunches->isNotEmpty()) ? [
                 'in' => $todayIn,
                 'out' => $todayOut,
                 'worked' => intdiv($workedMin, 60).'h '.($workedMin % 60).'m',
                 'break' => $breakMin,
-                'overtime' => ($otMin = $engineSynced ? (int) $summary->overtime_minutes : max(0, $workedMin - $stdMin)) > 0
+                'overtime' => ($otMin = max(0, $workedMin - $stdMin)) > 0
                     ? intdiv($otMin, 60).'h '.($otMin % 60).'m'
                     : '0m',
                 'mode' => $todayAtt?->work_mode ?? 'office',
