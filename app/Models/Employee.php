@@ -187,6 +187,21 @@ class Employee extends Model
         return $this->belongsTo(ShiftSetting::class, 'shift_id');
     }
 
+    /** Active team memberships (v4 Part 3 — at most one active at a time). */
+    public function teamMemberships(): HasMany
+    {
+        return $this->hasMany(DepartmentTeamMember::class);
+    }
+
+    /** The employee's current department team (via the active membership), or null. */
+    public function activeTeam(): ?DepartmentTeam
+    {
+        return $this->teamMemberships()
+            ->where('is_active', true)
+            ->latest('id')
+            ->first()?->team;
+    }
+
     public function biometricDevice(): BelongsTo
     {
         return $this->belongsTo(BiometricDevice::class, 'biometric_device_id');
