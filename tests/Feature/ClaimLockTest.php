@@ -3,6 +3,7 @@
 use App\Enums\UserRole;
 use App\Livewire\ApprovalCenter;
 use App\Livewire\Attendance\AllAttendance;
+use App\Livewire\Attendance\CommandCenter;
 use App\Livewire\Overtime\ManageOtRequests;
 use App\Models\AttendanceRegularisation;
 use App\Models\Employee;
@@ -171,6 +172,20 @@ test('the Approval Center respects a claim held by another reviewer', function (
     // HR B tries to approve straight from the Approval Center — blocked.
     Livewire::actingAs($hrB)->test(ApprovalCenter::class)
         ->call('approve', 'regularisation', $reg->id);
+
+    expect($reg->fresh()->status)->toBe('pending')
+        ->and($reg->fresh()->claimed_by)->toBe($hrA->id);
+});
+
+test('the Command Center respects a claim held by another reviewer', function () {
+    $hrA = User::factory()->create(['role' => UserRole::HrAdmin]);
+    $hrB = User::factory()->create(['role' => UserRole::HrAdmin]);
+    $reg = pendingReg(Employee::factory()->create(['status' => 'active']));
+
+    $reg->forceFill(['claimed_by' => $hrA->id, 'claimed_at' => now()])->save();
+
+    Livewire::actingAs($hrB)->test(CommandCenter::class)
+        ->call('approveOne', 'regularisation', $reg->id);
 
     expect($reg->fresh()->status)->toBe('pending')
         ->and($reg->fresh()->claimed_by)->toBe($hrA->id);

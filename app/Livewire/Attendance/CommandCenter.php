@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Attendance;
 
+use App\Livewire\Concerns\HandlesClaimLock;
 use App\Models\AttendanceRegularisation;
 use App\Models\AuditLog;
 use App\Models\HolidayWorkRequest;
@@ -29,6 +30,8 @@ use Livewire\Component;
  */
 class CommandCenter extends Component
 {
+    use HandlesClaimLock;
+
     public string $tab = 'regularisation';
 
     public string $search = '';
@@ -169,10 +172,11 @@ class CommandCenter extends Component
 
     protected function decideRegularisation(int $id, string $decision, ?string $comment = null): void
     {
-        $request = AttendanceRegularisation::with('employee.user')->findOrFail($id);
+        $request = AttendanceRegularisation::with('employee.user', 'claimer')->findOrFail($id);
         if ($request->status !== 'pending') {
             throw new \DomainException('Already reviewed.');
         }
+        $this->assertNotClaimedByOther($request);
 
         if ($decision === 'approved') {
             $attendance = app(AttendanceService::class)->approveRegularisation($request, Auth::id(), $comment);
@@ -188,10 +192,11 @@ class CommandCenter extends Component
 
     protected function decideLeave(int $id, string $decision, ?string $comment = null): void
     {
-        $request = LeaveRequest::with('employee.user')->findOrFail($id);
+        $request = LeaveRequest::with('employee.user', 'claimer')->findOrFail($id);
         if ($request->status !== 'pending') {
             throw new \DomainException('Already reviewed.');
         }
+        $this->assertNotClaimedByOther($request);
 
         $form = [
             'leave_type_id' => $request->leave_type_id,
@@ -221,10 +226,11 @@ class CommandCenter extends Component
 
     protected function decideOvertime(int $id, string $decision, ?string $comment = null): void
     {
-        $request = OtRequest::with(['employee.user', 'attendance'])->findOrFail($id);
+        $request = OtRequest::with(['employee.user', 'attendance', 'claimer'])->findOrFail($id);
         if (! $request->isPending()) {
             throw new \DomainException('Already reviewed.');
         }
+        $this->assertNotClaimedByOther($request);
 
         $decision === 'approved'
             ? app(OvertimeService::class)->approve($request, Auth::id(), $comment)

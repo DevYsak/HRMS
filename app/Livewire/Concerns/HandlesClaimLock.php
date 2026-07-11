@@ -48,4 +48,15 @@ trait HandlesClaimLock
     {
         return $request !== null && app(ClaimLockService::class)->heldByOther($request, Auth::id());
     }
+
+    /**
+     * Throw a DomainException when another reviewer holds the claim. For direct
+     * action surfaces (Command Center) whose wrappers already catch it and toast.
+     */
+    protected function assertNotClaimedByOther(?Model $request): void
+    {
+        if ($this->claimHeldByOther($request)) {
+            throw new \DomainException('Being handled by '.($request->claimer?->name ?? 'another reviewer').' — no action needed.');
+        }
+    }
 }
