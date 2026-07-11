@@ -1,15 +1,21 @@
 <?php
 
 use App\Enums\UserRole;
+use App\Livewire\Overtime\MyOtRequests;
 use App\Models\Department;
 use App\Models\DepartmentTeam;
 use App\Models\Employee;
 use App\Models\LeaveRequest;
 use App\Models\LeaveType;
+use App\Models\OtWindow;
 use App\Models\User;
+use App\Notifications\LeaveRequestNotification;
+use App\Notifications\OtRequestNotification;
+use App\Services\LeaveService;
 use App\Services\Teams\ApprovalRoutingService;
 use App\Services\Teams\TeamService;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Notification;
 
 /**
  * v4 Part 3 — department teams, one-active-team enforcement, and the
@@ -112,4 +118,60 @@ test('with no team, routing falls through to an in-scope HR admin', function () 
     $approver = app(ApprovalRoutingService::class)->resolveApprover($employee);
 
     expect($approver->name)->toBe('HR ONE');
+});
+
+test('submitting leave notifies the team lead', function () {
+    Notification::fake();
+
+    $dept = Department::factory()->create();
+    $leadUser = User::factory()->create(['name' => 'TEAM LEAD']);
+    $leadEmp = Employee::factory()->create(['department_id' => $dept->id, 'user_id' => $leadUser->id]);
+    $team = makeTeam($dept, $leadEmp);
+
+    $member = Employee::factory()->create(['department_id' => $dept->id, 'user_id' => User::factory()->create()->id]);
+    app(TeamService::class)->assign($member, $team);
+
+    $type = LeaveType::create(['name' => 'Casual', 'is_paid' => false, 'allow_unpaid_request' => true]);
+    $day = Carbon::today()->addWeek()->nextWeekday()->toDateString();
+
+    app(LeaveService::class)->submitRequest(
+        $member->fresh(),
+        $type,
+        $day,
+        $day,
+        'Personal work',
+        requestedLeaveStatus: 'unpaid',
+    );
+
+    Notification::assertSentTo($leadUser, LeaveRequestNotification::class);
+});
+
+test('submitting OT notifies the team lead', function () {
+    Notification::fake();
+
+    $dept = Department::factory()->create();
+    $leadUser = User::factory()->create(['name' => 'OT LEAD']);
+    $leadEmp = Employee::factory()->create(['department_id' => $dept->id, 'user_id' => $leadUser->id]);
+    $team = makeTeam($dept, $leadEmp);
+
+    $memberUser = User::factory()->create();
+    $member = Employee::factory()->create(['department_id' => $dept->id, 'user_id' => $memberUser->id]);
+    app(TeamService::class)->assign($member, $team);
+
+    OtWindow::create([
+        'title' => 'Release window',
+        'starts_at' => today()->toDateString(),
+        'ends_at' => today()->toDateString(),
+        'is_active' => true,
+        'created_by' => $leadUser->id,
+    ]);
+
+    Livewire\Livewire::actingAs($memberUser)->test(MyOtRequests::class)
+        ->set('work_date', today()->toDateString())
+        ->set('start_time', '18:00')
+        ->set('end_time', '20:00')
+        ->set('reason', 'Release deployment')
+        ->call('submit');
+
+    Notification::assertSentTo($leadUser, OtRequestNotification::class);
 });

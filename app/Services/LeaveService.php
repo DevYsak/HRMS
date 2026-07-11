@@ -16,6 +16,7 @@ use App\Notifications\LeaveEncashmentNotification;
 use App\Notifications\LeaveMonthlyAccrualNotification;
 use App\Notifications\LeavePaymentStatusChangedNotification;
 use App\Notifications\LeaveRequestNotification;
+use App\Services\Teams\ApprovalRoutingService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -216,24 +217,32 @@ class LeaveService
             ]);
         }
 
-        // Notify approvers
+        // Notify approvers — reporting manager + dept head + all in-scope HR,
+        // plus the team lead/backup chain (v4 Part 3.2) when the employee is on
+        // an active team. Deduplicated by user id so nobody is pinged twice.
         $request->load(['employee.user', 'leaveType']);
-        $manager = $employee->manager;
-        $managerId = $manager?->id;
 
-        if ($manager) {
-            $manager->notify(new LeaveRequestNotification($request));
-        }
+        $recipients = collect();
+        $push = function (?User $u) use ($recipients) {
+            if ($u && ! $recipients->contains(fn (User $r) => $r->id === $u->id)) {
+                $recipients->push($u);
+            }
+        };
 
-        $deptHead = $employee->department?->head;
-        if ($deptHead && $deptHead->id !== $managerId) {
-            $deptHead->notify(new LeaveRequestNotification($request));
-        }
+        $push($employee->manager);
+        $push($employee->department?->head);
 
-        $notifiedIds = array_filter([$managerId, $deptHead?->id]);
+        // Team lead / secondary lead resolved for the leave start date.
+        app(ApprovalRoutingService::class)
+            ->getApproverChain($employee, Carbon::parse($startDate))
+            ->each($push);
+
+        $notifiedIds = $recipients->pluck('id')->all();
         User::whereIn('role', ['hr_admin', 'super_admin'])
             ->when(\count($notifiedIds), fn ($q) => $q->whereNotIn('id', $notifiedIds))
-            ->each(fn ($hr) => $hr->notify(new LeaveRequestNotification($request)));
+            ->get()->each($push);
+
+        $recipients->each(fn (User $u) => $u->notify(new LeaveRequestNotification($request)));
 
         return $request;
     }
