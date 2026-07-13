@@ -38,6 +38,7 @@ use App\Livewire\Operations\Assets;
 use App\Livewire\Operations\Expenses;
 use App\Livewire\Overtime\ManageOtRequests;
 use App\Livewire\Overtime\MyOtRequests;
+use App\Livewire\Overtime\NexflowOtPanel;
 use App\Livewire\Payroll\Components;
 use App\Livewire\Payroll\FinanceApproval;
 use App\Livewire\Payroll\Incentives;
@@ -191,6 +192,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::prefix('overtime')->name('overtime.')->group(function () {
         Route::get('/my', MyOtRequests::class)->name('my');
         Route::get('/manage', ManageOtRequests::class)->name('manage')->middleware('role:approve-ot');
+        Route::get('/nexflow', NexflowOtPanel::class)->name('nexflow')->middleware('role:approve-ot');
     });
 
     // --------------------------------------------------
