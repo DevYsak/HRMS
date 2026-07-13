@@ -538,7 +538,11 @@ class AllAttendance extends Component
         $scopeIds = Auth::user()->accessibleEmployeeIds();
         $scoped = fn ($q) => $q->when($scopeIds !== null, fn ($qq) => $qq->whereIn('employee_id', $scopeIds));
 
-        $query = Attendance::query()->with('employee.user')->whereHas('employee.user');
+        // Exclude offboarded (inactive/archived) employees from the live roster —
+        // their biometric card is released on exit and they should not surface here.
+        $query = Attendance::query()->with('employee.user')
+            ->whereHas('employee.user')
+            ->whereHas('employee', fn ($q) => $q->whereNotIn('status', ['inactive', 'archived']));
         $scoped($query);
 
         $this->applyFilters($query);

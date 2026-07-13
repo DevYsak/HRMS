@@ -8,6 +8,7 @@ use App\Models\ExitRecord;
 use App\Models\OnboardingTask;
 use App\Notifications\OffboardingDetailsNotification;
 use App\Services\AssetAssignmentService;
+use App\Services\Biometric\BiometricSyncService;
 use App\Services\OnboardingService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -102,6 +103,11 @@ class OffboardingManager extends Component
         // Check if last working day has passed
         if (now()->startOfDay()->greaterThan(Carbon::parse($this->lastWorkingDay)->endOfDay())) {
             $employee->update(['status' => 'inactive']);
+
+            // Release the biometric card/enrolment so the departed employee is
+            // removed from the device and their code can be reassigned to a new
+            // hire. Device offline never blocks offboarding (logged, cleared anyway).
+            app(BiometricSyncService::class)->releaseEmployee($employee);
         }
 
         // Assign Offboarding tasks
