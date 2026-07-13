@@ -296,6 +296,7 @@ class AttendanceTracker extends Component
                 'mode' => isset($attendanceMap[$dateKey]) ? ($attendanceMap[$dateKey]->work_mode ?? 'office') : null,
                 'is_today' => $d->isToday(),
                 'is_holiday' => isset($holidayMap[$dateKey]),
+                'regularized' => isset($attendanceMap[$dateKey]) && $attendanceMap[$dateKey]->is_regularized,
             ];
         }
 
@@ -736,6 +737,7 @@ class AttendanceTracker extends Component
                 'break' => (int) ($item->break_minutes ?? 0),
                 'missing' => (! $item->check_out && ! $item->date->isToday()) || $item->missing_checkout,
                 'reg_status' => $item->regularisation?->status,
+                'is_regularized' => (bool) $item->is_regularized,
                 'events' => $events,
             ];
         })->values()->all();

@@ -50,6 +50,7 @@ test('a half-day regularisation marks the day half_day on final approval', funct
 
     expect($attendance)->not->toBeNull()
         ->and($attendance->status)->toBe('half_day')
+        ->and($attendance->is_regularized)->toBeTrue()
         ->and($reg->fresh()->status)->toBe('approved')
         ->and($reg->fresh()->half_day_period)->toBe('first');
 });
@@ -88,7 +89,8 @@ test('the request climbs manager → HR → admin, and only final approval write
         ->and($reg->status)->toBe('approved')
         ->and($reg->approval_trail)->toHaveCount(3)
         ->and($attendance->check_in->format('H:i'))->toBe('09:00')
-        ->and($attendance->check_out->format('H:i'))->toBe('18:00');
+        ->and($attendance->check_out->format('H:i'))->toBe('18:00')
+        ->and($attendance->is_regularized)->toBeTrue();       // day flagged as regularized
 
     $punches = AttendancePunch::where('employee_id', $employee->id)->orderBy('punched_at')->get();
     expect($punches)->toHaveCount(2)

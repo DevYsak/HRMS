@@ -1160,9 +1160,11 @@
                         </div>
                         <span class="rounded-full px-2 py-0.5 text-[9px] font-bold {{ $dayBadge }}">{{ $dayLabel }}</span>
                         <span class="inline-flex items-center rounded px-1.5 py-0.5 text-[8px] font-bold uppercase {{ $dayMode->chipClass() }}">{{ $dayMode->shortLabel() }}</span>
-                        @if($day['reg_status'])
-                            @php $regC = match($day['reg_status']) { 'approved' => 'bg-blue-50 text-blue-600', 'rejected' => 'bg-rose-50 text-rose-500', default => 'bg-amber-50 text-amber-600' }; @endphp
-                            <span class="rounded-full px-2 py-0.5 text-[8px] font-bold uppercase {{ $regC }}">{{ $day['reg_status'] === 'approved' ? 'Regularized' : 'Reg. '.$day['reg_status'] }}</span>
+                        @if($day['is_regularized'])
+                            <span class="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[8px] font-bold uppercase text-blue-600 dark:bg-blue-500/15 dark:text-blue-300"><flux:icon.check-badge class="size-2.5" /> Regularized</span>
+                        @elseif($day['reg_status'])
+                            @php $regC = match($day['reg_status']) { 'rejected' => 'bg-rose-50 text-rose-500', default => 'bg-amber-50 text-amber-600' }; @endphp
+                            <span class="rounded-full px-2 py-0.5 text-[8px] font-bold uppercase {{ $regC }}">Reg. {{ $day['reg_status'] }}</span>
                         @endif
                         <span class="ml-auto flex items-center gap-3 text-[10px] text-zinc-400">
                             <span>{{ count($day['events']) }} {{ \Illuminate\Support\Str::plural('punch', count($day['events'])) }}</span>

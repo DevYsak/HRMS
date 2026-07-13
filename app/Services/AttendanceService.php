@@ -170,7 +170,7 @@ class AttendanceService
                     $regularisation->update(['attendance_id' => $attendance->id]);
                 }
 
-                $attendance->update(['status' => 'half_day']);
+                $attendance->update(['status' => 'half_day', 'is_regularized' => true]);
 
                 return $attendance->fresh();
             }
@@ -207,6 +207,7 @@ class AttendanceService
                 'is_late' => false,
                 'late_minutes' => 0,
                 'missing_checkout' => false,
+                'is_regularized' => true,
             ], fn ($v) => $v !== null));
 
             // Write the corrected in/out into the punch journey (with the
