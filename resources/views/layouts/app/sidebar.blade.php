@@ -284,6 +284,8 @@
                             wire:navigate>Team Reviews</flux:sidebar.item>
                         <flux:sidebar.item :href="route('overtime.manage')" :current="request()->routeIs('overtime.manage')"
                             wire:navigate>Overtime Requests</flux:sidebar.item>
+                        <flux:sidebar.item :href="route('overtime.nexflow')" :current="request()->routeIs('overtime.nexflow')"
+                            wire:navigate>Nexflow Overtime</flux:sidebar.item>
                         @can('approve_wfh')
                             <flux:sidebar.item :href="route('wfh.manage')" :current="request()->routeIs('wfh.manage')"
                                 wire:navigate>WFH Requests</flux:sidebar.item>
