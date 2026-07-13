@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Attendance;
+use App\Models\AttendanceSetting;
 use App\Models\Employee;
 use App\Models\OtRequest;
 use App\Models\OtWindow;
@@ -16,7 +17,17 @@ class OvertimeService
     /** @deprecated Use $employee->shift?->ot_threshold_hours ?? 9.0 instead */
     public const STANDARD_HOURS = 9.0;
 
+    /** Fallback OT rate when no attendance setting is configured. */
     public const RATE_PER_HOUR = 100.0;
+
+    /**
+     * The configured OT pay rate (₹/hr), read from attendance settings so HR
+     * can change it without a code deploy. Falls back to the default constant.
+     */
+    public function otRatePerHour(): float
+    {
+        return (float) (AttendanceSetting::query()->value('ot_rate_per_hour') ?? self::RATE_PER_HOUR);
+    }
 
     /**
      * Create a pre-approval OT request.
@@ -255,8 +266,8 @@ class OvertimeService
             'total_hours_worked' => $request->attendance?->total_hours ?? $otHours + self::STANDARD_HOURS,
             'standard_hours' => self::STANDARD_HOURS,
             'ot_hours' => $otHours,
-            'rate_per_hour' => self::RATE_PER_HOUR,
-            'ot_amount' => round($otHours * self::RATE_PER_HOUR, 2),
+            'rate_per_hour' => $rate = $this->otRatePerHour(),
+            'ot_amount' => round($otHours * $rate, 2),
             'is_paid' => false,
         ]);
     }
