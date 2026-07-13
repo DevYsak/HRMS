@@ -421,10 +421,18 @@ EMPLOYEE 360 DRAWER (480px, right)
                     </div>
                 </div>
 
-                {{-- Attendance history --}}
-                <div class="rounded-2xl border border-orange-100/70 bg-white dark:bg-zinc-900 p-4 shadow-sm">
-                    <div class="mb-2 text-[10px] font-bold uppercase tracking-widest text-zinc-400">Attendance History · last 7</div>
-                    <div class="space-y-1">
+                {{-- Attendance history — Daily / Weekly toggle --}}
+                <div class="rounded-2xl border border-orange-100/70 bg-white dark:bg-zinc-900 p-4 shadow-sm" x-data="{ tab: 'daily' }">
+                    <div class="mb-2 flex items-center justify-between">
+                        <div class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Attendance History</div>
+                        <div class="flex items-center gap-0.5 rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800">
+                            <button type="button" @click="tab = 'daily'" :class="tab === 'daily' ? 'bg-white text-zinc-800 shadow-sm dark:bg-zinc-700 dark:text-white' : 'text-zinc-400'" class="rounded-md px-2 py-0.5 text-[10px] font-bold transition">Daily</button>
+                            <button type="button" @click="tab = 'weekly'" :class="tab === 'weekly' ? 'bg-white text-zinc-800 shadow-sm dark:bg-zinc-700 dark:text-white' : 'text-zinc-400'" class="rounded-md px-2 py-0.5 text-[10px] font-bold transition">Weekly</button>
+                        </div>
+                    </div>
+
+                    {{-- Daily (last 7 days) --}}
+                    <div x-show="tab === 'daily'" class="space-y-1">
                         @forelse($drawer['history'] as $h)
                             @php $hc = match($h['status']) { 'on_time' => 'text-emerald-600', 'late' => 'text-amber-600', default => 'text-zinc-400' }; @endphp
                             <div class="flex items-center justify-between rounded-lg px-2 py-1 text-[11px] odd:bg-orange-50/40">
@@ -432,6 +440,18 @@ EMPLOYEE 360 DRAWER (480px, right)
                                 <span class="font-mono tabular-nums text-zinc-600 dark:text-zinc-300">{{ $h['in'] ?? '—' }} → {{ $h['out'] ?? '—' }}</span>
                                 <span class="font-black tabular-nums text-zinc-800 dark:text-zinc-100">{{ $h['hours'] ? number_format((float) $h['hours'], 1).'h' : '—' }}</span>
                                 <span class="text-[9px] font-bold uppercase {{ $hc }}">{{ str_replace('_', ' ', $h['status']) }}</span>
+                            </div>
+                        @empty<p class="text-[10px] text-zinc-400">No records this month.</p>@endforelse
+                    </div>
+
+                    {{-- Weekly rollup (this month) --}}
+                    <div x-show="tab === 'weekly'" x-cloak class="space-y-1">
+                        @forelse($drawer['weekly_history'] as $w)
+                            <div class="flex items-center justify-between rounded-lg px-2 py-1 text-[11px] odd:bg-orange-50/40">
+                                <span class="font-bold text-zinc-700 dark:text-zinc-200">{{ $w['label'] }}</span>
+                                <span class="tabular-nums text-zinc-500 dark:text-zinc-400">{{ $w['present'] }}d present</span>
+                                <span class="font-black tabular-nums text-zinc-800 dark:text-zinc-100">{{ number_format((float) $w['hours'], 1) }}h</span>
+                                <span class="text-[9px] font-bold uppercase {{ $w['late'] > 0 ? 'text-amber-600' : 'text-emerald-600' }}">{{ $w['late'] }} late</span>
                             </div>
                         @empty<p class="text-[10px] text-zinc-400">No records this month.</p>@endforelse
                     </div>

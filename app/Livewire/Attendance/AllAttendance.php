@@ -345,6 +345,19 @@ class AllAttendance extends Component
                 'hours' => $a->total_hours,
                 'status' => $a->status,
             ])->values()->all(),
+            // Week-by-week rollup (this month) for the drawer's Weekly tab.
+            'weekly_history' => $month
+                ->groupBy(fn ($a) => $a->date->copy()->startOfWeek(Carbon::MONDAY)->format('Y-m-d'))
+                ->map(function ($rows, $weekStart) {
+                    $ws = Carbon::parse($weekStart);
+
+                    return [
+                        'label' => $ws->format('d M').' – '.$ws->copy()->addDays(6)->format('d M'),
+                        'present' => $rows->whereNotNull('check_in')->count(),
+                        'hours' => round($rows->sum(fn ($a) => (float) $a->total_hours), 1),
+                        'late' => $rows->where('is_late', true)->count(),
+                    ];
+                })->sortKeysDesc()->values()->take(6)->all(),
             'pending' => AttendanceRegularisation::where('employee_id', $employee->id)
                 ->where('status', 'pending')->with('claimer')->orderByDesc('work_date')->get()
                 ->map(fn ($r) => [

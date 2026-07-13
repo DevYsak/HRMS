@@ -107,6 +107,25 @@ test('HR can open the Employee 360 drawer with full profile data', function () {
         ->assertSet('drawerEmployeeId', null);
 });
 
+test('the drawer exposes a weekly history rollup for a particular employee', function () {
+    $hr = User::factory()->create(['role' => UserRole::HrAdmin]);
+    $employee = Employee::factory()->create(['status' => 'active']);
+
+    $day = today();
+    Attendance::create([
+        'employee_id' => $employee->id, 'date' => $day,
+        'check_in' => $day->copy()->setTime(9, 0), 'check_out' => $day->copy()->setTime(18, 0),
+        'status' => 'on_time', 'work_mode' => 'office', 'total_hours' => 8.0,
+    ]);
+
+    Livewire::actingAs($hr)->test(AllAttendance::class)
+        ->call('openEmployeeDrawer', $employee->id)
+        ->assertSet('drawer.weekly_history', fn ($w) => count($w) >= 1
+            && $w[0]['present'] >= 1
+            && (float) $w[0]['hours'] >= 8.0)
+        ->assertSee('Weekly');
+});
+
 test('the drawer computes worked/break from validated sessions, not the wrong engine summary', function () {
     // EMP005 scenario: the engine's summary mis-pairs this device (Face tagged
     // OUT), reporting 21m worked / 191m break. The validated Face=IN / Card=OUT
