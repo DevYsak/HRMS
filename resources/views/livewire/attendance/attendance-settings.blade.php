@@ -33,6 +33,9 @@
                     <flux:input wire:model="settings.shift_start" type="time" label="Default Start" />
                     <flux:input wire:model="settings.shift_end" type="time" label="Default End" />
                 </div>
+                <flux:input wire:model="settings.ot_rate_per_hour" type="number" step="0.01" min="0"
+                    label="Overtime rate (₹ / hour)"
+                    description="Used to compute OT pay when an overtime request is approved." />
                 <div class="space-y-3 pt-2">
                     <flux:switch wire:model="settings.requires_location" label="Require Geolocation"
                         description="Block clock-in if location is not shared." />

@@ -36,6 +36,7 @@ class AttendanceSettings extends Component
     protected $rules = [
         'settings.shift_start' => 'required',
         'settings.shift_end' => 'required',
+        'settings.ot_rate_per_hour' => 'required|numeric|min:0',
         'settings.requires_location' => 'boolean',
         'settings.requires_qr' => 'boolean',
         'settings.requires_photo' => 'boolean',

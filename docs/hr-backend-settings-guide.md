@@ -87,7 +87,7 @@ These are **not yet configurable** in a settings screen — they're either hardc
 
 | Gap | Where | Fix needed |
 |---|---|---|
-| **OT rate is hardcoded** at ₹100/hr | [OvertimeService.php:19](../app/Services/OvertimeService.php#L19) `RATE_PER_HOUR = 100.0` | Move to an editable setting (small fix) or `company_settings` (needs multi-company) |
+| ~~OT rate is hardcoded~~ ✅ **Fixed** — now editable on **Attendance Settings** (`ot_rate_per_hour`, default ₹100) | [AttendanceSettings.php](../app/Livewire/Attendance/AttendanceSettings.php) → [OvertimeService::otRatePerHour()](../app/Services/OvertimeService.php) | Done |
 | **Payslip company branding** | Payslip PDF | Needs the `companies` table (multi-company / Phase B — skipped) |
 | **Increment review is single-stage** | [IncrementCenter.php](../app/Livewire/Performance/IncrementCenter.php) | Spec wanted team-lead → dept-head → director hand-offs; built as one HR calibration screen |
 
