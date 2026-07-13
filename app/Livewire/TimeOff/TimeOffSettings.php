@@ -45,6 +45,8 @@ class TimeOffSettings extends Component
 
     public bool $is_sandwich_applicable = false;
 
+    public int $sandwich_min_days = 0;
+
     public bool $allow_half_day = true;
 
     // ── Accrual ──────────────────────────────────────────────────────────────
@@ -97,6 +99,7 @@ class TimeOffSettings extends Component
             $this->encashment_rate_multiplier = (float) ($type->encashment_rate_multiplier ?? 1.00);
             $this->allow_current_year_encashment = (bool) $type->allow_current_year_encashment;
             $this->is_sandwich_applicable = (bool) $type->is_sandwich_applicable;
+            $this->sandwich_min_days = (int) $type->sandwich_min_days;
             $this->allow_half_day = (bool) $type->allow_half_day;
             $this->is_monthly_accrual = (bool) $type->is_monthly_accrual;
             $this->accrual_days_per_month = (float) $type->accrual_days_per_month;
@@ -113,7 +116,7 @@ class TimeOffSettings extends Component
                 'allow_paid_request', 'allow_unpaid_request', 'allow_hr_override', 'hr_remark_required',
                 'allow_carry_forward', 'carry_forward_limit',
                 'allow_encashment', 'max_encashable_days', 'encashment_rate_multiplier', 'allow_current_year_encashment',
-                'is_sandwich_applicable', 'allow_half_day',
+                'is_sandwich_applicable', 'sandwich_min_days', 'allow_half_day',
                 'is_monthly_accrual', 'accrual_days_per_month',
                 'gender_restriction', 'probation_restricted', 'notice_period_restricted',
                 'max_consecutive_days', 'attachment_required',
@@ -154,6 +157,7 @@ class TimeOffSettings extends Component
             'encashment_rate_multiplier' => 'required|numeric|min:0.1|max:10',
             'allow_current_year_encashment' => 'required|boolean',
             'is_sandwich_applicable' => 'required|boolean',
+            'sandwich_min_days' => 'required|integer|min:0|max:31',
             'allow_half_day' => 'required|boolean',
             'is_monthly_accrual' => 'required|boolean',
             'accrual_days_per_month' => 'required|numeric|min:0|max:31',
@@ -183,6 +187,7 @@ class TimeOffSettings extends Component
             'encashment_rate_multiplier' => $this->encashment_rate_multiplier,
             'allow_current_year_encashment' => $this->allow_current_year_encashment,
             'is_sandwich_applicable' => $this->is_sandwich_applicable,
+            'sandwich_min_days' => $this->is_sandwich_applicable ? $this->sandwich_min_days : 0,
             'allow_half_day' => $this->allow_half_day,
             'is_monthly_accrual' => $this->is_monthly_accrual,
             'accrual_days_per_month' => $this->accrual_days_per_month,

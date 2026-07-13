@@ -29,11 +29,15 @@ class LeaveService
      * all calendar days for simplicity — sandwich flag determines whether to
      * also count the intervening weekend when leave splits across it).
      */
-    public function calculateLeaveDays(Carbon $start, Carbon $end, bool $sandwichApplicable = false): float
+    public function calculateLeaveDays(Carbon $start, Carbon $end, bool $sandwichApplicable = false, int $sandwichMinDays = 0): float
     {
-        if ($sandwichApplicable) {
-            // Count every calendar day — weekends within the range are included
-            return (float) ($start->diffInDays($end) + 1);
+        $calendarDays = $start->diffInDays($end) + 1;
+
+        // Sandwich counting (weekends within the range count as leave) applies
+        // only when enabled AND the leave spans at least the configured minimum.
+        // A minimum of 0 keeps the legacy "always sandwich when enabled" rule.
+        if ($sandwichApplicable && $calendarDays >= max(1, $sandwichMinDays)) {
+            return (float) $calendarDays;
         }
 
         // Without sandwich: count only weekdays
@@ -148,7 +152,7 @@ class LeaveService
         }
 
         // Max consecutive days
-        $days = $isHalfDay ? 0.5 : $this->calculateLeaveDays($start, $end, (bool) $leaveType->is_sandwich_applicable);
+        $days = $isHalfDay ? 0.5 : $this->calculateLeaveDays($start, $end, (bool) $leaveType->is_sandwich_applicable, (int) $leaveType->sandwich_min_days);
 
         if ($leaveType->max_consecutive_days !== null && $days > $leaveType->max_consecutive_days) {
             throw new \DomainException(
@@ -270,7 +274,8 @@ class LeaveService
             $leaveTypeFresh = LeaveType::find($data['leave_type_id']);
             $newDays = $isHalfDay ? 0.5 : $this->calculateLeaveDays(
                 $start, $end,
-                (bool) ($leaveTypeFresh?->is_sandwich_applicable ?? false)
+                (bool) ($leaveTypeFresh?->is_sandwich_applicable ?? false),
+                (int) ($leaveTypeFresh?->sandwich_min_days ?? 0)
             );
 
             // Reverse any prior balance deduction if it was approved+paid
@@ -636,6 +641,7 @@ class LeaveService
                 'encashment_rate_multiplier' => $data['encashment_rate_multiplier'] ?? 1.00,
                 'allow_current_year_encashment' => $data['allow_current_year_encashment'] ?? false,
                 'is_sandwich_applicable' => $data['is_sandwich_applicable'] ?? false,
+                'sandwich_min_days' => $data['sandwich_min_days'] ?? 0,
                 'allow_half_day' => $data['allow_half_day'] ?? true,
                 'is_monthly_accrual' => $data['is_monthly_accrual'] ?? false,
                 'accrual_days_per_month' => $data['accrual_days_per_month'] ?? 0,

@@ -61,6 +61,23 @@ function giveBalance(Employee $employee, LeaveType $type, float $days): LeaveBal
     ]);
 }
 
+// ─── Sandwich policy ──────────────────────────────────────────────────────────
+
+it('applies the sandwich rule only when the leave meets the configured minimum days', function () {
+    $svc = app(LeaveService::class);
+    $fri = Carbon::parse('2026-01-02'); // Friday
+    $mon = Carbon::parse('2026-01-05'); // Monday — 4 calendar days incl. the weekend
+
+    // Threshold 0 = legacy "always sandwich when enabled" → counts all 4 days.
+    expect($svc->calculateLeaveDays($fri, $mon, true, 0))->toBe(4.0)
+        // Span (4) meets a 3-day threshold → sandwich applies → 4 days.
+        ->and($svc->calculateLeaveDays($fri, $mon, true, 3))->toBe(4.0)
+        // Span (4) is below a 5-day threshold → no sandwich → weekdays only (Fri+Mon).
+        ->and($svc->calculateLeaveDays($fri, $mon, true, 5))->toBe(2.0)
+        // Sandwich disabled → weekdays only regardless of threshold.
+        ->and($svc->calculateLeaveDays($fri, $mon, false, 0))->toBe(2.0);
+});
+
 // ─── Paid/Unpaid policy ───────────────────────────────────────────────────────
 
 it('allows paid request when allow_paid_request is true', function () {
