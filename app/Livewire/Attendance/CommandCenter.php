@@ -36,6 +36,9 @@ class CommandCenter extends Component
 
     public string $search = '';
 
+    /** History filter: pending | approved | rejected | all. */
+    public string $statusFilter = 'pending';
+
     /** @var array<int, int> Selected pending ids on the active tab. */
     public array $selected = [];
 
@@ -52,6 +55,11 @@ class CommandCenter extends Component
     }
 
     public function updatedSearch(): void
+    {
+        $this->selected = [];
+    }
+
+    public function updatedStatusFilter(): void
     {
         $this->selected = [];
     }
@@ -258,11 +266,19 @@ class CommandCenter extends Component
     protected function pendingQuery()
     {
         $q = match ($this->tab) {
-            'leave' => LeaveRequest::query()->with(['employee.user', 'leaveType'])->where('status', 'pending'),
-            'wfh' => WfhRequest::query()->with('employee.user')->where('status', 'pending'),
-            'overtime' => OtRequest::query()->with('employee.user')->where('status', 'pending'),
-            'holiday' => HolidayWorkRequest::query()->with(['employee.user', 'holiday'])->where('status', 'pending'),
-            default => AttendanceRegularisation::query()->with('employee.user')->where('status', 'pending'),
+            'leave' => LeaveRequest::query()->with(['employee.user', 'leaveType']),
+            'wfh' => WfhRequest::query()->with('employee.user'),
+            'overtime' => OtRequest::query()->with('employee.user'),
+            'holiday' => HolidayWorkRequest::query()->with(['employee.user', 'holiday']),
+            default => AttendanceRegularisation::query()->with('employee.user'),
+        };
+
+        // Status filter: pending (default), a decided state, or the full history.
+        match ($this->statusFilter) {
+            'approved' => $q->where('status', 'approved'),
+            'rejected' => $q->where('status', 'rejected'),
+            'all' => $q,
+            default => $q->where('status', 'pending'),
         };
 
         if ($this->search !== '') {
@@ -272,46 +288,40 @@ class CommandCenter extends Component
         return $q->latest('created_at');
     }
 
-    /** Normalise a pending row for the list. */
+    /** Normalise a row for the list — carries its status so history rows badge. */
     protected function normalise($item): array
     {
-        return match ($this->tab) {
+        $base = [
+            'id' => $item->id,
+            'status' => $item->status,
+            'employee' => $item->employee?->user?->name ?? '—',
+            'reason' => $item->reason,
+        ];
+
+        return array_merge($base, match ($this->tab) {
             'leave' => [
-                'id' => $item->id,
-                'employee' => $item->employee?->user?->name ?? '—',
                 'when' => Carbon::parse($item->start_date)->format('d M').' – '.Carbon::parse($item->end_date)->format('d M Y'),
                 'detail' => ($item->leaveType?->name ?? 'Leave').' · '.$item->days.' day(s)',
-                'reason' => $item->reason,
             ],
             'wfh' => [
-                'id' => $item->id,
-                'employee' => $item->employee?->user?->name ?? '—',
                 'when' => Carbon::parse($item->start_date)->format('d M').' – '.Carbon::parse($item->end_date)->format('d M Y'),
                 'detail' => 'Work From Home',
-                'reason' => $item->reason,
             ],
             'overtime' => [
-                'id' => $item->id,
-                'employee' => $item->employee?->user?->name ?? '—',
                 'when' => Carbon::parse($item->work_date)->format('d M Y'),
                 'detail' => 'OT '.$item->requested_hours.'h · '.$item->start_time.'–'.$item->end_time,
-                'reason' => $item->reason,
             ],
             'holiday' => [
-                'id' => $item->id,
-                'employee' => $item->employee?->user?->name ?? '—',
                 'when' => Carbon::parse($item->work_date)->format('d M Y'),
                 'detail' => 'Work on '.($item->holiday?->name ?? 'holiday').' · '.$item->expected_hours.'h · '.$item->payTypeLabel(),
-                'reason' => $item->reason,
             ],
             default => [
-                'id' => $item->id,
-                'employee' => $item->employee?->user?->name ?? '—',
                 'when' => Carbon::parse($item->work_date)->format('d M Y'),
-                'detail' => 'Correct to '.Carbon::parse($item->requested_check_in)->format('H:i').' → '.Carbon::parse($item->requested_check_out)->format('H:i'),
-                'reason' => $item->reason,
+                'detail' => $item->requested_check_in
+                    ? 'Correct to '.Carbon::parse($item->requested_check_in)->format('H:i').' → '.Carbon::parse($item->requested_check_out)->format('H:i')
+                    : 'Half-day ('.$item->half_day_period.')',
             ],
-        };
+        });
     }
 
     /** Recent decisions across all four request types, newest first. */

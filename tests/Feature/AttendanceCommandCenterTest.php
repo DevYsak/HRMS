@@ -53,7 +53,9 @@ test('the command center shows pending counts per request type', function () {
 
 test('quick approve routes a regularisation through the real service', function () {
     Notification::fake();
-    $hr = ccHr();
+    // The final authority (Super Admin) finalises in one step; a scoped HR would
+    // only advance the manager→HR→admin stage chain (covered in RegularisationWorkflowTest).
+    $admin = User::factory()->create(['role' => UserRole::SuperAdmin]);
     $employee = Employee::factory()->create(['status' => 'active']);
     $date = today()->subDays(2)->toDateString();
     $att = Attendance::create([
@@ -67,11 +69,38 @@ test('quick approve routes a regularisation through the real service', function 
         'reason' => 'Forgot to punch out', 'status' => 'pending',
     ]);
 
-    Livewire::actingAs($hr)->test(CommandCenter::class)
+    Livewire::actingAs($admin)->test(CommandCenter::class)
         ->call('approveOne', 'regularisation', $reg->id);
 
     expect($reg->fresh()->status)->toBe('approved');
     expect($att->fresh()->check_out?->format('H:i'))->toBe('18:00');
+});
+
+test('the status filter shows decided history, not just pending', function () {
+    $hr = ccHr();
+    $pendingEmp = Employee::factory()->create(['user_id' => User::factory()->create(['name' => 'PENDING GUY'])->id, 'status' => 'active']);
+    $approvedEmp = Employee::factory()->create(['user_id' => User::factory()->create(['name' => 'APPROVED GAL'])->id, 'status' => 'active']);
+
+    $d = today()->subDays(2)->toDateString();
+    AttendanceRegularisation::create([
+        'employee_id' => $pendingEmp->id, 'work_date' => $d,
+        'requested_check_in' => "$d 09:00:00", 'requested_check_out' => "$d 18:00:00",
+        'reason' => 'Pending one', 'status' => 'pending',
+    ]);
+    AttendanceRegularisation::create([
+        'employee_id' => $approvedEmp->id, 'work_date' => $d,
+        'requested_check_in' => "$d 09:00:00", 'requested_check_out' => "$d 18:00:00",
+        'reason' => 'Approved one', 'status' => 'approved',
+    ]);
+
+    // Default (pending) shows the pending one, hides the approved one.
+    Livewire::actingAs($hr)->test(CommandCenter::class)
+        ->assertSee('PENDING GUY')
+        ->assertDontSee('APPROVED GAL')
+        // Switching to Approved history flips it.
+        ->set('statusFilter', 'approved')
+        ->assertSee('APPROVED GAL')
+        ->assertDontSee('PENDING GUY');
 });
 
 test('bulk approve handles every selected overtime request', function () {

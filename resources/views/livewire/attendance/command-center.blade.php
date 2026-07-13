@@ -14,6 +14,13 @@
             <input type="text" wire:model.live.debounce.300ms="search" placeholder="Search employee…"
                 class="w-52 rounded-xl border border-orange-100 bg-white dark:bg-zinc-900 py-2 pl-8 pr-2.5 text-xs font-semibold text-zinc-600 dark:text-zinc-300 shadow-sm placeholder:text-zinc-400 focus:border-orange-400 focus:ring-0">
         </div>
+        {{-- Status / history filter --}}
+        <div class="flex items-center rounded-xl border border-orange-100 bg-white dark:bg-zinc-900 p-0.5 text-[11px] font-bold shadow-sm">
+            @foreach(['pending' => 'Pending', 'approved' => 'Approved', 'rejected' => 'Rejected', 'all' => 'All'] as $val => $label)
+                <button wire:click="$set('statusFilter', '{{ $val }}')"
+                    class="rounded-lg px-2.5 py-1.5 transition {{ $statusFilter === $val ? 'bg-orange-500 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-800 dark:text-zinc-400' }}">{{ $label }}</button>
+            @endforeach
+        </div>
         <button wire:click="exportPending" class="inline-flex items-center gap-1.5 rounded-xl border border-orange-100 bg-white dark:bg-zinc-900 px-3 py-2 text-xs font-bold text-zinc-600 dark:text-zinc-300 shadow-sm transition hover:bg-orange-50"><flux:icon.arrow-down-tray class="size-4 text-orange-500" /> Export</button>
         <a href="{{ route('attendance.employees') }}" class="inline-flex items-center gap-1.5 rounded-xl border border-orange-100 bg-white dark:bg-zinc-900 px-3 py-2 text-xs font-bold text-zinc-600 dark:text-zinc-300 shadow-sm transition hover:bg-orange-50"><flux:icon.users class="size-4 text-orange-500" /> All Attendance</a>
     </div>
@@ -79,9 +86,14 @@
         @if(count($items) > 0)
             <div class="divide-y divide-orange-50" wire:loading.class="opacity-50" wire:target="tab,search,bulkApprove,bulkReject">
                 @foreach($items as $item)
+                    @php $isPending = ($item['status'] ?? 'pending') === 'pending'; @endphp
                     <div class="flex flex-wrap items-center gap-3 px-5 py-3 transition hover:bg-orange-50/40">
-                        <input type="checkbox" wire:model.live="selected" value="{{ $item['id'] }}"
-                            class="size-4 rounded border-zinc-300 text-orange-500 focus:ring-orange-400">
+                        @if($isPending)
+                            <input type="checkbox" wire:model.live="selected" value="{{ $item['id'] }}"
+                                class="size-4 rounded border-zinc-300 text-orange-500 focus:ring-orange-400">
+                        @else
+                            <span class="size-4"></span>
+                        @endif
                         <div class="min-w-0 flex-1">
                             <div class="flex flex-wrap items-center gap-x-3 gap-y-0.5">
                                 <span class="text-xs font-black text-zinc-900 dark:text-white">{{ $item['employee'] }}</span>
@@ -91,8 +103,13 @@
                             @if($item['reason'])<p class="mt-0.5 truncate text-[10px] italic text-zinc-400">“{{ $item['reason'] }}”</p>@endif
                         </div>
                         <div class="flex shrink-0 gap-1.5">
-                            <button wire:click="approveOne('{{ $tab }}', {{ $item['id'] }})" class="inline-flex items-center gap-1 rounded-lg bg-emerald-500 px-2.5 py-1 text-[10px] font-bold text-white transition hover:bg-emerald-600"><flux:icon.check class="size-3" /> Approve</button>
-                            <button wire:click="rejectOne('{{ $tab }}', {{ $item['id'] }})" class="inline-flex items-center gap-1 rounded-lg bg-rose-500 px-2.5 py-1 text-[10px] font-bold text-white transition hover:bg-rose-600"><flux:icon.x-mark class="size-3" /> Reject</button>
+                            @if($isPending)
+                                <button wire:click="approveOne('{{ $tab }}', {{ $item['id'] }})" class="inline-flex items-center gap-1 rounded-lg bg-emerald-500 px-2.5 py-1 text-[10px] font-bold text-white transition hover:bg-emerald-600"><flux:icon.check class="size-3" /> Approve</button>
+                                <button wire:click="rejectOne('{{ $tab }}', {{ $item['id'] }})" class="inline-flex items-center gap-1 rounded-lg bg-rose-500 px-2.5 py-1 text-[10px] font-bold text-white transition hover:bg-rose-600"><flux:icon.x-mark class="size-3" /> Reject</button>
+                            @else
+                                @php $sc = ($item['status'] ?? '') === 'approved' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-500'; @endphp
+                                <span class="inline-flex items-center rounded-lg px-2.5 py-1 text-[10px] font-bold uppercase {{ $sc }}">{{ str_replace('_', ' ', $item['status'] ?? '—') }}</span>
+                            @endif
                         </div>
                     </div>
                 @endforeach
@@ -101,7 +118,7 @@
                 <div class="border-t border-orange-100/70 bg-orange-50/30 px-5 py-2 text-[10px] text-zinc-400">Tip: rejections require a comment — tick items to open the bulk bar, or type a comment there first for single rejects.</div>
             @endif
         @else
-            <div class="py-14 text-center text-sm text-zinc-400"><flux:icon.check-badge class="mx-auto mb-2 size-9 text-emerald-300" /> Nothing pending — all caught up.</div>
+            <div class="py-14 text-center text-sm text-zinc-400"><flux:icon.check-badge class="mx-auto mb-2 size-9 text-emerald-300" /> {{ $statusFilter === 'pending' ? 'Nothing pending — all caught up.' : 'No '.$statusFilter.' requests found'.($search ? ' for “'.$search.'”' : '').'.' }}</div>
         @endif
     </div>
 
