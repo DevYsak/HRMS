@@ -155,6 +155,26 @@ class AttendanceService
                 'reviewed_at' => now(),
             ]);
 
+            // Half-day regularisation: mark the day as half-day rather than
+            // rewriting punch times. Seeds check_in on a fully-absent day so the
+            // NOT NULL column holds.
+            if ($regularisation->regularisation_type === 'half_day') {
+                $workDate = Carbon::parse($regularisation->work_date)->toDateString();
+                $attendance = $regularisation->attendance
+                    ?? Attendance::firstOrCreate(
+                        ['employee_id' => $regularisation->employee_id, 'date' => $regularisation->work_date],
+                        ['check_in' => Carbon::parse($workDate.' 09:00:00'), 'status' => 'half_day', 'work_mode' => 'office'],
+                    );
+
+                if (! $regularisation->attendance_id) {
+                    $regularisation->update(['attendance_id' => $attendance->id]);
+                }
+
+                $attendance->update(['status' => 'half_day']);
+
+                return $attendance->fresh();
+            }
+
             // requested_check_in/out are TIME columns — anchor them to the work
             // date so the corrected punch/attendance lands on the right day (not
             // "today" when the regularisation is loaded fresh from the DB).

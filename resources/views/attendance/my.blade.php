@@ -1408,9 +1408,36 @@
             <flux:input wire:model="regDate" type="date" />
         </div>
 
-        {{-- 2 · Which punch --}}
+        {{-- 2 · Type of fix --}}
         <div>
-            <div class="mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-zinc-400"><span class="inline-flex size-4 items-center justify-center rounded-full bg-orange-100 text-[9px] text-orange-600">2</span> Which punch is missing or wrong?</div>
+            <div class="mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-zinc-400"><span class="inline-flex size-4 items-center justify-center rounded-full bg-orange-100 text-[9px] text-orange-600">2</span> What do you need to fix?</div>
+            <div class="grid grid-cols-2 gap-3">
+                <label class="flex cursor-pointer items-center gap-2.5 rounded-xl border p-3 transition {{ $regType === 'punch' ? 'border-orange-400 bg-orange-50 dark:bg-orange-500/10' : 'border-zinc-200 dark:border-zinc-800' }}">
+                    <input type="radio" wire:model.live="regType" value="punch" class="border-zinc-300 text-orange-500 focus:ring-orange-400">
+                    <span class="flex items-center gap-1.5 text-sm font-semibold {{ $regType === 'punch' ? 'text-orange-700 dark:text-orange-400' : 'text-zinc-500 dark:text-zinc-400' }}"><flux:icon.clock class="size-4" /> Fix a punch</span>
+                </label>
+                <label class="flex cursor-pointer items-center gap-2.5 rounded-xl border p-3 transition {{ $regType === 'half_day' ? 'border-orange-400 bg-orange-50 dark:bg-orange-500/10' : 'border-zinc-200 dark:border-zinc-800' }}">
+                    <input type="radio" wire:model.live="regType" value="half_day" class="border-zinc-300 text-orange-500 focus:ring-orange-400">
+                    <span class="flex items-center gap-1.5 text-sm font-semibold {{ $regType === 'half_day' ? 'text-orange-700 dark:text-orange-400' : 'text-zinc-500 dark:text-zinc-400' }}"><flux:icon.sun class="size-4" /> Mark half day</span>
+                </label>
+            </div>
+        </div>
+
+        {{-- Half-day period (only for half-day requests) --}}
+        @if($regType === 'half_day')
+        <div>
+            <div class="mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-zinc-400"><span class="inline-flex size-4 items-center justify-center rounded-full bg-orange-100 text-[9px] text-orange-600">3</span> Which half?</div>
+            <flux:select wire:model="regHalfDayPeriod">
+                <flux:select.option value="first">First half</flux:select.option>
+                <flux:select.option value="second">Second half</flux:select.option>
+            </flux:select>
+        </div>
+        @endif
+
+        {{-- Punch fix — which punch (only when fixing a punch) --}}
+        @if($regType === 'punch')
+        <div>
+            <div class="mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-zinc-400"><span class="inline-flex size-4 items-center justify-center rounded-full bg-orange-100 text-[9px] text-orange-600">3</span> Which punch is missing or wrong?</div>
             <div class="grid grid-cols-2 gap-3">
                 <label class="flex cursor-pointer items-center gap-2.5 rounded-xl border p-3 transition {{ $regFixIn ? 'border-orange-400 bg-orange-50 dark:bg-orange-500/10' : 'border-zinc-200 dark:border-zinc-800' }}">
                     <input type="checkbox" wire:model.live="regFixIn" class="rounded border-zinc-300 text-orange-500 focus:ring-orange-400">
@@ -1444,6 +1471,7 @@
             </div>
             <p class="mt-1.5 text-[11px] text-zinc-400">Unticked punches keep their recorded time.</p>
         </div>
+        @endif
 
         {{-- 4 · Why --}}
         <div>

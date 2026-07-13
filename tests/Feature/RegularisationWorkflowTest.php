@@ -29,6 +29,31 @@ function makeRegularisation(Employee $employee): AttendanceRegularisation
     ]);
 }
 
+test('a half-day regularisation marks the day half_day on final approval', function () {
+    $employee = Employee::factory()->create();
+    $date = today()->subDay()->toDateString();
+
+    $reg = AttendanceRegularisation::create([
+        'employee_id' => $employee->id,
+        'work_date' => $date,
+        'regularisation_type' => 'half_day',
+        'half_day_period' => 'first',
+        'reason' => 'Left after lunch for a medical appointment.',
+        'status' => 'pending',
+        'stage' => 'manager_review',
+    ]);
+    $service = app(AttendanceService::class);
+
+    $service->approveRegularisation($reg, User::factory()->create(['role' => UserRole::Manager])->id);
+    $service->approveRegularisation($reg->refresh(), User::factory()->create(['role' => UserRole::HrAdmin])->id);
+    $attendance = $service->approveRegularisation($reg->refresh(), User::factory()->create(['role' => UserRole::SuperAdmin])->id);
+
+    expect($attendance)->not->toBeNull()
+        ->and($attendance->status)->toBe('half_day')
+        ->and($reg->fresh()->status)->toBe('approved')
+        ->and($reg->fresh()->half_day_period)->toBe('first');
+});
+
 test('the request climbs manager → HR → admin, and only final approval writes attendance', function () {
     $employee = Employee::factory()->create();
     $reg = makeRegularisation($employee);

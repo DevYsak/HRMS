@@ -11,6 +11,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'employee_id',
     'attendance_id',
     'work_date',
+    'regularisation_type',
+    'half_day_period',
     'requested_check_in',
     'requested_check_out',
     'check_in_method',

@@ -177,6 +177,13 @@ class AttendanceTracker extends Component
     public ?array $detail = null;
 
     // Regularisation form fields
+
+    /** Regularisation type: 'punch' (fix in/out) or 'half_day' (mark half day). */
+    public string $regType = 'punch';
+
+    /** Which half the half-day request covers: 'first' or 'second'. */
+    public string $regHalfDayPeriod = 'first';
+
     public bool $regFixIn = false;
 
     public bool $regFixOut = true;
@@ -1457,10 +1464,14 @@ class AttendanceTracker extends Component
 
     public function submitRegularisation()
     {
+        $isHalfDay = $this->regType === 'half_day';
+
         $this->validate([
             'regDate' => 'required|date',
-            'regCheckIn' => $this->regFixIn ? 'required' : 'nullable',
-            'regCheckOut' => $this->regFixOut ? 'required' : 'nullable',
+            'regType' => 'required|in:punch,half_day',
+            'regHalfDayPeriod' => $isHalfDay ? 'required|in:first,second' : 'nullable',
+            'regCheckIn' => $isHalfDay ? 'nullable' : ($this->regFixIn ? 'required' : 'nullable'),
+            'regCheckOut' => $isHalfDay ? 'nullable' : ($this->regFixOut ? 'required' : 'nullable'),
             'regReason' => 'required|min:5',
             'regAttachment' => 'nullable|file|max:5120|mimes:jpg,jpeg,png,pdf,webp',
         ], [
@@ -1469,45 +1480,54 @@ class AttendanceTracker extends Component
             'regAttachment.max' => 'The attachment may not exceed 5 MB.',
         ]);
 
-        if (! $this->regFixIn && ! $this->regFixOut) {
-            \Flux::toast('Tick at least one punch to correct (check-in or check-out).', variant: 'warning');
-
-            return;
-        }
-
         $employee = Auth::user()->employee;
         $attendance = Attendance::where('employee_id', $employee->id)
             ->where('date', $this->regDate)
             ->first();
 
-        // Untouched punches keep their recorded time so approval only
-        // overrides what the employee asked to fix.
-        $requestedIn = $this->regFixIn
-            ? $this->regCheckIn
-            : ($attendance?->check_in?->format('H:i') ?? $this->regCheckIn);
-        $requestedOut = $this->regFixOut
-            ? $this->regCheckOut
-            : ($attendance?->check_out?->format('H:i') ?? $this->regCheckOut);
-
-        if (! $requestedIn || ! $requestedOut) {
-            \Flux::toast('Both times are needed — tick the missing punch and fill it in.', variant: 'warning');
-
-            return;
-        }
-
-        $regularisation = AttendanceRegularisation::create([
+        $payload = [
             'employee_id' => $employee->id,
             'attendance_id' => $attendance?->id,
             'work_date' => $this->regDate,
-            'requested_check_in' => $this->regDate.' '.$requestedIn.':00',
-            'requested_check_out' => $this->regDate.' '.$requestedOut.':00',
-            'check_in_method' => in_array($this->regCheckInMethod, ['face', 'id_card'], true) ? $this->regCheckInMethod : 'id_card',
-            'check_out_method' => in_array($this->regCheckOutMethod, ['face', 'id_card'], true) ? $this->regCheckOutMethod : 'id_card',
+            'regularisation_type' => $this->regType,
             'reason' => $this->regReason,
             'attachment_path' => $this->regAttachment?->store('regularisation-attachments', 'public'),
             'status' => 'pending',
             'stage' => 'manager_review',
-        ]);
+        ];
+
+        if ($isHalfDay) {
+            // Half-day request: no punch times, just which half of the day.
+            $payload['half_day_period'] = $this->regHalfDayPeriod;
+        } else {
+            if (! $this->regFixIn && ! $this->regFixOut) {
+                \Flux::toast('Tick at least one punch to correct (check-in or check-out).', variant: 'warning');
+
+                return;
+            }
+
+            // Untouched punches keep their recorded time so approval only
+            // overrides what the employee asked to fix.
+            $requestedIn = $this->regFixIn
+                ? $this->regCheckIn
+                : ($attendance?->check_in?->format('H:i') ?? $this->regCheckIn);
+            $requestedOut = $this->regFixOut
+                ? $this->regCheckOut
+                : ($attendance?->check_out?->format('H:i') ?? $this->regCheckOut);
+
+            if (! $requestedIn || ! $requestedOut) {
+                \Flux::toast('Both times are needed — tick the missing punch and fill it in.', variant: 'warning');
+
+                return;
+            }
+
+            $payload['requested_check_in'] = $this->regDate.' '.$requestedIn.':00';
+            $payload['requested_check_out'] = $this->regDate.' '.$requestedOut.':00';
+            $payload['check_in_method'] = in_array($this->regCheckInMethod, ['face', 'id_card'], true) ? $this->regCheckInMethod : 'id_card';
+            $payload['check_out_method'] = in_array($this->regCheckOutMethod, ['face', 'id_card'], true) ? $this->regCheckOutMethod : 'id_card';
+        }
+
+        $regularisation = AttendanceRegularisation::create($payload);
 
         // Notify the manager AND HR/Admin so either can approve. Notifications
         // are best-effort: the request is already saved, so a mail-transport
@@ -1535,7 +1555,7 @@ class AttendanceTracker extends Component
             report($e); // logged for diagnosis; the regularisation is saved regardless
         }
 
-        $this->reset(['regDate', 'regCheckIn', 'regCheckOut', 'regReason', 'regFixIn', 'regFixOut', 'regAttachment']);
+        $this->reset(['regDate', 'regCheckIn', 'regCheckOut', 'regReason', 'regFixIn', 'regFixOut', 'regAttachment', 'regType', 'regHalfDayPeriod']);
         $this->modal('regularisation-modal')->close();
         \Flux::toast('Regularisation request sent to your manager & HR for approval.');
     }
