@@ -775,6 +775,35 @@
                                         <flux:icon :name="$statusIcon" class="size-3" />
                                         {{ $statusLabel }}
                                     </span>
+
+                                    {{-- Approval timeline: Submitted → Manager → HR → Approved --}}
+                                    @php
+                                        $tlSteps = ['Submitted', 'Manager', 'HR', 'Approved'];
+                                        $tlReached = match ($req->status) {
+                                            'pending', 'more_info_requested' => 1,
+                                            'pending_hr' => 2,
+                                            'approved' => 4,
+                                            default => 0,
+                                        };
+                                        $tlRejected = $req->status === 'rejected';
+                                    @endphp
+                                    @unless($req->status === 'cancelled')
+                                        <div class="mt-2 flex items-center" title="Approval stage: {{ $statusLabel }}">
+                                            @foreach($tlSteps as $si => $step)
+                                                @php
+                                                    $n = $si + 1;
+                                                    $done = ! $tlRejected && $n <= $tlReached;
+                                                    $current = ! $tlRejected && $req->status !== 'approved' && $n === $tlReached + 1;
+                                                    $failed = $tlRejected && $n === $tlReached + 1;
+                                                @endphp
+                                                <span class="size-1.5 rounded-full {{ $failed ? 'bg-rose-500' : ($done ? 'bg-emerald-500' : ($current ? 'bg-amber-400' : 'bg-zinc-200 dark:bg-zinc-700')) }}"
+                                                    title="{{ $step }}"></span>
+                                                @if($si < 3)
+                                                    <span class="h-px w-3 {{ $done ? 'bg-emerald-300 dark:bg-emerald-800' : 'bg-zinc-200 dark:bg-zinc-700' }}"></span>
+                                                @endif
+                                            @endforeach
+                                        </div>
+                                    @endunless
                                     @if($req->status === 'more_info_requested' && $req->reviewer_comment)
                                         <p class="mt-1 max-w-[220px] truncate text-[10px] italic text-orange-500" title="{{ $req->reviewer_comment }}">“{{ $req->reviewer_comment }}”</p>
                                     @elseif($req->status === 'rejected' && $req->reviewer_comment)
