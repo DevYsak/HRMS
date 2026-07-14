@@ -394,7 +394,10 @@
                 'sub' => $holidayWorkedCount > 0 ? 'Approved this year' : 'None this year',
             ],
         ];
+        // Hide zero-value KPI tiles so the row stays clean (matches the balance cards).
+        $statCards = array_values(array_filter($statCards, fn ($s) => (float) $s['value'] > 0));
     @endphp
+    @if(count($statCards))
     <div class="pulse-margin grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         @foreach($statCards as $stat)
             <div
@@ -431,6 +434,7 @@
             </div>
         @endforeach
     </div>
+    @endif
 
     {{-- â"€â"€â"€ ANALYTICS SECTION â"€â"€â"€ --}}
     @php
