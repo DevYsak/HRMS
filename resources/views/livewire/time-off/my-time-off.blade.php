@@ -322,7 +322,7 @@
             <div class="space-y-3">
                 @forelse($upcomingHolidays->take(6) as $holiday)
                     @php $daysLeft = (int) now()->startOfDay()->diffInDays($holiday->date->copy()->startOfDay()); @endphp
-                    <div class="flex items-center gap-3">
+                    <div class="group flex items-center gap-3">
                         <div class="flex size-11 shrink-0 flex-col items-center justify-center rounded-xl bg-zinc-50 dark:bg-zinc-800">
                             <span class="text-sm font-black leading-none text-zinc-800 dark:text-zinc-100">{{ $holiday->date->format('d') }}</span>
                             <span class="text-[9px] font-bold uppercase text-zinc-400">{{ $holiday->date->format('M') }}</span>
@@ -331,6 +331,9 @@
                             <p class="truncate text-xs font-bold text-zinc-700 dark:text-zinc-200">{{ $holiday->name }}</p>
                             <p class="truncate text-[10px] text-zinc-400">{{ $holiday->date->format('l') }}</p>
                         </div>
+                        <button type="button" wire:click="openHolidayWork('{{ $holiday->date->toDateString() }}')"
+                            class="shrink-0 rounded-lg px-1.5 py-0.5 text-[10px] font-bold text-orange-500 opacity-0 transition hover:bg-orange-50 group-hover:opacity-100 dark:hover:bg-orange-900/20"
+                            title="Request to work this holiday">Work</button>
                         <span class="shrink-0 rounded-full bg-orange-50 px-2 py-0.5 text-[9px] font-bold text-orange-600 dark:bg-orange-900/20 dark:text-orange-400">
                             {{ $daysLeft <= 0 ? 'Today' : 'In '.$daysLeft.'d' }}
                         </span>
@@ -1018,39 +1021,30 @@
             </div>
         </div>
 
-        {{-- Holiday Planner --}}
-        <div class="rounded-2xl border border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        {{-- Holiday Work & December Mandatory (upcoming holidays now live in the
+             timeline above; this keeps the mandatory days + work-request action) --}}
+        <div class="flex flex-col rounded-2xl border border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
             <div class="mb-3 flex items-center gap-2">
-                <div class="rounded-lg bg-rose-50 p-1.5 dark:bg-rose-900/20"><flux:icon.calendar class="size-4 text-rose-600 dark:text-rose-400" /></div>
-                <h3 class="text-xs font-black uppercase tracking-[0.12em] text-zinc-600 dark:text-zinc-300">Holiday Planner</h3>
+                <div class="rounded-lg bg-teal-50 p-1.5 dark:bg-teal-900/20"><flux:icon.briefcase class="size-4 text-teal-600 dark:text-teal-400" /></div>
+                <h3 class="text-xs font-black uppercase tracking-[0.12em] text-zinc-600 dark:text-zinc-300">Holiday Work</h3>
             </div>
-            <div class="space-y-1.5">
-                @forelse($upcomingHolidays as $h)
-                    <div class="group flex items-center justify-between gap-2 text-sm">
-                        <span class="truncate text-zinc-700 dark:text-zinc-200">{{ $h->name }}</span>
-                        <span class="flex shrink-0 items-center gap-2">
-                            <button type="button" wire:click="openHolidayWork('{{ $h->date->toDateString() }}')"
-                                class="rounded-lg px-1.5 py-0.5 text-[10px] font-bold text-orange-500 opacity-0 transition hover:bg-orange-50 group-hover:opacity-100" title="Request to work this holiday">Work</button>
-                            <span class="text-xs text-zinc-400">{{ $h->date->format('d M') }}</span>
-                        </span>
-                    </div>
-                @empty
-                    <p class="text-xs text-zinc-400">No upcoming public holidays.</p>
-                @endforelse
+            <div class="flex-1">
                 @if($mandatoryDays->isNotEmpty())
-                    <div class="mt-2 border-t border-zinc-100 dark:border-zinc-800 pt-2 dark:border-zinc-800">
-                        <p class="mb-1 text-[10px] font-bold uppercase tracking-wide text-amber-600">December Mandatory</p>
+                    <p class="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-amber-600">December Mandatory</p>
+                    <div class="space-y-1.5">
                         @foreach($mandatoryDays as $m)
-                            <div class="flex items-center justify-between text-sm">
+                            <div class="flex items-center justify-between gap-2 text-sm">
                                 <span class="truncate text-zinc-700 dark:text-zinc-200">{{ $m->description }}</span>
                                 <span class="shrink-0 text-xs text-zinc-400">{{ $m->date->format('d M') }}</span>
                             </div>
                         @endforeach
                     </div>
+                @else
+                    <p class="text-xs text-zinc-400">Worked on a public holiday? Log it to claim overtime or a comp-off credit. Hover any holiday in the timeline to request it directly.</p>
                 @endif
             </div>
             <button type="button" wire:click="openHolidayWork"
-                class="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-orange-200 bg-orange-50/60 px-3 py-2 text-xs font-bold text-orange-600 transition hover:bg-orange-100">
+                class="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-orange-200 bg-orange-50/60 px-3 py-2 text-xs font-bold text-orange-600 transition hover:bg-orange-100 dark:border-orange-900/40 dark:bg-orange-900/10 dark:text-orange-400 dark:hover:bg-orange-900/20">
                 <flux:icon.briefcase class="size-4" /> Request to Work on Holiday
             </button>
         </div>
