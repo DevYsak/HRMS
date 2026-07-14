@@ -275,9 +275,18 @@ class ManageOtRequests extends Component
 
         $requests = $query->paginate(15);
 
+        // Overall status mix (unfiltered) for the summary strip.
+        $byStatus = OtRequest::query()
+            ->selectRaw('status, COUNT(*) as total')
+            ->groupBy('status')
+            ->pluck('total', 'status');
+
         return view('livewire.overtime.manage-ot-requests', [
             'requests' => $requests,
-            'pendingCount' => OtRequest::where('status', 'pending')->count(),
+            'pendingCount' => (int) ($byStatus['pending'] ?? 0),
+            'approvedCount' => (int) ($byStatus['approved'] ?? 0),
+            'rejectedCount' => (int) ($byStatus['rejected'] ?? 0),
+            'nexflowCount' => OtRequest::where('source', 'nexflow')->count(),
         ])->layout('layouts.app', ['title' => 'Manage OT Requests']);
     }
 }

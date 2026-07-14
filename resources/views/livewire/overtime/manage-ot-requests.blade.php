@@ -31,21 +31,46 @@
                 </h3>
                 <p class="mt-1.5 text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">
                     Use this queue to approve valid extra work windows or send back requests with a reason.
+                    @if($nexflowCount)<span class="font-semibold text-indigo-500">{{ $nexflowCount }} from Nexflow.</span>@endif
                 </p>
             </div>
 
-            <div class="grid grid-cols-1 gap-3 sm:grid-cols-3 xl:grid-cols-1">
-                {{-- Pending --}}
-                <div class="flex items-center gap-3 rounded-2xl bg-orange-50 p-4 dark:bg-orange-950/20">
+            <div class="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-2">
+                {{-- Pending (click to filter) --}}
+                <button type="button" wire:click="$set('filterStatus', 'pending')"
+                    class="flex items-center gap-3 rounded-2xl bg-orange-50 p-4 text-left transition hover:ring-2 hover:ring-orange-200 dark:bg-orange-950/20 {{ $filterStatus === 'pending' ? 'ring-2 ring-orange-400' : '' }}">
                     <div class="flex size-9 shrink-0 items-center justify-center rounded-xl bg-orange-100 dark:bg-orange-900/40">
                         <flux:icon.sun class="size-5 text-orange-500" />
                     </div>
                     <div>
                         <div class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Pending</div>
                         <div class="text-2xl font-black text-zinc-900 dark:text-white">{{ $pendingCount }}</div>
-                        <p class="text-[11px] text-zinc-400">Needs decision now</p>
                     </div>
-                </div>
+                </button>
+
+                {{-- Approved (click to filter) --}}
+                <button type="button" wire:click="$set('filterStatus', 'approved')"
+                    class="flex items-center gap-3 rounded-2xl bg-emerald-50 p-4 text-left transition hover:ring-2 hover:ring-emerald-200 dark:bg-emerald-950/20 {{ $filterStatus === 'approved' ? 'ring-2 ring-emerald-400' : '' }}">
+                    <div class="flex size-9 shrink-0 items-center justify-center rounded-xl bg-emerald-100 dark:bg-emerald-900/40">
+                        <flux:icon.check-circle class="size-5 text-emerald-500" />
+                    </div>
+                    <div>
+                        <div class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Approved</div>
+                        <div class="text-2xl font-black text-zinc-900 dark:text-white">{{ $approvedCount }}</div>
+                    </div>
+                </button>
+
+                {{-- Rejected (click to filter) --}}
+                <button type="button" wire:click="$set('filterStatus', 'rejected')"
+                    class="flex items-center gap-3 rounded-2xl bg-rose-50 p-4 text-left transition hover:ring-2 hover:ring-rose-200 dark:bg-rose-950/20 {{ $filterStatus === 'rejected' ? 'ring-2 ring-rose-400' : '' }}">
+                    <div class="flex size-9 shrink-0 items-center justify-center rounded-xl bg-rose-100 dark:bg-rose-900/40">
+                        <flux:icon.x-circle class="size-5 text-rose-500" />
+                    </div>
+                    <div>
+                        <div class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Rejected</div>
+                        <div class="text-2xl font-black text-zinc-900 dark:text-white">{{ $rejectedCount }}</div>
+                    </div>
+                </button>
 
                 {{-- Showing --}}
                 <div class="flex items-center gap-3 rounded-2xl bg-blue-50 p-4 dark:bg-blue-950/20">
@@ -159,7 +184,14 @@
                                         {{ strtoupper(substr(($req->employee?->user?->name ?? 'Unknown'), 0, 1)) }}
                                     </div>
                                     <div>
-                                        <div class="font-semibold text-zinc-900 dark:text-white">{{ ($req->employee?->user?->name ?? 'Unknown') }}</div>
+                                        <div class="flex items-center gap-1.5">
+                                            <span class="font-semibold text-zinc-900 dark:text-white">{{ ($req->employee?->user?->name ?? 'Unknown') }}</span>
+                                            @if($req->source === 'nexflow')
+                                                <span class="inline-flex items-center gap-0.5 rounded bg-indigo-50 px-1.5 py-0.5 text-[9px] font-bold uppercase text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300"><flux:icon.bolt class="size-2.5" /> Nexflow</span>
+                                            @elseif($req->source === 'regularisation')
+                                                <span class="rounded bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold uppercase text-amber-600 dark:bg-amber-500/15">Auto</span>
+                                            @endif
+                                        </div>
                                         <div class="text-xs text-zinc-400">{{ $req->employee?->department?->name ?? 'No department' }}</div>
                                     </div>
                                 </div>
@@ -207,6 +239,15 @@
 
                             {{-- Actions (3-dot dropdown) — teleported to body to escape overflow clipping --}}
                             <td class="py-4 pl-4 pr-6 align-middle text-right">
+                              <div class="inline-flex items-center gap-1">
+                                @if($req->source === 'nexflow')
+                                    <flux:tooltip content="View Nexflow status history">
+                                        <button type="button" wire:click="openView({{ $req->id }})"
+                                            class="inline-flex size-8 items-center justify-center rounded-lg text-indigo-500 transition hover:bg-indigo-50 dark:hover:bg-indigo-500/10">
+                                            <flux:icon.clock class="size-4" />
+                                        </button>
+                                    </flux:tooltip>
+                                @endif
                                 <div
                                     x-data="{
                                         open: false,
@@ -289,6 +330,7 @@
                                         </div>
                                     </template>
                                 </div>
+                              </div>
                             </td>
                         </tr>
                     @empty
