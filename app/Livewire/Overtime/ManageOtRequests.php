@@ -213,6 +213,28 @@ class ManageOtRequests extends Component
         }
     }
 
+    /**
+     * Pull overtime from Nexflow for this month: import approved OT into payroll
+     * and record rejected OT for visibility. Also runs automatically every 10
+     * minutes via hrms:sync-nexflow-ot-details.
+     */
+    public function syncFromNexflow(OvertimeService $service): void
+    {
+        $this->checkOtPermission();
+
+        $result = $service->syncNexflowOtDetails(
+            now()->startOfMonth()->toDateString(),
+            now()->toDateString(),
+        );
+
+        \Flux::toast(
+            "Nexflow sync — {$result['imported']} approved imported, {$result['rejected']} rejected recorded"
+            .($result['skipped'] ? ", {$result['skipped']} already synced." : '.')
+        );
+
+        $this->resetPage();
+    }
+
     public function render()
     {
         $this->checkOtPermission();

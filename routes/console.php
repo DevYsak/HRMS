@@ -116,6 +116,12 @@ Schedule::command('hrms:sync-nexflow-ot')
     ->withoutOverlapping()
     ->runInBackground();
 
+// Pull approved/rejected overtime from the Nexflow ot-details endpoint → every 10 min
+Schedule::command('hrms:sync-nexflow-ot-details')
+    ->everyTenMinutes()
+    ->withoutOverlapping()
+    ->runInBackground();
+
 // Pull biometric punch logs every 5 minutes during working hours (07:00–22:00 IST)
 Schedule::command('hrms:sync-biometric')
     ->everyFiveMinutes()

@@ -6,10 +6,18 @@
             <h1 class="pulse-page-title">Manage OT Requests</h1>
             <p class="pulse-page-subtitle">Review pre-approval requests with clear work windows, duration, and action context.</p>
         </div>
-        <flux:button href="{{ route('reports.ot-records', ['month' => now()->month, 'year' => now()->year]) }}" variant="outline" icon="arrow-down-tray" target="_blank">
-            Export CSV
-        </flux:button>
+        <div class="flex items-center gap-2">
+            <flux:button wire:click="syncFromNexflow" wire:loading.attr="disabled" wire:target="syncFromNexflow"
+                variant="primary" icon="arrow-path">
+                <span wire:loading.remove wire:target="syncFromNexflow">Sync from Nexflow</span>
+                <span wire:loading wire:target="syncFromNexflow">Syncing…</span>
+            </flux:button>
+            <flux:button href="{{ route('reports.ot-records', ['month' => now()->month, 'year' => now()->year]) }}" variant="outline" icon="arrow-down-tray" target="_blank">
+                Export CSV
+            </flux:button>
+        </div>
     </div>
+    <p class="-mt-3 text-[11px] text-zinc-400">Overtime from Nexflow syncs automatically every 10 minutes — approved OT is imported for payroll, rejected OT is shown for reference. Click <strong>Sync from Nexflow</strong> to pull now.</p>
 
     {{-- Overview + Filters row --}}
     <div class="grid gap-4 xl:grid-cols-[1fr_2fr]">

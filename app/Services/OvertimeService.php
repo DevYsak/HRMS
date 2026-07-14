@@ -245,13 +245,20 @@ class OvertimeService
      * hrms:sync-nexflow-ot dedup. The OtRequest carries source='nexflow' and a
      * nexflow_ref for the audit trail.
      *
+     * Approved records are imported as approved OT + a materialised OvertimeRecord
+     * (payable). Rejected records are recorded as a rejected OT request so admin/HR
+     * can see them (not payable). Pending records are left alone until decided.
+     * Idempotent (deduped by nexflow_ref) and double-count safe.
+     *
      * @param  array{id?: int|string, date?: string, status?: string, reason?: string, ot_hours?: float, ot_minutes?: int, sessions?: array<int, array{started_at?: string, stopped_at?: string}>}  $record
-     * @return array{status: string, record: ?OvertimeRecord} status: imported | skipped | not_payable
+     * @return array{status: string, record: ?OvertimeRecord} status: imported | recorded_rejected | skipped | not_payable
      */
     public function importNexflowOtRecord(Employee $employee, array $record): array
     {
-        // Headline status is Nexflow's final two-level outcome — only 'approved' pays.
-        if (($record['status'] ?? null) !== 'approved') {
+        $status = $record['status'] ?? null;
+
+        // Only decided records act: approved (pays) or rejected (recorded). Pending waits.
+        if (! in_array($status, ['approved', 'rejected'], true)) {
             return ['status' => 'not_payable', 'record' => null];
         }
 
@@ -262,13 +269,10 @@ class OvertimeService
             return ['status' => 'not_payable', 'record' => null];
         }
 
-        // Double-count guard — an OT already logged for this day (any source) wins.
-        $exists = OtRequest::where('employee_id', $employee->id)
-            ->where('work_date', $workDate)
-            ->whereIn('status', ['pending', 'approved'])
-            ->exists();
+        $ref = 'otdetails:'.($record['id'] ?? $workDate);
 
-        if ($exists) {
+        // Idempotent across repeated syncs: this exact Nexflow record was already handled.
+        if (OtRequest::where('source', 'nexflow')->where('nexflow_ref', $ref)->exists()) {
             return ['status' => 'skipped', 'record' => null];
         }
 
@@ -277,6 +281,31 @@ class OvertimeService
         $startTime = $sessions->pluck('started_at')->filter()->sort()->first() ?: '18:00';
         $endTime = $sessions->pluck('stopped_at')->filter()->sort()->last()
             ?: date('H:i', strtotime($startTime) + (int) round($otHours * 3600));
+
+        // Rejected in Nexflow → record a rejected OT request for visibility (no pay).
+        if ($status === 'rejected') {
+            OtRequest::create([
+                'employee_id' => $employee->id,
+                'work_date' => $workDate,
+                'start_time' => $startTime,
+                'end_time' => $endTime,
+                'requested_hours' => $otHours,
+                'reason' => 'Nexflow OT: '.($record['reason'] ?? 'overtime').' (rejected in Nexflow)',
+                'status' => 'rejected',
+                'reviewer_comment' => 'Rejected in Nexflow (L1/L2).',
+                'reviewed_at' => now(),
+                'source' => 'nexflow',
+                'nexflow_ref' => $ref,
+            ]);
+
+            return ['status' => 'recorded_rejected', 'record' => null];
+        }
+
+        // Approved — double-count guard: a pending/approved OT already covers this day.
+        if (OtRequest::where('employee_id', $employee->id)->where('work_date', $workDate)
+            ->whereIn('status', ['pending', 'approved'])->exists()) {
+            return ['status' => 'skipped', 'record' => null];
+        }
 
         $otRequest = OtRequest::create([
             'employee_id' => $employee->id,
@@ -289,10 +318,50 @@ class OvertimeService
             'reviewer_comment' => 'Imported from Nexflow — both approval levels cleared.',
             'reviewed_at' => now(),
             'source' => 'nexflow',
-            'nexflow_ref' => 'otdetails:'.($record['id'] ?? $workDate),
+            'nexflow_ref' => $ref,
         ]);
 
         return ['status' => 'imported', 'record' => $this->createOvertimeRecordFromApprovedRequest($otRequest)];
+    }
+
+    /**
+     * Sync overtime for all active employees (optionally only Nexflow-eligible)
+     * from the Nexflow ot-details endpoint for a period: import approved OT into
+     * payroll and record rejected OT for visibility. Idempotent — safe to run
+     * repeatedly (the manual button and the 10-minute scheduler both call this).
+     *
+     * @return array{imported: int, rejected: int, skipped: int, employees: int}
+     */
+    public function syncNexflowOtDetails(?string $from = null, ?string $to = null, bool $eligibleOnly = false): array
+    {
+        $nexflow = app(NexflowApiService::class);
+
+        $employees = Employee::query()
+            ->where('status', 'active')
+            ->whereHas('user', fn ($q) => $q->whereNotNull('email'))
+            ->when($eligibleOnly, fn ($q) => $q->whereIn('ot_tracking_source', ['nexflow', 'hybrid']))
+            ->with('user')
+            ->get();
+
+        $imported = 0;
+        $rejected = 0;
+        $skipped = 0;
+
+        foreach ($employees as $employee) {
+            $data = $nexflow->getOtDetails($employee->user->email, $from, $to);
+
+            foreach ($data['ot_records'] ?? [] as $record) {
+                $outcome = $this->importNexflowOtRecord($employee, $record);
+                match ($outcome['status']) {
+                    'imported' => $imported++,
+                    'recorded_rejected' => $rejected++,
+                    'skipped' => $skipped++,
+                    default => null,
+                };
+            }
+        }
+
+        return compact('imported', 'rejected', 'skipped') + ['employees' => $employees->count()];
     }
 
     public function createOvertimeRecordFromApprovedRequest(OtRequest $request): OvertimeRecord
