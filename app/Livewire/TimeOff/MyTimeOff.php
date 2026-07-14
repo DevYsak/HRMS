@@ -818,6 +818,9 @@ class MyTimeOff extends Component
                     'available' => max(0, $allocated - $used - $encashed),
                 ];
             })
+            // Hide leave types with no activity at all — an all-zero card is noise.
+            ->filter(fn ($c) => $c->allocated > 0 || $c->used > 0 || $c->available > 0
+                || $c->carried > 0 || $c->comp_off > 0 || $c->encashed > 0)
             ->sortByDesc('allocated')
             ->values();
 

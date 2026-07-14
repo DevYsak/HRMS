@@ -554,35 +554,35 @@
             </div>
             <p class="mb-4 text-[11px] text-zinc-400">Usage across all leave types this year.</p>
 
-            @if($balances->isEmpty())
+            @if($balanceCards->isEmpty())
                 <div class="flex flex-col items-center justify-center py-6 text-center">
                     <flux:icon.chart-pie class="size-8 mb-2 text-zinc-200 dark:text-zinc-700 dark:text-zinc-200" />
                     <p class="text-xs font-medium text-zinc-400">No leave balances found.</p>
                 </div>
             @else
                 <div class="space-y-3">
-                    @foreach($balances as $bal)
+                    @foreach($balanceCards as $bal)
                         @php
-                            $alloc = (float) $bal->allocated_days;
-                            $used = (float) $bal->used_days;
+                            $alloc = (float) $bal->allocated;
+                            $used = (float) $bal->used;
                             $pctUsed = $alloc > 0 ? min(100, round(($used / $alloc) * 100)) : 0;
-                            $color = $bal->leaveType->color ?? '#7c3aed';
+                            $dColor = $bal->color ?: '#7c3aed';
                         @endphp
                         <div>
                             <div class="flex items-center justify-between mb-1">
                                 <div class="flex items-center gap-1.5">
-                                    <div class="size-2 rounded-full shrink-0" style="background: {{ $color }}"></div>
+                                    <div class="size-2 rounded-full shrink-0" style="background: {{ $dColor }}"></div>
                                     <span
-                                        class="text-[11px] font-semibold text-zinc-700 dark:text-zinc-200 dark:text-zinc-300">{{ $bal->leaveType->name }}</span>
+                                        class="text-[11px] font-semibold text-zinc-700 dark:text-zinc-200 dark:text-zinc-300">{{ $bal->name }}</span>
                                 </div>
                                 <span class="text-[11px] text-zinc-500 dark:text-zinc-400">
-                                    <span class="font-bold text-zinc-900 dark:text-white">{{ (int) $used }}</span> /
-                                    {{ (int) $alloc }}d
+                                    <span class="font-bold text-zinc-900 dark:text-white">{{ $fmt($used) }}</span> /
+                                    {{ $fmt($alloc) }}d
                                 </span>
                             </div>
                             <div class="h-2 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
                                 <div class="h-full rounded-full transition-all duration-700"
-                                    style="width: {{ $pctUsed }}%; background: {{ $color }}"></div>
+                                    style="width: {{ $pctUsed }}%; background: {{ $dColor }}"></div>
                             </div>
                         </div>
                     @endforeach
