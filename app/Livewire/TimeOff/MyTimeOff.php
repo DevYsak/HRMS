@@ -62,7 +62,7 @@ class MyTimeOff extends Component
 
     public string $employee_remarks = '';
 
-    /** Single supporting document (max 500 KB), previewed before submit. */
+    /** Single supporting document (max 5 MB), previewed before submit. */
     public $attachment = null;
 
     // ---- Conversation thread (message/attachment back-and-forth with the reviewer) ----
@@ -175,7 +175,7 @@ class MyTimeOff extends Component
             'requested_leave_status' => 'required|in:paid,unpaid',
             'reason' => 'required|min:5',
             'employee_remarks' => 'nullable|string|max:1000',
-            'attachment' => 'nullable|file|max:500|mimes:pdf,jpg,jpeg,png',
+            'attachment' => 'nullable|file|max:5120|mimes:pdf,jpg,jpeg,png,webp',
             'encash_leave_type_id' => $this->showEncashModal
                 ? 'required|exists:leave_types,id'
                 : 'nullable',
@@ -273,7 +273,7 @@ class MyTimeOff extends Component
 
         $leaveType = LeaveType::findOrFail($this->leave_type_id);
 
-        // Store the single supporting document (≤500 KB).
+        // Store the single supporting document (≤5 MB).
         $attachmentsPayload = [];
         if ($this->attachment) {
             $attachmentsPayload[] = [
@@ -356,7 +356,7 @@ class MyTimeOff extends Component
     {
         $this->validate([
             'conversation_body' => 'nullable|string|max:2000',
-            'conversation_attachment' => 'nullable|file|max:500|mimes:pdf,jpg,jpeg,png',
+            'conversation_attachment' => 'nullable|file|max:5120|mimes:pdf,jpg,jpeg,png,webp',
         ]);
 
         $employee = Auth::user()->employee;
@@ -751,8 +751,35 @@ class MyTimeOff extends Component
             ->orderBy('date')
             ->get();
 
+        // Merge balances by leave-type name for the balance cards. Duplicate
+        // leave types in the data would otherwise render as separate cards
+        // (e.g. two "Casual Leave"). Display-only — the raw $balances collection
+        // is left untouched for the stat/forecast logic above.
+        $balanceCards = $balances
+            ->groupBy(fn ($b) => strtolower(trim($b->leaveType->name ?? 'other')))
+            ->map(function ($group) {
+                $first = $group->first();
+                $allocated = (float) $group->sum('allocated_days');
+                $used = (float) $group->sum('used_days');
+                $encashed = (float) $group->sum(fn ($b) => (float) ($b->encashed_days ?? 0));
+
+                return (object) [
+                    'name' => $first->leaveType->name ?? 'Other',
+                    'color' => $first->leaveType->color,
+                    'allocated' => $allocated,
+                    'used' => $used,
+                    'encashed' => $encashed,
+                    'carried' => (float) $group->sum(fn ($b) => (float) ($b->carried_forward_days ?? 0)),
+                    'comp_off' => (float) $group->sum(fn ($b) => (float) ($b->comp_off_credits ?? 0)),
+                    'available' => max(0, $allocated - $used - $encashed),
+                ];
+            })
+            ->sortByDesc('allocated')
+            ->values();
+
         return view('livewire.time-off.my-time-off', [
             'balances' => $balances,
+            'balanceCards' => $balanceCards,
             'requests' => $requests,
             'leaveTypes' => LeaveType::where(function ($q) {
                 $q->where('allow_paid_request', true)->orWhere('allow_unpaid_request', true);

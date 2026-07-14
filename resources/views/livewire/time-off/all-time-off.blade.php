@@ -191,6 +191,17 @@
                                     </td>
                                     <td class="py-3.5 pr-6 text-right" wire:click.stop>
                                         <div class="flex items-center justify-end gap-1">
+                                            {{-- Conversation — opens the detail panel's message thread.
+                                                 Badge shows the message count so HR/Admin can see at a
+                                                 glance which requests have an active conversation. --}}
+                                            <button type="button" wire:click="viewRequest({{ $req->id }})"
+                                                title="{{ $req->messages_count > 0 ? $req->messages_count.' message(s) — open conversation' : 'Open conversation' }}"
+                                                class="relative inline-flex items-center p-1.5 rounded-lg transition-colors {{ $req->messages_count > 0 ? 'text-indigo-500 hover:text-indigo-700 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-900/20' : 'text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 dark:hover:text-zinc-200 dark:hover:bg-zinc-700' }}">
+                                                <flux:icon.chat-bubble-left-right class="size-4" />
+                                                @if($req->messages_count > 0)
+                                                    <span class="absolute -right-0.5 -top-0.5 inline-flex min-w-3.5 items-center justify-center rounded-full bg-indigo-600 px-1 text-[9px] font-black leading-none text-white">{{ $req->messages_count }}</span>
+                                                @endif
+                                            </button>
                                             <button type="button" wire:click="viewRequest({{ $req->id }})"
                                                 class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors">
                                                 <flux:icon.eye class="size-3.5" />
@@ -385,14 +396,14 @@
                                 @error('panelMessage')<p class="text-xs text-red-500">{{ $message }}</p>@enderror
                                 <div class="flex items-center justify-between gap-2">
                                     <div class="min-w-0 flex-1">
-                                        <input type="file" wire:model="panelMessageAttachment" accept=".pdf,.jpg,.jpeg,.png"
+                                        <input type="file" wire:model="panelMessageAttachment" accept=".pdf,.jpg,.jpeg,.png,.webp"
                                             class="block w-full text-[11px] text-zinc-500 file:mr-2 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-2 file:py-1 file:text-[11px] file:font-bold file:text-indigo-600 hover:file:bg-indigo-100 dark:text-zinc-400">
                                         @error('panelMessageAttachment')<p class="mt-1 text-xs text-red-500">{{ $message }}</p>@enderror
                                     </div>
                                     <button type="button" wire:click="postPanelMessage" wire:loading.attr="disabled" wire:target="postPanelMessage,panelMessageAttachment"
                                         class="shrink-0 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-indigo-700 disabled:opacity-60">Send</button>
                                 </div>
-                                <p class="text-[10px] text-zinc-400">PDF or image — max 500 KB. Sending on a pending request marks it “More Info Needed”.</p>
+                                <p class="text-[10px] text-zinc-400">PDF or image — max 5 MB. Sending on a pending request marks it “More Info Needed”.</p>
                             </div>
                         </div>
 

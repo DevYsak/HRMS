@@ -283,7 +283,7 @@ class AllTimeOff extends Component
 
         $this->validate([
             'panelMessage' => 'nullable|string|max:2000',
-            'panelMessageAttachment' => 'nullable|file|max:500|mimes:pdf,jpg,jpeg,png',
+            'panelMessageAttachment' => 'nullable|file|max:5120|mimes:pdf,jpg,jpeg,png,webp',
         ]);
 
         $request = LeaveRequest::findOrFail($this->viewingId);
@@ -506,6 +506,7 @@ class AllTimeOff extends Component
         abort_unless(Auth::user()->canApproveLeave(), 403);
 
         $query = LeaveRequest::with(['employee.user', 'employee.department', 'leaveType', 'reviewer'])
+            ->withCount('messages')
             ->whereHas('employee.user')
             ->when($this->search, fn ($q) => $q->whereHas('employee.user', fn ($q2) => $q2->where('name', 'like', '%'.$this->search.'%')))
             ->when($this->status, fn ($q) => $q->where('status', $this->status))
