@@ -228,8 +228,8 @@ class ManageOtRequests extends Component
         );
 
         \Flux::toast(
-            "Nexflow sync — {$result['imported']} approved imported, {$result['rejected']} rejected recorded"
-            .($result['skipped'] ? ", {$result['skipped']} already synced." : '.')
+            "Nexflow sync — {$result['imported']} imported, {$result['updated']} status change(s), {$result['rejected']} rejected recorded"
+            .($result['skipped'] ? ", {$result['skipped']} skipped." : '.')
         );
 
         $this->resetPage();

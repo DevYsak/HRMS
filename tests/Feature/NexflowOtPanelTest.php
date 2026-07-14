@@ -82,9 +82,9 @@ test('a pending record is not payable and no records are re-imported for the sam
     // Pending (L2 not cleared) → not payable.
     expect($ot->importNexflowOtRecord($employee, nexflowOtPayload()['ot_records'][1])['status'])->toBe('not_payable');
 
-    // First approved import succeeds, second is skipped (double-count guard).
+    // First approved import succeeds, re-seeing the same record is a no-op (unchanged).
     expect($ot->importNexflowOtRecord($employee, nexflowOtPayload()['ot_records'][0])['status'])->toBe('imported')
-        ->and($ot->importNexflowOtRecord($employee, nexflowOtPayload()['ot_records'][0])['status'])->toBe('skipped')
+        ->and($ot->importNexflowOtRecord($employee, nexflowOtPayload()['ot_records'][0])['status'])->toBe('unchanged')
         ->and(OtRequest::where('employee_id', $employee->id)->count())->toBe(1);
 });
 

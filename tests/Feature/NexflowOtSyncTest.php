@@ -2,6 +2,7 @@
 
 use App\Enums\UserRole;
 use App\Livewire\Overtime\ManageOtRequests;
+use App\Models\AuditLog;
 use App\Models\Employee;
 use App\Models\OtRequest;
 use App\Models\OvertimeRecord;
@@ -69,8 +70,44 @@ test('the sync is idempotent — a second run imports nothing new', function () 
     $second = $svc->syncNexflowOtDetails('2026-06-01', '2026-06-30');
 
     expect($second['imported'])->toBe(0)
-        ->and($second['skipped'])->toBe(1)
-        ->and(OtRequest::count())->toBe(1);
+        ->and($second['updated'])->toBe(0)
+        ->and(OtRequest::count())->toBe(1);   // unchanged — no duplicate
+});
+
+test('a status change in Nexflow is reconciled, voids the pay, and is recorded in history', function () {
+    configureNexbridgeSync();
+    Employee::factory()->create(['status' => 'active', 'user_id' => User::factory()->create(['email' => 'flip@x.com'])->id]);
+    $svc = app(OvertimeService::class);
+
+    // Nexflow re-decides the same OT across three syncs: approved → rejected → approved.
+    Http::fake([
+        '*flip@x.com/ot-details*' => Http::sequence()
+            ->push(otDetailsPayload(17, 'approved'), 200)
+            ->push(otDetailsPayload(17, 'rejected'), 200)
+            ->push(otDetailsPayload(17, 'approved'), 200),
+        '*' => Http::response(['ot_records' => []], 200),
+    ]);
+
+    // 1) approved → imported + payroll record.
+    $svc->syncNexflowOtDetails('2026-06-01', '2026-06-30');
+    $ot = OtRequest::where('source', 'nexflow')->first();
+    expect($ot->status)->toBe('approved')
+        ->and(OvertimeRecord::where('ot_request_id', $ot->id)->exists())->toBeTrue();
+
+    // 2) rejected → HRMS status updates and the unpaid pay is voided.
+    $result = $svc->syncNexflowOtDetails('2026-06-01', '2026-06-30');
+    expect($result['updated'])->toBe(1)
+        ->and($ot->fresh()->status)->toBe('rejected')
+        ->and(OvertimeRecord::where('ot_request_id', $ot->id)->exists())->toBeFalse()   // pay voided
+        ->and(OtRequest::count())->toBe(1);                                              // no duplicate
+
+    // The status change is recorded in history (audit log).
+    expect(AuditLog::where('action', 'nexflow_ot_status_changed')->where('auditable_id', $ot->id)->exists())->toBeTrue();
+
+    // 3) re-approved → pay is re-materialised.
+    $svc->syncNexflowOtDetails('2026-06-01', '2026-06-30');
+    expect($ot->fresh()->status)->toBe('approved')
+        ->and(OvertimeRecord::where('ot_request_id', $ot->id)->exists())->toBeTrue();
 });
 
 test('the Sync from Nexflow button on Manage OT pulls approved OT', function () {
