@@ -1205,6 +1205,9 @@
                     <flux:icon.calendar-days class="size-4 text-violet-600 dark:text-violet-400" />
                 </div>
                 <h3 class="text-xs font-black uppercase tracking-[0.12em] text-zinc-600 dark:text-zinc-300">Leave Calendar</h3>
+                <span class="hidden items-center gap-1 rounded-full bg-orange-50 px-2 py-0.5 text-[9px] font-bold text-orange-600 sm:inline-flex dark:bg-orange-900/20 dark:text-orange-400">
+                    <flux:icon.cursor-arrow-rays class="size-3" /> Click a date to apply
+                </span>
             </div>
             <div class="flex items-center gap-1.5">
                 <button wire:click="previousCalendarMonth"
@@ -1267,17 +1270,35 @@
                         $cellClasses .= ' ring-2 ring-orange-500 ring-offset-1 dark:ring-offset-zinc-900';
                     }
 
+                    // A day is bookable when it's a current-month working day,
+                    // today or later, with no holiday/leave already on it.
+                    $selectable = $day['isCurrentMonth'] && ! $day['isWeekend'] && ! $day['holiday']
+                        && ! $day['approved'] && ! $day['pending']
+                        && $day['date']->gte(now()->startOfDay());
+
+                    if ($selectable) {
+                        $cellClasses .= ' cursor-pointer hover:ring-2 hover:ring-orange-300 dark:hover:ring-orange-700';
+                    }
+
                     $title = $day['holiday']?->name
                         ?? ($day['approved'] ? $day['approved']->leaveType->name . ' (Approved)' : null)
                         ?? ($day['pending'] ? $day['pending']->leaveType->name . ' (Pending)' : null);
                 @endphp
-                <div class="{{ $cellClasses }}" @if($title) title="{{ $title }}" @endif>
-                    {{ $day['date']->day }}
-                    @if($day['approved'] || $day['pending'] || $day['holiday'])
-                        <span
-                            class="mt-0.5 size-1 rounded-full {{ $day['holiday'] ? 'bg-rose-500' : ($day['approved'] ? 'bg-emerald-500' : 'bg-amber-400') }}"></span>
-                    @endif
-                </div>
+                @if($selectable)
+                    <button type="button" wire:click="applyOnDate('{{ $day['date']->toDateString() }}')"
+                        class="{{ $cellClasses }} group" title="Apply leave on {{ $day['date']->format('d M Y') }}">
+                        {{ $day['date']->day }}
+                        <span class="pointer-events-none absolute right-1 top-1 hidden text-[9px] font-black text-orange-500 group-hover:block">+</span>
+                    </button>
+                @else
+                    <div class="{{ $cellClasses }}" @if($title) title="{{ $title }}" @endif>
+                        {{ $day['date']->day }}
+                        @if($day['approved'] || $day['pending'] || $day['holiday'])
+                            <span
+                                class="mt-0.5 size-1 rounded-full {{ $day['holiday'] ? 'bg-rose-500' : ($day['approved'] ? 'bg-emerald-500' : 'bg-amber-400') }}"></span>
+                        @endif
+                    </div>
+                @endif
             @endforeach
         </div>
     </div>

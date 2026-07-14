@@ -228,6 +228,24 @@ class MyTimeOff extends Component
         $this->showRequestModal = true;
     }
 
+    /**
+     * Apply leave straight from a calendar day: opens the Apply modal with the
+     * clicked date pre-filled as a single-day request (same fields/validation).
+     */
+    public function applyOnDate(string $date): void
+    {
+        $this->reset([
+            'leave_type_id', 'is_half_day', 'half_day_period',
+            'requested_leave_status', 'reason', 'employee_remarks', 'attachment',
+        ]);
+        $this->requested_leave_status = 'paid';
+        $this->start_date = $date;
+        $this->end_date = $date;
+        $this->resetErrorBag();
+        $this->resetValidation();
+        $this->showRequestModal = true;
+    }
+
     public function closeRequestModal(): void
     {
         $this->showRequestModal = false;
