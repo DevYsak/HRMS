@@ -438,7 +438,60 @@
         $dayShort = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
         $monthShort = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     @endphp
-    <div class="pulse-margin grid grid-cols-1 gap-4 lg:grid-cols-3">
+    <h2 class="pulse-margin text-sm font-black uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Leave Insights</h2>
+    <div class="pulse-margin grid grid-cols-1 gap-4 lg:grid-cols-2">
+
+        {{-- ── Overview donut (Used / Available / Carry-forward) ── --}}
+        @php
+            $insAllocated = (float) $balanceCards->sum('allocated');
+            $insUsed = (float) $balanceCards->sum('used');
+            $insAvailable = (float) $balanceCards->sum('available');
+            $insCarried = (float) $balanceCards->sum('carried');
+            $insBase = max($insUsed + $insAvailable, 0.0001);
+            $usedFrac = $insUsed / $insBase;
+            $availFrac = $insAvailable / $insBase;
+            $dCirc = 2 * pi() * 42;
+            $insLegend = [
+                ['label' => 'Used', 'value' => $insUsed, 'color' => '#f97316', 'pct' => round($usedFrac * 100)],
+                ['label' => 'Available', 'value' => $insAvailable, 'color' => '#10b981', 'pct' => round($availFrac * 100)],
+                ['label' => 'Carry Forward', 'value' => $insCarried, 'color' => '#f59e0b', 'pct' => $insAllocated > 0 ? round($insCarried / $insAllocated * 100) : 0],
+            ];
+        @endphp
+        <div class="rounded-2xl border border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm">
+            <div class="mb-4 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <div class="rounded-lg bg-violet-50 p-1.5 dark:bg-violet-900/20"><flux:icon.chart-pie class="size-4 text-violet-600 dark:text-violet-400" /></div>
+                    <h3 class="text-xs font-black uppercase tracking-[0.12em] text-zinc-600 dark:text-zinc-300">Overview</h3>
+                </div>
+                <span class="text-[10px] font-bold text-zinc-400">This Year</span>
+            </div>
+            <div class="flex items-center gap-5">
+                <div class="relative size-32 shrink-0">
+                    <svg class="size-32 -rotate-90" viewBox="0 0 100 100">
+                        <circle cx="50" cy="50" r="42" fill="none" stroke="currentColor" stroke-width="10" class="text-zinc-100 dark:text-zinc-800" />
+                        <circle cx="50" cy="50" r="42" fill="none" stroke="#10b981" stroke-width="10" stroke-linecap="round"
+                            stroke-dasharray="{{ $dCirc * $availFrac }} {{ $dCirc }}" />
+                        <circle cx="50" cy="50" r="42" fill="none" stroke="#f97316" stroke-width="10" stroke-linecap="round"
+                            stroke-dasharray="{{ $dCirc * $usedFrac }} {{ $dCirc }}" stroke-dashoffset="{{ -$dCirc * $availFrac }}" />
+                    </svg>
+                    <div class="absolute inset-0 flex flex-col items-center justify-center">
+                        <span class="text-2xl font-black text-zinc-900 dark:text-white">{{ $fmt($insAllocated) }}</span>
+                        <span class="text-[9px] font-bold uppercase text-zinc-400">Total Days</span>
+                    </div>
+                </div>
+                <div class="min-w-0 flex-1 space-y-2.5">
+                    @foreach($insLegend as $lg)
+                        <div class="flex items-center justify-between gap-2">
+                            <div class="flex min-w-0 items-center gap-2">
+                                <span class="size-2.5 shrink-0 rounded-full" style="background: {{ $lg['color'] }}"></span>
+                                <span class="truncate text-xs font-semibold text-zinc-600 dark:text-zinc-300">{{ $lg['label'] }}</span>
+                            </div>
+                            <span class="shrink-0 text-xs font-black text-zinc-800 dark:text-zinc-100">{{ $fmt($lg['value']) }} <span class="text-[10px] font-medium text-zinc-400">({{ $lg['pct'] }}%)</span></span>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+        </div>
 
         {{-- â"€â"€ Weekly Pattern â"€â"€ --}}
         <div class=" rounded-2xl border border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
