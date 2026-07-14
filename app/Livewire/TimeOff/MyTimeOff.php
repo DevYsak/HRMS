@@ -777,9 +777,18 @@ class MyTimeOff extends Component
             ->sortByDesc('allocated')
             ->values();
 
+        // Hero KPI: total approved leave days taken this calendar year.
+        $approvedThisYearDays = $employee
+            ? (float) $employee->leaveRequests()
+                ->where('status', 'approved')
+                ->whereYear('start_date', now()->year)
+                ->sum('days')
+            : 0.0;
+
         return view('livewire.time-off.my-time-off', [
             'balances' => $balances,
             'balanceCards' => $balanceCards,
+            'approvedThisYearDays' => $approvedThisYearDays,
             'requests' => $requests,
             'leaveTypes' => LeaveType::where(function ($q) {
                 $q->where('allow_paid_request', true)->orWhere('allow_unpaid_request', true);
