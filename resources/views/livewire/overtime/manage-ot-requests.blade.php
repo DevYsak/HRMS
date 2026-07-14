@@ -431,6 +431,46 @@
                             <p class="mt-2 text-sm leading-6 text-zinc-700 dark:text-zinc-300">{{ $selectedRequest->reviewer_comment }}</p>
                         </div>
                     @endif
+
+                    @if($selectedRequest->source === 'nexflow')
+                        <div class="rounded-xl border border-indigo-100 bg-white p-3 dark:border-indigo-500/20 dark:bg-zinc-950/50">
+                            <div class="flex items-center gap-1.5">
+                                <flux:icon.bolt class="size-3.5 text-indigo-500" />
+                                <p class="text-[11px] font-bold uppercase tracking-wide text-zinc-400">Nexflow status history</p>
+                            </div>
+                            @if(count($viewHistory))
+                                <ol class="mt-3 space-y-3">
+                                    @foreach($viewHistory as $h)
+                                        @php
+                                            $to = $h['to'] ?? '—';
+                                            [$dot, $txt] = match($to) {
+                                                'approved' => ['bg-emerald-500', 'text-emerald-600'],
+                                                'rejected' => ['bg-rose-500', 'text-rose-500'],
+                                                'pending'  => ['bg-amber-500', 'text-amber-600'],
+                                                default    => ['bg-zinc-400', 'text-zinc-500'],
+                                            };
+                                        @endphp
+                                        <li class="flex gap-3">
+                                            <span class="mt-1 size-2.5 shrink-0 rounded-full {{ $dot }}"></span>
+                                            <div class="min-w-0">
+                                                <p class="text-xs font-bold {{ $txt }}">
+                                                    @if($h['action'] === 'nexflow_ot_synced')
+                                                        Synced from Nexflow — {{ ucfirst($to) }}
+                                                    @else
+                                                        {{ ucfirst($h['from'] ?? '—') }} → {{ ucfirst($to) }}
+                                                    @endif
+                                                    @if($h['paid'])<span class="ml-1 rounded bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold text-amber-600">already paid</span>@endif
+                                                </p>
+                                                <p class="text-[11px] text-zinc-400">{{ $h['at'] }}</p>
+                                            </div>
+                                        </li>
+                                    @endforeach
+                                </ol>
+                            @else
+                                <p class="mt-2 text-xs text-zinc-400">No status changes recorded yet.</p>
+                            @endif
+                        </div>
+                    @endif
                 </div>
 
                 <div class="flex justify-end gap-3 border-t border-zinc-100 pt-2 dark:border-zinc-800">

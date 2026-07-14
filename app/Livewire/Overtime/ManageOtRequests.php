@@ -3,6 +3,7 @@
 namespace App\Livewire\Overtime;
 
 use App\Livewire\Concerns\HandlesClaimLock;
+use App\Models\AuditLog;
 use App\Models\OtRequest;
 use App\Notifications\OtRequestNotification;
 use App\Services\OvertimeService;
@@ -48,12 +49,38 @@ class ManageOtRequests extends Component
 
     public ?OtRequest $selectedRequest = null;
 
+    /** Status-change history for the OT being viewed (from the audit log). */
+    public array $viewHistory = [];
+
     public function openView(int $id): void
     {
         $this->checkOtPermission();
         $this->selectedRequest = OtRequest::with(['employee.user', 'employee.department', 'attendance', 'reviewer'])->findOrFail($id);
+        $this->viewHistory = $this->historyFor($id);
         $this->showViewModal = true;
         $this->dispatch('modal-show', name: 'view-ot-modal');
+    }
+
+    /**
+     * Build the status-change timeline for an OT request from the audit log
+     * (Nexflow sync + each re-decision), newest first.
+     *
+     * @return array<int, array{action: string, from: ?string, to: ?string, paid: ?bool, at: string}>
+     */
+    protected function historyFor(int $id): array
+    {
+        return AuditLog::where('auditable_type', OtRequest::class)
+            ->where('auditable_id', $id)
+            ->whereIn('action', ['nexflow_ot_synced', 'nexflow_ot_status_changed'])
+            ->orderByDesc('created_at')
+            ->get()
+            ->map(fn ($a) => [
+                'action' => $a->action,
+                'from' => $a->old_values['status'] ?? null,
+                'to' => $a->new_values['status'] ?? null,
+                'paid' => $a->new_values['already_paid'] ?? null,
+                'at' => $a->created_at?->format('d M Y, H:i'),
+            ])->all();
     }
 
     public function openEdit(int $id): void

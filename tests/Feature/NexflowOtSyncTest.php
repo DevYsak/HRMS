@@ -110,6 +110,30 @@ test('a status change in Nexflow is reconciled, voids the pay, and is recorded i
         ->and(OvertimeRecord::where('ot_request_id', $ot->id)->exists())->toBeTrue();
 });
 
+test('the OT view shows the Nexflow status-change history timeline', function () {
+    configureNexbridgeSync();
+    $admin = User::factory()->create(['role' => UserRole::SuperAdmin]);
+    Employee::factory()->create(['status' => 'active', 'user_id' => User::factory()->create(['email' => 'hist@x.com'])->id]);
+    $svc = app(OvertimeService::class);
+
+    Http::fake([
+        '*hist@x.com/ot-details*' => Http::sequence()
+            ->push(otDetailsPayload(17, 'approved'), 200)
+            ->push(otDetailsPayload(17, 'rejected'), 200),
+        '*' => Http::response(['ot_records' => []], 200),
+    ]);
+
+    $svc->syncNexflowOtDetails('2026-06-01', '2026-06-30');   // approved  → synced entry
+    $svc->syncNexflowOtDetails('2026-06-01', '2026-06-30');   // rejected  → status_changed entry
+    $ot = OtRequest::where('source', 'nexflow')->first();
+
+    Livewire::actingAs($admin)->test(ManageOtRequests::class)
+        ->call('openView', $ot->id)
+        ->assertSet('viewHistory', fn ($h) => count($h) === 2)   // synced + one change
+        ->assertSee('Nexflow status history')
+        ->assertSee('Approved → Rejected');
+});
+
 test('the Sync from Nexflow button on Manage OT pulls approved OT', function () {
     configureNexbridgeSync();
     $admin = User::factory()->create(['role' => UserRole::SuperAdmin]);
