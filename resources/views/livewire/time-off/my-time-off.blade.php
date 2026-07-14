@@ -237,6 +237,110 @@
             @endforeach
         </div>
     </div>
+
+    {{-- ─── TEAM AVAILABILITY · LEAVE PLANNER · UPCOMING HOLIDAYS ─── --}}
+    <div class="pulse-margin grid grid-cols-1 gap-4 lg:grid-cols-3">
+
+        {{-- Team Availability (today) --}}
+        <div class="rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <div class="mb-4 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <span class="rounded-lg bg-emerald-50 p-1.5 dark:bg-emerald-900/20"><flux:icon.users class="size-4 text-emerald-600 dark:text-emerald-400" /></span>
+                    <h3 class="text-xs font-black uppercase tracking-wider text-zinc-600 dark:text-zinc-300">Team Availability</h3>
+                </div>
+                <span class="text-[10px] font-semibold text-zinc-400">Today</span>
+            </div>
+            <div class="space-y-2.5">
+                @forelse($teamAvailability->take(6) as $dept)
+                    @php
+                        $statusLabel = $dept->on_leave > 0 ? $dept->on_leave.' on leave' : ($dept->wfh > 0 ? $dept->wfh.' WFH' : ($dept->half_day > 0 ? $dept->half_day.' half day' : 'Full Attendance'));
+                        $statusColor = $dept->on_leave > 0 ? 'text-rose-500' : ($dept->wfh > 0 ? 'text-blue-500' : ($dept->half_day > 0 ? 'text-amber-500' : 'text-emerald-500'));
+                    @endphp
+                    <div class="flex items-center justify-between gap-2 rounded-xl border border-zinc-100 px-3 py-2 dark:border-zinc-800">
+                        <div class="flex min-w-0 items-center gap-2">
+                            <span class="flex size-7 shrink-0 items-center justify-center rounded-lg bg-zinc-100 text-[10px] font-black uppercase text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">{{ strtoupper(substr($dept->dept, 0, 2)) }}</span>
+                            <div class="min-w-0">
+                                <p class="truncate text-xs font-bold text-zinc-700 dark:text-zinc-200">{{ $dept->dept }}</p>
+                                <p class="truncate text-[10px] font-semibold {{ $statusColor }}">{{ $statusLabel }}</p>
+                            </div>
+                        </div>
+                        <div class="flex shrink-0 items-center gap-1.5">
+                            <span class="text-[10px] font-semibold text-zinc-400">{{ $dept->present }}/{{ $dept->total }}</span>
+                            @if($dept->on_leave > 0)
+                                <span class="flex size-5 items-center justify-center rounded-full bg-rose-100 text-[9px] font-black text-rose-600 dark:bg-rose-900/30 dark:text-rose-400">{{ $dept->on_leave }}</span>
+                            @elseif($dept->half_day > 0)
+                                <span class="flex size-5 items-center justify-center rounded-full bg-amber-100 text-[9px] font-black text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">{{ $dept->half_day }}</span>
+                            @elseif($dept->wfh > 0)
+                                <span class="flex size-5 items-center justify-center rounded-full bg-blue-100 text-[9px] font-black text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">{{ $dept->wfh }}</span>
+                            @else
+                                <flux:icon.check-circle class="size-4 text-emerald-500" />
+                            @endif
+                        </div>
+                    </div>
+                @empty
+                    <p class="py-6 text-center text-xs text-zinc-400">No team data available.</p>
+                @endforelse
+            </div>
+        </div>
+
+        {{-- Leave Planner (reuses existing weekend/holiday leave rules) --}}
+        <div class="rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <div class="mb-4 flex items-center gap-2">
+                <span class="rounded-lg bg-orange-50 p-1.5 dark:bg-orange-900/20"><flux:icon.calendar-days class="size-4 text-orange-600 dark:text-orange-400" /></span>
+                <h3 class="text-xs font-black uppercase tracking-wider text-zinc-600 dark:text-zinc-300">Leave Planner</h3>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <flux:input wire:model.live="planner_start" type="date" label="Start Date" />
+                <flux:input wire:model.live="planner_end" type="date" label="End Date" />
+            </div>
+            <div class="mt-3 rounded-xl border border-zinc-100 bg-zinc-50/60 p-3 dark:border-zinc-800 dark:bg-zinc-800/30">
+                @if($plannerResult)
+                    <p class="mb-2 text-[10px] font-black uppercase tracking-wide text-zinc-400">Leave Summary</p>
+                    <div class="space-y-1.5 text-xs">
+                        <div class="flex justify-between"><span class="text-zinc-500 dark:text-zinc-400">Total Days</span><span class="font-bold text-zinc-800 dark:text-zinc-200">{{ $plannerResult['total'] }} Days</span></div>
+                        <div class="flex justify-between"><span class="text-zinc-500 dark:text-zinc-400">Weekends Included</span><span class="font-bold text-zinc-800 dark:text-zinc-200">{{ $plannerResult['weekend'] }} Day(s)</span></div>
+                        <div class="flex justify-between"><span class="text-zinc-500 dark:text-zinc-400">Holidays Included</span><span class="font-bold text-zinc-800 dark:text-zinc-200">{{ $plannerResult['holidays'] }} Day(s)</span></div>
+                        <div class="flex justify-between border-t border-zinc-200 pt-1.5 dark:border-zinc-700"><span class="font-semibold text-zinc-600 dark:text-zinc-300">Total Leave Days</span><span class="font-black text-orange-600 dark:text-orange-400">{{ $plannerResult['leaveDays'] }} Days</span></div>
+                        <div class="flex justify-between"><span class="text-emerald-600 dark:text-emerald-400">Remaining After Leave</span><span class="font-black text-emerald-600 dark:text-emerald-400">{{ $fmt($plannerResult['remaining']) }} Days</span></div>
+                    </div>
+                @else
+                    <p class="py-4 text-center text-[11px] text-zinc-400">Pick a start and end date to see the leave breakdown.</p>
+                @endif
+            </div>
+            <button type="button" wire:click="applyFromPlanner" @disabled(! $plannerResult)
+                class="mt-3 w-full rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50">
+                Check &amp; Apply Leave
+            </button>
+        </div>
+
+        {{-- Upcoming Holidays timeline --}}
+        <div class="rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <div class="mb-4 flex items-center gap-2">
+                <span class="rounded-lg bg-rose-50 p-1.5 dark:bg-rose-900/20"><flux:icon.flag class="size-4 text-rose-600 dark:text-rose-400" /></span>
+                <h3 class="text-xs font-black uppercase tracking-wider text-zinc-600 dark:text-zinc-300">Upcoming Holidays</h3>
+            </div>
+            <div class="space-y-3">
+                @forelse($upcomingHolidays->take(6) as $holiday)
+                    @php $daysLeft = (int) now()->startOfDay()->diffInDays($holiday->date->copy()->startOfDay()); @endphp
+                    <div class="flex items-center gap-3">
+                        <div class="flex size-11 shrink-0 flex-col items-center justify-center rounded-xl bg-zinc-50 dark:bg-zinc-800">
+                            <span class="text-sm font-black leading-none text-zinc-800 dark:text-zinc-100">{{ $holiday->date->format('d') }}</span>
+                            <span class="text-[9px] font-bold uppercase text-zinc-400">{{ $holiday->date->format('M') }}</span>
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <p class="truncate text-xs font-bold text-zinc-700 dark:text-zinc-200">{{ $holiday->name }}</p>
+                            <p class="truncate text-[10px] text-zinc-400">{{ $holiday->date->format('l') }}</p>
+                        </div>
+                        <span class="shrink-0 rounded-full bg-orange-50 px-2 py-0.5 text-[9px] font-bold text-orange-600 dark:bg-orange-900/20 dark:text-orange-400">
+                            {{ $daysLeft <= 0 ? 'Today' : 'In '.$daysLeft.'d' }}
+                        </span>
+                    </div>
+                @empty
+                    <p class="py-6 text-center text-xs text-zinc-400">No upcoming holidays.</p>
+                @endforelse
+            </div>
+        </div>
+    </div>
     {{-- â"€â"€â"€ LEAVE STATISTICS (KPI) SECTION â"€â"€â"€ --}}
     @php
         $totalAllocated = (float) $balances->sum('allocated_days');
