@@ -211,4 +211,49 @@
         </div>
     </div>
 
+    {{-- ═══════════════ RECENT NEW REQUESTS (latest incoming, all categories) ═══════════════ --}}
+    @php
+        $typeStyles = [
+            'Regularization' => ['pencil-square', '#F97316'],
+            'Leave' => ['calendar-days', '#8b5cf6'],
+            'WFH' => ['home', '#3b82f6'],
+            'Overtime' => ['bolt', '#f59e0b'],
+            'Holiday Work' => ['briefcase', '#14b8a6'],
+        ];
+    @endphp
+    <div class="rounded-2xl border border-orange-100/70 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <div class="flex items-center justify-between gap-3 border-b border-orange-100/70 px-5 py-3 dark:border-zinc-800">
+            <h3 class="flex items-center gap-2 text-sm font-black text-zinc-900 dark:text-white">
+                <span class="inline-flex size-7 items-center justify-center rounded-lg bg-orange-50 text-orange-500 dark:bg-orange-900/20"><flux:icon.sparkles class="size-4" /></span>
+                Recent New Requests
+                <span class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">· latest incoming</span>
+            </h3>
+            <span class="text-[10px] font-bold uppercase tracking-wide text-zinc-400">{{ count($incoming) }} new</span>
+        </div>
+        @if(count($incoming) > 0)
+            <div class="grid grid-cols-1 gap-px bg-orange-50 dark:bg-zinc-800/60 sm:grid-cols-2">
+                @foreach($incoming as $row)
+                    @php [$rIcon, $rColor] = $typeStyles[$row['type']] ?? ['inbox', '#71717a']; @endphp
+                    <button type="button" wire:click="$set('tab', '{{ $row['tab'] }}')"
+                        class="group flex items-center gap-3 bg-white px-5 py-3 text-left transition hover:bg-orange-50/50 dark:bg-zinc-900 dark:hover:bg-zinc-800/40">
+                        <span class="inline-flex size-9 shrink-0 items-center justify-center rounded-xl" style="background: {{ $rColor }}1a; color: {{ $rColor }};"><flux:icon :icon="$rIcon" class="size-4.5" /></span>
+                        <div class="min-w-0 flex-1">
+                            <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                                <span class="text-xs font-black text-zinc-900 dark:text-white">{{ $row['employee'] }}</span>
+                                <span class="rounded-full px-1.5 py-0.5 text-[9px] font-bold" style="background: {{ $rColor }}1a; color: {{ $rColor }};">{{ $row['type'] }}</span>
+                            </div>
+                            <p class="mt-0.5 truncate text-[11px] text-zinc-500 dark:text-zinc-400">{{ $row['detail'] }}</p>
+                        </div>
+                        <div class="shrink-0 text-right">
+                            <p class="text-[10px] font-semibold text-zinc-400">{{ $row['at'] ? \Carbon\Carbon::parse($row['at'])->diffForHumans(short: true) : '' }}</p>
+                            <span class="text-[10px] font-bold text-zinc-300 transition group-hover:text-orange-500">Review →</span>
+                        </div>
+                    </button>
+                @endforeach
+            </div>
+        @else
+            <div class="py-10 text-center text-sm text-zinc-400"><flux:icon.inbox class="mx-auto mb-2 size-8 text-zinc-200 dark:text-zinc-700" /> No new requests waiting.</div>
+        @endif
+    </div>
+
 </flux:main>

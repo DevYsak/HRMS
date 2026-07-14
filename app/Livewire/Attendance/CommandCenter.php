@@ -346,6 +346,29 @@ class CommandCenter extends Component
             ->all();
     }
 
+    /** Newest still-pending requests across all categories, newest first. */
+    protected function recentIncoming(): array
+    {
+        $map = fn ($rows, string $type, string $tab, callable $detail) => $rows->map(fn ($r) => [
+            'type' => $type,
+            'tab' => $tab,
+            'employee' => $r->employee?->user?->name ?? '—',
+            'detail' => $detail($r),
+            'at' => $r->created_at,
+        ]);
+
+        return collect()
+            ->concat($map(AttendanceRegularisation::with('employee.user')->where('status', 'pending')->latest()->limit(6)->get(), 'Regularization', 'regularisation', fn ($r) => Carbon::parse($r->work_date)->format('d M Y')))
+            ->concat($map(LeaveRequest::with(['employee.user', 'leaveType'])->where('status', 'pending')->latest()->limit(6)->get(), 'Leave', 'leave', fn ($r) => ($r->leaveType?->name ?? 'Leave').' · '.$r->days.'d'))
+            ->concat($map(WfhRequest::with('employee.user')->where('status', 'pending')->latest()->limit(6)->get(), 'WFH', 'wfh', fn ($r) => Carbon::parse($r->start_date)->format('d M').' – '.Carbon::parse($r->end_date)->format('d M')))
+            ->concat($map(OtRequest::with('employee.user')->where('status', 'pending')->latest()->limit(6)->get(), 'Overtime', 'overtime', fn ($r) => 'OT '.$r->requested_hours.'h'))
+            ->concat($map(HolidayWorkRequest::with(['employee.user', 'holiday'])->where('status', 'pending')->latest()->limit(6)->get(), 'Holiday Work', 'holiday', fn ($r) => 'Work on '.($r->holiday?->name ?? 'holiday')))
+            ->sortByDesc('at')
+            ->take(10)
+            ->values()
+            ->all();
+    }
+
     public function exportPending()
     {
         abort_unless(Auth::user()->canApproveLeave(), 403);
@@ -386,6 +409,7 @@ class CommandCenter extends Component
             'decided' => $decided,
             'items' => $this->pendingQuery()->limit(50)->get()->map(fn ($i) => $this->normalise($i))->all(),
             'feed' => $this->activityFeed(),
+            'incoming' => $this->recentIncoming(),
         ])->layout('layouts.app', ['title' => 'Attendance Command Center']);
     }
 }
