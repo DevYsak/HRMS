@@ -225,10 +225,52 @@
                             <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
                                 <flux:input wire:model="name" label="Full Name" icon="user" required />
                                 <flux:input wire:model="email" type="email" label="Email Address" icon="envelope" required />
-                                <x-clean-select model="roleId" label="System Role" :live="false"
+                                <x-clean-select model="roleId" label="System Role" :live="true"
                                     :options="$roles->map(fn ($roleOption) => ['value' => $roleOption->id, 'label' => $roleOption->name])->all()" />
                                 <flux:input wire:model="employee_id" label="Employee ID" icon="identification" placeholder="CNX-0001" required />
                             </div>
+
+                            {{-- HR/manager access scope — only for approver roles --}}
+                            @php $selectedBucket = optional($roles->firstWhere('id', (int) $roleId))->legacyBucket()?->value; @endphp
+                            @if(in_array($selectedBucket, ['hr_admin', 'manager'], true))
+                                <div class="rounded-2xl border border-orange-200/70 bg-orange-50/40 p-5 dark:border-orange-500/20 dark:bg-orange-500/5">
+                                    <div class="mb-1 flex items-center gap-2 text-sm font-bold text-zinc-800 dark:text-zinc-100">
+                                        <flux:icon.shield-check class="size-4 text-orange-500" /> Attendance Access Scope
+                                    </div>
+                                    <p class="mb-4 text-xs text-zinc-500 dark:text-zinc-400">Leave both empty for <b>company-wide</b> access. Pick departments and/or shifts to limit what this approver sees and can approve — so two HR admins can own different departments, or split by shift.</p>
+
+                                    <div class="mb-4">
+                                        <div class="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-zinc-400">Departments</div>
+                                        <div class="flex flex-wrap gap-2">
+                                            @foreach($departments as $dept)
+                                                <label class="cursor-pointer">
+                                                    <input type="checkbox" wire:model.live="scopeDepartments" value="{{ $dept->id }}" class="peer sr-only">
+                                                    <span class="inline-flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-600 transition peer-checked:border-orange-400 peer-checked:bg-orange-500 peer-checked:text-white dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">{{ $dept->name }}</span>
+                                                </label>
+                                            @endforeach
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <div class="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-zinc-400">Shifts</div>
+                                        <div class="flex flex-wrap gap-2">
+                                            @foreach($shifts as $sh)
+                                                <label class="cursor-pointer">
+                                                    <input type="checkbox" wire:model.live="scopeShifts" value="{{ $sh->id }}" class="peer sr-only">
+                                                    <span class="inline-flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-600 transition peer-checked:border-orange-400 peer-checked:bg-orange-500 peer-checked:text-white dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">{{ $sh->name }}</span>
+                                                </label>
+                                            @endforeach
+                                        </div>
+                                    </div>
+
+                                    <div class="mt-4 flex items-center gap-1.5 text-xs font-semibold {{ empty($scopeDepartments) && empty($scopeShifts) ? 'text-emerald-600' : 'text-orange-600' }}">
+                                        <flux:icon.information-circle class="size-3.5" />
+                                        {{ empty($scopeDepartments) && empty($scopeShifts)
+                                            ? 'Company-wide — this approver sees every employee.'
+                                            : 'Scoped — sees only '.(count($scopeDepartments) ? count($scopeDepartments).' dept(s)' : 'all depts').(count($scopeShifts) ? ' · '.count($scopeShifts).' shift(s)' : '').'.' }}
+                                    </div>
+                                </div>
+                            @endif
                             <div class="flex items-center gap-2 rounded-xl bg-indigo-50 px-4 py-3 text-sm text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-300">
                                 <flux:icon.information-circle class="size-4 shrink-0" />
                                 These details are used for system access and employee identification.

@@ -131,6 +131,15 @@
                     ['value' => 'remote', 'label' => 'Remote'],
                     ['value' => 'absent', 'label' => 'Absent'],
                 ]" />
+            {{-- Date range — filter the punch logs for an arbitrary span --}}
+            <div class="flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2 py-1" title="Filter logs by date range">
+                <flux:icon.calendar-days class="size-3.5 text-zinc-400" />
+                <input type="date" wire:model.live="dateFrom" max="{{ now()->toDateString() }}" aria-label="From date"
+                    class="w-[7.5rem] border-0 bg-transparent p-0.5 text-xs font-semibold tabular-nums text-zinc-600 dark:text-zinc-300 focus:ring-0">
+                <span class="text-zinc-300">–</span>
+                <input type="date" wire:model.live="dateTo" max="{{ now()->toDateString() }}" aria-label="To date"
+                    class="w-[7.5rem] border-0 bg-transparent p-0.5 text-xs font-semibold tabular-nums text-zinc-600 dark:text-zinc-300 focus:ring-0">
+            </div>
             @if($search || $date || $status)
                 <button wire:click="$set('search','');$set('date','');$set('status','')" class="inline-flex items-center gap-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 px-2.5 py-1.5 text-xs font-bold text-zinc-500 dark:text-zinc-400 transition hover:bg-zinc-200"><flux:icon.x-mark class="size-3.5" /> Reset</button>
             @endif
@@ -306,19 +315,61 @@ EMPLOYEE 360 DRAWER (480px, right)
                     @endif
                 </div>
 
-                {{-- Today's timeline --}}
+                {{-- Processed timeline (single source of truth) + raw device audit log --}}
                 @if(! empty($drawer['punches']))
-                    <div class="rounded-2xl border border-orange-100/70 bg-white dark:bg-zinc-900 p-4 shadow-sm">
-                        <div class="mb-2 text-[10px] font-bold uppercase tracking-widest text-zinc-400">Today's Punches · {{ count($drawer['punches']) }}</div>
+                    <div class="rounded-2xl border border-orange-100/70 bg-white dark:bg-zinc-900 p-4 shadow-sm" x-data="{ showRaw: false }">
+                        <div class="mb-2 flex items-center justify-between">
+                            <span class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Processed Timeline · {{ $drawer['punch_count'] ?? count($drawer['punches']) }} punches</span>
+                            @if(! empty($drawer['needs_regularization']))<span class="rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-bold uppercase text-amber-700">Needs Regularization</span>@endif
+                        </div>
+                        @if(! empty($drawer['punches_partial']))
+                            <div class="mb-2 flex items-center gap-1.5 rounded-lg bg-amber-50 px-2.5 py-1 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
+                                <flux:icon.information-circle class="size-3.5" /> Partial local stream — full stream in the v2 dashboard.
+                            </div>
+                        @endif
                         <div class="max-h-36 space-y-1 overflow-y-auto">
                             @foreach($drawer['punches'] as $p)
-                                <div class="flex items-center gap-2 rounded-lg bg-zinc-50/70 px-2.5 py-1 text-xs">
-                                    <flux:icon :icon="$p['icon']" class="size-3.5 text-orange-400" />
+                                @php $isMiss = ($p['type'] ?? '') === 'missing'; @endphp
+                                <div class="flex items-center gap-2 rounded-lg {{ $isMiss ? 'bg-amber-50 dark:bg-amber-500/10' : 'bg-zinc-50/70 dark:bg-zinc-800/40' }} px-2.5 py-1 text-xs">
+                                    <flux:icon :icon="$p['icon']" class="size-3.5 {{ $isMiss ? 'text-amber-500' : 'text-orange-400' }}" />
                                     <span class="font-black tabular-nums text-zinc-800 dark:text-zinc-100">{{ $p['time'] }}</span>
-                                    <span class="text-[10px] text-zinc-400">{{ $p['method'] ?? 'Punch' }}</span>
+                                    <span class="rounded-full px-1.5 py-0.5 text-[9px] font-bold {{ $isMiss ? 'bg-amber-100 text-amber-700' : (($p['dir'] ?? '') === 'IN' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700') }}">{{ $isMiss ? 'MISSING '.$p['dir'] : $p['dir'] }}</span>
+                                    <span class="text-[10px] text-zinc-400">{{ $p['method'] ?? '' }}</span>
                                 </div>
                             @endforeach
                         </div>
+                        {{-- Validated sessions --}}
+                        @if(! empty($drawer['sessions']))
+                            <div class="mt-2 border-t border-zinc-100 dark:border-zinc-800 pt-2 space-y-0.5">
+                                @foreach($drawer['sessions'] as $s)
+                                    <div class="flex items-center justify-between text-[10px] {{ ! empty($s['missing']) ? 'text-amber-600 font-semibold' : 'text-zinc-500 dark:text-zinc-400' }}">
+                                        <span>Session {{ $s['index'] }} · {{ $s['in'] ?? '⚠' }} → {{ $s['out'] ?? (! empty($s['live']) ? 'now' : '⚠') }}</span>
+                                        <span class="font-bold">{{ $s['label'] }}{{ ! empty($s['live']) ? ' · live' : '' }}</span>
+                                    </div>
+                                @endforeach
+                            </div>
+                        @endif
+                        {{-- Raw device log — audit only --}}
+                        @if(! empty($drawer['raw_punches']))
+                            <button type="button" @click="showRaw = !showRaw" class="mt-2 flex w-full items-center justify-between border-t border-zinc-100 dark:border-zinc-800 pt-2 text-[10px] font-bold uppercase tracking-widest text-zinc-400 hover:text-orange-500">
+                                <span>Raw device log · {{ count($drawer['raw_punches']) }} events
+                                    @if(($drawer['duplicate_count'] ?? 0) + ($drawer['conflict_count'] ?? 0) > 0)
+                                        <span class="ml-1 normal-case tracking-normal font-semibold text-zinc-400">({{ $drawer['duplicate_count'] }} dup · {{ $drawer['conflict_count'] }} retry merged)</span>
+                                    @endif
+                                </span>
+                                <flux:icon.chevron-down class="size-3.5" ::class="showRaw ? 'rotate-180' : ''" />
+                            </button>
+                            <div x-show="showRaw" x-collapse class="mt-1 max-h-40 space-y-0.5 overflow-y-auto">
+                                @foreach($drawer['raw_punches'] as $rp)
+                                    <div class="flex items-center gap-2 rounded px-2 py-1 text-[10px] {{ $rp['flag'] === 'kept' ? 'bg-zinc-50/60 dark:bg-zinc-800/30' : 'bg-zinc-50/30 dark:bg-zinc-800/10 opacity-60' }}" @if($rp['note']) title="{{ $rp['note'] }}" @endif>
+                                        <span class="font-mono font-bold tabular-nums text-zinc-700 dark:text-zinc-200">{{ $rp['time'] }}</span>
+                                        @if($rp['direction'])<span class="uppercase text-zinc-400">{{ $rp['direction'] }}</span>@endif
+                                        <span class="text-zinc-400">{{ $rp['method'] }}</span>
+                                        <span class="ml-auto rounded-full px-1.5 py-0.5 text-[8px] font-bold uppercase {{ $rp['flag'] === 'kept' ? 'bg-emerald-100 text-emerald-700' : ($rp['flag'] === 'retry' ? 'bg-violet-100 text-violet-700' : 'bg-zinc-200 text-zinc-500 dark:bg-zinc-700 dark:text-zinc-300') }}">{{ $rp['flag'] }}</span>
+                                    </div>
+                                @endforeach
+                            </div>
+                        @endif
                     </div>
                 @endif
 
@@ -331,14 +382,23 @@ EMPLOYEE 360 DRAWER (480px, right)
                                 <div class="rounded-xl border border-amber-200/70 bg-white/80 dark:bg-zinc-900/80 p-2.5">
                                     <div class="flex items-center justify-between text-xs">
                                         <span class="font-black text-zinc-900 dark:text-white">{{ $pr['date'] }}</span>
-                                        <span class="font-mono font-bold text-amber-700">{{ $pr['window'] }}</span>
+                                        <span class="flex items-center gap-1.5">
+                                            @if(! empty($pr['stage']))<span class="rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-700">{{ $pr['stage'] }}</span>@endif
+                                            <span class="font-mono font-bold text-amber-700">{{ $pr['window'] }}</span>
+                                        </span>
                                     </div>
                                     <p class="mt-0.5 truncate text-[10px] italic text-zinc-400">“{{ $pr['reason'] }}”</p>
-                                    <div class="mt-1.5 flex gap-1.5">
-                                        <button wire:click="quickApproveRegularisation({{ $pr['id'] }})" class="inline-flex items-center gap-1 rounded-lg bg-emerald-500 px-2.5 py-1 text-[10px] font-bold text-white transition hover:bg-emerald-600"><flux:icon.check class="size-3" /> Approve</button>
-                                        <button wire:click="openReviewModal({{ $pr['id'] }})" class="inline-flex items-center gap-1 rounded-lg bg-rose-500 px-2.5 py-1 text-[10px] font-bold text-white transition hover:bg-rose-600"><flux:icon.x-mark class="size-3" /> Reject</button>
-                                        <button wire:click="openReviewModal({{ $pr['id'] }})" class="inline-flex items-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1 text-[10px] font-bold text-zinc-600 dark:text-zinc-300 transition hover:bg-zinc-50 dark:bg-zinc-800/50"><flux:icon.pencil-square class="size-3" /> Edit</button>
-                                    </div>
+                                    @if(! empty($pr['handled_by']))
+                                        <div class="mt-1.5 inline-flex items-center gap-1.5 rounded-lg bg-sky-50 px-2.5 py-1 text-[10px] font-bold text-sky-700 dark:bg-sky-500/10 dark:text-sky-400">
+                                            <flux:icon.lock-closed class="size-3" /> Being handled by {{ $pr['handled_by'] }}
+                                        </div>
+                                    @else
+                                        <div class="mt-1.5 flex gap-1.5">
+                                            <button wire:click="quickApproveRegularisation({{ $pr['id'] }})" class="inline-flex items-center gap-1 rounded-lg bg-emerald-500 px-2.5 py-1 text-[10px] font-bold text-white transition hover:bg-emerald-600"><flux:icon.check class="size-3" /> Approve</button>
+                                            <button wire:click="openReviewModal({{ $pr['id'] }})" class="inline-flex items-center gap-1 rounded-lg bg-rose-500 px-2.5 py-1 text-[10px] font-bold text-white transition hover:bg-rose-600"><flux:icon.x-mark class="size-3" /> Reject</button>
+                                            <button wire:click="openReviewModal({{ $pr['id'] }})" class="inline-flex items-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1 text-[10px] font-bold text-zinc-600 dark:text-zinc-300 transition hover:bg-zinc-50 dark:bg-zinc-800/50"><flux:icon.pencil-square class="size-3" /> Edit</button>
+                                        </div>
+                                    @endif
                                 </div>
                             @endforeach
                         </div>
@@ -361,10 +421,18 @@ EMPLOYEE 360 DRAWER (480px, right)
                     </div>
                 </div>
 
-                {{-- Attendance history --}}
-                <div class="rounded-2xl border border-orange-100/70 bg-white dark:bg-zinc-900 p-4 shadow-sm">
-                    <div class="mb-2 text-[10px] font-bold uppercase tracking-widest text-zinc-400">Attendance History · last 7</div>
-                    <div class="space-y-1">
+                {{-- Attendance history — Daily / Weekly toggle --}}
+                <div class="rounded-2xl border border-orange-100/70 bg-white dark:bg-zinc-900 p-4 shadow-sm" x-data="{ tab: 'daily' }">
+                    <div class="mb-2 flex items-center justify-between">
+                        <div class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Attendance History</div>
+                        <div class="flex items-center gap-0.5 rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800">
+                            <button type="button" @click="tab = 'daily'" :class="tab === 'daily' ? 'bg-white text-zinc-800 shadow-sm dark:bg-zinc-700 dark:text-white' : 'text-zinc-400'" class="rounded-md px-2 py-0.5 text-[10px] font-bold transition">Daily</button>
+                            <button type="button" @click="tab = 'weekly'" :class="tab === 'weekly' ? 'bg-white text-zinc-800 shadow-sm dark:bg-zinc-700 dark:text-white' : 'text-zinc-400'" class="rounded-md px-2 py-0.5 text-[10px] font-bold transition">Weekly</button>
+                        </div>
+                    </div>
+
+                    {{-- Daily (last 7 days) --}}
+                    <div x-show="tab === 'daily'" class="space-y-1">
                         @forelse($drawer['history'] as $h)
                             @php $hc = match($h['status']) { 'on_time' => 'text-emerald-600', 'late' => 'text-amber-600', default => 'text-zinc-400' }; @endphp
                             <div class="flex items-center justify-between rounded-lg px-2 py-1 text-[11px] odd:bg-orange-50/40">
@@ -372,6 +440,18 @@ EMPLOYEE 360 DRAWER (480px, right)
                                 <span class="font-mono tabular-nums text-zinc-600 dark:text-zinc-300">{{ $h['in'] ?? '—' }} → {{ $h['out'] ?? '—' }}</span>
                                 <span class="font-black tabular-nums text-zinc-800 dark:text-zinc-100">{{ $h['hours'] ? number_format((float) $h['hours'], 1).'h' : '—' }}</span>
                                 <span class="text-[9px] font-bold uppercase {{ $hc }}">{{ str_replace('_', ' ', $h['status']) }}</span>
+                            </div>
+                        @empty<p class="text-[10px] text-zinc-400">No records this month.</p>@endforelse
+                    </div>
+
+                    {{-- Weekly rollup (this month) --}}
+                    <div x-show="tab === 'weekly'" x-cloak class="space-y-1">
+                        @forelse($drawer['weekly_history'] as $w)
+                            <div class="flex items-center justify-between rounded-lg px-2 py-1 text-[11px] odd:bg-orange-50/40">
+                                <span class="font-bold text-zinc-700 dark:text-zinc-200">{{ $w['label'] }}</span>
+                                <span class="tabular-nums text-zinc-500 dark:text-zinc-400">{{ $w['present'] }}d present</span>
+                                <span class="font-black tabular-nums text-zinc-800 dark:text-zinc-100">{{ number_format((float) $w['hours'], 1) }}h</span>
+                                <span class="text-[9px] font-bold uppercase {{ $w['late'] > 0 ? 'text-amber-600' : 'text-emerald-600' }}">{{ $w['late'] }} late</span>
                             </div>
                         @empty<p class="text-[10px] text-zinc-400">No records this month.</p>@endforelse
                     </div>
@@ -386,10 +466,10 @@ REVIEW REGULARISATION MODAL
 ══════════════════════════════════════════ --}}
 @if($showReviewModal)
     <div class="fixed inset-0 z-50 flex items-center justify-center p-4"
-         x-data x-on:keydown.escape.window="$wire.set('showReviewModal', false)">
-        <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="$wire.set('showReviewModal', false)"></div>
+         x-data x-on:keydown.escape.window="$wire.closeReviewModal()">
+        <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="$wire.closeReviewModal()"></div>
         <div class="relative max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white dark:bg-zinc-900 p-6 shadow-xl ring ring-black/5">
-            <button type="button" @click="$wire.set('showReviewModal', false)" class="absolute right-4 top-4 text-zinc-400 transition-colors hover:text-zinc-600 dark:text-zinc-300">
+            <button type="button" @click="$wire.closeReviewModal()" class="absolute right-4 top-4 text-zinc-400 transition-colors hover:text-zinc-600 dark:text-zinc-300">
                 <flux:icon.x-mark class="size-5" />
             </button>
 
@@ -423,6 +503,33 @@ REVIEW REGULARISATION MODAL
                             <p class="mb-1 text-[10px] uppercase tracking-wider text-zinc-400">Reason</p>
                             <p class="text-xs italic text-zinc-700 dark:text-zinc-200">"{{ $activeRequest->reason }}"</p>
                         </div>
+                        @if($activeRequest->attachment_path)
+                            <div class="flex items-center justify-between border-t border-orange-100 pt-2">
+                                <span class="text-[10px] uppercase tracking-wider text-zinc-400">Attachment</span>
+                                <a href="{{ \Illuminate\Support\Facades\Storage::url($activeRequest->attachment_path) }}" target="_blank" rel="noopener" class="inline-flex items-center gap-1 text-xs font-bold text-orange-600 hover:underline"><flux:icon.paper-clip class="size-3.5" /> View document</a>
+                            </div>
+                        @endif
+                        {{-- Approval chain progress --}}
+                        <div class="border-t border-orange-100 pt-2">
+                            <p class="mb-1.5 text-[10px] uppercase tracking-wider text-zinc-400">Approval Flow · currently at <b class="text-orange-600">{{ $activeRequest->stageLabel() }}</b></p>
+                            @php $stageNum = \App\Models\AttendanceRegularisation::STAGES[$activeRequest->stage ?? 'manager_review'] ?? 1; @endphp
+                            <div class="flex items-center gap-1.5">
+                                @foreach(['Manager', 'HR', 'Admin'] as $i => $st)
+                                    <span class="flex-1 rounded-full px-2 py-1 text-center text-[10px] font-bold {{ $activeRequest->status === 'approved' || $stageNum > $i + 1 ? 'bg-emerald-100 text-emerald-700' : ($stageNum === $i + 1 && $activeRequest->status === 'pending' ? 'bg-orange-100 text-orange-700 ring-1 ring-orange-300' : 'bg-zinc-100 text-zinc-400 dark:bg-zinc-800') }}">{{ $st }}</span>
+                                    @if($i < 2)<flux:icon.chevron-right class="size-3 shrink-0 text-zinc-300" />@endif
+                                @endforeach
+                            </div>
+                            @if(! empty($activeRequest->approval_trail))
+                                <div class="mt-2 space-y-1">
+                                    @foreach($activeRequest->approval_trail as $step)
+                                        <div class="flex items-center gap-1.5 text-[10px] text-zinc-500 dark:text-zinc-400">
+                                            <flux:icon :icon="($step['action'] ?? '') === 'approved' ? 'check-circle' : 'x-circle'" class="size-3 {{ ($step['action'] ?? '') === 'approved' ? 'text-emerald-500' : 'text-rose-500' }}" />
+                                            <b>{{ $step['name'] ?? 'Reviewer' }}</b> {{ $step['action'] ?? '' }} at {{ str_replace('_', ' ', $step['stage'] ?? '') }} · {{ \Carbon\Carbon::parse($step['at'])->format('d M h:i A') }}
+                                        </div>
+                                    @endforeach
+                                </div>
+                            @endif
+                        </div>
                     </div>
                     <flux:textarea wire:model="reviewComment"
                         label="{{ $regularisationLocked ? 'Comment (Required for Override)' : 'HR Comment (Required for Rejection)' }}"
@@ -431,7 +538,7 @@ REVIEW REGULARISATION MODAL
                         <p class="text-xs text-red-500">{{ $message }}</p>
                     @enderror
                     <div class="flex justify-end gap-2 border-t border-zinc-100 dark:border-zinc-800 pt-3">
-                        <button type="button" @click="$wire.set('showReviewModal', false)" class="rounded-xl border border-zinc-200 dark:border-zinc-800 px-4 py-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300 transition-colors hover:bg-zinc-50 dark:bg-zinc-800/50">Cancel</button>
+                        <button type="button" @click="$wire.closeReviewModal()" class="rounded-xl border border-zinc-200 dark:border-zinc-800 px-4 py-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300 transition-colors hover:bg-zinc-50 dark:bg-zinc-800/50">Cancel</button>
                         <flux:button wire:click="rejectRegularisation" variant="ghost" class="!text-red-600 hover:!bg-red-50">Reject</flux:button>
                         <flux:button wire:click="approveRegularisation" variant="primary">Approve</flux:button>
                     </div>

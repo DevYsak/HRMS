@@ -19,6 +19,12 @@ Schedule::command('hrms:escalate-leaves')
     ->withoutOverlapping()
     ->runInBackground();
 
+// Release approval claim-locks idle for 2+ hours (multi-HR routing) → hourly
+Schedule::command('hrms:release-stale-claims')
+    ->hourly()
+    ->withoutOverlapping()
+    ->runInBackground();
+
 // Flag today's missing check-outs → 21:00 IST (IT shift ends 19:30 + 1 hr buffer; spec §7)
 Schedule::command('hrms:flag-missing-checkouts')
     ->dailyAt('21:00')
@@ -67,9 +73,16 @@ Schedule::command('hrms:check-newhire-checkin')
     ->withoutOverlapping()
     ->runInBackground();
 
-// Notify employees + managers if QBR review due within 7 days → Monday 09:00
-Schedule::command('hrms:send-review-reminders')
+// Nudge reviewers with pending multi-reviewer submissions → Monday 09:00
+// (legacy hrms:send-review-reminders retired with the ReviewCycle cutover)
+Schedule::command('hrms:remind-review-participants')
     ->weeklyOn(1, '09:00')
+    ->withoutOverlapping()
+    ->runInBackground();
+
+// Remind HR to open the July increment cycle → June 1, 09:00
+Schedule::command('hrms:open-increment-cycle-reminder')
+    ->yearlyOn(6, 1, '09:00')
     ->withoutOverlapping()
     ->runInBackground();
 

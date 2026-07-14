@@ -18,7 +18,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
     'check_in_lat', 'check_in_lng', 'check_out_lat', 'check_out_lng',
     'break_start', 'break_end', 'break_minutes',
     'status', 'work_mode', 'is_late', 'late_minutes',
-    'is_verified', 'missing_checkout', 'excess_break_flag', 'total_hours', 'notes',
+    'is_verified', 'is_regularized', 'missing_checkout', 'excess_break_flag', 'total_hours', 'notes',
 ])]
 class Attendance extends Model
 {
@@ -32,6 +32,7 @@ class Attendance extends Model
             'break_end' => 'datetime',
             'is_verified' => 'boolean',
             'is_late' => 'boolean',
+            'is_regularized' => 'boolean',
             'missing_checkout' => 'boolean',
         ];
     }
@@ -43,7 +44,9 @@ class Attendance extends Model
 
     public function regularisation(): HasOne
     {
-        return $this->hasOne(AttendanceRegularisation::class);
+        // Latest request for the day, so a re-submitted/approved one wins over
+        // an earlier rejected attempt.
+        return $this->hasOne(AttendanceRegularisation::class)->latestOfMany();
     }
 
     public function breakLogs(): HasMany

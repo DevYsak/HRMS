@@ -61,6 +61,23 @@ function giveBalance(Employee $employee, LeaveType $type, float $days): LeaveBal
     ]);
 }
 
+// ─── Sandwich policy ──────────────────────────────────────────────────────────
+
+it('applies the sandwich rule only when the leave meets the configured minimum days', function () {
+    $svc = app(LeaveService::class);
+    $fri = Carbon::parse('2026-01-02'); // Friday
+    $mon = Carbon::parse('2026-01-05'); // Monday — 4 calendar days incl. the weekend
+
+    // Threshold 0 = legacy "always sandwich when enabled" → counts all 4 days.
+    expect($svc->calculateLeaveDays($fri, $mon, true, 0))->toBe(4.0)
+        // Span (4) meets a 3-day threshold → sandwich applies → 4 days.
+        ->and($svc->calculateLeaveDays($fri, $mon, true, 3))->toBe(4.0)
+        // Span (4) is below a 5-day threshold → no sandwich → weekdays only (Fri+Mon).
+        ->and($svc->calculateLeaveDays($fri, $mon, true, 5))->toBe(2.0)
+        // Sandwich disabled → weekdays only regardless of threshold.
+        ->and($svc->calculateLeaveDays($fri, $mon, false, 0))->toBe(2.0);
+});
+
 // ─── Paid/Unpaid policy ───────────────────────────────────────────────────────
 
 it('allows paid request when allow_paid_request is true', function () {
@@ -298,6 +315,154 @@ it('skips weekends when sandwich policy is disabled', function () {
     );
 
     expect($days)->toBe(6.0); // Mon, Tue, Wed, Thu, Fri, Mon = 6
+});
+
+it('sandwiches a weekend that falls in the next month (cross-month boundary)', function () {
+    $service = app(LeaveService::class);
+
+    // Fri 31 Jul 2026 → Mon 03 Aug 2026. The intervening Sat 01 Aug + Sun 02 Aug
+    // fall in the NEXT month but are still counted when sandwich is enabled.
+    $span = [Carbon::parse('2026-07-31'), Carbon::parse('2026-08-03')];
+
+    // Sandwich on → all 4 calendar days (Fri + Sat + Sun + Mon).
+    expect($service->calculateLeaveDays($span[0], $span[1], true))->toBe(4.0)
+        // Sandwich off → only the two weekdays (Fri + Mon).
+        ->and($service->calculateLeaveDays($span[0], $span[1], false))->toBe(2.0);
+});
+
+it('sandwiches a weekend that falls in the next year (cross-year boundary)', function () {
+    $service = app(LeaveService::class);
+
+    // Thu 31 Dec 2026 → Mon 04 Jan 2027. The intervening Sat 02 Jan + Sun 03 Jan
+    // fall in the NEXT year but are still counted when sandwich is enabled.
+    $span = [Carbon::parse('2026-12-31'), Carbon::parse('2027-01-04')];
+
+    // Sandwich on → all 5 calendar days (Thu + Fri + Sat + Sun + Mon).
+    expect($service->calculateLeaveDays($span[0], $span[1], true))->toBe(5.0)
+        // Sandwich off → only the three weekdays (Thu + Fri + Mon).
+        ->and($service->calculateLeaveDays($span[0], $span[1], false))->toBe(3.0);
+});
+
+// ─── Cross-request sandwich bridge ────────────────────────────────────────────
+// A weekend trapped between two SEPARATE leave requests is charged to the
+// later-submitted one by pulling its boundary out to swallow the weekend.
+
+/** Create an existing in-force (approved) leave block for the employee. */
+function existingLeave(Employee $employee, LeaveType $type, string $start, string $end): LeaveRequest
+{
+    return LeaveRequest::create([
+        'employee_id' => $employee->id,
+        'leave_type_id' => $type->id,
+        'start_date' => $start,
+        'end_date' => $end,
+        'days' => Carbon::parse($start)->diffInDays(Carbon::parse($end)) + 1,
+        'reason' => 'existing',
+        'requested_leave_status' => 'paid',
+        'status' => 'approved',
+    ]);
+}
+
+it('bridges a weekend trapped between two separate requests (same month)', function () {
+    $service = app(LeaveService::class);
+    $employee = leaveEmployee();
+    $type = paidLeaveType(['is_sandwich_applicable' => true]);
+
+    // Existing leave on Fri 02 Jan; now applying for Mon 05 Jan.
+    existingLeave($employee, $type, '2026-01-02', '2026-01-02');
+
+    [$start, $end] = $service->resolveSandwichBridge(
+        $employee, $type, Carbon::parse('2026-01-05'), Carbon::parse('2026-01-05')
+    );
+
+    // Boundary pulled back to Sat 03 Jan so the weekend is charged: Sat–Mon.
+    expect($start->toDateString())->toBe('2026-01-03')
+        ->and($end->toDateString())->toBe('2026-01-05')
+        ->and($service->calculateLeaveDays($start, $end, true))->toBe(3.0);
+});
+
+it('bridges a trapped weekend across a month boundary', function () {
+    $service = app(LeaveService::class);
+    $employee = leaveEmployee();
+    $type = paidLeaveType(['is_sandwich_applicable' => true]);
+
+    // Existing leave on Fri 31 Jul; applying for Mon 03 Aug — Sat 01 + Sun 02
+    // Aug are trapped in the NEXT month and must still be charged.
+    existingLeave($employee, $type, '2026-07-31', '2026-07-31');
+
+    [$start, $end] = $service->resolveSandwichBridge(
+        $employee, $type, Carbon::parse('2026-08-03'), Carbon::parse('2026-08-03')
+    );
+
+    expect($start->toDateString())->toBe('2026-08-01')
+        ->and($end->toDateString())->toBe('2026-08-03')
+        ->and($service->calculateLeaveDays($start, $end, true))->toBe(3.0);
+});
+
+it('bridges a trapped weekend across a year boundary', function () {
+    $service = app(LeaveService::class);
+    $employee = leaveEmployee();
+    $type = paidLeaveType(['is_sandwich_applicable' => true]);
+
+    // Existing leave on Fri 30 Dec 2033; applying for Mon 02 Jan 2034 — the
+    // Sat 31 Dec + Sun 01 Jan weekend straddles the year end and is charged.
+    existingLeave($employee, $type, '2033-12-30', '2033-12-30');
+
+    [$start, $end] = $service->resolveSandwichBridge(
+        $employee, $type, Carbon::parse('2034-01-02'), Carbon::parse('2034-01-02')
+    );
+
+    expect($start->toDateString())->toBe('2033-12-31')
+        ->and($end->toDateString())->toBe('2034-01-02')
+        ->and($service->calculateLeaveDays($start, $end, true))->toBe(3.0);
+});
+
+it('does not bridge when a working day sits in the gap', function () {
+    $service = app(LeaveService::class);
+    $employee = leaveEmployee();
+    $type = paidLeaveType(['is_sandwich_applicable' => true]);
+
+    // Existing leave ends Thu 30 Jul; applying for Mon 03 Aug. The gap is
+    // Fri 31 (a working day) + weekend — the working day breaks the sandwich.
+    existingLeave($employee, $type, '2026-07-30', '2026-07-30');
+
+    [$start, $end] = $service->resolveSandwichBridge(
+        $employee, $type, Carbon::parse('2026-08-03'), Carbon::parse('2026-08-03')
+    );
+
+    expect($start->toDateString())->toBe('2026-08-03')
+        ->and($end->toDateString())->toBe('2026-08-03');
+});
+
+it('does not bridge when the sandwich policy is off', function () {
+    $service = app(LeaveService::class);
+    $employee = leaveEmployee();
+    $type = paidLeaveType(['is_sandwich_applicable' => false]);
+
+    existingLeave($employee, $type, '2026-01-02', '2026-01-02');
+
+    [$start, $end] = $service->resolveSandwichBridge(
+        $employee, $type, Carbon::parse('2026-01-05'), Carbon::parse('2026-01-05')
+    );
+
+    expect($start->toDateString())->toBe('2026-01-05')
+        ->and($end->toDateString())->toBe('2026-01-05');
+});
+
+it('persists the bridged dates and day-count through submitRequest', function () {
+    $service = app(LeaveService::class);
+    $employee = leaveEmployee();
+    $type = paidLeaveType(['is_sandwich_applicable' => true]);
+    giveBalance($employee, $type, 10);
+
+    // First request: Fri 31 Jul (one day).
+    $service->submitRequest($employee, $type, '2026-07-31', '2026-07-31', 'first');
+
+    // Second request: Mon 03 Aug — should absorb Sat 01 + Sun 02 Aug.
+    $second = $service->submitRequest($employee, $type, '2026-08-03', '2026-08-03', 'second');
+
+    expect($second->start_date->toDateString())->toBe('2026-08-01')
+        ->and($second->end_date->toDateString())->toBe('2026-08-03')
+        ->and((float) $second->days)->toBe(3.0);
 });
 
 // ─── Holiday blocking (Phase 2) ────────────────────────────────────────────────

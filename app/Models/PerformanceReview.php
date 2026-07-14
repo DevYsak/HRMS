@@ -80,6 +80,18 @@ class PerformanceReview extends Model
         return $this->hasMany(PerformanceReviewScore::class, 'review_id');
     }
 
+    /** Multi-reviewer participants (v4 Phase D). */
+    public function participants(): HasMany
+    {
+        return $this->hasMany(ReviewParticipant::class, 'performance_review_id');
+    }
+
+    /** True when every participant has submitted their scores. */
+    public function allParticipantsSubmitted(): bool
+    {
+        return ! $this->participants()->where('status', '!=', 'submitted')->exists();
+    }
+
     /** Documents attached to this review (signed scorecard, manager notes, etc.). */
     public function documents(): MorphMany
     {

@@ -17,7 +17,7 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Str;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 
-#[Fillable(['name', 'email', 'password', 'current_team_id', 'avatar', 'role', 'role_id', 'theme', 'timezone', 'date_format', 'time_format'])]
+#[Fillable(['name', 'email', 'password', 'current_team_id', 'avatar', 'role', 'role_id', 'scope_departments', 'scope_shifts', 'theme', 'timezone', 'date_format', 'time_format'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -51,7 +51,52 @@ class User extends Authenticatable
             'two_factor_confirmed_at' => 'datetime',
             'role' => UserRole::class,
             'theme' => ThemePreference::class,
+            'scope_departments' => 'array',
+            'scope_shifts' => 'array',
         ];
+    }
+
+    /**
+     * Whether this approver acts company-wide (super admins always do, as does
+     * any HR/manager with no department/shift scope set). When false, the
+     * user's reach is narrowed to their scoped departments/shifts.
+     */
+    public function isCompanyWideApprover(): bool
+    {
+        return $this->isSuperAdmin()
+            || $this->assignedRole?->slug === 'super_admin'
+            || (empty($this->scope_departments) && empty($this->scope_shifts));
+    }
+
+    /** Does this user's attendance scope cover the given employee? */
+    public function coversEmployee(Employee $employee): bool
+    {
+        if ($this->isCompanyWideApprover()) {
+            return true;
+        }
+
+        $deptOk = empty($this->scope_departments) || in_array($employee->department_id, $this->scope_departments);
+        $shiftOk = empty($this->scope_shifts) || in_array($employee->shift_id, $this->scope_shifts);
+
+        return $deptOk && $shiftOk;
+    }
+
+    /**
+     * Employee ids this user may see/approve, or NULL when company-wide (no
+     * filter). Callers do `->when($ids !== null, fn ($q) => $q->whereIn('employee_id', $ids))`.
+     *
+     * @return array<int>|null
+     */
+    public function accessibleEmployeeIds(): ?array
+    {
+        if ($this->isCompanyWideApprover()) {
+            return null;
+        }
+
+        return Employee::query()
+            ->when($this->scope_departments, fn ($q, $d) => $q->whereIn('department_id', $d))
+            ->when($this->scope_shifts, fn ($q, $s) => $q->whereIn('shift_id', $s))
+            ->pluck('id')->all();
     }
 
     /**

@@ -3,6 +3,7 @@
 namespace App\Services\Biometric;
 
 use App\Models\Attendance;
+use App\Models\AuditLog;
 use App\Models\BiometricDevice;
 use App\Models\BiometricLog;
 use App\Models\Employee;
@@ -251,6 +252,49 @@ class BiometricSyncService
         } finally {
             $zk->disconnect();
         }
+    }
+
+    /**
+     * Release a departed employee's biometric identity on offboarding: delete
+     * their enrolment from the device (so their card/PIN stops working) and
+     * clear the biometric code from HRMS so the same card can be reassigned to
+     * a new hire. Past attendance is keyed on employee_id, so history is kept.
+     * A device that is offline never blocks the release — it is logged and the
+     * HRMS-side clearing still happens.
+     *
+     * @return bool whether the device enrolment was actually removed
+     */
+    public function releaseEmployee(Employee $employee): bool
+    {
+        $removed = false;
+        $device = $employee->biometricDevice;
+
+        if ($device && $employee->employee_code) {
+            try {
+                $removed = $this->removeEmployeeFromDevice($employee, $device);
+            } catch (Throwable $e) {
+                Log::warning('Biometric release: device removal failed, clearing HRMS-side anyway', [
+                    'employee_id' => $employee->id,
+                    'device_id' => $device->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        $before = $employee->only(['employee_code', 'biometric_user_id', 'biometric_device_id', 'sync_status']);
+
+        $employee->update([
+            'employee_code' => null,
+            'biometric_user_id' => null,
+            'biometric_device_id' => null,
+            'sync_status' => 'removed',
+        ]);
+
+        AuditLog::record($employee, 'biometric_released', $before, [
+            'device_removed' => $removed,
+        ]);
+
+        return $removed;
     }
 
     // ──────────────────────────────────────────────────────────────────────

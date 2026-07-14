@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Attendance;
+use App\Models\AttendanceSetting;
 use App\Models\Employee;
 use App\Models\OtRequest;
 use App\Models\OtWindow;
@@ -16,7 +17,17 @@ class OvertimeService
     /** @deprecated Use $employee->shift?->ot_threshold_hours ?? 9.0 instead */
     public const STANDARD_HOURS = 9.0;
 
+    /** Fallback OT rate when no attendance setting is configured. */
     public const RATE_PER_HOUR = 100.0;
+
+    /**
+     * The configured OT pay rate (₹/hr), read from attendance settings so HR
+     * can change it without a code deploy. Falls back to the default constant.
+     */
+    public function otRatePerHour(): float
+    {
+        return (float) (AttendanceSetting::query()->value('ot_rate_per_hour') ?? self::RATE_PER_HOUR);
+    }
 
     /**
      * Create a pre-approval OT request.
@@ -224,6 +235,66 @@ class OvertimeService
         return (float) ($employee->shift?->ot_threshold_hours ?? self::STANDARD_HOURS);
     }
 
+    /**
+     * Import one Nexflow NexBridge ot-details record into HRMS as an approved
+     * OT request + materialised OvertimeRecord, so it flows into payroll.
+     *
+     * Only fully signed-off records (headline status 'approved' — both Nexflow
+     * levels cleared) are payable. Idempotent and double-count safe: skips when
+     * an OT already exists for the employee on that date, matching the automated
+     * hrms:sync-nexflow-ot dedup. The OtRequest carries source='nexflow' and a
+     * nexflow_ref for the audit trail.
+     *
+     * @param  array{id?: int|string, date?: string, status?: string, reason?: string, ot_hours?: float, ot_minutes?: int, sessions?: array<int, array{started_at?: string, stopped_at?: string}>}  $record
+     * @return array{status: string, record: ?OvertimeRecord} status: imported | skipped | not_payable
+     */
+    public function importNexflowOtRecord(Employee $employee, array $record): array
+    {
+        // Headline status is Nexflow's final two-level outcome — only 'approved' pays.
+        if (($record['status'] ?? null) !== 'approved') {
+            return ['status' => 'not_payable', 'record' => null];
+        }
+
+        $workDate = $record['date'] ?? null;
+        $otHours = round((float) ($record['ot_hours'] ?? (($record['ot_minutes'] ?? 0) / 60)), 2);
+
+        if (! $workDate || $otHours <= 0) {
+            return ['status' => 'not_payable', 'record' => null];
+        }
+
+        // Double-count guard — an OT already logged for this day (any source) wins.
+        $exists = OtRequest::where('employee_id', $employee->id)
+            ->where('work_date', $workDate)
+            ->whereIn('status', ['pending', 'approved'])
+            ->exists();
+
+        if ($exists) {
+            return ['status' => 'skipped', 'record' => null];
+        }
+
+        // Derive the OT window from the completed sessions (first start → last stop).
+        $sessions = collect($record['sessions'] ?? []);
+        $startTime = $sessions->pluck('started_at')->filter()->sort()->first() ?: '18:00';
+        $endTime = $sessions->pluck('stopped_at')->filter()->sort()->last()
+            ?: date('H:i', strtotime($startTime) + (int) round($otHours * 3600));
+
+        $otRequest = OtRequest::create([
+            'employee_id' => $employee->id,
+            'work_date' => $workDate,
+            'start_time' => $startTime,
+            'end_time' => $endTime,
+            'requested_hours' => $otHours,
+            'reason' => 'Nexflow OT: '.($record['reason'] ?? 'overtime').' (L1 + L2 approved)',
+            'status' => 'approved',
+            'reviewer_comment' => 'Imported from Nexflow — both approval levels cleared.',
+            'reviewed_at' => now(),
+            'source' => 'nexflow',
+            'nexflow_ref' => 'otdetails:'.($record['id'] ?? $workDate),
+        ]);
+
+        return ['status' => 'imported', 'record' => $this->createOvertimeRecordFromApprovedRequest($otRequest)];
+    }
+
     public function createOvertimeRecordFromApprovedRequest(OtRequest $request): OvertimeRecord
     {
         if ($request->status !== 'approved') {
@@ -255,8 +326,8 @@ class OvertimeService
             'total_hours_worked' => $request->attendance?->total_hours ?? $otHours + self::STANDARD_HOURS,
             'standard_hours' => self::STANDARD_HOURS,
             'ot_hours' => $otHours,
-            'rate_per_hour' => self::RATE_PER_HOUR,
-            'ot_amount' => round($otHours * self::RATE_PER_HOUR, 2),
+            'rate_per_hour' => $rate = $this->otRatePerHour(),
+            'ot_amount' => round($otHours * $rate, 2),
             'is_paid' => false,
         ]);
     }

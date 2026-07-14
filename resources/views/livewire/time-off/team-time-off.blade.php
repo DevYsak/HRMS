@@ -89,7 +89,14 @@
         {{-- ── Team Leave Calendar ── --}}
         <div class="pulse-card mb-6">
             <div class="mb-4 flex items-center justify-between gap-3">
-                <h3 class="text-sm font-bold text-zinc-900 dark:text-white">Team Leave Calendar</h3>
+                <div class="flex items-center gap-4">
+                    <h3 class="text-sm font-bold text-zinc-900 dark:text-white">Team Leave Calendar</h3>
+                    <div class="hidden items-center gap-3 text-[10px] font-semibold text-zinc-400 sm:flex">
+                        <span class="flex items-center gap-1"><span class="size-2 rounded-sm bg-rose-500"></span> Holiday</span>
+                        <span class="flex items-center gap-1"><span class="size-2 rounded-sm bg-indigo-500"></span> Leave</span>
+                        <span class="flex items-center gap-1"><span class="size-2 rounded-sm bg-amber-500"></span> Comp-Off</span>
+                    </div>
+                </div>
                 <div class="flex items-center gap-1.5">
                     <button type="button" wire:click="prevCalMonth" class="rounded-lg border border-zinc-200 px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800">&larr;</button>
                     <span class="min-w-28 text-center text-xs font-bold text-zinc-700 dark:text-zinc-200">{{ $calendarLabel }}</span>
@@ -104,14 +111,25 @@
                     <div class="min-h-16 rounded-lg border p-1.5 text-left
                         {{ $day['inMonth'] ? 'border-zinc-100 dark:border-zinc-800' : 'border-transparent opacity-40' }}
                         {{ $day['isToday'] ? 'ring-2 ring-brand-500' : '' }}
-                        {{ $day['isWeekend'] ? 'bg-zinc-50/60 dark:bg-zinc-800/30' : '' }}">
-                        <div class="text-[10px] font-semibold text-zinc-400">{{ $day['date']->day }}</div>
+                        {{ $day['holiday'] ? 'bg-rose-50/70 dark:bg-rose-900/15' : ($day['isWeekend'] ? 'bg-zinc-50/60 dark:bg-zinc-800/30' : '') }}">
+                        <div class="flex items-center justify-between">
+                            <div class="text-[10px] font-semibold {{ $day['holiday'] ? 'text-rose-500' : 'text-zinc-400' }}">{{ $day['date']->day }}</div>
+                            @if($day['compOffCount'] > 0)
+                                <span class="rounded-sm bg-amber-500 px-1 text-[8px] font-black text-white" title="{{ $day['compOffCount'] }} comp-off">C</span>
+                            @endif
+                        </div>
                         <div class="mt-1 space-y-0.5">
-                            @foreach($day['leaves']->take(3) as $lv)
-                                <div class="truncate rounded px-1 py-0.5 text-[9px] font-bold text-white" style="background: {{ $lv['color'] }}" title="{{ $lv['name'] }} · {{ $lv['type'] }}">{{ $lv['name'] }}</div>
+                            @if($day['holiday'])
+                                <div class="truncate rounded px-1 py-0.5 text-[9px] font-bold text-white" style="background: {{ $day['holiday']['color'] }}" title="Holiday · {{ $day['holiday']['name'] }}">🎉 {{ $day['holiday']['name'] }}</div>
+                            @endif
+                            @foreach($day['leaves']->take($day['holiday'] ? 2 : 3) as $lv)
+                                <div class="flex items-center gap-0.5 truncate rounded px-1 py-0.5 text-[9px] font-bold text-white" style="background: {{ $lv['isCompOff'] ? '#f59e0b' : $lv['color'] }}" title="{{ $lv['name'] }} · {{ $lv['type'] }}">
+                                    {{ $lv['name'] }}
+                                </div>
                             @endforeach
-                            @if($day['leaves']->count() > 3)
-                                <div class="text-[9px] text-zinc-400">+{{ $day['leaves']->count() - 3 }} more</div>
+                            @php $shown = $day['holiday'] ? 2 : 3; @endphp
+                            @if($day['leaves']->count() > $shown)
+                                <div class="text-[9px] text-zinc-400">+{{ $day['leaves']->count() - $shown }} more</div>
                             @endif
                         </div>
                     </div>

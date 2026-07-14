@@ -6,6 +6,8 @@ use App\Models\OtRequest;
 use App\Models\User;
 use App\Notifications\OtRequestNotification;
 use App\Services\OvertimeService;
+use App\Services\Teams\ApprovalRoutingService;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -79,14 +81,26 @@ class MyOtRequests extends Component
             return;
         }
 
-        // Notify manager; fallback to HR/SuperAdmin if no manager assigned
-        $manager = $employee->manager;
-        if ($manager) {
-            $manager->notify(new OtRequestNotification($request));
-        } else {
-            User::whereIn('role', ['hr_admin', 'super_admin', 'manager'])
-                ->each(fn ($u) => $u->notify(new OtRequestNotification($request)));
+        // Notify the reporting manager plus the team lead/backup chain (v4
+        // Part 3.2) for the work date, deduped by user id. Fall back to
+        // HR/SuperAdmin/manager only when nobody resolves.
+        $recipients = collect();
+        $push = function (?User $u) use ($recipients) {
+            if ($u && ! $recipients->contains(fn (User $r) => $r->id === $u->id)) {
+                $recipients->push($u);
+            }
+        };
+
+        $push($employee->manager);
+        app(ApprovalRoutingService::class)
+            ->getApproverChain($employee, Carbon::parse($this->work_date))
+            ->each($push);
+
+        if ($recipients->isEmpty()) {
+            $recipients = User::whereIn('role', ['hr_admin', 'super_admin', 'manager'])->get();
         }
+
+        $recipients->each(fn (User $u) => $u->notify(new OtRequestNotification($request)));
 
         $this->showModal = false;
         \Flux::toast('OT request submitted successfully.');

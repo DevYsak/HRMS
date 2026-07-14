@@ -4,10 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\Candidate;
 use App\Models\Department;
-use App\Models\Employee;
 use App\Models\JobPosting;
-use App\Models\PerformanceReview;
-use App\Models\ReviewCycle;
 use App\Models\ReviewGoal;
 use App\Models\User;
 use Illuminate\Database\Seeder;
@@ -18,54 +15,10 @@ class Phase5Seeder extends Seeder
     {
         $adminAssignedToEmployee = User::where('email', 'admin@example.com')->first()?->employee;
 
-        // 1. Performance Reviews 
-        $cycle1 = ReviewCycle::create([
-            'name' => '2025 Annual Review',
-            'start_date' => '2025-11-01',
-            'end_date' => '2025-12-15',
-            'status' => 'closed',
-            'description' => 'End of year review for 2025.',
-        ]);
-
-        $cycle2 = ReviewCycle::create([
-            'name' => 'Q1 2026 Check-in',
-            'start_date' => '2026-03-01',
-            'end_date' => '2026-04-30',
-            'status' => 'active',
-            'description' => 'Q1 progress and goals alignment.',
-        ]);
-
-        $employees = Employee::whereIn('status', [
-            \App\Enums\EmployeeStatus::Active,
-            \App\Enums\EmployeeStatus::Onboarding,
-            \App\Enums\EmployeeStatus::Probation,
-        ])->get();
-
-        foreach ($employees as $emp) {
-            // Self Review
-            PerformanceReview::create([
-                'review_cycle_id' => $cycle2->id,
-                'employee_id' => $emp->id,
-                'type' => 'self',
-                'overall_rating' => $emp->id === $adminAssignedToEmployee?->id ? 4 : null,
-                'strengths' => $emp->id === $adminAssignedToEmployee?->id ? 'Improved platform stability.' : null,
-                'improvements' => $emp->id === $adminAssignedToEmployee?->id ? 'Need to focus on unit testing.' : null,
-                'status' => $emp->id === $adminAssignedToEmployee?->id ? 'submitted' : 'pending',
-                'submitted_at' => $emp->id === $adminAssignedToEmployee?->id ? now() : null,
-            ]);
-
-            // Manager Review
-            if ($emp->manager_id) {
-                $managerEmp = Employee::where('user_id', $emp->manager_id)->first();
-                PerformanceReview::create([
-                    'review_cycle_id' => $cycle2->id,
-                    'employee_id' => $emp->id,
-                    'reviewer_id' => $managerEmp?->id,
-                    'type' => 'manager',
-                    'status' => 'pending',
-                ]);
-            }
-        }
+        // 1. Performance review demo data now lives in the template-driven
+        // PerformanceCycle flow (create a template + cycle via the UI or
+        // ReviewWorkflowService). Legacy ReviewCycle seeding was retired in
+        // the v4 ReviewCycle→PerformanceCycle cutover.
 
         if ($adminAssignedToEmployee) {
             ReviewGoal::create([
@@ -106,7 +59,7 @@ class Phase5Seeder extends Seeder
             'title' => 'HR Coordinator',
             'department_id' => $hrDept?->id,
             'employment_type' => 'full_time',
-            'description' => "Join our growing People team.",
+            'description' => 'Join our growing People team.',
             'requirements' => "- Prior HR experience\n- Friendly and organized",
             'location' => 'New York, NY',
             'salary_min' => 70000,

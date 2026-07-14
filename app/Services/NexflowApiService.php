@@ -22,16 +22,19 @@ use Illuminate\Support\Facades\Log;
 class NexflowApiService
 {
     private string $baseUrl;
+
     private string $secret;
+
     private int $cacheTtl;
+
     private int $timeout;
 
     public function __construct()
     {
-        $this->baseUrl  = rtrim(config('nexbridge.nexflow_url', ''), '/');
-        $this->secret   = config('nexbridge.secret', '');
+        $this->baseUrl = rtrim(config('nexbridge.nexflow_url', ''), '/');
+        $this->secret = config('nexbridge.secret', '');
         $this->cacheTtl = config('nexbridge.cache_ttl', 900);
-        $this->timeout  = config('nexbridge.timeout', 10);
+        $this->timeout = config('nexbridge.timeout', 10);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -41,24 +44,49 @@ class NexflowApiService
     /**
      * Get daily clock-time summary (working hours + break time) for an employee.
      *
-     * @param  string  $email   Employee's work email (must match Nexflow user)
-     * @param  string  $from    Start date YYYY-MM-DD (defaults to start of month)
-     * @param  string  $to      End date YYYY-MM-DD (defaults to today)
-     * @return array|null       Parsed response array, or null if unavailable
+     * @param  string  $email  Employee's work email (must match Nexflow user)
+     * @param  string  $from  Start date YYYY-MM-DD (defaults to start of month)
+     * @param  string  $to  End date YYYY-MM-DD (defaults to today)
+     * @return array|null Parsed response array, or null if unavailable
      */
-    public function getClockSummary(string $email, string $from = null, string $to = null): ?array
+    public function getClockSummary(string $email, ?string $from = null, ?string $to = null): ?array
     {
         $from = $from ?? now()->startOfMonth()->toDateString();
-        $to   = $to   ?? now()->toDateString();
+        $to = $to ?? now()->toDateString();
 
         $cacheKey = "nexbridge:clock_summary:{$email}:{$from}:{$to}";
 
         return $this->cachedGet($cacheKey, function () use ($email, $from, $to) {
             return $this->get("/employees/{$email}/clock-summary", [
                 'from' => $from,
-                'to'   => $to,
+                'to' => $to,
             ]);
         });
+    }
+
+    /**
+     * Get an employee's overtime records + summary for a period from Nexflow.
+     * Mirrors the NexBridge GET /employees/{email}/ot-details contract.
+     *
+     * @param  string  $email  Employee's work email (must match Nexflow user)
+     * @param  string|null  $from  Start date YYYY-MM-DD (defaults to start of month)
+     * @param  string|null  $to  End date YYYY-MM-DD (defaults to today)
+     * @param  string|null  $status  Filter: approved|pending|rejected, or null for all
+     * @return array|null Parsed response array, or null if unavailable
+     */
+    public function getOtDetails(string $email, ?string $from = null, ?string $to = null, ?string $status = null): ?array
+    {
+        $from = $from ?? now()->startOfMonth()->toDateString();
+        $to = $to ?? now()->toDateString();
+
+        $params = ['from' => $from, 'to' => $to];
+        if ($status !== null && $status !== '') {
+            $params['status'] = $status;
+        }
+
+        $cacheKey = "nexbridge:ot_details:{$email}:{$from}:{$to}:".($status ?: 'all');
+
+        return $this->cachedGet($cacheKey, fn () => $this->get("/employees/{$email}/ot-details", $params));
     }
 
     /**
@@ -114,6 +142,7 @@ class NexflowApiService
                 if ($result === null) {
                     Cache::forget($cacheKey);
                 }
+
                 return $result;
             });
         }
@@ -124,14 +153,15 @@ class NexflowApiService
     /**
      * Make an authenticated GET request to Nexflow's NexBridge API.
      *
-     * @param  string  $path    Relative path under /api/nexbridge/v1/
-     * @param  array   $params  Query string parameters
-     * @return array|null       Decoded JSON body, or null on failure
+     * @param  string  $path  Relative path under /api/nexbridge/v1/
+     * @param  array  $params  Query string parameters
+     * @return array|null Decoded JSON body, or null on failure
      */
     private function get(string $path, array $params = []): ?array
     {
         if (empty($this->baseUrl) || empty($this->secret)) {
             Log::warning('[NexBridge] Not configured — skipping Nexflow API call.', ['path' => $path]);
+
             return null;
         }
 
@@ -150,36 +180,40 @@ class NexflowApiService
             if ($response->status() === 404) {
                 // Employee not found in Nexflow — not an error worth logging loudly
                 Log::info('[NexBridge] Employee not found in Nexflow.', ['path' => $path, 'params' => $params]);
+
                 return null;
             }
 
             Log::error('[NexBridge] Nexflow API returned an error.', [
-                'url'    => $url,
+                'url' => $url,
                 'status' => $response->status(),
-                'body'   => $response->body(),
+                'body' => $response->body(),
             ]);
 
             return null;
 
         } catch (ConnectionException $e) {
             Log::warning('[NexBridge] Could not reach Nexflow.', [
-                'url'     => $url,
+                'url' => $url,
                 'message' => $e->getMessage(),
             ]);
+
             return null;
 
         } catch (RequestException $e) {
             Log::error('[NexBridge] HTTP request error.', [
-                'url'     => $url,
+                'url' => $url,
                 'message' => $e->getMessage(),
             ]);
+
             return null;
 
         } catch (\Throwable $e) {
             Log::error('[NexBridge] Unexpected error calling Nexflow.', [
-                'url'     => $url,
+                'url' => $url,
                 'message' => $e->getMessage(),
             ]);
+
             return null;
         }
     }

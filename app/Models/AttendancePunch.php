@@ -15,7 +15,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 #[Fillable([
     'employee_id', 'employee_code', 'punched_at', 'punch_date',
-    'method', 'verify_raw', 'source', 'device_serial', 'location', 'lat', 'lng',
+    'method', 'direction', 'verify_raw', 'source', 'device_serial', 'location', 'lat', 'lng',
 ])]
 class AttendancePunch extends Model
 {

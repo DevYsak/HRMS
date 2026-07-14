@@ -3,6 +3,7 @@
 namespace App\Livewire\Attendance;
 
 use App\Models\Attendance;
+use App\Models\AttendanceDailySummary;
 use App\Models\AttendancePunch;
 use App\Models\AttendanceRegularisation;
 use App\Models\AuditLog;
@@ -12,7 +13,8 @@ use App\Models\LeaveBalance;
 use App\Models\User;
 use App\Notifications\AttendanceRegularisationNotification;
 use App\Notifications\RegularisationReviewedNotification;
-use App\Services\Attendance\PunchClassifier;
+use App\Services\Approvals\ClaimLockService;
+use App\Services\Attendance\PunchTimeline;
 use App\Services\AttendanceService;
 use Carbon\CarbonPeriod;
 use Illuminate\Database\Eloquent\Builder;
@@ -215,6 +217,8 @@ class AllAttendance extends Component
         $employee = Employee::with(['user', 'department', 'jobTitle', 'manager', 'office', 'shift'])
             ->findOrFail($employeeId);
 
+        abort_unless(Auth::user()->coversEmployee($employee), 403);
+
         $today = Carbon::today();
         $monthStart = $today->copy()->startOfMonth();
         $month = Attendance::where('employee_id', $employee->id)
@@ -230,10 +234,6 @@ class AllAttendance extends Component
 
         $todayAtt = $month->firstWhere(fn ($a) => $a->date->isToday());
         $stdMin = (int) round((float) ($employee->shift->standard_hours ?? 9) * 60);
-        $workedMin = 0;
-        if ($todayAtt?->check_in) {
-            $workedMin = max(0, (int) $todayAtt->check_in->diffInMinutes($todayAtt->check_out ?? now()) - (int) ($todayAtt->break_minutes ?? 0));
-        }
         $onBreak = $todayAtt
             ? BreakLog::where('attendance_id', $todayAtt->id)->whereNull('break_end')->exists()
             : false;
@@ -243,17 +243,44 @@ class AllAttendance extends Component
             ->orderBy('punched_at')
             ->get();
 
-        // Collapse device noise/duplicates and derive the real break minutes
-        // from the punch stream (the engine's stored break_minutes can be wrong
-        // when a stray verify flips the in/out pairing).
-        $classifier = app(PunchClassifier::class);
-        $punches = $classifier->dedupe($rawPunches);
-        $breakMin = $rawPunches->isNotEmpty()
-            ? $classifier->breakMinutes($rawPunches)
-            : (int) ($todayAtt->break_minutes ?? 0);
+        // ONE processed timeline from the shared PunchTimeline engine — the
+        // single source of truth the employee page also renders from. It merges
+        // duplicates/device conflicts, pairs validated sessions and annotates
+        // every raw event for the audit view. Worked/break come from these
+        // validated sessions, NOT the engine's summary (which mis-pairs this
+        // device). The summary is only the fallback when no punches synced.
+        $summary = AttendanceDailySummary::where('employee_id', $employee->id)
+            ->whereDate('date', $today->toDateString())
+            ->first();
+        $engineSynced = $summary && $summary->synced_at;
+        $processed = app(PunchTimeline::class)->process($rawPunches, $today, $summary);
 
-        if ($todayAtt?->check_in) {
-            $workedMin = max(0, (int) $todayAtt->check_in->diffInMinutes($todayAtt->check_out ?? now()) - $breakMin);
+        if ($rawPunches->isNotEmpty()) {
+            $stillInside = $processed['live'];
+            $workedMin = (int) $processed['working_minutes'];
+            $breakMin = (int) $processed['break_minutes'];
+            $todayIn = $processed['first_in'];
+            $todayOut = $processed['last_out'];
+            // Show the engine's punch count when it's higher (a sync gap), so the
+            // "partial" note still fires; otherwise the count we actually paired.
+            $punchCount = max((int) $processed['raw_count'], $engineSynced ? (int) $summary->raw_punch_count : 0);
+        } elseif ($engineSynced) {
+            $stillInside = ((int) $summary->raw_punch_count) % 2 === 1;
+            $workedMin = (int) round((float) $summary->working_hours * 60);
+            $breakMin = (int) $summary->break_minutes;
+            $todayIn = $summary->first_punch?->format('h:i A');
+            $todayOut = $stillInside ? null : $summary->last_punch?->format('h:i A');
+            $punchCount = (int) $summary->raw_punch_count;
+        } else {
+            $stillInside = false;
+            $breakMin = (int) ($todayAtt->break_minutes ?? 0);
+            $workedMin = 0;
+            if ($todayAtt?->check_in) {
+                $workedMin = max(0, (int) $todayAtt->check_in->diffInMinutes($todayAtt->check_out ?? now()) - $breakMin);
+            }
+            $todayIn = $todayAtt?->check_in?->format('h:i A');
+            $todayOut = $todayAtt?->check_out?->format('h:i A');
+            $punchCount = 0;
         }
 
         $this->drawer = [
@@ -271,23 +298,40 @@ class AllAttendance extends Component
             'leave_balance' => LeaveBalance::where('employee_id', $employee->id)
                 ->where('year', now()->year)->get()
                 ->sum(fn ($b) => $b->available() + (float) ($b->comp_off_credits ?? 0)),
-            'status' => $onBreak ? 'On Break' : ($todayAtt?->check_out ? 'Completed' : ($todayAtt ? 'Working' : 'Not In')),
-            'today' => $todayAtt ? [
-                'in' => $todayAtt->check_in?->format('h:i A'),
-                'out' => $todayAtt->check_out?->format('h:i A'),
+            'status' => $onBreak
+                ? 'On Break'
+                : ($stillInside
+                    ? 'Working'
+                    : ($todayOut ? 'Completed' : (($punchCount > 0 || $todayAtt) ? 'Working' : 'Not In'))),
+            'today' => ($todayAtt || $engineSynced || $rawPunches->isNotEmpty()) ? [
+                'in' => $todayIn,
+                'out' => $todayOut,
                 'worked' => intdiv($workedMin, 60).'h '.($workedMin % 60).'m',
                 'break' => $breakMin,
-                'overtime' => max(0, $workedMin - $stdMin) > 0 ? intdiv($workedMin - $stdMin, 60).'h '.(($workedMin - $stdMin) % 60).'m' : '0m',
-                'mode' => $todayAtt->work_mode,
-                'is_late' => (bool) $todayAtt->is_late,
-                'device' => $punches->pluck('device_serial')->filter()->unique()->implode(', ') ?: null,
-                'location' => $punches->pluck('location')->filter()->unique()->implode(', ') ?: ($employee->office?->name ?? null),
+                'overtime' => ($otMin = max(0, $workedMin - $stdMin)) > 0
+                    ? intdiv($otMin, 60).'h '.($otMin % 60).'m'
+                    : '0m',
+                'mode' => $todayAtt?->work_mode ?? 'office',
+                'is_late' => (bool) ($todayAtt?->is_late ?? ($engineSynced && $summary->late_minutes > 0)),
+                'device' => $rawPunches->pluck('device_serial')->filter()->unique()->implode(', ') ?: ($engineSynced ? $summary->device_serial : null),
+                'location' => $rawPunches->pluck('location')->filter()->unique()->implode(', ') ?: ($employee->office?->name ?? null),
             ] : null,
-            'punches' => $punches->map(fn ($p) => [
-                'time' => $p->punched_at->format('h:i A'),
-                'method' => $p->methodEnum()?->label(),
-                'icon' => $p->methodEnum()?->icon() ?? 'clock',
+            'punch_count' => $punchCount,
+            'punches_partial' => $engineSynced && $rawPunches->count() < $punchCount,
+            // Processed timeline (what employees see) — validated IN/OUT only.
+            'punches' => collect($processed['nodes'])->map(fn ($n) => [
+                'time' => $n['time'],
+                'dir' => $n['dir'],
+                'type' => $n['type'],
+                'method' => $n['method_label'],
+                'icon' => $n['method_icon'] ?? 'clock',
             ])->all(),
+            'sessions' => $processed['sessions'],
+            'duplicate_count' => (int) $processed['duplicate_count'],
+            'conflict_count' => (int) $processed['conflict_count'],
+            'needs_regularization' => (bool) $processed['needs_regularization'],
+            // Raw device log (HR/admin audit only) — every event, annotated.
+            'raw_punches' => $processed['raw_events'],
             'late_history' => $month->where('is_late', true)->take(5)->map(fn ($a) => [
                 'date' => $a->date->format('d M'), 'mins' => (int) ($a->late_minutes ?? 0),
             ])->values()->all(),
@@ -301,13 +345,28 @@ class AllAttendance extends Component
                 'hours' => $a->total_hours,
                 'status' => $a->status,
             ])->values()->all(),
+            // Week-by-week rollup (this month) for the drawer's Weekly tab.
+            'weekly_history' => $month
+                ->groupBy(fn ($a) => $a->date->copy()->startOfWeek(Carbon::MONDAY)->format('Y-m-d'))
+                ->map(function ($rows, $weekStart) {
+                    $ws = Carbon::parse($weekStart);
+
+                    return [
+                        'label' => $ws->format('d M').' – '.$ws->copy()->addDays(6)->format('d M'),
+                        'present' => $rows->whereNotNull('check_in')->count(),
+                        'hours' => round($rows->sum(fn ($a) => (float) $a->total_hours), 1),
+                        'late' => $rows->where('is_late', true)->count(),
+                    ];
+                })->sortKeysDesc()->values()->take(6)->all(),
             'pending' => AttendanceRegularisation::where('employee_id', $employee->id)
-                ->where('status', 'pending')->orderByDesc('work_date')->get()
+                ->where('status', 'pending')->with('claimer')->orderByDesc('work_date')->get()
                 ->map(fn ($r) => [
                     'id' => $r->id,
                     'date' => Carbon::parse($r->work_date)->format('d M Y'),
                     'window' => Carbon::parse($r->requested_check_in)->format('H:i').' → '.Carbon::parse($r->requested_check_out)->format('H:i'),
                     'reason' => $r->reason,
+                    'stage' => $r->stageLabel(),
+                    'handled_by' => app(ClaimLockService::class)->heldByOther($r, Auth::id()) ? $r->claimer?->name : null,
                 ])->all(),
         ];
         $this->drawerEmployeeId = $employeeId;
@@ -325,15 +384,32 @@ class AllAttendance extends Component
         abort_unless(Auth::user()->canApproveLeave(), 403);
 
         $request = AttendanceRegularisation::with('employee.user')->findOrFail($id);
+        abort_unless($request->employee && Auth::user()->coversEmployee($request->employee), 403);
         if ($request->status !== 'pending') {
             return;
         }
 
+        // Claim-lock: another HR is actively handling this request.
+        if (app(ClaimLockService::class)->heldByOther($request, Auth::id())) {
+            \Flux::toast('Being handled by '.($request->claimer?->name ?? 'another HR admin').' — no action needed.', variant: 'warning');
+
+            return;
+        }
+
         $attendance = app(AttendanceService::class)->approveRegularisation($request, Auth::id());
-        AuditLog::record($attendance, 'regularised', $attendance->toArray(), null);
+        app(ClaimLockService::class)->release($request);
+        $request->refresh();
+
+        if ($attendance) {
+            AuditLog::record($attendance, 'regularised', $attendance->toArray(), null);
+            \Flux::toast('Regularisation approved — hours & attendance updated.');
+        } else {
+            \Flux::toast($request->status === 'pending'
+                ? 'Approved at your stage — now awaiting '.$request->stageLabel().'.'
+                : 'Regularisation updated.');
+        }
         $request->employee->user?->notify(new RegularisationReviewedNotification($request));
 
-        \Flux::toast('Regularisation approved — hours & attendance updated.');
         if ($this->drawerEmployeeId) {
             $this->openEmployeeDrawer($this->drawerEmployeeId); // refresh drawer data
         }
@@ -343,7 +419,20 @@ class AllAttendance extends Component
     {
         abort_unless(Auth::user()->canApproveLeave(), 403);
 
-        $this->activeRequest = AttendanceRegularisation::with('employee.user', 'attendance', 'reviewer')->findOrFail($id);
+        $this->activeRequest = AttendanceRegularisation::with('employee.user', 'attendance', 'reviewer', 'claimer')->findOrFail($id);
+        abort_unless($this->activeRequest->employee && Auth::user()->coversEmployee($this->activeRequest->employee), 403);
+
+        // Claim-lock: first in-scope HR to open a pending request claims it;
+        // anyone else is told who's on it instead of getting the modal.
+        if ($this->activeRequest->status === 'pending') {
+            if (! app(ClaimLockService::class)->claim($this->activeRequest, Auth::id())) {
+                \Flux::toast('Being handled by '.($this->activeRequest->claimer?->name ?? 'another HR admin').' — no action needed.', variant: 'warning');
+                $this->activeRequest = null;
+
+                return;
+            }
+        }
+
         $this->reviewComment = '';
         $this->regularisationLocked = false;
         $this->lockedByName = '';
@@ -373,14 +462,33 @@ class AllAttendance extends Component
             Auth::id(),
             $this->reviewComment ?: null,
         );
+        $this->activeRequest->refresh();
 
-        AuditLog::record($attendance, 'regularised', $attendance->toArray(), null);
+        if ($attendance) {
+            AuditLog::record($attendance, 'regularised', $attendance->toArray(), null);
+            \Flux::toast('Regularisation request approved.');
+        } else {
+            \Flux::toast($this->activeRequest->status === 'pending'
+                ? 'Approved at your stage — now awaiting '.$this->activeRequest->stageLabel().'.'
+                : 'Regularisation updated.');
+        }
 
         $this->activeRequest->employee->user->notify(new RegularisationReviewedNotification($this->activeRequest));
 
+        app(ClaimLockService::class)->release($this->activeRequest);
         $this->showReviewModal = false;
         $this->activeRequest = null;
-        \Flux::toast('Regularisation request approved.');
+    }
+
+    /** Close the review modal without deciding — releases this HR's claim. */
+    public function closeReviewModal(): void
+    {
+        if ($this->activeRequest && (int) $this->activeRequest->claimed_by === Auth::id()) {
+            app(ClaimLockService::class)->release($this->activeRequest);
+        }
+
+        $this->showReviewModal = false;
+        $this->activeRequest = null;
     }
 
     public function rejectRegularisation(): void
@@ -402,6 +510,7 @@ class AllAttendance extends Component
 
         $this->activeRequest->employee->user->notify(new RegularisationReviewedNotification($this->activeRequest));
 
+        app(ClaimLockService::class)->release($this->activeRequest);
         $this->showReviewModal = false;
         $this->activeRequest = null;
         \Flux::toast('Regularisation request rejected.');
@@ -438,19 +547,31 @@ class AllAttendance extends Component
     {
         abort_unless(Auth::user()->canApproveLeave(), 403);
 
-        $query = Attendance::query()->with('employee.user')->whereHas('employee.user');
+        // Department/shift scope: HR with a scope only sees their employees.
+        $scopeIds = Auth::user()->accessibleEmployeeIds();
+        $scoped = fn ($q) => $q->when($scopeIds !== null, fn ($qq) => $qq->whereIn('employee_id', $scopeIds));
+
+        // Exclude offboarded (inactive/archived) employees from the live roster —
+        // their biometric card is released on exit and they should not surface here.
+        $query = Attendance::query()->with('employee.user')
+            ->whereHas('employee.user')
+            ->whereHas('employee', fn ($q) => $q->whereNotIn('status', ['inactive', 'archived']));
+        $scoped($query);
 
         $this->applyFilters($query);
 
-        $pendingRegularisations = AttendanceRegularisation::where('status', 'pending')
-            ->with(['employee.user', 'attendance'])
-            ->whereHas('employee.user')
-            ->get();
+        $pendingRegularisations = $scoped(
+            AttendanceRegularisation::where('status', 'pending')
+                ->with(['employee.user', 'attendance'])
+                ->whereHas('employee.user')
+        )->get();
 
         // KPI stats for today
         $today = Carbon::today();
-        $totalActive = Employee::where('status', 'active')->count();
-        $todayRecords = Attendance::where('date', $today)->get();
+        $totalActive = Employee::where('status', 'active')
+            ->when($scopeIds !== null, fn ($q) => $q->whereIn('id', $scopeIds))
+            ->count();
+        $todayRecords = $scoped(Attendance::where('date', $today))->get();
         $presentToday = $todayRecords->whereNotNull('check_in')->count();
         $lateToday = $todayRecords->where('is_late', true)->count();
         $onTimeToday = $presentToday - $lateToday;
@@ -471,8 +592,8 @@ class AllAttendance extends Component
         // Presence trend across the selected range (drives the overview chart).
         $trend = [];
         if ($this->dateFrom && $this->dateTo) {
-            $byDay = Attendance::whereBetween('date', [$this->dateFrom, $this->dateTo])
-                ->get(['date', 'is_late'])
+            $byDay = $scoped(Attendance::whereBetween('date', [$this->dateFrom, $this->dateTo]))
+                ->get(['date', 'is_late', 'employee_id'])
                 ->groupBy(fn ($a) => $a->date->toDateString());
             foreach (CarbonPeriod::create($this->dateFrom, $this->dateTo) as $d) {
                 $day = $byDay->get($d->toDateString(), collect());
@@ -491,7 +612,9 @@ class AllAttendance extends Component
         return view('livewire.attendance.all-attendance', [
             'attendances' => $query->latest('date')->paginate(15),
             'pendingRegularisations' => $pendingRegularisations,
-            'allEmployees' => Employee::with('user')->whereHas('user')->orderBy('id')->get(),
+            'allEmployees' => Employee::with('user')->whereHas('user')
+                ->when($scopeIds !== null, fn ($q) => $q->whereIn('id', $scopeIds))
+                ->orderBy('id')->get(),
             'stats' => $stats,
             'trend' => $trend,
             'weekLabel' => $weekLabel,

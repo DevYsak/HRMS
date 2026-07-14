@@ -74,7 +74,7 @@ test('autoCreateFromAttendance does not duplicate an existing OT request for the
 
 test('approving a regularisation into overtime auto-approves the OT and materialises the record', function () {
     $employee = Employee::factory()->create();
-    $reviewer = User::factory()->create();
+    $reviewer = User::factory()->create(['role' => 'super_admin']);
     $attendance = Attendance::create([
         'employee_id' => $employee->id,
         'date' => '2026-06-18',
@@ -113,7 +113,7 @@ test('approving a regularisation into overtime auto-approves the OT and material
 
 test('approving a regularisation within the threshold files no OT', function () {
     $employee = Employee::factory()->create();
-    $reviewer = User::factory()->create();
+    $reviewer = User::factory()->create(['role' => 'super_admin']);
     $reg = AttendanceRegularisation::create([
         'employee_id' => $employee->id,
         'attendance_id' => null,

@@ -260,7 +260,7 @@
                                     <span class="text-zinc-700 dark:text-zinc-300">Half Day Allowed</span>
                                 </label>
                                 <label class="flex items-center gap-2 cursor-pointer text-sm">
-                                    <flux:checkbox wire:model="is_sandwich_applicable" />
+                                    <flux:checkbox wire:model.live="is_sandwich_applicable" />
                                     <span class="text-zinc-700 dark:text-zinc-300">Sandwich Policy</span>
                                 </label>
                                 <label class="flex items-center gap-2 cursor-pointer text-sm">
@@ -276,6 +276,15 @@
                                     <span class="text-zinc-700 dark:text-zinc-300">Attachment Required</span>
                                 </label>
                             </div>
+                            {{-- Sandwich threshold — only when the policy is on --}}
+                            @if($is_sandwich_applicable)
+                                <div class="rounded-xl border border-amber-100 dark:border-amber-900/40 bg-amber-50/50 dark:bg-amber-900/10 p-4">
+                                    <flux:input wire:model="sandwich_min_days" type="number" min="0" max="31"
+                                        label="Sandwich applies from (days)"
+                                        description="Weekends/holidays inside the leave count as leave only when the request spans at least this many days. 0 = always apply." />
+                                </div>
+                            @endif
+
                             <div class="grid grid-cols-2 gap-3">
                                 <flux:input wire:model="carry_forward_limit" type="number" min="0"
                                     label="CF Limit (days, 0 = unlimited)" />

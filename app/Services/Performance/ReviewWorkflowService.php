@@ -8,6 +8,7 @@ use App\Models\PerformanceCycle;
 use App\Models\PerformanceReview;
 use App\Models\PerformanceReviewScore;
 use App\Models\PerformanceTemplate;
+use App\Models\ReviewWeightage;
 use App\Models\User;
 use App\Notifications\KpiAssignedNotification;
 use App\Notifications\ReviewCycleStartedNotification;
@@ -19,6 +20,7 @@ class ReviewWorkflowService
     public function __construct(
         private readonly KpiScoringEngine $scoringEngine,
         private readonly TimelineService $timeline,
+        private readonly ParticipantService $participants,
     ) {}
 
     /**
@@ -55,6 +57,9 @@ class ReviewWorkflowService
                     );
                 }
 
+                // Multi-reviewer set: self + team lead + dept head (Phase D)
+                $this->participants->createParticipantsFor($review);
+
                 $employee->user->notify(new ReviewCycleStartedNotification($cycle));
 
                 $this->timeline->record(
@@ -81,20 +86,14 @@ class ReviewWorkflowService
     {
         $this->assertReviewEditable($review, ['draft', 'in_progress']);
 
-        DB::transaction(function () use ($review, $scores) {
-            foreach ($scores as $row) {
-                PerformanceReviewScore::updateOrCreate(
-                    ['review_id' => $review->id, 'component_id' => $row['component_id']],
-                    ['self_score' => $row['self_score'], 'self_comment' => $row['self_comment'] ?? null],
-                );
-            }
+        $participant = $review->participants()->where('reviewer_role', 'self')->first()
+            ?? $this->participants->createParticipantsFor($review, notify: false)->firstWhere('reviewer_role', 'self');
 
-            $review->update([
-                'status' => 'submitted',
-                'submitted_at' => now(),
-                'self_submitted_at' => now(),
-            ]);
-        });
+        $this->participants->submit($participant, array_map(fn (array $row) => [
+            'component_id' => $row['component_id'],
+            'score' => $row['self_score'],
+            'comment' => $row['self_comment'] ?? null,
+        ], $scores));
 
         $this->timeline->record(
             $review->employee,
@@ -115,19 +114,22 @@ class ReviewWorkflowService
     {
         $this->assertReviewEditable($review, ['submitted']);
 
-        DB::transaction(function () use ($review, $scores, $managerFeedback) {
-            foreach ($scores as $row) {
-                PerformanceReviewScore::where('review_id', $review->id)
-                    ->where('component_id', $row['component_id'])
-                    ->update(['manager_score' => $row['manager_score'], 'manager_comment' => $row['manager_comment'] ?? null]);
-            }
-
-            $review->update([
-                'status' => 'manager_reviewed',
-                'manager_feedback' => $managerFeedback,
-                'manager_submitted_at' => now(),
+        $participant = $review->participants()->where('reviewer_id', $manager->id)->first()
+            ?? $review->participants()->where('reviewer_role', 'team_lead')->first()
+            ?? $review->participants()->create([
+                'reviewer_id' => $manager->id,
+                'reviewer_role' => 'team_lead',
+                'weight_percent' => ReviewWeightage::weightFor('team_lead', $review->employee?->department_id),
+                'status' => 'pending',
             ]);
-        });
+
+        $this->participants->submit($participant, array_map(fn (array $row) => [
+            'component_id' => $row['component_id'],
+            'score' => $row['manager_score'],
+            'comment' => $row['manager_comment'] ?? null,
+        ], $scores));
+
+        $review->update(['manager_feedback' => $managerFeedback]);
 
         $this->timeline->record(
             $review->employee,
@@ -171,6 +173,15 @@ class ReviewWorkflowService
     {
         if (! in_array($review->status, ['manager_reviewed', 'hr_reviewed'], true)) {
             throw new \DomainException('Only manager-reviewed or HR-reviewed records can be locked.');
+        }
+
+        // Spec Part 3.3: a review is only complete when every participant has
+        // submitted. The HR-reviewed stage acts as the explicit HR override.
+        if ($review->status !== 'hr_reviewed' && ! $review->allParticipantsSubmitted()) {
+            $pending = $review->participants()->where('status', '!=', 'submitted')
+                ->with('reviewer')->get()
+                ->map(fn ($p) => $p->reviewer?->name ?? $p->roleLabel())->implode(', ');
+            throw new \DomainException("Waiting on reviewer submissions: {$pending}. HR review can override.");
         }
 
         if ($review->performanceCycle) {

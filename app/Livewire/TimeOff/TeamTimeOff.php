@@ -6,6 +6,7 @@ use App\Models\Employee;
 use App\Models\LeaveBalance;
 use App\Models\LeaveRequest;
 use App\Models\LeaveType;
+use App\Models\PublicHoliday;
 use App\Services\LeaveService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -356,6 +357,12 @@ class TeamTimeOff extends Component
             ->where('end_date', '>=', $gridStart->toDateString())
             ->get();
 
+        // Public holidays overlaid on the calendar for the visible grid.
+        $holidays = PublicHoliday::active()
+            ->whereBetween('date', [$gridStart->toDateString(), $gridEnd->toDateString()])
+            ->get()
+            ->keyBy(fn ($h) => $h->date->toDateString());
+
         $calendarDays = [];
         $cursor = $gridStart->copy();
         while ($cursor->lte($gridEnd)) {
@@ -365,8 +372,12 @@ class TeamTimeOff extends Component
                     'name' => $r->employee->user->name ?? '—',
                     'type' => $r->leaveType->name ?? 'Leave',
                     'color' => $r->leaveType->color ?? '#6366f1',
+                    // Comp-Offs are surfaced distinctly from ordinary leave.
+                    'isCompOff' => ($r->leaveType->category ?? null) === 'comp_off',
                 ])
                 ->values();
+
+            $holiday = $holidays->get($cursor->toDateString());
 
             $calendarDays[] = [
                 'date' => $cursor->copy(),
@@ -374,6 +385,8 @@ class TeamTimeOff extends Component
                 'isToday' => $cursor->isToday(),
                 'isWeekend' => $cursor->isWeekend(),
                 'leaves' => $dayLeaves,
+                'holiday' => $holiday ? ['name' => $holiday->name, 'color' => $holiday->displayColor()] : null,
+                'compOffCount' => $dayLeaves->where('isCompOff', true)->count(),
             ];
             $cursor->addDay();
         }

@@ -11,6 +11,7 @@ use App\Models\AttendanceRegularisation;
 use App\Models\AttendanceSetting;
 use App\Models\BiometricDevice;
 use App\Models\BreakLog;
+use App\Models\Employee;
 use App\Models\LeaveBalance;
 use App\Models\LeaveRequest;
 use App\Models\PublicHoliday;
@@ -21,7 +22,7 @@ use App\Models\WfhReport;
 use App\Notifications\AttendanceRegularisationNotification;
 use App\Notifications\RegularisationReviewedNotification;
 use App\Services\AiAssistant;
-use App\Services\Attendance\PunchClassifier;
+use App\Services\Attendance\PunchTimeline as PunchTimelineEngine;
 use App\Services\AttendanceService;
 use App\Support\UserAgent;
 use Carbon\CarbonPeriod;
@@ -31,9 +32,12 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 
 class AttendanceTracker extends Component
 {
+    use WithFileUploads;
+
     public $todayAttendance;
 
     /** Active BreakLog record (null when not on break). */
@@ -93,11 +97,14 @@ class AttendanceTracker extends Component
     /** Current-week (Sun–Sat) day-by-day summary — independent of the calendar/period filters. */
     public array $weekSummary = [];
 
-    /** Chronological punch/break events for today. */
-    public array $todayTimeline = [];
-
-    /** Full Attendance Journey — every biometric punch for today, classified. */
-    public array $attendanceJourney = [];
+    /**
+     * Session-based punch journey for the enterprise timeline: neutral IN/OUT
+     * nodes, auto-paired work sessions, live/missing/duplicate flags. Never
+     * guesses the reason for an OUT.
+     *
+     * @var array<string, mixed>
+     */
+    public array $punchJourney = [];
 
     /** Smart Attendance Alerts — missing check-in/out/break, past & present. */
     public array $attendanceAlerts = [];
@@ -121,6 +128,19 @@ class AttendanceTracker extends Component
 
     /** Total available leave balance (current year, all types). */
     public float $leaveBalance = 0;
+
+    /** On-time streak + peer benchmarking for the redesigned right rail. */
+    public int $onTimeStreak = 0;
+
+    public int $bestStreak = 0;
+
+    public int $myOnTimeRate = 100;
+
+    public int $teamOnTimeRate = 0;
+
+    public int $companyOnTimeRate = 0;
+
+    public ?string $teamName = null;
 
     /** Today's biometric daily summary (raw punch count, device, sync). */
     public $todaySummary = null;
@@ -157,6 +177,13 @@ class AttendanceTracker extends Component
     public ?array $detail = null;
 
     // Regularisation form fields
+
+    /** Regularisation type: 'punch' (fix in/out) or 'half_day' (mark half day). */
+    public string $regType = 'punch';
+
+    /** Which half the half-day request covers: 'first' or 'second'. */
+    public string $regHalfDayPeriod = 'first';
+
     public bool $regFixIn = false;
 
     public bool $regFixOut = true;
@@ -167,7 +194,15 @@ class AttendanceTracker extends Component
 
     public string $regCheckOut = '';
 
+    /** Punch method the corrected check-in / check-out was actually made with. */
+    public string $regCheckInMethod = 'id_card';
+
+    public string $regCheckOutMethod = 'id_card';
+
     public string $regReason = '';
+
+    /** Optional supporting document (gate pass, medical slip, screenshot…). */
+    public $regAttachment = null;
 
     public function mount()
     {
@@ -261,6 +296,7 @@ class AttendanceTracker extends Component
                 'mode' => isset($attendanceMap[$dateKey]) ? ($attendanceMap[$dateKey]->work_mode ?? 'office') : null,
                 'is_today' => $d->isToday(),
                 'is_holiday' => isset($holidayMap[$dateKey]),
+                'regularized' => isset($attendanceMap[$dateKey]) && $attendanceMap[$dateKey]->is_regularized,
             ];
         }
 
@@ -284,8 +320,8 @@ class AttendanceTracker extends Component
 
         // 9. This-week summary + today's punch/break timeline
         $this->weekSummary = $this->buildWeekSummary($employee);
-        $this->todayTimeline = $this->buildTodayTimeline();
-        $this->attendanceJourney = $this->buildAttendanceJourney($employee);
+        $this->punchJourney = $this->buildPunchJourney($employee);
+        $this->loadStreakAndBenchmark($employee);
 
         // 10. Biometric daily summary + device (needed by the alerts below)
         $this->todaySummary = AttendanceDailySummary::where('employee_id', $employee->id)
@@ -421,6 +457,79 @@ class AttendanceTracker extends Component
      *
      * @return array<int, array{date:string, label:string, day:int, status:string, mode:?string, hours:float, is_today:bool, is_future:bool}>
      */
+    /**
+     * On-time streak (consecutive on-time working days back from the latest
+     * one) plus this-month on-time rate for the employee, their department and
+     * the company — powers the redesigned right rail (streak + benchmark).
+     */
+    protected function loadStreakAndBenchmark($employee): void
+    {
+        $recent = Attendance::where('employee_id', $employee->id)
+            ->where('date', '>=', now()->subDays(150)->toDateString())
+            ->get(['date', 'is_late', 'check_in'])
+            ->keyBy(fn ($a) => Carbon::parse($a->date)->toDateString());
+
+        // Best run of on-time days across the window.
+        $best = 0;
+        $run = 0;
+        foreach ($recent->sortKeys() as $a) {
+            if ($a->check_in && ! $a->is_late) {
+                $run++;
+                $best = max($best, $run);
+            } else {
+                $run = 0;
+            }
+        }
+
+        // Current streak: walk working days backward until a late/absent day.
+        $streak = 0;
+        $cursor = Carbon::today();
+        if (! isset($recent[$cursor->toDateString()])) {
+            $cursor->subDay(); // today not punched yet — start from yesterday
+        }
+        for ($i = 0; $i < 150; $i++) {
+            if ($cursor->isSunday()) {
+                $cursor->subDay();
+
+                continue;
+            }
+            $a = $recent[$cursor->toDateString()] ?? null;
+            if ($a && $a->check_in && ! $a->is_late) {
+                $streak++;
+            } elseif ($cursor->lt(Carbon::today())) {
+                break; // a past working day that was late, incomplete, or absent
+            }
+            $cursor->subDay();
+        }
+
+        $this->onTimeStreak = $streak;
+        $this->bestStreak = max($best, $streak);
+
+        // On-time rate = on-time / present, this month.
+        $monthStart = now()->startOfMonth()->toDateString();
+        $rate = function (array $ids) use ($monthStart): int {
+            if ($ids === []) {
+                return 0;
+            }
+            $base = Attendance::whereIn('employee_id', $ids)->where('date', '>=', $monthStart)->whereNotNull('check_in');
+            $present = (clone $base)->count();
+            if ($present === 0) {
+                return 0;
+            }
+            $late = (clone $base)->where('is_late', true)->count();
+
+            return (int) round(($present - $late) / $present * 100);
+        };
+
+        $this->myOnTimeRate = $rate([$employee->id]);
+        $teamIds = $employee->department_id
+            ? Employee::where('department_id', $employee->department_id)->where('status', 'active')->pluck('id')->all()
+            : [$employee->id];
+        $this->teamOnTimeRate = $rate($teamIds);
+        $this->companyOnTimeRate = $rate(Employee::where('status', 'active')->pluck('id')->all());
+        $this->teamName = $employee->department?->name;
+    }
+
     protected function buildWeekSummary($employee): array
     {
         $weekStart = Carbon::today()->startOfWeek(Carbon::SUNDAY);
@@ -486,132 +595,55 @@ class AttendanceTracker extends Component
     }
 
     /**
-     * Chronological check-in / break / check-out events for today.
-     *
-     * @return array<int, array{time:string, title:string, type:string, lat?:mixed, lng?:mixed, photo?:?string, device?:array}>
+     * Today's processed punch journey — delegated entirely to the shared
+     * PunchTimeline engine (the single source of truth for attendance
+     * processing). Duplicates, device conflicts, session pairing, totals and
+     * missing-punch flags all come from that one place.
      */
-    protected function buildTodayTimeline(): array
+    protected function buildPunchJourney($employee): array
     {
-        if (! $this->todayAttendance || ! $this->todayAttendance->check_in) {
-            return [];
-        }
-
-        $events = [[
-            'time' => $this->todayAttendance->check_in->format('h:i A'),
-            'title' => 'Clocked in'.($this->todayAttendance->is_late ? ' (late)' : ''),
-            'type' => $this->todayAttendance->is_late ? 'late' : 'in',
-            'lat' => $this->todayAttendance->check_in_lat,
-            'lng' => $this->todayAttendance->check_in_lng,
-            'photo' => $this->todayAttendance->check_in_photo,
-            'device' => UserAgent::parse($this->todayAttendance->check_in_user_agent),
-            'method' => PunchMethod::tryFrom((string) $this->todayAttendance->check_in_method),
-        ]];
-
-        $breaks = BreakLog::where('attendance_id', $this->todayAttendance->id)
-            ->orderBy('break_start')->get();
-        foreach ($breaks as $b) {
-            if ($b->break_start) {
-                $events[] = ['time' => Carbon::parse($b->break_start)->format('h:i A'), 'title' => 'Break started', 'type' => 'break'];
-            }
-            if ($b->break_end) {
-                $events[] = ['time' => Carbon::parse($b->break_end)->format('h:i A'), 'title' => 'Resumed work', 'type' => 'resume'];
-            }
-        }
-
-        if ($this->todayAttendance->check_out) {
-            $events[] = [
-                'time' => $this->todayAttendance->check_out->format('h:i A'),
-                'title' => 'Clocked out',
-                'type' => 'out',
-                'lat' => $this->todayAttendance->check_out_lat,
-                'lng' => $this->todayAttendance->check_out_lng,
-                'photo' => $this->todayAttendance->check_out_photo,
-                'device' => UserAgent::parse($this->todayAttendance->check_out_user_agent),
-                'method' => PunchMethod::tryFrom((string) $this->todayAttendance->check_out_method),
-            ];
-        }
-
-        return $events;
-    }
-
-    /**
-     * Full Attendance Journey — every individual biometric punch of the day,
-     * classified into Clock In / Break Start / Break End / Clock Out by the
-     * alternating in→out sequence. Empty when no per-punch data has synced
-     * (the timeline then falls back to first/last via buildTodayTimeline()).
-     *
-     * @return array<int, array{time:string, title:string, type:string, method:?PunchMethod, source:?string, location:?string, lat:mixed, lng:mixed}>
-     */
-    protected function buildAttendanceJourney($employee): array
-    {
-        $punches = AttendancePunch::where('employee_id', $employee->id)
-            ->whereDate('punch_date', Carbon::today()->toDateString())
+        $today = Carbon::today();
+        $raw = AttendancePunch::where('employee_id', $employee->id)
+            ->whereDate('punch_date', $today->toDateString())
             ->orderBy('punched_at')
             ->get();
 
-        return $this->classifyPunches($punches);
+        $summary = AttendanceDailySummary::where('employee_id', $employee->id)
+            ->whereDate('date', $today->toDateString())
+            ->first();
+
+        return $this->assemblePunchJourney($raw, $today, $summary);
     }
 
     /**
-     * Dedupe + classify a day's raw punches into timeline events.
-     * Shared by today's Journey and the Punch Timeline history.
+     * Thin wrapper over the PunchTimeline engine (kept as a seam for tests).
      *
-     * @param  Collection<int, AttendancePunch>  $punches
+     * @param  Collection<int, AttendancePunch>  $raw
+     * @return array<string, mixed>
      */
-    protected function classifyPunches($punches): array
+    protected function assemblePunchJourney($raw, Carbon $day, ?AttendanceDailySummary $summary = null): array
     {
-        if ($punches->isEmpty()) {
-            return [];
+        return app(PunchTimelineEngine::class)->process(collect($raw), $day, $summary);
+    }
+
+    /** Memoised today's-minutes result (one-element array so null is cacheable). */
+    protected ?array $todayValidatedCache = null;
+
+    /**
+     * Today's working minutes from validated sessions — used by the period
+     * stats and daily chart, which otherwise report 0h while the day is open.
+     * Null when no punch data exists (pure web-punch fallback applies).
+     */
+    protected function todayValidatedMinutes($employee): ?int
+    {
+        if ($this->todayValidatedCache === null) {
+            $journey = $this->punchJourney !== [] ? $this->punchJourney : $this->buildPunchJourney($employee);
+            $this->todayValidatedCache = [
+                ($journey['raw_count'] ?? 0) > 0 ? (int) $journey['working_minutes'] : null,
+            ];
         }
 
-        // Collapse device noise (repeated reads / a card tap plus a face verify
-        // seconds apart) into real presence events via the shared classifier, so
-        // a stray punch can't flip the in/out alternation into a phantom break.
-        $punches = app(PunchClassifier::class)->dedupe(collect($punches));
-
-        $n = $punches->count();
-
-        return $punches->map(function (AttendancePunch $p, int $i) use ($n, $punches) {
-            $isEntry = $i % 2 === 0;                 // even index = entered / clocked in
-            [$title, $type] = match (true) {
-                $i === 0 => ['Clocked in', 'in'],
-                $i === $n - 1 && ! $isEntry => ['Clocked out', 'out'],
-                $isEntry => ['Returned from break', 'resume'],
-                default => ['Break started', 'break'],
-            };
-
-            // Classify a break by when it starts and how long until the return punch.
-            if ($type === 'break') {
-                $next = $punches->get($i + 1);
-                $gapMin = $next ? (int) $p->punched_at->diffInMinutes($next->punched_at) : null;
-                $hour = (int) $p->punched_at->format('G');
-                $kind = match (true) {
-                    $gapMin === null => 'Break (no return punch)',
-                    $gapMin > 90 => 'Long break',
-                    $hour >= 12 && $hour < 16 && $gapMin >= 20 => 'Lunch break',
-                    $gapMin < 20 => 'Tea break',
-                    default => 'Personal break',
-                };
-                $title = $kind.($gapMin !== null ? " · {$gapMin}m" : '');
-            }
-
-            // Minutes since the previous kept punch (shown as "↓ 37 mins").
-            $prev = $i > 0 ? $punches->get($i - 1) : null;
-
-            return [
-                'time' => $p->punched_at->format('h:i A'),
-                'title' => $title,
-                'type' => $type,
-                'method' => $p->methodEnum()?->value,   // string (Livewire-safe)
-                'source' => $p->source,
-                'location' => $p->location,
-                'device' => $p->device_serial,
-                'lat' => $p->lat,
-                'lng' => $p->lng,
-                'gap_min' => $prev ? (int) $prev->punched_at->diffInMinutes($p->punched_at) : null,
-                'verify' => $p->verify_raw,
-            ];
-        })->all();
+        return $this->todayValidatedCache[0];
     }
 
     /** Punch Timeline history — every visible day's punches as classified events. */
@@ -645,7 +677,7 @@ class AttendanceTracker extends Component
 
         $this->logTimeline = $history->map(function ($item) use ($punchesByDay, $breaksByAttendance) {
             $key = $item->date->toDateString();
-            $events = $this->classifyPunches($punchesByDay->get($key, collect()));
+            $events = app(PunchTimelineEngine::class)->neutralEvents($punchesByDay->get($key, collect()));
 
             // Fallback: synthesise from the attendance row + break logs.
             if ($events === [] && $item->check_in) {
@@ -705,6 +737,7 @@ class AttendanceTracker extends Component
                 'break' => (int) ($item->break_minutes ?? 0),
                 'missing' => (! $item->check_out && ! $item->date->isToday()) || $item->missing_checkout,
                 'reg_status' => $item->regularisation?->status,
+                'is_regularized' => (bool) $item->is_regularized,
                 'events' => $events,
             ];
         })->values()->all();
@@ -729,24 +762,15 @@ class AttendanceTracker extends Component
 
         // ── Today ──
         if ($this->todayAttendance) {
-            if ($this->todayAttendance->check_in && ! $this->todayAttendance->check_out && $shiftOver) {
+            // Today's missing punches are owned by the Attendance Journey banner
+            // (single place per issue) — only alert here when the journey has no
+            // punch data to surface it itself.
+            $journeyOwnsToday = ($this->punchJourney['raw_count'] ?? 0) > 0;
+            if (! $journeyOwnsToday && $this->todayAttendance->check_in && ! $this->todayAttendance->check_out && $shiftOver) {
                 $alerts[] = [
                     'type' => 'missing_checkout',
                     'label' => 'Missing Check-Out',
                     'detail' => 'Today · clocked in at '.$this->todayAttendance->check_in->format('h:i A'),
-                    'date' => $today->toDateString(),
-                    'action' => true,
-                ];
-            }
-
-            // Break parity from the journey: an unclosed break = missing return punch.
-            $breakStarts = collect($this->attendanceJourney)->where('type', 'break')->count();
-            $breakEnds = collect($this->attendanceJourney)->where('type', 'resume')->count();
-            if ($breakStarts > $breakEnds && $this->todayAttendance->check_out) {
-                $alerts[] = [
-                    'type' => 'missing_break_end',
-                    'label' => 'Missing Break End',
-                    'detail' => 'Today · a break-return punch was not recorded',
                     'date' => $today->toDateString(),
                     'action' => true,
                 ];
@@ -774,22 +798,13 @@ class AttendanceTracker extends Component
                 ];
             }
 
-            // Long break (> 90m single gap, from the journey classification).
-            if (collect($this->attendanceJourney)->contains(fn ($e) => $e['type'] === 'break' && str_starts_with($e['title'], 'Long break'))) {
-                $alerts[] = [
-                    'type' => 'long_break',
-                    'label' => 'Long Break',
-                    'detail' => 'Today · a single break exceeded 90 minutes',
-                    'date' => $today->toDateString(),
-                    'action' => false,
-                ];
-            }
-
-            // Overtime worked today (informational).
+            // Overtime worked today — from validated sessions, never raw events.
             $stdMin = (int) round((float) ($this->shift->standard_hours ?? 9) * 60);
-            $workedMin = $this->todayAttendance->check_out
-                ? max(0, (int) $this->todayAttendance->check_in->diffInMinutes($this->todayAttendance->check_out) - (int) ($this->todayAttendance->break_minutes ?? 0))
-                : 0;
+            $workedMin = $journeyOwnsToday
+                ? (int) ($this->punchJourney['working_minutes'] ?? 0)
+                : ($this->todayAttendance->check_out
+                    ? max(0, (int) $this->todayAttendance->check_in->diffInMinutes($this->todayAttendance->check_out) - (int) ($this->todayAttendance->break_minutes ?? 0))
+                    : 0);
             if ($workedMin > $stdMin + 30) {
                 $otMin = $workedMin - $stdMin;
                 $alerts[] = [
@@ -963,7 +978,13 @@ class AttendanceTracker extends Component
             }
         }
 
-        $totalMinutes = $attendances->sum(function ($a) {
+        // Today's minutes come from validated sessions (the day is usually still
+        // open, so check_in→check_out math would report 0h all day long).
+        $todayEngineMin = $this->todayValidatedMinutes($employee);
+        $totalMinutes = $attendances->sum(function ($a) use ($todayEngineMin) {
+            if ($a->date->isToday() && $todayEngineMin !== null) {
+                return $todayEngineMin;
+            }
             if ($a->check_in && $a->check_out) {
                 return $a->check_in->diffInMinutes($a->check_out) - ($a->break_minutes ?? 0);
             }
@@ -1038,7 +1059,9 @@ class AttendanceTracker extends Component
             foreach (CarbonPeriod::create($start, $seriesEnd) as $d) {
                 $att = $attendanceDates->get($d->toDateString());
                 $hours = 0.0;
-                if ($att && $att->check_in && $att->check_out) {
+                if ($d->isToday() && $todayEngineMin !== null) {
+                    $hours = round(max(0, $todayEngineMin) / 60, 1);   // validated sessions, live-inclusive
+                } elseif ($att && $att->check_in && $att->check_out) {
                     $mins = $att->check_in->diffInMinutes($att->check_out) - ($att->break_minutes ?? 0);
                     $hours = round(max(0, $mins) / 60, 1);
                 }
@@ -1421,7 +1444,7 @@ class AttendanceTracker extends Component
                 ])->all(),
         ];
 
-        $this->dispatch('flux:modal:open', name: 'punch-detail');
+        $this->modal('punch-detail')->show();
     }
 
     public function openRegularisation($date)
@@ -1438,56 +1461,75 @@ class AttendanceTracker extends Component
             $this->regFixOut = true; // correcting an existing (wrong) punch
         }
 
-        $this->dispatch('flux:modal:open', name: 'regularisation-modal');
+        $this->modal('regularisation-modal')->show();
     }
 
     public function submitRegularisation()
     {
+        $isHalfDay = $this->regType === 'half_day';
+
         $this->validate([
             'regDate' => 'required|date',
-            'regCheckIn' => $this->regFixIn ? 'required' : 'nullable',
-            'regCheckOut' => $this->regFixOut ? 'required' : 'nullable',
+            'regType' => 'required|in:punch,half_day',
+            'regHalfDayPeriod' => $isHalfDay ? 'required|in:first,second' : 'nullable',
+            'regCheckIn' => $isHalfDay ? 'nullable' : ($this->regFixIn ? 'required' : 'nullable'),
+            'regCheckOut' => $isHalfDay ? 'nullable' : ($this->regFixOut ? 'required' : 'nullable'),
             'regReason' => 'required|min:5',
+            'regAttachment' => 'nullable|file|max:5120|mimes:jpg,jpeg,png,pdf,webp',
         ], [
             'regCheckIn.required' => 'Enter the correct check-in time.',
             'regCheckOut.required' => 'Enter the correct check-out time.',
+            'regAttachment.max' => 'The attachment may not exceed 5 MB.',
         ]);
-
-        if (! $this->regFixIn && ! $this->regFixOut) {
-            \Flux::toast('Tick at least one punch to correct (check-in or check-out).', variant: 'warning');
-
-            return;
-        }
 
         $employee = Auth::user()->employee;
         $attendance = Attendance::where('employee_id', $employee->id)
             ->where('date', $this->regDate)
             ->first();
 
-        // Untouched punches keep their recorded time so approval only
-        // overrides what the employee asked to fix.
-        $requestedIn = $this->regFixIn
-            ? $this->regCheckIn
-            : ($attendance?->check_in?->format('H:i') ?? $this->regCheckIn);
-        $requestedOut = $this->regFixOut
-            ? $this->regCheckOut
-            : ($attendance?->check_out?->format('H:i') ?? $this->regCheckOut);
-
-        if (! $requestedIn || ! $requestedOut) {
-            \Flux::toast('Both times are needed — tick the missing punch and fill it in.', variant: 'warning');
-
-            return;
-        }
-
-        $regularisation = AttendanceRegularisation::create([
+        $payload = [
             'employee_id' => $employee->id,
             'attendance_id' => $attendance?->id,
             'work_date' => $this->regDate,
-            'requested_check_in' => $this->regDate.' '.$requestedIn.':00',
-            'requested_check_out' => $this->regDate.' '.$requestedOut.':00',
+            'regularisation_type' => $this->regType,
             'reason' => $this->regReason,
+            'attachment_path' => $this->regAttachment?->store('regularisation-attachments', 'public'),
             'status' => 'pending',
-        ]);
+            'stage' => 'manager_review',
+        ];
+
+        if ($isHalfDay) {
+            // Half-day request: no punch times, just which half of the day.
+            $payload['half_day_period'] = $this->regHalfDayPeriod;
+        } else {
+            if (! $this->regFixIn && ! $this->regFixOut) {
+                \Flux::toast('Tick at least one punch to correct (check-in or check-out).', variant: 'warning');
+
+                return;
+            }
+
+            // Untouched punches keep their recorded time so approval only
+            // overrides what the employee asked to fix.
+            $requestedIn = $this->regFixIn
+                ? $this->regCheckIn
+                : ($attendance?->check_in?->format('H:i') ?? $this->regCheckIn);
+            $requestedOut = $this->regFixOut
+                ? $this->regCheckOut
+                : ($attendance?->check_out?->format('H:i') ?? $this->regCheckOut);
+
+            if (! $requestedIn || ! $requestedOut) {
+                \Flux::toast('Both times are needed — tick the missing punch and fill it in.', variant: 'warning');
+
+                return;
+            }
+
+            $payload['requested_check_in'] = $this->regDate.' '.$requestedIn.':00';
+            $payload['requested_check_out'] = $this->regDate.' '.$requestedOut.':00';
+            $payload['check_in_method'] = in_array($this->regCheckInMethod, ['face', 'id_card'], true) ? $this->regCheckInMethod : 'id_card';
+            $payload['check_out_method'] = in_array($this->regCheckOutMethod, ['face', 'id_card'], true) ? $this->regCheckOutMethod : 'id_card';
+        }
+
+        $regularisation = AttendanceRegularisation::create($payload);
 
         // Notify the manager AND HR/Admin so either can approve. Notifications
         // are best-effort: the request is already saved, so a mail-transport
@@ -1500,7 +1542,10 @@ class AttendanceTracker extends Component
                 Carbon::parse($this->regDate)->format('d M Y'),
                 'pending',
             );
-            $approvers = User::whereIn('role', ['hr_admin', 'super_admin'])->get();
+            // Route to HR whose department/shift scope covers this employee
+            // (company-wide HR + super admins always included), plus the manager.
+            $approvers = User::whereIn('role', ['hr_admin', 'super_admin'])->get()
+                ->filter(fn ($u) => $u->coversEmployee($employee));
             if ($employee->manager) {
                 $approvers->push($employee->manager);
             }
@@ -1512,8 +1557,8 @@ class AttendanceTracker extends Component
             report($e); // logged for diagnosis; the regularisation is saved regardless
         }
 
-        $this->reset(['regDate', 'regCheckIn', 'regCheckOut', 'regReason', 'regFixIn', 'regFixOut']);
-        $this->dispatch('flux:modal:close', name: 'regularisation-modal');
+        $this->reset(['regDate', 'regCheckIn', 'regCheckOut', 'regReason', 'regFixIn', 'regFixOut', 'regAttachment', 'regType', 'regHalfDayPeriod']);
+        $this->modal('regularisation-modal')->close();
         \Flux::toast('Regularisation request sent to your manager & HR for approval.');
     }
 

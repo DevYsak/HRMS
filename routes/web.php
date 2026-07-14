@@ -9,9 +9,13 @@ use App\Http\Controllers\PayslipController;
 use App\Http\Controllers\ReportController;
 use App\Livewire\AiAssistantPage;
 use App\Livewire\Attendance\AllAttendance;
+use App\Livewire\Attendance\AttendanceReports;
 use App\Livewire\Attendance\AttendanceSettings;
 use App\Livewire\Attendance\AttendanceTracker;
+use App\Livewire\Attendance\BiometricControl;
 use App\Livewire\Attendance\BiometricSummary;
+use App\Livewire\Attendance\CommandCenter;
+use App\Livewire\Attendance\ExecutiveAttendance;
 use App\Livewire\Attendance\TeamAttendance;
 use App\Livewire\AuditLogViewer;
 use App\Livewire\Dashboard;
@@ -25,6 +29,7 @@ use App\Livewire\Employees\EmployeeIndex;
 use App\Livewire\Employees\FinanceEmployeeProfile;
 use App\Livewire\Employees\OrgChart;
 use App\Livewire\Employees\ProbationConfirmation;
+use App\Livewire\Employees\TeamManagement;
 use App\Livewire\ExecutiveDashboard;
 use App\Livewire\FinanceDashboard;
 use App\Livewire\HrAdminDashboard;
@@ -38,6 +43,7 @@ use App\Livewire\Operations\Assets;
 use App\Livewire\Operations\Expenses;
 use App\Livewire\Overtime\ManageOtRequests;
 use App\Livewire\Overtime\MyOtRequests;
+use App\Livewire\Overtime\NexflowOtPanel;
 use App\Livewire\Payroll\Components;
 use App\Livewire\Payroll\FinanceApproval;
 use App\Livewire\Payroll\Incentives;
@@ -50,6 +56,7 @@ use App\Livewire\Performance\AllReviews;
 use App\Livewire\Performance\Dashboard as PerformanceDashboard;
 use App\Livewire\Performance\EmployeeScorecard;
 use App\Livewire\Performance\Goals;
+use App\Livewire\Performance\IncrementCenter;
 use App\Livewire\Performance\KpiDashboard;
 use App\Livewire\Performance\KpiTemplates;
 use App\Livewire\Performance\ManagePips;
@@ -59,7 +66,8 @@ use App\Livewire\Performance\MyPip;
 use App\Livewire\Performance\MyPromotions;
 use App\Livewire\Performance\MyReview;
 use App\Livewire\Performance\MyWarnings;
-use App\Livewire\Performance\ReviewCycles;
+use App\Livewire\Performance\PerformanceCycles;
+use App\Livewire\Performance\ReviewTasks;
 use App\Livewire\Performance\TeamReviews;
 use App\Livewire\Performance\WarningLetters;
 use App\Livewire\Settings\ControlPanel;
@@ -83,7 +91,9 @@ use App\Livewire\TimeOff\TeamTimeOff;
 use App\Livewire\TimeOff\TimeOffSettings;
 use App\Livewire\Wfh\ManageWfhRequests;
 use App\Livewire\Wfh\MyWfhRequests;
+use App\Models\IncrementProposal;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Fortify\Features;
 
 // ======================================================
@@ -135,6 +145,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         // HR / admin only
         Route::middleware('role:manage-employees')->group(function () {
+            Route::get('/teams', TeamManagement::class)->name('teams');
             Route::get('/create', EmployeeCreate::class)->name('create');
             Route::get('/import', EmployeeImport::class)->name('import');
             Route::get('/{employee}/edit', EmployeeEdit::class)->name('edit');
@@ -169,10 +180,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::middleware('role:approve-leave')->group(function () {
             Route::get('/team', TeamAttendance::class)->name('team');
             Route::get('/employees', AllAttendance::class)->name('employees');
-            Route::get('/command-center', \App\Livewire\Attendance\CommandCenter::class)->name('command-center');
-            Route::get('/reports', \App\Livewire\Attendance\AttendanceReports::class)->name('reports');
-            Route::get('/executive', \App\Livewire\Attendance\ExecutiveAttendance::class)->name('executive');
-            Route::get('/biometric-control', \App\Livewire\Attendance\BiometricControl::class)->name('biometric-control');
+            Route::get('/command-center', CommandCenter::class)->name('command-center');
+            Route::get('/reports', AttendanceReports::class)->name('reports');
+            Route::get('/executive', ExecutiveAttendance::class)->name('executive');
+            Route::get('/biometric-control', BiometricControl::class)->name('biometric-control');
         });
         Route::get('/settings', AttendanceSettings::class)->name('settings')->middleware('role:manage-settings');
         Route::get('/biometric-summary', BiometricSummary::class)->name('biometric-summary')->middleware('role:approve-leave');
@@ -191,6 +202,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::prefix('overtime')->name('overtime.')->group(function () {
         Route::get('/my', MyOtRequests::class)->name('my');
         Route::get('/manage', ManageOtRequests::class)->name('manage')->middleware('role:approve-ot');
+        Route::get('/nexflow', NexflowOtPanel::class)->name('nexflow')->middleware('role:approve-ot');
     });
 
     // --------------------------------------------------
@@ -249,13 +261,29 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/my-kpis', MyKpis::class)->name('my-kpis');
         Route::get('/scorecard/{id}', EmployeeScorecard::class)->name('scorecard');
 
+        // Multi-reviewer queue — anyone can be a participant (team lead, dept head, additional)
+        Route::get('/review-tasks', ReviewTasks::class)->name('review-tasks');
+
+        // Increment letter download — own letter, or HR/admin
+        Route::get('/increments/letter/{proposal}', function (IncrementProposal $proposal) {
+            $user = auth()->user();
+            abort_unless($user->canManageEmployees() || $proposal->employee?->user_id === $user->id, 403);
+            abort_unless($proposal->letter_path && Storage::disk('local')->exists($proposal->letter_path), 404);
+
+            return Storage::disk('local')->download(
+                $proposal->letter_path,
+                "increment-letter-{$proposal->cycle->financial_year}.pdf",
+            );
+        })->name('increments.letter');
+
         // Managers, Directors, HR, Finance can see team reviews
         Route::get('/team', TeamReviews::class)->name('team')->middleware('role:review-performance');
 
         // HR / admin only — all reviews and cycle management
         Route::middleware('role:manage-employees')->group(function () {
             Route::get('/employees', AllReviews::class)->name('employees');
-            Route::get('/cycles', ReviewCycles::class)->name('cycles');
+            Route::get('/cycles', PerformanceCycles::class)->name('cycles');
+            Route::get('/increments', IncrementCenter::class)->name('increments');
             Route::get('/kpi-dashboard', KpiDashboard::class)->name('kpi-dashboard');
             Route::get('/kpi-templates', KpiTemplates::class)->name('kpi-templates');
             Route::get('/warnings/manage', WarningLetters::class)->name('warnings.manage');

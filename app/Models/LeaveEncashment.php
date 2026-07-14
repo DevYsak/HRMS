@@ -18,6 +18,7 @@ class LeaveEncashment extends Model
         'requested_days' => 'float',
         'reviewed_at' => 'datetime',
         'finance_reviewed_at' => 'datetime',
+        'claimed_at' => 'datetime',
     ];
 
     public function employee(): BelongsTo
@@ -63,5 +64,11 @@ class LeaveEncashment extends Model
     public function isProcessed(): bool
     {
         return $this->status === 'processed';
+    }
+
+    /** The HR admin currently handling this request (claim-lock). */
+    public function claimer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'claimed_by');
     }
 }

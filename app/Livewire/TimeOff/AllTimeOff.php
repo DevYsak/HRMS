@@ -2,6 +2,7 @@
 
 namespace App\Livewire\TimeOff;
 
+use App\Livewire\Concerns\HandlesClaimLock;
 use App\Models\Employee;
 use App\Models\LeaveBalance;
 use App\Models\LeaveRequest;
@@ -14,6 +15,7 @@ use Livewire\WithPagination;
 
 class AllTimeOff extends Component
 {
+    use HandlesClaimLock;
     use WithFileUploads;
     use WithPagination;
 
@@ -115,13 +117,20 @@ class AllTimeOff extends Component
     {
         abort_unless(Auth::user()->canApproveLeave(), 403);
 
-        $this->viewingId = $id;
         $this->viewingRequest = LeaveRequest::with([
             'employee.user', 'employee.department', 'leaveType',
             'reviewer', 'hrReviewer', 'paymentAuditLogs.changedByUser',
-            'attachments', 'messages.user',
+            'attachments', 'messages.user', 'claimer',
         ])->findOrFail($id);
 
+        // Claim-lock: another in-scope reviewer is already handling this request.
+        if (! $this->claimForReview($this->viewingRequest)) {
+            $this->viewingRequest = null;
+
+            return;
+        }
+
+        $this->viewingId = $id;
         $this->panelReviewComment = '';
         $this->panelHrOverrideStatus = $this->viewingRequest->approved_leave_status
             ?? $this->viewingRequest->requested_leave_status
@@ -134,6 +143,14 @@ class AllTimeOff extends Component
 
     public function closeDetailPanel(): void
     {
+        // Closing without deciding frees the claim for the other reviewers.
+        if ($this->viewingId) {
+            $req = LeaveRequest::find($this->viewingId);
+            if ($req && (int) $req->claimed_by === Auth::id() && $req->status === 'pending') {
+                $this->releaseClaim($req);
+            }
+        }
+
         $this->showDetailPanel = false;
         $this->viewingId = null;
         $this->viewingRequest = null;
@@ -194,6 +211,7 @@ class AllTimeOff extends Component
             'hrReviewer', 'paymentAuditLogs.changedByUser', 'attachments', 'messages.user',
         ])->findOrFail($this->viewingId);
 
+        $this->releaseClaim($request);
         \Flux::toast('Leave approved successfully.', variant: 'success');
     }
 
@@ -224,6 +242,7 @@ class AllTimeOff extends Component
             'hrReviewer', 'paymentAuditLogs.changedByUser', 'attachments', 'messages.user',
         ])->findOrFail($this->viewingId);
 
+        $this->releaseClaim($request);
         \Flux::toast('Leave rejected.', variant: 'danger');
     }
 
@@ -264,7 +283,7 @@ class AllTimeOff extends Component
 
         $this->validate([
             'panelMessage' => 'nullable|string|max:2000',
-            'panelMessageAttachment' => 'nullable|file|max:500|mimes:pdf,jpg,jpeg,png',
+            'panelMessageAttachment' => 'nullable|file|max:5120|mimes:pdf,jpg,jpeg,png,webp',
         ]);
 
         $request = LeaveRequest::findOrFail($this->viewingId);
@@ -487,6 +506,7 @@ class AllTimeOff extends Component
         abort_unless(Auth::user()->canApproveLeave(), 403);
 
         $query = LeaveRequest::with(['employee.user', 'employee.department', 'leaveType', 'reviewer'])
+            ->withCount('messages')
             ->whereHas('employee.user')
             ->when($this->search, fn ($q) => $q->whereHas('employee.user', fn ($q2) => $q2->where('name', 'like', '%'.$this->search.'%')))
             ->when($this->status, fn ($q) => $q->where('status', $this->status))

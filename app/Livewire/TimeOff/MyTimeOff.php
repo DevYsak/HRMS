@@ -3,13 +3,16 @@
 namespace App\Livewire\TimeOff;
 
 use App\Models\DecemberMandatoryDay;
+use App\Models\Employee;
 use App\Models\HolidayPaySetting;
 use App\Models\HolidayWorkRequest;
 use App\Models\LeaveBalance;
 use App\Models\LeaveEncashment;
+use App\Models\LeaveRequest;
 use App\Models\LeaveType;
 use App\Models\PublicHoliday;
 use App\Models\User;
+use App\Models\WfhRequest;
 use App\Notifications\LeaveEncashmentNotification;
 use App\Services\HolidayWorkService;
 use App\Services\LeaveService;
@@ -58,11 +61,16 @@ class MyTimeOff extends Component
 
     public string $requested_leave_status = 'paid';
 
+    /** Leave Planner widget (independent of the Apply modal). */
+    public ?string $planner_start = null;
+
+    public ?string $planner_end = null;
+
     public string $reason = '';
 
     public string $employee_remarks = '';
 
-    /** Single supporting document (max 500 KB), previewed before submit. */
+    /** Single supporting document (max 5 MB), previewed before submit. */
     public $attachment = null;
 
     // ---- Conversation thread (message/attachment back-and-forth with the reviewer) ----
@@ -175,7 +183,7 @@ class MyTimeOff extends Component
             'requested_leave_status' => 'required|in:paid,unpaid',
             'reason' => 'required|min:5',
             'employee_remarks' => 'nullable|string|max:1000',
-            'attachment' => 'nullable|file|max:500|mimes:pdf,jpg,jpeg,png',
+            'attachment' => 'nullable|file|max:5120|mimes:pdf,jpg,jpeg,png,webp',
             'encash_leave_type_id' => $this->showEncashModal
                 ? 'required|exists:leave_types,id'
                 : 'nullable',
@@ -199,6 +207,42 @@ class MyTimeOff extends Component
         $this->resetErrorBag();
         $this->resetValidation();
         $this->requested_leave_status = 'paid';
+        $this->showRequestModal = true;
+    }
+
+    /**
+     * Carry the Leave Planner's dates into the Apply modal and open it.
+     * Reuses the same fields/validation/calculation as a normal apply.
+     */
+    public function applyFromPlanner(): void
+    {
+        $this->reset([
+            'leave_type_id', 'is_half_day', 'half_day_period',
+            'requested_leave_status', 'reason', 'employee_remarks', 'attachment',
+        ]);
+        $this->requested_leave_status = 'paid';
+        $this->start_date = $this->planner_start;
+        $this->end_date = $this->planner_end;
+        $this->resetErrorBag();
+        $this->resetValidation();
+        $this->showRequestModal = true;
+    }
+
+    /**
+     * Apply leave straight from a calendar day: opens the Apply modal with the
+     * clicked date pre-filled as a single-day request (same fields/validation).
+     */
+    public function applyOnDate(string $date): void
+    {
+        $this->reset([
+            'leave_type_id', 'is_half_day', 'half_day_period',
+            'requested_leave_status', 'reason', 'employee_remarks', 'attachment',
+        ]);
+        $this->requested_leave_status = 'paid';
+        $this->start_date = $date;
+        $this->end_date = $date;
+        $this->resetErrorBag();
+        $this->resetValidation();
         $this->showRequestModal = true;
     }
 
@@ -273,7 +317,7 @@ class MyTimeOff extends Component
 
         $leaveType = LeaveType::findOrFail($this->leave_type_id);
 
-        // Store the single supporting document (≤500 KB).
+        // Store the single supporting document (≤5 MB).
         $attachmentsPayload = [];
         if ($this->attachment) {
             $attachmentsPayload[] = [
@@ -356,7 +400,7 @@ class MyTimeOff extends Component
     {
         $this->validate([
             'conversation_body' => 'nullable|string|max:2000',
-            'conversation_attachment' => 'nullable|file|max:500|mimes:pdf,jpg,jpeg,png',
+            'conversation_attachment' => 'nullable|file|max:5120|mimes:pdf,jpg,jpeg,png,webp',
         ]);
 
         $employee = Auth::user()->employee;
@@ -719,16 +763,23 @@ class MyTimeOff extends Component
             $rangeWeekendDays = $rangeWeekendDays->unique()->values();
         }
 
-        // ── Live leave-day count for the selected range (respects half-day + sandwich) ──
+        // ── Live leave-day count for the selected range (respects half-day +
+        // sandwich, including a weekend bridged from an adjacent request) ──
         $rangeDays = null;
         if ($this->start_date && $this->end_date) {
             try {
                 $rs = Carbon::parse($this->start_date);
                 $re = Carbon::parse($this->end_date);
                 if ($rs->lte($re)) {
+                    $svc = app(LeaveService::class);
+                    // Preview the same cross-request bridge the submit will apply
+                    // so the estimate matches what actually gets charged.
+                    if (! $this->is_half_day && $employee && $selectedType) {
+                        [$rs, $re] = $svc->resolveSandwichBridge($employee, $selectedType, $rs, $re);
+                    }
                     $rangeDays = $this->is_half_day
                         ? 0.5
-                        : app(LeaveService::class)->calculateLeaveDays($rs, $re, (bool) ($selectedType?->is_sandwich_applicable));
+                        : $svc->calculateLeaveDays($rs, $re, (bool) ($selectedType?->is_sandwich_applicable), (int) ($selectedType?->sandwich_min_days ?? 0));
                 }
             } catch (\Throwable) {
                 // Invalid partial date input — no count.
@@ -744,8 +795,117 @@ class MyTimeOff extends Component
             ->orderBy('date')
             ->get();
 
+        // Merge balances by leave-type name for the balance cards. Duplicate
+        // leave types in the data would otherwise render as separate cards
+        // (e.g. two "Casual Leave"). Display-only — the raw $balances collection
+        // is left untouched for the stat/forecast logic above.
+        $balanceCards = $balances
+            ->groupBy(fn ($b) => strtolower(trim($b->leaveType->name ?? 'other')))
+            ->map(function ($group) {
+                $first = $group->first();
+                $allocated = (float) $group->sum('allocated_days');
+                $used = (float) $group->sum('used_days');
+                $encashed = (float) $group->sum(fn ($b) => (float) ($b->encashed_days ?? 0));
+
+                return (object) [
+                    'name' => $first->leaveType->name ?? 'Other',
+                    'color' => $first->leaveType->color,
+                    'allocated' => $allocated,
+                    'used' => $used,
+                    'encashed' => $encashed,
+                    'carried' => (float) $group->sum(fn ($b) => (float) ($b->carried_forward_days ?? 0)),
+                    'comp_off' => (float) $group->sum(fn ($b) => (float) ($b->comp_off_credits ?? 0)),
+                    'available' => max(0, $allocated - $used - $encashed),
+                ];
+            })
+            // Hide leave types with no activity at all — an all-zero card is noise.
+            ->filter(fn ($c) => $c->allocated > 0 || $c->used > 0 || $c->available > 0
+                || $c->carried > 0 || $c->comp_off > 0 || $c->encashed > 0)
+            ->sortByDesc('allocated')
+            ->values();
+
+        // ── Leave Planner: a quick pre-apply breakdown (reuses the same
+        // weekend/holiday rules as the Apply flow; no new business logic). ──
+        $availableTotal = (float) $balanceCards->sum('available');
+        $plannerResult = null;
+        if ($employee && $this->planner_start && $this->planner_end) {
+            try {
+                $ps = Carbon::parse($this->planner_start);
+                $pe = Carbon::parse($this->planner_end);
+                if ($ps->lte($pe)) {
+                    $total = $ps->diffInDays($pe) + 1;
+                    $weekend = 0;
+                    $cursor = $ps->copy();
+                    while ($cursor->lte($pe)) {
+                        if ($cursor->isWeekend()) {
+                            $weekend++;
+                        }
+                        $cursor->addDay();
+                    }
+                    $holCount = PublicHoliday::query()->active()
+                        ->whereBetween('date', [$ps->toDateString(), $pe->toDateString()])
+                        ->forEmployee($employee)->get()
+                        ->filter->appliesToEmployee($employee)
+                        ->filter(fn ($h) => ! $h->date->isWeekend())
+                        ->count();
+                    $leaveDays = max(0, $total - $weekend - $holCount);
+                    $plannerResult = [
+                        'total' => $total,
+                        'weekend' => $weekend,
+                        'holidays' => $holCount,
+                        'leaveDays' => $leaveDays,
+                        'remaining' => max(0, $availableTotal - $leaveDays),
+                    ];
+                }
+            } catch (\Throwable) {
+                // Invalid partial date input — no breakdown.
+            }
+        }
+
+        // ── Team Availability today (aggregated from existing leave/WFH data) ──
+        $todayStr = now()->toDateString();
+        $leaveTodayRows = LeaveRequest::where('status', 'approved')
+            ->whereDate('start_date', '<=', $todayStr)
+            ->whereDate('end_date', '>=', $todayStr)
+            ->get(['employee_id', 'is_half_day']);
+        $fullLeaveIds = $leaveTodayRows->where('is_half_day', false)->pluck('employee_id')->flip();
+        $halfDayIds = $leaveTodayRows->where('is_half_day', true)->pluck('employee_id')->flip();
+        $wfhIds = WfhRequest::where('status', 'approved')
+            ->whereDate('start_date', '<=', $todayStr)
+            ->whereDate('end_date', '>=', $todayStr)
+            ->pluck('employee_id')->flip();
+        $teamAvailability = Employee::where('status', 'active')->with('department')->get()
+            ->groupBy(fn ($e) => $e->department->name ?? 'Unassigned')
+            ->map(function ($emps, $dept) use ($fullLeaveIds, $halfDayIds, $wfhIds) {
+                $onLeave = $emps->filter(fn ($e) => $fullLeaveIds->has($e->id))->count();
+
+                return (object) [
+                    'dept' => $dept,
+                    'total' => $emps->count(),
+                    'on_leave' => $onLeave,
+                    'half_day' => $emps->filter(fn ($e) => $halfDayIds->has($e->id))->count(),
+                    'wfh' => $emps->filter(fn ($e) => $wfhIds->has($e->id) && ! $fullLeaveIds->has($e->id))->count(),
+                    'present' => max(0, $emps->count() - $onLeave),
+                ];
+            })
+            ->sortByDesc('total')
+            ->values();
+
+        // Hero KPI: total approved leave days taken this calendar year.
+        $approvedThisYearDays = $employee
+            ? (float) $employee->leaveRequests()
+                ->where('status', 'approved')
+                ->whereYear('start_date', now()->year)
+                ->sum('days')
+            : 0.0;
+
         return view('livewire.time-off.my-time-off', [
             'balances' => $balances,
+            'balanceCards' => $balanceCards,
+            'approvedThisYearDays' => $approvedThisYearDays,
+            'availableTotal' => $availableTotal,
+            'plannerResult' => $plannerResult,
+            'teamAvailability' => $teamAvailability,
             'requests' => $requests,
             'leaveTypes' => LeaveType::where(function ($q) {
                 $q->where('allow_paid_request', true)->orWhere('allow_unpaid_request', true);

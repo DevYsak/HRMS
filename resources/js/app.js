@@ -1,6 +1,8 @@
 import ApexCharts from 'apexcharts';
+import gsap from 'gsap';
 
 window.ApexCharts = ApexCharts;
+window.gsap = gsap;
 
 const isDark = () => document.documentElement.classList.contains('dark');
 
@@ -24,6 +26,34 @@ const applyChartTheme = (config, dark) => {
     config.tooltip = { ...(config.tooltip || {}), theme: t.tooltip.theme };
     return config;
 };
+
+/**
+ * Enterprise scroll-reveal: any [data-reveal] section fades/slides up with GSAP
+ * as it enters the viewport (once). Respects prefers-reduced-motion; elements
+ * simply stay visible when GSAP or the observer is unavailable.
+ */
+const initReveals = () => {
+    const g = window.gsap;
+    if (!g || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const els = document.querySelectorAll('[data-reveal]:not([data-revealed])');
+    if (!els.length) return;
+    const io = new IntersectionObserver((entries) => {
+        entries.forEach((e) => {
+            if (!e.isIntersecting) return;
+            io.unobserve(e.target);
+            const children = e.target.querySelectorAll('[data-reveal-item]');
+            if (children.length) {
+                g.fromTo(e.target, { opacity: 0 }, { opacity: 1, duration: 0.35 });
+                g.fromTo(children, { opacity: 0, y: 22 }, { opacity: 1, y: 0, duration: 0.55, ease: 'power3.out', stagger: 0.06 });
+            } else {
+                g.fromTo(e.target, { opacity: 0, y: 26 }, { opacity: 1, y: 0, duration: 0.65, ease: 'power3.out' });
+            }
+        });
+    }, { threshold: 0.1 });
+    els.forEach((el) => { el.setAttribute('data-revealed', '1'); io.observe(el); });
+};
+document.addEventListener('DOMContentLoaded', initReveals);
+document.addEventListener('livewire:navigated', initReveals);
 
 document.addEventListener('alpine:init', () => {
     const Alpine = window.Alpine;
@@ -67,6 +97,67 @@ document.addEventListener('alpine:init', () => {
             if (this._handler) window.removeEventListener('apex-update', this._handler);
             this._observer?.disconnect();
             this.chart?.destroy();
+        },
+    }));
+
+    /**
+     * Enterprise punch timeline: grows the connecting rail left→right, fades
+     * nodes in with a scale pop, and — when the employee is still inside —
+     * keeps a live "currently working" timer ticking every second.
+     *
+     *   <div x-data="punchTimeline({ live: true, startedAtMs: 1720…, base: '02:14' })">
+     */
+    Alpine.data('punchTimeline', (opts = {}) => ({
+        live: !!opts.live,
+        startedAtMs: opts.startedAtMs || null,
+        elapsed: '00h 00m 00s',
+        init() {
+            this.$nextTick(() => this.animateIn());
+            if (this.live && this.startedAtMs) {
+                this.tickTimer();
+                this._timer = setInterval(() => this.tickTimer(), 1000);
+            }
+        },
+        destroy() { if (this._timer) clearInterval(this._timer); },
+        animateIn() {
+            const g = window.gsap;
+            const rail = this.$root.querySelector('[data-tl-progress]');
+            const nodes = this.$root.querySelectorAll('[data-tl-node]');
+            const live = this.$root.querySelector('[data-tl-live]');
+            const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+            if (!g || prefersReduced) {
+                if (rail) rail.style.width = '100%';
+                nodes.forEach((n) => { n.style.opacity = 1; n.style.transform = 'none'; });
+                if (live) this.pulse(live);
+                return;
+            }
+
+            g.set(nodes, { opacity: 0, scale: 0.4 });
+            const tl = g.timeline();
+            if (rail) {
+                tl.fromTo(rail, { width: '0%' }, { width: '100%', duration: 0.9, ease: 'power2.inOut' }, 0);
+            }
+            tl.to(nodes, { opacity: 1, scale: 1, duration: 0.4, ease: 'back.out(2)', stagger: 0.08 }, 0.15);
+            // Approved-regularization punches land with a distinct elastic pop so the
+            // employee sees the correction arrive in the timeline.
+            const regs = this.$root.querySelectorAll('[data-tl-reg] .pa-hz-dot');
+            if (regs.length) {
+                tl.fromTo(regs, { scale: 0.3 }, { scale: 1, duration: 0.9, ease: 'elastic.out(1, 0.45)' }, '>-0.1');
+            }
+            tl.add(() => { if (live) this.pulse(live); });
+        },
+        pulse(el) {
+            const g = window.gsap;
+            if (!g) return;
+            g.to(el, { scale: 1.18, duration: 0.9, repeat: -1, yoyo: true, ease: 'sine.inOut', transformOrigin: 'center' });
+        },
+        tickTimer() {
+            const diff = Math.max(0, Math.floor((Date.now() - this.startedAtMs) / 1000));
+            const h = String(Math.floor(diff / 3600)).padStart(2, '0');
+            const m = String(Math.floor((diff % 3600) / 60)).padStart(2, '0');
+            const s = String(diff % 60).padStart(2, '0');
+            this.elapsed = `${h}h ${m}m ${s}s`;
         },
     }));
 

@@ -36,6 +36,7 @@ class OtRequest extends Model
         return [
             'work_date' => 'date',
             'reviewed_at' => 'datetime',
+            'claimed_at' => 'datetime',
         ];
     }
 
@@ -127,5 +128,11 @@ class OtRequest extends Model
         $date = $this->work_date instanceof Carbon ? $this->work_date->toDateString() : now()->toDateString();
 
         return Carbon::parse($date.' '.$value);
+    }
+
+    /** The HR admin currently handling this request (claim-lock). */
+    public function claimer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'claimed_by');
     }
 }

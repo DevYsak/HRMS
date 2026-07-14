@@ -38,10 +38,11 @@ test('my attendance page shows the Phase 6 analytics panels', function () {
     ]);
 
     Livewire::test(AttendanceTracker::class)
-        ->assertSee('Attendance Health')
+        ->assertSee('Attendance overview')
         ->assertSee('Attendance Score')
         ->assertSee('Working Hours Trend')
         ->assertSee('Attendance Score Trend')
-        ->assertSee('Shift Progress')
-        ->assertSee('Biometric Status');
+        // Redesigned hero + signature AI Coach panel + relocated quick actions.
+        ->assertSee('AI Attendance Coach')
+        ->assertSee('Quick actions');
 });
