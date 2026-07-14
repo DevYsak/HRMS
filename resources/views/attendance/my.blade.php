@@ -149,11 +149,11 @@
 </style>
 
 <div class="pa">
-  {{-- Command bar --}}
-  <div class="pa-cmd">
+  {{-- Analytics header — global period, comparison & mode filters (GA4-style) --}}
+  <div class="pa-cmd" style="backdrop-filter:blur(12px)">
     <div style="flex:1;min-width:120px;display:flex;align-items:center;gap:8px"><flux:icon.clock class="size-4" style="color:var(--pa-faint)" /><span style="font-size:13.5px;font-weight:620;color:var(--pa-ink)">My Attendance</span></div>
     <div class="pa-seg" role="tablist" aria-label="Range">
-      @foreach(['today' => 'Today', 'this_week' => 'Week', 'this_month' => 'Month'] as $val => $label)
+      @foreach(['today' => 'Today', 'this_week' => 'Week', 'this_month' => 'Month', 'quarter' => 'Quarter', 'year' => 'Year'] as $val => $label)
         <button wire:click="$set('statsPeriod', '{{ $val }}')" class="{{ $statsPeriod === $val ? 'on' : '' }}">{{ $label }}</button>
       @endforeach
     </div>
@@ -164,6 +164,8 @@
       <span class="lbl">to</span>
       <input type="date" wire:model.live="rangeTo" aria-label="To date" max="{{ now()->toDateString() }}">
     </div>
+    <x-clean-select model="compareMode" :live="true" title="Comparison window for KPI trends"
+      :options="[['value' => 'prev_period', 'label' => 'vs Previous period'], ['value' => 'last_month', 'label' => 'vs Last month'], ['value' => 'last_year', 'label' => 'vs Last year']]" />
     <x-clean-select model="analyticsMode" :live="true"
       :options="[['value' => '', 'label' => 'All modes'], ...collect(AttendanceMode::cases())->map(fn ($mode) => ['value' => $mode->value, 'label' => $mode->label()])->all()]" />
     <button wire:click="exportLog" class="pa-pill"><flux:icon.arrow-down-tray class="size-4" /> Export</button>
@@ -345,33 +347,67 @@
 <div class="pa">
   {{-- KPI overview · full width --}}
   <div>
-    <div class="pa-panel-h" style="margin-bottom:16px;font-size:15px">Attendance overview <span class="pa-panel-sub">{{ str_replace('_', ' ', $statsPeriod) }}</span></div>
+    <div class="pa-panel-h" style="margin-bottom:16px;font-size:15px">Attendance overview
+      <span class="pa-panel-sub">{{ str_replace('_', ' ', $statsPeriod) }}@if(($comparison['has_data'] ?? false)) · {{ $comparison['label'] }}@endif</span>
+    </div>
     @php
         $prodIndex = (int) min(100, max(0, $compliance));
         $workingH = round(collect($chartDaily)->sum('hours'), 1);
+
+        // Real sparkline from the period's daily hours (last 14 days, normalised
+        // into the 120×28 viewBox, higher hours → higher line). Null when there
+        // aren't 2+ points — the UI simply omits the spark.
+        $sparkDays = collect($chartDaily)->filter(fn ($d) => $d['hours'] !== null)->take(-14)->values();
+        $hoursSpark = null;
+        if ($sparkDays->count() >= 2) {
+            $maxH = max(0.1, (float) $sparkDays->max('hours'));
+            $stepX = 120 / ($sparkDays->count() - 1);
+            $hoursSpark = $sparkDays->map(fn ($d, $i) => round($i * $stepX, 1).','.round(26 - ((float) $d['hours'] / $maxH * 22), 1))->implode(' ');
+        }
+
+        // Real trend chips from the comparison engine — null delta hides the chip.
+        $chip = function (?int $delta, string $suffix = '', bool $goodWhenUp = true) {
+            if ($delta === null || $delta === 0) { return null; }
+            $up = $delta > 0;
+            return ['txt' => ($up ? '▲ ' : '▼ ').abs($delta).$suffix, 'dir' => ($up === $goodWhenUp) ? 'up' : 'down'];
+        };
+        $cmpChips = [
+            'present' => $chip($comparison['present'] ?? null),
+            'hours' => $chip($comparison['hours'] ?? null, 'h'),
+            'ontime' => $chip($comparison['on_time_pct'] ?? null, '%'),
+            'late' => $chip($comparison['late'] ?? null, '', false),
+        ];
+
+        // [label, value, icon, color, chip|plainText, caption, spark?]
         $kpis = [
-            ['Attendance Score', (string) $score, 'shield-check', '#F97316', '▲ 2', 'of 100 · top 12%', '0,20 24,18 48,19 72,12 96,14 120,6', 'up'],
-            ['Present Days', (string) $presentCount, 'check-badge', '#0F9D6E', 'of '.$totalWorkingDays, $lateCount.' late · 0 absent', '0,20 24,17 48,18 72,12 96,10 120,8', 'up'],
-            ['Working Hours', round($workingH).'h', 'clock', '#2F6FEB', 'this pd', 'Avg '.intdiv($avgWorkMin,60).'h '.($avgWorkMin%60).'m/day', '0,14 24,10 48,16 72,9 96,12 120,7', 'up'],
-            ['Productivity', $prodIndex.'%', 'chart-bar', '#0F9D6E', '▲ 3', 'focus '.intdiv($workedMin,60).'h '.($workedMin%60).'m', '0,18 24,15 48,16 72,11 96,12 120,8', 'up'],
-            ['Overtime', $otHours.'h', 'bolt', '#8B5CF6', $otDays.'d', '₹100/hr · pre-approved', '0,22 24,20 48,15 72,17 96,10 120,9', 'up'],
-            ['Leave Balance', rtrim(rtrim(number_format($leaveBalance, 1), '0'), '.'), 'calendar-days', '#2F6FEB', 'days', 'CSL + MDL pool', '0,12 24,12 48,13 72,11 96,12 120,10', 'flat'],
-            ['Late Arrivals', (string) $lateCount, 'exclamation-triangle', '#B45309', $lateCount ? '↓ 1' : '0', 'this period', '0,8 24,14 48,10 72,16 96,15 120,18', $lateCount ? 'down' : 'flat'],
-            ['Missing Punches', (string) $missingCount, 'flag', $missingCount ? '#D64545' : '#0F9D6E', $missingCount ? 'action' : 'clear', $missingCount ? 'regularize now' : 'all reconciled', '0,10 24,12 48,10 72,11 96,10 120,9', 'flat'],
+            ['Attendance Score', (string) $score, 'shield-check', '#F97316', null, 'of 100', null],
+            ['Present Days', (string) $presentCount, 'check-badge', '#0F9D6E', $cmpChips['present'] ?? 'of '.$totalWorkingDays, $lateCount.' late · '.($stats['absent'] ?? 0).' absent', $hoursSpark],
+            ['Working Hours', round($workingH).'h', 'clock', '#2F6FEB', $cmpChips['hours'] ?? 'this pd', 'Avg '.intdiv($avgWorkMin,60).'h '.($avgWorkMin%60).'m/day', $hoursSpark],
+            ['Productivity', $prodIndex.'%', 'chart-bar', '#0F9D6E', $cmpChips['ontime'] ?? null, 'focus '.intdiv($workedMin,60).'h '.($workedMin%60).'m', $hoursSpark],
+            ['Overtime', $otHours.'h', 'bolt', '#8B5CF6', $otDays.'d', 'pre-approved', null],
+            ['Leave Balance', rtrim(rtrim(number_format($leaveBalance, 1), '0'), '.'), 'calendar-days', '#2F6FEB', 'days', 'CSL + MDL pool', null],
+            ['Late Arrivals', (string) $lateCount, 'exclamation-triangle', '#B45309', $cmpChips['late'] ?? null, 'this period', null],
+            ['Missing Punches', (string) $missingCount, 'flag', $missingCount ? '#D64545' : '#0F9D6E', $missingCount ? 'action' : 'clear', $missingCount ? 'regularize now' : 'all reconciled', null],
         ];
     @endphp
     <div class="pa-kpis2" data-reveal>
-      @foreach($kpis as [$lbl, $val, $ic, $clr, $tr, $cmp, $spk, $dir])
-        @php $lastY = last(explode(',', last(explode(' ', $spk)))); @endphp
+      @foreach($kpis as [$lbl, $val, $ic, $clr, $tr, $cmp, $spk])
         <div class="pa-kpi2" data-reveal-item>
           <div class="top">
             <span class="ic" style="background: {{ $clr }}1a; color: {{ $clr }};"><flux:icon :icon="$ic" class="size-4" /></span>
-            <span class="tr {{ $dir }}">{{ $tr }}</span>
+            @if(is_array($tr))
+              <span class="tr {{ $tr['dir'] }}" title="{{ $comparison['label'] ?? '' }}">{{ $tr['txt'] }}</span>
+            @elseif($tr !== null && $tr !== '')
+              <span class="tr">{{ $tr }}</span>
+            @endif
           </div>
           <div class="v">{{ $val }}</div>
           <div class="l">{{ $lbl }}</div>
           <div class="cmp">{{ $cmp }}</div>
-          <svg class="spark" viewBox="0 0 120 28" preserveAspectRatio="none"><polyline points="{{ $spk }}" fill="none" stroke="{{ $clr }}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="120" cy="{{ $lastY }}" r="2.6" fill="{{ $clr }}"/></svg>
+          @if($spk)
+            @php $lastPt = explode(',', last(explode(' ', $spk))); @endphp
+            <svg class="spark" viewBox="0 0 120 28" preserveAspectRatio="none"><polyline points="{{ $spk }}" fill="none" stroke="{{ $clr }}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="{{ $lastPt[0] }}" cy="{{ $lastPt[1] }}" r="2.6" fill="{{ $clr }}"/></svg>
+          @endif
         </div>
       @endforeach
     </div>
@@ -932,18 +968,24 @@
     };
 @endphp
 
-<div class="flex items-center justify-between">
+{{-- Collapsible section shell — state persists per user in localStorage --}}
+<div x-data="{ o: JSON.parse(localStorage.getItem('pa-sec-analytics') ?? 'true') }" x-init="$watch('o', v => localStorage.setItem('pa-sec-analytics', JSON.stringify(v)))">
+<button type="button" @click="o = !o" class="flex w-full items-center justify-between rounded-xl px-1 py-1 text-left transition hover:bg-orange-50/40 dark:hover:bg-zinc-800/40">
     <div class="flex items-center gap-2">
         <span class="inline-flex size-8 items-center justify-center rounded-xl bg-orange-50 text-orange-500"><flux:icon.chart-bar class="size-4" /></span>
         <div class="text-sm font-black text-zinc-900 dark:text-white">Attendance Analytics</div>
         <span class="rounded-full bg-orange-50 px-2 py-0.5 text-[10px] font-bold text-orange-500">{{ ucwords(str_replace('_', ' ', $statsPeriod)) }}{{ $analyticsMode !== '' ? ' · '.AttendanceMode::tryFromValue($analyticsMode)->label() : '' }}</span>
     </div>
-    @if($analyticsMode !== '')
-        <button wire:click="$set('analyticsMode', '')" class="text-[11px] font-bold text-orange-500 hover:underline">Clear mode filter</button>
-    @endif
-</div>
+    <span class="flex items-center gap-3">
+        @if($analyticsMode !== '')
+            <span wire:click.stop="$set('analyticsMode', '')" class="text-[11px] font-bold text-orange-500 hover:underline">Clear mode filter</span>
+        @endif
+        <flux:icon.chevron-down class="size-4 text-zinc-400 transition-transform" ::class="o ? '' : '-rotate-90'" />
+    </span>
+</button>
 
-<div class="grid grid-cols-1 gap-4 lg:grid-cols-12" data-reveal wire:loading.class="opacity-50" wire:target="statsPeriod,analyticsMode,rangeFrom,rangeTo">
+<div x-show="o" x-transition:enter="transition duration-200 ease-out" x-transition:enter-start="-translate-y-1 opacity-0" x-transition:enter-end="translate-y-0 opacity-100"
+     class="mt-2 grid grid-cols-1 gap-4 lg:grid-cols-12" data-reveal wire:loading.class="opacity-50" wire:target="statsPeriod,analyticsMode,rangeFrom,rangeTo">
     {{-- Row 1 --}}
     <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm transition hover:shadow-md lg:col-span-5">
         <div class="mb-1 text-sm font-black text-zinc-900 dark:text-white">Working Hours Trend</div>
@@ -1020,6 +1062,7 @@
         @endif
     </div>
 </div>
+</div>{{-- /collapsible: analytics --}}
 
 {{-- ═══════════════ AI ATTENDANCE INSIGHTS ═══════════════ --}}
 @if(! empty($insightStats))
@@ -1049,16 +1092,21 @@
             ['Attendance Prediction', $ai['prediction'].'%', 'sparkles', '#F97316', null],
         ];
     @endphp
-    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm">
-        <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
+    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm"
+         x-data="{ o: JSON.parse(localStorage.getItem('pa-sec-ai') ?? 'true') }" x-init="$watch('o', v => localStorage.setItem('pa-sec-ai', JSON.stringify(v)))">
+        <button type="button" @click="o = !o" class="flex w-full flex-wrap items-center justify-between gap-2 text-left" :class="o ? 'mb-4' : ''">
             <div class="flex items-center gap-2">
                 <span class="inline-flex size-8 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-amber-400 text-white shadow"><flux:icon.sparkles class="size-4" /></span>
                 <div class="text-sm font-black text-zinc-900 dark:text-white">AI Attendance Insights</div>
                 <span class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">· {{ ucwords(str_replace('_', ' ', $statsPeriod)) }}</span>
             </div>
-            <span class="rounded-full bg-orange-50 px-2.5 py-1 text-[10px] font-bold text-orange-500">Predicted {{ $ai['prediction'] }}% by period end</span>
-        </div>
+            <span class="flex items-center gap-3">
+                <span class="rounded-full bg-orange-50 px-2.5 py-1 text-[10px] font-bold text-orange-500">Predicted {{ $ai['prediction'] }}% by period end</span>
+                <flux:icon.chevron-down class="size-4 text-zinc-400 transition-transform" ::class="o ? '' : '-rotate-90'" />
+            </span>
+        </button>
 
+        <div x-show="o" x-transition:enter="transition duration-200 ease-out" x-transition:enter-start="-translate-y-1 opacity-0" x-transition:enter-end="translate-y-0 opacity-100">
         {{-- Stat cards --}}
         <div class="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-6">
             @foreach($aiCards as [$label, $value, $icon, $color, $trend])
@@ -1098,6 +1146,7 @@
                 @endforeach
             </div>
         @endif
+        </div>{{-- /collapsible body: ai insights --}}
     </div>
 @endif
 
@@ -1124,13 +1173,17 @@
 @endif
 
 {{-- ═══════════════ PUNCH IN / OUT TIMELINE ═══════════════ --}}
-<div id="attendance-log" class="overflow-hidden rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm scroll-mt-6">
+<div id="attendance-log" class="overflow-hidden rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm scroll-mt-6"
+     x-data="{ o: JSON.parse(localStorage.getItem('pa-sec-log') ?? 'true') }" x-init="$watch('o', v => localStorage.setItem('pa-sec-log', JSON.stringify(v)))">
     <div class="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200/70 dark:border-zinc-800 px-5 py-3.5">
-        <h3 class="flex items-center gap-2 text-sm font-black text-zinc-900 dark:text-white"><flux:icon.clock class="size-4 text-orange-500" /> Punch In / Out Timeline
-            <span class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
-                · {{ $statsPeriod === 'custom' && $rangeFrom && $rangeTo ? \Carbon\Carbon::parse($rangeFrom)->format('d M').' – '.\Carbon\Carbon::parse($rangeTo)->format('d M Y') : $calendarMonth->format('M Y') }}
-            </span>
-        </h3>
+        <button type="button" @click="o = !o" class="flex flex-1 items-center gap-2 text-left">
+            <h3 class="flex items-center gap-2 text-sm font-black text-zinc-900 dark:text-white"><flux:icon.clock class="size-4 text-orange-500" /> Punch In / Out Timeline
+                <span class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
+                    · {{ $statsPeriod === 'custom' && $rangeFrom && $rangeTo ? \Carbon\Carbon::parse($rangeFrom)->format('d M').' – '.\Carbon\Carbon::parse($rangeTo)->format('d M Y') : $calendarMonth->format('M Y') }}
+                </span>
+            </h3>
+            <flux:icon.chevron-down class="size-4 text-zinc-400 transition-transform" ::class="o ? '' : '-rotate-90'" />
+        </button>
         <div class="flex flex-wrap items-center gap-2">
             <x-clean-select model="logMode" :live="true"
                 :options="[['value' => '', 'label' => 'All modes'], ...collect(AttendanceMode::cases())->map(fn ($mode) => ['value' => $mode->value, 'label' => $mode->label()])->all()]" />
@@ -1138,6 +1191,7 @@
         </div>
     </div>
 
+    <div x-show="o">
     @php $days = $logMode !== '' ? collect($logTimeline)->where('mode', $logMode)->values() : collect($logTimeline); @endphp
     @if($days->count() > 0)
         <div class="divide-y divide-orange-50">
@@ -1270,6 +1324,7 @@
         </div>
     @endif
     <div class="border-t border-zinc-200/70 dark:border-zinc-800 px-5 py-2 text-center text-[11px] text-zinc-400">All times are based on your shift timezone (IST)</div>
+    </div>{{-- /collapsible body: punch log --}}
 </div>
 
 </div>{{-- end spacing wrapper --}}

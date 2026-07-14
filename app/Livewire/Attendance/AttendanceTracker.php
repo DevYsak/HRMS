@@ -91,6 +91,12 @@ class AttendanceTracker extends Component
 
     public string $statsPeriod = 'this_month';
 
+    /** Comparison window for KPI deltas: prev_period | last_month | last_year. */
+    public string $compareMode = 'prev_period';
+
+    /** Real KPI deltas vs the comparison window (null delta = hide the chip). */
+    public array $comparison = [];
+
     /** Daily working-hours series for the analytics charts (selected period). */
     public array $chartDaily = [];
 
@@ -877,6 +883,11 @@ class AttendanceTracker extends Component
         $this->computeStats();
     }
 
+    public function updatedCompareMode(): void
+    {
+        $this->computeStats();
+    }
+
     /** A custom From/To range drives every chart, insight and the log. */
     public function updatedRangeFrom(): void
     {
@@ -924,6 +935,7 @@ class AttendanceTracker extends Component
             'today' => [Carbon::today(), Carbon::today()],
             'this_week' => [Carbon::now()->startOfWeek(Carbon::SUNDAY), Carbon::now()->endOfWeek(Carbon::SATURDAY)],
             'last_month' => [Carbon::now()->subMonth()->startOfMonth(), Carbon::now()->subMonth()->endOfMonth()],
+            'quarter' => [Carbon::now()->firstOfQuarter(), Carbon::now()->endOfMonth()],
             '3_months' => [Carbon::now()->subMonths(2)->startOfMonth(), Carbon::now()->endOfMonth()],
             'year' => [Carbon::now()->startOfYear(), Carbon::now()->endOfMonth()],
             'custom' => [
@@ -1141,16 +1153,41 @@ class AttendanceTracker extends Component
             : 0;
         $predictedPct = min(100, (int) round(($present + $remainingDays) / $fullWorkDays * 100));
 
-        // Trend vs the previous period of the same length.
+        // Trend vs the selected comparison window (GA4-style): previous period
+        // of the same length, the previous month, or the same period last year.
         $periodDays = max(1, (int) $start->diffInDays($end) + 1);
-        $prevStart = $start->copy()->subDays($periodDays);
-        $prevEnd = $start->copy()->subDay();
+        [$prevStart, $prevEnd] = match ($this->compareMode) {
+            'last_month' => [$start->copy()->subMonthNoOverflow(), $end->copy()->subMonthNoOverflow()],
+            'last_year' => [$start->copy()->subYear(), $end->copy()->subYear()],
+            default => [$start->copy()->subDays($periodDays), $start->copy()->subDay()],
+        };
         $prev = Attendance::where('employee_id', $employee->id)
             ->whereBetween('date', [$prevStart->toDateString(), $prevEnd->toDateString()])
             ->when($this->analyticsMode !== '', fn ($q) => $q->where('work_mode', $this->analyticsMode))
-            ->get(['check_in', 'is_late']);
+            ->get(['check_in', 'check_out', 'break_minutes', 'is_late']);
         $prevPresent = $prev->whereNotNull('check_in')->count();
         $prevLate = $prev->where('is_late', true)->count();
+        $prevMinutes = (int) $prev->sum(fn ($a) => $a->check_in && $a->check_out
+            ? max(0, $a->check_in->diffInMinutes($a->check_out) - ($a->break_minutes ?? 0))
+            : 0);
+        $prevOnTimePct = $prevPresent > 0 ? (int) round(max(0, $prevPresent - $prevLate) / $prevPresent * 100) : null;
+
+        // Real deltas for the KPI band — null delta means "no basis to compare"
+        // and the UI hides the trend chip rather than inventing one.
+        $this->comparison = [
+            'label' => match ($this->compareMode) {
+                'last_month' => 'vs last month',
+                'last_year' => 'vs last year',
+                default => 'vs previous period',
+            },
+            'has_data' => $prev->isNotEmpty(),
+            'present' => $prev->isNotEmpty() ? $present - $prevPresent : null,
+            'late' => $prev->isNotEmpty() ? $late - $prevLate : null,
+            'hours' => $prev->isNotEmpty() ? (int) round(($totalMinutes - $prevMinutes) / 60) : null,
+            'on_time_pct' => ($prevOnTimePct !== null && $workingBasis > 0)
+                ? (int) round($onTime / max(1, $present) * 100) - $prevOnTimePct
+                : null,
+        ];
 
         $fmtTime = fn (?int $m) => $m === null ? null : sprintf('%02d:%02d %s', (intdiv($m, 60) % 12) ?: 12, $m % 60, $m < 720 ? 'AM' : 'PM');
 
