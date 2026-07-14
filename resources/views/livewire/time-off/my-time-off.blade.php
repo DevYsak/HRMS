@@ -1206,7 +1206,7 @@
                 </div>
                 <h3 class="text-xs font-black uppercase tracking-[0.12em] text-zinc-600 dark:text-zinc-300">Leave Calendar</h3>
                 <span class="hidden items-center gap-1 rounded-full bg-orange-50 px-2 py-0.5 text-[9px] font-bold text-orange-600 sm:inline-flex dark:bg-orange-900/20 dark:text-orange-400">
-                    <flux:icon.cursor-arrow-rays class="size-3" /> Click a date to apply
+                    <flux:icon.cursor-arrow-rays class="size-3" /> Click a working day to apply · a holiday to request work
                 </span>
             </div>
             <div class="flex items-center gap-1.5">
@@ -1270,25 +1270,36 @@
                         $cellClasses .= ' ring-2 ring-orange-500 ring-offset-1 dark:ring-offset-zinc-900';
                     }
 
-                    // A day is bookable when it's a current-month working day,
-                    // today or later, with no holiday/leave already on it.
-                    $selectable = $day['isCurrentMonth'] && ! $day['isWeekend'] && ! $day['holiday']
-                        && ! $day['approved'] && ! $day['pending']
-                        && $day['date']->gte(now()->startOfDay());
+                    $isFuture = $day['date']->gte(now()->startOfDay());
+                    // Bookable for LEAVE: a free, future, current-month working day.
+                    $bookableLeave = $day['isCurrentMonth'] && ! $day['isWeekend'] && ! $day['holiday']
+                        && ! $day['approved'] && ! $day['pending'] && $isFuture;
+                    // A future public holiday can be requested to WORK (comp-off / OT).
+                    $workableHoliday = $day['isCurrentMonth'] && $day['holiday']
+                        && ! $day['approved'] && ! $day['pending'] && $isFuture;
 
-                    if ($selectable) {
+                    if ($bookableLeave) {
                         $cellClasses .= ' cursor-pointer hover:ring-2 hover:ring-orange-300 dark:hover:ring-orange-700';
+                    } elseif ($workableHoliday) {
+                        $cellClasses .= ' cursor-pointer hover:ring-2 hover:ring-rose-300 dark:hover:ring-rose-700';
                     }
 
                     $title = $day['holiday']?->name
                         ?? ($day['approved'] ? $day['approved']->leaveType->name . ' (Approved)' : null)
                         ?? ($day['pending'] ? $day['pending']->leaveType->name . ' (Pending)' : null);
                 @endphp
-                @if($selectable)
+                @if($bookableLeave)
                     <button type="button" wire:click="applyOnDate('{{ $day['date']->toDateString() }}')"
                         class="{{ $cellClasses }} group" title="Apply leave on {{ $day['date']->format('d M Y') }}">
                         {{ $day['date']->day }}
                         <span class="pointer-events-none absolute right-1 top-1 hidden text-[9px] font-black text-orange-500 group-hover:block">+</span>
+                    </button>
+                @elseif($workableHoliday)
+                    <button type="button" wire:click="openHolidayWork('{{ $day['date']->toDateString() }}')"
+                        class="{{ $cellClasses }} group" title="Request to work on {{ $day['holiday']->name }} ({{ $day['date']->format('d M') }})">
+                        {{ $day['date']->day }}
+                        <span class="mt-0.5 size-1 rounded-full bg-rose-500 group-hover:hidden"></span>
+                        <span class="pointer-events-none absolute right-0.5 top-0.5 hidden group-hover:block"><flux:icon.briefcase class="size-2.5 text-rose-500" /></span>
                     </button>
                 @else
                     <div class="{{ $cellClasses }}" @if($title) title="{{ $title }}" @endif>
