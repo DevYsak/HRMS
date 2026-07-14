@@ -719,16 +719,23 @@ class MyTimeOff extends Component
             $rangeWeekendDays = $rangeWeekendDays->unique()->values();
         }
 
-        // ── Live leave-day count for the selected range (respects half-day + sandwich) ──
+        // ── Live leave-day count for the selected range (respects half-day +
+        // sandwich, including a weekend bridged from an adjacent request) ──
         $rangeDays = null;
         if ($this->start_date && $this->end_date) {
             try {
                 $rs = Carbon::parse($this->start_date);
                 $re = Carbon::parse($this->end_date);
                 if ($rs->lte($re)) {
+                    $svc = app(LeaveService::class);
+                    // Preview the same cross-request bridge the submit will apply
+                    // so the estimate matches what actually gets charged.
+                    if (! $this->is_half_day && $employee && $selectedType) {
+                        [$rs, $re] = $svc->resolveSandwichBridge($employee, $selectedType, $rs, $re);
+                    }
                     $rangeDays = $this->is_half_day
                         ? 0.5
-                        : app(LeaveService::class)->calculateLeaveDays($rs, $re, (bool) ($selectedType?->is_sandwich_applicable));
+                        : $svc->calculateLeaveDays($rs, $re, (bool) ($selectedType?->is_sandwich_applicable), (int) ($selectedType?->sandwich_min_days ?? 0));
                 }
             } catch (\Throwable) {
                 // Invalid partial date input — no count.

@@ -54,6 +54,89 @@ class LeaveService
     }
 
     /**
+     * Cross-request sandwich bridge.
+     *
+     * When a leave type opts into the sandwich policy, a weekend that is
+     * "trapped" between this request and an *existing* leave block (submitted
+     * separately) should also be charged as leave — e.g. leave on Fri (one
+     * request) and Mon (another) sandwiches the Sat/Sun in between.
+     *
+     * This resolves the effective [start, end] by pulling the boundary outward
+     * to swallow a run of weekend days that sits directly between the requested
+     * dates and an adjacent approved/pending block. The gap must be made up of
+     * weekend days ONLY — a working day or a company holiday in the gap breaks
+     * the bridge (holidays are handled by blocking, never counted here).
+     *
+     * Returns the original dates unchanged when the policy is off, no adjacent
+     * block exists, or the bridged span falls short of the sandwich minimum.
+     *
+     * @return array{0: Carbon, 1: Carbon} the effective [start, end]
+     */
+    public function resolveSandwichBridge(
+        Employee $employee,
+        LeaveType $leaveType,
+        Carbon $start,
+        Carbon $end,
+        ?int $excludeRequestId = null,
+    ): array {
+        if (! $leaveType->is_sandwich_applicable || $start->isWeekend() || $end->isWeekend()) {
+            return [$start->copy(), $end->copy()];
+        }
+
+        $bridgedStart = $start->copy();
+        $bridgedEnd = $end->copy();
+
+        // Backward: walk over the run of weekend days immediately before the
+        // start; if a leave block sits on the working day just beyond it, the
+        // weekend is trapped, so pull the start back to the first weekend day.
+        $probe = $start->copy()->subDay();
+        $weekendRun = 0;
+        while ($probe->isWeekend()) {
+            $weekendRun++;
+            $probe->subDay();
+        }
+        if ($weekendRun > 0 && $this->hasLeaveOn($employee->id, $probe, $excludeRequestId)) {
+            $bridgedStart = $probe->copy()->addDay();
+        }
+
+        // Forward: mirror image after the end date.
+        $probe = $end->copy()->addDay();
+        $weekendRun = 0;
+        while ($probe->isWeekend()) {
+            $weekendRun++;
+            $probe->addDay();
+        }
+        if ($weekendRun > 0 && $this->hasLeaveOn($employee->id, $probe, $excludeRequestId)) {
+            $bridgedEnd = $probe->copy()->subDay();
+        }
+
+        // Respect the sandwich minimum-span threshold — if the bridged span
+        // doesn't reach it the weekend wouldn't be counted anyway, so leave the
+        // dates untouched to keep stored dates and the day-count consistent.
+        $span = $bridgedStart->diffInDays($bridgedEnd) + 1;
+        if ($span < max(1, (int) $leaveType->sandwich_min_days)) {
+            return [$start->copy(), $end->copy()];
+        }
+
+        return [$bridgedStart, $bridgedEnd];
+    }
+
+    /**
+     * Whether the employee has an in-force leave request (approved or pending)
+     * covering the given date. Used to detect an adjacent block for the
+     * cross-request sandwich bridge.
+     */
+    private function hasLeaveOn(int $employeeId, Carbon $date, ?int $excludeRequestId = null): bool
+    {
+        return LeaveRequest::where('employee_id', $employeeId)
+            ->when($excludeRequestId, fn ($q) => $q->where('id', '!=', $excludeRequestId))
+            ->whereIn('status', ['approved', 'pending', 'pending_hr'])
+            ->where('start_date', '<=', $date->toDateString())
+            ->where('end_date', '>=', $date->toDateString())
+            ->exists();
+    }
+
+    /**
      * The first active company holiday within [start, end] that applies to
      * the given employee (respecting branch/department/employee scope), or
      * null. Used to block leave that overlaps a holiday.
@@ -149,6 +232,17 @@ class LeaveService
             throw new \DomainException(
                 Carbon::parse($holiday->date)->format('d M Y')." ({$holiday->name}) is already a company holiday. Please exclude it from your leave dates."
             );
+        }
+
+        // Cross-request sandwich bridge — pull the boundary outward to swallow
+        // a weekend trapped between this request and an adjacent leave block
+        // (e.g. leave on Fri as one request + Mon as another). No-op for
+        // half-days and when the sandwich policy is off. Runs after the weekend
+        // and holiday validations so only the internal effective dates change.
+        if (! $isHalfDay) {
+            [$start, $end] = $this->resolveSandwichBridge($employee, $leaveType, $start, $end);
+            $startDate = $start->toDateString();
+            $endDate = $end->toDateString();
         }
 
         // Max consecutive days
@@ -272,6 +366,16 @@ class LeaveService
             $end = Carbon::parse($data['end_date']);
             $isHalfDay = (bool) ($data['is_half_day'] ?? false);
             $leaveTypeFresh = LeaveType::find($data['leave_type_id']);
+
+            // Re-apply the cross-request sandwich bridge on the (possibly edited)
+            // dates, excluding this request itself so it never bridges to its own
+            // old range. Keeps stored dates and the day-count consistent.
+            if (! $isHalfDay && $leaveTypeFresh) {
+                [$start, $end] = $this->resolveSandwichBridge($employee, $leaveTypeFresh, $start, $end, $leaveRequest->id);
+                $data['start_date'] = $start->toDateString();
+                $data['end_date'] = $end->toDateString();
+            }
+
             $newDays = $isHalfDay ? 0.5 : $this->calculateLeaveDays(
                 $start, $end,
                 (bool) ($leaveTypeFresh?->is_sandwich_applicable ?? false),
