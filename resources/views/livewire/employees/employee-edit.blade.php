@@ -362,6 +362,52 @@
                                     placeholder="e.g. 17"
                                     description="Device PIN used to match biometric punches. Leave blank if not enrolled." />
                             </div>
+
+                            {{-- Biometric mapping + engine sync --}}
+                            <div class="mt-5 rounded-2xl border border-indigo-100 bg-indigo-50/40 p-4 dark:border-indigo-500/20 dark:bg-indigo-500/5">
+                                <div class="flex flex-wrap items-center justify-between gap-3">
+                                    <div class="min-w-0">
+                                        <div class="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-indigo-600 dark:text-indigo-300">
+                                            <flux:icon.cpu-chip class="size-3.5" /> Biometric mapping &amp; sync
+                                        </div>
+                                        <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                                            The engine matches punches by <strong>Biometric Device ID</strong>. Save the ID first, then pull this employee's latest computed attendance.
+                                        </p>
+                                        <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px]">
+                                            <span class="text-zinc-500 dark:text-zinc-400">Mapped ID:
+                                                @if($employee->employee_code)
+                                                    <span class="font-mono font-bold text-zinc-800 dark:text-zinc-100">{{ $employee->employee_code }}</span>
+                                                @else
+                                                    <span class="font-semibold text-amber-600">not enrolled</span>
+                                                @endif
+                                            </span>
+                                            @php
+                                                $ss = $employee->sync_status;
+                                                [$sc, $sl] = match($ss) {
+                                                    'synced' => ['text-emerald-600', 'Synced'],
+                                                    'failed' => ['text-rose-500', 'Failed'],
+                                                    'removed' => ['text-zinc-400', 'Released'],
+                                                    default => ['text-amber-600', 'Pending'],
+                                                };
+                                            @endphp
+                                            <span class="text-zinc-500 dark:text-zinc-400">Device status: <span class="font-bold {{ $sc }}">{{ $sl }}</span></span>
+                                            <span class="text-zinc-500 dark:text-zinc-400">Last sync:
+                                                <span class="font-semibold text-zinc-700 dark:text-zinc-200">{{ $employee->last_biometric_sync_at?->diffForHumans() ?? 'never' }}</span>
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div class="flex shrink-0 items-end gap-2">
+                                        <div class="w-24">
+                                            <flux:input wire:model="syncDays" type="number" min="1" max="30" size="sm" label="Days back" />
+                                        </div>
+                                        <flux:button type="button" wire:click="syncBiometricNow" wire:loading.attr="disabled" wire:target="syncBiometricNow"
+                                            variant="primary" icon="arrow-path" size="sm">
+                                            <span wire:loading.remove wire:target="syncBiometricNow">Sync latest</span>
+                                            <span wire:loading wire:target="syncBiometricNow">Syncing…</span>
+                                        </flux:button>
+                                    </div>
+                                </div>
+                            </div>
                             <div class="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-100 pt-5 dark:border-zinc-800">
                                 <div class="flex items-center gap-1.5 text-xs text-zinc-400">
                                     <flux:icon.check-circle class="size-3.5 text-emerald-500" />

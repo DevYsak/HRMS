@@ -5,6 +5,7 @@ namespace App\Livewire\Employees;
 use App\Enums\EmployeeStatus;
 use App\Enums\UserRole;
 use App\Mail\WelcomeEmployeeMail;
+use App\Models\Attendance;
 use App\Models\Department;
 use App\Models\Employee;
 use App\Models\EmployeeSalary;
@@ -18,6 +19,7 @@ use App\Models\SalaryCycle;
 use App\Models\ShiftSetting;
 use App\Models\User;
 use App\Models\WorkMode;
+use App\Services\Biometric\EngineAttendanceSyncService;
 use App\Services\LeaveBalanceService;
 use App\Services\PasswordService;
 use App\Services\ProbationEngine;
@@ -73,6 +75,9 @@ class EmployeeEdit extends Component
     // Device PIN — the canonical biometric matching key (employee_code).
     // Mirrored to biometric_id on save so every attendance ingestion path matches.
     public string $employee_code = '';
+
+    /** How many days back the "Sync latest" button pulls from the engine. */
+    public int $syncDays = 7;
 
     public string $office_id = '';
 
@@ -489,6 +494,51 @@ class EmployeeEdit extends Component
         } catch (\DomainException $e) {
             \Flux::toast($e->getMessage(), variant: 'danger');
         }
+    }
+
+    // ── Biometric sync ────────────────────────────────────────────────────────
+
+    /**
+     * Pull the latest computed attendance from the Python engine for the last
+     * N days and report what landed for THIS employee. The engine matches on
+     * employee_code (the Biometric Device ID above), so this is the quickest way
+     * to verify a mapping and backfill someone's log after enrolling them.
+     * Delegates to the existing engine sync service — no sync logic changes here.
+     */
+    public function syncBiometricNow(EngineAttendanceSyncService $engine): void
+    {
+        abort_unless(auth()->user()->canManageEmployees(), 403);
+
+        if (! $this->employee->employee_code) {
+            \Flux::toast('Set the Biometric Device ID first, then save — the engine matches punches by that code.', variant: 'warning');
+
+            return;
+        }
+
+        $days = max(1, min(30, (int) $this->syncDays));
+        $synced = 0;
+        $errors = [];
+
+        for ($i = 0; $i < $days; $i++) {
+            $result = $engine->syncDate(now()->subDays($i)->toDateString());
+            $synced += (int) ($result['synced'] ?? 0);
+            if (! empty($result['error'])) {
+                $errors[] = $result['error'];
+            }
+        }
+
+        if ($errors !== []) {
+            \Flux::toast('Engine sync problem: '.$errors[0], variant: 'danger');
+
+            return;
+        }
+
+        $this->employee->refresh();
+        $mine = Attendance::where('employee_id', $this->employee->id)
+            ->where('date', '>=', now()->subDays($days)->toDateString())
+            ->count();
+
+        \Flux::toast("Synced the last {$days} day(s) from the engine — {$synced} record(s) processed, {$mine} day(s) now on this employee.");
     }
 
     // ── Manage Leave Balance ──────────────────────────────────────────────────
