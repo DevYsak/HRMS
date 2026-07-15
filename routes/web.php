@@ -221,6 +221,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/my-payslips', MyPayslips::class)->name('payslips');
         Route::get('/payslips/{payslip}/download', [PayslipController::class, 'download'])
             ->name('payslips.download');
+        // Combined multi-month print (max 6) — ?ids[]=1&ids[]=2
+        Route::get('/payslips/print-combined', [PayslipController::class, 'downloadCombined'])
+            ->name('payslips.print-combined');
 
         // Payroll administration — finance, HR Admin, Super Admin
         Route::middleware('role:run-payroll')->group(function () {

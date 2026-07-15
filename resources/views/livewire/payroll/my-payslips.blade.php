@@ -335,16 +335,36 @@
                 class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 shadow-sm overflow-hidden">
                 <div
                     class="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between gap-4">
-                    <h3 class="font-bold text-zinc-900 dark:text-white">Payslip History</h3>
-                    <x-clean-select model="filterYear" :live="true"
-                        :options="array_merge([['value' => '', 'label' => 'All Years']], collect(range(now()->year, now()->year - 3))->map(fn ($y) => ['value' => $y, 'label' => $y])->all())" />
+                    <div class="flex items-baseline gap-3">
+                        <h3 class="font-bold text-zinc-900 dark:text-white">Payslip History</h3>
+                        <span class="text-xs text-zinc-400">Tick up to {{ $maxCombined }} months to print together</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        @if(count($selected) > 0)
+                            <span class="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+                                {{ count($selected) }} of {{ $maxCombined }} selected
+                            </span>
+                            <button type="button" wire:click="clearSelection"
+                                class="cursor-pointer text-xs font-medium text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors">
+                                Clear
+                            </button>
+                            <button type="button" wire:click="printSelected"
+                                class="cursor-pointer inline-flex items-center gap-1.5 rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition-colors hover:bg-orange-600">
+                                <flux:icon.printer class="size-3.5" />
+                                Print {{ count($selected) }} payslip{{ count($selected) === 1 ? '' : 's' }}
+                            </button>
+                        @endif
+                        <x-clean-select model="filterYear" :live="true"
+                            :options="array_merge([['value' => '', 'label' => 'All Years']], collect(range(now()->year, now()->year - 3))->map(fn ($y) => ['value' => $y, 'label' => $y])->all())" />
+                    </div>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm">
                         <thead>
                             <tr class="bg-zinc-50/70 dark:bg-zinc-950/40 border-b border-zinc-100 dark:border-zinc-800">
+                                <th class="py-3 pl-6 pr-2 w-8"><span class="sr-only">Select for combined print</span></th>
                                 <th
-                                    class="py-3 pl-6 pr-4 text-left text-[10px] font-bold uppercase tracking-widest text-zinc-400">
+                                    class="py-3 pr-4 text-left text-[10px] font-bold uppercase tracking-widest text-zinc-400">
                                     Month</th>
                                 <th
                                     class="py-3 pr-4 text-left text-[10px] font-bold uppercase tracking-widest text-zinc-400">
@@ -369,7 +389,13 @@
                         <tbody class="divide-y divide-zinc-50 dark:divide-zinc-800/50">
                             @forelse($payslips as $slip)
                                 <tr class="hover:bg-zinc-50/60 dark:hover:bg-zinc-800/20 transition-colors">
-                                    <td class="py-3.5 pl-6 pr-4 font-semibold text-zinc-800 dark:text-zinc-200">
+                                    <td class="py-3.5 pl-6 pr-2">
+                                        <input type="checkbox" wire:model.live="selected" value="{{ $slip->id }}"
+                                            @disabled(!in_array($slip->id, $selected) && count($selected) >= $maxCombined)
+                                            aria-label="Select {{ $slip->payroll->month }} {{ $slip->payroll->year }} payslip"
+                                            class="size-4 rounded border-zinc-300 text-orange-500 focus:ring-orange-500 disabled:opacity-40 dark:border-zinc-600 dark:bg-zinc-800">
+                                    </td>
+                                    <td class="py-3.5 pr-4 font-semibold text-zinc-800 dark:text-zinc-200">
                                         {{ $slip->payroll->month }} {{ $slip->payroll->year }}
                                     </td>
                                     <td class="py-3.5 pr-4 text-zinc-600 dark:text-zinc-400">
@@ -422,7 +448,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="7" class="py-12 text-center text-zinc-400 text-sm">No payslips found</td>
+                                    <td colspan="8" class="py-12 text-center text-zinc-400 text-sm">No payslips found</td>
                                 </tr>
                             @endforelse
                         </tbody>

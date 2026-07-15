@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Payroll;
 
+use App\Http\Controllers\PayslipController;
 use App\Models\Payslip;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\Auth;
@@ -18,6 +19,44 @@ class MyPayslips extends Component
     public ?int $emailingId = null;
 
     public string $filterYear = '';
+
+    /** @var array<int, int> Payslip ids ticked for a combined print. */
+    public array $selected = [];
+
+    /** Mirror of the controller cap so the view can label the limit. */
+    public int $maxCombined = PayslipController::MAX_COMBINED_PAYSLIPS;
+
+    // ── Combined multi-month print ────────────────────────────────────────────
+
+    public function clearSelection(): void
+    {
+        $this->selected = [];
+    }
+
+    /**
+     * Hand the ticked payslips to the combined-print route.
+     *
+     * The controller re-checks ownership and the cap; this only spares the user
+     * a round-trip when the selection is obviously unusable.
+     */
+    public function printSelected()
+    {
+        $ids = array_values(array_unique(array_map('intval', $this->selected)));
+
+        if ($ids === []) {
+            \Flux::toast('Select at least one payslip to print.', variant: 'danger');
+
+            return null;
+        }
+
+        if (count($ids) > $this->maxCombined) {
+            \Flux::toast("You can print at most {$this->maxCombined} payslips at once.", variant: 'danger');
+
+            return null;
+        }
+
+        return $this->redirect(route('payroll.payslips.print-combined', ['ids' => $ids]));
+    }
 
     // ── Email payslip to employee ─────────────────────────────────────────────
 
