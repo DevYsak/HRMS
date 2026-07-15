@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Company;
 use App\Models\Payslip;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
@@ -61,6 +62,23 @@ class PayslipController extends Controller
             : $first->payroll->month.'_'.$first->payroll->year.'-'.$last->payroll->month.'_'.$last->payroll->year;
 
         return $pdf->stream('payslips_'.$range.'.pdf');
+    }
+
+    /**
+     * Public authenticity page reached by scanning a payslip's QR code.
+     *
+     * The 'signed' middleware has already rejected tampered URLs by the time
+     * this runs, so reaching here means the slip is genuine. Shows only what a
+     * bank or landlord needs to confirm — no full salary breakdown.
+     */
+    public function verify(Payslip $payslip)
+    {
+        $payslip->load(['payroll', 'employee.user']);
+
+        return view('payslips.verify', [
+            'payslip' => $payslip,
+            'company' => Company::first(),
+        ]);
     }
 
     /**

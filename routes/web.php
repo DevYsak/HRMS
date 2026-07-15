@@ -113,6 +113,13 @@ Route::view('/welcome', 'welcome', [
     'canRegister' => Features::enabled(Features::registration()),
 ])->name('home');
 
+// Payslip authenticity check — reached by scanning the QR on a payslip PDF.
+// Public by design (banks/landlords verify without an account) but the URL
+// must carry a valid signature, so slips can't be enumerated by id.
+Route::get('/payslips/{payslip}/verify', [PayslipController::class, 'verify'])
+    ->middleware('signed')
+    ->name('payroll.payslips.verify');
+
 // ======================================================
 // Authenticated + Email Verified routes
 // ======================================================

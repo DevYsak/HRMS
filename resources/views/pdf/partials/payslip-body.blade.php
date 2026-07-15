@@ -112,6 +112,20 @@
 
     $logoSrc = $company->logo ? public_path('storage/'.$company->logo) : null;
     if ($logoSrc && ! file_exists($logoSrc)) { $logoSrc = null; }
+
+    // QR → signed public verification URL. Null (no QR) on any failure —
+    // authenticity checking must never be the reason a payslip fails to render.
+    $qrDataUri = null;
+    if ($payslip->exists) {
+        try {
+            $qrDataUri = \App\Support\QrSvg::dataUri(
+                \Illuminate\Support\Facades\URL::signedRoute('payroll.payslips.verify', ['payslip' => $payslip->id]),
+                120,
+            );
+        } catch (\Throwable) {
+            $qrDataUri = null;
+        }
+    }
 @endphp
 
 <div class="accent-bar"></div>
@@ -168,7 +182,7 @@
 
     {{-- Attendance summary --}}
     <div class="sec">Attendance Summary &nbsp;·&nbsp; {{ $periodLabel }}</div>
-    <table class="att">
+    <table class="kpis">
         <tr>
             <td><span class="lbl">Days in Period</span><span class="val">{{ $totalDays }}</span></td>
             <td><span class="lbl">Working Days</span><span class="val">{{ $workingDays }}</span></td>
@@ -177,7 +191,7 @@
             <td><span class="lbl">Week Off</span><span class="val">{{ $weekOff }}</span></td>
             <td><span class="lbl">Holidays</span><span class="val">{{ $holidays }}</span></td>
             <td><span class="lbl">LWP</span><span class="val">{{ $lwp }}</span></td>
-            <td><span class="lbl">Paid Days</span><span class="val">{{ $paidDays }}</span></td>
+            <td class="hot"><span class="lbl">Paid Days</span><span class="val">{{ $paidDays }}</span></td>
             @if($otHours > 0)
                 <td><span class="lbl">Overtime (Hrs)</span><span class="val">{{ rtrim(rtrim(number_format($otHours, 2), '0'), '.') }}</span></td>
             @endif
@@ -185,6 +199,7 @@
     </table>
 
     {{-- Earnings / deductions --}}
+    <div class="sec">Salary Details</div>
     <table class="pay-wrap">
         <tr>
             <td>
@@ -235,8 +250,8 @@
                 @if($contributions->isNotEmpty())
                     <table class="contrib">
                         <tr>
-                            <td style="font-size: 7px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #6b7280; background: #f9fafb;">Employer Contributions</td>
-                            <td class="num" style="background: #f9fafb;"></td>
+                            <th>Employer Contributions</th>
+                            <th style="text-align: right;">Amount (₹)</th>
                         </tr>
                         @foreach($contributions as $line)
                             <tr>
@@ -273,17 +288,23 @@
         </tr>
     </table>
 
-    {{-- Signature + note --}}
+    {{-- QR + note + signature --}}
     <table class="sign-wrap">
         <tr>
-            <td style="width: 60%;">
+            @if($qrDataUri)
+                <td class="qr-box">
+                    <img src="{{ $qrDataUri }}" alt="">
+                    <div class="qr-cap">Scan to verify this payslip</div>
+                </td>
+            @endif
+            <td style="width: {{ $qrDataUri ? '48%' : '60%' }};">
                 <div class="gen-note">
                     This is a system-generated payslip and does not require a physical signature.<br>
                     Please contact the HR / Payroll team for any discrepancy in this payslip.<br>
                     Generated on {{ now()->format('d M Y, h:i A') }} · Confidential — intended solely for the employee.
                 </div>
             </td>
-            <td class="sign-box" style="width: 40%;">
+            <td class="sign-box">
                 <div class="sign-co">For {{ $company->name }}</div>
                 <span class="sign-line">Authorised Signatory</span>
             </td>
