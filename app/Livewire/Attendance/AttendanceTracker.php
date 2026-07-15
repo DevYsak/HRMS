@@ -222,6 +222,12 @@ class AttendanceTracker extends Component
     {
         $employee = Auth::user()->employee;
         if (! $employee) {
+            // Staff without an employee record (e.g. an HR admin account) still
+            // land on this page — give the view the engine's canonical empty
+            // shape so every journey key exists instead of blowing up on
+            // $punchJourney['live'].
+            $this->punchJourney = app(PunchTimelineEngine::class)->emptyResult();
+
             return;
         }
 

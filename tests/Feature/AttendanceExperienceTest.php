@@ -1,10 +1,22 @@
 <?php
 
+use App\Enums\UserRole;
 use App\Livewire\Attendance\AttendanceTracker;
 use App\Models\Attendance;
 use App\Models\Employee;
 use App\Models\User;
 use Livewire\Livewire;
+
+// Regression: an HR/admin account with no employee record still lands on My
+// Attendance. loadData() bails early for them, so the view used to blow up on
+// $punchJourney['live'] ("Undefined array key live") — a 500 in production.
+test('a user without an employee record can open My Attendance without erroring', function () {
+    $hr = User::factory()->create(['role' => UserRole::HrAdmin]);   // deliberately no Employee row
+
+    Livewire::actingAs($hr)->test(AttendanceTracker::class)
+        ->assertOk()
+        ->assertSet('punchJourney', fn ($pj) => array_key_exists('live', $pj) && $pj['live'] === false);
+});
 
 test('my attendance page shows the Phase 6 analytics panels', function () {
     $user = User::factory()->create();

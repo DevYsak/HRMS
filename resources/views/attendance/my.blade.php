@@ -16,14 +16,23 @@
     $leaveCount   = (int) ($stats['leaves'] ?? 0);
     $onTimeCount  = max(0, $presentCount - $lateCount);
 
+    // Mirrors AttendanceTracker::computeStats() so the "of N days" denominator
+    // matches the period the stats were actually computed for.
     $pStart = match($statsPeriod) {
+        'today'      => now()->startOfDay(),
         'this_week'  => now()->startOfWeek(\Carbon\Carbon::SUNDAY),
         'last_month' => now()->subMonth()->startOfMonth(),
+        'quarter'    => now()->firstOfQuarter(),
         '3_months'   => now()->subMonths(2)->startOfMonth(),
         'year'       => now()->startOfYear(),
+        'custom'     => \Carbon\Carbon::parse($rangeFrom ?? now()->startOfMonth()),
         default      => now()->startOfMonth(),
     };
-    $pEnd = ($statsPeriod === 'last_month') ? now()->subMonth()->endOfMonth() : now();
+    $pEnd = match(true) {
+        $statsPeriod === 'last_month' => now()->subMonth()->endOfMonth(),
+        $statsPeriod === 'custom' && $rangeTo => \Carbon\Carbon::parse($rangeTo),
+        default => now(),
+    };
     if ($pEnd->gt(now())) { $pEnd = now(); }
     $totalWorkingDays = max(1, (int) $pStart->diffInDaysFiltered(fn($d) => ! $d->isSunday(), $pEnd));
 
