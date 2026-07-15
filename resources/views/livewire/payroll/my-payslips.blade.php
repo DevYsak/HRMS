@@ -358,6 +358,74 @@
                             :options="array_merge([['value' => '', 'label' => 'All Years']], collect(range(now()->year, now()->year - 3))->map(fn ($y) => ['value' => $y, 'label' => $y])->all())" />
                     </div>
                 </div>
+
+                {{-- Period filters --}}
+                <div class="px-6 py-3 border-b border-zinc-100 dark:border-zinc-800 flex flex-wrap items-center gap-2">
+                    @foreach([
+                        'all' => 'All',
+                        'last_3' => 'Last 3 Months',
+                        'last_6' => 'Last 6 Months',
+                        'fy' => 'Financial Year',
+                        'month' => 'Month',
+                        'custom' => 'Custom Range',
+                    ] as $key => $label)
+                        <button type="button" wire:click="$set('filterPeriod', '{{ $key }}')"
+                            class="cursor-pointer rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors
+                                {{ $filterPeriod === $key
+                                    ? 'bg-orange-500 text-white shadow-sm'
+                                    : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700' }}">
+                            {{ $label }}
+                        </button>
+                    @endforeach
+
+                    @if($filterPeriod === 'fy')
+                        <x-clean-select model="filterFy" :live="true"
+                            :options="collect(range(now()->year, now()->year - 3))->map(fn ($y) => ['value' => $y, 'label' => 'FY ' . $y . '-' . substr($y + 1, 2)])->all()" />
+                    @endif
+
+                    @if($filterPeriod === 'month')
+                        <x-clean-select model="filterMonth" :live="true"
+                            :options="array_merge([['value' => '', 'label' => 'Select month']], collect(range(1, 12))->map(fn ($m) => ['value' => \Carbon\Carbon::create(null, $m, 1)->format('F'), 'label' => \Carbon\Carbon::create(null, $m, 1)->format('F')])->all())" />
+                    @endif
+
+                    @if($filterPeriod === 'custom')
+                        <input type="month" wire:model.live="rangeFrom" aria-label="Range from"
+                            class="rounded-lg border-zinc-200 bg-white px-2 py-1.5 text-xs dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
+                        <span class="text-xs text-zinc-400">to</span>
+                        <input type="month" wire:model.live="rangeTo" aria-label="Range to"
+                            class="rounded-lg border-zinc-200 bg-white px-2 py-1.5 text-xs dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
+                    @endif
+
+                    @if($filterPeriod !== 'all' || $filterYear)
+                        <button type="button" wire:click="resetFilters"
+                            class="cursor-pointer ml-auto text-xs font-medium text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors">
+                            Reset filters
+                        </button>
+                    @endif
+                </div>
+
+                {{-- Period summary — totals across the whole filtered window --}}
+                @if($periodTotals['months'] > 0)
+                    <div class="px-6 py-3 bg-zinc-50/60 dark:bg-zinc-950/30 border-b border-zinc-100 dark:border-zinc-800 grid grid-cols-2 gap-4 sm:grid-cols-4">
+                        <div>
+                            <div class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Months</div>
+                            <div class="text-sm font-black text-zinc-900 dark:text-white">{{ $periodTotals['months'] }}</div>
+                        </div>
+                        <div>
+                            <div class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Total Gross</div>
+                            <div class="text-sm font-black text-zinc-900 dark:text-white">₹{{ number_format($periodTotals['gross'], 2) }}</div>
+                        </div>
+                        <div>
+                            <div class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Total Deductions</div>
+                            <div class="text-sm font-black text-red-600">₹{{ number_format($periodTotals['deductions'], 2) }}</div>
+                        </div>
+                        <div>
+                            <div class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Total Net</div>
+                            <div class="text-sm font-black text-emerald-600">₹{{ number_format($periodTotals['net'], 2) }}</div>
+                        </div>
+                    </div>
+                @endif
+
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm">
                         <thead>
