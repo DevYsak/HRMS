@@ -86,3 +86,25 @@ test('the employee sidebar page renders without error', function () {
 
     $this->actingAs($user)->get('/')->assertOk();
 });
+
+test('the workspace nav does not show HR Overview alongside Dashboard for HR', function () {
+    $this->seed(RolesAndPermissionsSeeder::class);
+    $role = Role::where('slug', 'hr_admin')->firstOrFail();
+    $hr = User::factory()->create(['role' => UserRole::HrAdmin, 'role_id' => $role->id]);
+    Employee::factory()->create(['user_id' => $hr->id, 'status' => EmployeeStatus::Active]);
+
+    $response = $this->actingAs($hr)->get(route('dashboard'));
+
+    $response->assertOk()
+        ->assertSee('Dashboard')
+        ->assertDontSee('HR Overview');
+});
+
+test('the HR Overview route stays reachable even though it is unlinked', function () {
+    $this->seed(RolesAndPermissionsSeeder::class);
+    $role = Role::where('slug', 'hr_admin')->firstOrFail();
+    $hr = User::factory()->create(['role' => UserRole::HrAdmin, 'role_id' => $role->id]);
+    Employee::factory()->create(['user_id' => $hr->id, 'status' => EmployeeStatus::Active]);
+
+    $this->actingAs($hr)->get(route('dashboard.hr-admin'))->assertOk();
+});

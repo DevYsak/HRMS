@@ -416,10 +416,9 @@
                             <flux:sidebar.item icon="presentation-chart-line" :href="route('dashboard.director')"
                                 :current="request()->routeIs('dashboard.director')" wire:navigate>Director Dashboard</flux:sidebar.item>
                         @endif
-                        @if($isHr)
-                            <flux:sidebar.item icon="user-group" :href="route('dashboard.hr-admin')"
-                                :current="request()->routeIs('dashboard.hr-admin')" wire:navigate>HR Overview</flux:sidebar.item>
-                        @endif
+                        {{-- "HR Overview" (dashboard.hr-admin) is intentionally not linked here:
+                             Dashboard already renders the HR admin view for HR users, so the two
+                             read as duplicates in the nav. The route stays reachable by URL. --}}
                         @if($user->isDepartmentHead())
                             <flux:sidebar.item icon="building-office" :href="route('dashboard.department')"
                                 :current="request()->routeIs('dashboard.department')" wire:navigate>Department View</flux:sidebar.item>
