@@ -1,181 +1,119 @@
 @php
-    // Brand palette for the payslip stylesheet. Kept here so this partial is
-    // self-contained: it renders in <head>, before the body partial's @php runs.
-    $orange = $orange ?? '#f97316';
-    $green = $green ?? '#16a34a';
+    // Brand accent for the payslip; company primary colour wins when set.
+    if (! isset($accent)) {
+        $accentCompany = \App\Models\Company::first();
+        $accent = ($accentCompany && $accentCompany->primary_color) ? $accentCompany->primary_color : '#f97316';
+    }
+
+    // DomPDF cannot fetch web fonts — Inter is embedded from local TTFs.
+    // Forward slashes: backslashed Windows paths break DomPDF's url() parsing.
+    $interDir = str_replace('\\', '/', public_path('fonts/inter'));
 @endphp
 <style>
-@page  { margin: 0; size: A4 portrait; }
-*      { margin: 0; padding: 0; box-sizing: border-box; }
-body   { font-family: 'DejaVu Sans', Arial, sans-serif; font-size: 10px; color: #1f2937; background: #fff; line-height: 1.45; }
-
-.top-bar  { height: 5px; background: {{ $orange }}; }
-.btm-bar  { background: {{ $orange }}; padding: 9px 0; }
-.page     { padding: 0 32px; }
-
-/* ── HEADER ── */
-.hdr      { padding: 15px 0 13px; border-bottom: 1.5px solid #e5e7eb; }
-.hdr-tbl  { width: 100%; border-collapse: collapse; }
-.h-logo   { width: 130px; vertical-align: middle; }
-.h-center { vertical-align: middle; text-align: center; padding: 0 10px; }
-.h-right  { width: 175px; text-align: right; vertical-align: middle; }
-
-.co-name  { font-size: 13px; font-weight: 800; color: #111; }
-.co-addr  { font-size: 8px; color: #6b7280; margin-top: 3px; line-height: 1.8; }
-.co-cin   { font-size: 7.5px; color: #9ca3af; margin-top: 2px; }
-
-.slip-ttl { font-size: 27px; font-weight: 900; color: #111; letter-spacing: 1.5px; line-height: 1; }
-.slip-mo  { font-size: 15px; font-weight: 800; color: {{ $orange }}; margin-top: 3px; }
-.cyc-pill {
-    display: block; margin-top: 7px; background: #fff7ed;
-    border: 1px solid #fed7aa; color: #9a3412;
-    font-size: 7px; font-weight: 700; padding: 3px 8px; border-radius: 4px;
+@font-face {
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: 400;
+    src: url('{{ $interDir }}/Inter-Regular.ttf') format('truetype');
+}
+@font-face {
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: 500;
+    src: url('{{ $interDir }}/Inter-Medium.ttf') format('truetype');
+}
+@font-face {
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: 600;
+    src: url('{{ $interDir }}/Inter-SemiBold.ttf') format('truetype');
+}
+@font-face {
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: 700;
+    src: url('{{ $interDir }}/Inter-Bold.ttf') format('truetype');
 }
 
-/* ── EMPLOYEE ── */
-.emp      { padding: 14px 0 12px; border-bottom: 1.5px solid #e5e7eb; }
-.emp-tbl  { width: 100%; border-collapse: collapse; table-layout: fixed; }
-.ec-name  { width: 26%; vertical-align: top; padding-right: 12px; }
-.ec-mid   { width: 37%; vertical-align: top; border-left: 1px solid #f3f4f6; padding-left: 16px; }
-.ec-rgt   { width: 37%; vertical-align: top; border-left: 1px solid #f3f4f6; padding-left: 16px; }
-.e-name   { font-size: 16px; font-weight: 900; color: #111; }
-.e-role   { font-size: 10px; color: {{ $orange }}; font-weight: 700; margin-top: 2px; }
-.e-eid    { font-size: 8px; color: #6b7280; margin-top: 7px; font-weight: 600; }
+@page   { margin: 0; size: A4 portrait; }
+*       { margin: 0; padding: 0; box-sizing: border-box; }
+body    { font-family: 'Inter', 'DejaVu Sans', sans-serif; font-size: 9.5px; color: #111827; background: #fff; line-height: 1.5; }
 
-.fi           { margin-bottom: 8px; }
-.fi:last-child{ margin-bottom: 0; }
-.fl           { font-size: 7.5px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 1px; }
-.fv           { font-size: 9px; font-weight: 700; color: #111; display: block; }
+/* ── Sheet ─────────────────────────────────────────────────────────────── */
+.sheet      { padding: 30px 42px 26px; }
+.accent-bar { height: 4px; background: {{ $accent }}; }
 
-/* ── SALARY SUMMARY ── */
-.sum-bg   { background: #f9fafb; padding: 13px 32px; border-bottom: 1.5px solid #e5e7eb; margin: 0 -32px; }
-.sum-tbl  { width: 100%; border-collapse: separate; border-spacing: 10px 0; }
+/* ── Header ────────────────────────────────────────────────────────────── */
+.hdr            { width: 100%; border-collapse: collapse; margin-bottom: 6px; }
+.hdr td         { vertical-align: top; }
+.co-logo        { height: 30px; margin-bottom: 7px; }
+.co-name        { font-size: 13px; font-weight: 700; letter-spacing: -0.2px; }
+.co-meta        { font-size: 8px; color: #6b7280; line-height: 1.55; }
+.doc-title      { font-size: 19px; font-weight: 700; letter-spacing: 2.5px; text-align: right; color: #111827; }
+.doc-month      { font-size: 10.5px; font-weight: 600; text-align: right; color: {{ $accent }}; margin-top: 1px; }
+.doc-meta       { font-size: 8px; color: #6b7280; text-align: right; margin-top: 3px; line-height: 1.6; }
 
-.sc {
-    border: 1.5px solid #e5e7eb; background: #fff; border-radius: 10px;
-    padding: 14px 16px; vertical-align: middle; width: 33%;
-}
-.sc-net {
-    border: 1.5px solid #86efac; background: #f0fdf4; border-radius: 10px;
-    padding: 14px 16px; vertical-align: middle; width: 33%;
-}
-.sc-ico  { display: inline-block; vertical-align: middle; }
-.sc-ico-e{ width: 38px; height: 38px; border-radius: 50%; background: #fff7ed;
-           text-align: center; padding-top: 10px; display: inline-block; }
-.sc-ico-d{ width: 38px; height: 38px; border-radius: 50%; background: #fef2f2;
-           text-align: center; padding-top: 10px; display: inline-block; }
-.sc-ico-n{ width: 38px; height: 38px; border-radius: 50%; background: #dcfce7;
-           text-align: center; padding-top: 10px; display: inline-block; }
-.sc-body  { display: inline-block; vertical-align: middle; padding-left: 11px; }
-.sc-lbl   { font-size: 7.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #6b7280; }
-.sc-amt   { font-size: 17px; font-weight: 900; color: #111; line-height: 1.25; margin-top: 2px; }
-.sc-amt-d { font-size: 17px; font-weight: 900; color: #dc2626; line-height: 1.25; margin-top: 2px; }
-.sc-amt-n { font-size: 17px; font-weight: 900; color: {{ $green }}; line-height: 1.25; margin-top: 2px; }
-.sc-sub   { font-size: 7.5px; color: #9ca3af; margin-top: 2px; }
+.rule       { border: 0; border-top: 1px solid #e5e7eb; margin: 10px 0 14px; }
 
-/* ── SALARY COMPARISON (this vs previous month) ── */
-.cmp-wrap  { padding: 2px 0 8px; }
-.cmp-tbl   { width: 100%; border-collapse: collapse; margin-top: 8px; border: 1px solid #e5e7eb; table-layout: fixed; }
-.cmp-th    { font-size: 8px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.4px; color: #6b7280;
-             padding: 7px 12px; background: #f9fafb; border-bottom: 1.5px solid #e5e7eb; text-align: right; }
-.cmp-th-l  { text-align: left; }
-.cmp-th-c  { color: {{ $orange }}; }
-.cmp-td    { font-size: 9.5px; padding: 6.5px 12px; text-align: right; font-weight: 700; color: #111; border-bottom: 1px solid #f9fafb; }
-.cmp-td-l  { text-align: left; font-weight: 600; color: #374151; }
-.cmp-td-c  { background: #fff7ed; }
-.cmp-up    { color: #16a34a; }
-.cmp-dn    { color: #dc2626; }
-.cmp-flat  { color: #9ca3af; }
-.cmp-note  { font-size: 8px; color: #9ca3af; font-style: italic; margin-top: 5px; }
+/* ── Section titles ────────────────────────────────────────────────────── */
+.sec        { font-size: 7.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.4px; color: #6b7280; margin: 0 0 6px; }
 
-/* ── EARNINGS TABLE ── */
-.tbl-wrap { padding: 0 0 12px; }
-.sal-tbl  { width: 100%; border-collapse: collapse; margin-top: 12px; table-layout: fixed; border: 1px solid #e5e7eb; }
+/* ── Employee information grid ─────────────────────────────────────────── */
+.emp        { width: 100%; border-collapse: collapse; border: 1px solid #e5e7eb; margin-bottom: 14px; }
+.emp td     { width: 33.333%; padding: 7px 12px; border-bottom: 1px solid #f3f4f6; vertical-align: top; }
+.emp tr:last-child td { border-bottom: 0; }
+.emp .lbl   { display: block; font-size: 7px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.9px; color: #9ca3af; margin-bottom: 1px; }
+.emp .val   { font-size: 9.5px; font-weight: 500; color: #111827; }
+.emp .val-strong { font-size: 10.5px; font-weight: 700; }
 
-.eth { width: 36%; font-size: 8px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.4px;
-       color: {{ $orange }}; padding: 8px 13px 7px; border-bottom: 2px solid {{ $orange }};
-       background: #fff7ed; text-align: left; }
-.ath { width: 14%; font-size: 8px; font-weight: 900; text-transform: uppercase; color: {{ $orange }};
-       padding: 8px 13px 7px; border-bottom: 2px solid {{ $orange }}; background: #fff7ed; text-align: right; }
-.dth { width: 36%; font-size: 8px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.4px;
-       color: {{ $orange }}; padding: 8px 13px 7px; border-bottom: 2px solid {{ $orange }};
-       background: #fff7ed; text-align: left; border-left: 2px solid #e5e7eb; }
-.xth { width: 14%; font-size: 8px; font-weight: 900; text-transform: uppercase; color: {{ $orange }};
-       padding: 8px 13px 7px; border-bottom: 2px solid {{ $orange }}; background: #fff7ed; text-align: right; }
+/* ── Attendance strip ──────────────────────────────────────────────────── */
+.att        { width: 100%; border-collapse: collapse; border: 1px solid #e5e7eb; margin-bottom: 14px; background: #f9fafb; }
+.att td     { padding: 8px 6px; text-align: center; border-right: 1px solid #e5e7eb; }
+.att td:last-child { border-right: 0; }
+.att .lbl   { display: block; font-size: 6.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.7px; color: #6b7280; margin-bottom: 2px; }
+.att .val   { font-size: 11px; font-weight: 700; color: #111827; }
 
-.etd { padding: 6.5px 13px; font-size: 9.5px; color: #374151; border-bottom: 1px solid #f9fafb; }
-.atd { padding: 6.5px 13px; font-size: 9.5px; text-align: right; font-weight: 600; color: #111; border-bottom: 1px solid #f9fafb; }
-.dtd { padding: 6.5px 13px; font-size: 9.5px; color: #374151; border-bottom: 1px solid #f9fafb; border-left: 2px solid #f3f4f6; }
-.xtd { padding: 6.5px 13px; font-size: 9.5px; text-align: right; font-weight: 600; color: #374151; border-bottom: 1px solid #f9fafb; }
+/* ── Earnings / deductions ─────────────────────────────────────────────── */
+.pay-wrap        { width: 100%; border-collapse: separate; border-spacing: 12px 0; margin: 0 -12px 2px; }
+.pay-wrap > tbody > tr > td { width: 50%; vertical-align: top; }
+.pay             { width: 100%; border-collapse: collapse; border: 1px solid #e5e7eb; }
+.pay thead th    { font-size: 7px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #6b7280; background: #f9fafb; padding: 6px 12px; border-bottom: 1px solid #e5e7eb; text-align: left; }
+.pay thead th.num { text-align: right; }
+.pay tbody td    { padding: 5.5px 12px; font-size: 9px; border-bottom: 1px solid #f3f4f6; color: #374151; }
+.pay tbody td.num { text-align: right; font-weight: 500; color: #111827; }
+.pay .total td   { border-top: 1px solid #e5e7eb; border-bottom: 0; background: #f9fafb; font-weight: 700; font-size: 9.5px; color: #111827; padding: 7px 12px; }
 
-.tot-e { padding: 8px 13px; font-size: 10px; font-weight: 900; color: {{ $orange }}; background: #fff7ed; border-top: 2px solid #fed7aa; }
-.tot-a { padding: 8px 13px; font-size: 10px; font-weight: 900; color: {{ $orange }}; text-align: right; background: #fff7ed; border-top: 2px solid #fed7aa; }
-.tot-d { padding: 8px 13px; font-size: 10px; font-weight: 900; color: #dc2626; background: #fff7ed; border-left: 2px solid #e5e7eb; border-top: 2px solid #fed7aa; }
-.tot-x { padding: 8px 13px; font-size: 10px; font-weight: 900; color: #dc2626; text-align: right; background: #fff7ed; border-top: 2px solid #fed7aa; }
+/* ── Employer contribution + net panel row ─────────────────────────────── */
+.foot-wrap       { width: 100%; border-collapse: separate; border-spacing: 12px 0; margin: 12px -12px 0; }
+.foot-wrap > tbody > tr > td { width: 50%; vertical-align: top; }
 
-/* ── ATTENDANCE ── */
-.att-wrap  { padding: 0 0 12px; }
-.att-head  { font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px;
-             color: #111; padding: 10px 0 8px; border-top: 1.5px solid #e5e7eb; }
-.att-tbl   { width: 100%; border-collapse: separate; border-spacing: 8px 0; }
+.contrib         { width: 100%; border-collapse: collapse; border: 1px solid #e5e7eb; }
+.contrib td      { padding: 5px 12px; font-size: 8.5px; border-bottom: 1px solid #f3f4f6; color: #374151; }
+.contrib td.num  { text-align: right; font-weight: 500; color: #111827; }
+.contrib .total td { border-top: 1px solid #e5e7eb; border-bottom: 0; font-weight: 700; color: #111827; }
+.contrib-note    { font-size: 7px; color: #9ca3af; margin-top: 4px; line-height: 1.5; }
 
-/* Attendance card */
-.ac {
-    border: 1.5px solid #e5e7eb; background: #fff; border-radius: 10px;
-    padding: 16px 10px 14px; text-align: center; width: 25%; vertical-align: top;
-}
-.ac-ico-wrap { margin-bottom: 8px; }
-.ac-ico {
-    display: inline-block; width: 42px; height: 42px; border-radius: 12px;
-    padding-top: 11px; text-align: center;
-}
-.aci-blue   { background: #eff6ff; }
-.aci-green  { background: #f0fdf4; }
-.aci-purple { background: #f5f3ff; }
-.aci-red    { background: #fff7ed; }
+.net             { border: 1.5px solid {{ $accent }}; border-radius: 4px; padding: 12px 16px 11px; background: #fffbf7; }
+.net .lbl        { font-size: 7.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.4px; color: #6b7280; }
+.net .amt        { font-size: 21px; font-weight: 700; color: #111827; letter-spacing: -0.3px; margin: 2px 0 1px; }
+.net .words      { font-size: 8px; color: #6b7280; line-height: 1.5; }
+.net .credit     { font-size: 8px; font-weight: 600; color: #374151; margin-top: 5px; }
 
-.ac-num    { font-size: 26px; font-weight: 900; color: #111; line-height: 1; margin-bottom: 5px; }
-.ac-num-o  { font-size: 26px; font-weight: 900; color: {{ $orange }}; line-height: 1; margin-bottom: 5px; }
-.ac-lbl    { font-size: 7.5px; text-transform: uppercase; letter-spacing: 0.8px; color: #9ca3af; }
+/* ── YTD strip ─────────────────────────────────────────────────────────── */
+.ytd        { width: 100%; border-collapse: collapse; border: 1px solid #e5e7eb; margin-top: 14px; }
+.ytd td     { padding: 7px 12px; border-right: 1px solid #f3f4f6; }
+.ytd td:last-child { border-right: 0; }
+.ytd .lbl   { display: block; font-size: 6.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: #9ca3af; margin-bottom: 1px; }
+.ytd .val   { font-size: 9.5px; font-weight: 700; color: #111827; }
 
-/* ── BOTTOM 3-COL ── */
-.bot-wrap { padding: 12px 0; border-top: 1.5px solid #e5e7eb; }
-.bot-tbl  { width: 100%; border-collapse: collapse; }
-.bc1  { vertical-align: top; width: 31%; padding-right: 18px; border-right: 1px solid #f3f4f6; }
-.bc2  { vertical-align: top; width: 38%; padding: 0 18px; border-right: 1px solid #f3f4f6; }
-.bc3  { vertical-align: top; width: 31%; padding-left: 18px; }
+/* ── Footer ────────────────────────────────────────────────────────────── */
+.sign-wrap  { width: 100%; border-collapse: collapse; margin-top: 26px; }
+.sign-wrap td { vertical-align: bottom; }
+.gen-note   { font-size: 7px; color: #9ca3af; line-height: 1.6; }
+.sign-box   { text-align: right; }
+.sign-line  { display: inline-block; border-top: 1px solid #d1d5db; padding-top: 4px; font-size: 8px; font-weight: 600; color: #374151; min-width: 150px; text-align: center; }
+.sign-co    { font-size: 7px; color: #9ca3af; text-align: right; margin-bottom: 26px; }
 
-/* Section header with SVG icon */
-.bh-tbl   { border-collapse: collapse; margin-bottom: 10px; }
-.bh-ico   { vertical-align: middle; width: 22px; }
-.bh-txt   { vertical-align: middle; padding-left: 7px;
-            font-size: 9px; font-weight: 900; text-transform: uppercase;
-            letter-spacing: 0.4px; color: #111; white-space: nowrap; }
-
-.br    { display: table; width: 100%; margin-bottom: 6px; }
-.brl   { display: table-cell; font-size: 8.5px; color: #6b7280; width: 45%; vertical-align: top; }
-.brc   { display: table-cell; font-size: 8.5px; color: #d1d5db; width: 5%; }
-.brv   { display: table-cell; font-size: 9px; font-weight: 700; color: #111; }
-.brv-g { display: table-cell; font-size: 9px; font-weight: 700; color: {{ $green }}; }
-
-/* ── SALARY CREDITED ── */
-.sal-wrap { padding: 10px 0; border-top: 1.5px solid #e5e7eb; }
-.sal-tbl  { width: 100%; border-collapse: collapse; }
-.sal-box-td  { width: 58%; vertical-align: middle; }
-.sal-note-td { vertical-align: middle; text-align: right; }
-
-.sal-box { border: 1.5px solid #86efac; background: #f0fdf4; border-radius: 10px; padding: 12px 16px; }
-.sal-inner { border-collapse: collapse; }
-.sal-ico-td { vertical-align: middle; width: 42px; }
-.sal-txt-td { vertical-align: middle; padding-left: 12px; }
-.sal-ttl { font-size: 10px; font-weight: 900; color: {{ $green }}; }
-.sal-sub { font-size: 8.5px; color: #374151; margin-top: 3px; line-height: 1.6; }
-.sys-note { font-size: 8.5px; color: #6b7280; line-height: 1.8; font-style: italic; }
-
-/* ── BOTTOM BAR ── */
-.btm-inner { width: 100%; border-collapse: collapse; }
-.btm-td    { text-align: center; padding: 0 10px; border-right: 1px solid rgba(255,255,255,0.3); }
-.btm-td:last-child { border-right: none; }
-.btm-lbl   { font-size: 7px; color: rgba(255,255,255,0.75); text-transform: uppercase; letter-spacing: 0.8px; display: block; margin-bottom: 1px; }
-.btm-val   { font-size: 8.5px; font-weight: 700; color: #fff; }
+.contact    { border-top: 1px solid #e5e7eb; margin-top: 14px; padding-top: 8px; font-size: 7.5px; color: #6b7280; text-align: center; letter-spacing: 0.2px; }
+.contact .sep { color: #d1d5db; padding: 0 6px; }
 </style>
