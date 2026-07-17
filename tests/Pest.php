@@ -1,6 +1,7 @@
 <?php
 
 use Database\Seeders\RolesAndPermissionsSeeder;
+use Database\Seeders\StatutoryRuleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -19,6 +20,9 @@ pest()->extend(TestCase::class)
     ->use(RefreshDatabase::class)
     ->beforeEach(function () {
         $this->seed(RolesAndPermissionsSeeder::class);
+        // Statutory rates are baseline config the payroll engine resolves by date;
+        // it fails loud without them, so seed them for every feature test.
+        $this->seed(StatutoryRuleSeeder::class);
     })
     ->in('Feature');
 

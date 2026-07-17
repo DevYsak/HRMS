@@ -26,6 +26,11 @@ class LwpService
      *
      * @param  Carbon  $from  Cycle start date (inclusive)
      * @param  Carbon  $to  Cycle end date (inclusive)
+     * @param  float  $monthlyEarnings  Structural earnings for this cycle, as resolved
+     *                                  by SalaryCalculationService. Passed in rather than
+     *                                  recomputed here: this service must deduct against
+     *                                  exactly the earnings the engine paid, and deriving
+     *                                  it independently silently drifted from them.
      * @param  int  $workingDaysInMonth  Configurable; defaults to 26
      * @return array{days: float, deduction: float, items: array}
      */
@@ -33,6 +38,7 @@ class LwpService
         Employee $employee,
         Carbon $from,
         Carbon $to,
+        float $monthlyEarnings,
         int $workingDaysInMonth = 26
     ): array {
         $lwpDays = 0.0;
@@ -42,12 +48,7 @@ class LwpService
             $lwpDays += $this->resolveEffectiveDays($request, $from, $to);
         }
 
-        // Monthly basic salary = sum of all 'earning' salary components
-        $monthlySalary = $employee->salaries
-            ->filter(fn ($s) => $s->component && $s->component->type === 'earning' && $s->component->is_active)
-            ->sum('amount');
-
-        $perDaySalary = $workingDaysInMonth > 0 ? $monthlySalary / $workingDaysInMonth : 0;
+        $perDaySalary = $workingDaysInMonth > 0 ? $monthlyEarnings / $workingDaysInMonth : 0;
         $deduction = round($perDaySalary * $lwpDays, 2);
 
         $items = [];

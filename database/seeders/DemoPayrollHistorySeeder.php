@@ -39,15 +39,19 @@ class DemoPayrollHistorySeeder extends Seeder
     private const MONTHS = 6;
 
     /**
-     * Monthly gross at the start of the window, before the mid-window raise.
+     * Default monthly gross at the start of the window, before the mid-window raise.
+     * Overridable with DEMO_PAYROLL_GROSS.
      *
-     * Set above the new-regime 87A rebate threshold (₹12L taxable) on purpose:
-     * below it TDS computes to a legitimate zero and the demo would show no tax
-     * line at all.
+     * The default sits above the new-regime 87A rebate threshold (₹12L taxable) on
+     * purpose: below it TDS computes to a legitimate zero and the demo shows no tax
+     * line. A lower override (e.g. ₹50,000) is fine — it simply won't show TDS.
      */
     private const OPENING_GROSS = 125000.0;
 
-    /** Applied from the 4th month onward, so the trend chart shows a real step. */
+    /**
+     * Default raise applied from the 4th month onward, so the trend chart shows a
+     * step. Overridable with DEMO_PAYROLL_RAISE; set it to 1 for a flat window.
+     */
     private const RAISE_MULTIPLIER = 1.08;
 
     public function run(): void
@@ -166,9 +170,11 @@ class DemoPayrollHistorySeeder extends Seeder
         ];
 
         // Computed by the app's own statutory engine rather than invented figures.
-        $pf = $statutory->providentFundEmployee(min($basic, StatutoryService::PF_WAGE_CEILING));
-        $pt = $statutory->professionalTaxMaharashtra($gross, $period->month);
-        $tds = $statutory->monthlyTds($gross);
+        // PF caps the wage inside the service, so pass the full basic and let the
+        // date-resolved ceiling apply.
+        $pf = $statutory->providentFundEmployee($basic, $period);
+        $pt = $statutory->professionalTax($gross, $period, 'MH');
+        $tds = $statutory->monthlyTds($gross, $period);
 
         $deductions = array_filter([
             'Provident Fund (Employee)' => $pf,
@@ -211,10 +217,10 @@ class DemoPayrollHistorySeeder extends Seeder
         }
 
         // Employer side — informational on the payslip, not deducted from net.
-        $pfWage = min($basic, StatutoryService::PF_WAGE_CEILING);
+        // The service caps the wage internally against the date-resolved ceiling.
         foreach ([
-            'Provident Fund (Employer)' => $statutory->providentFundEmployer($pfWage),
-            'Pension Scheme (Employer)' => $statutory->pensionSchemeEmployer($pfWage),
+            'Provident Fund (Employer)' => $statutory->providentFundEmployer($basic, $period),
+            'Pension Scheme (Employer)' => $statutory->pensionSchemeEmployer($basic, $period),
         ] as $name => $amount) {
             if ($amount <= 0) {
                 continue;
@@ -237,9 +243,10 @@ class DemoPayrollHistorySeeder extends Seeder
     /** Monthly gross for a month index, applying the mid-window raise. */
     private function grossFor(int $monthIndex): float
     {
-        $gross = $monthIndex >= 3
-            ? self::OPENING_GROSS * self::RAISE_MULTIPLIER
-            : self::OPENING_GROSS;
+        $opening = (float) env('DEMO_PAYROLL_GROSS', self::OPENING_GROSS);
+        $raise = (float) env('DEMO_PAYROLL_RAISE', self::RAISE_MULTIPLIER);
+
+        $gross = $monthIndex >= 3 ? $opening * $raise : $opening;
 
         return round($gross, 2);
     }

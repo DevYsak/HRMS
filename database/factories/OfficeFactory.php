@@ -3,10 +3,11 @@
 namespace Database\Factories;
 
 use App\Models\Company;
+use App\Models\Office;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Office>
+ * @extends Factory<Office>
  */
 class OfficeFactory extends Factory
 {
@@ -17,6 +18,7 @@ class OfficeFactory extends Factory
             'name' => fake()->randomElement(['Head Office', 'Mumbai Office', 'Delhi Office', 'Bangalore Office', 'Hyderabad Office', 'Chennai Office']),
             'address' => fake()->streetAddress(),
             'city' => fake()->city(),
+            'state_code' => 'MH',
             'country' => 'India',
             'timezone' => 'Asia/Kolkata',
             'is_headquarters' => false,
