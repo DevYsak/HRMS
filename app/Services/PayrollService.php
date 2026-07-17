@@ -57,6 +57,14 @@ class PayrollService
             $this->incentiveService->releaseIncludedForEmployeesAndMonth($payroll, $activeEmployeeIds, $monthLabel);
             $this->reimbursementService->releaseIncludedForEmployeesAndMonth($payroll, $activeEmployeeIds, $monthLabel);
 
+            // Drop payslips belonging to employees who have since left the run — a
+            // deactivation or cycle switch between runs would otherwise strand a
+            // payslip here while the totals below are rebuilt from the current set
+            // only, leaving total_payout disagreeing with SUM(payslips.net_salary).
+            Payslip::where('payroll_id', $payroll->id)
+                ->whereNotIn('employee_id', $activeEmployeeIds)
+                ->delete();
+
             $totalPayrollPayout = 0.0;
             $otAmount = 0.0;
             $incentives = 0.0;
