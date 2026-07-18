@@ -1249,6 +1249,29 @@
                             </div>
                         @endif
 
+                        {{-- System auto punch-out banner — regularizable --}}
+                        @if($day['is_auto_checkout'] ?? false)
+                            <div class="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-orange-300 bg-orange-50 dark:bg-orange-900/15 px-3 py-2">
+                                <div class="flex items-center gap-2 text-xs">
+                                    <flux:icon.bolt class="size-4 text-orange-500" />
+                                    <span class="font-black text-orange-900 dark:text-orange-200">Auto Punch-Out</span>
+                                    <span class="text-orange-700 dark:text-orange-300">· system closed this day at {{ $day['corrected_out'] ?? '—' }} (no OUT punch received)</span>
+                                </div>
+                                <button wire:click="openRegularisation('{{ $day['date'] }}')" class="inline-flex items-center gap-1 rounded-lg bg-orange-500 px-3 py-1 text-[11px] font-bold text-white transition hover:bg-orange-600"><flux:icon.pencil-square class="size-3" /> Fix Time</button>
+                            </div>
+                        @endif
+
+                        {{-- Regularized: original vs corrected — history is never lost --}}
+                        @if($day['is_regularized'] && (($day['original_in'] ?? null) || ($day['original_out'] ?? null)))
+                            <div class="mb-3 rounded-xl border border-blue-200 bg-blue-50/70 dark:border-blue-900 dark:bg-blue-950/20 px-3 py-2 text-xs">
+                                <div class="mb-1 flex items-center gap-1.5 font-black text-blue-800 dark:text-blue-200"><flux:icon.check-badge class="size-4" /> Regularized — original punches preserved</div>
+                                <div class="flex flex-wrap gap-x-5 gap-y-1 font-mono tabular-nums">
+                                    <span class="text-zinc-500 dark:text-zinc-400">IN: <span class="line-through">{{ $day['original_in'] ?? '—' }}</span> <flux:icon.arrow-right class="inline size-3 text-blue-400" /> <span class="font-bold text-blue-700 dark:text-blue-300">{{ $day['corrected_in'] ?? '—' }}</span></span>
+                                    <span class="text-zinc-500 dark:text-zinc-400">OUT: <span class="line-through">{{ $day['original_out'] ?? '—' }}</span> <flux:icon.arrow-right class="inline size-3 text-blue-400" /> <span class="font-bold text-blue-700 dark:text-blue-300">{{ $day['corrected_out'] ?? '—' }}</span></span>
+                                </div>
+                            </div>
+                        @endif
+
                         {{-- Vertical punch timeline --}}
                         @if(count($day['events']) > 0)
                             <div class="relative ml-2 space-y-2.5">

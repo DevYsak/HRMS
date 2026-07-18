@@ -750,6 +750,13 @@ class AttendanceTracker extends Component
                 'missing' => (! $item->check_out && ! $item->date->isToday()) || $item->missing_checkout,
                 'reg_status' => $item->regularisation?->status,
                 'is_regularized' => (bool) $item->is_regularized,
+                // Original punches preserved at regularisation (Rule 9) and the
+                // system auto punch-out flag — both surfaced on the day card.
+                'original_in' => $item->original_check_in?->format('h:i A'),
+                'original_out' => $item->original_check_out?->format('h:i A'),
+                'corrected_in' => $item->check_in?->format('h:i A'),
+                'corrected_out' => $item->check_out?->format('h:i A'),
+                'is_auto_checkout' => (bool) $item->is_auto_checkout,
                 'events' => $events,
             ];
         })->values()->all();
@@ -1036,7 +1043,9 @@ class AttendanceTracker extends Component
             }
         }
 
-        $excessBreaks = $attendances->where('break_minutes', '>', 60)->count();
+        // Break allowance comes from the shift (break_duration), not a literal.
+        $breakAllowance = (int) ($this->shift->break_duration ?? 60);
+        $excessBreaks = $attendances->where('break_minutes', '>', $breakAllowance)->count();
         $withBreaks = $attendances->where('break_minutes', '>', 0);
         $avgBreak = $withBreaks->count() > 0 ? (int) round($withBreaks->avg('break_minutes')) : 0;
 
@@ -1115,7 +1124,7 @@ class AttendanceTracker extends Component
 
         $longestBreak = (int) $attendances->max('break_minutes');
         if ($longestBreak > 0) {
-            $insights[] = ['good' => $longestBreak <= 60, 'text' => 'Longest break '.($longestBreak >= 60 ? intdiv($longestBreak, 60).'h '.($longestBreak % 60).'m' : $longestBreak.' mins')];
+            $insights[] = ['good' => $longestBreak <= $breakAllowance, 'text' => 'Longest break '.($longestBreak >= 60 ? intdiv($longestBreak, 60).'h '.($longestBreak % 60).'m' : $longestBreak.' mins')];
         }
 
         $bestDay = $withIn->groupBy(fn ($a) => $a->date->format('l'))
@@ -1201,8 +1210,8 @@ class AttendanceTracker extends Component
         $suggestions[] = $this->analytics['attendance_score'] >= 85
             ? ['good' => true, 'text' => 'Great attendance — keep it up']
             : ['good' => false, 'text' => 'Focus on attendance consistency this period'];
-        if ($avgBreak > 60) {
-            $suggestions[] = ['good' => false, 'text' => 'Improve break duration — average exceeds 60 minutes'];
+        if ($avgBreak > $breakAllowance) {
+            $suggestions[] = ['good' => false, 'text' => "Improve break duration — average exceeds {$breakAllowance} minutes"];
         }
         if ($late > 0 && $this->shift?->start_time) {
             $suggestions[] = ['good' => false, 'text' => 'Arrive before '.Carbon::parse($this->shift->start_time)->addMinutes((int) ($this->shift->grace_minutes ?? 5))->format('g:i A').' to stay on time'];
@@ -1437,6 +1446,13 @@ class AttendanceTracker extends Component
             'late_minutes' => (int) ($att->late_minutes ?? 0),
             'break_minutes' => (int) ($att->break_minutes ?? 0),
             'total_hours' => $att->total_hours,
+            'is_regularized' => (bool) $att->is_regularized,
+            'is_auto_checkout' => (bool) $att->is_auto_checkout,
+            'auto_checkout_reason' => $att->auto_checkout_reason,
+            // Original punches preserved at regularisation — shown next to the
+            // corrected times so history is never lost.
+            'original_in' => $att->original_check_in?->format('h:i A'),
+            'original_out' => $att->original_check_out?->format('h:i A'),
             'in' => [
                 'time' => $att->check_in?->format('h:i A'),
                 'method' => $inMethod?->label(),
@@ -1470,20 +1486,30 @@ class AttendanceTracker extends Component
                     'device' => $p->device_serial,
                     'location' => $p->location,
                 ])->all(),
-            // Audit History — every regularisation touching this day.
+            // Audit History — every regularisation touching this day, with the
+            // full multi-stage approval trail (who acted, when, at which stage).
             'audits' => AttendanceRegularisation::where('employee_id', $employee->id)
                 ->whereDate('work_date', $date)
                 ->with('reviewer')
                 ->orderByDesc('created_at')
                 ->get()
                 ->map(fn ($r) => [
-                    'requested_in' => Carbon::parse($r->requested_check_in)->format('h:i A'),
-                    'requested_out' => Carbon::parse($r->requested_check_out)->format('h:i A'),
+                    'type' => $r->regularisation_type ?? 'punch',
+                    'requested_in' => $r->requested_check_in ? Carbon::parse($r->requested_check_in)->format('h:i A') : null,
+                    'requested_out' => $r->requested_check_out ? Carbon::parse($r->requested_check_out)->format('h:i A') : null,
                     'reason' => $r->reason,
                     'status' => $r->status,
+                    'stage' => $r->stageLabel(),
                     'reviewer' => $r->reviewer?->name,
                     'reviewed_at' => $r->reviewed_at?->format('d M Y h:i A'),
                     'submitted_at' => $r->created_at?->format('d M Y h:i A'),
+                    'trail' => collect($r->approval_trail ?? [])->map(fn ($t) => [
+                        'stage' => str_replace('_', ' ', (string) ($t['stage'] ?? '')),
+                        'action' => $t['action'] ?? '',
+                        'by' => $t['name'] ?? null,
+                        'comment' => $t['comment'] ?? null,
+                        'at' => $t['at'] ?? null,
+                    ])->all(),
                 ])->all(),
         ];
 

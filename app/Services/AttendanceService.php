@@ -12,11 +12,14 @@ use App\Models\Employee;
 use App\Models\PublicHoliday;
 use App\Models\ShiftSetting;
 use App\Models\User;
+use App\Services\Attendance\ShiftResolver;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class AttendanceService
 {
+    public function __construct(protected ShiftResolver $shifts) {}
+
     public function checkIn(Employee $employee, ShiftSetting $shift, array $payload = []): Attendance
     {
         $now = Carbon::now();
@@ -46,7 +49,8 @@ class AttendanceService
     public function checkOut(Attendance $attendance, array $payload = []): Attendance
     {
         $now = Carbon::now();
-        $totalHours = round($attendance->check_in->diffInMinutes($now) / 60, 2);
+        $grossMinutes = (int) $attendance->check_in->diffInMinutes($now);
+        $totalHours = round(max(0, $grossMinutes - (int) ($attendance->break_minutes ?? 0)) / 60, 2);
 
         $attendance->update([
             'check_out' => $now,
@@ -160,10 +164,16 @@ class AttendanceService
             // NOT NULL column holds.
             if ($regularisation->regularisation_type === 'half_day') {
                 $workDate = Carbon::parse($regularisation->work_date)->toDateString();
+                // Seed a fully-absent half-day at the employee's shift start
+                // (DB-driven), never a hardcoded clock time.
+                $shift = $regularisation->employee
+                    ? $this->shifts->resolve($regularisation->employee, $workDate)
+                    : null;
+                $seedCheckIn = $shift?->start ?? Carbon::parse($workDate.' 00:00:00');
                 $attendance = $regularisation->attendance
                     ?? Attendance::firstOrCreate(
                         ['employee_id' => $regularisation->employee_id, 'date' => $regularisation->work_date],
-                        ['check_in' => Carbon::parse($workDate.' 09:00:00'), 'status' => 'half_day', 'work_mode' => 'office'],
+                        ['check_in' => $seedCheckIn, 'status' => 'half_day', 'work_mode' => 'office'],
                     );
 
                 if (! $regularisation->attendance_id) {
@@ -197,18 +207,44 @@ class AttendanceService
             $grossMinutes = $checkIn->diffInMinutes($checkOut);
             $netMinutes = max(0, $grossMinutes - ((int) $attendance->break_minutes));
 
-            $attendance->update(array_filter([
+            // Preserve the ORIGINAL punch immutably the first time this day is
+            // corrected — the raw punch is never lost, only snapshotted. Later
+            // re-approvals keep the very first original.
+            $original = [];
+            if ($attendance->original_check_in === null && $attendance->original_check_out === null) {
+                $original = [
+                    'original_check_in' => $attendance->check_in,
+                    'original_check_out' => $attendance->check_out,
+                ];
+            }
+
+            // Late is recomputed against the shift, NOT forced to on_time — a
+            // punch corrected to 10:40 on an 09:00 shift is still late.
+            $shift = $regularisation->employee
+                ? $this->shifts->resolve($regularisation->employee, $workDate)
+                : null;
+            $isLate = $shift ? $shift->isLate($checkIn) : (bool) $attendance->is_late;
+            $lateMinutes = $shift ? $shift->lateMinutes($checkIn) : (int) ($attendance->late_minutes ?? 0);
+
+            // Times + methods: keep any existing value when the request left a
+            // field null (only the corrected punch is overwritten).
+            $punchFields = array_filter([
                 'check_in' => $checkIn,
                 'check_out' => $checkOut,
                 'check_in_method' => $regularisation->check_in_method,
                 'check_out_method' => $regularisation->check_out_method,
+            ], fn ($v) => $v !== null);
+
+            $attendance->update($original + $punchFields + [
                 'total_hours' => round($netMinutes / 60, 2),
-                'status' => 'on_time',
-                'is_late' => false,
-                'late_minutes' => 0,
+                'status' => $isLate ? 'late' : 'on_time',
+                'is_late' => $isLate,
+                'late_minutes' => $lateMinutes,
                 'missing_checkout' => false,
+                'is_auto_checkout' => false,   // a real correction supersedes any system auto-close
+                'auto_checkout_reason' => null,
                 'is_regularized' => true,
-            ], fn ($v) => $v !== null));
+            ]);
 
             // Write the corrected in/out into the punch journey (with the
             // declared method) so the employee's Attendance Journey reflects the

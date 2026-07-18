@@ -31,6 +31,20 @@ Schedule::command('hrms:flag-missing-checkouts')
     ->withoutOverlapping()
     ->runInBackground();
 
+// Auto punch-out engine (spec Rules 5 & 6): close open days at shift-end once
+// past the buffer; hold approved-OT days until the OT close time. Frequent +
+// idempotent → every 10 min from mid-afternoon, plus a 23:59 sweep for OT days.
+Schedule::command('hrms:auto-punch-out')
+    ->everyTenMinutes()
+    ->between('15:00', '23:50')
+    ->withoutOverlapping()
+    ->runInBackground();
+
+Schedule::command('hrms:auto-punch-out')
+    ->dailyAt('23:59')
+    ->withoutOverlapping()
+    ->runInBackground();
+
 // Confirm late flags for IT shift (10:30 start + 5 min grace) → 10:45 IST
 Schedule::command('hrms:check-late-arrivals')
     ->dailyAt('10:45')

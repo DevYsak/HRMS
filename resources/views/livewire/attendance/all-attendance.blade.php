@@ -37,13 +37,17 @@
 @php
     $kpis = [
         ['label' => 'Total Employees', 'value' => $stats['total'], 'sub' => 'active workforce', 'icon' => 'users', 'color' => '#71717a'],
-        ['label' => 'Present Today', 'value' => $stats['present'], 'sub' => $stats['present_pct'].'% of total', 'icon' => 'check-circle', 'color' => '#10b981'],
-        ['label' => 'Absent', 'value' => $stats['absent'], 'sub' => $stats['absent_pct'].'% of total', 'icon' => 'x-circle', 'color' => '#ef4444'],
+        ['label' => 'Present', 'value' => $stats['present'], 'sub' => $stats['present_pct'].'% of expected', 'icon' => 'check-circle', 'color' => '#10b981'],
+        ['label' => 'Absent', 'value' => $stats['absent'], 'sub' => $stats['absent_pct'].'% of expected', 'icon' => 'x-circle', 'color' => '#ef4444'],
         ['label' => 'On Time', 'value' => $stats['on_time'], 'sub' => 'within grace', 'icon' => 'clock', 'color' => '#3b82f6'],
         ['label' => 'Late Arrivals', 'value' => $stats['late'], 'sub' => $stats['late_pct'].'% of present', 'icon' => 'exclamation-triangle', 'color' => '#f59e0b'],
         ['label' => 'WFH / Hybrid', 'value' => $stats['wfh'], 'sub' => 'working remotely', 'icon' => 'home', 'color' => '#8b5cf6'],
     ];
 @endphp
+<div class="flex items-center gap-2 text-[11px] font-bold text-zinc-400">
+    <flux:icon.funnel class="size-3.5 text-orange-400" /> Metrics below reflect the current filter · <span class="text-orange-500">{{ $weekLabel }}</span>
+</div>
+<div class="h-1"></div>
 <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
     @foreach($kpis as $k)
         <div class="flex items-center gap-3 rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
@@ -179,7 +183,7 @@
                             $methods = collect([$inMethod, $outMethod])->filter()->unique();
                             $hrs = (float) $log->total_hours;
                         @endphp
-                        <tr wire:click="openEmployeeDrawer({{ $log->employee_id }})" class="cursor-pointer text-xs transition hover:bg-orange-50/40">
+                        <tr wire:click="openEmployeeDrawer({{ $log->employee_id }})" class="cursor-pointer text-xs transition {{ $log->is_regularized ? 'bg-blue-50/60 hover:bg-blue-50 dark:bg-blue-950/20' : 'hover:bg-orange-50/40' }}">
                             <td class="px-5 py-2.5">
                                 <div class="flex items-center gap-2.5">
                                     <div class="flex size-8 shrink-0 items-center justify-center rounded-xl bg-orange-100 text-[10px] font-black text-orange-600">{{ $initials }}</div>
@@ -189,13 +193,25 @@
                                     </div>
                                 </div>
                             </td>
-                            <td class="py-2.5"><div class="font-bold text-zinc-800 dark:text-zinc-100">{{ $log->date->format('d M') }}</div><div class="text-[9px] text-zinc-400">{{ $log->date->format('D') }}</div></td>
                             <td class="py-2.5">
-                                <span class="font-mono font-bold tabular-nums text-zinc-800 dark:text-zinc-100">{{ $log->check_in?->format('h:i A') ?? '—' }}</span>
+                                <div class="font-bold text-zinc-800 dark:text-zinc-100">{{ $log->date->format('d M') }}</div>
+                                <div class="text-[9px] text-zinc-400">{{ $log->date->format('D') }}</div>
+                                @if($log->is_regularized)<span class="mt-0.5 inline-flex items-center gap-0.5 rounded bg-blue-100 px-1 py-px text-[8px] font-black uppercase tracking-wide text-blue-600 dark:bg-blue-900/40 dark:text-blue-300"><flux:icon.pencil-square class="size-2.5" /> Regularized</span>@endif
+                            </td>
+                            <td class="py-2.5">
+                                <span class="font-mono font-bold tabular-nums {{ $log->is_regularized ? 'text-blue-600 dark:text-blue-300' : 'text-zinc-800 dark:text-zinc-100' }}">{{ $log->check_in?->format('h:i A') ?? '—' }}</span>
+                                @if($log->original_check_in && $log->check_in && ! $log->original_check_in->equalTo($log->check_in))
+                                    <div class="text-[9px] font-semibold text-zinc-400 line-through" title="Original punch (preserved)">{{ $log->original_check_in->format('h:i A') }}</div>
+                                @endif
                                 @if($log->is_late)<div class="text-[9px] font-bold text-amber-600">+{{ (int) ($log->late_minutes ?? 0) }}m late</div>@endif
                             </td>
                             <td class="py-2.5 font-mono tabular-nums">
-                                @if($log->check_out)<span class="font-bold text-zinc-800 dark:text-zinc-100">{{ $log->check_out->format('h:i A') }}</span>
+                                @if($log->check_out)
+                                    <span class="font-bold {{ $log->is_auto_checkout ? 'text-orange-500' : ($log->is_regularized ? 'text-blue-600 dark:text-blue-300' : 'text-zinc-800 dark:text-zinc-100') }}">{{ $log->check_out->format('h:i A') }}</span>
+                                    @if($log->original_check_out && ! $log->original_check_out->equalTo($log->check_out))
+                                        <div class="text-[9px] font-semibold text-zinc-400 line-through" title="Original punch (preserved)">{{ $log->original_check_out->format('h:i A') }}</div>
+                                    @endif
+                                    @if($log->is_auto_checkout)<div class="text-[9px] font-bold uppercase text-orange-500" title="System auto punch-out — please regularize">Auto OUT</div>@endif
                                 @elseif($log->check_in && $log->date->isToday())<span class="inline-flex items-center gap-1 font-bold text-emerald-600"><span class="size-1.5 animate-pulse rounded-full bg-emerald-500"></span> LIVE</span>
                                 @elseif($log->check_in)<span class="font-bold text-amber-500">missing</span>
                                 @else<span class="text-zinc-300">—</span>@endif

@@ -9,6 +9,7 @@ use App\Models\Employee;
 use App\Models\OtRequest;
 use App\Models\OtWindow;
 use App\Models\OvertimeRecord;
+use App\Services\Attendance\ShiftResolver;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
@@ -97,8 +98,11 @@ class OvertimeService
             return null;
         }
 
-        // Derive a synthetic OT window from shift start + threshold, same as Nexflow.
-        $shiftStartHour = (int) ($employee->shift?->start_time ? date('H', strtotime($employee->shift->start_time)) : 9);
+        // Derive a synthetic OT window from shift start + threshold, same as
+        // Nexflow. Shift start comes from the resolver (assigned shift, else the
+        // global attendance setting) — never a hardcoded hour.
+        $resolved = app(ShiftResolver::class)->resolve($employee, $workDate);
+        $shiftStartHour = (int) ($resolved?->start->hour ?? 0);
         $otStartTime = sprintf('%02d:00', ($shiftStartHour + (int) $threshold) % 24);
         $otEndTime = date('H:i', strtotime($otStartTime) + ((int) round($otHours * 60) * 60));
 
@@ -156,7 +160,10 @@ class OvertimeService
     {
         if ($request->attendance_id && $request->attendance) {
             $totalWorked = (float) $request->attendance->total_hours;
-            $ot = max(0, $totalWorked - self::STANDARD_HOURS);
+            $threshold = $request->employee
+                ? $this->getThresholdForEmployee($request->employee)
+                : self::STANDARD_HOURS;
+            $ot = max(0, $totalWorked - $threshold);
 
             return round($ot, 2);
         }
@@ -437,14 +444,17 @@ class OvertimeService
         }
 
         $otHours = $this->calculateOtHours($request);
+        $threshold = $request->employee
+            ? $this->getThresholdForEmployee($request->employee)
+            : self::STANDARD_HOURS;
 
         return OvertimeRecord::create([
             'employee_id' => $request->employee_id,
             'ot_request_id' => $request->id,
             'attendance_id' => $request->attendance_id,
             'work_date' => $request->work_date,
-            'total_hours_worked' => $request->attendance?->total_hours ?? $otHours + self::STANDARD_HOURS,
-            'standard_hours' => self::STANDARD_HOURS,
+            'total_hours_worked' => $request->attendance?->total_hours ?? $otHours + $threshold,
+            'standard_hours' => $threshold,
             'ot_hours' => $otHours,
             'rate_per_hour' => $rate = $this->otRatePerHour(),
             'ot_amount' => round($otHours * $rate, 2),

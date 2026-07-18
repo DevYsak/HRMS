@@ -20,7 +20,7 @@ class CheckExcessBreaks extends Command
     {
         $today = now()->toDateString();
 
-        $records = Attendance::with(['employee.user', 'employee.manager', 'breakLogs'])
+        $records = Attendance::with(['employee.user', 'employee.manager', 'employee.shift', 'breakLogs'])
             ->where('date', $today)
             ->whereNotNull('check_in')
             ->where('excess_break_flag', false)
@@ -35,8 +35,11 @@ class CheckExcessBreaks extends Command
                 $totalBreakMins = (int) ($record->break_minutes ?? 0);
             }
 
-            if ($totalBreakMins > 60) {
-                $excess = $totalBreakMins - 60;
+            // Allowance from the employee's shift (break_duration), not a literal.
+            $allowance = (int) ($record->employee?->shift?->break_duration ?? 60);
+
+            if ($totalBreakMins > $allowance) {
+                $excess = $totalBreakMins - $allowance;
                 $record->update([
                     'excess_break_flag' => true,
                     'notes' => trim(($record->notes ?? '')." [Auto] Excess break: {$totalBreakMins}min (+{$excess}min over limit)."),

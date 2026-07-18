@@ -516,6 +516,32 @@ class AllAttendance extends Component
         \Flux::toast('Regularisation request rejected.');
     }
 
+    /**
+     * Working days (excluding Sundays) covered by the active filter — 1 for a
+     * single-day filter, the span for a range, capped at today so future days
+     * don't inflate the "expected" denominator.
+     */
+    protected function filteredWorkingDays(): int
+    {
+        $today = Carbon::today();
+
+        if ($this->date) {
+            return Carbon::parse($this->date)->isSunday() ? 0 : 1;
+        }
+
+        if ($this->dateFrom && $this->dateTo) {
+            $from = Carbon::parse($this->dateFrom);
+            $to = Carbon::parse($this->dateTo)->min($today);
+            if ($to->lt($from)) {
+                return 0;
+            }
+
+            return (int) $from->diffInDaysFiltered(fn (Carbon $d) => ! $d->isSunday(), $to->copy()->endOfDay());
+        }
+
+        return 1;
+    }
+
     /** @param Builder<Attendance> $query */
     protected function applyFilters($query): void
     {
@@ -566,27 +592,39 @@ class AllAttendance extends Component
                 ->whereHas('employee.user')
         )->get();
 
-        // KPI stats for today
-        $today = Carbon::today();
+        // KPI stats recompute from the SAME filtered dataset the table shows —
+        // not a fixed "today" snapshot. Change the date/range/status/search and
+        // every card recomputes (present, absent, late, on-time, WFH).
         $totalActive = Employee::where('status', 'active')
             ->when($scopeIds !== null, fn ($q) => $q->whereIn('id', $scopeIds))
             ->count();
-        $todayRecords = $scoped(Attendance::where('date', $today))->get();
-        $presentToday = $todayRecords->whereNotNull('check_in')->count();
-        $lateToday = $todayRecords->where('is_late', true)->count();
-        $onTimeToday = $presentToday - $lateToday;
-        $absentToday = max(0, $totalActive - $presentToday);
+
+        $filtered = (clone $query)->get(['employee_id', 'date', 'check_in', 'is_late', 'work_mode']);
+
+        // A present "slot" is one employee-day with a check-in.
+        $present = $filtered->whereNotNull('check_in')
+            ->unique(fn ($a) => $a->employee_id.'|'.$a->date->toDateString())
+            ->count();
+        $late = $filtered->where('is_late', true)->count();
+        $onTime = max(0, $present - $late);
+        $wfh = $filtered->whereIn('work_mode', ['wfh', 'hybrid'])->count();
+
+        // Expected slots = active employees × working days in the filtered span,
+        // so "Absent" is meaningful for a single day and for a range.
+        $workingDays = $this->filteredWorkingDays();
+        $expectedSlots = $totalActive * $workingDays;
+        $absent = max(0, $expectedSlots - $present);
 
         $stats = [
             'total' => $totalActive,
-            'present' => $presentToday,
-            'absent' => $absentToday,
-            'on_time' => $onTimeToday,
-            'late' => $lateToday,
-            'wfh' => $todayRecords->whereIn('work_mode', ['wfh', 'hybrid'])->count(),
-            'present_pct' => $totalActive > 0 ? round(($presentToday / $totalActive) * 100, 1) : 0,
-            'absent_pct' => $totalActive > 0 ? round(($absentToday / $totalActive) * 100, 1) : 0,
-            'late_pct' => $presentToday > 0 ? round(($lateToday / $presentToday) * 100, 1) : 0,
+            'present' => $present,
+            'absent' => $absent,
+            'on_time' => $onTime,
+            'late' => $late,
+            'wfh' => $wfh,
+            'present_pct' => $expectedSlots > 0 ? round(($present / $expectedSlots) * 100, 1) : 0,
+            'absent_pct' => $expectedSlots > 0 ? round(($absent / $expectedSlots) * 100, 1) : 0,
+            'late_pct' => $present > 0 ? round(($late / $present) * 100, 1) : 0,
         ];
 
         // Presence trend across the selected range (drives the overview chart).

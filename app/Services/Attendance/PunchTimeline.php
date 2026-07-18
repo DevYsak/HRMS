@@ -52,12 +52,26 @@ class PunchTimeline
         }
 
         $ordered = $raw->sortBy('punched_at')->values();
-        [$kept, $rawEvents, $duplicateCount, $conflictCount] = $this->mergeNoise($ordered);
+        [$kept, $flags, $duplicateCount, $conflictCount] = $this->mergeNoise($ordered);
 
         $hasDirection = $kept->contains(fn (AttendancePunch $p) => $this->effectiveDirection($p) !== null);
         $directions = $this->resolveDirections($kept, $hasDirection);
 
-        return $this->assemble($kept, $directions, $ordered->count(), $rawEvents, $duplicateCount, $conflictCount, $day, $summary);
+        // Rule 1 — Face starts attendance. A Card/ID tap with no active session
+        // (a stray tap before the first Face IN, or after the day already
+        // closed) is ignored, not turned into a phantom missing-IN session.
+        $stray = $this->detectStray($kept, $directions);
+        foreach (array_keys($stray) as $i) {
+            $flags[spl_object_id($kept[$i])] = ['ignored', 'Ignored — card scan with no active check-in (Face required to start attendance)'];
+        }
+
+        $rawEvents = $ordered->map(function (AttendancePunch $p) use ($flags) {
+            [$f, $note] = $flags[spl_object_id($p)] ?? ['kept', null];
+
+            return $this->annotate($p, $f, $note);
+        })->all();
+
+        return $this->assemble($kept, $directions, $stray, $ordered->count(), $rawEvents, $duplicateCount, $conflictCount, $day, $summary);
     }
 
     /**
@@ -78,7 +92,18 @@ class PunchTimeline
         $hasDirection = $kept->contains(fn (AttendancePunch $p) => $this->effectiveDirection($p) !== null);
         $directions = $this->resolveDirections($kept, $hasDirection);
 
+        // Drop stray card taps (Rule 1) so the history timeline shows only the
+        // punches the engine actually acted on.
+        $stray = $this->detectStray($kept, $directions);
+        if ($stray !== []) {
+            $kept = $kept->reject(fn (AttendancePunch $p, int $i) => isset($stray[$i]))->values();
+            $directions = array_values(array_filter($directions, fn ($d, $i) => ! isset($stray[$i]), ARRAY_FILTER_USE_BOTH));
+        }
+
         $n = $kept->count();
+        if ($n === 0) {
+            return [];
+        }
         $lastOutIndex = null;
         foreach ($directions as $i => $dir) {
             if ($dir === 'out') {
@@ -120,7 +145,7 @@ class PunchTimeline
      *    morning IN that bounces an OUT keeps the IN. Drop only the echo.
      *
      * @param  Collection<int, AttendancePunch>  $ordered
-     * @return array{0: Collection<int, AttendancePunch>, 1: array<int, array<string, mixed>>, 2: int, 3: int}
+     * @return array{0: Collection<int, AttendancePunch>, 1: array<int, array{0: string, 1: ?string}>, 2: int, 3: int}
      */
     protected function mergeNoise(Collection $ordered): array
     {
@@ -167,10 +192,20 @@ class PunchTimeline
                 // Same direction within the window → a duplicate read (or a
                 // Face+Card re-verify of the same edge when the method differs).
                 if (! $opposite) {
-                    $sameMethod ? $duplicates++ : $conflicts++;
-                    $flag[spl_object_id($p)] = $sameMethod
-                        ? ['duplicate', 'Duplicate read — same punch registered again within '.self::MERGE_WINDOW_SECONDS.'s']
-                        : ['retry', 'Authentication retry — merged into the '.$prev->punched_at->format('h:i:s A').' punch'];
+                    if ($sameMethod) {
+                        // Rule 2 — a Face reader firing several times in a burst.
+                        // Keep the LATEST punch; the earlier reads are the echoes.
+                        $duplicates++;
+                        $kept->pop();
+                        $flag[spl_object_id($prev)] = ['duplicate', 'Duplicate read — superseded by the '.$p->punched_at->format('h:i:s A').' punch'];
+                        $kept->push($p);
+                        $flag[spl_object_id($p)] = ['kept', null];
+                    } else {
+                        // A Face+Card / Face+Fingerprint re-verify of one edge —
+                        // keep the first, merge the second in.
+                        $conflicts++;
+                        $flag[spl_object_id($p)] = ['retry', 'Authentication retry — merged into the '.$prev->punched_at->format('h:i:s A').' punch'];
+                    }
 
                     continue;
                 }
@@ -182,14 +217,51 @@ class PunchTimeline
             $flag[spl_object_id($p)] = ['kept', null];
         }
 
-        // Annotate every raw punch in chronological order for the audit view.
-        $rawEvents = $ordered->map(function (AttendancePunch $p) use ($flag) {
-            [$f, $note] = $flag[spl_object_id($p)] ?? ['kept', null];
+        return [$kept->values(), $flag, $duplicates, $conflicts];
+    }
 
-            return $this->annotate($p, $f, $note);
-        })->all();
+    /**
+     * Stray out-only taps (Rule 1): a Card/ID punch that arrives while no Face
+     * session is open — a leading tap before the first Face IN, or a lone tap on
+     * a day the employee never Face-scanned. Returns the kept-punch indices to
+     * ignore. A genuinely ambiguous OUT (one with no method-derived direction) is
+     * left alone so it still surfaces as a missing-IN needing regularization.
+     *
+     * @param  Collection<int, AttendancePunch>  $kept
+     * @param  array<int, string>  $directions
+     * @return array<int, true>
+     */
+    protected function detectStray(Collection $kept, array $directions): array
+    {
+        $stray = [];
+        $open = false;
 
-        return [$kept->values(), $rawEvents, $duplicates, $conflicts];
+        foreach ($kept as $i => $p) {
+            if ($directions[$i] !== 'out') {   // an IN opens (or keeps open) a session
+                $open = true;
+
+                continue;
+            }
+            if (! $open) {
+                if ($this->isOutOnlyMethod($p)) {
+                    $stray[$i] = true;   // stray card tap — ignore
+                }
+
+                continue;                 // ambiguous OUT with no opener: leave for missing-IN handling
+            }
+            $open = false;                // this OUT closes the open session
+        }
+
+        return $stray;
+    }
+
+    /** Whether a punch's method is configured as an out-only edge (e.g. Card). */
+    protected function isOutOnlyMethod(AttendancePunch $p): bool
+    {
+        $map = config('biometric.method_direction', []);
+        $method = (string) $p->method;
+
+        return $method !== '' && ($map[$method] ?? null) === 'out';
     }
 
     /**
@@ -228,12 +300,42 @@ class PunchTimeline
      *
      * @param  Collection<int, AttendancePunch>  $kept
      * @param  array<int, string>  $directions
+     * @param  array<int, true>  $stray
      * @param  array<int, array<string, mixed>>  $rawEvents
      * @return array<string, mixed>
      */
-    protected function assemble(Collection $kept, array $directions, int $rawCount, array $rawEvents, int $duplicateCount, int $conflictCount, Carbon $day, ?AttendanceDailySummary $summary): array
+    protected function assemble(Collection $kept, array $directions, array $stray, int $rawCount, array $rawEvents, int $duplicateCount, int $conflictCount, Carbon $day, ?AttendanceDailySummary $summary): array
     {
+        // Rule 1 — set aside ignored stray taps; sessions/nodes are built only
+        // from the effective punches the engine acts on.
+        $ignored = [];
+        if ($stray !== []) {
+            $effKept = collect();
+            $effDir = [];
+            foreach ($kept as $i => $p) {
+                if (isset($stray[$i])) {
+                    $ignored[] = $this->ignoredNode($p);
+
+                    continue;
+                }
+                $effKept->push($p);
+                $effDir[] = $directions[$i];
+            }
+            $kept = $effKept->values();
+            $directions = $effDir;
+        }
+
         $n = $kept->count();
+        if ($n === 0) {
+            return array_merge($this->emptyResult(), [
+                'raw_events' => $rawEvents,
+                'raw_count' => $rawCount,
+                'duplicate_count' => $duplicateCount,
+                'conflict_count' => $conflictCount,
+                'ignored' => $ignored,
+                'ignored_count' => count($ignored),
+            ]);
+        }
         $isToday = $day->isToday();
         $trailingIn = $directions[$n - 1] === 'in';
         $live = $trailingIn && $isToday;
@@ -365,6 +467,32 @@ class PunchTimeline
             'live_elapsed_minutes' => $liveElapsed,
             'missing_out' => $missingTrailingOut,
             'needs_regularization' => $needsRegularization,
+            'ignored' => $ignored,
+            'ignored_count' => count($ignored),
+        ];
+    }
+
+    /** A collapsed node for a stray tap the engine ignored (Rule 1). */
+    protected function ignoredNode(AttendancePunch $p): array
+    {
+        $method = $p->methodEnum();
+
+        return [
+            'time' => $p->punched_at->format('h:i A'),
+            'time_short' => $p->punched_at->format('g:i'),
+            'ts_ms' => (int) $p->punched_at->getTimestampMs(),
+            'dir' => 'IGN',
+            'type' => 'ignored',
+            'method' => $method?->value,
+            'method_label' => $method?->label() ?? ucfirst((string) $p->method),
+            'method_icon' => $method?->icon() ?? 'no-symbol',
+            'device' => $p->device_serial,
+            'location' => $p->location,
+            'verify' => $p->verify_raw,
+            'source' => $p->source,
+            'lat' => $p->lat,
+            'lng' => $p->lng,
+            'reason' => 'Ignored — card scan with no active check-in',
         ];
     }
 
@@ -453,6 +581,7 @@ class PunchTimeline
             'working_minutes' => 0, 'break_minutes' => 0, 'session_count' => 0,
             'live' => false, 'live_start_ms' => null, 'live_start_label' => null,
             'live_elapsed_minutes' => 0, 'missing_out' => false, 'needs_regularization' => false,
+            'ignored' => [], 'ignored_count' => 0,
         ];
     }
 }
