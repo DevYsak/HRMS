@@ -63,6 +63,13 @@ Schedule::command('hrms:check-excess-breaks')
     ->withoutOverlapping()
     ->runInBackground();
 
+// Rule 10: issue/escalate warning letters once monthly late marks reach the
+// configured threshold → 14:30 IST daily (after both shifts' late checks ran)
+Schedule::command('hrms:issue-late-warnings')
+    ->dailyAt('14:30')
+    ->withoutOverlapping()
+    ->runInBackground();
+
 // Escalate OT requests pending > 24 hours to HR → hourly
 Schedule::command('hrms:escalate-ot')
     ->hourly()

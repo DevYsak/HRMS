@@ -546,6 +546,25 @@
     </div>
 @endif
 
+{{-- ═══════════════ LATE-MARK WARNING (Rule 10: 3+ lates this month) ═══════════════ --}}
+@if($analytics['late_warning'] ?? false)
+    <div class="rounded-[18px] border border-rose-300 bg-gradient-to-r from-rose-50 to-white dark:from-rose-950/25 dark:to-zinc-900 p-4 shadow-sm" data-reveal>
+        <div class="flex flex-wrap items-center gap-3">
+            <span class="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-rose-500 text-white shadow-lg shadow-rose-200"><flux:icon.shield-exclamation class="size-5" /></span>
+            <div class="min-w-0 flex-1">
+                <div class="text-sm font-black text-rose-900 dark:text-rose-200">Late-mark warning — {{ $analytics['late_month_count'] }} late arrivals this month</div>
+                <div class="text-xs text-rose-700 dark:text-rose-300">
+                    {{ $analytics['late_threshold'] ?? 3 }}+ late marks trigger a formal warning letter and reduce your attendance &amp; performance scores
+                    (−{{ $analytics['late_penalty'] }} pts applied).
+                    @if(($analytics['late_consecutive'] ?? 0) >= 2) {{ $analytics['late_consecutive'] }} consecutive late days — @endif
+                    Arrive before your shift's grace cutoff to recover.
+                </div>
+            </div>
+            <span class="rounded-full bg-rose-100 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-rose-600 dark:bg-rose-900/40 dark:text-rose-300">Warning</span>
+        </div>
+    </div>
+@endif
+
 {{-- ═══════════════ TODAY'S ATTENDANCE JOURNEY (slice 2b) ═══════════════ --}}
 <style>
 .pa-jcard{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:16px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
@@ -804,6 +823,9 @@
         @if($noise > 0)
           <div class="pa-snote"><flux:icon.funnel class="size-3.5" /> {{ $noise }} duplicate/double {{ \Illuminate\Support\Str::plural('punch', $noise) }} detected and ignored in calculations.</div>
         @endif
+        @if(($pj['ignored_count'] ?? 0) > 0)
+          <div class="pa-snote"><flux:icon.no-symbol class="size-3.5" /> {{ $pj['ignored_count'] }} card {{ \Illuminate\Support\Str::plural('scan', $pj['ignored_count']) }} ignored — attendance starts with Face recognition.</div>
+        @endif
       @else
         <p style="font-size:12.5px;color:var(--pa-faint);margin:0">No sessions yet — your first punch starts session 1.</p>
       @endif
@@ -909,6 +931,25 @@
         'xaxis' => array_merge($axis, ['categories' => collect($lateTrend)->pluck('month')->all()]),
         'yaxis' => ['labels' => ['style' => ['colors' => '#9CA3AF', 'fontSize' => '10px']]], 'tooltip' => ['theme' => 'light'],
         'series' => [['name' => 'Late days', 'data' => collect($lateTrend)->pluck('late')->all()]],
+    ];
+
+    // 5b · Arrival Trend — minutes vs shift start (negative = early), with the
+    // shift-start and grace-cutoff boundaries drawn from the assigned shift.
+    $shiftStartMin = $shift?->start_time ? (int) \Illuminate\Support\Carbon::parse($shift->start_time)->format('H') * 60 + (int) \Illuminate\Support\Carbon::parse($shift->start_time)->format('i') : null;
+    $graceMin = (int) ($shift->grace_minutes ?? 0);
+    $arrivalSeries = collect($chartDaily)->map(fn ($d) => ($d['in_min'] !== null && $shiftStartMin !== null) ? $d['in_min'] - $shiftStartMin : null)->all();
+    $arrivalChart = [
+        'chart' => $baseChart('line', 200),
+        'colors' => ['#f59e0b'], 'dataLabels' => ['enabled' => false], 'stroke' => ['curve' => 'smooth', 'width' => 3],
+        'markers' => ['size' => 3, 'hover' => ['size' => 5]],
+        'grid' => ['borderColor' => '#F3E8DD', 'strokeDashArray' => 4],
+        'annotations' => ['yaxis' => array_values(array_filter([
+            $shiftStartMin !== null ? ['y' => 0, 'borderColor' => '#10b981', 'strokeDashArray' => 5, 'label' => ['text' => 'Shift start', 'style' => ['color' => '#10b981', 'background' => '#ECFDF5', 'fontSize' => '10px']]] : null,
+            ($shiftStartMin !== null && $graceMin > 0) ? ['y' => $graceMin, 'borderColor' => '#f43f5e', 'strokeDashArray' => 5, 'label' => ['text' => 'Grace +'.$graceMin.'m', 'style' => ['color' => '#f43f5e', 'background' => '#FFF1F2', 'fontSize' => '10px']]] : null,
+        ]))],
+        'xaxis' => array_merge($axis, ['categories' => $labels, 'tickAmount' => $tick]),
+        'yaxis' => ['labels' => ['style' => ['colors' => '#9CA3AF', 'fontSize' => '10px']]], 'tooltip' => ['theme' => 'light'],
+        'series' => [['name' => 'Minutes vs shift start', 'data' => $arrivalSeries]],
     ];
 
     // 6 · Break Analysis — daily break minutes + average line
@@ -1049,6 +1090,14 @@
         <div class="mb-1 text-sm font-black text-zinc-900 dark:text-white">Productivity Score</div>
         <x-dashboard.chart :options="$productivityChart" id="productivity-chart" wire:key="prod-{{ $ck }}" class="grid place-items-center" />
         <div class="text-center text-[10px] text-zinc-400">worked vs expected ({{ $totalWorkingDays }} working days × {{ $stdHours }}h)</div>
+    </div>
+    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm transition hover:shadow-md lg:col-span-4">
+        <div class="mb-1 text-sm font-black text-zinc-900 dark:text-white">Arrival Trend <span class="text-[10px] font-bold text-zinc-400">· vs your shift start</span></div>
+        @if($shiftStartMin !== null && collect($arrivalSeries)->filter(fn ($v) => $v !== null)->isNotEmpty())
+            <x-dashboard.chart :options="$arrivalChart" id="arrival-chart" wire:key="arrival-{{ $ck }}" class="-mb-2" />
+        @else
+            <div class="flex h-[200px] items-center justify-center text-xs text-zinc-300">No arrival data in this period.</div>
+        @endif
     </div>
 
     {{-- Row 4 · Heatmap --}}
@@ -1268,6 +1317,46 @@
                                 <div class="flex flex-wrap gap-x-5 gap-y-1 font-mono tabular-nums">
                                     <span class="text-zinc-500 dark:text-zinc-400">IN: <span class="line-through">{{ $day['original_in'] ?? '—' }}</span> <flux:icon.arrow-right class="inline size-3 text-blue-400" /> <span class="font-bold text-blue-700 dark:text-blue-300">{{ $day['corrected_in'] ?? '—' }}</span></span>
                                     <span class="text-zinc-500 dark:text-zinc-400">OUT: <span class="line-through">{{ $day['original_out'] ?? '—' }}</span> <flux:icon.arrow-right class="inline size-3 text-blue-400" /> <span class="font-bold text-blue-700 dark:text-blue-300">{{ $day['corrected_out'] ?? '—' }}</span></span>
+                                </div>
+                            </div>
+                        @endif
+
+                        {{-- Engine work sessions — validated IN→OUT pairs --}}
+                        @if(count($day['sessions'] ?? []) > 0)
+                            <div class="mb-3 flex flex-wrap items-center gap-2">
+                                @foreach($day['sessions'] as $s)
+                                    <span class="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[10px] font-bold tabular-nums {{ ($s['missing'] ?? false) ? 'border-amber-300 bg-amber-50 text-amber-700' : 'border-emerald-200 bg-emerald-50/70 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300' }}">
+                                        <span class="text-[8px] font-black uppercase tracking-wide opacity-60">S{{ $s['index'] }}</span>
+                                        {{ $s['in'] ?? '⚠' }} → {{ $s['out'] ?? (($s['live'] ?? false) ? 'now' : '⚠') }}
+                                        <span class="opacity-70">· {{ $s['label'] }}</span>
+                                    </span>
+                                @endforeach
+                            </div>
+                        @endif
+
+                        {{-- Punches the engine ignored (Rule 1/2) — collapsed, with reasons --}}
+                        @if(count($day['ignored_events'] ?? []) > 0 || ($day['noise_count'] ?? 0) > 0)
+                            <div x-data="{ ig: false }" class="mb-3">
+                                <button type="button" @click="ig = !ig" class="inline-flex items-center gap-1.5 rounded-lg bg-zinc-100 px-2.5 py-1 text-[10px] font-bold text-zinc-500 transition hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400">
+                                    <flux:icon.funnel class="size-3" />
+                                    {{ count($day['ignored_events'] ?? []) + ($day['noise_count'] ?? 0) }} {{ \Illuminate\Support\Str::plural('punch', count($day['ignored_events'] ?? []) + ($day['noise_count'] ?? 0)) }} ignored by Attendance Engine
+                                    <flux:icon.chevron-down class="size-3 transition-transform" ::class="ig ? 'rotate-180' : ''" />
+                                </button>
+                                <div x-show="ig" x-transition class="mt-2 space-y-1">
+                                    @foreach($day['ignored_events'] ?? [] as $ie)
+                                        <div class="flex items-center gap-2 rounded-lg bg-zinc-50 px-3 py-1.5 text-[11px] text-zinc-400 dark:bg-zinc-800/50">
+                                            <flux:icon.no-symbol class="size-3.5 shrink-0" />
+                                            <span class="font-mono font-bold line-through">{{ $ie['time'] }}</span>
+                                            <span class="font-bold">{{ $ie['method'] }}</span>
+                                            <span class="truncate">— {{ $ie['reason'] }}</span>
+                                        </div>
+                                    @endforeach
+                                    @if(($day['noise_count'] ?? 0) > 0)
+                                        <div class="flex items-center gap-2 rounded-lg bg-zinc-50 px-3 py-1.5 text-[11px] text-zinc-400 dark:bg-zinc-800/50">
+                                            <flux:icon.document-duplicate class="size-3.5 shrink-0" />
+                                            {{ $day['noise_count'] }} duplicate/double {{ \Illuminate\Support\Str::plural('read', $day['noise_count']) }} merged into the kept punches.
+                                        </div>
+                                    @endif
                                 </div>
                             </div>
                         @endif

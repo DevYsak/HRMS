@@ -638,26 +638,6 @@ class AttendanceTracker extends Component
         return app(PunchTimelineEngine::class)->process(collect($raw), $day, $summary);
     }
 
-    /** Memoised today's-minutes result (one-element array so null is cacheable). */
-    protected ?array $todayValidatedCache = null;
-
-    /**
-     * Today's working minutes from validated sessions — used by the period
-     * stats and daily chart, which otherwise report 0h while the day is open.
-     * Null when no punch data exists (pure web-punch fallback applies).
-     */
-    protected function todayValidatedMinutes($employee): ?int
-    {
-        if ($this->todayValidatedCache === null) {
-            $journey = $this->punchJourney !== [] ? $this->punchJourney : $this->buildPunchJourney($employee);
-            $this->todayValidatedCache = [
-                ($journey['raw_count'] ?? 0) > 0 ? (int) $journey['working_minutes'] : null,
-            ];
-        }
-
-        return $this->todayValidatedCache[0];
-    }
-
     /** Punch Timeline history — every visible day's punches as classified events. */
     public array $logTimeline = [];
 
@@ -687,7 +667,15 @@ class AttendanceTracker extends Component
             ->get()
             ->groupBy('attendance_id');
 
-        $this->logTimeline = $history->map(function ($item) use ($punchesByDay, $breaksByAttendance) {
+        // Engine decisions for every visible day — sessions, ignored punches
+        // and validated worked minutes, from the same PunchTimeline engine.
+        $dayMetrics = $this->engineDayMetrics(
+            $employee,
+            Carbon::parse(min($dates)),
+            Carbon::parse(max($dates)),
+        );
+
+        $this->logTimeline = $history->map(function ($item) use ($punchesByDay, $breaksByAttendance, $dayMetrics) {
             $key = $item->date->toDateString();
             $events = app(PunchTimelineEngine::class)->neutralEvents($punchesByDay->get($key, collect()));
 
@@ -733,9 +721,12 @@ class AttendanceTracker extends Component
                 }
             }
 
-            $workedMin = ($item->check_in && $item->check_out)
+            // Worked minutes from the engine's validated sessions when punch
+            // data exists; check_in→check_out math only as the web-punch fallback.
+            $m = $dayMetrics[$key] ?? null;
+            $workedMin = $m['worked'] ?? (($item->check_in && $item->check_out)
                 ? max(0, (int) $item->check_in->diffInMinutes($item->check_out) - (int) ($item->break_minutes ?? 0))
-                : 0;
+                : 0);
 
             return [
                 'date' => $key,
@@ -757,6 +748,16 @@ class AttendanceTracker extends Component
                 'corrected_in' => $item->check_in?->format('h:i A'),
                 'corrected_out' => $item->check_out?->format('h:i A'),
                 'is_auto_checkout' => (bool) $item->is_auto_checkout,
+                // Engine decisions for the expandable day view: validated work
+                // sessions, and punches the engine ignored (stray card scans /
+                // duplicate reads) shown collapsed with their reason.
+                'sessions' => $m['sessions'] ?? [],
+                'ignored_events' => collect($m['ignored'] ?? [])->map(fn ($n) => [
+                    'time' => $n['time'],
+                    'method' => $n['method_label'],
+                    'reason' => $n['reason'] ?? 'Ignored by Attendance Engine',
+                ])->all(),
+                'noise_count' => (int) ($m['duplicate_count'] ?? 0),
                 'events' => $events,
             ];
         })->values()->all();
@@ -888,7 +889,30 @@ class AttendanceTracker extends Component
     {
         $this->rangeFrom = null;
         $this->rangeTo = null;
-        $this->loadData(); // restores the month-based log after a custom range
+        $this->loadData();
+
+        // The Attendance Log follows the selected period — changing the filter
+        // recalculates the history list, not just the charts (Rule 12).
+        if ($this->statsPeriod !== 'this_month') {
+            [$start, $end] = $this->periodRange();
+            $this->syncHistoryToRange($start, $end);
+        }
+    }
+
+    /** Re-query the history + day-grouped log for an explicit date range. */
+    protected function syncHistoryToRange(Carbon $start, Carbon $end): void
+    {
+        $employee = Auth::user()->employee;
+        if (! $employee) {
+            return;
+        }
+
+        $this->history = Attendance::where('employee_id', $employee->id)
+            ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
+            ->with('regularisation')
+            ->orderByDesc('date')
+            ->get();
+        $this->buildLogTimeline($employee);
     }
 
     public function updatedAnalyticsMode(): void
@@ -926,25 +950,18 @@ class AttendanceTracker extends Component
         $this->computeStats();
 
         // The Attendance Log follows the selected range too.
-        $employee = Auth::user()->employee;
-        if ($employee) {
-            $this->history = Attendance::where('employee_id', $employee->id)
-                ->whereBetween('date', [$this->rangeFrom, $this->rangeTo])
-                ->with('regularisation')
-                ->orderByDesc('date')
-                ->get();
-            $this->buildLogTimeline($employee);
-        }
+        $this->syncHistoryToRange(Carbon::parse($this->rangeFrom), Carbon::parse($this->rangeTo));
     }
 
-    protected function computeStats(): void
+    /**
+     * The [start, end] window the current stats period resolves to — the ONE
+     * range every filtered section (stats, charts, history, insights) uses.
+     *
+     * @return array{0: Carbon, 1: Carbon}
+     */
+    protected function periodRange(): array
     {
-        $employee = Auth::user()->employee;
-        if (! $employee) {
-            return;
-        }
-
-        [$start, $end] = match ($this->statsPeriod) {
+        return match ($this->statsPeriod) {
             'today' => [Carbon::today(), Carbon::today()],
             'this_week' => [Carbon::now()->startOfWeek(Carbon::SUNDAY), Carbon::now()->endOfWeek(Carbon::SATURDAY)],
             'last_month' => [Carbon::now()->subMonth()->startOfMonth(), Carbon::now()->subMonth()->endOfMonth()],
@@ -957,6 +974,76 @@ class AttendanceTracker extends Component
             ],
             default => [Carbon::now()->startOfMonth(), Carbon::now()->endOfMonth()],
         };
+    }
+
+    /** Memoised engine day-metrics per range so stats + timeline share one computation. */
+    protected array $dayMetricsCache = [];
+
+    /**
+     * Every day in the range processed through the PunchTimeline engine — the
+     * same engine that renders the journey. Worked/break minutes come from
+     * validated sessions (never raw check_in→check_out math), so a day whose
+     * attendance row was mis-paired by the device still reports correct hours.
+     * Days without punch rows are absent from the result; callers fall back to
+     * the attendance row (web punches / pre-journey data).
+     *
+     * @return array<string, array{worked: int, break: int, sessions: array<int, array<string, mixed>>, ignored: array<int, array<string, mixed>>, ignored_count: int, duplicate_count: int, first_in_min: ?int, last_out_min: ?int, missing_out: bool}>
+     */
+    protected function engineDayMetrics($employee, Carbon $start, Carbon $end): array
+    {
+        $cacheKey = $start->toDateString().'|'.$end->toDateString();
+        if (isset($this->dayMetricsCache[$cacheKey])) {
+            return $this->dayMetricsCache[$cacheKey];
+        }
+
+        $punchesByDay = AttendancePunch::where('employee_id', $employee->id)
+            ->whereBetween('punch_date', [$start->toDateString(), $end->toDateString()])
+            ->orderBy('punched_at')
+            ->get()
+            ->groupBy(fn ($p) => $p->punch_date->toDateString());
+
+        $summaries = AttendanceDailySummary::where('employee_id', $employee->id)
+            ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
+            ->get()
+            ->keyBy(fn ($s) => $s->date->toDateString());
+
+        $engine = app(PunchTimelineEngine::class);
+        $toMinutes = function (?string $formatted): ?int {
+            if (! $formatted) {
+                return null;
+            }
+            $t = Carbon::parse($formatted);
+
+            return $t->hour * 60 + $t->minute;
+        };
+
+        $metrics = [];
+        foreach ($punchesByDay as $day => $dayPunches) {
+            $r = $engine->process($dayPunches, Carbon::parse($day), $summaries->get($day));
+            $metrics[$day] = [
+                'worked' => (int) $r['working_minutes'],
+                'break' => (int) $r['break_minutes'],
+                'sessions' => $r['sessions'],
+                'ignored' => $r['ignored'],
+                'ignored_count' => (int) $r['ignored_count'],
+                'duplicate_count' => (int) $r['duplicate_count'] + (int) $r['conflict_count'],
+                'first_in_min' => $toMinutes($r['first_in']),
+                'last_out_min' => $toMinutes($r['last_out']),
+                'missing_out' => (bool) $r['missing_out'],
+            ];
+        }
+
+        return $this->dayMetricsCache[$cacheKey] = $metrics;
+    }
+
+    protected function computeStats(): void
+    {
+        $employee = Auth::user()->employee;
+        if (! $employee) {
+            return;
+        }
+
+        [$start, $end] = $this->periodRange();
 
         $this->tasksCompletedPeriod = Task::where('employee_id', $employee->id)
             ->completed()
@@ -1003,19 +1090,22 @@ class AttendanceTracker extends Component
             }
         }
 
-        // Today's minutes come from validated sessions (the day is usually still
-        // open, so check_in→check_out math would report 0h all day long).
-        $todayEngineMin = $this->todayValidatedMinutes($employee);
-        $totalMinutes = $attendances->sum(function ($a) use ($todayEngineMin) {
-            if ($a->date->isToday() && $todayEngineMin !== null) {
-                return $todayEngineMin;
+        // EVERY day's minutes come from the PunchTimeline engine (validated
+        // sessions) — never raw check_in→check_out math when punch data exists.
+        // Fallback to the attendance row only for pure web-punch days.
+        $dayMetrics = $this->engineDayMetrics($employee, $start, $end->copy()->min(Carbon::today()));
+        $minutesForDay = function ($a) use ($dayMetrics) {
+            $m = $dayMetrics[$a->date->toDateString()] ?? null;
+            if ($m !== null) {
+                return $m['worked'];
             }
             if ($a->check_in && $a->check_out) {
-                return $a->check_in->diffInMinutes($a->check_out) - ($a->break_minutes ?? 0);
+                return max(0, $a->check_in->diffInMinutes($a->check_out) - ($a->break_minutes ?? 0));
             }
 
             return 0;
-        });
+        };
+        $totalMinutes = $attendances->sum($minutesForDay);
 
         $this->stats = [
             'present' => $attendances->where('status', 'on_time')->count() + $attendances->where('status', 'late')->count(),
@@ -1068,31 +1158,92 @@ class AttendanceTracker extends Component
             ];
         })->values()->all();
 
+        // ── Rule 10: monthly late-mark tracking ──────────────────────────
+        // Below the threshold = normal; at/above = warning (banner + score
+        // penalty + HR letter via hrms:issue-late-warnings). The threshold is
+        // DB-driven. Consecutive = run of late working days ending at the most
+        // recent late day.
+        $lateThreshold = max(1, (int) ($this->attendanceSettings->late_warning_threshold ?? 3));
+        $monthLateDates = Attendance::where('employee_id', $employee->id)
+            ->whereBetween('date', [now()->startOfMonth()->toDateString(), now()->toDateString()])
+            ->where('is_late', true)
+            ->orderByDesc('date')
+            ->pluck('date')
+            ->map(fn ($d) => Carbon::parse($d)->toDateString());
+        $monthLateCount = $monthLateDates->count();
+        $lateSet = array_flip($monthLateDates->all());
+        $consecutiveLate = 0;
+        if ($monthLateCount > 0) {
+            $cursor = Carbon::parse($monthLateDates->first());
+            while (isset($lateSet[$cursor->toDateString()])) {
+                $consecutiveLate++;
+                $cursor->subDay();
+                while ($cursor->isSunday()) {
+                    $cursor->subDay();
+                }
+            }
+        }
+        $lateWarning = $monthLateCount >= $lateThreshold;
+
+        // Warning-level lateness applies an explicit score deduction on top of
+        // the punctuality weighting — 2 points per late mark past the threshold.
+        $latePenalty = $lateWarning ? min(20, ($monthLateCount - ($lateThreshold - 1)) * 2) : 0;
+
         $this->analytics = [
             'shift_compliance' => $workingBasis > 0 ? (int) round($onTime / $workingBasis * 100) : 100,
-            'attendance_score' => (int) round($onTimePct * 0.6 + $presentPct * 0.25 + $breakPct * 0.15),
+            'attendance_score' => max(0, (int) round($onTimePct * 0.6 + $presentPct * 0.25 + $breakPct * 0.15) - $latePenalty),
             'office_days' => $officeDays,
             'wfh_days' => $wfhDays,
             'avg_break' => $avgBreak,
             'excess_breaks' => $excessBreaks,
             'late_trend' => $lateTrend,
             'mode_breakdown' => $modeBreakdown,
+            'late_month_count' => $monthLateCount,
+            'late_consecutive' => $consecutiveLate,
+            'late_warning' => $lateWarning,
+            'late_penalty' => $latePenalty,
+            'late_threshold' => $lateThreshold,
         ];
 
-        // ── Daily working-hours series for the trend chart (period up to today) ──
+        // ── Daily series for every chart (period up to today), engine-first ──
+        // hours/break from validated sessions; in/out minutes power the arrival
+        // trend. The mode filter narrows to matching attendance days.
         $seriesEnd = $end->copy()->min(Carbon::today());
         $daily = [];
         if ($start <= $seriesEnd) {
             foreach (CarbonPeriod::create($start, $seriesEnd) as $d) {
-                $att = $attendanceDates->get($d->toDateString());
+                $key = $d->toDateString();
+                $att = $attendanceDates->get($key);
+                $m = $dayMetrics[$key] ?? null;
+                $modeFiltered = $this->analyticsMode !== '' && ! $att;
+
                 $hours = 0.0;
-                if ($d->isToday() && $todayEngineMin !== null) {
-                    $hours = round(max(0, $todayEngineMin) / 60, 1);   // validated sessions, live-inclusive
-                } elseif ($att && $att->check_in && $att->check_out) {
-                    $mins = $att->check_in->diffInMinutes($att->check_out) - ($att->break_minutes ?? 0);
-                    $hours = round(max(0, $mins) / 60, 1);
+                $break = 0;
+                $inMin = null;
+                $outMin = null;
+                if ($m !== null && ! $modeFiltered) {
+                    $hours = round($m['worked'] / 60, 1);
+                    $break = $m['break'];
+                    $inMin = $m['first_in_min'];
+                    $outMin = $m['last_out_min'];
+                } elseif ($att && $att->check_in) {
+                    if ($att->check_out) {
+                        $mins = $att->check_in->diffInMinutes($att->check_out) - ($att->break_minutes ?? 0);
+                        $hours = round(max(0, $mins) / 60, 1);
+                        $outMin = $att->check_out->hour * 60 + $att->check_out->minute;
+                    }
+                    $break = (int) ($att->break_minutes ?? 0);
+                    $inMin = $att->check_in->hour * 60 + $att->check_in->minute;
                 }
-                $daily[] = ['label' => $d->format('d M'), 'hours' => $hours, 'break' => $att ? (int) ($att->break_minutes ?? 0) : 0, 'late' => (bool) ($att?->is_late)];
+
+                $daily[] = [
+                    'label' => $d->format('d M'),
+                    'hours' => $hours,
+                    'break' => $break,
+                    'late' => (bool) ($att?->is_late),
+                    'in_min' => $inMin,
+                    'out_min' => $outMin,
+                ];
             }
         }
         $this->chartDaily = $daily;
