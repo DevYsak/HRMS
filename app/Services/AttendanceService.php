@@ -12,6 +12,7 @@ use App\Models\Employee;
 use App\Models\PublicHoliday;
 use App\Models\ShiftSetting;
 use App\Models\User;
+use App\Services\Attendance\AttendanceScoreEngine;
 use App\Services\Attendance\ShiftResolver;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -182,6 +183,12 @@ class AttendanceService
 
                 $attendance->update(['status' => 'half_day', 'is_regularized' => true]);
 
+                // Rescore the corrected day so the attendance score and its
+                // audit breakdown reflect the approved correction immediately.
+                if ($regularisation->employee) {
+                    app(AttendanceScoreEngine::class)->scoreDay($regularisation->employee, $workDate);
+                }
+
                 return $attendance->fresh();
             }
 
@@ -260,6 +267,12 @@ class AttendanceService
             $otRequest = app(OvertimeService::class)->autoCreateFromAttendance($attendance->fresh(['employee.shift']));
             if ($otRequest) {
                 app(OvertimeService::class)->approve($otRequest, $reviewerId, 'Auto-approved with attendance regularisation.');
+            }
+
+            // Rescore the corrected day so the attendance score and its audit
+            // breakdown reflect the approved correction immediately.
+            if ($regularisation->employee) {
+                app(AttendanceScoreEngine::class)->scoreDay($regularisation->employee, $workDate);
             }
 
             return $attendance->fresh();

@@ -19,6 +19,30 @@
         </div>
     </div>
 
+    {{-- ═══════════════ ATTENDANCE HEALTH (engine-scored context) ═══════════════ --}}
+    <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        @php
+            $mtd = $health['mtd_score'];
+            $scoreTone = $mtd === null ? 'text-zinc-400' : ($mtd >= 85 ? 'text-emerald-600' : ($mtd >= 60 ? 'text-amber-600' : 'text-rose-500'));
+            $healthCards = [
+                ['Present Today', $health['present_today'].'/'.$health['active'], 'check-circle', '#10b981', 'clocked in'],
+                ['Late Today', $health['late_today'], 'exclamation-triangle', '#f59e0b', 'past grace'],
+                ['Absent Today', $health['absent_today'], 'x-circle', '#ef4444', 'no punch yet'],
+                ['MTD Score', ($mtd ?? '—').($mtd !== null ? '/100' : ''), 'shield-check', '#F97316', 'engine average'],
+                ['At Risk', $health['at_risk'], 'shield-exclamation', '#f43f5e', 'score below 60'],
+                ['Excellent', $health['bands']['excellent'], 'trophy', '#8b5cf6', 'score 90+'],
+            ];
+        @endphp
+        @foreach($healthCards as [$label, $value, $icon, $color, $sub])
+            <div class="rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 p-3.5 shadow-sm">
+                <span class="inline-flex size-8 items-center justify-center rounded-xl" style="background: {{ $color }}1a; color: {{ $color }};"><flux:icon :icon="$icon" class="size-4" /></span>
+                <div class="mt-2 text-xl font-black tabular-nums {{ $label === 'MTD Score' ? $scoreTone : 'text-zinc-900 dark:text-white' }}">{{ $value }}</div>
+                <div class="text-[9px] font-bold uppercase tracking-wide text-zinc-400">{{ $label }}</div>
+                <div class="text-[9px] text-zinc-400">{{ $sub }}</div>
+            </div>
+        @endforeach
+    </div>
+
     {{-- ═══════════════ OPERATIONS OVERVIEW ═══════════════ --}}
     @php
         $totalPending = array_sum($counts);

@@ -423,20 +423,17 @@
   </div>
 </div>
 
-{{-- ═══════════════ AI ATTENDANCE COACH (conversational · signature) ═══════════════ --}}
+{{-- ═══════════════ AI ATTENDANCE COACH (analytics engine · Rule/Priority 2) ═══════════════ --}}
 @php
-    $aiRisk = ($lateCount >= 3 || $missingCount >= 2)
-        ? ['High', 'var(--pa-danger)']
-        : (($lateCount >= 1 || $missingCount >= 1) ? ['Medium', 'var(--pa-warn)'] : ['Low', 'var(--pa-present)']);
-    $aiForecast = (int) min(100, max($attPct, $score) + 1);
-    $aiProd = (int) min(100, $compliance);
-    $aiOtPred = round(max($otHours, 0) * 1.2, 1);
-    $suggIn = $shift ? \Carbon\Carbon::parse($shift->start_time)->subMinutes(10)->format('g:i A') : '10:20 AM';
-    $deptPercentile = max(55, min(99, (int) ($myOnTimeRate ?: $attPct)));
-    $recText = ($avgBreak > 40)
-        ? 'Reduce your average break by '.max(5, $avgBreak - 30).' minutes to reach a '.min(99, $score + 3).'% attendance score.'
-        : (($lateCount > 0) ? 'Clock in by '.$suggIn.' to protect your on-time streak and lift your score.'
-        : 'You’re on track for your best month — keep clocking in before '.$suggIn.'.');
+    $riskToneMap = ['danger' => 'var(--pa-danger)', 'warn' => 'var(--pa-warn)', 'good' => 'var(--pa-present)', 'muted' => 'var(--pa-faint)'];
+    $cRisk = $coach['risk'] ?? ['level' => 'Low', 'tone' => 'good', 'text' => ''];
+    $cScore = $coach['score_change'] ?? [];
+    $cArrival = $coach['arrival_trend'] ?? [];
+    $cLogout = $coach['logout_trend'] ?? [];
+    $cBreak = $coach['break_analysis'] ?? [];
+    $cConsistency = $coach['consistency'] ?? ['pct' => 100, 'text' => ''];
+    $cHealth = $coach['health'] ?? ['label' => '—', 'tone' => 'muted', 'text' => ''];
+    $cMetrics = $coach['metrics'] ?? ['predicted_score' => $score, 'consistency' => 100, 'overtime_pred' => 0, 'risk' => $cRisk];
 @endphp
 <style>
 .pa-copilot{background:linear-gradient(155deg,var(--pa-accent-soft),var(--pa-surface) 52%);border:1px solid var(--pa-border);border-radius:24px;padding:28px 32px;position:relative;overflow:hidden;box-shadow:0 8px 28px rgba(24,24,27,.05)}
@@ -474,21 +471,62 @@
       <div style="flex:1"><div class="title">AI Attendance Coach</div><div class="sub">Your personal attendance assistant</div></div>
       <span class="pa-aichip"><span class="ld"></span>AI · live</span>
     </div>
-    <p class="pa-msg">{{ $heroGreet }}, {{ $heroName }}. You’re performing better than <b>{{ $deptPercentile }}% of your department</b> this month — and you’re on track for your best score yet.</p>
+    <p class="pa-msg">{{ $coach['headline'] ?? 'Building your attendance coaching profile.' }}</p>
+
+    {{-- Why your score changed — computed from the score breakdown factors --}}
+    @if(($cScore['reason'] ?? null))
+      <div class="pa-rec" style="margin-top:2px">
+        <span class="ic" style="background:{{ ($cScore['delta'] ?? 0) < 0 ? 'rgba(244,63,94,.12)' : 'var(--pa-accent-soft)' }};color:{{ ($cScore['delta'] ?? 0) < 0 ? '#f43f5e' : 'var(--pa-present)' }}"><flux:icon.chart-bar-square class="size-4" /></span>
+        <div><div class="k">Why your score changed</div><p>{{ $cScore['reason'] }}</p></div>
+      </div>
+    @endif
+
     <div class="stats">
-      <div class="pa-cstat"><div class="k">Predicted attendance score</div><div class="v num">{{ $aiForecast }}%</div></div>
-      <div class="pa-cstat"><div class="k">Productivity</div><div class="v num">{{ $aiProd }}%</div></div>
-      <div class="pa-cstat"><div class="k">Overtime</div><div class="v num">{{ $aiOtPred }}h</div></div>
-      <div class="pa-cstat"><div class="k">Burnout risk</div><div class="v" style="color:{{ $aiRisk[1] }}">{{ $aiRisk[0] }}</div></div>
+      <div class="pa-cstat"><div class="k">Predicted score</div><div class="v num">{{ $cMetrics['predicted_score'] }}</div></div>
+      <div class="pa-cstat"><div class="k">Consistency</div><div class="v num">{{ $cMetrics['consistency'] }}%</div></div>
+      <div class="pa-cstat"><div class="k">Attendance health</div><div class="v" style="font-size:20px;color:{{ $riskToneMap[$cHealth['tone']] ?? 'var(--pa-ink)' }}">{{ $cHealth['label'] }}</div></div>
+      <div class="pa-cstat"><div class="k">Warning risk</div><div class="v" style="font-size:20px;color:{{ $riskToneMap[$cRisk['tone']] ?? 'var(--pa-ink)' }}">{{ $cRisk['level'] }}</div></div>
     </div>
+
+    {{-- Dynamic trend read-outs --}}
+    <div class="stats" style="grid-template-columns:1fr;gap:8px;margin-top:12px">
+      @foreach([
+        ['arrow-right-end-on-rectangle', $cArrival['text'] ?? null],
+        ['arrow-left-start-on-rectangle', $cLogout['text'] ?? null],
+        ['pause', $cBreak['text'] ?? null],
+        ['shield-check', $cRisk['text'] ?? null],
+      ] as [$icon, $line])
+        @if($line)
+          <div style="display:flex;align-items:flex-start;gap:10px;font-size:13px;color:var(--pa-ink)">
+            <flux:icon :icon="$icon" class="size-4" style="color:var(--pa-faint);flex:0 0 auto;margin-top:2px" /><span>{{ $line }}</span>
+          </div>
+        @endif
+      @endforeach
+    </div>
+
     <div class="pa-rec">
       <span class="ic"><flux:icon.light-bulb class="size-4" /></span>
-      <div><div class="k">Recommendation</div><p>{{ $recText }}</p></div>
+      <div><div class="k">Recommendation</div><p>{{ $coach['recommendation'] ?? 'Keep your routine steady.' }}</p></div>
     </div>
+
+    {{-- Weekly coaching tips --}}
+    @if(!empty($coach['tips']))
+      <div style="margin-top:12px">
+        <div class="k" style="font-size:10.5px;font-weight:660;text-transform:uppercase;letter-spacing:.05em;color:var(--pa-faint);margin-bottom:6px">Weekly coaching tips</div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          @foreach($coach['tips'] as $tip)
+            <div style="display:flex;align-items:flex-start;gap:8px;font-size:12.5px;color:var(--pa-muted)"><flux:icon.check-circle class="size-3.5" style="color:var(--pa-accent-ink);flex:0 0 auto;margin-top:2px" /><span>{{ $tip }}</span></div>
+          @endforeach
+        </div>
+      </div>
+    @endif
+
     <div class="foot">
-      <span class="pa-chip-in"><flux:icon.clock /> Suggested clock-in <b style="color:var(--pa-accent-ink)">{{ $suggIn }}</b></span>
-      <span style="font-size:12.5px;color:var(--pa-muted);display:inline-flex;align-items:center;gap:6px"><flux:icon.fire class="size-4" style="color:#EA6A2C" />{{ $onTimeStreak }}-day on-time streak</span>
-      <span style="font-size:12.5px;color:var(--pa-muted)">Missing punches · {{ $missingCount === 0 ? 'none' : $missingCount }}</span>
+      @forelse($coach['achievements'] ?? [] as $ach)
+        <span class="pa-chip-in"><flux:icon :icon="$ach['icon']" class="size-4" style="color:var(--pa-accent-ink)" /> {{ $ach['label'] }}</span>
+      @empty
+        <span style="font-size:12.5px;color:var(--pa-muted)">Earn achievements by building an on-time streak and perfect-score days.</span>
+      @endforelse
     </div>
   </div>
 </div>
@@ -859,6 +897,38 @@
         {{ $above >= 0 ? 'On-time rate '.$above.'% above your '.($teamName ? 'team' : 'company') : abs($above).'% below — aim to arrive earlier' }}
       </p>
     </div>
+
+    {{-- Rule 11 · monthly attendance score, trend vs last month, rankings --}}
+    @if($monthlyScore !== null)
+      <div class="pa-rc">
+        <div class="pa-rc-h">Attendance score <span class="pa-rc-sub" style="margin-left:auto">this month</span></div>
+        <div style="display:flex;align-items:baseline;gap:8px">
+          <span style="font-size:26px;font-weight:800;color:{{ $monthlyScore >= 85 ? 'var(--pa-present)' : ($monthlyScore >= 60 ? 'var(--pa-warn)' : '#f43f5e') }}">{{ number_format($monthlyScore, 1) }}</span>
+          <span style="font-size:11px;color:var(--pa-faint)">/100</span>
+          @if($prevMonthlyScore !== null)
+            @php $sdelta = round($monthlyScore - $prevMonthlyScore, 1); @endphp
+            <span style="margin-left:auto;font-size:11px;font-weight:700;display:flex;align-items:center;gap:3px;color:{{ $sdelta >= 0 ? 'var(--pa-present)' : 'var(--pa-warn)' }}">
+              <flux:icon :icon="$sdelta >= 0 ? 'arrow-trending-up' : 'arrow-trending-down'" class="size-3.5" /> {{ $sdelta >= 0 ? '+' : '' }}{{ $sdelta }} vs last month
+            </span>
+          @endif
+        </div>
+        <div style="display:flex;gap:10px;margin-top:10px">
+          @if($deptRank)
+            <div style="flex:1;background:var(--pa-bg);border-radius:10px;padding:8px 10px;text-align:center">
+              <div style="font-size:15px;font-weight:800;color:var(--pa-ink)">#{{ $deptRank[0] }}<span style="font-size:10px;color:var(--pa-faint)">/{{ $deptRank[1] }}</span></div>
+              <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--pa-faint)">Dept rank</div>
+            </div>
+          @endif
+          @if($companyRank)
+            <div style="flex:1;background:var(--pa-bg);border-radius:10px;padding:8px 10px;text-align:center">
+              <div style="font-size:15px;font-weight:800;color:var(--pa-ink)">#{{ $companyRank[0] }}<span style="font-size:10px;color:var(--pa-faint)">/{{ $companyRank[1] }}</span></div>
+              <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--pa-faint)">Company rank</div>
+            </div>
+          @endif
+        </div>
+        <p style="margin:10px 0 0;font-size:10.5px;color:var(--pa-faint)">Engine-scored daily · tap “Why?” on any day for the full breakdown.</p>
+      </div>
+    @endif
   </div>{{-- /pa-rail --}}
   </div>{{-- /pa-jgrid --}}
 </div>
@@ -882,8 +952,11 @@
         'series' => [['name' => 'Hours', 'data' => collect($chartDaily)->pluck('hours')->all()]],
     ];
 
-    // 2 · Attendance Score Trend — area
-    $scoreSeries = collect($chartDaily)->map(fn($d) => min(100, (int) round(((float) $d['hours']) / max(1, $stdHours) * 100)))->all();
+    // 2 · Attendance Score Trend — area. Real engine scores (Rule 11) with an
+    // hours-based proxy only for days the nightly scorer hasn't covered yet.
+    $scoreSeries = collect($chartDaily)->map(fn ($d) => $d['score'] !== null
+        ? (int) round($d['score'])
+        : min(100, (int) round(((float) $d['hours']) / max(1, $stdHours) * 100)))->all();
     $scoreChart = [
         'chart' => $baseChart('area', 220),
         'colors' => ['#8b5cf6'], 'dataLabels' => ['enabled' => false], 'stroke' => ['curve' => 'smooth', 'width' => 3],
@@ -1282,6 +1355,7 @@
                             <span>{{ count($day['events']) }} {{ \Illuminate\Support\Str::plural('punch', count($day['events'])) }}</span>
                             @if($day['worked'])<span class="font-bold text-zinc-700 dark:text-zinc-200">{{ $day['worked'] }}</span>@endif
                             <span class="rounded-lg p-1 text-zinc-400 transition hover:bg-orange-100 hover:text-orange-600" wire:click.stop="showPunchDetail('{{ $day['date'] }}')" title="Full day details"><flux:icon.eye class="size-4" /></span>
+                            <span class="inline-flex items-center gap-0.5 rounded-lg px-1.5 py-1 text-[10px] font-black text-zinc-400 transition hover:bg-blue-50 hover:text-blue-600" wire:click.stop="showScoreDecision('{{ $day['date'] }}')" title="Why? — how the engine decided this day"><flux:icon.scale class="size-3.5" /> Why?</span>
                         </span>
                     </button>
 
@@ -1453,6 +1527,74 @@
 {{-- ═══════════════════════════════════════════════
      PUNCH DETAIL MODAL
 ═══════════════════════════════════════════════ --}}
+{{-- ═══════════ ATTENDANCE DECISION — "Why?" audit popup (Rule 11) ═══════════ --}}
+<flux:modal name="score-decision" class="max-w-lg">
+    @if($decision)
+        <div class="space-y-4">
+            <div class="flex items-start justify-between gap-3">
+                <div>
+                    <flux:heading size="lg">Attendance Decision</flux:heading>
+                    <flux:subheading>{{ $decision['date'] }}</flux:subheading>
+                </div>
+                @if($decision['score'] !== null)
+                    @php $sc = (int) round($decision['score']); @endphp
+                    <div class="text-center">
+                        <div class="text-2xl font-black tabular-nums {{ $sc >= 85 ? 'text-emerald-600' : ($sc >= 60 ? 'text-amber-500' : 'text-rose-500') }}">{{ $sc }}<span class="text-xs text-zinc-400">/100</span></div>
+                        <div class="text-[9px] font-bold uppercase tracking-wider text-zinc-400">Attendance Score</div>
+                    </div>
+                @endif
+            </div>
+
+            {{-- How the engine read the day --}}
+            <div class="rounded-xl border border-zinc-100 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-800/40 p-3 text-xs">
+                <div class="mb-2 flex items-center gap-1.5 font-black text-zinc-700 dark:text-zinc-200"><flux:icon.cog-6-tooth class="size-3.5 text-orange-500" /> Engine inputs</div>
+                <dl class="grid grid-cols-2 gap-x-4 gap-y-1.5 tabular-nums">
+                    @if($decision['shift'])
+                        <dt class="text-zinc-400">Shift</dt><dd class="text-right font-bold text-zinc-800 dark:text-zinc-100">{{ $decision['shift']['window'] }}</dd>
+                        <dt class="text-zinc-400">Grace</dt><dd class="text-right font-bold text-zinc-800 dark:text-zinc-100">{{ $decision['shift']['grace'] }}</dd>
+                    @endif
+                    <dt class="text-zinc-400">First IN</dt><dd class="text-right font-bold text-zinc-800 dark:text-zinc-100">{{ $decision['first_in'] ?? '—' }}</dd>
+                    <dt class="text-zinc-400">Last OUT</dt><dd class="text-right font-bold text-zinc-800 dark:text-zinc-100">{{ $decision['last_out'] ?? '—' }}{{ $decision['auto_punch_out'] ? ' (auto)' : '' }}</dd>
+                    <dt class="text-zinc-400">Worked</dt><dd class="text-right font-bold text-zinc-800 dark:text-zinc-100">{{ $decision['worked'] }}</dd>
+                    <dt class="text-zinc-400">Break</dt><dd class="text-right font-bold text-zinc-800 dark:text-zinc-100">{{ $decision['break'] }}</dd>
+                    @if($decision['late'])<dt class="text-zinc-400">Late</dt><dd class="text-right font-bold text-amber-600">{{ $decision['late'] }}</dd>@endif
+                    @if($decision['sessions'])<dt class="text-zinc-400">Sessions</dt><dd class="text-right font-bold text-zinc-800 dark:text-zinc-100">{{ $decision['sessions'] }}</dd>@endif
+                    @if($decision['duplicates'] > 0)<dt class="text-zinc-400">Duplicates merged</dt><dd class="text-right font-bold text-zinc-800 dark:text-zinc-100">{{ $decision['duplicates'] }}</dd>@endif
+                </dl>
+                @foreach($decision['ignored'] as $ig)
+                    <div class="mt-1.5 flex items-center gap-1.5 text-[11px] text-zinc-400"><flux:icon.no-symbol class="size-3" /> {{ $ig }}</div>
+                @endforeach
+            </div>
+
+            {{-- Deductions & bonuses — the persisted audit trail --}}
+            <div>
+                <div class="mb-1.5 flex items-center gap-1.5 text-xs font-black text-zinc-700 dark:text-zinc-200"><flux:icon.scale class="size-3.5 text-blue-500" /> Score breakdown</div>
+                @forelse($decision['breakdown'] as $line)
+                    <div class="flex items-start justify-between gap-3 border-b border-zinc-50 dark:border-zinc-800/60 py-1.5 text-xs">
+                        <div class="min-w-0">
+                            <div class="font-bold text-zinc-800 dark:text-zinc-100">{{ $line['label'] }}</div>
+                            <div class="text-[10px] text-zinc-400">{{ $line['detail'] }}</div>
+                        </div>
+                        <span class="shrink-0 font-black tabular-nums {{ $line['points'] < 0 ? 'text-rose-500' : 'text-emerald-600' }}">{{ $line['points'] > 0 ? '+' : '' }}{{ rtrim(rtrim(number_format($line['points'], 1), '0'), '.') }}</span>
+                    </div>
+                @empty
+                    <div class="rounded-lg bg-emerald-50 dark:bg-emerald-950/25 px-3 py-2 text-xs font-bold text-emerald-700 dark:text-emerald-300">Perfect day — no deductions applied.</div>
+                @endforelse
+                @if($decision['score'] === null)
+                    <div class="mt-2 text-[10px] text-zinc-400">This day hasn't been scored yet — the engine scores each day just after midnight.</div>
+                @endif
+            </div>
+
+            <div class="flex items-center justify-between rounded-xl bg-zinc-50 dark:bg-zinc-800/40 px-3 py-2">
+                <span class="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Final status</span>
+                <span class="text-xs font-black {{ $decision['status'] === 'late' ? 'text-amber-600' : ($decision['status'] === 'absent' ? 'text-rose-500' : 'text-emerald-600') }}">
+                    {{ ucwords(str_replace('_', ' ', $decision['status'])) }}{{ $decision['regularized'] ? ' · Regularized' : '' }}
+                </span>
+            </div>
+        </div>
+    @endif
+</flux:modal>
+
 <flux:modal name="punch-detail" class="max-w-lg">
     @if($detail)
         <div class="space-y-4">

@@ -15,6 +15,35 @@
     </div>
 </div>
 
+{{-- ═══════════════ FILTERS — every metric below recomputes ═══════════════ --}}
+<div class="mb-4 flex flex-wrap items-center gap-2 rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 p-3 shadow-sm" wire:loading.class="opacity-50" wire:target="period,rangeFrom,rangeTo,departmentId,officeId">
+    <span class="inline-flex items-center gap-1.5 text-[11px] font-black uppercase tracking-wider text-zinc-400"><flux:icon.funnel class="size-3.5 text-orange-400" /> Filters</span>
+    <select wire:model.live="period" class="rounded-lg border border-orange-100 bg-white dark:bg-zinc-900 py-1.5 pl-2.5 pr-7 text-xs font-bold text-zinc-600 dark:text-zinc-300 focus:border-orange-400 focus:ring-0">
+        <option value="this_month">This Month</option>
+        <option value="last_month">Last Month</option>
+        <option value="quarter">This Quarter</option>
+        <option value="year">This Year</option>
+        <option value="custom">Custom Range</option>
+    </select>
+    @if($period === 'custom')
+        <input type="date" wire:model.live="rangeFrom" max="{{ now()->toDateString() }}" class="rounded-lg border border-orange-100 bg-white dark:bg-zinc-900 p-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-300 focus:ring-0">
+        <span class="text-zinc-300">–</span>
+        <input type="date" wire:model.live="rangeTo" max="{{ now()->toDateString() }}" class="rounded-lg border border-orange-100 bg-white dark:bg-zinc-900 p-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-300 focus:ring-0">
+    @endif
+    <select wire:model.live="departmentId" class="rounded-lg border border-orange-100 bg-white dark:bg-zinc-900 py-1.5 pl-2.5 pr-7 text-xs font-bold text-zinc-600 dark:text-zinc-300 focus:border-orange-400 focus:ring-0">
+        <option value="">All Departments</option>
+        @foreach($departmentOptions as $id => $name)<option value="{{ $id }}">{{ $name }}</option>@endforeach
+    </select>
+    <select wire:model.live="officeId" class="rounded-lg border border-orange-100 bg-white dark:bg-zinc-900 py-1.5 pl-2.5 pr-7 text-xs font-bold text-zinc-600 dark:text-zinc-300 focus:border-orange-400 focus:ring-0">
+        <option value="">All Offices</option>
+        @foreach($officeOptions as $id => $name)<option value="{{ $id }}">{{ $name }}</option>@endforeach
+    </select>
+    <span class="ml-auto inline-flex items-center gap-1 rounded-lg bg-orange-50 px-2.5 py-1 text-[11px] font-bold text-orange-500">{{ $rangeLabel }}</span>
+    @if($period !== 'this_month' || $departmentId || $officeId)
+        <button wire:click="resetFilters" class="inline-flex items-center gap-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 px-2.5 py-1.5 text-xs font-bold text-zinc-500 dark:text-zinc-400 transition hover:bg-zinc-200"><flux:icon.x-mark class="size-3.5" /> Reset</button>
+    @endif
+</div>
+
 {{-- ═══════════════ HERO KPIs ═══════════════ --}}
 <div class="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-12">
     {{-- Company Attendance ring --}}
@@ -113,7 +142,10 @@
                 <div>
                     <div class="mb-1 flex items-center justify-between text-xs">
                         <span class="font-bold text-zinc-700 dark:text-zinc-200">{{ $d['name'] }} <span class="text-zinc-400">· {{ $d['headcount'] }}</span></span>
-                        <span class="font-black tabular-nums {{ $d['pct'] >= 90 ? 'text-emerald-600' : ($d['pct'] >= 80 ? 'text-amber-600' : 'text-rose-500') }}">{{ $d['pct'] }}%</span>
+                        <span class="flex items-center gap-2">
+                            @if(($d['score'] ?? 0) > 0)<span class="rounded bg-blue-50 px-1.5 py-0.5 text-[9px] font-black text-blue-600 dark:bg-blue-950/40 dark:text-blue-300" title="Engine attendance score">{{ $d['score'] }}/100</span>@endif
+                            <span class="font-black tabular-nums {{ $d['pct'] >= 90 ? 'text-emerald-600' : ($d['pct'] >= 80 ? 'text-amber-600' : 'text-rose-500') }}">{{ $d['pct'] }}%</span>
+                        </span>
                     </div>
                     <div class="h-1.5 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
                         <div class="h-full rounded-full transition-all {{ $d['pct'] >= 90 ? 'bg-emerald-500' : ($d['pct'] >= 80 ? 'bg-amber-500' : 'bg-rose-500') }}" style="width: {{ $d['pct'] }}%"></div>

@@ -63,6 +63,13 @@ Schedule::command('hrms:check-excess-breaks')
     ->withoutOverlapping()
     ->runInBackground();
 
+// Rule 11: score yesterday for every active employee → 00:20 IST (after the
+// 23:59 auto punch-out sweep has closed any open days)
+Schedule::command('hrms:compute-attendance-scores')
+    ->dailyAt('00:20')
+    ->withoutOverlapping()
+    ->runInBackground();
+
 // Rule 10: issue/escalate warning letters once monthly late marks reach the
 // configured threshold → 14:30 IST daily (after both shifts' late checks ran)
 Schedule::command('hrms:issue-late-warnings')

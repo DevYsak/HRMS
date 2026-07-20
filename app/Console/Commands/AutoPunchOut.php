@@ -6,6 +6,7 @@ use App\Models\Attendance;
 use App\Models\AttendancePunch;
 use App\Models\OtRequest;
 use App\Notifications\MissingCheckoutNotification;
+use App\Services\Attendance\AttendanceScoreEngine;
 use App\Services\Attendance\ShiftResolver;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
@@ -84,6 +85,10 @@ class AutoPunchOut extends Command
 
             $this->closeDay($attendance, $closeAt, $reason);
             $closed++;
+
+            // Rescore the day the engine just closed (no-op while it's still
+            // today — the nightly scorer covers it after midnight).
+            app(AttendanceScoreEngine::class)->scoreDay($employee, $date);
 
             $notification = new MissingCheckoutNotification($attendance->fresh());
             $employee->user?->notify($notification);

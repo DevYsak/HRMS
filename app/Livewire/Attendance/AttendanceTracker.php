@@ -5,6 +5,7 @@ namespace App\Livewire\Attendance;
 use App\Enums\AttendanceMode;
 use App\Enums\PunchMethod;
 use App\Models\Attendance;
+use App\Models\AttendanceDailyScore;
 use App\Models\AttendanceDailySummary;
 use App\Models\AttendancePunch;
 use App\Models\AttendanceRegularisation;
@@ -22,6 +23,8 @@ use App\Models\WfhReport;
 use App\Notifications\AttendanceRegularisationNotification;
 use App\Notifications\RegularisationReviewedNotification;
 use App\Services\AiAssistant;
+use App\Services\Attendance\AttendanceCoach;
+use App\Services\Attendance\AttendanceScoreEngine;
 use App\Services\Attendance\PunchTimeline as PunchTimelineEngine;
 use App\Services\AttendanceService;
 use App\Support\UserAgent;
@@ -181,6 +184,22 @@ class AttendanceTracker extends Component
 
     /** Full punch detail for the detail modal (null when closed). */
     public ?array $detail = null;
+
+    /** Rule 11 — month-to-date attendance score + previous month comparison. */
+    public ?float $monthlyScore = null;
+
+    public ?float $prevMonthlyScore = null;
+
+    /** [rank, poolSize] within the department / company (null = no scores yet). */
+    public ?array $deptRank = null;
+
+    public ?array $companyRank = null;
+
+    /** Attendance Decision payload for the "Why?" popup (null when closed). */
+    public ?array $decision = null;
+
+    /** AI Attendance Coach analytics payload (dynamic, from the engine). */
+    public array $coach = [];
 
     // Regularisation form fields
 
@@ -1237,16 +1256,43 @@ class AttendanceTracker extends Component
                 }
 
                 $daily[] = [
+                    'date' => $key,
                     'label' => $d->format('d M'),
                     'hours' => $hours,
                     'break' => $break,
                     'late' => (bool) ($att?->is_late),
                     'in_min' => $inMin,
                     'out_min' => $outMin,
+                    'score' => null,   // filled from attendance_daily_scores below
                 ];
             }
         }
+
+        // Rule 11 — overlay the engine's persisted daily scores on the series
+        // (the score chart falls back to an hours-based proxy for unscored days).
+        if ($daily !== []) {
+            $storedScores = AttendanceDailyScore::where('employee_id', $employee->id)
+                ->whereBetween('date', [$start->toDateString(), $seriesEnd->toDateString()])
+                ->get()
+                ->mapWithKeys(fn ($s) => [$s->date->toDateString() => (float) $s->score]);
+            foreach ($daily as &$dayEntry) {
+                $dayEntry['score'] = $storedScores[$dayEntry['date']] ?? null;
+            }
+            unset($dayEntry);
+        }
         $this->chartDaily = $daily;
+
+        // Rule 11 — monthly score, previous-month comparison and rankings from
+        // the engine's persisted daily scores.
+        $scoreEngine = app(AttendanceScoreEngine::class);
+        $this->monthlyScore = $scoreEngine->monthlyScore($employee, now());
+        $this->prevMonthlyScore = $scoreEngine->monthlyScore($employee, now()->subMonthNoOverflow());
+        $companyIds = Employee::where('status', 'active')->pluck('id')->all();
+        $deptIds = $employee->department_id
+            ? Employee::where('department_id', $employee->department_id)->where('status', 'active')->pluck('id')->all()
+            : [];
+        $this->companyRank = $scoreEngine->rankAmong($employee, $companyIds, now());
+        $this->deptRank = $deptIds !== [] ? $scoreEngine->rankAmong($employee, $deptIds, now()) : null;
 
         // ── Attendance Insights — auto-generated, plain-language, real data ──
         $withIn = $attendances->filter(fn ($a) => $a->check_in);
@@ -1394,6 +1440,10 @@ class AttendanceTracker extends Component
             'late_trend' => $late - $prevLate,
             'suggestions' => $suggestions,
         ];
+
+        // AI Attendance Coach — every insight computed from real engine data
+        // for the selected period (Priority 2).
+        $this->coach = app(AttendanceCoach::class)->analyze($employee, $start, $end);
     }
 
     /**
@@ -1665,6 +1715,22 @@ class AttendanceTracker extends Component
         ];
 
         $this->modal('punch-detail')->show();
+    }
+
+    /**
+     * "Why?" — the Attendance Decision popup: exactly how the engine reached
+     * its verdict for a day (shift window, punch decisions, deductions, score).
+     */
+    public function showScoreDecision(string $date): void
+    {
+        $employee = Auth::user()->employee;
+        if (! $employee) {
+            return;
+        }
+
+        $this->decision = app(AttendanceScoreEngine::class)->explainDay($employee, Carbon::parse($date));
+
+        $this->modal('score-decision')->show();
     }
 
     public function openRegularisation($date)
