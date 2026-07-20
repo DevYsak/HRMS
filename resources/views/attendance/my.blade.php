@@ -163,20 +163,6 @@
 .pa-cmd-title svg{color:var(--pa-faint)}
 .pa-cmd-right{margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 @media(max-width:900px){.pa-cmd-right{margin-left:0;width:100%}}
-
-/* Reveal-on-scroll — gated on .reveal-on (added by JS), so if the script never
-   runs nothing is hidden. Staggered fade/slide for a modern, GSAP-like feel. */
-.reveal-on [data-reveal]{opacity:0;transform:translateY(16px);transition:opacity .55s var(--pa-ease),transform .55s var(--pa-ease)}
-.reveal-on [data-reveal].is-visible{opacity:1;transform:none}
-.reveal-on [data-reveal].is-visible [data-reveal-item]{opacity:1;transform:none;transition:opacity .5s var(--pa-ease),transform .5s var(--pa-ease)}
-.reveal-on [data-reveal] [data-reveal-item]{opacity:0;transform:translateY(12px)}
-.reveal-on [data-reveal].is-visible [data-reveal-item]:nth-child(1){transition-delay:.03s}
-.reveal-on [data-reveal].is-visible [data-reveal-item]:nth-child(2){transition-delay:.08s}
-.reveal-on [data-reveal].is-visible [data-reveal-item]:nth-child(3){transition-delay:.13s}
-.reveal-on [data-reveal].is-visible [data-reveal-item]:nth-child(4){transition-delay:.18s}
-.reveal-on [data-reveal].is-visible [data-reveal-item]:nth-child(5){transition-delay:.23s}
-.reveal-on [data-reveal].is-visible [data-reveal-item]:nth-child(n+6){transition-delay:.28s}
-@media(prefers-reduced-motion:reduce){.reveal-on [data-reveal],.reveal-on [data-reveal] [data-reveal-item]{opacity:1!important;transform:none!important;transition:none!important}}
 </style>
 
 <div class="pa">
@@ -1722,6 +1708,33 @@
                                     Submitted {{ $audit['submitted_at'] }}
                                     @if($audit['reviewer']) · {{ ucfirst($audit['status']) }} by {{ $audit['reviewer'] }} on {{ $audit['reviewed_at'] }}@endif
                                 </div>
+
+                                {{-- Multi-stage manager approval trail (L1 → L2 → …) --}}
+                                @if(! empty($audit['trail']))
+                                    <ol class="mt-2.5 space-y-1.5 border-t border-zinc-100 pt-2.5 dark:border-zinc-800">
+                                        @foreach($audit['trail'] as $step)
+                                            @php
+                                                $stepDot = match(strtolower($step['action'])) {
+                                                    'approved' => 'bg-emerald-500',
+                                                    'rejected' => 'bg-rose-500',
+                                                    default => 'bg-amber-400',
+                                                };
+                                            @endphp
+                                            <li class="flex items-start gap-2">
+                                                <span class="mt-1 size-1.5 shrink-0 rounded-full {{ $stepDot }}"></span>
+                                                <div class="min-w-0 flex-1">
+                                                    <div class="flex items-center justify-between gap-2">
+                                                        <span class="text-[11px] font-bold capitalize text-zinc-700 dark:text-zinc-200">{{ $step['stage'] ?: 'Review' }} · {{ ucfirst($step['action']) }}</span>
+                                                        @if($step['at'])<span class="shrink-0 text-[9px] text-zinc-400">{{ $step['at'] }}</span>@endif
+                                                    </div>
+                                                    <div class="text-[10px] text-zinc-500 dark:text-zinc-400">
+                                                        {{ $step['by'] ?? 'System' }}@if($step['comment']) — “{{ $step['comment'] }}”@endif
+                                                    </div>
+                                                </div>
+                                            </li>
+                                        @endforeach
+                                    </ol>
+                                @endif
                             </div>
                         @endforeach
                     </div>
@@ -1953,41 +1966,5 @@
         <p class="text-center text-[10px] text-zinc-400">Photo &amp; location are optional — you can clock in without them.</p>
     </div>
 </flux:modal>
-
-@script
-<script>
-    // Reveal-on-scroll for [data-reveal] sections. Adds .reveal-on to <html>
-    // so the hiding CSS only applies once this runs — no-JS keeps content visible.
-    const io = ('IntersectionObserver' in window)
-        ? new IntersectionObserver((entries) => {
-            entries.forEach((en) => {
-                if (en.isIntersecting) {
-                    en.target.classList.add('is-visible');
-                    io.unobserve(en.target);
-                }
-            });
-        }, { rootMargin: '0px 0px -6% 0px', threshold: 0.05 })
-        : null;
-
-    const seen = new WeakSet();
-    function paReveal() {
-        document.querySelectorAll('[data-reveal]').forEach((el) => {
-            if (seen.has(el)) { return; }
-            seen.add(el);
-            if (io) { io.observe(el); } else { el.classList.add('is-visible'); }
-        });
-    }
-
-    document.documentElement.classList.add('reveal-on');
-    paReveal();
-
-    // Pick up any [data-reveal] Livewire morphs in after a filter change.
-    let debounce;
-    new MutationObserver(() => {
-        clearTimeout(debounce);
-        debounce = setTimeout(paReveal, 60);
-    }).observe(document.body, { childList: true, subtree: true });
-</script>
-@endscript
 
 </flux:main>
