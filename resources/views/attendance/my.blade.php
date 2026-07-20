@@ -155,29 +155,55 @@
 @media(max-width:1024px){.pa-hero{grid-template-columns:1fr 1fr}.pa-actwrap{grid-column:1/-1;border-top:1px solid var(--pa-border)}}
 @media(max-width:640px){.pa-hero{grid-template-columns:1fr}.pa-ringwrap{order:-1}}
 @media(prefers-reduced-motion:reduce){.pa-ring .prg{animation:none;stroke-dashoffset:{{ round(408 - (408 * $progress / 100), 1) }}}}
+
+/* Command/filter bar — position:relative + z-index so open dropdowns
+   (clean-select is absolute z-50) sit ABOVE the positioned hero that follows. */
+.pa-cmd{position:relative;z-index:40;row-gap:10px}
+.pa-cmd-title{display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:620;color:var(--pa-ink)}
+.pa-cmd-title svg{color:var(--pa-faint)}
+.pa-cmd-right{margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+@media(max-width:900px){.pa-cmd-right{margin-left:0;width:100%}}
+
+/* Reveal-on-scroll — gated on .reveal-on (added by JS), so if the script never
+   runs nothing is hidden. Staggered fade/slide for a modern, GSAP-like feel. */
+.reveal-on [data-reveal]{opacity:0;transform:translateY(16px);transition:opacity .55s var(--pa-ease),transform .55s var(--pa-ease)}
+.reveal-on [data-reveal].is-visible{opacity:1;transform:none}
+.reveal-on [data-reveal].is-visible [data-reveal-item]{opacity:1;transform:none;transition:opacity .5s var(--pa-ease),transform .5s var(--pa-ease)}
+.reveal-on [data-reveal] [data-reveal-item]{opacity:0;transform:translateY(12px)}
+.reveal-on [data-reveal].is-visible [data-reveal-item]:nth-child(1){transition-delay:.03s}
+.reveal-on [data-reveal].is-visible [data-reveal-item]:nth-child(2){transition-delay:.08s}
+.reveal-on [data-reveal].is-visible [data-reveal-item]:nth-child(3){transition-delay:.13s}
+.reveal-on [data-reveal].is-visible [data-reveal-item]:nth-child(4){transition-delay:.18s}
+.reveal-on [data-reveal].is-visible [data-reveal-item]:nth-child(5){transition-delay:.23s}
+.reveal-on [data-reveal].is-visible [data-reveal-item]:nth-child(n+6){transition-delay:.28s}
+@media(prefers-reduced-motion:reduce){.reveal-on [data-reveal],.reveal-on [data-reveal] [data-reveal-item]{opacity:1!important;transform:none!important;transition:none!important}}
 </style>
 
 <div class="pa">
   {{-- Analytics header — global period, comparison & mode filters (GA4-style) --}}
-  <div class="pa-cmd" style="backdrop-filter:blur(12px)">
-    <div style="flex:1;min-width:120px;display:flex;align-items:center;gap:8px"><flux:icon.clock class="size-4" style="color:var(--pa-faint)" /><span style="font-size:13.5px;font-weight:620;color:var(--pa-ink)">My Attendance</span></div>
+  <div class="pa-cmd">
+    <div class="pa-cmd-title"><flux:icon.clock class="size-4" /><span>My Attendance</span></div>
     <div class="pa-seg" role="tablist" aria-label="Range">
-      @foreach(['today' => 'Today', 'this_week' => 'Week', 'this_month' => 'Month', 'quarter' => 'Quarter', 'year' => 'Year'] as $val => $label)
+      @foreach(['today' => 'Today', 'this_week' => 'Week', 'this_month' => 'Month', 'quarter' => 'Quarter', 'year' => 'Year', 'custom' => 'Custom'] as $val => $label)
         <button wire:click="$set('statsPeriod', '{{ $val }}')" class="{{ $statsPeriod === $val ? 'on' : '' }}">{{ $label }}</button>
       @endforeach
     </div>
-    {{-- Custom date range — filters punch count, logs & analytics for the picked span --}}
-    <div class="pa-range {{ $statsPeriod === 'custom' ? 'on' : '' }}" title="Filter punches & logs by date range">
-      <flux:icon.calendar-days class="size-3.5" />
-      <input type="date" wire:model.live="rangeFrom" aria-label="From date" max="{{ now()->toDateString() }}">
-      <span class="lbl">to</span>
-      <input type="date" wire:model.live="rangeTo" aria-label="To date" max="{{ now()->toDateString() }}">
+    {{-- Date range appears only in Custom mode — keeps the bar clean otherwise. --}}
+    @if($statsPeriod === 'custom')
+      <div class="pa-range on" title="Filter punches, logs & analytics by date range">
+        <flux:icon.calendar-days class="size-3.5" />
+        <input type="date" wire:model.live="rangeFrom" aria-label="From date" max="{{ now()->toDateString() }}">
+        <span class="lbl">to</span>
+        <input type="date" wire:model.live="rangeTo" aria-label="To date" max="{{ now()->toDateString() }}">
+      </div>
+    @endif
+    <div class="pa-cmd-right">
+      <x-clean-select model="compareMode" :live="true" title="Comparison window for KPI trends"
+        :options="[['value' => 'prev_period', 'label' => 'vs Previous period'], ['value' => 'last_month', 'label' => 'vs Last month'], ['value' => 'last_year', 'label' => 'vs Last year']]" />
+      <x-clean-select model="analyticsMode" :live="true"
+        :options="[['value' => '', 'label' => 'All modes'], ...collect(AttendanceMode::cases())->map(fn ($mode) => ['value' => $mode->value, 'label' => $mode->label()])->all()]" />
+      <button wire:click="exportLog" class="pa-pill"><flux:icon.arrow-down-tray class="size-4" /> Export</button>
     </div>
-    <x-clean-select model="compareMode" :live="true" title="Comparison window for KPI trends"
-      :options="[['value' => 'prev_period', 'label' => 'vs Previous period'], ['value' => 'last_month', 'label' => 'vs Last month'], ['value' => 'last_year', 'label' => 'vs Last year']]" />
-    <x-clean-select model="analyticsMode" :live="true"
-      :options="[['value' => '', 'label' => 'All modes'], ...collect(AttendanceMode::cases())->map(fn ($mode) => ['value' => $mode->value, 'label' => $mode->label()])->all()]" />
-    <button wire:click="exportLog" class="pa-pill"><flux:icon.arrow-down-tray class="size-4" /> Export</button>
   </div>
 
   {{-- Premium 3-column hero (45 / 30 / 25) --}}
@@ -317,7 +343,7 @@
 </div>
 
 
-<div class="space-y-4">
+<div class="space-y-5 mt-5">
 
 {{-- ═══════════════ ATTENDANCE HEALTH + QUICK ACTIONS ═══════════════ --}}
 {{-- ═══════════════ ATTENDANCE HEALTH + QUICK ACTIONS (slice 4a) ═══════════════ --}}
@@ -1927,5 +1953,41 @@
         <p class="text-center text-[10px] text-zinc-400">Photo &amp; location are optional — you can clock in without them.</p>
     </div>
 </flux:modal>
+
+@script
+<script>
+    // Reveal-on-scroll for [data-reveal] sections. Adds .reveal-on to <html>
+    // so the hiding CSS only applies once this runs — no-JS keeps content visible.
+    const io = ('IntersectionObserver' in window)
+        ? new IntersectionObserver((entries) => {
+            entries.forEach((en) => {
+                if (en.isIntersecting) {
+                    en.target.classList.add('is-visible');
+                    io.unobserve(en.target);
+                }
+            });
+        }, { rootMargin: '0px 0px -6% 0px', threshold: 0.05 })
+        : null;
+
+    const seen = new WeakSet();
+    function paReveal() {
+        document.querySelectorAll('[data-reveal]').forEach((el) => {
+            if (seen.has(el)) { return; }
+            seen.add(el);
+            if (io) { io.observe(el); } else { el.classList.add('is-visible'); }
+        });
+    }
+
+    document.documentElement.classList.add('reveal-on');
+    paReveal();
+
+    // Pick up any [data-reveal] Livewire morphs in after a filter change.
+    let debounce;
+    new MutationObserver(() => {
+        clearTimeout(debounce);
+        debounce = setTimeout(paReveal, 60);
+    }).observe(document.body, { childList: true, subtree: true });
+</script>
+@endscript
 
 </flux:main>
