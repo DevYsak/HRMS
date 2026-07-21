@@ -812,6 +812,20 @@
 .pa-stot{display:flex;align-items:center;justify-content:space-between;margin-top:12px;padding-top:13px;border-top:2px solid var(--pa-border)}
 .pa-stot .tl{font-size:12px;font-weight:640;color:var(--pa-muted)}
 .pa-stot .tv{font-size:20px;font-weight:760;letter-spacing:-.02em;color:var(--pa-ink);font-variant-numeric:tabular-nums}
+/* Premium per-session card */
+.pa-sess{border:1px solid var(--pa-border);border-radius:14px;padding:13px 15px;margin-bottom:10px;background:var(--pa-surface-2);transition:border-color .16s,box-shadow .16s}
+.pa-sess:hover{border-color:var(--pa-border-2);box-shadow:0 4px 14px rgba(24,24,27,.05)}
+.pa-sess.live{border-color:var(--pa-present);background:var(--pa-present-soft)}
+.pa-sess.miss{border-color:var(--pa-warn);background:var(--pa-warn-soft)}
+.pa-sess-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:11px}
+.pa-sess-n{font-size:12.5px;font-weight:700;color:var(--pa-ink);display:flex;align-items:center;gap:7px}
+.pa-sess-badge{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--pa-present);background:var(--pa-surface);padding:2px 7px;border-radius:999px}
+.pa-sess-t{font-size:11.5px;font-weight:600;color:var(--pa-muted);font-variant-numeric:tabular-nums}
+.pa-sess-m{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.pa-sess-m .l{display:block;font-size:9px;font-weight:640;text-transform:uppercase;letter-spacing:.04em;color:var(--pa-faint)}
+.pa-sess-m .v{display:block;font-size:14px;font-weight:720;color:var(--pa-ink);margin-top:2px;font-variant-numeric:tabular-nums}
+.pa-sess-bar{height:6px;border-radius:5px;background:var(--pa-surface-3);overflow:hidden;margin-top:11px}
+.pa-sess-bar i{display:block;height:100%;border-radius:5px;background:linear-gradient(90deg,var(--pa-present),#22c55e);transition:width .8s var(--pa-ease)}
 .pa-snote{margin-top:12px;font-size:11.5px;color:var(--pa-faint);display:flex;align-items:center;gap:7px}
 .pa-swarn{margin-top:12px;font-size:12px;font-weight:600;color:var(--pa-danger);background:var(--pa-danger-soft);padding:9px 12px;border-radius:10px;display:flex;align-items:center;gap:8px}
 .pa-hz-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:var(--pa-faint);padding:52px 0}
@@ -939,10 +953,21 @@
       @if($hasPunch && count($pj['sessions']))
         @foreach($pj['sessions'] as $s)
           @php $miss = ! empty($s['missing']); @endphp
-          <div class="pa-srow {{ $s['live'] ? 'live' : '' }} {{ $miss ? 'miss' : '' }}">
-            <span class="sn">Session {{ $s['index'] }}</span>
-            <span class="sp">{{ $s['in'] ? \Illuminate\Support\Str::before($s['in'], ' ') : '⚠ missing' }} → {{ $s['out'] ? \Illuminate\Support\Str::before($s['out'], ' ') : ($miss ? '⚠ missing' : 'now') }}</span>
-            <span class="sd">{{ $miss ? $s['label'] : $s['label'].($s['live'] ? ' · live' : '') }}</span>
+          <div class="pa-sess {{ $s['live'] ? 'live' : '' }} {{ $miss ? 'miss' : '' }}">
+            <div class="pa-sess-h">
+              <span class="pa-sess-n">Session {{ $s['index'] }}@if($s['live'])<span class="pa-sess-badge">Current</span>@endif</span>
+              <span class="pa-sess-t">{{ $s['in'] ? \Illuminate\Support\Str::before($s['in'], ' ') : '⚠' }} – {{ $s['out'] ? \Illuminate\Support\Str::before($s['out'], ' ') : ($miss ? '⚠' : 'now') }}</span>
+            </div>
+            @if($miss)
+              <div class="pa-sess-m"><div><span class="l">Status</span><span class="v" style="color:var(--pa-warn);font-size:12px">{{ $s['label'] }}</span></div></div>
+            @else
+              <div class="pa-sess-m">
+                <div><span class="l">Worked</span><span class="v">{{ $s['label'] }}</span></div>
+                <div><span class="l">Break</span><span class="v">{{ $s['break_after_label'] ?? '—' }}</span></div>
+                <div><span class="l">Productivity</span><span class="v" style="color:var(--pa-present)">{{ $s['productivity'] ?? 0 }}%</span></div>
+              </div>
+              <div class="pa-sess-bar"><i style="width: {{ $s['productivity'] ?? 0 }}%"></i></div>
+            @endif
           </div>
         @endforeach
         <div class="pa-stot"><span class="tl">Total working hours</span><span class="tv">{{ $fmt($pj['working_minutes']) }}</span></div>
