@@ -952,6 +952,72 @@
   </div>{{-- /pa-jgrid --}}
 </div>
 
+{{-- ═══════════════ WORKING HOURS BREAKDOWN (engine hoursBreakdown) ═══════════════ --}}
+@php
+    $breakAllowance = (int) ($shift->break_duration ?? 0);
+    $hb = app(\App\Services\Attendance\PunchTimeline::class)->hoursBreakdown($workedMin, $breakMin, $targetMin, $breakAllowance);
+    // [label, minutes, icon, colour]
+    $hbTiles = [
+        ['Expected', $hb['expected'], 'calendar-days', '#6B7280'],
+        ['Worked', $hb['worked'], 'clock', '#0F9D6E'],
+        ['Break', $hb['break'], 'pause', '#F59E0B'],
+        ['Idle', $hb['idle'], 'exclamation-triangle', '#D64545'],
+        ['Overtime', $hb['overtime'], 'bolt', '#8B5CF6'],
+        ['Net Hours', $hb['net'], 'check-badge', '#2F6FEB'],
+        ['Remaining', $hb['remaining'], 'arrow-path', '#6B7280'],
+    ];
+    // Stacked bar of the actual day: worked + legitimate break + idle (break over limit).
+    $hbSpan = max(1, $hb['worked'] + $hb['break']);
+    $legitBreak = max(0, $hb['break'] - $hb['idle']);
+    $segWorked = round($hb['worked'] / $hbSpan * 100, 1);
+    $segBreak = round($legitBreak / $hbSpan * 100, 1);
+    $segIdle = round($hb['idle'] / $hbSpan * 100, 1);
+@endphp
+<style>
+.pa-hb{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:20px;padding:22px 24px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.04)}
+.pa-hb-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:16px}
+@media(min-width:640px){.pa-hb-grid{grid-template-columns:repeat(4,1fr)}}
+@media(min-width:1100px){.pa-hb-grid{grid-template-columns:repeat(7,1fr)}}
+.pa-hb-tile{display:flex;align-items:center;gap:11px;border:1px solid var(--pa-border);background:var(--pa-surface-2);border-radius:14px;padding:13px 14px;transition:transform .18s var(--pa-ease),box-shadow .18s}
+.pa-hb-tile:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(24,24,27,.06)}
+.pa-hb-ic{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;flex:0 0 auto}
+.pa-hb-v{font-size:15.5px;font-weight:740;letter-spacing:-.02em;color:var(--pa-ink);line-height:1.1;font-variant-numeric:tabular-nums;white-space:nowrap}
+.pa-hb-l{font-size:10px;font-weight:640;text-transform:uppercase;letter-spacing:.05em;color:var(--pa-faint);margin-top:3px}
+.pa-hb-bar{display:flex;height:12px;border-radius:8px;overflow:hidden;margin-top:20px;background:var(--pa-surface-3)}
+.pa-hb-bar i{display:block;height:100%;transition:width .8s var(--pa-ease)}
+.pa-hb-key{display:flex;flex-wrap:wrap;gap:16px;margin-top:12px;font-size:11.5px;color:var(--pa-muted)}
+.pa-hb-key span{display:inline-flex;align-items:center;gap:6px;font-weight:540}
+.pa-hb-key i{width:10px;height:10px;border-radius:3px}
+</style>
+<div class="pa">
+  <div class="pa-hb" data-reveal>
+    <div class="pa-panel-h" style="font-size:15px;margin:0">
+      <flux:icon.chart-bar-square class="size-4 text-orange-500" /> Working Hours Breakdown
+      <span class="pa-panel-sub">today · {{ $fmt($hb['worked']) }} of {{ $fmt($hb['expected']) }} expected</span>
+    </div>
+    <div class="pa-hb-grid">
+      @foreach($hbTiles as [$hbL, $hbM, $hbI, $hbC])
+        <div class="pa-hb-tile" data-reveal-item>
+          <span class="pa-hb-ic" style="background: {{ $hbC }}1a; color: {{ $hbC }};"><flux:icon :icon="$hbI" class="size-4" /></span>
+          <div><div class="pa-hb-v">{{ $fmt($hbM) }}</div><div class="pa-hb-l">{{ $hbL }}</div></div>
+        </div>
+      @endforeach
+    </div>
+    @if($hb['worked'] + $hb['break'] > 0)
+      <div class="pa-hb-bar">
+        <i style="width: {{ $segWorked }}%; background: #0F9D6E;"></i>
+        <i style="width: {{ $segBreak }}%; background: #F59E0B;"></i>
+        <i style="width: {{ $segIdle }}%; background: #D64545;"></i>
+      </div>
+      <div class="pa-hb-key">
+        <span><i style="background:#0F9D6E"></i> Worked {{ $fmt($hb['worked']) }} ({{ (int) round($segWorked) }}%)</span>
+        <span><i style="background:#F59E0B"></i> Break {{ $fmt($legitBreak) }} ({{ (int) round($segBreak) }}%)</span>
+        @if($hb['idle'] > 0)<span><i style="background:#D64545"></i> Idle {{ $fmt($hb['idle']) }} ({{ (int) round($segIdle) }}%)</span>@endif
+      </div>
+    @endif
+  </div>
+</div>
+
 {{-- ═══════════════ ATTENDANCE ANALYTICS (enterprise grid) ═══════════════ --}}
 @php
     $ck = $statsPeriod.'-'.$analyticsMode.'-'.($rangeFrom ?? '').'-'.($rangeTo ?? '');

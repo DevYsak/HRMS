@@ -572,6 +572,35 @@ class PunchTimeline
         return intdiv($minutes, 60).'h '.str_pad((string) ($minutes % 60), 2, '0', STR_PAD_LEFT).'m';
     }
 
+    /**
+     * Working-hours breakdown for the dashboard, derived only from validated
+     * session totals so the UI never re-derives (or mis-derives) it.
+     *
+     * - net    = worked (session minutes are already net of the between-session gaps)
+     * - idle   = break time beyond the shift's paid allowance (the "over limit" figure)
+     * - overtime / remaining = worked measured against the expected day
+     *
+     * @return array{expected:int, worked:int, break:int, idle:int, overtime:int, net:int, remaining:int, worked_pct:int, break_pct:int, idle_pct:int}
+     */
+    public function hoursBreakdown(int $workedMinutes, int $breakMinutes, int $expectedMinutes, int $breakAllowanceMinutes = 0): array
+    {
+        $idle = max(0, $breakMinutes - max(0, $breakAllowanceMinutes));
+        $denominator = max(1, $expectedMinutes);
+
+        return [
+            'expected' => $expectedMinutes,
+            'worked' => $workedMinutes,
+            'break' => $breakMinutes,
+            'idle' => $idle,
+            'overtime' => max(0, $workedMinutes - $expectedMinutes),
+            'net' => $workedMinutes,
+            'remaining' => max(0, $expectedMinutes - $workedMinutes),
+            'worked_pct' => (int) round(min(100, $workedMinutes / $denominator * 100)),
+            'break_pct' => (int) round(min(100, $breakMinutes / $denominator * 100)),
+            'idle_pct' => (int) round(min(100, $idle / $denominator * 100)),
+        ];
+    }
+
     /** The canonical empty payload for a day with no punches. */
     public function emptyResult(): array
     {

@@ -85,3 +85,29 @@ test('a trailing IN with no OUT on a past day flags a missing punch', function (
     expect($result['missing_out'])->toBeTrue()
         ->and($result['needs_regularization'])->toBeTrue();
 });
+
+test('hoursBreakdown derives idle from break beyond the shift allowance', function () {
+    $engine = new PunchTimeline;
+
+    // Worked 8h (480m), break 90m, expected 9h (540m), allowance 60m.
+    $b = $engine->hoursBreakdown(480, 90, 540, 60);
+
+    expect($b['worked'])->toBe(480);
+    expect($b['net'])->toBe(480);              // net = worked (already net of breaks)
+    expect($b['break'])->toBe(90);
+    expect($b['idle'])->toBe(30);              // 90 break − 60 allowance = 30 over limit
+    expect($b['remaining'])->toBe(60);         // 540 expected − 480 worked
+    expect($b['overtime'])->toBe(0);
+});
+
+test('hoursBreakdown reports overtime and zero idle within allowance', function () {
+    $engine = new PunchTimeline;
+
+    // Worked 10h (600m) > expected 9h; break 45m ≤ 60m allowance.
+    $b = $engine->hoursBreakdown(600, 45, 540, 60);
+
+    expect($b['overtime'])->toBe(60);          // 600 − 540
+    expect($b['remaining'])->toBe(0);
+    expect($b['idle'])->toBe(0);               // break within allowance
+    expect($b['worked_pct'])->toBe(100);       // capped at 100
+});
