@@ -56,5 +56,8 @@ test('my attendance page shows the Phase 6 analytics panels', function () {
         ->assertSee('Attendance Score Trend')
         // Redesigned hero + signature AI Coach panel + relocated quick actions.
         ->assertSee('AI Attendance Coach')
-        ->assertSee('Quick actions');
+        ->assertSee('Quick actions')
+        // Redesign additions — prove the new sections actually render.
+        ->assertSee('Working Hours Breakdown')
+        ->assertSee('Logout Trend');
 });
