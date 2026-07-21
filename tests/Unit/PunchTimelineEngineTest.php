@@ -111,3 +111,23 @@ test('hoursBreakdown reports overtime and zero idle within allowance', function 
     expect($b['idle'])->toBe(0);               // break within allowance
     expect($b['worked_pct'])->toBe(100);       // capped at 100
 });
+
+test('sessions expose break-after and productivity from validated times', function () {
+    // Two work blocks with a 30-min gap: 9–11 (120m), break 30m, 11:30–13 (90m).
+    $result = $this->engine->process(timelineStream([
+        ['09:00:00', 'face'], ['11:00:00', 'id_card'],
+        ['11:30:00', 'face'], ['13:00:00', 'id_card'],
+    ]), Carbon::parse('2026-07-07'));
+
+    expect($result['sessions'])->toHaveCount(2);
+
+    // Session 1: 120m worked, 30m break after → 120/(120+30) = 80%.
+    expect($result['sessions'][0]['minutes'])->toBe(120);
+    expect($result['sessions'][0]['break_after'])->toBe(30);
+    expect($result['sessions'][0]['productivity'])->toBe(80);
+
+    // Session 2: last block, no break after → 100%.
+    expect($result['sessions'][1]['minutes'])->toBe(90);
+    expect($result['sessions'][1]['break_after'])->toBe(0);
+    expect($result['sessions'][1]['productivity'])->toBe(100);
+});

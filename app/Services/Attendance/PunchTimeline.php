@@ -405,6 +405,8 @@ class PunchTimeline
                     'label' => $this->minutesToHm($mins),
                     'live' => false,
                     'missing' => false,
+                    'in_ms' => (int) $openIn->punched_at->getTimestampMs(),
+                    'out_ms' => (int) $p->punched_at->getTimestampMs(),
                 ];
                 $openIn = null;
                 $prevOut = $p;
@@ -434,6 +436,8 @@ class PunchTimeline
                     'label' => $this->minutesToHm($liveElapsed),
                     'live' => true,
                     'missing' => false,
+                    'in_ms' => (int) $openIn->punched_at->getTimestampMs(),
+                    'out_ms' => null,
                 ];
             } else {
                 $sessions[] = $this->incompleteSession(count($sessions) + 1, $openIn, null);
@@ -441,6 +445,24 @@ class PunchTimeline
         }
 
         $workingMinutes += $liveElapsed;
+
+        // Per-session break-after (the gap until the next session opens) and
+        // productivity (worked ÷ worked+break for that block). Both come straight
+        // from the validated session times — the Session Summary cards read these
+        // rather than re-deriving anything in the view.
+        $sessCount = count($sessions);
+        for ($si = 0; $si < $sessCount; $si++) {
+            $breakAfter = 0;
+            $thisOut = $sessions[$si]['out_ms'] ?? null;
+            $nextIn = $sessions[$si + 1]['in_ms'] ?? null;
+            if ($thisOut !== null && $nextIn !== null && $nextIn > $thisOut) {
+                $breakAfter = (int) round(($nextIn - $thisOut) / 60000);
+            }
+            $mins = (int) ($sessions[$si]['minutes'] ?? 0);
+            $sessions[$si]['break_after'] = $breakAfter;
+            $sessions[$si]['break_after_label'] = $breakAfter > 0 ? $this->minutesToHm($breakAfter) : '—';
+            $sessions[$si]['productivity'] = $mins > 0 ? (int) round($mins / max(1, $mins + $breakAfter) * 100) : 0;
+        }
 
         // Working / break come only from these validated sessions. The engine's
         // synced summary is NOT trusted for totals — on this device it mis-pairs
