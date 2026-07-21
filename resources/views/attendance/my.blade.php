@@ -1630,20 +1630,27 @@
                         $day['status'] === 'on_time' => ['bg-emerald-50 text-emerald-600', 'Present'],
                         default => ['bg-zinc-50 dark:bg-zinc-800/50 text-zinc-500 dark:text-zinc-400', ucfirst($day['status'] ?? '—')],
                     };
+                    // Colored left status border on each day row.
+                    $dayBorder = match(true) {
+                        $day['missing'] => 'border-l-amber-400',
+                        $day['is_late'] => 'border-l-amber-400',
+                        $day['status'] === 'on_time' => 'border-l-emerald-400',
+                        default => 'border-l-zinc-200 dark:border-l-zinc-700',
+                    };
                     $dayMode = AttendanceMode::tryFromValue($day['mode'] ?? 'office');
                 @endphp
-                <div x-data="{ open: {{ $day['is_today'] ? 'true' : 'false' }} }" class="{{ $day['missing'] ? 'bg-amber-50/30' : '' }}">
+                <div x-data="{ open: {{ $day['is_today'] ? 'true' : 'false' }} }" class="border-l-[3px] {{ $dayBorder }} {{ $day['missing'] ? 'bg-amber-50/30' : '' }}">
                     {{-- Day header --}}
-                    <button type="button" @click="open = !open" class="flex w-full flex-wrap items-center gap-3 px-5 py-3 text-left transition hover:bg-orange-50/40">
+                    <button type="button" @click="open = !open" class="flex w-full flex-wrap items-center gap-3 px-5 py-3.5 text-left transition hover:bg-orange-50/50 dark:hover:bg-zinc-800/40">
                         <flux:icon.chevron-right class="size-4 shrink-0 text-zinc-400 transition-transform" ::class="open ? 'rotate-90' : ''" />
                         <div class="min-w-[7.5rem]">
-                            <div class="text-xs font-black text-zinc-900 dark:text-white">{{ $day['label'] }} @if($day['is_today'])<span class="text-orange-500">· Today</span>@endif</div>
-                            <div class="text-[9px] text-zinc-400">{{ $day['dayname'] }}</div>
+                            <div class="text-sm font-black text-zinc-900 dark:text-white">{{ $day['label'] }} @if($day['is_today'])<span class="text-orange-500">· Today</span>@endif</div>
+                            <div class="text-[10px] text-zinc-400">{{ $day['dayname'] }}</div>
                         </div>
-                        <span class="rounded-full px-2 py-0.5 text-[9px] font-bold {{ $dayBadge }}">{{ $dayLabel }}</span>
-                        <span class="inline-flex items-center rounded px-1.5 py-0.5 text-[8px] font-bold uppercase {{ $dayMode->chipClass() }}">{{ $dayMode->shortLabel() }}</span>
+                        <span class="rounded-full px-2.5 py-1 text-[10px] font-bold {{ $dayBadge }}">{{ $dayLabel }}</span>
+                        <span class="inline-flex items-center rounded-md px-2 py-0.5 text-[9px] font-bold uppercase {{ $dayMode->chipClass() }}">{{ $dayMode->shortLabel() }}</span>
                         @if($day['is_regularized'])
-                            <span class="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[8px] font-bold uppercase text-blue-600 dark:bg-blue-500/15 dark:text-blue-300"><flux:icon.check-badge class="size-2.5" /> Regularized</span>
+                            <span class="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-0.5 text-[9px] font-bold uppercase text-blue-600 dark:bg-blue-500/15 dark:text-blue-300"><flux:icon.check-badge class="size-3" /> Regularized</span>
                         @elseif($day['reg_status'])
                             @php $regC = match($day['reg_status']) { 'rejected' => 'bg-rose-50 text-rose-500', default => 'bg-amber-50 text-amber-600' }; @endphp
                             <span class="rounded-full px-2 py-0.5 text-[8px] font-bold uppercase {{ $regC }}">Reg. {{ $day['reg_status'] }}</span>
@@ -1756,7 +1763,7 @@
                                             <div class="flex flex-wrap items-center gap-x-3 gap-y-0.5">
                                                 <span class="text-sm font-black tabular-nums text-zinc-900 dark:text-white">{{ $ev['time'] }}</span>
                                                 @if($evMethod)
-                                                    <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-bold {{ $evMethod->chipClass() }}"><flux:icon :icon="$evMethod->icon()" class="size-3" /> {{ $evMethod->label() }}</span>
+                                                    <span class="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold {{ $evMethod->chipClass() }}"><flux:icon :icon="$evMethod->icon()" class="size-3.5" /> {{ $evMethod->label() }}</span>
                                                 @else
                                                     <span class="text-[10px] font-bold text-zinc-500 dark:text-zinc-400">{{ $srcLabel }}</span>
                                                 @endif
