@@ -100,16 +100,19 @@
 .pa-cmd{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
 .pa-cmd h1{margin:0;font-size:21px;font-weight:680;letter-spacing:-.02em;color:var(--pa-ink)}
 .pa-cmd p{margin:2px 0 0;color:var(--pa-muted);font-size:13px}
-.pa-seg{display:inline-flex;background:var(--pa-surface-2);border:1px solid var(--pa-border);border-radius:10px;padding:3px}
-.pa-seg button{border:0;background:transparent;color:var(--pa-muted);font-size:12.5px;font-weight:560;padding:5px 11px;border-radius:7px;transition:all .16s var(--pa-ease)}
-.pa-seg button.on{background:var(--pa-surface);color:var(--pa-ink);box-shadow:0 1px 2px rgba(0,0,0,.06);font-weight:620}
-.pa-range{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 11px;border:1px solid var(--pa-border-2);border-radius:10px;background:var(--pa-surface);color:var(--pa-muted);transition:all .16s var(--pa-ease)}
+/* Segmented control — 44px, 14px radius, orange active tab */
+.pa-seg{display:inline-flex;align-items:center;background:var(--pa-surface-2);border:1px solid var(--pa-border);border-radius:14px;padding:4px;height:44px;gap:2px}
+.pa-seg button{border:0;background:transparent;color:var(--pa-muted);font-size:13px;font-weight:600;height:36px;padding:0 15px;border-radius:10px;transition:all .18s var(--pa-ease);white-space:nowrap}
+.pa-seg button:hover{color:var(--pa-ink);background:var(--pa-surface)}
+.pa-seg button.on{background:var(--pa-accent);color:#fff;box-shadow:0 2px 8px var(--pa-ring);font-weight:680}
+.pa-seg button.on:hover{background:var(--pa-accent);color:#fff}
+.pa-range{display:inline-flex;align-items:center;gap:6px;height:44px;padding:0 13px;border:1px solid var(--pa-border-2);border-radius:12px;background:var(--pa-surface);color:var(--pa-muted);transition:all .16s var(--pa-ease)}
 .pa-range.on{border-color:var(--pa-accent);box-shadow:0 0 0 3px var(--pa-ring);color:var(--pa-accent-ink)}
 .pa-range input{border:0;background:transparent;color:var(--pa-ink);font-size:12px;font-family:inherit;outline:0;width:116px;font-variant-numeric:tabular-nums}
 .pa-range .lbl{font-size:9.5px;font-weight:640;text-transform:uppercase;letter-spacing:.05em}
-.pa-pill{display:inline-flex;align-items:center;gap:7px;height:36px;padding:0 13px;border-radius:10px;border:1px solid var(--pa-border-2);
-  background:var(--pa-surface);color:var(--pa-ink);font-size:13px;font-weight:560;transition:all .16s var(--pa-ease)}
-.pa-pill:hover{background:var(--pa-surface-2);border-color:var(--pa-faint);transform:translateY(-1px)}
+.pa-pill{display:inline-flex;align-items:center;gap:7px;height:44px;padding:0 16px;border-radius:12px;border:1px solid var(--pa-border-2);
+  background:var(--pa-surface);color:var(--pa-ink);font-size:13px;font-weight:600;transition:all .16s var(--pa-ease)}
+.pa-pill:hover{background:var(--pa-surface-2);border-color:var(--pa-faint);transform:translateY(-1px);box-shadow:0 4px 12px rgba(24,24,27,.06)}
 .pa-primary{display:inline-flex;align-items:center;gap:7px;height:36px;padding:0 15px;border-radius:10px;border:1px solid var(--pa-accent-ink);
   background:var(--pa-accent);color:#fff;font-size:13px;font-weight:600;box-shadow:0 1px 2px var(--pa-ring);transition:all .16s var(--pa-ease)}
 .pa-primary:hover{filter:brightness(1.06);box-shadow:0 4px 14px var(--pa-ring);transform:translateY(-1px)}
@@ -161,7 +164,10 @@
 .pa-cmd{position:relative;z-index:40;row-gap:10px}
 .pa-cmd-title{display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:620;color:var(--pa-ink)}
 .pa-cmd-title svg{color:var(--pa-faint)}
-.pa-cmd-right{margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pa-cmd-right{margin-left:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+/* Every right-side control the same 44px height as the segmented control */
+.pa-cmd-right button{height:44px}
+.pa-cmd-right button:not(.pa-pill){border-radius:12px}
 @media(max-width:900px){.pa-cmd-right{margin-left:0;width:100%}}
 </style>
 
@@ -249,9 +255,10 @@
     @media(max-width:680px){.pa-hero2{grid-template-columns:1fr}.pa-hC{border-left:0;border-top:1px solid var(--pa-border)}.pa-h-timer{font-size:48px}}
 
     /* ── Greeting ── */
-    .pa-greet{margin-bottom:20px}
-    .pa-greet-t{font-size:25px;font-weight:760;letter-spacing:-.03em;color:var(--pa-ink)}
-    .pa-greet-s{font-size:13.5px;color:var(--pa-muted);margin-top:4px}
+    .pa-greet{margin-bottom:22px}
+    .pa-greet-hi{font-size:14px;color:var(--pa-muted);font-weight:520}
+    .pa-greet-name{font-size:32px;font-weight:780;letter-spacing:-.03em;color:var(--pa-ink);line-height:1.1;margin:1px 0 5px}
+    .pa-greet-date{font-size:13px;color:var(--pa-faint);font-weight:500}
 
     /* ── 5-card hero ── */
     .pa-h4{display:grid;grid-template-columns:1.35fr 1fr 1fr 1fr 1fr;gap:16px}
@@ -276,15 +283,16 @@
     .pa-hcard:hover{transform:translateY(-3px);box-shadow:0 2px 4px rgba(24,24,27,.05),0 16px 34px rgba(24,24,27,.08)}
     .pa-hct{font-size:12px;font-weight:640;color:var(--pa-muted);display:flex;align-items:center;gap:8px;margin-bottom:14px}
     .pa-hct svg{color:var(--pa-faint)}
-    .pa-hbig{font-size:29px;font-weight:760;letter-spacing:-.03em;color:var(--pa-ink);line-height:1;font-variant-numeric:tabular-nums}
-    .pa-hsub{font-size:12px;color:var(--pa-muted);margin-top:7px}
+    .pa-hbig{font-size:32px;font-weight:770;letter-spacing:-.03em;color:var(--pa-ink);line-height:1;font-variant-numeric:tabular-nums}
+    .pa-hsub{font-size:12px;color:var(--pa-muted);margin-top:8px}
     .pa-hfoot{font-size:11.5px;color:var(--pa-faint);margin-top:auto;padding-top:12px}
     .pa-hspark{width:100%;height:26px;display:block;margin-top:12px}
     .pa-hbadges{margin-top:11px}
-    .pa-hbadge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:660;padding:4px 11px;border-radius:999px}
-    .pa-hbadge.ok{background:var(--pa-present-soft);color:var(--pa-present)}
-    .pa-hbadge.warn{background:var(--pa-warn-soft);color:var(--pa-warn)}
-    .pa-hbadge.live{background:var(--pa-present-soft);color:var(--pa-present)}
+    .pa-hbadge{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:680;padding:5px 12px;border-radius:999px}
+    .pa-hbadge::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;flex:0 0 auto}
+    .pa-hbadge.ok{background:linear-gradient(135deg,var(--pa-present-soft),rgba(15,157,110,.04));color:var(--pa-present);border:1px solid rgba(15,157,110,.16)}
+    .pa-hbadge.warn{background:linear-gradient(135deg,var(--pa-warn-soft),rgba(180,83,9,.04));color:var(--pa-warn);border:1px solid rgba(180,83,9,.16)}
+    .pa-hbadge.live{background:linear-gradient(135deg,var(--pa-present-soft),rgba(15,157,110,.04));color:var(--pa-present);border:1px solid rgba(15,157,110,.16)}
     .pa-hscore{display:flex;align-items:center;gap:16px}
     .pa-h-ring-sm{width:112px !important;height:112px !important;flex:0 0 auto}
     .pa-h-ring-sm .big{font-size:29px}
@@ -324,8 +332,9 @@
   @endphp
   {{-- Greeting --}}
   <div class="pa-greet">
-    <div class="pa-greet-t">{{ $heroGreet }}, {{ $heroName }} 👋</div>
-    <div class="pa-greet-s">Here's your attendance summary for {{ now()->format('l, d F Y') }}.</div>
+    <div class="pa-greet-hi">{{ $heroGreet }},</div>
+    <div class="pa-greet-name">{{ $heroName }} 👋</div>
+    <div class="pa-greet-date">{{ now()->format('l, d F Y') }}</div>
   </div>
 
   @php
