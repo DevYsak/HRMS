@@ -295,6 +295,10 @@
     .pa-hbadge.live{background:linear-gradient(135deg,var(--pa-present-soft),rgba(15,157,110,.04));color:var(--pa-present);border:1px solid rgba(15,157,110,.16)}
     .pa-hscore{display:flex;align-items:center;gap:16px}
     .pa-h-ring-sm{width:112px !important;height:112px !important;flex:0 0 auto}
+    /* The inline <svg> is authored at 104px; force it to fill the ring box so the
+       ring is centred under the .big/"/100" label instead of hugging the top-left
+       corner (which made "/100" read as clipped at the ring's bottom edge). */
+    .pa-h-ring-sm svg{width:100% !important;height:100% !important;display:block}
     .pa-h-ring-sm .big{font-size:29px}
     .pa-h-ring-sm .sm{font-size:10px;letter-spacing:0}
     .pa-hband{font-size:16px;font-weight:740;color:var(--pa-ink)}
@@ -783,6 +787,22 @@
 .pa-hz-track{position:relative;display:flex;align-items:flex-start;gap:14px;padding:104px 34px 26px;min-width:max-content;margin:0 auto}
 .pa-hz-rail{position:absolute;left:76px;right:76px;top:124px;height:3px;border-radius:3px;background:var(--pa-border);z-index:0}
 .pa-hz-rail-fill{position:absolute;left:76px;top:124px;height:3px;border-radius:3px;width:0;background:linear-gradient(90deg,var(--pa-present),#3B82F6 40%,#F59E0B 72%,var(--pa-danger));z-index:1}
+/* Animated "day-flow" wave that fills the space reserved for hover tooltips —
+   turns dead white space above the nodes into a live, on-brand graphic. Purely
+   decorative (aria-hidden, pointer-events:none) and sits behind nodes/tooltips. */
+.pa-hz-flow{position:absolute;left:0;right:0;top:8px;height:82px;z-index:0;pointer-events:none;opacity:.92}
+.pa-hz-flow .s0{stop-color:var(--pa-present)}
+.pa-hz-flow .s1{stop-color:#3B82F6}
+.pa-hz-flow .s2{stop-color:#F59E0B}
+.pa-hz-flow .s3{stop-color:var(--pa-danger)}
+.pa-hz-flow .a0{stop-color:var(--pa-accent);stop-opacity:.16}
+.pa-hz-flow .a1{stop-color:var(--pa-accent);stop-opacity:0}
+.pa-hz-flow-base{stroke-width:2;opacity:.3}
+.pa-hz-flow-comet{stroke-width:3.4;stroke-linecap:round;stroke-dasharray:96 1320;stroke-dashoffset:0;filter:drop-shadow(0 0 5px rgba(249,115,22,.55));animation:pahzflow 5s linear infinite}
+.pa-hz-flow-comet2{stroke-width:2.2;stroke-linecap:round;opacity:.72;stroke-dasharray:60 1360;stroke-dashoffset:0;animation:pahzflow 8s linear infinite;animation-delay:-3.2s}
+@keyframes pahzflow{to{stroke-dashoffset:-1416}}
+@media(prefers-reduced-motion:reduce){.pa-hz-flow-comet,.pa-hz-flow-comet2{animation:none;opacity:.5}}
+[data-theme="dark"] .pa-hz-flow-base,.dark .pa-hz-flow-base{opacity:.42}
 .pa-hz-node{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;min-width:98px;flex:0 0 auto}
 .pa-hz-dot{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;color:#fff;border:3.5px solid var(--pa-surface);box-shadow:0 3px 10px rgba(24,24,27,.16);cursor:pointer;transition:box-shadow .18s var(--pa-ease),transform .18s var(--pa-ease)}
 .pa-hz-node:hover .pa-hz-dot{box-shadow:0 6px 20px rgba(24,24,27,.26);transform:translateY(-3px)}
@@ -930,6 +950,23 @@
     @if($hasPunch)
       <div class="pa-hz-scroll" wire:loading.class="opacity-40" wire:target="statsPeriod,rangeFrom,rangeTo">
         <div class="pa-hz-track">
+          {{-- Decorative day-flow wave: fills the tooltip headroom with an on-brand
+               animated graphic instead of empty white space. Stretches to the track
+               width; strokes flow via CSS dash animation (no JS, reduced-motion aware). --}}
+          <svg class="pa-hz-flow" viewBox="0 0 1200 100" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+            <defs>
+              <linearGradient id="paHzLine" x1="0" y1="0" x2="1200" y2="0" gradientUnits="userSpaceOnUse">
+                <stop offset="0" class="s0" /><stop offset=".38" class="s1" /><stop offset=".7" class="s2" /><stop offset="1" class="s3" />
+              </linearGradient>
+              <linearGradient id="paHzArea" x1="0" y1="0" x2="0" y2="100" gradientUnits="userSpaceOnUse">
+                <stop offset="0" class="a0" /><stop offset="1" class="a1" />
+              </linearGradient>
+            </defs>
+            <path class="pa-hz-flow-area" fill="url(#paHzArea)" d="M0,64 C120,40 240,74 360,58 C480,42 600,72 720,54 C840,38 960,70 1080,52 C1140,44 1170,58 1200,54 L1200,100 L0,100 Z" />
+            <path class="pa-hz-flow-base" fill="none" stroke="url(#paHzLine)" d="M0,64 C120,40 240,74 360,58 C480,42 600,72 720,54 C840,38 960,70 1080,52 C1140,44 1170,58 1200,54" />
+            <path class="pa-hz-flow-comet2" fill="none" stroke="url(#paHzLine)" d="M0,64 C120,40 240,74 360,58 C480,42 600,72 720,54 C840,38 960,70 1080,52 C1140,44 1170,58 1200,54" />
+            <path class="pa-hz-flow-comet" fill="none" stroke="url(#paHzLine)" d="M0,64 C120,40 240,74 360,58 C480,42 600,72 720,54 C840,38 960,70 1080,52 C1140,44 1170,58 1200,54" />
+          </svg>
           <div class="pa-hz-rail"></div>
           <div class="pa-hz-rail-fill" data-tl-progress></div>
           @foreach($pj['nodes'] as $node)
