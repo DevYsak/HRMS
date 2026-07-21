@@ -1406,6 +1406,63 @@
 </div>
 </div>{{-- /collapsible: analytics --}}
 
+{{-- ═══════════════ RECENT ACTIVITY (real regularization / alert log) ═══════════════ --}}
+@php
+    // Built from the already-loaded log timeline — no extra queries. Each item is
+    // a real regularization, approval, missing-punch or late event.
+    $activity = collect();
+    foreach (collect($logTimeline)->take(30) as $d) {
+        $when = $d['label'] ?? '';
+        if (($d['reg_status'] ?? null) === 'pending') {
+            $activity->push(['ic' => 'pencil-square', 'tone' => 'amber', 'title' => 'Regularization Request', 'desc' => $when.' — pending review', 'badge' => 'Pending', 'bt' => 'amber']);
+        } elseif (($d['is_regularized'] ?? false) || ($d['reg_status'] ?? null) === 'approved') {
+            $activity->push(['ic' => 'check-badge', 'tone' => 'emerald', 'title' => 'Manager Approval', 'desc' => $when.' — regularization approved', 'badge' => 'Approved', 'bt' => 'emerald']);
+        } elseif (($d['reg_status'] ?? null) === 'rejected') {
+            $activity->push(['ic' => 'x-circle', 'tone' => 'rose', 'title' => 'Regularization Rejected', 'desc' => $when, 'badge' => 'Rejected', 'bt' => 'rose']);
+        } elseif ($d['missing'] ?? false) {
+            $activity->push(['ic' => 'exclamation-circle', 'tone' => 'rose', 'title' => 'Missing Punch Alert', 'desc' => $when.' — a punch needs regularization', 'badge' => 'Alert', 'bt' => 'rose']);
+        } elseif ($d['is_late'] ?? false) {
+            $activity->push(['ic' => 'clock', 'tone' => 'amber', 'title' => 'Attendance Warning', 'desc' => $when.' — late arrival', 'badge' => 'Warning', 'bt' => 'amber']);
+        }
+    }
+    $activity = $activity->take(6);
+@endphp
+@if($activity->isNotEmpty())
+<div class="pa">
+  <div class="pa-panel" data-reveal>
+    <div class="pa-panel-h" style="font-size:15px">
+      <flux:icon.bell-alert class="size-4 text-orange-500" /> Recent Activity
+      <span class="pa-panel-sub">latest attendance events</span>
+    </div>
+    <div class="pa-actlist" data-reveal>
+      @foreach($activity as $a)
+        @php
+          $toneBg = ['emerald' => 'var(--pa-present-soft)', 'amber' => 'var(--pa-warn-soft)', 'rose' => 'var(--pa-danger-soft)'][$a['tone']] ?? 'var(--pa-surface-2)';
+          $toneFg = ['emerald' => 'var(--pa-present)', 'amber' => 'var(--pa-warn)', 'rose' => 'var(--pa-danger)'][$a['tone']] ?? 'var(--pa-muted)';
+          $badgeCls = ['emerald' => 'bg-emerald-50 text-emerald-600', 'amber' => 'bg-amber-50 text-amber-600', 'rose' => 'bg-rose-50 text-rose-500'][$a['bt']] ?? 'bg-zinc-100 text-zinc-500';
+        @endphp
+        <div class="pa-actitem" data-reveal-item>
+          <span class="pa-actic" style="background:{{ $toneBg }};color:{{ $toneFg }}"><flux:icon :icon="$a['ic']" class="size-4" /></span>
+          <div class="min-w-0 flex-1">
+            <div class="pa-actt">{{ $a['title'] }}</div>
+            <div class="pa-actd">{{ $a['desc'] }}</div>
+          </div>
+          <span class="shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-bold {{ $badgeCls }}">{{ $a['badge'] }}</span>
+        </div>
+      @endforeach
+    </div>
+  </div>
+</div>
+<style>
+.pa-actlist{display:flex;flex-direction:column;gap:4px}
+.pa-actitem{display:flex;align-items:center;gap:12px;padding:11px 8px;border-radius:12px;transition:background .16s}
+.pa-actitem:hover{background:var(--pa-surface-2)}
+.pa-actic{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;flex:0 0 auto}
+.pa-actt{font-size:13px;font-weight:660;color:var(--pa-ink)}
+.pa-actd{font-size:11.5px;color:var(--pa-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+</style>
+@endif
+
 {{-- ═══════════════ AI ATTENDANCE INSIGHTS ═══════════════ --}}
 @if(! empty($insightStats))
     @php
