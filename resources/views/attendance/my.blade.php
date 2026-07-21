@@ -353,11 +353,11 @@
 .pa-qa-l{font-size:10.5px;font-weight:600;color:var(--pa-muted)}
 .pa-kpis2{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
 @media(min-width:680px){.pa-kpis2{grid-template-columns:repeat(4,1fr)}}
-.pa-kpi2{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:16px;padding:16px 18px;box-shadow:0 1px 2px rgba(0,0,0,.05);transition:transform .18s var(--pa-ease),box-shadow .18s,border-color .18s}
-.pa-kpi2:hover{transform:translateY(-3px);box-shadow:0 8px 22px rgba(0,0,0,.06);border-color:var(--pa-border-2)}
+.pa-kpi2{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:18px;padding:18px 20px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 4px 12px rgba(24,24,27,.03);transition:transform .2s var(--pa-ease),box-shadow .2s,border-color .2s}
+.pa-kpi2:hover{transform:translateY(-3px);box-shadow:0 2px 4px rgba(24,24,27,.05),0 14px 30px rgba(24,24,27,.08);border-color:var(--pa-border-2)}
 .pa-kpi2 .top{display:flex;align-items:center;justify-content:space-between}
-.pa-kpi2 .ic{width:34px;height:34px;border-radius:10px;display:grid;place-items:center}
-.pa-kpi2 .tr{font-size:11px;font-weight:640;padding:3px 7px;border-radius:7px;background:var(--pa-surface-2);color:var(--pa-muted)}
+.pa-kpi2 .ic{width:36px;height:36px;border-radius:11px;display:grid;place-items:center}
+.pa-kpi2 .tr{display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:640;padding:3px 8px;border-radius:999px;background:var(--pa-surface-2);color:var(--pa-muted)}
 .pa-kpi2 .tr.up{background:var(--pa-present-soft);color:var(--pa-present)}
 .pa-kpi2 .tr.down{background:var(--pa-danger-soft);color:var(--pa-danger)}
 .pa-kpi2 .v{font-size:26px;font-weight:720;letter-spacing:-.025em;margin-top:12px;line-height:1;color:var(--pa-ink);font-variant-numeric:tabular-nums}
@@ -413,23 +413,8 @@
     @endphp
     <div class="pa-kpis2" data-reveal>
       @foreach($kpis as [$lbl, $val, $ic, $clr, $tr, $cmp, $spk])
-        <div class="pa-kpi2" data-reveal-item>
-          <div class="top">
-            <span class="ic" style="background: {{ $clr }}1a; color: {{ $clr }};"><flux:icon :icon="$ic" class="size-4" /></span>
-            @if(is_array($tr))
-              <span class="tr {{ $tr['dir'] }}" title="{{ $comparison['label'] ?? '' }}">{{ $tr['txt'] }}</span>
-            @elseif($tr !== null && $tr !== '')
-              <span class="tr">{{ $tr }}</span>
-            @endif
-          </div>
-          <div class="v">{{ $val }}</div>
-          <div class="l">{{ $lbl }}</div>
-          <div class="cmp">{{ $cmp }}</div>
-          @if($spk)
-            @php $lastPt = explode(',', last(explode(' ', $spk))); @endphp
-            <svg class="spark" viewBox="0 0 120 28" preserveAspectRatio="none"><polyline points="{{ $spk }}" fill="none" stroke="{{ $clr }}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="{{ $lastPt[0] }}" cy="{{ $lastPt[1] }}" r="2.6" fill="{{ $clr }}"/></svg>
-          @endif
-        </div>
+        <x-attendance.kpi-card :label="$lbl" :value="$val" :icon="$ic" :color="$clr"
+          :trend="$tr" :caption="$cmp" :spark="$spk" :comparison-label="$comparison['label'] ?? ''" />
       @endforeach
     </div>
   </div>
