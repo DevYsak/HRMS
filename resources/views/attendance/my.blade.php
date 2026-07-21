@@ -708,8 +708,8 @@
 .pa-live-dot{width:9px;height:9px;border-radius:50%;background:var(--pa-accent);animation:pabeat 1.8s var(--pa-ease) infinite}
 .pa-work{display:grid;grid-template-columns:1.55fr 1fr;gap:18px;align-items:start}
 @media(max-width:960px){.pa-work{grid-template-columns:1fr}}
-.pa-rail{display:flex;flex-direction:column;gap:18px}
-.pa-rc{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:16px;padding:16px 18px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.05)}
+.pa-rail{display:flex;flex-direction:column;gap:16px;align-self:start}
+.pa-rc{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:18px;padding:16px 18px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.05)}
 .pa-rc-h{font-size:13.5px;font-weight:640;color:var(--pa-ink);display:flex;align-items:center;gap:8px}
 .pa-rc-sub{font-size:11px;color:var(--pa-faint);font-weight:500}
 .pa-streak{background:linear-gradient(140deg,rgba(234,106,44,.08),var(--pa-surface))}
@@ -804,15 +804,18 @@
 .pa-jgrid{display:grid;grid-template-columns:1.35fr 1fr;gap:18px;margin-top:18px}
 @media(max-width:960px){.pa-jgrid{grid-template-columns:1fr}}
 /* 3-column row: Session Summary (35%) · Working Hours Breakdown (40%) · rail (25%) */
-.pa-jgrid-3{grid-template-columns:35% 40% 25%}
+/* Balanced 3-column row: equal-height columns, 24px gutters, cards that fill */
+.pa-jgrid-3{grid-template-columns:35fr 40fr 25fr;gap:24px;align-items:stretch;margin-top:20px}
 @media(max-width:1180px){.pa-jgrid-3{grid-template-columns:1fr 1fr}}
 @media(max-width:820px){.pa-jgrid-3{grid-template-columns:1fr}}
-/* Breakdown card sized for the middle column: tiles stack 2-up, not 7 */
-.pa-hb-col{align-self:start}
+/* Breakdown fills the middle column; tiles 2-up, stacked bar pinned to the bottom */
+.pa-hb-col{display:flex;flex-direction:column}
 .pa-hb-col .pa-hb-grid{grid-template-columns:repeat(2,1fr) !important}
-.pa-hb-col .pa-hb-tile{padding:10px 12px}
+.pa-hb-col .pa-hb-tile{padding:12px 13px}
 .pa-hb-col .pa-hb-v{font-size:14px}
-.pa-sesscard{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:18px;padding:16px 18px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.05)}
+.pa-hb-col .pa-hb-bar{margin-top:auto;height:14px}
+.pa-hb-col .pa-hb-key{margin-bottom:2px}
+.pa-sesscard{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:18px;padding:15px 16px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.05);display:flex;flex-direction:column}
 .pa-sesscard .sh{font-size:13.5px;font-weight:660;color:var(--pa-ink);display:flex;align-items:center;gap:8px;margin-bottom:12px}
 .pa-srow{display:grid;grid-template-columns:78px 1fr auto;align-items:center;gap:12px;padding:11px 0;border-top:1px solid var(--pa-border)}
 .pa-srow:first-of-type{border-top:0}
@@ -824,11 +827,11 @@
 .pa-stot .tl{font-size:12px;font-weight:640;color:var(--pa-muted)}
 .pa-stot .tv{font-size:20px;font-weight:760;letter-spacing:-.02em;color:var(--pa-ink);font-variant-numeric:tabular-nums}
 /* Premium per-session card */
-.pa-sess{border:1px solid var(--pa-border);border-radius:14px;padding:13px 15px;margin-bottom:10px;background:var(--pa-surface-2);transition:border-color .16s,box-shadow .16s}
+.pa-sess{border:1px solid var(--pa-border);border-radius:13px;padding:11px 13px;margin-bottom:8px;background:var(--pa-surface-2);transition:border-color .16s,box-shadow .16s}
 .pa-sess:hover{border-color:var(--pa-border-2);box-shadow:0 4px 14px rgba(24,24,27,.05)}
 .pa-sess.live{border-color:var(--pa-present);background:var(--pa-present-soft)}
 .pa-sess.miss{border-color:var(--pa-warn);background:var(--pa-warn-soft)}
-.pa-sess-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:11px}
+.pa-sess-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px}
 .pa-sess-n{font-size:12.5px;font-weight:700;color:var(--pa-ink);display:flex;align-items:center;gap:7px}
 .pa-sess-badge{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--pa-present);background:var(--pa-surface);padding:2px 7px;border-radius:999px}
 .pa-sess-t{font-size:11.5px;font-weight:600;color:var(--pa-muted);font-variant-numeric:tabular-nums}
