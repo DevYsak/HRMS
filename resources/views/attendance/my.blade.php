@@ -3,7 +3,7 @@
 @use('App\Support\UserAgent')
 @use('Illuminate\Support\Facades\Storage')
 
-<flux:main class="min-h-screen bg-[#FFF8F3] dark:bg-white/5 p-4 md:p-6" x-data="{
+<flux:main class="min-h-screen bg-[#F5F6F8] dark:bg-white/5 p-4 md:p-6" x-data="{
     currentTime: '',
     updateClock() { this.currentTime = new Date().toLocaleTimeString('en-IN', { hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit' }); }
 }" x-init="updateClock(); setInterval(() => updateClock(), 1000)">
@@ -247,6 +247,42 @@
     @keyframes pahfill{to{width:{{ $progress }}%}}
     @media(max-width:1024px){.pa-hero2{grid-template-columns:1fr 1fr}.pa-hR{grid-column:1/-1;border-left:0;border-top:1px solid var(--pa-border);flex-direction:row;flex-wrap:wrap}.pa-hR .pa-h-cta{flex:1;min-width:160px}.pa-smart{flex-basis:100%}}
     @media(max-width:680px){.pa-hero2{grid-template-columns:1fr}.pa-hC{border-left:0;border-top:1px solid var(--pa-border)}.pa-h-timer{font-size:48px}}
+
+    /* ── Greeting ── */
+    .pa-greet{margin-bottom:18px}
+    .pa-greet-t{font-size:22px;font-weight:740;letter-spacing:-.025em;color:var(--pa-ink)}
+    .pa-greet-s{font-size:13px;color:var(--pa-muted);margin-top:3px}
+
+    /* ── 4-card hero ── */
+    .pa-h4{display:grid;grid-template-columns:1.25fr 1fr 1fr 1fr;gap:16px}
+    @media(max-width:1100px){.pa-h4{grid-template-columns:repeat(2,1fr)}}
+    @media(max-width:560px){.pa-h4{grid-template-columns:1fr}}
+    .pa-hcard{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:20px;padding:20px 22px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.04);display:flex;flex-direction:column;transition:transform .2s var(--pa-ease),box-shadow .2s}
+    .pa-hcard:hover{transform:translateY(-3px);box-shadow:0 2px 4px rgba(24,24,27,.05),0 16px 34px rgba(24,24,27,.08)}
+    .pa-hct{font-size:12px;font-weight:640;color:var(--pa-muted);display:flex;align-items:center;gap:8px;margin-bottom:14px}
+    .pa-hct svg{color:var(--pa-faint)}
+    .pa-hbig{font-size:29px;font-weight:760;letter-spacing:-.03em;color:var(--pa-ink);line-height:1;font-variant-numeric:tabular-nums}
+    .pa-hsub{font-size:12px;color:var(--pa-muted);margin-top:7px}
+    .pa-hfoot{font-size:11.5px;color:var(--pa-faint);margin-top:auto;padding-top:12px}
+    .pa-hspark{width:100%;height:26px;display:block;margin-top:12px}
+    .pa-hbadges{margin-top:11px}
+    .pa-hbadge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:660;padding:4px 11px;border-radius:999px}
+    .pa-hbadge.ok{background:var(--pa-present-soft);color:var(--pa-present)}
+    .pa-hbadge.warn{background:var(--pa-warn-soft);color:var(--pa-warn)}
+    .pa-hbadge.live{background:var(--pa-present-soft);color:var(--pa-present)}
+    .pa-hscore{display:flex;align-items:center;gap:16px}
+    .pa-h-ring-sm{width:112px !important;height:112px !important;flex:0 0 auto}
+    .pa-h-ring-sm .big{font-size:29px}
+    .pa-h-ring-sm .sm{font-size:10px;letter-spacing:0}
+    .pa-hband{font-size:16px;font-weight:740;color:var(--pa-ink)}
+    .pa-htrend{font-size:12px;font-weight:640;margin-top:4px}
+    .pa-htrend.up{color:var(--pa-present)}
+    .pa-htrend.down{color:var(--pa-danger)}
+    .pa-livedot{width:7px;height:7px;border-radius:50%;background:var(--pa-present);display:inline-block;animation:pabeat 1.6s var(--pa-ease) infinite;margin-left:auto}
+    .pa-actbar{display:flex;flex-wrap:wrap;gap:14px;align-items:stretch;margin-top:16px}
+    .pa-actbtns{display:flex;gap:10px;flex-wrap:wrap;flex:2;min-width:280px}
+    .pa-actbtns .pa-h-cta{flex:1;min-width:150px}
+    .pa-actsmart{margin:0;flex:1;min-width:230px;display:flex;flex-direction:column;justify-content:center}
   </style>
   @php
       // Live hero ticker counts VALIDATED working time (engine sessions), not
@@ -264,49 +300,76 @@
           $heroBaseMin = -$breakMin;
       }
   @endphp
-  <section class="pa-hero2"
+  {{-- Greeting --}}
+  <div class="pa-greet">
+    <div class="pa-greet-t">{{ $heroGreet }}, {{ $heroName }} 👋</div>
+    <div class="pa-greet-s">Here's your attendance summary for {{ now()->format('l, d F Y') }}.</div>
+  </div>
+
+  @php
+    $pj = $punchJourney;
+    $scoreBand = $score >= 90 ? 'Excellent' : ($score >= 75 ? 'Good' : ($score >= 60 ? 'Fair' : 'Needs work'));
+    $scoreDelta = (isset($monthlyScore, $prevMonthlyScore) && $prevMonthlyScore !== null) ? (int) round($monthlyScore - $prevMonthlyScore) : null;
+    $workedPct = min(100, (int) round($workedMin / max(1, $targetMin) * 100));
+    $firstInLate = (bool) ($todayAttendance?->is_late);
+    $shiftEndMin2 = $shift?->end_time ? ((int) \Carbon\Carbon::parse($shift->end_time)->format('H')) * 60 + (int) \Carbon\Carbon::parse($shift->end_time)->format('i') : null;
+    $lastOutMin2 = $todayAttendance?->check_out ? $todayAttendance->check_out->hour * 60 + $todayAttendance->check_out->minute : null;
+    $earlyExit = $shiftEndMin2 !== null && $lastOutMin2 !== null && $lastOutMin2 < $shiftEndMin2;
+    $heroSparkDays = collect($chartDaily)->filter(fn ($d) => $d['hours'] !== null)->take(-12)->values();
+    $heroSpark = null;
+    if ($heroSparkDays->count() >= 2) {
+        $mx = max(0.1, (float) $heroSparkDays->max('hours'));
+        $sx = 100 / ($heroSparkDays->count() - 1);
+        $heroSpark = $heroSparkDays->map(fn ($d, $i) => round($i * $sx, 1).','.round(24 - ((float) $d['hours'] / $mx * 20), 1))->implode(' ');
+    }
+  @endphp
+
+  {{-- 4-card hero: Score · Worked · First In · Last Out --}}
+  <div class="pa-h4" data-reveal
       x-data="{ baseMin: {{ $heroBaseMin }}, startMs: {{ $heroLiveStartMs ?? 'null' }}, live: '{{ $workedLabel }}',
         tick(){ if(this.startMs===null) return; const t=Math.max(0,this.baseMin+Math.floor((Date.now()-this.startMs)/60000)); this.live=Math.floor(t/60)+'h '+String(t%60).padStart(2,'0')+'m'; } }"
       x-init="tick(); if(startMs!==null) setInterval(()=>tick(),1000)">
-    {{-- LEFT · 45% --}}
-    <div class="pa-hL">
-      <div class="pa-h-greet">{{ $heroGreet }},</div>
-      <div class="pa-h-name">{{ $heroName }} 👋</div>
-      <div class="pa-h-date">{{ now()->format('l, d F Y') }}</div>
-      @if($isIn)
-        <span class="pa-status work"><span class="beat"></span>Working now · on shift</span>
-      @elseif($isDone)
-        <span class="pa-status done"><flux:icon.check-circle class="size-4" /> Checked out for the day</span>
-      @else
-        <span class="pa-status out"><flux:icon.moon class="size-4" /> Not clocked in yet</span>
-      @endif
-      <div class="pa-h-timer num" x-text="live">{{ $workedLabel }}</div>
-      <div class="pa-h-cap">{{ $todayAttendance?->check_in ? 'Working time today · since '.$todayAttendance->check_in->format('h:i A') : 'Clock in to start your day' }}</div>
-      <div class="pa-h-meta">
-        <div><div class="k">Shift</div><div class="v">{{ $shift ? \Carbon\Carbon::parse($shift->start_time)->format('g:i').'–'.\Carbon\Carbon::parse($shift->end_time)->format('g:i A') : '—' }}</div></div>
-        <div><div class="k">Expected logout</div><div class="v">{{ $expectedLogout }}</div></div>
-        <div><div class="k">Remaining</div><div class="v">{{ intdiv($remainingMin,60) }}h {{ $remainingMin%60 }}m</div></div>
-      </div>
-      <div class="pa-h-tags">
-        <span class="pa-h-tag mode"><flux:icon.building-office-2 />{{ $heroMode->label() }}</span>
-        <span class="pa-h-tag"><flux:icon.map-pin />{{ $emp?->office?->name ?? 'Office' }}</span>
-        <span class="pa-h-tag"><flux:icon.cpu-chip />{{ $punchSource }}{{ $deviceName && $deviceName !== '—' ? ' · '.\Illuminate\Support\Str::limit((string) $deviceName, 12) : '' }}</span>
+    {{-- Attendance Score --}}
+    <div class="pa-hcard" data-reveal-item>
+      <div class="pa-hct"><flux:icon.shield-check class="size-4" /> Attendance Score</div>
+      <div class="pa-hscore">
+        <div class="pa-h-ring pa-h-ring-sm">
+          <svg width="112" height="112" viewBox="0 0 172 172"><circle class="trk" cx="86" cy="86" r="75"/><circle class="prg" cx="86" cy="86" r="75"/></svg>
+          <div class="mid"><div class="big num" x-data="countUp('{{ $score }}')" x-text="display" wire:key="hs-{{ $score }}">{{ $score }}</div><div class="sm">/100</div></div>
+        </div>
+        <div>
+          <div class="pa-hband">{{ $scoreBand }}</div>
+          @if($scoreDelta !== null && $scoreDelta !== 0)<div class="pa-htrend {{ $scoreDelta > 0 ? 'up' : 'down' }}">{{ $scoreDelta > 0 ? '▲' : '▼' }} {{ abs($scoreDelta) }} vs last month</div>@endif
+        </div>
       </div>
     </div>
-    {{-- CENTER · 30% --}}
-    <div class="pa-hC">
-      <div class="pa-h-ring">
-        <svg width="172" height="172" viewBox="0 0 172 172"><circle class="trk" cx="86" cy="86" r="75"/><circle class="prg" cx="86" cy="86" r="75"/></svg>
-        <div class="mid"><div class="big num" x-data="countUp('{{ $score }}')" x-text="display" wire:key="score-{{ $score }}">{{ $score }}</div><div class="sm">Attendance score</div></div>
-      </div>
-      <div class="pa-h-cprog">
-        <div class="lbl">Shift progress <b class="num">{{ $progress }}%</b></div>
-        <div class="pa-h-bar"><i></i></div>
-        <div class="lbl" style="margin-top:12px">Daily goal <b class="num">{{ $targetLabel }}</b></div>
-      </div>
+    {{-- Worked Today --}}
+    <div class="pa-hcard" data-reveal-item>
+      <div class="pa-hct"><flux:icon.clock class="size-4" /> Worked Today @if($pj['live'])<span class="pa-livedot"></span>@endif</div>
+      <div class="pa-hbig num" x-text="live">{{ $workedLabel }}</div>
+      <div class="pa-hsub">of {{ $targetLabel }} expected</div>
+      @if($heroSpark)<svg class="pa-hspark" viewBox="0 0 100 24" preserveAspectRatio="none"><polyline points="{{ $heroSpark }}" fill="none" stroke="#0F9D6E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>@endif
+      <div class="pa-hfoot"><b style="color:var(--pa-present)">{{ $workedPct }}%</b> Productive time</div>
     </div>
-    {{-- RIGHT · 25% --}}
-    <div class="pa-hR">
+    {{-- First In --}}
+    <div class="pa-hcard" data-reveal-item>
+      <div class="pa-hct"><flux:icon.arrow-right-end-on-rectangle class="size-4" style="color:var(--pa-present)" /> First In</div>
+      <div class="pa-hbig num">{{ $pj['first_in'] ?? '—' }}</div>
+      <div class="pa-hbadges">@if($pj['first_in'])<span class="pa-hbadge {{ $firstInLate ? 'warn' : 'ok' }}">{{ $firstInLate ? 'Late' : 'On Time' }}</span>@endif</div>
+      <div class="pa-hfoot">Shift: {{ $shift ? \Carbon\Carbon::parse($shift->start_time)->format('g:i A').' – '.\Carbon\Carbon::parse($shift->end_time)->format('g:i A') : '—' }}</div>
+    </div>
+    {{-- Last Out --}}
+    <div class="pa-hcard" data-reveal-item>
+      <div class="pa-hct"><flux:icon.arrow-left-start-on-rectangle class="size-4" style="color:var(--pa-danger)" /> Last Out</div>
+      <div class="pa-hbig num">{{ $pj['last_out'] ?? ($pj['live'] ? 'Active' : '—') }}</div>
+      <div class="pa-hbadges">@if($pj['last_out'])<span class="pa-hbadge {{ $earlyExit ? 'warn' : 'ok' }}">{{ $earlyExit ? 'Early Exit' : 'On Time' }}</span>@elseif($pj['live'])<span class="pa-hbadge live">Working now</span>@endif</div>
+      <div class="pa-hfoot">Expected: {{ $expectedLogout }}</div>
+    </div>
+  </div>
+
+  {{-- Action bar: clock in/out, break, regularize + smart status (all preserved) --}}
+  <div class="pa-actbar" data-reveal>
+    <div class="pa-actbtns">
       @if(! $todayAttendance)
         <button type="button" class="pa-h-cta primary" @click="$flux.modal('punch-capture').show(); $dispatch('open-punch', { action: 'in' })"><span class="ic"><flux:icon.arrow-right-end-on-rectangle class="size-4" /></span><div><div class="t">Clock in</div><div class="d">Selfie + location</div></div></button>
       @elseif($isIn)
@@ -320,12 +383,12 @@
         <button type="button" class="pa-h-cta" wire:click="startBreak" @if(! $isIn) disabled @endif><span class="ic pa-ic-warn"><flux:icon.pause class="size-4" /></span><div><div class="t">Start break</div><div class="d">Pause timer</div></div></button>
       @endif
       <button type="button" class="pa-h-cta" wire:click="openRegularisation('{{ today()->toDateString() }}')"><span class="ic pa-ic-iris"><flux:icon.pencil-square class="size-4" /></span><div><div class="t">Regularize</div><div class="d">Fix a punch</div></div></button>
-      <div class="pa-smart">
-        <div class="h"><flux:icon.sparkles class="size-4" /> Smart status</div>
-        <p>{{ $isIn ? "On track — ".intdiv($remainingMin,60)."h ".($remainingMin%60)."m to your ".$targetLabel." goal." : ($isDone ? "Day complete — great work today!" : "Clock in by ".$heroSuggIn." to stay on time.") }}</p>
-      </div>
     </div>
-  </section>
+    <div class="pa-smart pa-actsmart">
+      <div class="h"><flux:icon.sparkles class="size-4" /> Smart status</div>
+      <p>{{ $isIn ? "On track — ".intdiv($remainingMin,60)."h ".($remainingMin%60)."m to your ".$targetLabel." goal." : ($isDone ? "Day complete — great work today!" : "Clock in by ".$heroSuggIn." to stay on time.") }}</p>
+    </div>
+  </div>
 </div>
 
 
