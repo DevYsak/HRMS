@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
-    'name', 'logo', 'website', 'industry', 'phone', 'email',
+    'name', 'logo', 'favicon', 'website', 'industry', 'phone', 'email',
     'address', 'address_line2', 'cin', 'city', 'country', 'default_state_code', 'timezone', 'date_format',
     'currency', 'currency_symbol', 'primary_color', 'secondary_color',
 ])]
