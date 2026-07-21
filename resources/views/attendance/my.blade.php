@@ -426,7 +426,8 @@
 .pa-qa-ic{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;background:var(--pa-accent-soft);color:var(--pa-accent-ink)}
 .pa-qa-l{font-size:10.5px;font-weight:600;color:var(--pa-muted)}
 .pa-kpis2{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
-@media(min-width:680px){.pa-kpis2{grid-template-columns:repeat(4,1fr)}}
+@media(min-width:680px){.pa-kpis2{grid-template-columns:repeat(3,1fr)}}
+@media(min-width:1100px){.pa-kpis2{grid-template-columns:repeat(5,1fr)}}
 .pa-kpi2{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:18px;padding:18px 20px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 4px 12px rgba(24,24,27,.03);transition:transform .2s var(--pa-ease),box-shadow .2s,border-color .2s}
 .pa-kpi2:hover{transform:translateY(-3px);box-shadow:0 2px 4px rgba(24,24,27,.05),0 14px 30px rgba(24,24,27,.08);border-color:var(--pa-border-2)}
 .pa-kpi2 .top{display:flex;align-items:center;justify-content:space-between}
@@ -442,7 +443,7 @@
 <div class="pa">
   {{-- KPI overview · full width --}}
   <div>
-    <div class="pa-panel-h" style="margin-bottom:16px;font-size:15px">Attendance overview
+    <div class="pa-panel-h" style="margin-bottom:16px;font-size:15px">Attendance health
       <span class="pa-panel-sub">{{ str_replace('_', ' ', $statsPeriod) }}@if(($comparison['has_data'] ?? false)) · {{ $comparison['label'] }}@endif</span>
     </div>
     @php
@@ -474,15 +475,16 @@
         ];
 
         // [label, value, icon, color, chip|plainText, caption, spark?]
+        // Five compact health cards (reference layout), all from real data.
+        $monthlyPct = $monthlyScore !== null ? (int) round($monthlyScore) : $score;
+        $healthBand = $monthlyPct >= 90 ? 'Excellent' : ($monthlyPct >= 75 ? 'Good' : ($monthlyPct >= 60 ? 'Fair' : 'Needs work'));
+        $streakWord = \Illuminate\Support\Str::plural('day', $onTimeStreak);
         $kpis = [
-            ['Attendance Score', (string) $score, 'shield-check', '#F97316', null, 'of 100', null],
-            ['Present Days', (string) $presentCount, 'check-badge', '#0F9D6E', $cmpChips['present'] ?? 'of '.$totalWorkingDays, $lateCount.' late · '.($stats['absent'] ?? 0).' absent', $hoursSpark],
-            ['Working Hours', round($workingH).'h', 'clock', '#2F6FEB', $cmpChips['hours'] ?? 'this pd', 'Avg '.intdiv($avgWorkMin,60).'h '.($avgWorkMin%60).'m/day', $hoursSpark],
+            ['Attendance Health', $monthlyPct.'%', 'shield-check', '#0F9D6E', $healthBand, 'this month', $hoursSpark],
+            ['Attendance Streak', $onTimeStreak.' '.$streakWord, 'fire', '#F97316', $onTimeStreak >= $bestStreak && $onTimeStreak > 0 ? 'personal best' : 'best '.$bestStreak, 'on-time run', null],
+            ['Monthly Goal', $monthlyPct.'%', 'flag', '#8B5CF6', null, 'attendance goal', null],
             ['Productivity', $prodIndex.'%', 'chart-bar', '#0F9D6E', $cmpChips['ontime'] ?? null, 'focus '.intdiv($workedMin,60).'h '.($workedMin%60).'m', $hoursSpark],
-            ['Overtime', $otHours.'h', 'bolt', '#8B5CF6', $otDays.'d', 'pre-approved', null],
-            ['Leave Balance', rtrim(rtrim(number_format($leaveBalance, 1), '0'), '.'), 'calendar-days', '#2F6FEB', 'days', 'CSL + MDL pool', null],
-            ['Late Arrivals', (string) $lateCount, 'exclamation-triangle', '#B45309', $cmpChips['late'] ?? null, 'this period', null],
-            ['Missing Punches', (string) $missingCount, 'flag', $missingCount ? '#D64545' : '#0F9D6E', $missingCount ? 'action' : 'clear', $missingCount ? 'regularize now' : 'all reconciled', null],
+            ['Leave Balance', rtrim(rtrim(number_format($leaveBalance, 1), '0'), '.').' days', 'calendar-days', '#2F6FEB', 'available', 'CSL + MDL pool', null],
         ];
     @endphp
     <div class="pa-kpis2" data-reveal>
