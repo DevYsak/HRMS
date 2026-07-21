@@ -249,9 +249,9 @@
     @media(max-width:680px){.pa-hero2{grid-template-columns:1fr}.pa-hC{border-left:0;border-top:1px solid var(--pa-border)}.pa-h-timer{font-size:48px}}
 
     /* ── Greeting ── */
-    .pa-greet{margin-bottom:18px}
-    .pa-greet-t{font-size:22px;font-weight:740;letter-spacing:-.025em;color:var(--pa-ink)}
-    .pa-greet-s{font-size:13px;color:var(--pa-muted);margin-top:3px}
+    .pa-greet{margin-bottom:20px}
+    .pa-greet-t{font-size:25px;font-weight:760;letter-spacing:-.03em;color:var(--pa-ink)}
+    .pa-greet-s{font-size:13.5px;color:var(--pa-muted);margin-top:4px}
 
     /* ── 5-card hero ── */
     .pa-h4{display:grid;grid-template-columns:1.35fr 1fr 1fr 1fr 1fr;gap:16px}
@@ -262,8 +262,17 @@
     .pa-hprog i{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,var(--pa-present),#22c55e);transition:width .8s var(--pa-ease)}
     .pa-hlink{display:inline-flex;align-items:center;gap:4px;margin-top:8px;font-size:12px;font-weight:640;color:var(--pa-accent-ink);background:none;border:0;cursor:pointer;padding:0}
     .pa-hlink:hover{text-decoration:underline}
-    .pa-hcard-score .pa-h-ring-sm{width:104px !important;height:104px !important}
-    .pa-hcard{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:18px;padding:20px 22px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.05);display:flex;flex-direction:column;transition:transform .2s var(--pa-ease),box-shadow .2s}
+    .pa-hcard-score .pa-h-ring-sm{width:140px !important;height:140px !important}
+    .pa-hcard-score .pa-h-ring-sm .big{font-size:39px}
+    .pa-hcard-score .pa-h-ring-sm .sm{font-size:11px}
+    .pa-hcard-score .pa-hscore{gap:20px}
+    .pa-hcard-score .pa-hband{font-size:18px}
+    /* Worked Today — the primary hero card */
+    .pa-hcard-worked{border-color:var(--pa-accent);background:linear-gradient(165deg,var(--pa-accent-soft),var(--pa-surface) 62%);box-shadow:0 2px 6px var(--pa-ring),0 14px 32px rgba(24,24,27,.07)}
+    .pa-hcard-worked .pa-hbig{font-size:38px}
+    .pa-hcard-worked .pa-hct,.pa-hcard-worked .pa-hct svg{color:var(--pa-accent-ink)}
+    .pa-hcard-worked .pa-hprog{height:9px}
+    .pa-hcard{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:18px;padding:22px 24px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.05);display:flex;flex-direction:column;transition:transform .2s var(--pa-ease),box-shadow .2s}
     .pa-hcard:hover{transform:translateY(-3px);box-shadow:0 2px 4px rgba(24,24,27,.05),0 16px 34px rgba(24,24,27,.08)}
     .pa-hct{font-size:12px;font-weight:640;color:var(--pa-muted);display:flex;align-items:center;gap:8px;margin-bottom:14px}
     .pa-hct svg{color:var(--pa-faint)}
@@ -285,10 +294,17 @@
     .pa-htrend.up{color:var(--pa-present)}
     .pa-htrend.down{color:var(--pa-danger)}
     .pa-livedot{width:7px;height:7px;border-radius:50%;background:var(--pa-present);display:inline-block;animation:pabeat 1.6s var(--pa-ease) infinite;margin-left:auto}
-    .pa-actbar{display:flex;flex-wrap:wrap;gap:14px;align-items:stretch;margin-top:16px}
+    .pa-actbar{display:flex;flex-wrap:wrap;gap:14px;align-items:stretch;margin-top:20px}
     .pa-actbtns{display:flex;gap:10px;flex-wrap:wrap;flex:2;min-width:280px}
     .pa-actbtns .pa-h-cta{flex:1;min-width:150px}
-    .pa-actsmart{margin:0;flex:1;min-width:230px;display:flex;flex-direction:column;justify-content:center}
+    /* Clock In — the prominent primary action */
+    .pa-actbtns .pa-h-cta.primary{flex:1.5;padding:16px 18px}
+    .pa-actbtns .pa-h-cta.primary .t{font-size:15px}
+    .pa-actbtns .pa-h-cta.primary .ic{width:40px;height:40px}
+    /* Smart Status — richer insight card */
+    .pa-actsmart{margin:0;flex:1.6;min-width:250px;display:flex;flex-direction:column;justify-content:center;background:linear-gradient(135deg,var(--pa-accent-soft),var(--pa-surface) 75%);border:1px solid var(--pa-border);border-radius:16px;padding:16px 20px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.04)}
+    .pa-actsmart .h{font-size:12.5px;font-weight:700}
+    .pa-actsmart p{font-size:13.5px;font-weight:500;line-height:1.5;margin-top:7px}
   </style>
   @php
       // Live hero ticker counts VALIDATED working time (engine sessions), not
@@ -347,8 +363,8 @@
         </div>
       </div>
     </div>
-    {{-- Worked Today --}}
-    <div class="pa-hcard" data-reveal-item>
+    {{-- Worked Today · primary card --}}
+    <div class="pa-hcard pa-hcard-worked" data-reveal-item>
       <div class="pa-hct"><flux:icon.clock class="size-4" /> Worked Today @if($pj['live'])<span class="pa-livedot"></span>@endif</div>
       <div class="pa-hbig num" x-text="live">{{ $workedLabel }}</div>
       <div class="pa-hsub">of {{ $targetLabel }} expected</div>
@@ -752,17 +768,20 @@
 .pa-livebadge .dot{width:6px;height:6px;border-radius:50%;background:var(--pa-present);animation:pabeat 1.6s var(--pa-ease) infinite}
 /* Horizontal timeline */
 .pa-hz-scroll{overflow-x:auto;overflow-y:hidden;padding:0 10px}
-.pa-hz-track{position:relative;display:flex;align-items:flex-start;gap:8px;padding:104px 34px 26px;min-width:max-content;margin:0 auto}
+.pa-hz-track{position:relative;display:flex;align-items:flex-start;gap:14px;padding:104px 34px 26px;min-width:max-content;margin:0 auto}
 .pa-hz-rail{position:absolute;left:76px;right:76px;top:124px;height:3px;border-radius:3px;background:var(--pa-border);z-index:0}
 .pa-hz-rail-fill{position:absolute;left:76px;top:124px;height:3px;border-radius:3px;width:0;background:linear-gradient(90deg,var(--pa-present),#3B82F6 40%,#F59E0B 72%,var(--pa-danger));z-index:1}
-.pa-hz-node{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;min-width:84px;flex:0 0 auto}
-.pa-hz-dot{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;color:#fff;border:3px solid var(--pa-surface);box-shadow:0 2px 8px rgba(24,24,27,.14);cursor:default;transition:box-shadow .16s}
-.pa-hz-node:hover .pa-hz-dot{box-shadow:0 4px 16px rgba(24,24,27,.24)}
+.pa-hz-node{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;min-width:98px;flex:0 0 auto}
+.pa-hz-dot{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;color:#fff;border:3.5px solid var(--pa-surface);box-shadow:0 3px 10px rgba(24,24,27,.16);cursor:pointer;transition:box-shadow .18s var(--pa-ease),transform .18s var(--pa-ease)}
+.pa-hz-node:hover .pa-hz-dot{box-shadow:0 6px 20px rgba(24,24,27,.26);transform:translateY(-3px)}
+.pa-hz-node:hover .pa-hz-time{color:var(--pa-accent-ink)}
 .pa-hz-dot.t-first_in{background:var(--pa-present)}
 .pa-hz-dot.t-in{background:#3B82F6}
 .pa-hz-dot.t-out{background:#F59E0B}
 .pa-hz-dot.t-last_out{background:var(--pa-danger)}
-.pa-hz-dot.t-live{background:var(--pa-present);box-shadow:0 0 0 6px var(--pa-present-soft)}
+.pa-hz-dot.t-live{background:var(--pa-present);animation:pahzpulse 2s var(--pa-ease) infinite}
+@keyframes pahzpulse{0%{box-shadow:0 0 0 0 rgba(15,157,110,.4)}70%{box-shadow:0 0 0 13px rgba(15,157,110,0)}100%{box-shadow:0 0 0 0 rgba(15,157,110,0)}}
+@media(prefers-reduced-motion:reduce){.pa-hz-dot.t-live{animation:none;box-shadow:0 0 0 6px var(--pa-present-soft)}}
 .pa-hz-dot.t-missing{background:var(--pa-warn-soft);border:2px dashed var(--pa-warn);color:var(--pa-warn);box-shadow:none;animation:pashake 2.4s var(--pa-ease) infinite}
 @keyframes pashake{0%,88%,100%{transform:translateX(0)}90%{transform:translateX(-2.5px)}92%{transform:translateX(2.5px)}94%{transform:translateX(-2px)}96%{transform:translateX(2px)}98%{transform:translateX(-1px)}}
 @media(prefers-reduced-motion:reduce){.pa-hz-dot.t-missing{animation:none}}
@@ -1139,7 +1158,7 @@
 
     // 1 · Working Hours Trend — smooth line
     $hoursChart = [
-        'chart' => $baseChart('line', 220),
+        'chart' => $baseChart('line', 250),
         'colors' => ['#F97316'], 'dataLabels' => ['enabled' => false], 'stroke' => ['curve' => 'smooth', 'width' => 3],
         'markers' => ['size' => 0, 'hover' => ['size' => 5]],
         'grid' => ['borderColor' => '#F3E8DD', 'strokeDashArray' => 4],
@@ -1154,7 +1173,7 @@
         ? (int) round($d['score'])
         : min(100, (int) round(((float) $d['hours']) / max(1, $stdHours) * 100)))->all();
     $scoreChart = [
-        'chart' => $baseChart('area', 220),
+        'chart' => $baseChart('area', 250),
         'colors' => ['#8b5cf6'], 'dataLabels' => ['enabled' => false], 'stroke' => ['curve' => 'smooth', 'width' => 3],
         'fill' => ['type' => 'gradient', 'gradient' => ['shadeIntensity' => 1, 'opacityFrom' => 0.3, 'opacityTo' => 0.02, 'stops' => [0, 90]]],
         'grid' => ['borderColor' => '#F3E8DD', 'strokeDashArray' => 4],
@@ -1169,7 +1188,7 @@
         'weekend' => '#d4d4d8', 'future' => '#e4e4e7', default => '#f43f5e',
     })->all();
     $weeklyChart = [
-        'chart' => $baseChart('bar', 200),
+        'chart' => $baseChart('bar', 240),
         'colors' => $weekColors,
         'plotOptions' => ['bar' => ['borderRadius' => 5, 'columnWidth' => '55%', 'distributed' => true]],
         'dataLabels' => ['enabled' => false], 'legend' => ['show' => false],
@@ -1194,7 +1213,7 @@
     // 5 · Late Arrival Trend — column (fixed 6-month window)
     $lateTrend = $analytics['late_trend'] ?? [];
     $lateChart = [
-        'chart' => $baseChart('bar', 200),
+        'chart' => $baseChart('bar', 240),
         'colors' => ['#F59E0B'], 'plotOptions' => ['bar' => ['borderRadius' => 5, 'columnWidth' => '45%']],
         'dataLabels' => ['enabled' => false], 'grid' => ['borderColor' => '#F3E8DD', 'strokeDashArray' => 4],
         'xaxis' => array_merge($axis, ['categories' => collect($lateTrend)->pluck('month')->all()]),
@@ -1208,7 +1227,7 @@
     $graceMin = (int) ($shift->grace_minutes ?? 0);
     $arrivalSeries = collect($chartDaily)->map(fn ($d) => ($d['in_min'] !== null && $shiftStartMin !== null) ? $d['in_min'] - $shiftStartMin : null)->all();
     $arrivalChart = [
-        'chart' => $baseChart('line', 200),
+        'chart' => $baseChart('line', 240),
         'colors' => ['#f59e0b'], 'dataLabels' => ['enabled' => false], 'stroke' => ['curve' => 'smooth', 'width' => 3],
         'markers' => ['size' => 3, 'hover' => ['size' => 5]],
         'grid' => ['borderColor' => '#F3E8DD', 'strokeDashArray' => 4],
@@ -1226,7 +1245,7 @@
     $shiftEndMin = $shift?->end_time ? (int) \Illuminate\Support\Carbon::parse($shift->end_time)->format('H') * 60 + (int) \Illuminate\Support\Carbon::parse($shift->end_time)->format('i') : null;
     $logoutSeries = collect($chartDaily)->map(fn ($d) => ($d['out_min'] !== null && $shiftEndMin !== null) ? $d['out_min'] - $shiftEndMin : null)->all();
     $logoutChart = [
-        'chart' => $baseChart('line', 200),
+        'chart' => $baseChart('line', 240),
         'colors' => ['#0ea5e9'], 'dataLabels' => ['enabled' => false], 'stroke' => ['curve' => 'smooth', 'width' => 3],
         'markers' => ['size' => 3, 'hover' => ['size' => 5]],
         'grid' => ['borderColor' => '#F3E8DD', 'strokeDashArray' => 4],
@@ -1244,7 +1263,7 @@
     $longBreaks = $breakVals->filter(fn ($b) => $b > 60)->count();
     $shortBreaks = $breakVals->filter(fn ($b) => $b > 0 && $b < 20)->count();
     $breakChart = [
-        'chart' => $baseChart('bar', 200),
+        'chart' => $baseChart('bar', 240),
         'colors' => ['#0ea5e9'], 'plotOptions' => ['bar' => ['borderRadius' => 4, 'columnWidth' => '55%']],
         'dataLabels' => ['enabled' => false], 'grid' => ['borderColor' => '#F3E8DD', 'strokeDashArray' => 4],
         'annotations' => ['yaxis' => [['y' => $avgBreakLine, 'borderColor' => '#F97316', 'strokeDashArray' => 5, 'label' => ['text' => 'Avg '.$avgBreakLine.'m', 'style' => ['color' => '#F97316', 'background' => '#FFF7ED', 'fontSize' => '10px']]]]],
@@ -1256,7 +1275,7 @@
     // 7 · Office vs WFH vs Hybrid — horizontal bars
     $modeBreakdown = $analytics['mode_breakdown'] ?? [];
     $modeChart = [
-        'chart' => $baseChart('bar', 200),
+        'chart' => $baseChart('bar', 240),
         'colors' => collect($modeBreakdown)->keys()->map(fn ($k) => AttendanceMode::tryFromValue($k)->hex())->all(),
         'plotOptions' => ['bar' => ['horizontal' => true, 'borderRadius' => 5, 'barHeight' => '55%', 'distributed' => true]],
         'dataLabels' => ['enabled' => true, 'style' => ['fontSize' => '11px']], 'legend' => ['show' => false],
@@ -1269,7 +1288,7 @@
     // 9 · Overtime Trend — daily hours beyond the standard day
     $otSeries = collect($chartDaily)->map(fn ($d) => round(max(0, (float) $d['hours'] - $stdHours), 1))->all();
     $otChart = [
-        'chart' => $baseChart('area', 200),
+        'chart' => $baseChart('area', 240),
         'colors' => ['#8b5cf6'], 'dataLabels' => ['enabled' => false], 'stroke' => ['curve' => 'smooth', 'width' => 2.5],
         'fill' => ['type' => 'gradient', 'gradient' => ['shadeIntensity' => 1, 'opacityFrom' => 0.3, 'opacityTo' => 0.02, 'stops' => [0, 90]]],
         'grid' => ['borderColor' => '#F3E8DD', 'strokeDashArray' => 4],
@@ -1323,11 +1342,11 @@
 <div x-show="o" x-transition:enter="transition duration-200 ease-out" x-transition:enter-start="-translate-y-1 opacity-0" x-transition:enter-end="translate-y-0 opacity-100"
      class="mt-2 grid grid-cols-1 gap-4 lg:grid-cols-12" data-reveal wire:loading.class="opacity-50" wire:target="statsPeriod,analyticsMode,rangeFrom,rangeTo">
     {{-- Row 1 --}}
-    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm transition hover:shadow-md lg:col-span-5">
+    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-sm transition hover:shadow-md lg:col-span-5">
         <div class="mb-1 text-sm font-black text-zinc-900 dark:text-white">Working Hours Trend</div>
         @if(count($chartDaily) > 0)<x-dashboard.chart :options="$hoursChart" id="hours-chart" wire:key="hours-{{ $ck }}" class="-mb-2" />@else<div class="flex h-[220px] items-center justify-center text-xs text-zinc-300">No data in this period.</div>@endif
     </div>
-    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm transition hover:shadow-md lg:col-span-3">
+    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-sm transition hover:shadow-md lg:col-span-3">
         <div class="mb-1 text-sm font-black text-zinc-900 dark:text-white">Monthly Attendance</div>
         @if($presentCount + ($stats['absent'] ?? 0) > 0)<x-dashboard.chart :options="$monthlyDonut" id="monthly-donut" wire:key="donut-{{ $ck }}" class="grid place-items-center" />@else<div class="flex h-[210px] items-center justify-center text-xs text-zinc-300">No data.</div>@endif
         <div class="mt-1 grid grid-cols-3 gap-1 text-center text-[9px] font-bold">
@@ -1336,13 +1355,13 @@
             <span class="text-rose-500">{{ $totalWorkingDays > 0 ? round(($stats['absent'] ?? 0) / $totalWorkingDays * 100) : 0 }}% Absent</span>
         </div>
     </div>
-    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm transition hover:shadow-md lg:col-span-4">
+    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-sm transition hover:shadow-md lg:col-span-4">
         <div class="mb-1 text-sm font-black text-zinc-900 dark:text-white">Attendance Score Trend</div>
         @if(count($chartDaily) > 0)<x-dashboard.chart :options="$scoreChart" id="score-chart" wire:key="score-{{ $ck }}" class="-mb-2" />@else<div class="flex h-[220px] items-center justify-center text-xs text-zinc-300">No data.</div>@endif
     </div>
 
     {{-- Row 2 --}}
-    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm transition hover:shadow-md lg:col-span-4">
+    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-sm transition hover:shadow-md lg:col-span-4">
         <div class="mb-1 flex items-center justify-between">
             <div class="text-sm font-black text-zinc-900 dark:text-white">Weekly Attendance</div>
             <div class="flex gap-1.5 text-[8px] font-bold">
@@ -1351,11 +1370,11 @@
         </div>
         <x-dashboard.chart :options="$weeklyChart" id="weekly-chart" wire:key="weekly-{{ $ck }}" class="-mb-2" />
     </div>
-    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm transition hover:shadow-md lg:col-span-4">
+    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-sm transition hover:shadow-md lg:col-span-4">
         <div class="mb-1 text-sm font-black text-zinc-900 dark:text-white">Late Arrival Trend <span class="text-[10px] font-bold text-zinc-400">· 6 months</span></div>
         <x-dashboard.chart :options="$lateChart" id="late-chart" wire:key="late-{{ $ck }}" class="-mb-2" />
     </div>
-    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm transition hover:shadow-md lg:col-span-4">
+    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-sm transition hover:shadow-md lg:col-span-4">
         <div class="mb-1 flex items-center justify-between">
             <div class="text-sm font-black text-zinc-900 dark:text-white">Break Analysis</div>
             <div class="flex gap-2 text-[9px] font-bold text-zinc-400"><span>Avg <strong class="text-sky-600">{{ $avgBreakLine }}m</strong></span><span>Long <strong class="text-amber-600">{{ $longBreaks }}</strong></span><span>Short <strong class="text-emerald-600">{{ $shortBreaks }}</strong></span></div>
@@ -1364,20 +1383,20 @@
     </div>
 
     {{-- Row 3 --}}
-    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm transition hover:shadow-md lg:col-span-4">
+    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-sm transition hover:shadow-md lg:col-span-4">
         <div class="mb-1 text-sm font-black text-zinc-900 dark:text-white">Office vs WFH vs Hybrid</div>
         @if(! empty($modeBreakdown))<x-dashboard.chart :options="$modeChart" id="mode-chart" wire:key="mode-{{ $ck }}" class="-mb-2" />@else<div class="flex h-[200px] items-center justify-center text-xs text-zinc-300">No attendance yet.</div>@endif
     </div>
-    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm transition hover:shadow-md lg:col-span-5">
+    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-sm transition hover:shadow-md lg:col-span-5">
         <div class="mb-1 text-sm font-black text-zinc-900 dark:text-white">Overtime Trend</div>
         @if(count($chartDaily) > 0)<x-dashboard.chart :options="$otChart" id="ot-chart" wire:key="ot-{{ $ck }}" class="-mb-2" />@else<div class="flex h-[200px] items-center justify-center text-xs text-zinc-300">No data.</div>@endif
     </div>
-    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm transition hover:shadow-md lg:col-span-3">
+    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-sm transition hover:shadow-md lg:col-span-3">
         <div class="mb-1 text-sm font-black text-zinc-900 dark:text-white">Productivity Score</div>
         <x-dashboard.chart :options="$productivityChart" id="productivity-chart" wire:key="prod-{{ $ck }}" class="grid place-items-center" />
         <div class="text-center text-[10px] text-zinc-400">worked vs expected ({{ $totalWorkingDays }} working days × {{ $stdHours }}h)</div>
     </div>
-    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm transition hover:shadow-md lg:col-span-4">
+    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-sm transition hover:shadow-md lg:col-span-4">
         <div class="mb-1 text-sm font-black text-zinc-900 dark:text-white">Arrival Trend <span class="text-[10px] font-bold text-zinc-400">· vs your shift start</span></div>
         @if($shiftStartMin !== null && collect($arrivalSeries)->filter(fn ($v) => $v !== null)->isNotEmpty())
             <x-dashboard.chart :options="$arrivalChart" id="arrival-chart" wire:key="arrival-{{ $ck }}" class="-mb-2" />
@@ -1385,7 +1404,7 @@
             <div class="flex h-[200px] items-center justify-center text-xs text-zinc-300">No arrival data in this period.</div>
         @endif
     </div>
-    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm transition hover:shadow-md lg:col-span-4">
+    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-sm transition hover:shadow-md lg:col-span-4">
         <div class="mb-1 text-sm font-black text-zinc-900 dark:text-white">Logout Trend <span class="text-[10px] font-bold text-zinc-400">· vs your shift end</span></div>
         @if($shiftEndMin !== null && collect($logoutSeries)->filter(fn ($v) => $v !== null)->isNotEmpty())
             <x-dashboard.chart :options="$logoutChart" id="logout-chart" wire:key="logout-{{ $ck }}" class="-mb-2" />
@@ -1395,7 +1414,7 @@
     </div>
 
     {{-- Row 4 · Heatmap --}}
-    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm transition hover:shadow-md lg:col-span-12">
+    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-sm transition hover:shadow-md lg:col-span-12">
         <div class="mb-3 flex items-center justify-between">
             <div class="text-sm font-black text-zinc-900 dark:text-white">Attendance Heatmap <span class="text-[10px] font-bold text-zinc-400">· hours per day</span></div>
             <div class="flex items-center gap-1 text-[10px] text-zinc-400">Less
