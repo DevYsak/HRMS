@@ -525,7 +525,7 @@
     $cMetrics = $coach['metrics'] ?? ['predicted_score' => $score, 'consistency' => 100, 'overtime_pred' => 0, 'risk' => $cRisk];
 @endphp
 <style>
-.pa-copilot{background:linear-gradient(155deg,var(--pa-accent-soft),var(--pa-surface) 52%);border:1px solid var(--pa-border);border-radius:24px;padding:28px 32px;position:relative;overflow:hidden;box-shadow:0 8px 28px rgba(24,24,27,.05)}
+.pa-copilot{background:linear-gradient(155deg,var(--pa-accent-soft),var(--pa-surface) 52%);border:1px solid var(--pa-border);border-radius:18px;padding:26px 28px;position:relative;overflow:hidden;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.05)}
 .dark .pa-copilot{box-shadow:0 12px 36px rgba(0,0,0,.45)}
 .pa-copilot .head{display:flex;align-items:center;gap:13px;margin-bottom:20px}
 .pa-copilot .avatar{width:42px;height:42px;border-radius:13px;background:linear-gradient(145deg,var(--pa-accent),var(--pa-accent-ink));display:grid;place-items:center;color:#fff;box-shadow:0 6px 18px var(--pa-ring);flex:0 0 auto}
@@ -541,6 +541,7 @@
 .pa-cstat{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:16px;padding:16px 18px}
 .pa-cstat .k{font-size:11px;color:var(--pa-muted);font-weight:600}
 .pa-cstat .v{font-size:26px;font-weight:730;color:var(--pa-ink);margin-top:6px;font-variant-numeric:tabular-nums;line-height:1}
+.pa-clabel{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--pa-faint);margin:20px 0 9px}
 .pa-rec{display:flex;gap:13px;background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:16px;padding:16px 18px;margin-top:14px}
 .pa-rec .ic{width:32px;height:32px;border-radius:10px;background:var(--pa-accent-soft);color:var(--pa-accent-ink);display:grid;place-items:center;flex:0 0 auto}
 .pa-rec .k{font-size:10.5px;font-weight:660;text-transform:uppercase;letter-spacing:.05em;color:var(--pa-faint)}
@@ -570,15 +571,17 @@
       </div>
     @endif
 
-    <div class="stats">
+    <div class="pa-clabel" style="margin-top:16px">Health &amp; risk</div>
+    <div class="stats" style="margin-top:0">
       <div class="pa-cstat"><div class="k">Predicted score</div><div class="v num">{{ $cMetrics['predicted_score'] }}</div></div>
       <div class="pa-cstat"><div class="k">Consistency</div><div class="v num">{{ $cMetrics['consistency'] }}%</div></div>
       <div class="pa-cstat"><div class="k">Attendance health</div><div class="v" style="font-size:20px;color:{{ $riskToneMap[$cHealth['tone']] ?? 'var(--pa-ink)' }}">{{ $cHealth['label'] }}</div></div>
       <div class="pa-cstat"><div class="k">Warning risk</div><div class="v" style="font-size:20px;color:{{ $riskToneMap[$cRisk['tone']] ?? 'var(--pa-ink)' }}">{{ $cRisk['level'] }}</div></div>
     </div>
 
-    {{-- Dynamic trend read-outs --}}
-    <div class="stats" style="grid-template-columns:1fr;gap:8px;margin-top:12px">
+    {{-- Key insights (dynamic trend read-outs) --}}
+    <div class="pa-clabel">Key insights</div>
+    <div class="stats" style="grid-template-columns:1fr;gap:9px;margin-top:0">
       @foreach([
         ['arrow-right-end-on-rectangle', $cArrival['text'] ?? null],
         ['arrow-left-start-on-rectangle', $cLogout['text'] ?? null],
@@ -586,8 +589,8 @@
         ['shield-check', $cRisk['text'] ?? null],
       ] as [$icon, $line])
         @if($line)
-          <div style="display:flex;align-items:flex-start;gap:10px;font-size:13px;color:var(--pa-ink)">
-            <flux:icon :icon="$icon" class="size-4" style="color:var(--pa-faint);flex:0 0 auto;margin-top:2px" /><span>{{ $line }}</span>
+          <div style="display:flex;align-items:flex-start;gap:10px;font-size:13px;color:var(--pa-ink);background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:11px;padding:10px 12px">
+            <flux:icon :icon="$icon" class="size-4" style="color:var(--pa-accent-ink);flex:0 0 auto;margin-top:1px" /><span>{{ $line }}</span>
           </div>
         @endif
       @endforeach
