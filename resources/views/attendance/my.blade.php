@@ -253,10 +253,16 @@
     .pa-greet-t{font-size:22px;font-weight:740;letter-spacing:-.025em;color:var(--pa-ink)}
     .pa-greet-s{font-size:13px;color:var(--pa-muted);margin-top:3px}
 
-    /* ── 4-card hero ── */
-    .pa-h4{display:grid;grid-template-columns:1.25fr 1fr 1fr 1fr;gap:16px}
-    @media(max-width:1100px){.pa-h4{grid-template-columns:repeat(2,1fr)}}
-    @media(max-width:560px){.pa-h4{grid-template-columns:1fr}}
+    /* ── 5-card hero ── */
+    .pa-h4{display:grid;grid-template-columns:1.35fr 1fr 1fr 1fr 1fr;gap:16px}
+    @media(max-width:1280px){.pa-h4{grid-template-columns:repeat(3,1fr)}}
+    @media(max-width:820px){.pa-h4{grid-template-columns:repeat(2,1fr)}}
+    @media(max-width:520px){.pa-h4{grid-template-columns:1fr}}
+    .pa-hprog{height:8px;border-radius:6px;background:var(--pa-surface-3);overflow:hidden;margin-top:14px}
+    .pa-hprog i{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,var(--pa-present),#22c55e);transition:width .8s var(--pa-ease)}
+    .pa-hlink{display:inline-flex;align-items:center;gap:4px;margin-top:8px;font-size:12px;font-weight:640;color:var(--pa-accent-ink);background:none;border:0;cursor:pointer;padding:0}
+    .pa-hlink:hover{text-decoration:underline}
+    .pa-hcard-score .pa-h-ring-sm{width:104px !important;height:104px !important}
     .pa-hcard{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:18px;padding:20px 22px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.05);display:flex;flex-direction:column;transition:transform .2s var(--pa-ease),box-shadow .2s}
     .pa-hcard:hover{transform:translateY(-3px);box-shadow:0 2px 4px rgba(24,24,27,.05),0 16px 34px rgba(24,24,27,.08)}
     .pa-hct{font-size:12px;font-weight:640;color:var(--pa-muted);display:flex;align-items:center;gap:8px;margin-bottom:14px}
@@ -315,31 +321,29 @@
     $shiftEndMin2 = $shift?->end_time ? ((int) \Carbon\Carbon::parse($shift->end_time)->format('H')) * 60 + (int) \Carbon\Carbon::parse($shift->end_time)->format('i') : null;
     $lastOutMin2 = $todayAttendance?->check_out ? $todayAttendance->check_out->hour * 60 + $todayAttendance->check_out->minute : null;
     $earlyExit = $shiftEndMin2 !== null && $lastOutMin2 !== null && $lastOutMin2 < $shiftEndMin2;
-    $heroSparkDays = collect($chartDaily)->filter(fn ($d) => $d['hours'] !== null)->take(-12)->values();
-    $heroSpark = null;
-    if ($heroSparkDays->count() >= 2) {
-        $mx = max(0.1, (float) $heroSparkDays->max('hours'));
-        $sx = 100 / ($heroSparkDays->count() - 1);
-        $heroSpark = $heroSparkDays->map(fn ($d, $i) => round($i * $sx, 1).','.round(24 - ((float) $d['hours'] / $mx * 20), 1))->implode(' ');
-    }
+    $breakLabel = intdiv($breakMin, 60).'h '.str_pad((string) ($breakMin % 60), 2, '0', STR_PAD_LEFT).'m';
+    $breakAllowance = (int) ($shift->break_duration ?? 0);
+    $breakOver = max(0, $breakMin - $breakAllowance);
+    $scoreMsg = $score >= 75 ? 'Keep it up!' : ($score >= 60 ? 'Room to improve' : 'Needs attention');
   @endphp
 
-  {{-- 4-card hero: Score · Worked · First In · Last Out --}}
+  {{-- 5-card hero: Score · Worked · First In · Last Out · Total Break --}}
   <div class="pa-h4" data-reveal
       x-data="{ baseMin: {{ $heroBaseMin }}, startMs: {{ $heroLiveStartMs ?? 'null' }}, live: '{{ $workedLabel }}',
         tick(){ if(this.startMs===null) return; const t=Math.max(0,this.baseMin+Math.floor((Date.now()-this.startMs)/60000)); this.live=Math.floor(t/60)+'h '+String(t%60).padStart(2,'0')+'m'; } }"
       x-init="tick(); if(startMs!==null) setInterval(()=>tick(),1000)">
     {{-- Attendance Score --}}
-    <div class="pa-hcard" data-reveal-item>
+    <div class="pa-hcard pa-hcard-score" data-reveal-item>
       <div class="pa-hct"><flux:icon.shield-check class="size-4" /> Attendance Score</div>
       <div class="pa-hscore">
         <div class="pa-h-ring pa-h-ring-sm">
-          <svg width="112" height="112" viewBox="0 0 172 172"><circle class="trk" cx="86" cy="86" r="75"/><circle class="prg" cx="86" cy="86" r="75"/></svg>
+          <svg width="104" height="104" viewBox="0 0 172 172"><circle class="trk" cx="86" cy="86" r="75"/><circle class="prg" cx="86" cy="86" r="75"/></svg>
           <div class="mid"><div class="big num" x-data="countUp('{{ $score }}')" x-text="display" wire:key="hs-{{ $score }}">{{ $score }}</div><div class="sm">/100</div></div>
         </div>
         <div>
-          <div class="pa-hband">{{ $scoreBand }}</div>
-          @if($scoreDelta !== null && $scoreDelta !== 0)<div class="pa-htrend {{ $scoreDelta > 0 ? 'up' : 'down' }}">{{ $scoreDelta > 0 ? '▲' : '▼' }} {{ abs($scoreDelta) }} vs last month</div>@endif
+          <div class="pa-hband" style="color:{{ $score >= 75 ? 'var(--pa-present)' : ($score >= 60 ? 'var(--pa-warn)' : 'var(--pa-danger)') }}">{{ $scoreBand }}</div>
+          <div class="pa-hsub" style="margin-top:2px">{{ $scoreMsg }}</div>
+          <button type="button" wire:click="showScoreDecision('{{ today()->toDateString() }}')" class="pa-hlink">View details <flux:icon.arrow-right class="size-3" /></button>
         </div>
       </div>
     </div>
@@ -348,8 +352,8 @@
       <div class="pa-hct"><flux:icon.clock class="size-4" /> Worked Today @if($pj['live'])<span class="pa-livedot"></span>@endif</div>
       <div class="pa-hbig num" x-text="live">{{ $workedLabel }}</div>
       <div class="pa-hsub">of {{ $targetLabel }} expected</div>
-      @if($heroSpark)<svg class="pa-hspark" viewBox="0 0 100 24" preserveAspectRatio="none"><polyline points="{{ $heroSpark }}" fill="none" stroke="#0F9D6E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>@endif
-      <div class="pa-hfoot"><b style="color:var(--pa-present)">{{ $workedPct }}%</b> Productive time</div>
+      <div class="pa-hprog"><i style="width: {{ $workedPct }}%"></i></div>
+      <div class="pa-hfoot"><b style="color:var(--pa-present)">{{ $workedPct }}%</b> of expected</div>
     </div>
     {{-- First In --}}
     <div class="pa-hcard" data-reveal-item>
@@ -361,9 +365,16 @@
     {{-- Last Out --}}
     <div class="pa-hcard" data-reveal-item>
       <div class="pa-hct"><flux:icon.arrow-left-start-on-rectangle class="size-4" style="color:var(--pa-danger)" /> Last Out</div>
-      <div class="pa-hbig num">{{ $pj['last_out'] ?? ($pj['live'] ? 'Active' : '—') }}</div>
-      <div class="pa-hbadges">@if($pj['last_out'])<span class="pa-hbadge {{ $earlyExit ? 'warn' : 'ok' }}">{{ $earlyExit ? 'Early Exit' : 'On Time' }}</span>@elseif($pj['live'])<span class="pa-hbadge live">Working now</span>@endif</div>
+      <div class="pa-hbig num">{{ $pj['last_out'] ?? '—' }}</div>
+      <div class="pa-hbadges">@if($pj['last_out'])<span class="pa-hbadge {{ $earlyExit ? 'warn' : 'ok' }}">{{ $earlyExit ? 'Early Exit' : 'On Time' }}</span>@elseif($pj['live'])<span class="pa-hbadge live">Not yet punched out</span>@endif</div>
       <div class="pa-hfoot">Expected: {{ $expectedLogout }}</div>
+    </div>
+    {{-- Total Break --}}
+    <div class="pa-hcard" data-reveal-item>
+      <div class="pa-hct"><flux:icon.pause-circle class="size-4" style="color:var(--pa-warn)" /> Total Break</div>
+      <div class="pa-hbig num">{{ $breakLabel }}</div>
+      <div class="pa-hbadges">@if($breakOver > 0)<span class="pa-hbadge warn">↑ {{ $breakOver }}m over limit</span>@elseif($breakAllowance > 0)<span class="pa-hbadge ok">within allowance</span>@endif</div>
+      <div class="pa-hfoot">Allowed: {{ $breakAllowance }}m</div>
     </div>
   </div>
 
