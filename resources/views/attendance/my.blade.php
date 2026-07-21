@@ -803,6 +803,15 @@
 /* bottom grid: sessions + rail */
 .pa-jgrid{display:grid;grid-template-columns:1.35fr 1fr;gap:18px;margin-top:18px}
 @media(max-width:960px){.pa-jgrid{grid-template-columns:1fr}}
+/* 3-column row: Session Summary (35%) · Working Hours Breakdown (40%) · rail (25%) */
+.pa-jgrid-3{grid-template-columns:35% 40% 25%}
+@media(max-width:1180px){.pa-jgrid-3{grid-template-columns:1fr 1fr}}
+@media(max-width:820px){.pa-jgrid-3{grid-template-columns:1fr}}
+/* Breakdown card sized for the middle column: tiles stack 2-up, not 7 */
+.pa-hb-col{align-self:start}
+.pa-hb-col .pa-hb-grid{grid-template-columns:repeat(2,1fr) !important}
+.pa-hb-col .pa-hb-tile{padding:10px 12px}
+.pa-hb-col .pa-hb-v{font-size:14px}
 .pa-sesscard{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:18px;padding:16px 18px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.05)}
 .pa-sesscard .sh{font-size:13.5px;font-weight:660;color:var(--pa-ink);display:flex;align-items:center;gap:8px;margin-bottom:12px}
 .pa-srow{display:grid;grid-template-columns:78px 1fr auto;align-items:center;gap:12px;padding:11px 0;border-top:1px solid var(--pa-border)}
@@ -948,8 +957,27 @@
     @endif
   </div>{{-- /pa-jcard2 --}}
 
-  {{-- Session summary + streak/benchmark rail --}}
-  <div class="pa-jgrid" data-reveal>
+  @php
+    // Working-hours breakdown (moved into the 3-column row). Engine-computed.
+    $breakAllowance = (int) ($shift->break_duration ?? 0);
+    $hb = app(\App\Services\Attendance\PunchTimeline::class)->hoursBreakdown($workedMin, $breakMin, $targetMin, $breakAllowance);
+    $hbTiles = [
+        ['Expected', $hb['expected'], 'calendar-days', '#6B7280'],
+        ['Worked', $hb['worked'], 'clock', '#0F9D6E'],
+        ['Break', $hb['break'], 'pause', '#F59E0B'],
+        ['Idle', $hb['idle'], 'exclamation-triangle', '#D64545'],
+        ['Overtime', $hb['overtime'], 'bolt', '#8B5CF6'],
+        ['Net Hours', $hb['net'], 'check-badge', '#2F6FEB'],
+        ['Remaining', $hb['remaining'], 'arrow-path', '#6B7280'],
+    ];
+    $hbSpan = max(1, $hb['worked'] + $hb['break']);
+    $legitBreak = max(0, $hb['break'] - $hb['idle']);
+    $segWorked = round($hb['worked'] / $hbSpan * 100, 1);
+    $segBreak = round($legitBreak / $hbSpan * 100, 1);
+    $segIdle = round($hb['idle'] / $hbSpan * 100, 1);
+  @endphp
+  {{-- 3-column row: Session Summary · Working Hours Breakdown · streak/benchmark rail --}}
+  <div class="pa-jgrid pa-jgrid-3" data-reveal>
     <div class="pa-sesscard">
       <div class="sh"><flux:icon.squares-2x2 class="size-4 text-orange-500" /> Session summary</div>
       @if($hasPunch && count($pj['sessions']))
@@ -989,7 +1017,34 @@
       @endif
     </div>
 
-  {{-- Right rail: streak · benchmark (slice 3) --}}
+  {{-- Center column: Working Hours Breakdown --}}
+  <div class="pa-hb pa-hb-col" data-reveal-item>
+    <div class="pa-panel-h" style="font-size:14px;margin:0">
+      <flux:icon.chart-bar-square class="size-4 text-orange-500" /> Working Hours Breakdown
+    </div>
+    <div class="pa-hb-grid">
+      @foreach($hbTiles as [$hbL, $hbM, $hbI, $hbC])
+        <div class="pa-hb-tile">
+          <span class="pa-hb-ic" style="background: {{ $hbC }}1a; color: {{ $hbC }};"><flux:icon :icon="$hbI" class="size-4" /></span>
+          <div><div class="pa-hb-v">{{ $fmt($hbM) }}</div><div class="pa-hb-l">{{ $hbL }}</div></div>
+        </div>
+      @endforeach
+    </div>
+    @if($hb['worked'] + $hb['break'] > 0)
+      <div class="pa-hb-bar">
+        <i style="width: {{ $segWorked }}%; background: #0F9D6E;"></i>
+        <i style="width: {{ $segBreak }}%; background: #F59E0B;"></i>
+        <i style="width: {{ $segIdle }}%; background: #D64545;"></i>
+      </div>
+      <div class="pa-hb-key">
+        <span><i style="background:#0F9D6E"></i> Worked {{ $fmt($hb['worked']) }} ({{ (int) round($segWorked) }}%)</span>
+        <span><i style="background:#F59E0B"></i> Break {{ $fmt($legitBreak) }} ({{ (int) round($segBreak) }}%)</span>
+        @if($hb['idle'] > 0)<span><i style="background:#D64545"></i> Idle {{ $fmt($hb['idle']) }} ({{ (int) round($segIdle) }}%)</span>@endif
+      </div>
+    @endif
+  </div>
+
+  {{-- Right column: streak · benchmark (slice 3) --}}
   <div class="pa-rail">
     <div class="pa-rc pa-streak">
       <div style="display:flex;align-items:center;gap:12px">
@@ -1053,27 +1108,7 @@
   </div>{{-- /pa-jgrid --}}
 </div>
 
-{{-- ═══════════════ WORKING HOURS BREAKDOWN (engine hoursBreakdown) ═══════════════ --}}
-@php
-    $breakAllowance = (int) ($shift->break_duration ?? 0);
-    $hb = app(\App\Services\Attendance\PunchTimeline::class)->hoursBreakdown($workedMin, $breakMin, $targetMin, $breakAllowance);
-    // [label, minutes, icon, colour]
-    $hbTiles = [
-        ['Expected', $hb['expected'], 'calendar-days', '#6B7280'],
-        ['Worked', $hb['worked'], 'clock', '#0F9D6E'],
-        ['Break', $hb['break'], 'pause', '#F59E0B'],
-        ['Idle', $hb['idle'], 'exclamation-triangle', '#D64545'],
-        ['Overtime', $hb['overtime'], 'bolt', '#8B5CF6'],
-        ['Net Hours', $hb['net'], 'check-badge', '#2F6FEB'],
-        ['Remaining', $hb['remaining'], 'arrow-path', '#6B7280'],
-    ];
-    // Stacked bar of the actual day: worked + legitimate break + idle (break over limit).
-    $hbSpan = max(1, $hb['worked'] + $hb['break']);
-    $legitBreak = max(0, $hb['break'] - $hb['idle']);
-    $segWorked = round($hb['worked'] / $hbSpan * 100, 1);
-    $segBreak = round($legitBreak / $hbSpan * 100, 1);
-    $segIdle = round($hb['idle'] / $hbSpan * 100, 1);
-@endphp
+{{-- Working Hours Breakdown styles — the card now lives in the 3-column journey row above. --}}
 <style>
 .pa-hb{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:18px;padding:22px 24px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.05)}
 .pa-hb-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:16px}
@@ -1090,34 +1125,6 @@
 .pa-hb-key span{display:inline-flex;align-items:center;gap:6px;font-weight:540}
 .pa-hb-key i{width:10px;height:10px;border-radius:3px}
 </style>
-<div class="pa">
-  <div class="pa-hb" data-reveal>
-    <div class="pa-panel-h" style="font-size:15px;margin:0">
-      <flux:icon.chart-bar-square class="size-4 text-orange-500" /> Working Hours Breakdown
-      <span class="pa-panel-sub">today · {{ $fmt($hb['worked']) }} of {{ $fmt($hb['expected']) }} expected</span>
-    </div>
-    <div class="pa-hb-grid">
-      @foreach($hbTiles as [$hbL, $hbM, $hbI, $hbC])
-        <div class="pa-hb-tile" data-reveal-item>
-          <span class="pa-hb-ic" style="background: {{ $hbC }}1a; color: {{ $hbC }};"><flux:icon :icon="$hbI" class="size-4" /></span>
-          <div><div class="pa-hb-v">{{ $fmt($hbM) }}</div><div class="pa-hb-l">{{ $hbL }}</div></div>
-        </div>
-      @endforeach
-    </div>
-    @if($hb['worked'] + $hb['break'] > 0)
-      <div class="pa-hb-bar">
-        <i style="width: {{ $segWorked }}%; background: #0F9D6E;"></i>
-        <i style="width: {{ $segBreak }}%; background: #F59E0B;"></i>
-        <i style="width: {{ $segIdle }}%; background: #D64545;"></i>
-      </div>
-      <div class="pa-hb-key">
-        <span><i style="background:#0F9D6E"></i> Worked {{ $fmt($hb['worked']) }} ({{ (int) round($segWorked) }}%)</span>
-        <span><i style="background:#F59E0B"></i> Break {{ $fmt($legitBreak) }} ({{ (int) round($segBreak) }}%)</span>
-        @if($hb['idle'] > 0)<span><i style="background:#D64545"></i> Idle {{ $fmt($hb['idle']) }} ({{ (int) round($segIdle) }}%)</span>@endif
-      </div>
-    @endif
-  </div>
-</div>
 
 {{-- ═══════════════ ATTENDANCE ANALYTICS (enterprise grid) ═══════════════ --}}
 @php
