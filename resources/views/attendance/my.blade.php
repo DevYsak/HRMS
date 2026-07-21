@@ -257,7 +257,7 @@
     .pa-h4{display:grid;grid-template-columns:1.25fr 1fr 1fr 1fr;gap:16px}
     @media(max-width:1100px){.pa-h4{grid-template-columns:repeat(2,1fr)}}
     @media(max-width:560px){.pa-h4{grid-template-columns:1fr}}
-    .pa-hcard{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:20px;padding:20px 22px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.04);display:flex;flex-direction:column;transition:transform .2s var(--pa-ease),box-shadow .2s}
+    .pa-hcard{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:18px;padding:20px 22px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.05);display:flex;flex-direction:column;transition:transform .2s var(--pa-ease),box-shadow .2s}
     .pa-hcard:hover{transform:translateY(-3px);box-shadow:0 2px 4px rgba(24,24,27,.05),0 16px 34px rgba(24,24,27,.08)}
     .pa-hct{font-size:12px;font-weight:640;color:var(--pa-muted);display:flex;align-items:center;gap:8px;margin-bottom:14px}
     .pa-hct svg{color:var(--pa-faint)}
@@ -392,12 +392,12 @@
 </div>
 
 
-<div class="space-y-5 mt-5">
+<div class="space-y-6 mt-6">
 
 {{-- ═══════════════ ATTENDANCE HEALTH + QUICK ACTIONS ═══════════════ --}}
 {{-- ═══════════════ ATTENDANCE HEALTH + QUICK ACTIONS (slice 4a) ═══════════════ --}}
 <style>
-.pa-panel{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:16px;box-shadow:0 1px 2px rgba(0,0,0,.05);padding:16px 18px}
+.pa-panel{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:18px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.05);padding:16px 18px}
 .pa-panel-h{font-size:14px;font-weight:640;color:var(--pa-ink);margin-bottom:12px;display:flex;align-items:center;gap:8px}
 .pa-panel-sub{margin-left:auto;font-size:11px;font-weight:500;color:var(--pa-faint);text-transform:capitalize}
 .pa-kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
@@ -665,7 +665,7 @@
 
 {{-- ═══════════════ TODAY'S ATTENDANCE JOURNEY (slice 2b) ═══════════════ --}}
 <style>
-.pa-jcard{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:16px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.pa-jcard{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:16px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.05)}
 .pa-jhead{display:flex;align-items:center;gap:10px;padding:15px 18px 6px}
 .pa-jhead h3{margin:0;font-size:14px;font-weight:640;color:var(--pa-ink)}
 .pa-jhead .sub{font-size:12px;color:var(--pa-faint)}
@@ -696,7 +696,7 @@
 .pa-work{display:grid;grid-template-columns:1.55fr 1fr;gap:18px;align-items:start}
 @media(max-width:960px){.pa-work{grid-template-columns:1fr}}
 .pa-rail{display:flex;flex-direction:column;gap:18px}
-.pa-rc{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:16px;padding:16px 18px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.pa-rc{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:16px;padding:16px 18px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.05)}
 .pa-rc-h{font-size:13.5px;font-weight:640;color:var(--pa-ink);display:flex;align-items:center;gap:8px}
 .pa-rc-sub{font-size:11px;color:var(--pa-faint);font-weight:500}
 .pa-streak{background:linear-gradient(140deg,rgba(234,106,44,.08),var(--pa-surface))}
@@ -720,7 +720,7 @@
 {{-- ═══ Enterprise punch timeline (session-based · neutral IN/OUT · GSAP) ═══ --}}
 <style>
 .pa-jsec{margin-top:18px}
-.pa-jcard2{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:20px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.pa-jcard2{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:18px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.05)}
 .pa-jhead2{display:flex;align-items:center;gap:12px;padding:18px 22px 14px}
 .pa-jhead2 h3{margin:0;font-size:15px;font-weight:680;letter-spacing:-.01em;color:var(--pa-ink)}
 .pa-jhead2 .sub{font-size:12px;color:var(--pa-faint);margin-top:2px}
@@ -790,7 +790,7 @@
 /* bottom grid: sessions + rail */
 .pa-jgrid{display:grid;grid-template-columns:1.35fr 1fr;gap:18px;margin-top:18px}
 @media(max-width:960px){.pa-jgrid{grid-template-columns:1fr}}
-.pa-sesscard{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:16px;padding:16px 18px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.pa-sesscard{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:18px;padding:16px 18px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.05)}
 .pa-sesscard .sh{font-size:13.5px;font-weight:660;color:var(--pa-ink);display:flex;align-items:center;gap:8px;margin-bottom:12px}
 .pa-srow{display:grid;grid-template-columns:78px 1fr auto;align-items:center;gap:12px;padding:11px 0;border-top:1px solid var(--pa-border)}
 .pa-srow:first-of-type{border-top:0}
@@ -1037,7 +1037,7 @@
     $segIdle = round($hb['idle'] / $hbSpan * 100, 1);
 @endphp
 <style>
-.pa-hb{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:20px;padding:22px 24px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.04)}
+.pa-hb{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:18px;padding:22px 24px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.05)}
 .pa-hb-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:16px}
 @media(min-width:640px){.pa-hb-grid{grid-template-columns:repeat(4,1fr)}}
 @media(min-width:1100px){.pa-hb-grid{grid-template-columns:repeat(7,1fr)}}
