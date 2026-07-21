@@ -297,7 +297,7 @@
     <div class="pa-hC">
       <div class="pa-h-ring">
         <svg width="172" height="172" viewBox="0 0 172 172"><circle class="trk" cx="86" cy="86" r="75"/><circle class="prg" cx="86" cy="86" r="75"/></svg>
-        <div class="mid"><div class="big num">{{ $score }}</div><div class="sm">Attendance score</div></div>
+        <div class="mid"><div class="big num" x-data="countUp('{{ $score }}')" x-text="display" wire:key="score-{{ $score }}">{{ $score }}</div><div class="sm">Attendance score</div></div>
       </div>
       <div class="pa-h-cprog">
         <div class="lbl">Shift progress <b class="num">{{ $progress }}%</b></div>
@@ -704,6 +704,8 @@
 /* Approved-regularization punch: emerald ring so the corrected punch reads as verified */
 .pa-hz-node.reg .pa-hz-dot{box-shadow:0 0 0 3px var(--pa-present-soft),0 2px 8px rgba(24,24,27,.14)}
 .pa-hz-node.reg .pa-hz-time::after{content:"✓";margin-left:4px;color:var(--pa-present);font-weight:800}
+/* System auto punch-out: violet ring to distinguish it from a real punch */
+.pa-hz-node.auto .pa-hz-dot{background:#8B5CF6;box-shadow:0 0 0 3px rgba(139,92,246,.16),0 2px 8px rgba(24,24,27,.14)}
 .pa-hz-time{font-size:13px;font-weight:680;color:var(--pa-ink);margin-top:10px;font-variant-numeric:tabular-nums;white-space:nowrap}
 .pa-hz-dir{font-size:10px;font-weight:720;letter-spacing:.06em;margin-top:3px;padding:1px 8px;border-radius:20px}
 .pa-hz-dir.d-in{color:var(--pa-present);background:var(--pa-present-soft)}
@@ -800,9 +802,18 @@
           @foreach($pj['nodes'] as $node)
             @php
               $isMissing = $node['type'] === 'missing';
-              $nodeIcon = $isMissing ? 'exclamation-triangle' : ($node['dir'] === 'IN' ? 'arrow-right-end-on-rectangle' : 'arrow-left-start-on-rectangle');
+              $src = $node['source'] ?? '';
+              // Unique icon per punch type: missing → alert, regularized → verified
+              // badge, face/card → their auth icon, otherwise an IN/OUT arrow.
+              $nodeIcon = match(true) {
+                  $isMissing => 'exclamation-triangle',
+                  $src === 'regularisation' => 'check-badge',
+                  $src === 'auto' => 'bolt',
+                  ! empty($node['method_icon']) => $node['method_icon'],
+                  default => $node['dir'] === 'IN' ? 'arrow-right-end-on-rectangle' : 'arrow-left-start-on-rectangle',
+              };
             @endphp
-            <div class="pa-hz-node {{ $isMissing ? 'miss' : '' }} {{ ($node['source'] ?? '') === 'regularisation' ? 'reg' : '' }}" data-tl-node @if(($node['source'] ?? '') === 'regularisation') data-tl-reg @endif>
+            <div class="pa-hz-node {{ $isMissing ? 'miss' : '' }} {{ $src === 'regularisation' ? 'reg' : '' }} {{ $src === 'auto' ? 'auto' : '' }}" data-tl-node @if($src === 'regularisation') data-tl-reg @endif>
               <div class="pa-hz-tip">
                 <div class="tt"><span>{{ $node['time'] }}</span><span>{{ $isMissing ? 'Missing '.$node['dir'] : $node['dir'] }}</span></div>
                 @if($isMissing)
@@ -823,11 +834,22 @@
           @endforeach
         </div>
       </div>
+      @php
+        $nodeSources = collect($pj['nodes']);
+        $hasReg = $nodeSources->contains(fn ($n) => ($n['source'] ?? '') === 'regularisation');
+        $hasAuto = $nodeSources->contains(fn ($n) => ($n['source'] ?? '') === 'auto');
+        $hasFace = $nodeSources->contains(fn ($n) => str_contains(strtolower($n['method_label'] ?? ''), 'face'));
+        $hasCard = $nodeSources->contains(fn ($n) => str_contains(strtolower($n['method_label'] ?? ''), 'card'));
+      @endphp
       <div class="pa-hz-leg">
         <span><i style="background:var(--pa-present)"></i> First in</span>
         <span><i style="background:#3B82F6"></i> In</span>
         <span><i style="background:#F59E0B"></i> Out</span>
         <span><i style="background:var(--pa-danger)"></i> Last out</span>
+        @if($hasFace)<span><flux:icon.face-smile class="size-3.5" /> Face</span>@endif
+        @if($hasCard)<span><flux:icon.identification class="size-3.5" /> Card</span>@endif
+        @if($hasReg)<span><flux:icon.check-badge class="size-3.5 text-emerald-500" /> Regularized</span>@endif
+        @if($hasAuto)<span><i style="background:#8B5CF6"></i> Auto punch</span>@endif
         @if($pj['live'])<span><i style="background:var(--pa-present)"></i> Live</span>@endif
         @if(! empty($pj['needs_regularization']))<span><i style="background:var(--pa-warn)"></i> Missing punch</span>@endif
       </div>
