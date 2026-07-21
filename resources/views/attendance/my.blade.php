@@ -1044,6 +1044,23 @@
         'series' => [['name' => 'Minutes vs shift start', 'data' => $arrivalSeries]],
     ];
 
+    // 5c · Logout Trend — minutes vs shift end (positive = stayed late, negative
+    // = left early), from the same engine sessions that feed the arrival trend.
+    $shiftEndMin = $shift?->end_time ? (int) \Illuminate\Support\Carbon::parse($shift->end_time)->format('H') * 60 + (int) \Illuminate\Support\Carbon::parse($shift->end_time)->format('i') : null;
+    $logoutSeries = collect($chartDaily)->map(fn ($d) => ($d['out_min'] !== null && $shiftEndMin !== null) ? $d['out_min'] - $shiftEndMin : null)->all();
+    $logoutChart = [
+        'chart' => $baseChart('line', 200),
+        'colors' => ['#0ea5e9'], 'dataLabels' => ['enabled' => false], 'stroke' => ['curve' => 'smooth', 'width' => 3],
+        'markers' => ['size' => 3, 'hover' => ['size' => 5]],
+        'grid' => ['borderColor' => '#F3E8DD', 'strokeDashArray' => 4],
+        'annotations' => ['yaxis' => array_values(array_filter([
+            $shiftEndMin !== null ? ['y' => 0, 'borderColor' => '#6366f1', 'strokeDashArray' => 5, 'label' => ['text' => 'Shift end', 'style' => ['color' => '#6366f1', 'background' => '#EEF2FF', 'fontSize' => '10px']]] : null,
+        ]))],
+        'xaxis' => array_merge($axis, ['categories' => $labels, 'tickAmount' => $tick]),
+        'yaxis' => ['labels' => ['style' => ['colors' => '#9CA3AF', 'fontSize' => '10px']]], 'tooltip' => ['theme' => 'light'],
+        'series' => [['name' => 'Minutes vs shift end', 'data' => $logoutSeries]],
+    ];
+
     // 6 · Break Analysis — daily break minutes + average line
     $breakVals = collect($chartDaily)->pluck('break');
     $avgBreakLine = (int) ($analytics['avg_break'] ?? 0);
@@ -1189,6 +1206,14 @@
             <x-dashboard.chart :options="$arrivalChart" id="arrival-chart" wire:key="arrival-{{ $ck }}" class="-mb-2" />
         @else
             <div class="flex h-[200px] items-center justify-center text-xs text-zinc-300">No arrival data in this period.</div>
+        @endif
+    </div>
+    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm transition hover:shadow-md lg:col-span-4">
+        <div class="mb-1 text-sm font-black text-zinc-900 dark:text-white">Logout Trend <span class="text-[10px] font-bold text-zinc-400">· vs your shift end</span></div>
+        @if($shiftEndMin !== null && collect($logoutSeries)->filter(fn ($v) => $v !== null)->isNotEmpty())
+            <x-dashboard.chart :options="$logoutChart" id="logout-chart" wire:key="logout-{{ $ck }}" class="-mb-2" />
+        @else
+            <div class="flex h-[200px] items-center justify-center text-xs text-zinc-300">No logout data in this period.</div>
         @endif
     </div>
 
