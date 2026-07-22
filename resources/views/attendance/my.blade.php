@@ -101,16 +101,16 @@
 .pa-cmd h1{margin:0;font-size:21px;font-weight:680;letter-spacing:-.02em;color:var(--pa-ink)}
 .pa-cmd p{margin:2px 0 0;color:var(--pa-muted);font-size:13px}
 /* Segmented control — 44px, 14px radius, orange active tab */
-.pa-seg{display:inline-flex;align-items:center;background:var(--pa-surface-2);border:1px solid var(--pa-border);border-radius:14px;padding:4px;height:44px;gap:2px}
-.pa-seg button{border:0;background:transparent;color:var(--pa-muted);font-size:13px;font-weight:600;height:36px;padding:0 15px;border-radius:10px;transition:all .18s var(--pa-ease);white-space:nowrap}
+.pa-seg{display:inline-flex;align-items:center;background:var(--pa-surface-2);border:1px solid var(--pa-border);border-radius:14px;padding:4px;height:40px;gap:2px}
+.pa-seg button{border:0;background:transparent;color:var(--pa-muted);font-size:13px;font-weight:600;height:32px;padding:0 14px;border-radius:9px;transition:all .18s var(--pa-ease);white-space:nowrap}
 .pa-seg button:hover{color:var(--pa-ink);background:var(--pa-surface)}
 .pa-seg button.on{background:var(--pa-accent);color:#fff;box-shadow:0 2px 8px var(--pa-ring);font-weight:680}
 .pa-seg button.on:hover{background:var(--pa-accent);color:#fff}
-.pa-range{display:inline-flex;align-items:center;gap:6px;height:44px;padding:0 13px;border:1px solid var(--pa-border-2);border-radius:12px;background:var(--pa-surface);color:var(--pa-muted);transition:all .16s var(--pa-ease)}
+.pa-range{display:inline-flex;align-items:center;gap:6px;height:40px;padding:0 12px;border:1px solid var(--pa-border-2);border-radius:12px;background:var(--pa-surface);color:var(--pa-muted);transition:all .16s var(--pa-ease)}
 .pa-range.on{border-color:var(--pa-accent);box-shadow:0 0 0 3px var(--pa-ring);color:var(--pa-accent-ink)}
 .pa-range input{border:0;background:transparent;color:var(--pa-ink);font-size:12px;font-family:inherit;outline:0;width:116px;font-variant-numeric:tabular-nums}
 .pa-range .lbl{font-size:9.5px;font-weight:640;text-transform:uppercase;letter-spacing:.05em}
-.pa-pill{display:inline-flex;align-items:center;gap:7px;height:44px;padding:0 16px;border-radius:12px;border:1px solid var(--pa-border-2);
+.pa-pill{display:inline-flex;align-items:center;gap:7px;height:40px;padding:0 15px;border-radius:12px;border:1px solid var(--pa-border-2);
   background:var(--pa-surface);color:var(--pa-ink);font-size:13px;font-weight:600;transition:all .16s var(--pa-ease)}
 .pa-pill:hover{background:var(--pa-surface-2);border-color:var(--pa-faint);transform:translateY(-1px);box-shadow:0 4px 12px rgba(24,24,27,.06)}
 .pa-primary{display:inline-flex;align-items:center;gap:7px;height:36px;padding:0 15px;border-radius:10px;border:1px solid var(--pa-accent-ink);
@@ -165,8 +165,8 @@
 .pa-cmd-title{display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:620;color:var(--pa-ink)}
 .pa-cmd-title svg{color:var(--pa-faint)}
 .pa-cmd-right{margin-left:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-/* Every right-side control the same 44px height as the segmented control */
-.pa-cmd-right button{height:44px}
+/* Every right-side control the same 40px height as the segmented control */
+.pa-cmd-right button{height:40px}
 .pa-cmd-right button:not(.pa-pill){border-radius:12px}
 @media(max-width:900px){.pa-cmd-right{margin-left:0;width:100%}}
 </style>
@@ -255,39 +255,39 @@
     @media(max-width:680px){.pa-hero2{grid-template-columns:1fr}.pa-hC{border-left:0;border-top:1px solid var(--pa-border)}.pa-h-timer{font-size:48px}}
 
     /* ── Greeting ── */
-    .pa-greet{margin-bottom:22px}
-    .pa-greet-hi{font-size:14px;color:var(--pa-muted);font-weight:520}
-    .pa-greet-name{font-size:32px;font-weight:780;letter-spacing:-.03em;color:var(--pa-ink);line-height:1.1;margin:1px 0 5px}
-    .pa-greet-date{font-size:13px;color:var(--pa-faint);font-weight:500}
+    .pa-greet{margin-bottom:16px}
+    .pa-greet-hi{font-size:13px;color:var(--pa-muted);font-weight:520}
+    .pa-greet-name{font-size:26px;font-weight:780;letter-spacing:-.03em;color:var(--pa-ink);line-height:1.1;margin:1px 0 3px}
+    .pa-greet-date{font-size:12.5px;color:var(--pa-faint);font-weight:500}
 
     /* ── 5-card hero ── */
     .pa-h4{display:grid;grid-template-columns:1.35fr 1fr 1fr 1fr 1fr;gap:16px}
     @media(max-width:1280px){.pa-h4{grid-template-columns:repeat(3,1fr)}}
     @media(max-width:820px){.pa-h4{grid-template-columns:repeat(2,1fr)}}
     @media(max-width:520px){.pa-h4{grid-template-columns:1fr}}
-    .pa-hprog{height:8px;border-radius:6px;background:var(--pa-surface-3);overflow:hidden;margin-top:14px}
+    .pa-hprog{height:8px;border-radius:6px;background:var(--pa-surface-3);overflow:hidden;margin-top:11px}
     .pa-hprog i{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,var(--pa-present),#22c55e);transition:width .8s var(--pa-ease)}
-    .pa-hlink{display:inline-flex;align-items:center;gap:4px;margin-top:8px;font-size:12px;font-weight:640;color:var(--pa-accent-ink);background:none;border:0;cursor:pointer;padding:0}
+    .pa-hlink{display:inline-flex;align-items:center;gap:4px;margin-top:7px;font-size:12px;font-weight:640;color:var(--pa-accent-ink);background:none;border:0;cursor:pointer;padding:0}
     .pa-hlink:hover{text-decoration:underline}
-    .pa-hcard-score .pa-h-ring-sm{width:140px !important;height:140px !important}
-    .pa-hcard-score .pa-h-ring-sm .big{font-size:39px}
-    .pa-hcard-score .pa-h-ring-sm .sm{font-size:11px}
-    .pa-hcard-score .pa-hscore{gap:20px}
-    .pa-hcard-score .pa-hband{font-size:18px}
+    .pa-hcard-score .pa-h-ring-sm{width:118px !important;height:118px !important}
+    .pa-hcard-score .pa-h-ring-sm .big{font-size:32px}
+    .pa-hcard-score .pa-h-ring-sm .sm{font-size:10px}
+    .pa-hcard-score .pa-hscore{gap:16px}
+    .pa-hcard-score .pa-hband{font-size:17px}
     /* Worked Today — the primary hero card */
     .pa-hcard-worked{border-color:var(--pa-accent);background:linear-gradient(165deg,var(--pa-accent-soft),var(--pa-surface) 62%);box-shadow:0 2px 6px var(--pa-ring),0 14px 32px rgba(24,24,27,.07)}
-    .pa-hcard-worked .pa-hbig{font-size:38px}
+    .pa-hcard-worked .pa-hbig{font-size:32px}
     .pa-hcard-worked .pa-hct,.pa-hcard-worked .pa-hct svg{color:var(--pa-accent-ink)}
     .pa-hcard-worked .pa-hprog{height:9px}
-    .pa-hcard{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:18px;padding:22px 24px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.05);display:flex;flex-direction:column;transition:transform .2s var(--pa-ease),box-shadow .2s}
+    .pa-hcard{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:18px;padding:17px 19px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.05);display:flex;flex-direction:column;transition:transform .2s var(--pa-ease),box-shadow .2s}
     .pa-hcard:hover{transform:translateY(-3px);box-shadow:0 2px 4px rgba(24,24,27,.05),0 16px 34px rgba(24,24,27,.08)}
-    .pa-hct{font-size:12px;font-weight:640;color:var(--pa-muted);display:flex;align-items:center;gap:8px;margin-bottom:14px}
+    .pa-hct{font-size:12px;font-weight:640;color:var(--pa-muted);display:flex;align-items:center;gap:8px;margin-bottom:10px}
     .pa-hct svg{color:var(--pa-faint)}
-    .pa-hbig{font-size:32px;font-weight:770;letter-spacing:-.03em;color:var(--pa-ink);line-height:1;font-variant-numeric:tabular-nums}
-    .pa-hsub{font-size:12px;color:var(--pa-muted);margin-top:8px}
-    .pa-hfoot{font-size:11.5px;color:var(--pa-faint);margin-top:auto;padding-top:12px}
-    .pa-hspark{width:100%;height:26px;display:block;margin-top:12px}
-    .pa-hbadges{margin-top:11px}
+    .pa-hbig{font-size:27px;font-weight:770;letter-spacing:-.03em;color:var(--pa-ink);line-height:1;font-variant-numeric:tabular-nums}
+    .pa-hsub{font-size:12px;color:var(--pa-muted);margin-top:6px}
+    .pa-hfoot{font-size:11.5px;color:var(--pa-faint);margin-top:auto;padding-top:10px}
+    .pa-hspark{width:100%;height:24px;display:block;margin-top:10px}
+    .pa-hbadges{margin-top:9px}
     .pa-hbadge{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:680;padding:5px 12px;border-radius:999px}
     .pa-hbadge::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;flex:0 0 auto}
     .pa-hbadge.ok{background:linear-gradient(135deg,var(--pa-present-soft),rgba(15,157,110,.04));color:var(--pa-present);border:1px solid rgba(15,157,110,.16)}
@@ -306,17 +306,17 @@
     .pa-htrend.up{color:var(--pa-present)}
     .pa-htrend.down{color:var(--pa-danger)}
     .pa-livedot{width:7px;height:7px;border-radius:50%;background:var(--pa-present);display:inline-block;animation:pabeat 1.6s var(--pa-ease) infinite;margin-left:auto}
-    .pa-actbar{display:flex;flex-wrap:wrap;gap:14px;align-items:stretch;margin-top:20px}
+    .pa-actbar{display:flex;flex-wrap:wrap;gap:12px;align-items:stretch;margin-top:16px}
     .pa-actbtns{display:flex;gap:10px;flex-wrap:wrap;flex:2;min-width:280px}
     .pa-actbtns .pa-h-cta{flex:1;min-width:150px}
     /* Clock In — the prominent primary action */
-    .pa-actbtns .pa-h-cta.primary{flex:1.5;padding:16px 18px}
-    .pa-actbtns .pa-h-cta.primary .t{font-size:15px}
-    .pa-actbtns .pa-h-cta.primary .ic{width:40px;height:40px}
+    .pa-actbtns .pa-h-cta.primary{flex:1.5;padding:13px 16px}
+    .pa-actbtns .pa-h-cta.primary .t{font-size:14.5px}
+    .pa-actbtns .pa-h-cta.primary .ic{width:38px;height:38px}
     /* Smart Status — richer insight card */
-    .pa-actsmart{margin:0;flex:1.6;min-width:250px;display:flex;flex-direction:column;justify-content:center;background:linear-gradient(135deg,var(--pa-accent-soft),var(--pa-surface) 75%);border:1px solid var(--pa-border);border-radius:16px;padding:16px 20px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.04)}
+    .pa-actsmart{margin:0;flex:1.6;min-width:250px;display:flex;flex-direction:column;justify-content:center;background:linear-gradient(135deg,var(--pa-accent-soft),var(--pa-surface) 75%);border:1px solid var(--pa-border);border-radius:18px;padding:13px 18px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.04)}
     .pa-actsmart .h{font-size:12.5px;font-weight:700}
-    .pa-actsmart p{font-size:13.5px;font-weight:500;line-height:1.5;margin-top:7px}
+    .pa-actsmart p{font-size:13px;font-weight:500;line-height:1.45;margin-top:6px}
   </style>
   @php
       // Live hero ticker counts VALIDATED working time (engine sessions), not
@@ -457,17 +457,17 @@
 .pa-kpis2{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
 @media(min-width:680px){.pa-kpis2{grid-template-columns:repeat(3,1fr)}}
 @media(min-width:1100px){.pa-kpis2{grid-template-columns:repeat(5,1fr)}}
-.pa-kpi2{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:18px;padding:18px 20px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 4px 12px rgba(24,24,27,.03);transition:transform .2s var(--pa-ease),box-shadow .2s,border-color .2s}
+.pa-kpi2{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:18px;padding:15px 17px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 4px 12px rgba(24,24,27,.03);transition:transform .2s var(--pa-ease),box-shadow .2s,border-color .2s}
 .pa-kpi2:hover{transform:translateY(-3px);box-shadow:0 2px 4px rgba(24,24,27,.05),0 14px 30px rgba(24,24,27,.08);border-color:var(--pa-border-2)}
 .pa-kpi2 .top{display:flex;align-items:center;justify-content:space-between}
 .pa-kpi2 .ic{width:36px;height:36px;border-radius:11px;display:grid;place-items:center}
 .pa-kpi2 .tr{display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:640;padding:3px 8px;border-radius:999px;background:var(--pa-surface-2);color:var(--pa-muted)}
 .pa-kpi2 .tr.up{background:var(--pa-present-soft);color:var(--pa-present)}
 .pa-kpi2 .tr.down{background:var(--pa-danger-soft);color:var(--pa-danger)}
-.pa-kpi2 .v{font-size:26px;font-weight:720;letter-spacing:-.025em;margin-top:12px;line-height:1;color:var(--pa-ink);font-variant-numeric:tabular-nums}
-.pa-kpi2 .l{font-size:12.5px;color:var(--pa-muted);margin-top:5px;font-weight:500}
+.pa-kpi2 .v{font-size:24px;font-weight:720;letter-spacing:-.025em;margin-top:10px;line-height:1;color:var(--pa-ink);font-variant-numeric:tabular-nums}
+.pa-kpi2 .l{font-size:12px;color:var(--pa-muted);margin-top:4px;font-weight:500}
 .pa-kpi2 .cmp{font-size:11px;color:var(--pa-faint);margin-top:1px}
-.pa-kpi2 .spark{margin-top:11px;height:28px;width:100%;display:block}
+.pa-kpi2 .spark{margin-top:9px;height:24px;width:100%;display:block}
 </style>
 <div class="pa">
   {{-- KPI overview · full width --}}
@@ -538,28 +538,28 @@
     $cMetrics = $coach['metrics'] ?? ['predicted_score' => $score, 'consistency' => 100, 'overtime_pred' => 0, 'risk' => $cRisk];
 @endphp
 <style>
-.pa-copilot{background:linear-gradient(155deg,var(--pa-accent-soft),var(--pa-surface) 52%);border:1px solid var(--pa-border);border-radius:18px;padding:26px 28px;position:relative;overflow:hidden;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.05)}
+.pa-copilot{background:linear-gradient(155deg,var(--pa-accent-soft),var(--pa-surface) 52%);border:1px solid var(--pa-border);border-radius:18px;padding:20px 22px;position:relative;overflow:hidden;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.05)}
 .dark .pa-copilot{box-shadow:0 12px 36px rgba(0,0,0,.45)}
-.pa-copilot .head{display:flex;align-items:center;gap:13px;margin-bottom:20px}
-.pa-copilot .avatar{width:42px;height:42px;border-radius:13px;background:linear-gradient(145deg,var(--pa-accent),var(--pa-accent-ink));display:grid;place-items:center;color:#fff;box-shadow:0 6px 18px var(--pa-ring);flex:0 0 auto}
-.pa-copilot .avatar svg{width:22px;height:22px}
+.pa-copilot .head{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.pa-copilot .avatar{width:38px;height:38px;border-radius:12px;background:linear-gradient(145deg,var(--pa-accent),var(--pa-accent-ink));display:grid;place-items:center;color:#fff;box-shadow:0 6px 18px var(--pa-ring);flex:0 0 auto}
+.pa-copilot .avatar svg{width:20px;height:20px}
 .pa-copilot .title{font-size:16px;font-weight:660;color:var(--pa-ink)}
 .pa-copilot .sub{font-size:12px;color:var(--pa-faint)}
 .pa-aichip{display:inline-flex;align-items:center;gap:6px;background:var(--pa-surface);border:1px solid var(--pa-border);color:var(--pa-accent-ink);font-size:11px;font-weight:640;padding:5px 11px;border-radius:20px}
 .pa-aichip .ld{width:6px;height:6px;border-radius:50%;background:var(--pa-present);box-shadow:0 0 0 0 var(--pa-present);animation:pabeat 1.8s var(--pa-ease) infinite}
-.pa-msg{font-size:17px;line-height:1.55;color:var(--pa-ink);font-weight:500;max-width:680px;letter-spacing:-.01em}
+.pa-msg{font-size:16px;line-height:1.5;color:var(--pa-ink);font-weight:500;max-width:680px;letter-spacing:-.01em}
 .pa-msg b{font-weight:680;color:var(--pa-accent-ink)}
-.pa-copilot .stats{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin:22px 0 6px}
+.pa-copilot .stats{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin:14px 0 4px}
 @media(min-width:820px){.pa-copilot .stats{grid-template-columns:repeat(4,1fr)}}
-.pa-cstat{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:16px;padding:16px 18px}
+.pa-cstat{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:14px;padding:13px 15px}
 .pa-cstat .k{font-size:11px;color:var(--pa-muted);font-weight:600}
-.pa-cstat .v{font-size:26px;font-weight:730;color:var(--pa-ink);margin-top:6px;font-variant-numeric:tabular-nums;line-height:1}
-.pa-clabel{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--pa-faint);margin:20px 0 9px}
-.pa-rec{display:flex;gap:13px;background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:16px;padding:16px 18px;margin-top:14px}
+.pa-cstat .v{font-size:23px;font-weight:730;color:var(--pa-ink);margin-top:4px;font-variant-numeric:tabular-nums;line-height:1}
+.pa-clabel{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--pa-faint);margin:14px 0 7px}
+.pa-rec{display:flex;gap:12px;background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:14px;padding:12px 14px;margin-top:10px}
 .pa-rec .ic{width:32px;height:32px;border-radius:10px;background:var(--pa-accent-soft);color:var(--pa-accent-ink);display:grid;place-items:center;flex:0 0 auto}
 .pa-rec .k{font-size:10.5px;font-weight:660;text-transform:uppercase;letter-spacing:.05em;color:var(--pa-faint)}
-.pa-rec p{margin:3px 0 0;font-size:13.5px;color:var(--pa-ink);line-height:1.5}
-.pa-copilot .foot{display:flex;flex-wrap:wrap;gap:12px 22px;margin-top:16px;align-items:center}
+.pa-rec p{margin:3px 0 0;font-size:13px;color:var(--pa-ink);line-height:1.45}
+.pa-copilot .foot{display:flex;flex-wrap:wrap;gap:10px 20px;margin-top:12px;align-items:center}
 .pa-chip-in{display:inline-flex;align-items:center;gap:8px;background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:20px;padding:8px 14px;font-size:13px;font-weight:560;color:var(--pa-ink)}
 .pa-chip-in svg{width:15px;height:15px;color:var(--pa-faint)}
 .pa-qastrip{display:flex;flex-wrap:wrap;gap:10px}
@@ -740,15 +740,15 @@
 .pa-live-dot{width:9px;height:9px;border-radius:50%;background:var(--pa-accent);animation:pabeat 1.8s var(--pa-ease) infinite}
 .pa-work{display:grid;grid-template-columns:1.55fr 1fr;gap:18px;align-items:start}
 @media(max-width:960px){.pa-work{grid-template-columns:1fr}}
-.pa-rail{display:flex;flex-direction:column;gap:16px;align-self:start}
-.pa-rc{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:18px;padding:16px 18px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.05)}
+.pa-rail{display:flex;flex-direction:column;gap:14px;align-self:start}
+.pa-rc{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:18px;padding:14px 16px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.05)}
 .pa-rc-h{font-size:13.5px;font-weight:640;color:var(--pa-ink);display:flex;align-items:center;gap:8px}
 .pa-rc-sub{font-size:11px;color:var(--pa-faint);font-weight:500}
 .pa-streak{background:linear-gradient(140deg,rgba(234,106,44,.08),var(--pa-surface))}
-.pa-flame{width:44px;height:44px;border-radius:12px;background:linear-gradient(150deg,#F7A34B,#EA6A2C);display:grid;place-items:center;color:#fff;box-shadow:0 4px 14px rgba(234,106,44,.28);flex:0 0 auto}
-.pa-streak-n{font-size:27px;font-weight:720;letter-spacing:-.03em;line-height:1;color:var(--pa-ink)}
+.pa-flame{width:40px;height:40px;border-radius:11px;background:linear-gradient(150deg,#F7A34B,#EA6A2C);display:grid;place-items:center;color:#fff;box-shadow:0 4px 14px rgba(234,106,44,.28);flex:0 0 auto}
+.pa-streak-n{font-size:24px;font-weight:720;letter-spacing:-.03em;line-height:1;color:var(--pa-ink)}
 .pa-streak-l{font-size:12px;color:var(--pa-muted)}
-.pa-streak-week{display:flex;gap:6px;margin-top:14px}
+.pa-streak-week{display:flex;gap:6px;margin-top:10px}
 .pa-sd{flex:1;height:6px;border-radius:4px;background:var(--pa-surface-3)}
 .pa-sd.on{background:#EA6A2C}
 .pa-ins{display:flex;gap:10px;padding:10px 0;border-top:1px solid var(--pa-border)}
@@ -766,7 +766,7 @@
 <style>
 .pa-jsec{margin-top:18px}
 .pa-jcard2{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:18px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.05)}
-.pa-jhead2{display:flex;align-items:center;gap:12px;padding:18px 22px 14px}
+.pa-jhead2{display:flex;align-items:center;gap:12px;padding:15px 22px 11px}
 .pa-jhead2 h3{margin:0;font-size:15px;font-weight:680;letter-spacing:-.01em;color:var(--pa-ink)}
 .pa-jhead2 .sub{font-size:12px;color:var(--pa-faint);margin-top:2px}
 .pa-jhead2 .fixlink{margin-left:auto;color:var(--pa-accent-ink);font-weight:620;font-size:12.5px;background:none;border:0;cursor:pointer}
@@ -774,23 +774,23 @@
 /* Attendance stat card */
 .pa-acard{display:grid;grid-template-columns:1.5fr repeat(5,1fr);gap:0;border-top:1px solid var(--pa-border);border-bottom:1px solid var(--pa-border);background:var(--pa-surface-2)}
 @media(max-width:900px){.pa-acard{grid-template-columns:1fr 1fr 1fr}}
-.pa-atile{padding:16px 20px;border-right:1px solid var(--pa-border)}
+.pa-atile{padding:13px 18px;border-right:1px solid var(--pa-border)}
 .pa-atile:last-child{border-right:0}
 .pa-atile .lbl{font-size:10.5px;font-weight:640;text-transform:uppercase;letter-spacing:.07em;color:var(--pa-faint);display:flex;align-items:center;gap:6px}
-.pa-atile .val{font-size:19px;font-weight:720;letter-spacing:-.02em;color:var(--pa-ink);margin-top:6px;font-variant-numeric:tabular-nums}
-.pa-atile.hero .val{font-size:30px;font-weight:760}
+.pa-atile .val{font-size:18px;font-weight:720;letter-spacing:-.02em;color:var(--pa-ink);margin-top:4px;font-variant-numeric:tabular-nums}
+.pa-atile.hero .val{font-size:25px;font-weight:760}
 .pa-atile .sub2{font-size:11px;color:var(--pa-muted);margin-top:2px}
 .pa-livebadge{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:720;text-transform:uppercase;letter-spacing:.05em;color:var(--pa-present);background:var(--pa-present-soft);padding:2px 8px;border-radius:20px;vertical-align:middle;margin-left:8px}
 .pa-livebadge .dot{width:6px;height:6px;border-radius:50%;background:var(--pa-present);animation:pabeat 1.6s var(--pa-ease) infinite}
 /* Horizontal timeline */
 .pa-hz-scroll{overflow-x:auto;overflow-y:hidden;padding:0 10px}
-.pa-hz-track{position:relative;display:flex;align-items:flex-start;gap:14px;padding:104px 34px 26px;min-width:max-content;margin:0 auto}
-.pa-hz-rail{position:absolute;left:76px;right:76px;top:124px;height:3px;border-radius:3px;background:var(--pa-border);z-index:0}
-.pa-hz-rail-fill{position:absolute;left:76px;top:124px;height:3px;border-radius:3px;width:0;background:linear-gradient(90deg,var(--pa-present),#3B82F6 40%,#F59E0B 72%,var(--pa-danger));z-index:1}
+.pa-hz-track{position:relative;display:flex;align-items:flex-start;gap:14px;padding:92px 34px 22px;min-width:max-content;margin:0 auto}
+.pa-hz-rail{position:absolute;left:76px;right:76px;top:112px;height:3px;border-radius:3px;background:var(--pa-border);z-index:0}
+.pa-hz-rail-fill{position:absolute;left:76px;top:112px;height:3px;border-radius:3px;width:0;background:linear-gradient(90deg,var(--pa-present),#3B82F6 40%,#F59E0B 72%,var(--pa-danger));z-index:1}
 /* Animated "day-flow" wave that fills the space reserved for hover tooltips —
    turns dead white space above the nodes into a live, on-brand graphic. Purely
    decorative (aria-hidden, pointer-events:none) and sits behind nodes/tooltips. */
-.pa-hz-flow{position:absolute;left:0;right:0;top:8px;height:82px;z-index:0;pointer-events:none;opacity:.92}
+.pa-hz-flow{position:absolute;left:0;right:0;top:6px;height:72px;z-index:0;pointer-events:none;opacity:.92}
 .pa-hz-flow .s0{stop-color:var(--pa-present)}
 .pa-hz-flow .s1{stop-color:#3B82F6}
 .pa-hz-flow .s2{stop-color:#F59E0B}
@@ -820,8 +820,8 @@
 .pa-hz-node.miss .pa-hz-time{color:var(--pa-warn)}
 .pa-hz-dir.d-missing{color:var(--pa-warn);background:var(--pa-warn-soft)}
 /* Needs-regularization banner */
-.pa-regbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:0 22px 16px;padding:13px 16px;border-radius:14px;background:var(--pa-warn-soft);border:1px solid var(--pa-warn)}
-.pa-regbar .ic{width:34px;height:34px;border-radius:10px;background:var(--pa-warn);color:#fff;display:grid;place-items:center;flex:0 0 auto}
+.pa-regbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 22px 12px;padding:10px 14px;border-radius:12px;background:var(--pa-warn-soft);border:1px solid var(--pa-warn)}
+.pa-regbar .ic{width:30px;height:30px;border-radius:9px;background:var(--pa-warn);color:#fff;display:grid;place-items:center;flex:0 0 auto}
 .pa-regbar .tx{font-size:12.5px;color:var(--pa-ink);line-height:1.45}
 .pa-regbar .tx b{font-weight:680}
 .pa-regbar .cta{margin-left:auto;display:inline-flex;align-items:center;gap:7px;background:var(--pa-warn);color:#fff;border:0;border-radius:10px;padding:9px 15px;font-size:12.5px;font-weight:640;cursor:pointer;white-space:nowrap}
@@ -846,17 +846,17 @@
 .pa-hz-tip .tr .k{width:78px;opacity:.7;flex:0 0 auto}
 .pa-hz-tip a{color:#93C5FD;font-weight:640}
 /* live banner */
-.pa-livebar{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin:0 22px 18px;padding:14px 18px;border-radius:14px;background:linear-gradient(135deg,var(--pa-present-soft),var(--pa-surface));border:1px solid var(--pa-present-soft)}
+.pa-livebar{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin:0 22px 14px;padding:11px 16px;border-radius:12px;background:linear-gradient(135deg,var(--pa-present-soft),var(--pa-surface));border:1px solid var(--pa-present-soft)}
 .pa-livebar .lw{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:680;color:var(--pa-present)}
 .pa-livebar .lw .dot{width:9px;height:9px;border-radius:50%;background:var(--pa-present);animation:pabeat 1.6s var(--pa-ease) infinite}
-.pa-livebar .el{margin-left:auto;font-size:24px;font-weight:760;letter-spacing:-.02em;color:var(--pa-ink);font-variant-numeric:tabular-nums}
+.pa-livebar .el{margin-left:auto;font-size:21px;font-weight:760;letter-spacing:-.02em;color:var(--pa-ink);font-variant-numeric:tabular-nums}
 .pa-livebar .st{font-size:12px;color:var(--pa-muted)}
 /* bottom grid: sessions + rail */
 .pa-jgrid{display:grid;grid-template-columns:1.35fr 1fr;gap:18px;margin-top:18px}
 @media(max-width:960px){.pa-jgrid{grid-template-columns:1fr}}
 /* 3-column row: Session Summary (35%) · Working Hours Breakdown (40%) · rail (25%) */
 /* Balanced 3-column row: equal-height columns, 24px gutters, cards that fill */
-.pa-jgrid-3{grid-template-columns:35fr 40fr 25fr;gap:24px;align-items:stretch;margin-top:20px}
+.pa-jgrid-3{grid-template-columns:35fr 40fr 25fr;gap:24px;align-items:stretch;margin-top:16px}
 @media(max-width:1180px){.pa-jgrid-3{grid-template-columns:1fr 1fr}}
 @media(max-width:820px){.pa-jgrid-3{grid-template-columns:1fr}}
 /* Breakdown fills the middle column; tiles 2-up, stacked bar pinned to the bottom */
@@ -866,8 +866,8 @@
 .pa-hb-col .pa-hb-v{font-size:14px}
 .pa-hb-col .pa-hb-bar{margin-top:auto;height:14px}
 .pa-hb-col .pa-hb-key{margin-bottom:2px}
-.pa-sesscard{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:18px;padding:15px 16px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.05);display:flex;flex-direction:column}
-.pa-sesscard .sh{font-size:13.5px;font-weight:660;color:var(--pa-ink);display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.pa-sesscard{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:18px;padding:14px 15px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.05);display:flex;flex-direction:column}
+.pa-sesscard .sh{font-size:13.5px;font-weight:660;color:var(--pa-ink);display:flex;align-items:center;gap:8px;margin-bottom:10px}
 .pa-srow{display:grid;grid-template-columns:78px 1fr auto;align-items:center;gap:12px;padding:11px 0;border-top:1px solid var(--pa-border)}
 .pa-srow:first-of-type{border-top:0}
 .pa-srow .sn{font-size:11px;font-weight:680;text-transform:uppercase;letter-spacing:.05em;color:var(--pa-faint)}
@@ -878,11 +878,11 @@
 .pa-stot .tl{font-size:12px;font-weight:640;color:var(--pa-muted)}
 .pa-stot .tv{font-size:20px;font-weight:760;letter-spacing:-.02em;color:var(--pa-ink);font-variant-numeric:tabular-nums}
 /* Premium per-session card */
-.pa-sess{border:1px solid var(--pa-border);border-radius:13px;padding:11px 13px;margin-bottom:8px;background:var(--pa-surface-2);transition:border-color .16s,box-shadow .16s}
+.pa-sess{border:1px solid var(--pa-border);border-radius:13px;padding:10px 12px;margin-bottom:7px;background:var(--pa-surface-2);transition:border-color .16s,box-shadow .16s}
 .pa-sess:hover{border-color:var(--pa-border-2);box-shadow:0 4px 14px rgba(24,24,27,.05)}
 .pa-sess.live{border-color:var(--pa-present);background:var(--pa-present-soft)}
 .pa-sess.miss{border-color:var(--pa-warn);background:var(--pa-warn-soft)}
-.pa-sess-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px}
+.pa-sess-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
 .pa-sess-n{font-size:12.5px;font-weight:700;color:var(--pa-ink);display:flex;align-items:center;gap:7px}
 .pa-sess-badge{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--pa-present);background:var(--pa-surface);padding:2px 7px;border-radius:999px}
 .pa-sess-t{font-size:11.5px;font-weight:600;color:var(--pa-muted);font-variant-numeric:tabular-nums}
@@ -894,8 +894,8 @@
 .pa-snote{margin-top:12px;font-size:11.5px;color:var(--pa-faint);display:flex;align-items:center;gap:7px}
 .pa-swarn{margin-top:12px;font-size:12px;font-weight:600;color:var(--pa-danger);background:var(--pa-danger-soft);padding:9px 12px;border-radius:10px;display:flex;align-items:center;gap:8px}
 .pa-hz-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:var(--pa-faint);padding:52px 0}
-/* legend */
-.pa-hz-leg{display:flex;gap:16px;flex-wrap:wrap;padding:12px 22px 18px;border-top:1px solid var(--pa-border)}
+/* legend — pinned footer strip (distinct surface so it reads as persistent) */
+.pa-hz-leg{display:flex;gap:14px;flex-wrap:wrap;padding:10px 22px 13px;border-top:1px solid var(--pa-border);background:var(--pa-surface-2);border-radius:0 0 18px 18px}
 .pa-hz-leg span{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:560;color:var(--pa-muted)}
 .pa-hz-leg i{width:10px;height:10px;border-radius:50%;display:inline-block}
 </style>
@@ -1181,8 +1181,8 @@
 
 {{-- Working Hours Breakdown styles — the card now lives in the 3-column journey row above. --}}
 <style>
-.pa-hb{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:18px;padding:22px 24px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.05)}
-.pa-hb-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:16px}
+.pa-hb{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:18px;padding:17px 19px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.05)}
+.pa-hb-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:12px}
 @media(min-width:640px){.pa-hb-grid{grid-template-columns:repeat(4,1fr)}}
 @media(min-width:1100px){.pa-hb-grid{grid-template-columns:repeat(7,1fr)}}
 .pa-hb-tile{display:flex;align-items:center;gap:11px;border:1px solid var(--pa-border);background:var(--pa-surface-2);border-radius:14px;padding:13px 14px;transition:transform .18s var(--pa-ease),box-shadow .18s}
@@ -1391,11 +1391,11 @@
 <div x-show="o" x-transition:enter="transition duration-200 ease-out" x-transition:enter-start="-translate-y-1 opacity-0" x-transition:enter-end="translate-y-0 opacity-100"
      class="mt-2 grid grid-cols-1 gap-4 lg:grid-cols-12" data-reveal wire:loading.class="opacity-50" wire:target="statsPeriod,analyticsMode,rangeFrom,rangeTo">
     {{-- Row 1 --}}
-    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-sm transition hover:shadow-md lg:col-span-5">
+    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm transition hover:shadow-md lg:col-span-5">
         <div class="mb-1 text-sm font-black text-zinc-900 dark:text-white">Working Hours Trend</div>
         @if(count($chartDaily) > 0)<x-dashboard.chart :options="$hoursChart" id="hours-chart" wire:key="hours-{{ $ck }}" class="-mb-2" />@else<div class="flex h-[220px] items-center justify-center text-xs text-zinc-300">No data in this period.</div>@endif
     </div>
-    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-sm transition hover:shadow-md lg:col-span-3">
+    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm transition hover:shadow-md lg:col-span-3">
         <div class="mb-1 text-sm font-black text-zinc-900 dark:text-white">Monthly Attendance</div>
         @if($presentCount + ($stats['absent'] ?? 0) > 0)<x-dashboard.chart :options="$monthlyDonut" id="monthly-donut" wire:key="donut-{{ $ck }}" class="grid place-items-center" />@else<div class="flex h-[210px] items-center justify-center text-xs text-zinc-300">No data.</div>@endif
         <div class="mt-1 grid grid-cols-3 gap-1 text-center text-[9px] font-bold">
@@ -1404,13 +1404,13 @@
             <span class="text-rose-500">{{ $totalWorkingDays > 0 ? round(($stats['absent'] ?? 0) / $totalWorkingDays * 100) : 0 }}% Absent</span>
         </div>
     </div>
-    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-sm transition hover:shadow-md lg:col-span-4">
+    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm transition hover:shadow-md lg:col-span-4">
         <div class="mb-1 text-sm font-black text-zinc-900 dark:text-white">Attendance Score Trend</div>
         @if(count($chartDaily) > 0)<x-dashboard.chart :options="$scoreChart" id="score-chart" wire:key="score-{{ $ck }}" class="-mb-2" />@else<div class="flex h-[220px] items-center justify-center text-xs text-zinc-300">No data.</div>@endif
     </div>
 
     {{-- Row 2 --}}
-    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-sm transition hover:shadow-md lg:col-span-4">
+    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm transition hover:shadow-md lg:col-span-4">
         <div class="mb-1 flex items-center justify-between">
             <div class="text-sm font-black text-zinc-900 dark:text-white">Weekly Attendance</div>
             <div class="flex gap-1.5 text-[8px] font-bold">
@@ -1419,11 +1419,11 @@
         </div>
         <x-dashboard.chart :options="$weeklyChart" id="weekly-chart" wire:key="weekly-{{ $ck }}" class="-mb-2" />
     </div>
-    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-sm transition hover:shadow-md lg:col-span-4">
+    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm transition hover:shadow-md lg:col-span-4">
         <div class="mb-1 text-sm font-black text-zinc-900 dark:text-white">Late Arrival Trend <span class="text-[10px] font-bold text-zinc-400">· 6 months</span></div>
         <x-dashboard.chart :options="$lateChart" id="late-chart" wire:key="late-{{ $ck }}" class="-mb-2" />
     </div>
-    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-sm transition hover:shadow-md lg:col-span-4">
+    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm transition hover:shadow-md lg:col-span-4">
         <div class="mb-1 flex items-center justify-between">
             <div class="text-sm font-black text-zinc-900 dark:text-white">Break Analysis</div>
             <div class="flex gap-2 text-[9px] font-bold text-zinc-400"><span>Avg <strong class="text-sky-600">{{ $avgBreakLine }}m</strong></span><span>Long <strong class="text-amber-600">{{ $longBreaks }}</strong></span><span>Short <strong class="text-emerald-600">{{ $shortBreaks }}</strong></span></div>
@@ -1432,20 +1432,20 @@
     </div>
 
     {{-- Row 3 --}}
-    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-sm transition hover:shadow-md lg:col-span-4">
+    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm transition hover:shadow-md lg:col-span-4">
         <div class="mb-1 text-sm font-black text-zinc-900 dark:text-white">Office vs WFH vs Hybrid</div>
         @if(! empty($modeBreakdown))<x-dashboard.chart :options="$modeChart" id="mode-chart" wire:key="mode-{{ $ck }}" class="-mb-2" />@else<div class="flex h-[200px] items-center justify-center text-xs text-zinc-300">No attendance yet.</div>@endif
     </div>
-    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-sm transition hover:shadow-md lg:col-span-5">
+    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm transition hover:shadow-md lg:col-span-5">
         <div class="mb-1 text-sm font-black text-zinc-900 dark:text-white">Overtime Trend</div>
         @if(count($chartDaily) > 0)<x-dashboard.chart :options="$otChart" id="ot-chart" wire:key="ot-{{ $ck }}" class="-mb-2" />@else<div class="flex h-[200px] items-center justify-center text-xs text-zinc-300">No data.</div>@endif
     </div>
-    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-sm transition hover:shadow-md lg:col-span-3">
+    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm transition hover:shadow-md lg:col-span-3">
         <div class="mb-1 text-sm font-black text-zinc-900 dark:text-white">Productivity Score</div>
         <x-dashboard.chart :options="$productivityChart" id="productivity-chart" wire:key="prod-{{ $ck }}" class="grid place-items-center" />
         <div class="text-center text-[10px] text-zinc-400">worked vs expected ({{ $totalWorkingDays }} working days × {{ $stdHours }}h)</div>
     </div>
-    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-sm transition hover:shadow-md lg:col-span-4">
+    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm transition hover:shadow-md lg:col-span-4">
         <div class="mb-1 text-sm font-black text-zinc-900 dark:text-white">Arrival Trend <span class="text-[10px] font-bold text-zinc-400">· vs your shift start</span></div>
         @if($shiftStartMin !== null && collect($arrivalSeries)->filter(fn ($v) => $v !== null)->isNotEmpty())
             <x-dashboard.chart :options="$arrivalChart" id="arrival-chart" wire:key="arrival-{{ $ck }}" class="-mb-2" />
@@ -1453,7 +1453,7 @@
             <div class="flex h-[200px] items-center justify-center text-xs text-zinc-300">No arrival data in this period.</div>
         @endif
     </div>
-    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-sm transition hover:shadow-md lg:col-span-4">
+    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm transition hover:shadow-md lg:col-span-4">
         <div class="mb-1 text-sm font-black text-zinc-900 dark:text-white">Logout Trend <span class="text-[10px] font-bold text-zinc-400">· vs your shift end</span></div>
         @if($shiftEndMin !== null && collect($logoutSeries)->filter(fn ($v) => $v !== null)->isNotEmpty())
             <x-dashboard.chart :options="$logoutChart" id="logout-chart" wire:key="logout-{{ $ck }}" class="-mb-2" />
@@ -1463,7 +1463,7 @@
     </div>
 
     {{-- Row 4 · Heatmap --}}
-    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-sm transition hover:shadow-md lg:col-span-12">
+    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm transition hover:shadow-md lg:col-span-12">
         <div class="mb-3 flex items-center justify-between">
             <div class="text-sm font-black text-zinc-900 dark:text-white">Attendance Heatmap <span class="text-[10px] font-bold text-zinc-400">· hours per day</span></div>
             <div class="flex items-center gap-1 text-[10px] text-zinc-400">Less
@@ -1532,8 +1532,8 @@
   </div>
 </div>
 <style>
-.pa-actlist{display:flex;flex-direction:column;gap:4px}
-.pa-actitem{display:flex;align-items:center;gap:12px;padding:11px 8px;border-radius:12px;transition:background .16s}
+.pa-actlist{display:flex;flex-direction:column;gap:3px}
+.pa-actitem{display:flex;align-items:center;gap:12px;padding:9px 8px;border-radius:12px;transition:background .16s}
 .pa-actitem:hover{background:var(--pa-surface-2)}
 .pa-actic{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;flex:0 0 auto}
 .pa-actt{font-size:13px;font-weight:660;color:var(--pa-ink)}
@@ -1652,7 +1652,7 @@
 {{-- ═══════════════ PUNCH IN / OUT TIMELINE ═══════════════ --}}
 <div id="attendance-log" class="overflow-hidden rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm scroll-mt-6"
      x-data="{ o: JSON.parse(localStorage.getItem('pa-sec-log') ?? 'true') }" x-init="$watch('o', v => localStorage.setItem('pa-sec-log', JSON.stringify(v)))">
-    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200/70 dark:border-zinc-800 px-5 py-3.5">
+    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200/70 dark:border-zinc-800 px-5 py-3">
         <button type="button" @click="o = !o" class="flex flex-1 items-center gap-2 text-left">
             <h3 class="flex items-center gap-2 text-sm font-black text-zinc-900 dark:text-white"><flux:icon.clock class="size-4 text-orange-500" /> Punch In / Out Timeline
                 <span class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
@@ -1690,7 +1690,7 @@
                 @endphp
                 <div x-data="{ open: {{ $day['is_today'] ? 'true' : 'false' }} }" class="border-l-[3px] {{ $dayBorder }} {{ $day['missing'] ? 'bg-amber-50/30' : '' }}">
                     {{-- Day header --}}
-                    <button type="button" @click="open = !open" class="flex w-full flex-wrap items-center gap-3 px-5 py-3.5 text-left transition hover:bg-orange-50/50 dark:hover:bg-zinc-800/40">
+                    <button type="button" @click="open = !open" class="flex w-full flex-wrap items-center gap-3 px-5 py-2.5 text-left transition hover:bg-orange-50/50 dark:hover:bg-zinc-800/40">
                         <flux:icon.chevron-right class="size-4 shrink-0 text-zinc-400 transition-transform" ::class="open ? 'rotate-90' : ''" />
                         <div class="min-w-[7.5rem]">
                             <div class="text-sm font-black text-zinc-900 dark:text-white">{{ $day['label'] }} @if($day['is_today'])<span class="text-orange-500">· Today</span>@endif</div>
@@ -1790,7 +1790,7 @@
 
                         {{-- Vertical punch timeline --}}
                         @if(count($day['events']) > 0)
-                            <div class="relative ml-2 space-y-2.5">
+                            <div class="relative ml-2 space-y-2">
                                 @foreach($day['events'] as $ev)
                                     @php
                                         [$dot, $ic] = match($ev['type']) {
