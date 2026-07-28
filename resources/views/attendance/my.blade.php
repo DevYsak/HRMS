@@ -870,12 +870,15 @@
 /* Breakdown fills the middle column; tiles 2-up. The grid takes flex:1 so its
    rows stretch to absorb the column's extra height (set by the tallest sibling,
    usually Session Summary) — no dead gap between the tiles and the bar. */
+/* Compact, natural-height tile grid — no longer stretched. The freed vertical
+   space goes to the radial breakdown chart below instead of oversized tiles. */
 .pa-hb-col{display:flex;flex-direction:column}
-.pa-hb-col .pa-hb-grid{grid-template-columns:repeat(2,1fr) !important;flex:1;align-content:stretch;min-height:0}
-.pa-hb-col .pa-hb-tile{padding:11px 13px}
-.pa-hb-col .pa-hb-v{font-size:14px}
-.pa-hb-col .pa-hb-bar{margin-top:12px;height:10px}
-.pa-hb-col .pa-hb-key{margin-top:9px;margin-bottom:0}
+.pa-hb-col .pa-hb-grid{grid-template-columns:repeat(4,1fr) !important;gap:9px}
+.pa-hb-col .pa-hb-tile{padding:10px 10px;gap:8px}
+.pa-hb-col .pa-hb-ic{width:27px;height:27px}
+.pa-hb-col .pa-hb-v{font-size:12.5px}
+.pa-hb-col .pa-hb-l{font-size:8.5px}
+.pa-hb-col .pa-hb-key{margin-top:0}
 .pa-sesscard{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:18px;padding:14px 15px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.05);display:flex;flex-direction:column}
 .pa-sesscard .sh{font-size:13.5px;font-weight:660;color:var(--pa-ink);display:flex;align-items:center;gap:8px;margin-bottom:10px}
 .pa-srow{display:grid;grid-template-columns:78px 1fr auto;align-items:center;gap:12px;padding:11px 0;border-top:1px solid var(--pa-border)}
@@ -1090,7 +1093,35 @@
     $segWorked = round($hb['worked'] / $hbSpan * 100, 1);
     $segBreak = round($legitBreak / $hbSpan * 100, 1);
     $segIdle = round($hb['idle'] / $hbSpan * 100, 1);
+
+    // Radial breakdown chart — the same segWorked/segBreak/segIdle percentages
+    // drawn as a 3-arc donut instead of a flat bar. Standard SVG technique:
+    // each arc is a full circle with dasharray "{ownLength} {circumference}"
+    // (so only that one arc paints) and dashoffset shifted by the cumulative
+    // length of the segments before it — no path/arc math needed.
+    $wbR = 64;
+    $wbCirc = round(2 * M_PI * $wbR, 2);
+    $wbWLen = round($segWorked / 100 * $wbCirc, 2);
+    $wbBLen = round($segBreak / 100 * $wbCirc, 2);
+    $wbILen = round($segIdle / 100 * $wbCirc, 2);
+    $wbWOff = 0.0;
+    $wbBOff = round(-$wbWLen, 2);
+    $wbIOff = round(-($wbWLen + $wbBLen), 2);
   @endphp
+  <style>
+  .pa-wb-viz{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;margin-top:14px}
+  .pa-wb-ring{position:relative;width:100%;max-width:196px;aspect-ratio:1/1;flex:0 0 auto}
+  .pa-wb-ring svg{width:100%;height:100%;display:block;transform:rotate(-90deg)}
+  .pa-wb-trk{fill:none;stroke:var(--pa-surface-3);stroke-width:16}
+  .pa-wb-seg{fill:none;stroke-width:16;stroke-linecap:round}
+  .pa-wb-ring .mid{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+  .pa-wb-ring .big{font-size:22px;font-weight:740;letter-spacing:-.02em;color:var(--pa-ink);line-height:1}
+  .pa-wb-ring .sm{font-size:10px;font-weight:640;text-transform:uppercase;letter-spacing:.05em;color:var(--pa-faint);margin-top:4px}
+  @keyframes pawbW{from{stroke-dashoffset:{{ round($wbWOff - $wbCirc, 2) }}}}
+  @keyframes pawbB{from{stroke-dashoffset:{{ round($wbBOff - $wbCirc, 2) }}}}
+  @keyframes pawbI{from{stroke-dashoffset:{{ round($wbIOff - $wbCirc, 2) }}}}
+  @media(prefers-reduced-motion:reduce){.pa-wb-seg{animation:none !important}}
+  </style>
   {{-- 3-column row: Session Summary · Working Hours Breakdown · streak/benchmark rail --}}
   <div class="pa-jgrid pa-jgrid-3" data-reveal>
     <div class="pa-sesscard">
@@ -1200,15 +1231,36 @@
       @endforeach
     </div>
     @if($hb['worked'] + $hb['break'] > 0)
-      <div class="pa-hb-bar">
-        <i style="width: {{ $segWorked }}%; background: #0F9D6E;"></i>
-        <i style="width: {{ $segBreak }}%; background: #F59E0B;"></i>
-        <i style="width: {{ $segIdle }}%; background: #D64545;"></i>
-      </div>
-      <div class="pa-hb-key">
-        <span><i style="background:#0F9D6E"></i> Worked {{ $fmt($hb['worked']) }} ({{ (int) round($segWorked) }}%)</span>
-        <span><i style="background:#F59E0B"></i> Break {{ $fmt($legitBreak) }} ({{ (int) round($segBreak) }}%)</span>
-        @if($hb['idle'] > 0)<span><i style="background:#D64545"></i> Idle {{ $fmt($hb['idle']) }} ({{ (int) round($segIdle) }}%)</span>@endif
+      <div class="pa-wb-viz">
+        <div class="pa-wb-ring">
+          <svg viewBox="0 0 160 160" aria-hidden="true" focusable="false">
+            <circle class="pa-wb-trk" cx="80" cy="80" r="{{ $wbR }}" />
+            @if($hb['worked'] > 0)
+              <circle class="pa-wb-seg" cx="80" cy="80" r="{{ $wbR }}" stroke="#0F9D6E"
+                stroke-dasharray="{{ $wbWLen }} {{ $wbCirc }}" stroke-dashoffset="{{ $wbWOff }}"
+                style="animation:pawbW .9s var(--pa-ease) .05s backwards" />
+            @endif
+            @if($legitBreak > 0)
+              <circle class="pa-wb-seg" cx="80" cy="80" r="{{ $wbR }}" stroke="#F59E0B"
+                stroke-dasharray="{{ $wbBLen }} {{ $wbCirc }}" stroke-dashoffset="{{ $wbBOff }}"
+                style="animation:pawbB .9s var(--pa-ease) .2s backwards" />
+            @endif
+            @if($hb['idle'] > 0)
+              <circle class="pa-wb-seg" cx="80" cy="80" r="{{ $wbR }}" stroke="#D64545"
+                stroke-dasharray="{{ $wbILen }} {{ $wbCirc }}" stroke-dashoffset="{{ $wbIOff }}"
+                style="animation:pawbI .9s var(--pa-ease) .35s backwards" />
+            @endif
+          </svg>
+          <div class="mid">
+            <div class="big num">{{ $fmt($hb['worked']) }}</div>
+            <div class="sm">worked · {{ (int) round($segWorked) }}%</div>
+          </div>
+        </div>
+        <div class="pa-hb-key">
+          <span><i style="background:#0F9D6E"></i> Worked {{ $fmt($hb['worked']) }} ({{ (int) round($segWorked) }}%)</span>
+          <span><i style="background:#F59E0B"></i> Break {{ $fmt($legitBreak) }} ({{ (int) round($segBreak) }}%)</span>
+          @if($hb['idle'] > 0)<span><i style="background:#D64545"></i> Idle {{ $fmt($hb['idle']) }} ({{ (int) round($segIdle) }}%)</span>@endif
+        </div>
       </div>
     @endif
   </div>
@@ -1288,8 +1340,6 @@
 .pa-hb-ic{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;flex:0 0 auto}
 .pa-hb-v{font-size:15.5px;font-weight:740;letter-spacing:-.02em;color:var(--pa-ink);line-height:1.1;font-variant-numeric:tabular-nums;white-space:nowrap}
 .pa-hb-l{font-size:10px;font-weight:640;text-transform:uppercase;letter-spacing:.05em;color:var(--pa-faint);margin-top:3px}
-.pa-hb-bar{display:flex;height:12px;border-radius:8px;overflow:hidden;margin-top:20px;background:var(--pa-surface-3)}
-.pa-hb-bar i{display:block;height:100%;transition:width .8s var(--pa-ease)}
 .pa-hb-key{display:flex;flex-wrap:wrap;gap:16px;margin-top:12px;font-size:11.5px;color:var(--pa-muted)}
 .pa-hb-key span{display:inline-flex;align-items:center;gap:6px;font-weight:540}
 .pa-hb-key i{width:10px;height:10px;border-radius:3px}
