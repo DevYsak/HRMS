@@ -740,7 +740,10 @@
 .pa-live-dot{width:9px;height:9px;border-radius:50%;background:var(--pa-accent);animation:pabeat 1.8s var(--pa-ease) infinite}
 .pa-work{display:grid;grid-template-columns:1.55fr 1fr;gap:18px;align-items:start}
 @media(max-width:960px){.pa-work{grid-template-columns:1fr}}
-.pa-rail{display:flex;flex-direction:column;gap:14px;align-self:start}
+/* Rail stretches with the row; each card grows from its natural height so the
+   column's leftover space is shared evenly and all three columns bottom-align. */
+.pa-rail{display:flex;flex-direction:column;gap:14px}
+.pa-rail .pa-rc{flex:1 1 auto}
 .pa-rc{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:18px;padding:14px 16px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.05)}
 .pa-rc-h{font-size:13.5px;font-weight:640;color:var(--pa-ink);display:flex;align-items:center;gap:8px}
 .pa-rc-sub{font-size:11px;color:var(--pa-faint);font-weight:500}
@@ -864,13 +867,15 @@
 .pa-jgrid-3{grid-template-columns:35fr 40fr 25fr;gap:24px;align-items:stretch;margin-top:16px}
 @media(max-width:1180px){.pa-jgrid-3{grid-template-columns:1fr 1fr}}
 @media(max-width:820px){.pa-jgrid-3{grid-template-columns:1fr}}
-/* Breakdown fills the middle column; tiles 2-up, stacked bar pinned to the bottom */
+/* Breakdown fills the middle column; tiles 2-up. The grid takes flex:1 so its
+   rows stretch to absorb the column's extra height (set by the tallest sibling,
+   usually Session Summary) — no dead gap between the tiles and the bar. */
 .pa-hb-col{display:flex;flex-direction:column}
-.pa-hb-col .pa-hb-grid{grid-template-columns:repeat(2,1fr) !important}
-.pa-hb-col .pa-hb-tile{padding:12px 13px}
+.pa-hb-col .pa-hb-grid{grid-template-columns:repeat(2,1fr) !important;flex:1;align-content:stretch;min-height:0}
+.pa-hb-col .pa-hb-tile{padding:11px 13px}
 .pa-hb-col .pa-hb-v{font-size:14px}
-.pa-hb-col .pa-hb-bar{margin-top:auto;height:14px}
-.pa-hb-col .pa-hb-key{margin-bottom:2px}
+.pa-hb-col .pa-hb-bar{margin-top:12px;height:10px}
+.pa-hb-col .pa-hb-key{margin-top:9px;margin-bottom:0}
 .pa-sesscard{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:18px;padding:14px 15px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.05);display:flex;flex-direction:column}
 .pa-sesscard .sh{font-size:13.5px;font-weight:660;color:var(--pa-ink);display:flex;align-items:center;gap:8px;margin-bottom:10px}
 .pa-srow{display:grid;grid-template-columns:78px 1fr auto;align-items:center;gap:12px;padding:11px 0;border-top:1px solid var(--pa-border)}
