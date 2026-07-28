@@ -18,7 +18,7 @@
 
     {{-- ── Action Toolbar ──────────────────────────────────────────────────── --}}
     <div class="flex flex-wrap items-center justify-end gap-3 rounded-2xl border border-zinc-100 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        {{-- Month / Year selectors (shown when no locked payroll) --}}
+        {{-- Month / Year selectors (shown while the payroll is still a draft, or doesn't exist yet) --}}
         @if(!$currentPayroll || $currentPayroll->status === 'draft')
             <div class="flex gap-2">
                 <flux:select wire:model.live="month" size="sm" class="w-32">
@@ -34,17 +34,20 @@
             <flux:button wire:click="startProcessing" variant="primary" icon="play">
                 {{ $currentPayroll ? 'Re-generate Draft' : 'Generate Draft' }}
             </flux:button>
-        @else
-            {{-- Export + Finalize when payroll exists --}}
-            <flux:button wire:click="exportExcel" variant="ghost" icon="arrow-down-tray">
-                Export Excel
-            </flux:button>
 
-            @if($currentPayroll->status === 'draft')
+            {{-- This was previously nested where it could never render — status is
+                 guaranteed non-draft on that branch. Draft + Submit for Approval both
+                 belong here, since a generated draft is exactly when submitting makes sense. --}}
+            @if($currentPayroll && $currentPayroll->status === 'draft')
                 <flux:button wire:click="submitForApproval" class="bg-amber-500 hover:bg-amber-600 text-white border-amber-500" icon="paper-airplane">
                     Submit for Approval
                 </flux:button>
             @endif
+        @else
+            {{-- Export + status-specific actions once a payroll exists and is past draft --}}
+            <flux:button wire:click="exportExcel" variant="ghost" icon="arrow-down-tray">
+                Export Excel
+            </flux:button>
 
             @if($currentPayroll->status === 'pending_finance')
                 {{-- Process.php can only submit a draft for approval — finalizing (marking
@@ -58,6 +61,21 @@
                     <span class="inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 dark:bg-amber-900/20 dark:text-amber-400">
                         <flux:icon.clock class="size-3.5" /> Awaiting Finance Approval
                     </span>
+                @endif
+            @elseif($currentPayroll->status === 'finalized')
+                @if($currentPayroll->isLocked())
+                    <span class="inline-flex items-center gap-1.5 rounded-lg bg-zinc-100 px-3 py-2 text-xs font-semibold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+                        <flux:icon.lock-closed class="size-3.5" /> Locked{{ $currentPayroll->lockedBy ? ' by '.$currentPayroll->lockedBy->name : '' }}
+                    </span>
+                    @if(auth()->user()->canUnlockPayroll())
+                        <flux:button wire:click="unlockPayroll" wire:confirm="Unlock this payroll? It can then be regenerated again." variant="ghost" icon="lock-open">
+                            Unlock
+                        </flux:button>
+                    @endif
+                @elseif(auth()->user()->canLockPayroll())
+                    <flux:button wire:click="lockPayroll" wire:confirm="Lock this payroll? It can no longer be regenerated once locked." variant="primary" icon="lock-closed">
+                        Lock Payroll
+                    </flux:button>
                 @endif
             @endif
         @endif

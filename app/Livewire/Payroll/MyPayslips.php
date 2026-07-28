@@ -3,6 +3,7 @@
 namespace App\Livewire\Payroll;
 
 use App\Http\Controllers\PayslipController;
+use App\Models\AuditLog;
 use App\Models\Payslip;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
@@ -195,6 +196,7 @@ class MyPayslips extends Component
                     ->attachData($pdf->output(), "payslip_{$month}.pdf", ['mime' => 'application/pdf']);
             });
 
+            AuditLog::record($slip, 'emailed', null, ['to' => $email], subjectEmployeeId: $slip->employee_id);
             \Flux::toast("Payslip emailed to {$email}.", variant: 'success');
         } catch (\Throwable $e) {
             \Flux::toast('Failed to send email: '.$e->getMessage(), variant: 'danger');

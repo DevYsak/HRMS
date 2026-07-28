@@ -44,6 +44,7 @@ use App\Livewire\Operations\Expenses;
 use App\Livewire\Overtime\ManageOtRequests;
 use App\Livewire\Overtime\MyOtRequests;
 use App\Livewire\Overtime\NexflowOtPanel;
+use App\Livewire\Payroll\AuditTrail as PayrollAuditTrail;
 use App\Livewire\Payroll\Components;
 use App\Livewire\Payroll\FinanceApproval;
 use App\Livewire\Payroll\Incentives;
@@ -240,6 +241,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/process', Process::class)->name('process');
             Route::get('/incentives', Incentives::class)->name('incentives');
             Route::get('/reimbursements', Reimbursements::class)->name('reimbursements');
+            Route::get('/audit-trail', PayrollAuditTrail::class)->name('audit-trail');
         });
 
         // Finance approval — Finance, Director, Super Admin

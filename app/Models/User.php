@@ -203,6 +203,16 @@ class User extends Authenticatable
         return $this->hasPermission('view_finance_profile');
     }
 
+    public function canLockPayroll(): bool
+    {
+        return $this->hasPermission('lock_payroll');
+    }
+
+    public function canUnlockPayroll(): bool
+    {
+        return $this->hasPermission('unlock_payroll');
+    }
+
     public function canReviewPerformance(): bool
     {
         return $this->hasPermission('review_performance');

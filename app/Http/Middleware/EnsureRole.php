@@ -20,6 +20,7 @@ class EnsureRole
      *   manage-employees | approve-leave | approve-ot | run-payroll
      *   approve-finance  | manage-settings | manage-documents
      *   view-finance-profile | review-performance
+     *   lock-payroll | unlock-payroll
      *
      * @param  Closure(Request): (Response)  $next
      */
@@ -50,6 +51,8 @@ class EnsureRole
             'manage-documents' => $user->canManageDocuments(),
             'view-finance-profile' => $user->canViewFinanceProfile(),
             'review-performance' => $user->canReviewPerformance(),
+            'lock-payroll' => $user->canLockPayroll(),
+            'unlock-payroll' => $user->canUnlockPayroll(),
             default => false,
         };
     }

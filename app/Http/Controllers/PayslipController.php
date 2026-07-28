@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AuditLog;
 use App\Models\Company;
 use App\Models\Payslip;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -106,6 +107,8 @@ class PayslipController extends Controller
         if (! Gate::check('view', $payslip) && auth()->user()->id !== $payslip->employee->user_id && ! auth()->user()->canRunPayroll()) {
             abort(403, 'Unauthorized action.');
         }
+
+        AuditLog::record($payslip, 'downloaded', null, null, subjectEmployeeId: $payslip->employee_id);
 
         // If a stored PDF path exists, serve it directly from storage for performance and auditing
         if (! empty($payslip->pdf_path) && Storage::exists($payslip->pdf_path)) {

@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'ot_amount', 'incentives', 'reimbursements', 'deductions',
     'processed_by', 'processed_at',
     'finance_approved_by', 'finance_approved_at', 'finance_note',
+    'locked_at', 'locked_by',
 ])]
 class Payroll extends Model
 {
@@ -20,6 +21,7 @@ class Payroll extends Model
         return [
             'processed_at' => 'datetime',
             'finance_approved_at' => 'datetime',
+            'locked_at' => 'datetime',
             'ot_amount' => 'decimal:2',
             'incentives' => 'decimal:2',
             'reimbursements' => 'decimal:2',
@@ -43,9 +45,19 @@ class Payroll extends Model
         return $this->belongsTo(User::class, 'finance_approved_by');
     }
 
+    public function lockedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'locked_by');
+    }
+
     public function isPendingFinance(): bool
     {
         return $this->status === 'pending_finance';
+    }
+
+    public function isLocked(): bool
+    {
+        return $this->locked_at !== null;
     }
 
     /** Gross total including OT, incentives, reimbursements, minus deductions. */

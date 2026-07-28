@@ -3,9 +3,11 @@
 namespace App\Services;
 
 use App\Mail\PayslipMail;
+use App\Models\AuditLog;
 use App\Models\Employee;
 use App\Models\OvertimeRecord;
 use App\Models\Payroll;
+use App\Models\PayrollRunFailure;
 use App\Models\Payslip;
 use App\Models\User;
 use App\Notifications\PayrollApprovalNotification;
@@ -25,6 +27,26 @@ class PayrollService
 
     public function generateDraft(string $month, int $year, string $cycle, int $processedBy): Payroll
     {
+        try {
+            return $this->runGenerateDraft($month, $year, $cycle, $processedBy);
+        } catch (\Throwable $e) {
+            // A bad run used to just vanish as a toast — record it so it shows up
+            // somewhere (the payroll dashboard's "Failed" widget reads this table).
+            PayrollRunFailure::create([
+                'month' => $month,
+                'year' => $year,
+                'cycle' => $cycle,
+                'attempted_by' => $processedBy,
+                'reason' => $e->getMessage(),
+                'context' => ['exception' => get_class($e)],
+            ]);
+
+            throw $e;
+        }
+    }
+
+    private function runGenerateDraft(string $month, int $year, string $cycle, int $processedBy): Payroll
+    {
         [$cycleFrom, $cycleTo] = $this->resolveCycleDates($month, $year, $cycle);
         $monthLabel = Carbon::parse("1 {$month} {$year}")->format('Y-m');
 
@@ -33,6 +55,10 @@ class PayrollService
                 ->where('year', $year)
                 ->where('cycle', $cycle)
                 ->first();
+
+            if ($payroll && $payroll->isLocked()) {
+                throw new \DomainException('This payroll is locked and can no longer be regenerated.');
+            }
 
             if ($payroll && $payroll->status !== 'draft') {
                 throw new \DomainException('Payroll is locked for this cycle until finance completes review.');
@@ -135,6 +161,7 @@ class PayrollService
         }
 
         $payroll->update(['status' => 'pending_finance']);
+        AuditLog::record($payroll, 'submitted_for_approval', null, ['status' => 'pending_finance']);
 
         foreach (User::whereIn('role', ['super_admin', 'finance', 'director'])->get() as $approver) {
             $approver->notify(new PayrollApprovalNotification($payroll->fresh(), 'finance_approved'));
@@ -149,12 +176,20 @@ class PayrollService
             throw new \DomainException('Only pending payrolls can be approved by finance.');
         }
 
+        // Maker-checker: whoever most recently generated/regenerated this draft
+        // (processed_by) cannot also be the one who approves it into finalized.
+        if ((int) $payroll->processed_by === $approverId) {
+            throw new \DomainException('You processed this payroll — someone else must approve it (maker-checker separation).');
+        }
+
         return DB::transaction(function () use ($payroll, $approverId) {
             $payroll->update([
                 'status' => 'finalized',
                 'finance_approved_by' => $approverId,
                 'finance_approved_at' => now(),
             ]);
+
+            AuditLog::record($payroll, 'approved', null, ['status' => 'finalized', 'finance_approved_by' => $approverId]);
 
             $payroll->loadMissing('payslips.employee.user');
             $payroll->payslips()->update(['status' => 'paid']);
@@ -185,8 +220,39 @@ class PayrollService
             'finance_approved_by' => null,
             'finance_approved_at' => null,
         ]);
+        AuditLog::record($payroll, 'rejected', null, ['status' => 'draft'], reason: $note);
 
         return $payroll->fresh(['payslips.employee.user']);
+    }
+
+    /** Lock a finalized payroll so it can no longer be regenerated or edited. */
+    public function lock(Payroll $payroll, int $userId): Payroll
+    {
+        if ($payroll->status !== 'finalized') {
+            throw new \DomainException('Only a finalized payroll can be locked.');
+        }
+
+        if ($payroll->isLocked()) {
+            throw new \DomainException('This payroll is already locked.');
+        }
+
+        $payroll->update(['locked_at' => now(), 'locked_by' => $userId]);
+        AuditLog::record($payroll, 'locked', null, ['locked_by' => $userId]);
+
+        return $payroll->fresh();
+    }
+
+    /** Unlock a payroll, allowing it to be regenerated again if needed. */
+    public function unlock(Payroll $payroll): Payroll
+    {
+        if (! $payroll->isLocked()) {
+            throw new \DomainException('This payroll is not locked.');
+        }
+
+        $payroll->update(['locked_at' => null, 'locked_by' => null]);
+        AuditLog::record($payroll, 'unlocked');
+
+        return $payroll->fresh();
     }
 
     public function dispatchFinalizedPayrollNotifications(Payroll $payroll): void
@@ -200,6 +266,7 @@ class PayrollService
 
             $payslip->employee->user->notify(new PayslipGeneratedNotification($payslip));
             Mail::to($payslip->employee->user->email)->send(new PayslipMail($payslip));
+            AuditLog::record($payslip, 'emailed', null, ['to' => $payslip->employee->user->email], subjectEmployeeId: $payslip->employee_id);
         }
     }
 

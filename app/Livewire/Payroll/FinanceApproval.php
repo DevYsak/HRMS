@@ -38,7 +38,14 @@ class FinanceApproval extends Component
             return;
         }
 
-        $payroll = $payrollService->approveFinance($payroll, Auth::id());
+        try {
+            $payroll = $payrollService->approveFinance($payroll, Auth::id());
+        } catch (\DomainException $e) {
+            \Flux::toast($e->getMessage(), variant: 'danger');
+
+            return;
+        }
+
         $payrollService->dispatchFinalizedPayrollNotifications($payroll);
 
         $this->loadPending();

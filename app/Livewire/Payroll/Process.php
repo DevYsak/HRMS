@@ -200,6 +200,48 @@ class Process extends Component
         \Flux::toast('Export feature coming soon.', variant: 'warning');
     }
 
+    /** Lock the current finalized payroll so it can no longer be regenerated. */
+    public function lockPayroll(): void
+    {
+        abort_unless(Auth::user()->canLockPayroll(), 403);
+
+        if (! $this->currentPayroll) {
+            return;
+        }
+
+        try {
+            app(PayrollService::class)->lock($this->currentPayroll, Auth::id());
+        } catch (\DomainException $e) {
+            \Flux::toast($e->getMessage(), variant: 'danger');
+
+            return;
+        }
+
+        $this->loadCurrentPayroll();
+        \Flux::toast('Payroll locked.');
+    }
+
+    /** Unlock the current payroll, allowing it to be regenerated again. */
+    public function unlockPayroll(): void
+    {
+        abort_unless(Auth::user()->canUnlockPayroll(), 403);
+
+        if (! $this->currentPayroll) {
+            return;
+        }
+
+        try {
+            app(PayrollService::class)->unlock($this->currentPayroll);
+        } catch (\DomainException $e) {
+            \Flux::toast($e->getMessage(), variant: 'danger');
+
+            return;
+        }
+
+        $this->loadCurrentPayroll();
+        \Flux::toast('Payroll unlocked.');
+    }
+
     public function render()
     {
         abort_unless(Auth::user()->canRunPayroll(), 403);
