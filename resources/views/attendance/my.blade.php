@@ -887,20 +887,54 @@
 .pa-stot{display:flex;align-items:center;justify-content:space-between;margin-top:12px;padding-top:13px;border-top:2px solid var(--pa-border)}
 .pa-stot .tl{font-size:12px;font-weight:640;color:var(--pa-muted)}
 .pa-stot .tv{font-size:20px;font-weight:760;letter-spacing:-.02em;color:var(--pa-ink);font-variant-numeric:tabular-nums}
-/* Premium per-session card */
-.pa-sess{border:1px solid var(--pa-border);border-radius:13px;padding:10px 12px;margin-bottom:7px;background:var(--pa-surface-2);transition:border-color .16s,box-shadow .16s}
-.pa-sess:hover{border-color:var(--pa-border-2);box-shadow:0 4px 14px rgba(24,24,27,.05)}
-.pa-sess.live{border-color:var(--pa-present);background:var(--pa-present-soft)}
-.pa-sess.miss{border-color:var(--pa-warn);background:var(--pa-warn-soft)}
-.pa-sess-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
-.pa-sess-n{font-size:12.5px;font-weight:700;color:var(--pa-ink);display:flex;align-items:center;gap:7px}
-.pa-sess-badge{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--pa-present);background:var(--pa-surface);padding:2px 7px;border-radius:999px}
-.pa-sess-t{font-size:11.5px;font-weight:600;color:var(--pa-muted);font-variant-numeric:tabular-nums}
-.pa-sess-m{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-.pa-sess-m .l{display:block;font-size:9px;font-weight:640;text-transform:uppercase;letter-spacing:.04em;color:var(--pa-faint)}
-.pa-sess-m .v{display:block;font-size:14px;font-weight:720;color:var(--pa-ink);margin-top:2px;font-variant-numeric:tabular-nums}
-.pa-sess-bar{height:6px;border-radius:5px;background:var(--pa-surface-3);overflow:hidden;margin-top:11px}
-.pa-sess-bar i{display:block;height:100%;border-radius:5px;background:linear-gradient(90deg,var(--pa-present),#22c55e);transition:width .8s var(--pa-ease)}
+/* Session flow visualization — a vertical, connected IN/OUT timeline replacing
+   the stacked per-session cards. flex:1 lets it absorb the row's extra height
+   (set by the tallest sibling column) so Session Summary bottom-aligns with
+   Working Hours Breakdown and the rail — same trick used on those columns. */
+.pa-sess-viz{position:relative;flex:1;min-height:160px;display:flex;padding:2px 0}
+.pa-sv-flow{position:absolute;left:0;top:0;width:44px;height:100%;z-index:0;pointer-events:none;opacity:.9}
+.pa-sv-flow .s0{stop-color:var(--pa-present)}
+.pa-sv-flow .s1{stop-color:#3B82F6}
+.pa-sv-flow .s2{stop-color:#F59E0B}
+.pa-sv-flow .s3{stop-color:var(--pa-danger)}
+.pa-sv-flow-base{stroke-width:2;opacity:.32}
+[data-theme="dark"] .pa-sv-flow-base,.dark .pa-sv-flow-base{opacity:.46}
+.pa-sv-flow-comet{stroke-width:3;stroke-linecap:round;stroke-dasharray:40 520;stroke-dashoffset:0;filter:drop-shadow(0 0 4px rgba(249,115,22,.5));animation:pasvflow 4.5s linear infinite}
+.pa-sv-flow-comet2{stroke-width:2;stroke-linecap:round;opacity:.65;stroke-dasharray:24 530;stroke-dashoffset:0;animation:pasvflow 7.5s linear infinite;animation-delay:-3s}
+@keyframes pasvflow{to{stroke-dashoffset:-560}}
+@media(prefers-reduced-motion:reduce){.pa-sv-flow-comet,.pa-sv-flow-comet2{animation:none;opacity:.45}}
+.pa-sv-col{position:relative;z-index:1;flex:1;display:flex;flex-direction:column;justify-content:space-between;min-width:0}
+.pa-sv-row{display:flex;align-items:center;gap:11px}
+.pa-sv-rail{width:44px;flex:0 0 auto;display:flex;align-items:center;justify-content:center}
+.pa-sv-dot{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;color:#fff;border:2.5px solid var(--pa-surface);box-shadow:0 2px 6px rgba(24,24,27,.14)}
+.pa-sv-dot.t-first_in{background:var(--pa-present)}
+.pa-sv-dot.t-in{background:#3B82F6}
+.pa-sv-dot.t-out{background:#F59E0B}
+.pa-sv-dot.t-last_out{background:var(--pa-danger)}
+.pa-sv-dot.t-live{background:var(--pa-present);animation:pahzpulse 2s var(--pa-ease) infinite}
+.pa-sv-dot.t-missing{background:var(--pa-warn-soft);border:2px dashed var(--pa-warn);color:var(--pa-warn);box-shadow:none;animation:pashake 2.4s var(--pa-ease) infinite}
+@media(prefers-reduced-motion:reduce){.pa-sv-dot.t-live,.pa-sv-dot.t-missing{animation:none}}
+.pa-sv-info{display:flex;align-items:baseline;gap:8px;min-width:0}
+.pa-sv-time{font-size:13.5px;font-weight:700;color:var(--pa-ink);font-variant-numeric:tabular-nums;white-space:nowrap}
+.pa-sv-dir{font-size:9.5px;font-weight:720;letter-spacing:.06em;padding:1px 7px;border-radius:20px;white-space:nowrap}
+.pa-sv-dir.d-in{color:var(--pa-present);background:var(--pa-present-soft)}
+.pa-sv-dir.d-out{color:var(--pa-danger);background:var(--pa-danger-soft)}
+.pa-sv-dir.d-live{color:var(--pa-present);background:var(--pa-present-soft)}
+.pa-sv-dir.d-missing{color:var(--pa-warn);background:var(--pa-warn-soft)}
+.pa-sv-seg,.pa-sv-brk{display:flex;align-items:center;gap:11px}
+.pa-sv-seg .tick{width:2px;height:22px;border-radius:2px;background:linear-gradient(var(--pa-present),#22c55e);flex:0 0 auto}
+.pa-sv-seg.live .tick{background:var(--pa-present);animation:pabeat 1.6s var(--pa-ease) infinite}
+.pa-sv-seg.miss .tick{background:none;border-left:2px dashed var(--pa-warn);width:0}
+.pa-sv-brk .tick{width:2px;height:16px;border-radius:2px;background:repeating-linear-gradient(var(--pa-border) 0 3px,transparent 3px 6px);flex:0 0 auto}
+.pa-sv-seg-info{display:flex;align-items:center;gap:8px;min-width:0;flex:1}
+.pa-sv-seg .lbl{font-size:12px;font-weight:600;color:var(--pa-muted)}
+.pa-sv-seg.miss .lbl{color:var(--pa-warn);font-weight:640}
+.pa-sv-seg.live .lbl{color:var(--pa-present);font-weight:640}
+.pa-sv-brk .lbl{font-size:11px;color:var(--pa-faint)}
+.pa-sv-prog{width:44px;height:4px;border-radius:3px;background:var(--pa-surface-3);overflow:hidden;flex:0 0 auto}
+.pa-sv-prog i{display:block;height:100%;border-radius:3px;background:linear-gradient(90deg,var(--pa-present),#22c55e);transition:width .8s var(--pa-ease)}
+.pa-sv-seg .pct{font-size:10.5px;font-weight:700;color:var(--pa-present);font-variant-numeric:tabular-nums;flex:0 0 auto}
+.pa-sv-empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:var(--pa-faint);padding:20px 0}
 .pa-snote{margin-top:12px;font-size:11.5px;color:var(--pa-faint);display:flex;align-items:center;gap:7px}
 .pa-swarn{margin-top:12px;font-size:12px;font-weight:600;color:var(--pa-danger);background:var(--pa-danger-soft);padding:9px 12px;border-radius:10px;display:flex;align-items:center;gap:8px}
 .pa-hz-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:var(--pa-faint);padding:52px 0}
@@ -1061,26 +1095,80 @@
   <div class="pa-jgrid pa-jgrid-3" data-reveal>
     <div class="pa-sesscard">
       <div class="sh"><flux:icon.squares-2x2 class="size-4 text-orange-500" /> Session summary</div>
-      @if($hasPunch && count($pj['sessions']))
-        @foreach($pj['sessions'] as $s)
-          @php $miss = ! empty($s['missing']); @endphp
-          <div class="pa-sess {{ $s['live'] ? 'live' : '' }} {{ $miss ? 'miss' : '' }}">
-            <div class="pa-sess-h">
-              <span class="pa-sess-n">Session {{ $s['index'] }}@if($s['live'])<span class="pa-sess-badge">Current</span>@endif</span>
-              <span class="pa-sess-t">{{ $s['in'] ? \Illuminate\Support\Str::before($s['in'], ' ') : '⚠' }} – {{ $s['out'] ? \Illuminate\Support\Str::before($s['out'], ' ') : ($miss ? '⚠' : 'now') }}</span>
-            </div>
-            @if($miss)
-              <div class="pa-sess-m"><div><span class="l">Status</span><span class="v" style="color:var(--pa-warn);font-size:12px">{{ $s['label'] }}</span></div></div>
-            @else
-              <div class="pa-sess-m">
-                <div><span class="l">Worked</span><span class="v">{{ $s['label'] }}</span></div>
-                <div><span class="l">Break</span><span class="v">{{ $s['break_after_label'] ?? '—' }}</span></div>
-                <div><span class="l">Productivity</span><span class="v" style="color:var(--pa-present)">{{ $s['productivity'] ?? 0 }}%</span></div>
-              </div>
-              <div class="pa-sess-bar"><i style="width: {{ $s['productivity'] ?? 0 }}%"></i></div>
-            @endif
+      @php
+        // Flatten sessions into a vertical flow: an IN node, a work connector
+        // (with the same productivity % already computed by the engine), an
+        // OUT/LIVE/MISSING node, then a break connector before the next
+        // session. Node "type" reuses the horizontal timeline's vocabulary
+        // (first_in/in/out/last_out/live/missing) so colors/icons match 1:1 —
+        // no new engine data, just $pj['sessions'] read a different way.
+        $svItems = [];
+        if ($hasPunch && count($pj['sessions'])) {
+            $sessCount = count($pj['sessions']);
+            foreach ($pj['sessions'] as $i => $s) {
+                $miss = ! empty($s['missing']);
+                $outType = $s['live'] ? 'live' : ($miss ? 'missing' : ($i === $sessCount - 1 ? 'last_out' : 'out'));
+                $svItems[] = ['kind' => 'node', 'type' => $i === 0 ? 'first_in' : 'in', 'dir' => 'IN',
+                    'time' => $s['in'] ? \Illuminate\Support\Str::before($s['in'], ' ') : '—'];
+                $svItems[] = ['kind' => 'work', 'miss' => $miss, 'live' => $s['live'], 'label' => $s['label'], 'pct' => $s['productivity'] ?? null];
+                $svItems[] = ['kind' => 'node', 'type' => $outType, 'dir' => $s['live'] ? 'LIVE' : ($miss ? 'MISSING' : 'OUT'),
+                    'time' => $s['live'] ? 'now' : ($s['out'] ? \Illuminate\Support\Str::before($s['out'], ' ') : '—')];
+                if ($i < $sessCount - 1 && ! empty($s['break_after_label']) && $s['break_after_label'] !== '—') {
+                    $svItems[] = ['kind' => 'break', 'label' => $s['break_after_label']];
+                }
+            }
+        }
+        $svIcon = fn ($type) => match ($type) {
+            'missing' => 'exclamation-triangle',
+            'out', 'last_out', 'live' => 'arrow-left-start-on-rectangle',
+            default => 'arrow-right-end-on-rectangle',
+        };
+      @endphp
+      @if(count($svItems))
+        <div class="pa-sess-viz">
+          <svg class="pa-sv-flow" viewBox="0 0 44 480" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+            <defs>
+              <linearGradient id="paSvLine" x1="0" y1="0" x2="0" y2="480" gradientUnits="userSpaceOnUse">
+                <stop offset="0" class="s0" /><stop offset=".38" class="s1" /><stop offset=".7" class="s2" /><stop offset="1" class="s3" />
+              </linearGradient>
+            </defs>
+            <path class="pa-sv-flow-base" fill="none" stroke="url(#paSvLine)"
+              d="M22,0 C36,20 8,40 22,60 C36,80 8,100 22,120 C36,140 8,160 22,180 C36,200 8,220 22,240 C36,260 8,280 22,300 C36,320 8,340 22,360 C36,380 8,400 22,420 C36,440 8,460 22,480" />
+            <path class="pa-sv-flow-comet2" fill="none" stroke="url(#paSvLine)"
+              d="M22,0 C36,20 8,40 22,60 C36,80 8,100 22,120 C36,140 8,160 22,180 C36,200 8,220 22,240 C36,260 8,280 22,300 C36,320 8,340 22,360 C36,380 8,400 22,420 C36,440 8,460 22,480" />
+            <path class="pa-sv-flow-comet" fill="none" stroke="url(#paSvLine)"
+              d="M22,0 C36,20 8,40 22,60 C36,80 8,100 22,120 C36,140 8,160 22,180 C36,200 8,220 22,240 C36,260 8,280 22,300 C36,320 8,340 22,360 C36,380 8,400 22,420 C36,440 8,460 22,480" />
+          </svg>
+          <div class="pa-sv-col">
+            @foreach($svItems as $it)
+              @if($it['kind'] === 'node')
+                <div class="pa-sv-row">
+                  <span class="pa-sv-rail"><span class="pa-sv-dot t-{{ $it['type'] }}"><flux:icon :icon="$svIcon($it['type'])" class="size-3.5" /></span></span>
+                  <div class="pa-sv-info">
+                    <span class="pa-sv-time">{{ $it['time'] }}</span>
+                    <span class="pa-sv-dir d-{{ strtolower($it['dir']) }}">{{ $it['dir'] }}</span>
+                  </div>
+                </div>
+              @elseif($it['kind'] === 'work')
+                <div class="pa-sv-seg {{ $it['miss'] ? 'miss' : '' }} {{ $it['live'] ? 'live' : '' }}">
+                  <span class="pa-sv-rail"><span class="tick"></span></span>
+                  <div class="pa-sv-seg-info">
+                    <span class="lbl">{{ $it['miss'] ? 'Missing OUT — needs regularization' : $it['label'].' worked' }}</span>
+                    @if(! $it['miss'] && $it['pct'] !== null)
+                      <span class="pa-sv-prog"><i style="width:{{ $it['pct'] }}%"></i></span>
+                      <span class="pct">{{ $it['pct'] }}%</span>
+                    @endif
+                  </div>
+                </div>
+              @else
+                <div class="pa-sv-brk">
+                  <span class="pa-sv-rail"><span class="tick"></span></span>
+                  <span class="lbl">{{ $it['label'] }} break</span>
+                </div>
+              @endif
+            @endforeach
           </div>
-        @endforeach
+        </div>
         <div class="pa-stot"><span class="tl">Total working hours</span><span class="tv">{{ $fmt($pj['working_minutes']) }}</span></div>
         <div class="pa-stot" style="border-top:1px solid var(--pa-border);padding-top:11px;margin-top:11px"><span class="tl">Total break</span><span class="tv" style="font-size:16px;color:var(--pa-muted)">{{ $fmt($pj['break_minutes']) }}</span></div>
         @if($pj['missing_out'])
@@ -1094,7 +1182,7 @@
           <div class="pa-snote"><flux:icon.no-symbol class="size-3.5" /> {{ $pj['ignored_count'] }} card {{ \Illuminate\Support\Str::plural('scan', $pj['ignored_count']) }} ignored — attendance starts with Face recognition.</div>
         @endif
       @else
-        <p style="font-size:12.5px;color:var(--pa-faint);margin:0">No sessions yet — your first punch starts session 1.</p>
+        <div class="pa-sv-empty"><flux:icon.clock class="mb-2 size-7" style="opacity:.4" /><p style="font-size:12.5px;margin:0">No sessions yet — your first punch starts session 1.</p></div>
       @endif
     </div>
 
