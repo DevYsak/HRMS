@@ -790,7 +790,12 @@
 /* Animated "day-flow" wave that fills the space reserved for hover tooltips —
    turns dead white space above the nodes into a live, on-brand graphic. Purely
    decorative (aria-hidden, pointer-events:none) and sits behind nodes/tooltips. */
-.pa-hz-flow{position:absolute;left:0;right:0;top:6px;height:72px;z-index:0;pointer-events:none;opacity:.92}
+/* width:100% is REQUIRED — an absolutely-positioned <svg> is a replaced
+   element, so left:0;right:0 alone doesn't stretch it; without it the width
+   falls back to the viewBox aspect ratio (height 72 × 12 = 864px) and the
+   wave dies mid-track on wide/scrolling timelines. 100% of .pa-hz-track
+   (min-width:max-content) spans first punch → last punch at any viewport. */
+.pa-hz-flow{position:absolute;left:0;top:6px;width:100%;height:72px;z-index:0;pointer-events:none;opacity:.92}
 .pa-hz-flow .s0{stop-color:var(--pa-present)}
 .pa-hz-flow .s1{stop-color:#3B82F6}
 .pa-hz-flow .s2{stop-color:#F59E0B}
