@@ -23,7 +23,7 @@
                             <div class="text-2xl font-black text-zinc-900 dark:text-white">IDR {{ number_format($payroll->computeTotal(), 0) }}</div>
                         </div>
                         <div class="flex gap-2">
-                            <flux:button wire:click="reject({{ $payroll->id }})" variant="ghost" class="text-red-600 hover:text-red-700">Reject</flux:button>
+                            <flux:button wire:click="openReject({{ $payroll->id }})" variant="ghost" class="text-red-600 hover:text-red-700">Reject</flux:button>
                             <flux:button wire:click="approve({{ $payroll->id }})" variant="primary">Approve & Finalize</flux:button>
                         </div>
                     </div>
@@ -87,4 +87,20 @@
             </div>
         @endforelse
     </div>
+
+    <flux:modal name="reject-payroll" class="max-w-lg">
+        <div class="space-y-5">
+            <div>
+                <flux:heading size="lg">Reject payroll</flux:heading>
+                <flux:subheading>Sends the payroll back to Draft so HR can correct it. The reason is included in the payroll audit trail.</flux:subheading>
+            </div>
+
+            <flux:textarea wire:model="rejectReason" label="Reason (optional)" placeholder="e.g. missing OT approvals for Engineering, incorrect LWP for 2 employees" rows="3" />
+
+            <div class="flex justify-end gap-2">
+                <flux:button @click="$flux.modal('reject-payroll').close()" variant="ghost">Cancel</flux:button>
+                <flux:button wire:click="confirmReject" variant="danger">Reject Payroll</flux:button>
+            </div>
+        </div>
+    </flux:modal>
 </flux:main>

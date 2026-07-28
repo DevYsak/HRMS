@@ -46,14 +46,19 @@
                 </flux:button>
             @endif
 
-            @if(in_array($currentPayroll->status, ['pending_finance']))
-                <flux:button
-                    wire:click="finalize"
-                    wire:confirm="Finalize payroll? This will mark all payslips as paid and notify employees."
-                    variant="primary"
-                    icon="play">
-                    Finalize &amp; Pay
-                </flux:button>
+            @if($currentPayroll->status === 'pending_finance')
+                {{-- Process.php can only submit a draft for approval — finalizing (marking
+                     payslips paid + notifying employees) only ever happens on the Finance
+                     Approval page. A button here that claimed to do that never actually did. --}}
+                @if(auth()->user()->canApproveFinance())
+                    <flux:button :href="route('payroll.finance-approve')" wire:navigate variant="primary" icon="check-circle">
+                        Go to Finance Approval
+                    </flux:button>
+                @else
+                    <span class="inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 dark:bg-amber-900/20 dark:text-amber-400">
+                        <flux:icon.clock class="size-3.5" /> Awaiting Finance Approval
+                    </span>
+                @endif
             @endif
         @endif
     </div>
@@ -167,16 +172,6 @@
                         @foreach($offices as $office)
                             <option value="{{ $office->id }}">{{ $office->name }}</option>
                         @endforeach
-                    </flux:select>
-                </div>
-
-                {{-- Payment Type --}}
-                <div class="min-w-36">
-                    <flux:select wire:model.live="filterPaymentType" size="sm">
-                        <option value="">All</option>
-                        <option value="bank_transfer">Bank Transfer</option>
-                        <option value="cash">Cash</option>
-                        <option value="cheque">Cheque</option>
                     </flux:select>
                 </div>
 

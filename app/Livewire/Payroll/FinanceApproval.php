@@ -11,6 +11,10 @@ class FinanceApproval extends Component
 {
     public $pendingPayrolls;
 
+    public ?int $rejectingId = null;
+
+    public string $rejectReason = '';
+
     public function mount()
     {
         $this->loadPending();
@@ -41,19 +45,35 @@ class FinanceApproval extends Component
         \Flux::toast('Payroll approved and finalized!');
     }
 
-    public function reject($payrollId)
+    /** Open the reject-reason modal for a specific payroll. */
+    public function openReject(int $payrollId): void
     {
         abort_unless(Auth::user()->canApproveFinance(), 403);
 
-        $payroll = Payroll::findOrFail($payrollId);
+        $this->rejectingId = $payrollId;
+        $this->rejectReason = '';
+        $this->modal('reject-payroll')->show();
+    }
+
+    /** Confirm rejection with the reason entered in the modal. */
+    public function confirmReject(): void
+    {
+        abort_unless(Auth::user()->canApproveFinance(), 403);
+
+        $payroll = Payroll::findOrFail($this->rejectingId);
+
         if ($payroll->status !== 'pending_finance') {
             \Flux::toast('Only pending payrolls can be rejected.', variant: 'danger');
+            $this->modal('reject-payroll')->close();
 
             return;
         }
 
-        app(PayrollService::class)->rejectFinance($payroll);
+        app(PayrollService::class)->rejectFinance($payroll, trim($this->rejectReason) !== '' ? trim($this->rejectReason) : null);
 
+        $this->modal('reject-payroll')->close();
+        $this->rejectingId = null;
+        $this->rejectReason = '';
         $this->loadPending();
         \Flux::toast('Payroll sent back for corrections.');
     }

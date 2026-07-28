@@ -30,8 +30,6 @@ class Process extends Component
 
     public string $filterLocation = '';
 
-    public string $filterPaymentType = '';
-
     public string $filterStatus = '';
 
     public int $perPage = 10;
@@ -143,7 +141,6 @@ class Process extends Component
         $this->search = '';
         $this->filterDepartment = '';
         $this->filterLocation = '';
-        $this->filterPaymentType = '';
         $this->filterStatus = '';
         $this->resetPage();
     }
@@ -196,26 +193,6 @@ class Process extends Component
         app(PayrollService::class)->submitForFinanceApproval($this->currentPayroll);
         $this->loadCurrentPayroll();
         \Flux::toast('Payroll submitted for finance approval.');
-    }
-
-    /** Legacy alias kept so old wire:click="finalize" calls still work. */
-    public function finalize(): void
-    {
-        abort_unless(Auth::user()->canRunPayroll(), 403);
-
-        if (! $this->currentPayroll) {
-            \Flux::toast('No payroll to finalize.', variant: 'danger');
-
-            return;
-        }
-
-        if ($this->currentPayroll->status === 'draft') {
-            $this->submitForApproval();
-
-            return;
-        }
-
-        \Flux::toast('Payroll is awaiting finance approval. Use the Finance Approval page.', variant: 'warning');
     }
 
     public function exportExcel(): void

@@ -48,11 +48,6 @@ class Payroll extends Model
         return $this->status === 'pending_finance';
     }
 
-    public function isApproved(): bool
-    {
-        return $this->status === 'approved';
-    }
-
     /** Gross total including OT, incentives, reimbursements, minus deductions. */
     public function computeTotal(): float
     {
