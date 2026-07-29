@@ -242,6 +242,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/incentives', Incentives::class)->name('incentives');
             Route::get('/reimbursements', Reimbursements::class)->name('reimbursements');
             Route::get('/audit-trail', PayrollAuditTrail::class)->name('audit-trail');
+            // Admin bulk download — many employees' payslips for one run, zipped
+            // (distinct from the self-service print-combined above).
+            Route::get('/payslips/download-bulk', [PayslipController::class, 'downloadBulkZip'])
+                ->name('payslips.download-bulk');
         });
 
         // Finance approval — Finance, Director, Super Admin

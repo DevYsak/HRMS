@@ -42,6 +42,15 @@ class Process extends Component
     /** Offices list for filter dropdown. */
     public $offices;
 
+    /** @var array<int, int> Payslip ids ticked for bulk actions. */
+    public array $selected = [];
+
+    /** Payslip currently open in the edit modal, or null. */
+    public ?int $editingId = null;
+
+    /** @var array<int, array{name: string, amount: float, type: string}> */
+    public array $editItems = [];
+
     public function mount(): void
     {
         $this->month = Carbon::now()->format('F');
@@ -195,11 +204,6 @@ class Process extends Component
         \Flux::toast('Payroll submitted for finance approval.');
     }
 
-    public function exportExcel(): void
-    {
-        \Flux::toast('Export feature coming soon.', variant: 'warning');
-    }
-
     /** Lock the current finalized payroll so it can no longer be regenerated. */
     public function lockPayroll(): void
     {
@@ -240,6 +244,239 @@ class Process extends Component
 
         $this->loadCurrentPayroll();
         \Flux::toast('Payroll unlocked.');
+    }
+
+    // ── Per-payslip actions ──────────────────────────────────────────────────
+
+    public function regenerateSingle(int $payslipId): void
+    {
+        abort_unless(Auth::user()->canRunPayroll(), 403);
+
+        $payslip = Payslip::with('employee')->findOrFail($payslipId);
+
+        try {
+            app(PayrollService::class)->regenerateSinglePayslip($payslip->payroll, $payslip->employee, Auth::id());
+        } catch (\DomainException $e) {
+            \Flux::toast($e->getMessage(), variant: 'danger');
+
+            return;
+        }
+
+        $this->loadCurrentPayroll();
+        \Flux::toast('Payslip regenerated for '.($payslip->employee->user?->name ?? 'employee').'.');
+    }
+
+    public function deleteSingle(int $payslipId): void
+    {
+        abort_unless(Auth::user()->canDeletePayslip(), 403);
+
+        $payslip = Payslip::findOrFail($payslipId);
+
+        try {
+            app(PayrollService::class)->deletePayslip($payslip);
+        } catch (\DomainException $e) {
+            \Flux::toast($e->getMessage(), variant: 'danger');
+
+            return;
+        }
+
+        $this->selected = array_values(array_diff($this->selected, [$payslipId]));
+        $this->loadCurrentPayroll();
+        \Flux::toast('Payslip deleted.');
+    }
+
+    public function lockSinglePayslip(int $payslipId): void
+    {
+        abort_unless(Auth::user()->canLockPayroll(), 403);
+
+        try {
+            app(PayrollService::class)->lockPayslip(Payslip::findOrFail($payslipId), Auth::id());
+        } catch (\DomainException $e) {
+            \Flux::toast($e->getMessage(), variant: 'danger');
+
+            return;
+        }
+
+        \Flux::toast('Payslip locked.');
+    }
+
+    public function unlockSinglePayslip(int $payslipId): void
+    {
+        abort_unless(Auth::user()->canUnlockPayroll(), 403);
+
+        try {
+            app(PayrollService::class)->unlockPayslip(Payslip::findOrFail($payslipId));
+        } catch (\DomainException $e) {
+            \Flux::toast($e->getMessage(), variant: 'danger');
+
+            return;
+        }
+
+        \Flux::toast('Payslip unlocked.');
+    }
+
+    public function emailSingle(int $payslipId): void
+    {
+        abort_unless(Auth::user()->canRunPayroll(), 403);
+
+        try {
+            app(PayrollService::class)->emailPayslip(Payslip::with('employee.user')->findOrFail($payslipId));
+        } catch (\DomainException $e) {
+            \Flux::toast($e->getMessage(), variant: 'danger');
+
+            return;
+        }
+
+        \Flux::toast('Payslip queued for email.');
+    }
+
+    // ── Edit modal (draft payslip line items) ────────────────────────────────
+
+    public function openEdit(int $payslipId): void
+    {
+        abort_unless(Auth::user()->canRunPayroll(), 403);
+
+        $payslip = Payslip::with('items')->findOrFail($payslipId);
+
+        $this->editingId = $payslipId;
+        $this->editItems = $payslip->items->map(fn ($i) => [
+            'name' => $i->name, 'amount' => (float) $i->amount, 'type' => $i->type,
+        ])->all();
+
+        $this->modal('edit-payslip')->show();
+    }
+
+    public function addEditItem(): void
+    {
+        $this->editItems[] = ['name' => '', 'amount' => 0, 'type' => 'earning'];
+    }
+
+    public function removeEditItem(int $index): void
+    {
+        unset($this->editItems[$index]);
+        $this->editItems = array_values($this->editItems);
+    }
+
+    public function saveEdit(): void
+    {
+        abort_unless(Auth::user()->canRunPayroll(), 403);
+
+        $this->validate([
+            'editItems' => ['array', 'min:1'],
+            'editItems.*.name' => ['required', 'string', 'max:255'],
+            'editItems.*.amount' => ['required', 'numeric', 'min:0'],
+            'editItems.*.type' => ['required', 'in:earning,deduction,employer_contribution'],
+        ]);
+
+        $payslip = Payslip::findOrFail($this->editingId);
+
+        try {
+            app(PayrollService::class)->updatePayslipItems($payslip, $this->editItems);
+        } catch (\DomainException $e) {
+            \Flux::toast($e->getMessage(), variant: 'danger');
+
+            return;
+        }
+
+        $this->modal('edit-payslip')->close();
+        $this->editingId = null;
+        $this->editItems = [];
+        $this->loadCurrentPayroll();
+        \Flux::toast('Payslip updated.');
+    }
+
+    // ── Bulk actions ──────────────────────────────────────────────────────────
+
+    public function selectAllVisible(): void
+    {
+        $this->selected = $this->payslips->pluck('id')->map(fn ($id) => (int) $id)->all();
+    }
+
+    public function clearSelection(): void
+    {
+        $this->selected = [];
+    }
+
+    public function bulkDownload()
+    {
+        abort_unless(Auth::user()->canRunPayroll(), 403);
+
+        if ($this->selected === []) {
+            \Flux::toast('Select at least one payslip to download.', variant: 'danger');
+
+            return null;
+        }
+
+        return $this->redirect(route('payroll.payslips.download-bulk', ['ids' => $this->selected]));
+    }
+
+    public function bulkEmail(): void
+    {
+        abort_unless(Auth::user()->canRunPayroll(), 403);
+
+        if ($this->selected === []) {
+            \Flux::toast('Select at least one payslip to email.', variant: 'danger');
+
+            return;
+        }
+
+        $service = app(PayrollService::class);
+        $done = 0;
+        $failed = 0;
+
+        foreach (Payslip::with('employee.user')->whereIn('id', $this->selected)->get() as $payslip) {
+            try {
+                $service->emailPayslip($payslip);
+                $done++;
+            } catch (\Throwable) {
+                $failed++;
+            }
+        }
+
+        \Flux::toast(
+            "Bulk email: {$done} queued".($failed ? ", {$failed} failed" : '.'),
+            variant: $failed ? 'warning' : 'success',
+        );
+
+        $this->selected = [];
+    }
+
+    // ── Export ────────────────────────────────────────────────────────────────
+
+    /** Payroll Register — every payslip in the current run, one row each. */
+    public function exportExcel()
+    {
+        abort_unless(Auth::user()->canRunPayroll(), 403);
+
+        if (! $this->currentPayroll) {
+            \Flux::toast('No payroll to export.', variant: 'danger');
+
+            return null;
+        }
+
+        $rows = Payslip::with(['employee.user', 'employee.department'])
+            ->where('payroll_id', $this->currentPayroll->id)
+            ->get()
+            ->map(fn (Payslip $p) => [
+                $p->employee->employee_id ?? $p->employee_id,
+                $p->employee->user?->name ?? '—',
+                $p->employee->department?->name ?? '—',
+                number_format((float) $p->gross_salary, 2, '.', ''),
+                number_format((float) $p->total_deductions, 2, '.', ''),
+                number_format((float) $p->net_salary, 2, '.', ''),
+                $p->status,
+            ]);
+
+        $filename = 'payroll-register-'.$this->month.'-'.$this->year.'.csv';
+
+        return response()->streamDownload(function () use ($rows) {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, ['Employee ID', 'Employee Name', 'Department', 'Gross', 'Deductions', 'Net Pay', 'Status']);
+            foreach ($rows as $row) {
+                fputcsv($handle, $row);
+            }
+            fclose($handle);
+        }, $filename, ['Content-Type' => 'text/csv']);
     }
 
     public function render()

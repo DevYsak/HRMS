@@ -213,6 +213,11 @@ class User extends Authenticatable
         return $this->hasPermission('unlock_payroll');
     }
 
+    public function canDeletePayslip(): bool
+    {
+        return $this->hasPermission('delete_payslip');
+    }
+
     public function canReviewPerformance(): bool
     {
         return $this->hasPermission('review_performance');

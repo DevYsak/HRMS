@@ -101,6 +101,52 @@ class PayslipController extends Controller
         }
     }
 
+    /** Most payslips an HR/payroll admin may bundle into one bulk ZIP download. */
+    public const MAX_BULK_ZIP = 200;
+
+    /**
+     * Admin bulk download — one PDF per selected payslip, zipped. Distinct
+     * from downloadCombined() (self-service, one employee's own months merged
+     * into a single PDF, capped at 6): this is HR/payroll-staff pulling many
+     * different employees' payslips for the same run at once.
+     */
+    public function downloadBulkZip(Request $request)
+    {
+        abort_unless(auth()->user()->canRunPayroll(), 403);
+
+        $validated = $request->validate([
+            'ids' => ['required', 'array', 'min:1', 'max:'.self::MAX_BULK_ZIP],
+            'ids.*' => ['integer'],
+        ], [
+            'ids.max' => 'You can bulk-download at most '.self::MAX_BULK_ZIP.' payslips at once.',
+            'ids.required' => 'Select at least one payslip to download.',
+        ]);
+
+        $payslips = Payslip::with(['payroll', 'items', 'employee.user'])
+            ->whereIn('id', $validated['ids'])
+            ->get();
+
+        abort_if($payslips->isEmpty(), 404, 'No payslips found for the selected ids.');
+
+        $tmp = tempnam(sys_get_temp_dir(), 'payslips_').'.zip';
+        $zip = new \ZipArchive;
+        $zip->open($tmp, \ZipArchive::CREATE | \ZipArchive::OVERWRITE);
+
+        foreach ($payslips as $payslip) {
+            $pdf = Pdf::loadView('pdf.payslip', ['payslip' => $payslip])->output();
+            $name = 'payslip_'.($payslip->employee->employee_id ?? $payslip->employee_id).'_'.$payslip->payroll->month.'_'.$payslip->payroll->year.'.pdf';
+            $zip->addFromString($name, $pdf);
+
+            AuditLog::record($payslip, 'downloaded', null, ['via' => 'bulk_zip'], subjectEmployeeId: $payslip->employee_id);
+        }
+
+        $zip->close();
+
+        $filename = 'payslips_bulk_'.now()->format('Ymd_His').'.zip';
+
+        return response()->download($tmp, $filename)->deleteFileAfterSend(true);
+    }
+
     public function download(Payslip $payslip)
     {
         // Ensure the user is either the employee who owns the payslip, a manager of the employee, HR Admin, or Finance/SuperAdmin

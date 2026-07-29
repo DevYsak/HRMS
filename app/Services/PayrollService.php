@@ -98,9 +98,22 @@ class PayrollService
             $deductions = 0.0;
 
             foreach ($employees as $employee) {
-                Payslip::where('payroll_id', $payroll->id)
+                $existing = Payslip::where('payroll_id', $payroll->id)
                     ->where('employee_id', $employee->id)
-                    ->delete();
+                    ->first();
+
+                // A payslip locked individually (Phase 2) survives a whole-batch
+                // regenerate untouched — its existing totals still count toward
+                // the payroll header below.
+                if ($existing?->isLocked()) {
+                    $otAmount += 0.0;
+                    $deductions += (float) $existing->total_deductions;
+                    $totalPayrollPayout += (float) $existing->net_salary;
+
+                    continue;
+                }
+
+                $existing?->delete();
 
                 $result = $this->salaryCalculationService->calculate(
                     $employee,
@@ -253,6 +266,173 @@ class PayrollService
         AuditLog::record($payroll, 'unlocked');
 
         return $payroll->fresh();
+    }
+
+    /**
+     * Recompute a payroll's header totals from its current payslips — the
+     * single source of truth used after any operation that touches one
+     * payslip in isolation (regenerate/edit/delete a single employee), so the
+     * header never drifts from SUM(payslips.*) the way PayrollRerunIntegrityTest
+     * guards against for the whole-batch path.
+     */
+    private function recalculatePayrollTotals(Payroll $payroll): void
+    {
+        $payroll->update([
+            'total_payout' => (float) $payroll->payslips()->sum('net_salary'),
+            'deductions' => (float) $payroll->payslips()->sum('total_deductions'),
+        ]);
+    }
+
+    /** Re-run the calculation engine for one employee inside an existing draft payroll, leaving every other payslip untouched. */
+    public function regenerateSinglePayslip(Payroll $payroll, Employee $employee, int $userId): Payslip
+    {
+        if ($payroll->isLocked()) {
+            throw new \DomainException('This payroll is locked and can no longer be regenerated.');
+        }
+
+        if ($payroll->status !== 'draft') {
+            throw new \DomainException('Only draft payroll payslips can be regenerated.');
+        }
+
+        return DB::transaction(function () use ($payroll, $employee) {
+            [$cycleFrom, $cycleTo] = $this->resolveCycleDates($payroll->month, $payroll->year, $payroll->cycle);
+            $monthLabel = Carbon::parse("1 {$payroll->month} {$payroll->year}")->format('Y-m');
+
+            $existing = Payslip::where('payroll_id', $payroll->id)->where('employee_id', $employee->id)->first();
+            if ($existing?->isLocked()) {
+                throw new \DomainException('This payslip is locked and can no longer be regenerated.');
+            }
+            $existing?->delete();
+
+            $result = $this->salaryCalculationService->calculate($employee, $cycleFrom, $cycleTo, $monthLabel, $payroll);
+
+            $payslip = Payslip::create([
+                'payroll_id' => $payroll->id,
+                'employee_id' => $employee->id,
+                'gross_salary' => $result->gross,
+                'total_deductions' => $result->totalDeductions,
+                'net_salary' => $result->net,
+                'status' => 'draft',
+            ]);
+
+            foreach (array_merge($result->earningItems, $result->deductionItems, $result->employerContributionItems) as $item) {
+                $payslip->items()->create($item);
+            }
+
+            if ($result->otRecords->isNotEmpty()) {
+                $result->otRecords->each(fn ($record) => $record->update(['payslip_id' => $payslip->id]));
+            }
+
+            $this->recalculatePayrollTotals($payroll);
+            AuditLog::record($payslip, 'regenerated', null, null, subjectEmployeeId: $employee->id);
+
+            return $payslip->fresh(['items', 'employee.user']);
+        });
+    }
+
+    /**
+     * Replace a draft payslip's earning/deduction/employer-contribution lines
+     * with a manually adjusted set and recompute gross/deductions/net from them.
+     *
+     * @param  array<int, array{name: string, amount: float, type: string}>  $items
+     */
+    public function updatePayslipItems(Payslip $payslip, array $items, ?string $reason = null): Payslip
+    {
+        if ($payslip->status !== 'draft') {
+            throw new \DomainException('Only draft payslips can be edited.');
+        }
+
+        if ($payslip->isLocked() || $payslip->payroll->isLocked()) {
+            throw new \DomainException('This payslip is locked and can no longer be edited.');
+        }
+
+        return DB::transaction(function () use ($payslip, $items, $reason) {
+            $old = $payslip->only(['gross_salary', 'total_deductions', 'net_salary']);
+
+            $payslip->items()->delete();
+            $gross = 0.0;
+            $deductions = 0.0;
+            foreach ($items as $item) {
+                $payslip->items()->create($item);
+                if ($item['type'] === 'earning') {
+                    $gross += (float) $item['amount'];
+                } elseif ($item['type'] === 'deduction') {
+                    $deductions += (float) $item['amount'];
+                }
+            }
+            $net = $gross - $deductions;
+
+            $payslip->update(['gross_salary' => $gross, 'total_deductions' => $deductions, 'net_salary' => $net]);
+            $this->recalculatePayrollTotals($payslip->payroll);
+
+            AuditLog::record(
+                $payslip,
+                'edited',
+                $old,
+                ['gross_salary' => $gross, 'total_deductions' => $deductions, 'net_salary' => $net],
+                reason: $reason,
+                subjectEmployeeId: $payslip->employee_id,
+            );
+
+            return $payslip->fresh(['items', 'employee.user']);
+        });
+    }
+
+    /** Delete a draft payslip and recompute the parent payroll's totals. */
+    public function deletePayslip(Payslip $payslip): void
+    {
+        if ($payslip->status !== 'draft') {
+            throw new \DomainException('Only draft payslips can be deleted.');
+        }
+
+        if ($payslip->isLocked() || $payslip->payroll->isLocked()) {
+            throw new \DomainException('This payslip is locked and cannot be deleted.');
+        }
+
+        DB::transaction(function () use ($payslip) {
+            $payroll = $payslip->payroll;
+            $payslip->delete();
+            $this->recalculatePayrollTotals($payroll);
+        });
+    }
+
+    /** Lock an individual payslip so it survives a payroll-level regenerate untouched. */
+    public function lockPayslip(Payslip $payslip, int $userId): Payslip
+    {
+        if ($payslip->isLocked()) {
+            throw new \DomainException('This payslip is already locked.');
+        }
+
+        $payslip->update(['locked_at' => now(), 'locked_by' => $userId]);
+        AuditLog::record($payslip, 'locked', null, ['locked_by' => $userId], subjectEmployeeId: $payslip->employee_id);
+
+        return $payslip->fresh();
+    }
+
+    /** Unlock an individual payslip. */
+    public function unlockPayslip(Payslip $payslip): Payslip
+    {
+        if (! $payslip->isLocked()) {
+            throw new \DomainException('This payslip is not locked.');
+        }
+
+        $payslip->update(['locked_at' => null, 'locked_by' => null]);
+        AuditLog::record($payslip, 'unlocked', null, null, subjectEmployeeId: $payslip->employee_id);
+
+        return $payslip->fresh();
+    }
+
+    /** Admin-triggered single payslip email (any employee) — self-service email lives in MyPayslips::emailPayslip(). */
+    public function emailPayslip(Payslip $payslip): void
+    {
+        $email = $payslip->employee->user?->email;
+
+        if (! $email) {
+            throw new \DomainException('This employee has no email address on file.');
+        }
+
+        Mail::to($email)->queue(new PayslipMail($payslip));
+        AuditLog::record($payslip, 'emailed', null, ['to' => $email], subjectEmployeeId: $payslip->employee_id);
     }
 
     public function dispatchFinalizedPayrollNotifications(Payroll $payroll): void
