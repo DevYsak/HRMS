@@ -47,6 +47,7 @@ use App\Livewire\Overtime\NexflowOtPanel;
 use App\Livewire\Payroll\AuditTrail as PayrollAuditTrail;
 use App\Livewire\Payroll\Components;
 use App\Livewire\Payroll\FinanceApproval;
+use App\Livewire\Payroll\HistoricalImport;
 use App\Livewire\Payroll\Incentives;
 use App\Livewire\Payroll\MyPayslips;
 use App\Livewire\Payroll\Overview;
@@ -238,6 +239,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/overview', Overview::class)->name('overview');
             Route::get('/components', Components::class)->name('components');
             Route::get('/structures', SalaryStructures::class)->name('structures');
+            Route::get('/historical-import', HistoricalImport::class)->name('historical-import');
             Route::get('/process', Process::class)->name('process');
             Route::get('/incentives', Incentives::class)->name('incentives');
             Route::get('/reimbursements', Reimbursements::class)->name('reimbursements');
