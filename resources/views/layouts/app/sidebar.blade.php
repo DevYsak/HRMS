@@ -639,6 +639,18 @@
                             :expanded="false">
                             @can('run_payroll')
                                 <flux:sidebar.item :href="route('reports.payroll-summary')">Payroll Summary</flux:sidebar.item>
+                                <flux:sidebar.item :href="route('reports.payroll-register')">Payroll Register</flux:sidebar.item>
+                                <flux:sidebar.item :href="route('reports.salary-register')">Salary Register</flux:sidebar.item>
+                                <flux:sidebar.item :href="route('reports.bank-transfer')">Bank Transfer</flux:sidebar.item>
+                                <flux:sidebar.item :href="route('reports.pf-report')">PF Report</flux:sidebar.item>
+                                <flux:sidebar.item :href="route('reports.esi-report')">ESI Report</flux:sidebar.item>
+                                <flux:sidebar.item :href="route('reports.pt-report')">Professional Tax Report</flux:sidebar.item>
+                                <flux:sidebar.item :href="route('reports.tds-report')">TDS Report</flux:sidebar.item>
+                                <flux:sidebar.item :href="route('reports.cost-center-report')">Cost Center Report</flux:sidebar.item>
+                                <flux:sidebar.item :href="route('reports.department-payroll-report')">Department Payroll Report</flux:sidebar.item>
+                                <flux:sidebar.item :href="route('reports.payroll-monthly-summary')">Payroll Monthly Summary</flux:sidebar.item>
+                                <flux:sidebar.item :href="route('reports.payroll-yearly-summary')">Payroll Yearly Summary</flux:sidebar.item>
+                                <flux:sidebar.item :href="route('reports.payroll-variance-report')">Payroll Variance Report</flux:sidebar.item>
                             @endcan
                             @can('approve_leave')
                                 <flux:sidebar.item :href="route('reports.attendance-summary')">Attendance Summary</flux:sidebar.item>

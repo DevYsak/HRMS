@@ -11,6 +11,7 @@ use App\Models\NexflowOtSyncLog;
 use App\Models\OtRequest;
 use App\Models\OvertimeRecord;
 use App\Models\Payroll;
+use App\Models\Payslip;
 use App\Models\PerformanceReview;
 use App\Models\PipRecord;
 use App\Models\PromotionRecommendation;
@@ -20,6 +21,8 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ReportController extends Controller
@@ -80,9 +83,10 @@ class ReportController extends Controller
     {
         $month = (int) $request->integer('month', now()->month);
         $year = (int) $request->integer('year', now()->year);
+        $monthName = Carbon::create($year, $month, 1)->format('F');
 
         $payrolls = Payroll::with(['payslips.employee.user', 'processedBy', 'financeApprovedBy'])
-            ->where('month', $month)
+            ->where('month', $monthName)
             ->where('year', $year)
             ->orderByDesc('created_at')
             ->get();
@@ -594,6 +598,448 @@ class ReportController extends Controller
                     $row->ot_hours_detected ?? '',
                     $row->action ?? '',
                     $row->skip_reason ?? '',
+                ]);
+            }
+
+            fclose($handle);
+        }, $filename, ['Content-Type' => 'text/csv']);
+    }
+
+    // ── Payroll reports (Phase 6) ──────────────────────────────────────────
+    // Informational summaries built straight from payslips/payslip_items —
+    // explicitly not government-filing-ready formats (PF ECR, ESI return,
+    // PT challan, bank NEFT file). PayslipItem only stores a free-text
+    // `name` (no stable component id/code), so the PF/ESI/PT/TDS reports
+    // below match on name — fragile if a component is renamed, acceptable
+    // for this informational tier.
+
+    /** Payslips for a given month/year(/cycle), eager loaded for reporting. */
+    private function payslipsForPeriod(int $month, int $year, ?string $cycle = null): Collection
+    {
+        $monthName = Carbon::create($year, $month, 1)->format('F');
+
+        return Payslip::query()
+            ->whereHas('payroll', function ($q) use ($monthName, $year, $cycle) {
+                $q->where('month', $monthName)->where('year', $year);
+                if ($cycle) {
+                    $q->where('cycle', $cycle);
+                }
+            })
+            ->with(['employee.user', 'employee.department', 'employee.jobTitle', 'employee.payrollSettings', 'items'])
+            ->get();
+    }
+
+    /**
+     * Sum deduction/employer-contribution lines whose name matches any of the
+     * given patterns — each item counts once even if it matches more than
+     * one pattern (e.g. "Income Tax (TDS)" matches both "tds" and "income tax").
+     *
+     * @param  string|array<int,string>  $namePatterns
+     */
+    private function statutorySum(Payslip $payslip, string $type, string|array $namePatterns): float
+    {
+        $patterns = (array) $namePatterns;
+
+        return (float) $payslip->items
+            ->filter(fn ($item) => $item->type === $type && Str::contains(Str::lower($item->name), $patterns))
+            ->sum('amount');
+    }
+
+    public function payrollRegisterCsv(Request $request): StreamedResponse
+    {
+        $month = (int) $request->integer('month', now()->month);
+        $year = (int) $request->integer('year', now()->year);
+        $cycle = $request->string('cycle')->toString() ?: null;
+
+        $payslips = $this->payslipsForPeriod($month, $year, $cycle);
+        $filename = 'payroll-register-'.Carbon::create($year, $month, 1)->format('Y-m').'.csv';
+
+        return response()->streamDownload(function () use ($payslips) {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, ['Employee ID', 'Name', 'Department', 'Designation', 'Gross Salary', 'Total Deductions', 'Net Salary', 'Status']);
+
+            foreach ($payslips as $payslip) {
+                $employee = $payslip->employee;
+                fputcsv($handle, [
+                    $employee?->employee_id,
+                    $employee?->user?->name,
+                    $employee?->department?->name,
+                    $employee?->jobTitle?->name,
+                    number_format((float) $payslip->gross_salary, 2, '.', ''),
+                    number_format((float) $payslip->total_deductions, 2, '.', ''),
+                    number_format((float) $payslip->net_salary, 2, '.', ''),
+                    ucfirst($payslip->status),
+                ]);
+            }
+
+            fclose($handle);
+        }, $filename, ['Content-Type' => 'text/csv']);
+    }
+
+    /** One column per distinct earning/deduction line item name encountered that period. */
+    public function salaryRegisterCsv(Request $request): StreamedResponse
+    {
+        $month = (int) $request->integer('month', now()->month);
+        $year = (int) $request->integer('year', now()->year);
+        $cycle = $request->string('cycle')->toString() ?: null;
+
+        $payslips = $this->payslipsForPeriod($month, $year, $cycle);
+        $earningNames = $payslips->flatMap(fn ($p) => $p->items->where('type', 'earning')->pluck('name'))->unique()->sort()->values();
+        $deductionNames = $payslips->flatMap(fn ($p) => $p->items->where('type', 'deduction')->pluck('name'))->unique()->sort()->values();
+        $filename = 'salary-register-'.Carbon::create($year, $month, 1)->format('Y-m').'.csv';
+
+        return response()->streamDownload(function () use ($payslips, $earningNames, $deductionNames) {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, array_merge(
+                ['Employee ID', 'Name', 'Department'],
+                $earningNames->all(),
+                $deductionNames->all(),
+                ['Gross Salary', 'Total Deductions', 'Net Salary'],
+            ));
+
+            foreach ($payslips as $payslip) {
+                $employee = $payslip->employee;
+                $amountsByName = $payslip->items->groupBy('name')->map(fn ($items) => (float) $items->sum('amount'));
+
+                $formatAmount = fn ($name) => $amountsByName->has($name) ? number_format($amountsByName->get($name), 2, '.', '') : '';
+
+                fputcsv($handle, array_merge(
+                    [$employee?->employee_id, $employee?->user?->name, $employee?->department?->name],
+                    $earningNames->map($formatAmount)->all(),
+                    $deductionNames->map($formatAmount)->all(),
+                    [
+                        number_format((float) $payslip->gross_salary, 2, '.', ''),
+                        number_format((float) $payslip->total_deductions, 2, '.', ''),
+                        number_format((float) $payslip->net_salary, 2, '.', ''),
+                    ],
+                ));
+            }
+
+            fclose($handle);
+        }, $filename, ['Content-Type' => 'text/csv']);
+    }
+
+    /** Informational bank-advice list — not a bank-specific NEFT/RTGS file format. */
+    public function bankTransferReportCsv(Request $request): StreamedResponse
+    {
+        $month = (int) $request->integer('month', now()->month);
+        $year = (int) $request->integer('year', now()->year);
+        $cycle = $request->string('cycle')->toString() ?: null;
+
+        $payslips = $this->payslipsForPeriod($month, $year, $cycle);
+        $filename = 'bank-transfer-'.Carbon::create($year, $month, 1)->format('Y-m').'.csv';
+
+        return response()->streamDownload(function () use ($payslips) {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, ['Employee ID', 'Name', 'Bank Name', 'Account Number', 'IFSC Code', 'Net Salary']);
+
+            foreach ($payslips as $payslip) {
+                $employee = $payslip->employee;
+                $settings = $employee?->payrollSettings;
+                fputcsv($handle, [
+                    $employee?->employee_id,
+                    $employee?->user?->name,
+                    $settings?->bank_name ?: 'MISSING',
+                    $settings?->account_number ?: 'MISSING',
+                    $settings?->ifsc_code ?: 'MISSING',
+                    number_format((float) $payslip->net_salary, 2, '.', ''),
+                ]);
+            }
+
+            fclose($handle);
+        }, $filename, ['Content-Type' => 'text/csv']);
+    }
+
+    public function providentFundReportCsv(Request $request): StreamedResponse
+    {
+        $month = (int) $request->integer('month', now()->month);
+        $year = (int) $request->integer('year', now()->year);
+        $cycle = $request->string('cycle')->toString() ?: null;
+
+        $payslips = $this->payslipsForPeriod($month, $year, $cycle);
+        $filename = 'pf-report-'.Carbon::create($year, $month, 1)->format('Y-m').'.csv';
+
+        return response()->streamDownload(function () use ($payslips) {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, ['Employee ID', 'Name', 'PF Number', 'UAN', 'Employee Contribution', 'Employer Contribution']);
+
+            foreach ($payslips as $payslip) {
+                $employeeShare = $this->statutorySum($payslip, 'deduction', 'provident fund');
+                $employerShare = $this->statutorySum($payslip, 'employer_contribution', 'provident fund');
+                if ($employeeShare <= 0 && $employerShare <= 0) {
+                    continue;
+                }
+
+                $employee = $payslip->employee;
+                fputcsv($handle, [
+                    $employee?->employee_id,
+                    $employee?->user?->name,
+                    $employee?->payrollSettings?->pf_number,
+                    $employee?->payrollSettings?->uan_number,
+                    number_format($employeeShare, 2, '.', ''),
+                    number_format($employerShare, 2, '.', ''),
+                ]);
+            }
+
+            fclose($handle);
+        }, $filename, ['Content-Type' => 'text/csv']);
+    }
+
+    public function esiReportCsv(Request $request): StreamedResponse
+    {
+        $month = (int) $request->integer('month', now()->month);
+        $year = (int) $request->integer('year', now()->year);
+        $cycle = $request->string('cycle')->toString() ?: null;
+
+        $payslips = $this->payslipsForPeriod($month, $year, $cycle);
+        $filename = 'esi-report-'.Carbon::create($year, $month, 1)->format('Y-m').'.csv';
+
+        return response()->streamDownload(function () use ($payslips) {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, ['Employee ID', 'Name', 'ESI Number', 'Employee Contribution']);
+
+            foreach ($payslips as $payslip) {
+                $employeeShare = $this->statutorySum($payslip, 'deduction', 'esi');
+                if ($employeeShare <= 0) {
+                    continue;
+                }
+
+                $employee = $payslip->employee;
+                fputcsv($handle, [
+                    $employee?->employee_id,
+                    $employee?->user?->name,
+                    $employee?->payrollSettings?->esi_number,
+                    number_format($employeeShare, 2, '.', ''),
+                ]);
+            }
+
+            fclose($handle);
+        }, $filename, ['Content-Type' => 'text/csv']);
+    }
+
+    public function professionalTaxReportCsv(Request $request): StreamedResponse
+    {
+        $month = (int) $request->integer('month', now()->month);
+        $year = (int) $request->integer('year', now()->year);
+        $cycle = $request->string('cycle')->toString() ?: null;
+
+        $payslips = $this->payslipsForPeriod($month, $year, $cycle);
+        $filename = 'pt-report-'.Carbon::create($year, $month, 1)->format('Y-m').'.csv';
+
+        return response()->streamDownload(function () use ($payslips) {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, ['Employee ID', 'Name', 'Department', 'Professional Tax']);
+
+            foreach ($payslips as $payslip) {
+                $amount = $this->statutorySum($payslip, 'deduction', 'professional tax');
+                if ($amount <= 0) {
+                    continue;
+                }
+
+                $employee = $payslip->employee;
+                fputcsv($handle, [
+                    $employee?->employee_id,
+                    $employee?->user?->name,
+                    $employee?->department?->name,
+                    number_format($amount, 2, '.', ''),
+                ]);
+            }
+
+            fclose($handle);
+        }, $filename, ['Content-Type' => 'text/csv']);
+    }
+
+    public function tdsReportCsv(Request $request): StreamedResponse
+    {
+        $month = (int) $request->integer('month', now()->month);
+        $year = (int) $request->integer('year', now()->year);
+        $cycle = $request->string('cycle')->toString() ?: null;
+
+        $payslips = $this->payslipsForPeriod($month, $year, $cycle);
+        $filename = 'tds-report-'.Carbon::create($year, $month, 1)->format('Y-m').'.csv';
+
+        return response()->streamDownload(function () use ($payslips) {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, ['Employee ID', 'Name', 'PAN', 'TDS Deducted']);
+
+            foreach ($payslips as $payslip) {
+                $amount = $this->statutorySum($payslip, 'deduction', ['tds', 'income tax']);
+                if ($amount <= 0) {
+                    continue;
+                }
+
+                $employee = $payslip->employee;
+                fputcsv($handle, [
+                    $employee?->employee_id,
+                    $employee?->user?->name,
+                    $employee?->payrollSettings?->pan_number,
+                    number_format($amount, 2, '.', ''),
+                ]);
+            }
+
+            fclose($handle);
+        }, $filename, ['Content-Type' => 'text/csv']);
+    }
+
+    /** Department-wise cost summary — the schema has no separate cost-center dimension, so department is the grouping. */
+    public function costCenterReportCsv(Request $request): StreamedResponse
+    {
+        $month = (int) $request->integer('month', now()->month);
+        $year = (int) $request->integer('year', now()->year);
+        $cycle = $request->string('cycle')->toString() ?: null;
+
+        $groups = $this->payslipsForPeriod($month, $year, $cycle)
+            ->groupBy(fn (Payslip $p) => $p->employee?->department?->name ?? 'Unassigned');
+        $filename = 'cost-center-report-'.Carbon::create($year, $month, 1)->format('Y-m').'.csv';
+
+        return response()->streamDownload(function () use ($groups) {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, ['Cost Center (Department)', 'Employee Count', 'Total Gross', 'Total Deductions', 'Total Net']);
+
+            foreach ($groups->sortKeys() as $name => $group) {
+                fputcsv($handle, [
+                    $name,
+                    $group->count(),
+                    number_format((float) $group->sum('gross_salary'), 2, '.', ''),
+                    number_format((float) $group->sum('total_deductions'), 2, '.', ''),
+                    number_format((float) $group->sum('net_salary'), 2, '.', ''),
+                ]);
+            }
+
+            fclose($handle);
+        }, $filename, ['Content-Type' => 'text/csv']);
+    }
+
+    /** Per-employee detail, grouped and sorted by department. */
+    public function departmentPayrollReportCsv(Request $request): StreamedResponse
+    {
+        $month = (int) $request->integer('month', now()->month);
+        $year = (int) $request->integer('year', now()->year);
+        $cycle = $request->string('cycle')->toString() ?: null;
+
+        $payslips = $this->payslipsForPeriod($month, $year, $cycle)
+            ->sortBy(fn (Payslip $p) => ($p->employee?->department?->name ?? 'zzz Unassigned').'|'.($p->employee?->user?->name ?? ''));
+        $filename = 'department-payroll-report-'.Carbon::create($year, $month, 1)->format('Y-m').'.csv';
+
+        return response()->streamDownload(function () use ($payslips) {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, ['Department', 'Employee ID', 'Name', 'Designation', 'Gross Salary', 'Total Deductions', 'Net Salary']);
+
+            foreach ($payslips as $payslip) {
+                $employee = $payslip->employee;
+                fputcsv($handle, [
+                    $employee?->department?->name ?? 'Unassigned',
+                    $employee?->employee_id,
+                    $employee?->user?->name,
+                    $employee?->jobTitle?->name,
+                    number_format((float) $payslip->gross_salary, 2, '.', ''),
+                    number_format((float) $payslip->total_deductions, 2, '.', ''),
+                    number_format((float) $payslip->net_salary, 2, '.', ''),
+                ]);
+            }
+
+            fclose($handle);
+        }, $filename, ['Content-Type' => 'text/csv']);
+    }
+
+    /** One row per month of the given year. */
+    public function payrollMonthlySummaryCsv(Request $request): StreamedResponse
+    {
+        $year = (int) $request->integer('year', now()->year);
+
+        $payrolls = Payroll::where('year', $year)->with('payslips')->get()->groupBy('month');
+        $filename = "payroll-monthly-summary-{$year}.csv";
+
+        return response()->streamDownload(function () use ($payrolls, $year) {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, ['Month', 'Employees Paid', 'Total Gross', 'Total Deductions', 'Total Net Payout', 'OT Amount', 'Incentives', 'Reimbursements']);
+
+            for ($m = 1; $m <= 12; $m++) {
+                $monthName = Carbon::create($year, $m, 1)->format('F');
+                $monthPayrolls = $payrolls->get($monthName, Collection::make());
+                $payslips = $monthPayrolls->flatMap->payslips;
+
+                fputcsv($handle, [
+                    $monthName,
+                    $payslips->count(),
+                    number_format((float) $payslips->sum('gross_salary'), 2, '.', ''),
+                    number_format((float) $payslips->sum('total_deductions'), 2, '.', ''),
+                    number_format((float) $monthPayrolls->sum('total_payout'), 2, '.', ''),
+                    number_format((float) $monthPayrolls->sum('ot_amount'), 2, '.', ''),
+                    number_format((float) $monthPayrolls->sum('incentives'), 2, '.', ''),
+                    number_format((float) $monthPayrolls->sum('reimbursements'), 2, '.', ''),
+                ]);
+            }
+
+            fclose($handle);
+        }, $filename, ['Content-Type' => 'text/csv']);
+    }
+
+    /** One row per year that has any payroll data at all. */
+    public function payrollYearlySummaryCsv(): StreamedResponse
+    {
+        $years = Payroll::query()->select('year')->distinct()->orderBy('year')->pluck('year');
+
+        return response()->streamDownload(function () use ($years) {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, ['Year', 'Payroll Runs', 'Employees Paid (Unique)', 'Total Gross', 'Total Deductions', 'Total Net Payout']);
+
+            foreach ($years as $year) {
+                $payrolls = Payroll::where('year', $year)->with('payslips')->get();
+                $payslips = $payrolls->flatMap->payslips;
+
+                fputcsv($handle, [
+                    $year,
+                    $payrolls->count(),
+                    $payslips->pluck('employee_id')->unique()->count(),
+                    number_format((float) $payslips->sum('gross_salary'), 2, '.', ''),
+                    number_format((float) $payslips->sum('total_deductions'), 2, '.', ''),
+                    number_format((float) $payrolls->sum('total_payout'), 2, '.', ''),
+                ]);
+            }
+
+            fclose($handle);
+        }, 'payroll-yearly-summary.csv', ['Content-Type' => 'text/csv']);
+    }
+
+    /** Compares the selected period's net pay against the prior month, per employee. */
+    public function payrollVarianceReportCsv(Request $request): StreamedResponse
+    {
+        $month = (int) $request->integer('month', now()->month);
+        $year = (int) $request->integer('year', now()->year);
+        $cycle = $request->string('cycle')->toString() ?: null;
+
+        $current = Carbon::create($year, $month, 1);
+        $previous = $current->copy()->subMonth();
+
+        $currentPayslips = $this->payslipsForPeriod($current->month, $current->year, $cycle)->keyBy('employee_id');
+        $previousPayslips = $this->payslipsForPeriod($previous->month, $previous->year, $cycle)->keyBy('employee_id');
+        $employeeIds = $currentPayslips->keys()->merge($previousPayslips->keys())->unique();
+
+        $filename = 'payroll-variance-report-'.$current->format('Y-m').'.csv';
+
+        return response()->streamDownload(function () use ($employeeIds, $currentPayslips, $previousPayslips) {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, ['Employee ID', 'Name', 'Department', 'Previous Net', 'Current Net', 'Variance Amount', 'Variance %']);
+
+            foreach ($employeeIds as $employeeId) {
+                $curr = $currentPayslips->get($employeeId);
+                $prev = $previousPayslips->get($employeeId);
+                $employee = ($curr ?? $prev)?->employee;
+
+                $currNet = (float) ($curr->net_salary ?? 0);
+                $prevNet = (float) ($prev->net_salary ?? 0);
+                $variance = round($currNet - $prevNet, 2);
+                $variancePct = $prevNet > 0 ? round($variance / $prevNet * 100, 2) : ($currNet > 0 ? 100.0 : 0.0);
+
+                fputcsv($handle, [
+                    $employee?->employee_id,
+                    $employee?->user?->name,
+                    $employee?->department?->name,
+                    number_format($prevNet, 2, '.', ''),
+                    number_format($currNet, 2, '.', ''),
+                    number_format($variance, 2, '.', ''),
+                    $variancePct,
                 ]);
             }
 

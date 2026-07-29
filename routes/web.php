@@ -364,6 +364,22 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/payroll-summary.pdf', [ReportController::class, 'payrollSummaryPdf'])
             ->name('payroll-summary')
             ->middleware('role:run-payroll');
+
+        // Payroll reports (12 types) — Phase 6
+        Route::middleware('role:run-payroll')->group(function () {
+            Route::get('/payroll-register.csv', [ReportController::class, 'payrollRegisterCsv'])->name('payroll-register');
+            Route::get('/salary-register.csv', [ReportController::class, 'salaryRegisterCsv'])->name('salary-register');
+            Route::get('/bank-transfer.csv', [ReportController::class, 'bankTransferReportCsv'])->name('bank-transfer');
+            Route::get('/pf-report.csv', [ReportController::class, 'providentFundReportCsv'])->name('pf-report');
+            Route::get('/esi-report.csv', [ReportController::class, 'esiReportCsv'])->name('esi-report');
+            Route::get('/pt-report.csv', [ReportController::class, 'professionalTaxReportCsv'])->name('pt-report');
+            Route::get('/tds-report.csv', [ReportController::class, 'tdsReportCsv'])->name('tds-report');
+            Route::get('/cost-center-report.csv', [ReportController::class, 'costCenterReportCsv'])->name('cost-center-report');
+            Route::get('/department-payroll-report.csv', [ReportController::class, 'departmentPayrollReportCsv'])->name('department-payroll-report');
+            Route::get('/payroll-monthly-summary.csv', [ReportController::class, 'payrollMonthlySummaryCsv'])->name('payroll-monthly-summary');
+            Route::get('/payroll-yearly-summary.csv', [ReportController::class, 'payrollYearlySummaryCsv'])->name('payroll-yearly-summary');
+            Route::get('/payroll-variance-report.csv', [ReportController::class, 'payrollVarianceReportCsv'])->name('payroll-variance-report');
+        });
         Route::get('/attendance-summary.csv', [ReportController::class, 'attendanceSummaryCsv'])
             ->name('attendance-summary')
             ->middleware('role:approve-leave');
