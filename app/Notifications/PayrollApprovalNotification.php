@@ -40,6 +40,17 @@ class PayrollApprovalNotification extends Notification
                 'icon' => 'check-circle',
                 'color' => 'green',
             ],
+            'rejected' => [
+                'type' => 'payroll',
+                'title' => 'Payroll Rejected by Finance',
+                'body' => $this->payroll->finance_note
+                    ? "Payroll for {$period} was rejected by Finance: {$this->payroll->finance_note}"
+                    : "Payroll for {$period} was rejected by Finance and returned to draft.",
+                'action' => 'Review',
+                'url' => '/payroll/process',
+                'icon' => 'x-circle',
+                'color' => 'red',
+            ],
             default => [
                 'type' => 'payroll',
                 'title' => 'Payroll Processed',

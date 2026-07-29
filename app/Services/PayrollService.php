@@ -16,6 +16,7 @@ use App\Models\SalaryStructure;
 use App\Models\User;
 use App\Notifications\PayrollApprovalNotification;
 use App\Notifications\PayslipGeneratedNotification;
+use App\Notifications\SalaryStructureAssignedNotification;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
@@ -181,7 +182,7 @@ class PayrollService
         AuditLog::record($payroll, 'submitted_for_approval', null, ['status' => 'pending_finance']);
 
         foreach (User::whereIn('role', ['super_admin', 'finance', 'director'])->get() as $approver) {
-            $approver->notify(new PayrollApprovalNotification($payroll->fresh(), 'finance_approved'));
+            $approver->notify(new PayrollApprovalNotification($payroll->fresh(), 'submitted'));
         }
 
         return $payroll->fresh(['payslips.employee.user']);
@@ -208,7 +209,7 @@ class PayrollService
 
             AuditLog::record($payroll, 'approved', null, ['status' => 'finalized', 'finance_approved_by' => $approverId]);
 
-            $payroll->loadMissing('payslips.employee.user');
+            $payroll->loadMissing('payslips.employee.user', 'processedBy');
             $payroll->payslips()->update(['status' => 'paid']);
 
             foreach ($payroll->payslips as $payslip) {
@@ -217,6 +218,8 @@ class PayrollService
                     $this->overtimeService->markAsPaid($records, $payslip->id);
                 }
             }
+
+            $payroll->processedBy?->notify(new PayrollApprovalNotification($payroll, 'finance_approved'));
 
             return $payroll->fresh(['payslips.employee.user']);
         });
@@ -238,6 +241,8 @@ class PayrollService
             'finance_approved_at' => null,
         ]);
         AuditLog::record($payroll, 'rejected', null, ['status' => 'draft'], reason: $note);
+
+        $payroll->loadMissing('processedBy')->processedBy?->notify(new PayrollApprovalNotification($payroll, 'rejected'));
 
         return $payroll->fresh(['payslips.employee.user']);
     }
@@ -351,6 +356,8 @@ class PayrollService
             ]);
 
             AuditLog::record($revision, 'created', null, $revision->toArray(), subjectEmployeeId: $employee->id);
+
+            $employee->loadMissing('user')->user?->notify(new SalaryStructureAssignedNotification($revision));
 
             return $revision->fresh();
         });
