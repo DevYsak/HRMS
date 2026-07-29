@@ -3,6 +3,8 @@
 namespace App\Livewire\Payroll;
 
 use App\Models\Department;
+use App\Models\EmploymentType;
+use App\Models\JobTitle;
 use App\Models\Office;
 use App\Models\Payroll;
 use App\Models\Payslip;
@@ -30,6 +32,10 @@ class Process extends Component
 
     public string $filterLocation = '';
 
+    public string $filterDesignation = '';
+
+    public string $filterEmploymentType = '';
+
     public string $filterStatus = '';
 
     public int $perPage = 10;
@@ -41,6 +47,12 @@ class Process extends Component
 
     /** Offices list for filter dropdown. */
     public $offices;
+
+    /** Job titles list for the Designation filter dropdown. */
+    public $jobTitles;
+
+    /** Employment types list for filter dropdown. */
+    public $employmentTypes;
 
     /** @var array<int, int> Payslip ids ticked for bulk actions. */
     public array $selected = [];
@@ -57,6 +69,8 @@ class Process extends Component
         $this->year = Carbon::now()->year;
         $this->departments = Department::orderBy('name')->get();
         $this->offices = Office::orderBy('name')->get();
+        $this->jobTitles = JobTitle::orderBy('name')->get();
+        $this->employmentTypes = EmploymentType::orderBy('name')->get();
         $this->loadCurrentPayroll();
     }
 
@@ -92,6 +106,16 @@ class Process extends Component
     }
 
     public function updatedFilterLocation(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatedFilterDesignation(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatedFilterEmploymentType(): void
     {
         $this->resetPage();
     }
@@ -132,6 +156,14 @@ class Process extends Component
             $query->whereHas('employee', fn ($q) => $q->where('office_id', $this->filterLocation));
         }
 
+        if ($this->filterDesignation !== '') {
+            $query->whereHas('employee', fn ($q) => $q->where('job_title_id', $this->filterDesignation));
+        }
+
+        if ($this->filterEmploymentType !== '') {
+            $query->whereHas('employee', fn ($q) => $q->where('employment_type_id', $this->filterEmploymentType));
+        }
+
         if ($this->filterStatus !== '') {
             // Match on payslip status OR payroll status
             $status = $this->filterStatus;
@@ -150,6 +182,8 @@ class Process extends Component
         $this->search = '';
         $this->filterDepartment = '';
         $this->filterLocation = '';
+        $this->filterDesignation = '';
+        $this->filterEmploymentType = '';
         $this->filterStatus = '';
         $this->resetPage();
     }
@@ -487,6 +521,8 @@ class Process extends Component
             'payslips' => $this->payslips,
             'departments' => $this->departments,
             'offices' => $this->offices,
+            'jobTitles' => $this->jobTitles,
+            'employmentTypes' => $this->employmentTypes,
         ])->layout('layouts.app', ['title' => 'Run Payroll']);
     }
 }

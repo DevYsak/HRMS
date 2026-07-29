@@ -45,6 +45,7 @@
                             <flux:button variant="ghost" size="sm" icon="ellipsis-vertical" />
                             <flux:menu>
                                 <flux:menu.item wire:click="edit({{ $structure->id }})" icon="pencil">Edit</flux:menu.item>
+                                <flux:menu.item wire:click="openAssign({{ $structure->id }})" icon="user-plus">Assign to Employee</flux:menu.item>
                                 <flux:menu.item wire:click="toggleActive({{ $structure->id }})" icon="{{ $structure->is_active ? 'eye-slash' : 'eye' }}">
                                     {{ $structure->is_active ? 'Deactivate' : 'Activate' }}
                                 </flux:menu.item>
@@ -109,6 +110,44 @@
                             Cancel
                         </button>
                         <flux:button type="submit" variant="primary">{{ $editingId ? 'Update' : 'Create' }} Structure</flux:button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    @endif
+
+    {{-- Assign to Employee Modal --}}
+    @if($showAssignModal)
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4"
+             x-data x-on:keydown.escape.window="$wire.set('showAssignModal', false)">
+            <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="$wire.set('showAssignModal', false)"></div>
+            <div class="relative w-full max-w-lg bg-white dark:bg-zinc-800 rounded-2xl shadow-xl ring ring-black/5 dark:ring-zinc-700 p-6 space-y-6">
+                <button type="button" @click="$wire.set('showAssignModal', false)"
+                    class="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors">
+                    <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+                <div>
+                    <h2 class="text-base font-bold text-zinc-900 dark:text-white">Assign Salary Structure</h2>
+                    <p class="text-sm text-zinc-500 mt-0.5">
+                        Replaces the employee's current salary components with this structure's, effective the chosen date, and logs a salary revision.
+                    </p>
+                </div>
+                <form wire:submit="assign" class="space-y-5">
+                    <flux:select wire:model="assignForm.employee_id" label="Employee" placeholder="Select an employee&hellip;">
+                        @foreach($employees as $employee)
+                            <option value="{{ $employee->id }}">{{ $employee->user?->name ?? 'Unnamed' }}</option>
+                        @endforeach
+                    </flux:select>
+                    <flux:input wire:model="assignForm.effective_date" type="date" label="Effective Date" required />
+                    <flux:textarea wire:model="assignForm.reason" label="Reason" rows="2"
+                        placeholder="Optional — e.g. role change, correction, structure revision" />
+
+                    <div class="flex justify-end gap-3 pt-4 border-t border-zinc-100 dark:border-zinc-800">
+                        <button type="button" @click="$wire.set('showAssignModal', false)"
+                            class="px-4 py-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-600 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors">
+                            Cancel
+                        </button>
+                        <flux:button type="submit" variant="primary">Assign Structure</flux:button>
                     </div>
                 </form>
             </div>

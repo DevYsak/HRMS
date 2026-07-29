@@ -5,10 +5,14 @@ namespace App\Services;
 use App\Mail\PayslipMail;
 use App\Models\AuditLog;
 use App\Models\Employee;
+use App\Models\EmployeePayrollSettings;
+use App\Models\EmployeeSalary;
 use App\Models\OvertimeRecord;
 use App\Models\Payroll;
 use App\Models\PayrollRunFailure;
 use App\Models\Payslip;
+use App\Models\SalaryRevision;
+use App\Models\SalaryStructure;
 use App\Models\User;
 use App\Notifications\PayrollApprovalNotification;
 use App\Notifications\PayslipGeneratedNotification;
@@ -266,6 +270,90 @@ class PayrollService
         AuditLog::record($payroll, 'unlocked');
 
         return $payroll->fresh();
+    }
+
+    /**
+     * Assign a salary structure to an employee, replacing whatever
+     * employee_salaries rows are currently effective with the structure's
+     * components as of the effective date — old rows are closed out
+     * (effective_to), never deleted — and record a SalaryRevision, mirroring
+     * the effective-dating convention IncrementService::applySalaryUplift()
+     * already established for the increment path. This is the only other
+     * place employee compensation changes, so it needs the same trail.
+     */
+    public function assignSalaryStructure(
+        SalaryStructure $structure,
+        Employee $employee,
+        User $actor,
+        string $effectiveDate,
+        ?string $reason = null,
+    ): SalaryRevision {
+        $structure->loadMissing('components');
+
+        return DB::transaction(function () use ($structure, $employee, $actor, $effectiveDate, $reason) {
+            $effective = Carbon::parse($effectiveDate);
+
+            $currentRows = EmployeeSalary::where('employee_id', $employee->id)
+                ->effectiveOn($effective)
+                ->with('component')
+                ->get();
+
+            $oldCtc = round($currentRows
+                ->filter(fn (EmployeeSalary $row) => $row->component?->effective_component_type === 'earning')
+                ->sum('amount') * 12, 2);
+
+            foreach ($currentRows as $row) {
+                $row->update(['effective_to' => $effective->copy()->subDay()->toDateString()]);
+            }
+
+            $snapshot = [];
+            $newAnnualEarnings = 0.0;
+
+            foreach ($structure->components as $component) {
+                $amount = (float) ($component->pivot->amount ?? $component->default_amount);
+
+                EmployeeSalary::create([
+                    'employee_id' => $employee->id,
+                    'salary_component_id' => $component->id,
+                    'amount' => $amount,
+                    'effective_from' => $effective->toDateString(),
+                    'effective_to' => null,
+                ]);
+
+                if ($component->effective_component_type === 'earning') {
+                    $newAnnualEarnings += $amount * 12;
+                }
+
+                $old = $currentRows->firstWhere('salary_component_id', $component->id);
+                $snapshot[] = [
+                    'component' => $component->name,
+                    'old_amount' => $old ? (float) $old->amount : 0.0,
+                    'new_amount' => $amount,
+                ];
+            }
+
+            $newCtc = round($newAnnualEarnings, 2);
+
+            $settings = EmployeePayrollSettings::where('employee_id', $employee->id)->first()
+                ?? EmployeePayrollSettings::defaults($employee->id);
+            $settings->salary_structure_id = $structure->id;
+            $settings->ctc = $newCtc;
+            $settings->save();
+
+            $revision = SalaryRevision::create([
+                'employee_id' => $employee->id,
+                'effective_date' => $effective->toDateString(),
+                'reason' => $reason ?: "Assigned salary structure: {$structure->name}",
+                'approved_by' => $actor->id,
+                'old_ctc' => $oldCtc,
+                'new_ctc' => $newCtc,
+                'structure_snapshot' => $snapshot,
+            ]);
+
+            AuditLog::record($revision, 'created', null, $revision->toArray(), subjectEmployeeId: $employee->id);
+
+            return $revision->fresh();
+        });
     }
 
     /**

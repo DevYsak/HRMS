@@ -193,6 +193,26 @@
                     </flux:select>
                 </div>
 
+                {{-- Designation --}}
+                <div class="min-w-40">
+                    <flux:select wire:model.live="filterDesignation" size="sm">
+                        <option value="">All Designations</option>
+                        @foreach($jobTitles as $title)
+                            <option value="{{ $title->id }}">{{ $title->name }}</option>
+                        @endforeach
+                    </flux:select>
+                </div>
+
+                {{-- Employment Type --}}
+                <div class="min-w-40">
+                    <flux:select wire:model.live="filterEmploymentType" size="sm">
+                        <option value="">All Employment Types</option>
+                        @foreach($employmentTypes as $type)
+                            <option value="{{ $type->id }}">{{ $type->name }}</option>
+                        @endforeach
+                    </flux:select>
+                </div>
+
                 {{-- Status --}}
                 <div class="min-w-36">
                     <flux:select wire:model.live="filterStatus" size="sm">
