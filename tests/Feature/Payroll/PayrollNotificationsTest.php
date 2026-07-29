@@ -5,6 +5,7 @@ use App\Models\Employee;
 use App\Models\EmployeePayrollSettings;
 use App\Models\EmployeeSalary;
 use App\Models\Payroll;
+use App\Models\PayrollApprovalPolicy;
 use App\Models\SalaryComponent;
 use App\Models\SalaryStructure;
 use App\Models\User;
@@ -101,6 +102,24 @@ test('rejecting finance notifies the maker with the rejection reason', function 
 
     Notification::assertSentTo($maker, PayrollApprovalNotification::class, function ($n) {
         return $n->event === 'rejected' && str_contains($n->toArray($n)['body'], 'Overtime totals look wrong.');
+    });
+});
+
+test('a configured approval step notifies its approver with the step name, not the generic submitted copy', function () {
+    Notification::fake();
+    $maker = User::factory()->create(['role' => 'super_admin']);
+    $hrApprover = User::factory()->create(['role' => 'hr_admin']);
+    PayrollApprovalPolicy::create(['level' => 1, 'label' => 'HR Review', 'approver_type' => 'hr_admin', 'is_active' => true]);
+
+    $payroll = Payroll::create(['month' => 'August', 'year' => 2027, 'cycle' => 'cycle_a', 'status' => 'draft', 'processed_by' => $maker->id]);
+    app(PayrollService::class)->submitForFinanceApproval($payroll);
+
+    Notification::assertSentTo($hrApprover, PayrollApprovalNotification::class, function ($n) {
+        $data = $n->toArray($n);
+
+        return $n->event === 'step_ready'
+            && str_contains($data['title'], 'HR Review')
+            && str_contains($data['body'], 'HR Review');
     });
 });
 

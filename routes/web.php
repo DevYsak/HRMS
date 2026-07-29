@@ -72,6 +72,7 @@ use App\Livewire\Performance\PerformanceCycles;
 use App\Livewire\Performance\ReviewTasks;
 use App\Livewire\Performance\TeamReviews;
 use App\Livewire\Performance\WarningLetters;
+use App\Livewire\Settings\ApprovalPolicySettings;
 use App\Livewire\Settings\ControlPanel;
 use App\Livewire\Settings\DataManagement;
 use App\Livewire\Settings\DepartmentManager;
@@ -250,9 +251,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 ->name('payslips.download-bulk');
         });
 
-        // Finance approval — Finance, Director, Super Admin
+        // Finance approval — Finance/Director/Super Admin (legacy + any configured
+        // step's approver), OR HR Admin, who may hold an "HR Review" step under a
+        // configured policy despite not having approve-finance. Real per-step
+        // eligibility is enforced in FinanceApproval/PayrollService.
         Route::get('/finance-approve', FinanceApproval::class)->name('finance-approve')
-            ->middleware('role:approve-finance');
+            ->middleware('role:run-payroll,approve-finance');
     });
 
     // --------------------------------------------------
@@ -459,6 +463,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/employment-types', EmploymentTypeManager::class)->name('employment-types');
         Route::get('/work-modes', WorkModeManager::class)->name('work-modes');
         Route::get('/salary-cycles', SalaryCycleManager::class)->name('salary-cycles');
+        Route::get('/payroll-approval-policy', ApprovalPolicySettings::class)->name('payroll-approval-policy');
         Route::get('/job-titles', JobTitleManager::class)->name('job-titles');
         Route::get('/menu', MenuSettings::class)->name('menu');
         Route::get('/notifications', NotificationSettings::class)->name('notifications');

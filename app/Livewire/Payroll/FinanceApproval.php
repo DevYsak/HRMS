@@ -3,6 +3,7 @@
 namespace App\Livewire\Payroll;
 
 use App\Models\Payroll;
+use App\Models\PayrollApprovalStep;
 use App\Services\PayrollService;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
@@ -15,22 +16,36 @@ class FinanceApproval extends Component
 
     public string $rejectReason = '';
 
+    /** Set instead of rejectingId when rejecting a single step of a configured chain. */
+    public ?int $rejectingStepId = null;
+
     public function mount()
     {
         $this->loadPending();
     }
 
+    /**
+     * Reachable by anyone who can either run payroll (e.g. an hr_admin
+     * acting on an "HR Review" step) or approve finance the legacy way —
+     * the real per-action authorization happens per-step in the view/service.
+     */
+    private function authorizeAccess(): void
+    {
+        abort_unless(Auth::user()->canApproveFinance() || Auth::user()->canRunPayroll(), 403);
+    }
+
     public function loadPending()
     {
         $this->pendingPayrolls = Payroll::where('status', 'pending_finance')
-            ->with(['payslips.employee.user', 'processedBy'])
+            ->with(['payslips.employee.user', 'processedBy', 'approvalSteps.approver', 'approvalSteps.specificUser'])
             ->latest()
             ->get();
     }
 
+    /** Legacy single-hop approval — only valid for a payroll with no configured steps. */
     public function approve($payrollId, PayrollService $payrollService)
     {
-        abort_unless(Auth::user()->canApproveFinance(), 403);
+        $this->authorizeAccess();
 
         $payroll = Payroll::findOrFail($payrollId);
 
@@ -52,20 +67,27 @@ class FinanceApproval extends Component
         \Flux::toast('Payroll approved and finalized!');
     }
 
-    /** Open the reject-reason modal for a specific payroll. */
+    /** Open the reject-reason modal for a specific payroll (legacy, no configured steps). */
     public function openReject(int $payrollId): void
     {
-        abort_unless(Auth::user()->canApproveFinance(), 403);
+        $this->authorizeAccess();
 
         $this->rejectingId = $payrollId;
+        $this->rejectingStepId = null;
         $this->rejectReason = '';
         $this->modal('reject-payroll')->show();
     }
 
-    /** Confirm rejection with the reason entered in the modal. */
+    /** Confirm rejection with the reason entered in the shared modal — routes to whichever of rejectingId/rejectingStepId is set. */
     public function confirmReject(): void
     {
-        abort_unless(Auth::user()->canApproveFinance(), 403);
+        $this->authorizeAccess();
+
+        if ($this->rejectingStepId !== null) {
+            $this->confirmRejectStep();
+
+            return;
+        }
 
         $payroll = Payroll::findOrFail($this->rejectingId);
 
@@ -76,7 +98,14 @@ class FinanceApproval extends Component
             return;
         }
 
-        app(PayrollService::class)->rejectFinance($payroll, trim($this->rejectReason) !== '' ? trim($this->rejectReason) : null);
+        try {
+            app(PayrollService::class)->rejectFinance($payroll, trim($this->rejectReason) !== '' ? trim($this->rejectReason) : null);
+        } catch (\DomainException $e) {
+            \Flux::toast($e->getMessage(), variant: 'danger');
+            $this->modal('reject-payroll')->close();
+
+            return;
+        }
 
         $this->modal('reject-payroll')->close();
         $this->rejectingId = null;
@@ -85,9 +114,68 @@ class FinanceApproval extends Component
         \Flux::toast('Payroll sent back for corrections.');
     }
 
+    /** Approve the current step of a configured chain. */
+    public function approveStep(int $stepId, PayrollService $payrollService)
+    {
+        $this->authorizeAccess();
+
+        $step = PayrollApprovalStep::findOrFail($stepId);
+
+        try {
+            $payroll = $payrollService->approveStep($step, Auth::user());
+        } catch (\DomainException $e) {
+            \Flux::toast($e->getMessage(), variant: 'danger');
+
+            return;
+        }
+
+        if ($payroll->status === 'finalized') {
+            $payrollService->dispatchFinalizedPayrollNotifications($payroll);
+            \Flux::toast('Final step approved — payroll finalized!');
+        } else {
+            \Flux::toast('Step approved — moved to the next approver.');
+        }
+
+        $this->loadPending();
+    }
+
+    /** Open the reject-reason modal for a specific step of a configured chain. */
+    public function openRejectStep(int $stepId): void
+    {
+        $this->authorizeAccess();
+
+        $this->rejectingStepId = $stepId;
+        $this->rejectingId = null;
+        $this->rejectReason = '';
+        $this->modal('reject-payroll')->show();
+    }
+
+    /** Confirm rejection of a single step, entered in the shared modal. */
+    public function confirmRejectStep(): void
+    {
+        $this->authorizeAccess();
+
+        $step = PayrollApprovalStep::findOrFail($this->rejectingStepId);
+
+        try {
+            app(PayrollService::class)->rejectStep($step, Auth::user(), trim($this->rejectReason) !== '' ? trim($this->rejectReason) : null);
+        } catch (\DomainException $e) {
+            \Flux::toast($e->getMessage(), variant: 'danger');
+            $this->modal('reject-payroll')->close();
+
+            return;
+        }
+
+        $this->modal('reject-payroll')->close();
+        $this->rejectingStepId = null;
+        $this->rejectReason = '';
+        $this->loadPending();
+        \Flux::toast('Payroll sent back for corrections.');
+    }
+
     public function render()
     {
-        abort_unless(Auth::user()->canApproveFinance(), 403);
+        $this->authorizeAccess();
 
         return view('livewire.payroll.finance-approval')
             ->layout('layouts.app', ['title' => 'Finance Approval']);

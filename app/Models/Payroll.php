@@ -35,6 +35,17 @@ class Payroll extends Model
         return $this->hasMany(Payslip::class);
     }
 
+    public function approvalSteps(): HasMany
+    {
+        return $this->hasMany(PayrollApprovalStep::class)->orderBy('level');
+    }
+
+    /** The earliest still-pending step in this payroll's configured approval chain, if any. */
+    public function currentApprovalStep(): ?PayrollApprovalStep
+    {
+        return $this->approvalSteps->firstWhere('status', 'pending');
+    }
+
     public function processedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'processed_by');

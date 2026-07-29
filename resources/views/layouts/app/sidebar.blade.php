@@ -717,6 +717,9 @@
                     <flux:sidebar.item :href="route('settings.salary-cycles')"
                         :current="request()->routeIs('settings.salary-cycles')" wire:navigate>Salary Cycles
                     </flux:sidebar.item>
+                    <flux:sidebar.item :href="route('settings.payroll-approval-policy')"
+                        :current="request()->routeIs('settings.payroll-approval-policy')" wire:navigate>Payroll Approval Policy
+                    </flux:sidebar.item>
                     <flux:sidebar.item :href="route('settings.job-titles')"
                         :current="request()->routeIs('settings.job-titles')" wire:navigate>Job Titles</flux:sidebar.item>
                     <flux:sidebar.item :href="route('settings.notifications')"
