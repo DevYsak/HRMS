@@ -70,7 +70,50 @@
 
     {{-- Preview --}}
     @if($showPreview)
-        @php $summary = $parsed['summary'] ?? ['total'=>0,'new'=>0,'update'=>0,'error'=>0]; @endphp
+        @php
+            $summary = $parsed['summary'] ?? ['total'=>0,'new'=>0,'update'=>0,'error'=>0];
+            $preflight = array_filter($parsed['preflight'] ?? []);
+            $quality = array_filter($parsed['quality'] ?? []);
+        @endphp
+
+        {{-- Pre-flight: master data the file references but the system doesn't have yet --}}
+        @if(! empty($preflight))
+            <div class="rounded-2xl border border-amber-200 bg-amber-50 p-5 dark:border-amber-900/40 dark:bg-amber-900/10">
+                <div class="flex items-start gap-3">
+                    <flux:icon.exclamation-triangle class="mt-0.5 size-5 shrink-0 text-amber-500" />
+                    <div class="space-y-2">
+                        <h3 class="text-sm font-bold text-amber-900 dark:text-amber-200">Set these up before importing</h3>
+                        <p class="text-xs text-amber-800 dark:text-amber-300">
+                            The file refers to the records below, but they don't exist yet. Rows will still import &mdash; these fields will just be left blank. Create them first to avoid a re-import.
+                        </p>
+                        <ul class="space-y-1 text-xs text-amber-900 dark:text-amber-200">
+                            @foreach($preflight as $label => $values)
+                                <li>
+                                    <span class="font-bold">{{ $label }}:</span>
+                                    {{ implode(', ', array_map(fn ($v) => '"'.$v.'"', $values)) }}
+                                </li>
+                            @endforeach
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        @endif
+
+        {{-- Data quality counters --}}
+        @if(! empty($quality))
+            <div class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-zinc-900">
+                <h3 class="mb-3 text-xs font-bold uppercase tracking-widest text-zinc-500">Data quality</h3>
+                <div class="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+                    @foreach($quality as $key => $count)
+                        <div class="flex items-center gap-2">
+                            <span class="font-bold text-rose-600 dark:text-rose-400">{{ $count }}</span>
+                            <span class="text-zinc-600 dark:text-zinc-300">{{ ucfirst(str_replace('_', ' ', $key)) }}</span>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+        @endif
+
         <div class="rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-white/10 dark:bg-zinc-900">
             <div class="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-100 bg-zinc-50/70 px-5 py-3 dark:border-white/5 dark:bg-zinc-800/40">
                 <h3 class="text-xs font-bold uppercase tracking-widest text-zinc-500">2 · Preview · {{ $summary['total'] }} rows</h3>

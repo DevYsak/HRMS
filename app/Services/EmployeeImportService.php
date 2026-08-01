@@ -11,6 +11,7 @@ use App\Models\EmployeeImportLog;
 use App\Models\EmploymentType;
 use App\Models\JobTitle;
 use App\Models\NotificationSetting;
+use App\Models\Office;
 use App\Models\ShiftSetting;
 use App\Models\User;
 use Illuminate\Support\Carbon;
@@ -33,8 +34,8 @@ class EmployeeImportService
 {
     /** Canonical column keys (== slugged spreadsheet headings). */
     public const COLUMNS = [
-        'employee_id', 'first_name', 'middle_name', 'last_name', 'email', 'gender',
-        'date_of_birth', 'phone', 'emergency_contact', 'address', 'department',
+        'employee_id', 'employee_code', 'first_name', 'middle_name', 'last_name', 'email', 'gender',
+        'date_of_birth', 'phone', 'emergency_contact', 'address', 'company', 'department',
         'designation', 'role', 'reporting_manager', 'joining_date', 'employment_type',
         'shift', 'status', 'biometric_pin', 'ctc', 'pf_number', 'esi_number', 'pan',
         'aadhaar', 'bank_name', 'account_number', 'ifsc', 'password',
@@ -44,8 +45,8 @@ class EmployeeImportService
     public function templateHeadings(): array
     {
         return [
-            'Employee ID', 'First Name', 'Middle Name', 'Last Name', 'Email', 'Gender',
-            'Date Of Birth', 'Phone', 'Emergency Contact', 'Address', 'Department',
+            'Employee ID', 'Employee Code', 'First Name', 'Middle Name', 'Last Name', 'Email', 'Gender',
+            'Date Of Birth', 'Phone', 'Emergency Contact', 'Address', 'Company', 'Department',
             'Designation', 'Role', 'Reporting Manager', 'Joining Date', 'Employment Type',
             'Shift', 'Status', 'Biometric PIN', 'CTC', 'PF Number', 'ESI Number', 'PAN',
             'Aadhaar', 'Bank Name', 'Account Number', 'IFSC', 'Password',
@@ -56,8 +57,8 @@ class EmployeeImportService
     public function sampleRow(): array
     {
         return [
-            'EMP1001', 'Asha', '', 'Verma', 'asha.verma@example.com', 'female',
-            '1994-05-12', '9876543210', '9876500000', '12 MG Road, Pune', 'Engineering',
+            'EMP1001', '1001', 'Asha', '', 'Verma', 'asha.verma@example.com', 'female',
+            '1994-05-12', '9876543210', '9876500000', '12 MG Road, Pune', 'Head Office', 'Engineering',
             'Software Engineer', 'employee', 'manager@example.com', '2026-07-01', 'Full Time',
             'IT Shift', 'active', '101', '600000', 'MH/BAN/12345/123', '31000000000000000',
             'ABCDE1234F', '123456789012', 'HDFC Bank', '50100000000000', 'HDFC0001234', '',
@@ -67,8 +68,13 @@ class EmployeeImportService
     /**
      * Validate + resolve raw rows into a preview.
      *
+     * Returns three blocks: `rows` (per-row result), `summary` (the new/update/
+     * error tally), `preflight` (master data referenced by the file but missing
+     * from the database — shown before importing rather than as N warnings
+     * after), and `quality` (the data-quality counters HR needs to sign off).
+     *
      * @param  array<int, array<string, mixed>>  $rows  keyed by slugged heading
-     * @return array{rows: array<int, array{line:int, data:array, status:string, errors:array<int,string>}>, summary: array<string,int>}
+     * @return array{rows: array<int, array{line:int, data:array, status:string, errors:array<int,string>}>, summary: array<string,int>, preflight: array<string, array<int,string>>, quality: array<string,int>}
      */
     public function parse(array $rows): array
     {
@@ -76,16 +82,31 @@ class EmployeeImportService
         $jobTitles = $this->lookup(JobTitle::all());
         $employmentTypes = $this->lookup(EmploymentType::all());
         $shifts = $this->lookup(ShiftSetting::all());
-        $managers = User::query()->pluck('id', 'email')
-            ->mapWithKeys(fn ($id, $email) => [Str::lower((string) $email) => $id]);
+        $offices = $this->lookup(Office::all());
         $existingEmails = User::query()->pluck('id', 'email')
             ->mapWithKeys(fn ($id, $email) => [Str::lower((string) $email) => $id]);
         $existingEmployeeIds = Employee::query()->pluck('employee_id')->filter()->map(fn ($v) => (string) $v)->all();
 
+        // Manager can be given as an email, an Employee ID, or a plain name —
+        // HR sheets in the wild use all three.
+        $managersByEmail = $existingEmails;
+        $managersByEmployeeId = Employee::query()->whereNotNull('employee_id')
+            ->pluck('user_id', 'employee_id')
+            ->mapWithKeys(fn ($userId, $empId) => [Str::lower(trim((string) $empId)) => $userId]);
+        $usersByName = User::query()->get(['id', 'name'])
+            ->groupBy(fn (User $u) => Str::lower(trim((string) $u->name)));
+
         $seen = [];
         $seenEmpIds = [];
+        $seenEmployeeCodes = [];
         $out = [];
         $summary = ['total' => 0, 'new' => 0, 'update' => 0, 'error' => 0];
+        $preflight = [];
+        $quality = [
+            'duplicate_emails' => 0, 'duplicate_employee_ids' => 0, 'duplicate_employee_codes' => 0,
+            'missing_emails' => 0, 'missing_employee_ids' => 0,
+            'invalid_dates' => 0, 'missing_shifts' => 0,
+        ];
 
         foreach ($rows as $i => $raw) {
             $r = $this->normalize($raw);
@@ -100,16 +121,20 @@ class EmployeeImportService
 
             $email = Str::lower((string) $r['email']);
             $name = trim(implode(' ', array_filter([$r['first_name'], $r['middle_name'], $r['last_name']])));
+            // Used to make every message point at a human, not just a row number.
+            $who = $name !== '' ? "'{$name}'" : ($r['employee_id'] !== '' ? "'{$r['employee_id']}'" : 'this row');
 
             if ($name === '') {
                 $errors[] = 'First name is required.';
             }
             if ($email === '') {
-                $errors[] = 'Email is required.';
+                $errors[] = "Email is required — {$who} has no email address. It is needed to create their login.";
+                $quality['missing_emails']++;
             } elseif (! Validator::make(['e' => $email], ['e' => 'email'])->passes()) {
-                $errors[] = 'Email is not a valid address.';
+                $errors[] = "Email '{$r['email']}' is not a valid address.";
             } elseif (isset($seen[$email])) {
                 $errors[] = 'Duplicate email within the file (row '.$seen[$email].').';
+                $quality['duplicate_emails']++;
             }
             $seen[$email] = $line;
             $existingUserId = $existingEmails[$email] ?? null;
@@ -118,28 +143,46 @@ class EmployeeImportService
             $empId = (string) $r['employee_id'];
             if ($existingUserId === null) {
                 if ($empId === '') {
-                    $errors[] = 'Employee ID is required for new employees.';
+                    $errors[] = "Employee ID is required for new employees — {$who} has none.";
+                    $quality['missing_employee_ids']++;
                 } elseif (in_array($empId, $existingEmployeeIds, true)) {
                     $errors[] = "Employee ID '{$empId}' already exists.";
+                    $quality['duplicate_employee_ids']++;
                 } elseif (isset($seenEmpIds[$empId])) {
                     $errors[] = "Duplicate Employee ID '{$empId}' within the file (row {$seenEmpIds[$empId]}).";
+                    $quality['duplicate_employee_ids']++;
                 }
                 if ($empId !== '') {
                     $seenEmpIds[$empId] = $line;
                 }
             }
 
+            // Employee Code is its own column now; biometric_pin remains the
+            // device mapping and is only used as a fallback for older sheets.
+            $employeeCode = $r['employee_code'] !== '' ? $r['employee_code'] : $r['biometric_pin'];
+            if ($employeeCode !== '' && ! is_numeric($employeeCode)) {
+                $errors[] = "Employee Code '{$employeeCode}' must be a number.";
+            } elseif ($employeeCode !== '') {
+                if (isset($seenEmployeeCodes[$employeeCode])) {
+                    $errors[] = "Duplicate Employee Code '{$employeeCode}' within the file (row {$seenEmployeeCodes[$employeeCode]}).";
+                    $quality['duplicate_employee_codes']++;
+                }
+                $seenEmployeeCodes[$employeeCode] = $line;
+            }
+
             $joiningDate = $this->parseDate($r['joining_date']);
             if ($r['joining_date'] !== '' && $joiningDate === null) {
-                $errors[] = 'Joining date is not a valid date.';
+                $errors[] = "Joining date '{$r['joining_date']}' is not a valid date.";
+                $quality['invalid_dates']++;
             }
             if ($r['joining_date'] === '') {
-                $errors[] = 'Joining date is required.';
+                $errors[] = "Joining date is required — {$who} has none.";
             }
 
             $dob = $r['date_of_birth'] !== '' ? $this->parseDate($r['date_of_birth']) : null;
             if ($r['date_of_birth'] !== '' && $dob === null) {
-                $errors[] = 'Date of birth is not a valid date.';
+                $errors[] = "Date of birth '{$r['date_of_birth']}' is not a valid date.";
+                $quality['invalid_dates']++;
             }
 
             $role = $this->resolveRole($r['role']);
@@ -153,18 +196,23 @@ class EmployeeImportService
             }
 
             // Optional look-ups: unmatched values warn (and import blank) rather than block the row.
-            $departmentId = $this->resolveId($departments, $r['department'], 'Department', $warnings);
-            $jobTitleId = $this->resolveId($jobTitles, $r['designation'], 'Designation', $warnings);
-            $employmentTypeId = $this->resolveId($employmentTypes, $r['employment_type'], 'Employment type', $warnings);
-            $shiftId = $this->resolveId($shifts, $r['shift'], 'Shift', $warnings);
+            $departmentId = $this->resolveId($departments, $r['department'], 'Department', $warnings, $preflight);
+            $jobTitleId = $this->resolveId($jobTitles, $r['designation'], 'Designation', $warnings, $preflight);
+            $employmentTypeId = $this->resolveId($employmentTypes, $r['employment_type'], 'Employment type', $warnings, $preflight);
+            $shiftId = $this->resolveId($shifts, $r['shift'], 'Shift', $warnings, $preflight);
+            $officeId = $this->resolveId($offices, $r['company'], 'Company/Branch', $warnings, $preflight);
 
-            $managerId = null;
-            if ($r['reporting_manager'] !== '') {
-                $managerId = $managers[Str::lower($r['reporting_manager'])] ?? null;
-                if ($managerId === null) {
-                    $warnings[] = "Reporting manager '{$r['reporting_manager']}' was not found (left blank).";
-                }
+            if ($r['shift'] === '' || $shiftId === null) {
+                $quality['missing_shifts']++;
             }
+
+            $managerId = $this->resolveManager(
+                $r['reporting_manager'],
+                $managersByEmail,
+                $managersByEmployeeId,
+                $usersByName,
+                $warnings,
+            );
 
             foreach ([['ifsc', '/^[A-Z]{4}0[A-Z0-9]{6}$/', 'IFSC'], ['pan', '/^[A-Z]{5}[0-9]{4}[A-Z]$/', 'PAN'], ['aadhaar', '/^[0-9]{12}$/', 'Aadhaar']] as [$key, $pattern, $labelText]) {
                 if ($r[$key] !== '' && ! preg_match($pattern, strtoupper($r[$key]))) {
@@ -191,13 +239,14 @@ class EmployeeImportService
                     'password' => (string) $r['password'],
                     'employee' => [
                         'employee_id' => $r['employee_id'] ?: null,
-                        'employee_code' => is_numeric($r['biometric_pin']) ? (int) $r['biometric_pin'] : null,
+                        'employee_code' => is_numeric($employeeCode) ? (int) $employeeCode : null,
                         'biometric_id' => is_numeric($r['biometric_pin']) ? $r['biometric_pin'] : null,
                         'gender' => $this->resolveGender($r['gender']),
                         'date_of_birth' => $dob,
                         'phone' => $r['phone'] ?: null,
                         'emergency_contact' => $r['emergency_contact'] ?: null,
                         'address' => $r['address'] ?: null,
+                        'office_id' => $officeId,
                         'department_id' => $departmentId,
                         'job_title_id' => $jobTitleId,
                         'manager_id' => $managerId,
@@ -220,7 +269,14 @@ class EmployeeImportService
             ];
         }
 
-        return ['rows' => $out, 'summary' => $summary];
+        // De-duplicate and sort the pre-flight lists so the preview shows each
+        // missing master record once, not once per row that referenced it.
+        foreach ($preflight as $label => $values) {
+            $preflight[$label] = collect($values)->unique()->sort()->values()->all();
+        }
+        ksort($preflight);
+
+        return ['rows' => $out, 'summary' => $summary, 'preflight' => $preflight, 'quality' => $quality];
     }
 
     /**
@@ -346,23 +402,82 @@ class EmployeeImportService
 
     // ── Helpers ─────────────────────────────────────────────────────────────
 
-    /** @return Collection<string, int> lower(name) => id */
+    /**
+     * @return Collection<string, int> lower(trimmed name) => id
+     *
+     * Names are trimmed on BOTH sides of the comparison: HR sheets routinely
+     * carry trailing spaces ("UK Operations "), and so does master data that
+     * was itself created from such a sheet.
+     */
     private function lookup($models): Collection
     {
-        return $models->mapWithKeys(fn ($m) => [Str::lower((string) $m->name) => $m->id]);
+        return $models->mapWithKeys(fn ($m) => [Str::lower(trim((string) $m->name)) => $m->id]);
     }
 
-    private function resolveId(Collection $map, string $value, string $label, array &$errors): ?int
+    /**
+     * Resolve a master-data name to its id. An unmatched value warns (the row
+     * still imports with the field blank) and is recorded in $preflight so the
+     * preview can list everything missing up front.
+     *
+     * @param  array<string, array<int, string>>  $preflight
+     */
+    private function resolveId(Collection $map, string $value, string $label, array &$warnings, array &$preflight): ?int
     {
         if ($value === '') {
             return null;
         }
-        $id = $map[Str::lower($value)] ?? null;
+        $id = $map[Str::lower(trim($value))] ?? null;
         if ($id === null) {
-            $errors[] = "{$label} '{$value}' was not found.";
+            $warnings[] = "{$label} '{$value}' was not found.";
+            $preflight[$label][] = $value;
         }
 
         return $id;
+    }
+
+    /**
+     * Resolve a reporting manager given an email, an Employee ID, or a plain
+     * name — HR sheets use all three. Ambiguous names (two people with the
+     * same name) warn rather than silently picking one.
+     *
+     * @param  Collection<string, int>  $byEmail
+     * @param  Collection<string, int>  $byEmployeeId
+     * @param  Collection<string, Collection<int, User>>  $byName
+     */
+    private function resolveManager(
+        string $value,
+        Collection $byEmail,
+        Collection $byEmployeeId,
+        Collection $byName,
+        array &$warnings,
+    ): ?int {
+        if ($value === '') {
+            return null;
+        }
+
+        $key = Str::lower(trim($value));
+
+        if ($id = $byEmail[$key] ?? null) {
+            return (int) $id;
+        }
+
+        if ($id = $byEmployeeId[$key] ?? null) {
+            return (int) $id;
+        }
+
+        $matches = $byName[$key] ?? collect();
+        if ($matches->count() === 1) {
+            return (int) $matches->first()->id;
+        }
+        if ($matches->count() > 1) {
+            $warnings[] = "Reporting manager '{$value}' matches {$matches->count()} people — set the manager's email or Employee ID instead (left blank).";
+
+            return null;
+        }
+
+        $warnings[] = "Reporting manager '{$value}' was not found (left blank).";
+
+        return null;
     }
 
     private function resolveRole(string $value): ?UserRole
@@ -402,16 +517,41 @@ class EmployeeImportService
         return in_array($v, ['male', 'female', 'other'], true) ? $v : null;
     }
 
+    /**
+     * Parse the date formats HR sheets actually contain ('2026-07-01',
+     * '07-06-2010', '11th Feb 2025', '23rd Sept 2024') and reject the ones
+     * PHP would otherwise silently corrupt:
+     *  - a bare number ('2026') becomes today's date with that year;
+     *  - an impossible date ('31-02-2025') rolls over to 3 March.
+     * Both are returned as null so the caller reports a blocking row error.
+     */
     private function parseDate(string $value): ?string
     {
-        if (trim($value) === '') {
+        $value = trim($value);
+
+        if ($value === '') {
             return null;
         }
+
+        // A digits-only value carries no month/day and can only be guessed at.
+        if (preg_match('/^\d+$/', $value)) {
+            return null;
+        }
+
         try {
-            return Carbon::parse($value)->toDateString();
+            $date = Carbon::parse($value);
         } catch (\Throwable) {
             return null;
         }
+
+        // Carbon/DateTime reports day-overflow ("31 Feb") as a warning rather
+        // than an exception, so it has to be checked explicitly.
+        $errors = Carbon::getLastErrors();
+        if ($errors && ($errors['warning_count'] ?? 0) > 0) {
+            return null;
+        }
+
+        return $date->toDateString();
     }
 
     /** @return array<string, string> every column key present and string-trimmed */

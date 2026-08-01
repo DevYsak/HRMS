@@ -21,7 +21,7 @@ class EmployeesExport
     /** @return array<int, array<int, mixed>> */
     public function rows(): array
     {
-        return Employee::with(['user', 'department', 'jobTitle', 'shift', 'manager', 'employmentType', 'payrollSettings'])
+        return Employee::with(['user', 'office', 'department', 'jobTitle', 'shift', 'manager', 'employmentType', 'payrollSettings'])
             ->get()
             ->map(function (Employee $e): array {
                 $user = $e->user;
@@ -31,6 +31,7 @@ class EmployeesExport
 
                 return [
                     $e->employee_id,
+                    $e->employee_code,
                     $parts[0] ?? '',
                     '',
                     $parts[1] ?? '',
@@ -40,6 +41,7 @@ class EmployeesExport
                     $e->phone,
                     $e->emergency_contact,
                     $e->address,
+                    $e->office?->name,
                     $e->department?->name,
                     $e->jobTitle?->name,
                     is_object($user?->role) ? $user->role->value : $user?->role,
@@ -48,7 +50,7 @@ class EmployeesExport
                     $e->employmentType?->name,
                     $e->shift?->name,
                     $status,
-                    $e->employee_code,
+                    $e->biometric_id,
                     $pay?->ctc,
                     $pay?->pf_number,
                     $pay?->esi_number,
