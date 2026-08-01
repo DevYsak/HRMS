@@ -126,7 +126,9 @@ class EmployeeImportService
         $offices = $this->lookup(Office::all());
         $existingEmails = User::query()->pluck('id', 'email')
             ->mapWithKeys(fn ($id, $email) => [Str::lower((string) $email) => $id]);
-        $existingEmployeeIds = Employee::query()->pluck('employee_id')->filter()->map(fn ($v) => (string) $v)->all();
+        $existingByEmployeeId = Employee::query()->whereNotNull('employee_id')
+            ->pluck('user_id', 'employee_id')
+            ->mapWithKeys(fn ($userId, $empId) => [Str::lower(trim((string) $empId)) => $userId]);
 
         // Manager can be given as an email, an Employee ID, or a plain name —
         // HR sheets in the wild use all three.
@@ -197,6 +199,13 @@ class EmployeeImportService
                 $isPlaceholderEmail = true;
                 $warnings[] = "No email address — imported as '{$email}' and flagged Email Pending.";
                 $quality['missing_emails']++;
+            } elseif (Str::endsWith($email, '@'.self::PLACEHOLDER_EMAIL_DOMAIN)) {
+                // Round-trip: exporting employees and re-importing brings the
+                // generated address back in the file. It is still a stand-in,
+                // so keep the flag rather than silently marking it resolved.
+                $isPlaceholderEmail = true;
+                $warnings[] = "Still using the generated address '{$email}' — flagged Email Pending.";
+                $quality['missing_emails']++;
             } elseif (! Validator::make(['e' => $email], ['e' => 'email'])->passes()) {
                 $errors[] = "Email '{$r['email']}' is not a valid address.";
             } elseif (isset($seen[$email])) {
@@ -204,24 +213,34 @@ class EmployeeImportService
                 $quality['duplicate_emails']++;
             }
             $seen[$email] = $line;
-            $existingUserId = $existingEmails[$email] ?? null;
 
-            // Employee ID is required + unique for new hires (column is NOT NULL, unique).
+            // Match on Employee ID first — it is the stable business key, while
+            // an email address changes (notably when HR replaces a generated
+            // stand-in with the real one). Falling back to email keeps sheets
+            // that carry no Employee ID working.
             $empId = (string) $r['employee_id'];
+            $existingUserId = ($empId !== '' ? ($existingByEmployeeId[Str::lower($empId)] ?? null) : null)
+                ?? ($existingEmails[$email] ?? null);
+
             if ($existingUserId === null) {
+                // Creating: Employee ID is required and must be unique.
                 if ($empId === '') {
                     $errors[] = "Employee ID is required for new employees — {$who} has none.";
                     $quality['missing_employee_ids']++;
-                } elseif (in_array($empId, $existingEmployeeIds, true)) {
-                    $errors[] = "Employee ID '{$empId}' already exists.";
-                    $quality['duplicate_employee_ids']++;
                 } elseif (isset($seenEmpIds[$empId])) {
                     $errors[] = "Duplicate Employee ID '{$empId}' within the file (row {$seenEmpIds[$empId]}).";
                     $quality['duplicate_employee_ids']++;
                 }
-                if ($empId !== '') {
-                    $seenEmpIds[$empId] = $line;
-                }
+            } elseif ($isPlaceholderEmail === false && ($existingEmails[$email] ?? null) !== null
+                && $existingEmails[$email] !== $existingUserId) {
+                // The address being assigned already belongs to somebody else;
+                // letting this through would hit the users.email unique index.
+                $errors[] = "Email '{$email}' is already used by another employee.";
+                $quality['duplicate_emails']++;
+            }
+
+            if ($empId !== '') {
+                $seenEmpIds[$empId] = $line;
             }
 
             // Employee Code is its own column now; biometric_pin remains the
@@ -516,7 +535,13 @@ class EmployeeImportService
             return;
         }
 
-        $user->update(['name' => $data['name'], 'role' => $data['role']]);
+        // The email is updatable now that rows match on Employee ID — this is
+        // how HR replaces a generated stand-in address with the real one.
+        $user->update([
+            'name' => $data['name'],
+            'role' => $data['role'],
+            'email' => $data['email'],
+        ]);
 
         if ($user->employee) {
             // Never rewrite the immutable, unique employee_id on update.

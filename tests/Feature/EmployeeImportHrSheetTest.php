@@ -1,5 +1,6 @@
 <?php
 
+use App\Exports\EmployeesExport;
 use App\Mail\WelcomeEmployeeMail;
 use App\Models\Department;
 use App\Models\Employee;
@@ -9,6 +10,7 @@ use App\Models\User;
 use App\Services\EmployeeImportService;
 use App\Services\ProbationEngine;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 
 /**
  * Phase A of the HR data migration: hardening the employee importer against
@@ -378,6 +380,73 @@ test('a duplicate bio code blocks the row, since punches would attach to the wro
         ->and($parsed['rows'][1]['status'])->toBe('error')
         ->and(implode(' ', $parsed['rows'][1]['errors']))->toContain('Duplicate Bio Code')
         ->and($parsed['quality']['duplicate_bio_codes'])->toBe(1);
+});
+
+test('exporting employees, adding new rows and re-importing updates and creates without duplicating', function () {
+    Mail::fake();
+    $actor = User::factory()->create();
+    $service = hrSheetService();
+
+    // Two existing employees: one with a real address, one imported without.
+    $service->import($service->parse([
+        ['employee_id' => 'RT001', 'employee_name' => 'Real Email Person', 'email' => 'rt.real@example.com', 'date_of_joining' => '2026-01-01'],
+        ['employee_id' => 'RT002', 'employee_name' => 'No Email Person', 'date_of_joining' => '2026-01-02'],
+    ]), 'skip', $actor);
+
+    // Export in the import layout, exactly as the "Export existing" button does.
+    $export = new EmployeesExport;
+    $slugs = array_map(fn ($h) => Str::slug($h, '_'), $export->headings());
+    $rows = array_values(array_filter($export->rows(), fn ($r) => in_array($r[0], ['RT001', 'RT002'], true)));
+
+    // HR edits an existing row and appends a new hire.
+    $rows[0][array_search('phone', $slugs)] = '9111111111';
+    $newHire = array_fill(0, count($slugs), '');
+    $newHire[array_search('employee_id', $slugs)] = 'RT003';
+    $newHire[array_search('first_name', $slugs)] = 'Brand';
+    $newHire[array_search('last_name', $slugs)] = 'New Hire';
+    $newHire[array_search('email', $slugs)] = 'rt.new@example.com';
+    $newHire[array_search('joining_date', $slugs)] = '2026-08-01';
+    $rows[] = $newHire;
+
+    $parsed = $service->parse(array_map(fn ($r) => array_combine($slugs, $r), $rows));
+    expect($parsed['summary']['update'])->toBe(2)
+        ->and($parsed['summary']['new'])->toBe(1)
+        ->and($parsed['summary']['error'])->toBe(0);
+
+    $log = $service->import($parsed, 'update', $actor);
+    expect($log->updated)->toBe(2)->and($log->imported)->toBe(1);
+
+    expect(Employee::whereIn('employee_id', ['RT001', 'RT002', 'RT003'])->count())->toBe(3);
+    expect(Employee::where('employee_id', 'RT001')->first()->phone)->toBe('9111111111');
+});
+
+test('a generated email coming back through export keeps its Email Pending flag', function () {
+    Mail::fake();
+    $actor = User::factory()->create();
+    $service = hrSheetService();
+
+    $service->import($service->parse([
+        ['employee_id' => 'RT100', 'employee_name' => 'Placeholder Person', 'date_of_joining' => '2026-01-01'],
+    ]), 'skip', $actor);
+
+    $employee = Employee::with('user')->where('employee_id', 'RT100')->first();
+    expect($employee->has_placeholder_email)->toBeTrue();
+
+    // Re-import the row with the generated address still in the file — it is
+    // not a real mailbox, so the flag must survive the round trip.
+    $parsed = $service->parse([
+        ['employee_id' => 'RT100', 'employee_name' => 'Placeholder Person', 'email' => $employee->user->email, 'date_of_joining' => '2026-01-01'],
+    ]);
+    $service->import($parsed, 'update', $actor);
+
+    expect(Employee::where('employee_id', 'RT100')->first()->has_placeholder_email)->toBeTrue();
+
+    // Giving them a genuine address clears it.
+    $service->import($service->parse([
+        ['employee_id' => 'RT100', 'employee_name' => 'Placeholder Person', 'email' => 'rt100.real@example.com', 'date_of_joining' => '2026-01-01'],
+    ]), 'update', $actor);
+
+    expect(Employee::where('employee_id', 'RT100')->first()->has_placeholder_email)->toBeFalse();
 });
 
 test('duplicate employee codes within the file are caught', function () {
