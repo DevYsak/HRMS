@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\EmployeeStatus;
 use App\Enums\UserRole;
 use App\Mail\WelcomeEmployeeMail;
+use App\Models\Company;
 use App\Models\Department;
 use App\Models\Employee;
 use App\Models\EmployeeImportLog;
@@ -32,6 +33,13 @@ use Illuminate\Support\Str;
  */
 class EmployeeImportService
 {
+    /**
+     * Domain used for generated stand-in addresses when the HR sheet has no
+     * email. `.local` is reserved and unroutable, so a placeholder can never
+     * collide with a real mailbox or accidentally reach someone.
+     */
+    public const PLACEHOLDER_EMAIL_DOMAIN = 'conexus.local';
+
     /** Canonical column keys (== slugged spreadsheet headings). */
     public const COLUMNS = [
         'employee_id', 'employee_code', 'first_name', 'middle_name', 'last_name', 'email', 'gender',
@@ -142,16 +150,22 @@ class EmployeeImportService
             }
         }
 
+        $existingBioCodes = Employee::query()->whereNotNull('biometric_id')
+            ->pluck('biometric_id')->mapWithKeys(fn ($v) => [(string) $v => true])->all();
+
         $seen = [];
         $seenEmpIds = [];
         $seenEmployeeCodes = [];
+        $seenBioCodes = [];
         $out = [];
         $summary = ['total' => 0, 'new' => 0, 'update' => 0, 'error' => 0];
         $preflight = [];
         $quality = [
             'duplicate_emails' => 0, 'duplicate_employee_ids' => 0, 'duplicate_employee_codes' => 0,
-            'missing_emails' => 0, 'missing_employee_ids' => 0,
-            'invalid_dates' => 0, 'missing_shifts' => 0,
+            'duplicate_bio_codes' => 0,
+            'missing_emails' => 0, 'missing_employee_ids' => 0, 'missing_joining_dates' => 0,
+            'invalid_dates' => 0,
+            'missing_departments' => 0, 'missing_designations' => 0, 'missing_shifts' => 0,
         ];
 
         foreach ($rows as $i => $raw) {
@@ -173,8 +187,15 @@ class EmployeeImportService
             if ($name === '') {
                 $errors[] = 'First name is required.';
             }
+
+            // A missing email no longer blocks the row: generate an unroutable
+            // stand-in so the employee still gets a record, and flag it so HR
+            // can fill in the real address later.
+            $isPlaceholderEmail = false;
             if ($email === '') {
-                $errors[] = "Email is required — {$who} has no email address. It is needed to create their login.";
+                $email = $this->placeholderEmail($r['employee_id'], $name, $seen, $existingEmails);
+                $isPlaceholderEmail = true;
+                $warnings[] = "No email address — imported as '{$email}' and flagged Email Pending.";
                 $quality['missing_emails']++;
             } elseif (! Validator::make(['e' => $email], ['e' => 'email'])->passes()) {
                 $errors[] = "Email '{$r['email']}' is not a valid address.";
@@ -216,13 +237,32 @@ class EmployeeImportService
                 $seenEmployeeCodes[$employeeCode] = $line;
             }
 
+            // A duplicate Bio Code is genuinely corrupting — the biometric sync
+            // matches punches on it, so two employees sharing one would collect
+            // each other's attendance. This one does block the row.
+            $bioCode = $r['biometric_pin'];
+            if ($bioCode !== '') {
+                if (isset($seenBioCodes[$bioCode])) {
+                    $errors[] = "Duplicate Bio Code '{$bioCode}' within the file (row {$seenBioCodes[$bioCode]}) — biometric punches would attach to the wrong employee.";
+                    $quality['duplicate_bio_codes']++;
+                } elseif (isset($existingBioCodes[$bioCode])) {
+                    $errors[] = "Bio Code '{$bioCode}' is already assigned to another employee.";
+                    $quality['duplicate_bio_codes']++;
+                }
+                $seenBioCodes[$bioCode] = $line;
+            }
+
+            // A supplied-but-unparseable date is still an error (it means the
+            // sheet is wrong); a genuinely blank one imports and is flagged, so
+            // incomplete HR records don't block the migration.
             $joiningDate = $this->parseDate($r['joining_date']);
             if ($r['joining_date'] !== '' && $joiningDate === null) {
                 $errors[] = "Joining date '{$r['joining_date']}' is not a valid date.";
                 $quality['invalid_dates']++;
             }
             if ($r['joining_date'] === '') {
-                $errors[] = "Joining date is required — {$who} has none.";
+                $warnings[] = "No joining date — imported and flagged Joining Date Missing. Probation, leave accrual and payroll proration stay off for {$who} until it is set.";
+                $quality['missing_joining_dates']++;
             }
 
             $dob = $r['date_of_birth'] !== '' ? $this->parseDate($r['date_of_birth']) : null;
@@ -248,7 +288,13 @@ class EmployeeImportService
             $shiftId = $this->resolveId($shifts, $r['shift'], 'Shift', $warnings, $preflight);
             $officeId = $this->resolveId($offices, $r['company'], 'Company/Branch', $warnings, $preflight);
 
-            if ($r['shift'] === '' || $shiftId === null) {
+            if ($departmentId === null) {
+                $quality['missing_departments']++;
+            }
+            if ($jobTitleId === null) {
+                $quality['missing_designations']++;
+            }
+            if ($shiftId === null) {
                 $quality['missing_shifts']++;
             }
 
@@ -287,9 +333,18 @@ class EmployeeImportService
                     // Kept so import() can re-resolve managers that are themselves
                     // rows in this same file, once every row has been created.
                     'manager_ref' => $r['reporting_manager'],
+                    // Raw master-data names, so import() can create any that are
+                    // missing when auto-create is enabled and then re-resolve.
+                    'master_refs' => [
+                        'department' => $r['department'],
+                        'designation' => $r['designation'],
+                        'shift' => $r['shift'],
+                        'company' => $r['company'],
+                    ],
                     'employee' => [
                         'employee_id' => $r['employee_id'] ?: null,
                         'employee_code' => is_numeric($employeeCode) ? (int) $employeeCode : null,
+                        'has_placeholder_email' => $isPlaceholderEmail,
                         'biometric_id' => is_numeric($r['biometric_pin']) ? $r['biometric_pin'] : null,
                         'gender' => $this->resolveGender($r['gender']),
                         'date_of_birth' => $dob,
@@ -332,9 +387,19 @@ class EmployeeImportService
     /**
      * Persist a parsed preview. Skips error rows; honours skip/update mode for
      * existing employees. All inserts run in one transaction (rollback on error).
+     *
+     * @param  bool  $autoCreateMasterData  create any departments/designations/
+     *                                      shifts/offices the file references but
+     *                                      the system doesn't have yet
      */
-    public function import(array $parsed, string $mode, User $actor, ?string $filename = null, bool $sendWelcome = false): EmployeeImportLog
-    {
+    public function import(
+        array $parsed,
+        string $mode,
+        User $actor,
+        ?string $filename = null,
+        bool $sendWelcome = false,
+        bool $autoCreateMasterData = false,
+    ): EmployeeImportLog {
         $mode = $mode === 'update' ? 'update' : 'skip';
         $imported = 0;
         $updated = 0;
@@ -342,6 +407,7 @@ class EmployeeImportService
         $failed = 0;
         $errorLog = [];
         $newlyCreated = [];
+        $createdMasterData = [];
 
         foreach ($parsed['rows'] as $row) {
             if ($row['status'] === 'error') {
@@ -351,8 +417,12 @@ class EmployeeImportService
         }
 
         try {
-            DB::transaction(function () use ($parsed, $mode, $actor, &$imported, &$updated, &$skipped, &$newlyCreated) {
+            DB::transaction(function () use ($parsed, $mode, $actor, $autoCreateMasterData, &$imported, &$updated, &$skipped, &$newlyCreated, &$createdMasterData) {
                 $passwords = app(PasswordService::class);
+
+                if ($autoCreateMasterData) {
+                    [$parsed, $createdMasterData] = $this->autoCreateMasterData($parsed);
+                }
 
                 foreach ($parsed['rows'] as $row) {
                     if ($row['status'] === 'error') {
@@ -413,6 +483,11 @@ class EmployeeImportService
 
         if ($sendWelcome && $welcomeEnabled) {
             foreach ($newlyCreated as $entry) {
+                // Never mail a generated stand-in address — it belongs to no one.
+                if (Str::endsWith(Str::lower($entry['user']->email), '@'.self::PLACEHOLDER_EMAIL_DOMAIN)) {
+                    continue;
+                }
+
                 try {
                     Mail::to($entry['user']->email)->send(new WelcomeEmployeeMail($entry['user'], $entry['plain']));
                 } catch (\Throwable) {
@@ -539,6 +614,91 @@ class EmployeeImportService
         $warnings[] = "Reporting manager '{$value}' was not found (left blank).";
 
         return null;
+    }
+
+    /**
+     * Create any departments, designations, shifts or offices the file refers
+     * to that don't exist yet, then re-resolve every row's ids against them.
+     * Runs inside the import transaction, so a later failure rolls the new
+     * master data back too.
+     *
+     * Shift hours are read out of the HR label where possible — "10.30 AM to
+     * 7.30 PM" and "1PM to 10PM" both parse — falling back to the company's
+     * default window when the label carries no times ("General Shift").
+     *
+     * @return array{0: array, 1: array<string, array<int, string>>} [patched parse result, what was created]
+     */
+    private function autoCreateMasterData(array $parsed): array
+    {
+        $created = [];
+        // departments/job_titles/offices are all NOT NULL on company_id. On a
+        // fresh system with no company yet, creating one is far better than
+        // letting a constraint violation roll back the whole import.
+        $companyId = Company::query()->value('id')
+            ?? Company::create(['name' => config('app.name', 'Company')])->id;
+
+        foreach ($parsed['rows'] as $row) {
+            if ($row['status'] === 'error') {
+                continue;
+            }
+
+            foreach ($row['data']['master_refs'] ?? [] as $kind => $name) {
+                $name = trim((string) $name);
+                if ($name === '') {
+                    continue;
+                }
+
+                $model = match ($kind) {
+                    'department' => Department::class,
+                    'designation' => JobTitle::class,
+                    'shift' => ShiftSetting::class,
+                    'company' => Office::class,
+                    default => null,
+                };
+
+                if ($model === null) {
+                    continue;
+                }
+
+                $exists = $model::query()->whereRaw('LOWER(TRIM(name)) = ?', [Str::lower($name)])->exists();
+                if ($exists) {
+                    continue;
+                }
+
+                if ($kind === 'shift') {
+                    [$start, $end] = $this->parseShiftLabel($name);
+                    ShiftSetting::create(['name' => $name, 'start_time' => $start, 'end_time' => $end]);
+                } else {
+                    $model::create(['name' => $name, 'company_id' => $companyId]);
+                }
+
+                $created[$kind][] = $name;
+            }
+        }
+
+        // Re-resolve every row against the now-complete master data.
+        $maps = [
+            'department' => ['map' => $this->lookup(Department::all()), 'key' => 'department_id'],
+            'designation' => ['map' => $this->lookup(JobTitle::all()), 'key' => 'job_title_id'],
+            'shift' => ['map' => $this->lookup(ShiftSetting::all()), 'key' => 'shift_id'],
+            'company' => ['map' => $this->lookup(Office::all()), 'key' => 'office_id'],
+        ];
+
+        foreach ($parsed['rows'] as $i => $row) {
+            foreach ($maps as $kind => $spec) {
+                $name = trim((string) ($row['data']['master_refs'][$kind] ?? ''));
+                if ($name === '') {
+                    continue;
+                }
+                $parsed['rows'][$i]['data']['employee'][$spec['key']] = $spec['map'][Str::lower($name)] ?? null;
+            }
+        }
+
+        foreach ($created as $kind => $names) {
+            $created[$kind] = collect($names)->unique()->sort()->values()->all();
+        }
+
+        return [$parsed, $created];
     }
 
     /**
@@ -688,6 +848,57 @@ class EmployeeImportService
         }
 
         return $out;
+    }
+
+    /**
+     * Read start/end times out of an HR shift label. Handles the forms real
+     * sheets use — "10.30 AM to 7.30 PM", "1PM to 10PM", "9:00 AM - 6:00 PM",
+     * "10:30-19:30" — and falls back to a standard 09:00–18:00 day for labels
+     * that carry no times at all, which HR then corrects in Settings.
+     *
+     * @return array{0: string, 1: string}
+     */
+    private function parseShiftLabel(string $label): array
+    {
+        // "10.30 AM" → "10:30 AM"; a dot separator confuses date parsing.
+        $normalised = preg_replace('/(\d)\.(\d)/', '$1:$2', trim($label)) ?? $label;
+
+        if (preg_match('/^(.*?)\s*(?:to|-|–|—)\s*(.*)$/i', $normalised, $m)) {
+            try {
+                return [
+                    Carbon::parse(trim($m[1]))->format('H:i:s'),
+                    Carbon::parse(trim($m[2]))->format('H:i:s'),
+                ];
+            } catch (\Throwable) {
+                // Fall through to the default window.
+            }
+        }
+
+        return ['09:00:00', '18:00:00'];
+    }
+
+    /**
+     * Build an unroutable stand-in address for a row with no email, keyed on
+     * the Employee ID so it is stable across re-imports (re-importing the same
+     * sheet matches the same person rather than creating a duplicate).
+     * A numeric suffix is added only if that address is somehow already taken.
+     *
+     * @param  array<string, int>  $seenInFile
+     * @param  Collection<string, int>  $existingEmails
+     */
+    private function placeholderEmail(string $employeeId, string $name, array $seenInFile, Collection $existingEmails): string
+    {
+        $local = Str::slug($employeeId !== '' ? $employeeId : $name, '.');
+        $local = $local !== '' ? $local : 'employee';
+
+        $candidate = Str::lower($local).'@'.self::PLACEHOLDER_EMAIL_DOMAIN;
+        $suffix = 1;
+
+        while (isset($seenInFile[$candidate]) || $existingEmails->has($candidate)) {
+            $candidate = Str::lower($local).'-'.(++$suffix).'@'.self::PLACEHOLDER_EMAIL_DOMAIN;
+        }
+
+        return $candidate;
     }
 
     /**

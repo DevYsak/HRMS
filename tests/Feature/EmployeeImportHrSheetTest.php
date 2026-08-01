@@ -1,11 +1,13 @@
 <?php
 
+use App\Mail\WelcomeEmployeeMail;
 use App\Models\Department;
 use App\Models\Employee;
 use App\Models\Office;
 use App\Models\ShiftSetting;
 use App\Models\User;
 use App\Services\EmployeeImportService;
+use App\Services\ProbationEngine;
 use Illuminate\Support\Facades\Mail;
 
 /**
@@ -148,13 +150,14 @@ test('the preview lists missing master data once, not once per row', function ()
         ->and($parsed['preflight']['Shift'])->toBe(['Ghost Shift']);
 });
 
-test('a missing email blocks the row and names the person so HR can fix it', function () {
+test('a missing email warns and names the person rather than blocking the row', function () {
     $parsed = hrSheetService()->parse([
         ['employee_id' => 'CNS700', 'first_name' => 'Nicholas', 'last_name' => 'Dsouza', 'joining_date' => '2026-07-01'],
     ]);
 
-    expect($parsed['rows'][0]['status'])->toBe('error')
-        ->and(implode(' ', $parsed['rows'][0]['errors']))->toContain('Nicholas Dsouza')
+    expect($parsed['rows'][0]['status'])->toBe('new')
+        ->and($parsed['rows'][0]['errors'])->toBeEmpty()
+        ->and(implode(' ', $parsed['rows'][0]['warnings']))->toContain('Email Pending')
         ->and($parsed['quality']['missing_emails'])->toBe(1);
 });
 
@@ -251,6 +254,130 @@ test('a manager who is genuinely absent still warns', function () {
     ]);
 
     expect(implode(' ', $parsed['rows'][0]['warnings']))->toContain("Reporting manager 'Nobody At All' was not found");
+});
+
+test('a row with no email imports with a generated address and an Email Pending flag', function () {
+    Mail::fake();
+    $actor = User::factory()->create();
+    $service = hrSheetService();
+
+    $parsed = $service->parse([
+        ['employee_id' => 'CNS970', 'employee_name' => 'No Email Person', 'date_of_joining' => '2026-07-01'],
+    ]);
+
+    expect($parsed['rows'][0]['status'])->toBe('new')
+        ->and($parsed['rows'][0]['data']['email'])->toBe('cns970@'.EmployeeImportService::PLACEHOLDER_EMAIL_DOMAIN)
+        ->and($parsed['quality']['missing_emails'])->toBe(1);
+
+    $service->import($parsed, 'skip', $actor);
+
+    $employee = Employee::where('employee_id', 'CNS970')->first();
+    expect($employee)->not->toBeNull()
+        ->and($employee->has_placeholder_email)->toBeTrue()
+        ->and($employee->dataFlags())->toContain('Email Pending');
+});
+
+test('no mail is ever sent to a generated placeholder address', function () {
+    Mail::fake();
+    $actor = User::factory()->create();
+    $service = hrSheetService();
+
+    $parsed = $service->parse([
+        ['employee_id' => 'CNS971', 'employee_name' => 'Placeholder Person', 'date_of_joining' => '2026-07-01'],
+        ['employee_id' => 'CNS972', 'employee_name' => 'Real Person', 'email' => 'real.person@example.com', 'date_of_joining' => '2026-07-01'],
+    ]);
+
+    // Opt in to welcome emails: only the row with a genuine address gets one.
+    $service->import($parsed, 'skip', $actor, 'welcome.xlsx', sendWelcome: true);
+
+    Mail::assertSent(WelcomeEmployeeMail::class, 1);
+    Mail::assertSent(WelcomeEmployeeMail::class, fn ($mail) => $mail->hasTo('real.person@example.com'));
+});
+
+test('a row with no joining date imports and is flagged instead of rejected', function () {
+    Mail::fake();
+    $actor = User::factory()->create();
+    $service = hrSheetService();
+
+    $parsed = $service->parse([
+        ['employee_id' => 'CNS973', 'employee_name' => 'No Date Person', 'email' => 'nodate@example.com'],
+    ]);
+
+    expect($parsed['rows'][0]['status'])->toBe('new')
+        ->and($parsed['quality']['missing_joining_dates'])->toBe(1)
+        ->and(implode(' ', $parsed['rows'][0]['warnings']))->toContain('Joining Date Missing');
+
+    $service->import($parsed, 'skip', $actor);
+
+    $employee = Employee::where('employee_id', 'CNS973')->first();
+    expect($employee->joining_date)->toBeNull()
+        ->and($employee->isMissingJoiningDate())->toBeTrue()
+        ->and($employee->dataFlags())->toContain('Joining Date Missing');
+});
+
+test('probation is left unset for an employee with no joining date, not fabricated from today', function () {
+    // Carbon::parse(null) silently returns now(), so without a guard this
+    // employee would be given a probation period ending 90 days from today.
+    $user = User::factory()->create();
+    $employee = Employee::factory()->create(['user_id' => $user->id, 'joining_date' => null]);
+
+    $engine = app(ProbationEngine::class);
+
+    expect($engine->calculateEndDate($employee))->toBeNull();
+
+    $engine->autoSetIfEnabled($employee);
+    expect($employee->fresh()->probation_end_date)->toBeNull();
+});
+
+test('missing departments, designations and shifts are auto-created and linked when enabled', function () {
+    Mail::fake();
+    $actor = User::factory()->create();
+    $service = hrSheetService();
+
+    $parsed = $service->parse([
+        ['employee_id' => 'CNS980', 'employee_name' => 'Auto Create', 'email' => 'auto@example.com', 'date_of_joining' => '2026-07-01',
+            'department' => 'Brand New Dept', 'designation' => 'Brand New Role', 'shift' => '10.30 AM to 7.30 PM'],
+    ]);
+
+    $service->import($parsed, 'skip', $actor, null, false, autoCreateMasterData: true);
+
+    $employee = Employee::with(['department', 'jobTitle', 'shift'])->where('employee_id', 'CNS980')->first();
+
+    expect($employee->department?->name)->toBe('Brand New Dept')
+        ->and($employee->jobTitle?->name)->toBe('Brand New Role')
+        ->and($employee->shift?->name)->toBe('10.30 AM to 7.30 PM');
+
+    // Shift hours are read out of the HR label rather than guessed.
+    expect($employee->shift->start_time)->toStartWith('10:30')
+        ->and($employee->shift->end_time)->toStartWith('19:30');
+});
+
+test('master data is left alone when auto-create is off', function () {
+    Mail::fake();
+    $actor = User::factory()->create();
+    $service = hrSheetService();
+
+    $parsed = $service->parse([
+        ['employee_id' => 'CNS981', 'employee_name' => 'No Auto', 'email' => 'noauto@example.com', 'date_of_joining' => '2026-07-01',
+            'department' => 'Never Created Dept'],
+    ]);
+
+    $service->import($parsed, 'skip', $actor, null, false, autoCreateMasterData: false);
+
+    expect(Department::where('name', 'Never Created Dept')->exists())->toBeFalse();
+    expect(Employee::where('employee_id', 'CNS981')->first()->department_id)->toBeNull();
+});
+
+test('a duplicate bio code blocks the row, since punches would attach to the wrong person', function () {
+    $parsed = hrSheetService()->parse([
+        ['employee_id' => 'CNS990', 'bio_code' => '42', 'employee_name' => 'First Person', 'email' => 'b1@example.com', 'date_of_joining' => '2026-07-01'],
+        ['employee_id' => 'CNS991', 'bio_code' => '42', 'employee_name' => 'Second Person', 'email' => 'b2@example.com', 'date_of_joining' => '2026-07-01'],
+    ]);
+
+    expect($parsed['rows'][0]['status'])->toBe('new')
+        ->and($parsed['rows'][1]['status'])->toBe('error')
+        ->and(implode(' ', $parsed['rows'][1]['errors']))->toContain('Duplicate Bio Code')
+        ->and($parsed['quality']['duplicate_bio_codes'])->toBe(1);
 });
 
 test('duplicate employee codes within the file are caught', function () {

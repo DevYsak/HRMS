@@ -164,7 +164,9 @@ class EmployeeEdit extends Component
         $this->employment_type_id = (string) ($this->employee->employment_type_id ?? '');
         $this->work_mode_id = (string) ($this->employee->work_mode_id ?? '');
         $this->salary_cycle_id = (string) ($this->employee->salary_cycle_id ?? '');
-        $this->joining_date = $this->employee->joining_date->format('Y-m-d');
+        // Nullable since the HR data migration — an imported employee may not
+        // have a joining date yet, and the edit screen is where HR fills it in.
+        $this->joining_date = $this->employee->joining_date?->format('Y-m-d') ?? '';
         $this->probation_end_date = $this->employee->probation_end_date?->format('Y-m-d') ?? '';
         $this->status = $this->employee->status->value;
         $this->ot_tracking_source = $this->employee->ot_tracking_source ?? 'biometric';
@@ -201,7 +203,9 @@ class EmployeeEdit extends Component
             'photo' => 'nullable|image|max:2048',
             // Employment
             'employee_code' => ['nullable', 'integer', 'min:1', 'max:65535', Rule::unique('employees', 'employee_code')->ignore($this->employee->id)],
-            'joining_date' => 'required|date',
+            // Nullable so HR can still edit an employee imported without a
+            // joining date; this screen is where they fill it in.
+            'joining_date' => 'nullable|date',
             'shift_id' => 'nullable|exists:shift_settings,id',
             'ot_tracking_source' => 'required|in:biometric,manual,nexflow,hybrid',
             'employment_type_id' => 'nullable|exists:employment_types,id',
@@ -251,7 +255,7 @@ class EmployeeEdit extends Component
             'employment_type_id' => $this->employment_type_id ?: null,
             'work_mode_id' => $this->work_mode_id ?: null,
             'salary_cycle_id' => $this->salary_cycle_id ?: null,
-            'joining_date' => $this->joining_date,
+            'joining_date' => $this->joining_date ?: null,
             'status' => $this->status,
             'resignation_date' => $this->resignation_date ?: null,
             'termination_date' => $this->termination_date ?: null,

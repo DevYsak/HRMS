@@ -132,7 +132,7 @@
                     </div>
                     <div class="flex items-center gap-3 text-sm text-zinc-600 dark:text-zinc-300">
                         <flux:icon.calendar-days class="size-4 shrink-0 text-zinc-400" />
-                        <span>Joined {{ $employee->joining_date->format('d M Y') }}</span>
+                        <span>{{ $employee->joining_date ? 'Joined '.$employee->joining_date->format('d M Y') : 'Joining date not set' }}</span>
                     </div>
                     <div class="flex items-center gap-3 text-sm text-zinc-600 dark:text-zinc-300">
                         <flux:icon.building-office class="size-4 shrink-0 text-zinc-400" />
@@ -747,7 +747,7 @@
                             <div class="grid grid-cols-2 gap-4 rounded-xl border border-zinc-100 bg-zinc-50 p-4 text-sm dark:border-zinc-800 dark:bg-zinc-900">
                                 <div>
                                     <div class="mb-1 text-zinc-400">Joining Date</div>
-                                    <div class="font-bold text-zinc-900 dark:text-white">{{ $employee->joining_date->format('d M Y') }}</div>
+                                    <div class="font-bold text-zinc-900 dark:text-white">{{ $employee->joining_date?->format('d M Y') ?? 'Not set' }}</div>
                                 </div>
                                 <div>
                                     <div class="mb-1 text-zinc-400">Probation End Date</div>

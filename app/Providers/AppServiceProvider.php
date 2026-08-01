@@ -28,6 +28,7 @@ use App\Observers\PayrollObserver;
 use App\Observers\PayslipObserver;
 use App\Observers\ReimbursementObserver;
 use App\Observers\UserObserver;
+use App\Services\EmployeeImportService;
 use Carbon\CarbonImmutable;
 use Illuminate\Mail\Events\MessageSending;
 use Illuminate\Mail\Events\MessageSent;
@@ -195,6 +196,15 @@ class AppServiceProvider extends ServiceProvider
             // Fail-open: a config/schema error never blocks all mail.
             if (! $this->globalMailEnabled()) {
                 return false;
+            }
+
+            // Employees imported without an email address are given an
+            // unroutable stand-in. Nothing may be sent to one — it belongs to
+            // no real mailbox — until HR fills in the genuine address.
+            foreach (($message->getTo() ?: []) as $address) {
+                if (str_ends_with(strtolower($address->getAddress()), '@'.EmployeeImportService::PLACEHOLDER_EMAIL_DOMAIN)) {
+                    return false;
+                }
             }
 
             $key = $this->mailHeader($message, 'X-Notification-Key');

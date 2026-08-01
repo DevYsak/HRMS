@@ -14,7 +14,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 #[Fillable([
     // Identity
     'user_id', 'employee_id', 'biometric_id',
-    'employee_code', 'biometric_user_id', 'biometric_device_id', 'sync_status', 'last_biometric_sync_at',
+    'employee_code', 'has_placeholder_email', 'biometric_user_id', 'biometric_device_id', 'sync_status', 'last_biometric_sync_at',
     // Personal
     'phone', 'date_of_birth', 'gender', 'address', 'emergency_contact', 'photo',
     // Placement
@@ -137,9 +137,34 @@ class Employee extends Model
             'archived_at' => 'datetime',
             // Primitives
             'employee_code' => 'integer',
+            'has_placeholder_email' => 'boolean',
             // Enums
             'status' => EmployeeStatus::class,
         ];
+    }
+
+    /**
+     * Imported from an HR sheet that had no joining date. Probation, leave
+     * accrual and payroll proration all key off this date, so they skip the
+     * employee until HR fills it in rather than computing from a guess.
+     */
+    public function isMissingJoiningDate(): bool
+    {
+        return $this->joining_date === null;
+    }
+
+    /**
+     * True when this employee still needs real HR data before every feature
+     * works — surfaced on the record and in the import validation report.
+     *
+     * @return array<int, string>
+     */
+    public function dataFlags(): array
+    {
+        return array_values(array_filter([
+            $this->has_placeholder_email ? 'Email Pending' : null,
+            $this->isMissingJoiningDate() ? 'Joining Date Missing' : null,
+        ]));
     }
 
     public function user(): BelongsTo
