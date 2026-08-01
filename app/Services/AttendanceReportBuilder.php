@@ -6,12 +6,14 @@ use App\Models\Attendance;
 use App\Models\AttendanceDailySummary;
 use App\Models\AttendanceRegularisation;
 use App\Models\Employee;
+use App\Models\LeaveBalance;
 use App\Models\LeaveRequest;
 use App\Models\OvertimeRecord;
 use App\Models\PublicHoliday;
 use Carbon\CarbonPeriod;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
 /**
@@ -28,18 +30,42 @@ class AttendanceReportBuilder
     public const TYPES = [
         'daily' => 'Daily Report',
         'monthly' => 'Monthly Report',
+        'register' => 'Monthly Attendance Register',
         'muster' => 'Muster Roll',
         'late' => 'Late Report',
         'absent' => 'Absent Report',
         'holiday' => 'Holiday Report',
         'leave' => 'Leave Report',
+        'leave_summary' => 'Leave Summary',
+        'comp_off' => 'Comp-Off Summary',
         'overtime' => 'Overtime Report',
+        'payroll_attendance' => 'Payroll Attendance Report',
         'working_hours' => 'Working Hours Report',
         'department' => 'Department Report',
         'employee' => 'Employee Report',
         'biometric' => 'Biometric Report',
         'regularization' => 'Regularization Report',
     ];
+
+    /**
+     * Day codes used by the register and payroll reports, matching the
+     * shorthand HR already uses on their own attendance sheet.
+     */
+    private const CODE_PRESENT = 'P';
+
+    private const CODE_ABSENT = 'A';
+
+    private const CODE_LATE = 'L';
+
+    private const CODE_HALF_DAY = 'HD';
+
+    private const CODE_LEAVE = 'LV';
+
+    private const CODE_WEEKLY_OFF = 'WO';
+
+    private const CODE_HOLIDAY = 'H';
+
+    private const CODE_FUTURE = '-';
 
     /**
      * @param  array{from?:string,to?:string,department_id?:int|string|null,office_id?:int|string|null,shift_id?:int|string|null,employee_id?:int|string|null,mode?:string|null}  $filters
@@ -54,11 +80,15 @@ class AttendanceReportBuilder
 
         $report = match ($type) {
             'monthly' => $this->monthly($from, $to, $filters),
+            'register' => $this->register($from, $to, $filters),
             'muster' => $this->muster($from, $to, $filters),
             'late' => $this->late($from, $to, $filters),
             'absent' => $this->absent($from, $to, $filters),
             'holiday' => $this->holiday($from, $to),
             'leave' => $this->leave($from, $to, $filters),
+            'leave_summary' => $this->leaveSummary($from, $to, $filters),
+            'comp_off' => $this->compOff($from, $to, $filters),
+            'payroll_attendance' => $this->payrollAttendance($from, $to, $filters),
             'overtime' => $this->overtime($from, $to, $filters),
             'working_hours' => $this->workingHours($from, $to, $filters),
             'department' => $this->department($from, $to, $filters),
@@ -246,6 +276,294 @@ class AttendanceReportBuilder
                 ['label' => 'Employees', 'value' => $employees->count()],
                 ['label' => 'Days', 'value' => $days->count()],
                 ['label' => 'Legend', 'value' => 'P Present · L Late · A Absent · W Weekend · H Holiday'],
+            ],
+        ];
+    }
+
+    /**
+     * Build the per-employee, per-day code grid the register and payroll
+     * reports both need. Unlike muster() this is uncapped and returns the
+     * codes HR uses on their own sheet, so the two can be compared directly.
+     *
+     * @return array{days: Collection, employees: Collection, grid: array<int, array<string, string>>}
+     */
+    protected function dayCodeGrid(Carbon $from, Carbon $to, array $filters): array
+    {
+        $days = collect(CarbonPeriod::create($from->copy()->startOfDay(), $to->copy()->startOfDay()));
+        $employees = $this->employeeQuery($filters)
+            ->with('user', 'department')
+            ->get()
+            ->sortBy(fn (Employee $e) => $e->user?->name ?? '')
+            ->values();
+
+        $empIds = $employees->pluck('id');
+
+        $attendance = Attendance::whereIn('employee_id', $empIds)
+            ->whereBetween('date', [$from->toDateString(), $to->toDateString()])
+            ->get()
+            ->groupBy('employee_id');
+
+        $holidays = PublicHoliday::whereBetween('date', [$from->toDateString(), $to->toDateString()])
+            ->pluck('date')
+            ->mapWithKeys(fn ($d) => [Carbon::parse($d)->toDateString() => true]);
+
+        // Approved leave, expanded per covered day, so a leave day reads LV
+        // rather than being miscounted as an absence.
+        $leaveDays = [];
+        $leaveRequests = LeaveRequest::whereIn('employee_id', $empIds)
+            ->where('status', 'approved')
+            ->where('start_date', '<=', $to->toDateString())
+            ->where('end_date', '>=', $from->toDateString())
+            ->get();
+        foreach ($leaveRequests as $leave) {
+            foreach (CarbonPeriod::create(Carbon::parse($leave->start_date), Carbon::parse($leave->end_date)) as $day) {
+                $leaveDays[$leave->employee_id][$day->toDateString()] = true;
+            }
+        }
+
+        $grid = [];
+        foreach ($employees as $employee) {
+            $byDate = ($attendance->get($employee->id) ?? collect())->keyBy(fn ($a) => $a->date->toDateString());
+            $cells = [];
+
+            foreach ($days as $day) {
+                $key = $day->toDateString();
+                $record = $byDate[$key] ?? null;
+
+                $cells[$key] = match (true) {
+                    // A worked day wins over any calendar classification.
+                    $record && $record->status === 'half_day' => self::CODE_HALF_DAY,
+                    $record && $record->is_late => self::CODE_LATE,
+                    $record && $record->check_in !== null => self::CODE_PRESENT,
+                    isset($holidays[$key]) => self::CODE_HOLIDAY,
+                    isset($leaveDays[$employee->id][$key]) => self::CODE_LEAVE,
+                    $this->isWeeklyOff($day) => self::CODE_WEEKLY_OFF,
+                    $day->gt(now()) => self::CODE_FUTURE,
+                    default => self::CODE_ABSENT,
+                };
+            }
+
+            $grid[$employee->id] = $cells;
+        }
+
+        return ['days' => $days, 'employees' => $employees, 'grid' => $grid];
+    }
+
+    /**
+     * Whether a date is a non-working day.
+     *
+     * Currently Sunday-only, matching AttendanceScoreEngine. Companies on a
+     * five-day week need this driven by a configurable working-week setting —
+     * until then their Saturdays are counted as absences.
+     */
+    protected function isWeeklyOff(Carbon $day): bool
+    {
+        return $day->isSunday();
+    }
+
+    /**
+     * Monthly Attendance Register — the day grid plus trailing totals, in the
+     * shape HR's own sheet uses so the two can be diffed column for column.
+     */
+    protected function register(Carbon $from, Carbon $to, array $filters): array
+    {
+        ['days' => $days, 'employees' => $employees, 'grid' => $grid] = $this->dayCodeGrid($from, $to, $filters);
+
+        $columns = array_merge(
+            ['Emp ID', 'Employee', 'Department'],
+            $days->map(fn ($d) => $d->format('d'))->all(),
+            ['P', 'A', 'L', 'HD', 'LV', 'WO', 'H', 'Payable Days'],
+        );
+
+        $rows = [];
+        foreach ($employees as $employee) {
+            $cells = $grid[$employee->id] ?? [];
+            $tally = array_count_values($cells);
+
+            $present = $tally[self::CODE_PRESENT] ?? 0;
+            $late = $tally[self::CODE_LATE] ?? 0;
+            $halfDay = $tally[self::CODE_HALF_DAY] ?? 0;
+            $leave = $tally[self::CODE_LEAVE] ?? 0;
+            $weeklyOff = $tally[self::CODE_WEEKLY_OFF] ?? 0;
+            $holiday = $tally[self::CODE_HOLIDAY] ?? 0;
+
+            $rows[] = array_merge(
+                [
+                    $employee->employee_id ?? '—',
+                    $employee->user?->name ?? '—',
+                    $employee->department?->name ?? '—',
+                ],
+                array_values($cells),
+                [
+                    // Late still counts as a present day.
+                    $present + $late,
+                    $tally[self::CODE_ABSENT] ?? 0,
+                    $late,
+                    $halfDay,
+                    $leave,
+                    $weeklyOff,
+                    $holiday,
+                    $this->payableDays($present, $late, $halfDay, $leave, $weeklyOff, $holiday),
+                ],
+            );
+        }
+
+        return [
+            'columns' => $columns,
+            'rows' => $rows,
+            'summary' => [
+                ['label' => 'Employees', 'value' => $employees->count()],
+                ['label' => 'Days', 'value' => $days->count()],
+                ['label' => 'Legend', 'value' => 'P Present · L Late · HD Half Day · LV Leave · A Absent · WO Weekly Off · H Holiday'],
+            ],
+        ];
+    }
+
+    /** Paid days: worked + paid leave + weekly offs + holidays, with half days at 0.5. */
+    protected function payableDays(int $present, int $late, int $halfDay, int $leave, int $weeklyOff, int $holiday): float
+    {
+        return round($present + $late + ($halfDay * 0.5) + $leave + $weeklyOff + $holiday, 1);
+    }
+
+    /**
+     * Payroll Attendance Report — the bridge between attendance and payroll:
+     * how many days each employee is actually paid for, and how many are lost.
+     */
+    protected function payrollAttendance(Carbon $from, Carbon $to, array $filters): array
+    {
+        ['days' => $days, 'employees' => $employees, 'grid' => $grid] = $this->dayCodeGrid($from, $to, $filters);
+
+        $rows = [];
+        $totalPayable = 0.0;
+        $totalLop = 0;
+
+        foreach ($employees as $employee) {
+            $tally = array_count_values($grid[$employee->id] ?? []);
+
+            $present = $tally[self::CODE_PRESENT] ?? 0;
+            $late = $tally[self::CODE_LATE] ?? 0;
+            $halfDay = $tally[self::CODE_HALF_DAY] ?? 0;
+            $leave = $tally[self::CODE_LEAVE] ?? 0;
+            $weeklyOff = $tally[self::CODE_WEEKLY_OFF] ?? 0;
+            $holiday = $tally[self::CODE_HOLIDAY] ?? 0;
+            $absent = $tally[self::CODE_ABSENT] ?? 0;
+
+            $payable = $this->payableDays($present, $late, $halfDay, $leave, $weeklyOff, $holiday);
+            // Unapproved absence is loss of pay; a half day loses half.
+            $lop = round($absent + ($halfDay * 0.5), 1);
+
+            $totalPayable += $payable;
+            $totalLop += $lop;
+
+            $rows[] = [
+                $employee->employee_id ?? '—',
+                $employee->user?->name ?? '—',
+                $employee->department?->name ?? '—',
+                $days->count(),
+                $present + $late,
+                $halfDay,
+                $leave,
+                $weeklyOff,
+                $holiday,
+                $absent,
+                $lop,
+                $payable,
+            ];
+        }
+
+        return [
+            'columns' => [
+                'Emp ID', 'Employee', 'Department', 'Calendar Days', 'Present', 'Half Days',
+                'Paid Leave', 'Weekly Offs', 'Holidays', 'Absent', 'LOP Days', 'Payable Days',
+            ],
+            'rows' => $rows,
+            'summary' => [
+                ['label' => 'Employees', 'value' => $employees->count()],
+                ['label' => 'Total Payable Days', 'value' => round($totalPayable, 1)],
+                ['label' => 'Total LOP Days', 'value' => round($totalLop, 1)],
+            ],
+        ];
+    }
+
+    /**
+     * Leave Summary — the per-employee, per-type balance rollup. Distinct from
+     * the `leave` report, which lists individual requests.
+     */
+    protected function leaveSummary(Carbon $from, Carbon $to, array $filters): array
+    {
+        $year = (int) $to->year;
+        $employeeIds = $this->employeeQuery($filters)->pluck('id');
+
+        $balances = LeaveBalance::with(['employee.user', 'employee.department', 'leaveType'])
+            ->whereIn('employee_id', $employeeIds)
+            ->where('year', $year)
+            ->get()
+            ->sortBy(fn (LeaveBalance $b) => [$b->employee?->user?->name ?? '', $b->leaveType?->name ?? ''])
+            ->values();
+
+        $rows = $balances->map(function (LeaveBalance $balance) {
+            $opening = (float) $balance->allocated_days + (float) $balance->carried_forward_days;
+
+            return [
+                $balance->employee?->employee_id ?? '—',
+                $balance->employee?->user?->name ?? '—',
+                $balance->employee?->department?->name ?? '—',
+                $balance->leaveType?->name ?? '—',
+                number_format($opening, 1),
+                number_format((float) $balance->carried_forward_days, 1),
+                number_format((float) $balance->used_days, 1),
+                number_format($balance->pendingDays(), 1),
+                number_format((float) ($balance->encashed_days ?? 0), 1),
+                number_format($balance->available(), 1),
+            ];
+        })->all();
+
+        return [
+            'columns' => [
+                'Emp ID', 'Employee', 'Department', 'Leave Type',
+                'Opening', 'Carried Forward', 'Availed', 'Pending', 'Encashed', 'Closing Balance',
+            ],
+            'rows' => $rows,
+            'summary' => [
+                ['label' => 'Year', 'value' => $year],
+                ['label' => 'Employees', 'value' => $balances->pluck('employee_id')->unique()->count()],
+                ['label' => 'Total Availed', 'value' => number_format((float) $balances->sum(fn ($b) => (float) $b->used_days), 1)],
+            ],
+        ];
+    }
+
+    /** Comp-Off Summary — credits earned against comp-off leave taken. */
+    protected function compOff(Carbon $from, Carbon $to, array $filters): array
+    {
+        $year = (int) $to->year;
+        $employeeIds = $this->employeeQuery($filters)->pluck('id');
+
+        $balances = LeaveBalance::with(['employee.user', 'employee.department', 'leaveType'])
+            ->whereIn('employee_id', $employeeIds)
+            ->where('year', $year)
+            ->whereHas('leaveType', fn ($q) => $q->where('category', 'comp_off'))
+            ->get()
+            ->sortBy(fn (LeaveBalance $b) => $b->employee?->user?->name ?? '')
+            ->values();
+
+        $rows = $balances->map(fn (LeaveBalance $balance) => [
+            $balance->employee?->employee_id ?? '—',
+            $balance->employee?->user?->name ?? '—',
+            $balance->employee?->department?->name ?? '—',
+            number_format((float) ($balance->comp_off_credits ?? 0), 1),
+            number_format((float) $balance->used_days, 1),
+            number_format($balance->pendingDays(), 1),
+            number_format($balance->available(), 1),
+        ])->all();
+
+        return [
+            'columns' => ['Emp ID', 'Employee', 'Department', 'Earned', 'Availed', 'Pending', 'Balance'],
+            'rows' => $rows,
+            'summary' => [
+                ['label' => 'Year', 'value' => $year],
+                ['label' => 'Employees', 'value' => $balances->count()],
+                ['label' => 'Total Earned', 'value' => number_format((float) $balances->sum(fn ($b) => (float) ($b->comp_off_credits ?? 0)), 1)],
+                ['label' => 'Total Availed', 'value' => number_format((float) $balances->sum(fn ($b) => (float) $b->used_days), 1)],
             ],
         ];
     }
