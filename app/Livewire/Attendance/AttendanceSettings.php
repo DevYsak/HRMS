@@ -40,6 +40,9 @@ class AttendanceSettings extends Component
 
     public bool $showShiftModal = false;
 
+    /** Non-working weekdays as Carbon dayOfWeek numbers (0 = Sunday … 6 = Saturday). */
+    public array $weeklyOffDays = [];
+
     /** The 10 configurable score-weight keys (Rule 11). */
     private const WEIGHT_KEYS = [
         'late_arrival_penalty', 'late_per_30m_penalty', 'early_exit_penalty',
@@ -72,6 +75,8 @@ class AttendanceSettings extends Component
             'ot_auto_close_time' => substr((string) ($this->settings->ot_auto_close_time ?? '23:59:00'), 0, 5),
         ];
 
+        $this->weeklyOffDays = AttendanceSetting::weeklyOffDays();
+
         $scores = AttendanceScoreSetting::current();
         $this->weights = collect(self::WEIGHT_KEYS)->mapWithKeys(fn ($k) => [$k => (float) $scores->{$k}])->all();
 
@@ -86,12 +91,24 @@ class AttendanceSettings extends Component
         abort_unless(Auth::user()->canManageSettings(), 403);
 
         $this->validate();
+
+        // At least one working day must remain, or every employee would be
+        // permanently off and attendance would stop meaning anything.
+        $offDays = array_values(array_unique(array_map('intval', $this->weeklyOffDays)));
+        if (count($offDays) >= 7) {
+            \Flux::toast('At least one day must remain a working day.', variant: 'danger');
+
+            return;
+        }
+
         $this->settings->fill([
+            'weekly_off_days' => $offDays !== [] ? $offDays : null,
             'late_grace_period' => $this->policy['late_grace_period'],
             'late_warning_threshold' => $this->policy['late_warning_threshold'],
             'auto_checkout_buffer_minutes' => $this->policy['auto_checkout_buffer_minutes'],
             'ot_auto_close_time' => $this->policy['ot_auto_close_time'].':00',
         ])->save();
+
         \Flux::toast('Attendance settings updated.');
     }
 

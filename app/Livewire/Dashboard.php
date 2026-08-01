@@ -6,6 +6,7 @@ use App\Enums\EmployeeStatus;
 use App\Enums\UserRole;
 use App\Models\Attendance;
 use App\Models\AttendanceRegularisation;
+use App\Models\AttendanceSetting;
 use App\Models\AuditLog;
 use App\Models\Department;
 use App\Models\Document;
@@ -122,7 +123,7 @@ class Dashboard extends Component
                     'days' => $dayStrings->map(function ($dateStr) use ($attByDate, $days) {
                         $d = $days->first(fn ($day) => $day->toDateString() === $dateStr);
                         $att = $attByDate->get($dateStr);
-                        $isWeekend = $d?->isSaturday() || $d?->isSunday();
+                        $isWeekend = $d !== null && AttendanceSetting::isWeeklyOff($d);
 
                         if ($att && $att->check_in) {
                             // Clocked in even on weekend — show actual status
@@ -282,7 +283,7 @@ class Dashboard extends Component
         $attendanceTrend = collect();
         for ($i = 5; $i >= 0; $i--) {
             $d = now()->subMonths($i);
-            $workDays = $d->copy()->startOfMonth()->diffInDaysFiltered(fn ($day) => ! $day->isSunday(), $d->copy()->endOfMonth());
+            $workDays = AttendanceSetting::workingDaysBetween($d->copy()->startOfMonth(), $d->copy()->endOfMonth());
             $present = Attendance::whereYear('date', $d->year)
                 ->whereMonth('date', $d->month)
                 ->whereNotNull('check_in')

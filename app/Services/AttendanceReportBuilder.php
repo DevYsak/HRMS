@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Attendance;
 use App\Models\AttendanceDailySummary;
 use App\Models\AttendanceRegularisation;
+use App\Models\AttendanceSetting;
 use App\Models\Employee;
 use App\Models\LeaveBalance;
 use App\Models\LeaveRequest;
@@ -203,7 +204,7 @@ class AttendanceReportBuilder
     protected function monthly(Carbon $from, Carbon $to, array $filters): array
     {
         $rows = $this->attendanceQuery($from, $to, $filters)->get()->groupBy('employee_id');
-        $workDays = max(1, (int) $from->copy()->startOfDay()->diffInDaysFiltered(fn ($d) => ! $d->isSunday(), $to));
+        $workDays = max(1, AttendanceSetting::workingDaysBetween($from, $to));
 
         $data = [];
         $totPresent = 0;
@@ -259,7 +260,7 @@ class AttendanceReportBuilder
                 $key = $day->toDateString();
                 $cells[] = match (true) {
                     isset($holidays[$key]) => 'H',
-                    $day->isSunday() => 'W',
+                    $this->isWeeklyOff($day) => 'W',
                     isset($byDate[$key]) && $byDate[$key]->is_late => 'L',
                     isset($byDate[$key]) && $byDate[$key]->check_in => 'P',
                     $day->gt(now()) => '·',
@@ -349,16 +350,10 @@ class AttendanceReportBuilder
         return ['days' => $days, 'employees' => $employees, 'grid' => $grid];
     }
 
-    /**
-     * Whether a date is a non-working day.
-     *
-     * Currently Sunday-only, matching AttendanceScoreEngine. Companies on a
-     * five-day week need this driven by a configurable working-week setting —
-     * until then their Saturdays are counted as absences.
-     */
+    /** Whether a date is a non-working day, per the configured working week. */
     protected function isWeeklyOff(Carbon $day): bool
     {
-        return $day->isSunday();
+        return AttendanceSetting::isWeeklyOff($day);
     }
 
     /**
@@ -611,7 +606,7 @@ class AttendanceReportBuilder
             $present = $att->get($emp->id) ?? collect();
             foreach (CarbonPeriod::create($from->copy()->startOfDay(), $cutoff) as $day) {
                 $key = $day->toDateString();
-                if ($day->isSunday() || isset($holidays[$key]) || isset($present[$key])) {
+                if ($this->isWeeklyOff($day) || isset($holidays[$key]) || isset($present[$key])) {
                     continue;
                 }
                 $data[] = [

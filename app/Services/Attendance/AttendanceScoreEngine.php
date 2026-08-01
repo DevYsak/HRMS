@@ -6,6 +6,7 @@ use App\Models\Attendance;
 use App\Models\AttendanceDailyScore;
 use App\Models\AttendancePunch;
 use App\Models\AttendanceScoreSetting;
+use App\Models\AttendanceSetting;
 use App\Models\Employee;
 use App\Models\LeaveRequest;
 use App\Models\PublicHoliday;
@@ -55,7 +56,7 @@ class AttendanceScoreEngine
             ->where('end_date', '>=', $day->toDateString())
             ->exists();
         $isHoliday = PublicHoliday::whereDate('date', $day->toDateString())->exists();
-        $isOffDay = $onLeave || $isHoliday || $day->isSunday();
+        $isOffDay = $onLeave || $isHoliday || AttendanceSetting::isWeeklyOff($day);
 
         if (! $attendance || ! $attendance->check_in) {
             if ($isOffDay) {
@@ -158,7 +159,7 @@ class AttendanceScoreEngine
         }
 
         // Working a holiday/weekend earns the holiday-work bonus.
-        if ($isHoliday || $day->isSunday()) {
+        if ($isHoliday || AttendanceSetting::isWeeklyOff($day)) {
             $apply('holiday_work', 'Worked a holiday/weekend', +$settings->holiday_work_bonus,
                 ($isHoliday ? 'Public holiday' : 'Weekend').' attendance.');
         }

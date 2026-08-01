@@ -6,6 +6,7 @@ use App\Models\Attendance;
 use App\Models\AttendanceDailySummary;
 use App\Models\AttendancePunch;
 use App\Models\AttendanceRegularisation;
+use App\Models\AttendanceSetting;
 use App\Models\AuditLog;
 use App\Models\BreakLog;
 use App\Models\Employee;
@@ -226,7 +227,7 @@ class AllAttendance extends Component
             ->orderByDesc('date')
             ->get();
 
-        $workDays = max(1, (int) $monthStart->diffInDaysFiltered(fn ($d) => ! $d->isSunday(), $today->copy()->endOfDay()));
+        $workDays = max(1, AttendanceSetting::workingDaysBetween($monthStart, $today));
         $present = $month->whereNotNull('check_in')->count();
         $late = $month->where('is_late', true)->count();
         $onTimePct = $present > 0 ? round(($present - $late) / $present * 100) : 100;
@@ -526,7 +527,7 @@ class AllAttendance extends Component
         $today = Carbon::today();
 
         if ($this->date) {
-            return Carbon::parse($this->date)->isSunday() ? 0 : 1;
+            return AttendanceSetting::isWeeklyOff(Carbon::parse($this->date)) ? 0 : 1;
         }
 
         if ($this->dateFrom && $this->dateTo) {
@@ -536,7 +537,7 @@ class AllAttendance extends Component
                 return 0;
             }
 
-            return (int) $from->diffInDaysFiltered(fn (Carbon $d) => ! $d->isSunday(), $to->copy()->endOfDay());
+            return AttendanceSetting::workingDaysBetween($from, $to);
         }
 
         return 1;

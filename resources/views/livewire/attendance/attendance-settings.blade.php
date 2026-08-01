@@ -37,6 +37,28 @@
                     label="Overtime rate (₹ / hour)"
                     description="Used to compute OT pay when an overtime request is approved." />
 
+                {{-- Working week — drives absence, attendance score, payable days and every report --}}
+                <div>
+                    <flux:label>Weekly offs</flux:label>
+                    <flux:description>
+                        Days that are never counted as working days. Anything not ticked is a working day, so an
+                        employee without attendance on it is marked absent.
+                    </flux:description>
+                    <div class="mt-2 flex flex-wrap gap-2">
+                        @foreach([0 => 'Sun', 1 => 'Mon', 2 => 'Tue', 3 => 'Wed', 4 => 'Thu', 5 => 'Fri', 6 => 'Sat'] as $dayNumber => $dayLabel)
+                            <label class="cursor-pointer">
+                                <input type="checkbox" wire:model="weeklyOffDays" value="{{ $dayNumber }}" class="peer sr-only">
+                                <span class="inline-flex items-center rounded-lg border border-zinc-200 px-3 py-1.5 text-sm font-semibold text-zinc-600 transition-colors peer-checked:border-orange-500 peer-checked:bg-orange-50 peer-checked:text-orange-700 dark:border-zinc-700 dark:text-zinc-300 dark:peer-checked:border-orange-500/60 dark:peer-checked:bg-orange-500/10 dark:peer-checked:text-orange-400">
+                                    {{ $dayLabel }}
+                                </span>
+                            </label>
+                        @endforeach
+                    </div>
+                    @if(count($weeklyOffDays) >= 7)
+                        <p class="mt-2 text-xs font-semibold text-rose-600">At least one day must remain a working day.</p>
+                    @endif
+                </div>
+
                 {{-- Policy thresholds — drive the engine, editable without code --}}
                 <div class="grid grid-cols-2 gap-4">
                     <flux:input wire:model="policy.late_grace_period" type="number" min="0" max="120" suffix="min"
