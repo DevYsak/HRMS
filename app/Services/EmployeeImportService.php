@@ -41,6 +41,39 @@ class EmployeeImportService
         'aadhaar', 'bank_name', 'account_number', 'ifsc', 'password',
     ];
 
+    /**
+     * Headings HR spreadsheets use in the wild, mapped onto the canonical
+     * COLUMNS keys above. Lets a live HR sheet import as-is instead of forcing
+     * someone to rename columns before every run. A canonical column already
+     * present in the file always wins over its alias.
+     *
+     * `employee_name` is a virtual target: a single full-name column is split
+     * into first/middle/last by normalize().
+     */
+    public const HEADER_ALIASES = [
+        'bio_code' => 'biometric_pin',
+        'biometric_code' => 'biometric_pin',
+        'bio_id' => 'biometric_pin',
+        'name' => 'employee_name',
+        'full_name' => 'employee_name',
+        'employee_full_name' => 'employee_name',
+        'manager' => 'reporting_manager',
+        'reporting_manager_email' => 'reporting_manager',
+        'date_of_joining' => 'joining_date',
+        'doj' => 'joining_date',
+        'date_of_birth' => 'date_of_birth',
+        'dob' => 'date_of_birth',
+        'mobile' => 'phone',
+        'mobile_number' => 'phone',
+        'contact_number' => 'phone',
+        'employment_status' => 'status',
+        'company_branch' => 'company',
+        'branch' => 'company',
+        'office' => 'company',
+        'emp_id' => 'employee_id',
+        'emp_code' => 'employee_code',
+    ];
+
     /** Human-readable headings for the downloadable template (slug == COLUMNS). */
     public function templateHeadings(): array
     {
@@ -95,6 +128,19 @@ class EmployeeImportService
             ->mapWithKeys(fn ($userId, $empId) => [Str::lower(trim((string) $empId)) => $userId]);
         $usersByName = User::query()->get(['id', 'name'])
             ->groupBy(fn (User $u) => Str::lower(trim((string) $u->name)));
+
+        // Identities carried by the file itself. On a first migration the whole
+        // org is new, so a manager is usually another row in the same file —
+        // those are linked in a second pass after import rather than warned about.
+        $inFileIdentities = [];
+        foreach ($rows as $raw) {
+            $n = $this->normalize($raw);
+            foreach ([$n['email'], $n['employee_id'], trim(implode(' ', array_filter([$n['first_name'], $n['middle_name'], $n['last_name']])))] as $identity) {
+                if (trim((string) $identity) !== '') {
+                    $inFileIdentities[Str::lower(trim((string) $identity))] = true;
+                }
+            }
+        }
 
         $seen = [];
         $seenEmpIds = [];
@@ -212,6 +258,7 @@ class EmployeeImportService
                 $managersByEmployeeId,
                 $usersByName,
                 $warnings,
+                $inFileIdentities,
             );
 
             foreach ([['ifsc', '/^[A-Z]{4}0[A-Z0-9]{6}$/', 'IFSC'], ['pan', '/^[A-Z]{5}[0-9]{4}[A-Z]$/', 'PAN'], ['aadhaar', '/^[0-9]{12}$/', 'Aadhaar']] as [$key, $pattern, $labelText]) {
@@ -237,6 +284,9 @@ class EmployeeImportService
                     'role' => $role ?? UserRole::Employee,
                     'existing_user_id' => $existingUserId,
                     'password' => (string) $r['password'],
+                    // Kept so import() can re-resolve managers that are themselves
+                    // rows in this same file, once every row has been created.
+                    'manager_ref' => $r['reporting_manager'],
                     'employee' => [
                         'employee_id' => $r['employee_id'] ?: null,
                         'employee_code' => is_numeric($employeeCode) ? (int) $employeeCode : null,
@@ -336,6 +386,10 @@ class EmployeeImportService
                     $newlyCreated[] = ['user' => $user, 'plain' => $plain];
                     $imported++;
                 }
+
+                // Now that every row exists, link managers who were themselves
+                // rows in this file (a first migration imports the whole org at once).
+                $this->linkManagers($parsed['rows']);
             });
         } catch (\Throwable $e) {
             // Whole batch rolled back — record as failed.
@@ -450,6 +504,7 @@ class EmployeeImportService
         Collection $byEmployeeId,
         Collection $byName,
         array &$warnings,
+        array $inFileIdentities = [],
     ): ?int {
         if ($value === '') {
             return null;
@@ -475,9 +530,61 @@ class EmployeeImportService
             return null;
         }
 
+        // The manager is another row in this file — it will link automatically
+        // once the whole batch has been created, so this isn't worth warning about.
+        if (isset($inFileIdentities[$key])) {
+            return null;
+        }
+
         $warnings[] = "Reporting manager '{$value}' was not found (left blank).";
 
         return null;
+    }
+
+    /**
+     * Second pass, run inside the import transaction once every row exists:
+     * links reporting managers that were themselves rows in the same file.
+     * Without this, a first-time migration (where the whole org is new) would
+     * leave every manager blank and need a second import to fix.
+     *
+     * @param  array<int, array<string, mixed>>  $rows
+     * @return int number of employees whose manager was linked
+     */
+    private function linkManagers(array $rows): int
+    {
+        $refs = collect($rows)
+            ->filter(fn ($row) => $row['status'] !== 'error' && trim((string) ($row['data']['manager_ref'] ?? '')) !== '')
+            ->filter(fn ($row) => $row['data']['employee']['manager_id'] === null);
+
+        if ($refs->isEmpty()) {
+            return 0;
+        }
+
+        $byEmail = User::query()->pluck('id', 'email')
+            ->mapWithKeys(fn ($id, $email) => [Str::lower((string) $email) => $id]);
+        $byEmployeeId = Employee::query()->whereNotNull('employee_id')
+            ->pluck('user_id', 'employee_id')
+            ->mapWithKeys(fn ($userId, $empId) => [Str::lower(trim((string) $empId)) => $userId]);
+        $byName = User::query()->get(['id', 'name'])
+            ->groupBy(fn (User $u) => Str::lower(trim((string) $u->name)));
+
+        $linked = 0;
+        $ignored = [];
+
+        foreach ($refs as $row) {
+            $employee = Employee::whereHas('user', fn ($q) => $q->where('email', $row['data']['email']))->first();
+            if (! $employee) {
+                continue;
+            }
+
+            $managerId = $this->resolveManager((string) $row['data']['manager_ref'], $byEmail, $byEmployeeId, $byName, $ignored);
+            if ($managerId !== null) {
+                $employee->update(['manager_id' => $managerId]);
+                $linked++;
+            }
+        }
+
+        return $linked;
     }
 
     private function resolveRole(string $value): ?UserRole
@@ -557,12 +664,48 @@ class EmployeeImportService
     /** @return array<string, string> every column key present and string-trimmed */
     private function normalize(array $raw): array
     {
+        // Fold HR's own heading names onto the canonical keys. A canonical
+        // column that already carries a value is never overwritten.
+        foreach (self::HEADER_ALIASES as $alias => $canonical) {
+            if (trim((string) ($raw[$canonical] ?? '')) !== '') {
+                continue;
+            }
+            if (trim((string) ($raw[$alias] ?? '')) !== '') {
+                $raw[$canonical] = $raw[$alias];
+            }
+        }
+
         $out = [];
         foreach (self::COLUMNS as $key) {
             $out[$key] = trim((string) ($raw[$key] ?? ''));
         }
 
+        // A sheet with a single "Employee Name" column is split into the
+        // first/middle/last the template expects.
+        $fullName = trim((string) ($raw['employee_name'] ?? ''));
+        if ($fullName !== '' && $out['first_name'] === '' && $out['last_name'] === '') {
+            [$out['first_name'], $out['middle_name'], $out['last_name']] = $this->splitName($fullName);
+        }
+
         return $out;
+    }
+
+    /**
+     * Split a full name into [first, middle, last]. "Gayatri Chagan Navlakhe"
+     * becomes first=Gayatri, middle=Chagan, last=Navlakhe; a single-word name
+     * stays entirely in first.
+     *
+     * @return array{0: string, 1: string, 2: string}
+     */
+    private function splitName(string $full): array
+    {
+        $parts = preg_split('/\s+/', trim($full), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+
+        $first = (string) array_shift($parts);
+        $last = $parts !== [] ? (string) array_pop($parts) : '';
+        $middle = implode(' ', $parts);
+
+        return [$first, $middle, $last];
     }
 
     private function isBlank(array $normalized): bool
