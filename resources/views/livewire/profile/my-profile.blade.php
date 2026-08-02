@@ -133,12 +133,21 @@
                     </p>
                     <div class="space-y-1.5">
                         @foreach(array_slice($completion['missing'], 0, 6) as $gap)
-                            <button type="button"
-                                    wire:click="{{ $gap['tier'] === Registry::TIER_EDITABLE ? "editField('{$gap['field']}')" : "requestField('{$gap['field']}')" }}"
-                                    class="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left text-sm transition hover:bg-zinc-50 dark:hover:bg-white/5">
-                                <span class="text-zinc-700 dark:text-zinc-200">{{ $gap['label'] }}</span>
-                                <flux:icon.arrow-right class="size-3.5 text-zinc-300" />
-                            </button>
+                            @if((Registry::get($gap['field'])['type'] ?? null) === 'image')
+                                {{-- Media needs a real file picker, not a modal --}}
+                                <label class="flex w-full cursor-pointer items-center justify-between rounded-lg px-2 py-1.5 text-left text-sm transition hover:bg-zinc-50 dark:hover:bg-white/5">
+                                    <span class="text-zinc-700 dark:text-zinc-200">{{ $gap['label'] }}</span>
+                                    <flux:icon.camera class="size-3.5 text-zinc-300" />
+                                    <input type="file" wire:model="photo" accept="image/*" class="sr-only">
+                                </label>
+                            @else
+                                <button type="button"
+                                        wire:click="{{ $gap['tier'] === Registry::TIER_EDITABLE ? "editField('{$gap['field']}')" : "requestField('{$gap['field']}')" }}"
+                                        class="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left text-sm transition hover:bg-zinc-50 dark:hover:bg-white/5">
+                                    <span class="text-zinc-700 dark:text-zinc-200">{{ $gap['label'] }}</span>
+                                    <flux:icon.arrow-right class="size-3.5 text-zinc-300" />
+                                </button>
+                            @endif
                         @endforeach
                     </div>
                 </x-employee.section-card>

@@ -1,9 +1,13 @@
 <?php
 
 use App\Livewire\Profile\MyProfile;
+use App\Models\AuditLog;
 use App\Models\Employee;
 use App\Models\ProfileChangeRequest;
 use App\Models\User;
+use App\Services\Profile\ProfileChangeService;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 
 /**
@@ -123,6 +127,55 @@ test('a pending request is surfaced and can be withdrawn by its owner', function
         ->call('withdrawRequest', $request->id);
 
     expect($request->fresh()->status)->toBe(ProfileChangeRequest::STATUS_CANCELLED);
+});
+
+test('a stored photo path is persisted and audited', function () {
+    // Asserted at the service rather than through Livewire's temporary-upload
+    // plumbing: that path needs the GD extension, which this environment does
+    // not have. This covers our own logic — the write and the audit entry.
+    $employee = selfProfileEmployee();
+
+    app(ProfileChangeService::class)
+        ->updateEditable($employee, 'photo', 'employee-photos/me.png', $employee->user);
+
+    expect($employee->fresh()->photo)->toBe('employee-photos/me.png');
+
+    expect(AuditLog::where('auditable_type', Employee::class)
+        ->where('auditable_id', $employee->id)
+        ->where('action', 'profile_updated')->exists())->toBeTrue();
+});
+
+test('a non-image upload is rejected', function () {
+    Storage::fake('public');
+    $employee = selfProfileEmployee();
+
+    Livewire::actingAs($employee->user)
+        ->test(MyProfile::class)
+        ->set('photo', UploadedFile::fake()->create('resume.pdf', 100, 'application/pdf'))
+        ->assertHasErrors('photo');
+
+    expect($employee->fresh()->photo)->toBeNull();
+});
+
+test('the photo is not rendered as an editable text row', function () {
+    // Regression: the generic field row opened a text input for the photo,
+    // which made uploading impossible. Media belongs to the avatar control.
+    $employee = selfProfileEmployee();
+
+    Livewire::actingAs($employee->user)
+        ->test(MyProfile::class)
+        ->assertDontSee('PROFILE PHOTO')
+        ->call('editField', 'photo')
+        ->assertSet('editingField', null);   // never opens the text modal
+});
+
+test('the work email is shown and clearly locked', function () {
+    $employee = selfProfileEmployee();
+
+    Livewire::actingAs($employee->user)
+        ->test(MyProfile::class)
+        ->assertSee('Work email')
+        ->assertSee('also your login');       // the lock explanation
 });
 
 test('tabs switch and only known tabs are accepted', function () {

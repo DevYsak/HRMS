@@ -80,6 +80,14 @@ class MyProfile extends Component
             return;
         }
 
+        // Media is uploaded through the avatar control, not the text modal —
+        // routing it here would present an unusable text box.
+        if ((Registry::get($field)['type'] ?? null) === 'image') {
+            \Flux::toast('Use the camera button on your photo to upload a new one.');
+
+            return;
+        }
+
         $this->editingField = $field;
         $this->editingValue = Registry::valueFor($this->employee, $field);
         $this->modal('edit-field')->show();

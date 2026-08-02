@@ -16,6 +16,11 @@
     $value   = Registry::displayValueFor($employee, $field);
     $tier    = Registry::tier($field);
 
+    // Media needs a file picker, not a text row. The avatar in the hero is the
+    // single place a photo is managed, so this row would only ever be a broken
+    // duplicate of it.
+    $isMedia = ($meta['type'] ?? null) === 'image';
+
     // On the HR surface every registered field is writable; on the employee's
     // own page the tier decides.
     $mode = match (true) {
@@ -29,6 +34,7 @@
     $isEmpty = $value === null || $value === '';
 @endphp
 
+@unless($isMedia)
 <div
     class="group flex items-start justify-between gap-4 border-b border-zinc-100 py-3 last:border-0 dark:border-white/5"
     wire:key="profile-field-{{ $field }}"
@@ -105,3 +111,4 @@
         @endif
     </div>
 </div>
+@endunless

@@ -231,9 +231,19 @@ class ProfileChangeService
      */
     private function validated(string $field, mixed $value): mixed
     {
+        $rules = ProfileFieldRegistry::rulesFor($field);
+
+        // A media field's registry rules ("image", "max:2048") describe the
+        // *upload*, and are enforced at the boundary where the file is
+        // received. What reaches this service is the stored path, so applying
+        // the upload rules here would reject every valid save.
+        if ((ProfileFieldRegistry::get($field)['type'] ?? null) === 'image') {
+            $rules = ['nullable', 'string', 'max:2048'];
+        }
+
         Validator::make(
             [$field => $value],
-            [$field => ProfileFieldRegistry::rulesFor($field)],
+            [$field => $rules],
             [],
             [$field => ProfileFieldRegistry::label($field)],
         )->validate();
