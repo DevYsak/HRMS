@@ -85,6 +85,11 @@ class RolesAndPermissionsSeeder extends Seeder
             ['key' => 'view_reports', 'label' => 'View Reports', 'description' => 'Access system reports'],
             ['key' => 'export_reports', 'label' => 'Export Reports', 'description' => 'Download attendance, OT and payroll reports'],
         ],
+        'Profile' => [
+            ['key' => 'edit_own_profile', 'label' => 'Edit Own Profile', 'description' => 'Change your own editable profile fields'],
+            ['key' => 'request_profile_change', 'label' => 'Request Profile Change', 'description' => 'Ask HR to approve a change to a restricted field'],
+            ['key' => 'approve_profile_changes', 'label' => 'Approve Profile Changes', 'description' => 'Review and decide employee profile change requests'],
+        ],
         'Settings' => [
             ['key' => 'manage_roles', 'label' => 'Manage Roles', 'description' => 'Create, edit and assign roles & permissions'],
             ['key' => 'manage_settings', 'label' => 'Manage Settings', 'description' => 'Configure company-wide system settings'],
@@ -120,6 +125,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'upload_documents', 'manage_documents', 'view_documents', 'acknowledge_documents',
             'view_reports', 'export_reports',
             'manage_roles', 'manage_settings', 'manage_company_settings',
+            'edit_own_profile', 'request_profile_change', 'approve_profile_changes',
         ],
         'director' => [
             'view_dashboard', 'view_executive_dashboard',
@@ -130,6 +136,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'view_performance', 'review_performance', 'manage_kpi_templates', 'manage_review_cycles', 'manage_scorecards', 'manage_promotions', 'manage_pip', 'manage_warning_letters',
             'view_documents', 'acknowledge_documents',
             'view_reports', 'export_reports',
+            'edit_own_profile', 'request_profile_change',
         ],
         'manager' => [
             'view_dashboard',
@@ -139,6 +146,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'view_payslips',
             'view_performance', 'review_performance', 'manage_promotions', 'manage_pip',
             'view_documents', 'acknowledge_documents',
+            'edit_own_profile', 'request_profile_change',
         ],
         'finance' => [
             'view_dashboard',
@@ -148,6 +156,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'view_performance', 'review_performance', 'manage_promotions', 'manage_pip',
             'view_documents', 'acknowledge_documents',
             'view_reports', 'export_reports',
+            'edit_own_profile', 'request_profile_change',
         ],
         'employee' => [
             'view_dashboard',
@@ -156,6 +165,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'view_payslips',
             'view_performance',
             'view_documents', 'acknowledge_documents',
+            'edit_own_profile', 'request_profile_change',
         ],
     ];
 

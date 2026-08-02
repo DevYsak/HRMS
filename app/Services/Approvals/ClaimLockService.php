@@ -6,6 +6,7 @@ use App\Models\AttendanceRegularisation;
 use App\Models\LeaveEncashment;
 use App\Models\LeaveRequest;
 use App\Models\OtRequest;
+use App\Models\ProfileChangeRequest;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 
@@ -29,6 +30,7 @@ class ClaimLockService
         OtRequest::class,
         AttendanceRegularisation::class,
         LeaveEncashment::class,
+        ProfileChangeRequest::class,
     ];
 
     /**
