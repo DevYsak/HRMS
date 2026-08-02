@@ -72,6 +72,7 @@ use App\Livewire\Performance\PerformanceCycles;
 use App\Livewire\Performance\ReviewTasks;
 use App\Livewire\Performance\TeamReviews;
 use App\Livewire\Performance\WarningLetters;
+use App\Livewire\Profile\MyProfile;
 use App\Livewire\Settings\ApprovalPolicySettings;
 use App\Livewire\Settings\ControlPanel;
 use App\Livewire\Settings\DataManagement;
@@ -138,6 +139,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // AI Assistant full page
     Route::get('/ai-assistant', AiAssistantPage::class)->name('ai.assistant');
+
+    // The employee's own profile. Distinct from /settings/profile, which stays
+    // account-level (email verification, deletion) inside the settings shell.
+    Route::get('/my-profile', MyProfile::class)->name('profile.me');
 
     // --------------------------------------------------
     // Employees module
