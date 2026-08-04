@@ -9,6 +9,11 @@
 
         <div class="flex items-center gap-2">
             <flux:button
+                :href="route('employees.profile', $employee)"
+                wire:navigate
+                variant="outline" icon="identification" size="sm"
+            >Profile</flux:button>
+            <flux:button
                 wire:click="resetPassword"
                 wire:loading.attr="disabled"
                 wire:target="resetPassword"

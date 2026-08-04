@@ -117,14 +117,27 @@
                                         </flux:tooltip>
                                     @endif
 
-                                    <flux:button
-                                        href="{{ route('employees.edit', $emp->id) }}"
-                                        wire:navigate
-                                        variant="ghost"
-                                        size="sm"
-                                        icon="pencil-square"
-                                        class="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
-                                    />
+                                    <flux:tooltip content="Open profile">
+                                        <flux:button
+                                            href="{{ route('employees.profile', $emp->id) }}"
+                                            wire:navigate
+                                            variant="ghost"
+                                            size="sm"
+                                            icon="identification"
+                                            class="text-zinc-400 hover:text-orange-600 dark:hover:text-orange-400"
+                                        />
+                                    </flux:tooltip>
+
+                                    <flux:tooltip content="Edit full record">
+                                        <flux:button
+                                            href="{{ route('employees.edit', $emp->id) }}"
+                                            wire:navigate
+                                            variant="ghost"
+                                            size="sm"
+                                            icon="pencil-square"
+                                            class="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+                                        />
+                                    </flux:tooltip>
                                     
                                     <flux:button 
                                         wire:click="deleteEmployee({{ $emp->id }})" 

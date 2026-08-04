@@ -2,14 +2,10 @@
 
 namespace App\Livewire\Profile;
 
-use App\Models\Attendance;
-use App\Models\AttendanceDailyScore;
-use App\Models\AttendanceSetting;
+use App\Livewire\Profile\Concerns\ShowsProfileSummary;
 use App\Models\Employee;
-use App\Models\LeaveBalance;
 use App\Models\ProfileChangeRequest;
 use App\Services\Profile\ProfileChangeService;
-use App\Services\Profile\ProfileCompletionService;
 use App\Services\Profile\ProfileFieldRegistry as Registry;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
@@ -27,6 +23,7 @@ use Livewire\WithFileUploads;
  */
 class MyProfile extends Component
 {
+    use ShowsProfileSummary;
     use WithFileUploads;
 
     #[Url(as: 'tab')]
@@ -211,61 +208,13 @@ class MyProfile extends Component
             ->pending()->get()->keyBy('field');
     }
 
-    /**
-     * Five headline numbers. Kept to cheap aggregates — the profile shell must
-     * not become the slowest page in the app.
-     */
-    public function getKpisProperty(): array
-    {
-        $employee = $this->employee;
-        $from = now()->startOfMonth();
-
-        $attendance = Attendance::where('employee_id', $employee->id)
-            ->whereBetween('date', [$from->toDateString(), now()->toDateString()])
-            ->selectRaw('COUNT(*) as total, SUM(check_in IS NOT NULL) as present')
-            ->first();
-
-        $workingDays = max(1, AttendanceSetting::workingDaysBetween($from, now()));
-        $attendancePct = min(100, (int) round(((int) ($attendance->present ?? 0)) / $workingDays * 100));
-
-        $balances = LeaveBalance::with('leaveType')
-            ->where('employee_id', $employee->id)
-            ->where('year', now()->year)
-            ->get();
-
-        $leaveAvailable = round($balances->sum(fn (LeaveBalance $b) => $b->available()), 1);
-        $compOff = round(
-            $balances->filter(fn (LeaveBalance $b) => $b->leaveType?->category === 'comp_off')
-                ->sum(fn (LeaveBalance $b) => (float) ($b->comp_off_credits ?? 0)),
-            1
-        );
-
-        // Average of the engine's own daily scores this month, so the profile
-        // agrees with the attendance module rather than computing its own.
-        $score = AttendanceDailyScore::where('employee_id', $employee->id)
-            ->whereBetween('date', [$from->toDateString(), now()->toDateString()])
-            ->avg('score');
-
-        $tenure = $employee->joining_date
-            ? $employee->joining_date->diff(now())
-            : null;
-
-        return [
-            'attendance' => $attendancePct,
-            'leave' => $leaveAvailable,
-            'comp_off' => $compOff,
-            'score' => $score !== null ? round((float) $score) : null,
-            'tenure' => $tenure ? $tenure->y.'y '.$tenure->m.'m' : 'Not set',
-        ];
-    }
-
     public function render()
     {
         return view('livewire.profile.my-profile', [
             'employee' => $this->employee,
-            'completion' => app(ProfileCompletionService::class)->for($this->employee),
+            'completion' => $this->summaryCompletion($this->employee),
             'pending' => $this->pendingRequests,
-            'kpis' => $this->kpis,
+            'kpis' => $this->summaryKpis($this->employee),
             'requests' => ProfileChangeRequest::with(['reviewer', 'requestedBy'])
                 ->where('employee_id', $this->employee->id)
                 ->latest()->limit(20)->get(),

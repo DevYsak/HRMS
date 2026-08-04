@@ -2,7 +2,16 @@
 
 namespace App\Services\Profile;
 
+use App\Enums\EmployeeStatus;
+use App\Enums\UserRole;
+use App\Models\Department;
 use App\Models\Employee;
+use App\Models\EmploymentType;
+use App\Models\JobTitle;
+use App\Models\Office;
+use App\Models\ShiftSetting;
+use App\Models\User;
+use Illuminate\Database\Eloquent\Model;
 
 /**
  * Single source of truth for who may change which profile field.
@@ -40,7 +49,16 @@ class ProfileFieldRegistry
      * marital status, education or skills later is one entry here plus a
      * migration — nothing else has to change.
      *
-     * @var array<string, array{label:string, tier:string, group:string, source:string, type:string, rules:array<int,string>, reason?:string, relation?:string}>
+     * `options` supplies the choices for select and relation inputs: either an
+     * inline value=>label map, a backed-enum class, or a model class resolved
+     * to id=>name. Without it a field with a fixed set of values would need
+     * its choices hardcoded in Blade, which is exactly what this class exists
+     * to prevent.
+     *
+     * `hr_editable` marks the handful of fields HR must not write from a
+     * profile page because another workflow owns them and applies side effects.
+     *
+     * @var array<string, array{label:string, tier:string, group:string, source:string, type:string, rules:array<int,string>, reason?:string, relation?:string, options?:string|array<array-key,string>, hr_editable?:bool}>
      */
     public const FIELDS = [
         // ── Employee editable ────────────────────────────────────────────
@@ -92,6 +110,7 @@ class ProfileFieldRegistry
             'group' => 'identity',
             'source' => self::SOURCE_EMPLOYEE,
             'type' => 'select',
+            'options' => ['male' => 'Male', 'female' => 'Female', 'other' => 'Other'],
             'rules' => ['nullable', 'in:male,female,other'],
         ],
         'address' => [
@@ -178,6 +197,7 @@ class ProfileFieldRegistry
             'source' => self::SOURCE_EMPLOYEE,
             'type' => 'relation',
             'relation' => 'department',
+            'options' => Department::class,
             'rules' => ['nullable', 'exists:departments,id'],
             'reason' => 'Set by HR as part of your placement.',
         ],
@@ -188,6 +208,7 @@ class ProfileFieldRegistry
             'source' => self::SOURCE_EMPLOYEE,
             'type' => 'relation',
             'relation' => 'jobTitle',
+            'options' => JobTitle::class,
             'rules' => ['nullable', 'exists:job_titles,id'],
             'reason' => 'Designation changes go through the promotion workflow.',
         ],
@@ -198,6 +219,7 @@ class ProfileFieldRegistry
             'source' => self::SOURCE_EMPLOYEE,
             'type' => 'relation',
             'relation' => 'manager',
+            'options' => User::class,
             'rules' => ['nullable', 'exists:users,id'],
             'reason' => 'Reporting lines are managed by HR.',
         ],
@@ -208,6 +230,7 @@ class ProfileFieldRegistry
             'source' => self::SOURCE_EMPLOYEE,
             'type' => 'relation',
             'relation' => 'office',
+            'options' => Office::class,
             'rules' => ['nullable', 'exists:offices,id'],
             'reason' => 'Set by HR as part of your placement.',
         ],
@@ -218,6 +241,7 @@ class ProfileFieldRegistry
             'source' => self::SOURCE_EMPLOYEE,
             'type' => 'relation',
             'relation' => 'shift',
+            'options' => ShiftSetting::class,
             'rules' => ['nullable', 'exists:shift_settings,id'],
             'reason' => 'Your shift is assigned by HR and drives attendance rules.',
         ],
@@ -228,6 +252,7 @@ class ProfileFieldRegistry
             'source' => self::SOURCE_EMPLOYEE,
             'type' => 'relation',
             'relation' => 'employmentType',
+            'options' => EmploymentType::class,
             'rules' => ['nullable', 'exists:employment_types,id'],
             'reason' => 'Defined by your contract.',
         ],
@@ -245,9 +270,15 @@ class ProfileFieldRegistry
             'tier' => self::TIER_LOCKED,
             'group' => 'employment',
             'source' => self::SOURCE_EMPLOYEE,
-            'type' => 'text',
+            'type' => 'select',
+            'options' => EmployeeStatus::class,
             'rules' => ['required', 'string'],
             'reason' => 'Managed through the employee lifecycle workflow.',
+            // Onboarding, confirmation and exit each apply side effects and
+            // enforce EmployeeStatus::allowedTransitions(). Writing the column
+            // straight from a profile page would skip both, so this field is
+            // displayed here and changed there.
+            'hr_editable' => false,
         ],
         'ctc' => [
             'label' => 'Annual CTC',
@@ -309,6 +340,74 @@ class ProfileFieldRegistry
     public static function label(string $key): string
     {
         return self::FIELDS[$key]['label'] ?? str_replace('_', ' ', ucfirst($key));
+    }
+
+    /**
+     * Whether HR may write this field from a profile page.
+     *
+     * Locked fields are HR's to set — that is what the tier means — but a few
+     * are owned by a workflow that applies side effects of its own. Those are
+     * shown here and edited there. Unknown keys are not editable at all.
+     */
+    public static function isHrEditable(string $key): bool
+    {
+        return self::has($key) && (self::FIELDS[$key]['hr_editable'] ?? true);
+    }
+
+    /**
+     * Choices for a select or relation input, as value => label.
+     *
+     * Declared in FIELDS as an inline map, a backed-enum class, or a model
+     * class. Anything else — including a field with no `options` — yields an
+     * empty list, so a caller can tell "no choices" from "free text".
+     *
+     * @return array<array-key, string>
+     */
+    public static function optionsFor(string $key): array
+    {
+        $options = self::FIELDS[$key]['options'] ?? null;
+
+        if (is_array($options)) {
+            return $options;
+        }
+
+        if (! is_string($options) || ! class_exists($options)) {
+            return [];
+        }
+
+        if (enum_exists($options)) {
+            return collect($options::cases())
+                ->mapWithKeys(fn ($case) => [
+                    $case->value => method_exists($case, 'label') ? $case->label() : (string) $case->value,
+                ])
+                ->all();
+        }
+
+        return self::modelOptions($options);
+    }
+
+    /**
+     * Selectable rows for a relation field, newest master data included.
+     *
+     * Reporting manager is the one case that needs narrowing: every employee
+     * has a User row, but only leadership roles may be assigned as a manager —
+     * the same restriction the employee edit screen applies.
+     *
+     * @param  class-string<Model>  $model
+     * @return array<array-key, string>
+     */
+    private static function modelOptions(string $model): array
+    {
+        $query = $model::query();
+
+        if ($model === User::class) {
+            $query->whereIn('role', [
+                UserRole::SuperAdmin, UserRole::HrAdmin,
+                UserRole::Director, UserRole::Manager,
+            ]);
+        }
+
+        return $query->orderBy('name')->pluck('name', 'id')->all();
     }
 
     /** Why a locked field can't be edited — shown in the lock tooltip. */

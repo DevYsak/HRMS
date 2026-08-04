@@ -1,11 +1,13 @@
 @php
     use App\Services\Profile\ProfileFieldRegistry as Registry;
 
-    // The input type comes from the registry, so adding a field never means
+    // The input type and its choices both come from the registry, so adding a
+    // field — or repointing one at a different master table — never means
     // touching this partial.
     $meta = Registry::get($field) ?? [];
     $type = $meta['type'] ?? 'text';
     $label = Registry::label($field);
+    $options = Registry::optionsFor($field);
 @endphp
 
 @switch($type)
@@ -18,12 +20,18 @@
         @break
 
     @case('select')
+    @case('relation')
         <flux:select wire:model="editingValue" :label="$label">
             <option value="">Not specified</option>
-            <option value="male">Male</option>
-            <option value="female">Female</option>
-            <option value="other">Other</option>
+            @foreach($options as $value => $text)
+                <option value="{{ $value }}">{{ $text }}</option>
+            @endforeach
         </flux:select>
+        @if(empty($options))
+            <p class="-mt-3 text-xs text-zinc-500">
+                No {{ Str::lower($label) }} records exist yet — create one first.
+            </p>
+        @endif
         @break
 
     @case('number')

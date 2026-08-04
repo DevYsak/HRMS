@@ -21,11 +21,11 @@
     // duplicate of it.
     $isMedia = ($meta['type'] ?? null) === 'image';
 
-    // On the HR surface every registered field is writable; on the employee's
-    // own page the tier decides.
+    // On the HR surface every registered field is writable except those a
+    // dedicated workflow owns; on the employee's own page the tier decides.
     $mode = match (true) {
         ! $canEdit                         => 'read',
-        $asHr && $meta !== null            => 'edit',
+        $asHr && Registry::isHrEditable($field) => 'edit',
         $tier === Registry::TIER_EDITABLE  => 'edit',
         $tier === Registry::TIER_APPROVAL  => 'request',
         default                            => 'locked',

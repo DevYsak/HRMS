@@ -72,6 +72,7 @@ use App\Livewire\Performance\PerformanceCycles;
 use App\Livewire\Performance\ReviewTasks;
 use App\Livewire\Performance\TeamReviews;
 use App\Livewire\Performance\WarningLetters;
+use App\Livewire\Profile\EmployeeProfile;
 use App\Livewire\Profile\MyProfile;
 use App\Livewire\Settings\ApprovalPolicySettings;
 use App\Livewire\Settings\ControlPanel;
@@ -164,6 +165,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/create', EmployeeCreate::class)->name('create');
             Route::get('/import', EmployeeImport::class)->name('import');
             Route::get('/{employee}/edit', EmployeeEdit::class)->name('edit');
+            // Redesigned profile view; the full 15-tab record stays at /edit
+            // while its tabs migrate onto the shared profile components.
+            Route::get('/{employee}/profile', EmployeeProfile::class)->name('profile');
             Route::get('/{employee}/probation', ProbationConfirmation::class)->name('probation');
             Route::get('/{employee}/onboarding', OnboardingChecklist::class)->name('onboarding');
             Route::get('/{employee}/offboarding', OffboardingChecklist::class)->name('offboarding');

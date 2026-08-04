@@ -199,6 +199,13 @@ class ProfileChangeService
             throw new \DomainException("Unknown profile field '{$field}'.");
         }
 
+        if (! ProfileFieldRegistry::isHrEditable($field)) {
+            throw new \DomainException(
+                ProfileFieldRegistry::label($field).' is changed through its own workflow, not here. '
+                .ProfileFieldRegistry::lockReason($field)
+            );
+        }
+
         $value = $this->validated($field, $value);
         $old = ProfileFieldRegistry::valueFor($employee, $field);
 
