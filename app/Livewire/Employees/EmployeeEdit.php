@@ -19,6 +19,7 @@ use App\Models\SalaryCycle;
 use App\Models\ShiftSetting;
 use App\Models\User;
 use App\Models\WorkMode;
+use App\Services\Biometric\BiometricCodeService;
 use App\Services\Biometric\EngineAttendanceSyncService;
 use App\Services\LeaveBalanceService;
 use App\Services\PasswordService;
@@ -115,6 +116,9 @@ class EmployeeEdit extends Component
 
     public string $ot_tracking_source = 'biometric';
 
+    /** Set when the typed Device ID is held by someone else — drives the Reassign prompt. */
+    public ?string $codeConflict = null;
+
     // ── Leave Balance Manage Modal ────────────────────────────────────────────
     public bool $showManageLeaveModal = false;
 
@@ -194,7 +198,11 @@ class EmployeeEdit extends Component
             'email' => ['required', 'email', Rule::unique('users', 'email')->ignore($this->employee->user_id)],
             'roleId' => ['required', Rule::exists('roles', 'id')->where('is_active', true)],
             // Personal
-            'employee_id' => ['required', 'string', Rule::unique('employees', 'employee_id')->ignore($this->employee->id)],
+            // whereNull('deleted_at') on both identity columns: Rule::unique
+            // queries the raw table, so without it a soft-deleted employee
+            // reserves their Employee ID and Device ID forever and HR is told
+            // the value is taken by somebody who is not in the directory.
+            'employee_id' => ['required', 'string', Rule::unique('employees', 'employee_id')->whereNull('deleted_at')->ignore($this->employee->id)],
             'phone' => 'nullable|string|max:30',
             'date_of_birth' => 'nullable|date|before:today',
             'gender' => 'nullable|string|in:male,female,other,prefer_not_to_say',
@@ -202,7 +210,7 @@ class EmployeeEdit extends Component
             'emergency_contact' => 'nullable|string|max:255',
             'photo' => 'nullable|image|max:2048',
             // Employment
-            'employee_code' => ['nullable', 'integer', 'min:1', 'max:65535', Rule::unique('employees', 'employee_code')->ignore($this->employee->id)],
+            'employee_code' => ['nullable', 'integer', 'min:1', 'max:65535', Rule::unique('employees', 'employee_code')->whereNull('deleted_at')->ignore($this->employee->id)],
             // Nullable so HR can still edit an employee imported without a
             // joining date; this screen is where they fill it in.
             'joining_date' => 'nullable|date',
@@ -498,6 +506,43 @@ class EmployeeEdit extends Component
         } catch (\DomainException $e) {
             \Flux::toast($e->getMessage(), variant: 'danger');
         }
+    }
+
+    // ── Biometric Device ID ───────────────────────────────────────────────────
+
+    /**
+     * Warn as soon as the typed Device ID collides, naming the holder.
+     *
+     * "Already taken" on save is a dead end when the holder is a deleted
+     * employee nobody can find; this says who has it and offers the override.
+     */
+    public function updatedEmployeeCode(BiometricCodeService $codes): void
+    {
+        $this->codeConflict = $codes->conflictMessage($this->employee_code, $this->employee->id);
+    }
+
+    /**
+     * Move the Device ID onto this employee, clearing whoever holds it.
+     *
+     * The deliberate override for the two cases HR actually hits: a card handed
+     * to a new person, and a deleted employee still squatting on the number.
+     * Both sides are audited because losing a Device ID silently would stop the
+     * previous holder's punches from matching.
+     */
+    public function reassignBiometricCode(BiometricCodeService $codes): void
+    {
+        abort_unless(auth()->user()->canManageEmployees(), 403);
+
+        if ($this->employee_code === '') {
+            return;
+        }
+
+        $codes->reassign($this->employee, $this->employee_code, auth()->user());
+
+        $this->employee->refresh();
+        $this->codeConflict = null;
+
+        \Flux::toast("Biometric Device ID {$this->employee_code} reassigned to this employee.", variant: 'success');
     }
 
     // ── Biometric sync ────────────────────────────────────────────────────────

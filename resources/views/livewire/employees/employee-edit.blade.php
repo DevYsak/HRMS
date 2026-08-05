@@ -363,9 +363,29 @@
                                         :options="[['value' => 'biometric', 'label' => 'Biometric (standard attendance)'], ['value' => 'manual', 'label' => 'Manual (HR-entered)'], ['value' => 'nexflow', 'label' => 'Nexflow (IT/Dev/QA teams)'], ['value' => 'hybrid', 'label' => 'Hybrid (both sources)']]" />
                                     <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Nexflow/Hybrid enables the Nexflow tab and sync.</p>
                                 </div>
-                                <flux:input wire:model="employee_code" type="number" min="1" max="65535" label="Biometric Device ID"
-                                    placeholder="e.g. 17"
-                                    description="Device PIN used to match biometric punches. Leave blank if not enrolled." />
+                                <div>
+                                    <flux:input wire:model.live.debounce.500ms="employee_code" type="number" min="1" max="65535" label="Biometric Device ID"
+                                        placeholder="e.g. 17"
+                                        description="Device PIN used to match biometric punches. Leave blank if not enrolled." />
+
+                                    {{-- Names the holder instead of a bare "already taken", and offers
+                                         the override. The holder is often a deleted employee, who is
+                                         invisible in the directory but still reserves the number. --}}
+                                    @if($codeConflict)
+                                        <div class="mt-2 rounded-xl border border-amber-200 bg-amber-50 p-3 dark:border-amber-500/25 dark:bg-amber-500/10">
+                                            <div class="flex items-start gap-2">
+                                                <flux:icon.exclamation-triangle class="mt-0.5 size-4 shrink-0 text-amber-500" />
+                                                <p class="flex-1 text-xs leading-relaxed text-amber-800 dark:text-amber-300">{{ $codeConflict }}</p>
+                                            </div>
+                                            <flux:button
+                                                wire:click="reassignBiometricCode"
+                                                wire:confirm="Move this Device ID to this employee? The current holder loses it and their future punches will stop matching until they are given a new ID."
+                                                size="xs" variant="primary" class="mt-2">
+                                                Reassign to this employee
+                                            </flux:button>
+                                        </div>
+                                    @endif
+                                </div>
                             </div>
 
                             {{-- Biometric mapping + engine sync --}}

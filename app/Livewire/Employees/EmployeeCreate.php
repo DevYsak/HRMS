@@ -205,8 +205,10 @@ class EmployeeCreate extends Component
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', Rule::unique('users', 'email')->whereNull('deleted_at')],
             'roleId' => ['required', Rule::exists('roles', 'id')->where('is_active', true)],
-            'employee_id' => ['required', 'string', 'unique:employees,employee_id'],
-            'employee_code' => ['nullable', 'integer', 'min:1', 'max:65535', 'unique:employees,employee_code'],
+            // Soft-delete aware, matching the email rule above: a deleted
+            // employee must not reserve an Employee ID or Device ID for good.
+            'employee_id' => ['required', 'string', Rule::unique('employees', 'employee_id')->whereNull('deleted_at')],
+            'employee_code' => ['nullable', 'integer', 'min:1', 'max:65535', Rule::unique('employees', 'employee_code')->whereNull('deleted_at')],
             'phone' => ['nullable', 'string', 'max:30'],
             'date_of_birth' => ['nullable', 'date', 'before:today'],
             'gender' => ['nullable', 'string', 'in:male,female,other,prefer_not_to_say'],
