@@ -11,7 +11,6 @@ use App\Models\AuditLog;
 use App\Models\BreakLog;
 use App\Models\Employee;
 use App\Models\LeaveBalance;
-use App\Models\User;
 use App\Notifications\AttendanceRegularisationNotification;
 use App\Notifications\RegularisationReviewedNotification;
 use App\Services\Approvals\ClaimLockService;
@@ -177,7 +176,7 @@ class AllAttendance extends Component
             ->where('date', $this->markDate)
             ->first();
 
-        AttendanceRegularisation::create([
+        $regularisation = AttendanceRegularisation::create([
             'employee_id' => $employee->id,
             'attendance_id' => $attendance?->id,
             'work_date' => $this->markDate,
@@ -187,22 +186,27 @@ class AllAttendance extends Component
             'status' => 'pending',
         ]);
 
-        // Notify manager for approval; fallback to HR team if no manager
-        $notification = new AttendanceRegularisationNotification(
-            $employee->user->name,
-            Carbon::parse($this->markDate)->format('d M Y'),
-            'pending',
+        // HR marking attendance IS the correction — routing it back through a
+        // manager left the employee's hours wrong while HR believed they had
+        // fixed them. Applying it through the service (rather than writing the
+        // attendance here) keeps one code path for corrections: original punch
+        // snapshot, break and late recompute, score rescore, OT filing and the
+        // approval trail that records who did it.
+        app(AttendanceService::class)->approveRegularisation(
+            $regularisation,
+            Auth::id(),
+            'Applied directly by HR.',
         );
 
-        if ($employee->manager) {
-            $employee->manager->notify($notification);
-        } else {
-            User::whereIn('role', ['hr_admin', 'super_admin'])
-                ->each(fn ($u) => $u->notify($notification));
-        }
+        // Tell the employee their day was corrected — they did not ask for it.
+        $employee->user?->notify(new AttendanceRegularisationNotification(
+            $employee->user->name,
+            Carbon::parse($this->markDate)->format('d M Y'),
+            'approved',
+        ));
 
         $this->showMarkModal = false;
-        \Flux::toast("Attendance regularisation submitted for {$employee->user->name}. Pending manager approval.");
+        \Flux::toast("Attendance updated for {$employee->user->name} and recorded against your name.");
     }
 
     // ── Employee 360 Drawer ──────────────────────────────────────────────────

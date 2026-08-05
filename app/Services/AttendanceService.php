@@ -13,6 +13,7 @@ use App\Models\PublicHoliday;
 use App\Models\ShiftSetting;
 use App\Models\User;
 use App\Services\Attendance\AttendanceScoreEngine;
+use App\Services\Attendance\ResolvedShift;
 use App\Services\Attendance\ShiftResolver;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -199,6 +200,14 @@ class AttendanceService
             $checkIn = Carbon::parse($workDate.' '.Carbon::parse($regularisation->requested_check_in)->format('H:i:s'));
             $checkOut = Carbon::parse($workDate.' '.Carbon::parse($regularisation->requested_check_out)->format('H:i:s'));
 
+            // A night shift clocks out on the following calendar day. Both
+            // times are TIME columns anchored to the work date, so without this
+            // a 22:00 → 06:00 correction spans minus sixteen hours and the
+            // clamp below books the whole shift as zero hours worked.
+            if ($checkOut->lessThanOrEqualTo($checkIn)) {
+                $checkOut->addDay();
+            }
+
             // Seed check_in/out on create so regularising a fully-absent day
             // (no existing attendance row) doesn't violate the NOT NULL columns.
             $attendance = $regularisation->attendance
@@ -211,8 +220,15 @@ class AttendanceService
                 $regularisation->update(['attendance_id' => $attendance->id]);
             }
 
-            $grossMinutes = $checkIn->diffInMinutes($checkOut);
-            $netMinutes = max(0, $grossMinutes - ((int) $attendance->break_minutes));
+            // Resolved before the hours are worked out: the break fallback
+            // needs the shift's unpaid break, not just the late calculation.
+            $shift = $regularisation->employee
+                ? $this->shifts->resolve($regularisation->employee, $workDate)
+                : null;
+
+            $grossMinutes = (int) $checkIn->diffInMinutes($checkOut);
+            $breakMinutes = $this->breakMinutesForCorrection($attendance, $checkIn, $checkOut, $shift);
+            $netMinutes = max(0, $grossMinutes - $breakMinutes);
 
             // Preserve the ORIGINAL punch immutably the first time this day is
             // corrected — the raw punch is never lost, only snapshotted. Later
@@ -227,9 +243,6 @@ class AttendanceService
 
             // Late is recomputed against the shift, NOT forced to on_time — a
             // punch corrected to 10:40 on an 09:00 shift is still late.
-            $shift = $regularisation->employee
-                ? $this->shifts->resolve($regularisation->employee, $workDate)
-                : null;
             $isLate = $shift ? $shift->isLate($checkIn) : (bool) $attendance->is_late;
             $lateMinutes = $shift ? $shift->lateMinutes($checkIn) : (int) ($attendance->late_minutes ?? 0);
 
@@ -243,6 +256,7 @@ class AttendanceService
             ], fn ($v) => $v !== null);
 
             $attendance->update($original + $punchFields + [
+                'break_minutes' => $breakMinutes,
                 'total_hours' => round($netMinutes / 60, 2),
                 'status' => $isLate ? 'late' : 'on_time',
                 'is_late' => $isLate,
@@ -331,15 +345,61 @@ class AttendanceService
         return $regularisation->fresh();
     }
 
-    /** Workflow authority: super admin finalises (3), HR clears through hr_review (2), managers clear manager_review (1). */
+    /**
+     * Workflow authority: HR and super admin are final (3), managers clear
+     * manager_review (1).
+     *
+     * HR used to sit at 2, which meant an HR approval only advanced the request
+     * to admin_approval and never corrected the attendance — HR pressed
+     * Approve, the row said approved-in-progress, and the employee's hours
+     * stayed wrong until a super admin happened to look. HR owns attendance
+     * corrections, so HR finalises. The admin_approval stage is retained so
+     * requests already parked there stay valid and can now be cleared by HR.
+     */
     protected function approvalLevel(?User $user): int
     {
         return match (true) {
             $user === null => 1,
             $user->isSuperAdmin() || $user->assignedRole?->slug === 'super_admin' => 3,
-            $user->isHrAdmin() => 2,
+            $user->isHrAdmin() => 3,
             default => 1,
         };
+    }
+
+    /**
+     * Unpaid break to deduct from a corrected day.
+     *
+     * Prefers what actually happened — break logs overlapping the corrected
+     * window — and falls back to the shift's standard break when there are
+     * none. That fallback is what makes a regularised absent day honest: such a
+     * day has no break logs at all, so without it a 09:00–18:00 correction
+     * books nine straight hours with no lunch deducted.
+     *
+     * Never exceeds the worked span, so the net can't go negative.
+     */
+    private function breakMinutesForCorrection(
+        Attendance $attendance,
+        Carbon $checkIn,
+        Carbon $checkOut,
+        ?ResolvedShift $shift,
+    ): int {
+        $grossMinutes = (int) $checkIn->diffInMinutes($checkOut);
+
+        $logged = (int) BreakLog::where('employee_id', $attendance->employee_id)
+            ->whereNotNull('break_end')
+            ->where('break_start', '>=', $checkIn)
+            ->where('break_end', '<=', $checkOut)
+            ->sum('duration_minutes');
+
+        if ($logged > 0) {
+            return min($logged, $grossMinutes);
+        }
+
+        // No logs: keep whatever the day already carried, else the shift's own
+        // unpaid break. Both are clamped to the corrected span.
+        $fallback = (int) ($attendance->break_minutes ?: $shift?->breakMinutes ?: 0);
+
+        return max(0, min($fallback, $grossMinutes));
     }
 
     protected function creditCompOffIfEligible(Attendance $attendance, Carbon $date): void
