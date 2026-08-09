@@ -534,7 +534,7 @@
             ['Attendance Streak', $onTimeStreak.' '.$streakWord, 'fire', '#F97316', $onTimeStreak >= $bestStreak && $onTimeStreak > 0 ? 'personal best' : 'best '.$bestStreak, 'on-time run', null],
             ['Monthly Goal', $monthlyPct.'%', 'flag', '#8B5CF6', null, 'attendance goal', null],
             ['Productivity', $prodIndex.'%', 'chart-bar', '#0F9D6E', $cmpChips['ontime'] ?? null, 'focus '.intdiv($workedMin,60).'h '.($workedMin%60).'m', $hoursSpark],
-            ['Leave Balance', rtrim(rtrim(number_format($leaveBalance, 1), '0'), '.').' days', 'calendar-days', '#2F6FEB', 'available', 'CSL + MDL pool', null],
+            ['Leave Balance', rtrim(rtrim(number_format($leaveBalance, 1), '0'), '.').' days', 'calendar-days', '#2F6FEB', 'available', 'Across all leave types', null],
         ];
     @endphp
     <div class="pa-kpis2" data-reveal>

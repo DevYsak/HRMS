@@ -1190,8 +1190,8 @@
                 <flux:icon.chevron-down class="size-4 text-zinc-400" x-bind:class="open && 'rotate-180'" />
             </button>
             <ul class="mt-3 space-y-1.5 text-xs text-zinc-600 dark:text-zinc-300" x-show="open" x-transition>
-                <li>&bull; 18 leave days/year = 12 CSL + 6 MDL.</li>
-                <li>&bull; December shutdown uses Mandatory Days (MDL).</li>
+                <li>&bull; 18 leave days/year = 12 CSL + 6 MDL (Mandatory December Leave).</li>
+                <li>&bull; MDL is the December shutdown — fixed dates, not a balance you apply from.</li>
                 <li>&bull; No lapse — unused leave carries forward.</li>
                 <li>&bull; Encashment is paid on approval.</li>
                 <li>&bull; Overtime is pre-approved only (₹100/hr), tracked separately.</li>

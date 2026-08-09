@@ -22,7 +22,7 @@ class LeaveSeeder extends Seeder
             ['name' => 'Annual Leave', 'is_paid' => true, 'color' => '#1DB77A', 'category' => 'annual', 'allow_carry_forward' => true, 'carry_forward_limit' => 0, 'allow_encashment' => true],
             ['name' => 'Sick Leave', 'is_paid' => true, 'color' => '#EF4444', 'category' => 'sick', 'allow_carry_forward' => true, 'carry_forward_limit' => 0, 'allow_encashment' => false],
             ['name' => 'Casual Leave', 'is_paid' => true, 'color' => '#F59E0B', 'category' => 'other', 'allow_carry_forward' => true, 'carry_forward_limit' => 0, 'allow_encashment' => false],
-            ['name' => 'Maternity Leave', 'is_paid' => true, 'color' => '#D946EF', 'category' => 'mdl', 'allow_carry_forward' => true, 'carry_forward_limit' => 0, 'allow_encashment' => false],
+            ['name' => 'Maternity Leave', 'is_paid' => true, 'color' => '#D946EF', 'category' => 'maternity', 'allow_carry_forward' => true, 'carry_forward_limit' => 0, 'allow_encashment' => false],
             ['name' => 'Comp Off', 'is_paid' => true, 'color' => '#06B6D4', 'category' => 'comp_off', 'allow_carry_forward' => true, 'carry_forward_limit' => 0, 'allow_encashment' => false],
             ['name' => 'Unpaid Leave', 'is_paid' => false, 'color' => '#6B7280', 'category' => 'unpaid', 'allow_carry_forward' => false, 'carry_forward_limit' => 0, 'allow_encashment' => false],
             ['name' => 'Unauthorized Leave', 'is_paid' => false, 'color' => '#991B1B', 'category' => 'unauthorized', 'allow_carry_forward' => false, 'carry_forward_limit' => 0, 'allow_encashment' => false],

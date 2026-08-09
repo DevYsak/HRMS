@@ -88,7 +88,7 @@ class LeaveTypeSeeder extends Seeder
             [
                 'name' => 'Maternity Leave',
                 'code' => 'ML',
-                'category' => 'mdl',
+                'category' => 'maternity',
                 'is_paid' => true,
                 'allow_paid_request' => true,
                 'allow_unpaid_request' => false,
