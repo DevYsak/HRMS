@@ -7,7 +7,9 @@ use App\Models\AuditLog;
 use App\Models\Employee;
 use App\Models\User;
 use App\Services\Biometric\BiometricCodeService;
+use Illuminate\Support\Facades\Auth;
 use Livewire\Livewire;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 /**
  * Ownership of the Biometric Device ID (employees.employee_code).
@@ -142,17 +144,38 @@ test('reassign frees an id held by a deleted employee', function () {
         ->and(Employee::onlyTrashed()->find($ghost->id)->employee_code)->toBeNull();
 });
 
-test('a plain employee cannot reassign a device id', function () {
+test('a plain employee cannot reach the screen that reassigns a device id', function () {
+    // Two layers guard this. The outer one is EmployeeEdit::mount(), which
+    // authorizes 'update' and aborts before the component ever renders — so
+    // the reassign method is unreachable rather than merely refused.
     $holder = bioEmployee('Protected Holder', 70);
     $taker = bioEmployee('Opportunist');
 
     Livewire::actingAs($taker->user)
         ->test(EmployeeEdit::class, ['employee' => $taker])
-        ->set('employee_code', '70')
-        ->call('reassignBiometricCode')
         ->assertForbidden();
 
     expect($holder->fresh()->employee_code)->toBe(70);
+});
+
+test('the reassign guard refuses a non-manager even if the screen is reached', function () {
+    // The inner layer: abort_unless(canManageEmployees()) on the action itself,
+    // so a role that can open the screen but must not move device IDs is still
+    // stopped. Tested against the component method directly, since the outer
+    // mount guard would otherwise mask it.
+    $holder = bioEmployee('Protected Holder', 71);
+    $taker = bioEmployee('Opportunist');
+
+    $component = new EmployeeEdit;
+    $component->employee = $taker;
+    $component->employee_code = '71';
+
+    Auth::login($taker->user);
+
+    expect(fn () => $component->reassignBiometricCode(app(BiometricCodeService::class)))
+        ->toThrow(HttpException::class);
+
+    expect($holder->fresh()->employee_code)->toBe(71);
 });
 
 test('the legacy biometric_id column is kept in step with the device id', function () {
