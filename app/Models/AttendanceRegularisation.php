@@ -25,6 +25,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'reviewer_comment',
     'approval_trail',
     'reviewed_at',
+    'applied_by',
+    'applied_at',
+    'applied_via',
 ])]
 class AttendanceRegularisation extends Model
 {
@@ -36,6 +39,7 @@ class AttendanceRegularisation extends Model
         return [
             'work_date' => 'date',
             'reviewed_at' => 'datetime',
+            'applied_at' => 'datetime',
             'approval_trail' => 'array',
             'claimed_at' => 'datetime',
         ];

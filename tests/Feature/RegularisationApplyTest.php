@@ -14,10 +14,28 @@ use Livewire\Livewire;
 /**
  * Regularisation actually correcting the day.
  *
- * The bugs behind these: HR approval only advanced a stage and never touched
- * attendance; a night-shift correction booked zero hours; and the break was
- * taken from the pre-correction row, so a regularised absent day recorded a
- * full shift with no lunch deducted.
+ * The bugs behind these: a night-shift correction booked zero hours, and the
+ * break was taken from the pre-correction row, so a regularised absent day
+ * recorded a full shift with no lunch deducted. Both are unchanged.
+ *
+ * BUSINESS RULE CHANGE — how HR applies a correction.
+ *
+ *   OLD  HR was made the final approver, so approveRegularisation() applied
+ *        the change immediately when called by HR. That silently redefined
+ *        what "approve" meant for every reviewer and made admin_approval
+ *        unreachable for new requests.
+ *
+ *   NEW  The staged chain is intact — Manager → HR → Admin → Apply — and HR
+ *        approving still only clears hr_review. Applying immediately is now
+ *        fastTrackRegularisation(): a separate action, separately authorised
+ *        (manage_attendance, which managers do not hold), and separately
+ *        audited via applied_via = 'hr_fast_path'.
+ *
+ * These tests therefore call fastTrackRegularisation() where they previously
+ * called approveRegularisation() as HR. What is being asserted — the corrected
+ * hours, the break arithmetic, the original-value snapshot — is unchanged;
+ * only the route HR takes to apply it has. See RegularisationFastPathTest for
+ * the workflow itself and RegularisationWorkflowTest for the untouched chain.
  */
 function regApplyShift(string $start = '09:00:00', string $end = '18:00:00', int $break = 60): ShiftSetting
 {
@@ -52,18 +70,36 @@ function regApplyRequest(Employee $employee, string $date, string $in, string $o
     ]);
 }
 
-test('an HR approval applies the correction instead of parking it', function () {
+test('HR fast-tracking applies the correction instead of parking it', function () {
+    // Renamed: under the old rule an HR *approval* applied the change. Now
+    // approving clears hr_review like any other stage, and this is what HR
+    // does when the day must be corrected now.
     $employee = regApplyEmployee();
     $hr = User::factory()->create(['role' => UserRole::HrAdmin]);
     $date = now()->subDay()->toDateString();
 
     $request = regApplyRequest($employee, $date, '09:00', '18:00');
 
-    $attendance = app(AttendanceService::class)->approveRegularisation($request, $hr->id);
+    $attendance = app(AttendanceService::class)->fastTrackRegularisation($request, $hr->id);
 
     expect($attendance)->not->toBeNull()
         ->and($request->fresh()->status)->toBe('approved')
+        ->and($request->fresh()->applied_via)->toBe('hr_fast_path')
         ->and(Attendance::where('employee_id', $employee->id)->where('date', $date)->exists())->toBeTrue();
+});
+
+test('an HR approval alone does NOT apply the correction', function () {
+    // The other half of the rule change, asserted directly: the chain is real.
+    $employee = regApplyEmployee();
+    $hr = User::factory()->create(['role' => UserRole::HrAdmin]);
+    $date = now()->subDay()->toDateString();
+
+    $request = regApplyRequest($employee, $date, '09:00', '18:00');
+
+    expect(app(AttendanceService::class)->approveRegularisation($request, $hr->id))->toBeNull()
+        ->and($request->fresh()->stage)->toBe('admin_approval')
+        ->and($request->fresh()->status)->toBe('pending')
+        ->and(Attendance::where('employee_id', $employee->id)->where('date', $date)->exists())->toBeFalse();
 });
 
 test('a manager approval still advances rather than finalising', function () {
@@ -80,18 +116,20 @@ test('a manager approval still advances rather than finalising', function () {
         ->and($request->fresh()->stage)->toBe('hr_review');
 });
 
-test('the approval trail records who approved, with their name', function () {
+test('the approval trail records who applied it, with their name', function () {
     $employee = regApplyEmployee();
     $hr = User::factory()->create(['role' => UserRole::HrAdmin, 'name' => 'Approving Officer']);
     $date = now()->subDay()->toDateString();
 
     $request = regApplyRequest($employee, $date, '09:00', '18:00');
-    app(AttendanceService::class)->approveRegularisation($request, $hr->id, 'Checked the door log');
+    app(AttendanceService::class)->fastTrackRegularisation($request, $hr->id, 'Checked the door log');
 
     $trail = $request->fresh()->approval_trail;
 
     expect($trail)->toHaveCount(1)
-        ->and($trail[0]['action'])->toBe('approved')
+        // 'fast_tracked', not 'approved': the shortcut is named rather than
+        // disguised as a chain the request never climbed.
+        ->and($trail[0]['action'])->toBe('fast_tracked')
         ->and($trail[0]['name'])->toBe('Approving Officer')
         ->and($trail[0]['comment'])->toBe('Checked the door log')
         ->and($trail[0]['at'])->not->toBeEmpty();
@@ -106,7 +144,7 @@ test('a night shift correction records the hours actually worked', function () {
     $date = now()->subDay()->toDateString();
 
     $request = regApplyRequest($employee, $date, '22:00', '06:00');
-    $attendance = app(AttendanceService::class)->approveRegularisation($request, $hr->id);
+    $attendance = app(AttendanceService::class)->fastTrackRegularisation($request, $hr->id);
 
     // 8h gross, 60m shift break -> 7h net.
     expect((float) $attendance->total_hours)->toBe(7.0);
@@ -122,7 +160,7 @@ test('a regularised absent day still has the shift break deducted', function () 
     expect(Attendance::where('employee_id', $employee->id)->where('date', $date)->exists())->toBeFalse();
 
     $request = regApplyRequest($employee, $date, '09:00', '18:00');
-    $attendance = app(AttendanceService::class)->approveRegularisation($request, $hr->id);
+    $attendance = app(AttendanceService::class)->fastTrackRegularisation($request, $hr->id);
 
     expect((int) $attendance->break_minutes)->toBe(60)
         ->and((float) $attendance->total_hours)->toBe(8.0);
@@ -153,7 +191,7 @@ test('real logged breaks beat the shift default', function () {
     $request = regApplyRequest($employee, $date, '09:00', '18:00');
     $request->update(['attendance_id' => $attendance->id]);
 
-    $corrected = app(AttendanceService::class)->approveRegularisation($request, $hr->id);
+    $corrected = app(AttendanceService::class)->fastTrackRegularisation($request, $hr->id);
 
     expect((int) $corrected->break_minutes)->toBe(30)
         ->and((float) $corrected->total_hours)->toBe(8.5);
@@ -166,7 +204,7 @@ test('the break never exceeds the corrected span', function () {
     $date = now()->subDay()->toDateString();
 
     $request = regApplyRequest($employee, $date, '09:00', '10:00');
-    $attendance = app(AttendanceService::class)->approveRegularisation($request, $hr->id);
+    $attendance = app(AttendanceService::class)->fastTrackRegularisation($request, $hr->id);
 
     expect((float) $attendance->total_hours)->toBeGreaterThanOrEqual(0.0)
         ->and((int) $attendance->break_minutes)->toBeLessThanOrEqual(60);
@@ -213,7 +251,7 @@ test('the original punch is snapshotted before the first correction', function (
     $request = regApplyRequest($employee, $date, '09:00', '18:00');
     $request->update(['attendance_id' => $attendance->id]);
 
-    app(AttendanceService::class)->approveRegularisation($request, $hr->id);
+    app(AttendanceService::class)->fastTrackRegularisation($request, $hr->id);
 
     // The raw punch is never lost, only superseded.
     expect($attendance->fresh()->original_check_in->format('H:i'))->toBe('10:45');

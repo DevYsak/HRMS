@@ -188,11 +188,11 @@ class AllAttendance extends Component
 
         // HR marking attendance IS the correction — routing it back through a
         // manager left the employee's hours wrong while HR believed they had
-        // fixed them. Applying it through the service (rather than writing the
-        // attendance here) keeps one code path for corrections: original punch
-        // snapshot, break and late recompute, score rescore, OT filing and the
-        // approval trail that records who did it.
-        app(AttendanceService::class)->approveRegularisation(
+        // fixed them. Fast-tracked rather than approved: it reaches the same
+        // applied state through the same application routine, but the trail
+        // records that HR applied it directly instead of implying the request
+        // climbed a chain it never went through.
+        app(AttendanceService::class)->fastTrackRegularisation(
             $regularisation,
             Auth::id(),
             'Applied directly by HR.',

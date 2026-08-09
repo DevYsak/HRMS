@@ -166,7 +166,73 @@ class AttendanceService
             return null;
         }
 
-        return DB::transaction(function () use ($regularisation, $reviewerId, $comment, $trail) {
+        return $this->applyRegularisation($regularisation, $reviewerId, $comment, $trail, 'admin_chain');
+    }
+
+    /**
+     * HR applies a correction immediately, without waiting for admin approval.
+     *
+     * The staged chain still exists and is still the default: this is a
+     * deliberate, separately authorised shortcut for the case HR actually
+     * hits — a punch is plainly wrong, HR has the evidence, and the employee's
+     * hours should not stay wrong until an admin happens to look.
+     *
+     * It reaches the same applied state through the same application routine
+     * as the admin path, so there is exactly one implementation of "correct an
+     * attendance day". What differs is only the audit: the trail records a
+     * fast-tracked action at hr_review, and applied_via marks the route.
+     *
+     * @throws \DomainException when the caller may not fast-track
+     */
+    public function fastTrackRegularisation(AttendanceRegularisation $regularisation, int $reviewerId, ?string $comment = null): ?Attendance
+    {
+        if ($regularisation->status !== 'pending') {
+            return $regularisation->attendance;
+        }
+
+        $reviewer = User::find($reviewerId);
+
+        // Explicitly authorised, and not merely by being an approver: managers
+        // approve regularisations but must not apply them unreviewed.
+        // manage_attendance is held by HR, directors and super admins only.
+        if (! $reviewer?->hasPermission('manage_attendance')) {
+            throw new \DomainException('You are not authorised to apply a regularisation directly.');
+        }
+
+        $trail = $regularisation->approval_trail ?? [];
+        $trail[] = [
+            'stage' => $regularisation->stage ?: 'manager_review',
+            'action' => 'fast_tracked',
+            'by' => $reviewerId,
+            'name' => $reviewer->name,
+            'comment' => $comment,
+            'at' => now()->toDateTimeString(),
+        ];
+
+        return $this->applyRegularisation($regularisation, $reviewerId, $comment, $trail, 'hr_fast_path');
+    }
+
+    /**
+     * The one place a regularisation is actually written onto attendance.
+     *
+     * Both routes end here — the full manager → HR → admin chain and HR's
+     * fast-path — so the correction, the original-value snapshot, the break and
+     * late recompute, the punch journey, the OT filing and the rescore happen
+     * identically however the request was approved. A second implementation is
+     * how two routes end up producing different attendance from the same
+     * request.
+     *
+     * @param  array<int, array<string, mixed>>  $trail
+     * @param  string  $via  admin_chain | hr_fast_path
+     */
+    protected function applyRegularisation(
+        AttendanceRegularisation $regularisation,
+        int $reviewerId,
+        ?string $comment,
+        array $trail,
+        string $via,
+    ): ?Attendance {
+        return DB::transaction(function () use ($regularisation, $reviewerId, $comment, $trail, $via) {
             $regularisation->update([
                 'status' => 'approved',
                 'stage' => 'admin_approval',
@@ -174,6 +240,11 @@ class AttendanceService
                 'reviewer_comment' => $comment,
                 'approval_trail' => $trail,
                 'reviewed_at' => now(),
+                // Who actually rewrote the attendance, and by which route —
+                // reviewer_id alone cannot distinguish the two paths.
+                'applied_by' => $reviewerId,
+                'applied_at' => now(),
+                'applied_via' => $via,
             ]);
 
             // Half-day regularisation: mark the day as half-day rather than
@@ -361,22 +432,21 @@ class AttendanceService
     }
 
     /**
-     * Workflow authority: HR and super admin are final (3), managers clear
-     * manager_review (1).
+     * Workflow authority: super admin finalises (3), HR clears through
+     * hr_review (2), managers clear manager_review (1).
      *
-     * HR used to sit at 2, which meant an HR approval only advanced the request
-     * to admin_approval and never corrected the attendance — HR pressed
-     * Approve, the row said approved-in-progress, and the employee's hours
-     * stayed wrong until a super admin happened to look. HR owns attendance
-     * corrections, so HR finalises. The admin_approval stage is retained so
-     * requests already parked there stay valid and can now be cleared by HR.
+     * The staged chain is deliberate — each level sees the request before it
+     * takes effect. HR's need to correct a day immediately is served by
+     * fastTrackRegularisation() instead, which is an explicit, separately
+     * authorised, separately audited action rather than a quiet change to what
+     * "approve" means for everyone.
      */
     protected function approvalLevel(?User $user): int
     {
         return match (true) {
             $user === null => 1,
             $user->isSuperAdmin() || $user->assignedRole?->slug === 'super_admin' => 3,
-            $user->isHrAdmin() => 3,
+            $user->isHrAdmin() => 2,
             default => 1,
         };
     }
