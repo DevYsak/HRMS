@@ -16,11 +16,18 @@ use Illuminate\Support\Carbon;
  * hardcoded literal. Resolution order, all DB-driven:
  *
  *   1. The employee's assigned ShiftSetting (employees.shift_id).
- *   2. Any ShiftSetting, when the employee has none assigned yet.
- *   3. The global AttendanceSetting (shift_start / shift_end / grace).
+ *   2. The shift HR nominated as the company default (is_default).
  *
- * Returns null only when the app has neither a shift nor an attendance setting
- * configured — callers skip rather than invent a time.
+ * Returns null when neither applies. Callers all guard for that and skip,
+ * which is the point: an unassigned employee gets no attendance judgement at
+ * all rather than a confidently wrong one.
+ *
+ * This previously fell back to ShiftSetting::query()->first() — an arbitrary
+ * row, ordered by nothing in particular. An unassigned UK Sales employee was
+ * therefore scored against the 10:30 IT window and marked hours late every
+ * single day, with nothing on screen to say why. Which shift covers an
+ * unassigned employee is a policy decision, so it is now stated explicitly by
+ * HR or not made at all.
  */
 class ShiftResolver
 {
@@ -28,8 +35,13 @@ class ShiftResolver
     {
         $day = $date instanceof Carbon ? $date->copy() : Carbon::parse($date);
 
-        $shift = $employee->shift ?? ShiftSetting::query()->first();
+        $shift = $employee->shift ?? self::companyDefault();
         $settings = AttendanceSetting::query()->first();
+
+        // No assigned shift and no nominated default: refuse to guess.
+        if (! $shift) {
+            return null;
+        }
 
         [$startRaw, $endRaw, $grace, $standard, $threshold, $break, $name] = $this->sourceValues($shift, $settings);
 
@@ -65,42 +77,48 @@ class ShiftResolver
     }
 
     /**
-     * Pull the raw window values from the shift (authoritative) or fall back to
-     * the global attendance setting for the pieces a shift can't provide.
+     * The shift HR nominated to cover employees without an explicit assignment.
+     *
+     * Memoised per request: resolve() is called once per employee per day in
+     * scoring and report loops, and this would otherwise be a query each time.
+     */
+    public static function companyDefault(): ?ShiftSetting
+    {
+        return once(fn (): ?ShiftSetting => ShiftSetting::query()->where('is_default', true)->first());
+    }
+
+    /**
+     * Whether attendance can be judged for this employee at all.
+     *
+     * Surfaces on the employee's own page as "Shift not assigned" and in the
+     * HR data-quality flags, so a silent gap becomes a visible task.
+     */
+    public static function hasResolvableShift(Employee $employee): bool
+    {
+        return $employee->shift_id !== null || self::companyDefault() !== null;
+    }
+
+    /**
+     * The shift's own window, with the global attendance setting supplying only
+     * the grace period when the shift row leaves it null.
+     *
+     * The global setting no longer contributes a start/end. Those values
+     * (09:00-18:00 here) match no shift the company actually runs, so using
+     * them produced late marks against a working day nobody works.
      *
      * @return array{0: mixed, 1: mixed, 2: int, 3: float, 4: float, 5: int, 6: string}
      */
-    protected function sourceValues(?ShiftSetting $shift, ?AttendanceSetting $settings): array
+    protected function sourceValues(ShiftSetting $shift, ?AttendanceSetting $settings): array
     {
-        if ($shift) {
-            return [
-                $shift->start_time,
-                $shift->end_time,
-                (int) ($shift->grace_minutes ?? $settings->late_grace_period ?? 0),
-                (float) ($shift->standard_hours ?? 9.0),
-                (float) ($shift->ot_threshold_hours ?? $shift->standard_hours ?? 9.0),
-                (int) ($shift->break_duration ?? 0),
-                $shift->name ?? 'Shift',
-            ];
-        }
-
-        if ($settings) {
-            $start = Carbon::parse($settings->shift_start);
-            $end = Carbon::parse($settings->shift_end);
-            $standard = round($start->floatDiffInHours($end->lessThanOrEqualTo($start) ? $end->copy()->addDay() : $end), 2);
-
-            return [
-                $settings->shift_start,
-                $settings->shift_end,
-                (int) ($settings->late_grace_period ?? 0),
-                $standard,
-                $standard,
-                0,
-                'Default Shift',
-            ];
-        }
-
-        return [null, null, 0, 9.0, 9.0, 0, 'Shift'];
+        return [
+            $shift->start_time,
+            $shift->end_time,
+            (int) ($shift->grace_minutes ?? $settings->late_grace_period ?? 0),
+            (float) ($shift->standard_hours ?? 9.0),
+            (float) ($shift->ot_threshold_hours ?? $shift->standard_hours ?? 9.0),
+            (int) ($shift->break_duration ?? 0),
+            $shift->name ?? 'Shift',
+        ];
     }
 
     /** Anchor a stored time (H:i:s, or a datetime/Carbon) onto the target day. */

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\EmployeeStatus;
+use App\Services\Attendance\ShiftResolver;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -164,6 +165,10 @@ class Employee extends Model
         return array_values(array_filter([
             $this->has_placeholder_email ? 'Email Pending' : null,
             $this->isMissingJoiningDate() ? 'Joining Date Missing' : null,
+            // Without a resolvable shift there is no window to judge arrivals
+            // against, so the attendance engine declines to score the day at
+            // all. That is safe but invisible — this makes it a visible task.
+            ShiftResolver::hasResolvableShift($this) ? null : 'Shift Not Assigned',
         ]));
     }
 

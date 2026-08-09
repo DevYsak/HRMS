@@ -22,15 +22,30 @@ class AttendanceService
 {
     public function __construct(protected ShiftResolver $shifts) {}
 
-    public function checkIn(Employee $employee, ShiftSetting $shift, array $payload = []): Attendance
+    /**
+     * Record an arrival.
+     *
+     * The shift is optional because a punch is a fact and lateness is a
+     * judgement. An employee HR has not yet assigned a shift to must still be
+     * able to record that they are at work — barring them would lose the
+     * attendance record entirely over a configuration gap. Without a shift
+     * there is simply no window to be late against, so the day is stored as
+     * on_time with zero late minutes and the score engine skips it.
+     */
+    public function checkIn(Employee $employee, ?ShiftSetting $shift, array $payload = []): Attendance
     {
         $now = Carbon::now();
-        $shiftStart = Carbon::parse($shift->start_time, config('app.timezone'))
-            ->setDate($now->year, $now->month, $now->day);
-        $cutoff = $shiftStart->copy()->addMinutes((int) $shift->grace_minutes);
+        $isLate = false;
+        $lateMinutes = 0;
 
-        $isLate = $now->gt($cutoff);
-        $lateMinutes = $isLate ? (int) $cutoff->diffInMinutes($now) : 0;
+        if ($shift && $shift->start_time) {
+            $shiftStart = Carbon::parse($shift->start_time, config('app.timezone'))
+                ->setDate($now->year, $now->month, $now->day);
+            $cutoff = $shiftStart->copy()->addMinutes((int) $shift->grace_minutes);
+
+            $isLate = $now->gt($cutoff);
+            $lateMinutes = $isLate ? (int) $cutoff->diffInMinutes($now) : 0;
+        }
 
         return Attendance::create([
             'employee_id' => $employee->id,

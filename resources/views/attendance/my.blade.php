@@ -470,6 +470,27 @@
 .pa-kpi2 .spark{margin-top:9px;height:24px;width:100%;display:block}
 </style>
 <div class="pa">
+
+  {{-- No shift assigned: the engine cannot judge arrivals without a window, so
+       it declines to score the day rather than guessing. Saying so is the point
+       — the employee previously saw a confident 9:00–6:00 day they do not work,
+       and late marks measured against it. --}}
+  @if($this->shiftUnassigned)
+    <div class="rounded-2xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-500/25 dark:bg-amber-500/10" style="margin-bottom:16px">
+      <div class="flex items-start gap-3">
+        <flux:icon.exclamation-triangle class="mt-0.5 size-5 shrink-0 text-amber-500" />
+        <div class="min-w-0">
+          <p class="text-sm font-bold text-amber-900 dark:text-amber-200">Shift not assigned</p>
+          <p class="mt-0.5 text-xs leading-relaxed text-amber-800 dark:text-amber-300">
+            Your working hours have not been set up yet, so late marks, overtime and
+            attendance scoring are paused for you — nothing here is counted against you.
+            Your punches are still being recorded. Please ask HR to assign your shift.
+          </p>
+        </div>
+      </div>
+    </div>
+  @endif
+
   {{-- KPI overview · full width --}}
   <div>
     <div class="pa-panel-h" style="margin-bottom:16px;font-size:15px">Attendance health

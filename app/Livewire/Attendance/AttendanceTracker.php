@@ -26,6 +26,7 @@ use App\Services\AiAssistant;
 use App\Services\Attendance\AttendanceCoach;
 use App\Services\Attendance\AttendanceScoreEngine;
 use App\Services\Attendance\PunchTimeline as PunchTimelineEngine;
+use App\Services\Attendance\ShiftResolver;
 use App\Services\AttendanceService;
 use App\Support\UserAgent;
 use Carbon\CarbonPeriod;
@@ -250,7 +251,10 @@ class AttendanceTracker extends Component
             return;
         }
 
-        $this->shift = $employee->shift ?? ShiftSetting::first();
+        // Assigned shift, else the shift HR nominated as the company default.
+        // Never ShiftSetting::first(): that showed an unassigned UK Sales
+        // employee the 10:30 IT window and judged their arrivals against it.
+        $this->shift = $employee->shift ?? ShiftResolver::companyDefault();
         $this->shiftLabel = $this->buildShiftLabel();
 
         // 1. Setup boundaries  (week starts Sunday to match S M T W T F S header)
@@ -1525,13 +1529,11 @@ class AttendanceTracker extends Component
             return;
         }
 
-        $shift = $this->shift instanceof ShiftSetting ? $this->shift : ShiftSetting::first();
-
-        if (! $shift) {
-            \Flux::toast('No shift configured. Contact HR to set up your shift.', variant: 'danger');
-
-            return;
-        }
+        // May be null when HR has not assigned a shift. That does not block the
+        // punch: being at work is a fact, being late is a judgement. Losing the
+        // attendance record over a configuration gap would be the worse
+        // outcome, so the day is recorded and simply not judged.
+        $shift = $this->shift instanceof ShiftSetting ? $this->shift : ShiftResolver::companyDefault();
 
         // Enforce admin capture requirements (WFH/field discipline).
         if ($this->attendanceSettings?->requires_location && ($lat === null || $lng === null)) {
@@ -1848,53 +1850,46 @@ class AttendanceTracker extends Component
         \Flux::toast('Regularisation request sent to your manager & HR for approval.');
     }
 
+    /**
+     * The shift window shown to the employee, from the same source the engine
+     * scores against — so the page can never advertise hours the engine is not
+     * using.
+     *
+     * Previously this had two other paths: hardcoded "IT Shift: 10:30 AM…"
+     * literals, and a global-setting fallback that told an unassigned employee
+     * they worked 9:00–6:00. Both could disagree with the resolver, and the
+     * second described a working day the company does not run.
+     */
     protected function buildShiftLabel(): ?string
     {
         $employee = Auth::user()->employee;
+        $shift = $employee?->shift ?? ShiftResolver::companyDefault();
 
-        // Path 1 — employee has shift_id linked to a ShiftSetting record
-        $shiftSetting = $employee->shift ?? null;
-        if ($shiftSetting && $shiftSetting->start_time && $shiftSetting->end_time) {
-            return sprintf(
-                '%s: %s – %s IST | Grace: %d mins',
-                $shiftSetting->name ?? 'Shift',
-                Carbon::parse($shiftSetting->start_time)->format('g:i A'),
-                Carbon::parse($shiftSetting->end_time)->format('g:i A'),
-                $shiftSetting->grace_minutes ?? 5,
-            );
+        if (! $shift || ! $shift->start_time || ! $shift->end_time) {
+            return null;   // the view renders the "not assigned" state instead
         }
 
-        // Path 2 — try DB lookup by shift code before using hardcoded fallbacks
-        $shiftCode = $employee->getAttribute('shift_code') ?? null;
-        if ($shiftCode) {
-            $found = ShiftSetting::where('name', 'like', '%'.trim($shiftCode).'%')->first();
-            if ($found) {
-                return sprintf(
-                    '%s: %s – %s IST | Grace: %d mins',
-                    $found->name,
-                    Carbon::parse($found->start_time)->format('g:i A'),
-                    Carbon::parse($found->end_time)->format('g:i A'),
-                    $found->grace_minutes ?? 5,
-                );
-            }
+        return sprintf(
+            '%s: %s – %s IST | Grace: %d mins%s',
+            $shift->name ?? 'Shift',
+            Carbon::parse($shift->start_time)->format('g:i A'),
+            Carbon::parse($shift->end_time)->format('g:i A'),
+            $shift->grace_minutes ?? 0,
+            $employee?->shift_id ? '' : ' (company default)',
+        );
+    }
 
-            return match (strtolower(trim($shiftCode))) {
-                'it' => 'IT Shift: 10:30 AM – 7:30 PM IST | Grace: 5 mins',
-                'uk' => 'UK Sales Shift: 1:00 PM – 10:00 PM IST | Grace: 5 mins',
-                default => null,
-            };
-        }
+    /**
+     * Whether attendance can be judged for the signed-in employee at all.
+     *
+     * Drives the "Shift not assigned" banner. Reads the same policy as the
+     * resolver rather than re-deriving it, so the banner and the engine agree.
+     */
+    public function getShiftUnassignedProperty(): bool
+    {
+        $employee = Auth::user()->employee;
 
-        // Path 3 — global fallback from AttendanceSetting
-        if ($this->attendanceSettings?->shift_start && $this->attendanceSettings?->shift_end) {
-            return sprintf(
-                'Default Shift: %s – %s IST',
-                Carbon::parse($this->attendanceSettings->shift_start)->format('g:i A'),
-                Carbon::parse($this->attendanceSettings->shift_end)->format('g:i A'),
-            );
-        }
-
-        return null;
+        return $employee !== null && ! ShiftResolver::hasResolvableShift($employee);
     }
 
     public function render()

@@ -19,9 +19,18 @@ use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 
+/**
+ * The company's shift for tests that do not assign one per employee.
+ *
+ * Marked as the company default because that is what these tests mean: "the
+ * company runs this shift". They used to get it via ShiftResolver reaching for
+ * ShiftSetting::first(), which also silently mis-scored real unassigned
+ * employees against an arbitrary row. Stating the intent keeps the tests
+ * working without restoring that behaviour.
+ */
 function dayShift(): ShiftSetting
 {
-    return ShiftSetting::create([
+    $shift = ShiftSetting::create([
         'name' => 'Day',
         'start_time' => '09:00',
         'end_time' => '18:00',
@@ -29,6 +38,10 @@ function dayShift(): ShiftSetting
         'break_duration' => 60,
         'standard_hours' => 9,
     ]);
+
+    $shift->makeCompanyDefault();
+
+    return $shift->fresh();
 }
 
 test('the attendance service persists every supported work mode', function () {
