@@ -269,6 +269,11 @@ class AttendanceTracker extends Component
             // $punchJourney['live'].
             $this->punchJourney = app(PunchTimelineEngine::class)->emptyResult();
 
+            // Same reason: no employee record means no shift to measure, so
+            // give the card its explicit not-measurable shape rather than an
+            // empty array the view would dereference.
+            $this->shiftProgress = ShiftProgress::unassigned()->toArray();
+
             return;
         }
 
