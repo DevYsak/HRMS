@@ -27,6 +27,7 @@ use App\Services\Attendance\AttendanceCoach;
 use App\Services\Attendance\AttendanceScoreEngine;
 use App\Services\Attendance\PunchClassifier;
 use App\Services\Attendance\PunchTimeline as PunchTimelineEngine;
+use App\Services\Attendance\ShiftProgress;
 use App\Services\Attendance\ShiftResolver;
 use App\Services\AttendanceService;
 use App\Support\UserAgent;
@@ -128,6 +129,13 @@ class AttendanceTracker extends Component
      * @var array<int, array<string, mixed>>
      */
     public array $attendanceJourney = [];
+
+    /**
+     * Progress through today's shift, as ShiftProgress::toArray().
+     *
+     * @var array<string, mixed>
+     */
+    public array $shiftProgress = [];
 
     /** Smart Attendance Alerts — missing check-in/out/break, past & present. */
     public array $attendanceAlerts = [];
@@ -370,6 +378,7 @@ class AttendanceTracker extends Component
         $this->weekSummary = $this->buildWeekSummary($employee);
         $this->punchJourney = $this->buildPunchJourney($employee);
         $this->attendanceJourney = $this->buildAttendanceJourney($employee);
+        $this->shiftProgress = $this->buildShiftProgress($employee)->toArray();
         $this->loadStreakAndBenchmark($employee);
 
         // 10. Biometric daily summary + device (needed by the alerts below)
@@ -675,6 +684,62 @@ class AttendanceTracker extends Component
         );
     }
 
+    /**
+     * Assemble today's Shift Progress from state this page already holds.
+     *
+     * Deliberately a thin assembly step: the expected duration comes from the
+     * resolved shift and the worked minutes from PunchTimeline, both untouched.
+     * The arithmetic and the clamping live in ShiftProgress so the rules are
+     * testable without a Livewire component around them.
+     */
+    protected function buildShiftProgress($employee): ShiftProgress
+    {
+        $today = Carbon::today();
+
+        // Leave and holidays first: a day nobody was expected to work must not
+        // read as being behind schedule.
+        if ($this->todayLeaveLabel($employee, $today) !== null) {
+            return ShiftProgress::nonWorking($this->todayLeaveLabel($employee, $today));
+        }
+
+        if (AttendanceSetting::isWeeklyOff($today)) {
+            return ShiftProgress::nonWorking('Weekly off');
+        }
+
+        $shift = app(ShiftResolver::class)->resolve($employee, $today);
+
+        if (! $shift) {
+            return ShiftProgress::unassigned();
+        }
+
+        // The engine's figure, including any live session — never recomputed here.
+        $worked = (int) ($this->punchJourney['working_minutes'] ?? 0);
+
+        return ShiftProgress::of(
+            $shift,
+            $worked,
+            clockedOut: (bool) $this->todayAttendance?->check_out,
+        );
+    }
+
+    /** Leave or holiday covering today, as a label for the non-working state. */
+    protected function todayLeaveLabel($employee, Carbon $day): ?string
+    {
+        $onLeave = LeaveRequest::where('employee_id', $employee->id)
+            ->where('status', 'approved')
+            ->whereDate('start_date', '<=', $day->toDateString())
+            ->whereDate('end_date', '>=', $day->toDateString())
+            ->exists();
+
+        if ($onLeave) {
+            return 'On leave';
+        }
+
+        return PublicHoliday::whereDate('date', $day->toDateString())->exists()
+            ? 'Public holiday'
+            : null;
+    }
+
     protected function buildPunchJourney($employee): array
     {
         $today = Carbon::today();
@@ -878,6 +943,25 @@ class AttendanceTracker extends Component
                     'detail' => 'Today · clocked out '.$this->todayAttendance->check_out->format('h:i A').' before shift end '.$shiftEnd->format('h:i A'),
                     'date' => $today->toDateString(),
                     'action' => true,
+                ];
+            }
+
+            // Long break — informational, never actionable. A long break is not
+            // a punch to correct: the punches are right and the employee simply
+            // took the time, so offering "Regularize" would invite them to
+            // falsify it. Threshold is the classifier's, so a gap the journey
+            // labels "Long break" is exactly the gap that raises this.
+            $breakMin = $journeyOwnsToday
+                ? (int) ($this->punchJourney['break_minutes'] ?? 0)
+                : (int) ($this->todayAttendance->break_minutes ?? 0);
+
+            if ($breakMin > PunchClassifier::LONG_BREAK_MINUTES) {
+                $alerts[] = [
+                    'type' => 'long_break',
+                    'label' => 'Long Break',
+                    'detail' => 'Today · '.intdiv($breakMin, 60).'h '.($breakMin % 60).'m away, beyond the usual break',
+                    'date' => $today->toDateString(),
+                    'action' => false,
                 ];
             }
 

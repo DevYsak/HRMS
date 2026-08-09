@@ -393,10 +393,12 @@ test('smart alerts flag late arrival and long break as info/action correctly', f
         'check_in' => today()->setTime(11, 30), 'check_out' => today()->setTime(19, 0),
         'is_late' => true, 'late_minutes' => 55, 'status' => 'late', 'work_mode' => 'office',
     ]);
-    foreach (['11:30', '13:00', '15:00', '19:00'] as $t) { // 2h break = long
+    // 13:00 out, 15:00 back = a 2h break. The methods must alternate: with all
+    // four as Face the engine reads four arrivals and no break ever forms.
+    foreach ([['11:30', 'face'], ['13:00', 'id_card'], ['15:00', 'face'], ['19:00', 'id_card']] as [$t, $m]) {
         AttendancePunch::create([
             'employee_id' => $employee->id, 'punched_at' => today()->setTimeFromTimeString($t),
-            'punch_date' => today(), 'method' => 'face', 'source' => 'biometric',
+            'punch_date' => today(), 'method' => $m, 'source' => 'biometric',
         ]);
     }
 

@@ -1351,6 +1351,97 @@
 </div>
 
 {{-- ============================================================
+     Shift Progress
+     Worked against the employee's own resolved shift. Unassigned and
+     non-working days show an explicit empty state rather than 0% of
+     an invented nine-hour day, which would tell someone they were
+     behind on a schedule nobody gave them.
+     ============================================================ --}}
+@php $sp = $shiftProgress; @endphp
+<div class="pa pa-jsec">
+  <div class="pa-sp">
+    <div class="pa-sp-head">
+      <div>
+        <h3>Shift Progress</h3>
+        <div class="sub">{{ $sp['status_label'] }}</div>
+      </div>
+      @if($sp['measurable'] && $sp['overtime_minutes'] > 0)
+        {{-- Beyond the standard day. Shown separately because overtime is only
+             payable against an approved request, so it must not read as extra
+             progress on the ring. --}}
+        <span class="pa-sp-ot">+{{ intdiv($sp['overtime_minutes'], 60) }}h {{ $sp['overtime_minutes'] % 60 }}m beyond shift</span>
+      @endif
+    </div>
+
+    <div class="pa-sp-body">
+      @if($sp['measurable'])
+        @php $dash = max(0, min(100, (int) $sp['percent'])); @endphp
+        <div class="pa-sp-ring" role="img"
+             aria-label="{{ $sp['percent_label'] }} of shift completed, {{ $sp['worked_label'] }} worked of {{ $sp['expected_label'] }}">
+          <svg viewBox="0 0 36 36" class="pa-sp-svg">
+            <circle cx="18" cy="18" r="15.9" fill="none" stroke="currentColor" class="track" stroke-width="3" />
+            <circle cx="18" cy="18" r="15.9" fill="none" stroke="currentColor" class="fill" stroke-width="3"
+                    stroke-linecap="round" stroke-dasharray="{{ $dash }} 100" />
+          </svg>
+          <span class="pa-sp-pct">{{ $sp['percent_label'] }}</span>
+        </div>
+        <dl class="pa-sp-stats">
+          <div><dt>Worked</dt><dd>{{ $sp['worked_label'] }}</dd></div>
+          <div><dt>Remaining</dt><dd>{{ $sp['remaining_label'] }}</dd></div>
+          <div><dt>Expected</dt><dd>{{ $sp['expected_label'] }}</dd></div>
+        </dl>
+      @else
+        <div class="pa-sp-empty">
+          <flux:icon.clock class="size-5 text-zinc-300" />
+          <div>
+            <div class="t">{{ $sp['note'] ?? 'Not measurable today' }}</div>
+            <div class="s">
+              @if($sp['state'] === 'unassigned')
+                Ask HR to assign your shift — attendance scoring is paused until then.
+              @else
+                Nothing is expected from you today.
+              @endif
+            </div>
+          </div>
+          <dl class="pa-sp-stats muted">
+            <div><dt>Worked</dt><dd>—</dd></div>
+            <div><dt>Remaining</dt><dd>—</dd></div>
+            <div><dt>Expected</dt><dd>—</dd></div>
+          </dl>
+        </div>
+      @endif
+    </div>
+  </div>
+</div>
+
+<style>
+.pa-sp{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:18px;padding:17px 19px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.05)}
+.pa-sp-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.pa-sp-head h3{margin:0;font-size:14px;font-weight:800;color:var(--pa-ink)}
+.pa-sp-head .sub{margin-top:2px;font-size:11px;color:var(--pa-faint)}
+.pa-sp-ot{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;padding:4px 9px;border-radius:999px;background:#FFF7ED;color:#C2410C;white-space:nowrap}
+.pa-sp-body{margin-top:14px}
+.pa-sp-ring{position:relative;width:96px;height:96px;flex:0 0 auto}
+.pa-sp-svg{width:96px;height:96px;transform:rotate(-90deg)}
+.pa-sp-svg .track{color:var(--pa-border)}
+.pa-sp-svg .fill{color:var(--pa-accent);transition:stroke-dasharray .7s var(--pa-ease)}
+.pa-sp-pct{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:800;color:var(--pa-ink)}
+.pa-sp-body{display:flex;align-items:center;gap:22px;flex-wrap:wrap}
+.pa-sp-stats{display:flex;gap:26px;margin:0;flex:1;min-width:200px}
+.pa-sp-stats dt{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--pa-faint)}
+.pa-sp-stats dd{margin:3px 0 0;font-size:17px;font-weight:800;color:var(--pa-ink);font-variant-numeric:tabular-nums}
+.pa-sp-stats.muted dd{color:var(--pa-faint)}
+.pa-sp-empty{display:flex;align-items:center;gap:12px;flex-wrap:wrap;width:100%}
+.pa-sp-empty .t{font-size:13px;font-weight:800;color:var(--pa-ink)}
+.pa-sp-empty .s{margin-top:2px;font-size:11px;color:var(--pa-faint)}
+@media(max-width:640px){
+  .pa-sp-body{gap:16px}
+  .pa-sp-stats{gap:18px;min-width:0;width:100%}
+  .pa-sp-stats dd{font-size:15px}
+}
+</style>
+
+{{-- ============================================================
      Biometric Status
      The component already loads the device, today's engine summary
      and the recent sync history on every request; before this the
