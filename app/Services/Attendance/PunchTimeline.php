@@ -193,13 +193,27 @@ class PunchTimeline
                 // Face+Card re-verify of the same edge when the method differs).
                 if (! $opposite) {
                     if ($sameMethod) {
-                        // Rule 2 — a Face reader firing several times in a burst.
-                        // Keep the LATEST punch; the earlier reads are the echoes.
+                        // Rule 2 — one reader firing several times in a burst.
+                        //
+                        // Which edge is real depends on the direction. Somebody
+                        // arriving is at the door on the FIRST read; somebody
+                        // leaving is gone after the LAST. Keeping the latest
+                        // read unconditionally shortened every duplicated
+                        // arrival — a 09:00:00 / 09:00:05 pair started the day
+                        // at 09:00:05, and the employee silently lost that time
+                        // from their worked hours.
                         $duplicates++;
-                        $kept->pop();
-                        $flag[spl_object_id($prev)] = ['duplicate', 'Duplicate read — superseded by the '.$p->punched_at->format('h:i:s A').' punch'];
-                        $kept->push($p);
-                        $flag[spl_object_id($p)] = ['kept', null];
+                        $burstDir = $curDir ?? $prevDir;
+                        $keepLater = $burstDir === 'out';
+
+                        if ($keepLater) {
+                            $kept->pop();
+                            $flag[spl_object_id($prev)] = ['duplicate', 'Duplicate read — superseded by the '.$p->punched_at->format('h:i:s A').' punch'];
+                            $kept->push($p);
+                            $flag[spl_object_id($p)] = ['kept', null];
+                        } else {
+                            $flag[spl_object_id($p)] = ['duplicate', 'Duplicate read — merged into the '.$prev->punched_at->format('h:i:s A').' punch'];
+                        }
                     } else {
                         // A Face+Card / Face+Fingerprint re-verify of one edge —
                         // keep the first, merge the second in.

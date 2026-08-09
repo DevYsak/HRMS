@@ -25,6 +25,7 @@ use App\Notifications\RegularisationReviewedNotification;
 use App\Services\AiAssistant;
 use App\Services\Attendance\AttendanceCoach;
 use App\Services\Attendance\AttendanceScoreEngine;
+use App\Services\Attendance\PunchClassifier;
 use App\Services\Attendance\PunchTimeline as PunchTimelineEngine;
 use App\Services\Attendance\ShiftResolver;
 use App\Services\AttendanceService;
@@ -115,6 +116,18 @@ class AttendanceTracker extends Component
      * @var array<string, mixed>
      */
     public array $punchJourney = [];
+
+    /**
+     * Today's journey with break semantics applied — Clocked in, Lunch break,
+     * Returned from break, Clocked out.
+     *
+     * The neutral timeline deliberately emits only IN and OUT; this is the
+     * classified view the employee reads. Both come from the same deduplicated
+     * punches, so the journey and the session totals can never disagree.
+     *
+     * @var array<int, array<string, mixed>>
+     */
+    public array $attendanceJourney = [];
 
     /** Smart Attendance Alerts — missing check-in/out/break, past & present. */
     public array $attendanceAlerts = [];
@@ -356,6 +369,7 @@ class AttendanceTracker extends Component
         // 9. This-week summary + today's punch/break timeline
         $this->weekSummary = $this->buildWeekSummary($employee);
         $this->punchJourney = $this->buildPunchJourney($employee);
+        $this->attendanceJourney = $this->buildAttendanceJourney($employee);
         $this->loadStreakAndBenchmark($employee);
 
         // 10. Biometric daily summary + device (needed by the alerts below)
@@ -371,11 +385,14 @@ class AttendanceTracker extends Component
             ->whereNotNull('synced_at')
             ->orderByDesc('date')
             ->limit(5)
-            ->get(['date', 'synced_at', 'raw_punch_count'])
+            ->get(['date', 'synced_at', 'raw_punch_count', 'device_serial'])
             ->map(fn ($s) => [
                 'date' => $s->date->format('d M'),
                 'synced' => $s->synced_at->format('h:i A'),
                 'punches' => (int) $s->raw_punch_count,
+                // The engine stamps the serial of the reader that produced the
+                // day's punches; the biometric_devices row may hold none.
+                'serial' => $s->device_serial,
             ])->all();
 
         $this->attendanceAlerts = $this->buildAttendanceAlerts();
@@ -635,6 +652,29 @@ class AttendanceTracker extends Component
      * processing). Duplicates, device conflicts, session pairing, totals and
      * missing-punch flags all come from that one place.
      */
+    /**
+     * Today's punches as a classified journey.
+     *
+     * Runs the last two stages of the pipeline: the timeline normalises the
+     * raw stream into deduplicated IN/OUT events, then the classifier names
+     * the gaps between them. Reusing the timeline's output rather than
+     * re-reading the punches is what keeps this consistent with the session
+     * totals shown beside it.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected function buildAttendanceJourney($employee): array
+    {
+        $raw = AttendancePunch::where('employee_id', $employee->id)
+            ->whereDate('punch_date', Carbon::today()->toDateString())
+            ->orderBy('punched_at')
+            ->get();
+
+        return app(PunchClassifier::class)->enrich(
+            app(PunchTimelineEngine::class)->neutralEvents($raw),
+        );
+    }
+
     protected function buildPunchJourney($employee): array
     {
         $today = Carbon::today();

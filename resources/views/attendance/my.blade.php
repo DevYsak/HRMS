@@ -1350,6 +1350,114 @@
   </div>{{-- /pa-jgrid --}}
 </div>
 
+{{-- ============================================================
+     Biometric Status
+     The component already loads the device, today's engine summary
+     and the recent sync history on every request; before this the
+     view rendered none of it, so three queries ran per page load to
+     produce nothing an employee could see. It also answers the
+     question they actually ask when a punch looks wrong: did the
+     device reach the server, and when.
+     ============================================================ --}}
+<div class="pa pa-jsec">
+  <div class="pa-bio">
+    <div class="pa-bio-head">
+      <div>
+        <h3>Biometric Status</h3>
+        <div class="sub">{{ $biometricDevice?->name ?? 'No device registered' }}</div>
+      </div>
+      @php
+        $lastSync = $biometricDevice?->last_synced_at;
+        // Device Health tiers. "Offline" is the same 30-minute threshold the
+        // device_offline smart alert uses, so the badge and the alert can never
+        // tell the employee two different stories about the same device.
+        [$healthLabel, $healthTone] = match (true) {
+            ! $lastSync => ['Never Synced', 'warn'],
+            \Carbon\Carbon::parse($lastSync)->gt(now()->subMinutes(30)) => ['Online', 'ok'],
+            \Carbon\Carbon::parse($lastSync)->gt(now()->subHours(6)) => ['Delayed', 'warn'],
+            default => ['Offline', 'bad'],
+        };
+        // The serial the engine stamped on today's summary is what actually
+        // recorded these punches; the device row is only the fallback.
+        $deviceSerial = $todaySummary?->device_serial
+            ?: collect($syncHistory)->pluck('serial')->filter()->first()
+            ?: $biometricDevice?->serial_number;
+      @endphp
+      <div class="pa-bio-healthwrap">
+        <div class="lbl">Device Health</div>
+        <span class="pa-bio-health {{ $healthTone }}">{{ $healthLabel }}</span>
+      </div>
+    </div>
+
+    <div class="pa-bio-grid">
+      <div class="pa-bio-tile">
+        <div class="lbl">Punch Source</div>
+        <div class="val">
+          @if($todaySummary?->first_punch_method || $todaySummary?->last_punch_method)
+            @foreach(array_unique(array_filter([$todaySummary->first_punch_method, $todaySummary->last_punch_method])) as $m)
+              <span class="pa-bio-chip">{{ \App\Enums\PunchMethod::tryFrom($m)?->label() ?? \Illuminate\Support\Str::headline($m) }}</span>
+            @endforeach
+          @else
+            <span class="muted">No punches today</span>
+          @endif
+        </div>
+      </div>
+      <div class="pa-bio-tile">
+        <div class="lbl">Device Serial</div>
+        <div class="val mono">{{ $deviceSerial ?: '—' }}</div>
+      </div>
+      <div class="pa-bio-tile">
+        <div class="lbl">Last Sync</div>
+        <div class="val">{{ $lastSync ? \Carbon\Carbon::parse($lastSync)->diffForHumans() : '—' }}</div>
+      </div>
+      <div class="pa-bio-tile">
+        <div class="lbl">Punches Recorded</div>
+        <div class="val">{{ $todaySummary?->raw_punch_count ?? 0 }}</div>
+      </div>
+    </div>
+
+    @if(count($syncHistory))
+      <div class="pa-bio-hist">
+        <div class="lbl">Sync History</div>
+        <table>
+          <thead><tr><th>Date</th><th>Synced at</th><th class="r">Punches</th></tr></thead>
+          <tbody>
+            @foreach($syncHistory as $h)
+              <tr><td>{{ $h['date'] }}</td><td>{{ $h['synced'] }}</td><td class="r">{{ $h['punches'] }}</td></tr>
+            @endforeach
+          </tbody>
+        </table>
+      </div>
+    @endif
+  </div>
+</div>
+
+<style>
+.pa-bio{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:18px;padding:17px 19px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.05)}
+.pa-bio-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.pa-bio-head h3{margin:0;font-size:14px;font-weight:800;color:var(--pa-ink)}
+.pa-bio-head .sub{margin-top:2px;font-size:11px;color:var(--pa-faint)}
+.pa-bio-health{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;padding:4px 9px;border-radius:999px;white-space:nowrap}
+.pa-bio-health.ok{background:#ECFDF5;color:#047857}
+.pa-bio-health.warn{background:#FFF7ED;color:#C2410C}
+.pa-bio-health.bad{background:#FEF2F2;color:#B91C1C}
+.pa-bio-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px}
+@media(max-width:820px){.pa-bio-grid{grid-template-columns:repeat(2,1fr)}}
+.pa-bio-tile{background:var(--pa-bg);border-radius:12px;padding:10px 12px}
+.pa-bio-tile .lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--pa-faint)}
+.pa-bio-tile .val{margin-top:4px;font-size:13px;font-weight:700;color:var(--pa-ink);display:flex;flex-wrap:wrap;gap:4px}
+.pa-bio-tile .val.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
+.pa-bio-tile .muted{font-weight:500;color:var(--pa-faint)}
+.pa-bio-chip{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:999px;padding:2px 9px;font-size:11px;font-weight:700}
+.pa-bio-hist{margin-top:14px}
+.pa-bio-hist .lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--pa-faint);margin-bottom:6px}
+.pa-bio-hist table{width:100%;border-collapse:collapse;font-size:12px}
+.pa-bio-hist th{text-align:left;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--pa-faint);padding:5px 0;border-bottom:1px solid var(--pa-border)}
+.pa-bio-hist td{padding:6px 0;border-bottom:1px solid var(--pa-border);color:var(--pa-ink)}
+.pa-bio-hist tr:last-child td{border-bottom:0}
+.pa-bio-hist .r{text-align:right}
+</style>
+
 {{-- Working Hours Breakdown styles — the card now lives in the 3-column journey row above. --}}
 <style>
 .pa-hb{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:18px;padding:17px 19px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.05)}
