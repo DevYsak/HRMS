@@ -66,6 +66,57 @@
         :shiftName="$shiftName" :workedMinutes="$workedTodayMinutes" :quote="$quote"
         :designation="$designation" :department="$department" />
 
+    {{-- ═══════════ GET STARTED ═══════════ --}}
+    {{-- Both of these already existed but only on pages the employee had to go
+         looking for, so a new joiner never learned they had tasks waiting.
+         The strip disappears entirely once there is nothing outstanding. --}}
+    @php
+        $profilePercent = (int) ($profileCompletion['percent'] ?? 100);
+        $profileMissing = count($profileCompletion['missing'] ?? []);
+        $showGetStarted = $profilePercent < 100 || $myOnboardingOpen > 0;
+    @endphp
+
+    @if($showGetStarted)
+        <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+            @if($profilePercent < 100)
+                <a href="{{ route('profile.edit') }}" wire:navigate
+                   class="group flex items-center gap-4 rounded-2xl border border-orange-100 bg-white p-4 shadow-sm transition hover:border-orange-200 hover:shadow dark:border-white/5 dark:bg-zinc-900">
+                    <div class="relative grid size-12 shrink-0 place-items-center">
+                        <svg class="size-12 -rotate-90" viewBox="0 0 36 36">
+                            <circle cx="18" cy="18" r="15.9" fill="none" class="stroke-zinc-100 dark:stroke-zinc-800" stroke-width="4"></circle>
+                            <circle cx="18" cy="18" r="15.9" fill="none" stroke="#f97316" stroke-width="4" stroke-linecap="round"
+                                    stroke-dasharray="{{ $profilePercent }}, 100"></circle>
+                        </svg>
+                        <span class="absolute text-[10px] font-black text-zinc-900 dark:text-white">{{ $profilePercent }}%</span>
+                    </div>
+                    <div class="min-w-0 flex-1">
+                        <div class="text-sm font-black text-zinc-900 dark:text-white">Complete your profile</div>
+                        <div class="text-xs text-zinc-500 dark:text-zinc-400">
+                            {{ $profileMissing }} {{ \Illuminate\Support\Str::plural('field', $profileMissing) }} still to fill in.
+                        </div>
+                    </div>
+                    <flux:icon.chevron-right class="size-4 shrink-0 text-zinc-300 transition group-hover:translate-x-0.5 group-hover:text-orange-500" />
+                </a>
+            @endif
+
+            @if($myOnboardingOpen > 0)
+                <a href="{{ route('onboarding.my') }}" wire:navigate
+                   class="group flex items-center gap-4 rounded-2xl border border-orange-100 bg-white p-4 shadow-sm transition hover:border-orange-200 hover:shadow dark:border-white/5 dark:bg-zinc-900">
+                    <span class="flex size-12 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-orange-600 dark:bg-orange-900/20">
+                        <flux:icon.clipboard-document-check class="size-6" />
+                    </span>
+                    <div class="min-w-0 flex-1">
+                        <div class="text-sm font-black text-zinc-900 dark:text-white">Finish your onboarding</div>
+                        <div class="text-xs text-zinc-500 dark:text-zinc-400">
+                            {{ $myOnboardingOpen }} {{ \Illuminate\Support\Str::plural('task', $myOnboardingOpen) }} waiting for you.
+                        </div>
+                    </div>
+                    <flux:icon.chevron-right class="size-4 shrink-0 text-zinc-300 transition group-hover:translate-x-0.5 group-hover:text-orange-500" />
+                </a>
+            @endif
+        </div>
+    @endif
+
     {{-- ═══════════ KPI ROW ═══════════ --}}
     <div class="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-8">
         <x-employee.kpi-card label="Today" :value="$statusLabel" :tone="$statusTone" icon="check-badge" :sub="$todayAttendance?->check_in?->format('h:i A') ?? 'Not clocked in'" />

@@ -43,6 +43,23 @@ class WfhService
         ]);
     }
 
+    /**
+     * Whether an approved work-from-home request covers this date.
+     *
+     * Approval used to change nothing but a status column: an employee with an
+     * approved request could still punch in as "office", and an employee with
+     * no request at all could pick "wfh" from a dropdown. The approval and the
+     * attendance record had no connection, so neither could be trusted.
+     */
+    public function isApprovedFor(Employee $employee, Carbon $date): bool
+    {
+        return $employee->wfhRequests()
+            ->where('status', 'approved')
+            ->whereDate('start_date', '<=', $date->toDateString())
+            ->whereDate('end_date', '>=', $date->toDateString())
+            ->exists();
+    }
+
     public function approve(WfhRequest $request, int $reviewerId, ?string $comment = null): void
     {
         if (! $request->isPending()) {

@@ -1,6 +1,7 @@
 <?php
 
 use App\Concerns\PasswordValidationRules;
+use App\Services\PasswordService;
 use Flux\Flux;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
@@ -57,9 +58,22 @@ new #[Title('Security settings')] class extends Component {
             throw $e;
         }
 
-        Auth::user()->update([
-            'password' => $validated['password'],
-        ]);
+        try {
+            // Through the service so history, the reuse policy, the temporary
+            // -password flag and the changed-at stamp are applied here exactly
+            // as they are everywhere else.
+            app(PasswordService::class)->changePassword(Auth::user(), $validated['password'], Auth::user());
+        } catch (ValidationException $e) {
+            $this->reset('current_password', 'password', 'password_confirmation');
+
+            throw $e;
+        }
+
+        // Other browsers still hold a session issued against the old password.
+        // Leaving them signed in defeats the reason most people change one.
+        if (config('security.logout_other_devices_on_password_change')) {
+            Auth::logoutOtherDevices($validated['password']);
+        }
 
         $this->reset('current_password', 'password', 'password_confirmation');
 

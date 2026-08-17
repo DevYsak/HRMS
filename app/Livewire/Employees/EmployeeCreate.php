@@ -251,6 +251,9 @@ class EmployeeCreate extends Component
             'name' => $this->name,
             'email' => $this->email,
             'password' => Hash::make($plainPassword),
+            // Issued on their behalf and delivered by email, so it is a shared
+            // secret until they replace it.
+            'must_change_password' => true,
             'role' => $chosenRole->legacyBucket(),
             'role_id' => $chosenRole->id,
         ]);

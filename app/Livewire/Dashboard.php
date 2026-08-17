@@ -16,6 +16,7 @@ use App\Models\EmployeeScorecard;
 use App\Models\LeaveBalance;
 use App\Models\LeaveEncashment;
 use App\Models\LeaveRequest;
+use App\Models\OnboardingTask;
 use App\Models\OtRequest;
 use App\Models\Payroll;
 use App\Models\Payslip;
@@ -23,8 +24,11 @@ use App\Models\PerformanceCycle;
 use App\Models\PerformanceReview;
 use App\Models\PipRecord;
 use App\Models\PromotionRecommendation;
-use App\Models\PublicHoliday;
 use App\Models\WarningLetter;
+use App\Services\Attendance\HolidayResolver;
+use App\Services\Attendance\ShiftResolver;
+use App\Services\AttendanceService;
+use App\Services\Profile\ProfileCompletionService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
@@ -356,6 +360,106 @@ class Dashboard extends Component
         return app(ExecutiveDashboard::class)->render();
     }
 
+    /**
+     * Clock in from the dashboard.
+     *
+     * The button here has always been a link to the attendance page, so the
+     * most common action in the product took two screens. It now punches
+     * directly — through AttendanceService, the same call the attendance page
+     * makes. No second engine: lateness, shift resolution and comp-off all stay
+     * where they are.
+     *
+     * The exception is capture policy. When HR requires a selfie or a location
+     * fix, the dashboard has no camera or geolocation prompt, and punching
+     * without them would quietly defeat the control. Those employees are handed
+     * to the attendance page, which does have the capture UI.
+     */
+    public function clockIn(?float $lat = null, ?float $lng = null): void
+    {
+        $employee = Auth::user()?->employee;
+
+        if (! $employee) {
+            \Flux::toast('No employee profile found. Contact HR.', variant: 'danger');
+
+            return;
+        }
+
+        if ($this->punchNeedsCapture($lat, $lng)) {
+            $this->redirect(route('attendance.my'), navigate: true);
+
+            return;
+        }
+
+        // Already punched in today — do nothing rather than open a second day.
+        if ($this->todayAttendanceFor($employee)) {
+            return;
+        }
+
+        app(AttendanceService::class)->checkIn(
+            $employee,
+            $employee->shift ?? ShiftResolver::companyDefault(),
+            ['ip' => request()->ip(), 'lat' => $lat, 'lng' => $lng],
+        );
+
+        \Flux::toast('Clocked in successfully.');
+    }
+
+    /** Clock out from the dashboard. Mirrors clockIn(); see its note. */
+    public function clockOut(?float $lat = null, ?float $lng = null): void
+    {
+        $employee = Auth::user()?->employee;
+
+        if (! $employee) {
+            \Flux::toast('No employee profile found. Contact HR.', variant: 'danger');
+
+            return;
+        }
+
+        if ($this->punchNeedsCapture($lat, $lng)) {
+            $this->redirect(route('attendance.my'), navigate: true);
+
+            return;
+        }
+
+        $attendance = $this->todayAttendanceFor($employee);
+
+        if (! $attendance || $attendance->check_out) {
+            return;
+        }
+
+        app(AttendanceService::class)->checkOut($attendance, ['ip' => request()->ip(), 'lat' => $lat, 'lng' => $lng]);
+
+        \Flux::toast('Clocked out successfully. Good work today!');
+    }
+
+    /**
+     * Whether HR requires evidence this screen cannot supply.
+     *
+     * The dashboard button asks the browser for a location, so a location
+     * requirement is satisfiable here — but only if the browser actually
+     * returned one. A selfie is not: the camera modal lives on the attendance
+     * page, and punching without the photo would defeat the control rather
+     * than enforce it. Either way the employee is handed to that page, which
+     * can collect what is missing.
+     */
+    private function punchNeedsCapture(?float $lat, ?float $lng): bool
+    {
+        $settings = AttendanceSetting::first();
+
+        if ($settings?->requires_photo) {
+            return true;
+        }
+
+        return (bool) $settings?->requires_location && ($lat === null || $lng === null);
+    }
+
+    private function todayAttendanceFor(Employee $employee): ?Attendance
+    {
+        return Attendance::where('employee_id', $employee->id)
+            ->whereDate('date', Carbon::today()->toDateString())
+            ->first();
+    }
+
     private function renderEmployee()
     {
         $user = Auth::user();
@@ -367,9 +471,13 @@ class Dashboard extends Component
             ? Attendance::where('employee_id', $employee->id)->where('date', $today)->first()
             : null;
 
-        // Leave balances (using allocated_days / used_days from schema)
+        // Leave balances (using allocated_days / used_days from schema).
+        // A plain integer comparison: leave_balances.year is a smallint holding
+        // 2026, not a date. whereYear() compiled to YEAR(year), and YEAR(2026)
+        // is NULL in MySQL, so this matched nothing and every employee saw a
+        // zero balance — worse than no data, because it looked authoritative.
         $leaveBalances = $employee
-            ? LeaveBalance::with('leaveType')->where('employee_id', $employee->id)->whereYear('year', now()->year)->get()
+            ? LeaveBalance::with('leaveType')->where('employee_id', $employee->id)->where('year', now()->year)->get()
             : collect();
 
         // My pending OT requests
@@ -398,10 +506,12 @@ class Dashboard extends Component
                 ->get()
             : collect();
 
-        // Next Public Holiday
-        $nextPublicHoliday = PublicHoliday::where('date', '>=', $today)
-            ->orderBy('date', 'asc')
-            ->first();
+        // Next Public Holiday — on this employee's own calendar. Asking without
+        // a country showed India staff the next UK bank holiday whenever it
+        // happened to fall first, and it also ignored is_active, so archived
+        // holidays could win.
+        $holidays = app(HolidayResolver::class);
+        $nextPublicHoliday = $holidays->nextHoliday($employee, $today);
 
         // Pending Actions (Documents to Acknowledge, Reviews Due)
         $pendingActions = collect();
@@ -470,9 +580,14 @@ class Dashboard extends Component
         $presentDays = $monthAttendance->whereNotNull('check_in')->count();
         $lateCount = $monthAttendance->where('is_late', true)->count();
 
+        // isWeekend() is Carbon's Sat+Sun, not the company's configured week.
+        // An office on a Sun-only week lost every Saturday from the denominator
+        // (attendance % overstated); one on a 5-day week counted holidays as
+        // working days (understated). AttendanceSetting::isWeeklyOff is the
+        // same rule the score engine and the muster report use.
         $workingDaysElapsed = 0;
         for ($d = $monthStart->copy(); $d->lte($today); $d = $d->addDay()) {
-            if (! $d->isWeekend()) {
+            if (! AttendanceSetting::isWeeklyOff($d) && ! $holidays->isHoliday($employee, $d)) {
                 $workingDaysElapsed++;
             }
         }
@@ -524,8 +639,27 @@ class Dashboard extends Component
         $performanceScore = $myScorecard?->final_score;
         $performanceGrade = $myScorecard?->grade;
 
+        // ── Getting started ────────────────────────────────────────────────
+        // Profile completeness and onboarding progress both existed but were
+        // only visible on pages an employee had to go looking for. A new joiner
+        // had no way to learn they had eight tasks waiting.
+        $profileCompletion = $employee
+            ? app(ProfileCompletionService::class)->for($employee)
+            : ['percent' => 100, 'missing' => [], 'completed' => 0, 'total' => 0];
+
+        $onboardingTasks = $employee
+            ? OnboardingTask::where('employee_id', $employee->id)->onboarding()->get()
+            : collect();
+
+        $myOnboardingOpen = $onboardingTasks
+            ->where('owner_role', 'employee')
+            ->where('is_completed', false)
+            ->count();
+
         // ── Upcoming holidays (next 4) ─────────────────────────────────────
-        $upcomingHolidays = PublicHoliday::where('date', '>=', $today)->orderBy('date')->take(4)->get();
+        // Same calendar as $nextPublicHoliday above — they read from one query
+        // now, so the "next holiday" card and this list cannot disagree.
+        $upcomingHolidays = $holidays->upcomingHolidays($employee, 4, $today);
 
         // Quote of the day (rotates daily)
         $quotes = [
@@ -570,6 +704,8 @@ class Dashboard extends Component
             'performanceScore',
             'performanceGrade',
             'upcomingHolidays',
+            'profileCompletion',
+            'myOnboardingOpen',
             'quote',
         ))->layout('layouts.app', ['title' => 'My Dashboard']);
     }

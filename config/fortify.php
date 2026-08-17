@@ -144,7 +144,14 @@ return [
     */
 
     'features' => [
-        Features::registration(),
+        // Registration is deliberately absent. Pulse is an internal HRMS where
+        // every account belongs to an employee HR has onboarded, so there is no
+        // legitimate self-signup. While it was enabled, an anonymous visitor
+        // could POST /register and land on the dashboard with the default
+        // 'employee' role and no employee record — email verification is not
+        // enabled here, so nothing stood in the way.
+        // Accounts are created via Employees > Add Employee (EmployeeCreate).
+        // Features::registration(),
         Features::resetPasswords(),
         // Features::emailVerification(), // Internal HRMS — email verification not required
         Features::twoFactorAuthentication([

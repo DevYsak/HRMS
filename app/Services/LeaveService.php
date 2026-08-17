@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\EmployeeStatus;
+use App\Models\AttendanceSetting;
 use App\Models\Employee;
 use App\Models\LeaveAccrualLog;
 use App\Models\LeaveBalance;
@@ -215,14 +216,18 @@ class LeaveService
             throw new \DomainException("'{$leaveType->name}' is not available during notice period.");
         }
 
-        // Weekend block — Saturdays and Sundays are non-working days and can't
-        // be picked as leave. Weekends that merely fall inside a longer range
-        // (e.g. a Fri→Mon leave) are fine — they're simply not counted.
-        if ($start->isWeekend()) {
-            throw new \DomainException($start->format('l, d M Y').' is a weekend (non-working day) — please pick a working day as your start date.');
+        // Weekly-off block — a non-working day can't be picked as the start or
+        // end of leave. Offs that merely fall inside a longer range (e.g. a
+        // Fri→Mon leave) are fine — they're simply not counted.
+        //
+        // Uses the configured week, not Carbon's isWeekend(). Under a
+        // Sunday-only week that hardcoded Sat+Sun and refused leave starting on
+        // a Saturday the company actually works.
+        if (AttendanceSetting::isWeeklyOff($start)) {
+            throw new \DomainException($start->format('l, d M Y').' is a non-working day — please pick a working day as your start date.');
         }
-        if ($end->isWeekend()) {
-            throw new \DomainException($end->format('l, d M Y').' is a weekend (non-working day) — please pick a working day as your end date.');
+        if (AttendanceSetting::isWeeklyOff($end)) {
+            throw new \DomainException($end->format('l, d M Y').' is a non-working day — please pick a working day as your end date.');
         }
 
         // Company holiday block — leave cannot include a holiday that applies

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\HolidayType;
+use App\Services\Attendance\HolidayResolver;
 use Database\Factories\PublicHolidayFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -135,16 +136,14 @@ class PublicHoliday extends Model
     }
 
     /**
-     * Whether the given date is a holiday that applies to a specific employee
-     * (respects branch/department/employee scope). Used by leave-date blocking.
+     * Whether the given date is a holiday that applies to a specific employee.
+     *
+     * Delegates to HolidayResolver, which adds the employee's calendar to the
+     * branch/department/employee scope this used to check on its own. Without
+     * the country test, a UK bank holiday blocked an India employee's leave.
      */
     public static function holidayForEmployeeOn(Carbon $date, Employee $employee): ?self
     {
-        return static::query()
-            ->active()
-            ->where('date', $date->toDateString())
-            ->forEmployee($employee)
-            ->get()
-            ->first(fn (self $h) => $h->appliesToEmployee($employee));
+        return app(HolidayResolver::class)->forEmployeeOn($employee, $date);
     }
 }

@@ -9,7 +9,6 @@ use App\Models\AttendanceScoreSetting;
 use App\Models\AttendanceSetting;
 use App\Models\Employee;
 use App\Models\LeaveRequest;
-use App\Models\PublicHoliday;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
 
@@ -33,6 +32,7 @@ class AttendanceScoreEngine
     public function __construct(
         protected ShiftResolver $shifts,
         protected PunchTimeline $timeline,
+        protected HolidayResolver $holidays,
     ) {}
 
     /**
@@ -55,7 +55,9 @@ class AttendanceScoreEngine
             ->where('start_date', '<=', $day->toDateString())
             ->where('end_date', '>=', $day->toDateString())
             ->exists();
-        $isHoliday = PublicHoliday::whereDate('date', $day->toDateString())->exists();
+        // Whose holiday? This asked "is it a holiday for anyone", so a UK bank
+        // holiday excused an India employee's absence and vice versa.
+        $isHoliday = $this->holidays->isHoliday($employee, $day);
         $isOffDay = $onLeave || $isHoliday || AttendanceSetting::isWeeklyOff($day);
 
         if (! $attendance || ! $attendance->check_in) {

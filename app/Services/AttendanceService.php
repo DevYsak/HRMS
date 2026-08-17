@@ -13,6 +13,7 @@ use App\Models\PublicHoliday;
 use App\Models\ShiftSetting;
 use App\Models\User;
 use App\Services\Attendance\AttendanceScoreEngine;
+use App\Services\Attendance\HolidayResolver;
 use App\Services\Attendance\ResolvedShift;
 use App\Services\Attendance\ShiftResolver;
 use Illuminate\Support\Carbon;
@@ -506,18 +507,13 @@ class AttendanceService
         app(LeaveService::class)->creditCompOff($employee, $date);
     }
 
+    /**
+     * Delegates to HolidayResolver, which is now the single home for the
+     * country rule. Kept as a thin method so existing callers here read the
+     * same as before.
+     */
     protected function resolveHolidayCountry(Employee $employee): string
     {
-        $officeCountry = strtoupper((string) ($employee->office?->country ?? ''));
-        if (in_array($officeCountry, ['UK', 'UNITED KINGDOM', 'GB', 'GREAT BRITAIN'], true)) {
-            return 'UK';
-        }
-
-        $shiftName = strtoupper((string) ($employee->shift?->name ?? ''));
-        if (str_contains($shiftName, 'UK')) {
-            return 'UK';
-        }
-
-        return 'IN';
+        return app(HolidayResolver::class)->resolveCountry($employee);
     }
 }

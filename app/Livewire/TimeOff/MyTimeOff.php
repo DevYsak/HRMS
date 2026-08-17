@@ -14,6 +14,7 @@ use App\Models\PublicHoliday;
 use App\Models\User;
 use App\Models\WfhRequest;
 use App\Notifications\LeaveEncashmentNotification;
+use App\Services\Attendance\HolidayResolver;
 use App\Services\HolidayWorkService;
 use App\Services\LeaveService;
 use Carbon\Carbon;
@@ -794,10 +795,9 @@ class MyTimeOff extends Component
         }
 
         // ── Holiday planner: upcoming public holidays + December mandatory days ──
-        $upcomingHolidays = PublicHoliday::whereDate('date', '>=', now()->toDateString())
-            ->orderBy('date')
-            ->limit(8)
-            ->get();
+        // The employee's own calendar and scope. This listed every holiday in
+        // the system, so India staff planned around UK bank holidays.
+        $upcomingHolidays = app(HolidayResolver::class)->upcomingHolidays($employee, 8);
         $mandatoryDays = DecemberMandatoryDay::where('year', now()->year)
             ->orderBy('date')
             ->get();

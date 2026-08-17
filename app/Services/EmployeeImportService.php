@@ -466,6 +466,11 @@ class EmployeeImportService
                         'name' => $row['data']['name'],
                         'email' => $row['data']['email'],
                         'password' => Hash::make($plain),
+                        // Whether generated or supplied in the sheet, this
+                        // password has been handled by someone other than its
+                        // owner. A sheet-supplied one is often the same value
+                        // down the whole column, so the flag matters most there.
+                        'must_change_password' => true,
                         'role' => $row['data']['role'],
                     ]);
                     $passwords->recordHistory($user, $user->password, $actor);
@@ -537,9 +542,15 @@ class EmployeeImportService
 
         // The email is updatable now that rows match on Employee ID — this is
         // how HR replaces a generated stand-in address with the real one.
+        //
+        // Role is deliberately NOT updated. A spreadsheet is the wrong place to
+        // grant or revoke privileges: a stale or mistyped column could promote
+        // someone to HR, or demote a director, with no approval step and no
+        // visible trace. Role changes belong to the employee edit screen, which
+        // is permission-gated and audit-logged. The password is likewise never
+        // touched here — an import must not invalidate a working login.
         $user->update([
             'name' => $data['name'],
-            'role' => $data['role'],
             'email' => $data['email'],
         ]);
 

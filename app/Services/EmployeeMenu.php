@@ -28,6 +28,7 @@ class EmployeeMenu
         ['key' => 'performance', 'label' => 'Performance', 'icon' => 'arrow-trending-up', 'type' => 'group'],
         ['key' => 'development', 'label' => 'Development', 'icon' => 'academic-cap', 'type' => 'group'],
         ['key' => 'payroll', 'label' => 'Payroll', 'icon' => 'banknotes', 'type' => 'group'],
+        ['key' => 'onboarding', 'label' => 'My Onboarding', 'icon' => 'clipboard-document-check', 'type' => 'item', 'route' => 'onboarding.my', 'active' => 'onboarding.my'],
         ['key' => 'documents', 'label' => 'Documents', 'icon' => 'document-text', 'type' => 'item', 'route' => 'documents.index', 'active' => 'documents.*', 'badge' => 'documents'],
         ['key' => 'inbox', 'label' => 'Inbox', 'icon' => 'inbox', 'type' => 'item', 'route' => 'notifications.index', 'active' => 'notifications.*', 'badge' => 'inbox'],
     ];

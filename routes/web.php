@@ -35,6 +35,7 @@ use App\Livewire\FinanceDashboard;
 use App\Livewire\HrAdminDashboard;
 use App\Livewire\ManagerDashboard;
 use App\Livewire\NotificationsPage;
+use App\Livewire\Onboarding\MyOnboarding;
 use App\Livewire\Onboarding\OffboardingChecklist;
 use App\Livewire\Onboarding\OffboardingManager;
 use App\Livewire\Onboarding\OnboardingChecklist;
@@ -128,7 +129,13 @@ Route::get('/payslips/{payslip}/verify', [PayslipController::class, 'verify'])
 // ======================================================
 // Authenticated + Email Verified routes
 // ======================================================
-Route::middleware(['auth', 'verified'])->group(function () {
+// 'verified' was applied here but never did anything: it only blocks users
+// whose model implements MustVerifyEmail, and User deliberately does not —
+// Pulse accounts are created by HR against known work addresses, so there is
+// nobody to verify an address to. Leaving the middleware in place implied a
+// control that did not exist. Accounts are gated by HR creation and by
+// CheckActiveEmployee instead.
+Route::middleware(['auth'])->group(function () {
 
     // Dashboard
     Route::get('/', Dashboard::class)->name('dashboard');
@@ -223,6 +230,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/manage', ManageOtRequests::class)->name('manage')->middleware('role:approve-ot');
         Route::get('/nexflow', NexflowOtPanel::class)->name('nexflow')->middleware('role:approve-ot');
     });
+
+    // --------------------------------------------------
+    // My Onboarding — the employee's own checklist.
+    //
+    // Deliberately outside the employees/* group: every onboarding screen sat
+    // behind role:manage-employees, so new joiners were assigned tasks they
+    // could not see. This one is scoped to the signed-in employee's own
+    // records, so it needs no extra role.
+    // --------------------------------------------------
+    Route::get('/my-onboarding', MyOnboarding::class)->name('onboarding.my');
 
     // --------------------------------------------------
     // Work From Home module

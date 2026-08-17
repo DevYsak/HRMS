@@ -7,8 +7,11 @@ use App\Actions\Fortify\ResetUserPassword;
 use App\Http\Responses\LoginResponse;
 use App\Http\Responses\RegisterResponse;
 use App\Http\Responses\TwoFactorLoginResponse;
+use App\Models\User;
+use Illuminate\Auth\Events\Login;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
@@ -37,6 +40,28 @@ class FortifyServiceProvider extends ServiceProvider
         $this->configureActions();
         $this->configureViews();
         $this->configureRateLimiting();
+        $this->recordLogins();
+    }
+
+    /**
+     * Stamp last_login_at on every successful sign-in.
+     *
+     * Without it there is no way to tell a dormant account from an active one,
+     * which is the first question asked when reviewing who still needs access.
+     * Written without touching updated_at so it does not masquerade as a
+     * profile edit in the audit trail.
+     */
+    private function recordLogins(): void
+    {
+        Event::listen(Login::class, function (Login $event): void {
+            $user = $event->user;
+
+            if ($user instanceof User) {
+                $user->timestamps = false;
+                $user->forceFill(['last_login_at' => now()])->save();
+                $user->timestamps = true;
+            }
+        });
     }
 
     /**

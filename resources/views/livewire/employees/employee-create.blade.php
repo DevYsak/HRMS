@@ -26,9 +26,10 @@
                     @endforeach
                 </flux:select>
             </div>
-            <p class="text-xs text-zinc-500">Default password: <kbd
-                    class="font-mono bg-zinc-100 px-1 rounded dark:bg-zinc-800">Password@123</kbd> — employee should
-                change on first login.</p>
+            {{-- No default password is published here any more. One is
+                 generated per account and shown once after saving. --}}
+            <p class="text-xs text-zinc-500">A unique temporary password is generated on save, shown to you once, and
+                emailed to the employee. They must set their own password when they first sign in.</p>
         </div>
 
         {{-- Section 2: Personal Profile (Spec §3.1) --}}

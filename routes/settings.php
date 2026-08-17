@@ -12,7 +12,8 @@ Route::middleware(['auth'])->group(function () {
     Route::livewire('settings/profile', 'pages::settings.profile')->name('profile.edit');
 });
 
-Route::middleware(['auth', 'verified'])->group(function () {
+// See routes/web.php — 'verified' is inert here for the same reason.
+Route::middleware(['auth'])->group(function () {
     Route::livewire('settings/appearance', 'pages::settings.appearance')->name('appearance.edit');
     Route::livewire('settings/preferences', 'pages::settings.preferences')->name('settings.preferences');
 

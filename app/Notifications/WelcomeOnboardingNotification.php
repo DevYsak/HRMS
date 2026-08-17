@@ -26,7 +26,7 @@ class WelcomeOnboardingNotification extends Notification
             'title' => 'Welcome to the Team!',
             'body' => "Welcome aboard! Your account is ready. Your joining date is {$joining}. Please complete your profile and review your onboarding tasks.",
             'action' => 'Get Started',
-            'url' => '/dashboard',
+            'url' => route('dashboard', absolute: false),
             'icon' => 'hand-raised',
             'color' => 'green',
         ];

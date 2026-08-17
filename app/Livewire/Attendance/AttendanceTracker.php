@@ -15,7 +15,6 @@ use App\Models\BreakLog;
 use App\Models\Employee;
 use App\Models\LeaveBalance;
 use App\Models\LeaveRequest;
-use App\Models\PublicHoliday;
 use App\Models\ShiftSetting;
 use App\Models\Task;
 use App\Models\User;
@@ -25,11 +24,13 @@ use App\Notifications\RegularisationReviewedNotification;
 use App\Services\AiAssistant;
 use App\Services\Attendance\AttendanceCoach;
 use App\Services\Attendance\AttendanceScoreEngine;
+use App\Services\Attendance\HolidayResolver;
 use App\Services\Attendance\PunchClassifier;
 use App\Services\Attendance\PunchTimeline as PunchTimelineEngine;
 use App\Services\Attendance\ShiftProgress;
 use App\Services\Attendance\ShiftResolver;
 use App\Services\AttendanceService;
+use App\Services\WfhService;
 use App\Support\UserAgent;
 use Carbon\CarbonPeriod;
 use Illuminate\Support\Carbon;
@@ -301,12 +302,11 @@ class AttendanceTracker extends Component
             ->where('end_date', '>=', $gridStart->toDateString())
             ->get();
 
-        $holidays = PublicHoliday::whereBetween('date', [$gridStart->toDateString(), $gridEnd->toDateString()])
-            ->get();
+        // This employee's calendar and scope, not "any holiday for anyone".
+        $holidayMap = app(HolidayResolver::class)->keyedForEmployee($employee, $gridStart, $gridEnd);
 
         // 3. Process data in memory
         $attendanceMap = $allAttendances->keyBy(fn ($a) => $a->date->toDateString());
-        $holidayMap = $holidays->keyBy(fn ($h) => Carbon::parse($h->date)->toDateString());
 
         $leaveMap = [];
         foreach ($leaves as $l) {
@@ -362,7 +362,7 @@ class AttendanceTracker extends Component
         }
 
         // 7. Load UI specific lists
-        $this->monthHolidays = $holidays->filter(fn ($h) => Carbon::parse($h->date)->month === $start->month &&
+        $this->monthHolidays = $holidayMap->filter(fn ($h) => Carbon::parse($h->date)->month === $start->month &&
             Carbon::parse($h->date)->year === $start->year
         )->values();
 
@@ -617,8 +617,7 @@ class AttendanceTracker extends Component
             }
         }
 
-        $holidayDays = PublicHoliday::whereBetween('date', [$weekStart->toDateString(), $weekEnd->toDateString()])
-            ->get()->keyBy(fn ($h) => Carbon::parse($h->date)->toDateString());
+        $holidayDays = app(HolidayResolver::class)->keyedForEmployee($employee, $weekStart, $weekEnd);
 
         $summary = [];
         foreach (CarbonPeriod::create($weekStart, $weekEnd) as $d) {
@@ -740,7 +739,7 @@ class AttendanceTracker extends Component
             return 'On leave';
         }
 
-        return PublicHoliday::whereDate('date', $day->toDateString())->exists()
+        return app(HolidayResolver::class)->isHoliday($employee, $day)
             ? 'Public holiday'
             : null;
     }
@@ -1213,11 +1212,11 @@ class AttendanceTracker extends Component
             ->where('end_date', '>=', $start->toDateString())
             ->get();
 
-        $holidays = PublicHoliday::whereBetween('date', [$start->toDateString(), $end->toDateString()])->get();
+        $holidayDates = app(HolidayResolver::class)->keyedForEmployee($employee, $start, $end);
 
         // Build lookup maps
         $attendanceDates = $attendances->keyBy(fn ($a) => $a->date->toDateString());
-        $holidayDates = $holidays->keyBy(fn ($h) => Carbon::parse($h->date)->toDateString());
+
         $leaveMap = [];
         foreach ($leaves as $l) {
             $lPeriod = CarbonPeriod::create($l->start_date, $l->end_date);
@@ -1673,6 +1672,15 @@ class AttendanceTracker extends Component
 
         if ($this->attendanceSettings?->requires_photo && ! $photo) {
             \Flux::toast('A selfie is required to clock in — please capture a photo and try again.', variant: 'danger');
+
+            return;
+        }
+
+        // Working from home is an approved arrangement, not a dropdown choice.
+        // Recording it unapproved made the WFH request meaningless: the day was
+        // logged as remote whether or not anyone had agreed to it.
+        if ($this->workMode === 'wfh' && ! app(WfhService::class)->isApprovedFor($employee, Carbon::today())) {
+            \Flux::toast('You have no approved work-from-home request for today. Submit one under Work From Home, or clock in with a different work mode.', variant: 'danger');
 
             return;
         }
