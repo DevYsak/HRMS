@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Storage;
 
 #[Fillable([
     'name', 'logo', 'favicon', 'website', 'industry', 'phone', 'email',
-    'address', 'address_line2', 'cin', 'city', 'country', 'default_state_code', 'timezone', 'date_format',
+    'address', 'address_line2', 'cin', 'city', 'country', 'holiday_calendar', 'default_state_code', 'timezone', 'date_format',
     'currency', 'currency_symbol', 'primary_color', 'secondary_color',
 ])]
 class Company extends Model

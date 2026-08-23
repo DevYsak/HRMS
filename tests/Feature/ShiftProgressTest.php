@@ -49,8 +49,11 @@ function spEmployee(?ShiftSetting $shift): Employee
 {
     $user = User::factory()->create(['role' => UserRole::Employee]);
 
+    // Calendar stated explicitly: the company default is UK now, and the
+    // holiday fixtures in this file are on the India calendar.
     return Employee::factory()->create([
         'user_id' => $user->id, 'status' => 'active', 'shift_id' => $shift?->id,
+        'holiday_calendar' => 'IN',
     ]);
 }
 

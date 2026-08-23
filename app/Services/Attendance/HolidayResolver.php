@@ -8,6 +8,7 @@ use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * The one place that answers "is this a holiday for this person?".
@@ -35,35 +36,51 @@ use Illuminate\Support\Collection;
  */
 class HolidayResolver
 {
-    /** Office country values that mean the UK calendar. */
-    private const UK_COUNTRIES = ['UK', 'UNITED KINGDOM', 'GB', 'GREAT BRITAIN'];
-
-    public const DEFAULT_COUNTRY = 'IN';
+    /**
+     * Last-resort calendar, used only when there is no company record at all.
+     * Every real environment answers from `companies.holiday_calendar`.
+     */
+    public const FALLBACK_CALENDAR = 'IN';
 
     /**
      * The holiday calendar an employee follows.
      *
-     * Office country first, since that is the deliberate setting. The shift
-     * name is a fallback for employees whose office is unset but who work the
-     * UK Sales window — imperfect, but it is the existing rule and changing it
-     * would silently move people between calendars.
+     * Explicit settings only, most specific first:
+     *
+     *   1. the employee's own override
+     *   2. the office they sit in, if that office names a calendar
+     *   3. the company default
+     *
+     * This used to read the employee's SHIFT NAME and treat "contains UK" as
+     * meaning the UK calendar. Conexus's UK Operations shift is called
+     * "1PM to 10PM", so every UK employee was quietly given Indian public
+     * holidays — and had their attendance scored against the wrong working
+     * days. Naming coincidences are not configuration.
+     *
+     * `offices.country` is deliberately not consulted either. Where a desk is
+     * does not determine what the contract owes: a UK-policy company with staff
+     * in Bangalore still gives them UK bank holidays. Reading an address as if
+     * it were a policy is the same mistake in a different field.
      */
     public function resolveCountry(?Employee $employee): string
     {
-        if (! $employee) {
-            return self::DEFAULT_COUNTRY;
-        }
+        return strtoupper(
+            $employee?->holiday_calendar
+                ?: $employee?->office?->holiday_calendar
+                ?: $this->companyCalendar()
+        );
+    }
 
-        $officeCountry = strtoupper((string) ($employee->office?->country ?? ''));
-        if (in_array($officeCountry, self::UK_COUNTRIES, true)) {
-            return 'UK';
-        }
-
-        if (str_contains(strtoupper((string) ($employee->shift?->name ?? '')), 'UK')) {
-            return 'UK';
-        }
-
-        return self::DEFAULT_COUNTRY;
+    /**
+     * The company-wide default, memoised for the request.
+     *
+     * Read straight from the table rather than through the model so this stays
+     * usable mid-migration, and so a missing companies row is a quiet fallback
+     * rather than a fatal error on every attendance calculation.
+     */
+    private function companyCalendar(): string
+    {
+        return once(fn (): string => DB::table('companies')->value('holiday_calendar') ?: self::FALLBACK_CALENDAR);
     }
 
     /**

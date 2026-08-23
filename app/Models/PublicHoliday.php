@@ -20,7 +20,7 @@ use Illuminate\Support\Carbon;
  * attendance/leave/report consumer keep working unchanged.
  */
 #[Fillable([
-    'date', 'name', 'country', 'holiday_type', 'category', 'color', 'description',
+    'date', 'name', 'country', 'jurisdiction', 'holiday_type', 'category', 'color', 'description', 'source',
     'is_paid', 'is_optional', 'is_recurring', 'is_active',
     'office_id', 'department_id', 'applicable_employee_ids', 'created_by',
 ])]

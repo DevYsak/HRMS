@@ -4,6 +4,7 @@ use App\Enums\UserRole;
 use App\Livewire\Dashboard;
 use App\Models\Attendance;
 use App\Models\AttendanceSetting;
+use App\Models\Company;
 use App\Models\Employee;
 use App\Models\LeaveBalance;
 use App\Models\LeaveType;
@@ -25,7 +26,11 @@ function edbEmployee(array $attributes = []): Employee
 {
     $user = User::factory()->create(['role' => UserRole::Employee]);
 
-    return Employee::factory()->create($attributes + ['user_id' => $user->id, 'status' => 'active']);
+    // Calendar stated explicitly: the company default is now UK, and these
+    // cases are about the India calendar.
+    return Employee::factory()->create($attributes + [
+        'user_id' => $user->id, 'status' => 'active', 'holiday_calendar' => 'IN',
+    ]);
 }
 
 // ── 1. Leave balances ──────────────────────────────────────────────────────
@@ -86,8 +91,8 @@ test('an India employee is not shown a UK bank holiday', function () {
 });
 
 test('a UK employee sees the UK calendar', function () {
-    $office = Office::factory()->create(['country' => 'United Kingdom']);
-    $employee = edbEmployee(['office_id' => $office->id]);
+    $office = Office::factory()->create(['country' => 'United Kingdom', 'holiday_calendar' => 'UK']);
+    $employee = edbEmployee(['office_id' => $office->id, 'holiday_calendar' => 'UK']);
     $today = Carbon::today();
 
     PublicHoliday::create(['date' => $today->copy()->addDays(3)->toDateString(), 'name' => 'Diwali', 'country' => 'IN']);
@@ -143,20 +148,25 @@ test('a holiday today still counts as the next holiday', function () {
         ->assertViewHas('nextPublicHoliday', fn ($h) => $h?->name === 'Today Off');
 });
 
-test('the resolver puts a UK-shift employee on the UK calendar', function () {
-    // The existing fallback for employees whose office is unset. Kept as-is by
-    // the extraction — this pins it so it cannot drift silently.
+test('a shift name no longer decides the calendar', function () {
+    // This used to assert the opposite: that a shift called "UK Sales" put the
+    // employee on the UK calendar. That heuristic was the bug — the real UK
+    // shift is called "1PM to 10PM" — so the rule is now an explicit setting
+    // and the shift name is inert. Covered fully in HolidayCalendarAssignmentTest.
     $shift = ShiftSetting::create([
         'name' => 'UK Sales', 'start_time' => '13:00', 'end_time' => '22:00', 'grace_minutes' => 10,
     ]);
     $employee = edbEmployee(['shift_id' => $shift->id]);
 
-    expect(app(HolidayResolver::class)->resolveCountry($employee))->toBe('UK');
+    expect(app(HolidayResolver::class)->resolveCountry($employee))->toBe('IN');
 });
 
-test('the resolver defaults to India when there is no employee at all', function () {
-    expect(app(HolidayResolver::class)->resolveCountry(null))->toBe(HolidayResolver::DEFAULT_COUNTRY)
-        ->and(HolidayResolver::DEFAULT_COUNTRY)->toBe('IN');
+test('with no employee the resolver falls back to the company calendar', function () {
+    // DEFAULT_COUNTRY is gone: the calendar is a company setting now, not a
+    // constant. With no company row at all the fallback still applies.
+    Company::query()->delete();
+
+    expect(app(HolidayResolver::class)->resolveCountry(null))->toBe(HolidayResolver::FALLBACK_CALENDAR);
 });
 
 // ── 3. Weekly off ──────────────────────────────────────────────────────────

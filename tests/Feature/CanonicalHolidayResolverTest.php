@@ -20,12 +20,19 @@ function chrEmployee(array $attributes = []): Employee
 {
     $user = User::factory()->create(['role' => UserRole::Employee]);
 
-    return Employee::factory()->create($attributes + ['user_id' => $user->id, 'status' => 'active']);
+    // The calendar is stated per employee rather than inherited. The company
+    // default is now UK, so a test about the India calendar has to say so —
+    // which is clearer than depending on whatever the default happens to be.
+    return Employee::factory()->create($attributes + [
+        'user_id' => $user->id,
+        'status' => 'active',
+        'holiday_calendar' => 'IN',
+    ]);
 }
 
 function chrUkOffice(): Office
 {
-    return Office::factory()->create(['country' => 'United Kingdom']);
+    return Office::factory()->create(['country' => 'United Kingdom', 'holiday_calendar' => 'UK']);
 }
 
 // ── Calendar ───────────────────────────────────────────────────────────────
@@ -38,7 +45,7 @@ test('an India employee is not on a UK holiday', function () {
 });
 
 test('a UK employee is on a UK holiday', function () {
-    $employee = chrEmployee(['office_id' => chrUkOffice()->id]);
+    $employee = chrEmployee(['office_id' => chrUkOffice()->id, 'holiday_calendar' => 'UK']);
     PublicHoliday::create(['date' => '2026-08-31', 'name' => 'Summer Bank Holiday', 'country' => 'UK']);
 
     expect(app(HolidayResolver::class)->isHoliday($employee, Carbon::parse('2026-08-31')))->toBeTrue();
@@ -46,7 +53,7 @@ test('a UK employee is on a UK holiday', function () {
 
 test('the same date is a holiday for one calendar and a working day for the other', function () {
     $india = chrEmployee();
-    $uk = chrEmployee(['office_id' => chrUkOffice()->id]);
+    $uk = chrEmployee(['office_id' => chrUkOffice()->id, 'holiday_calendar' => 'UK']);
 
     PublicHoliday::create(['date' => '2026-08-31', 'name' => 'Summer Bank Holiday', 'country' => 'UK']);
     PublicHoliday::create(['date' => '2026-08-31', 'name' => 'Ganesh Chaturthi', 'country' => 'IN']);
@@ -117,7 +124,7 @@ test('country and scope are both required, not either', function () {
     // The exact case neither old rule handled: a UK employee sitting in an
     // India office. Attendance said "UK calendar, ignore the office"; leave
     // said "this office, ignore the calendar".
-    $indiaOffice = Office::factory()->create(['country' => 'India']);
+    $indiaOffice = Office::factory()->create(['country' => 'India', 'holiday_calendar' => 'IN']);
     $ukEmployee = chrEmployee(['office_id' => $indiaOffice->id]);
 
     PublicHoliday::create([
@@ -170,7 +177,7 @@ test('explain says why a date is not a holiday for this employee', function () {
 
 test('a range fetch gives each employee their own answer from one query', function () {
     $india = chrEmployee();
-    $uk = chrEmployee(['office_id' => chrUkOffice()->id]);
+    $uk = chrEmployee(['office_id' => chrUkOffice()->id, 'holiday_calendar' => 'UK']);
 
     PublicHoliday::create(['date' => '2026-10-02', 'name' => 'Gandhi Jayanti', 'country' => 'IN']);
     PublicHoliday::create(['date' => '2026-12-26', 'name' => 'Boxing Day', 'country' => 'UK']);

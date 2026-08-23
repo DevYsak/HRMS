@@ -19,7 +19,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     // Personal
     'phone', 'date_of_birth', 'gender', 'address', 'emergency_contact', 'photo',
     // Placement
-    'office_id', 'department_id', 'job_title_id', 'manager_id',
+    'office_id', 'holiday_calendar', 'department_id', 'job_title_id', 'manager_id',
     // Employment (Phase 1A FKs)
     'employment_type_id', 'work_mode_id', 'salary_cycle_id',
     // Legacy string columns kept for backward compat during migration
