@@ -19,7 +19,9 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     // Personal
     'phone', 'date_of_birth', 'gender', 'address', 'emergency_contact', 'photo',
     // Placement
-    'office_id', 'holiday_calendar', 'department_id', 'job_title_id', 'manager_id',
+    'office_id', 'holiday_calendar', 'leave_policy_id', 'working_pattern',
+    'working_days_per_week', 'contracted_hours_per_week', 'working_days',
+    'department_id', 'job_title_id', 'manager_id',
     // Employment (Phase 1A FKs)
     'employment_type_id', 'work_mode_id', 'salary_cycle_id',
     // Legacy string columns kept for backward compat during migration
@@ -122,6 +124,11 @@ class Employee extends Model
     protected function casts(): array
     {
         return [
+            // Which weekdays this employee works, as ISO numbers (1 = Monday).
+            'working_days' => 'array',
+            'working_days_per_week' => 'decimal:1',
+            'contracted_hours_per_week' => 'decimal:2',
+
             // Dates
             'joining_date' => 'date',
             'date_of_birth' => 'date',
@@ -190,6 +197,17 @@ class Employee extends Model
     public function jobTitle(): BelongsTo
     {
         return $this->belongsTo(JobTitle::class);
+    }
+
+    /**
+     * The holiday policy that decides this employee's entitlement.
+     *
+     * Separate from shift, employment type and working pattern on purpose —
+     * each answers a different question and none is derivable from another.
+     */
+    public function leavePolicy(): BelongsTo
+    {
+        return $this->belongsTo(LeavePolicy::class);
     }
 
     public function manager(): BelongsTo
