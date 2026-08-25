@@ -22,44 +22,15 @@ function plcUser(array $attributes = []): User
     return $user;
 }
 
-// ── Forced change ──────────────────────────────────────────────────────────
+// ── Self-service change ────────────────────────────────────────────────────
+//
+// Employees change their own password from Settings > Security. There is no
+// forced first-login flow: it was built and then withdrawn on the user's
+// instruction. `must_change_password` is still set when a credential is issued
+// on someone's behalf, but nothing acts on it — so an emailed password stays
+// valid until the employee chooses to replace it.
 
-test('a user with a temporary password is redirected to the security page', function () {
-    $user = plcUser(['must_change_password' => true]);
-
-    $this->withoutVite()->actingAs($user)->get('/')
-        ->assertRedirect(route('security.edit'));
-});
-
-test('a user without the flag reaches the dashboard normally', function () {
-    $user = plcUser(['must_change_password' => false]);
-
-    $this->withoutVite()->actingAs($user)->get('/')->assertOk();
-});
-
-test('the security page is reachable via password confirmation, not a loop', function () {
-    // The security page sits behind Fortify's confirm-password step. The point
-    // of this test is that the block sends the user forward through that step
-    // rather than bouncing them back to where they started.
-    $user = plcUser(['must_change_password' => true, 'password' => 'Issued!ByHr#2026']);
-
-    $this->withoutVite()->actingAs($user)->get(route('security.edit'))
-        ->assertRedirect(route('password.confirm'));
-
-    $this->actingAs($user)->post(route('password.confirm.store'), ['password' => 'Issued!ByHr#2026']);
-
-    $this->withoutVite()->actingAs($user)->get(route('security.edit'))->assertOk();
-});
-
-test('logout stays reachable while a password change is outstanding', function () {
-    $user = plcUser(['must_change_password' => true]);
-
-    $this->actingAs($user)->post('/logout')->assertRedirect();
-
-    expect(auth()->check())->toBeFalse();
-});
-
-test('changing the password releases the block', function () {
+test('changing the password clears the issued-credential flag', function () {
     $user = plcUser(['must_change_password' => true, 'password' => 'Issued!ByHr#2026']);
 
     Livewire::actingAs($user)->test('pages::settings.security')
@@ -78,7 +49,7 @@ test('changing the password releases the block', function () {
     $this->withoutVite()->actingAs($fresh)->get('/')->assertOk();
 });
 
-test('a failed change leaves the block in place', function () {
+test('a failed change leaves the issued-credential flag set', function () {
     $user = plcUser(['must_change_password' => true, 'password' => 'Issued!ByHr#2026']);
 
     Livewire::actingAs($user)->test('pages::settings.security')
@@ -182,4 +153,34 @@ test('a successful login stamps last_login_at', function () {
     $this->post('/login', ['email' => $user->email, 'password' => 'Login!Passw0rd#26']);
 
     expect($user->fresh()->last_login_at)->not->toBeNull();
+});
+
+// ── A rejected attempt must be visible ─────────────────────────────────────
+
+test('a wrong current password shows an error instead of silently clearing', function () {
+    // "Nothing happens" was the actual report: the form reset all three fields
+    // and rendered no message, so a rejected attempt looked like no attempt.
+    $user = plcUser(['must_change_password' => true, 'password' => 'Issued!ByHr#2026']);
+
+    Livewire::actingAs($user)->test('pages::settings.security')
+        ->set('current_password', 'TheWrongOne#2026')
+        ->set('password', 'MyOwn!Choice#2026')
+        ->set('password_confirmation', 'MyOwn!Choice#2026')
+        ->call('updatePassword')
+        ->assertHasErrors('current_password');
+
+    expect($user->fresh()->must_change_password)->toBeTrue();
+});
+
+test('reusing the current password is reported, not swallowed', function () {
+    $user = plcUser(['must_change_password' => true, 'password' => 'Issued!ByHr#2026']);
+
+    Livewire::actingAs($user)->test('pages::settings.security')
+        ->set('current_password', 'Issued!ByHr#2026')
+        ->set('password', 'Issued!ByHr#2026')
+        ->set('password_confirmation', 'Issued!ByHr#2026')
+        ->call('updatePassword')
+        ->assertHasErrors('password');
+
+    expect($user->fresh()->must_change_password)->toBeTrue();
 });
