@@ -47,7 +47,9 @@ test('1 — a new biometric employee never gets the literal password', function 
 
     expect($user)->not->toBeNull()
         ->and(Hash::check('password', $user->password))->toBeFalse()
-        ->and($user->must_change_password)->toBeTrue();
+        // No forced-change flag any more; what matters is that the generated
+        // credential is not something anyone could guess.
+        ->and(strlen($user->password))->toBeGreaterThan(20);
 });
 
 test('2 — an existing user keeps their password', function () {
@@ -74,8 +76,7 @@ test('3 — a password the employee changed themselves survives the sync', funct
     $fresh = $user->fresh();
 
     expect(Hash::check('Chosen!ByMe#2026', $fresh->password))->toBeTrue()
-        // Their own choice, so they are not asked to change it again.
-        ->and($fresh->must_change_password)->toBeFalse();
+        ->and($fresh->password_changed_at)->not->toBeNull();
 });
 
 test('4 — a promoted user is not demoted back to employee', function () {

@@ -26,12 +26,16 @@ function plcUser(array $attributes = []): User
 //
 // Employees change their own password from Settings > Security. There is no
 // forced first-login flow: it was built and then withdrawn on the user's
-// instruction. `must_change_password` is still set when a credential is issued
-// on someone's behalf, but nothing acts on it — so an emailed password stays
-// valid until the employee chooses to replace it.
+// instruction, and the `must_change_password` column has since been dropped
+// entirely — it was still being written on employee creation, import and
+// biometric sync, which broke imports against databases that never had it.
+//
+// An HR-issued password stays valid until the employee replaces it. What is
+// still recorded is `password_changed_at`: null means nobody has chosen this
+// password themselves.
 
-test('changing the password clears the issued-credential flag', function () {
-    $user = plcUser(['must_change_password' => true, 'password' => 'Issued!ByHr#2026']);
+test('changing the password stamps when it was chosen', function () {
+    $user = plcUser(['password' => 'Issued!ByHr#2026']);
 
     Livewire::actingAs($user)->test('pages::settings.security')
         ->set('current_password', 'Issued!ByHr#2026')
@@ -42,15 +46,14 @@ test('changing the password clears the issued-credential flag', function () {
 
     $fresh = $user->fresh();
 
-    expect($fresh->must_change_password)->toBeFalse()
-        ->and($fresh->password_changed_at)->not->toBeNull()
+    expect($fresh->password_changed_at)->not->toBeNull()
         ->and(Hash::check('MyOwn!Choice#2026', $fresh->password))->toBeTrue();
 
     $this->withoutVite()->actingAs($fresh)->get('/')->assertOk();
 });
 
-test('a failed change leaves the issued-credential flag set', function () {
-    $user = plcUser(['must_change_password' => true, 'password' => 'Issued!ByHr#2026']);
+test('a failed change leaves the password untouched', function () {
+    $user = plcUser(['password' => 'Issued!ByHr#2026']);
 
     Livewire::actingAs($user)->test('pages::settings.security')
         ->set('current_password', 'TheWrongOne#2026')
@@ -59,7 +62,7 @@ test('a failed change leaves the issued-credential flag set', function () {
         ->call('updatePassword')
         ->assertHasErrors('current_password');
 
-    expect($user->fresh()->must_change_password)->toBeTrue();
+    expect(Hash::check('Issued!ByHr#2026', $user->fresh()->password))->toBeTrue();
 });
 
 // ── History ────────────────────────────────────────────────────────────────
@@ -122,15 +125,16 @@ test('an admin reset always succeeds and re-flags the account', function () {
     // A locked-out account must be recoverable even if the admin happens to
     // pick something the user has had before.
     config(['security.password_history_limit' => 5]);
-    $user = plcUser(['password' => 'Known!Passw0rd#26', 'must_change_password' => false]);
+    $user = plcUser(['password' => 'Known!Passw0rd#26']);
     $admin = User::factory()->create(['role' => UserRole::HrAdmin]);
 
     $plain = app(PasswordService::class)->resetPassword($user, 'Known!Passw0rd#26', $admin);
 
     $fresh = $user->fresh();
 
+    // password_changed_at null records that the employee has not chosen this
+    // password themselves. It gates nothing.
     expect($plain)->toBe('Known!Passw0rd#26')
-        ->and($fresh->must_change_password)->toBeTrue()
         ->and($fresh->password_changed_at)->toBeNull();
 });
 
@@ -160,7 +164,7 @@ test('a successful login stamps last_login_at', function () {
 test('a wrong current password shows an error instead of silently clearing', function () {
     // "Nothing happens" was the actual report: the form reset all three fields
     // and rendered no message, so a rejected attempt looked like no attempt.
-    $user = plcUser(['must_change_password' => true, 'password' => 'Issued!ByHr#2026']);
+    $user = plcUser(['password' => 'Issued!ByHr#2026']);
 
     Livewire::actingAs($user)->test('pages::settings.security')
         ->set('current_password', 'TheWrongOne#2026')
@@ -169,11 +173,11 @@ test('a wrong current password shows an error instead of silently clearing', fun
         ->call('updatePassword')
         ->assertHasErrors('current_password');
 
-    expect($user->fresh()->must_change_password)->toBeTrue();
+    expect(Hash::check('Issued!ByHr#2026', $user->fresh()->password))->toBeTrue();
 });
 
 test('reusing the current password is reported, not swallowed', function () {
-    $user = plcUser(['must_change_password' => true, 'password' => 'Issued!ByHr#2026']);
+    $user = plcUser(['password' => 'Issued!ByHr#2026']);
 
     Livewire::actingAs($user)->test('pages::settings.security')
         ->set('current_password', 'Issued!ByHr#2026')
@@ -182,5 +186,5 @@ test('reusing the current password is reported, not swallowed', function () {
         ->call('updatePassword')
         ->assertHasErrors('password');
 
-    expect($user->fresh()->must_change_password)->toBeTrue();
+    expect($user->fresh()->password_changed_at)->toBeNull();
 });

@@ -90,7 +90,6 @@ class PasswordService
 
         $user->forceFill([
             'password' => Hash::make($plain),
-            'must_change_password' => false,
             'password_changed_at' => now(),
         ])->save();
 
@@ -101,9 +100,8 @@ class PasswordService
      * Set (or generate) a password for a user, persist it, and record history.
      * Returns the plaintext so it can be revealed once to an admin / emailed.
      *
-     * Issued on someone's behalf, so the account is flagged to choose its own
-     * password at next sign-in. Deliberately skips the reuse check: an admin
-     * resetting a locked-out account must always succeed.
+     * Deliberately skips the reuse check: an admin resetting a locked-out
+     * account must always succeed.
      */
     public function resetPassword(User $user, ?string $plain = null, ?User $changedBy = null): string
     {
@@ -111,7 +109,8 @@ class PasswordService
 
         $user->forceFill([
             'password' => Hash::make($plain),
-            'must_change_password' => true,
+            // Null marks a credential the employee has not chosen themselves;
+            // it is a record, not a gate. Nothing forces a change.
             'password_changed_at' => null,
         ])->save();
 

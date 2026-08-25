@@ -466,11 +466,6 @@ class EmployeeImportService
                         'name' => $row['data']['name'],
                         'email' => $row['data']['email'],
                         'password' => Hash::make($plain),
-                        // Whether generated or supplied in the sheet, this
-                        // password has been handled by someone other than its
-                        // owner. A sheet-supplied one is often the same value
-                        // down the whole column, so the flag matters most there.
-                        'must_change_password' => true,
                         'role' => $row['data']['role'],
                     ]);
                     $passwords->recordHistory($user, $user->password, $actor);
