@@ -23,9 +23,6 @@
         $roleColor = '#f97316';
         $roleLabel = $user->displayRoleName();
 
-        $company = \App\Models\Company::first()
-            ?? new \App\Models\Company(['name' => 'Pulse HRMS', 'primary_color' => '#f97316']);
-
         $unread = $user->unreadNotifications()->count();
         $inboxRoute = Route::has('notifications.index') ? route('notifications.index') : '#';
 
@@ -86,22 +83,26 @@
         style="--role-accent: {{ $roleColor }}; --color-accent: {{ $roleColor }}; --color-accent-content: {{ $roleColor }}; --color-accent-foreground: #ffffff;"
         class="pulse-sidebar border-e border-[#F3E8DD] bg-[#FFF8F1]">
 
-        {{-- Brand --}}
-        <flux:sidebar.brand :name="$company->name" :href="route('dashboard')" wire:navigate>
-            <x-slot name="logo" class="flex aspect-square size-9 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-orange-400 shadow-lg shadow-orange-500/30">
-                @if($company->logo)
-                    <img src="{{ asset('storage/' . $company->logo) }}" class="size-6 object-contain"
-                        alt="{{ $company->name }}">
-                @else
-                    <svg class="size-5 fill-white" viewBox="0 0 24 24">
-                        <path d="M13 2L4.5 13.5H11l-1 8.5 8.5-11.5H12l1-8.5z" />
-                    </svg>
-                @endif
-            </x-slot>
-        </flux:sidebar.brand>
+        {{-- Brand — the logo itself, with no box or company name beside it.
+             flux:sidebar.brand is not used here: it caps its anchor at h-10 and
+             wraps the logo slot in an overflow-hidden h-6 box, which crops a
+             full-width mark. The collapsed variant below is Flux's own, so the
+             logo still shrinks with the rail. --}}
+        {{-- Sized by width, not height: the wordmark is ~6.3:1, so a 48px-tall
+             logo would be ~300px wide and overflow the rail. Filling the
+             available width is both the largest it can legibly be and what
+             "full width, space on the right" asks for. --}}
+        {{-- No fixed height: the anchor hugs the logo, so the gap above the nav
+             is the padding below and nothing else. --}}
+        <a href="{{ route('dashboard') }}" wire:navigate data-flux-sidebar-brand
+            class="flex shrink-0 items-center pb-1.5 pl-3 pr-6 pt-3 in-data-flux-sidebar-collapsed-desktop:px-1.5">
+            {{-- .pulse-sidebar forces a cream background in both themes, so the
+                 mark must stay dark here — inverting it would render white on
+                 cream and vanish in dark mode. --}}
+            <x-brand-logo size="w-full h-auto" :invert-on-dark="false" /></a>
 
         {{-- Role chip — colored by the current user's role --}}
-        <div class="px-3 pb-1 pt-0.5 overflow-hidden whitespace-nowrap">
+        <div class="overflow-hidden whitespace-nowrap px-3 pb-1.5">
             <span class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider"
                 style="color: {{ $roleColor }}; background-color: color-mix(in srgb, {{ $roleColor }} 14%, transparent);">
                 <span class="size-1.5 rounded-full" style="background-color: {{ $roleColor }}"></span>
@@ -416,10 +417,9 @@
                             <flux:sidebar.item icon="presentation-chart-line" :href="route('dashboard.director')"
                                 :current="request()->routeIs('dashboard.director')" wire:navigate>Director Dashboard</flux:sidebar.item>
                         @endif
-                        @if($isHr)
-                            <flux:sidebar.item icon="user-group" :href="route('dashboard.hr-admin')"
-                                :current="request()->routeIs('dashboard.hr-admin')" wire:navigate>HR Overview</flux:sidebar.item>
-                        @endif
+                        {{-- "HR Overview" (dashboard.hr-admin) is intentionally not linked here:
+                             Dashboard already renders the HR admin view for HR users, so the two
+                             read as duplicates in the nav. The route stays reachable by URL. --}}
                         @if($user->isDepartmentHead())
                             <flux:sidebar.item icon="building-office" :href="route('dashboard.department')"
                                 :current="request()->routeIs('dashboard.department')" wire:navigate>Department View</flux:sidebar.item>
@@ -540,6 +540,8 @@
                                 :current="request()->routeIs('payroll.components')" wire:navigate>Components</flux:sidebar.item>
                             <flux:sidebar.item :href="route('payroll.structures')"
                                 :current="request()->routeIs('payroll.structures')" wire:navigate>Salary Structures</flux:sidebar.item>
+                            <flux:sidebar.item :href="route('payroll.historical-import')"
+                                :current="request()->routeIs('payroll.historical-import')" wire:navigate>Historical Import</flux:sidebar.item>
                         @endcan
                         @if($isFin || $isHr)
                             <flux:sidebar.item :href="route('payroll.incentives')"
@@ -638,6 +640,18 @@
                             :expanded="false">
                             @can('run_payroll')
                                 <flux:sidebar.item :href="route('reports.payroll-summary')">Payroll Summary</flux:sidebar.item>
+                                <flux:sidebar.item :href="route('reports.payroll-register')">Payroll Register</flux:sidebar.item>
+                                <flux:sidebar.item :href="route('reports.salary-register')">Salary Register</flux:sidebar.item>
+                                <flux:sidebar.item :href="route('reports.bank-transfer')">Bank Transfer</flux:sidebar.item>
+                                <flux:sidebar.item :href="route('reports.pf-report')">PF Report</flux:sidebar.item>
+                                <flux:sidebar.item :href="route('reports.esi-report')">ESI Report</flux:sidebar.item>
+                                <flux:sidebar.item :href="route('reports.pt-report')">Professional Tax Report</flux:sidebar.item>
+                                <flux:sidebar.item :href="route('reports.tds-report')">TDS Report</flux:sidebar.item>
+                                <flux:sidebar.item :href="route('reports.cost-center-report')">Cost Center Report</flux:sidebar.item>
+                                <flux:sidebar.item :href="route('reports.department-payroll-report')">Department Payroll Report</flux:sidebar.item>
+                                <flux:sidebar.item :href="route('reports.payroll-monthly-summary')">Payroll Monthly Summary</flux:sidebar.item>
+                                <flux:sidebar.item :href="route('reports.payroll-yearly-summary')">Payroll Yearly Summary</flux:sidebar.item>
+                                <flux:sidebar.item :href="route('reports.payroll-variance-report')">Payroll Variance Report</flux:sidebar.item>
                             @endcan
                             @can('approve_leave')
                                 <flux:sidebar.item :href="route('reports.attendance-summary')">Attendance Summary</flux:sidebar.item>
@@ -703,6 +717,9 @@
                         :current="request()->routeIs('settings.work-modes')" wire:navigate>Work Modes</flux:sidebar.item>
                     <flux:sidebar.item :href="route('settings.salary-cycles')"
                         :current="request()->routeIs('settings.salary-cycles')" wire:navigate>Salary Cycles
+                    </flux:sidebar.item>
+                    <flux:sidebar.item :href="route('settings.payroll-approval-policy')"
+                        :current="request()->routeIs('settings.payroll-approval-policy')" wire:navigate>Payroll Approval Policy
                     </flux:sidebar.item>
                     <flux:sidebar.item :href="route('settings.job-titles')"
                         :current="request()->routeIs('settings.job-titles')" wire:navigate>Job Titles</flux:sidebar.item>
@@ -771,7 +788,8 @@
                         </span>
                     </div>
                     <flux:menu.separator />
-                    <flux:menu.item :href="route('profile.edit')" icon="user" wire:navigate>Profile</flux:menu.item>
+                    <flux:menu.item :href="route('profile.me')" icon="user" wire:navigate>My Profile</flux:menu.item>
+                    <flux:menu.item :href="route('profile.edit')" icon="cog-6-tooth" wire:navigate>Account settings</flux:menu.item>
                     <flux:menu.item :href="route('settings.preferences')" icon="adjustments-horizontal" wire:navigate>Preferences</flux:menu.item>
                     @can('manage_settings')
                         <flux:menu.item :href="route('settings.general')" icon="cog-6-tooth" wire:navigate>Settings
@@ -847,7 +865,8 @@
                         </div>
                     </div>
                     <flux:menu.separator />
-                    <flux:menu.item :href="route('profile.edit')" icon="user" wire:navigate>Profile</flux:menu.item>
+                    <flux:menu.item :href="route('profile.me')" icon="user" wire:navigate>My Profile</flux:menu.item>
+                    <flux:menu.item :href="route('profile.edit')" icon="cog-6-tooth" wire:navigate>Account settings</flux:menu.item>
                     <flux:menu.item :href="route('settings.preferences')" icon="adjustments-horizontal" wire:navigate>Preferences</flux:menu.item>
                     <flux:menu.item :href="route('appearance.edit')" icon="paint-brush" wire:navigate>Appearance</flux:menu.item>
                     <flux:menu.separator />

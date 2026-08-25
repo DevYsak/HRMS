@@ -22,6 +22,10 @@ class CompanySeeder extends Seeder
                 'address' => '42, Tech Park, Whitefield',
                 'city' => 'Bangalore',
                 'country' => 'India',
+                // Professional-tax fallback state. Only a Maharashtra PT rule is
+                // seeded; add a jurisdiction-scoped rule (e.g. KA) before running
+                // payroll for employees whose office sits in another state.
+                'default_state_code' => 'MH',
                 'timezone' => 'Asia/Kolkata',
                 'date_format' => 'd M Y',
                 'currency' => 'INR',

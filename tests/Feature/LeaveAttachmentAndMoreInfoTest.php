@@ -3,6 +3,7 @@
 use App\Enums\UserRole;
 use App\Livewire\TimeOff\AllTimeOff;
 use App\Livewire\TimeOff\TeamTimeOff;
+use App\Models\AttendanceSetting;
 use App\Models\Employee;
 use App\Models\LeaveAttachment;
 use App\Models\LeaveRequest;
@@ -10,6 +11,7 @@ use App\Models\LeaveType;
 use App\Models\User;
 use App\Notifications\LeaveRequestNotification;
 use App\Services\LeaveService;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Notification;
 use Livewire\Livewire;
 
@@ -65,17 +67,28 @@ test('submitRequest persists the single supporting attachment and mirrors it int
     expect(LeaveAttachment::where('leave_request_id', $request->id)->count())->toBe(1);
 });
 
-test('submitRequest blocks a weekend start or end date', function () {
+test('submitRequest blocks a non-working start or end date', function () {
     Notification::fake();
     $employee = lamEmployee();
     $type = lamLeaveType();
 
+    // The rule is now the company's configured week rather than Carbon's
+    // hardcoded Sat+Sun, so the week this test assumes is stated explicitly.
+    // Without it the default is Sunday-only, under which Saturday is a working
+    // day and the first assertion would rightly not throw.
+    AttendanceSetting::query()->delete();
+    AttendanceSetting::create([
+        'shift_start' => '09:00', 'shift_end' => '18:00',
+        'weekly_off_days' => [Carbon::SATURDAY, Carbon::SUNDAY],
+    ]);
+    AttendanceSetting::flushWeeklyOffCache();
+
     // 2026-09-12 is a Saturday, 2026-09-13 a Sunday.
     expect(fn () => app(LeaveService::class)->submitRequest($employee, $type, '2026-09-12', '2026-09-12', 'x', requestedLeaveStatus: 'unpaid'))
-        ->toThrow(DomainException::class, 'weekend');
+        ->toThrow(DomainException::class, 'non-working day');
 
     expect(fn () => app(LeaveService::class)->submitRequest($employee, $type, '2026-09-13', '2026-09-13', 'x', requestedLeaveStatus: 'unpaid'))
-        ->toThrow(DomainException::class, 'weekend');
+        ->toThrow(DomainException::class, 'non-working day');
 
     // A Friday→Monday range is fine — the weekend inside it is simply not counted.
     $ok = app(LeaveService::class)->submitRequest($employee, $type, '2026-09-11', '2026-09-14', 'trip', requestedLeaveStatus: 'unpaid');

@@ -14,6 +14,7 @@ use App\Models\PublicHoliday;
 use App\Models\User;
 use App\Models\WfhRequest;
 use App\Notifications\LeaveEncashmentNotification;
+use App\Services\Attendance\HolidayResolver;
 use App\Services\HolidayWorkService;
 use App\Services\LeaveService;
 use Carbon\Carbon;
@@ -645,7 +646,13 @@ class MyTimeOff extends Component
 
         $csl = $findBalance(['casual', 'csl', 'casual leave']);
         $compOff = $findBalance(['comp', 'compensatory', 'comp off']);
-        $mdl = $findBalance(['md', 'medical', 'mdl', 'maternity']);
+
+        // Maternity resolves on its own terms. It used to be matched under an
+        // 'mdl' alias, which made the employee's "MDL" card show maternity
+        // while the policy text beside it described the December shutdown.
+        // MDL means Mandatory December Leave and is not a leave balance at
+        // all — it lives in december_mandatory_days and is surfaced separately.
+        $maternity = $findBalance(['maternity']);
 
         $firstBalances = $balances->values();
         if (! $csl && $firstBalances->count() > 0) {
@@ -654,9 +661,10 @@ class MyTimeOff extends Component
         if (! $compOff && $firstBalances->count() > 1) {
             $compOff = $firstBalances->get(1) ?? $firstBalances->get(0);
         }
-        if (! $mdl && $firstBalances->count() > 2) {
-            $mdl = $firstBalances->get(2) ?? $firstBalances->get(0);
-        }
+
+        // No positional fallback here. Reaching for "whatever happens to be
+        // third" showed an unrelated leave type under someone else's label —
+        // if there is no maternity balance, there is no maternity balance.
 
         $cslUsed = $csl ? ($csl->used_days + ($csl->encashed_days ?? 0)) : 0;
         $cslTotal = $csl ? max(0, $csl->allocated_days) : 0;
@@ -787,10 +795,9 @@ class MyTimeOff extends Component
         }
 
         // ── Holiday planner: upcoming public holidays + December mandatory days ──
-        $upcomingHolidays = PublicHoliday::whereDate('date', '>=', now()->toDateString())
-            ->orderBy('date')
-            ->limit(8)
-            ->get();
+        // The employee's own calendar and scope. This listed every holiday in
+        // the system, so India staff planned around UK bank holidays.
+        $upcomingHolidays = app(HolidayResolver::class)->upcomingHolidays($employee, 8);
         $mandatoryDays = DecemberMandatoryDay::where('year', now()->year)
             ->orderBy('date')
             ->get();
@@ -924,7 +931,10 @@ class MyTimeOff extends Component
             'highlightBalances' => [
                 'csl' => $csl,
                 'compOff' => $compOff,
-                'mdl' => $mdl,
+                // Maternity, named as maternity. There is deliberately no
+                // 'mdl' key: Mandatory December Leave is not a balance, and
+                // $mandatoryDays below carries it.
+                'maternity' => $maternity,
             ],
             'selectedType' => $selectedType,
             'selectedBalance' => $selectedBalance,

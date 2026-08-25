@@ -37,8 +37,13 @@ class BiometricEmployeeMasterSeeder extends Seeder
      *   shift          string  — 'IT Shift' | 'UK Sales Shift'
      *   dept           string  — department code (ADMIN|HR|PRD|SALES|OPS|MKT|FIN)
      *   joining_date   string  — YYYY-MM-DD  (optional, defaults to today)
+     *   role           string  — UserRole value (optional, defaults to 'employee').
+     *                            Declared here so re-running the seeder never
+     *                            silently demotes an account back to 'employee'.
      *
      * To add more employees: append rows to this array.
+     *
+     * @var list<array{employee_code:int,name:string,email:string,shift:string,dept:string,joining_date?:string,role?:string}>
      */
     private array $employees = [
         [
@@ -48,6 +53,7 @@ class BiometricEmployeeMasterSeeder extends Seeder
             'shift' => 'IT Shift',
             'dept' => 'PRD',
             'joining_date' => '2022-04-01',
+            'role' => 'super_admin',
         ],
         // ─────────────────────────────────────────────────────
         // ADD MORE EMPLOYEES BELOW — copy the block above.
@@ -81,7 +87,7 @@ class BiometricEmployeeMasterSeeder extends Seeder
                 [
                     'name' => $data['name'],
                     'password' => Hash::make('password'),  // force-reset on first login recommended
-                    'role' => 'employee',
+                    'role' => $data['role'] ?? 'employee',
                 ]
             );
 

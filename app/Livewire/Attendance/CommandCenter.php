@@ -3,8 +3,10 @@
 namespace App\Livewire\Attendance;
 
 use App\Livewire\Concerns\HandlesClaimLock;
+use App\Models\Attendance;
 use App\Models\AttendanceRegularisation;
 use App\Models\AuditLog;
+use App\Models\Employee;
 use App\Models\HolidayWorkRequest;
 use App\Models\LeaveRequest;
 use App\Models\OtRequest;
@@ -12,6 +14,7 @@ use App\Models\WfhRequest;
 use App\Notifications\OtRequestNotification;
 use App\Notifications\RegularisationReviewedNotification;
 use App\Notifications\WfhRequestNotification;
+use App\Services\Attendance\AttendanceScoreEngine;
 use App\Services\AttendanceService;
 use App\Services\HolidayWorkService;
 use App\Services\LeaveService;
@@ -382,6 +385,36 @@ class CommandCenter extends Component
         return Response::streamDownload(fn () => print ($csv), "pending-{$this->tab}-".now()->format('Ymd').'.csv', ['Content-Type' => 'text/csv']);
     }
 
+    /**
+     * Live attendance-health context for approvers — today's presence plus the
+     * month-to-date engine score, at-risk count and score-band distribution
+     * (Rule 11). Gives decisions context without leaving the hub.
+     *
+     * @return array<string, mixed>
+     */
+    protected function attendanceHealth(): array
+    {
+        $today = Carbon::today();
+        $monthStart = $today->copy()->startOfMonth();
+
+        $activeIds = Employee::where('status', 'active')->pluck('id')->all();
+        $todayAtt = Attendance::whereIn('employee_id', $activeIds)->where('date', $today->toDateString())
+            ->get(['check_in', 'is_late']);
+        $presentToday = $todayAtt->whereNotNull('check_in')->count();
+
+        $band = app(AttendanceScoreEngine::class)->companyHealth($activeIds, $monthStart, $today);
+
+        return [
+            'active' => count($activeIds),
+            'present_today' => $presentToday,
+            'late_today' => $todayAtt->where('is_late', true)->count(),
+            'absent_today' => max(0, count($activeIds) - $presentToday),
+            'mtd_score' => $band['avg_score'],
+            'at_risk' => $band['at_risk'],
+            'bands' => $band['bands'],
+        ];
+    }
+
     public function render()
     {
         abort_unless(Auth::user()->canApproveLeave(), 403);
@@ -410,6 +443,7 @@ class CommandCenter extends Component
             'items' => $this->pendingQuery()->limit(50)->get()->map(fn ($i) => $this->normalise($i))->all(),
             'feed' => $this->activityFeed(),
             'incoming' => $this->recentIncoming(),
+            'health' => $this->attendanceHealth(),
         ])->layout('layouts.app', ['title' => 'Attendance Command Center']);
     }
 }

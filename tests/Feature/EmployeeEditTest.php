@@ -2,9 +2,52 @@
 
 use App\Enums\UserRole;
 use App\Livewire\Employees\EmployeeEdit;
+use App\Models\Attendance;
 use App\Models\Employee;
 use App\Models\User;
+use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
+
+test('the profile sync button pulls the employee latest attendance from the engine', function () {
+    config(['services.biometric_app.url' => 'https://engine.test']);
+    $this->actingAs(User::factory()->create(['role' => UserRole::HrAdmin]));
+
+    $employee = Employee::factory()->create(['employee_code' => 17]);
+
+    // The engine returns its computed daily dashboard; it matches on employee_code.
+    Http::fake(['engine.test/*' => Http::response([
+        'summaries' => [[
+            'employee_code' => 17,
+            'date' => today()->toDateString(),
+            'first_punch' => today()->setTime(9, 0)->toDateTimeString(),
+            'last_punch' => today()->setTime(18, 0)->toDateTimeString(),
+            'working_min' => 480, 'break_min' => 30, 'raw_punch_count' => 4,
+        ]],
+    ], 200)]);
+
+    Livewire::test(EmployeeEdit::class, ['employee' => $employee])
+        ->set('syncDays', 1)
+        ->call('syncBiometricNow')
+        ->assertHasNoErrors();
+
+    // The engine was actually called for today.
+    Http::assertSent(fn ($r) => str_contains($r->url(), 'engine.test'));
+});
+
+test('the profile sync button asks for a Biometric Device ID before syncing', function () {
+    config(['services.biometric_app.url' => 'https://engine.test']);
+    $this->actingAs(User::factory()->create(['role' => UserRole::HrAdmin]));
+
+    $employee = Employee::factory()->create(['employee_code' => null]);   // not enrolled
+    Http::fake();
+
+    Livewire::test(EmployeeEdit::class, ['employee' => $employee])
+        ->call('syncBiometricNow');
+
+    // No engine call is made without a mapped device id.
+    Http::assertNothingSent();
+    expect(Attendance::where('employee_id', $employee->id)->count())->toBe(0);
+});
 
 test('employee edit page renders quick action and probation action buttons with explicit button types', function () {
     $this->actingAs(User::factory()->create(['role' => UserRole::HrAdmin]));

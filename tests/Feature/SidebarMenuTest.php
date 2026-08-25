@@ -22,8 +22,10 @@ function menuAdmin(): User
 test('the employee menu is fully visible by default (fail-open)', function () {
     $items = app(EmployeeMenu::class)->visible();
 
-    expect($items)->toHaveCount(11);
-    expect(collect($items)->pluck('key'))->toContain('dashboard', 'attendance', 'inbox');
+    // 12 since My Onboarding joined the catalog — employees previously had no
+    // route to their own onboarding tasks at all.
+    expect($items)->toHaveCount(12);
+    expect(collect($items)->pluck('key'))->toContain('dashboard', 'attendance', 'onboarding', 'inbox');
 });
 
 test('disabling an item hides it from the visible menu', function () {
@@ -85,4 +87,26 @@ test('the employee sidebar page renders without error', function () {
     $user->forceFill(['role' => UserRole::Employee, 'email_verified_at' => now()])->save();
 
     $this->actingAs($user)->get('/')->assertOk();
+});
+
+test('the workspace nav does not show HR Overview alongside Dashboard for HR', function () {
+    $this->seed(RolesAndPermissionsSeeder::class);
+    $role = Role::where('slug', 'hr_admin')->firstOrFail();
+    $hr = User::factory()->create(['role' => UserRole::HrAdmin, 'role_id' => $role->id]);
+    Employee::factory()->create(['user_id' => $hr->id, 'status' => EmployeeStatus::Active]);
+
+    $response = $this->actingAs($hr)->get(route('dashboard'));
+
+    $response->assertOk()
+        ->assertSee('Dashboard')
+        ->assertDontSee('HR Overview');
+});
+
+test('the HR Overview route stays reachable even though it is unlinked', function () {
+    $this->seed(RolesAndPermissionsSeeder::class);
+    $role = Role::where('slug', 'hr_admin')->firstOrFail();
+    $hr = User::factory()->create(['role' => UserRole::HrAdmin, 'role_id' => $role->id]);
+    Employee::factory()->create(['user_id' => $hr->id, 'status' => EmployeeStatus::Active]);
+
+    $this->actingAs($hr)->get(route('dashboard.hr-admin'))->assertOk();
 });

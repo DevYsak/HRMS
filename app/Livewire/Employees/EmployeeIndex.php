@@ -6,6 +6,7 @@ use App\Models\Department;
 use App\Models\Employee;
 use App\Models\JobTitle;
 use App\Models\Office;
+use App\Services\Biometric\BiometricCodeService;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -58,10 +59,20 @@ class EmployeeIndex extends Component
         $employee = Employee::findOrFail($id);
         $this->authorize('delete', $employee);
 
+        // Free the Biometric Device ID before soft-deleting. Without this the
+        // trashed row keeps holding the device PIN, and the replacement hire
+        // is told the ID is "already taken" by somebody who no longer appears
+        // anywhere in the directory. Offboarding already does this via
+        // BiometricSyncService::releaseEmployee(); a direct delete must too.
+        $code = $employee->employee_code;
+        app(BiometricCodeService::class)->release($employee, auth()->user());
+
         $employee->delete();
         $employee->user->delete();
 
-        \Flux::toast('Employee deleted successfully.');
+        \Flux::toast($code
+            ? "Employee deleted. Biometric Device ID {$code} is free to reassign."
+            : 'Employee deleted successfully.');
     }
 
     public function render()

@@ -335,16 +335,104 @@
                 class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 shadow-sm overflow-hidden">
                 <div
                     class="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between gap-4">
-                    <h3 class="font-bold text-zinc-900 dark:text-white">Payslip History</h3>
-                    <x-clean-select model="filterYear" :live="true"
-                        :options="array_merge([['value' => '', 'label' => 'All Years']], collect(range(now()->year, now()->year - 3))->map(fn ($y) => ['value' => $y, 'label' => $y])->all())" />
+                    <div class="flex items-baseline gap-3">
+                        <h3 class="font-bold text-zinc-900 dark:text-white">Payslip History</h3>
+                        <span class="text-xs text-zinc-400">Tick up to {{ $maxCombined }} months to print together</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        @if(count($selected) > 0)
+                            <span class="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+                                {{ count($selected) }} of {{ $maxCombined }} selected
+                            </span>
+                            <button type="button" wire:click="clearSelection"
+                                class="cursor-pointer text-xs font-medium text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors">
+                                Clear
+                            </button>
+                            <button type="button" wire:click="printSelected"
+                                class="cursor-pointer inline-flex items-center gap-1.5 rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition-colors hover:bg-orange-600">
+                                <flux:icon.printer class="size-3.5" />
+                                Print {{ count($selected) }} payslip{{ count($selected) === 1 ? '' : 's' }}
+                            </button>
+                        @endif
+                        <x-clean-select model="filterYear" :live="true"
+                            :options="array_merge([['value' => '', 'label' => 'All Years']], collect(range(now()->year, now()->year - 3))->map(fn ($y) => ['value' => $y, 'label' => $y])->all())" />
+                    </div>
                 </div>
+
+                {{-- Period filters --}}
+                <div class="px-6 py-3 border-b border-zinc-100 dark:border-zinc-800 flex flex-wrap items-center gap-2">
+                    @foreach([
+                        'all' => 'All',
+                        'last_3' => 'Last 3 Months',
+                        'last_6' => 'Last 6 Months',
+                        'fy' => 'Financial Year',
+                        'month' => 'Month',
+                        'custom' => 'Custom Range',
+                    ] as $key => $label)
+                        <button type="button" wire:click="$set('filterPeriod', '{{ $key }}')"
+                            class="cursor-pointer rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors
+                                {{ $filterPeriod === $key
+                                    ? 'bg-orange-500 text-white shadow-sm'
+                                    : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700' }}">
+                            {{ $label }}
+                        </button>
+                    @endforeach
+
+                    @if($filterPeriod === 'fy')
+                        <x-clean-select model="filterFy" :live="true"
+                            :options="collect(range(now()->year, now()->year - 3))->map(fn ($y) => ['value' => $y, 'label' => 'FY ' . $y . '-' . substr($y + 1, 2)])->all()" />
+                    @endif
+
+                    @if($filterPeriod === 'month')
+                        <x-clean-select model="filterMonth" :live="true"
+                            :options="array_merge([['value' => '', 'label' => 'Select month']], collect(range(1, 12))->map(fn ($m) => ['value' => \Carbon\Carbon::create(null, $m, 1)->format('F'), 'label' => \Carbon\Carbon::create(null, $m, 1)->format('F')])->all())" />
+                    @endif
+
+                    @if($filterPeriod === 'custom')
+                        <input type="month" wire:model.live="rangeFrom" aria-label="Range from"
+                            class="rounded-lg border-zinc-200 bg-white px-2 py-1.5 text-xs dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
+                        <span class="text-xs text-zinc-400">to</span>
+                        <input type="month" wire:model.live="rangeTo" aria-label="Range to"
+                            class="rounded-lg border-zinc-200 bg-white px-2 py-1.5 text-xs dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
+                    @endif
+
+                    @if($filterPeriod !== 'all' || $filterYear)
+                        <button type="button" wire:click="resetFilters"
+                            class="cursor-pointer ml-auto text-xs font-medium text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors">
+                            Reset filters
+                        </button>
+                    @endif
+                </div>
+
+                {{-- Period summary — totals across the whole filtered window --}}
+                @if($periodTotals['months'] > 0)
+                    <div class="px-6 py-3 bg-zinc-50/60 dark:bg-zinc-950/30 border-b border-zinc-100 dark:border-zinc-800 grid grid-cols-2 gap-4 sm:grid-cols-4">
+                        <div>
+                            <div class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Months</div>
+                            <div class="text-sm font-black text-zinc-900 dark:text-white">{{ $periodTotals['months'] }}</div>
+                        </div>
+                        <div>
+                            <div class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Total Gross</div>
+                            <div class="text-sm font-black text-zinc-900 dark:text-white">₹{{ number_format($periodTotals['gross'], 2) }}</div>
+                        </div>
+                        <div>
+                            <div class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Total Deductions</div>
+                            <div class="text-sm font-black text-red-600">₹{{ number_format($periodTotals['deductions'], 2) }}</div>
+                        </div>
+                        <div>
+                            <div class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Total Net</div>
+                            <div class="text-sm font-black text-emerald-600">₹{{ number_format($periodTotals['net'], 2) }}</div>
+                        </div>
+                    </div>
+                @endif
+
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm">
                         <thead>
                             <tr class="bg-zinc-50/70 dark:bg-zinc-950/40 border-b border-zinc-100 dark:border-zinc-800">
+                                <th class="py-3 pl-6 pr-2 w-8"><span class="sr-only">Select for combined print</span></th>
                                 <th
-                                    class="py-3 pl-6 pr-4 text-left text-[10px] font-bold uppercase tracking-widest text-zinc-400">
+                                    class="py-3 pr-4 text-left text-[10px] font-bold uppercase tracking-widest text-zinc-400">
                                     Month</th>
                                 <th
                                     class="py-3 pr-4 text-left text-[10px] font-bold uppercase tracking-widest text-zinc-400">
@@ -369,7 +457,13 @@
                         <tbody class="divide-y divide-zinc-50 dark:divide-zinc-800/50">
                             @forelse($payslips as $slip)
                                 <tr class="hover:bg-zinc-50/60 dark:hover:bg-zinc-800/20 transition-colors">
-                                    <td class="py-3.5 pl-6 pr-4 font-semibold text-zinc-800 dark:text-zinc-200">
+                                    <td class="py-3.5 pl-6 pr-2">
+                                        <input type="checkbox" wire:model.live="selected" value="{{ $slip->id }}"
+                                            @disabled(!in_array($slip->id, $selected) && count($selected) >= $maxCombined)
+                                            aria-label="Select {{ $slip->payroll->month }} {{ $slip->payroll->year }} payslip"
+                                            class="size-4 rounded border-zinc-300 text-orange-500 focus:ring-orange-500 disabled:opacity-40 dark:border-zinc-600 dark:bg-zinc-800">
+                                    </td>
+                                    <td class="py-3.5 pr-4 font-semibold text-zinc-800 dark:text-zinc-200">
                                         {{ $slip->payroll->month }} {{ $slip->payroll->year }}
                                     </td>
                                     <td class="py-3.5 pr-4 text-zinc-600 dark:text-zinc-400">
@@ -422,7 +516,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="7" class="py-12 text-center text-zinc-400 text-sm">No payslips found</td>
+                                    <td colspan="8" class="py-12 text-center text-zinc-400 text-sm">No payslips found</td>
                                 </tr>
                             @endforelse
                         </tbody>

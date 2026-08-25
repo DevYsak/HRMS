@@ -1,26 +1,22 @@
 <flux:main class="bg-zinc-50 dark:bg-zinc-950 min-h-screen">
 
     {{-- Header --}}
-    <div class="pulse-hero shadow-xl">
-        <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_rgba(59,130,246,0.22),_transparent_65%)]"></div>
-        <div class="pointer-events-none absolute -bottom-10 -left-10 size-64 rounded-full blur-3xl" style="background:radial-gradient(circle,rgba(59,130,246,0.30),transparent 70%)"></div>
-        <div class="pointer-events-none absolute top-0 right-0 size-48 rounded-full blur-3xl" style="background:radial-gradient(circle,rgba(59,130,246,0.08),transparent 70%)"></div>
-        <div class="relative flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+    {{-- Matches the shared hero used by Overtime, Payslips, Time Off and the
+         dashboard. This page was the only one in the app rendered in blue,
+         which read as a different product rather than a different section. --}}
+    <div class="pulse-hero">
+        <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_rgba(249,115,22,0.22),_transparent_65%)]"></div>
+        <div class="pointer-events-none absolute -bottom-10 -left-10 size-64 rounded-full blur-3xl" style="background:radial-gradient(circle,rgba(249,115,22,0.30),transparent 70%)"></div>
+        <div class="pointer-events-none absolute top-0 right-0 size-48 rounded-full blur-3xl" style="background:radial-gradient(circle,rgba(249,115,22,0.08),transparent 70%)"></div>
+        <div class="relative flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
-                <div class="mb-3 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 backdrop-blur-sm">
-                    <div class="size-1.5 animate-pulse rounded-full bg-blue-200"></div>
-                    <span class="text-[11px] font-bold uppercase tracking-[0.18em] text-blue-100">Remote Work</span>
-                </div>
                 <h1 class="text-3xl font-black text-white tracking-tight">My Work From Home</h1>
-                <p class="mt-1.5 text-sm font-medium text-blue-100/70">Submit and track your work-from-home requests.</p>
+                <p class="text-white/55 text-sm mt-1">Submit and track your work-from-home requests.</p>
             </div>
-            <div class="flex shrink-0 flex-wrap items-center gap-3">
-                <button wire:click="openModal"
-                    class="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-black text-blue-700 shadow-lg shadow-black/20 transition-all hover:bg-blue-50">
-                    <flux:icon.plus class="size-4 shrink-0" />
-                    <span>Request WFH</span>
-                </button>
-            </div>
+            <button wire:click="openModal"
+                class="inline-flex items-center gap-2 px-5 py-2.5 bg-brand-600 hover:bg-brand-700 border border-orange-400/50 text-white rounded-xl text-sm font-bold transition shadow-lg shadow-orange-900/30">
+                <flux:icon.plus class="size-4" /> Request WFH
+            </button>
         </div>
     </div>
 

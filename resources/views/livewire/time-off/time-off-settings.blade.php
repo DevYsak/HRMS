@@ -29,7 +29,6 @@
                             'annual' => 'calendar-days',
                             'sick' => 'heart',
                             'other' => 'face-smile',
-                            'mdl' => 'building-office',
                             'comp_off' => 'banknotes',
                             'encashment' => 'currency-dollar',
                             'unpaid' => 'document-text',
@@ -196,7 +195,7 @@
                             <flux:select wire:model="category" label="Category">
                                 <option value="annual">Annual</option>
                                 <option value="sick">Sick</option>
-                                <option value="mdl">Maternity / MDL</option>
+                                <option value="maternity">Maternity Leave</option>
                                 <option value="paternity">Paternity</option>
                                 <option value="bereavement">Bereavement</option>
                                 <option value="comp_off">Comp Off</option>

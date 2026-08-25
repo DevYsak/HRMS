@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\EmployeeStatus;
+use App\Services\Attendance\ShiftResolver;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -14,11 +15,13 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 #[Fillable([
     // Identity
     'user_id', 'employee_id', 'biometric_id',
-    'employee_code', 'biometric_user_id', 'biometric_device_id', 'sync_status', 'last_biometric_sync_at',
+    'employee_code', 'has_placeholder_email', 'biometric_user_id', 'biometric_device_id', 'sync_status', 'last_biometric_sync_at',
     // Personal
     'phone', 'date_of_birth', 'gender', 'address', 'emergency_contact', 'photo',
     // Placement
-    'office_id', 'department_id', 'job_title_id', 'manager_id',
+    'office_id', 'holiday_calendar', 'leave_policy_id', 'working_pattern',
+    'working_days_per_week', 'contracted_hours_per_week', 'working_days',
+    'department_id', 'job_title_id', 'manager_id',
     // Employment (Phase 1A FKs)
     'employment_type_id', 'work_mode_id', 'salary_cycle_id',
     // Legacy string columns kept for backward compat during migration
@@ -121,6 +124,11 @@ class Employee extends Model
     protected function casts(): array
     {
         return [
+            // Which weekdays this employee works, as ISO numbers (1 = Monday).
+            'working_days' => 'array',
+            'working_days_per_week' => 'decimal:1',
+            'contracted_hours_per_week' => 'decimal:2',
+
             // Dates
             'joining_date' => 'date',
             'date_of_birth' => 'date',
@@ -137,9 +145,38 @@ class Employee extends Model
             'archived_at' => 'datetime',
             // Primitives
             'employee_code' => 'integer',
+            'has_placeholder_email' => 'boolean',
             // Enums
             'status' => EmployeeStatus::class,
         ];
+    }
+
+    /**
+     * Imported from an HR sheet that had no joining date. Probation, leave
+     * accrual and payroll proration all key off this date, so they skip the
+     * employee until HR fills it in rather than computing from a guess.
+     */
+    public function isMissingJoiningDate(): bool
+    {
+        return $this->joining_date === null;
+    }
+
+    /**
+     * True when this employee still needs real HR data before every feature
+     * works — surfaced on the record and in the import validation report.
+     *
+     * @return array<int, string>
+     */
+    public function dataFlags(): array
+    {
+        return array_values(array_filter([
+            $this->has_placeholder_email ? 'Email Pending' : null,
+            $this->isMissingJoiningDate() ? 'Joining Date Missing' : null,
+            // Without a resolvable shift there is no window to judge arrivals
+            // against, so the attendance engine declines to score the day at
+            // all. That is safe but invisible — this makes it a visible task.
+            ShiftResolver::hasResolvableShift($this) ? null : 'Shift Not Assigned',
+        ]));
     }
 
     public function user(): BelongsTo
@@ -160,6 +197,17 @@ class Employee extends Model
     public function jobTitle(): BelongsTo
     {
         return $this->belongsTo(JobTitle::class);
+    }
+
+    /**
+     * The holiday policy that decides this employee's entitlement.
+     *
+     * Separate from shift, employment type and working pattern on purpose —
+     * each answers a different question and none is derivable from another.
+     */
+    public function leavePolicy(): BelongsTo
+    {
+        return $this->belongsTo(LeavePolicy::class);
     }
 
     public function manager(): BelongsTo

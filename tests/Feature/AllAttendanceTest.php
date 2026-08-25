@@ -29,7 +29,7 @@ test('the all-attendance board renders KPIs, trend and the log for HR', function
     Livewire::actingAs($hr)->test(AllAttendance::class)
         ->assertOk()
         ->assertSee('Employees Attendance')
-        ->assertSee('Present Today')
+        ->assertSee('Present')
         ->assertSee('Presence Overview')
         ->assertSee('BOARDPERSON')
         ->assertSee('Face');

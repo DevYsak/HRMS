@@ -16,10 +16,10 @@ function makeEmployee(): Employee
     return Employee::factory()->create(['user_id' => $user->id]);
 }
 
-function mdlType(): LeaveType
+function maternityType(): LeaveType
 {
     return LeaveType::firstOrCreate(
-        ['category' => 'mdl'],
+        ['category' => 'maternity'],
         [
             'name' => 'Maternity Leave',
             'is_paid' => false,
@@ -35,7 +35,7 @@ function approvedMdl(Employee $employee, string $start, string $end, bool $halfD
 {
     return LeaveRequest::create([
         'employee_id' => $employee->id,
-        'leave_type_id' => mdlType()->id,
+        'leave_type_id' => maternityType()->id,
         'start_date' => $start,
         'end_date' => $end,
         'is_half_day' => $halfDay,
@@ -49,7 +49,7 @@ function pendingMdl(Employee $employee, string $start, string $end, bool $halfDa
 {
     return LeaveRequest::create([
         'employee_id' => $employee->id,
-        'leave_type_id' => mdlType()->id,
+        'leave_type_id' => maternityType()->id,
         'start_date' => $start,
         'end_date' => $end,
         'is_half_day' => $halfDay,
@@ -61,73 +61,73 @@ function pendingMdl(Employee $employee, string $start, string $end, bool $halfDa
 
 // ─── Approved-leave conflicts ──────────────────────────────────────────────────
 
-it('blocks a new MDL full-day when an approved MDL full-day overlaps', function () {
+it('blocks a new maternity full-day when an approved maternity full-day overlaps', function () {
     $employee = makeEmployee();
     approvedMdl($employee, '2026-06-01', '2026-06-30');
 
     expect(fn () => app(LeaveService::class)->submitRequest(
-        $employee, mdlType(), '2026-06-15', '2026-06-15', 'test',
+        $employee, maternityType(), '2026-06-15', '2026-06-15', 'test',
     ))->toThrow(DomainException::class, 'approved leave');
 });
 
-it('blocks a new MDL half-day when an approved MDL full-day overlaps', function () {
+it('blocks a new maternity half-day when an approved maternity full-day overlaps', function () {
     $employee = makeEmployee();
     approvedMdl($employee, '2026-06-01', '2026-06-30');
 
     expect(fn () => app(LeaveService::class)->submitRequest(
-        $employee, mdlType(), '2026-06-15', '2026-06-15', 'test',
+        $employee, maternityType(), '2026-06-15', '2026-06-15', 'test',
         isHalfDay: true, halfDayPeriod: 'first_half', requestedLeaveStatus: 'unpaid',
     ))->toThrow(DomainException::class, 'approved leave');
 });
 
-it('blocks a new MDL full-day when an approved MDL half-day is on the same date', function () {
+it('blocks a new maternity full-day when an approved maternity half-day is on the same date', function () {
     $employee = makeEmployee();
     approvedMdl($employee, '2026-07-10', '2026-07-10', halfDay: true);
 
     expect(fn () => app(LeaveService::class)->submitRequest(
-        $employee, mdlType(), '2026-07-10', '2026-07-10', 'test', requestedLeaveStatus: 'unpaid',
+        $employee, maternityType(), '2026-07-10', '2026-07-10', 'test', requestedLeaveStatus: 'unpaid',
     ))->toThrow(DomainException::class, 'approved leave');
 });
 
-it('blocks a new MDL half-day when an approved MDL half-day is on the same date', function () {
+it('blocks a new maternity half-day when an approved maternity half-day is on the same date', function () {
     $employee = makeEmployee();
     approvedMdl($employee, '2026-07-10', '2026-07-10', halfDay: true);
 
     expect(fn () => app(LeaveService::class)->submitRequest(
-        $employee, mdlType(), '2026-07-10', '2026-07-10', 'test',
+        $employee, maternityType(), '2026-07-10', '2026-07-10', 'test',
         isHalfDay: true, halfDayPeriod: 'second_half', requestedLeaveStatus: 'unpaid',
     ))->toThrow(DomainException::class, 'approved leave');
 });
 
 // ─── Pending-leave conflicts ───────────────────────────────────────────────────
 
-it('blocks a new MDL request when a pending MDL already exists on overlapping dates', function () {
+it('blocks a new maternity request when a pending maternity already exists on overlapping dates', function () {
     $employee = makeEmployee();
     pendingMdl($employee, '2026-08-01', '2026-08-31');
 
     expect(fn () => app(LeaveService::class)->submitRequest(
-        $employee, mdlType(), '2026-08-19', '2026-08-19', 'test', requestedLeaveStatus: 'unpaid',
+        $employee, maternityType(), '2026-08-19', '2026-08-19', 'test', requestedLeaveStatus: 'unpaid',
     ))->toThrow(DomainException::class, 'pending leave');
 });
 
-it('blocks a new MDL half-day when a pending MDL half-day is on the same date', function () {
+it('blocks a new maternity half-day when a pending maternity half-day is on the same date', function () {
     $employee = makeEmployee();
     pendingMdl($employee, '2026-08-10', '2026-08-10', halfDay: true);
 
     expect(fn () => app(LeaveService::class)->submitRequest(
-        $employee, mdlType(), '2026-08-10', '2026-08-10', 'test',
+        $employee, maternityType(), '2026-08-10', '2026-08-10', 'test',
         isHalfDay: true, halfDayPeriod: 'first_half', requestedLeaveStatus: 'unpaid',
     ))->toThrow(DomainException::class, 'pending leave');
 });
 
 // ─── Non-overlapping is allowed ───────────────────────────────────────────────
 
-it('allows MDL on dates outside the approved MDL window', function () {
+it('allows maternity on dates outside the approved maternity window', function () {
     $employee = makeEmployee();
     approvedMdl($employee, '2026-06-01', '2026-06-30');
 
     $request = app(LeaveService::class)->submitRequest(
-        $employee, mdlType(), '2026-07-01', '2026-07-01', 'post-MDL follow-up', requestedLeaveStatus: 'unpaid',
+        $employee, maternityType(), '2026-07-01', '2026-07-01', 'post-maternity follow-up', requestedLeaveStatus: 'unpaid',
     );
 
     expect($request)->toBeInstanceOf(LeaveRequest::class)
@@ -136,7 +136,7 @@ it('allows MDL on dates outside the approved MDL window', function () {
 
 // ─── Cross-type overlap is also blocked ───────────────────────────────────────
 
-it('blocks any leave type when approved MDL covers those dates', function () {
+it('blocks any leave type when approved maternity covers those dates', function () {
     $employee = makeEmployee();
     approvedMdl($employee, '2026-06-01', '2026-06-30');
 

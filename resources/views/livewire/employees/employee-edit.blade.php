@@ -9,6 +9,11 @@
 
         <div class="flex items-center gap-2">
             <flux:button
+                :href="route('employees.profile', $employee)"
+                wire:navigate
+                variant="outline" icon="identification" size="sm"
+            >Profile</flux:button>
+            <flux:button
                 wire:click="resetPassword"
                 wire:loading.attr="disabled"
                 wire:target="resetPassword"
@@ -132,7 +137,7 @@
                     </div>
                     <div class="flex items-center gap-3 text-sm text-zinc-600 dark:text-zinc-300">
                         <flux:icon.calendar-days class="size-4 shrink-0 text-zinc-400" />
-                        <span>Joined {{ $employee->joining_date->format('d M Y') }}</span>
+                        <span>{{ $employee->joining_date ? 'Joined '.$employee->joining_date->format('d M Y') : 'Joining date not set' }}</span>
                     </div>
                     <div class="flex items-center gap-3 text-sm text-zinc-600 dark:text-zinc-300">
                         <flux:icon.building-office class="size-4 shrink-0 text-zinc-400" />
@@ -358,9 +363,75 @@
                                         :options="[['value' => 'biometric', 'label' => 'Biometric (standard attendance)'], ['value' => 'manual', 'label' => 'Manual (HR-entered)'], ['value' => 'nexflow', 'label' => 'Nexflow (IT/Dev/QA teams)'], ['value' => 'hybrid', 'label' => 'Hybrid (both sources)']]" />
                                     <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Nexflow/Hybrid enables the Nexflow tab and sync.</p>
                                 </div>
-                                <flux:input wire:model="employee_code" type="number" min="1" max="65535" label="Biometric Device ID"
-                                    placeholder="e.g. 17"
-                                    description="Device PIN used to match biometric punches. Leave blank if not enrolled." />
+                                <div>
+                                    <flux:input wire:model.live.debounce.500ms="employee_code" type="number" min="1" max="65535" label="Biometric Device ID"
+                                        placeholder="e.g. 17"
+                                        description="Device PIN used to match biometric punches. Leave blank if not enrolled." />
+
+                                    {{-- Names the holder instead of a bare "already taken", and offers
+                                         the override. The holder is often a deleted employee, who is
+                                         invisible in the directory but still reserves the number. --}}
+                                    @if($codeConflict)
+                                        <div class="mt-2 rounded-xl border border-amber-200 bg-amber-50 p-3 dark:border-amber-500/25 dark:bg-amber-500/10">
+                                            <div class="flex items-start gap-2">
+                                                <flux:icon.exclamation-triangle class="mt-0.5 size-4 shrink-0 text-amber-500" />
+                                                <p class="flex-1 text-xs leading-relaxed text-amber-800 dark:text-amber-300">{{ $codeConflict }}</p>
+                                            </div>
+                                            <flux:button
+                                                wire:click="reassignBiometricCode"
+                                                wire:confirm="Move this Device ID to this employee? The current holder loses it and their future punches will stop matching until they are given a new ID."
+                                                size="xs" variant="primary" class="mt-2">
+                                                Reassign to this employee
+                                            </flux:button>
+                                        </div>
+                                    @endif
+                                </div>
+                            </div>
+
+                            {{-- Biometric mapping + engine sync --}}
+                            <div class="mt-5 rounded-2xl border border-indigo-100 bg-indigo-50/40 p-4 dark:border-indigo-500/20 dark:bg-indigo-500/5">
+                                <div class="flex flex-wrap items-center justify-between gap-3">
+                                    <div class="min-w-0">
+                                        <div class="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-indigo-600 dark:text-indigo-300">
+                                            <flux:icon.cpu-chip class="size-3.5" /> Biometric mapping &amp; sync
+                                        </div>
+                                        <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                                            The engine matches punches by <strong>Biometric Device ID</strong>. Save the ID first, then pull this employee's latest computed attendance.
+                                        </p>
+                                        <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px]">
+                                            <span class="text-zinc-500 dark:text-zinc-400">Mapped ID:
+                                                @if($employee->employee_code)
+                                                    <span class="font-mono font-bold text-zinc-800 dark:text-zinc-100">{{ $employee->employee_code }}</span>
+                                                @else
+                                                    <span class="font-semibold text-amber-600">not enrolled</span>
+                                                @endif
+                                            </span>
+                                            @php
+                                                $ss = $employee->sync_status;
+                                                [$sc, $sl] = match($ss) {
+                                                    'synced' => ['text-emerald-600', 'Synced'],
+                                                    'failed' => ['text-rose-500', 'Failed'],
+                                                    'removed' => ['text-zinc-400', 'Released'],
+                                                    default => ['text-amber-600', 'Pending'],
+                                                };
+                                            @endphp
+                                            <span class="text-zinc-500 dark:text-zinc-400">Device status: <span class="font-bold {{ $sc }}">{{ $sl }}</span></span>
+                                            <span class="text-zinc-500 dark:text-zinc-400">Last sync:
+                                                <span class="font-semibold text-zinc-700 dark:text-zinc-200">{{ $employee->last_biometric_sync_at?->diffForHumans() ?? 'never' }}</span>
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div class="flex shrink-0 items-end gap-2">
+                                        <div class="w-24">
+                                            <flux:input wire:model="syncDays" type="number" min="1" max="30" size="sm" label="Days back" />
+                                        </div>
+                                        <flux:button type="button" wire:click="syncBiometricNow" wire:loading.attr="disabled" wire:target="syncBiometricNow"
+                                            variant="primary" icon="arrow-path" size="sm">
+                                            <span wire:loading.remove wire:target="syncBiometricNow">Sync latest</span>
+                                            <span wire:loading wire:target="syncBiometricNow">Syncing…</span>
+                                        </flux:button>
+                                    </div>
+                                </div>
                             </div>
                             <div class="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-100 pt-5 dark:border-zinc-800">
                                 <div class="flex items-center gap-1.5 text-xs text-zinc-400">
@@ -701,7 +772,7 @@
                             <div class="grid grid-cols-2 gap-4 rounded-xl border border-zinc-100 bg-zinc-50 p-4 text-sm dark:border-zinc-800 dark:bg-zinc-900">
                                 <div>
                                     <div class="mb-1 text-zinc-400">Joining Date</div>
-                                    <div class="font-bold text-zinc-900 dark:text-white">{{ $employee->joining_date->format('d M Y') }}</div>
+                                    <div class="font-bold text-zinc-900 dark:text-white">{{ $employee->joining_date?->format('d M Y') ?? 'Not set' }}</div>
                                 </div>
                                 <div>
                                     <div class="mb-1 text-zinc-400">Probation End Date</div>

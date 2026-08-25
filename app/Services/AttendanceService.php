@@ -12,20 +12,41 @@ use App\Models\Employee;
 use App\Models\PublicHoliday;
 use App\Models\ShiftSetting;
 use App\Models\User;
+use App\Services\Attendance\AttendanceScoreEngine;
+use App\Services\Attendance\HolidayResolver;
+use App\Services\Attendance\ResolvedShift;
+use App\Services\Attendance\ShiftResolver;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class AttendanceService
 {
-    public function checkIn(Employee $employee, ShiftSetting $shift, array $payload = []): Attendance
+    public function __construct(protected ShiftResolver $shifts) {}
+
+    /**
+     * Record an arrival.
+     *
+     * The shift is optional because a punch is a fact and lateness is a
+     * judgement. An employee HR has not yet assigned a shift to must still be
+     * able to record that they are at work — barring them would lose the
+     * attendance record entirely over a configuration gap. Without a shift
+     * there is simply no window to be late against, so the day is stored as
+     * on_time with zero late minutes and the score engine skips it.
+     */
+    public function checkIn(Employee $employee, ?ShiftSetting $shift, array $payload = []): Attendance
     {
         $now = Carbon::now();
-        $shiftStart = Carbon::parse($shift->start_time, config('app.timezone'))
-            ->setDate($now->year, $now->month, $now->day);
-        $cutoff = $shiftStart->copy()->addMinutes((int) $shift->grace_minutes);
+        $isLate = false;
+        $lateMinutes = 0;
 
-        $isLate = $now->gt($cutoff);
-        $lateMinutes = $isLate ? (int) $cutoff->diffInMinutes($now) : 0;
+        if ($shift && $shift->start_time) {
+            $shiftStart = Carbon::parse($shift->start_time, config('app.timezone'))
+                ->setDate($now->year, $now->month, $now->day);
+            $cutoff = $shiftStart->copy()->addMinutes((int) $shift->grace_minutes);
+
+            $isLate = $now->gt($cutoff);
+            $lateMinutes = $isLate ? (int) $cutoff->diffInMinutes($now) : 0;
+        }
 
         return Attendance::create([
             'employee_id' => $employee->id,
@@ -46,7 +67,8 @@ class AttendanceService
     public function checkOut(Attendance $attendance, array $payload = []): Attendance
     {
         $now = Carbon::now();
-        $totalHours = round($attendance->check_in->diffInMinutes($now) / 60, 2);
+        $grossMinutes = (int) $attendance->check_in->diffInMinutes($now);
+        $totalHours = round(max(0, $grossMinutes - (int) ($attendance->break_minutes ?? 0)) / 60, 2);
 
         $attendance->update([
             'check_out' => $now,
@@ -145,7 +167,73 @@ class AttendanceService
             return null;
         }
 
-        return DB::transaction(function () use ($regularisation, $reviewerId, $comment, $trail) {
+        return $this->applyRegularisation($regularisation, $reviewerId, $comment, $trail, 'admin_chain');
+    }
+
+    /**
+     * HR applies a correction immediately, without waiting for admin approval.
+     *
+     * The staged chain still exists and is still the default: this is a
+     * deliberate, separately authorised shortcut for the case HR actually
+     * hits — a punch is plainly wrong, HR has the evidence, and the employee's
+     * hours should not stay wrong until an admin happens to look.
+     *
+     * It reaches the same applied state through the same application routine
+     * as the admin path, so there is exactly one implementation of "correct an
+     * attendance day". What differs is only the audit: the trail records a
+     * fast-tracked action at hr_review, and applied_via marks the route.
+     *
+     * @throws \DomainException when the caller may not fast-track
+     */
+    public function fastTrackRegularisation(AttendanceRegularisation $regularisation, int $reviewerId, ?string $comment = null): ?Attendance
+    {
+        if ($regularisation->status !== 'pending') {
+            return $regularisation->attendance;
+        }
+
+        $reviewer = User::find($reviewerId);
+
+        // Explicitly authorised, and not merely by being an approver: managers
+        // approve regularisations but must not apply them unreviewed.
+        // manage_attendance is held by HR, directors and super admins only.
+        if (! $reviewer?->hasPermission('manage_attendance')) {
+            throw new \DomainException('You are not authorised to apply a regularisation directly.');
+        }
+
+        $trail = $regularisation->approval_trail ?? [];
+        $trail[] = [
+            'stage' => $regularisation->stage ?: 'manager_review',
+            'action' => 'fast_tracked',
+            'by' => $reviewerId,
+            'name' => $reviewer->name,
+            'comment' => $comment,
+            'at' => now()->toDateTimeString(),
+        ];
+
+        return $this->applyRegularisation($regularisation, $reviewerId, $comment, $trail, 'hr_fast_path');
+    }
+
+    /**
+     * The one place a regularisation is actually written onto attendance.
+     *
+     * Both routes end here — the full manager → HR → admin chain and HR's
+     * fast-path — so the correction, the original-value snapshot, the break and
+     * late recompute, the punch journey, the OT filing and the rescore happen
+     * identically however the request was approved. A second implementation is
+     * how two routes end up producing different attendance from the same
+     * request.
+     *
+     * @param  array<int, array<string, mixed>>  $trail
+     * @param  string  $via  admin_chain | hr_fast_path
+     */
+    protected function applyRegularisation(
+        AttendanceRegularisation $regularisation,
+        int $reviewerId,
+        ?string $comment,
+        array $trail,
+        string $via,
+    ): ?Attendance {
+        return DB::transaction(function () use ($regularisation, $reviewerId, $comment, $trail, $via) {
             $regularisation->update([
                 'status' => 'approved',
                 'stage' => 'admin_approval',
@@ -153,6 +241,11 @@ class AttendanceService
                 'reviewer_comment' => $comment,
                 'approval_trail' => $trail,
                 'reviewed_at' => now(),
+                // Who actually rewrote the attendance, and by which route —
+                // reviewer_id alone cannot distinguish the two paths.
+                'applied_by' => $reviewerId,
+                'applied_at' => now(),
+                'applied_via' => $via,
             ]);
 
             // Half-day regularisation: mark the day as half-day rather than
@@ -160,10 +253,16 @@ class AttendanceService
             // NOT NULL column holds.
             if ($regularisation->regularisation_type === 'half_day') {
                 $workDate = Carbon::parse($regularisation->work_date)->toDateString();
+                // Seed a fully-absent half-day at the employee's shift start
+                // (DB-driven), never a hardcoded clock time.
+                $shift = $regularisation->employee
+                    ? $this->shifts->resolve($regularisation->employee, $workDate)
+                    : null;
+                $seedCheckIn = $shift?->start ?? Carbon::parse($workDate.' 00:00:00');
                 $attendance = $regularisation->attendance
                     ?? Attendance::firstOrCreate(
                         ['employee_id' => $regularisation->employee_id, 'date' => $regularisation->work_date],
-                        ['check_in' => Carbon::parse($workDate.' 09:00:00'), 'status' => 'half_day', 'work_mode' => 'office'],
+                        ['check_in' => $seedCheckIn, 'status' => 'half_day', 'work_mode' => 'office'],
                     );
 
                 if (! $regularisation->attendance_id) {
@@ -171,6 +270,12 @@ class AttendanceService
                 }
 
                 $attendance->update(['status' => 'half_day', 'is_regularized' => true]);
+
+                // Rescore the corrected day so the attendance score and its
+                // audit breakdown reflect the approved correction immediately.
+                if ($regularisation->employee) {
+                    app(AttendanceScoreEngine::class)->scoreDay($regularisation->employee, $workDate);
+                }
 
                 return $attendance->fresh();
             }
@@ -181,6 +286,14 @@ class AttendanceService
             $workDate = Carbon::parse($regularisation->work_date)->toDateString();
             $checkIn = Carbon::parse($workDate.' '.Carbon::parse($regularisation->requested_check_in)->format('H:i:s'));
             $checkOut = Carbon::parse($workDate.' '.Carbon::parse($regularisation->requested_check_out)->format('H:i:s'));
+
+            // A night shift clocks out on the following calendar day. Both
+            // times are TIME columns anchored to the work date, so without this
+            // a 22:00 → 06:00 correction spans minus sixteen hours and the
+            // clamp below books the whole shift as zero hours worked.
+            if ($checkOut->lessThanOrEqualTo($checkIn)) {
+                $checkOut->addDay();
+            }
 
             // Seed check_in/out on create so regularising a fully-absent day
             // (no existing attendance row) doesn't violate the NOT NULL columns.
@@ -194,21 +307,52 @@ class AttendanceService
                 $regularisation->update(['attendance_id' => $attendance->id]);
             }
 
-            $grossMinutes = $checkIn->diffInMinutes($checkOut);
-            $netMinutes = max(0, $grossMinutes - ((int) $attendance->break_minutes));
+            // Resolved before the hours are worked out: the break fallback
+            // needs the shift's unpaid break, not just the late calculation.
+            $shift = $regularisation->employee
+                ? $this->shifts->resolve($regularisation->employee, $workDate)
+                : null;
 
-            $attendance->update(array_filter([
+            $grossMinutes = (int) $checkIn->diffInMinutes($checkOut);
+            $breakMinutes = $this->breakMinutesForCorrection($attendance, $checkIn, $checkOut, $shift);
+            $netMinutes = max(0, $grossMinutes - $breakMinutes);
+
+            // Preserve the ORIGINAL punch immutably the first time this day is
+            // corrected — the raw punch is never lost, only snapshotted. Later
+            // re-approvals keep the very first original.
+            $original = [];
+            if ($attendance->original_check_in === null && $attendance->original_check_out === null) {
+                $original = [
+                    'original_check_in' => $attendance->check_in,
+                    'original_check_out' => $attendance->check_out,
+                ];
+            }
+
+            // Late is recomputed against the shift, NOT forced to on_time — a
+            // punch corrected to 10:40 on an 09:00 shift is still late.
+            $isLate = $shift ? $shift->isLate($checkIn) : (bool) $attendance->is_late;
+            $lateMinutes = $shift ? $shift->lateMinutes($checkIn) : (int) ($attendance->late_minutes ?? 0);
+
+            // Times + methods: keep any existing value when the request left a
+            // field null (only the corrected punch is overwritten).
+            $punchFields = array_filter([
                 'check_in' => $checkIn,
                 'check_out' => $checkOut,
                 'check_in_method' => $regularisation->check_in_method,
                 'check_out_method' => $regularisation->check_out_method,
+            ], fn ($v) => $v !== null);
+
+            $attendance->update($original + $punchFields + [
+                'break_minutes' => $breakMinutes,
                 'total_hours' => round($netMinutes / 60, 2),
-                'status' => 'on_time',
-                'is_late' => false,
-                'late_minutes' => 0,
+                'status' => $isLate ? 'late' : 'on_time',
+                'is_late' => $isLate,
+                'late_minutes' => $lateMinutes,
                 'missing_checkout' => false,
+                'is_auto_checkout' => false,   // a real correction supersedes any system auto-close
+                'auto_checkout_reason' => null,
                 'is_regularized' => true,
-            ], fn ($v) => $v !== null));
+            ]);
 
             // Write the corrected in/out into the punch journey (with the
             // declared method) so the employee's Attendance Journey reflects the
@@ -224,6 +368,12 @@ class AttendanceService
             $otRequest = app(OvertimeService::class)->autoCreateFromAttendance($attendance->fresh(['employee.shift']));
             if ($otRequest) {
                 app(OvertimeService::class)->approve($otRequest, $reviewerId, 'Auto-approved with attendance regularisation.');
+            }
+
+            // Rescore the corrected day so the attendance score and its audit
+            // breakdown reflect the approved correction immediately.
+            if ($regularisation->employee) {
+                app(AttendanceScoreEngine::class)->scoreDay($regularisation->employee, $workDate);
             }
 
             return $attendance->fresh();
@@ -282,7 +432,16 @@ class AttendanceService
         return $regularisation->fresh();
     }
 
-    /** Workflow authority: super admin finalises (3), HR clears through hr_review (2), managers clear manager_review (1). */
+    /**
+     * Workflow authority: super admin finalises (3), HR clears through
+     * hr_review (2), managers clear manager_review (1).
+     *
+     * The staged chain is deliberate — each level sees the request before it
+     * takes effect. HR's need to correct a day immediately is served by
+     * fastTrackRegularisation() instead, which is an explicit, separately
+     * authorised, separately audited action rather than a quiet change to what
+     * "approve" means for everyone.
+     */
     protected function approvalLevel(?User $user): int
     {
         return match (true) {
@@ -291,6 +450,42 @@ class AttendanceService
             $user->isHrAdmin() => 2,
             default => 1,
         };
+    }
+
+    /**
+     * Unpaid break to deduct from a corrected day.
+     *
+     * Prefers what actually happened — break logs overlapping the corrected
+     * window — and falls back to the shift's standard break when there are
+     * none. That fallback is what makes a regularised absent day honest: such a
+     * day has no break logs at all, so without it a 09:00–18:00 correction
+     * books nine straight hours with no lunch deducted.
+     *
+     * Never exceeds the worked span, so the net can't go negative.
+     */
+    private function breakMinutesForCorrection(
+        Attendance $attendance,
+        Carbon $checkIn,
+        Carbon $checkOut,
+        ?ResolvedShift $shift,
+    ): int {
+        $grossMinutes = (int) $checkIn->diffInMinutes($checkOut);
+
+        $logged = (int) BreakLog::where('employee_id', $attendance->employee_id)
+            ->whereNotNull('break_end')
+            ->where('break_start', '>=', $checkIn)
+            ->where('break_end', '<=', $checkOut)
+            ->sum('duration_minutes');
+
+        if ($logged > 0) {
+            return min($logged, $grossMinutes);
+        }
+
+        // No logs: keep whatever the day already carried, else the shift's own
+        // unpaid break. Both are clamped to the corrected span.
+        $fallback = (int) ($attendance->break_minutes ?: $shift?->breakMinutes ?: 0);
+
+        return max(0, min($fallback, $grossMinutes));
     }
 
     protected function creditCompOffIfEligible(Attendance $attendance, Carbon $date): void
@@ -312,18 +507,13 @@ class AttendanceService
         app(LeaveService::class)->creditCompOff($employee, $date);
     }
 
+    /**
+     * Delegates to HolidayResolver, which is now the single home for the
+     * country rule. Kept as a thin method so existing callers here read the
+     * same as before.
+     */
     protected function resolveHolidayCountry(Employee $employee): string
     {
-        $officeCountry = strtoupper((string) ($employee->office?->country ?? ''));
-        if (in_array($officeCountry, ['UK', 'UNITED KINGDOM', 'GB', 'GREAT BRITAIN'], true)) {
-            return 'UK';
-        }
-
-        $shiftName = strtoupper((string) ($employee->shift?->name ?? ''));
-        if (str_contains($shiftName, 'UK')) {
-            return 'UK';
-        }
-
-        return 'IN';
+        return app(HolidayResolver::class)->resolveCountry($employee);
     }
 }

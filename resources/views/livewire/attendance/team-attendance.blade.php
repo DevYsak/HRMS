@@ -4,6 +4,53 @@
             <h1 class="pulse-page-title">Team Attendance</h1>
             <p class="pulse-page-subtitle">Monitoring real-time presence of your direct reports</p>
         </div>
+        <div class="flex items-center gap-2">
+            <select wire:model.live="period" class="rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 py-1.5 pl-2.5 pr-7 text-xs font-bold text-zinc-600 dark:text-zinc-300 focus:ring-0">
+                <option value="this_week">This Week</option>
+                <option value="this_month">This Month</option>
+                <option value="last_month">Last Month</option>
+                <option value="quarter">This Quarter</option>
+            </select>
+        </div>
+    </div>
+
+    {{-- ─── PERIOD ANALYTICS — recomputes from the filter (engine-scored) ─── --}}
+    <div class="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900" wire:loading.class="opacity-50" wire:target="period">
+        <div class="mb-3 flex items-center justify-between">
+            <h3 class="flex items-center gap-2 text-sm font-bold text-zinc-900 dark:text-white"><flux:icon.chart-bar class="size-4 text-orange-500" /> Team Analytics</h3>
+            <span class="rounded-full bg-orange-50 px-2 py-0.5 text-[10px] font-bold text-orange-500 dark:bg-orange-500/15">{{ $periodLabel }}</span>
+        </div>
+        <div class="grid grid-cols-2 gap-3 sm:grid-cols-5">
+            @php
+                $pcards = [
+                    ['Present Days', $periodStats['present'], '#10b981'],
+                    ['Late Marks', $periodStats['late'], '#f59e0b'],
+                    ['Worked Hours', $periodStats['worked_hours'].'h', '#3b82f6'],
+                    ['Overtime', $periodStats['overtime_hours'].'h', '#8b5cf6'],
+                    ['Avg Score', $periodStats['avg_score'].'/100', '#F97316'],
+                ];
+            @endphp
+            @foreach($pcards as [$label, $value, $color])
+                <div class="rounded-xl border border-zinc-100 bg-zinc-50/60 p-3 dark:border-zinc-800 dark:bg-zinc-800/40">
+                    <div class="text-xl font-black tabular-nums text-zinc-900 dark:text-white" style="color: {{ $color }}">{{ $value }}</div>
+                    <div class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">{{ $label }}</div>
+                </div>
+            @endforeach
+        </div>
+        @if(!empty($scoreRanking))
+            <div class="mt-3 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+                <div class="mb-2 text-[10px] font-bold uppercase tracking-widest text-zinc-400">Attendance score leaders</div>
+                <div class="flex flex-wrap gap-2">
+                    @foreach($scoreRanking as $i => $r)
+                        <span class="inline-flex items-center gap-1.5 rounded-lg border border-zinc-100 bg-white px-2.5 py-1 text-xs dark:border-zinc-800 dark:bg-zinc-900">
+                            <span class="text-[9px] font-black text-zinc-400">#{{ $i + 1 }}</span>
+                            <span class="font-bold text-zinc-700 dark:text-zinc-200">{{ $r['name'] }}</span>
+                            <span class="font-black tabular-nums {{ $r['score'] >= 85 ? 'text-emerald-600' : ($r['score'] >= 60 ? 'text-amber-600' : 'text-rose-500') }}">{{ $r['score'] }}</span>
+                        </span>
+                    @endforeach
+                </div>
+            </div>
+        @endif
     </div>
 
     {{-- ─── LIVE BOARD ─── --}}

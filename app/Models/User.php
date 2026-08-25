@@ -17,7 +17,7 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Str;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 
-#[Fillable(['name', 'email', 'password', 'current_team_id', 'avatar', 'role', 'role_id', 'scope_departments', 'scope_shifts', 'theme', 'timezone', 'date_format', 'time_format'])]
+#[Fillable(['name', 'email', 'password', 'must_change_password', 'password_changed_at', 'last_login_at', 'current_team_id', 'avatar', 'role', 'role_id', 'scope_departments', 'scope_shifts', 'theme', 'timezone', 'date_format', 'time_format'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -48,6 +48,9 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'must_change_password' => 'boolean',
+            'password_changed_at' => 'datetime',
+            'last_login_at' => 'datetime',
             'two_factor_confirmed_at' => 'datetime',
             'role' => UserRole::class,
             'theme' => ThemePreference::class,
@@ -201,6 +204,21 @@ class User extends Authenticatable
     public function canViewFinanceProfile(): bool
     {
         return $this->hasPermission('view_finance_profile');
+    }
+
+    public function canLockPayroll(): bool
+    {
+        return $this->hasPermission('lock_payroll');
+    }
+
+    public function canUnlockPayroll(): bool
+    {
+        return $this->hasPermission('unlock_payroll');
+    }
+
+    public function canDeletePayslip(): bool
+    {
+        return $this->hasPermission('delete_payslip');
     }
 
     public function canReviewPerformance(): bool

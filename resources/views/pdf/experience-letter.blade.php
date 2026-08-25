@@ -60,7 +60,10 @@
     <div class="content">
         <p><strong>TO WHOMSOEVER IT MAY CONCERN</strong></p>
         
-        <p>This is to certify that <strong>{{ $employee->user->name }}</strong> was employed with <strong>{{ $company->name }}</strong> from <strong>{{ $employee->joining_date->format('F d, Y') }}</strong> to <strong>{{ \Carbon\Carbon::parse($employee->exitRecord->last_working_day)->format('F d, Y') }}</strong>.</p>
+        {{-- joining_date is nullable for employees imported from an incomplete
+             HR record. An experience letter is not valid without it, so say so
+             plainly rather than rendering a broken or fabricated date. --}}
+        <p>This is to certify that <strong>{{ $employee->user->name }}</strong> was employed with <strong>{{ $company->name }}</strong> from <strong>{{ $employee->joining_date?->format('F d, Y') ?? '[JOINING DATE NOT ON RECORD]' }}</strong> to <strong>{{ \Carbon\Carbon::parse($employee->exitRecord->last_working_day)->format('F d, Y') }}</strong>.</p>
         
         <p>During their tenure, they held the position of <strong>{{ $employee->jobTitle->title ?? 'Employee' }}</strong> in the <strong>{{ $employee->department->name ?? 'General' }}</strong> department.</p>
         

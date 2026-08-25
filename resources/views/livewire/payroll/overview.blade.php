@@ -1,224 +1,152 @@
-@php
-    $changeAmt  = $lastMonthPayout > 0 ? $totalMonthlyPayout - $lastMonthPayout : 0;
-    $changePct  = $lastMonthPayout > 0 ? round(($changeAmt / $lastMonthPayout) * 100, 1) : 0;
-    $activeComponents = \App\Models\SalaryComponent::where('is_active', true)->count();
-    $pendingCount     = $statusCounts['draft'] ?? 0;
-@endphp
+<flux:main class="space-y-6 p-4 md:p-6">
 
-<flux:main class="bg-[#F7F8FA] min-h-screen dark:bg-zinc-950">
-
-    {{-- ── Page Header ────────────────────────────────────────────────── --}}
-    <div class="pulse-hero shadow-xl">
-        <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_rgba(249,115,22,0.22),_transparent_65%)]"></div>
-        <div class="pointer-events-none absolute -bottom-10 -left-10 size-64 rounded-full blur-3xl" style="background:radial-gradient(circle,rgba(249,115,22,0.30),transparent 70%)"></div>
-        <div class="pointer-events-none absolute top-0 right-0 size-48 rounded-full blur-3xl" style="background:radial-gradient(circle,rgba(249,115,22,0.08),transparent 70%)"></div>
-
-        <div class="relative flex flex-col sm:flex-row sm:items-center justify-between gap-6">
-            <div>
-                <div class="mb-3 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 backdrop-blur-sm">
-                    <div class="size-1.5 animate-pulse rounded-full bg-orange-200"></div>
-                    <span class="text-[11px] font-bold uppercase tracking-[0.18em] text-orange-100">Payroll</span>
-                </div>
-                <h1 class="text-3xl font-black tracking-tight text-white">Payroll Overview</h1>
-                <p class="mt-1.5 text-sm font-medium text-violet-200/80">Summary of company-wide salary disbursements.</p>
-            </div>
-            <div class="flex shrink-0 flex-wrap items-center gap-3">
-                <a href="{{ route('reports.payroll-summary', ['month' => now()->month, 'year' => now()->year]) }}"
-                   target="_blank"
-                   class="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-white/25 bg-white/15 px-4 py-2.5 text-sm font-bold text-white backdrop-blur-sm transition-all hover:bg-white/25">
-                    <flux:icon.arrow-down-tray class="size-4 shrink-0" />
-                    <span>Export PDF</span>
-                </a>
-                <a href="{{ route('payroll.components') }}"
-                   wire:navigate
-                   class="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-white/25 bg-white/15 px-4 py-2.5 text-sm font-bold text-white backdrop-blur-sm transition-all hover:bg-white/25">
-                    <flux:icon.cog-6-tooth class="size-4 shrink-0" />
-                    <span>Settings</span>
-                </a>
-                <a href="{{ route('payroll.process') }}"
-                   wire:navigate
-                   class="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-black text-orange-700 shadow-lg shadow-black/20 transition-all hover:bg-violet-50">
-                    <flux:icon.play class="size-4 shrink-0" />
-                    <span>Process Payroll</span>
-                </a>
-            </div>
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+            <flux:heading size="xl">Payroll Overview</flux:heading>
+            <flux:subheading>Run status, payout trends and upcoming cycles at a glance.</flux:subheading>
+        </div>
+        <div class="flex items-center gap-2">
+            <x-clean-select model="filterYear" :live="true"
+                :options="array_merge([['value' => '', 'label' => 'This year']], collect(range(now()->year, now()->year - 3))->map(fn ($y) => ['value' => (string) $y, 'label' => (string) $y])->all())" />
+            <flux:button :href="route('reports.payroll-summary', ['month' => now()->month, 'year' => now()->year])" target="_blank" variant="ghost" icon="arrow-down-tray">Export PDF</flux:button>
+            <flux:button :href="route('payroll.process')" wire:navigate variant="primary" icon="play">Run Payroll</flux:button>
         </div>
     </div>
 
-    <div class="p-4 md:p-6 space-y-5">
-
-        {{-- ── KPI Cards ───────────────────────────────────────────────── --}}
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
-
-            {{-- Expected Payout --}}
-            <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 p-6 shadow-sm relative overflow-hidden">
-                <div class="absolute -right-6 -top-6 size-28 rounded-full bg-violet-50 dark:bg-violet-950/20 pointer-events-none"></div>
-                <div class="relative">
-                    <div class="flex items-start justify-between mb-5">
-                        <div class="size-11 rounded-xl bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center shrink-0">
-                            <flux:icon.banknotes class="size-5 text-violet-600 dark:text-violet-400" />
-                        </div>
-                        <span class="text-[10px] font-bold text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-950/40 border border-violet-200 dark:border-violet-800/40 px-2.5 py-1 rounded-full tracking-wide uppercase">
-                            {{ now()->format('M Y') }}
-                        </span>
-                    </div>
-                    <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">Expected Payout</div>
-                    <div class="text-3xl font-black text-zinc-900 dark:text-white tracking-tight tabular-nums">
-                        ₹{{ number_format($totalMonthlyPayout, 2) }}
-                    </div>
-                    <div class="mt-3 flex items-center gap-1.5 text-xs font-semibold {{ $changePct >= 0 ? 'text-emerald-600' : 'text-red-500' }}">
-                        <flux:icon :name="$changePct >= 0 ? 'arrow-trending-up' : 'arrow-trending-down'" class="size-3.5" />
-                        {{ abs($changePct) }}% vs last month
-                    </div>
-                </div>
-            </div>
-
-            {{-- Active Components --}}
-            <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 p-6 shadow-sm relative overflow-hidden">
-                <div class="absolute -right-6 -top-6 size-28 rounded-full bg-blue-50 dark:bg-blue-950/20 pointer-events-none"></div>
-                <div class="relative">
-                    <div class="flex items-start justify-between mb-5">
-                        <div class="size-11 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shrink-0">
-                            <flux:icon.puzzle-piece class="size-5 text-blue-600 dark:text-blue-400" />
-                        </div>
-                        <span class="text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/40 px-2.5 py-1 rounded-full tracking-wide uppercase">
-                            Components
-                        </span>
-                    </div>
-                    <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">Active Components</div>
-                    <div class="text-3xl font-black text-zinc-900 dark:text-white tracking-tight">
-                        {{ $activeComponents }}
-                    </div>
-                    <div class="mt-3 text-xs text-zinc-500 font-medium">Earnings &amp; Deductions combined</div>
-                </div>
-            </div>
-
-            {{-- Pending Processes --}}
-            <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 p-6 shadow-sm relative overflow-hidden">
-                <div class="absolute -right-6 -top-6 size-28 rounded-full bg-orange-50 dark:bg-orange-950/20 pointer-events-none"></div>
-                <div class="relative">
-                    <div class="flex items-start justify-between mb-5">
-                        <div class="size-11 rounded-xl bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center shrink-0">
-                            <flux:icon.clock class="size-5 text-orange-500 dark:text-orange-400" />
-                        </div>
-                        <span class="text-[10px] font-bold text-orange-500 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-800/40 px-2.5 py-1 rounded-full tracking-wide uppercase">
-                            Pending
-                        </span>
-                    </div>
-                    <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">Pending Processes</div>
-                    <div class="text-3xl font-black text-zinc-900 dark:text-white tracking-tight">
-                        {{ $pendingCount }}
-                    </div>
-                    <div class="mt-3 text-xs text-zinc-500 font-medium">Drafts awaiting finalization</div>
-                </div>
-            </div>
+    {{-- ══ KPI ROW ══ --}}
+    <div class="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-7">
+        <x-dashboard.hr.stat-tile label="Employees" :value="$totalEmployees" icon="users" accent="blue" />
+        <x-dashboard.hr.stat-tile label="Processed" :value="$processedCount" icon="check-badge" accent="green" sub="finalized" />
+        <x-dashboard.hr.stat-tile label="Pending" :value="$pendingCount" icon="clock" accent="amber" sub="awaiting finance" />
+        <x-dashboard.hr.stat-tile label="Draft" :value="$draftCount" icon="pencil-square" accent="orange" sub="in progress" />
+        <x-dashboard.hr.stat-tile label="Failed" :value="$failedCount" icon="exclamation-triangle" :accent="$failedCount > 0 ? 'red' : 'green'" sub="generation errors" />
+        <div class="col-span-2 xl:col-span-2">
+            <x-dashboard.kpi-card label="Total Salary Paid" :value="'₹'.number_format($totalSalaryPaid, 0)" icon="banknotes" accent="green" :compare="'vs ₹'.number_format($lastMonthPayout,0).' last month'" />
         </div>
+    </div>
 
-        {{-- ── YTD Banner ──────────────────────────────────────────────── --}}
-        <div class="bg-gradient-to-r from-violet-600 to-violet-700 dark:from-violet-800 dark:to-violet-900 rounded-2xl p-5 flex items-center justify-between shadow-sm shadow-brand-200 dark:shadow-none">
-            <div class="flex items-center gap-4">
-                <div class="size-11 rounded-xl bg-white/15 flex items-center justify-center shrink-0">
-                    <flux:icon.chart-bar class="size-5 text-white" />
-                </div>
-                <div>
-                    <div class="text-[10px] font-bold text-violet-200 uppercase tracking-widest mb-0.5">Year to Date — {{ now()->year }}</div>
-                    <div class="text-2xl font-black text-white tracking-tight tabular-nums">₹{{ number_format($ytdPayout, 2) }}</div>
-                </div>
-            </div>
-            <div class="text-right hidden sm:block">
-                <div class="text-[10px] font-bold text-violet-200 uppercase tracking-widest mb-0.5">Total Cycles Run</div>
-                <div class="text-2xl font-black text-white">{{ $recentPayrolls->count() }}</div>
-            </div>
-        </div>
+    {{-- ══ PAYOUT TREND + UPCOMING CYCLE ══ --}}
+    <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <x-dashboard.hr.section-card class="lg:col-span-2" title="Payout Trend" subtitle="Total payroll payout, last 6 months (₹ Lakh)" icon="chart-bar" accent="orange">
+            <x-dashboard.chart :options="$payoutChart" id="payroll-payout-trend" />
+        </x-dashboard.hr.section-card>
 
-        {{-- ── Recent Payroll Cycles ────────────────────────────────────── --}}
-        <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 shadow-sm overflow-hidden">
-            <div class="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between gap-4">
-                <div>
-                    <h3 class="text-base font-bold text-zinc-900 dark:text-white">Payroll Cycles</h3>
-                    <p class="text-xs text-zinc-500 mt-0.5">{{ $recentPayrolls->count() }} runs{{ $filterYear ? ' in ' . $filterYear : '' }}</p>
+        <x-dashboard.hr.section-card title="Upcoming Payroll Cycle" subtitle="Next pay date per active cycle" icon="calendar-days" accent="blue">
+            @forelse($upcomingCycles as $cycle)
+                <div class="mb-2 flex items-center justify-between rounded-xl border border-[#F3E8DD] bg-[#FFFDF8] p-3 dark:border-white/10 dark:bg-white/5">
+                    <div>
+                        <div class="text-sm font-bold text-[#111827] dark:text-white">{{ $cycle['name'] }}</div>
+                        <div class="text-[11px] text-[#9CA3AF] dark:text-zinc-500">Pays on day {{ $cycle['pay_day'] }} of the month</div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-sm font-bold text-orange-600 dark:text-orange-400">{{ $cycle['next']->format('d M') }}</div>
+                        <div class="text-[11px] text-[#9CA3AF] dark:text-zinc-500">{{ $cycle['days'] === 0 ? 'Today' : ($cycle['days'] === 1 ? 'Tomorrow' : $cycle['days'].' days') }}</div>
+                    </div>
                 </div>
-                <div class="flex items-center gap-3">
-                    <x-clean-select model="filterYear" :live="true"
-                        :options="array_merge([['value' => '', 'label' => 'All Years']], collect(range(now()->year, now()->year - 3))->map(fn ($y) => ['value' => $y, 'label' => $y])->all())" />
-                    <a href="{{ route('payroll.process') }}" wire:navigate
-                       class="inline-flex items-center gap-1 text-xs font-semibold text-brand-600 hover:text-brand-700 transition-colors">
-                        View all <flux:icon.arrow-right class="size-3.5" />
-                    </a>
-                </div>
+            @empty
+                <p class="py-8 text-center text-sm text-[#9CA3AF] dark:text-zinc-500">No active salary cycles configured.</p>
+            @endforelse
+        </x-dashboard.hr.section-card>
+    </div>
+
+    {{-- ══ RECENT ACTIVITY + CALENDAR ══ --}}
+    <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <x-dashboard.hr.section-card class="lg:col-span-2" title="Recent Payroll Activity" subtitle="Latest payroll/payslip audit events" icon="sparkles" accent="violet">
+            <x-slot:actions>
+                <flux:button :href="route('payroll.audit-trail')" wire:navigate size="sm" variant="ghost">View all →</flux:button>
+            </x-slot:actions>
+            <div class="max-h-[320px] space-y-2.5 overflow-y-auto pr-1">
+                @forelse($recentActivity as $log)
+                    @php
+                        $dot = match(true) {
+                            in_array($log->action, ['created', 'approved', 'unlocked'], true) => 'bg-emerald-500',
+                            in_array($log->action, ['rejected', 'deleted'], true) => 'bg-rose-500',
+                            $log->action === 'locked' => 'bg-amber-500',
+                            default => 'bg-blue-500',
+                        };
+                    @endphp
+                    <div class="flex items-center gap-3 rounded-xl border border-[#F3E8DD] bg-[#FFFDF8] p-3 dark:border-white/10 dark:bg-white/5">
+                        <span class="size-2.5 shrink-0 rounded-full {{ $dot }}"></span>
+                        <span class="flex size-8 shrink-0 items-center justify-center rounded-full bg-white text-[10px] font-bold text-orange-500 ring-1 ring-[#F3E8DD] dark:bg-zinc-800 dark:ring-white/10">
+                            {{ \Illuminate\Support\Str::of($log->user?->name ?? 'System')->explode(' ')->take(2)->map(fn ($p) => $p[0] ?? '')->implode('') }}
+                        </span>
+                        <p class="min-w-0 flex-1 truncate text-sm text-[#6B7280] dark:text-zinc-400">
+                            <span class="font-semibold text-[#111827] dark:text-white">{{ $log->user?->name ?? 'System' }}</span>
+                            {{ ucfirst(str_replace('_', ' ', $log->action)) }} a {{ class_basename($log->auditable_type) }}
+                        </p>
+                        <span class="shrink-0 text-[11px] font-medium text-[#9CA3AF] dark:text-zinc-500">{{ $log->created_at?->diffForHumans(null, true) }}</span>
+                    </div>
+                @empty
+                    <p class="py-8 text-center text-sm text-[#9CA3AF] dark:text-zinc-500">No payroll activity yet.</p>
+                @endforelse
             </div>
-            <div class="overflow-x-auto">
-                <table class="w-full text-sm">
-                    <thead>
-                        <tr class="bg-zinc-50/70 dark:bg-zinc-950/40 border-b border-zinc-100 dark:border-zinc-800">
-                            <th class="py-3 pl-6 pr-4 text-left text-[10px] font-bold uppercase tracking-widest text-zinc-400">Cycle Period</th>
-                            <th class="py-3 pr-4 text-left text-[10px] font-bold uppercase tracking-widest text-zinc-400">Total Disbursement</th>
-                            <th class="py-3 pr-4 text-left text-[10px] font-bold uppercase tracking-widest text-zinc-400">Status</th>
-                            <th class="py-3 pr-4 text-left text-[10px] font-bold uppercase tracking-widest text-zinc-400">Employees</th>
-                            <th class="py-3 pr-6 text-right text-[10px] font-bold uppercase tracking-widest text-zinc-400">Action</th>
+        </x-dashboard.hr.section-card>
+
+        <x-dashboard.hr.section-card title="Payroll Calendar" :subtitle="$calendarMonthLabel" icon="calendar" accent="amber">
+            <div class="grid grid-cols-7 gap-1">
+                @foreach($calendarDays as $d)
+                    <div @class([
+                        'relative flex aspect-square items-center justify-center rounded-lg text-[11px] font-semibold',
+                        'bg-orange-500 text-white' => $d['is_today'],
+                        'bg-[#FFFDF8] text-[#9CA3AF] dark:bg-white/5 dark:text-zinc-500' => ! $d['is_today'] && $d['is_weekend'],
+                        'bg-white text-[#374151] dark:bg-zinc-800 dark:text-zinc-300' => ! $d['is_today'] && ! $d['is_weekend'],
+                        'ring-2 ring-emerald-400' => ! empty($d['cycles']) && ! $d['is_today'],
+                    ]) title="{{ ! empty($d['cycles']) ? implode(', ', $d['cycles']).' pay day' : '' }}">
+                        {{ $d['day'] }}
+                        @if(! empty($d['cycles']))
+                            <span class="absolute -bottom-0.5 size-1.5 rounded-full {{ $d['is_today'] ? 'bg-white' : 'bg-emerald-500' }}"></span>
+                        @endif
+                    </div>
+                @endforeach
+            </div>
+            <div class="mt-3 flex items-center gap-1.5 text-[11px] text-[#9CA3AF] dark:text-zinc-500">
+                <span class="size-1.5 rounded-full bg-emerald-500"></span> Pay day
+            </div>
+        </x-dashboard.hr.section-card>
+    </div>
+
+    {{-- ══ RECENT PAYROLL CYCLES TABLE ══ --}}
+    <x-dashboard.hr.section-card title="Recent Payroll Cycles" icon="banknotes" accent="green">
+        <x-slot:actions>
+            <flux:button :href="route('payroll.process')" wire:navigate size="sm" variant="ghost">View all →</flux:button>
+        </x-slot:actions>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="text-[11px] font-bold uppercase tracking-wide text-[#9CA3AF] dark:text-zinc-500">
+                        <th class="py-2 pr-4 text-left">Period</th>
+                        <th class="py-2 pr-4 text-left">Cycle</th>
+                        <th class="py-2 pr-4 text-right">Disbursement</th>
+                        <th class="py-2 pr-4 text-left">Status</th>
+                        <th class="py-2 pr-4 text-right">Employees</th>
+                        <th class="py-2 pr-2 text-right"></th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-[#F3E8DD] dark:divide-white/5">
+                    @forelse($recentPayrolls as $p)
+                        @php
+                            $statusCls = match($p->status) {
+                                'finalized' => 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+                                'pending_finance' => 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+                                default => 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400',
+                            };
+                        @endphp
+                        <tr class="hover:bg-[#FFFDF8] dark:hover:bg-white/5">
+                            <td class="py-2.5 pr-4 font-semibold text-[#111827] dark:text-white">{{ $p->month }} {{ $p->year }}</td>
+                            <td class="py-2.5 pr-4 text-[#6B7280] dark:text-zinc-400">{{ $p->cycle === 'cycle_a' ? 'Cycle A' : 'Cycle B' }}</td>
+                            <td class="py-2.5 pr-4 text-right font-semibold text-[#111827] dark:text-white">₹{{ number_format($p->total_payout, 0) }}</td>
+                            <td class="py-2.5 pr-4"><span class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-bold {{ $statusCls }}">{{ ucfirst(str_replace('_', ' ', $p->status)) }}</span></td>
+                            <td class="py-2.5 pr-4 text-right text-[#6B7280] dark:text-zinc-400">{{ $p->payslips_count }}</td>
+                            <td class="py-2.5 pr-2 text-right">
+                                <flux:button :href="route('payroll.process')" wire:navigate variant="ghost" size="sm" icon="eye" />
+                            </td>
                         </tr>
-                    </thead>
-                    <tbody class="divide-y divide-zinc-50 dark:divide-zinc-800/50">
-                        @forelse($recentPayrolls as $p)
-                            @php
-                                [$statusClass, $statusLabel] = match($p->status) {
-                                    'finalized'       => ['bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800/40', 'Finalized'],
-                                    'pending_finance' => ['bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-800/40', 'Pending Finance'],
-                                    'draft'           => ['bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800/40', 'Draft'],
-                                    default           => ['bg-zinc-100 text-zinc-600 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700', ucfirst($p->status)],
-                                };
-                                $cycleLabel = strtoupper(str_replace('_', ' ', $p->cycle ?? 'cycle_a'));
-                                $empCount   = $p->payslips()->count();
-                            @endphp
-                            <tr class="hover:bg-violet-50/20 dark:hover:bg-violet-950/10 transition-colors group">
-                                <td class="py-4 pl-6 pr-4">
-                                    <div class="font-bold text-zinc-900 dark:text-white">{{ $p->month }} {{ $p->year }}</div>
-                                    <div class="text-[10px] text-zinc-400 mt-0.5 font-medium">{{ $cycleLabel }}</div>
-                                </td>
-                                <td class="py-4 pr-4">
-                                    <div class="font-black text-zinc-900 dark:text-white tabular-nums">
-                                        ₹{{ number_format($p->total_payout, 2) }}
-                                    </div>
-                                    <div class="text-[10px] text-zinc-400 mt-0.5">gross payout</div>
-                                </td>
-                                <td class="py-4 pr-4">
-                                    <span class="inline-flex items-center px-2.5 py-1 rounded-lg border text-[10px] font-bold {{ $statusClass }}">
-                                        {{ strtoupper($statusLabel) }}
-                                    </span>
-                                </td>
-                                <td class="py-4 pr-4">
-                                    <div class="flex items-center gap-1.5">
-                                        <div class="size-5 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center shrink-0">
-                                            <flux:icon.users class="size-3 text-zinc-500" />
-                                        </div>
-                                        <span class="font-semibold text-zinc-700 dark:text-zinc-300">{{ $empCount }}</span>
-                                        <span class="text-[10px] text-zinc-400">paid</span>
-                                    </div>
-                                </td>
-                                <td class="py-4 pr-6 text-right">
-                                    <flux:button variant="ghost" size="sm" icon="eye"
-                                        class="opacity-0 group-hover:opacity-100 transition-opacity" />
-                                </td>
-                            </tr>
-                        @empty
-                            <tr>
-                                <td colspan="5" class="py-16 text-center">
-                                    <div class="size-14 rounded-2xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center mx-auto mb-3">
-                                        <flux:icon.document-text class="size-7 text-zinc-400" />
-                                    </div>
-                                    <p class="text-sm font-bold text-zinc-600 dark:text-zinc-300">No payroll cycles yet</p>
-                                    <p class="text-xs text-zinc-400 mt-1">Run your first payroll to see history here</p>
-                                    <a href="{{ route('payroll.process') }}" wire:navigate
-                                       class="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-bold rounded-xl transition-colors">
-                                        <flux:icon.play class="size-4" /> Process Payroll
-                                    </a>
-                                </td>
-                            </tr>
-                        @endforelse
-                    </tbody>
-                </table>
-            </div>
+                    @empty
+                        <tr><td colspan="6" class="py-10 text-center text-sm text-[#9CA3AF] dark:text-zinc-500">No payroll cycles yet.</td></tr>
+                    @endforelse
+                </tbody>
+            </table>
         </div>
+    </x-dashboard.hr.section-card>
 
-    </div>
 </flux:main>

@@ -31,6 +31,20 @@ Schedule::command('hrms:flag-missing-checkouts')
     ->withoutOverlapping()
     ->runInBackground();
 
+// Auto punch-out engine (spec Rules 5 & 6): close open days at shift-end once
+// past the buffer; hold approved-OT days until the OT close time. Frequent +
+// idempotent → every 10 min from mid-afternoon, plus a 23:59 sweep for OT days.
+Schedule::command('hrms:auto-punch-out')
+    ->everyTenMinutes()
+    ->between('15:00', '23:50')
+    ->withoutOverlapping()
+    ->runInBackground();
+
+Schedule::command('hrms:auto-punch-out')
+    ->dailyAt('23:59')
+    ->withoutOverlapping()
+    ->runInBackground();
+
 // Confirm late flags for IT shift (10:30 start + 5 min grace) → 10:45 IST
 Schedule::command('hrms:check-late-arrivals')
     ->dailyAt('10:45')
@@ -46,6 +60,20 @@ Schedule::command('hrms:check-late-arrivals')
 // Flag excess breaks (>60 min) for today → 20:00 IST (after IT shift ends at 19:30)
 Schedule::command('hrms:check-excess-breaks')
     ->dailyAt('20:00')
+    ->withoutOverlapping()
+    ->runInBackground();
+
+// Rule 11: score yesterday for every active employee → 00:20 IST (after the
+// 23:59 auto punch-out sweep has closed any open days)
+Schedule::command('hrms:compute-attendance-scores')
+    ->dailyAt('00:20')
+    ->withoutOverlapping()
+    ->runInBackground();
+
+// Rule 10: issue/escalate warning letters once monthly late marks reach the
+// configured threshold → 14:30 IST daily (after both shifts' late checks ran)
+Schedule::command('hrms:issue-late-warnings')
+    ->dailyAt('14:30')
     ->withoutOverlapping()
     ->runInBackground();
 
@@ -113,6 +141,12 @@ Schedule::command('hrms:flag-unauthorized-absences')
 // Sync Nexflow clock data and auto-create OT requests for excess hours → 09:00 IST (after shift closes)
 Schedule::command('hrms:sync-nexflow-ot')
     ->dailyAt('09:00')
+    ->withoutOverlapping()
+    ->runInBackground();
+
+// Pull approved/rejected overtime from the Nexflow ot-details endpoint → every 10 min
+Schedule::command('hrms:sync-nexflow-ot-details')
+    ->everyTenMinutes()
     ->withoutOverlapping()
     ->runInBackground();
 

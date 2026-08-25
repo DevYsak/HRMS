@@ -3,7 +3,7 @@
 @use('App\Support\UserAgent')
 @use('Illuminate\Support\Facades\Storage')
 
-<flux:main class="min-h-screen bg-[#FFF8F3] dark:bg-white/5 p-4 md:p-6" x-data="{
+<flux:main class="min-h-screen bg-[#F5F6F8] dark:bg-white/5 p-4 md:p-6" x-data="{
     currentTime: '',
     updateClock() { this.currentTime = new Date().toLocaleTimeString('en-IN', { hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit' }); }
 }" x-init="updateClock(); setInterval(() => updateClock(), 1000)">
@@ -16,14 +16,23 @@
     $leaveCount   = (int) ($stats['leaves'] ?? 0);
     $onTimeCount  = max(0, $presentCount - $lateCount);
 
+    // Mirrors AttendanceTracker::computeStats() so the "of N days" denominator
+    // matches the period the stats were actually computed for.
     $pStart = match($statsPeriod) {
+        'today'      => now()->startOfDay(),
         'this_week'  => now()->startOfWeek(\Carbon\Carbon::SUNDAY),
         'last_month' => now()->subMonth()->startOfMonth(),
+        'quarter'    => now()->firstOfQuarter(),
         '3_months'   => now()->subMonths(2)->startOfMonth(),
         'year'       => now()->startOfYear(),
+        'custom'     => \Carbon\Carbon::parse($rangeFrom ?? now()->startOfMonth()),
         default      => now()->startOfMonth(),
     };
-    $pEnd = ($statsPeriod === 'last_month') ? now()->subMonth()->endOfMonth() : now();
+    $pEnd = match(true) {
+        $statsPeriod === 'last_month' => now()->subMonth()->endOfMonth(),
+        $statsPeriod === 'custom' && $rangeTo => \Carbon\Carbon::parse($rangeTo),
+        default => now(),
+    };
     if ($pEnd->gt(now())) { $pEnd = now(); }
     $totalWorkingDays = max(1, (int) $pStart->diffInDaysFiltered(fn($d) => ! $d->isSunday(), $pEnd));
 
@@ -91,16 +100,19 @@
 .pa-cmd{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
 .pa-cmd h1{margin:0;font-size:21px;font-weight:680;letter-spacing:-.02em;color:var(--pa-ink)}
 .pa-cmd p{margin:2px 0 0;color:var(--pa-muted);font-size:13px}
-.pa-seg{display:inline-flex;background:var(--pa-surface-2);border:1px solid var(--pa-border);border-radius:10px;padding:3px}
-.pa-seg button{border:0;background:transparent;color:var(--pa-muted);font-size:12.5px;font-weight:560;padding:5px 11px;border-radius:7px;transition:all .16s var(--pa-ease)}
-.pa-seg button.on{background:var(--pa-surface);color:var(--pa-ink);box-shadow:0 1px 2px rgba(0,0,0,.06);font-weight:620}
-.pa-range{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 11px;border:1px solid var(--pa-border-2);border-radius:10px;background:var(--pa-surface);color:var(--pa-muted);transition:all .16s var(--pa-ease)}
+/* Segmented control — 44px, 14px radius, orange active tab */
+.pa-seg{display:inline-flex;align-items:center;background:var(--pa-surface-2);border:1px solid var(--pa-border);border-radius:14px;padding:4px;height:40px;gap:2px}
+.pa-seg button{border:0;background:transparent;color:var(--pa-muted);font-size:13px;font-weight:600;height:32px;padding:0 14px;border-radius:9px;transition:all .18s var(--pa-ease);white-space:nowrap}
+.pa-seg button:hover{color:var(--pa-ink);background:var(--pa-surface)}
+.pa-seg button.on{background:var(--pa-accent);color:#fff;box-shadow:0 2px 8px var(--pa-ring);font-weight:680}
+.pa-seg button.on:hover{background:var(--pa-accent);color:#fff}
+.pa-range{display:inline-flex;align-items:center;gap:6px;height:40px;padding:0 12px;border:1px solid var(--pa-border-2);border-radius:12px;background:var(--pa-surface);color:var(--pa-muted);transition:all .16s var(--pa-ease)}
 .pa-range.on{border-color:var(--pa-accent);box-shadow:0 0 0 3px var(--pa-ring);color:var(--pa-accent-ink)}
 .pa-range input{border:0;background:transparent;color:var(--pa-ink);font-size:12px;font-family:inherit;outline:0;width:116px;font-variant-numeric:tabular-nums}
 .pa-range .lbl{font-size:9.5px;font-weight:640;text-transform:uppercase;letter-spacing:.05em}
-.pa-pill{display:inline-flex;align-items:center;gap:7px;height:36px;padding:0 13px;border-radius:10px;border:1px solid var(--pa-border-2);
-  background:var(--pa-surface);color:var(--pa-ink);font-size:13px;font-weight:560;transition:all .16s var(--pa-ease)}
-.pa-pill:hover{background:var(--pa-surface-2);border-color:var(--pa-faint);transform:translateY(-1px)}
+.pa-pill{display:inline-flex;align-items:center;gap:7px;height:40px;padding:0 15px;border-radius:12px;border:1px solid var(--pa-border-2);
+  background:var(--pa-surface);color:var(--pa-ink);font-size:13px;font-weight:600;transition:all .16s var(--pa-ease)}
+.pa-pill:hover{background:var(--pa-surface-2);border-color:var(--pa-faint);transform:translateY(-1px);box-shadow:0 4px 12px rgba(24,24,27,.06)}
 .pa-primary{display:inline-flex;align-items:center;gap:7px;height:36px;padding:0 15px;border-radius:10px;border:1px solid var(--pa-accent-ink);
   background:var(--pa-accent);color:#fff;font-size:13px;font-weight:600;box-shadow:0 1px 2px var(--pa-ring);transition:all .16s var(--pa-ease)}
 .pa-primary:hover{filter:brightness(1.06);box-shadow:0 4px 14px var(--pa-ring);transform:translateY(-1px)}
@@ -146,27 +158,44 @@
 @media(max-width:1024px){.pa-hero{grid-template-columns:1fr 1fr}.pa-actwrap{grid-column:1/-1;border-top:1px solid var(--pa-border)}}
 @media(max-width:640px){.pa-hero{grid-template-columns:1fr}.pa-ringwrap{order:-1}}
 @media(prefers-reduced-motion:reduce){.pa-ring .prg{animation:none;stroke-dashoffset:{{ round(408 - (408 * $progress / 100), 1) }}}}
+
+/* Command/filter bar — position:relative + z-index so open dropdowns
+   (clean-select is absolute z-50) sit ABOVE the positioned hero that follows. */
+.pa-cmd{position:relative;z-index:40;row-gap:10px}
+.pa-cmd-title{display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:620;color:var(--pa-ink)}
+.pa-cmd-title svg{color:var(--pa-faint)}
+.pa-cmd-right{margin-left:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+/* Every right-side control the same 40px height as the segmented control */
+.pa-cmd-right button{height:40px}
+.pa-cmd-right button:not(.pa-pill){border-radius:12px}
+@media(max-width:900px){.pa-cmd-right{margin-left:0;width:100%}}
 </style>
 
 <div class="pa">
-  {{-- Command bar --}}
+  {{-- Analytics header — global period, comparison & mode filters (GA4-style) --}}
   <div class="pa-cmd">
-    <div style="flex:1;min-width:120px;display:flex;align-items:center;gap:8px"><flux:icon.clock class="size-4" style="color:var(--pa-faint)" /><span style="font-size:13.5px;font-weight:620;color:var(--pa-ink)">My Attendance</span></div>
+    <div class="pa-cmd-title"><flux:icon.clock class="size-4" /><span>My Attendance</span></div>
     <div class="pa-seg" role="tablist" aria-label="Range">
-      @foreach(['today' => 'Today', 'this_week' => 'Week', 'this_month' => 'Month'] as $val => $label)
+      @foreach(['today' => 'Today', 'this_week' => 'Week', 'this_month' => 'Month', 'quarter' => 'Quarter', 'year' => 'Year', 'custom' => 'Custom'] as $val => $label)
         <button wire:click="$set('statsPeriod', '{{ $val }}')" class="{{ $statsPeriod === $val ? 'on' : '' }}">{{ $label }}</button>
       @endforeach
     </div>
-    {{-- Custom date range — filters punch count, logs & analytics for the picked span --}}
-    <div class="pa-range {{ $statsPeriod === 'custom' ? 'on' : '' }}" title="Filter punches & logs by date range">
-      <flux:icon.calendar-days class="size-3.5" />
-      <input type="date" wire:model.live="rangeFrom" aria-label="From date" max="{{ now()->toDateString() }}">
-      <span class="lbl">to</span>
-      <input type="date" wire:model.live="rangeTo" aria-label="To date" max="{{ now()->toDateString() }}">
+    {{-- Date range appears only in Custom mode — keeps the bar clean otherwise. --}}
+    @if($statsPeriod === 'custom')
+      <div class="pa-range on" title="Filter punches, logs & analytics by date range">
+        <flux:icon.calendar-days class="size-3.5" />
+        <input type="date" wire:model.live="rangeFrom" aria-label="From date" max="{{ now()->toDateString() }}">
+        <span class="lbl">to</span>
+        <input type="date" wire:model.live="rangeTo" aria-label="To date" max="{{ now()->toDateString() }}">
+      </div>
+    @endif
+    <div class="pa-cmd-right">
+      <x-clean-select model="compareMode" :live="true" title="Comparison window for KPI trends"
+        :options="[['value' => 'prev_period', 'label' => 'vs Previous period'], ['value' => 'last_month', 'label' => 'vs Last month'], ['value' => 'last_year', 'label' => 'vs Last year']]" />
+      <x-clean-select model="analyticsMode" :live="true"
+        :options="[['value' => '', 'label' => 'All modes'], ...collect(AttendanceMode::cases())->map(fn ($mode) => ['value' => $mode->value, 'label' => $mode->label()])->all()]" />
+      <button wire:click="exportLog" class="pa-pill"><flux:icon.arrow-down-tray class="size-4" /> Export</button>
     </div>
-    <x-clean-select model="analyticsMode" :live="true"
-      :options="[['value' => '', 'label' => 'All modes'], ...collect(AttendanceMode::cases())->map(fn ($mode) => ['value' => $mode->value, 'label' => $mode->label()])->all()]" />
-    <button wire:click="exportLog" class="pa-pill"><flux:icon.arrow-down-tray class="size-4" /> Export</button>
   </div>
 
   {{-- Premium 3-column hero (45 / 30 / 25) --}}
@@ -224,6 +253,70 @@
     @keyframes pahfill{to{width:{{ $progress }}%}}
     @media(max-width:1024px){.pa-hero2{grid-template-columns:1fr 1fr}.pa-hR{grid-column:1/-1;border-left:0;border-top:1px solid var(--pa-border);flex-direction:row;flex-wrap:wrap}.pa-hR .pa-h-cta{flex:1;min-width:160px}.pa-smart{flex-basis:100%}}
     @media(max-width:680px){.pa-hero2{grid-template-columns:1fr}.pa-hC{border-left:0;border-top:1px solid var(--pa-border)}.pa-h-timer{font-size:48px}}
+
+    /* ── Greeting ── */
+    .pa-greet{margin-bottom:16px}
+    .pa-greet-hi{font-size:13px;color:var(--pa-muted);font-weight:520}
+    .pa-greet-name{font-size:26px;font-weight:780;letter-spacing:-.03em;color:var(--pa-ink);line-height:1.1;margin:1px 0 3px}
+    .pa-greet-date{font-size:12.5px;color:var(--pa-faint);font-weight:500}
+
+    /* ── 5-card hero ── */
+    .pa-h4{display:grid;grid-template-columns:1.35fr 1fr 1fr 1fr 1fr;gap:16px}
+    @media(max-width:1280px){.pa-h4{grid-template-columns:repeat(3,1fr)}}
+    @media(max-width:820px){.pa-h4{grid-template-columns:repeat(2,1fr)}}
+    @media(max-width:520px){.pa-h4{grid-template-columns:1fr}}
+    .pa-hprog{height:8px;border-radius:6px;background:var(--pa-surface-3);overflow:hidden;margin-top:11px}
+    .pa-hprog i{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,var(--pa-present),#22c55e);transition:width .8s var(--pa-ease)}
+    .pa-hlink{display:inline-flex;align-items:center;gap:4px;margin-top:7px;font-size:12px;font-weight:640;color:var(--pa-accent-ink);background:none;border:0;cursor:pointer;padding:0}
+    .pa-hlink:hover{text-decoration:underline}
+    .pa-hcard-score .pa-h-ring-sm{width:118px !important;height:118px !important}
+    .pa-hcard-score .pa-h-ring-sm .big{font-size:32px}
+    .pa-hcard-score .pa-h-ring-sm .sm{font-size:10px}
+    .pa-hcard-score .pa-hscore{gap:16px}
+    .pa-hcard-score .pa-hband{font-size:17px}
+    /* Worked Today — the primary hero card */
+    .pa-hcard-worked{border-color:var(--pa-accent);background:linear-gradient(165deg,var(--pa-accent-soft),var(--pa-surface) 62%);box-shadow:0 2px 6px var(--pa-ring),0 14px 32px rgba(24,24,27,.07)}
+    .pa-hcard-worked .pa-hbig{font-size:32px}
+    .pa-hcard-worked .pa-hct,.pa-hcard-worked .pa-hct svg{color:var(--pa-accent-ink)}
+    .pa-hcard-worked .pa-hprog{height:9px}
+    .pa-hcard{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:18px;padding:17px 19px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.05);display:flex;flex-direction:column;transition:transform .2s var(--pa-ease),box-shadow .2s}
+    .pa-hcard:hover{transform:translateY(-3px);box-shadow:0 2px 4px rgba(24,24,27,.05),0 16px 34px rgba(24,24,27,.08)}
+    .pa-hct{font-size:12px;font-weight:640;color:var(--pa-muted);display:flex;align-items:center;gap:8px;margin-bottom:10px}
+    .pa-hct svg{color:var(--pa-faint)}
+    .pa-hbig{font-size:27px;font-weight:770;letter-spacing:-.03em;color:var(--pa-ink);line-height:1;font-variant-numeric:tabular-nums}
+    .pa-hsub{font-size:12px;color:var(--pa-muted);margin-top:6px}
+    .pa-hfoot{font-size:11.5px;color:var(--pa-faint);margin-top:auto;padding-top:10px}
+    .pa-hspark{width:100%;height:24px;display:block;margin-top:10px}
+    .pa-hbadges{margin-top:9px}
+    .pa-hbadge{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:680;padding:5px 12px;border-radius:999px}
+    .pa-hbadge::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;flex:0 0 auto}
+    .pa-hbadge.ok{background:linear-gradient(135deg,var(--pa-present-soft),rgba(15,157,110,.04));color:var(--pa-present);border:1px solid rgba(15,157,110,.16)}
+    .pa-hbadge.warn{background:linear-gradient(135deg,var(--pa-warn-soft),rgba(180,83,9,.04));color:var(--pa-warn);border:1px solid rgba(180,83,9,.16)}
+    .pa-hbadge.live{background:linear-gradient(135deg,var(--pa-present-soft),rgba(15,157,110,.04));color:var(--pa-present);border:1px solid rgba(15,157,110,.16)}
+    .pa-hscore{display:flex;align-items:center;gap:16px}
+    .pa-h-ring-sm{width:112px !important;height:112px !important;flex:0 0 auto}
+    /* The inline <svg> is authored at 104px; force it to fill the ring box so the
+       ring is centred under the .big/"/100" label instead of hugging the top-left
+       corner (which made "/100" read as clipped at the ring's bottom edge). */
+    .pa-h-ring-sm svg{width:100% !important;height:100% !important;display:block}
+    .pa-h-ring-sm .big{font-size:29px}
+    .pa-h-ring-sm .sm{font-size:10px;letter-spacing:0}
+    .pa-hband{font-size:16px;font-weight:740;color:var(--pa-ink)}
+    .pa-htrend{font-size:12px;font-weight:640;margin-top:4px}
+    .pa-htrend.up{color:var(--pa-present)}
+    .pa-htrend.down{color:var(--pa-danger)}
+    .pa-livedot{width:7px;height:7px;border-radius:50%;background:var(--pa-present);display:inline-block;animation:pabeat 1.6s var(--pa-ease) infinite;margin-left:auto}
+    .pa-actbar{display:flex;flex-wrap:wrap;gap:12px;align-items:stretch;margin-top:16px}
+    .pa-actbtns{display:flex;gap:10px;flex-wrap:wrap;flex:2;min-width:280px}
+    .pa-actbtns .pa-h-cta{flex:1;min-width:150px}
+    /* Clock In — the prominent primary action */
+    .pa-actbtns .pa-h-cta.primary{flex:1.5;padding:13px 16px}
+    .pa-actbtns .pa-h-cta.primary .t{font-size:14.5px}
+    .pa-actbtns .pa-h-cta.primary .ic{width:38px;height:38px}
+    /* Smart Status — richer insight card */
+    .pa-actsmart{margin:0;flex:1.6;min-width:250px;display:flex;flex-direction:column;justify-content:center;background:linear-gradient(135deg,var(--pa-accent-soft),var(--pa-surface) 75%);border:1px solid var(--pa-border);border-radius:18px;padding:13px 18px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.04)}
+    .pa-actsmart .h{font-size:12.5px;font-weight:700}
+    .pa-actsmart p{font-size:13px;font-weight:500;line-height:1.45;margin-top:6px}
   </style>
   @php
       // Live hero ticker counts VALIDATED working time (engine sessions), not
@@ -241,49 +334,82 @@
           $heroBaseMin = -$breakMin;
       }
   @endphp
-  <section class="pa-hero2"
+  {{-- Greeting --}}
+  <div class="pa-greet">
+    <div class="pa-greet-hi">{{ $heroGreet }},</div>
+    <div class="pa-greet-name">{{ $heroName }} 👋</div>
+    <div class="pa-greet-date">{{ now()->format('l, d F Y') }}</div>
+  </div>
+
+  @php
+    $pj = $punchJourney;
+    $scoreBand = $score >= 90 ? 'Excellent' : ($score >= 75 ? 'Good' : ($score >= 60 ? 'Fair' : 'Needs work'));
+    $scoreDelta = (isset($monthlyScore, $prevMonthlyScore) && $prevMonthlyScore !== null) ? (int) round($monthlyScore - $prevMonthlyScore) : null;
+    $workedPct = min(100, (int) round($workedMin / max(1, $targetMin) * 100));
+    $firstInLate = (bool) ($todayAttendance?->is_late);
+    $shiftEndMin2 = $shift?->end_time ? ((int) \Carbon\Carbon::parse($shift->end_time)->format('H')) * 60 + (int) \Carbon\Carbon::parse($shift->end_time)->format('i') : null;
+    $lastOutMin2 = $todayAttendance?->check_out ? $todayAttendance->check_out->hour * 60 + $todayAttendance->check_out->minute : null;
+    $earlyExit = $shiftEndMin2 !== null && $lastOutMin2 !== null && $lastOutMin2 < $shiftEndMin2;
+    $breakLabel = intdiv($breakMin, 60).'h '.str_pad((string) ($breakMin % 60), 2, '0', STR_PAD_LEFT).'m';
+    $breakAllowance = (int) ($shift->break_duration ?? 0);
+    $breakOver = max(0, $breakMin - $breakAllowance);
+    $scoreMsg = $score >= 75 ? 'Keep it up!' : ($score >= 60 ? 'Room to improve' : 'Needs attention');
+  @endphp
+
+  {{-- 5-card hero: Score · Worked · First In · Last Out · Total Break --}}
+  <div class="pa-h4" data-reveal
       x-data="{ baseMin: {{ $heroBaseMin }}, startMs: {{ $heroLiveStartMs ?? 'null' }}, live: '{{ $workedLabel }}',
         tick(){ if(this.startMs===null) return; const t=Math.max(0,this.baseMin+Math.floor((Date.now()-this.startMs)/60000)); this.live=Math.floor(t/60)+'h '+String(t%60).padStart(2,'0')+'m'; } }"
       x-init="tick(); if(startMs!==null) setInterval(()=>tick(),1000)">
-    {{-- LEFT · 45% --}}
-    <div class="pa-hL">
-      <div class="pa-h-greet">{{ $heroGreet }},</div>
-      <div class="pa-h-name">{{ $heroName }} 👋</div>
-      <div class="pa-h-date">{{ now()->format('l, d F Y') }}</div>
-      @if($isIn)
-        <span class="pa-status work"><span class="beat"></span>Working now · on shift</span>
-      @elseif($isDone)
-        <span class="pa-status done"><flux:icon.check-circle class="size-4" /> Checked out for the day</span>
-      @else
-        <span class="pa-status out"><flux:icon.moon class="size-4" /> Not clocked in yet</span>
-      @endif
-      <div class="pa-h-timer num" x-text="live">{{ $workedLabel }}</div>
-      <div class="pa-h-cap">{{ $todayAttendance?->check_in ? 'Working time today · since '.$todayAttendance->check_in->format('h:i A') : 'Clock in to start your day' }}</div>
-      <div class="pa-h-meta">
-        <div><div class="k">Shift</div><div class="v">{{ $shift ? \Carbon\Carbon::parse($shift->start_time)->format('g:i').'–'.\Carbon\Carbon::parse($shift->end_time)->format('g:i A') : '—' }}</div></div>
-        <div><div class="k">Expected logout</div><div class="v">{{ $expectedLogout }}</div></div>
-        <div><div class="k">Remaining</div><div class="v">{{ intdiv($remainingMin,60) }}h {{ $remainingMin%60 }}m</div></div>
-      </div>
-      <div class="pa-h-tags">
-        <span class="pa-h-tag mode"><flux:icon.building-office-2 />{{ $heroMode->label() }}</span>
-        <span class="pa-h-tag"><flux:icon.map-pin />{{ $emp?->office?->name ?? 'Office' }}</span>
-        <span class="pa-h-tag"><flux:icon.cpu-chip />{{ $punchSource }}{{ $deviceName && $deviceName !== '—' ? ' · '.\Illuminate\Support\Str::limit((string) $deviceName, 12) : '' }}</span>
+    {{-- Attendance Score --}}
+    <div class="pa-hcard pa-hcard-score" data-reveal-item>
+      <div class="pa-hct"><flux:icon.shield-check class="size-4" /> Attendance Score</div>
+      <div class="pa-hscore">
+        <div class="pa-h-ring pa-h-ring-sm">
+          <svg width="104" height="104" viewBox="0 0 172 172"><circle class="trk" cx="86" cy="86" r="75"/><circle class="prg" cx="86" cy="86" r="75"/></svg>
+          <div class="mid"><div class="big num" x-data="countUp('{{ $score }}')" x-text="display" wire:key="hs-{{ $score }}">{{ $score }}</div><div class="sm">/100</div></div>
+        </div>
+        <div>
+          <div class="pa-hband" style="color:{{ $score >= 75 ? 'var(--pa-present)' : ($score >= 60 ? 'var(--pa-warn)' : 'var(--pa-danger)') }}">{{ $scoreBand }}</div>
+          <div class="pa-hsub" style="margin-top:2px">{{ $scoreMsg }}</div>
+          <button type="button" wire:click="showScoreDecision('{{ today()->toDateString() }}')" class="pa-hlink">View details <flux:icon.arrow-right class="size-3" /></button>
+        </div>
       </div>
     </div>
-    {{-- CENTER · 30% --}}
-    <div class="pa-hC">
-      <div class="pa-h-ring">
-        <svg width="172" height="172" viewBox="0 0 172 172"><circle class="trk" cx="86" cy="86" r="75"/><circle class="prg" cx="86" cy="86" r="75"/></svg>
-        <div class="mid"><div class="big num">{{ $score }}</div><div class="sm">Attendance score</div></div>
-      </div>
-      <div class="pa-h-cprog">
-        <div class="lbl">Shift progress <b class="num">{{ $progress }}%</b></div>
-        <div class="pa-h-bar"><i></i></div>
-        <div class="lbl" style="margin-top:12px">Daily goal <b class="num">{{ $targetLabel }}</b></div>
-      </div>
+    {{-- Worked Today · primary card --}}
+    <div class="pa-hcard pa-hcard-worked" data-reveal-item>
+      <div class="pa-hct"><flux:icon.clock class="size-4" /> Worked Today @if($pj['live'])<span class="pa-livedot"></span>@endif</div>
+      <div class="pa-hbig num" x-text="live">{{ $workedLabel }}</div>
+      <div class="pa-hsub">of {{ $targetLabel }} expected</div>
+      <div class="pa-hprog"><i style="width: {{ $workedPct }}%"></i></div>
+      <div class="pa-hfoot"><b style="color:var(--pa-present)">{{ $workedPct }}%</b> of expected</div>
     </div>
-    {{-- RIGHT · 25% --}}
-    <div class="pa-hR">
+    {{-- First In --}}
+    <div class="pa-hcard" data-reveal-item>
+      <div class="pa-hct"><flux:icon.arrow-right-end-on-rectangle class="size-4" style="color:var(--pa-present)" /> First In</div>
+      <div class="pa-hbig num">{{ $pj['first_in'] ?? '—' }}</div>
+      <div class="pa-hbadges">@if($pj['first_in'])<span class="pa-hbadge {{ $firstInLate ? 'warn' : 'ok' }}">{{ $firstInLate ? 'Late' : 'On Time' }}</span>@endif</div>
+      <div class="pa-hfoot">Shift: {{ $shift ? \Carbon\Carbon::parse($shift->start_time)->format('g:i A').' – '.\Carbon\Carbon::parse($shift->end_time)->format('g:i A') : '—' }}</div>
+    </div>
+    {{-- Last Out --}}
+    <div class="pa-hcard" data-reveal-item>
+      <div class="pa-hct"><flux:icon.arrow-left-start-on-rectangle class="size-4" style="color:var(--pa-danger)" /> Last Out</div>
+      <div class="pa-hbig num">{{ $pj['last_out'] ?? '—' }}</div>
+      <div class="pa-hbadges">@if($pj['last_out'])<span class="pa-hbadge {{ $earlyExit ? 'warn' : 'ok' }}">{{ $earlyExit ? 'Early Exit' : 'On Time' }}</span>@elseif($pj['live'])<span class="pa-hbadge live">Not yet punched out</span>@endif</div>
+      <div class="pa-hfoot">Expected: {{ $expectedLogout }}</div>
+    </div>
+    {{-- Total Break --}}
+    <div class="pa-hcard" data-reveal-item>
+      <div class="pa-hct"><flux:icon.pause-circle class="size-4" style="color:var(--pa-warn)" /> Total Break</div>
+      <div class="pa-hbig num">{{ $breakLabel }}</div>
+      <div class="pa-hbadges">@if($breakOver > 0)<span class="pa-hbadge warn">↑ {{ $breakOver }}m over limit</span>@elseif($breakAllowance > 0)<span class="pa-hbadge ok">within allowance</span>@endif</div>
+      <div class="pa-hfoot">Allowed: {{ $breakAllowance }}m</div>
+    </div>
+  </div>
+
+  {{-- Action bar: clock in/out, break, regularize + smart status (all preserved) --}}
+  <div class="pa-actbar" data-reveal>
+    <div class="pa-actbtns">
       @if(! $todayAttendance)
         <button type="button" class="pa-h-cta primary" @click="$flux.modal('punch-capture').show(); $dispatch('open-punch', { action: 'in' })"><span class="ic"><flux:icon.arrow-right-end-on-rectangle class="size-4" /></span><div><div class="t">Clock in</div><div class="d">Selfie + location</div></div></button>
       @elseif($isIn)
@@ -297,21 +423,21 @@
         <button type="button" class="pa-h-cta" wire:click="startBreak" @if(! $isIn) disabled @endif><span class="ic pa-ic-warn"><flux:icon.pause class="size-4" /></span><div><div class="t">Start break</div><div class="d">Pause timer</div></div></button>
       @endif
       <button type="button" class="pa-h-cta" wire:click="openRegularisation('{{ today()->toDateString() }}')"><span class="ic pa-ic-iris"><flux:icon.pencil-square class="size-4" /></span><div><div class="t">Regularize</div><div class="d">Fix a punch</div></div></button>
-      <div class="pa-smart">
-        <div class="h"><flux:icon.sparkles class="size-4" /> Smart status</div>
-        <p>{{ $isIn ? "On track — ".intdiv($remainingMin,60)."h ".($remainingMin%60)."m to your ".$targetLabel." goal." : ($isDone ? "Day complete — great work today!" : "Clock in by ".$heroSuggIn." to stay on time.") }}</p>
-      </div>
     </div>
-  </section>
+    <div class="pa-smart pa-actsmart">
+      <div class="h"><flux:icon.sparkles class="size-4" /> Smart status</div>
+      <p>{{ $isIn ? "On track — ".intdiv($remainingMin,60)."h ".($remainingMin%60)."m to your ".$targetLabel." goal." : ($isDone ? "Day complete — great work today!" : "Clock in by ".$heroSuggIn." to stay on time.") }}</p>
+    </div>
+  </div>
 </div>
 
 
-<div class="space-y-4">
+<div class="space-y-6 mt-6">
 
 {{-- ═══════════════ ATTENDANCE HEALTH + QUICK ACTIONS ═══════════════ --}}
 {{-- ═══════════════ ATTENDANCE HEALTH + QUICK ACTIONS (slice 4a) ═══════════════ --}}
 <style>
-.pa-panel{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:16px;box-shadow:0 1px 2px rgba(0,0,0,.05);padding:16px 18px}
+.pa-panel{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:18px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.05);padding:16px 18px}
 .pa-panel-h{font-size:14px;font-weight:640;color:var(--pa-ink);margin-bottom:12px;display:flex;align-items:center;gap:8px}
 .pa-panel-sub{margin-left:auto;font-size:11px;font-weight:500;color:var(--pa-faint);text-transform:capitalize}
 .pa-kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
@@ -329,92 +455,132 @@
 .pa-qa-ic{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;background:var(--pa-accent-soft);color:var(--pa-accent-ink)}
 .pa-qa-l{font-size:10.5px;font-weight:600;color:var(--pa-muted)}
 .pa-kpis2{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
-@media(min-width:680px){.pa-kpis2{grid-template-columns:repeat(4,1fr)}}
-.pa-kpi2{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:16px;padding:16px 18px;box-shadow:0 1px 2px rgba(0,0,0,.05);transition:transform .18s var(--pa-ease),box-shadow .18s,border-color .18s}
-.pa-kpi2:hover{transform:translateY(-3px);box-shadow:0 8px 22px rgba(0,0,0,.06);border-color:var(--pa-border-2)}
+@media(min-width:680px){.pa-kpis2{grid-template-columns:repeat(3,1fr)}}
+@media(min-width:1100px){.pa-kpis2{grid-template-columns:repeat(5,1fr)}}
+.pa-kpi2{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:18px;padding:15px 17px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 4px 12px rgba(24,24,27,.03);transition:transform .2s var(--pa-ease),box-shadow .2s,border-color .2s}
+.pa-kpi2:hover{transform:translateY(-3px);box-shadow:0 2px 4px rgba(24,24,27,.05),0 14px 30px rgba(24,24,27,.08);border-color:var(--pa-border-2)}
 .pa-kpi2 .top{display:flex;align-items:center;justify-content:space-between}
-.pa-kpi2 .ic{width:34px;height:34px;border-radius:10px;display:grid;place-items:center}
-.pa-kpi2 .tr{font-size:11px;font-weight:640;padding:3px 7px;border-radius:7px;background:var(--pa-surface-2);color:var(--pa-muted)}
+.pa-kpi2 .ic{width:36px;height:36px;border-radius:11px;display:grid;place-items:center}
+.pa-kpi2 .tr{display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:640;padding:3px 8px;border-radius:999px;background:var(--pa-surface-2);color:var(--pa-muted)}
 .pa-kpi2 .tr.up{background:var(--pa-present-soft);color:var(--pa-present)}
 .pa-kpi2 .tr.down{background:var(--pa-danger-soft);color:var(--pa-danger)}
-.pa-kpi2 .v{font-size:26px;font-weight:720;letter-spacing:-.025em;margin-top:12px;line-height:1;color:var(--pa-ink);font-variant-numeric:tabular-nums}
-.pa-kpi2 .l{font-size:12.5px;color:var(--pa-muted);margin-top:5px;font-weight:500}
+.pa-kpi2 .v{font-size:24px;font-weight:720;letter-spacing:-.025em;margin-top:10px;line-height:1;color:var(--pa-ink);font-variant-numeric:tabular-nums}
+.pa-kpi2 .l{font-size:12px;color:var(--pa-muted);margin-top:4px;font-weight:500}
 .pa-kpi2 .cmp{font-size:11px;color:var(--pa-faint);margin-top:1px}
-.pa-kpi2 .spark{margin-top:11px;height:28px;width:100%;display:block}
+.pa-kpi2 .spark{margin-top:9px;height:24px;width:100%;display:block}
 </style>
 <div class="pa">
+
+  {{-- No shift assigned: the engine cannot judge arrivals without a window, so
+       it declines to score the day rather than guessing. Saying so is the point
+       — the employee previously saw a confident 9:00–6:00 day they do not work,
+       and late marks measured against it. --}}
+  @if($this->shiftUnassigned)
+    <div class="rounded-2xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-500/25 dark:bg-amber-500/10" style="margin-bottom:16px">
+      <div class="flex items-start gap-3">
+        <flux:icon.exclamation-triangle class="mt-0.5 size-5 shrink-0 text-amber-500" />
+        <div class="min-w-0">
+          <p class="text-sm font-bold text-amber-900 dark:text-amber-200">Shift not assigned</p>
+          <p class="mt-0.5 text-xs leading-relaxed text-amber-800 dark:text-amber-300">
+            Your working hours have not been set up yet, so late marks, overtime and
+            attendance scoring are paused for you — nothing here is counted against you.
+            Your punches are still being recorded. Please ask HR to assign your shift.
+          </p>
+        </div>
+      </div>
+    </div>
+  @endif
+
   {{-- KPI overview · full width --}}
   <div>
-    <div class="pa-panel-h" style="margin-bottom:16px;font-size:15px">Attendance overview <span class="pa-panel-sub">{{ str_replace('_', ' ', $statsPeriod) }}</span></div>
+    <div class="pa-panel-h" style="margin-bottom:16px;font-size:15px">Attendance health
+      <span class="pa-panel-sub">{{ str_replace('_', ' ', $statsPeriod) }}@if(($comparison['has_data'] ?? false)) · {{ $comparison['label'] }}@endif</span>
+    </div>
     @php
         $prodIndex = (int) min(100, max(0, $compliance));
         $workingH = round(collect($chartDaily)->sum('hours'), 1);
+
+        // Real sparkline from the period's daily hours (last 14 days, normalised
+        // into the 120×28 viewBox, higher hours → higher line). Null when there
+        // aren't 2+ points — the UI simply omits the spark.
+        $sparkDays = collect($chartDaily)->filter(fn ($d) => $d['hours'] !== null)->take(-14)->values();
+        $hoursSpark = null;
+        if ($sparkDays->count() >= 2) {
+            $maxH = max(0.1, (float) $sparkDays->max('hours'));
+            $stepX = 120 / ($sparkDays->count() - 1);
+            $hoursSpark = $sparkDays->map(fn ($d, $i) => round($i * $stepX, 1).','.round(26 - ((float) $d['hours'] / $maxH * 22), 1))->implode(' ');
+        }
+
+        // Real trend chips from the comparison engine — null delta hides the chip.
+        $chip = function (?int $delta, string $suffix = '', bool $goodWhenUp = true) {
+            if ($delta === null || $delta === 0) { return null; }
+            $up = $delta > 0;
+            return ['txt' => ($up ? '▲ ' : '▼ ').abs($delta).$suffix, 'dir' => ($up === $goodWhenUp) ? 'up' : 'down'];
+        };
+        $cmpChips = [
+            'present' => $chip($comparison['present'] ?? null),
+            'hours' => $chip($comparison['hours'] ?? null, 'h'),
+            'ontime' => $chip($comparison['on_time_pct'] ?? null, '%'),
+            'late' => $chip($comparison['late'] ?? null, '', false),
+        ];
+
+        // [label, value, icon, color, chip|plainText, caption, spark?]
+        // Five compact health cards (reference layout), all from real data.
+        $monthlyPct = $monthlyScore !== null ? (int) round($monthlyScore) : $score;
+        $healthBand = $monthlyPct >= 90 ? 'Excellent' : ($monthlyPct >= 75 ? 'Good' : ($monthlyPct >= 60 ? 'Fair' : 'Needs work'));
+        $streakWord = \Illuminate\Support\Str::plural('day', $onTimeStreak);
         $kpis = [
-            ['Attendance Score', (string) $score, 'shield-check', '#F97316', '▲ 2', 'of 100 · top 12%', '0,20 24,18 48,19 72,12 96,14 120,6', 'up'],
-            ['Present Days', (string) $presentCount, 'check-badge', '#0F9D6E', 'of '.$totalWorkingDays, $lateCount.' late · 0 absent', '0,20 24,17 48,18 72,12 96,10 120,8', 'up'],
-            ['Working Hours', round($workingH).'h', 'clock', '#2F6FEB', 'this pd', 'Avg '.intdiv($avgWorkMin,60).'h '.($avgWorkMin%60).'m/day', '0,14 24,10 48,16 72,9 96,12 120,7', 'up'],
-            ['Productivity', $prodIndex.'%', 'chart-bar', '#0F9D6E', '▲ 3', 'focus '.intdiv($workedMin,60).'h '.($workedMin%60).'m', '0,18 24,15 48,16 72,11 96,12 120,8', 'up'],
-            ['Overtime', $otHours.'h', 'bolt', '#8B5CF6', $otDays.'d', '₹100/hr · pre-approved', '0,22 24,20 48,15 72,17 96,10 120,9', 'up'],
-            ['Leave Balance', rtrim(rtrim(number_format($leaveBalance, 1), '0'), '.'), 'calendar-days', '#2F6FEB', 'days', 'CSL + MDL pool', '0,12 24,12 48,13 72,11 96,12 120,10', 'flat'],
-            ['Late Arrivals', (string) $lateCount, 'exclamation-triangle', '#B45309', $lateCount ? '↓ 1' : '0', 'this period', '0,8 24,14 48,10 72,16 96,15 120,18', $lateCount ? 'down' : 'flat'],
-            ['Missing Punches', (string) $missingCount, 'flag', $missingCount ? '#D64545' : '#0F9D6E', $missingCount ? 'action' : 'clear', $missingCount ? 'regularize now' : 'all reconciled', '0,10 24,12 48,10 72,11 96,10 120,9', 'flat'],
+            ['Attendance Health', $monthlyPct.'%', 'shield-check', '#0F9D6E', $healthBand, 'this month', $hoursSpark],
+            ['Attendance Streak', $onTimeStreak.' '.$streakWord, 'fire', '#F97316', $onTimeStreak >= $bestStreak && $onTimeStreak > 0 ? 'personal best' : 'best '.$bestStreak, 'on-time run', null],
+            ['Monthly Goal', $monthlyPct.'%', 'flag', '#8B5CF6', null, 'attendance goal', null],
+            ['Productivity', $prodIndex.'%', 'chart-bar', '#0F9D6E', $cmpChips['ontime'] ?? null, 'focus '.intdiv($workedMin,60).'h '.($workedMin%60).'m', $hoursSpark],
+            ['Leave Balance', rtrim(rtrim(number_format($leaveBalance, 1), '0'), '.').' days', 'calendar-days', '#2F6FEB', 'available', 'Across all leave types', null],
         ];
     @endphp
     <div class="pa-kpis2" data-reveal>
-      @foreach($kpis as [$lbl, $val, $ic, $clr, $tr, $cmp, $spk, $dir])
-        @php $lastY = last(explode(',', last(explode(' ', $spk)))); @endphp
-        <div class="pa-kpi2" data-reveal-item>
-          <div class="top">
-            <span class="ic" style="background: {{ $clr }}1a; color: {{ $clr }};"><flux:icon :icon="$ic" class="size-4" /></span>
-            <span class="tr {{ $dir }}">{{ $tr }}</span>
-          </div>
-          <div class="v">{{ $val }}</div>
-          <div class="l">{{ $lbl }}</div>
-          <div class="cmp">{{ $cmp }}</div>
-          <svg class="spark" viewBox="0 0 120 28" preserveAspectRatio="none"><polyline points="{{ $spk }}" fill="none" stroke="{{ $clr }}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="120" cy="{{ $lastY }}" r="2.6" fill="{{ $clr }}"/></svg>
-        </div>
+      @foreach($kpis as [$lbl, $val, $ic, $clr, $tr, $cmp, $spk])
+        <x-attendance.kpi-card :label="$lbl" :value="$val" :icon="$ic" :color="$clr"
+          :trend="$tr" :caption="$cmp" :spark="$spk" :comparison-label="$comparison['label'] ?? ''" />
       @endforeach
     </div>
   </div>
 </div>
 
-{{-- ═══════════════ AI ATTENDANCE COACH (conversational · signature) ═══════════════ --}}
+{{-- ═══════════════ AI ATTENDANCE COACH (analytics engine · Rule/Priority 2) ═══════════════ --}}
 @php
-    $aiRisk = ($lateCount >= 3 || $missingCount >= 2)
-        ? ['High', 'var(--pa-danger)']
-        : (($lateCount >= 1 || $missingCount >= 1) ? ['Medium', 'var(--pa-warn)'] : ['Low', 'var(--pa-present)']);
-    $aiForecast = (int) min(100, max($attPct, $score) + 1);
-    $aiProd = (int) min(100, $compliance);
-    $aiOtPred = round(max($otHours, 0) * 1.2, 1);
-    $suggIn = $shift ? \Carbon\Carbon::parse($shift->start_time)->subMinutes(10)->format('g:i A') : '10:20 AM';
-    $deptPercentile = max(55, min(99, (int) ($myOnTimeRate ?: $attPct)));
-    $recText = ($avgBreak > 40)
-        ? 'Reduce your average break by '.max(5, $avgBreak - 30).' minutes to reach a '.min(99, $score + 3).'% attendance score.'
-        : (($lateCount > 0) ? 'Clock in by '.$suggIn.' to protect your on-time streak and lift your score.'
-        : 'You’re on track for your best month — keep clocking in before '.$suggIn.'.');
+    $riskToneMap = ['danger' => 'var(--pa-danger)', 'warn' => 'var(--pa-warn)', 'good' => 'var(--pa-present)', 'muted' => 'var(--pa-faint)'];
+    $cRisk = $coach['risk'] ?? ['level' => 'Low', 'tone' => 'good', 'text' => ''];
+    $cScore = $coach['score_change'] ?? [];
+    $cArrival = $coach['arrival_trend'] ?? [];
+    $cLogout = $coach['logout_trend'] ?? [];
+    $cBreak = $coach['break_analysis'] ?? [];
+    $cConsistency = $coach['consistency'] ?? ['pct' => 100, 'text' => ''];
+    $cHealth = $coach['health'] ?? ['label' => '—', 'tone' => 'muted', 'text' => ''];
+    $cMetrics = $coach['metrics'] ?? ['predicted_score' => $score, 'consistency' => 100, 'overtime_pred' => 0, 'risk' => $cRisk];
 @endphp
 <style>
-.pa-copilot{background:linear-gradient(155deg,var(--pa-accent-soft),var(--pa-surface) 52%);border:1px solid var(--pa-border);border-radius:24px;padding:28px 32px;position:relative;overflow:hidden;box-shadow:0 8px 28px rgba(24,24,27,.05)}
+.pa-copilot{background:linear-gradient(155deg,var(--pa-accent-soft),var(--pa-surface) 52%);border:1px solid var(--pa-border);border-radius:18px;padding:20px 22px;position:relative;overflow:hidden;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.05)}
 .dark .pa-copilot{box-shadow:0 12px 36px rgba(0,0,0,.45)}
-.pa-copilot .head{display:flex;align-items:center;gap:13px;margin-bottom:20px}
-.pa-copilot .avatar{width:42px;height:42px;border-radius:13px;background:linear-gradient(145deg,var(--pa-accent),var(--pa-accent-ink));display:grid;place-items:center;color:#fff;box-shadow:0 6px 18px var(--pa-ring);flex:0 0 auto}
-.pa-copilot .avatar svg{width:22px;height:22px}
+.pa-copilot .head{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.pa-copilot .avatar{width:38px;height:38px;border-radius:12px;background:linear-gradient(145deg,var(--pa-accent),var(--pa-accent-ink));display:grid;place-items:center;color:#fff;box-shadow:0 6px 18px var(--pa-ring);flex:0 0 auto}
+.pa-copilot .avatar svg{width:20px;height:20px}
 .pa-copilot .title{font-size:16px;font-weight:660;color:var(--pa-ink)}
 .pa-copilot .sub{font-size:12px;color:var(--pa-faint)}
 .pa-aichip{display:inline-flex;align-items:center;gap:6px;background:var(--pa-surface);border:1px solid var(--pa-border);color:var(--pa-accent-ink);font-size:11px;font-weight:640;padding:5px 11px;border-radius:20px}
 .pa-aichip .ld{width:6px;height:6px;border-radius:50%;background:var(--pa-present);box-shadow:0 0 0 0 var(--pa-present);animation:pabeat 1.8s var(--pa-ease) infinite}
-.pa-msg{font-size:17px;line-height:1.55;color:var(--pa-ink);font-weight:500;max-width:680px;letter-spacing:-.01em}
+.pa-msg{font-size:16px;line-height:1.5;color:var(--pa-ink);font-weight:500;max-width:680px;letter-spacing:-.01em}
 .pa-msg b{font-weight:680;color:var(--pa-accent-ink)}
-.pa-copilot .stats{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin:22px 0 6px}
+.pa-copilot .stats{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin:14px 0 4px}
 @media(min-width:820px){.pa-copilot .stats{grid-template-columns:repeat(4,1fr)}}
-.pa-cstat{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:16px;padding:16px 18px}
+.pa-cstat{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:14px;padding:13px 15px}
 .pa-cstat .k{font-size:11px;color:var(--pa-muted);font-weight:600}
-.pa-cstat .v{font-size:26px;font-weight:730;color:var(--pa-ink);margin-top:6px;font-variant-numeric:tabular-nums;line-height:1}
-.pa-rec{display:flex;gap:13px;background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:16px;padding:16px 18px;margin-top:14px}
+.pa-cstat .v{font-size:23px;font-weight:730;color:var(--pa-ink);margin-top:4px;font-variant-numeric:tabular-nums;line-height:1}
+.pa-clabel{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--pa-faint);margin:14px 0 7px}
+.pa-rec{display:flex;gap:12px;background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:14px;padding:12px 14px;margin-top:10px}
 .pa-rec .ic{width:32px;height:32px;border-radius:10px;background:var(--pa-accent-soft);color:var(--pa-accent-ink);display:grid;place-items:center;flex:0 0 auto}
 .pa-rec .k{font-size:10.5px;font-weight:660;text-transform:uppercase;letter-spacing:.05em;color:var(--pa-faint)}
-.pa-rec p{margin:3px 0 0;font-size:13.5px;color:var(--pa-ink);line-height:1.5}
-.pa-copilot .foot{display:flex;flex-wrap:wrap;gap:12px 22px;margin-top:16px;align-items:center}
+.pa-rec p{margin:3px 0 0;font-size:13px;color:var(--pa-ink);line-height:1.45}
+.pa-copilot .foot{display:flex;flex-wrap:wrap;gap:10px 20px;margin-top:12px;align-items:center}
 .pa-chip-in{display:inline-flex;align-items:center;gap:8px;background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:20px;padding:8px 14px;font-size:13px;font-weight:560;color:var(--pa-ink)}
 .pa-chip-in svg{width:15px;height:15px;color:var(--pa-faint)}
 .pa-qastrip{display:flex;flex-wrap:wrap;gap:10px}
@@ -429,21 +595,64 @@
       <div style="flex:1"><div class="title">AI Attendance Coach</div><div class="sub">Your personal attendance assistant</div></div>
       <span class="pa-aichip"><span class="ld"></span>AI · live</span>
     </div>
-    <p class="pa-msg">{{ $heroGreet }}, {{ $heroName }}. You’re performing better than <b>{{ $deptPercentile }}% of your department</b> this month — and you’re on track for your best score yet.</p>
-    <div class="stats">
-      <div class="pa-cstat"><div class="k">Predicted attendance score</div><div class="v num">{{ $aiForecast }}%</div></div>
-      <div class="pa-cstat"><div class="k">Productivity</div><div class="v num">{{ $aiProd }}%</div></div>
-      <div class="pa-cstat"><div class="k">Overtime</div><div class="v num">{{ $aiOtPred }}h</div></div>
-      <div class="pa-cstat"><div class="k">Burnout risk</div><div class="v" style="color:{{ $aiRisk[1] }}">{{ $aiRisk[0] }}</div></div>
+    <p class="pa-msg">{{ $coach['headline'] ?? 'Building your attendance coaching profile.' }}</p>
+
+    {{-- Why your score changed — computed from the score breakdown factors --}}
+    @if(($cScore['reason'] ?? null))
+      <div class="pa-rec" style="margin-top:2px">
+        <span class="ic" style="background:{{ ($cScore['delta'] ?? 0) < 0 ? 'rgba(244,63,94,.12)' : 'var(--pa-accent-soft)' }};color:{{ ($cScore['delta'] ?? 0) < 0 ? '#f43f5e' : 'var(--pa-present)' }}"><flux:icon.chart-bar-square class="size-4" /></span>
+        <div><div class="k">Why your score changed</div><p>{{ $cScore['reason'] }}</p></div>
+      </div>
+    @endif
+
+    <div class="pa-clabel" style="margin-top:16px">Health &amp; risk</div>
+    <div class="stats" style="margin-top:0">
+      <div class="pa-cstat"><div class="k">Predicted score</div><div class="v num">{{ $cMetrics['predicted_score'] }}</div></div>
+      <div class="pa-cstat"><div class="k">Consistency</div><div class="v num">{{ $cMetrics['consistency'] }}%</div></div>
+      <div class="pa-cstat"><div class="k">Attendance health</div><div class="v" style="font-size:20px;color:{{ $riskToneMap[$cHealth['tone']] ?? 'var(--pa-ink)' }}">{{ $cHealth['label'] }}</div></div>
+      <div class="pa-cstat"><div class="k">Warning risk</div><div class="v" style="font-size:20px;color:{{ $riskToneMap[$cRisk['tone']] ?? 'var(--pa-ink)' }}">{{ $cRisk['level'] }}</div></div>
     </div>
+
+    {{-- Key insights (dynamic trend read-outs) --}}
+    <div class="pa-clabel">Key insights</div>
+    <div class="stats" style="grid-template-columns:1fr;gap:9px;margin-top:0">
+      @foreach([
+        ['arrow-right-end-on-rectangle', $cArrival['text'] ?? null],
+        ['arrow-left-start-on-rectangle', $cLogout['text'] ?? null],
+        ['pause', $cBreak['text'] ?? null],
+        ['shield-check', $cRisk['text'] ?? null],
+      ] as [$icon, $line])
+        @if($line)
+          <div style="display:flex;align-items:flex-start;gap:10px;font-size:13px;color:var(--pa-ink);background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:11px;padding:10px 12px">
+            <flux:icon :icon="$icon" class="size-4" style="color:var(--pa-accent-ink);flex:0 0 auto;margin-top:1px" /><span>{{ $line }}</span>
+          </div>
+        @endif
+      @endforeach
+    </div>
+
     <div class="pa-rec">
       <span class="ic"><flux:icon.light-bulb class="size-4" /></span>
-      <div><div class="k">Recommendation</div><p>{{ $recText }}</p></div>
+      <div><div class="k">Recommendation</div><p>{{ $coach['recommendation'] ?? 'Keep your routine steady.' }}</p></div>
     </div>
+
+    {{-- Weekly coaching tips --}}
+    @if(!empty($coach['tips']))
+      <div style="margin-top:12px">
+        <div class="k" style="font-size:10.5px;font-weight:660;text-transform:uppercase;letter-spacing:.05em;color:var(--pa-faint);margin-bottom:6px">Weekly coaching tips</div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          @foreach($coach['tips'] as $tip)
+            <div style="display:flex;align-items:flex-start;gap:8px;font-size:12.5px;color:var(--pa-muted)"><flux:icon.check-circle class="size-3.5" style="color:var(--pa-accent-ink);flex:0 0 auto;margin-top:2px" /><span>{{ $tip }}</span></div>
+          @endforeach
+        </div>
+      </div>
+    @endif
+
     <div class="foot">
-      <span class="pa-chip-in"><flux:icon.clock /> Suggested clock-in <b style="color:var(--pa-accent-ink)">{{ $suggIn }}</b></span>
-      <span style="font-size:12.5px;color:var(--pa-muted);display:inline-flex;align-items:center;gap:6px"><flux:icon.fire class="size-4" style="color:#EA6A2C" />{{ $onTimeStreak }}-day on-time streak</span>
-      <span style="font-size:12.5px;color:var(--pa-muted)">Missing punches · {{ $missingCount === 0 ? 'none' : $missingCount }}</span>
+      @forelse($coach['achievements'] ?? [] as $ach)
+        <span class="pa-chip-in"><flux:icon :icon="$ach['icon']" class="size-4" style="color:var(--pa-accent-ink)" /> {{ $ach['label'] }}</span>
+      @empty
+        <span style="font-size:12.5px;color:var(--pa-muted)">Earn achievements by building an on-time streak and perfect-score days.</span>
+      @endforelse
     </div>
   </div>
 </div>
@@ -501,9 +710,28 @@
     </div>
 @endif
 
+{{-- ═══════════════ LATE-MARK WARNING (Rule 10: 3+ lates this month) ═══════════════ --}}
+@if($analytics['late_warning'] ?? false)
+    <div class="rounded-[18px] border border-rose-300 bg-gradient-to-r from-rose-50 to-white dark:from-rose-950/25 dark:to-zinc-900 p-4 shadow-sm" data-reveal>
+        <div class="flex flex-wrap items-center gap-3">
+            <span class="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-rose-500 text-white shadow-lg shadow-rose-200"><flux:icon.shield-exclamation class="size-5" /></span>
+            <div class="min-w-0 flex-1">
+                <div class="text-sm font-black text-rose-900 dark:text-rose-200">Late-mark warning — {{ $analytics['late_month_count'] }} late arrivals this month</div>
+                <div class="text-xs text-rose-700 dark:text-rose-300">
+                    {{ $analytics['late_threshold'] ?? 3 }}+ late marks trigger a formal warning letter and reduce your attendance &amp; performance scores
+                    (−{{ $analytics['late_penalty'] }} pts applied).
+                    @if(($analytics['late_consecutive'] ?? 0) >= 2) {{ $analytics['late_consecutive'] }} consecutive late days — @endif
+                    Arrive before your shift's grace cutoff to recover.
+                </div>
+            </div>
+            <span class="rounded-full bg-rose-100 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-rose-600 dark:bg-rose-900/40 dark:text-rose-300">Warning</span>
+        </div>
+    </div>
+@endif
+
 {{-- ═══════════════ TODAY'S ATTENDANCE JOURNEY (slice 2b) ═══════════════ --}}
 <style>
-.pa-jcard{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:16px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.pa-jcard{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:16px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.05)}
 .pa-jhead{display:flex;align-items:center;gap:10px;padding:15px 18px 6px}
 .pa-jhead h3{margin:0;font-size:14px;font-weight:640;color:var(--pa-ink)}
 .pa-jhead .sub{font-size:12px;color:var(--pa-faint)}
@@ -533,15 +761,18 @@
 .pa-live-dot{width:9px;height:9px;border-radius:50%;background:var(--pa-accent);animation:pabeat 1.8s var(--pa-ease) infinite}
 .pa-work{display:grid;grid-template-columns:1.55fr 1fr;gap:18px;align-items:start}
 @media(max-width:960px){.pa-work{grid-template-columns:1fr}}
-.pa-rail{display:flex;flex-direction:column;gap:18px}
-.pa-rc{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:16px;padding:16px 18px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+/* Rail stretches with the row; each card grows from its natural height so the
+   column's leftover space is shared evenly and all three columns bottom-align. */
+.pa-rail{display:flex;flex-direction:column;gap:14px}
+.pa-rail .pa-rc{flex:1 1 auto}
+.pa-rc{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:18px;padding:14px 16px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.05)}
 .pa-rc-h{font-size:13.5px;font-weight:640;color:var(--pa-ink);display:flex;align-items:center;gap:8px}
 .pa-rc-sub{font-size:11px;color:var(--pa-faint);font-weight:500}
 .pa-streak{background:linear-gradient(140deg,rgba(234,106,44,.08),var(--pa-surface))}
-.pa-flame{width:44px;height:44px;border-radius:12px;background:linear-gradient(150deg,#F7A34B,#EA6A2C);display:grid;place-items:center;color:#fff;box-shadow:0 4px 14px rgba(234,106,44,.28);flex:0 0 auto}
-.pa-streak-n{font-size:27px;font-weight:720;letter-spacing:-.03em;line-height:1;color:var(--pa-ink)}
+.pa-flame{width:40px;height:40px;border-radius:11px;background:linear-gradient(150deg,#F7A34B,#EA6A2C);display:grid;place-items:center;color:#fff;box-shadow:0 4px 14px rgba(234,106,44,.28);flex:0 0 auto}
+.pa-streak-n{font-size:24px;font-weight:720;letter-spacing:-.03em;line-height:1;color:var(--pa-ink)}
 .pa-streak-l{font-size:12px;color:var(--pa-muted)}
-.pa-streak-week{display:flex;gap:6px;margin-top:14px}
+.pa-streak-week{display:flex;gap:6px;margin-top:10px}
 .pa-sd{flex:1;height:6px;border-radius:4px;background:var(--pa-surface-3)}
 .pa-sd.on{background:#EA6A2C}
 .pa-ins{display:flex;gap:10px;padding:10px 0;border-top:1px solid var(--pa-border)}
@@ -558,8 +789,8 @@
 {{-- ═══ Enterprise punch timeline (session-based · neutral IN/OUT · GSAP) ═══ --}}
 <style>
 .pa-jsec{margin-top:18px}
-.pa-jcard2{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:20px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
-.pa-jhead2{display:flex;align-items:center;gap:12px;padding:18px 22px 14px}
+.pa-jcard2{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:18px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.05)}
+.pa-jhead2{display:flex;align-items:center;gap:12px;padding:15px 22px 11px}
 .pa-jhead2 h3{margin:0;font-size:15px;font-weight:680;letter-spacing:-.01em;color:var(--pa-ink)}
 .pa-jhead2 .sub{font-size:12px;color:var(--pa-faint);margin-top:2px}
 .pa-jhead2 .fixlink{margin-left:auto;color:var(--pa-accent-ink);font-weight:620;font-size:12.5px;background:none;border:0;cursor:pointer}
@@ -567,35 +798,59 @@
 /* Attendance stat card */
 .pa-acard{display:grid;grid-template-columns:1.5fr repeat(5,1fr);gap:0;border-top:1px solid var(--pa-border);border-bottom:1px solid var(--pa-border);background:var(--pa-surface-2)}
 @media(max-width:900px){.pa-acard{grid-template-columns:1fr 1fr 1fr}}
-.pa-atile{padding:16px 20px;border-right:1px solid var(--pa-border)}
+.pa-atile{padding:13px 18px;border-right:1px solid var(--pa-border)}
 .pa-atile:last-child{border-right:0}
 .pa-atile .lbl{font-size:10.5px;font-weight:640;text-transform:uppercase;letter-spacing:.07em;color:var(--pa-faint);display:flex;align-items:center;gap:6px}
-.pa-atile .val{font-size:19px;font-weight:720;letter-spacing:-.02em;color:var(--pa-ink);margin-top:6px;font-variant-numeric:tabular-nums}
-.pa-atile.hero .val{font-size:30px;font-weight:760}
+.pa-atile .val{font-size:18px;font-weight:720;letter-spacing:-.02em;color:var(--pa-ink);margin-top:4px;font-variant-numeric:tabular-nums}
+.pa-atile.hero .val{font-size:25px;font-weight:760}
 .pa-atile .sub2{font-size:11px;color:var(--pa-muted);margin-top:2px}
 .pa-livebadge{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:720;text-transform:uppercase;letter-spacing:.05em;color:var(--pa-present);background:var(--pa-present-soft);padding:2px 8px;border-radius:20px;vertical-align:middle;margin-left:8px}
 .pa-livebadge .dot{width:6px;height:6px;border-radius:50%;background:var(--pa-present);animation:pabeat 1.6s var(--pa-ease) infinite}
 /* Horizontal timeline */
 .pa-hz-scroll{overflow-x:auto;overflow-y:hidden;padding:0 10px}
-.pa-hz-track{position:relative;display:flex;align-items:flex-start;gap:8px;padding:104px 34px 26px;min-width:max-content;margin:0 auto}
-.pa-hz-rail{position:absolute;left:76px;right:76px;top:124px;height:3px;border-radius:3px;background:var(--pa-border);z-index:0}
-.pa-hz-rail-fill{position:absolute;left:76px;top:124px;height:3px;border-radius:3px;width:0;background:linear-gradient(90deg,var(--pa-present),#3B82F6 40%,#F59E0B 72%,var(--pa-danger));z-index:1}
-.pa-hz-node{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;min-width:84px;flex:0 0 auto}
-.pa-hz-dot{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;color:#fff;border:3px solid var(--pa-surface);box-shadow:0 2px 8px rgba(24,24,27,.14);cursor:default;transition:box-shadow .16s}
-.pa-hz-node:hover .pa-hz-dot{box-shadow:0 4px 16px rgba(24,24,27,.24)}
+.pa-hz-track{position:relative;display:flex;align-items:flex-start;gap:14px;padding:92px 34px 22px;min-width:max-content;margin:0 auto}
+.pa-hz-rail{position:absolute;left:76px;right:76px;top:112px;height:3px;border-radius:3px;background:var(--pa-border);z-index:0}
+.pa-hz-rail-fill{position:absolute;left:76px;top:112px;height:3px;border-radius:3px;width:0;background:linear-gradient(90deg,var(--pa-present),#3B82F6 40%,#F59E0B 72%,var(--pa-danger));z-index:1}
+/* Animated "day-flow" wave that fills the space reserved for hover tooltips —
+   turns dead white space above the nodes into a live, on-brand graphic. Purely
+   decorative (aria-hidden, pointer-events:none) and sits behind nodes/tooltips. */
+/* width:100% is REQUIRED — an absolutely-positioned <svg> is a replaced
+   element, so left:0;right:0 alone doesn't stretch it; without it the width
+   falls back to the viewBox aspect ratio (height 72 × 12 = 864px) and the
+   wave dies mid-track on wide/scrolling timelines. 100% of .pa-hz-track
+   (min-width:max-content) spans first punch → last punch at any viewport. */
+.pa-hz-flow{position:absolute;left:0;top:6px;width:100%;height:72px;z-index:0;pointer-events:none;opacity:.92}
+.pa-hz-flow .s0{stop-color:var(--pa-present)}
+.pa-hz-flow .s1{stop-color:#3B82F6}
+.pa-hz-flow .s2{stop-color:#F59E0B}
+.pa-hz-flow .s3{stop-color:var(--pa-danger)}
+.pa-hz-flow .a0{stop-color:var(--pa-accent);stop-opacity:.16}
+.pa-hz-flow .a1{stop-color:var(--pa-accent);stop-opacity:0}
+.pa-hz-flow-base{stroke-width:2;opacity:.3}
+.pa-hz-flow-comet{stroke-width:3.4;stroke-linecap:round;stroke-dasharray:96 1320;stroke-dashoffset:0;filter:drop-shadow(0 0 5px rgba(249,115,22,.55));animation:pahzflow 5s linear infinite}
+.pa-hz-flow-comet2{stroke-width:2.2;stroke-linecap:round;opacity:.72;stroke-dasharray:60 1360;stroke-dashoffset:0;animation:pahzflow 8s linear infinite;animation-delay:-3.2s}
+@keyframes pahzflow{to{stroke-dashoffset:-1416}}
+@media(prefers-reduced-motion:reduce){.pa-hz-flow-comet,.pa-hz-flow-comet2{animation:none;opacity:.5}}
+[data-theme="dark"] .pa-hz-flow-base,.dark .pa-hz-flow-base{opacity:.42}
+.pa-hz-node{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;min-width:98px;flex:0 0 auto}
+.pa-hz-dot{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;color:#fff;border:3.5px solid var(--pa-surface);box-shadow:0 3px 10px rgba(24,24,27,.16);cursor:pointer;transition:box-shadow .18s var(--pa-ease),transform .18s var(--pa-ease)}
+.pa-hz-node:hover .pa-hz-dot{box-shadow:0 6px 20px rgba(24,24,27,.26);transform:translateY(-3px)}
+.pa-hz-node:hover .pa-hz-time{color:var(--pa-accent-ink)}
 .pa-hz-dot.t-first_in{background:var(--pa-present)}
 .pa-hz-dot.t-in{background:#3B82F6}
 .pa-hz-dot.t-out{background:#F59E0B}
 .pa-hz-dot.t-last_out{background:var(--pa-danger)}
-.pa-hz-dot.t-live{background:var(--pa-present);box-shadow:0 0 0 6px var(--pa-present-soft)}
+.pa-hz-dot.t-live{background:var(--pa-present);animation:pahzpulse 2s var(--pa-ease) infinite}
+@keyframes pahzpulse{0%{box-shadow:0 0 0 0 rgba(15,157,110,.4)}70%{box-shadow:0 0 0 13px rgba(15,157,110,0)}100%{box-shadow:0 0 0 0 rgba(15,157,110,0)}}
+@media(prefers-reduced-motion:reduce){.pa-hz-dot.t-live{animation:none;box-shadow:0 0 0 6px var(--pa-present-soft)}}
 .pa-hz-dot.t-missing{background:var(--pa-warn-soft);border:2px dashed var(--pa-warn);color:var(--pa-warn);box-shadow:none;animation:pashake 2.4s var(--pa-ease) infinite}
 @keyframes pashake{0%,88%,100%{transform:translateX(0)}90%{transform:translateX(-2.5px)}92%{transform:translateX(2.5px)}94%{transform:translateX(-2px)}96%{transform:translateX(2px)}98%{transform:translateX(-1px)}}
 @media(prefers-reduced-motion:reduce){.pa-hz-dot.t-missing{animation:none}}
 .pa-hz-node.miss .pa-hz-time{color:var(--pa-warn)}
 .pa-hz-dir.d-missing{color:var(--pa-warn);background:var(--pa-warn-soft)}
 /* Needs-regularization banner */
-.pa-regbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:0 22px 16px;padding:13px 16px;border-radius:14px;background:var(--pa-warn-soft);border:1px solid var(--pa-warn)}
-.pa-regbar .ic{width:34px;height:34px;border-radius:10px;background:var(--pa-warn);color:#fff;display:grid;place-items:center;flex:0 0 auto}
+.pa-regbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 22px 12px;padding:10px 14px;border-radius:12px;background:var(--pa-warn-soft);border:1px solid var(--pa-warn)}
+.pa-regbar .ic{width:30px;height:30px;border-radius:9px;background:var(--pa-warn);color:#fff;display:grid;place-items:center;flex:0 0 auto}
 .pa-regbar .tx{font-size:12.5px;color:var(--pa-ink);line-height:1.45}
 .pa-regbar .tx b{font-weight:680}
 .pa-regbar .cta{margin-left:auto;display:inline-flex;align-items:center;gap:7px;background:var(--pa-warn);color:#fff;border:0;border-radius:10px;padding:9px 15px;font-size:12.5px;font-weight:640;cursor:pointer;white-space:nowrap}
@@ -605,6 +860,8 @@
 /* Approved-regularization punch: emerald ring so the corrected punch reads as verified */
 .pa-hz-node.reg .pa-hz-dot{box-shadow:0 0 0 3px var(--pa-present-soft),0 2px 8px rgba(24,24,27,.14)}
 .pa-hz-node.reg .pa-hz-time::after{content:"✓";margin-left:4px;color:var(--pa-present);font-weight:800}
+/* System auto punch-out: violet ring to distinguish it from a real punch */
+.pa-hz-node.auto .pa-hz-dot{background:#8B5CF6;box-shadow:0 0 0 3px rgba(139,92,246,.16),0 2px 8px rgba(24,24,27,.14)}
 .pa-hz-time{font-size:13px;font-weight:680;color:var(--pa-ink);margin-top:10px;font-variant-numeric:tabular-nums;white-space:nowrap}
 .pa-hz-dir{font-size:10px;font-weight:720;letter-spacing:.06em;margin-top:3px;padding:1px 8px;border-radius:20px}
 .pa-hz-dir.d-in{color:var(--pa-present);background:var(--pa-present-soft)}
@@ -618,16 +875,33 @@
 .pa-hz-tip .tr .k{width:78px;opacity:.7;flex:0 0 auto}
 .pa-hz-tip a{color:#93C5FD;font-weight:640}
 /* live banner */
-.pa-livebar{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin:0 22px 18px;padding:14px 18px;border-radius:14px;background:linear-gradient(135deg,var(--pa-present-soft),var(--pa-surface));border:1px solid var(--pa-present-soft)}
+.pa-livebar{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin:0 22px 14px;padding:11px 16px;border-radius:12px;background:linear-gradient(135deg,var(--pa-present-soft),var(--pa-surface));border:1px solid var(--pa-present-soft)}
 .pa-livebar .lw{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:680;color:var(--pa-present)}
 .pa-livebar .lw .dot{width:9px;height:9px;border-radius:50%;background:var(--pa-present);animation:pabeat 1.6s var(--pa-ease) infinite}
-.pa-livebar .el{margin-left:auto;font-size:24px;font-weight:760;letter-spacing:-.02em;color:var(--pa-ink);font-variant-numeric:tabular-nums}
+.pa-livebar .el{margin-left:auto;font-size:21px;font-weight:760;letter-spacing:-.02em;color:var(--pa-ink);font-variant-numeric:tabular-nums}
 .pa-livebar .st{font-size:12px;color:var(--pa-muted)}
 /* bottom grid: sessions + rail */
 .pa-jgrid{display:grid;grid-template-columns:1.35fr 1fr;gap:18px;margin-top:18px}
 @media(max-width:960px){.pa-jgrid{grid-template-columns:1fr}}
-.pa-sesscard{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:16px;padding:16px 18px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
-.pa-sesscard .sh{font-size:13.5px;font-weight:660;color:var(--pa-ink);display:flex;align-items:center;gap:8px;margin-bottom:12px}
+/* 3-column row: Session Summary (35%) · Working Hours Breakdown (40%) · rail (25%) */
+/* Balanced 3-column row: equal-height columns, 24px gutters, cards that fill */
+.pa-jgrid-3{grid-template-columns:35fr 40fr 25fr;gap:24px;align-items:stretch;margin-top:16px}
+@media(max-width:1180px){.pa-jgrid-3{grid-template-columns:1fr 1fr}}
+@media(max-width:820px){.pa-jgrid-3{grid-template-columns:1fr}}
+/* Breakdown fills the middle column; tiles 2-up. The grid takes flex:1 so its
+   rows stretch to absorb the column's extra height (set by the tallest sibling,
+   usually Session Summary) — no dead gap between the tiles and the bar. */
+/* Compact, natural-height tile grid — no longer stretched. The freed vertical
+   space goes to the radial breakdown chart below instead of oversized tiles. */
+.pa-hb-col{display:flex;flex-direction:column}
+.pa-hb-col .pa-hb-grid{grid-template-columns:repeat(4,1fr) !important;gap:9px}
+.pa-hb-col .pa-hb-tile{padding:10px 10px;gap:8px}
+.pa-hb-col .pa-hb-ic{width:27px;height:27px}
+.pa-hb-col .pa-hb-v{font-size:12.5px}
+.pa-hb-col .pa-hb-l{font-size:8.5px}
+.pa-hb-col .pa-hb-key{margin-top:0}
+.pa-sesscard{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:18px;padding:14px 15px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.05);display:flex;flex-direction:column}
+.pa-sesscard .sh{font-size:13.5px;font-weight:660;color:var(--pa-ink);display:flex;align-items:center;gap:8px;margin-bottom:10px}
 .pa-srow{display:grid;grid-template-columns:78px 1fr auto;align-items:center;gap:12px;padding:11px 0;border-top:1px solid var(--pa-border)}
 .pa-srow:first-of-type{border-top:0}
 .pa-srow .sn{font-size:11px;font-weight:680;text-transform:uppercase;letter-spacing:.05em;color:var(--pa-faint)}
@@ -637,11 +911,59 @@
 .pa-stot{display:flex;align-items:center;justify-content:space-between;margin-top:12px;padding-top:13px;border-top:2px solid var(--pa-border)}
 .pa-stot .tl{font-size:12px;font-weight:640;color:var(--pa-muted)}
 .pa-stot .tv{font-size:20px;font-weight:760;letter-spacing:-.02em;color:var(--pa-ink);font-variant-numeric:tabular-nums}
+/* Session flow visualization — a vertical, connected IN/OUT timeline replacing
+   the stacked per-session cards. flex:1 lets it absorb the row's extra height
+   (set by the tallest sibling column) so Session Summary bottom-aligns with
+   Working Hours Breakdown and the rail — same trick used on those columns. */
+.pa-sess-viz{position:relative;flex:1;min-height:160px;display:flex;padding:2px 0}
+.pa-sv-flow{position:absolute;left:0;top:0;width:44px;height:100%;z-index:0;pointer-events:none;opacity:.9}
+.pa-sv-flow .s0{stop-color:var(--pa-present)}
+.pa-sv-flow .s1{stop-color:#3B82F6}
+.pa-sv-flow .s2{stop-color:#F59E0B}
+.pa-sv-flow .s3{stop-color:var(--pa-danger)}
+.pa-sv-flow-base{stroke-width:2;opacity:.32}
+[data-theme="dark"] .pa-sv-flow-base,.dark .pa-sv-flow-base{opacity:.46}
+.pa-sv-flow-comet{stroke-width:3;stroke-linecap:round;stroke-dasharray:40 520;stroke-dashoffset:0;filter:drop-shadow(0 0 4px rgba(249,115,22,.5));animation:pasvflow 4.5s linear infinite}
+.pa-sv-flow-comet2{stroke-width:2;stroke-linecap:round;opacity:.65;stroke-dasharray:24 530;stroke-dashoffset:0;animation:pasvflow 7.5s linear infinite;animation-delay:-3s}
+@keyframes pasvflow{to{stroke-dashoffset:-560}}
+@media(prefers-reduced-motion:reduce){.pa-sv-flow-comet,.pa-sv-flow-comet2{animation:none;opacity:.45}}
+.pa-sv-col{position:relative;z-index:1;flex:1;display:flex;flex-direction:column;justify-content:space-between;min-width:0}
+.pa-sv-row{display:flex;align-items:center;gap:11px}
+.pa-sv-rail{width:44px;flex:0 0 auto;display:flex;align-items:center;justify-content:center}
+.pa-sv-dot{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;color:#fff;border:2.5px solid var(--pa-surface);box-shadow:0 2px 6px rgba(24,24,27,.14)}
+.pa-sv-dot.t-first_in{background:var(--pa-present)}
+.pa-sv-dot.t-in{background:#3B82F6}
+.pa-sv-dot.t-out{background:#F59E0B}
+.pa-sv-dot.t-last_out{background:var(--pa-danger)}
+.pa-sv-dot.t-live{background:var(--pa-present);animation:pahzpulse 2s var(--pa-ease) infinite}
+.pa-sv-dot.t-missing{background:var(--pa-warn-soft);border:2px dashed var(--pa-warn);color:var(--pa-warn);box-shadow:none;animation:pashake 2.4s var(--pa-ease) infinite}
+@media(prefers-reduced-motion:reduce){.pa-sv-dot.t-live,.pa-sv-dot.t-missing{animation:none}}
+.pa-sv-info{display:flex;align-items:baseline;gap:8px;min-width:0}
+.pa-sv-time{font-size:13.5px;font-weight:700;color:var(--pa-ink);font-variant-numeric:tabular-nums;white-space:nowrap}
+.pa-sv-dir{font-size:9.5px;font-weight:720;letter-spacing:.06em;padding:1px 7px;border-radius:20px;white-space:nowrap}
+.pa-sv-dir.d-in{color:var(--pa-present);background:var(--pa-present-soft)}
+.pa-sv-dir.d-out{color:var(--pa-danger);background:var(--pa-danger-soft)}
+.pa-sv-dir.d-live{color:var(--pa-present);background:var(--pa-present-soft)}
+.pa-sv-dir.d-missing{color:var(--pa-warn);background:var(--pa-warn-soft)}
+.pa-sv-seg,.pa-sv-brk{display:flex;align-items:center;gap:11px}
+.pa-sv-seg .tick{width:2px;height:22px;border-radius:2px;background:linear-gradient(var(--pa-present),#22c55e);flex:0 0 auto}
+.pa-sv-seg.live .tick{background:var(--pa-present);animation:pabeat 1.6s var(--pa-ease) infinite}
+.pa-sv-seg.miss .tick{background:none;border-left:2px dashed var(--pa-warn);width:0}
+.pa-sv-brk .tick{width:2px;height:16px;border-radius:2px;background:repeating-linear-gradient(var(--pa-border) 0 3px,transparent 3px 6px);flex:0 0 auto}
+.pa-sv-seg-info{display:flex;align-items:center;gap:8px;min-width:0;flex:1}
+.pa-sv-seg .lbl{font-size:12px;font-weight:600;color:var(--pa-muted)}
+.pa-sv-seg.miss .lbl{color:var(--pa-warn);font-weight:640}
+.pa-sv-seg.live .lbl{color:var(--pa-present);font-weight:640}
+.pa-sv-brk .lbl{font-size:11px;color:var(--pa-faint)}
+.pa-sv-prog{width:44px;height:4px;border-radius:3px;background:var(--pa-surface-3);overflow:hidden;flex:0 0 auto}
+.pa-sv-prog i{display:block;height:100%;border-radius:3px;background:linear-gradient(90deg,var(--pa-present),#22c55e);transition:width .8s var(--pa-ease)}
+.pa-sv-seg .pct{font-size:10.5px;font-weight:700;color:var(--pa-present);font-variant-numeric:tabular-nums;flex:0 0 auto}
+.pa-sv-empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:var(--pa-faint);padding:20px 0}
 .pa-snote{margin-top:12px;font-size:11.5px;color:var(--pa-faint);display:flex;align-items:center;gap:7px}
 .pa-swarn{margin-top:12px;font-size:12px;font-weight:600;color:var(--pa-danger);background:var(--pa-danger-soft);padding:9px 12px;border-radius:10px;display:flex;align-items:center;gap:8px}
 .pa-hz-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:var(--pa-faint);padding:52px 0}
-/* legend */
-.pa-hz-leg{display:flex;gap:16px;flex-wrap:wrap;padding:12px 22px 18px;border-top:1px solid var(--pa-border)}
+/* legend — pinned footer strip (distinct surface so it reads as persistent) */
+.pa-hz-leg{display:flex;gap:14px;flex-wrap:wrap;padding:10px 22px 13px;border-top:1px solid var(--pa-border);background:var(--pa-surface-2);border-radius:0 0 18px 18px}
 .pa-hz-leg span{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:560;color:var(--pa-muted)}
 .pa-hz-leg i{width:10px;height:10px;border-radius:50%;display:inline-block}
 </style>
@@ -696,14 +1018,40 @@
     @if($hasPunch)
       <div class="pa-hz-scroll" wire:loading.class="opacity-40" wire:target="statsPeriod,rangeFrom,rangeTo">
         <div class="pa-hz-track">
+          {{-- Decorative day-flow wave: fills the tooltip headroom with an on-brand
+               animated graphic instead of empty white space. Stretches to the track
+               width; strokes flow via CSS dash animation (no JS, reduced-motion aware). --}}
+          <svg class="pa-hz-flow" viewBox="0 0 1200 100" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+            <defs>
+              <linearGradient id="paHzLine" x1="0" y1="0" x2="1200" y2="0" gradientUnits="userSpaceOnUse">
+                <stop offset="0" class="s0" /><stop offset=".38" class="s1" /><stop offset=".7" class="s2" /><stop offset="1" class="s3" />
+              </linearGradient>
+              <linearGradient id="paHzArea" x1="0" y1="0" x2="0" y2="100" gradientUnits="userSpaceOnUse">
+                <stop offset="0" class="a0" /><stop offset="1" class="a1" />
+              </linearGradient>
+            </defs>
+            <path class="pa-hz-flow-area" fill="url(#paHzArea)" d="M0,64 C120,40 240,74 360,58 C480,42 600,72 720,54 C840,38 960,70 1080,52 C1140,44 1170,58 1200,54 L1200,100 L0,100 Z" />
+            <path class="pa-hz-flow-base" fill="none" stroke="url(#paHzLine)" d="M0,64 C120,40 240,74 360,58 C480,42 600,72 720,54 C840,38 960,70 1080,52 C1140,44 1170,58 1200,54" />
+            <path class="pa-hz-flow-comet2" fill="none" stroke="url(#paHzLine)" d="M0,64 C120,40 240,74 360,58 C480,42 600,72 720,54 C840,38 960,70 1080,52 C1140,44 1170,58 1200,54" />
+            <path class="pa-hz-flow-comet" fill="none" stroke="url(#paHzLine)" d="M0,64 C120,40 240,74 360,58 C480,42 600,72 720,54 C840,38 960,70 1080,52 C1140,44 1170,58 1200,54" />
+          </svg>
           <div class="pa-hz-rail"></div>
           <div class="pa-hz-rail-fill" data-tl-progress></div>
           @foreach($pj['nodes'] as $node)
             @php
               $isMissing = $node['type'] === 'missing';
-              $nodeIcon = $isMissing ? 'exclamation-triangle' : ($node['dir'] === 'IN' ? 'arrow-right-end-on-rectangle' : 'arrow-left-start-on-rectangle');
+              $src = $node['source'] ?? '';
+              // Unique icon per punch type: missing → alert, regularized → verified
+              // badge, face/card → their auth icon, otherwise an IN/OUT arrow.
+              $nodeIcon = match(true) {
+                  $isMissing => 'exclamation-triangle',
+                  $src === 'regularisation' => 'check-badge',
+                  $src === 'auto' => 'bolt',
+                  ! empty($node['method_icon']) => $node['method_icon'],
+                  default => $node['dir'] === 'IN' ? 'arrow-right-end-on-rectangle' : 'arrow-left-start-on-rectangle',
+              };
             @endphp
-            <div class="pa-hz-node {{ $isMissing ? 'miss' : '' }} {{ ($node['source'] ?? '') === 'regularisation' ? 'reg' : '' }}" data-tl-node @if(($node['source'] ?? '') === 'regularisation') data-tl-reg @endif>
+            <div class="pa-hz-node {{ $isMissing ? 'miss' : '' }} {{ $src === 'regularisation' ? 'reg' : '' }} {{ $src === 'auto' ? 'auto' : '' }}" data-tl-node @if($src === 'regularisation') data-tl-reg @endif>
               <div class="pa-hz-tip">
                 <div class="tt"><span>{{ $node['time'] }}</span><span>{{ $isMissing ? 'Missing '.$node['dir'] : $node['dir'] }}</span></div>
                 @if($isMissing)
@@ -724,11 +1072,22 @@
           @endforeach
         </div>
       </div>
+      @php
+        $nodeSources = collect($pj['nodes']);
+        $hasReg = $nodeSources->contains(fn ($n) => ($n['source'] ?? '') === 'regularisation');
+        $hasAuto = $nodeSources->contains(fn ($n) => ($n['source'] ?? '') === 'auto');
+        $hasFace = $nodeSources->contains(fn ($n) => str_contains(strtolower($n['method_label'] ?? ''), 'face'));
+        $hasCard = $nodeSources->contains(fn ($n) => str_contains(strtolower($n['method_label'] ?? ''), 'card'));
+      @endphp
       <div class="pa-hz-leg">
         <span><i style="background:var(--pa-present)"></i> First in</span>
         <span><i style="background:#3B82F6"></i> In</span>
         <span><i style="background:#F59E0B"></i> Out</span>
         <span><i style="background:var(--pa-danger)"></i> Last out</span>
+        @if($hasFace)<span><flux:icon.face-smile class="size-3.5" /> Face</span>@endif
+        @if($hasCard)<span><flux:icon.identification class="size-3.5" /> Card</span>@endif
+        @if($hasReg)<span><flux:icon.check-badge class="size-3.5 text-emerald-500" /> Regularized</span>@endif
+        @if($hasAuto)<span><i style="background:#8B5CF6"></i> Auto punch</span>@endif
         @if($pj['live'])<span><i style="background:var(--pa-present)"></i> Live</span>@endif
         @if(! empty($pj['needs_regularization']))<span><i style="background:var(--pa-warn)"></i> Missing punch</span>@endif
       </div>
@@ -737,19 +1096,131 @@
     @endif
   </div>{{-- /pa-jcard2 --}}
 
-  {{-- Session summary + streak/benchmark rail --}}
-  <div class="pa-jgrid" data-reveal>
+  @php
+    // Working-hours breakdown (moved into the 3-column row). Engine-computed.
+    $breakAllowance = (int) ($shift->break_duration ?? 0);
+    $hb = app(\App\Services\Attendance\PunchTimeline::class)->hoursBreakdown($workedMin, $breakMin, $targetMin, $breakAllowance);
+    $hbTiles = [
+        ['Expected', $hb['expected'], 'calendar-days', '#6B7280'],
+        ['Worked', $hb['worked'], 'clock', '#0F9D6E'],
+        ['Break', $hb['break'], 'pause', '#F59E0B'],
+        ['Idle', $hb['idle'], 'exclamation-triangle', '#D64545'],
+        ['Overtime', $hb['overtime'], 'bolt', '#8B5CF6'],
+        ['Net Hours', $hb['net'], 'check-badge', '#2F6FEB'],
+        ['Remaining', $hb['remaining'], 'arrow-path', '#6B7280'],
+    ];
+    $hbSpan = max(1, $hb['worked'] + $hb['break']);
+    $legitBreak = max(0, $hb['break'] - $hb['idle']);
+    $segWorked = round($hb['worked'] / $hbSpan * 100, 1);
+    $segBreak = round($legitBreak / $hbSpan * 100, 1);
+    $segIdle = round($hb['idle'] / $hbSpan * 100, 1);
+
+    // Radial breakdown chart — the same segWorked/segBreak/segIdle percentages
+    // drawn as a 3-arc donut instead of a flat bar. Standard SVG technique:
+    // each arc is a full circle with dasharray "{ownLength} {circumference}"
+    // (so only that one arc paints) and dashoffset shifted by the cumulative
+    // length of the segments before it — no path/arc math needed.
+    $wbR = 64;
+    $wbCirc = round(2 * M_PI * $wbR, 2);
+    $wbWLen = round($segWorked / 100 * $wbCirc, 2);
+    $wbBLen = round($segBreak / 100 * $wbCirc, 2);
+    $wbILen = round($segIdle / 100 * $wbCirc, 2);
+    $wbWOff = 0.0;
+    $wbBOff = round(-$wbWLen, 2);
+    $wbIOff = round(-($wbWLen + $wbBLen), 2);
+  @endphp
+  <style>
+  .pa-wb-viz{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;margin-top:14px}
+  .pa-wb-ring{position:relative;width:100%;max-width:196px;aspect-ratio:1/1;flex:0 0 auto}
+  .pa-wb-ring svg{width:100%;height:100%;display:block;transform:rotate(-90deg)}
+  .pa-wb-trk{fill:none;stroke:var(--pa-surface-3);stroke-width:16}
+  .pa-wb-seg{fill:none;stroke-width:16;stroke-linecap:round}
+  .pa-wb-ring .mid{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+  .pa-wb-ring .big{font-size:22px;font-weight:740;letter-spacing:-.02em;color:var(--pa-ink);line-height:1}
+  .pa-wb-ring .sm{font-size:10px;font-weight:640;text-transform:uppercase;letter-spacing:.05em;color:var(--pa-faint);margin-top:4px}
+  @keyframes pawbW{from{stroke-dashoffset:{{ round($wbWOff - $wbCirc, 2) }}}}
+  @keyframes pawbB{from{stroke-dashoffset:{{ round($wbBOff - $wbCirc, 2) }}}}
+  @keyframes pawbI{from{stroke-dashoffset:{{ round($wbIOff - $wbCirc, 2) }}}}
+  @media(prefers-reduced-motion:reduce){.pa-wb-seg{animation:none !important}}
+  </style>
+  {{-- 3-column row: Session Summary · Working Hours Breakdown · streak/benchmark rail --}}
+  <div class="pa-jgrid pa-jgrid-3" data-reveal>
     <div class="pa-sesscard">
       <div class="sh"><flux:icon.squares-2x2 class="size-4 text-orange-500" /> Session summary</div>
-      @if($hasPunch && count($pj['sessions']))
-        @foreach($pj['sessions'] as $s)
-          @php $miss = ! empty($s['missing']); @endphp
-          <div class="pa-srow {{ $s['live'] ? 'live' : '' }} {{ $miss ? 'miss' : '' }}">
-            <span class="sn">Session {{ $s['index'] }}</span>
-            <span class="sp">{{ $s['in'] ? \Illuminate\Support\Str::before($s['in'], ' ') : '⚠ missing' }} → {{ $s['out'] ? \Illuminate\Support\Str::before($s['out'], ' ') : ($miss ? '⚠ missing' : 'now') }}</span>
-            <span class="sd">{{ $miss ? $s['label'] : $s['label'].($s['live'] ? ' · live' : '') }}</span>
+      @php
+        // Flatten sessions into a vertical flow: an IN node, a work connector
+        // (with the same productivity % already computed by the engine), an
+        // OUT/LIVE/MISSING node, then a break connector before the next
+        // session. Node "type" reuses the horizontal timeline's vocabulary
+        // (first_in/in/out/last_out/live/missing) so colors/icons match 1:1 —
+        // no new engine data, just $pj['sessions'] read a different way.
+        $svItems = [];
+        if ($hasPunch && count($pj['sessions'])) {
+            $sessCount = count($pj['sessions']);
+            foreach ($pj['sessions'] as $i => $s) {
+                $miss = ! empty($s['missing']);
+                $outType = $s['live'] ? 'live' : ($miss ? 'missing' : ($i === $sessCount - 1 ? 'last_out' : 'out'));
+                $svItems[] = ['kind' => 'node', 'type' => $i === 0 ? 'first_in' : 'in', 'dir' => 'IN',
+                    'time' => $s['in'] ? \Illuminate\Support\Str::before($s['in'], ' ') : '—'];
+                $svItems[] = ['kind' => 'work', 'miss' => $miss, 'live' => $s['live'], 'label' => $s['label'], 'pct' => $s['productivity'] ?? null];
+                $svItems[] = ['kind' => 'node', 'type' => $outType, 'dir' => $s['live'] ? 'LIVE' : ($miss ? 'MISSING' : 'OUT'),
+                    'time' => $s['live'] ? 'now' : ($s['out'] ? \Illuminate\Support\Str::before($s['out'], ' ') : '—')];
+                if ($i < $sessCount - 1 && ! empty($s['break_after_label']) && $s['break_after_label'] !== '—') {
+                    $svItems[] = ['kind' => 'break', 'label' => $s['break_after_label']];
+                }
+            }
+        }
+        $svIcon = fn ($type) => match ($type) {
+            'missing' => 'exclamation-triangle',
+            'out', 'last_out', 'live' => 'arrow-left-start-on-rectangle',
+            default => 'arrow-right-end-on-rectangle',
+        };
+      @endphp
+      @if(count($svItems))
+        <div class="pa-sess-viz">
+          <svg class="pa-sv-flow" viewBox="0 0 44 480" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+            <defs>
+              <linearGradient id="paSvLine" x1="0" y1="0" x2="0" y2="480" gradientUnits="userSpaceOnUse">
+                <stop offset="0" class="s0" /><stop offset=".38" class="s1" /><stop offset=".7" class="s2" /><stop offset="1" class="s3" />
+              </linearGradient>
+            </defs>
+            <path class="pa-sv-flow-base" fill="none" stroke="url(#paSvLine)"
+              d="M22,0 C36,20 8,40 22,60 C36,80 8,100 22,120 C36,140 8,160 22,180 C36,200 8,220 22,240 C36,260 8,280 22,300 C36,320 8,340 22,360 C36,380 8,400 22,420 C36,440 8,460 22,480" />
+            <path class="pa-sv-flow-comet2" fill="none" stroke="url(#paSvLine)"
+              d="M22,0 C36,20 8,40 22,60 C36,80 8,100 22,120 C36,140 8,160 22,180 C36,200 8,220 22,240 C36,260 8,280 22,300 C36,320 8,340 22,360 C36,380 8,400 22,420 C36,440 8,460 22,480" />
+            <path class="pa-sv-flow-comet" fill="none" stroke="url(#paSvLine)"
+              d="M22,0 C36,20 8,40 22,60 C36,80 8,100 22,120 C36,140 8,160 22,180 C36,200 8,220 22,240 C36,260 8,280 22,300 C36,320 8,340 22,360 C36,380 8,400 22,420 C36,440 8,460 22,480" />
+          </svg>
+          <div class="pa-sv-col">
+            @foreach($svItems as $it)
+              @if($it['kind'] === 'node')
+                <div class="pa-sv-row">
+                  <span class="pa-sv-rail"><span class="pa-sv-dot t-{{ $it['type'] }}"><flux:icon :icon="$svIcon($it['type'])" class="size-3.5" /></span></span>
+                  <div class="pa-sv-info">
+                    <span class="pa-sv-time">{{ $it['time'] }}</span>
+                    <span class="pa-sv-dir d-{{ strtolower($it['dir']) }}">{{ $it['dir'] }}</span>
+                  </div>
+                </div>
+              @elseif($it['kind'] === 'work')
+                <div class="pa-sv-seg {{ $it['miss'] ? 'miss' : '' }} {{ $it['live'] ? 'live' : '' }}">
+                  <span class="pa-sv-rail"><span class="tick"></span></span>
+                  <div class="pa-sv-seg-info">
+                    <span class="lbl">{{ $it['miss'] ? 'Missing OUT — needs regularization' : $it['label'].' worked' }}</span>
+                    @if(! $it['miss'] && $it['pct'] !== null)
+                      <span class="pa-sv-prog"><i style="width:{{ $it['pct'] }}%"></i></span>
+                      <span class="pct">{{ $it['pct'] }}%</span>
+                    @endif
+                  </div>
+                </div>
+              @else
+                <div class="pa-sv-brk">
+                  <span class="pa-sv-rail"><span class="tick"></span></span>
+                  <span class="lbl">{{ $it['label'] }} break</span>
+                </div>
+              @endif
+            @endforeach
           </div>
-        @endforeach
+        </div>
         <div class="pa-stot"><span class="tl">Total working hours</span><span class="tv">{{ $fmt($pj['working_minutes']) }}</span></div>
         <div class="pa-stot" style="border-top:1px solid var(--pa-border);padding-top:11px;margin-top:11px"><span class="tl">Total break</span><span class="tv" style="font-size:16px;color:var(--pa-muted)">{{ $fmt($pj['break_minutes']) }}</span></div>
         @if($pj['missing_out'])
@@ -759,12 +1230,63 @@
         @if($noise > 0)
           <div class="pa-snote"><flux:icon.funnel class="size-3.5" /> {{ $noise }} duplicate/double {{ \Illuminate\Support\Str::plural('punch', $noise) }} detected and ignored in calculations.</div>
         @endif
+        @if(($pj['ignored_count'] ?? 0) > 0)
+          <div class="pa-snote"><flux:icon.no-symbol class="size-3.5" /> {{ $pj['ignored_count'] }} card {{ \Illuminate\Support\Str::plural('scan', $pj['ignored_count']) }} ignored — attendance starts with Face recognition.</div>
+        @endif
       @else
-        <p style="font-size:12.5px;color:var(--pa-faint);margin:0">No sessions yet — your first punch starts session 1.</p>
+        <div class="pa-sv-empty"><flux:icon.clock class="mb-2 size-7" style="opacity:.4" /><p style="font-size:12.5px;margin:0">No sessions yet — your first punch starts session 1.</p></div>
       @endif
     </div>
 
-  {{-- Right rail: streak · benchmark (slice 3) --}}
+  {{-- Center column: Working Hours Breakdown --}}
+  <div class="pa-hb pa-hb-col" data-reveal-item>
+    <div class="pa-panel-h" style="font-size:14px;margin:0">
+      <flux:icon.chart-bar-square class="size-4 text-orange-500" /> Working Hours Breakdown
+    </div>
+    <div class="pa-hb-grid">
+      @foreach($hbTiles as [$hbL, $hbM, $hbI, $hbC])
+        <div class="pa-hb-tile">
+          <span class="pa-hb-ic" style="background: {{ $hbC }}1a; color: {{ $hbC }};"><flux:icon :icon="$hbI" class="size-4" /></span>
+          <div><div class="pa-hb-v">{{ $fmt($hbM) }}</div><div class="pa-hb-l">{{ $hbL }}</div></div>
+        </div>
+      @endforeach
+    </div>
+    @if($hb['worked'] + $hb['break'] > 0)
+      <div class="pa-wb-viz">
+        <div class="pa-wb-ring">
+          <svg viewBox="0 0 160 160" aria-hidden="true" focusable="false">
+            <circle class="pa-wb-trk" cx="80" cy="80" r="{{ $wbR }}" />
+            @if($hb['worked'] > 0)
+              <circle class="pa-wb-seg" cx="80" cy="80" r="{{ $wbR }}" stroke="#0F9D6E"
+                stroke-dasharray="{{ $wbWLen }} {{ $wbCirc }}" stroke-dashoffset="{{ $wbWOff }}"
+                style="animation:pawbW .9s var(--pa-ease) .05s backwards" />
+            @endif
+            @if($legitBreak > 0)
+              <circle class="pa-wb-seg" cx="80" cy="80" r="{{ $wbR }}" stroke="#F59E0B"
+                stroke-dasharray="{{ $wbBLen }} {{ $wbCirc }}" stroke-dashoffset="{{ $wbBOff }}"
+                style="animation:pawbB .9s var(--pa-ease) .2s backwards" />
+            @endif
+            @if($hb['idle'] > 0)
+              <circle class="pa-wb-seg" cx="80" cy="80" r="{{ $wbR }}" stroke="#D64545"
+                stroke-dasharray="{{ $wbILen }} {{ $wbCirc }}" stroke-dashoffset="{{ $wbIOff }}"
+                style="animation:pawbI .9s var(--pa-ease) .35s backwards" />
+            @endif
+          </svg>
+          <div class="mid">
+            <div class="big num">{{ $fmt($hb['worked']) }}</div>
+            <div class="sm">worked · {{ (int) round($segWorked) }}%</div>
+          </div>
+        </div>
+        <div class="pa-hb-key">
+          <span><i style="background:#0F9D6E"></i> Worked {{ $fmt($hb['worked']) }} ({{ (int) round($segWorked) }}%)</span>
+          <span><i style="background:#F59E0B"></i> Break {{ $fmt($legitBreak) }} ({{ (int) round($segBreak) }}%)</span>
+          @if($hb['idle'] > 0)<span><i style="background:#D64545"></i> Idle {{ $fmt($hb['idle']) }} ({{ (int) round($segIdle) }}%)</span>@endif
+        </div>
+      </div>
+    @endif
+  </div>
+
+  {{-- Right column: streak · benchmark (slice 3) --}}
   <div class="pa-rail">
     <div class="pa-rc pa-streak">
       <div style="display:flex;align-items:center;gap:12px">
@@ -792,9 +1314,256 @@
         {{ $above >= 0 ? 'On-time rate '.$above.'% above your '.($teamName ? 'team' : 'company') : abs($above).'% below — aim to arrive earlier' }}
       </p>
     </div>
+
+    {{-- Rule 11 · monthly attendance score, trend vs last month, rankings --}}
+    @if($monthlyScore !== null)
+      <div class="pa-rc">
+        <div class="pa-rc-h">Attendance score <span class="pa-rc-sub" style="margin-left:auto">this month</span></div>
+        <div style="display:flex;align-items:baseline;gap:8px">
+          <span style="font-size:26px;font-weight:800;color:{{ $monthlyScore >= 85 ? 'var(--pa-present)' : ($monthlyScore >= 60 ? 'var(--pa-warn)' : '#f43f5e') }}">{{ number_format($monthlyScore, 1) }}</span>
+          <span style="font-size:11px;color:var(--pa-faint)">/100</span>
+          @if($prevMonthlyScore !== null)
+            @php $sdelta = round($monthlyScore - $prevMonthlyScore, 1); @endphp
+            <span style="margin-left:auto;font-size:11px;font-weight:700;display:flex;align-items:center;gap:3px;color:{{ $sdelta >= 0 ? 'var(--pa-present)' : 'var(--pa-warn)' }}">
+              <flux:icon :icon="$sdelta >= 0 ? 'arrow-trending-up' : 'arrow-trending-down'" class="size-3.5" /> {{ $sdelta >= 0 ? '+' : '' }}{{ $sdelta }} vs last month
+            </span>
+          @endif
+        </div>
+        <div style="display:flex;gap:10px;margin-top:10px">
+          @if($deptRank)
+            <div style="flex:1;background:var(--pa-bg);border-radius:10px;padding:8px 10px;text-align:center">
+              <div style="font-size:15px;font-weight:800;color:var(--pa-ink)">#{{ $deptRank[0] }}<span style="font-size:10px;color:var(--pa-faint)">/{{ $deptRank[1] }}</span></div>
+              <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--pa-faint)">Dept rank</div>
+            </div>
+          @endif
+          @if($companyRank)
+            <div style="flex:1;background:var(--pa-bg);border-radius:10px;padding:8px 10px;text-align:center">
+              <div style="font-size:15px;font-weight:800;color:var(--pa-ink)">#{{ $companyRank[0] }}<span style="font-size:10px;color:var(--pa-faint)">/{{ $companyRank[1] }}</span></div>
+              <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--pa-faint)">Company rank</div>
+            </div>
+          @endif
+        </div>
+        <p style="margin:10px 0 0;font-size:10.5px;color:var(--pa-faint)">Engine-scored daily · tap “Why?” on any day for the full breakdown.</p>
+      </div>
+    @endif
   </div>{{-- /pa-rail --}}
   </div>{{-- /pa-jgrid --}}
 </div>
+
+{{-- ============================================================
+     Shift Progress
+     Worked against the employee's own resolved shift. Unassigned and
+     non-working days show an explicit empty state rather than 0% of
+     an invented nine-hour day, which would tell someone they were
+     behind on a schedule nobody gave them.
+     ============================================================ --}}
+@php $sp = $shiftProgress; @endphp
+<div class="pa pa-jsec">
+  <div class="pa-sp">
+    <div class="pa-sp-head">
+      <div>
+        <h3>Shift Progress</h3>
+        <div class="sub">{{ $sp['status_label'] }}</div>
+      </div>
+      @if($sp['measurable'] && $sp['overtime_minutes'] > 0)
+        {{-- Beyond the standard day. Shown separately because overtime is only
+             payable against an approved request, so it must not read as extra
+             progress on the ring. --}}
+        <span class="pa-sp-ot">+{{ intdiv($sp['overtime_minutes'], 60) }}h {{ $sp['overtime_minutes'] % 60 }}m beyond shift</span>
+      @endif
+    </div>
+
+    <div class="pa-sp-body">
+      @if($sp['measurable'])
+        @php $dash = max(0, min(100, (int) $sp['percent'])); @endphp
+        <div class="pa-sp-ring" role="img"
+             aria-label="{{ $sp['percent_label'] }} of shift completed, {{ $sp['worked_label'] }} worked of {{ $sp['expected_label'] }}">
+          <svg viewBox="0 0 36 36" class="pa-sp-svg">
+            <circle cx="18" cy="18" r="15.9" fill="none" stroke="currentColor" class="track" stroke-width="3" />
+            <circle cx="18" cy="18" r="15.9" fill="none" stroke="currentColor" class="fill" stroke-width="3"
+                    stroke-linecap="round" stroke-dasharray="{{ $dash }} 100" />
+          </svg>
+          <span class="pa-sp-pct">{{ $sp['percent_label'] }}</span>
+        </div>
+        <dl class="pa-sp-stats">
+          <div><dt>Worked</dt><dd>{{ $sp['worked_label'] }}</dd></div>
+          <div><dt>Remaining</dt><dd>{{ $sp['remaining_label'] }}</dd></div>
+          <div><dt>Expected</dt><dd>{{ $sp['expected_label'] }}</dd></div>
+        </dl>
+      @else
+        <div class="pa-sp-empty">
+          <flux:icon.clock class="size-5 text-zinc-300" />
+          <div>
+            <div class="t">{{ $sp['note'] ?? 'Not measurable today' }}</div>
+            <div class="s">
+              @if($sp['state'] === 'unassigned')
+                Ask HR to assign your shift — attendance scoring is paused until then.
+              @else
+                Nothing is expected from you today.
+              @endif
+            </div>
+          </div>
+          <dl class="pa-sp-stats muted">
+            <div><dt>Worked</dt><dd>—</dd></div>
+            <div><dt>Remaining</dt><dd>—</dd></div>
+            <div><dt>Expected</dt><dd>—</dd></div>
+          </dl>
+        </div>
+      @endif
+    </div>
+  </div>
+</div>
+
+<style>
+.pa-sp{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:18px;padding:17px 19px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.05)}
+.pa-sp-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.pa-sp-head h3{margin:0;font-size:14px;font-weight:800;color:var(--pa-ink)}
+.pa-sp-head .sub{margin-top:2px;font-size:11px;color:var(--pa-faint)}
+.pa-sp-ot{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;padding:4px 9px;border-radius:999px;background:#FFF7ED;color:#C2410C;white-space:nowrap}
+.pa-sp-body{margin-top:14px}
+.pa-sp-ring{position:relative;width:96px;height:96px;flex:0 0 auto}
+.pa-sp-svg{width:96px;height:96px;transform:rotate(-90deg)}
+.pa-sp-svg .track{color:var(--pa-border)}
+.pa-sp-svg .fill{color:var(--pa-accent);transition:stroke-dasharray .7s var(--pa-ease)}
+.pa-sp-pct{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:800;color:var(--pa-ink)}
+.pa-sp-body{display:flex;align-items:center;gap:22px;flex-wrap:wrap}
+.pa-sp-stats{display:flex;gap:26px;margin:0;flex:1;min-width:200px}
+.pa-sp-stats dt{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--pa-faint)}
+.pa-sp-stats dd{margin:3px 0 0;font-size:17px;font-weight:800;color:var(--pa-ink);font-variant-numeric:tabular-nums}
+.pa-sp-stats.muted dd{color:var(--pa-faint)}
+.pa-sp-empty{display:flex;align-items:center;gap:12px;flex-wrap:wrap;width:100%}
+.pa-sp-empty .t{font-size:13px;font-weight:800;color:var(--pa-ink)}
+.pa-sp-empty .s{margin-top:2px;font-size:11px;color:var(--pa-faint)}
+@media(max-width:640px){
+  .pa-sp-body{gap:16px}
+  .pa-sp-stats{gap:18px;min-width:0;width:100%}
+  .pa-sp-stats dd{font-size:15px}
+}
+</style>
+
+{{-- ============================================================
+     Biometric Status
+     The component already loads the device, today's engine summary
+     and the recent sync history on every request; before this the
+     view rendered none of it, so three queries ran per page load to
+     produce nothing an employee could see. It also answers the
+     question they actually ask when a punch looks wrong: did the
+     device reach the server, and when.
+     ============================================================ --}}
+<div class="pa pa-jsec">
+  <div class="pa-bio">
+    <div class="pa-bio-head">
+      <div>
+        <h3>Biometric Status</h3>
+        <div class="sub">{{ $biometricDevice?->name ?? 'No device registered' }}</div>
+      </div>
+      @php
+        $lastSync = $biometricDevice?->last_synced_at;
+        // Device Health tiers. "Offline" is the same 30-minute threshold the
+        // device_offline smart alert uses, so the badge and the alert can never
+        // tell the employee two different stories about the same device.
+        [$healthLabel, $healthTone] = match (true) {
+            ! $lastSync => ['Never Synced', 'warn'],
+            \Carbon\Carbon::parse($lastSync)->gt(now()->subMinutes(30)) => ['Online', 'ok'],
+            \Carbon\Carbon::parse($lastSync)->gt(now()->subHours(6)) => ['Delayed', 'warn'],
+            default => ['Offline', 'bad'],
+        };
+        // The serial the engine stamped on today's summary is what actually
+        // recorded these punches; the device row is only the fallback.
+        $deviceSerial = $todaySummary?->device_serial
+            ?: collect($syncHistory)->pluck('serial')->filter()->first()
+            ?: $biometricDevice?->serial_number;
+      @endphp
+      <div class="pa-bio-healthwrap">
+        <div class="lbl">Device Health</div>
+        <span class="pa-bio-health {{ $healthTone }}">{{ $healthLabel }}</span>
+      </div>
+    </div>
+
+    <div class="pa-bio-grid">
+      <div class="pa-bio-tile">
+        <div class="lbl">Punch Source</div>
+        <div class="val">
+          @if($todaySummary?->first_punch_method || $todaySummary?->last_punch_method)
+            @foreach(array_unique(array_filter([$todaySummary->first_punch_method, $todaySummary->last_punch_method])) as $m)
+              <span class="pa-bio-chip">{{ \App\Enums\PunchMethod::tryFrom($m)?->label() ?? \Illuminate\Support\Str::headline($m) }}</span>
+            @endforeach
+          @else
+            <span class="muted">No punches today</span>
+          @endif
+        </div>
+      </div>
+      <div class="pa-bio-tile">
+        <div class="lbl">Device Serial</div>
+        <div class="val mono">{{ $deviceSerial ?: '—' }}</div>
+      </div>
+      <div class="pa-bio-tile">
+        <div class="lbl">Last Sync</div>
+        <div class="val">{{ $lastSync ? \Carbon\Carbon::parse($lastSync)->diffForHumans() : '—' }}</div>
+      </div>
+      <div class="pa-bio-tile">
+        <div class="lbl">Punches Recorded</div>
+        <div class="val">{{ $todaySummary?->raw_punch_count ?? 0 }}</div>
+      </div>
+    </div>
+
+    @if(count($syncHistory))
+      <div class="pa-bio-hist">
+        <div class="lbl">Sync History</div>
+        <table>
+          <thead><tr><th>Date</th><th>Synced at</th><th class="r">Punches</th></tr></thead>
+          <tbody>
+            @foreach($syncHistory as $h)
+              <tr><td>{{ $h['date'] }}</td><td>{{ $h['synced'] }}</td><td class="r">{{ $h['punches'] }}</td></tr>
+            @endforeach
+          </tbody>
+        </table>
+      </div>
+    @endif
+  </div>
+</div>
+
+<style>
+.pa-bio{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:18px;padding:17px 19px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.05)}
+.pa-bio-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.pa-bio-head h3{margin:0;font-size:14px;font-weight:800;color:var(--pa-ink)}
+.pa-bio-head .sub{margin-top:2px;font-size:11px;color:var(--pa-faint)}
+.pa-bio-health{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;padding:4px 9px;border-radius:999px;white-space:nowrap}
+.pa-bio-health.ok{background:#ECFDF5;color:#047857}
+.pa-bio-health.warn{background:#FFF7ED;color:#C2410C}
+.pa-bio-health.bad{background:#FEF2F2;color:#B91C1C}
+.pa-bio-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px}
+@media(max-width:820px){.pa-bio-grid{grid-template-columns:repeat(2,1fr)}}
+.pa-bio-tile{background:var(--pa-bg);border-radius:12px;padding:10px 12px}
+.pa-bio-tile .lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--pa-faint)}
+.pa-bio-tile .val{margin-top:4px;font-size:13px;font-weight:700;color:var(--pa-ink);display:flex;flex-wrap:wrap;gap:4px}
+.pa-bio-tile .val.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
+.pa-bio-tile .muted{font-weight:500;color:var(--pa-faint)}
+.pa-bio-chip{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:999px;padding:2px 9px;font-size:11px;font-weight:700}
+.pa-bio-hist{margin-top:14px}
+.pa-bio-hist .lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--pa-faint);margin-bottom:6px}
+.pa-bio-hist table{width:100%;border-collapse:collapse;font-size:12px}
+.pa-bio-hist th{text-align:left;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--pa-faint);padding:5px 0;border-bottom:1px solid var(--pa-border)}
+.pa-bio-hist td{padding:6px 0;border-bottom:1px solid var(--pa-border);color:var(--pa-ink)}
+.pa-bio-hist tr:last-child td{border-bottom:0}
+.pa-bio-hist .r{text-align:right}
+</style>
+
+{{-- Working Hours Breakdown styles — the card now lives in the 3-column journey row above. --}}
+<style>
+.pa-hb{background:var(--pa-surface);border:1px solid var(--pa-border);border-radius:18px;padding:17px 19px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.05)}
+.pa-hb-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:12px}
+@media(min-width:640px){.pa-hb-grid{grid-template-columns:repeat(4,1fr)}}
+@media(min-width:1100px){.pa-hb-grid{grid-template-columns:repeat(7,1fr)}}
+.pa-hb-tile{display:flex;align-items:center;gap:11px;border:1px solid var(--pa-border);background:var(--pa-surface-2);border-radius:14px;padding:13px 14px;transition:transform .18s var(--pa-ease),box-shadow .18s}
+.pa-hb-tile:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(24,24,27,.06)}
+.pa-hb-ic{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;flex:0 0 auto}
+.pa-hb-v{font-size:15.5px;font-weight:740;letter-spacing:-.02em;color:var(--pa-ink);line-height:1.1;font-variant-numeric:tabular-nums;white-space:nowrap}
+.pa-hb-l{font-size:10px;font-weight:640;text-transform:uppercase;letter-spacing:.05em;color:var(--pa-faint);margin-top:3px}
+.pa-hb-key{display:flex;flex-wrap:wrap;gap:16px;margin-top:12px;font-size:11.5px;color:var(--pa-muted)}
+.pa-hb-key span{display:inline-flex;align-items:center;gap:6px;font-weight:540}
+.pa-hb-key i{width:10px;height:10px;border-radius:3px}
+</style>
 
 {{-- ═══════════════ ATTENDANCE ANALYTICS (enterprise grid) ═══════════════ --}}
 @php
@@ -806,7 +1575,7 @@
 
     // 1 · Working Hours Trend — smooth line
     $hoursChart = [
-        'chart' => $baseChart('line', 220),
+        'chart' => $baseChart('line', 250),
         'colors' => ['#F97316'], 'dataLabels' => ['enabled' => false], 'stroke' => ['curve' => 'smooth', 'width' => 3],
         'markers' => ['size' => 0, 'hover' => ['size' => 5]],
         'grid' => ['borderColor' => '#F3E8DD', 'strokeDashArray' => 4],
@@ -815,10 +1584,13 @@
         'series' => [['name' => 'Hours', 'data' => collect($chartDaily)->pluck('hours')->all()]],
     ];
 
-    // 2 · Attendance Score Trend — area
-    $scoreSeries = collect($chartDaily)->map(fn($d) => min(100, (int) round(((float) $d['hours']) / max(1, $stdHours) * 100)))->all();
+    // 2 · Attendance Score Trend — area. Real engine scores (Rule 11) with an
+    // hours-based proxy only for days the nightly scorer hasn't covered yet.
+    $scoreSeries = collect($chartDaily)->map(fn ($d) => $d['score'] !== null
+        ? (int) round($d['score'])
+        : min(100, (int) round(((float) $d['hours']) / max(1, $stdHours) * 100)))->all();
     $scoreChart = [
-        'chart' => $baseChart('area', 220),
+        'chart' => $baseChart('area', 250),
         'colors' => ['#8b5cf6'], 'dataLabels' => ['enabled' => false], 'stroke' => ['curve' => 'smooth', 'width' => 3],
         'fill' => ['type' => 'gradient', 'gradient' => ['shadeIntensity' => 1, 'opacityFrom' => 0.3, 'opacityTo' => 0.02, 'stops' => [0, 90]]],
         'grid' => ['borderColor' => '#F3E8DD', 'strokeDashArray' => 4],
@@ -833,7 +1605,7 @@
         'weekend' => '#d4d4d8', 'future' => '#e4e4e7', default => '#f43f5e',
     })->all();
     $weeklyChart = [
-        'chart' => $baseChart('bar', 200),
+        'chart' => $baseChart('bar', 240),
         'colors' => $weekColors,
         'plotOptions' => ['bar' => ['borderRadius' => 5, 'columnWidth' => '55%', 'distributed' => true]],
         'dataLabels' => ['enabled' => false], 'legend' => ['show' => false],
@@ -858,12 +1630,48 @@
     // 5 · Late Arrival Trend — column (fixed 6-month window)
     $lateTrend = $analytics['late_trend'] ?? [];
     $lateChart = [
-        'chart' => $baseChart('bar', 200),
+        'chart' => $baseChart('bar', 240),
         'colors' => ['#F59E0B'], 'plotOptions' => ['bar' => ['borderRadius' => 5, 'columnWidth' => '45%']],
         'dataLabels' => ['enabled' => false], 'grid' => ['borderColor' => '#F3E8DD', 'strokeDashArray' => 4],
         'xaxis' => array_merge($axis, ['categories' => collect($lateTrend)->pluck('month')->all()]),
         'yaxis' => ['labels' => ['style' => ['colors' => '#9CA3AF', 'fontSize' => '10px']]], 'tooltip' => ['theme' => 'light'],
         'series' => [['name' => 'Late days', 'data' => collect($lateTrend)->pluck('late')->all()]],
+    ];
+
+    // 5b · Arrival Trend — minutes vs shift start (negative = early), with the
+    // shift-start and grace-cutoff boundaries drawn from the assigned shift.
+    $shiftStartMin = $shift?->start_time ? (int) \Illuminate\Support\Carbon::parse($shift->start_time)->format('H') * 60 + (int) \Illuminate\Support\Carbon::parse($shift->start_time)->format('i') : null;
+    $graceMin = (int) ($shift->grace_minutes ?? 0);
+    $arrivalSeries = collect($chartDaily)->map(fn ($d) => ($d['in_min'] !== null && $shiftStartMin !== null) ? $d['in_min'] - $shiftStartMin : null)->all();
+    $arrivalChart = [
+        'chart' => $baseChart('line', 240),
+        'colors' => ['#f59e0b'], 'dataLabels' => ['enabled' => false], 'stroke' => ['curve' => 'smooth', 'width' => 3],
+        'markers' => ['size' => 3, 'hover' => ['size' => 5]],
+        'grid' => ['borderColor' => '#F3E8DD', 'strokeDashArray' => 4],
+        'annotations' => ['yaxis' => array_values(array_filter([
+            $shiftStartMin !== null ? ['y' => 0, 'borderColor' => '#10b981', 'strokeDashArray' => 5, 'label' => ['text' => 'Shift start', 'style' => ['color' => '#10b981', 'background' => '#ECFDF5', 'fontSize' => '10px']]] : null,
+            ($shiftStartMin !== null && $graceMin > 0) ? ['y' => $graceMin, 'borderColor' => '#f43f5e', 'strokeDashArray' => 5, 'label' => ['text' => 'Grace +'.$graceMin.'m', 'style' => ['color' => '#f43f5e', 'background' => '#FFF1F2', 'fontSize' => '10px']]] : null,
+        ]))],
+        'xaxis' => array_merge($axis, ['categories' => $labels, 'tickAmount' => $tick]),
+        'yaxis' => ['labels' => ['style' => ['colors' => '#9CA3AF', 'fontSize' => '10px']]], 'tooltip' => ['theme' => 'light'],
+        'series' => [['name' => 'Minutes vs shift start', 'data' => $arrivalSeries]],
+    ];
+
+    // 5c · Logout Trend — minutes vs shift end (positive = stayed late, negative
+    // = left early), from the same engine sessions that feed the arrival trend.
+    $shiftEndMin = $shift?->end_time ? (int) \Illuminate\Support\Carbon::parse($shift->end_time)->format('H') * 60 + (int) \Illuminate\Support\Carbon::parse($shift->end_time)->format('i') : null;
+    $logoutSeries = collect($chartDaily)->map(fn ($d) => ($d['out_min'] !== null && $shiftEndMin !== null) ? $d['out_min'] - $shiftEndMin : null)->all();
+    $logoutChart = [
+        'chart' => $baseChart('line', 240),
+        'colors' => ['#0ea5e9'], 'dataLabels' => ['enabled' => false], 'stroke' => ['curve' => 'smooth', 'width' => 3],
+        'markers' => ['size' => 3, 'hover' => ['size' => 5]],
+        'grid' => ['borderColor' => '#F3E8DD', 'strokeDashArray' => 4],
+        'annotations' => ['yaxis' => array_values(array_filter([
+            $shiftEndMin !== null ? ['y' => 0, 'borderColor' => '#6366f1', 'strokeDashArray' => 5, 'label' => ['text' => 'Shift end', 'style' => ['color' => '#6366f1', 'background' => '#EEF2FF', 'fontSize' => '10px']]] : null,
+        ]))],
+        'xaxis' => array_merge($axis, ['categories' => $labels, 'tickAmount' => $tick]),
+        'yaxis' => ['labels' => ['style' => ['colors' => '#9CA3AF', 'fontSize' => '10px']]], 'tooltip' => ['theme' => 'light'],
+        'series' => [['name' => 'Minutes vs shift end', 'data' => $logoutSeries]],
     ];
 
     // 6 · Break Analysis — daily break minutes + average line
@@ -872,7 +1680,7 @@
     $longBreaks = $breakVals->filter(fn ($b) => $b > 60)->count();
     $shortBreaks = $breakVals->filter(fn ($b) => $b > 0 && $b < 20)->count();
     $breakChart = [
-        'chart' => $baseChart('bar', 200),
+        'chart' => $baseChart('bar', 240),
         'colors' => ['#0ea5e9'], 'plotOptions' => ['bar' => ['borderRadius' => 4, 'columnWidth' => '55%']],
         'dataLabels' => ['enabled' => false], 'grid' => ['borderColor' => '#F3E8DD', 'strokeDashArray' => 4],
         'annotations' => ['yaxis' => [['y' => $avgBreakLine, 'borderColor' => '#F97316', 'strokeDashArray' => 5, 'label' => ['text' => 'Avg '.$avgBreakLine.'m', 'style' => ['color' => '#F97316', 'background' => '#FFF7ED', 'fontSize' => '10px']]]]],
@@ -884,7 +1692,7 @@
     // 7 · Office vs WFH vs Hybrid — horizontal bars
     $modeBreakdown = $analytics['mode_breakdown'] ?? [];
     $modeChart = [
-        'chart' => $baseChart('bar', 200),
+        'chart' => $baseChart('bar', 240),
         'colors' => collect($modeBreakdown)->keys()->map(fn ($k) => AttendanceMode::tryFromValue($k)->hex())->all(),
         'plotOptions' => ['bar' => ['horizontal' => true, 'borderRadius' => 5, 'barHeight' => '55%', 'distributed' => true]],
         'dataLabels' => ['enabled' => true, 'style' => ['fontSize' => '11px']], 'legend' => ['show' => false],
@@ -897,7 +1705,7 @@
     // 9 · Overtime Trend — daily hours beyond the standard day
     $otSeries = collect($chartDaily)->map(fn ($d) => round(max(0, (float) $d['hours'] - $stdHours), 1))->all();
     $otChart = [
-        'chart' => $baseChart('area', 200),
+        'chart' => $baseChart('area', 240),
         'colors' => ['#8b5cf6'], 'dataLabels' => ['enabled' => false], 'stroke' => ['curve' => 'smooth', 'width' => 2.5],
         'fill' => ['type' => 'gradient', 'gradient' => ['shadeIntensity' => 1, 'opacityFrom' => 0.3, 'opacityTo' => 0.02, 'stops' => [0, 90]]],
         'grid' => ['borderColor' => '#F3E8DD', 'strokeDashArray' => 4],
@@ -932,18 +1740,24 @@
     };
 @endphp
 
-<div class="flex items-center justify-between">
+{{-- Collapsible section shell — state persists per user in localStorage --}}
+<div x-data="{ o: JSON.parse(localStorage.getItem('pa-sec-analytics') ?? 'true') }" x-init="$watch('o', v => localStorage.setItem('pa-sec-analytics', JSON.stringify(v)))">
+<button type="button" @click="o = !o" class="flex w-full items-center justify-between rounded-xl px-1 py-1 text-left transition hover:bg-orange-50/40 dark:hover:bg-zinc-800/40">
     <div class="flex items-center gap-2">
         <span class="inline-flex size-8 items-center justify-center rounded-xl bg-orange-50 text-orange-500"><flux:icon.chart-bar class="size-4" /></span>
         <div class="text-sm font-black text-zinc-900 dark:text-white">Attendance Analytics</div>
         <span class="rounded-full bg-orange-50 px-2 py-0.5 text-[10px] font-bold text-orange-500">{{ ucwords(str_replace('_', ' ', $statsPeriod)) }}{{ $analyticsMode !== '' ? ' · '.AttendanceMode::tryFromValue($analyticsMode)->label() : '' }}</span>
     </div>
-    @if($analyticsMode !== '')
-        <button wire:click="$set('analyticsMode', '')" class="text-[11px] font-bold text-orange-500 hover:underline">Clear mode filter</button>
-    @endif
-</div>
+    <span class="flex items-center gap-3">
+        @if($analyticsMode !== '')
+            <span wire:click.stop="$set('analyticsMode', '')" class="text-[11px] font-bold text-orange-500 hover:underline">Clear mode filter</span>
+        @endif
+        <flux:icon.chevron-down class="size-4 text-zinc-400 transition-transform" ::class="o ? '' : '-rotate-90'" />
+    </span>
+</button>
 
-<div class="grid grid-cols-1 gap-4 lg:grid-cols-12" data-reveal wire:loading.class="opacity-50" wire:target="statsPeriod,analyticsMode,rangeFrom,rangeTo">
+<div x-show="o" x-transition:enter="transition duration-200 ease-out" x-transition:enter-start="-translate-y-1 opacity-0" x-transition:enter-end="translate-y-0 opacity-100"
+     class="mt-2 grid grid-cols-1 gap-4 lg:grid-cols-12" data-reveal wire:loading.class="opacity-50" wire:target="statsPeriod,analyticsMode,rangeFrom,rangeTo">
     {{-- Row 1 --}}
     <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm transition hover:shadow-md lg:col-span-5">
         <div class="mb-1 text-sm font-black text-zinc-900 dark:text-white">Working Hours Trend</div>
@@ -999,6 +1813,22 @@
         <x-dashboard.chart :options="$productivityChart" id="productivity-chart" wire:key="prod-{{ $ck }}" class="grid place-items-center" />
         <div class="text-center text-[10px] text-zinc-400">worked vs expected ({{ $totalWorkingDays }} working days × {{ $stdHours }}h)</div>
     </div>
+    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm transition hover:shadow-md lg:col-span-4">
+        <div class="mb-1 text-sm font-black text-zinc-900 dark:text-white">Arrival Trend <span class="text-[10px] font-bold text-zinc-400">· vs your shift start</span></div>
+        @if($shiftStartMin !== null && collect($arrivalSeries)->filter(fn ($v) => $v !== null)->isNotEmpty())
+            <x-dashboard.chart :options="$arrivalChart" id="arrival-chart" wire:key="arrival-{{ $ck }}" class="-mb-2" />
+        @else
+            <div class="flex h-[200px] items-center justify-center text-xs text-zinc-300">No arrival data in this period.</div>
+        @endif
+    </div>
+    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm transition hover:shadow-md lg:col-span-4">
+        <div class="mb-1 text-sm font-black text-zinc-900 dark:text-white">Logout Trend <span class="text-[10px] font-bold text-zinc-400">· vs your shift end</span></div>
+        @if($shiftEndMin !== null && collect($logoutSeries)->filter(fn ($v) => $v !== null)->isNotEmpty())
+            <x-dashboard.chart :options="$logoutChart" id="logout-chart" wire:key="logout-{{ $ck }}" class="-mb-2" />
+        @else
+            <div class="flex h-[200px] items-center justify-center text-xs text-zinc-300">No logout data in this period.</div>
+        @endif
+    </div>
 
     {{-- Row 4 · Heatmap --}}
     <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm transition hover:shadow-md lg:col-span-12">
@@ -1020,6 +1850,64 @@
         @endif
     </div>
 </div>
+</div>{{-- /collapsible: analytics --}}
+
+{{-- ═══════════════ RECENT ACTIVITY (real regularization / alert log) ═══════════════ --}}
+@php
+    // Built from the already-loaded log timeline — no extra queries. Each item is
+    // a real regularization, approval, missing-punch or late event.
+    $activity = collect();
+    foreach (collect($logTimeline)->take(30) as $d) {
+        $when = $d['label'] ?? '';
+        if (($d['reg_status'] ?? null) === 'pending') {
+            $activity->push(['ic' => 'pencil-square', 'tone' => 'amber', 'title' => 'Regularization Request', 'desc' => $when.' — pending review', 'badge' => 'Pending', 'bt' => 'amber']);
+        } elseif (($d['is_regularized'] ?? false) || ($d['reg_status'] ?? null) === 'approved') {
+            $activity->push(['ic' => 'check-badge', 'tone' => 'emerald', 'title' => 'Manager Approval', 'desc' => $when.' — regularization approved', 'badge' => 'Approved', 'bt' => 'emerald']);
+        } elseif (($d['reg_status'] ?? null) === 'rejected') {
+            $activity->push(['ic' => 'x-circle', 'tone' => 'rose', 'title' => 'Regularization Rejected', 'desc' => $when, 'badge' => 'Rejected', 'bt' => 'rose']);
+        } elseif ($d['missing'] ?? false) {
+            $activity->push(['ic' => 'exclamation-circle', 'tone' => 'rose', 'title' => 'Missing Punch Alert', 'desc' => $when.' — a punch needs regularization', 'badge' => 'Alert', 'bt' => 'rose']);
+        } elseif ($d['is_late'] ?? false) {
+            $activity->push(['ic' => 'clock', 'tone' => 'amber', 'title' => 'Attendance Warning', 'desc' => $when.' — late arrival', 'badge' => 'Warning', 'bt' => 'amber']);
+        }
+    }
+    $activity = $activity->take(6);
+@endphp
+@if($activity->isNotEmpty())
+<div class="pa">
+  <div class="pa-panel" data-reveal>
+    <div class="pa-panel-h" style="font-size:15px">
+      <flux:icon.bell-alert class="size-4 text-orange-500" /> Recent Activity
+      <span class="pa-panel-sub">latest attendance events</span>
+    </div>
+    <div class="pa-actlist" data-reveal>
+      @foreach($activity as $a)
+        @php
+          $toneBg = ['emerald' => 'var(--pa-present-soft)', 'amber' => 'var(--pa-warn-soft)', 'rose' => 'var(--pa-danger-soft)'][$a['tone']] ?? 'var(--pa-surface-2)';
+          $toneFg = ['emerald' => 'var(--pa-present)', 'amber' => 'var(--pa-warn)', 'rose' => 'var(--pa-danger)'][$a['tone']] ?? 'var(--pa-muted)';
+          $badgeCls = ['emerald' => 'bg-emerald-50 text-emerald-600', 'amber' => 'bg-amber-50 text-amber-600', 'rose' => 'bg-rose-50 text-rose-500'][$a['bt']] ?? 'bg-zinc-100 text-zinc-500';
+        @endphp
+        <div class="pa-actitem" data-reveal-item>
+          <span class="pa-actic" style="background:{{ $toneBg }};color:{{ $toneFg }}"><flux:icon :icon="$a['ic']" class="size-4" /></span>
+          <div class="min-w-0 flex-1">
+            <div class="pa-actt">{{ $a['title'] }}</div>
+            <div class="pa-actd">{{ $a['desc'] }}</div>
+          </div>
+          <span class="shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-bold {{ $badgeCls }}">{{ $a['badge'] }}</span>
+        </div>
+      @endforeach
+    </div>
+  </div>
+</div>
+<style>
+.pa-actlist{display:flex;flex-direction:column;gap:3px}
+.pa-actitem{display:flex;align-items:center;gap:12px;padding:9px 8px;border-radius:12px;transition:background .16s}
+.pa-actitem:hover{background:var(--pa-surface-2)}
+.pa-actic{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;flex:0 0 auto}
+.pa-actt{font-size:13px;font-weight:660;color:var(--pa-ink)}
+.pa-actd{font-size:11.5px;color:var(--pa-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+</style>
+@endif
 
 {{-- ═══════════════ AI ATTENDANCE INSIGHTS ═══════════════ --}}
 @if(! empty($insightStats))
@@ -1049,16 +1937,21 @@
             ['Attendance Prediction', $ai['prediction'].'%', 'sparkles', '#F97316', null],
         ];
     @endphp
-    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm">
-        <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
+    <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm"
+         x-data="{ o: JSON.parse(localStorage.getItem('pa-sec-ai') ?? 'true') }" x-init="$watch('o', v => localStorage.setItem('pa-sec-ai', JSON.stringify(v)))">
+        <button type="button" @click="o = !o" class="flex w-full flex-wrap items-center justify-between gap-2 text-left" :class="o ? 'mb-4' : ''">
             <div class="flex items-center gap-2">
                 <span class="inline-flex size-8 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-amber-400 text-white shadow"><flux:icon.sparkles class="size-4" /></span>
                 <div class="text-sm font-black text-zinc-900 dark:text-white">AI Attendance Insights</div>
                 <span class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">· {{ ucwords(str_replace('_', ' ', $statsPeriod)) }}</span>
             </div>
-            <span class="rounded-full bg-orange-50 px-2.5 py-1 text-[10px] font-bold text-orange-500">Predicted {{ $ai['prediction'] }}% by period end</span>
-        </div>
+            <span class="flex items-center gap-3">
+                <span class="rounded-full bg-orange-50 px-2.5 py-1 text-[10px] font-bold text-orange-500">Predicted {{ $ai['prediction'] }}% by period end</span>
+                <flux:icon.chevron-down class="size-4 text-zinc-400 transition-transform" ::class="o ? '' : '-rotate-90'" />
+            </span>
+        </button>
 
+        <div x-show="o" x-transition:enter="transition duration-200 ease-out" x-transition:enter-start="-translate-y-1 opacity-0" x-transition:enter-end="translate-y-0 opacity-100">
         {{-- Stat cards --}}
         <div class="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-6">
             @foreach($aiCards as [$label, $value, $icon, $color, $trend])
@@ -1098,6 +1991,7 @@
                 @endforeach
             </div>
         @endif
+        </div>{{-- /collapsible body: ai insights --}}
     </div>
 @endif
 
@@ -1124,13 +2018,17 @@
 @endif
 
 {{-- ═══════════════ PUNCH IN / OUT TIMELINE ═══════════════ --}}
-<div id="attendance-log" class="overflow-hidden rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm scroll-mt-6">
-    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200/70 dark:border-zinc-800 px-5 py-3.5">
-        <h3 class="flex items-center gap-2 text-sm font-black text-zinc-900 dark:text-white"><flux:icon.clock class="size-4 text-orange-500" /> Punch In / Out Timeline
-            <span class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
-                · {{ $statsPeriod === 'custom' && $rangeFrom && $rangeTo ? \Carbon\Carbon::parse($rangeFrom)->format('d M').' – '.\Carbon\Carbon::parse($rangeTo)->format('d M Y') : $calendarMonth->format('M Y') }}
-            </span>
-        </h3>
+<div id="attendance-log" class="overflow-hidden rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm scroll-mt-6"
+     x-data="{ o: JSON.parse(localStorage.getItem('pa-sec-log') ?? 'true') }" x-init="$watch('o', v => localStorage.setItem('pa-sec-log', JSON.stringify(v)))">
+    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200/70 dark:border-zinc-800 px-5 py-3">
+        <button type="button" @click="o = !o" class="flex flex-1 items-center gap-2 text-left">
+            <h3 class="flex items-center gap-2 text-sm font-black text-zinc-900 dark:text-white"><flux:icon.clock class="size-4 text-orange-500" /> Punch In / Out Timeline
+                <span class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
+                    · {{ $statsPeriod === 'custom' && $rangeFrom && $rangeTo ? \Carbon\Carbon::parse($rangeFrom)->format('d M').' – '.\Carbon\Carbon::parse($rangeTo)->format('d M Y') : $calendarMonth->format('M Y') }}
+                </span>
+            </h3>
+            <flux:icon.chevron-down class="size-4 text-zinc-400 transition-transform" ::class="o ? '' : '-rotate-90'" />
+        </button>
         <div class="flex flex-wrap items-center gap-2">
             <x-clean-select model="logMode" :live="true"
                 :options="[['value' => '', 'label' => 'All modes'], ...collect(AttendanceMode::cases())->map(fn ($mode) => ['value' => $mode->value, 'label' => $mode->label()])->all()]" />
@@ -1138,6 +2036,7 @@
         </div>
     </div>
 
+    <div x-show="o">
     @php $days = $logMode !== '' ? collect($logTimeline)->where('mode', $logMode)->values() : collect($logTimeline); @endphp
     @if($days->count() > 0)
         <div class="divide-y divide-orange-50">
@@ -1148,20 +2047,27 @@
                         $day['status'] === 'on_time' => ['bg-emerald-50 text-emerald-600', 'Present'],
                         default => ['bg-zinc-50 dark:bg-zinc-800/50 text-zinc-500 dark:text-zinc-400', ucfirst($day['status'] ?? '—')],
                     };
+                    // Colored left status border on each day row.
+                    $dayBorder = match(true) {
+                        $day['missing'] => 'border-l-amber-400',
+                        $day['is_late'] => 'border-l-amber-400',
+                        $day['status'] === 'on_time' => 'border-l-emerald-400',
+                        default => 'border-l-zinc-200 dark:border-l-zinc-700',
+                    };
                     $dayMode = AttendanceMode::tryFromValue($day['mode'] ?? 'office');
                 @endphp
-                <div x-data="{ open: {{ $day['is_today'] ? 'true' : 'false' }} }" class="{{ $day['missing'] ? 'bg-amber-50/30' : '' }}">
+                <div x-data="{ open: {{ $day['is_today'] ? 'true' : 'false' }} }" class="border-l-[3px] {{ $dayBorder }} {{ $day['missing'] ? 'bg-amber-50/30' : '' }}">
                     {{-- Day header --}}
-                    <button type="button" @click="open = !open" class="flex w-full flex-wrap items-center gap-3 px-5 py-3 text-left transition hover:bg-orange-50/40">
+                    <button type="button" @click="open = !open" class="flex w-full flex-wrap items-center gap-3 px-5 py-2.5 text-left transition hover:bg-orange-50/50 dark:hover:bg-zinc-800/40">
                         <flux:icon.chevron-right class="size-4 shrink-0 text-zinc-400 transition-transform" ::class="open ? 'rotate-90' : ''" />
                         <div class="min-w-[7.5rem]">
-                            <div class="text-xs font-black text-zinc-900 dark:text-white">{{ $day['label'] }} @if($day['is_today'])<span class="text-orange-500">· Today</span>@endif</div>
-                            <div class="text-[9px] text-zinc-400">{{ $day['dayname'] }}</div>
+                            <div class="text-sm font-black text-zinc-900 dark:text-white">{{ $day['label'] }} @if($day['is_today'])<span class="text-orange-500">· Today</span>@endif</div>
+                            <div class="text-[10px] text-zinc-400">{{ $day['dayname'] }}</div>
                         </div>
-                        <span class="rounded-full px-2 py-0.5 text-[9px] font-bold {{ $dayBadge }}">{{ $dayLabel }}</span>
-                        <span class="inline-flex items-center rounded px-1.5 py-0.5 text-[8px] font-bold uppercase {{ $dayMode->chipClass() }}">{{ $dayMode->shortLabel() }}</span>
+                        <span class="rounded-full px-2.5 py-1 text-[10px] font-bold {{ $dayBadge }}">{{ $dayLabel }}</span>
+                        <span class="inline-flex items-center rounded-md px-2 py-0.5 text-[9px] font-bold uppercase {{ $dayMode->chipClass() }}">{{ $dayMode->shortLabel() }}</span>
                         @if($day['is_regularized'])
-                            <span class="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[8px] font-bold uppercase text-blue-600 dark:bg-blue-500/15 dark:text-blue-300"><flux:icon.check-badge class="size-2.5" /> Regularized</span>
+                            <span class="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-0.5 text-[9px] font-bold uppercase text-blue-600 dark:bg-blue-500/15 dark:text-blue-300"><flux:icon.check-badge class="size-3" /> Regularized</span>
                         @elseif($day['reg_status'])
                             @php $regC = match($day['reg_status']) { 'rejected' => 'bg-rose-50 text-rose-500', default => 'bg-amber-50 text-amber-600' }; @endphp
                             <span class="rounded-full px-2 py-0.5 text-[8px] font-bold uppercase {{ $regC }}">Reg. {{ $day['reg_status'] }}</span>
@@ -1170,6 +2076,7 @@
                             <span>{{ count($day['events']) }} {{ \Illuminate\Support\Str::plural('punch', count($day['events'])) }}</span>
                             @if($day['worked'])<span class="font-bold text-zinc-700 dark:text-zinc-200">{{ $day['worked'] }}</span>@endif
                             <span class="rounded-lg p-1 text-zinc-400 transition hover:bg-orange-100 hover:text-orange-600" wire:click.stop="showPunchDetail('{{ $day['date'] }}')" title="Full day details"><flux:icon.eye class="size-4" /></span>
+                            <span class="inline-flex items-center gap-0.5 rounded-lg px-1.5 py-1 text-[10px] font-black text-zinc-400 transition hover:bg-blue-50 hover:text-blue-600" wire:click.stop="showScoreDecision('{{ $day['date'] }}')" title="Why? — how the engine decided this day"><flux:icon.scale class="size-3.5" /> Why?</span>
                         </span>
                     </button>
 
@@ -1186,9 +2093,72 @@
                             </div>
                         @endif
 
+                        {{-- System auto punch-out banner — regularizable --}}
+                        @if($day['is_auto_checkout'] ?? false)
+                            <div class="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-orange-300 bg-orange-50 dark:bg-orange-900/15 px-3 py-2">
+                                <div class="flex items-center gap-2 text-xs">
+                                    <flux:icon.bolt class="size-4 text-orange-500" />
+                                    <span class="font-black text-orange-900 dark:text-orange-200">Auto Punch-Out</span>
+                                    <span class="text-orange-700 dark:text-orange-300">· system closed this day at {{ $day['corrected_out'] ?? '—' }} (no OUT punch received)</span>
+                                </div>
+                                <button wire:click="openRegularisation('{{ $day['date'] }}')" class="inline-flex items-center gap-1 rounded-lg bg-orange-500 px-3 py-1 text-[11px] font-bold text-white transition hover:bg-orange-600"><flux:icon.pencil-square class="size-3" /> Fix Time</button>
+                            </div>
+                        @endif
+
+                        {{-- Regularized: original vs corrected — history is never lost --}}
+                        @if($day['is_regularized'] && (($day['original_in'] ?? null) || ($day['original_out'] ?? null)))
+                            <div class="mb-3 rounded-xl border border-blue-200 bg-blue-50/70 dark:border-blue-900 dark:bg-blue-950/20 px-3 py-2 text-xs">
+                                <div class="mb-1 flex items-center gap-1.5 font-black text-blue-800 dark:text-blue-200"><flux:icon.check-badge class="size-4" /> Regularized — original punches preserved</div>
+                                <div class="flex flex-wrap gap-x-5 gap-y-1 font-mono tabular-nums">
+                                    <span class="text-zinc-500 dark:text-zinc-400">IN: <span class="line-through">{{ $day['original_in'] ?? '—' }}</span> <flux:icon.arrow-right class="inline size-3 text-blue-400" /> <span class="font-bold text-blue-700 dark:text-blue-300">{{ $day['corrected_in'] ?? '—' }}</span></span>
+                                    <span class="text-zinc-500 dark:text-zinc-400">OUT: <span class="line-through">{{ $day['original_out'] ?? '—' }}</span> <flux:icon.arrow-right class="inline size-3 text-blue-400" /> <span class="font-bold text-blue-700 dark:text-blue-300">{{ $day['corrected_out'] ?? '—' }}</span></span>
+                                </div>
+                            </div>
+                        @endif
+
+                        {{-- Engine work sessions — validated IN→OUT pairs --}}
+                        @if(count($day['sessions'] ?? []) > 0)
+                            <div class="mb-3 flex flex-wrap items-center gap-2">
+                                @foreach($day['sessions'] as $s)
+                                    <span class="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[10px] font-bold tabular-nums {{ ($s['missing'] ?? false) ? 'border-amber-300 bg-amber-50 text-amber-700' : 'border-emerald-200 bg-emerald-50/70 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300' }}">
+                                        <span class="text-[8px] font-black uppercase tracking-wide opacity-60">S{{ $s['index'] }}</span>
+                                        {{ $s['in'] ?? '⚠' }} → {{ $s['out'] ?? (($s['live'] ?? false) ? 'now' : '⚠') }}
+                                        <span class="opacity-70">· {{ $s['label'] }}</span>
+                                    </span>
+                                @endforeach
+                            </div>
+                        @endif
+
+                        {{-- Punches the engine ignored (Rule 1/2) — collapsed, with reasons --}}
+                        @if(count($day['ignored_events'] ?? []) > 0 || ($day['noise_count'] ?? 0) > 0)
+                            <div x-data="{ ig: false }" class="mb-3">
+                                <button type="button" @click="ig = !ig" class="inline-flex items-center gap-1.5 rounded-lg bg-zinc-100 px-2.5 py-1 text-[10px] font-bold text-zinc-500 transition hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400">
+                                    <flux:icon.funnel class="size-3" />
+                                    {{ count($day['ignored_events'] ?? []) + ($day['noise_count'] ?? 0) }} {{ \Illuminate\Support\Str::plural('punch', count($day['ignored_events'] ?? []) + ($day['noise_count'] ?? 0)) }} ignored by Attendance Engine
+                                    <flux:icon.chevron-down class="size-3 transition-transform" ::class="ig ? 'rotate-180' : ''" />
+                                </button>
+                                <div x-show="ig" x-transition class="mt-2 space-y-1">
+                                    @foreach($day['ignored_events'] ?? [] as $ie)
+                                        <div class="flex items-center gap-2 rounded-lg bg-zinc-50 px-3 py-1.5 text-[11px] text-zinc-400 dark:bg-zinc-800/50">
+                                            <flux:icon.no-symbol class="size-3.5 shrink-0" />
+                                            <span class="font-mono font-bold line-through">{{ $ie['time'] }}</span>
+                                            <span class="font-bold">{{ $ie['method'] }}</span>
+                                            <span class="truncate">— {{ $ie['reason'] }}</span>
+                                        </div>
+                                    @endforeach
+                                    @if(($day['noise_count'] ?? 0) > 0)
+                                        <div class="flex items-center gap-2 rounded-lg bg-zinc-50 px-3 py-1.5 text-[11px] text-zinc-400 dark:bg-zinc-800/50">
+                                            <flux:icon.document-duplicate class="size-3.5 shrink-0" />
+                                            {{ $day['noise_count'] }} duplicate/double {{ \Illuminate\Support\Str::plural('read', $day['noise_count']) }} merged into the kept punches.
+                                        </div>
+                                    @endif
+                                </div>
+                            </div>
+                        @endif
+
                         {{-- Vertical punch timeline --}}
                         @if(count($day['events']) > 0)
-                            <div class="relative ml-2 space-y-2.5">
+                            <div class="relative ml-2 space-y-2">
                                 @foreach($day['events'] as $ev)
                                     @php
                                         [$dot, $ic] = match($ev['type']) {
@@ -1210,7 +2180,7 @@
                                             <div class="flex flex-wrap items-center gap-x-3 gap-y-0.5">
                                                 <span class="text-sm font-black tabular-nums text-zinc-900 dark:text-white">{{ $ev['time'] }}</span>
                                                 @if($evMethod)
-                                                    <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-bold {{ $evMethod->chipClass() }}"><flux:icon :icon="$evMethod->icon()" class="size-3" /> {{ $evMethod->label() }}</span>
+                                                    <span class="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold {{ $evMethod->chipClass() }}"><flux:icon :icon="$evMethod->icon()" class="size-3.5" /> {{ $evMethod->label() }}</span>
                                                 @else
                                                     <span class="text-[10px] font-bold text-zinc-500 dark:text-zinc-400">{{ $srcLabel }}</span>
                                                 @endif
@@ -1270,6 +2240,7 @@
         </div>
     @endif
     <div class="border-t border-zinc-200/70 dark:border-zinc-800 px-5 py-2 text-center text-[11px] text-zinc-400">All times are based on your shift timezone (IST)</div>
+    </div>{{-- /collapsible body: punch log --}}
 </div>
 
 </div>{{-- end spacing wrapper --}}
@@ -1277,6 +2248,74 @@
 {{-- ═══════════════════════════════════════════════
      PUNCH DETAIL MODAL
 ═══════════════════════════════════════════════ --}}
+{{-- ═══════════ ATTENDANCE DECISION — "Why?" audit popup (Rule 11) ═══════════ --}}
+<flux:modal name="score-decision" class="max-w-lg">
+    @if($decision)
+        <div class="space-y-4">
+            <div class="flex items-start justify-between gap-3">
+                <div>
+                    <flux:heading size="lg">Attendance Decision</flux:heading>
+                    <flux:subheading>{{ $decision['date'] }}</flux:subheading>
+                </div>
+                @if($decision['score'] !== null)
+                    @php $sc = (int) round($decision['score']); @endphp
+                    <div class="text-center">
+                        <div class="text-2xl font-black tabular-nums {{ $sc >= 85 ? 'text-emerald-600' : ($sc >= 60 ? 'text-amber-500' : 'text-rose-500') }}">{{ $sc }}<span class="text-xs text-zinc-400">/100</span></div>
+                        <div class="text-[9px] font-bold uppercase tracking-wider text-zinc-400">Attendance Score</div>
+                    </div>
+                @endif
+            </div>
+
+            {{-- How the engine read the day --}}
+            <div class="rounded-xl border border-zinc-100 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-800/40 p-3 text-xs">
+                <div class="mb-2 flex items-center gap-1.5 font-black text-zinc-700 dark:text-zinc-200"><flux:icon.cog-6-tooth class="size-3.5 text-orange-500" /> Engine inputs</div>
+                <dl class="grid grid-cols-2 gap-x-4 gap-y-1.5 tabular-nums">
+                    @if($decision['shift'])
+                        <dt class="text-zinc-400">Shift</dt><dd class="text-right font-bold text-zinc-800 dark:text-zinc-100">{{ $decision['shift']['window'] }}</dd>
+                        <dt class="text-zinc-400">Grace</dt><dd class="text-right font-bold text-zinc-800 dark:text-zinc-100">{{ $decision['shift']['grace'] }}</dd>
+                    @endif
+                    <dt class="text-zinc-400">First IN</dt><dd class="text-right font-bold text-zinc-800 dark:text-zinc-100">{{ $decision['first_in'] ?? '—' }}</dd>
+                    <dt class="text-zinc-400">Last OUT</dt><dd class="text-right font-bold text-zinc-800 dark:text-zinc-100">{{ $decision['last_out'] ?? '—' }}{{ $decision['auto_punch_out'] ? ' (auto)' : '' }}</dd>
+                    <dt class="text-zinc-400">Worked</dt><dd class="text-right font-bold text-zinc-800 dark:text-zinc-100">{{ $decision['worked'] }}</dd>
+                    <dt class="text-zinc-400">Break</dt><dd class="text-right font-bold text-zinc-800 dark:text-zinc-100">{{ $decision['break'] }}</dd>
+                    @if($decision['late'])<dt class="text-zinc-400">Late</dt><dd class="text-right font-bold text-amber-600">{{ $decision['late'] }}</dd>@endif
+                    @if($decision['sessions'])<dt class="text-zinc-400">Sessions</dt><dd class="text-right font-bold text-zinc-800 dark:text-zinc-100">{{ $decision['sessions'] }}</dd>@endif
+                    @if($decision['duplicates'] > 0)<dt class="text-zinc-400">Duplicates merged</dt><dd class="text-right font-bold text-zinc-800 dark:text-zinc-100">{{ $decision['duplicates'] }}</dd>@endif
+                </dl>
+                @foreach($decision['ignored'] as $ig)
+                    <div class="mt-1.5 flex items-center gap-1.5 text-[11px] text-zinc-400"><flux:icon.no-symbol class="size-3" /> {{ $ig }}</div>
+                @endforeach
+            </div>
+
+            {{-- Deductions & bonuses — the persisted audit trail --}}
+            <div>
+                <div class="mb-1.5 flex items-center gap-1.5 text-xs font-black text-zinc-700 dark:text-zinc-200"><flux:icon.scale class="size-3.5 text-blue-500" /> Score breakdown</div>
+                @forelse($decision['breakdown'] as $line)
+                    <div class="flex items-start justify-between gap-3 border-b border-zinc-50 dark:border-zinc-800/60 py-1.5 text-xs">
+                        <div class="min-w-0">
+                            <div class="font-bold text-zinc-800 dark:text-zinc-100">{{ $line['label'] }}</div>
+                            <div class="text-[10px] text-zinc-400">{{ $line['detail'] }}</div>
+                        </div>
+                        <span class="shrink-0 font-black tabular-nums {{ $line['points'] < 0 ? 'text-rose-500' : 'text-emerald-600' }}">{{ $line['points'] > 0 ? '+' : '' }}{{ rtrim(rtrim(number_format($line['points'], 1), '0'), '.') }}</span>
+                    </div>
+                @empty
+                    <div class="rounded-lg bg-emerald-50 dark:bg-emerald-950/25 px-3 py-2 text-xs font-bold text-emerald-700 dark:text-emerald-300">Perfect day — no deductions applied.</div>
+                @endforelse
+                @if($decision['score'] === null)
+                    <div class="mt-2 text-[10px] text-zinc-400">This day hasn't been scored yet — the engine scores each day just after midnight.</div>
+                @endif
+            </div>
+
+            <div class="flex items-center justify-between rounded-xl bg-zinc-50 dark:bg-zinc-800/40 px-3 py-2">
+                <span class="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Final status</span>
+                <span class="text-xs font-black {{ $decision['status'] === 'late' ? 'text-amber-600' : ($decision['status'] === 'absent' ? 'text-rose-500' : 'text-emerald-600') }}">
+                    {{ ucwords(str_replace('_', ' ', $decision['status'])) }}{{ $decision['regularized'] ? ' · Regularized' : '' }}
+                </span>
+            </div>
+        </div>
+    @endif
+</flux:modal>
+
 <flux:modal name="punch-detail" class="max-w-lg">
     @if($detail)
         <div class="space-y-4">
@@ -1378,6 +2417,33 @@
                                     Submitted {{ $audit['submitted_at'] }}
                                     @if($audit['reviewer']) · {{ ucfirst($audit['status']) }} by {{ $audit['reviewer'] }} on {{ $audit['reviewed_at'] }}@endif
                                 </div>
+
+                                {{-- Multi-stage manager approval trail (L1 → L2 → …) --}}
+                                @if(! empty($audit['trail']))
+                                    <ol class="mt-2.5 space-y-1.5 border-t border-zinc-100 pt-2.5 dark:border-zinc-800">
+                                        @foreach($audit['trail'] as $step)
+                                            @php
+                                                $stepDot = match(strtolower($step['action'])) {
+                                                    'approved' => 'bg-emerald-500',
+                                                    'rejected' => 'bg-rose-500',
+                                                    default => 'bg-amber-400',
+                                                };
+                                            @endphp
+                                            <li class="flex items-start gap-2">
+                                                <span class="mt-1 size-1.5 shrink-0 rounded-full {{ $stepDot }}"></span>
+                                                <div class="min-w-0 flex-1">
+                                                    <div class="flex items-center justify-between gap-2">
+                                                        <span class="text-[11px] font-bold capitalize text-zinc-700 dark:text-zinc-200">{{ $step['stage'] ?: 'Review' }} · {{ ucfirst($step['action']) }}</span>
+                                                        @if($step['at'])<span class="shrink-0 text-[9px] text-zinc-400">{{ $step['at'] }}</span>@endif
+                                                    </div>
+                                                    <div class="text-[10px] text-zinc-500 dark:text-zinc-400">
+                                                        {{ $step['by'] ?? 'System' }}@if($step['comment']) — “{{ $step['comment'] }}”@endif
+                                                    </div>
+                                                </div>
+                                            </li>
+                                        @endforeach
+                                    </ol>
+                                @endif
                             </div>
                         @endforeach
                     </div>

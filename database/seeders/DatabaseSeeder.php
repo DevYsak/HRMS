@@ -26,6 +26,13 @@ class DatabaseSeeder extends Seeder
             LeaveSeeder::class,
             LeaveTypeSeeder::class,
 
+            // ── Payroll foundation (statutory rates, components, structures,
+            //    cycles) — required before any payroll can be run ───────────
+            StatutoryRuleSeeder::class,
+            SalaryCycleSeeder::class,
+            PayrollSeeder::class,
+            SalaryStructureSeeder::class,
+
             // ── Real employee master (biometric codes are source of truth) ─
             BiometricEmployeeMasterSeeder::class,
 

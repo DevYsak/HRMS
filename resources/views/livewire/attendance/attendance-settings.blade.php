@@ -36,6 +36,46 @@
                 <flux:input wire:model="settings.ot_rate_per_hour" type="number" step="0.01" min="0"
                     label="Overtime rate (₹ / hour)"
                     description="Used to compute OT pay when an overtime request is approved." />
+
+                {{-- Working week — drives absence, attendance score, payable days and every report --}}
+                <div>
+                    <flux:label>Weekly offs</flux:label>
+                    <flux:description>
+                        Days that are never counted as working days. Anything not ticked is a working day, so an
+                        employee without attendance on it is marked absent.
+                    </flux:description>
+                    <div class="mt-2 flex flex-wrap gap-2">
+                        @foreach([0 => 'Sun', 1 => 'Mon', 2 => 'Tue', 3 => 'Wed', 4 => 'Thu', 5 => 'Fri', 6 => 'Sat'] as $dayNumber => $dayLabel)
+                            <label class="cursor-pointer">
+                                <input type="checkbox" wire:model="weeklyOffDays" value="{{ $dayNumber }}" class="peer sr-only">
+                                <span class="inline-flex items-center rounded-lg border border-zinc-200 px-3 py-1.5 text-sm font-semibold text-zinc-600 transition-colors peer-checked:border-orange-500 peer-checked:bg-orange-50 peer-checked:text-orange-700 dark:border-zinc-700 dark:text-zinc-300 dark:peer-checked:border-orange-500/60 dark:peer-checked:bg-orange-500/10 dark:peer-checked:text-orange-400">
+                                    {{ $dayLabel }}
+                                </span>
+                            </label>
+                        @endforeach
+                    </div>
+                    @if(count($weeklyOffDays) >= 7)
+                        <p class="mt-2 text-xs font-semibold text-rose-600">At least one day must remain a working day.</p>
+                    @endif
+                </div>
+
+                {{-- Policy thresholds — drive the engine, editable without code --}}
+                <div class="grid grid-cols-2 gap-4">
+                    <flux:input wire:model="policy.late_grace_period" type="number" min="0" max="120" suffix="min"
+                        label="Fallback grace period"
+                        description="Grace for employees with no shift assigned." />
+                    <flux:input wire:model="policy.late_warning_threshold" type="number" min="1" max="31"
+                        label="Late-mark warning at"
+                        description="Monthly late marks that trigger a warning letter." />
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <flux:input wire:model="policy.auto_checkout_buffer_minutes" type="number" min="0" max="240" suffix="min"
+                        label="Auto punch-out buffer"
+                        description="Wait past shift-end before auto-closing an open day (OUT stamped at shift-end)." />
+                    <flux:input wire:model="policy.ot_auto_close_time" type="time"
+                        label="OT auto-close time"
+                        description="When an approved-OT day is still open, close it at this time." />
+                </div>
                 <div class="space-y-3 pt-2">
                     <flux:switch wire:model="settings.requires_location" label="Require Geolocation"
                         description="Block clock-in if location is not shared." />
@@ -43,6 +83,33 @@
                         description="Block clock-in if a punch selfie is not captured." />
                     <flux:switch wire:model="settings.requires_qr" label="Require QR Scan"
                         description="Require scanning a physical QR code at the office." />
+                </div>
+            </div>
+
+            {{-- ═══ Attendance Score Weights (Rule 11 · HR-editable) ═══ --}}
+            <div class="rounded-2xl border border-zinc-100 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                <div class="mb-1 flex items-center gap-2">
+                    <div class="rounded-lg bg-blue-50 p-1.5 dark:bg-blue-900/20"><flux:icon.scale class="size-4 text-blue-600 dark:text-blue-400" /></div>
+                    <h3 class="text-sm font-black text-zinc-900 dark:text-white">Attendance Score Weights</h3>
+                </div>
+                <div class="mb-4 rounded-xl border border-zinc-100 bg-zinc-50 p-3 text-xs text-zinc-500 dark:border-zinc-800 dark:bg-zinc-800/50">
+                    <flux:icon.information-circle class="mb-0.5 inline size-3.5 text-zinc-400" />
+                    Points the engine deducts (penalties) or adds (bonuses) per day. Every day starts at 100.
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <flux:input wire:model="weights.late_arrival_penalty" type="number" step="0.5" min="0" label="Late arrival" suffix="pts" />
+                    <flux:input wire:model="weights.late_per_30m_penalty" type="number" step="0.5" min="0" label="Extra per 30 min late" suffix="pts" />
+                    <flux:input wire:model="weights.early_exit_penalty" type="number" step="0.5" min="0" label="Early exit" suffix="pts" />
+                    <flux:input wire:model="weights.missing_punch_penalty" type="number" step="0.5" min="0" label="Missing punch" suffix="pts" />
+                    <flux:input wire:model="weights.auto_punch_out_penalty" type="number" step="0.5" min="0" label="Auto punch-out" suffix="pts" />
+                    <flux:input wire:model="weights.regularization_penalty" type="number" step="0.5" min="0" label="Regularized day" suffix="pts" />
+                    <flux:input wire:model="weights.break_violation_penalty" type="number" step="0.5" min="0" label="Break over allowance" suffix="pts" />
+                    <flux:input wire:model="weights.short_hours_penalty" type="number" step="0.5" min="0" label="Short working hours" suffix="pts" />
+                    <flux:input wire:model="weights.overtime_bonus" type="number" step="0.5" min="0" label="Overtime bonus" suffix="pts" />
+                    <flux:input wire:model="weights.holiday_work_bonus" type="number" step="0.5" min="0" label="Holiday/weekend bonus" suffix="pts" />
+                </div>
+                <div class="mt-4 flex justify-end">
+                    <flux:button wire:click="saveScoreSettings" variant="primary" icon="check" size="sm">Save Score Weights</flux:button>
                 </div>
             </div>
         </div>

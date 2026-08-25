@@ -6,11 +6,11 @@ use App\Models\Attendance;
 use App\Models\AttendanceDailySummary;
 use App\Models\AttendancePunch;
 use App\Models\AttendanceRegularisation;
+use App\Models\AttendanceSetting;
 use App\Models\AuditLog;
 use App\Models\BreakLog;
 use App\Models\Employee;
 use App\Models\LeaveBalance;
-use App\Models\User;
 use App\Notifications\AttendanceRegularisationNotification;
 use App\Notifications\RegularisationReviewedNotification;
 use App\Services\Approvals\ClaimLockService;
@@ -176,7 +176,7 @@ class AllAttendance extends Component
             ->where('date', $this->markDate)
             ->first();
 
-        AttendanceRegularisation::create([
+        $regularisation = AttendanceRegularisation::create([
             'employee_id' => $employee->id,
             'attendance_id' => $attendance?->id,
             'work_date' => $this->markDate,
@@ -186,22 +186,27 @@ class AllAttendance extends Component
             'status' => 'pending',
         ]);
 
-        // Notify manager for approval; fallback to HR team if no manager
-        $notification = new AttendanceRegularisationNotification(
-            $employee->user->name,
-            Carbon::parse($this->markDate)->format('d M Y'),
-            'pending',
+        // HR marking attendance IS the correction — routing it back through a
+        // manager left the employee's hours wrong while HR believed they had
+        // fixed them. Fast-tracked rather than approved: it reaches the same
+        // applied state through the same application routine, but the trail
+        // records that HR applied it directly instead of implying the request
+        // climbed a chain it never went through.
+        app(AttendanceService::class)->fastTrackRegularisation(
+            $regularisation,
+            Auth::id(),
+            'Applied directly by HR.',
         );
 
-        if ($employee->manager) {
-            $employee->manager->notify($notification);
-        } else {
-            User::whereIn('role', ['hr_admin', 'super_admin'])
-                ->each(fn ($u) => $u->notify($notification));
-        }
+        // Tell the employee their day was corrected — they did not ask for it.
+        $employee->user?->notify(new AttendanceRegularisationNotification(
+            $employee->user->name,
+            Carbon::parse($this->markDate)->format('d M Y'),
+            'approved',
+        ));
 
         $this->showMarkModal = false;
-        \Flux::toast("Attendance regularisation submitted for {$employee->user->name}. Pending manager approval.");
+        \Flux::toast("Attendance updated for {$employee->user->name} and recorded against your name.");
     }
 
     // ── Employee 360 Drawer ──────────────────────────────────────────────────
@@ -226,7 +231,7 @@ class AllAttendance extends Component
             ->orderByDesc('date')
             ->get();
 
-        $workDays = max(1, (int) $monthStart->diffInDaysFiltered(fn ($d) => ! $d->isSunday(), $today->copy()->endOfDay()));
+        $workDays = max(1, AttendanceSetting::workingDaysBetween($monthStart, $today));
         $present = $month->whereNotNull('check_in')->count();
         $late = $month->where('is_late', true)->count();
         $onTimePct = $present > 0 ? round(($present - $late) / $present * 100) : 100;
@@ -516,6 +521,32 @@ class AllAttendance extends Component
         \Flux::toast('Regularisation request rejected.');
     }
 
+    /**
+     * Working days (excluding Sundays) covered by the active filter — 1 for a
+     * single-day filter, the span for a range, capped at today so future days
+     * don't inflate the "expected" denominator.
+     */
+    protected function filteredWorkingDays(): int
+    {
+        $today = Carbon::today();
+
+        if ($this->date) {
+            return AttendanceSetting::isWeeklyOff(Carbon::parse($this->date)) ? 0 : 1;
+        }
+
+        if ($this->dateFrom && $this->dateTo) {
+            $from = Carbon::parse($this->dateFrom);
+            $to = Carbon::parse($this->dateTo)->min($today);
+            if ($to->lt($from)) {
+                return 0;
+            }
+
+            return AttendanceSetting::workingDaysBetween($from, $to);
+        }
+
+        return 1;
+    }
+
     /** @param Builder<Attendance> $query */
     protected function applyFilters($query): void
     {
@@ -566,27 +597,39 @@ class AllAttendance extends Component
                 ->whereHas('employee.user')
         )->get();
 
-        // KPI stats for today
-        $today = Carbon::today();
+        // KPI stats recompute from the SAME filtered dataset the table shows —
+        // not a fixed "today" snapshot. Change the date/range/status/search and
+        // every card recomputes (present, absent, late, on-time, WFH).
         $totalActive = Employee::where('status', 'active')
             ->when($scopeIds !== null, fn ($q) => $q->whereIn('id', $scopeIds))
             ->count();
-        $todayRecords = $scoped(Attendance::where('date', $today))->get();
-        $presentToday = $todayRecords->whereNotNull('check_in')->count();
-        $lateToday = $todayRecords->where('is_late', true)->count();
-        $onTimeToday = $presentToday - $lateToday;
-        $absentToday = max(0, $totalActive - $presentToday);
+
+        $filtered = (clone $query)->get(['employee_id', 'date', 'check_in', 'is_late', 'work_mode']);
+
+        // A present "slot" is one employee-day with a check-in.
+        $present = $filtered->whereNotNull('check_in')
+            ->unique(fn ($a) => $a->employee_id.'|'.$a->date->toDateString())
+            ->count();
+        $late = $filtered->where('is_late', true)->count();
+        $onTime = max(0, $present - $late);
+        $wfh = $filtered->whereIn('work_mode', ['wfh', 'hybrid'])->count();
+
+        // Expected slots = active employees × working days in the filtered span,
+        // so "Absent" is meaningful for a single day and for a range.
+        $workingDays = $this->filteredWorkingDays();
+        $expectedSlots = $totalActive * $workingDays;
+        $absent = max(0, $expectedSlots - $present);
 
         $stats = [
             'total' => $totalActive,
-            'present' => $presentToday,
-            'absent' => $absentToday,
-            'on_time' => $onTimeToday,
-            'late' => $lateToday,
-            'wfh' => $todayRecords->whereIn('work_mode', ['wfh', 'hybrid'])->count(),
-            'present_pct' => $totalActive > 0 ? round(($presentToday / $totalActive) * 100, 1) : 0,
-            'absent_pct' => $totalActive > 0 ? round(($absentToday / $totalActive) * 100, 1) : 0,
-            'late_pct' => $presentToday > 0 ? round(($lateToday / $presentToday) * 100, 1) : 0,
+            'present' => $present,
+            'absent' => $absent,
+            'on_time' => $onTime,
+            'late' => $late,
+            'wfh' => $wfh,
+            'present_pct' => $expectedSlots > 0 ? round(($present / $expectedSlots) * 100, 1) : 0,
+            'absent_pct' => $expectedSlots > 0 ? round(($absent / $expectedSlots) * 100, 1) : 0,
+            'late_pct' => $present > 0 ? round(($late / $present) * 100, 1) : 0,
         ];
 
         // Presence trend across the selected range (drives the overview chart).

@@ -3,6 +3,7 @@
 namespace App\Notifications;
 
 use App\Models\Payroll;
+use App\Models\PayrollApprovalStep;
 use App\Notifications\Concerns\SendsMailChannel;
 use Illuminate\Notifications\Notification;
 
@@ -10,7 +11,11 @@ class PayrollApprovalNotification extends Notification
 {
     use SendsMailChannel;
 
-    public function __construct(public readonly Payroll $payroll, public readonly string $event) {}
+    public function __construct(
+        public readonly Payroll $payroll,
+        public readonly string $event,
+        public readonly ?PayrollApprovalStep $step = null,
+    ) {}
 
     public function via(object $notifiable): array
     {
@@ -39,6 +44,26 @@ class PayrollApprovalNotification extends Notification
                 'url' => '/payroll/overview',
                 'icon' => 'check-circle',
                 'color' => 'green',
+            ],
+            'rejected' => [
+                'type' => 'payroll',
+                'title' => 'Payroll Rejected by Finance',
+                'body' => $this->payroll->finance_note
+                    ? "Payroll for {$period} was rejected by Finance: {$this->payroll->finance_note}"
+                    : "Payroll for {$period} was rejected by Finance and returned to draft.",
+                'action' => 'Review',
+                'url' => '/payroll/process',
+                'icon' => 'x-circle',
+                'color' => 'red',
+            ],
+            'step_ready' => [
+                'type' => 'payroll',
+                'title' => "Payroll Approval Needed — {$this->step?->label}",
+                'body' => "Payroll for {$period} needs your approval at the \"{$this->step?->label}\" step.",
+                'action' => 'Review',
+                'url' => '/payroll/finance-approve',
+                'icon' => 'banknotes',
+                'color' => 'amber',
             ],
             default => [
                 'type' => 'payroll',

@@ -19,9 +19,18 @@ use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 
+/**
+ * The company's shift for tests that do not assign one per employee.
+ *
+ * Marked as the company default because that is what these tests mean: "the
+ * company runs this shift". They used to get it via ShiftResolver reaching for
+ * ShiftSetting::first(), which also silently mis-scored real unassigned
+ * employees against an arbitrary row. Stating the intent keeps the tests
+ * working without restoring that behaviour.
+ */
 function dayShift(): ShiftSetting
 {
-    return ShiftSetting::create([
+    $shift = ShiftSetting::create([
         'name' => 'Day',
         'start_time' => '09:00',
         'end_time' => '18:00',
@@ -29,6 +38,10 @@ function dayShift(): ShiftSetting
         'break_duration' => 60,
         'standard_hours' => 9,
     ]);
+
+    $shift->makeCompanyDefault();
+
+    return $shift->fresh();
 }
 
 test('the attendance service persists every supported work mode', function () {
@@ -271,8 +284,11 @@ test('the punch summary and biometric status show the biometric daily figures', 
 });
 
 test('the attendance journey classifies every punch in sequence', function () {
+    // Methods matter: config/biometric.php maps face -> IN and id_card -> OUT,
+    // so a real day alternates the reader, not the index. The original fixture
+    // was written against the superseded alternate-by-position model.
     $employee = Employee::factory()->create();
-    foreach ([['09:00', 'face'], ['13:00', 'id_card'], ['13:40', 'id_card'], ['18:00', 'face']] as [$t, $m]) {
+    foreach ([['09:00', 'face'], ['13:00', 'id_card'], ['13:40', 'face'], ['18:00', 'id_card']] as [$t, $m]) {
         AttendancePunch::create([
             'employee_id' => $employee->id,
             'punched_at' => today()->setTimeFromTimeString($t),
@@ -284,7 +300,10 @@ test('the attendance journey classifies every punch in sequence', function () {
 
     Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
         ->assertOk()
-        ->assertSee('Attendance Journey')
+        // Casing only. PunchJourneyTest — the newer suite written for this very
+        // section — pins the lowercase heading, so that is the current contract
+        // and this assertion was the stale one.
+        ->assertSee('Attendance journey')
         ->assertSet('attendanceJourney', fn ($j) => count($j) === 4
             && $j[0]['type'] === 'in' && $j[1]['type'] === 'break'
             && $j[2]['type'] === 'resume' && $j[3]['type'] === 'out'
@@ -324,12 +343,12 @@ test('smart alerts flag a past missing check-out with a regularize action', func
 
 test('the journey classifies a midday gap as a lunch break with duration', function () {
     $employee = Employee::factory()->create();
-    foreach (['09:00', '13:00', '13:45', '18:00'] as $t) {
+    foreach ([['09:00', 'face'], ['13:00', 'id_card'], ['13:45', 'face'], ['18:00', 'id_card']] as [$t, $m]) {
         AttendancePunch::create([
             'employee_id' => $employee->id,
             'punched_at' => today()->setTimeFromTimeString($t),
             'punch_date' => today(),
-            'method' => 'face',
+            'method' => $m,
             'source' => 'biometric',
         ]);
     }
@@ -374,10 +393,12 @@ test('smart alerts flag late arrival and long break as info/action correctly', f
         'check_in' => today()->setTime(11, 30), 'check_out' => today()->setTime(19, 0),
         'is_late' => true, 'late_minutes' => 55, 'status' => 'late', 'work_mode' => 'office',
     ]);
-    foreach (['11:30', '13:00', '15:00', '19:00'] as $t) { // 2h break = long
+    // 13:00 out, 15:00 back = a 2h break. The methods must alternate: with all
+    // four as Face the engine reads four arrivals and no break ever forms.
+    foreach ([['11:30', 'face'], ['13:00', 'id_card'], ['15:00', 'face'], ['19:00', 'id_card']] as [$t, $m]) {
         AttendancePunch::create([
             'employee_id' => $employee->id, 'punched_at' => today()->setTimeFromTimeString($t),
-            'punch_date' => today(), 'method' => 'face', 'source' => 'biometric',
+            'punch_date' => today(), 'method' => $m, 'source' => 'biometric',
         ]);
     }
 
@@ -408,12 +429,16 @@ test('attendance insights are generated from real period data', function () {
 
 test('the journey collapses duplicate punches logged seconds apart', function () {
     $employee = Employee::factory()->create();
-    foreach (['09:00:00', '09:00:40', '13:00:00', '13:45:00', '18:00:00', '18:01:10'] as $t) {
+    foreach ([
+        ['09:00:00', 'face'], ['09:00:40', 'face'],       // duplicate arrival read
+        ['13:00:00', 'id_card'], ['13:45:00', 'face'],    // lunch out / back
+        ['18:00:00', 'id_card'], ['18:01:10', 'id_card'], // duplicate departure read
+    ] as [$t, $m]) {
         AttendancePunch::create([
             'employee_id' => $employee->id,
             'punched_at' => today()->toDateString().' '.$t,
             'punch_date' => today(),
-            'method' => 'face',
+            'method' => $m,
             'source' => 'biometric',
         ]);
     }
@@ -479,12 +504,12 @@ test('regularising only the check-out keeps the recorded check-in', function () 
 
 test('journey events carry the duration from the previous punch', function () {
     $employee = Employee::factory()->create();
-    foreach (['09:00', '13:00', '13:37', '18:00'] as $t) {
+    foreach ([['09:00', 'face'], ['13:00', 'id_card'], ['13:37', 'face'], ['18:00', 'id_card']] as [$t, $m]) {
         AttendancePunch::create([
             'employee_id' => $employee->id,
             'punched_at' => today()->setTimeFromTimeString($t),
             'punch_date' => today(),
-            'method' => 'face',
+            'method' => $m,
             'source' => 'biometric',
         ]);
     }

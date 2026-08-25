@@ -3,6 +3,7 @@
 namespace App\Livewire\Overtime;
 
 use App\Livewire\Concerns\HandlesClaimLock;
+use App\Models\AuditLog;
 use App\Models\OtRequest;
 use App\Notifications\OtRequestNotification;
 use App\Services\OvertimeService;
@@ -48,12 +49,38 @@ class ManageOtRequests extends Component
 
     public ?OtRequest $selectedRequest = null;
 
+    /** Status-change history for the OT being viewed (from the audit log). */
+    public array $viewHistory = [];
+
     public function openView(int $id): void
     {
         $this->checkOtPermission();
         $this->selectedRequest = OtRequest::with(['employee.user', 'employee.department', 'attendance', 'reviewer'])->findOrFail($id);
+        $this->viewHistory = $this->historyFor($id);
         $this->showViewModal = true;
         $this->dispatch('modal-show', name: 'view-ot-modal');
+    }
+
+    /**
+     * Build the status-change timeline for an OT request from the audit log
+     * (Nexflow sync + each re-decision), newest first.
+     *
+     * @return array<int, array{action: string, from: ?string, to: ?string, paid: ?bool, at: string}>
+     */
+    protected function historyFor(int $id): array
+    {
+        return AuditLog::where('auditable_type', OtRequest::class)
+            ->where('auditable_id', $id)
+            ->whereIn('action', ['nexflow_ot_synced', 'nexflow_ot_status_changed'])
+            ->orderByDesc('created_at')
+            ->get()
+            ->map(fn ($a) => [
+                'action' => $a->action,
+                'from' => $a->old_values['status'] ?? null,
+                'to' => $a->new_values['status'] ?? null,
+                'paid' => $a->new_values['already_paid'] ?? null,
+                'at' => $a->created_at?->format('d M Y, H:i'),
+            ])->all();
     }
 
     public function openEdit(int $id): void
@@ -213,6 +240,28 @@ class ManageOtRequests extends Component
         }
     }
 
+    /**
+     * Pull overtime from Nexflow for this month: import approved OT into payroll
+     * and record rejected OT for visibility. Also runs automatically every 10
+     * minutes via hrms:sync-nexflow-ot-details.
+     */
+    public function syncFromNexflow(OvertimeService $service): void
+    {
+        $this->checkOtPermission();
+
+        $result = $service->syncNexflowOtDetails(
+            now()->startOfMonth()->toDateString(),
+            now()->toDateString(),
+        );
+
+        \Flux::toast(
+            "Nexflow sync — {$result['imported']} imported, {$result['updated']} status change(s), {$result['rejected']} rejected recorded"
+            .($result['skipped'] ? ", {$result['skipped']} skipped." : '.')
+        );
+
+        $this->resetPage();
+    }
+
     public function render()
     {
         $this->checkOtPermission();
@@ -226,9 +275,18 @@ class ManageOtRequests extends Component
 
         $requests = $query->paginate(15);
 
+        // Overall status mix (unfiltered) for the summary strip.
+        $byStatus = OtRequest::query()
+            ->selectRaw('status, COUNT(*) as total')
+            ->groupBy('status')
+            ->pluck('total', 'status');
+
         return view('livewire.overtime.manage-ot-requests', [
             'requests' => $requests,
-            'pendingCount' => OtRequest::where('status', 'pending')->count(),
+            'pendingCount' => (int) ($byStatus['pending'] ?? 0),
+            'approvedCount' => (int) ($byStatus['approved'] ?? 0),
+            'rejectedCount' => (int) ($byStatus['rejected'] ?? 0),
+            'nexflowCount' => OtRequest::where('source', 'nexflow')->count(),
         ])->layout('layouts.app', ['title' => 'Manage OT Requests']);
     }
 }

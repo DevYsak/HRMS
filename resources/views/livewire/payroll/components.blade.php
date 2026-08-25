@@ -22,7 +22,7 @@
                             </div>
                             <div>
                                 <div class="font-bold text-zinc-900 dark:text-white">{{ $comp->name }}</div>
-                                <div class="text-xs text-zinc-500">{{ $comp->is_fixed ? 'Fixed amount' : 'Variable' }}</div>
+                                <div class="text-xs text-zinc-500">{{ match($comp->calculation_type ?? 'fixed') { 'percentage' => $comp->percentage_value.'% of '.str_replace('_',' ',$comp->percentage_basis ?? 'basic'), 'formula' => 'Formula: '.$comp->formula_expression, default => 'Fixed amount' } }}</div>
                             </div>
                         </div>
                         <div class="flex items-center gap-4">
@@ -59,7 +59,7 @@
                             </div>
                             <div>
                                 <div class="font-bold text-zinc-900 dark:text-white">{{ $comp->name }}</div>
-                                <div class="text-xs text-zinc-500">{{ $comp->is_fixed ? 'Fixed amount' : 'Variable' }}</div>
+                                <div class="text-xs text-zinc-500">{{ match($comp->calculation_type ?? 'fixed') { 'percentage' => $comp->percentage_value.'% of '.str_replace('_',' ',$comp->percentage_basis ?? 'basic'), 'formula' => 'Formula: '.$comp->formula_expression, default => 'Fixed amount' } }}</div>
                             </div>
                         </div>
                         <div class="flex items-center gap-4">
@@ -88,7 +88,7 @@
         <div class="fixed inset-0 z-50 flex items-center justify-center p-4"
              x-data x-on:keydown.escape.window="$wire.set('showModal', false)">
             <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="$wire.set('showModal', false)"></div>
-            <div class="relative w-full max-w-lg bg-white dark:bg-zinc-800 rounded-2xl shadow-xl ring ring-black/5 dark:ring-zinc-700 p-6 space-y-6">
+            <div class="relative w-full max-w-xl bg-white dark:bg-zinc-800 rounded-2xl shadow-xl ring ring-black/5 dark:ring-zinc-700 p-6 space-y-6">
                 <button type="button" @click="$wire.set('showModal', false)"
                     class="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors">
                     <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
@@ -97,17 +97,68 @@
                     <h2 class="text-base font-bold text-zinc-900 dark:text-white">{{ $editingId ? 'Edit Component' : 'New Salary Component' }}</h2>
                     <p class="text-sm text-zinc-500 mt-0.5">Define how this earning or deduction behaves.</p>
                 </div>
-                <form wire:submit="save" class="space-y-5">
-                    <flux:input wire:model="form.name" label="Component Name" placeholder="e.g. Basic Salary, Tax" required />
+                <form wire:submit="save" class="space-y-5 max-h-[70vh] overflow-y-auto pr-1">
                     <div class="grid grid-cols-2 gap-4">
-                        <flux:select wire:model="form.type" label="Component Type">
+                        <flux:input wire:model="form.name" label="Component Name" placeholder="e.g. Basic Salary, Tax" required />
+                        <flux:input wire:model="form.code" label="Code" placeholder="e.g. BASIC" description="Referenced by other components' formulas / percentage-of" />
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <flux:select wire:model="form.type" label="Type">
                             <option value="earning">Earning (+)</option>
                             <option value="deduction">Deduction (-)</option>
                         </flux:select>
-                        <flux:input wire:model="form.default_amount" type="number" step="0.01" label="Default Amount" />
+                        <flux:select wire:model="form.component_type" label="Component Type">
+                            <option value="earning">Earning</option>
+                            <option value="deduction">Deduction</option>
+                            <option value="employer_contribution">Employer Contribution</option>
+                        </flux:select>
                     </div>
-                    <div class="pt-2 space-y-4">
-                        <flux:switch wire:model="form.is_fixed" label="Fixed Amount" description="Is this a standard flat value or variable?" />
+
+                    <flux:select wire:model.live="form.calculation_type" label="Calculation Type">
+                        <option value="fixed">Fixed Amount</option>
+                        <option value="percentage">Percentage Of</option>
+                        <option value="formula">Formula Based</option>
+                    </flux:select>
+
+                    @if($form['calculation_type'] === 'fixed')
+                        <flux:input wire:model="form.default_amount" type="number" step="0.01" label="Default Amount" />
+                    @elseif($form['calculation_type'] === 'percentage')
+                        <div class="grid grid-cols-2 gap-4">
+                            <flux:input wire:model="form.percentage_value" type="number" step="0.01" label="Percentage (%)" />
+                            <flux:select wire:model.live="form.percentage_basis" label="Of">
+                                <option value="basic">Basic Salary</option>
+                                <option value="gross">Gross (running total)</option>
+                                <option value="ctc">CTC</option>
+                                <option value="component">Another Component</option>
+                            </flux:select>
+                        </div>
+                        @if($form['percentage_basis'] === 'component')
+                            <flux:select wire:model="form.percentage_of_component_id" label="Which component?">
+                                <option value="">Select a component</option>
+                                @foreach($availableComponents as $c)
+                                    <option value="{{ $c->id }}">{{ $c->name }} ({{ $c->code }})</option>
+                                @endforeach
+                            </flux:select>
+                        @endif
+                    @else
+                        <flux:textarea wire:model.live.debounce.400ms="form.formula_expression" label="Formula"
+                            placeholder="e.g. BASIC * 0.4 + HRA" rows="2"
+                            description="Arithmetic only (+ - * / and parentheses). Reference other components by their Code, in uppercase." />
+                        @if($formulaError)
+                            <p class="text-xs font-semibold text-rose-600">{{ $formulaError }}</p>
+                        @elseif($formulaPreview !== null)
+                            <p class="text-xs font-semibold text-emerald-600">Preview (using each component's default amount): {{ number_format($formulaPreview, 2) }}</p>
+                        @endif
+                    @endif
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <flux:input wire:model="form.display_order" type="number" label="Display Order" description="Lower shows first" />
+                    </div>
+
+                    <div class="pt-2 space-y-3 border-t border-zinc-100 pt-4 dark:border-zinc-800">
+                        <flux:switch wire:model="form.is_taxable" label="Taxable" description="Included in income-tax computation" />
+                        <flux:switch wire:model="form.is_pf_applicable" label="PF Applicable" description="Counts toward the Provident Fund wage" />
+                        <flux:switch wire:model="form.is_esi_applicable" label="ESI Applicable" description="Counts toward the ESI wage" />
                         <flux:switch wire:model="form.is_active" label="Enabled" />
                     </div>
                     <div class="flex justify-end gap-3 pt-4 border-t border-zinc-100 dark:border-zinc-800">

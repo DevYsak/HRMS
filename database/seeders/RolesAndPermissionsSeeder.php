@@ -61,6 +61,9 @@ class RolesAndPermissionsSeeder extends Seeder
             ['key' => 'manage_salary_components', 'label' => 'Manage Salary Components', 'description' => 'Configure salary structures and components'],
             ['key' => 'approve_finance', 'label' => 'Finance Approval', 'description' => 'Sign off payroll for disbursement'],
             ['key' => 'view_finance_profile', 'label' => 'Finance Employee View', 'description' => 'View salary, bank and statutory details for payroll processing'],
+            ['key' => 'lock_payroll', 'label' => 'Lock Payroll', 'description' => 'Lock a finalized payroll so it can no longer be regenerated'],
+            ['key' => 'unlock_payroll', 'label' => 'Unlock Payroll', 'description' => 'Unlock a previously locked payroll'],
+            ['key' => 'delete_payslip', 'label' => 'Delete Payslip', 'description' => 'Delete an individual draft payslip'],
         ],
         'Performance' => [
             ['key' => 'view_performance', 'label' => 'View Performance', 'description' => 'View own and team performance data'],
@@ -81,6 +84,11 @@ class RolesAndPermissionsSeeder extends Seeder
         'Reports' => [
             ['key' => 'view_reports', 'label' => 'View Reports', 'description' => 'Access system reports'],
             ['key' => 'export_reports', 'label' => 'Export Reports', 'description' => 'Download attendance, OT and payroll reports'],
+        ],
+        'Profile' => [
+            ['key' => 'edit_own_profile', 'label' => 'Edit Own Profile', 'description' => 'Change your own editable profile fields'],
+            ['key' => 'request_profile_change', 'label' => 'Request Profile Change', 'description' => 'Ask HR to approve a change to a restricted field'],
+            ['key' => 'approve_profile_changes', 'label' => 'Approve Profile Changes', 'description' => 'Review and decide employee profile change requests'],
         ],
         'Settings' => [
             ['key' => 'manage_roles', 'label' => 'Manage Roles', 'description' => 'Create, edit and assign roles & permissions'],
@@ -112,11 +120,12 @@ class RolesAndPermissionsSeeder extends Seeder
             'manage_employees', 'create_employee', 'edit_employee', 'delete_employee', 'view_employee', 'view_directory', 'view_org_chart', 'manage_onboarding', 'manage_offboarding',
             'view_attendance', 'manage_attendance', 'approve_regularisation', 'manage_shifts', 'manage_biometric', 'approve_overtime', 'approve_wfh',
             'view_leave', 'apply_leave', 'approve_leave', 'manage_leave_types', 'manage_leave_policies', 'manage_leave_balances', 'manage_leave_encashment',
-            'view_payroll', 'run_payroll', 'view_payslips', 'manage_salary_components', 'view_finance_profile',
+            'view_payroll', 'run_payroll', 'view_payslips', 'manage_salary_components', 'view_finance_profile', 'lock_payroll', 'unlock_payroll', 'delete_payslip',
             'view_performance', 'review_performance', 'manage_kpi_templates', 'manage_review_cycles', 'manage_scorecards', 'manage_promotions', 'manage_pip', 'manage_warning_letters',
             'upload_documents', 'manage_documents', 'view_documents', 'acknowledge_documents',
             'view_reports', 'export_reports',
             'manage_roles', 'manage_settings', 'manage_company_settings',
+            'edit_own_profile', 'request_profile_change', 'approve_profile_changes',
         ],
         'director' => [
             'view_dashboard', 'view_executive_dashboard',
@@ -127,6 +136,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'view_performance', 'review_performance', 'manage_kpi_templates', 'manage_review_cycles', 'manage_scorecards', 'manage_promotions', 'manage_pip', 'manage_warning_letters',
             'view_documents', 'acknowledge_documents',
             'view_reports', 'export_reports',
+            'edit_own_profile', 'request_profile_change',
         ],
         'manager' => [
             'view_dashboard',
@@ -136,6 +146,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'view_payslips',
             'view_performance', 'review_performance', 'manage_promotions', 'manage_pip',
             'view_documents', 'acknowledge_documents',
+            'edit_own_profile', 'request_profile_change',
         ],
         'finance' => [
             'view_dashboard',
@@ -145,6 +156,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'view_performance', 'review_performance', 'manage_promotions', 'manage_pip',
             'view_documents', 'acknowledge_documents',
             'view_reports', 'export_reports',
+            'edit_own_profile', 'request_profile_change',
         ],
         'employee' => [
             'view_dashboard',
@@ -153,6 +165,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'view_payslips',
             'view_performance',
             'view_documents', 'acknowledge_documents',
+            'edit_own_profile', 'request_profile_change',
         ],
     ];
 

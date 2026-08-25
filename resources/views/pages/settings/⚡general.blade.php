@@ -29,6 +29,7 @@ new #[Title('Company Settings')] class extends Component {
     public $primary_color;
     public $secondary_color;
     public $logo; // For upload
+    public $favicon; // For upload
 
     // Office form
     public $officeId;
@@ -86,6 +87,10 @@ new #[Title('Company Settings')] class extends Component {
             'name' => 'required|string|max:255',
             'email' => 'required|email',
             'website' => 'nullable|url',
+            // Logo: any raster/vector image up to 2 MB.
+            'logo' => 'nullable|image|mimes:png,jpg,jpeg,webp,svg|max:2048',
+            // Favicon: square-ish icon; .ico is not an "image" mime, so list it explicitly.
+            'favicon' => 'nullable|mimes:png,ico,svg,jpg|max:1024',
         ]);
 
         $this->company->fill([
@@ -107,7 +112,16 @@ new #[Title('Company Settings')] class extends Component {
             $this->company->logo = $this->logo->store('branding', 'public');
         }
 
+        if ($this->favicon) {
+            $this->company->favicon = $this->favicon->store('branding', 'public');
+        }
+
         $this->company->save();
+
+        // The page <head> caches the favicon path; drop it so the new icon shows.
+        \Illuminate\Support\Facades\Cache::forget('company.favicon');
+
+        $this->reset(['logo', 'favicon']);
 
         Flux::toast(variant: 'success', text: __('Company details updated.'));
     }
@@ -260,6 +274,59 @@ new #[Title('Company Settings')] class extends Component {
                             <input type="color" wire:model="secondary_color" class="size-10 rounded border border-zinc-200" />
                             <flux:input wire:model="secondary_color" class="flex-1" />
                         </div>
+                    </flux:field>
+                </div>
+
+                {{-- Branding: logo & favicon --}}
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {{-- Logo --}}
+                    <flux:field>
+                        <flux:label>{{ __('Company Logo') }}</flux:label>
+                        <div class="flex items-center gap-4">
+                            <div class="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800">
+                                @if ($logo && $logo->isPreviewable())
+                                    <img src="{{ $logo->temporaryUrl() }}" class="size-full object-contain" alt="Logo preview">
+                                @elseif ($logo)
+                                    <flux:icon.document-check class="size-6 text-emerald-500" />
+                                @elseif ($company->logo)
+                                    <img src="{{ asset('storage/'.$company->logo) }}" class="size-full object-contain" alt="Current logo">
+                                @else
+                                    <flux:icon.photo class="size-6 text-zinc-400" />
+                                @endif
+                            </div>
+                            <div class="flex-1">
+                                <input type="file" wire:model="logo" accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                                    class="block w-full text-sm text-zinc-500 file:mr-3 file:rounded-lg file:border-0 file:bg-zinc-100 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-zinc-700 hover:file:bg-zinc-200 dark:file:bg-zinc-700 dark:file:text-zinc-200" />
+                                <flux:text size="sm" class="mt-1 text-zinc-400">{{ __('PNG, JPG, WEBP or SVG · max 2 MB. Shown in the sidebar & payslips.') }}</flux:text>
+                                <div wire:loading wire:target="logo"><flux:text size="sm" class="text-zinc-400">{{ __('Uploading…') }}</flux:text></div>
+                            </div>
+                        </div>
+                        <flux:error name="logo" />
+                    </flux:field>
+
+                    {{-- Favicon --}}
+                    <flux:field>
+                        <flux:label>{{ __('Favicon') }}</flux:label>
+                        <div class="flex items-center gap-4">
+                            <div class="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800">
+                                @if ($favicon && $favicon->isPreviewable())
+                                    <img src="{{ $favicon->temporaryUrl() }}" class="size-8 object-contain" alt="Favicon preview">
+                                @elseif ($favicon)
+                                    <flux:icon.document-check class="size-6 text-emerald-500" />
+                                @elseif ($company->favicon)
+                                    <img src="{{ asset('storage/'.$company->favicon) }}" class="size-8 object-contain" alt="Current favicon">
+                                @else
+                                    <flux:icon.globe-alt class="size-6 text-zinc-400" />
+                                @endif
+                            </div>
+                            <div class="flex-1">
+                                <input type="file" wire:model="favicon" accept="image/png,image/x-icon,image/svg+xml,.ico"
+                                    class="block w-full text-sm text-zinc-500 file:mr-3 file:rounded-lg file:border-0 file:bg-zinc-100 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-zinc-700 hover:file:bg-zinc-200 dark:file:bg-zinc-700 dark:file:text-zinc-200" />
+                                <flux:text size="sm" class="mt-1 text-zinc-400">{{ __('ICO, PNG or SVG · max 1 MB · square (e.g. 32×32). Browser tab icon.') }}</flux:text>
+                                <div wire:loading wire:target="favicon"><flux:text size="sm" class="text-zinc-400">{{ __('Uploading…') }}</flux:text></div>
+                            </div>
+                        </div>
+                        <flux:error name="favicon" />
                     </flux:field>
                 </div>
 

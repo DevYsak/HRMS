@@ -10,7 +10,7 @@ use Illuminate\Support\Carbon;
 use Livewire\Livewire;
 
 test('a regular employee cannot open holiday management', function () {
-    $employee = Employee::factory()->create();
+    $employee = Employee::factory()->create(['holiday_calendar' => 'IN']);
 
     Livewire::actingAs($employee->user)->test(ManageHolidays::class)
         ->assertForbidden();
@@ -64,8 +64,8 @@ test('duplicate creates a copy one year later', function () {
 test('a branch-scoped holiday only applies to employees of that branch', function () {
     $office = Office::factory()->create();
     $otherOffice = Office::factory()->create();
-    $inBranch = Employee::factory()->create(['office_id' => $office->id]);
-    $otherBranch = Employee::factory()->create(['office_id' => $otherOffice->id]);
+    $inBranch = Employee::factory()->create(['holiday_calendar' => 'IN', 'office_id' => $office->id]);
+    $otherBranch = Employee::factory()->create(['holiday_calendar' => 'IN', 'office_id' => $otherOffice->id]);
 
     $h = PublicHoliday::factory()->create(['date' => now()->toDateString(), 'office_id' => $office->id]);
 

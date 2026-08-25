@@ -35,6 +35,7 @@ use App\Livewire\FinanceDashboard;
 use App\Livewire\HrAdminDashboard;
 use App\Livewire\ManagerDashboard;
 use App\Livewire\NotificationsPage;
+use App\Livewire\Onboarding\MyOnboarding;
 use App\Livewire\Onboarding\OffboardingChecklist;
 use App\Livewire\Onboarding\OffboardingManager;
 use App\Livewire\Onboarding\OnboardingChecklist;
@@ -44,8 +45,10 @@ use App\Livewire\Operations\Expenses;
 use App\Livewire\Overtime\ManageOtRequests;
 use App\Livewire\Overtime\MyOtRequests;
 use App\Livewire\Overtime\NexflowOtPanel;
+use App\Livewire\Payroll\AuditTrail as PayrollAuditTrail;
 use App\Livewire\Payroll\Components;
 use App\Livewire\Payroll\FinanceApproval;
+use App\Livewire\Payroll\HistoricalImport;
 use App\Livewire\Payroll\Incentives;
 use App\Livewire\Payroll\MyPayslips;
 use App\Livewire\Payroll\Overview;
@@ -70,6 +73,9 @@ use App\Livewire\Performance\PerformanceCycles;
 use App\Livewire\Performance\ReviewTasks;
 use App\Livewire\Performance\TeamReviews;
 use App\Livewire\Performance\WarningLetters;
+use App\Livewire\Profile\EmployeeProfile;
+use App\Livewire\Profile\MyProfile;
+use App\Livewire\Settings\ApprovalPolicySettings;
 use App\Livewire\Settings\ControlPanel;
 use App\Livewire\Settings\DataManagement;
 use App\Livewire\Settings\DepartmentManager;
@@ -113,10 +119,23 @@ Route::view('/welcome', 'welcome', [
     'canRegister' => Features::enabled(Features::registration()),
 ])->name('home');
 
+// Payslip authenticity check — reached by scanning the QR on a payslip PDF.
+// Public by design (banks/landlords verify without an account) but the URL
+// must carry a valid signature, so slips can't be enumerated by id.
+Route::get('/payslips/{payslip}/verify', [PayslipController::class, 'verify'])
+    ->middleware('signed')
+    ->name('payroll.payslips.verify');
+
 // ======================================================
 // Authenticated + Email Verified routes
 // ======================================================
-Route::middleware(['auth', 'verified'])->group(function () {
+// 'verified' was applied here but never did anything: it only blocks users
+// whose model implements MustVerifyEmail, and User deliberately does not —
+// Pulse accounts are created by HR against known work addresses, so there is
+// nobody to verify an address to. Leaving the middleware in place implied a
+// control that did not exist. Accounts are gated by HR creation and by
+// CheckActiveEmployee instead.
+Route::middleware(['auth'])->group(function () {
 
     // Dashboard
     Route::get('/', Dashboard::class)->name('dashboard');
@@ -128,6 +147,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // AI Assistant full page
     Route::get('/ai-assistant', AiAssistantPage::class)->name('ai.assistant');
+
+    // The employee's own profile. Distinct from /settings/profile, which stays
+    // account-level (email verification, deletion) inside the settings shell.
+    Route::get('/my-profile', MyProfile::class)->name('profile.me');
 
     // --------------------------------------------------
     // Employees module
@@ -149,6 +172,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/create', EmployeeCreate::class)->name('create');
             Route::get('/import', EmployeeImport::class)->name('import');
             Route::get('/{employee}/edit', EmployeeEdit::class)->name('edit');
+            // Redesigned profile view; the full 15-tab record stays at /edit
+            // while its tabs migrate onto the shared profile components.
+            Route::get('/{employee}/profile', EmployeeProfile::class)->name('profile');
             Route::get('/{employee}/probation', ProbationConfirmation::class)->name('probation');
             Route::get('/{employee}/onboarding', OnboardingChecklist::class)->name('onboarding');
             Route::get('/{employee}/offboarding', OffboardingChecklist::class)->name('offboarding');
@@ -206,6 +232,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 
     // --------------------------------------------------
+    // My Onboarding — the employee's own checklist.
+    //
+    // Deliberately outside the employees/* group: every onboarding screen sat
+    // behind role:manage-employees, so new joiners were assigned tasks they
+    // could not see. This one is scoped to the signed-in employee's own
+    // records, so it needs no extra role.
+    // --------------------------------------------------
+    Route::get('/my-onboarding', MyOnboarding::class)->name('onboarding.my');
+
+    // --------------------------------------------------
     // Work From Home module
     // --------------------------------------------------
     Route::prefix('wfh')->name('wfh.')->group(function () {
@@ -221,20 +257,32 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/my-payslips', MyPayslips::class)->name('payslips');
         Route::get('/payslips/{payslip}/download', [PayslipController::class, 'download'])
             ->name('payslips.download');
+        // Combined multi-month print (max 6) — ?ids[]=1&ids[]=2
+        Route::get('/payslips/print-combined', [PayslipController::class, 'downloadCombined'])
+            ->name('payslips.print-combined');
 
         // Payroll administration — finance, HR Admin, Super Admin
         Route::middleware('role:run-payroll')->group(function () {
             Route::get('/overview', Overview::class)->name('overview');
             Route::get('/components', Components::class)->name('components');
             Route::get('/structures', SalaryStructures::class)->name('structures');
+            Route::get('/historical-import', HistoricalImport::class)->name('historical-import');
             Route::get('/process', Process::class)->name('process');
             Route::get('/incentives', Incentives::class)->name('incentives');
             Route::get('/reimbursements', Reimbursements::class)->name('reimbursements');
+            Route::get('/audit-trail', PayrollAuditTrail::class)->name('audit-trail');
+            // Admin bulk download — many employees' payslips for one run, zipped
+            // (distinct from the self-service print-combined above).
+            Route::get('/payslips/download-bulk', [PayslipController::class, 'downloadBulkZip'])
+                ->name('payslips.download-bulk');
         });
 
-        // Finance approval — Finance, Director, Super Admin
+        // Finance approval — Finance/Director/Super Admin (legacy + any configured
+        // step's approver), OR HR Admin, who may hold an "HR Review" step under a
+        // configured policy despite not having approve-finance. Real per-step
+        // eligibility is enforced in FinanceApproval/PayrollService.
         Route::get('/finance-approve', FinanceApproval::class)->name('finance-approve')
-            ->middleware('role:approve-finance');
+            ->middleware('role:run-payroll,approve-finance');
     });
 
     // --------------------------------------------------
@@ -346,6 +394,22 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/payroll-summary.pdf', [ReportController::class, 'payrollSummaryPdf'])
             ->name('payroll-summary')
             ->middleware('role:run-payroll');
+
+        // Payroll reports (12 types) — Phase 6
+        Route::middleware('role:run-payroll')->group(function () {
+            Route::get('/payroll-register.csv', [ReportController::class, 'payrollRegisterCsv'])->name('payroll-register');
+            Route::get('/salary-register.csv', [ReportController::class, 'salaryRegisterCsv'])->name('salary-register');
+            Route::get('/bank-transfer.csv', [ReportController::class, 'bankTransferReportCsv'])->name('bank-transfer');
+            Route::get('/pf-report.csv', [ReportController::class, 'providentFundReportCsv'])->name('pf-report');
+            Route::get('/esi-report.csv', [ReportController::class, 'esiReportCsv'])->name('esi-report');
+            Route::get('/pt-report.csv', [ReportController::class, 'professionalTaxReportCsv'])->name('pt-report');
+            Route::get('/tds-report.csv', [ReportController::class, 'tdsReportCsv'])->name('tds-report');
+            Route::get('/cost-center-report.csv', [ReportController::class, 'costCenterReportCsv'])->name('cost-center-report');
+            Route::get('/department-payroll-report.csv', [ReportController::class, 'departmentPayrollReportCsv'])->name('department-payroll-report');
+            Route::get('/payroll-monthly-summary.csv', [ReportController::class, 'payrollMonthlySummaryCsv'])->name('payroll-monthly-summary');
+            Route::get('/payroll-yearly-summary.csv', [ReportController::class, 'payrollYearlySummaryCsv'])->name('payroll-yearly-summary');
+            Route::get('/payroll-variance-report.csv', [ReportController::class, 'payrollVarianceReportCsv'])->name('payroll-variance-report');
+        });
         Route::get('/attendance-summary.csv', [ReportController::class, 'attendanceSummaryCsv'])
             ->name('attendance-summary')
             ->middleware('role:approve-leave');
@@ -425,6 +489,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/employment-types', EmploymentTypeManager::class)->name('employment-types');
         Route::get('/work-modes', WorkModeManager::class)->name('work-modes');
         Route::get('/salary-cycles', SalaryCycleManager::class)->name('salary-cycles');
+        Route::get('/payroll-approval-policy', ApprovalPolicySettings::class)->name('payroll-approval-policy');
         Route::get('/job-titles', JobTitleManager::class)->name('job-titles');
         Route::get('/menu', MenuSettings::class)->name('menu');
         Route::get('/notifications', NotificationSettings::class)->name('notifications');

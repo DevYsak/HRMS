@@ -5,6 +5,7 @@ namespace App\Livewire\Attendance;
 use App\Enums\AttendanceMode;
 use App\Enums\PunchMethod;
 use App\Models\Attendance;
+use App\Models\AttendanceDailyScore;
 use App\Models\AttendanceDailySummary;
 use App\Models\AttendancePunch;
 use App\Models\AttendanceRegularisation;
@@ -14,7 +15,6 @@ use App\Models\BreakLog;
 use App\Models\Employee;
 use App\Models\LeaveBalance;
 use App\Models\LeaveRequest;
-use App\Models\PublicHoliday;
 use App\Models\ShiftSetting;
 use App\Models\Task;
 use App\Models\User;
@@ -22,8 +22,15 @@ use App\Models\WfhReport;
 use App\Notifications\AttendanceRegularisationNotification;
 use App\Notifications\RegularisationReviewedNotification;
 use App\Services\AiAssistant;
+use App\Services\Attendance\AttendanceCoach;
+use App\Services\Attendance\AttendanceScoreEngine;
+use App\Services\Attendance\HolidayResolver;
+use App\Services\Attendance\PunchClassifier;
 use App\Services\Attendance\PunchTimeline as PunchTimelineEngine;
+use App\Services\Attendance\ShiftProgress;
+use App\Services\Attendance\ShiftResolver;
 use App\Services\AttendanceService;
+use App\Services\WfhService;
 use App\Support\UserAgent;
 use Carbon\CarbonPeriod;
 use Illuminate\Support\Carbon;
@@ -91,6 +98,12 @@ class AttendanceTracker extends Component
 
     public string $statsPeriod = 'this_month';
 
+    /** Comparison window for KPI deltas: prev_period | last_month | last_year. */
+    public string $compareMode = 'prev_period';
+
+    /** Real KPI deltas vs the comparison window (null delta = hide the chip). */
+    public array $comparison = [];
+
     /** Daily working-hours series for the analytics charts (selected period). */
     public array $chartDaily = [];
 
@@ -105,6 +118,25 @@ class AttendanceTracker extends Component
      * @var array<string, mixed>
      */
     public array $punchJourney = [];
+
+    /**
+     * Today's journey with break semantics applied — Clocked in, Lunch break,
+     * Returned from break, Clocked out.
+     *
+     * The neutral timeline deliberately emits only IN and OUT; this is the
+     * classified view the employee reads. Both come from the same deduplicated
+     * punches, so the journey and the session totals can never disagree.
+     *
+     * @var array<int, array<string, mixed>>
+     */
+    public array $attendanceJourney = [];
+
+    /**
+     * Progress through today's shift, as ShiftProgress::toArray().
+     *
+     * @var array<string, mixed>
+     */
+    public array $shiftProgress = [];
 
     /** Smart Attendance Alerts — missing check-in/out/break, past & present. */
     public array $attendanceAlerts = [];
@@ -176,6 +208,22 @@ class AttendanceTracker extends Component
     /** Full punch detail for the detail modal (null when closed). */
     public ?array $detail = null;
 
+    /** Rule 11 — month-to-date attendance score + previous month comparison. */
+    public ?float $monthlyScore = null;
+
+    public ?float $prevMonthlyScore = null;
+
+    /** [rank, poolSize] within the department / company (null = no scores yet). */
+    public ?array $deptRank = null;
+
+    public ?array $companyRank = null;
+
+    /** Attendance Decision payload for the "Why?" popup (null when closed). */
+    public ?array $decision = null;
+
+    /** AI Attendance Coach analytics payload (dynamic, from the engine). */
+    public array $coach = [];
+
     // Regularisation form fields
 
     /** Regularisation type: 'punch' (fix in/out) or 'half_day' (mark half day). */
@@ -216,10 +264,24 @@ class AttendanceTracker extends Component
     {
         $employee = Auth::user()->employee;
         if (! $employee) {
+            // Staff without an employee record (e.g. an HR admin account) still
+            // land on this page — give the view the engine's canonical empty
+            // shape so every journey key exists instead of blowing up on
+            // $punchJourney['live'].
+            $this->punchJourney = app(PunchTimelineEngine::class)->emptyResult();
+
+            // Same reason: no employee record means no shift to measure, so
+            // give the card its explicit not-measurable shape rather than an
+            // empty array the view would dereference.
+            $this->shiftProgress = ShiftProgress::unassigned()->toArray();
+
             return;
         }
 
-        $this->shift = $employee->shift ?? ShiftSetting::first();
+        // Assigned shift, else the shift HR nominated as the company default.
+        // Never ShiftSetting::first(): that showed an unassigned UK Sales
+        // employee the 10:30 IT window and judged their arrivals against it.
+        $this->shift = $employee->shift ?? ShiftResolver::companyDefault();
         $this->shiftLabel = $this->buildShiftLabel();
 
         // 1. Setup boundaries  (week starts Sunday to match S M T W T F S header)
@@ -240,12 +302,11 @@ class AttendanceTracker extends Component
             ->where('end_date', '>=', $gridStart->toDateString())
             ->get();
 
-        $holidays = PublicHoliday::whereBetween('date', [$gridStart->toDateString(), $gridEnd->toDateString()])
-            ->get();
+        // This employee's calendar and scope, not "any holiday for anyone".
+        $holidayMap = app(HolidayResolver::class)->keyedForEmployee($employee, $gridStart, $gridEnd);
 
         // 3. Process data in memory
         $attendanceMap = $allAttendances->keyBy(fn ($a) => $a->date->toDateString());
-        $holidayMap = $holidays->keyBy(fn ($h) => Carbon::parse($h->date)->toDateString());
 
         $leaveMap = [];
         foreach ($leaves as $l) {
@@ -301,7 +362,7 @@ class AttendanceTracker extends Component
         }
 
         // 7. Load UI specific lists
-        $this->monthHolidays = $holidays->filter(fn ($h) => Carbon::parse($h->date)->month === $start->month &&
+        $this->monthHolidays = $holidayMap->filter(fn ($h) => Carbon::parse($h->date)->month === $start->month &&
             Carbon::parse($h->date)->year === $start->year
         )->values();
 
@@ -321,6 +382,8 @@ class AttendanceTracker extends Component
         // 9. This-week summary + today's punch/break timeline
         $this->weekSummary = $this->buildWeekSummary($employee);
         $this->punchJourney = $this->buildPunchJourney($employee);
+        $this->attendanceJourney = $this->buildAttendanceJourney($employee);
+        $this->shiftProgress = $this->buildShiftProgress($employee)->toArray();
         $this->loadStreakAndBenchmark($employee);
 
         // 10. Biometric daily summary + device (needed by the alerts below)
@@ -336,11 +399,14 @@ class AttendanceTracker extends Component
             ->whereNotNull('synced_at')
             ->orderByDesc('date')
             ->limit(5)
-            ->get(['date', 'synced_at', 'raw_punch_count'])
+            ->get(['date', 'synced_at', 'raw_punch_count', 'device_serial'])
             ->map(fn ($s) => [
                 'date' => $s->date->format('d M'),
                 'synced' => $s->synced_at->format('h:i A'),
                 'punches' => (int) $s->raw_punch_count,
+                // The engine stamps the serial of the reader that produced the
+                // day's punches; the biometric_devices row may hold none.
+                'serial' => $s->device_serial,
             ])->all();
 
         $this->attendanceAlerts = $this->buildAttendanceAlerts();
@@ -551,8 +617,7 @@ class AttendanceTracker extends Component
             }
         }
 
-        $holidayDays = PublicHoliday::whereBetween('date', [$weekStart->toDateString(), $weekEnd->toDateString()])
-            ->get()->keyBy(fn ($h) => Carbon::parse($h->date)->toDateString());
+        $holidayDays = app(HolidayResolver::class)->keyedForEmployee($employee, $weekStart, $weekEnd);
 
         $summary = [];
         foreach (CarbonPeriod::create($weekStart, $weekEnd) as $d) {
@@ -600,6 +665,85 @@ class AttendanceTracker extends Component
      * processing). Duplicates, device conflicts, session pairing, totals and
      * missing-punch flags all come from that one place.
      */
+    /**
+     * Today's punches as a classified journey.
+     *
+     * Runs the last two stages of the pipeline: the timeline normalises the
+     * raw stream into deduplicated IN/OUT events, then the classifier names
+     * the gaps between them. Reusing the timeline's output rather than
+     * re-reading the punches is what keeps this consistent with the session
+     * totals shown beside it.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected function buildAttendanceJourney($employee): array
+    {
+        $raw = AttendancePunch::where('employee_id', $employee->id)
+            ->whereDate('punch_date', Carbon::today()->toDateString())
+            ->orderBy('punched_at')
+            ->get();
+
+        return app(PunchClassifier::class)->enrich(
+            app(PunchTimelineEngine::class)->neutralEvents($raw),
+        );
+    }
+
+    /**
+     * Assemble today's Shift Progress from state this page already holds.
+     *
+     * Deliberately a thin assembly step: the expected duration comes from the
+     * resolved shift and the worked minutes from PunchTimeline, both untouched.
+     * The arithmetic and the clamping live in ShiftProgress so the rules are
+     * testable without a Livewire component around them.
+     */
+    protected function buildShiftProgress($employee): ShiftProgress
+    {
+        $today = Carbon::today();
+
+        // Leave and holidays first: a day nobody was expected to work must not
+        // read as being behind schedule.
+        if ($this->todayLeaveLabel($employee, $today) !== null) {
+            return ShiftProgress::nonWorking($this->todayLeaveLabel($employee, $today));
+        }
+
+        if (AttendanceSetting::isWeeklyOff($today)) {
+            return ShiftProgress::nonWorking('Weekly off');
+        }
+
+        $shift = app(ShiftResolver::class)->resolve($employee, $today);
+
+        if (! $shift) {
+            return ShiftProgress::unassigned();
+        }
+
+        // The engine's figure, including any live session — never recomputed here.
+        $worked = (int) ($this->punchJourney['working_minutes'] ?? 0);
+
+        return ShiftProgress::of(
+            $shift,
+            $worked,
+            clockedOut: (bool) $this->todayAttendance?->check_out,
+        );
+    }
+
+    /** Leave or holiday covering today, as a label for the non-working state. */
+    protected function todayLeaveLabel($employee, Carbon $day): ?string
+    {
+        $onLeave = LeaveRequest::where('employee_id', $employee->id)
+            ->where('status', 'approved')
+            ->whereDate('start_date', '<=', $day->toDateString())
+            ->whereDate('end_date', '>=', $day->toDateString())
+            ->exists();
+
+        if ($onLeave) {
+            return 'On leave';
+        }
+
+        return app(HolidayResolver::class)->isHoliday($employee, $day)
+            ? 'Public holiday'
+            : null;
+    }
+
     protected function buildPunchJourney($employee): array
     {
         $today = Carbon::today();
@@ -624,26 +768,6 @@ class AttendanceTracker extends Component
     protected function assemblePunchJourney($raw, Carbon $day, ?AttendanceDailySummary $summary = null): array
     {
         return app(PunchTimelineEngine::class)->process(collect($raw), $day, $summary);
-    }
-
-    /** Memoised today's-minutes result (one-element array so null is cacheable). */
-    protected ?array $todayValidatedCache = null;
-
-    /**
-     * Today's working minutes from validated sessions — used by the period
-     * stats and daily chart, which otherwise report 0h while the day is open.
-     * Null when no punch data exists (pure web-punch fallback applies).
-     */
-    protected function todayValidatedMinutes($employee): ?int
-    {
-        if ($this->todayValidatedCache === null) {
-            $journey = $this->punchJourney !== [] ? $this->punchJourney : $this->buildPunchJourney($employee);
-            $this->todayValidatedCache = [
-                ($journey['raw_count'] ?? 0) > 0 ? (int) $journey['working_minutes'] : null,
-            ];
-        }
-
-        return $this->todayValidatedCache[0];
     }
 
     /** Punch Timeline history — every visible day's punches as classified events. */
@@ -675,7 +799,15 @@ class AttendanceTracker extends Component
             ->get()
             ->groupBy('attendance_id');
 
-        $this->logTimeline = $history->map(function ($item) use ($punchesByDay, $breaksByAttendance) {
+        // Engine decisions for every visible day — sessions, ignored punches
+        // and validated worked minutes, from the same PunchTimeline engine.
+        $dayMetrics = $this->engineDayMetrics(
+            $employee,
+            Carbon::parse(min($dates)),
+            Carbon::parse(max($dates)),
+        );
+
+        $this->logTimeline = $history->map(function ($item) use ($punchesByDay, $breaksByAttendance, $dayMetrics) {
             $key = $item->date->toDateString();
             $events = app(PunchTimelineEngine::class)->neutralEvents($punchesByDay->get($key, collect()));
 
@@ -721,9 +853,12 @@ class AttendanceTracker extends Component
                 }
             }
 
-            $workedMin = ($item->check_in && $item->check_out)
+            // Worked minutes from the engine's validated sessions when punch
+            // data exists; check_in→check_out math only as the web-punch fallback.
+            $m = $dayMetrics[$key] ?? null;
+            $workedMin = $m['worked'] ?? (($item->check_in && $item->check_out)
                 ? max(0, (int) $item->check_in->diffInMinutes($item->check_out) - (int) ($item->break_minutes ?? 0))
-                : 0;
+                : 0);
 
             return [
                 'date' => $key,
@@ -738,6 +873,23 @@ class AttendanceTracker extends Component
                 'missing' => (! $item->check_out && ! $item->date->isToday()) || $item->missing_checkout,
                 'reg_status' => $item->regularisation?->status,
                 'is_regularized' => (bool) $item->is_regularized,
+                // Original punches preserved at regularisation (Rule 9) and the
+                // system auto punch-out flag — both surfaced on the day card.
+                'original_in' => $item->original_check_in?->format('h:i A'),
+                'original_out' => $item->original_check_out?->format('h:i A'),
+                'corrected_in' => $item->check_in?->format('h:i A'),
+                'corrected_out' => $item->check_out?->format('h:i A'),
+                'is_auto_checkout' => (bool) $item->is_auto_checkout,
+                // Engine decisions for the expandable day view: validated work
+                // sessions, and punches the engine ignored (stray card scans /
+                // duplicate reads) shown collapsed with their reason.
+                'sessions' => $m['sessions'] ?? [],
+                'ignored_events' => collect($m['ignored'] ?? [])->map(fn ($n) => [
+                    'time' => $n['time'],
+                    'method' => $n['method_label'],
+                    'reason' => $n['reason'] ?? 'Ignored by Attendance Engine',
+                ])->all(),
+                'noise_count' => (int) ($m['duplicate_count'] ?? 0),
                 'events' => $events,
             ];
         })->values()->all();
@@ -795,6 +947,25 @@ class AttendanceTracker extends Component
                     'detail' => 'Today · clocked out '.$this->todayAttendance->check_out->format('h:i A').' before shift end '.$shiftEnd->format('h:i A'),
                     'date' => $today->toDateString(),
                     'action' => true,
+                ];
+            }
+
+            // Long break — informational, never actionable. A long break is not
+            // a punch to correct: the punches are right and the employee simply
+            // took the time, so offering "Regularize" would invite them to
+            // falsify it. Threshold is the classifier's, so a gap the journey
+            // labels "Long break" is exactly the gap that raises this.
+            $breakMin = $journeyOwnsToday
+                ? (int) ($this->punchJourney['break_minutes'] ?? 0)
+                : (int) ($this->todayAttendance->break_minutes ?? 0);
+
+            if ($breakMin > PunchClassifier::LONG_BREAK_MINUTES) {
+                $alerts[] = [
+                    'type' => 'long_break',
+                    'label' => 'Long Break',
+                    'detail' => 'Today · '.intdiv($breakMin, 60).'h '.($breakMin % 60).'m away, beyond the usual break',
+                    'date' => $today->toDateString(),
+                    'action' => false,
                 ];
             }
 
@@ -869,10 +1040,38 @@ class AttendanceTracker extends Component
     {
         $this->rangeFrom = null;
         $this->rangeTo = null;
-        $this->loadData(); // restores the month-based log after a custom range
+        $this->loadData();
+
+        // The Attendance Log follows the selected period — changing the filter
+        // recalculates the history list, not just the charts (Rule 12).
+        if ($this->statsPeriod !== 'this_month') {
+            [$start, $end] = $this->periodRange();
+            $this->syncHistoryToRange($start, $end);
+        }
+    }
+
+    /** Re-query the history + day-grouped log for an explicit date range. */
+    protected function syncHistoryToRange(Carbon $start, Carbon $end): void
+    {
+        $employee = Auth::user()->employee;
+        if (! $employee) {
+            return;
+        }
+
+        $this->history = Attendance::where('employee_id', $employee->id)
+            ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
+            ->with('regularisation')
+            ->orderByDesc('date')
+            ->get();
+        $this->buildLogTimeline($employee);
     }
 
     public function updatedAnalyticsMode(): void
+    {
+        $this->computeStats();
+    }
+
+    public function updatedCompareMode(): void
     {
         $this->computeStats();
     }
@@ -902,15 +1101,90 @@ class AttendanceTracker extends Component
         $this->computeStats();
 
         // The Attendance Log follows the selected range too.
-        $employee = Auth::user()->employee;
-        if ($employee) {
-            $this->history = Attendance::where('employee_id', $employee->id)
-                ->whereBetween('date', [$this->rangeFrom, $this->rangeTo])
-                ->with('regularisation')
-                ->orderByDesc('date')
-                ->get();
-            $this->buildLogTimeline($employee);
+        $this->syncHistoryToRange(Carbon::parse($this->rangeFrom), Carbon::parse($this->rangeTo));
+    }
+
+    /**
+     * The [start, end] window the current stats period resolves to — the ONE
+     * range every filtered section (stats, charts, history, insights) uses.
+     *
+     * @return array{0: Carbon, 1: Carbon}
+     */
+    protected function periodRange(): array
+    {
+        return match ($this->statsPeriod) {
+            'today' => [Carbon::today(), Carbon::today()],
+            'this_week' => [Carbon::now()->startOfWeek(Carbon::SUNDAY), Carbon::now()->endOfWeek(Carbon::SATURDAY)],
+            'last_month' => [Carbon::now()->subMonth()->startOfMonth(), Carbon::now()->subMonth()->endOfMonth()],
+            'quarter' => [Carbon::now()->firstOfQuarter(), Carbon::now()->endOfMonth()],
+            '3_months' => [Carbon::now()->subMonths(2)->startOfMonth(), Carbon::now()->endOfMonth()],
+            'year' => [Carbon::now()->startOfYear(), Carbon::now()->endOfMonth()],
+            'custom' => [
+                Carbon::parse($this->rangeFrom ?? now()->startOfMonth()),
+                Carbon::parse($this->rangeTo ?? now()),
+            ],
+            default => [Carbon::now()->startOfMonth(), Carbon::now()->endOfMonth()],
+        };
+    }
+
+    /** Memoised engine day-metrics per range so stats + timeline share one computation. */
+    protected array $dayMetricsCache = [];
+
+    /**
+     * Every day in the range processed through the PunchTimeline engine — the
+     * same engine that renders the journey. Worked/break minutes come from
+     * validated sessions (never raw check_in→check_out math), so a day whose
+     * attendance row was mis-paired by the device still reports correct hours.
+     * Days without punch rows are absent from the result; callers fall back to
+     * the attendance row (web punches / pre-journey data).
+     *
+     * @return array<string, array{worked: int, break: int, sessions: array<int, array<string, mixed>>, ignored: array<int, array<string, mixed>>, ignored_count: int, duplicate_count: int, first_in_min: ?int, last_out_min: ?int, missing_out: bool}>
+     */
+    protected function engineDayMetrics($employee, Carbon $start, Carbon $end): array
+    {
+        $cacheKey = $start->toDateString().'|'.$end->toDateString();
+        if (isset($this->dayMetricsCache[$cacheKey])) {
+            return $this->dayMetricsCache[$cacheKey];
         }
+
+        $punchesByDay = AttendancePunch::where('employee_id', $employee->id)
+            ->whereBetween('punch_date', [$start->toDateString(), $end->toDateString()])
+            ->orderBy('punched_at')
+            ->get()
+            ->groupBy(fn ($p) => $p->punch_date->toDateString());
+
+        $summaries = AttendanceDailySummary::where('employee_id', $employee->id)
+            ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
+            ->get()
+            ->keyBy(fn ($s) => $s->date->toDateString());
+
+        $engine = app(PunchTimelineEngine::class);
+        $toMinutes = function (?string $formatted): ?int {
+            if (! $formatted) {
+                return null;
+            }
+            $t = Carbon::parse($formatted);
+
+            return $t->hour * 60 + $t->minute;
+        };
+
+        $metrics = [];
+        foreach ($punchesByDay as $day => $dayPunches) {
+            $r = $engine->process($dayPunches, Carbon::parse($day), $summaries->get($day));
+            $metrics[$day] = [
+                'worked' => (int) $r['working_minutes'],
+                'break' => (int) $r['break_minutes'],
+                'sessions' => $r['sessions'],
+                'ignored' => $r['ignored'],
+                'ignored_count' => (int) $r['ignored_count'],
+                'duplicate_count' => (int) $r['duplicate_count'] + (int) $r['conflict_count'],
+                'first_in_min' => $toMinutes($r['first_in']),
+                'last_out_min' => $toMinutes($r['last_out']),
+                'missing_out' => (bool) $r['missing_out'],
+            ];
+        }
+
+        return $this->dayMetricsCache[$cacheKey] = $metrics;
     }
 
     protected function computeStats(): void
@@ -920,18 +1194,7 @@ class AttendanceTracker extends Component
             return;
         }
 
-        [$start, $end] = match ($this->statsPeriod) {
-            'today' => [Carbon::today(), Carbon::today()],
-            'this_week' => [Carbon::now()->startOfWeek(Carbon::SUNDAY), Carbon::now()->endOfWeek(Carbon::SATURDAY)],
-            'last_month' => [Carbon::now()->subMonth()->startOfMonth(), Carbon::now()->subMonth()->endOfMonth()],
-            '3_months' => [Carbon::now()->subMonths(2)->startOfMonth(), Carbon::now()->endOfMonth()],
-            'year' => [Carbon::now()->startOfYear(), Carbon::now()->endOfMonth()],
-            'custom' => [
-                Carbon::parse($this->rangeFrom ?? now()->startOfMonth()),
-                Carbon::parse($this->rangeTo ?? now()),
-            ],
-            default => [Carbon::now()->startOfMonth(), Carbon::now()->endOfMonth()],
-        };
+        [$start, $end] = $this->periodRange();
 
         $this->tasksCompletedPeriod = Task::where('employee_id', $employee->id)
             ->completed()
@@ -949,11 +1212,11 @@ class AttendanceTracker extends Component
             ->where('end_date', '>=', $start->toDateString())
             ->get();
 
-        $holidays = PublicHoliday::whereBetween('date', [$start->toDateString(), $end->toDateString()])->get();
+        $holidayDates = app(HolidayResolver::class)->keyedForEmployee($employee, $start, $end);
 
         // Build lookup maps
         $attendanceDates = $attendances->keyBy(fn ($a) => $a->date->toDateString());
-        $holidayDates = $holidays->keyBy(fn ($h) => Carbon::parse($h->date)->toDateString());
+
         $leaveMap = [];
         foreach ($leaves as $l) {
             $lPeriod = CarbonPeriod::create($l->start_date, $l->end_date);
@@ -978,19 +1241,22 @@ class AttendanceTracker extends Component
             }
         }
 
-        // Today's minutes come from validated sessions (the day is usually still
-        // open, so check_in→check_out math would report 0h all day long).
-        $todayEngineMin = $this->todayValidatedMinutes($employee);
-        $totalMinutes = $attendances->sum(function ($a) use ($todayEngineMin) {
-            if ($a->date->isToday() && $todayEngineMin !== null) {
-                return $todayEngineMin;
+        // EVERY day's minutes come from the PunchTimeline engine (validated
+        // sessions) — never raw check_in→check_out math when punch data exists.
+        // Fallback to the attendance row only for pure web-punch days.
+        $dayMetrics = $this->engineDayMetrics($employee, $start, $end->copy()->min(Carbon::today()));
+        $minutesForDay = function ($a) use ($dayMetrics) {
+            $m = $dayMetrics[$a->date->toDateString()] ?? null;
+            if ($m !== null) {
+                return $m['worked'];
             }
             if ($a->check_in && $a->check_out) {
-                return $a->check_in->diffInMinutes($a->check_out) - ($a->break_minutes ?? 0);
+                return max(0, $a->check_in->diffInMinutes($a->check_out) - ($a->break_minutes ?? 0));
             }
 
             return 0;
-        });
+        };
+        $totalMinutes = $attendances->sum($minutesForDay);
 
         $this->stats = [
             'present' => $attendances->where('status', 'on_time')->count() + $attendances->where('status', 'late')->count(),
@@ -1018,7 +1284,9 @@ class AttendanceTracker extends Component
             }
         }
 
-        $excessBreaks = $attendances->where('break_minutes', '>', 60)->count();
+        // Break allowance comes from the shift (break_duration), not a literal.
+        $breakAllowance = (int) ($this->shift->break_duration ?? 60);
+        $excessBreaks = $attendances->where('break_minutes', '>', $breakAllowance)->count();
         $withBreaks = $attendances->where('break_minutes', '>', 0);
         $avgBreak = $withBreaks->count() > 0 ? (int) round($withBreaks->avg('break_minutes')) : 0;
 
@@ -1041,34 +1309,122 @@ class AttendanceTracker extends Component
             ];
         })->values()->all();
 
+        // ── Rule 10: monthly late-mark tracking ──────────────────────────
+        // Below the threshold = normal; at/above = warning (banner + score
+        // penalty + HR letter via hrms:issue-late-warnings). The threshold is
+        // DB-driven. Consecutive = run of late working days ending at the most
+        // recent late day.
+        $lateThreshold = max(1, (int) ($this->attendanceSettings->late_warning_threshold ?? 3));
+        $monthLateDates = Attendance::where('employee_id', $employee->id)
+            ->whereBetween('date', [now()->startOfMonth()->toDateString(), now()->toDateString()])
+            ->where('is_late', true)
+            ->orderByDesc('date')
+            ->pluck('date')
+            ->map(fn ($d) => Carbon::parse($d)->toDateString());
+        $monthLateCount = $monthLateDates->count();
+        $lateSet = array_flip($monthLateDates->all());
+        $consecutiveLate = 0;
+        if ($monthLateCount > 0) {
+            $cursor = Carbon::parse($monthLateDates->first());
+            while (isset($lateSet[$cursor->toDateString()])) {
+                $consecutiveLate++;
+                $cursor->subDay();
+                while ($cursor->isSunday()) {
+                    $cursor->subDay();
+                }
+            }
+        }
+        $lateWarning = $monthLateCount >= $lateThreshold;
+
+        // Warning-level lateness applies an explicit score deduction on top of
+        // the punctuality weighting — 2 points per late mark past the threshold.
+        $latePenalty = $lateWarning ? min(20, ($monthLateCount - ($lateThreshold - 1)) * 2) : 0;
+
         $this->analytics = [
             'shift_compliance' => $workingBasis > 0 ? (int) round($onTime / $workingBasis * 100) : 100,
-            'attendance_score' => (int) round($onTimePct * 0.6 + $presentPct * 0.25 + $breakPct * 0.15),
+            'attendance_score' => max(0, (int) round($onTimePct * 0.6 + $presentPct * 0.25 + $breakPct * 0.15) - $latePenalty),
             'office_days' => $officeDays,
             'wfh_days' => $wfhDays,
             'avg_break' => $avgBreak,
             'excess_breaks' => $excessBreaks,
             'late_trend' => $lateTrend,
             'mode_breakdown' => $modeBreakdown,
+            'late_month_count' => $monthLateCount,
+            'late_consecutive' => $consecutiveLate,
+            'late_warning' => $lateWarning,
+            'late_penalty' => $latePenalty,
+            'late_threshold' => $lateThreshold,
         ];
 
-        // ── Daily working-hours series for the trend chart (period up to today) ──
+        // ── Daily series for every chart (period up to today), engine-first ──
+        // hours/break from validated sessions; in/out minutes power the arrival
+        // trend. The mode filter narrows to matching attendance days.
         $seriesEnd = $end->copy()->min(Carbon::today());
         $daily = [];
         if ($start <= $seriesEnd) {
             foreach (CarbonPeriod::create($start, $seriesEnd) as $d) {
-                $att = $attendanceDates->get($d->toDateString());
+                $key = $d->toDateString();
+                $att = $attendanceDates->get($key);
+                $m = $dayMetrics[$key] ?? null;
+                $modeFiltered = $this->analyticsMode !== '' && ! $att;
+
                 $hours = 0.0;
-                if ($d->isToday() && $todayEngineMin !== null) {
-                    $hours = round(max(0, $todayEngineMin) / 60, 1);   // validated sessions, live-inclusive
-                } elseif ($att && $att->check_in && $att->check_out) {
-                    $mins = $att->check_in->diffInMinutes($att->check_out) - ($att->break_minutes ?? 0);
-                    $hours = round(max(0, $mins) / 60, 1);
+                $break = 0;
+                $inMin = null;
+                $outMin = null;
+                if ($m !== null && ! $modeFiltered) {
+                    $hours = round($m['worked'] / 60, 1);
+                    $break = $m['break'];
+                    $inMin = $m['first_in_min'];
+                    $outMin = $m['last_out_min'];
+                } elseif ($att && $att->check_in) {
+                    if ($att->check_out) {
+                        $mins = $att->check_in->diffInMinutes($att->check_out) - ($att->break_minutes ?? 0);
+                        $hours = round(max(0, $mins) / 60, 1);
+                        $outMin = $att->check_out->hour * 60 + $att->check_out->minute;
+                    }
+                    $break = (int) ($att->break_minutes ?? 0);
+                    $inMin = $att->check_in->hour * 60 + $att->check_in->minute;
                 }
-                $daily[] = ['label' => $d->format('d M'), 'hours' => $hours, 'break' => $att ? (int) ($att->break_minutes ?? 0) : 0, 'late' => (bool) ($att?->is_late)];
+
+                $daily[] = [
+                    'date' => $key,
+                    'label' => $d->format('d M'),
+                    'hours' => $hours,
+                    'break' => $break,
+                    'late' => (bool) ($att?->is_late),
+                    'in_min' => $inMin,
+                    'out_min' => $outMin,
+                    'score' => null,   // filled from attendance_daily_scores below
+                ];
             }
         }
+
+        // Rule 11 — overlay the engine's persisted daily scores on the series
+        // (the score chart falls back to an hours-based proxy for unscored days).
+        if ($daily !== []) {
+            $storedScores = AttendanceDailyScore::where('employee_id', $employee->id)
+                ->whereBetween('date', [$start->toDateString(), $seriesEnd->toDateString()])
+                ->get()
+                ->mapWithKeys(fn ($s) => [$s->date->toDateString() => (float) $s->score]);
+            foreach ($daily as &$dayEntry) {
+                $dayEntry['score'] = $storedScores[$dayEntry['date']] ?? null;
+            }
+            unset($dayEntry);
+        }
         $this->chartDaily = $daily;
+
+        // Rule 11 — monthly score, previous-month comparison and rankings from
+        // the engine's persisted daily scores.
+        $scoreEngine = app(AttendanceScoreEngine::class);
+        $this->monthlyScore = $scoreEngine->monthlyScore($employee, now());
+        $this->prevMonthlyScore = $scoreEngine->monthlyScore($employee, now()->subMonthNoOverflow());
+        $companyIds = Employee::where('status', 'active')->pluck('id')->all();
+        $deptIds = $employee->department_id
+            ? Employee::where('department_id', $employee->department_id)->where('status', 'active')->pluck('id')->all()
+            : [];
+        $this->companyRank = $scoreEngine->rankAmong($employee, $companyIds, now());
+        $this->deptRank = $deptIds !== [] ? $scoreEngine->rankAmong($employee, $deptIds, now()) : null;
 
         // ── Attendance Insights — auto-generated, plain-language, real data ──
         $withIn = $attendances->filter(fn ($a) => $a->check_in);
@@ -1097,7 +1453,7 @@ class AttendanceTracker extends Component
 
         $longestBreak = (int) $attendances->max('break_minutes');
         if ($longestBreak > 0) {
-            $insights[] = ['good' => $longestBreak <= 60, 'text' => 'Longest break '.($longestBreak >= 60 ? intdiv($longestBreak, 60).'h '.($longestBreak % 60).'m' : $longestBreak.' mins')];
+            $insights[] = ['good' => $longestBreak <= $breakAllowance, 'text' => 'Longest break '.($longestBreak >= 60 ? intdiv($longestBreak, 60).'h '.($longestBreak % 60).'m' : $longestBreak.' mins')];
         }
 
         $bestDay = $withIn->groupBy(fn ($a) => $a->date->format('l'))
@@ -1141,16 +1497,41 @@ class AttendanceTracker extends Component
             : 0;
         $predictedPct = min(100, (int) round(($present + $remainingDays) / $fullWorkDays * 100));
 
-        // Trend vs the previous period of the same length.
+        // Trend vs the selected comparison window (GA4-style): previous period
+        // of the same length, the previous month, or the same period last year.
         $periodDays = max(1, (int) $start->diffInDays($end) + 1);
-        $prevStart = $start->copy()->subDays($periodDays);
-        $prevEnd = $start->copy()->subDay();
+        [$prevStart, $prevEnd] = match ($this->compareMode) {
+            'last_month' => [$start->copy()->subMonthNoOverflow(), $end->copy()->subMonthNoOverflow()],
+            'last_year' => [$start->copy()->subYear(), $end->copy()->subYear()],
+            default => [$start->copy()->subDays($periodDays), $start->copy()->subDay()],
+        };
         $prev = Attendance::where('employee_id', $employee->id)
             ->whereBetween('date', [$prevStart->toDateString(), $prevEnd->toDateString()])
             ->when($this->analyticsMode !== '', fn ($q) => $q->where('work_mode', $this->analyticsMode))
-            ->get(['check_in', 'is_late']);
+            ->get(['check_in', 'check_out', 'break_minutes', 'is_late']);
         $prevPresent = $prev->whereNotNull('check_in')->count();
         $prevLate = $prev->where('is_late', true)->count();
+        $prevMinutes = (int) $prev->sum(fn ($a) => $a->check_in && $a->check_out
+            ? max(0, $a->check_in->diffInMinutes($a->check_out) - ($a->break_minutes ?? 0))
+            : 0);
+        $prevOnTimePct = $prevPresent > 0 ? (int) round(max(0, $prevPresent - $prevLate) / $prevPresent * 100) : null;
+
+        // Real deltas for the KPI band — null delta means "no basis to compare"
+        // and the UI hides the trend chip rather than inventing one.
+        $this->comparison = [
+            'label' => match ($this->compareMode) {
+                'last_month' => 'vs last month',
+                'last_year' => 'vs last year',
+                default => 'vs previous period',
+            },
+            'has_data' => $prev->isNotEmpty(),
+            'present' => $prev->isNotEmpty() ? $present - $prevPresent : null,
+            'late' => $prev->isNotEmpty() ? $late - $prevLate : null,
+            'hours' => $prev->isNotEmpty() ? (int) round(($totalMinutes - $prevMinutes) / 60) : null,
+            'on_time_pct' => ($prevOnTimePct !== null && $workingBasis > 0)
+                ? (int) round($onTime / max(1, $present) * 100) - $prevOnTimePct
+                : null,
+        ];
 
         $fmtTime = fn (?int $m) => $m === null ? null : sprintf('%02d:%02d %s', (intdiv($m, 60) % 12) ?: 12, $m % 60, $m < 720 ? 'AM' : 'PM');
 
@@ -1158,8 +1539,8 @@ class AttendanceTracker extends Component
         $suggestions[] = $this->analytics['attendance_score'] >= 85
             ? ['good' => true, 'text' => 'Great attendance — keep it up']
             : ['good' => false, 'text' => 'Focus on attendance consistency this period'];
-        if ($avgBreak > 60) {
-            $suggestions[] = ['good' => false, 'text' => 'Improve break duration — average exceeds 60 minutes'];
+        if ($avgBreak > $breakAllowance) {
+            $suggestions[] = ['good' => false, 'text' => "Improve break duration — average exceeds {$breakAllowance} minutes"];
         }
         if ($late > 0 && $this->shift?->start_time) {
             $suggestions[] = ['good' => false, 'text' => 'Arrive before '.Carbon::parse($this->shift->start_time)->addMinutes((int) ($this->shift->grace_minutes ?? 5))->format('g:i A').' to stay on time'];
@@ -1191,6 +1572,10 @@ class AttendanceTracker extends Component
             'late_trend' => $late - $prevLate,
             'suggestions' => $suggestions,
         ];
+
+        // AI Attendance Coach — every insight computed from real engine data
+        // for the selected period (Priority 2).
+        $this->coach = app(AttendanceCoach::class)->analyze($employee, $start, $end);
     }
 
     /**
@@ -1272,13 +1657,11 @@ class AttendanceTracker extends Component
             return;
         }
 
-        $shift = $this->shift instanceof ShiftSetting ? $this->shift : ShiftSetting::first();
-
-        if (! $shift) {
-            \Flux::toast('No shift configured. Contact HR to set up your shift.', variant: 'danger');
-
-            return;
-        }
+        // May be null when HR has not assigned a shift. That does not block the
+        // punch: being at work is a fact, being late is a judgement. Losing the
+        // attendance record over a configuration gap would be the worse
+        // outcome, so the day is recorded and simply not judged.
+        $shift = $this->shift instanceof ShiftSetting ? $this->shift : ShiftResolver::companyDefault();
 
         // Enforce admin capture requirements (WFH/field discipline).
         if ($this->attendanceSettings?->requires_location && ($lat === null || $lng === null)) {
@@ -1289,6 +1672,15 @@ class AttendanceTracker extends Component
 
         if ($this->attendanceSettings?->requires_photo && ! $photo) {
             \Flux::toast('A selfie is required to clock in — please capture a photo and try again.', variant: 'danger');
+
+            return;
+        }
+
+        // Working from home is an approved arrangement, not a dropdown choice.
+        // Recording it unapproved made the WFH request meaningless: the day was
+        // logged as remote whether or not anyone had agreed to it.
+        if ($this->workMode === 'wfh' && ! app(WfhService::class)->isApprovedFor($employee, Carbon::today())) {
+            \Flux::toast('You have no approved work-from-home request for today. Submit one under Work From Home, or clock in with a different work mode.', variant: 'danger');
 
             return;
         }
@@ -1394,6 +1786,13 @@ class AttendanceTracker extends Component
             'late_minutes' => (int) ($att->late_minutes ?? 0),
             'break_minutes' => (int) ($att->break_minutes ?? 0),
             'total_hours' => $att->total_hours,
+            'is_regularized' => (bool) $att->is_regularized,
+            'is_auto_checkout' => (bool) $att->is_auto_checkout,
+            'auto_checkout_reason' => $att->auto_checkout_reason,
+            // Original punches preserved at regularisation — shown next to the
+            // corrected times so history is never lost.
+            'original_in' => $att->original_check_in?->format('h:i A'),
+            'original_out' => $att->original_check_out?->format('h:i A'),
             'in' => [
                 'time' => $att->check_in?->format('h:i A'),
                 'method' => $inMethod?->label(),
@@ -1427,24 +1826,50 @@ class AttendanceTracker extends Component
                     'device' => $p->device_serial,
                     'location' => $p->location,
                 ])->all(),
-            // Audit History — every regularisation touching this day.
+            // Audit History — every regularisation touching this day, with the
+            // full multi-stage approval trail (who acted, when, at which stage).
             'audits' => AttendanceRegularisation::where('employee_id', $employee->id)
                 ->whereDate('work_date', $date)
                 ->with('reviewer')
                 ->orderByDesc('created_at')
                 ->get()
                 ->map(fn ($r) => [
-                    'requested_in' => Carbon::parse($r->requested_check_in)->format('h:i A'),
-                    'requested_out' => Carbon::parse($r->requested_check_out)->format('h:i A'),
+                    'type' => $r->regularisation_type ?? 'punch',
+                    'requested_in' => $r->requested_check_in ? Carbon::parse($r->requested_check_in)->format('h:i A') : null,
+                    'requested_out' => $r->requested_check_out ? Carbon::parse($r->requested_check_out)->format('h:i A') : null,
                     'reason' => $r->reason,
                     'status' => $r->status,
+                    'stage' => $r->stageLabel(),
                     'reviewer' => $r->reviewer?->name,
                     'reviewed_at' => $r->reviewed_at?->format('d M Y h:i A'),
                     'submitted_at' => $r->created_at?->format('d M Y h:i A'),
+                    'trail' => collect($r->approval_trail ?? [])->map(fn ($t) => [
+                        'stage' => str_replace('_', ' ', (string) ($t['stage'] ?? '')),
+                        'action' => $t['action'] ?? '',
+                        'by' => $t['name'] ?? null,
+                        'comment' => $t['comment'] ?? null,
+                        'at' => $t['at'] ?? null,
+                    ])->all(),
                 ])->all(),
         ];
 
         $this->modal('punch-detail')->show();
+    }
+
+    /**
+     * "Why?" — the Attendance Decision popup: exactly how the engine reached
+     * its verdict for a day (shift window, punch decisions, deductions, score).
+     */
+    public function showScoreDecision(string $date): void
+    {
+        $employee = Auth::user()->employee;
+        if (! $employee) {
+            return;
+        }
+
+        $this->decision = app(AttendanceScoreEngine::class)->explainDay($employee, Carbon::parse($date));
+
+        $this->modal('score-decision')->show();
     }
 
     public function openRegularisation($date)
@@ -1562,53 +1987,46 @@ class AttendanceTracker extends Component
         \Flux::toast('Regularisation request sent to your manager & HR for approval.');
     }
 
+    /**
+     * The shift window shown to the employee, from the same source the engine
+     * scores against — so the page can never advertise hours the engine is not
+     * using.
+     *
+     * Previously this had two other paths: hardcoded "IT Shift: 10:30 AM…"
+     * literals, and a global-setting fallback that told an unassigned employee
+     * they worked 9:00–6:00. Both could disagree with the resolver, and the
+     * second described a working day the company does not run.
+     */
     protected function buildShiftLabel(): ?string
     {
         $employee = Auth::user()->employee;
+        $shift = $employee?->shift ?? ShiftResolver::companyDefault();
 
-        // Path 1 — employee has shift_id linked to a ShiftSetting record
-        $shiftSetting = $employee->shift ?? null;
-        if ($shiftSetting && $shiftSetting->start_time && $shiftSetting->end_time) {
-            return sprintf(
-                '%s: %s – %s IST | Grace: %d mins',
-                $shiftSetting->name ?? 'Shift',
-                Carbon::parse($shiftSetting->start_time)->format('g:i A'),
-                Carbon::parse($shiftSetting->end_time)->format('g:i A'),
-                $shiftSetting->grace_minutes ?? 5,
-            );
+        if (! $shift || ! $shift->start_time || ! $shift->end_time) {
+            return null;   // the view renders the "not assigned" state instead
         }
 
-        // Path 2 — try DB lookup by shift code before using hardcoded fallbacks
-        $shiftCode = $employee->getAttribute('shift_code') ?? null;
-        if ($shiftCode) {
-            $found = ShiftSetting::where('name', 'like', '%'.trim($shiftCode).'%')->first();
-            if ($found) {
-                return sprintf(
-                    '%s: %s – %s IST | Grace: %d mins',
-                    $found->name,
-                    Carbon::parse($found->start_time)->format('g:i A'),
-                    Carbon::parse($found->end_time)->format('g:i A'),
-                    $found->grace_minutes ?? 5,
-                );
-            }
+        return sprintf(
+            '%s: %s – %s IST | Grace: %d mins%s',
+            $shift->name ?? 'Shift',
+            Carbon::parse($shift->start_time)->format('g:i A'),
+            Carbon::parse($shift->end_time)->format('g:i A'),
+            $shift->grace_minutes ?? 0,
+            $employee?->shift_id ? '' : ' (company default)',
+        );
+    }
 
-            return match (strtolower(trim($shiftCode))) {
-                'it' => 'IT Shift: 10:30 AM – 7:30 PM IST | Grace: 5 mins',
-                'uk' => 'UK Sales Shift: 1:00 PM – 10:00 PM IST | Grace: 5 mins',
-                default => null,
-            };
-        }
+    /**
+     * Whether attendance can be judged for the signed-in employee at all.
+     *
+     * Drives the "Shift not assigned" banner. Reads the same policy as the
+     * resolver rather than re-deriving it, so the banner and the engine agree.
+     */
+    public function getShiftUnassignedProperty(): bool
+    {
+        $employee = Auth::user()->employee;
 
-        // Path 3 — global fallback from AttendanceSetting
-        if ($this->attendanceSettings?->shift_start && $this->attendanceSettings?->shift_end) {
-            return sprintf(
-                'Default Shift: %s – %s IST',
-                Carbon::parse($this->attendanceSettings->shift_start)->format('g:i A'),
-                Carbon::parse($this->attendanceSettings->shift_end)->format('g:i A'),
-            );
-        }
-
-        return null;
+        return $employee !== null && ! ShiftResolver::hasResolvableShift($employee);
     }
 
     public function render()

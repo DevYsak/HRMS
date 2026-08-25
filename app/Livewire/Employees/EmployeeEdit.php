@@ -5,6 +5,7 @@ namespace App\Livewire\Employees;
 use App\Enums\EmployeeStatus;
 use App\Enums\UserRole;
 use App\Mail\WelcomeEmployeeMail;
+use App\Models\Attendance;
 use App\Models\Department;
 use App\Models\Employee;
 use App\Models\EmployeeSalary;
@@ -18,6 +19,8 @@ use App\Models\SalaryCycle;
 use App\Models\ShiftSetting;
 use App\Models\User;
 use App\Models\WorkMode;
+use App\Services\Biometric\BiometricCodeService;
+use App\Services\Biometric\EngineAttendanceSyncService;
 use App\Services\LeaveBalanceService;
 use App\Services\PasswordService;
 use App\Services\ProbationEngine;
@@ -74,6 +77,9 @@ class EmployeeEdit extends Component
     // Mirrored to biometric_id on save so every attendance ingestion path matches.
     public string $employee_code = '';
 
+    /** How many days back the "Sync latest" button pulls from the engine. */
+    public int $syncDays = 7;
+
     public string $office_id = '';
 
     public string $department_id = '';
@@ -109,6 +115,9 @@ class EmployeeEdit extends Component
     public string $extend_reason = '';
 
     public string $ot_tracking_source = 'biometric';
+
+    /** Set when the typed Device ID is held by someone else — drives the Reassign prompt. */
+    public ?string $codeConflict = null;
 
     // ── Leave Balance Manage Modal ────────────────────────────────────────────
     public bool $showManageLeaveModal = false;
@@ -159,7 +168,9 @@ class EmployeeEdit extends Component
         $this->employment_type_id = (string) ($this->employee->employment_type_id ?? '');
         $this->work_mode_id = (string) ($this->employee->work_mode_id ?? '');
         $this->salary_cycle_id = (string) ($this->employee->salary_cycle_id ?? '');
-        $this->joining_date = $this->employee->joining_date->format('Y-m-d');
+        // Nullable since the HR data migration — an imported employee may not
+        // have a joining date yet, and the edit screen is where HR fills it in.
+        $this->joining_date = $this->employee->joining_date?->format('Y-m-d') ?? '';
         $this->probation_end_date = $this->employee->probation_end_date?->format('Y-m-d') ?? '';
         $this->status = $this->employee->status->value;
         $this->ot_tracking_source = $this->employee->ot_tracking_source ?? 'biometric';
@@ -187,7 +198,11 @@ class EmployeeEdit extends Component
             'email' => ['required', 'email', Rule::unique('users', 'email')->ignore($this->employee->user_id)],
             'roleId' => ['required', Rule::exists('roles', 'id')->where('is_active', true)],
             // Personal
-            'employee_id' => ['required', 'string', Rule::unique('employees', 'employee_id')->ignore($this->employee->id)],
+            // whereNull('deleted_at') on both identity columns: Rule::unique
+            // queries the raw table, so without it a soft-deleted employee
+            // reserves their Employee ID and Device ID forever and HR is told
+            // the value is taken by somebody who is not in the directory.
+            'employee_id' => ['required', 'string', Rule::unique('employees', 'employee_id')->whereNull('deleted_at')->ignore($this->employee->id)],
             'phone' => 'nullable|string|max:30',
             'date_of_birth' => 'nullable|date|before:today',
             'gender' => 'nullable|string|in:male,female,other,prefer_not_to_say',
@@ -195,8 +210,10 @@ class EmployeeEdit extends Component
             'emergency_contact' => 'nullable|string|max:255',
             'photo' => 'nullable|image|max:2048',
             // Employment
-            'employee_code' => ['nullable', 'integer', 'min:1', 'max:65535', Rule::unique('employees', 'employee_code')->ignore($this->employee->id)],
-            'joining_date' => 'required|date',
+            'employee_code' => ['nullable', 'integer', 'min:1', 'max:65535', Rule::unique('employees', 'employee_code')->whereNull('deleted_at')->ignore($this->employee->id)],
+            // Nullable so HR can still edit an employee imported without a
+            // joining date; this screen is where they fill it in.
+            'joining_date' => 'nullable|date',
             'shift_id' => 'nullable|exists:shift_settings,id',
             'ot_tracking_source' => 'required|in:biometric,manual,nexflow,hybrid',
             'employment_type_id' => 'nullable|exists:employment_types,id',
@@ -246,7 +263,7 @@ class EmployeeEdit extends Component
             'employment_type_id' => $this->employment_type_id ?: null,
             'work_mode_id' => $this->work_mode_id ?: null,
             'salary_cycle_id' => $this->salary_cycle_id ?: null,
-            'joining_date' => $this->joining_date,
+            'joining_date' => $this->joining_date ?: null,
             'status' => $this->status,
             'resignation_date' => $this->resignation_date ?: null,
             'termination_date' => $this->termination_date ?: null,
@@ -489,6 +506,88 @@ class EmployeeEdit extends Component
         } catch (\DomainException $e) {
             \Flux::toast($e->getMessage(), variant: 'danger');
         }
+    }
+
+    // ── Biometric Device ID ───────────────────────────────────────────────────
+
+    /**
+     * Warn as soon as the typed Device ID collides, naming the holder.
+     *
+     * "Already taken" on save is a dead end when the holder is a deleted
+     * employee nobody can find; this says who has it and offers the override.
+     */
+    public function updatedEmployeeCode(BiometricCodeService $codes): void
+    {
+        $this->codeConflict = $codes->conflictMessage($this->employee_code, $this->employee->id);
+    }
+
+    /**
+     * Move the Device ID onto this employee, clearing whoever holds it.
+     *
+     * The deliberate override for the two cases HR actually hits: a card handed
+     * to a new person, and a deleted employee still squatting on the number.
+     * Both sides are audited because losing a Device ID silently would stop the
+     * previous holder's punches from matching.
+     */
+    public function reassignBiometricCode(BiometricCodeService $codes): void
+    {
+        abort_unless(auth()->user()->canManageEmployees(), 403);
+
+        if ($this->employee_code === '') {
+            return;
+        }
+
+        $codes->reassign($this->employee, $this->employee_code, auth()->user());
+
+        $this->employee->refresh();
+        $this->codeConflict = null;
+
+        \Flux::toast("Biometric Device ID {$this->employee_code} reassigned to this employee.", variant: 'success');
+    }
+
+    // ── Biometric sync ────────────────────────────────────────────────────────
+
+    /**
+     * Pull the latest computed attendance from the Python engine for the last
+     * N days and report what landed for THIS employee. The engine matches on
+     * employee_code (the Biometric Device ID above), so this is the quickest way
+     * to verify a mapping and backfill someone's log after enrolling them.
+     * Delegates to the existing engine sync service — no sync logic changes here.
+     */
+    public function syncBiometricNow(EngineAttendanceSyncService $engine): void
+    {
+        abort_unless(auth()->user()->canManageEmployees(), 403);
+
+        if (! $this->employee->employee_code) {
+            \Flux::toast('Set the Biometric Device ID first, then save — the engine matches punches by that code.', variant: 'warning');
+
+            return;
+        }
+
+        $days = max(1, min(30, (int) $this->syncDays));
+        $synced = 0;
+        $errors = [];
+
+        for ($i = 0; $i < $days; $i++) {
+            $result = $engine->syncDate(now()->subDays($i)->toDateString());
+            $synced += (int) ($result['synced'] ?? 0);
+            if (! empty($result['error'])) {
+                $errors[] = $result['error'];
+            }
+        }
+
+        if ($errors !== []) {
+            \Flux::toast('Engine sync problem: '.$errors[0], variant: 'danger');
+
+            return;
+        }
+
+        $this->employee->refresh();
+        $mine = Attendance::where('employee_id', $this->employee->id)
+            ->where('date', '>=', now()->subDays($days)->toDateString())
+            ->count();
+
+        \Flux::toast("Synced the last {$days} day(s) from the engine — {$synced} record(s) processed, {$mine} day(s) now on this employee.");
     }
 
     // ── Manage Leave Balance ──────────────────────────────────────────────────

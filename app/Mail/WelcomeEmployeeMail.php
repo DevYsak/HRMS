@@ -14,9 +14,14 @@ class WelcomeEmployeeMail extends Mailable
 {
     use Queueable, SerializesModels;
 
+    /**
+     * The password is required rather than defaulted. It previously fell back
+     * to a published literal, so any caller that forgot the argument would mail
+     * out a credential the whole company could guess.
+     */
     public function __construct(
         public readonly User $user,
-        public readonly string $temporaryPassword = 'Password@123',
+        public readonly string $temporaryPassword,
     ) {}
 
     public function envelope(): Envelope

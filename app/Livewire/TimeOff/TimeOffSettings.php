@@ -145,7 +145,7 @@ class TimeOffSettings extends Component
             'code' => ['nullable', 'string', 'max:20', Rule::unique('leave_types', 'code')->ignore($this->editingId)],
             'is_paid' => 'required|boolean',
             'color' => 'required|string|size:7',
-            'category' => 'required|in:annual,sick,mdl,comp_off,encashment,unpaid,other,unauthorized,bereavement,paternity,wfh,lwp,custom',
+            'category' => 'required|in:annual,sick,maternity,comp_off,encashment,unpaid,other,unauthorized,bereavement,paternity,wfh,lwp,custom',
             'allow_paid_request' => 'required|boolean',
             'allow_unpaid_request' => 'required|boolean',
             'allow_hr_override' => 'required|boolean',

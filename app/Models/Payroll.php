@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'ot_amount', 'incentives', 'reimbursements', 'deductions',
     'processed_by', 'processed_at',
     'finance_approved_by', 'finance_approved_at', 'finance_note',
+    'locked_at', 'locked_by',
 ])]
 class Payroll extends Model
 {
@@ -20,6 +21,7 @@ class Payroll extends Model
         return [
             'processed_at' => 'datetime',
             'finance_approved_at' => 'datetime',
+            'locked_at' => 'datetime',
             'ot_amount' => 'decimal:2',
             'incentives' => 'decimal:2',
             'reimbursements' => 'decimal:2',
@@ -33,6 +35,17 @@ class Payroll extends Model
         return $this->hasMany(Payslip::class);
     }
 
+    public function approvalSteps(): HasMany
+    {
+        return $this->hasMany(PayrollApprovalStep::class)->orderBy('level');
+    }
+
+    /** The earliest still-pending step in this payroll's configured approval chain, if any. */
+    public function currentApprovalStep(): ?PayrollApprovalStep
+    {
+        return $this->approvalSteps->firstWhere('status', 'pending');
+    }
+
     public function processedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'processed_by');
@@ -43,14 +56,19 @@ class Payroll extends Model
         return $this->belongsTo(User::class, 'finance_approved_by');
     }
 
+    public function lockedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'locked_by');
+    }
+
     public function isPendingFinance(): bool
     {
         return $this->status === 'pending_finance';
     }
 
-    public function isApproved(): bool
+    public function isLocked(): bool
     {
-        return $this->status === 'approved';
+        return $this->locked_at !== null;
     }
 
     /** Gross total including OT, incentives, reimbursements, minus deductions. */

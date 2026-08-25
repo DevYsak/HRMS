@@ -43,7 +43,7 @@ test('increase adds to the existing allocation', function () {
 
     app(BulkLeaveService::class)->apply(collect([$e]), $type, 'increase', 5, 'Bump', User::factory()->create(), now()->year);
 
-    expect((float) LeaveBalance::where('employee_id', $e->id)->value('allocated_days'))->toBe(15.0);
+    expect((float) LeaveBalance::where('employee_id', $e->id)->where('leave_type_id', $type->id)->value('allocated_days'))->toBe(15.0);
 });
 
 test('decrease never drops a balance below days already used', function () {
@@ -54,7 +54,7 @@ test('decrease never drops a balance below days already used', function () {
     app(BulkLeaveService::class)->apply(collect([$e]), $type, 'decrease', 5, 'Trim', User::factory()->create(), now()->year);
 
     // floored at used (8), not 10 - 5 = 5
-    expect((float) LeaveBalance::where('employee_id', $e->id)->value('allocated_days'))->toBe(8.0);
+    expect((float) LeaveBalance::where('employee_id', $e->id)->where('leave_type_id', $type->id)->value('allocated_days'))->toBe(8.0);
 });
 
 test('reset restores the leave type default allocation', function () {
@@ -64,7 +64,7 @@ test('reset restores the leave type default allocation', function () {
 
     app(BulkLeaveService::class)->apply(collect([$e]), $type, 'reset', 0, 'Year reset', User::factory()->create(), now()->year);
 
-    expect((float) LeaveBalance::where('employee_id', $e->id)->value('allocated_days'))->toBe(14.0);
+    expect((float) LeaveBalance::where('employee_id', $e->id)->where('leave_type_id', $type->id)->value('allocated_days'))->toBe(14.0);
 });
 
 test('system-controlled leave types cannot be bulk-assigned', function () {

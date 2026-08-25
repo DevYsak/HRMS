@@ -92,15 +92,36 @@
                 <div class="text-2xl font-black tabular-nums text-zinc-900 dark:text-white" x-text="text"></div>
             </div>
 
-            <div class="mt-3 flex gap-2">
+            {{-- Punches through the dashboard's clockIn()/clockOut(), which delegate to
+                 AttendanceService — the same call the attendance page makes. The browser
+                 location is offered here because it is cheap to ask for; when HR requires
+                 a selfie, or the employee declines location, the component hands off to
+                 the attendance page, which has the full capture UI. --}}
+            <div class="mt-3 flex gap-2"
+                 x-data="{
+                    punching: false,
+                    punch(action) {
+                        if (this.punching) return;
+                        this.punching = true;
+                        const send = (lat, lng) => $wire.call(action, lat, lng).finally(() => this.punching = false);
+                        if (! ('geolocation' in navigator)) { send(null, null); return; }
+                        navigator.geolocation.getCurrentPosition(
+                            p => send(+p.coords.latitude.toFixed(6), +p.coords.longitude.toFixed(6)),
+                            () => send(null, null),
+                            { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
+                        );
+                    }
+                 }">
                 @if(! $isIn)
-                    <a href="{{ route('attendance.my') }}" wire:navigate class="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-orange-500 px-3 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-orange-600">
+                    <button type="button" x-on:click="punch('clockIn')" x-bind:disabled="punching"
+                            class="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-orange-500 px-3 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-orange-600 disabled:opacity-60">
                         <flux:icon.arrow-right-end-on-rectangle class="size-4" /> Clock In
-                    </a>
+                    </button>
                 @elseif(! $isOut)
-                    <a href="{{ route('attendance.my') }}" wire:navigate class="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-orange-500 px-3 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-orange-600">
+                    <button type="button" x-on:click="punch('clockOut')" x-bind:disabled="punching"
+                            class="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-orange-500 px-3 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-orange-600 disabled:opacity-60">
                         <flux:icon.arrow-left-start-on-rectangle class="size-4" /> Clock Out
-                    </a>
+                    </button>
                     <a href="{{ route('attendance.my') }}" wire:navigate class="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-xs font-bold text-zinc-700 transition hover:bg-zinc-50 dark:border-white/10 dark:bg-white/5 dark:text-zinc-200">
                         <flux:icon.pause-circle class="size-4" /> Break
                     </a>

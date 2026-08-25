@@ -20,19 +20,11 @@
                 <div class="absolute -bottom-16 -left-16 w-72 h-72 rounded-full opacity-10" style="background: rgba(255,255,255,0.2)"></div>
             </div>
 
-            {{-- Logo top-left --}}
-            <div class="relative z-10 p-8">
-                <a href="{{ route('home') }}" class="flex items-center gap-3" wire:navigate>
-                    <span class="flex size-10 items-center justify-center rounded-xl bg-white/20 backdrop-blur-sm border border-white/30">
-                        <svg class="size-5 fill-white" viewBox="0 0 24 24">
-                            <path d="M4 3h3v7h10V3h3v18h-3v-8H7v8H4V3z" />
-                        </svg>
-                    </span>
-                    <div>
-                        <span class="text-xl font-bold text-white tracking-tight">Pulse</span>
-                        <span class="ml-1 text-sm text-orange-100 font-normal">by Conexus</span>
-                    </div>
-                </a>
+            {{-- Logo top-left — no box, natural width --}}
+            <div class="relative z-10 px-10 pt-8">
+                {{-- The panel is orange in both themes, so the mark stays black. --}}
+                <x-brand-logo :href="route('home')" size="h-11 w-auto sm:h-12"
+                              :invert-on-dark="false" wire:navigate />
             </div>
 
             {{-- Main tagline --}}
@@ -68,13 +60,8 @@
         <div class="flex items-center justify-center px-8 py-12 bg-gray-50 dark:bg-zinc-900">
             <div class="w-full max-w-sm">
                 {{-- Mobile logo (shown only on small screens) --}}
-                <div class="mb-8 flex items-center gap-3 lg:hidden">
-                    <span class="flex size-9 items-center justify-center rounded-xl bg-brand-600">
-                        <svg class="size-5 fill-white" viewBox="0 0 24 24">
-                            <path d="M4 3h3v7h10V3h3v18h-3v-8H7v8H4V3z" />
-                        </svg>
-                    </span>
-                    <span class="text-lg font-bold text-zinc-900 dark:text-white">Pulse <span class="text-zinc-400 font-normal text-sm">by Conexus</span></span>
+                <div class="mb-8 lg:hidden">
+                    <x-brand-logo size="h-10 w-auto" />
                 </div>
 
                 {{ $slot }}

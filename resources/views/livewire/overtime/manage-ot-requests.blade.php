@@ -6,10 +6,18 @@
             <h1 class="pulse-page-title">Manage OT Requests</h1>
             <p class="pulse-page-subtitle">Review pre-approval requests with clear work windows, duration, and action context.</p>
         </div>
-        <flux:button href="{{ route('reports.ot-records', ['month' => now()->month, 'year' => now()->year]) }}" variant="outline" icon="arrow-down-tray" target="_blank">
-            Export CSV
-        </flux:button>
+        <div class="flex items-center gap-2">
+            <flux:button wire:click="syncFromNexflow" wire:loading.attr="disabled" wire:target="syncFromNexflow"
+                variant="primary" icon="arrow-path">
+                <span wire:loading.remove wire:target="syncFromNexflow">Sync from Nexflow</span>
+                <span wire:loading wire:target="syncFromNexflow">Syncing…</span>
+            </flux:button>
+            <flux:button href="{{ route('reports.ot-records', ['month' => now()->month, 'year' => now()->year]) }}" variant="outline" icon="arrow-down-tray" target="_blank">
+                Export CSV
+            </flux:button>
+        </div>
     </div>
+    <p class="-mt-3 text-[11px] text-zinc-400">Overtime from Nexflow syncs automatically every 10 minutes — approved OT is imported for payroll, rejected OT is shown for reference. Click <strong>Sync from Nexflow</strong> to pull now.</p>
 
     {{-- Overview + Filters row --}}
     <div class="grid gap-4 xl:grid-cols-[1fr_2fr]">
@@ -23,21 +31,46 @@
                 </h3>
                 <p class="mt-1.5 text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">
                     Use this queue to approve valid extra work windows or send back requests with a reason.
+                    @if($nexflowCount)<span class="font-semibold text-indigo-500">{{ $nexflowCount }} from Nexflow.</span>@endif
                 </p>
             </div>
 
-            <div class="grid grid-cols-1 gap-3 sm:grid-cols-3 xl:grid-cols-1">
-                {{-- Pending --}}
-                <div class="flex items-center gap-3 rounded-2xl bg-orange-50 p-4 dark:bg-orange-950/20">
+            <div class="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-2">
+                {{-- Pending (click to filter) --}}
+                <button type="button" wire:click="$set('filterStatus', 'pending')"
+                    class="flex items-center gap-3 rounded-2xl bg-orange-50 p-4 text-left transition hover:ring-2 hover:ring-orange-200 dark:bg-orange-950/20 {{ $filterStatus === 'pending' ? 'ring-2 ring-orange-400' : '' }}">
                     <div class="flex size-9 shrink-0 items-center justify-center rounded-xl bg-orange-100 dark:bg-orange-900/40">
                         <flux:icon.sun class="size-5 text-orange-500" />
                     </div>
                     <div>
                         <div class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Pending</div>
                         <div class="text-2xl font-black text-zinc-900 dark:text-white">{{ $pendingCount }}</div>
-                        <p class="text-[11px] text-zinc-400">Needs decision now</p>
                     </div>
-                </div>
+                </button>
+
+                {{-- Approved (click to filter) --}}
+                <button type="button" wire:click="$set('filterStatus', 'approved')"
+                    class="flex items-center gap-3 rounded-2xl bg-emerald-50 p-4 text-left transition hover:ring-2 hover:ring-emerald-200 dark:bg-emerald-950/20 {{ $filterStatus === 'approved' ? 'ring-2 ring-emerald-400' : '' }}">
+                    <div class="flex size-9 shrink-0 items-center justify-center rounded-xl bg-emerald-100 dark:bg-emerald-900/40">
+                        <flux:icon.check-circle class="size-5 text-emerald-500" />
+                    </div>
+                    <div>
+                        <div class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Approved</div>
+                        <div class="text-2xl font-black text-zinc-900 dark:text-white">{{ $approvedCount }}</div>
+                    </div>
+                </button>
+
+                {{-- Rejected (click to filter) --}}
+                <button type="button" wire:click="$set('filterStatus', 'rejected')"
+                    class="flex items-center gap-3 rounded-2xl bg-rose-50 p-4 text-left transition hover:ring-2 hover:ring-rose-200 dark:bg-rose-950/20 {{ $filterStatus === 'rejected' ? 'ring-2 ring-rose-400' : '' }}">
+                    <div class="flex size-9 shrink-0 items-center justify-center rounded-xl bg-rose-100 dark:bg-rose-900/40">
+                        <flux:icon.x-circle class="size-5 text-rose-500" />
+                    </div>
+                    <div>
+                        <div class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Rejected</div>
+                        <div class="text-2xl font-black text-zinc-900 dark:text-white">{{ $rejectedCount }}</div>
+                    </div>
+                </button>
 
                 {{-- Showing --}}
                 <div class="flex items-center gap-3 rounded-2xl bg-blue-50 p-4 dark:bg-blue-950/20">
@@ -151,7 +184,14 @@
                                         {{ strtoupper(substr(($req->employee?->user?->name ?? 'Unknown'), 0, 1)) }}
                                     </div>
                                     <div>
-                                        <div class="font-semibold text-zinc-900 dark:text-white">{{ ($req->employee?->user?->name ?? 'Unknown') }}</div>
+                                        <div class="flex items-center gap-1.5">
+                                            <span class="font-semibold text-zinc-900 dark:text-white">{{ ($req->employee?->user?->name ?? 'Unknown') }}</span>
+                                            @if($req->source === 'nexflow')
+                                                <span class="inline-flex items-center gap-0.5 rounded bg-indigo-50 px-1.5 py-0.5 text-[9px] font-bold uppercase text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300"><flux:icon.bolt class="size-2.5" /> Nexflow</span>
+                                            @elseif($req->source === 'regularisation')
+                                                <span class="rounded bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold uppercase text-amber-600 dark:bg-amber-500/15">Auto</span>
+                                            @endif
+                                        </div>
                                         <div class="text-xs text-zinc-400">{{ $req->employee?->department?->name ?? 'No department' }}</div>
                                     </div>
                                 </div>
@@ -199,6 +239,15 @@
 
                             {{-- Actions (3-dot dropdown) — teleported to body to escape overflow clipping --}}
                             <td class="py-4 pl-4 pr-6 align-middle text-right">
+                              <div class="inline-flex items-center gap-1">
+                                @if($req->source === 'nexflow')
+                                    <flux:tooltip content="View Nexflow status history">
+                                        <button type="button" wire:click="openView({{ $req->id }})"
+                                            class="inline-flex size-8 items-center justify-center rounded-lg text-indigo-500 transition hover:bg-indigo-50 dark:hover:bg-indigo-500/10">
+                                            <flux:icon.clock class="size-4" />
+                                        </button>
+                                    </flux:tooltip>
+                                @endif
                                 <div
                                     x-data="{
                                         open: false,
@@ -281,6 +330,7 @@
                                         </div>
                                     </template>
                                 </div>
+                              </div>
                             </td>
                         </tr>
                     @empty
@@ -421,6 +471,46 @@
                         <div class="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950/50">
                             <p class="text-[11px] font-bold uppercase tracking-wide text-zinc-400">Reviewer Comment</p>
                             <p class="mt-2 text-sm leading-6 text-zinc-700 dark:text-zinc-300">{{ $selectedRequest->reviewer_comment }}</p>
+                        </div>
+                    @endif
+
+                    @if($selectedRequest->source === 'nexflow')
+                        <div class="rounded-xl border border-indigo-100 bg-white p-3 dark:border-indigo-500/20 dark:bg-zinc-950/50">
+                            <div class="flex items-center gap-1.5">
+                                <flux:icon.bolt class="size-3.5 text-indigo-500" />
+                                <p class="text-[11px] font-bold uppercase tracking-wide text-zinc-400">Nexflow status history</p>
+                            </div>
+                            @if(count($viewHistory))
+                                <ol class="mt-3 space-y-3">
+                                    @foreach($viewHistory as $h)
+                                        @php
+                                            $to = $h['to'] ?? '—';
+                                            [$dot, $txt] = match($to) {
+                                                'approved' => ['bg-emerald-500', 'text-emerald-600'],
+                                                'rejected' => ['bg-rose-500', 'text-rose-500'],
+                                                'pending'  => ['bg-amber-500', 'text-amber-600'],
+                                                default    => ['bg-zinc-400', 'text-zinc-500'],
+                                            };
+                                        @endphp
+                                        <li class="flex gap-3">
+                                            <span class="mt-1 size-2.5 shrink-0 rounded-full {{ $dot }}"></span>
+                                            <div class="min-w-0">
+                                                <p class="text-xs font-bold {{ $txt }}">
+                                                    @if($h['action'] === 'nexflow_ot_synced')
+                                                        Synced from Nexflow — {{ ucfirst($to) }}
+                                                    @else
+                                                        {{ ucfirst($h['from'] ?? '—') }} → {{ ucfirst($to) }}
+                                                    @endif
+                                                    @if($h['paid'])<span class="ml-1 rounded bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold text-amber-600">already paid</span>@endif
+                                                </p>
+                                                <p class="text-[11px] text-zinc-400">{{ $h['at'] }}</p>
+                                            </div>
+                                        </li>
+                                    @endforeach
+                                </ol>
+                            @else
+                                <p class="mt-2 text-xs text-zinc-400">No status changes recorded yet.</p>
+                            @endif
                         </div>
                     @endif
                 </div>

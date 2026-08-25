@@ -72,9 +72,11 @@ class NexflowApiService
      * @param  string|null  $from  Start date YYYY-MM-DD (defaults to start of month)
      * @param  string|null  $to  End date YYYY-MM-DD (defaults to today)
      * @param  string|null  $status  Filter: approved|pending|rejected, or null for all
+     * @param  bool  $fresh  Bypass the local cache — use for the sync, whose whole
+     *                       job is to pick up status changes (approved↔rejected) live
      * @return array|null Parsed response array, or null if unavailable
      */
-    public function getOtDetails(string $email, ?string $from = null, ?string $to = null, ?string $status = null): ?array
+    public function getOtDetails(string $email, ?string $from = null, ?string $to = null, ?string $status = null, bool $fresh = false): ?array
     {
         $from = $from ?? now()->startOfMonth()->toDateString();
         $to = $to ?? now()->toDateString();
@@ -84,9 +86,15 @@ class NexflowApiService
             $params['status'] = $status;
         }
 
+        $fetch = fn () => $this->get("/employees/{$email}/ot-details", $params);
+
+        if ($fresh) {
+            return $fetch();
+        }
+
         $cacheKey = "nexbridge:ot_details:{$email}:{$from}:{$to}:".($status ?: 'all');
 
-        return $this->cachedGet($cacheKey, fn () => $this->get("/employees/{$email}/ot-details", $params));
+        return $this->cachedGet($cacheKey, $fetch);
     }
 
     /**

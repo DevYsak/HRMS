@@ -6,6 +6,7 @@ use App\Models\Department;
 use App\Models\Employee;
 use App\Models\ShiftSetting;
 use App\Models\User;
+use App\Services\PasswordService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Hash;
 
@@ -61,6 +62,21 @@ class SyncBiometricEmployees extends Command
         // ────────────────────────────────────────────────────────────────
     ];
 
+    /**
+     * The roster to sync.
+     *
+     * Defaults to the master list above, but `biometric.employee_master` wins
+     * when set — so a deployment can supply the roster through config instead
+     * of editing this file, and tests can drive the command without touching
+     * the real list.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function roster(): array
+    {
+        return config('biometric.employee_master') ?: $this->masterData;
+    }
+
     public function handle(): int
     {
         $isDryRun = (bool) $this->option('dry-run');
@@ -78,7 +94,7 @@ class SyncBiometricEmployees extends Command
         $skipped = 0;
         $errors = [];
 
-        foreach ($this->masterData as $data) {
+        foreach ($this->roster() as $data) {
             $code = (int) $data['employee_code'];
 
             // Validate shift exists
@@ -103,19 +119,45 @@ class SyncBiometricEmployees extends Command
             }
 
             try {
-                // 1. Upsert User login account
-                $user = User::updateOrCreate(
-                    ['email' => $data['email']],
-                    [
+                // 1. Upsert User login account.
+                //
+                // Password and role are create-only. They used to sit in the
+                // update half of updateOrCreate, so every run rewrote both:
+                // an employee's chosen password was replaced with the literal
+                // string "password", and anyone promoted to manager, HR or
+                // director was silently demoted back to employee. A sync is
+                // an employee-directory feed; it has no business holding an
+                // opinion about credentials or privileges.
+                // Identity is resolved by employee_code first — the key this
+                // command documents as its anchor. Matching on email alone
+                // meant a corrected address in the master produced a second
+                // user and orphaned the first, which kept its login and role.
+                $existingEmployee = Employee::where('employee_code', $code)->first();
+                $user = $existingEmployee?->user ?? User::where('email', $data['email'])->first();
+
+                if ($user) {
+                    // Only what this command owns.
+                    if ($user->email !== $data['email']) {
+                        $this->line("  <fg=yellow>EMAIL</>   code={$code}  {$user->email} → {$data['email']}");
+                    }
+
+                    $user->update(['name' => $data['name'], 'email' => $data['email']]);
+                } else {
+                    $user = User::create([
                         'name' => $data['name'],
-                        'password' => Hash::make('password'),
+                        'email' => $data['email'],
+                        'password' => Hash::make(app(PasswordService::class)->generate()),
+                        // Nobody has been told this password — it exists only so
+                        // the account is never left with a guessable one. The
+                        // employee arrives through the reset-password flow, and
+                        // the flag holds them there until they set their own.
+                        'must_change_password' => true,
                         'role' => 'employee',
-                    ]
-                );
+                    ]);
+                }
 
                 // 2. Upsert Employee record — employee_code is the anchor
-                $existing = Employee::where('employee_code', $code)->first()
-                    ?? Employee::where('user_id', $user->id)->first();
+                $existing = $existingEmployee ?? Employee::where('user_id', $user->id)->first();
 
                 if ($existing) {
                     $existing->update([

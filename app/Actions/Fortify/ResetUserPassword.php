@@ -4,6 +4,7 @@ namespace App\Actions\Fortify;
 
 use App\Concerns\PasswordValidationRules;
 use App\Models\User;
+use App\Services\PasswordService;
 use Illuminate\Support\Facades\Validator;
 use Laravel\Fortify\Contracts\ResetsUserPasswords;
 
@@ -22,8 +23,9 @@ class ResetUserPassword implements ResetsUserPasswords
             'password' => $this->passwordRules(),
         ])->validate();
 
-        $user->forceFill([
-            'password' => $input['password'],
-        ])->save();
+        // A forgotten-password reset is the user choosing their own password —
+        // it clears any outstanding temporary-credential flag and is recorded
+        // in history like any other self-service change.
+        app(PasswordService::class)->changePassword($user, $input['password'], $user);
     }
 }

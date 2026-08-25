@@ -2,22 +2,25 @@
 
 namespace App\Notifications;
 
-use App\Mail\PayslipMail;
 use App\Models\Payslip;
+use App\Notifications\Concerns\SendsMailChannel;
 use Illuminate\Notifications\Notification;
 
+/**
+ * A lightweight "your payslip is ready" alert — the actual PayslipMail (with
+ * the PDF attached) is sent separately by PayrollService, so this uses the
+ * generic SendsMailChannel template rather than resending the same PDF mail
+ * a second time.
+ */
 class PayslipGeneratedNotification extends Notification
 {
+    use SendsMailChannel;
+
     public function __construct(public readonly Payslip $payslip) {}
 
     public function via(object $notifiable): array
     {
         return ['database', 'mail'];
-    }
-
-    public function toMail(object $notifiable): PayslipMail
-    {
-        return (new PayslipMail($this->payslip))->to($notifiable->email);
     }
 
     public function toArray(object $notifiable): array

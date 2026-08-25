@@ -3,6 +3,8 @@
 namespace App\Livewire\Payroll;
 
 use App\Models\Department;
+use App\Models\EmploymentType;
+use App\Models\JobTitle;
 use App\Models\Office;
 use App\Models\Payroll;
 use App\Models\Payslip;
@@ -30,7 +32,9 @@ class Process extends Component
 
     public string $filterLocation = '';
 
-    public string $filterPaymentType = '';
+    public string $filterDesignation = '';
+
+    public string $filterEmploymentType = '';
 
     public string $filterStatus = '';
 
@@ -44,12 +48,29 @@ class Process extends Component
     /** Offices list for filter dropdown. */
     public $offices;
 
+    /** Job titles list for the Designation filter dropdown. */
+    public $jobTitles;
+
+    /** Employment types list for filter dropdown. */
+    public $employmentTypes;
+
+    /** @var array<int, int> Payslip ids ticked for bulk actions. */
+    public array $selected = [];
+
+    /** Payslip currently open in the edit modal, or null. */
+    public ?int $editingId = null;
+
+    /** @var array<int, array{name: string, amount: float, type: string}> */
+    public array $editItems = [];
+
     public function mount(): void
     {
         $this->month = Carbon::now()->format('F');
         $this->year = Carbon::now()->year;
         $this->departments = Department::orderBy('name')->get();
         $this->offices = Office::orderBy('name')->get();
+        $this->jobTitles = JobTitle::orderBy('name')->get();
+        $this->employmentTypes = EmploymentType::orderBy('name')->get();
         $this->loadCurrentPayroll();
     }
 
@@ -85,6 +106,16 @@ class Process extends Component
     }
 
     public function updatedFilterLocation(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatedFilterDesignation(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatedFilterEmploymentType(): void
     {
         $this->resetPage();
     }
@@ -125,6 +156,14 @@ class Process extends Component
             $query->whereHas('employee', fn ($q) => $q->where('office_id', $this->filterLocation));
         }
 
+        if ($this->filterDesignation !== '') {
+            $query->whereHas('employee', fn ($q) => $q->where('job_title_id', $this->filterDesignation));
+        }
+
+        if ($this->filterEmploymentType !== '') {
+            $query->whereHas('employee', fn ($q) => $q->where('employment_type_id', $this->filterEmploymentType));
+        }
+
         if ($this->filterStatus !== '') {
             // Match on payslip status OR payroll status
             $status = $this->filterStatus;
@@ -143,7 +182,8 @@ class Process extends Component
         $this->search = '';
         $this->filterDepartment = '';
         $this->filterLocation = '';
-        $this->filterPaymentType = '';
+        $this->filterDesignation = '';
+        $this->filterEmploymentType = '';
         $this->filterStatus = '';
         $this->resetPage();
     }
@@ -198,29 +238,279 @@ class Process extends Component
         \Flux::toast('Payroll submitted for finance approval.');
     }
 
-    /** Legacy alias kept so old wire:click="finalize" calls still work. */
-    public function finalize(): void
+    /** Lock the current finalized payroll so it can no longer be regenerated. */
+    public function lockPayroll(): void
+    {
+        abort_unless(Auth::user()->canLockPayroll(), 403);
+
+        if (! $this->currentPayroll) {
+            return;
+        }
+
+        try {
+            app(PayrollService::class)->lock($this->currentPayroll, Auth::id());
+        } catch (\DomainException $e) {
+            \Flux::toast($e->getMessage(), variant: 'danger');
+
+            return;
+        }
+
+        $this->loadCurrentPayroll();
+        \Flux::toast('Payroll locked.');
+    }
+
+    /** Unlock the current payroll, allowing it to be regenerated again. */
+    public function unlockPayroll(): void
+    {
+        abort_unless(Auth::user()->canUnlockPayroll(), 403);
+
+        if (! $this->currentPayroll) {
+            return;
+        }
+
+        try {
+            app(PayrollService::class)->unlock($this->currentPayroll);
+        } catch (\DomainException $e) {
+            \Flux::toast($e->getMessage(), variant: 'danger');
+
+            return;
+        }
+
+        $this->loadCurrentPayroll();
+        \Flux::toast('Payroll unlocked.');
+    }
+
+    // ── Per-payslip actions ──────────────────────────────────────────────────
+
+    public function regenerateSingle(int $payslipId): void
+    {
+        abort_unless(Auth::user()->canRunPayroll(), 403);
+
+        $payslip = Payslip::with('employee')->findOrFail($payslipId);
+
+        try {
+            app(PayrollService::class)->regenerateSinglePayslip($payslip->payroll, $payslip->employee, Auth::id());
+        } catch (\DomainException $e) {
+            \Flux::toast($e->getMessage(), variant: 'danger');
+
+            return;
+        }
+
+        $this->loadCurrentPayroll();
+        \Flux::toast('Payslip regenerated for '.($payslip->employee->user?->name ?? 'employee').'.');
+    }
+
+    public function deleteSingle(int $payslipId): void
+    {
+        abort_unless(Auth::user()->canDeletePayslip(), 403);
+
+        $payslip = Payslip::findOrFail($payslipId);
+
+        try {
+            app(PayrollService::class)->deletePayslip($payslip);
+        } catch (\DomainException $e) {
+            \Flux::toast($e->getMessage(), variant: 'danger');
+
+            return;
+        }
+
+        $this->selected = array_values(array_diff($this->selected, [$payslipId]));
+        $this->loadCurrentPayroll();
+        \Flux::toast('Payslip deleted.');
+    }
+
+    public function lockSinglePayslip(int $payslipId): void
+    {
+        abort_unless(Auth::user()->canLockPayroll(), 403);
+
+        try {
+            app(PayrollService::class)->lockPayslip(Payslip::findOrFail($payslipId), Auth::id());
+        } catch (\DomainException $e) {
+            \Flux::toast($e->getMessage(), variant: 'danger');
+
+            return;
+        }
+
+        \Flux::toast('Payslip locked.');
+    }
+
+    public function unlockSinglePayslip(int $payslipId): void
+    {
+        abort_unless(Auth::user()->canUnlockPayroll(), 403);
+
+        try {
+            app(PayrollService::class)->unlockPayslip(Payslip::findOrFail($payslipId));
+        } catch (\DomainException $e) {
+            \Flux::toast($e->getMessage(), variant: 'danger');
+
+            return;
+        }
+
+        \Flux::toast('Payslip unlocked.');
+    }
+
+    public function emailSingle(int $payslipId): void
+    {
+        abort_unless(Auth::user()->canRunPayroll(), 403);
+
+        try {
+            app(PayrollService::class)->emailPayslip(Payslip::with('employee.user')->findOrFail($payslipId));
+        } catch (\DomainException $e) {
+            \Flux::toast($e->getMessage(), variant: 'danger');
+
+            return;
+        }
+
+        \Flux::toast('Payslip queued for email.');
+    }
+
+    // ── Edit modal (draft payslip line items) ────────────────────────────────
+
+    public function openEdit(int $payslipId): void
+    {
+        abort_unless(Auth::user()->canRunPayroll(), 403);
+
+        $payslip = Payslip::with('items')->findOrFail($payslipId);
+
+        $this->editingId = $payslipId;
+        $this->editItems = $payslip->items->map(fn ($i) => [
+            'name' => $i->name, 'amount' => (float) $i->amount, 'type' => $i->type,
+        ])->all();
+
+        $this->modal('edit-payslip')->show();
+    }
+
+    public function addEditItem(): void
+    {
+        $this->editItems[] = ['name' => '', 'amount' => 0, 'type' => 'earning'];
+    }
+
+    public function removeEditItem(int $index): void
+    {
+        unset($this->editItems[$index]);
+        $this->editItems = array_values($this->editItems);
+    }
+
+    public function saveEdit(): void
+    {
+        abort_unless(Auth::user()->canRunPayroll(), 403);
+
+        $this->validate([
+            'editItems' => ['array', 'min:1'],
+            'editItems.*.name' => ['required', 'string', 'max:255'],
+            'editItems.*.amount' => ['required', 'numeric', 'min:0'],
+            'editItems.*.type' => ['required', 'in:earning,deduction,employer_contribution'],
+        ]);
+
+        $payslip = Payslip::findOrFail($this->editingId);
+
+        try {
+            app(PayrollService::class)->updatePayslipItems($payslip, $this->editItems);
+        } catch (\DomainException $e) {
+            \Flux::toast($e->getMessage(), variant: 'danger');
+
+            return;
+        }
+
+        $this->modal('edit-payslip')->close();
+        $this->editingId = null;
+        $this->editItems = [];
+        $this->loadCurrentPayroll();
+        \Flux::toast('Payslip updated.');
+    }
+
+    // ── Bulk actions ──────────────────────────────────────────────────────────
+
+    public function selectAllVisible(): void
+    {
+        $this->selected = $this->payslips->pluck('id')->map(fn ($id) => (int) $id)->all();
+    }
+
+    public function clearSelection(): void
+    {
+        $this->selected = [];
+    }
+
+    public function bulkDownload()
+    {
+        abort_unless(Auth::user()->canRunPayroll(), 403);
+
+        if ($this->selected === []) {
+            \Flux::toast('Select at least one payslip to download.', variant: 'danger');
+
+            return null;
+        }
+
+        return $this->redirect(route('payroll.payslips.download-bulk', ['ids' => $this->selected]));
+    }
+
+    public function bulkEmail(): void
+    {
+        abort_unless(Auth::user()->canRunPayroll(), 403);
+
+        if ($this->selected === []) {
+            \Flux::toast('Select at least one payslip to email.', variant: 'danger');
+
+            return;
+        }
+
+        $service = app(PayrollService::class);
+        $done = 0;
+        $failed = 0;
+
+        foreach (Payslip::with('employee.user')->whereIn('id', $this->selected)->get() as $payslip) {
+            try {
+                $service->emailPayslip($payslip);
+                $done++;
+            } catch (\Throwable) {
+                $failed++;
+            }
+        }
+
+        \Flux::toast(
+            "Bulk email: {$done} queued".($failed ? ", {$failed} failed" : '.'),
+            variant: $failed ? 'warning' : 'success',
+        );
+
+        $this->selected = [];
+    }
+
+    // ── Export ────────────────────────────────────────────────────────────────
+
+    /** Payroll Register — every payslip in the current run, one row each. */
+    public function exportExcel()
     {
         abort_unless(Auth::user()->canRunPayroll(), 403);
 
         if (! $this->currentPayroll) {
-            \Flux::toast('No payroll to finalize.', variant: 'danger');
+            \Flux::toast('No payroll to export.', variant: 'danger');
 
-            return;
+            return null;
         }
 
-        if ($this->currentPayroll->status === 'draft') {
-            $this->submitForApproval();
+        $rows = Payslip::with(['employee.user', 'employee.department'])
+            ->where('payroll_id', $this->currentPayroll->id)
+            ->get()
+            ->map(fn (Payslip $p) => [
+                $p->employee->employee_id ?? $p->employee_id,
+                $p->employee->user?->name ?? '—',
+                $p->employee->department?->name ?? '—',
+                number_format((float) $p->gross_salary, 2, '.', ''),
+                number_format((float) $p->total_deductions, 2, '.', ''),
+                number_format((float) $p->net_salary, 2, '.', ''),
+                $p->status,
+            ]);
 
-            return;
-        }
+        $filename = 'payroll-register-'.$this->month.'-'.$this->year.'.csv';
 
-        \Flux::toast('Payroll is awaiting finance approval. Use the Finance Approval page.', variant: 'warning');
-    }
-
-    public function exportExcel(): void
-    {
-        \Flux::toast('Export feature coming soon.', variant: 'warning');
+        return response()->streamDownload(function () use ($rows) {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, ['Employee ID', 'Employee Name', 'Department', 'Gross', 'Deductions', 'Net Pay', 'Status']);
+            foreach ($rows as $row) {
+                fputcsv($handle, $row);
+            }
+            fclose($handle);
+        }, $filename, ['Content-Type' => 'text/csv']);
     }
 
     public function render()
@@ -231,6 +521,8 @@ class Process extends Component
             'payslips' => $this->payslips,
             'departments' => $this->departments,
             'offices' => $this->offices,
+            'jobTitles' => $this->jobTitles,
+            'employmentTypes' => $this->employmentTypes,
         ])->layout('layouts.app', ['title' => 'Run Payroll']);
     }
 }

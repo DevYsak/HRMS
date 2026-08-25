@@ -2,8 +2,10 @@
 
 namespace App\Livewire\Payroll;
 
+use App\Models\Employee;
 use App\Models\SalaryComponent;
 use App\Models\SalaryStructure;
+use App\Services\PayrollService;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
 
@@ -27,6 +29,16 @@ class SalaryStructures extends Component
 
     /** @var array<int, float|string|null> Component id => amount override */
     public array $componentAmounts = [];
+
+    public bool $showAssignModal = false;
+
+    public ?int $assigningStructureId = null;
+
+    public array $assignForm = [
+        'employee_id' => '',
+        'effective_date' => '',
+        'reason' => '',
+    ];
 
     public function create(): void
     {
@@ -106,6 +118,47 @@ class SalaryStructures extends Component
         \Flux::toast('Salary structure restored.');
     }
 
+    public function openAssign(int $id): void
+    {
+        $this->assigningStructureId = $id;
+        $this->assignForm = [
+            'employee_id' => '',
+            'effective_date' => now()->toDateString(),
+            'reason' => '',
+        ];
+        $this->resetErrorBag('assignForm');
+        $this->showAssignModal = true;
+    }
+
+    public function assign(PayrollService $payrollService): void
+    {
+        $this->validate([
+            'assignForm.employee_id' => ['required', 'exists:employees,id'],
+            'assignForm.effective_date' => ['required', 'date'],
+            'assignForm.reason' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $structure = SalaryStructure::with('components')->findOrFail($this->assigningStructureId);
+        $employee = Employee::with('user')->findOrFail($this->assignForm['employee_id']);
+
+        try {
+            $payrollService->assignSalaryStructure(
+                $structure,
+                $employee,
+                auth()->user(),
+                $this->assignForm['effective_date'],
+                $this->assignForm['reason'] !== '' ? $this->assignForm['reason'] : null,
+            );
+        } catch (\DomainException $e) {
+            \Flux::toast($e->getMessage(), variant: 'danger');
+
+            return;
+        }
+
+        \Flux::toast("\"{$structure->name}\" assigned to {$employee->user?->name}.");
+        $this->showAssignModal = false;
+    }
+
     public function render()
     {
         $structures = SalaryStructure::with('components')
@@ -116,6 +169,11 @@ class SalaryStructures extends Component
         return view('livewire.payroll.salary-structures', [
             'structures' => $structures,
             'components' => SalaryComponent::active()->ordered()->get(),
+            'employees' => Employee::with('user')
+                ->where('status', 'active')
+                ->get()
+                ->sortBy(fn (Employee $employee) => $employee->user?->name ?? '')
+                ->values(),
         ])->layout('layouts.app', ['title' => 'Salary Structures']);
     }
 }

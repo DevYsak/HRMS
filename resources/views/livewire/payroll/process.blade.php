@@ -18,7 +18,7 @@
 
     {{-- ── Action Toolbar ──────────────────────────────────────────────────── --}}
     <div class="flex flex-wrap items-center justify-end gap-3 rounded-2xl border border-zinc-100 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        {{-- Month / Year selectors (shown when no locked payroll) --}}
+        {{-- Month / Year selectors (shown while the payroll is still a draft, or doesn't exist yet) --}}
         @if(!$currentPayroll || $currentPayroll->status === 'draft')
             <div class="flex gap-2">
                 <flux:select wire:model.live="month" size="sm" class="w-32">
@@ -34,26 +34,49 @@
             <flux:button wire:click="startProcessing" variant="primary" icon="play">
                 {{ $currentPayroll ? 'Re-generate Draft' : 'Generate Draft' }}
             </flux:button>
-        @else
-            {{-- Export + Finalize when payroll exists --}}
-            <flux:button wire:click="exportExcel" variant="ghost" icon="arrow-down-tray">
-                Export Excel
-            </flux:button>
 
-            @if($currentPayroll->status === 'draft')
+            {{-- This was previously nested where it could never render — status is
+                 guaranteed non-draft on that branch. Draft + Submit for Approval both
+                 belong here, since a generated draft is exactly when submitting makes sense. --}}
+            @if($currentPayroll && $currentPayroll->status === 'draft')
                 <flux:button wire:click="submitForApproval" class="bg-amber-500 hover:bg-amber-600 text-white border-amber-500" icon="paper-airplane">
                     Submit for Approval
                 </flux:button>
             @endif
+        @else
+            {{-- Export + status-specific actions once a payroll exists and is past draft --}}
+            <flux:button wire:click="exportExcel" variant="ghost" icon="arrow-down-tray">
+                Export Excel
+            </flux:button>
 
-            @if(in_array($currentPayroll->status, ['pending_finance']))
-                <flux:button
-                    wire:click="finalize"
-                    wire:confirm="Finalize payroll? This will mark all payslips as paid and notify employees."
-                    variant="primary"
-                    icon="play">
-                    Finalize &amp; Pay
-                </flux:button>
+            @if($currentPayroll->status === 'pending_finance')
+                {{-- Process.php can only submit a draft for approval — finalizing (marking
+                     payslips paid + notifying employees) only ever happens on the Finance
+                     Approval page. A button here that claimed to do that never actually did. --}}
+                @if(auth()->user()->canApproveFinance())
+                    <flux:button :href="route('payroll.finance-approve')" wire:navigate variant="primary" icon="check-circle">
+                        Go to Finance Approval
+                    </flux:button>
+                @else
+                    <span class="inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 dark:bg-amber-900/20 dark:text-amber-400">
+                        <flux:icon.clock class="size-3.5" /> Awaiting Finance Approval
+                    </span>
+                @endif
+            @elseif($currentPayroll->status === 'finalized')
+                @if($currentPayroll->isLocked())
+                    <span class="inline-flex items-center gap-1.5 rounded-lg bg-zinc-100 px-3 py-2 text-xs font-semibold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+                        <flux:icon.lock-closed class="size-3.5" /> Locked{{ $currentPayroll->lockedBy ? ' by '.$currentPayroll->lockedBy->name : '' }}
+                    </span>
+                    @if(auth()->user()->canUnlockPayroll())
+                        <flux:button wire:click="unlockPayroll" wire:confirm="Unlock this payroll? It can then be regenerated again." variant="ghost" icon="lock-open">
+                            Unlock
+                        </flux:button>
+                    @endif
+                @elseif(auth()->user()->canLockPayroll())
+                    <flux:button wire:click="lockPayroll" wire:confirm="Lock this payroll? It can no longer be regenerated once locked." variant="primary" icon="lock-closed">
+                        Lock Payroll
+                    </flux:button>
+                @endif
             @endif
         @endif
     </div>
@@ -170,13 +193,23 @@
                     </flux:select>
                 </div>
 
-                {{-- Payment Type --}}
-                <div class="min-w-36">
-                    <flux:select wire:model.live="filterPaymentType" size="sm">
-                        <option value="">All</option>
-                        <option value="bank_transfer">Bank Transfer</option>
-                        <option value="cash">Cash</option>
-                        <option value="cheque">Cheque</option>
+                {{-- Designation --}}
+                <div class="min-w-40">
+                    <flux:select wire:model.live="filterDesignation" size="sm">
+                        <option value="">All Designations</option>
+                        @foreach($jobTitles as $title)
+                            <option value="{{ $title->id }}">{{ $title->name }}</option>
+                        @endforeach
+                    </flux:select>
+                </div>
+
+                {{-- Employment Type --}}
+                <div class="min-w-40">
+                    <flux:select wire:model.live="filterEmploymentType" size="sm">
+                        <option value="">All Employment Types</option>
+                        @foreach($employmentTypes as $type)
+                            <option value="{{ $type->id }}">{{ $type->name }}</option>
+                        @endforeach
                     </flux:select>
                 </div>
 
@@ -222,7 +255,7 @@
         {{-- ── Payslips Table ───────────────────────────────────────────────── --}}
         <div class="pulse-card overflow-hidden p-0">
             {{-- Table header row --}}
-            <div class="flex items-center justify-between px-6 py-4 border-b border-zinc-100 dark:border-zinc-800">
+            <div class="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-b border-zinc-100 dark:border-zinc-800">
                 <div class="flex items-center gap-2">
                     <h3 class="font-bold text-zinc-900 dark:text-white">
                         {{ ucfirst(str_replace('_', ' ', $currentPayroll->status ?? 'Draft')) }} Payslips
@@ -231,18 +264,24 @@
                         {{ $payslips->total() }}
                     </span>
                 </div>
-                <button type="button" class="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400">
-                    <flux:icon.chart-bar class="size-4" />
-                    View Summary
-                </button>
+
+                {{-- Bulk action bar — appears once at least one row is ticked --}}
+                @if(count($selected) > 0)
+                    <div class="flex items-center gap-2 rounded-xl bg-brand-50 px-3 py-1.5 dark:bg-brand-900/20">
+                        <span class="text-xs font-bold text-brand-700 dark:text-brand-300">{{ count($selected) }} selected</span>
+                        <flux:button wire:click="bulkDownload" size="sm" variant="ghost" icon="arrow-down-tray">Download</flux:button>
+                        <flux:button wire:click="bulkEmail" wire:confirm="Email {{ count($selected) }} payslip(s) to their employees?" size="sm" variant="ghost" icon="envelope">Email</flux:button>
+                        <flux:button wire:click="clearSelection" size="sm" variant="ghost" icon="x-mark">Clear</flux:button>
+                    </div>
+                @else
+                    <flux:button wire:click="selectAllVisible" size="sm" variant="ghost" icon="check-circle">Select all on page</flux:button>
+                @endif
             </div>
             <div class="overflow-x-auto">
                 <table class="w-full text-sm">
                     <thead>
                         <tr class="bg-zinc-50/80 dark:bg-zinc-900/60 border-b border-zinc-100 dark:border-zinc-800">
-                            <th class="py-3 pl-5 pr-3 w-10">
-                                <input type="checkbox" class="rounded border-zinc-300 dark:border-zinc-600 text-brand-600 focus:ring-brand-500" />
-                            </th>
+                            <th class="py-3 pl-5 pr-3 w-10"></th>
                             <th class="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-zinc-400">Employee</th>
                             <th class="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-zinc-400">Department</th>
                             <th class="py-3 pr-4 text-right text-xs font-semibold uppercase tracking-wide text-zinc-400">Gross (₹)</th>
@@ -276,7 +315,8 @@
                             @endphp
                             <tr class="hover:bg-zinc-50/60 dark:hover:bg-zinc-800/30 transition-colors">
                                 <td class="py-3.5 pl-5 pr-3 w-10">
-                                    <input type="checkbox" class="rounded border-zinc-300 dark:border-zinc-600 text-brand-600 focus:ring-brand-500" />
+                                    <input type="checkbox" wire:model.live="selected" value="{{ $slip->id }}"
+                                        class="rounded border-zinc-300 dark:border-zinc-600 text-brand-600 focus:ring-brand-500" />
                                 </td>
 
                                 {{-- Employee --}}
@@ -314,24 +354,42 @@
 
                                 {{-- Status --}}
                                 <td class="py-3.5 pr-4">
-                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold {{ $rowStatusClass }}">
+                                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold {{ $rowStatusClass }}">
+                                        @if($slip->isLocked())<flux:icon.lock-closed class="size-3" />@endif
                                         {{ $rowStatusLabel }}
                                     </span>
                                 </td>
 
                                 {{-- Actions --}}
+                                @php $slipLocked = $slip->isLocked() || $currentPayroll->isLocked(); @endphp
                                 <td class="py-3.5 pr-6 text-right" wire:click.stop>
                                     <div class="flex items-center justify-end gap-1">
                                         <a href="{{ route('payroll.payslips.download', $slip->id) }}" target="_blank"
                                             class="inline-flex items-center justify-center size-8 rounded-lg text-zinc-400 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-900/20 transition-colors"
-                                            title="Download PDF">
-                                            <flux:icon.eye class="size-4" />
-                                        </a>
-                                        <a href="{{ route('payroll.payslips.download', $slip->id) }}" target="_blank"
-                                            class="inline-flex items-center justify-center size-8 rounded-lg text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors"
-                                            title="Download PDF">
+                                            title="View / Download PDF">
                                             <flux:icon.arrow-down-tray class="size-4" />
                                         </a>
+                                        <flux:dropdown>
+                                            <flux:button variant="ghost" size="sm" icon="ellipsis-vertical" />
+                                            <flux:menu>
+                                                @if($slip->status === 'draft' && ! $slipLocked)
+                                                    <flux:menu.item wire:click="openEdit({{ $slip->id }})" icon="pencil-square">Edit</flux:menu.item>
+                                                    <flux:menu.item wire:click="regenerateSingle({{ $slip->id }})" wire:confirm="Regenerate this employee's payslip from current salary/attendance data?" icon="arrow-path">Regenerate</flux:menu.item>
+                                                @endif
+                                                <flux:menu.item wire:click="emailSingle({{ $slip->id }})" icon="envelope">Email</flux:menu.item>
+                                                @if($slipLocked && $slip->isLocked())
+                                                    @if(auth()->user()->canUnlockPayroll())
+                                                        <flux:menu.item wire:click="unlockSinglePayslip({{ $slip->id }})" icon="lock-open">Unlock</flux:menu.item>
+                                                    @endif
+                                                @elseif(! $currentPayroll->isLocked() && auth()->user()->canLockPayroll())
+                                                    <flux:menu.item wire:click="lockSinglePayslip({{ $slip->id }})" icon="lock-closed">Lock</flux:menu.item>
+                                                @endif
+                                                @if($slip->status === 'draft' && ! $slipLocked && auth()->user()->canDeletePayslip())
+                                                    <flux:menu.separator />
+                                                    <flux:menu.item wire:click="deleteSingle({{ $slip->id }})" wire:confirm="Delete this payslip? This cannot be undone." variant="danger" icon="trash">Delete</flux:menu.item>
+                                                @endif
+                                            </flux:menu>
+                                        </flux:dropdown>
                                     </div>
                                 </td>
                             </tr>
@@ -398,5 +456,52 @@
         </div>
 
     @endif
+
+    <flux:modal name="edit-payslip" class="max-w-2xl">
+        <div class="space-y-5">
+            <div>
+                <flux:heading size="lg">Edit payslip line items</flux:heading>
+                <flux:subheading>Draft only — adjustments recompute gross, deductions and net automatically.</flux:subheading>
+            </div>
+
+            <div class="space-y-2">
+                @foreach($editItems as $i => $item)
+                    <div class="flex items-end gap-2">
+                        <div class="flex-1">
+                            <flux:input wire:model="editItems.{{ $i }}.name" placeholder="Component name" size="sm" />
+                        </div>
+                        <div class="w-32">
+                            <flux:input wire:model="editItems.{{ $i }}.amount" type="number" step="0.01" placeholder="Amount" size="sm" />
+                        </div>
+                        <div class="w-40">
+                            <flux:select wire:model="editItems.{{ $i }}.type" size="sm">
+                                <option value="earning">Earning</option>
+                                <option value="deduction">Deduction</option>
+                                <option value="employer_contribution">Employer Contribution</option>
+                            </flux:select>
+                        </div>
+                        <flux:button wire:click="removeEditItem({{ $i }})" variant="ghost" size="sm" icon="trash" />
+                    </div>
+                @endforeach
+            </div>
+
+            <flux:button wire:click="addEditItem" variant="ghost" size="sm" icon="plus">Add line item</flux:button>
+
+            @php
+                $previewGross = collect($editItems)->where('type', 'earning')->sum(fn ($i) => (float) ($i['amount'] ?? 0));
+                $previewDeductions = collect($editItems)->where('type', 'deduction')->sum(fn ($i) => (float) ($i['amount'] ?? 0));
+            @endphp
+            <div class="grid grid-cols-3 gap-3 rounded-xl bg-zinc-50 p-3 text-sm dark:bg-zinc-800/50">
+                <div><span class="text-zinc-400">Gross</span><div class="font-bold text-zinc-900 dark:text-white">₹{{ number_format($previewGross, 2) }}</div></div>
+                <div><span class="text-zinc-400">Deductions</span><div class="font-bold text-red-500">₹{{ number_format($previewDeductions, 2) }}</div></div>
+                <div><span class="text-zinc-400">Net</span><div class="font-bold text-emerald-600">₹{{ number_format($previewGross - $previewDeductions, 2) }}</div></div>
+            </div>
+
+            <div class="flex justify-end gap-2">
+                <flux:button @click="$flux.modal('edit-payslip').close()" variant="ghost">Cancel</flux:button>
+                <flux:button wire:click="saveEdit" variant="primary">Save Changes</flux:button>
+            </div>
+        </div>
+    </flux:modal>
 
 </flux:main>

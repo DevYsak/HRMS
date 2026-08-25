@@ -49,16 +49,41 @@ test('password can be reset with valid token', function () {
     $this->post(route('password.request'), ['email' => $user->email]);
 
     Notification::assertSentTo($user, ResetPassword::class, function ($notification) use ($user) {
+        // Deliberately not 'password': that is UserFactory's default, so the
+        // reset would be asking for the password the account already has, and
+        // the password-reuse policy now rejects it. The behaviour under test —
+        // a valid token resets the password — is unchanged, so only the value
+        // moved. Reuse itself is covered by the test below.
         $response = $this->post(route('password.update'), [
             'token' => $notification->token,
             'email' => $user->email,
-            'password' => 'password',
-            'password_confirmation' => 'password',
+            'password' => 'Brand!NewPassw0rd#26',
+            'password_confirmation' => 'Brand!NewPassw0rd#26',
         ]);
 
         $response
             ->assertSessionHasNoErrors()
             ->assertRedirect(route('login', absolute: false));
+
+        return true;
+    });
+});
+
+test('a reset cannot reuse the password the account already has', function () {
+    Notification::fake();
+
+    $user = User::factory()->create();
+
+    $this->post(route('password.request'), ['email' => $user->email]);
+
+    Notification::assertSentTo($user, ResetPassword::class, function ($notification) use ($user) {
+        $this->post(route('password.update'), [
+            'token' => $notification->token,
+            'email' => $user->email,
+            // UserFactory's default — i.e. the current password.
+            'password' => 'password',
+            'password_confirmation' => 'password',
+        ])->assertSessionHasErrors('password');
 
         return true;
     });

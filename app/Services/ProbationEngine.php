@@ -28,9 +28,21 @@ class ProbationEngine
         return $setting?->probation_days ?? $employee->employmentType?->probation_days ?? 90;
     }
 
-    /** Calculate and (optionally) persist probation end date from joining date. */
-    public function calculateEndDate(Employee $employee): Carbon
+    /**
+     * Probation end date, or null when the employee has no joining date yet
+     * (imported from an incomplete HR record).
+     *
+     * Guarding this matters: Carbon::parse(null) silently returns *now()*, so
+     * without the check a DOJ-less employee would be given a probation period
+     * ending 90 days from whenever the code happened to run — and
+     * autoSetIfEnabled() would persist that fabricated date.
+     */
+    public function calculateEndDate(Employee $employee): ?Carbon
     {
+        if ($employee->joining_date === null) {
+            return null;
+        }
+
         return Carbon::parse($employee->joining_date)->addDays($this->resolveProbationDays($employee));
     }
 
@@ -51,6 +63,13 @@ class ProbationEngine
         }
 
         $endDate = $this->calculateEndDate($employee);
+
+        // No joining date → nothing to calculate from. Leave probation unset
+        // until HR fills the date in, rather than persisting a guess.
+        if ($endDate === null) {
+            return;
+        }
+
         Employee::withoutEvents(fn () => $employee->update(['probation_end_date' => $endDate]));
     }
 

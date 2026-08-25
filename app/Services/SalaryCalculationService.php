@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\DTOs\SalaryCalculationResult;
+use App\Models\Company;
 use App\Models\Employee;
 use App\Models\EmployeePayrollSettings;
 use App\Models\EmployeeSalary;
@@ -243,7 +244,7 @@ class SalaryCalculationService
 
         // ── Step 10: LWP deduction ────────────────────────────────────────────
         $lwpDeduction = 0.0;
-        $lwp = $this->lwpService->calculate($employee, $cycleStart, $cycleEnd);
+        $lwp = $this->lwpService->calculate($employee, $cycleStart, $cycleEnd, $earningsSum);
 
         if ($lwp['deduction'] > 0) {
             $lwpDeduction = (float) $lwp['deduction'];
@@ -300,30 +301,41 @@ class SalaryCalculationService
 
         if ($component->is_pf_applicable) {
             return $employerSide
-                ? $this->statutoryService->providentFundEmployer($pfWage)
-                : $this->statutoryService->providentFundEmployee($pfWage);
+                ? $this->statutoryService->providentFundEmployer($pfWage, $cycleEnd)
+                : $this->statutoryService->providentFundEmployee($pfWage, $cycleEnd);
         }
 
         if ($component->is_esi_applicable) {
             return $employerSide
-                ? $this->statutoryService->esiEmployer($grossWage)
-                : $this->statutoryService->esiEmployee($grossWage);
+                ? $this->statutoryService->esiEmployer($grossWage, $cycleEnd)
+                : $this->statutoryService->esiEmployee($grossWage, $cycleEnd);
         }
 
         // Professional Tax and TDS are employee-side deductions only.
         if (! $employerSide && in_array($component->code, ['PROFESSIONAL_TAX', 'PT'], true)) {
-            return $this->statutoryService->professionalTaxMaharashtra(
+            return $this->statutoryService->professionalTax(
                 $grossWage,
-                (int) $cycleEnd->month,
+                $cycleEnd,
+                $this->resolveJurisdiction($employee),
                 strtolower((string) $employee->gender) === 'female',
             );
         }
 
         if (! $employerSide && $component->code === 'TDS') {
-            return $this->statutoryService->monthlyTds($grossWage);
+            return $this->statutoryService->monthlyTds($grossWage, $cycleEnd);
         }
 
         return null;
+    }
+
+    /**
+     * Professional-tax jurisdiction for an employee: the state where their office
+     * is located (the PT nexus), falling back to the company's default state.
+     */
+    private function resolveJurisdiction(Employee $employee): ?string
+    {
+        return $employee->office?->state_code
+            ?? Company::query()->value('default_state_code');
     }
 
     /**
@@ -386,8 +398,14 @@ class SalaryCalculationService
 
         try {
             return round(FormulaEvaluator::evaluate($component->formula_expression, $context), 2);
-        } catch (\RuntimeException) {
-            return 0.0;
+        } catch (\RuntimeException $e) {
+            // A malformed formula is a configuration fault, not a zero-rupee
+            // component. Swallowing it here silently underpaid every employee
+            // carrying the component, with nothing surfaced to the operator.
+            throw new \DomainException(
+                "Salary component '{$component->name}' has an invalid formula: {$e->getMessage()}",
+                previous: $e,
+            );
         }
     }
 }
