@@ -94,6 +94,7 @@ use App\Livewire\TimeOff\BulkLeaveAssignment;
 use App\Livewire\TimeOff\FinanceEncashments;
 use App\Livewire\TimeOff\LeaveAllocationPolicies;
 use App\Livewire\TimeOff\LeaveCarryForward;
+use App\Livewire\TimeOff\LeaveRegularisation;
 use App\Livewire\TimeOff\MyTimeOff;
 use App\Livewire\TimeOff\TeamTimeOff;
 use App\Livewire\TimeOff\TimeOffSettings;
@@ -208,6 +209,12 @@ Route::middleware(['auth'])->group(function () {
         // this changes entitlement, so nothing runs until HR approves the list.
         Route::get('/carry-forward', LeaveCarryForward::class)->name('carry-forward')
             ->middleware('can:view_leave_carry_forward');
+
+        // Leave regularisation. The queue lives here; the approval chain does
+        // not — it is the existing manager -> HR -> admin pipeline in
+        // AttendanceService, shared with attendance corrections.
+        Route::get('/regularisation', LeaveRegularisation::class)->name('regularisation')
+            ->middleware('can:view_leave_regularisation');
 
         Route::get('/settings', TimeOffSettings::class)->name('settings')->middleware('role:manage-settings');
     });

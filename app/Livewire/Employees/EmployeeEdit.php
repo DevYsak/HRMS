@@ -21,6 +21,7 @@ use App\Models\User;
 use App\Models\WorkMode;
 use App\Services\Biometric\BiometricCodeService;
 use App\Services\Biometric\EngineAttendanceSyncService;
+use App\Services\Leave\LeaveYearResolver;
 use App\Services\LeaveBalanceService;
 use App\Services\PasswordService;
 use App\Services\ProbationEngine;
@@ -178,7 +179,7 @@ class EmployeeEdit extends Component
         $this->resignation_date = $this->employee->resignation_date?->format('Y-m-d') ?? '';
         $this->termination_date = $this->employee->termination_date?->format('Y-m-d') ?? '';
         $this->notice_period_end_date = $this->employee->notice_period_end_date?->format('Y-m-d') ?? '';
-        $this->leaveBalanceYear = (string) now()->year;
+        $this->leaveBalanceYear = (string) app(LeaveYearResolver::class)->legacyYearFor();
     }
 
     public function setTab(string $tab): void

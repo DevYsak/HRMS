@@ -28,6 +28,7 @@ use App\Models\WarningLetter;
 use App\Services\Attendance\HolidayResolver;
 use App\Services\Attendance\ShiftResolver;
 use App\Services\AttendanceService;
+use App\Services\Leave\LeaveYearResolver;
 use App\Services\Profile\ProfileCompletionService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -477,7 +478,7 @@ class Dashboard extends Component
         // is NULL in MySQL, so this matched nothing and every employee saw a
         // zero balance — worse than no data, because it looked authoritative.
         $leaveBalances = $employee
-            ? LeaveBalance::with('leaveType')->where('employee_id', $employee->id)->where('year', now()->year)->get()
+            ? LeaveBalance::with('leaveType')->where('employee_id', $employee->id)->where('year', app(LeaveYearResolver::class)->legacyYearFor())->get()
             : collect();
 
         // My pending OT requests

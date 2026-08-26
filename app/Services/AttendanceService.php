@@ -16,6 +16,7 @@ use App\Services\Attendance\AttendanceScoreEngine;
 use App\Services\Attendance\HolidayResolver;
 use App\Services\Attendance\ResolvedShift;
 use App\Services\Attendance\ShiftResolver;
+use App\Services\Leave\LeaveRegularisationService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -247,6 +248,16 @@ class AttendanceService
                 'applied_at' => now(),
                 'applied_via' => $via,
             ]);
+
+            // A leave regularisation converts a past absence into approved
+            // leave: a balance is deducted and the day is marked, rather than
+            // punches being rewritten. It reaches this point through exactly
+            // the same chain, trail and applied_via marking as every other
+            // kind, which is the reason it lives behind this gate rather than
+            // in a pipeline of its own.
+            if ($regularisation->category === 'leave') {
+                return app(LeaveRegularisationService::class)->apply($regularisation, $reviewerId);
+            }
 
             // Half-day regularisation: mark the day as half-day rather than
             // rewriting punch times. Seeds check_in on a fully-absent day so the

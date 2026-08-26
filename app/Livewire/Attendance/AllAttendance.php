@@ -16,6 +16,7 @@ use App\Notifications\RegularisationReviewedNotification;
 use App\Services\Approvals\ClaimLockService;
 use App\Services\Attendance\PunchTimeline;
 use App\Services\AttendanceService;
+use App\Services\Leave\LeaveYearResolver;
 use Carbon\CarbonPeriod;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
@@ -301,7 +302,7 @@ class AllAttendance extends Component
             'score' => (int) round($onTimePct * 0.6 + $presentPct * 0.4),
             'late_count' => $late,
             'leave_balance' => LeaveBalance::where('employee_id', $employee->id)
-                ->where('year', now()->year)->get()
+                ->where('year', app(LeaveYearResolver::class)->legacyYearFor())->get()
                 ->sum(fn ($b) => $b->available() + (float) ($b->comp_off_credits ?? 0)),
             'status' => $onBreak
                 ? 'On Break'

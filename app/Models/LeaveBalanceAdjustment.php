@@ -10,6 +10,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'employee_id',
     'leave_type_id',
     'action',
+    // manual | regularisation | carry_forward — so payroll and reporting can
+    // tell an automated deduction from an HR correction.
+    'source',
+    'source_id',
     'days',
     'previous_balance',
     'new_balance',

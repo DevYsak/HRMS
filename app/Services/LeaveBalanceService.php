@@ -10,6 +10,7 @@ use App\Models\LeaveBalanceAdjustment;
 use App\Models\LeaveRequest;
 use App\Models\LeaveType;
 use App\Models\User;
+use App\Services\Leave\LeaveYearResolver;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -165,7 +166,10 @@ class LeaveBalanceService
             );
         }
 
-        $year ??= now()->year;
+        // The current LEAVE year, not the calendar year: with a 1 July start
+        // those differ from January to June, and an HR correction made in
+        // March would otherwise land in a year that has not begun.
+        $year ??= app(LeaveYearResolver::class)->legacyYearFor();
 
         return DB::transaction(function () use ($employee, $leaveType, $action, $days, $reason, $remarks, $adjuster, $year) {
             $balance = LeaveBalance::firstOrCreate(

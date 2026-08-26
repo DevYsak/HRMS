@@ -16,6 +16,7 @@ use App\Models\WfhRequest;
 use App\Notifications\LeaveEncashmentNotification;
 use App\Services\Attendance\HolidayResolver;
 use App\Services\HolidayWorkService;
+use App\Services\Leave\LeaveYearResolver;
 use App\Services\LeaveService;
 use Carbon\Carbon;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -528,7 +529,7 @@ class MyTimeOff extends Component
         $employee = Auth::user()->employee;
 
         $balances = $employee
-            ? $employee->leaveBalances()->with('leaveType')->where('year', $this->filterYear ?: now()->year)->get()
+            ? $employee->leaveBalances()->with('leaveType')->where('year', $this->filterYear ?: app(LeaveYearResolver::class)->legacyYearFor())->get()
             : collect();
 
         $requests = $employee
@@ -545,12 +546,12 @@ class MyTimeOff extends Component
 
         $encashableTypes = $employee
             ? LeaveType::where('allow_encashment', true)
-                ->whereHas('leaveBalances', fn ($q) => $q->where('employee_id', $employee->id)->where('year', now()->year))
+                ->whereHas('leaveBalances', fn ($q) => $q->where('employee_id', $employee->id)->where('year', app(LeaveYearResolver::class)->legacyYearFor()))
                 ->get()
                 ->map(function ($type) use ($employee) {
                     $balance = LeaveBalance::where('employee_id', $employee->id)
                         ->where('leave_type_id', $type->id)
-                        ->where('year', now()->year)
+                        ->where('year', app(LeaveYearResolver::class)->legacyYearFor())
                         ->first();
 
                     $cfAvailable = $balance
