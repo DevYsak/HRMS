@@ -17,12 +17,26 @@
 
     <div class="pulse-action-bar">
         <div>
-            <h1 class="pulse-page-title">Employees</h1>
-            <p class="pulse-page-subtitle">Manage your company's workforce</p>
+            <h1 class="pulse-page-title">{{ $showDeleted ? 'Deleted Employees' : 'Employees' }}</h1>
+            <p class="pulse-page-subtitle">
+                {{ $showDeleted
+                    ? 'Restore someone with their history, or remove them permanently.'
+                    : "Manage your company's workforce" }}
+            </p>
         </div>
-        <flux:button href="{{ route('employees.create') }}" wire:navigate variant="primary" icon="plus">
-            Add Employee
-        </flux:button>
+        <div class="flex items-center gap-2">
+            {{-- Deleted employees were unreachable before this: soft-deleted,
+                 still holding their email, with no way back. --}}
+            <flux:button wire:click="$toggle('showDeleted')" variant="{{ $showDeleted ? 'primary' : 'ghost' }}"
+                icon="{{ $showDeleted ? 'arrow-uturn-left' : 'archive-box' }}">
+                {{ $showDeleted ? 'Back to active' : 'Deleted' }}
+            </flux:button>
+            @unless($showDeleted)
+                <flux:button href="{{ route('employees.create') }}" wire:navigate variant="primary" icon="plus">
+                    Add Employee
+                </flux:button>
+            @endunless
+        </div>
     </div>
 
     <div class="pulse-card">
@@ -139,20 +153,51 @@
                                         />
                                     </flux:tooltip>
                                     
-                                    <flux:button 
-                                        wire:click="deleteEmployee({{ $emp->id }})" 
-                                        wire:confirm.prompt="Are you sure you want to soft delete this employee?\n\nType DELETE to confirm|DELETE"
-                                        variant="ghost" 
-                                        size="sm" 
-                                        icon="trash" 
-                                        class="text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 dark:hover:text-red-400"
-                                    />
+                                    @if($showDeleted)
+                                        <flux:tooltip content="Restore with leave, attendance and payroll history">
+                                            <flux:button
+                                                wire:click="restoreEmployee({{ $emp->id }})"
+                                                variant="ghost"
+                                                size="sm"
+                                                icon="arrow-uturn-left"
+                                                class="text-zinc-400 hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-400"
+                                            />
+                                        </flux:tooltip>
+
+                                        {{-- Irreversible, and it takes their history with it, so the
+                                             confirmation spells out exactly what is lost. --}}
+                                        <flux:tooltip content="Delete permanently — cannot be undone">
+                                            <flux:button
+                                                wire:click="forceDeleteEmployee({{ $emp->id }})"
+                                                wire:confirm.prompt="Permanently delete this employee?
+
+Their leave balances, attendance, payslips and audit history go with them. This cannot be undone.
+
+Type DELETE FOREVER to confirm|DELETE FOREVER"
+                                                variant="ghost"
+                                                size="sm"
+                                                icon="fire"
+                                                class="text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10 dark:hover:text-red-400"
+                                            />
+                                        </flux:tooltip>
+                                    @else
+                                        <flux:button
+                                            wire:click="deleteEmployee({{ $emp->id }})"
+                                            wire:confirm.prompt="Are you sure you want to soft delete this employee?
+
+Type DELETE to confirm|DELETE"
+                                            variant="ghost"
+                                            size="sm"
+                                            icon="trash"
+                                            class="text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 dark:hover:text-red-400"
+                                        />
+                                    @endif
                                 </div>
                             </td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="7" class="pulse-table__empty">No employees found.</td>
+                            <td colspan="7" class="pulse-table__empty">{{ $showDeleted ? 'No deleted employees.' : 'No employees found.' }}</td>
                         </tr>
                     @endforelse
                 </tbody>

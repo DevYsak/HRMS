@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\EmployeeStatus;
 use App\Enums\UserRole;
 use App\Mail\WelcomeEmployeeMail;
+use App\Models\AuditLog;
 use App\Models\Company;
 use App\Models\Department;
 use App\Models\Employee;
@@ -117,7 +118,7 @@ class EmployeeImportService
      * @param  array<int, array<string, mixed>>  $rows  keyed by slugged heading
      * @return array{rows: array<int, array{line:int, data:array, status:string, errors:array<int,string>}>, summary: array<string,int>, preflight: array<string, array<int,string>>, quality: array<string,int>}
      */
-    public function parse(array $rows): array
+    public function parse(array $rows, bool $restoreDeleted = false): array
     {
         $departments = $this->lookup(Department::all());
         $jobTitles = $this->lookup(JobTitle::all());
@@ -266,13 +267,18 @@ class EmployeeImportService
             }
 
             // A deleted identity still holds the email at database level.
-            // Blocking is deliberate: restoring somebody, or releasing their
-            // address, is an HR decision and not something an import should
-            // make on its own.
+            // Bringing somebody back is an HR decision, so it happens only when
+            // explicitly asked for — never as a side effect of an import that
+            // happens to name them.
             if ($existingUserId !== null && $trashedUserIds->has($existingUserId)) {
-                $errors[] = "'{$email}' belongs to a deleted employee record. Restore them from Manage Employees, or use a different address — an import must not resurrect or overwrite a deleted identity on its own.";
-                $quality['duplicate_emails']++;
                 $userState = 'deleted';
+
+                if ($restoreDeleted) {
+                    $warnings[] = "{$who} was deleted and will be restored, keeping their leave, attendance and payroll history. Their record is then updated from this file.";
+                } else {
+                    $errors[] = "'{$email}' belongs to a deleted employee record. Tick 'Restore deleted employees' to bring them back with their history intact, or use a different address — an import must not resurrect a deleted identity on its own.";
+                    $quality['duplicate_emails']++;
+                }
             }
 
             if ($empId !== '') {
@@ -387,6 +393,7 @@ class EmployeeImportService
                     'role' => $role ?? UserRole::Employee,
                     'existing_user_id' => $existingUserId,
                     'user_state' => $userState,
+                    'restore' => $userState === 'deleted' && $restoreDeleted,
                     'employee_state' => $employeeState,
                     'password' => (string) $r['password'],
                     // Kept so import() can re-resolve managers that are themselves
@@ -570,9 +577,15 @@ class EmployeeImportService
 
     private function updateExisting(array $data): void
     {
-        $user = User::with('employee.payrollSettings')->find($data['existing_user_id']);
+        // withTrashed(): a restore row targets a soft-deleted user, which a
+        // scoped find() would return as null — silently doing nothing.
+        $user = User::withTrashed()->with('employee.payrollSettings')->find($data['existing_user_id']);
         if (! $user) {
             return;
+        }
+
+        if (! empty($data['restore'])) {
+            $this->restoreIdentity($user);
         }
 
         // The email is updatable now that rows match on Employee ID — this is
@@ -609,6 +622,34 @@ class EmployeeImportService
         // null above, and the relation stays cached that way.
         $employee = $user->employee()->create($data['employee']);
         $employee->payrollSettings()->create($data['payroll']);
+    }
+
+    /**
+     * Bring a deleted employee back, with their history.
+     *
+     * Soft-deleting released the biometric code and hid both records; the
+     * employee's leave, attendance, payslips and audit trail were never
+     * removed. Restoring reconnects them rather than starting the person again
+     * as a stranger with the same name.
+     *
+     * Audited explicitly: a resurrection is exactly the kind of change someone
+     * will want to account for later.
+     */
+    private function restoreIdentity(User $user): void
+    {
+        if ($user->trashed()) {
+            $user->restore();
+        }
+
+        $employee = Employee::withTrashed()->where('user_id', $user->id)->first();
+
+        if ($employee?->trashed()) {
+            $employee->restore();
+            AuditLog::record($employee, 'restored', null, ['restored_by' => 'employee import']);
+        }
+
+        // The relation was loaded while both were hidden.
+        $user->unsetRelation('employee');
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────

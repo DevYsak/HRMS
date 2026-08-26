@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Employees;
 
+use App\Models\AuditLog;
 use App\Models\Department;
 use App\Models\Employee;
 use App\Models\JobTitle;
@@ -23,6 +24,16 @@ class EmployeeIndex extends Component
     public $job_title_id = '';
 
     public $status = '';
+
+    /**
+     * Show deleted employees instead of active ones.
+     *
+     * Deleting soft-deletes both records and leaves every leave balance,
+     * attendance row, payslip and audit entry in place — but nothing in the
+     * application could see them afterwards, let alone bring them back. A
+     * deleted employee was unreachable and their email permanently spent.
+     */
+    public bool $showDeleted = false;
 
     public function mount()
     {
@@ -54,6 +65,68 @@ class EmployeeIndex extends Component
         $this->resetPage();
     }
 
+    public function updatingShowDeleted(): void
+    {
+        $this->resetPage();
+    }
+
+    /**
+     * Bring a deleted employee back, with their history.
+     *
+     * The biometric code was released on deletion and is deliberately not
+     * reclaimed here: it may already belong to somebody else, and silently
+     * taking it back would point their punches at the wrong person. HR
+     * reassigns it explicitly.
+     */
+    public function restoreEmployee($id): void
+    {
+        $employee = Employee::withTrashed()->findOrFail($id);
+        $this->authorize('delete', $employee);
+
+        if (! $employee->trashed()) {
+            return;
+        }
+
+        $employee->restore();
+        $employee->user()->withTrashed()->first()?->restore();
+
+        AuditLog::record($employee, 'restored', null, ['restored_by' => 'employee index']);
+
+        \Flux::toast($employee->employee_code
+            ? 'Employee restored with their history.'
+            : 'Employee restored with their history. Their Biometric Device ID was released on deletion — reassign it from the employee record.');
+    }
+
+    /**
+     * Erase a deleted employee for good.
+     *
+     * Irreversible, and it takes the person's leave, attendance, payslips and
+     * audit trail with it. Only reachable for an already-deleted record, so
+     * removing somebody is always two deliberate steps rather than one click.
+     */
+    public function forceDeleteEmployee($id): void
+    {
+        $employee = Employee::withTrashed()->findOrFail($id);
+        $this->authorize('forceDelete', $employee);
+
+        if (! $employee->trashed()) {
+            \Flux::toast('Delete the employee first — permanent removal only applies to an already-deleted record.', variant: 'danger');
+
+            return;
+        }
+
+        $name = $employee->user()->withTrashed()->first()?->name ?? $employee->employee_id;
+
+        // Recorded before the row goes, or there would be nothing to attach it
+        // to afterwards.
+        AuditLog::record($employee, 'force_deleted', $employee->toArray(), null);
+
+        $employee->user()->withTrashed()->first()?->forceDelete();
+        $employee->forceDelete();
+
+        \Flux::toast("{$name} permanently deleted. This cannot be undone.");
+    }
+
     public function deleteEmployee($id)
     {
         $employee = Employee::findOrFail($id);
@@ -79,7 +152,8 @@ class EmployeeIndex extends Component
     {
         $user = auth()->user();
 
-        $employees = Employee::with(['user', 'office', 'department', 'jobTitle', 'manager', 'shift'])
+        $employees = Employee::with(['user' => fn ($q) => $q->withTrashed(), 'office', 'department', 'jobTitle', 'manager', 'shift'])
+            ->when($this->showDeleted, fn ($q) => $q->onlyTrashed())
             ->when(! $user->canManageEmployees(), function ($query) use ($user) {
                 $query->where('manager_id', $user->employee?->id);
             })

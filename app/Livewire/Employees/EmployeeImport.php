@@ -29,6 +29,13 @@ class EmployeeImport extends Component
     /** Create departments/designations/shifts/offices the file refers to but the system lacks. */
     public bool $autoCreateMasterData = true;
 
+    /**
+     * Off by default, deliberately. Bringing a deleted employee back is an HR
+     * decision, so it has to be asked for — never a side effect of an import
+     * that happens to name them.
+     */
+    public bool $restoreDeleted = false;
+
     /** @var array{rows:array, summary:array} */
     public array $parsed = [];
 
@@ -71,7 +78,7 @@ class EmployeeImport extends Component
 
         $rows = $sheets->read($this->file->getRealPath(), $this->file->getClientOriginalExtension());
 
-        $this->parsed = $service->parse($rows);
+        $this->parsed = $service->parse($rows, $this->restoreDeleted);
         $this->showPreview = true;
         $this->lastResult = null;
     }

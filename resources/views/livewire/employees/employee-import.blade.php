@@ -39,6 +39,14 @@
                     Create missing departments, designations &amp; shifts
                     <span class="text-[11px] text-zinc-400">(rather than importing those fields blank)</span>
                 </label>
+                {{-- Off by default: bringing a deleted employee back is an HR
+                     decision, not something an import should do because a file
+                     happens to name them. --}}
+                <label class="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
+                    <input type="checkbox" wire:model="restoreDeleted" class="rounded border-zinc-300 text-orange-500 focus:ring-orange-400">
+                    Restore deleted employees
+                    <span class="text-[11px] text-zinc-400">(brings them back with their leave, attendance &amp; payroll history)</span>
+                </label>
             </div>
         </div>
 
