@@ -77,16 +77,22 @@
                         <tr class="group">
                             <td class="pulse-td pl-6">
                                 <div class="flex items-center gap-3">
+                                    {{-- Guarded like every other relation in this row. jobTitle, department
+                                         and shift were already null-safe; user and status were not,
+                                         purely because the active list never produces a row missing
+                                         either. Defensive, not a diagnosis of the live 500. --}}
                                     @if($emp->photo)
                                         <img src="{{ asset('storage/'.$emp->photo) }}" class="size-8 rounded-full object-cover" />
                                     @else
                                         <div class="flex size-8 shrink-0 items-center justify-center rounded-full bg-brand-600 text-xs font-bold text-white">
-                                            {{ strtoupper(substr($emp->user->name, 0, 1)) }}
+                                            {{ strtoupper(substr($emp->user?->name ?? '?', 0, 1)) }}
                                         </div>
                                     @endif
                                     <div>
-                                        <div class="font-semibold text-zinc-900 dark:text-white">{{ $emp->user->name }}</div>
-                                        <div class="text-xs text-zinc-400">{{ $emp->user->email }}</div>
+                                        <div class="font-semibold text-zinc-900 dark:text-white">
+                                            {{ $emp->user?->name ?? 'No user account' }}
+                                        </div>
+                                        <div class="text-xs text-zinc-400">{{ $emp->user?->email ?? '—' }}</div>
                                     </div>
                                 </div>
                             </td>
@@ -106,7 +112,7 @@
                             </td>
                             <td class="pulse-td">
                                 @php
-                                    $sc = match($emp->status->value) {
+                                    $sc = match($emp->status?->value) {
                                         'active'    => 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400',
                                         'probation' => 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400',
                                         'inactive'  => 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400',
@@ -114,7 +120,7 @@
                                     };
                                 @endphp
                                 <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider {{ $sc }}">
-                                    {{ $emp->status->label() }}
+                                    {{ $emp->status?->label() ?? '—' }}
                                 </span>
                             </td>
                             <td class="pulse-td pr-6 text-right!">
