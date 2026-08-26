@@ -644,6 +644,26 @@ class EmployeeImportService
      * carry trailing spaces ("UK Operations "), and so does master data that
      * was itself created from such a sheet.
      */
+    /**
+     * The shift whose hours a label describes, regardless of what it is called.
+     *
+     * "10.30 AM to 7.30 PM" and "IT Shift" are the same shift when both run
+     * 10:30 to 19:30; only one of them should exist, and this is how a
+     * spreadsheet written in the other form still finds it.
+     */
+    private function shiftIdBySchedule(string $label): ?int
+    {
+        [$start, $end] = $this->parseShiftLabel($label);
+
+        if (! $start || ! $end) {
+            return null;
+        }
+
+        return ShiftSetting::whereTime('start_time', $start)
+            ->whereTime('end_time', $end)
+            ->value('id');
+    }
+
     private function lookup($models): Collection
     {
         return $models->mapWithKeys(fn ($m) => [Str::lower(trim((string) $m->name)) => $m->id]);
@@ -773,6 +793,20 @@ class EmployeeImportService
 
                 if ($kind === 'shift') {
                     [$start, $end] = $this->parseShiftLabel($name);
+
+                    // A shift is its hours, not its label. The name check above
+                    // only catches a repeat of the same wording — it let
+                    // "10.30 AM to 7.30 PM" become a second shift alongside
+                    // "IT Shift" despite both being 10:30 to 19:30, and every
+                    // employee on that spreadsheet column landed on the copy.
+                    $sameSchedule = $start && $end
+                        ? ShiftSetting::whereTime('start_time', $start)->whereTime('end_time', $end)->first()
+                        : null;
+
+                    if ($sameSchedule) {
+                        continue;
+                    }
+
                     ShiftSetting::create(['name' => $name, 'start_time' => $start, 'end_time' => $end]);
                 } else {
                     $model::create(['name' => $name, 'company_id' => $companyId]);
@@ -796,7 +830,17 @@ class EmployeeImportService
                 if ($name === '') {
                     continue;
                 }
-                $parsed['rows'][$i]['data']['employee'][$spec['key']] = $spec['map'][Str::lower($name)] ?? null;
+                $resolved = $spec['map'][Str::lower($name)] ?? null;
+
+                // A shift cell that spells out its hours rather than naming a
+                // shift still has to reach the shift that keeps those hours.
+                // Without this the row imports with no shift at all, which is
+                // how the duplicate came to look necessary in the first place.
+                if ($resolved === null && $kind === 'shift') {
+                    $resolved = $this->shiftIdBySchedule($name);
+                }
+
+                $parsed['rows'][$i]['data']['employee'][$spec['key']] = $resolved;
             }
         }
 
