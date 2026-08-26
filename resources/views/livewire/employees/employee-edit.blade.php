@@ -84,7 +84,7 @@
     </flux:breadcrumbs>
 
     {{-- ── Hero ──────────────────────────────────────────────────────────── --}}
-    <div class="relative overflow-hidden rounded-2xl border border-[#F2E3D5] bg-gradient-to-br from-[#FFF4EA] via-[#FFF9F4] to-[#FFF1E4] p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04)] md:p-6 dark:border-white/10 dark:from-[#161E2E] dark:via-[#111827] dark:to-[#1B2436]">
+    <div class="relative overflow-hidden rounded-2xl border border-[#F2E3D5] bg-gradient-to-br from-[#FFF4EA] via-[#FFF9F4] to-[#FFF1E4] p-5 shadow-sm md:p-6 dark:border-white/10 dark:from-[#161E2E] dark:via-[#111827] dark:to-[#1B2436]">
         {{-- Two soft blooms rather than a busy pattern: enough to stop the card
              reading flat, quiet enough to sit behind text. --}}
         <div class="pointer-events-none absolute -right-16 -top-24 size-72 rounded-full bg-orange-400/20 blur-3xl"></div>
@@ -96,7 +96,7 @@
                     <img src="{{ asset('storage/'.$employee->photo) }}"
                         class="size-16 shrink-0 rounded-2xl object-cover shadow-sm ring-2 ring-white dark:ring-white/10" />
                 @else
-                    <div class="flex size-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-500 to-orange-400 text-2xl font-extrabold text-white shadow-[0_4px_12px_rgba(249,115,22,0.35)]">
+                    <div class="flex size-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-500 to-orange-400 text-2xl font-extrabold text-white shadow-lg shadow-orange-500/30">
                         {{ strtoupper(substr($employee->user?->name ?? '?', 0, 1)) }}
                     </div>
                 @endif
@@ -137,7 +137,7 @@
                         x-transition:enter="transition ease-out duration-150"
                         x-transition:enter-start="opacity-0 -translate-y-1"
                         x-transition:enter-end="opacity-100 translate-y-0"
-                        class="absolute right-0 top-full z-50 mt-2 w-72 overflow-hidden rounded-2xl border border-[#EAECF0] bg-white shadow-[0_12px_32px_rgba(16,24,40,0.12)] dark:border-white/10 dark:bg-zinc-900">
+                        class="absolute right-0 top-full z-50 mt-2 w-72 overflow-hidden rounded-2xl border border-[#EAECF0] bg-white shadow-xl dark:border-white/10 dark:bg-zinc-900">
 
                         <div class="px-4 pb-1 pt-3 text-[10px] font-bold uppercase tracking-widest text-[#98A2B3]">Account access</div>
 
@@ -199,7 +199,7 @@
              somebody before opening any panel, so they answer before the tabs. --}}
         <div class="relative mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
             @foreach($quickFacts as [$icon, $label, $value])
-                <div class="nx-chip flex items-center gap-3 rounded-xl border border-white/80 bg-white/80 px-3.5 py-3 shadow-[0_1px_2px_rgba(16,24,40,0.04)] backdrop-blur dark:border-white/10 dark:bg-white/5">
+                <div class="nx-chip flex items-center gap-3 rounded-xl border border-white/80 bg-white/80 px-3.5 py-3 shadow-sm backdrop-blur dark:border-white/10 dark:bg-white/5">
                     <div class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-orange-50 text-orange-500 dark:bg-orange-500/10">
                         <flux:icon :name="$icon" class="size-4" />
                     </div>
@@ -244,11 +244,11 @@
         </div>
     @endif
 
-    <div class="grid grid-cols-1 gap-5 lg:grid-cols-[19rem_minmax(0,1fr)]">
+    <div class="grid grid-cols-1 gap-5 lg:grid-cols-12">
 
         {{-- ── Left: summary. Ordered above the editor on mobile. ────────── --}}
-        <aside class="space-y-5">
-            <div class="overflow-hidden rounded-2xl border border-[#EAECF0] bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)] dark:border-white/10 dark:bg-zinc-900">
+        <aside class="space-y-5 lg:col-span-4 xl:col-span-3">
+            <div class="overflow-hidden rounded-2xl border border-[#EAECF0] bg-white shadow-sm dark:border-white/10 dark:bg-zinc-900">
 
                 @foreach([
                     ['Contact', [
@@ -309,7 +309,7 @@
         </aside>
 
         {{-- ── Right: the record ─────────────────────────────────────────── --}}
-        <div class="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-[#EAECF0] bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)] dark:border-white/10 dark:bg-zinc-900">
+        <div class="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-[#EAECF0] bg-white lg:col-span-8 xl:col-span-9 shadow-sm dark:border-white/10 dark:bg-zinc-900">
 
             {{-- Primary: which area of the record. Underlined, weighted. --}}
             <div class="nx-scroll overflow-x-auto border-b border-[#EAECF0] px-4 dark:border-white/10">
@@ -342,7 +342,7 @@
                             <button type="button" wire:click="setTab('{{ $tab }}')"
                                 @class([
                                     'nx-tab relative whitespace-nowrap rounded-lg px-3 py-1.5 text-[13px] font-semibold',
-                                    'bg-orange-500 text-white shadow-[0_1px_3px_rgba(249,115,22,0.4)]' => $isTab,
+                                    'bg-orange-500 text-white shadow-sm' => $isTab,
                                     'text-[#667085] hover:bg-orange-50 hover:text-orange-600 dark:text-zinc-400 dark:hover:bg-white/5' => ! $isTab,
                                 ])>
                                 {{ $tab }}
