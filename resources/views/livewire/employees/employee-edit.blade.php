@@ -1175,8 +1175,21 @@
                 </button>
 
                 <div>
-                    <h2 class="text-base font-bold text-[#101828] dark:text-white">Manage Leave Balance</h2>
+                    {{-- Named for what it is. It was "Manage Leave Balance", which read
+                         as the way to do anything to a balance — including carrying
+                         days forward, where it would have credited days with no link
+                         to the year they came from. --}}
+                    <h2 class="text-base font-bold text-[#101828] dark:text-white">Manual Balance Adjustment</h2>
                     <p class="text-sm text-zinc-500 mt-0.5">For {{ $employee->user->name }} · {{ $leaveBalanceYear }}</p>
+                </div>
+
+                <div class="flex items-start gap-3 rounded-xl border border-orange-100 bg-orange-50/60 px-3.5 py-3 text-xs text-[#7C4A17] dark:border-orange-500/20 dark:bg-orange-500/5 dark:text-orange-300">
+                    <flux:icon.information-circle class="mt-0.5 size-4 shrink-0" />
+                    <span>
+                        Use <a href="{{ route('time-off.carry-forward') }}" wire:navigate class="font-semibold underline">Carry Forward</a>
+                        for previous-year entitlement — it stays traceable to the year it came from.
+                        Use this only for HR corrections.
+                    </span>
                 </div>
 
                 <div class="space-y-4">

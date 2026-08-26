@@ -93,6 +93,7 @@ use App\Livewire\TimeOff\AllTimeOff;
 use App\Livewire\TimeOff\BulkLeaveAssignment;
 use App\Livewire\TimeOff\FinanceEncashments;
 use App\Livewire\TimeOff\LeaveAllocationPolicies;
+use App\Livewire\TimeOff\LeaveCarryForward;
 use App\Livewire\TimeOff\MyTimeOff;
 use App\Livewire\TimeOff\TeamTimeOff;
 use App\Livewire\TimeOff\TimeOffSettings;
@@ -203,6 +204,11 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/encashments', FinanceEncashments::class)->name('encashments')->middleware('role:approve-finance');
         Route::get('/bulk-assign', BulkLeaveAssignment::class)->name('bulk-assign')->middleware('role:manage-settings');
         Route::get('/leave-policies', LeaveAllocationPolicies::class)->name('leave-policies')->middleware('role:manage-settings');
+        // Year-end carry forward. Preview is separate from apply on purpose:
+        // this changes entitlement, so nothing runs until HR approves the list.
+        Route::get('/carry-forward', LeaveCarryForward::class)->name('carry-forward')
+            ->middleware('can:view_leave_carry_forward');
+
         Route::get('/settings', TimeOffSettings::class)->name('settings')->middleware('role:manage-settings');
     });
 
