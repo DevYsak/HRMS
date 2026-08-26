@@ -185,3 +185,46 @@ test('an employee cannot permanently delete anyone', function () {
 
     expect(Employee::withTrashed()->find($deleted->id))->not->toBeNull();
 });
+
+// ── The Deleted view must survive imperfect rows ───────────────────────────
+
+test('an employee cannot be orphaned from its user', function () {
+    // Worth pinning, because it rules out a whole class of render failure:
+    // employees.user_id is ON DELETE CASCADE, so hard-deleting a user takes the
+    // employee row with it. There is no such thing as an employee without a
+    // user, which is why `$emp->user->name` survived unguarded for so long.
+    $user = User::factory()->create(['role' => UserRole::Employee]);
+    $employee = Employee::factory()->create(['user_id' => $user->id]);
+    $employee->delete();
+    $user->forceDelete();
+
+    expect(Employee::withTrashed()->find($employee->id))->toBeNull();
+});
+
+test('a deleted employee with no shift, title or department still renders', function () {
+    $user = User::factory()->create(['role' => UserRole::Employee]);
+    $employee = Employee::factory()->create([
+        'user_id' => $user->id,
+        'shift_id' => null,
+        'job_title_id' => null,
+        'department_id' => null,
+        'office_id' => null,
+    ]);
+    $employee->delete();
+    $user->delete();
+
+    Livewire::actingAs(erpAdmin())->test(EmployeeIndex::class)
+        ->set('showDeleted', true)
+        ->assertOk();
+});
+
+test('the active list still renders normally', function () {
+    // The guards must not have changed anything for the ordinary case.
+    $user = User::factory()->create(['name' => 'Active Person', 'role' => UserRole::Employee]);
+    Employee::factory()->create(['user_id' => $user->id]);
+
+    Livewire::actingAs(erpAdmin())->test(EmployeeIndex::class)
+        ->assertOk()
+        ->assertSee('Active Person')
+        ->assertDontSee('No user account');
+});
