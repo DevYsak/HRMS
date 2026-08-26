@@ -7,6 +7,7 @@ use App\Models\Employee;
 use App\Models\LeaveBalance;
 use App\Models\LeaveType;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Livewire\Livewire;
 
@@ -188,17 +189,26 @@ test('an employee cannot permanently delete anyone', function () {
 
 // ── The Deleted view must survive imperfect rows ───────────────────────────
 
-test('an employee cannot be orphaned from its user', function () {
-    // Worth pinning, because it rules out a whole class of render failure:
-    // employees.user_id is ON DELETE CASCADE, so hard-deleting a user takes the
-    // employee row with it. There is no such thing as an employee without a
-    // user, which is why `$emp->user->name` survived unguarded for so long.
+test('a deleted employee whose user row is gone still renders', function () {
+    // Live threw exactly this: Attempt to read property "name" on null, from
+    // employee-index.blade.php. Locally it cannot happen - employees.user_id is
+    // NOT NULL with ON DELETE CASCADE, so the user row cannot vanish underneath
+    // an employee. The production database evidently does not enforce that, so
+    // the orphan is built here deliberately rather than assumed impossible.
     $user = User::factory()->create(['role' => UserRole::Employee]);
     $employee = Employee::factory()->create(['user_id' => $user->id]);
     $employee->delete();
-    $user->forceDelete();
 
-    expect(Employee::withTrashed()->find($employee->id))->toBeNull();
+    DB::statement('SET FOREIGN_KEY_CHECKS=0');
+    DB::table('users')->where('id', $user->id)->delete();
+    DB::statement('SET FOREIGN_KEY_CHECKS=1');
+
+    expect(Employee::withTrashed()->find($employee->id))->not->toBeNull();
+
+    Livewire::actingAs(erpAdmin())->test(EmployeeIndex::class)
+        ->set('showDeleted', true)
+        ->assertOk()
+        ->assertSee('No user account');
 });
 
 test('a deleted employee with no shift, title or department still renders', function () {
