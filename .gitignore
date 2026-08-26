@@ -31,3 +31,12 @@ yarn-error.log
 /.claude/settings.local.json
 *.pdf
 PULSE_HRMS_Test_Cases.md
+
+# Stray files that ended up in the web root. Anything under public/ is served
+# without authentication, so these are deliberately never committed — and they
+# must be deleted from the live server by hand, since a deploy will not remove
+# what Git does not track. The voucher file exposes a PIN.
+/public/wordpress-7.0.4.zip
+/public/voucher-R360DEMOEXPIRED.txt
+/public/Gemini_Generated_Image_.png
+/public/c3a15bfe-20a9-4cec-8cf2-496ef95b9039.png
