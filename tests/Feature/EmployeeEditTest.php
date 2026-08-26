@@ -192,3 +192,60 @@ test('the record page survives an employee with nothing filled in', function () 
         ->assertSee('Not set')
         ->assertSee('No shift assigned');
 });
+
+// ── Two-level navigation ───────────────────────────────────────────────────
+//
+// Sixteen panels sat on one rail. They now sit under six areas: the primary row
+// picks the area, the secondary row picks the panel. The active area is derived
+// from the active tab rather than stored, so there is no second piece of state
+// to fall out of step — which is exactly what these pin down.
+
+test('opening an area lands on its first panel', function () {
+    $this->actingAs(User::factory()->create(['role' => UserRole::HrAdmin]));
+    $employee = Employee::factory()->create();
+
+    Livewire::test(EmployeeEdit::class, ['employee' => $employee])
+        ->call('setTab', 'Payroll')
+        ->assertSet('activeTab', 'Payroll')
+        ->assertOk();
+});
+
+test('the area highlights from whichever panel is open', function () {
+    // Reaching Documents from the sidebar shortcut must light up Record, not
+    // leave the primary row pointing somewhere else.
+    $this->actingAs(User::factory()->create(['role' => UserRole::HrAdmin]));
+    $employee = Employee::factory()->create();
+
+    Livewire::test(EmployeeEdit::class, ['employee' => $employee])
+        ->call('setTab', 'Documents')
+        ->assertOk()
+        ->assertSee('Record')
+        ->assertSee('Documents');
+});
+
+test('an area holding one panel shows no second row', function () {
+    // Conduct and Pay hold a single panel each; a secondary row with one pill
+    // in it is noise.
+    $this->actingAs(User::factory()->create(['role' => UserRole::HrAdmin]));
+    $employee = Employee::factory()->create();
+
+    Livewire::test(EmployeeEdit::class, ['employee' => $employee])
+        ->call('setTab', 'Warnings')
+        ->assertOk();
+});
+
+test('the hero answers the four questions asked before any panel opens', function () {
+    $this->actingAs(User::factory()->create(['role' => UserRole::HrAdmin]));
+
+    $employee = Employee::factory()->create([
+        'employee_id' => 'EMP-A021',
+        'joining_date' => '2022-06-28',
+    ]);
+
+    Livewire::test(EmployeeEdit::class, ['employee' => $employee])
+        ->assertOk()
+        ->assertSee('EMP-A021')
+        ->assertSee('28 Jun 2022')
+        ->assertSee('Emp ID')
+        ->assertSee('Manager');
+});

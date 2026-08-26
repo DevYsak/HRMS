@@ -1,90 +1,155 @@
 {{-- Employee record editor.
 
-     Restyled onto the dashboard's language rather than its own: the same warm
-     ground (#FFFDF8), the same #F3E8DD hairlines, the same orange accent and
-     Inter face. It previously ran on indigo and cold zinc, which made the
-     deepest screen in the People module look like a different product.
+     Two-level navigation. Sixteen panels on one rail is unreadable at any
+     spacing, so they sit under six categories: the primary row picks the area,
+     the secondary row picks the panel within it. The active category is derived
+     from the active tab rather than stored, so no component state changed and
+     every existing wire binding still works.
 
-     The chrome is what changed — header, identity card, tab bar. Every panel
-     below keeps its own markup and wire bindings. --}}
-<flux:main class="min-h-screen space-y-5 bg-[#FFFDF8] p-4 font-['Inter'] md:p-6 dark:bg-[#0B1220]">
-    <style>@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');</style>
+     Panels below the chrome keep their own markup. --}}
+<flux:main class="nx-record min-h-screen space-y-5 bg-[#F7F8FA] p-4 font-['Inter'] md:p-6 dark:bg-[#0B1220]">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+        /* Scoped to this page. Flux inputs default to a compact height that
+           reads as cramped beside cards this size, and their focus ring is the
+           framework blue rather than the Nexcore accent. */
+        .nx-record input:not([type=checkbox]):not([type=radio]),
+        .nx-record select,
+        .nx-record [data-flux-input] input,
+        .nx-record [data-flux-select] button {
+            min-height: 3rem;
+            border-radius: 0.75rem;
+        }
+        .nx-record input:focus-visible,
+        .nx-record select:focus-visible,
+        .nx-record [data-flux-input] input:focus {
+            outline: none;
+            border-color: #fb923c !important;
+            box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.14) !important;
+        }
+        .nx-record [data-flux-field] label {
+            font-weight: 600;
+            color: #374151;
+        }
+        .dark .nx-record [data-flux-field] label { color: #d4d4d8; }
+
+        /* 150–250ms, applied to the few things that actually move. */
+        .nx-tab, .nx-chip, .nx-shortcut { transition: all 180ms cubic-bezier(.4, 0, .2, 1); }
+        .nx-chip:hover { transform: translateY(-1px); }
+        .nx-scroll { scrollbar-width: none; }
+        .nx-scroll::-webkit-scrollbar { display: none; }
+    </style>
 
     @php
+        // Status chip. Onboarding reads as informational rather than a warning,
+        // which is why it is blue and not amber.
         $statusTone = match($employee->status?->value) {
-            'active', 'confirmed' => ['bg-emerald-50 text-emerald-700 ring-emerald-600/20', 'bg-emerald-500'],
-            'probation'           => ['bg-amber-50 text-amber-700 ring-amber-600/20', 'bg-amber-500'],
-            'onboarding'          => ['bg-blue-50 text-blue-700 ring-blue-600/20', 'bg-blue-500'],
-            'notice_period', 'resigned', 'terminated', 'absconded' => ['bg-red-50 text-red-700 ring-red-600/20', 'bg-red-500'],
-            default               => ['bg-zinc-100 text-zinc-600 ring-zinc-500/20', 'bg-zinc-400'],
+            'active', 'confirmed' => 'bg-emerald-50 text-emerald-700 ring-emerald-600/20',
+            'probation'           => 'bg-amber-50 text-amber-700 ring-amber-600/20',
+            'onboarding', 'draft' => 'bg-blue-50 text-blue-700 ring-blue-600/20',
+            'notice_period', 'resigned', 'terminated', 'absconded' => 'bg-rose-50 text-rose-700 ring-rose-600/20',
+            default               => 'bg-zinc-100 text-zinc-600 ring-zinc-500/20',
         };
+
+        // Six areas rather than sixteen siblings. Derived, not stored: clicking
+        // an area opens its first panel, and the area highlights because the
+        // active panel belongs to it.
+        $areas = [
+            'Record'  => ['icon' => 'identification',      'tabs' => ['General', 'Personal', 'Job', 'Documents']],
+            'Time'    => ['icon' => 'clock',               'tabs' => ['Attendance', 'Leave', 'OT']],
+            'Growth'  => ['icon' => 'arrow-trending-up',   'tabs' => ['Performance', 'Promotions', 'Probation', 'PIP']],
+            'Conduct' => ['icon' => 'exclamation-triangle','tabs' => ['Warnings']],
+            'Pay'     => ['icon' => 'banknotes',           'tabs' => ['Payroll']],
+            'History' => ['icon' => 'clock',               'tabs' => ['Timeline', 'Activity']],
+        ];
+
+        if (in_array($employee->ot_tracking_source, ['nexflow', 'hybrid'], true)) {
+            $areas['Time']['tabs'][] = 'Nexflow';
+        }
+
+        $activeArea = collect($areas)->search(fn ($a) => in_array($activeTab, $a['tabs'], true)) ?: 'Record';
+
+        $quickFacts = [
+            ['envelope',        'Emp ID',  $employee->employee_id ?: 'Not set'],
+            ['calendar-days',   'Joined',  $employee->joining_date?->format('d M Y') ?? 'Not set'],
+            ['building-office', 'Office',  $employee->office?->name ?? 'Not set'],
+            ['user-circle',     'Manager', $employee->manager?->name ?? 'Not set'],
+        ];
     @endphp
 
-    {{-- ── Hero: identity and the actions that act on this person ────────── --}}
-    <div class="relative overflow-hidden rounded-2xl border border-[#F3E8DD] bg-gradient-to-r from-[#FFF8F1] via-white to-[#FFF2E8] p-5 shadow-sm md:p-6 dark:border-white/10 dark:from-[#0F172A] dark:via-[#111827] dark:to-[#1E293B]">
-        <div class="pointer-events-none absolute -right-10 -top-16 size-64 rounded-full bg-orange-500/10 blur-3xl"></div>
+    <flux:breadcrumbs>
+        <flux:breadcrumbs.item :href="route('employees.index')" wire:navigate>Employees</flux:breadcrumbs.item>
+        <flux:breadcrumbs.item>{{ $employee->user?->name ?? 'Employee' }}</flux:breadcrumbs.item>
+    </flux:breadcrumbs>
 
-        <div class="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-            <div class="min-w-0">
-                <flux:breadcrumbs class="mb-3">
-                    <flux:breadcrumbs.item :href="route('employees.index')" wire:navigate>Employees</flux:breadcrumbs.item>
-                    <flux:breadcrumbs.item>{{ $employee->user?->name ?? 'Employee' }}</flux:breadcrumbs.item>
-                </flux:breadcrumbs>
+    {{-- ── Hero ──────────────────────────────────────────────────────────── --}}
+    <div class="relative overflow-hidden rounded-2xl border border-[#F2E3D5] bg-gradient-to-br from-[#FFF4EA] via-[#FFF9F4] to-[#FFF1E4] p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04)] md:p-6 dark:border-white/10 dark:from-[#161E2E] dark:via-[#111827] dark:to-[#1B2436]">
+        {{-- Two soft blooms rather than a busy pattern: enough to stop the card
+             reading flat, quiet enough to sit behind text. --}}
+        <div class="pointer-events-none absolute -right-16 -top-24 size-72 rounded-full bg-orange-400/20 blur-3xl"></div>
+        <div class="pointer-events-none absolute -bottom-28 right-40 size-56 rounded-full bg-amber-300/15 blur-3xl"></div>
 
-                <div class="flex items-center gap-4">
-                    @if($employee->photo)
-                        <img src="{{ asset('storage/'.$employee->photo) }}" class="size-14 shrink-0 rounded-2xl object-cover ring-2 ring-white shadow-sm dark:ring-white/10" />
-                    @else
-                        <div class="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-500 to-orange-400 text-xl font-extrabold text-white shadow-sm">
-                            {{ strtoupper(substr($employee->user?->name ?? '?', 0, 1)) }}
-                        </div>
-                    @endif
+        <div class="relative flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+            <div class="flex min-w-0 items-center gap-4">
+                @if($employee->photo)
+                    <img src="{{ asset('storage/'.$employee->photo) }}"
+                        class="size-16 shrink-0 rounded-2xl object-cover shadow-sm ring-2 ring-white dark:ring-white/10" />
+                @else
+                    <div class="flex size-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-500 to-orange-400 text-2xl font-extrabold text-white shadow-[0_4px_12px_rgba(249,115,22,0.35)]">
+                        {{ strtoupper(substr($employee->user?->name ?? '?', 0, 1)) }}
+                    </div>
+                @endif
 
-                    <div class="min-w-0">
-                        <h1 class="truncate text-xl font-extrabold text-[#111827] md:text-2xl dark:text-white">
-                            {{ $employee->user?->name ?? 'Employee' }}
-                        </h1>
-                        <div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-[#6B7280] dark:text-zinc-400">
-                            <span>{{ $employee->jobTitle?->name ?? 'No job title' }}</span>
-                            <span class="text-[#E7D4C2] dark:text-white/20">•</span>
-                            <span>{{ $employee->department?->name ?? 'No department' }}</span>
-                            <span class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset {{ $statusTone[0] }}">
-                                <span class="size-1.5 rounded-full {{ $statusTone[1] }}"></span>
-                                {{ $employee->status?->label() ?? '—' }}
-                            </span>
-                        </div>
+                <div class="min-w-0">
+                    <h1 class="truncate text-2xl font-extrabold tracking-tight text-[#101828] dark:text-white">
+                        {{ $employee->user?->name ?? 'Employee' }}
+                    </h1>
+                    <div class="mt-1.5 flex flex-wrap items-center gap-2 text-sm text-[#667085] dark:text-zinc-400">
+                        <span class="font-medium">{{ $employee->jobTitle?->name ?? 'No job title' }}</span>
+                        <span class="text-[#D7C3B0] dark:text-white/20">•</span>
+                        <span class="font-medium">{{ $employee->department?->name ?? 'No department' }}</span>
+                        <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset {{ $statusTone }}">
+                            {{ $employee->status?->label() ?? '—' }}
+                        </span>
                     </div>
                 </div>
             </div>
 
-            {{-- Four outline buttons and a kebab used to sit here competing for
-                 attention. Profile is the one people actually reach for; the
-                 credential actions are destructive-ish and now live together
-                 behind one menu where they can be labelled properly. --}}
+            {{-- Hierarchy: one primary, one secondary, everything that changes
+                 somebody's credentials behind the overflow where it has room to
+                 be labelled. --}}
             <div class="flex shrink-0 flex-wrap items-center gap-2">
-                <flux:button :href="route('employees.profile', $employee)" wire:navigate variant="primary" icon="identification" size="sm">
+                <flux:button :href="route('employees.profile', $employee)" wire:navigate variant="primary" icon="user" size="sm">
                     View profile
                 </flux:button>
 
-                <flux:button wire:click="openEmailModal" variant="outline" icon="envelope" size="sm">Send email</flux:button>
+                <flux:tooltip content="Email this employee">
+                    <flux:button wire:click="openEmailModal" variant="filled" icon="envelope" size="sm">Send email</flux:button>
+                </flux:tooltip>
 
                 <div x-data="{ open: false }" class="relative" @click.outside="open = false">
-                    <flux:button @click="open = !open" variant="outline" size="sm" icon="ellipsis-horizontal" />
+                    <flux:tooltip content="More actions">
+                        <flux:button @click="open = !open" variant="filled" size="sm" icon="ellipsis-horizontal" />
+                    </flux:tooltip>
 
-                    <div x-show="open" x-transition x-cloak
-                        class="absolute right-0 top-full z-50 mt-2 w-64 overflow-hidden rounded-2xl border border-[#F3E8DD] bg-white shadow-xl dark:border-white/10 dark:bg-zinc-900">
+                    <div x-show="open" x-cloak
+                        x-transition:enter="transition ease-out duration-150"
+                        x-transition:enter-start="opacity-0 -translate-y-1"
+                        x-transition:enter-end="opacity-100 translate-y-0"
+                        class="absolute right-0 top-full z-50 mt-2 w-72 overflow-hidden rounded-2xl border border-[#EAECF0] bg-white shadow-[0_12px_32px_rgba(16,24,40,0.12)] dark:border-white/10 dark:bg-zinc-900">
 
-                        <div class="px-4 pb-1 pt-3 text-[10px] font-bold uppercase tracking-widest text-[#9CA3AF]">Account access</div>
+                        <div class="px-4 pb-1 pt-3 text-[10px] font-bold uppercase tracking-widest text-[#98A2B3]">Account access</div>
 
                         <button type="button" wire:click="resetPassword" wire:loading.attr="disabled" wire:target="resetPassword" @click="open = false"
                             class="flex w-full items-start gap-3 px-4 py-2.5 text-left transition hover:bg-orange-50/70 dark:hover:bg-white/5">
                             <flux:icon.lock-closed class="mt-0.5 size-4 shrink-0 text-orange-500" />
                             <span>
-                                <span class="block text-sm font-semibold text-[#111827] dark:text-zinc-100">
+                                <span class="block text-sm font-semibold text-[#101828] dark:text-zinc-100">
                                     <span wire:loading.remove wire:target="resetPassword">Send reset link</span>
                                     <span wire:loading wire:target="resetPassword">Sending…</span>
                                 </span>
-                                <span class="block text-xs text-[#6B7280] dark:text-zinc-400">They choose their own new password</span>
+                                <span class="block text-xs text-[#667085] dark:text-zinc-400">They choose their own new password</span>
                             </span>
                         </button>
 
@@ -93,19 +158,19 @@
                             class="flex w-full items-start gap-3 px-4 py-2.5 text-left transition hover:bg-orange-50/70 dark:hover:bg-white/5">
                             <flux:icon.key class="mt-0.5 size-4 shrink-0 text-orange-500" />
                             <span>
-                                <span class="block text-sm font-semibold text-[#111827] dark:text-zinc-100">
+                                <span class="block text-sm font-semibold text-[#101828] dark:text-zinc-100">
                                     <span wire:loading.remove wire:target="setTemporaryPassword">Set temporary password</span>
                                     <span wire:loading wire:target="setTemporaryPassword">Resetting…</span>
                                 </span>
-                                <span class="block text-xs text-[#6B7280] dark:text-zinc-400">Replaces their password immediately</span>
+                                <span class="block text-xs text-[#667085] dark:text-zinc-400">Replaces their password immediately</span>
                             </span>
                         </button>
 
-                        <div class="my-1 border-t border-[#F3E8DD] dark:border-white/10"></div>
-                        <div class="px-4 pb-1 pt-2 text-[10px] font-bold uppercase tracking-widest text-[#9CA3AF]">Record</div>
+                        <div class="my-1 border-t border-[#EAECF0] dark:border-white/10"></div>
+                        <div class="px-4 pb-1 pt-2 text-[10px] font-bold uppercase tracking-widest text-[#98A2B3]">Record</div>
 
                         <button type="button" wire:click="setTab('Activity')" @click="open = false"
-                            class="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-semibold text-[#111827] transition hover:bg-orange-50/70 dark:text-zinc-100 dark:hover:bg-white/5">
+                            class="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-semibold text-[#101828] transition hover:bg-orange-50/70 dark:text-zinc-100 dark:hover:bg-white/5">
                             <flux:icon.clock class="size-4 shrink-0 text-orange-500" />
                             View activity
                         </button>
@@ -113,7 +178,7 @@
                         @if($employee->status->value !== 'inactive')
                             <button type="button" wire:click="deactivate"
                                 wire:confirm="Deactivate this employee? Their status will be set to Inactive." @click="open = false"
-                                class="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-semibold text-red-600 transition hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10">
+                                class="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-semibold text-rose-600 transition hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10">
                                 <flux:icon.no-symbol class="size-4 shrink-0" />
                                 Deactivate employee
                             </button>
@@ -129,18 +194,38 @@
                 </div>
             </div>
         </div>
+
+        {{-- Quick facts as chips. These are the four questions asked about
+             somebody before opening any panel, so they answer before the tabs. --}}
+        <div class="relative mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+            @foreach($quickFacts as [$icon, $label, $value])
+                <div class="nx-chip flex items-center gap-3 rounded-xl border border-white/80 bg-white/80 px-3.5 py-3 shadow-[0_1px_2px_rgba(16,24,40,0.04)] backdrop-blur dark:border-white/10 dark:bg-white/5">
+                    <div class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-orange-50 text-orange-500 dark:bg-orange-500/10">
+                        <flux:icon :name="$icon" class="size-4" />
+                    </div>
+                    <div class="min-w-0">
+                        <div class="text-[10px] font-bold uppercase tracking-widest text-[#98A2B3]">{{ $label }}</div>
+                        <div class="truncate text-sm font-semibold text-[#101828] dark:text-zinc-100">{{ $value }}</div>
+                    </div>
+                </div>
+            @endforeach
+        </div>
     </div>
 
     {{-- ── Notices ───────────────────────────────────────────────────────── --}}
     @if(session('status'))
-        <div class="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-300">
+        <div x-data="{ show: true }" x-show="show" x-transition
+            class="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-300">
             <flux:icon.check-circle class="mt-0.5 size-4 shrink-0" />
-            <span>{{ session('status') }}</span>
+            <span class="flex-1">{{ session('status') }}</span>
+            <button type="button" @click="show = false" class="text-emerald-600/60 transition hover:text-emerald-700">
+                <flux:icon.x-mark class="size-4" />
+            </button>
         </div>
     @endif
 
     @if($localResetUrl)
-        <div class="space-y-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-200">
+        <div class="space-y-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-200">
             <div class="flex items-start gap-3">
                 <flux:icon.exclamation-triangle class="mt-0.5 size-4 shrink-0" />
                 <div>
@@ -159,127 +244,118 @@
         </div>
     @endif
 
-    <div class="grid grid-cols-1 gap-5 lg:grid-cols-12">
+    <div class="grid grid-cols-1 gap-5 lg:grid-cols-[19rem_minmax(0,1fr)]">
 
-        {{-- ── Left: who this is ─────────────────────────────────────────── --}}
-        <div class="space-y-5 lg:col-span-4 xl:col-span-3">
-            <div class="overflow-hidden rounded-2xl border border-[#F3E8DD] bg-white shadow-sm dark:border-white/10 dark:bg-zinc-900">
-                <div class="border-b border-[#F3E8DD] px-5 py-4 dark:border-white/10">
-                    <div class="flex items-center justify-between">
-                        <span class="text-[10px] font-bold uppercase tracking-widest text-[#9CA3AF]">Employee ID</span>
-                        <span class="font-mono text-sm font-extrabold text-[#111827] dark:text-white">{{ $employee->employee_id ?? '—' }}</span>
-                    </div>
-                    @if($employee->employee_code)
-                        <div class="mt-2 flex items-center justify-between">
-                            <span class="text-[10px] font-bold uppercase tracking-widest text-[#9CA3AF]">Biometric</span>
-                            <span class="font-mono text-sm font-semibold text-[#6B7280] dark:text-zinc-400">{{ $employee->employee_code }}</span>
-                        </div>
-                    @endif
-                </div>
+        {{-- ── Left: summary. Ordered above the editor on mobile. ────────── --}}
+        <aside class="space-y-5">
+            <div class="overflow-hidden rounded-2xl border border-[#EAECF0] bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)] dark:border-white/10 dark:bg-zinc-900">
 
-                {{-- One row per fact, each with a real fallback: a blank line
-                     reads as a bug, "Not set" reads as work to do. --}}
-                <dl class="divide-y divide-[#F7EEE5] dark:divide-white/5">
-                    @foreach([
-                        ['envelope',         'Email',      $employee->user?->email ?: 'Not set'],
-                        ['phone',            'Phone',      $employee->phone ?: 'Not set'],
-                        ['clock',            'Shift',      $employee->shift?->name ?? 'No shift assigned'],
-                        ['calendar-days',    'Joined',     $employee->joining_date?->format('d M Y') ?? 'Not set'],
-                        ['building-office',  'Office',     $employee->office?->name ?? 'Not set'],
-                        ['user-circle',      'Manager',    $employee->manager?->name ?? 'Not set'],
-                    ] as [$icon, $label, $value])
-                        <div class="flex items-start gap-3 px-5 py-3">
-                            <flux:icon :name="$icon" class="mt-0.5 size-4 shrink-0 text-orange-400" />
-                            <div class="min-w-0 flex-1">
-                                <dt class="text-[10px] font-bold uppercase tracking-widest text-[#9CA3AF]">{{ $label }}</dt>
-                                <dd class="truncate text-sm font-medium text-[#111827] dark:text-zinc-200">{{ $value }}</dd>
+                @foreach([
+                    ['Contact', [
+                        ['envelope', 'Email', $employee->user?->email ?: 'Not set'],
+                        ['phone',    'Phone', $employee->phone ?: 'Not set'],
+                    ]],
+                    ['Work', [
+                        ['clock',           'Shift',   $employee->shift?->name ?? 'No shift assigned'],
+                        ['calendar-days',   'Joined',  $employee->joining_date?->format('d M Y') ?? 'Not set'],
+                        ['building-office', 'Office',  $employee->office?->name ?? 'Not set'],
+                        ['user-circle',     'Manager', $employee->manager?->name ?? 'Not set'],
+                    ]],
+                ] as [$section, $rows])
+                    <div class="px-5 pb-1 pt-4 text-[10px] font-bold uppercase tracking-widest text-[#98A2B3]">{{ $section }}</div>
+                    <dl class="px-5 pb-3">
+                        @foreach($rows as [$icon, $label, $value])
+                            {{-- Every row has a real fallback. A blank line reads as a
+                                 rendering fault; "Not set" reads as work still to do. --}}
+                            <div class="flex items-start gap-3 py-2.5">
+                                <flux:icon :name="$icon" class="mt-0.5 size-4 shrink-0 text-[#98A2B3]" />
+                                <div class="min-w-0 flex-1">
+                                    <dt class="text-xs font-medium text-[#98A2B3]">{{ $label }}</dt>
+                                    <dd class="truncate text-sm font-semibold text-[#101828] dark:text-zinc-200" title="{{ $value }}">{{ $value }}</dd>
+                                </div>
                             </div>
-                        </div>
-                    @endforeach
-                </dl>
+                        @endforeach
+                    </dl>
+                @endforeach
 
-                <div class="border-t border-[#F3E8DD] px-5 py-4 dark:border-white/10">
-                    <h3 class="mb-3 text-[10px] font-bold uppercase tracking-widest text-[#9CA3AF]">Shortcuts</h3>
+                <div class="border-t border-[#EAECF0] px-5 py-4 dark:border-white/10">
+                    <h3 class="mb-3 text-[10px] font-bold uppercase tracking-widest text-[#98A2B3]">Shortcuts</h3>
                     <div class="grid grid-cols-4 gap-2">
                         @foreach([
-                            ['document-text',  'Payslip',    'link',  route('payroll.payslips')],
-                            ['calendar-days',  'Attendance', 'link',  route('attendance.employees')],
-                            ['folder',         'Documents',  'tab',   'Documents'],
-                            ['squares-2x2',    'Activity',   'tab',   'Activity'],
+                            ['user',           'Profile',    'link', route('employees.profile', $employee)],
+                            ['calendar-days',  'Attendance', 'link', route('attendance.employees')],
+                            ['folder',         'Documents',  'tab',  'Documents'],
+                            ['squares-2x2',    'Activity',   'tab',  'Activity'],
                         ] as [$icon, $label, $kind, $target])
-                            @if($kind === 'link')
-                                <a href="{{ $target }}" wire:navigate
-                                    class="flex flex-col items-center gap-1.5 rounded-xl border border-transparent bg-[#FFF8F1] p-2.5 text-center transition hover:border-orange-200 hover:bg-orange-50 dark:bg-white/5 dark:hover:bg-white/10">
-                                    <flux:icon :name="$icon" class="size-4 text-orange-500" />
-                                    <span class="text-[10px] font-semibold leading-tight text-[#6B7280] dark:text-zinc-400">{{ $label }}</span>
-                                </a>
-                            @else
-                                <button type="button" wire:click="setTab('{{ $target }}')"
-                                    class="flex flex-col items-center gap-1.5 rounded-xl border border-transparent bg-[#FFF8F1] p-2.5 text-center transition hover:border-orange-200 hover:bg-orange-50 dark:bg-white/5 dark:hover:bg-white/10">
-                                    <flux:icon :name="$icon" class="size-4 text-orange-500" />
-                                    <span class="text-[10px] font-semibold leading-tight text-[#6B7280] dark:text-zinc-400">{{ $label }}</span>
-                                </button>
-                            @endif
+                            <flux:tooltip :content="$label">
+                                @if($kind === 'link')
+                                    <a href="{{ $target }}" wire:navigate
+                                        class="nx-shortcut flex flex-col items-center gap-1.5 rounded-xl bg-[#FFF7F0] p-2.5 text-center hover:bg-orange-100/70 dark:bg-white/5 dark:hover:bg-white/10">
+                                        <flux:icon :name="$icon" class="size-4 text-orange-500" />
+                                        <span class="text-[10px] font-semibold leading-tight text-[#667085] dark:text-zinc-400">{{ $label }}</span>
+                                    </a>
+                                @else
+                                    <button type="button" wire:click="setTab('{{ $target }}')"
+                                        class="nx-shortcut flex w-full flex-col items-center gap-1.5 rounded-xl bg-[#FFF7F0] p-2.5 text-center hover:bg-orange-100/70 dark:bg-white/5 dark:hover:bg-white/10">
+                                        <flux:icon :name="$icon" class="size-4 text-orange-500" />
+                                        <span class="text-[10px] font-semibold leading-tight text-[#667085] dark:text-zinc-400">{{ $label }}</span>
+                                    </button>
+                                @endif
+                            </flux:tooltip>
                         @endforeach
                     </div>
                 </div>
             </div>
-        </div>
+        </aside>
 
-        {{-- ── Right: the record itself ──────────────────────────────────── --}}
-        <div class="flex flex-col overflow-hidden rounded-2xl border border-[#F3E8DD] bg-white shadow-sm lg:col-span-8 xl:col-span-9 dark:border-white/10 dark:bg-zinc-900">
+        {{-- ── Right: the record ─────────────────────────────────────────── --}}
+        <div class="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-[#EAECF0] bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)] dark:border-white/10 dark:bg-zinc-900">
 
-            {{-- Sixteen tabs on one underlined rail overflowed into browser
-                 scroll arrows, and nothing told you which of the sixteen you
-                 were looking for. They are grouped now, and wrap instead of
-                 scrolling, so the whole record is visible at once. --}}
-            @php
-                $tabGroups = [
-                    'Record'      => ['General', 'Personal', 'Job', 'Documents'],
-                    'Time'        => ['Attendance', 'Leave', 'OT'],
-                    'Growth'      => ['Performance', 'Promotions', 'Probation', 'PIP'],
-                    'Conduct'     => ['Warnings'],
-                    'Pay'         => ['Payroll'],
-                    'History'     => ['Timeline', 'Activity'],
-                ];
-
-                if (in_array($employee->ot_tracking_source, ['nexflow', 'hybrid'], true)) {
-                    $tabGroups['Time'][] = 'Nexflow';
-                }
-            @endphp
-
-            <div class="border-b border-[#F3E8DD] bg-[#FFFDF8] px-4 py-3 dark:border-white/10 dark:bg-white/[0.02]">
-                <div class="flex flex-wrap items-center gap-x-5 gap-y-2">
-                    @foreach($tabGroups as $groupLabel => $tabs)
-                        <div class="flex items-center gap-1.5">
-                            <span class="mr-0.5 text-[10px] font-bold uppercase tracking-widest text-[#C8B7A6] dark:text-zinc-600">{{ $groupLabel }}</span>
-                            @foreach($tabs as $tab)
-                                @php
-                                    $isActive = $activeTab === $tab;
-                                    $needsAttention = ($tab === 'Probation' && $employee->status->value === 'probation');
-                                @endphp
-                                <button type="button" wire:click="setTab('{{ $tab }}')"
-                                    @class([
-                                        'relative whitespace-nowrap rounded-lg px-2.5 py-1.5 text-[13px] font-semibold transition',
-                                        'bg-gradient-to-br from-orange-500 to-orange-400 text-white shadow-sm' => $isActive,
-                                        'text-[#6B7280] hover:bg-orange-50 hover:text-orange-600 dark:text-zinc-400 dark:hover:bg-white/5' => ! $isActive,
-                                    ])>
-                                    {{ $tab }}
-                                    @if($needsAttention)
-                                        <span @class([
-                                            'absolute right-0.5 top-0.5 size-1.5 rounded-full',
-                                            'bg-white' => $isActive,
-                                            'bg-amber-500' => ! $isActive,
-                                        ])></span>
-                                    @endif
-                                </button>
-                            @endforeach
-                        </div>
+            {{-- Primary: which area of the record. Underlined, weighted. --}}
+            <div class="nx-scroll overflow-x-auto border-b border-[#EAECF0] px-4 dark:border-white/10">
+                <div class="flex min-w-max items-center gap-1">
+                    @foreach($areas as $area => $meta)
+                        @php $isArea = $activeArea === $area; @endphp
+                        <button type="button" wire:click="setTab('{{ $meta['tabs'][0] }}')"
+                            @class([
+                                'nx-tab relative flex items-center gap-2 whitespace-nowrap border-b-2 px-3.5 py-3.5 text-sm font-semibold',
+                                'border-orange-500 text-orange-600 dark:text-orange-400' => $isArea,
+                                'border-transparent text-[#667085] hover:text-[#101828] dark:text-zinc-400 dark:hover:text-zinc-200' => ! $isArea,
+                            ])>
+                            <flux:icon :name="$meta['icon']" class="size-4" />
+                            {{ $area }}
+                            @if($area === 'Growth' && $employee->status->value === 'probation')
+                                <span class="size-1.5 rounded-full bg-amber-500"></span>
+                            @endif
+                        </button>
                     @endforeach
                 </div>
             </div>
 
-            {{-- Tab content --}}
+            {{-- Secondary: which panel within it. Deliberately lighter — pills,
+                 no underline, no icons — so the two rows never compete. --}}
+            @if(count($areas[$activeArea]['tabs']) > 1)
+                <div class="nx-scroll overflow-x-auto border-b border-[#EAECF0] bg-[#FCFCFD] px-4 py-2.5 dark:border-white/10 dark:bg-white/[0.02]">
+                    <div class="flex min-w-max items-center gap-1">
+                        @foreach($areas[$activeArea]['tabs'] as $tab)
+                            @php $isTab = $activeTab === $tab; @endphp
+                            <button type="button" wire:click="setTab('{{ $tab }}')"
+                                @class([
+                                    'nx-tab relative whitespace-nowrap rounded-lg px-3 py-1.5 text-[13px] font-semibold',
+                                    'bg-orange-500 text-white shadow-[0_1px_3px_rgba(249,115,22,0.4)]' => $isTab,
+                                    'text-[#667085] hover:bg-orange-50 hover:text-orange-600 dark:text-zinc-400 dark:hover:bg-white/5' => ! $isTab,
+                                ])>
+                                {{ $tab }}
+                                @if($tab === 'Probation' && $employee->status->value === 'probation')
+                                    <span @class(['absolute right-0.5 top-0.5 size-1.5 rounded-full', 'bg-white' => $isTab, 'bg-amber-500' => ! $isTab])></span>
+                                @endif
+                            </button>
+                        @endforeach
+                    </div>
+                </div>
+            @endif
+
+{{-- Tab content --}}
             <div class="flex-1 p-6 md:p-7">
                 <form wire:submit="save">
 
@@ -287,8 +363,8 @@
                     @if($activeTab === 'General')
                         <div wire:key="tab-general" class="space-y-6">
                             <div>
-                                <h3 class="text-base font-bold text-[#111827] dark:text-white">Account Information</h3>
-                                <p class="mt-0.5 text-sm text-[#6B7280]">Update and manage employee account details</p>
+                                <h3 class="text-base font-bold text-[#101828] dark:text-white">Account Information</h3>
+                                <p class="mt-0.5 text-sm text-[#667085]">Update and manage employee account details</p>
                             </div>
                             <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
                                 <flux:input wire:model="name" label="Full Name" icon="user" required />
@@ -339,18 +415,31 @@
                                     </div>
                                 </div>
                             @endif
-                            <div class="flex items-center gap-2 rounded-xl bg-orange-50 px-4 py-3 text-sm text-orange-700 dark:bg-orange-950/30 dark:text-orange-300">
+                            <div class="flex items-start gap-3 rounded-xl border border-orange-100 bg-orange-50/60 px-4 py-3.5 text-sm text-[#7C4A17] dark:border-orange-500/20 dark:bg-orange-500/5 dark:text-orange-300">
                                 <flux:icon.information-circle class="size-4 shrink-0" />
                                 These details are used for system access and employee identification.
                             </div>
-                            <div class="flex flex-wrap items-center justify-between gap-3 border-t border-[#F3E8DD] pt-5 dark:border-white/10">
-                                <div class="flex items-center gap-1.5 text-xs text-[#9CA3AF]">
-                                    <flux:icon.check-circle class="size-3.5 text-emerald-500" />
-                                    Last updated {{ $employee->updated_at->format('d M Y, g:i A') }}
+                            {{-- Sticky so Save stays reachable on a long panel without
+                                 scrolling back, and so "what changed" and "commit it"
+                                 sit together. --}}
+                            <div class="sticky bottom-0 -mx-6 mt-2 flex flex-wrap items-center justify-between gap-3 border-t border-[#EAECF0] bg-white/90 px-6 py-4 backdrop-blur md:-mx-7 md:px-7 dark:border-white/10 dark:bg-zinc-900/90">
+                                <div class="flex items-center gap-2 text-xs text-[#98A2B3]">
+                                    <span wire:loading.remove wire:target="save" class="flex items-center gap-1.5">
+                                        <flux:icon.check-circle class="size-3.5 text-emerald-500" />
+                                        Last updated {{ $employee->updated_at->format('d M Y, g:i A') }}
+                                    </span>
+                                    <span wire:loading wire:target="save" class="flex items-center gap-1.5 font-medium text-orange-600">
+                                        <flux:icon.arrow-path class="size-3.5 animate-spin" />
+                                        Saving changes…
+                                    </span>
                                 </div>
                                 <div class="flex gap-2">
                                     <flux:button type="button" href="{{ route('employees.index') }}" wire:navigate variant="ghost">Cancel</flux:button>
-                                    <flux:button type="submit" variant="primary" icon="check">Save Changes</flux:button>
+                                    <flux:button type="submit" variant="primary" icon="check"
+                                        wire:loading.attr="disabled" wire:target="save">
+                                        <span wire:loading.remove wire:target="save">Save Changes</span>
+                                        <span wire:loading wire:target="save">Saving…</span>
+                                    </flux:button>
                                 </div>
                             </div>
                         </div>
@@ -359,8 +448,8 @@
                     @elseif($activeTab === 'Personal')
                         <div wire:key="tab-personal" class="space-y-6">
                             <div>
-                                <h3 class="text-base font-bold text-[#111827] dark:text-white">Personal Information</h3>
-                                <p class="mt-0.5 text-sm text-[#6B7280]">Manage personal and contact details</p>
+                                <h3 class="text-base font-bold text-[#101828] dark:text-white">Personal Information</h3>
+                                <p class="mt-0.5 text-sm text-[#667085]">Manage personal and contact details</p>
                             </div>
                             <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
                                 <flux:input wire:model="phone" label="Phone Number" icon="phone" placeholder="+91 98765 43210" />
@@ -375,20 +464,33 @@
                                 @if($employee->photo)
                                     <div class="mb-2 flex items-center gap-3">
                                         <img src="{{ asset('storage/'.$employee->photo) }}" class="size-12 rounded-full border border-zinc-200 object-cover" />
-                                        <span class="text-xs text-[#9CA3AF]">Current photo — upload a new one to replace</span>
+                                        <span class="text-xs text-[#98A2B3]">Current photo — upload a new one to replace</span>
                                     </div>
                                 @endif
                                 <flux:input wire:model="photo" type="file" accept="image/*" class="mt-1" />
                                 @error('photo') <flux:error>{{ $message }}</flux:error> @enderror
                             </flux:field>
-                            <div class="flex flex-wrap items-center justify-between gap-3 border-t border-[#F3E8DD] pt-5 dark:border-white/10">
-                                <div class="flex items-center gap-1.5 text-xs text-[#9CA3AF]">
-                                    <flux:icon.check-circle class="size-3.5 text-emerald-500" />
-                                    Last updated {{ $employee->updated_at->format('d M Y, g:i A') }}
+                            {{-- Sticky so Save stays reachable on a long panel without
+                                 scrolling back, and so "what changed" and "commit it"
+                                 sit together. --}}
+                            <div class="sticky bottom-0 -mx-6 mt-2 flex flex-wrap items-center justify-between gap-3 border-t border-[#EAECF0] bg-white/90 px-6 py-4 backdrop-blur md:-mx-7 md:px-7 dark:border-white/10 dark:bg-zinc-900/90">
+                                <div class="flex items-center gap-2 text-xs text-[#98A2B3]">
+                                    <span wire:loading.remove wire:target="save" class="flex items-center gap-1.5">
+                                        <flux:icon.check-circle class="size-3.5 text-emerald-500" />
+                                        Last updated {{ $employee->updated_at->format('d M Y, g:i A') }}
+                                    </span>
+                                    <span wire:loading wire:target="save" class="flex items-center gap-1.5 font-medium text-orange-600">
+                                        <flux:icon.arrow-path class="size-3.5 animate-spin" />
+                                        Saving changes…
+                                    </span>
                                 </div>
                                 <div class="flex gap-2">
                                     <flux:button type="button" href="{{ route('employees.index') }}" wire:navigate variant="ghost">Cancel</flux:button>
-                                    <flux:button type="submit" variant="primary" icon="check">Save Changes</flux:button>
+                                    <flux:button type="submit" variant="primary" icon="check"
+                                        wire:loading.attr="disabled" wire:target="save">
+                                        <span wire:loading.remove wire:target="save">Save Changes</span>
+                                        <span wire:loading wire:target="save">Saving…</span>
+                                    </flux:button>
                                 </div>
                             </div>
                         </div>
@@ -397,8 +499,8 @@
                     @elseif($activeTab === 'Job')
                         <div wire:key="tab-job" class="space-y-6">
                             <div>
-                                <h3 class="text-base font-bold text-[#111827] dark:text-white">Job Information</h3>
-                                <p class="mt-0.5 text-sm text-[#6B7280]">Employment details, role assignments, and leave allocations</p>
+                                <h3 class="text-base font-bold text-[#101828] dark:text-white">Job Information</h3>
+                                <p class="mt-0.5 text-sm text-[#667085]">Employment details, role assignments, and leave allocations</p>
                             </div>
                             <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
                                 <flux:input wire:model="joining_date" type="date" label="Joining Date" required />
@@ -496,14 +598,27 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="flex flex-wrap items-center justify-between gap-3 border-t border-[#F3E8DD] pt-5 dark:border-white/10">
-                                <div class="flex items-center gap-1.5 text-xs text-[#9CA3AF]">
-                                    <flux:icon.check-circle class="size-3.5 text-emerald-500" />
-                                    Last updated {{ $employee->updated_at->format('d M Y, g:i A') }}
+                            {{-- Sticky so Save stays reachable on a long panel without
+                                 scrolling back, and so "what changed" and "commit it"
+                                 sit together. --}}
+                            <div class="sticky bottom-0 -mx-6 mt-2 flex flex-wrap items-center justify-between gap-3 border-t border-[#EAECF0] bg-white/90 px-6 py-4 backdrop-blur md:-mx-7 md:px-7 dark:border-white/10 dark:bg-zinc-900/90">
+                                <div class="flex items-center gap-2 text-xs text-[#98A2B3]">
+                                    <span wire:loading.remove wire:target="save" class="flex items-center gap-1.5">
+                                        <flux:icon.check-circle class="size-3.5 text-emerald-500" />
+                                        Last updated {{ $employee->updated_at->format('d M Y, g:i A') }}
+                                    </span>
+                                    <span wire:loading wire:target="save" class="flex items-center gap-1.5 font-medium text-orange-600">
+                                        <flux:icon.arrow-path class="size-3.5 animate-spin" />
+                                        Saving changes…
+                                    </span>
                                 </div>
                                 <div class="flex gap-2">
                                     <flux:button type="button" href="{{ route('employees.index') }}" wire:navigate variant="ghost">Cancel</flux:button>
-                                    <flux:button type="submit" variant="primary" icon="check">Save Changes</flux:button>
+                                    <flux:button type="submit" variant="primary" icon="check"
+                                        wire:loading.attr="disabled" wire:target="save">
+                                        <span wire:loading.remove wire:target="save">Save Changes</span>
+                                        <span wire:loading wire:target="save">Saving…</span>
+                                    </flux:button>
                                 </div>
                             </div>
                         </div>
@@ -514,8 +629,8 @@
                             {{-- Header row --}}
                             <div class="flex flex-wrap items-start justify-between gap-3">
                                 <div>
-                                    <h3 class="text-base font-bold text-[#111827] dark:text-white">Leave Balance</h3>
-                                    <p class="mt-0.5 text-sm text-[#6B7280]">Centrally managed — allocations are set via Leave Settings.</p>
+                                    <h3 class="text-base font-bold text-[#101828] dark:text-white">Leave Balance</h3>
+                                    <p class="mt-0.5 text-sm text-[#667085]">Centrally managed — allocations are set via Leave Settings.</p>
                                 </div>
                                 <div class="flex items-center gap-2">
                                     {{-- Year selector --}}
@@ -530,10 +645,10 @@
                             </div>
 
                             {{-- Balance summary table --}}
-                            <div class="overflow-x-auto rounded-xl border border-[#F3E8DD] dark:border-white/10">
+                            <div class="overflow-x-auto rounded-xl border border-[#EAECF0] dark:border-white/10">
                                 <table class="w-full text-sm">
                                     <thead>
-                                        <tr class="border-b border-[#F3E8DD] dark:border-white/10 bg-[#FFFDF8] dark:bg-zinc-800/50">
+                                        <tr class="border-b border-[#EAECF0] dark:border-white/10 bg-[#F9FAFB] dark:bg-zinc-800/50">
                                             <th class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-zinc-400">Leave Type</th>
                                             <th class="px-4 py-3 text-center text-xs font-bold uppercase tracking-wide text-zinc-400">Allocated</th>
                                             <th class="px-4 py-3 text-center text-xs font-bold uppercase tracking-wide text-zinc-400">Carried Fwd</th>
@@ -594,7 +709,7 @@
                                     <h4 class="mb-3 text-sm font-bold text-zinc-700 dark:text-zinc-300">Adjustment History</h4>
                                     <div class="space-y-2 max-h-64 overflow-y-auto">
                                         @foreach($adjustmentHistory as $log)
-                                            <div class="flex items-start gap-3 rounded-xl border border-[#F3E8DD] dark:border-white/10 bg-white dark:bg-zinc-900 px-4 py-3">
+                                            <div class="flex items-start gap-3 rounded-xl border border-[#EAECF0] dark:border-white/10 bg-white dark:bg-zinc-900 px-4 py-3">
                                                 <div class="mt-0.5 shrink-0">
                                                     @if($log->action === 'credit')
                                                         <span class="flex size-6 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30">
@@ -611,14 +726,14 @@
                                                         <span class="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                                                             {{ ucfirst($log->action) }} {{ $log->days }} day(s)
                                                         </span>
-                                                        <span class="text-xs text-[#9CA3AF]">{{ $log->leaveType?->name }}</span>
-                                                        <span class="text-xs text-[#9CA3AF]">·</span>
-                                                        <span class="text-xs text-[#9CA3AF]">{{ $log->adjusted_at->format('d M Y, h:i A') }}</span>
-                                                        <span class="text-xs text-[#9CA3AF]">by {{ $log->adjustedByUser?->name }}</span>
+                                                        <span class="text-xs text-[#98A2B3]">{{ $log->leaveType?->name }}</span>
+                                                        <span class="text-xs text-[#98A2B3]">·</span>
+                                                        <span class="text-xs text-[#98A2B3]">{{ $log->adjusted_at->format('d M Y, h:i A') }}</span>
+                                                        <span class="text-xs text-[#98A2B3]">by {{ $log->adjustedByUser?->name }}</span>
                                                     </div>
                                                     <p class="mt-0.5 text-xs text-zinc-500">{{ $log->reason }}</p>
                                                     @if($log->remarks)
-                                                        <p class="text-xs text-[#9CA3AF] italic">{{ $log->remarks }}</p>
+                                                        <p class="text-xs text-[#98A2B3] italic">{{ $log->remarks }}</p>
                                                     @endif
                                                     <div class="mt-1 flex items-center gap-2 text-[11px] text-zinc-400">
                                                         <span>Balance: {{ $log->previous_balance }} → <strong class="text-zinc-600 dark:text-zinc-300">{{ $log->new_balance }}</strong></span>
@@ -636,8 +751,8 @@
                     @elseif($activeTab === 'Attendance')
                         <div wire:key="tab-attendance" class="space-y-4">
                             <div>
-                                <h3 class="text-base font-bold text-[#111827] dark:text-white">Attendance</h3>
-                                <p class="mt-0.5 text-sm text-[#6B7280]">Most recent 30 attendance records</p>
+                                <h3 class="text-base font-bold text-[#101828] dark:text-white">Attendance</h3>
+                                <p class="mt-0.5 text-sm text-[#667085]">Most recent 30 attendance records</p>
                             </div>
                             <div class="pulse-table-wrap">
                                 <table class="pulse-table">
@@ -672,8 +787,8 @@
                         <div wire:key="tab-ot" class="space-y-4">
                             <div class="flex items-center justify-between">
                                 <div>
-                                    <h3 class="text-base font-bold text-[#111827] dark:text-white">Overtime</h3>
-                                    <p class="mt-0.5 text-sm text-[#6B7280]">Recorded OT hours</p>
+                                    <h3 class="text-base font-bold text-[#101828] dark:text-white">Overtime</h3>
+                                    <p class="mt-0.5 text-sm text-[#667085]">Recorded OT hours</p>
                                 </div>
                                 <div class="text-right">
                                     <div class="text-2xl font-black text-zinc-900 dark:text-white">{{ (float) $otRecords->sum('ot_hours') }}h</div>
@@ -704,15 +819,15 @@
                     @elseif($activeTab === 'Performance')
                         <div wire:key="tab-performance" class="space-y-6">
                             <div>
-                                <h3 class="text-base font-bold text-[#111827] dark:text-white">Performance Trend</h3>
-                                <p class="mt-0.5 text-sm text-[#6B7280]">Review ratings and KPI scorecards over time</p>
+                                <h3 class="text-base font-bold text-[#101828] dark:text-white">Performance Trend</h3>
+                                <p class="mt-0.5 text-sm text-[#667085]">Review ratings and KPI scorecards over time</p>
                             </div>
                             @if($reviewHistory->isNotEmpty())
                                 <div class="flex flex-wrap gap-3">
                                     @foreach($reviewHistory->take(8) as $rev)
-                                        <div class="rounded-xl border border-[#F3E8DD] px-4 py-3 dark:border-zinc-800">
-                                            <div class="text-xs text-[#9CA3AF]">{{ $rev->cycle?->name ?? 'Cycle' }}</div>
-                                            <div class="text-xl font-black text-zinc-900 dark:text-white">{{ $rev->overall_rating ?? '—' }}<span class="text-xs text-[#9CA3AF]">/5</span></div>
+                                        <div class="rounded-xl border border-[#EAECF0] px-4 py-3 dark:border-zinc-800">
+                                            <div class="text-xs text-[#98A2B3]">{{ $rev->cycle?->name ?? 'Cycle' }}</div>
+                                            <div class="text-xl font-black text-zinc-900 dark:text-white">{{ $rev->overall_rating ?? '—' }}<span class="text-xs text-[#98A2B3]">/5</span></div>
                                         </div>
                                     @endforeach
                                 </div>
@@ -745,13 +860,13 @@
                     {{-- ── Warnings Tab ── --}}
                     @elseif($activeTab === 'Warnings')
                         <div wire:key="tab-warnings" class="space-y-4">
-                            <h3 class="text-base font-bold text-[#111827] dark:text-white">Warning Letters</h3>
+                            <h3 class="text-base font-bold text-[#101828] dark:text-white">Warning Letters</h3>
                             <div class="space-y-2">
                                 @forelse($warningHistory as $w)
-                                    <div class="flex items-center justify-between gap-3 rounded-xl border border-[#F3E8DD] px-4 py-3 dark:border-zinc-800">
+                                    <div class="flex items-center justify-between gap-3 rounded-xl border border-[#EAECF0] px-4 py-3 dark:border-zinc-800">
                                         <div class="min-w-0">
                                             <div class="text-sm font-semibold text-zinc-900 dark:text-white">{{ ucwords(str_replace('_', ' ', $w->warning_type)) }}</div>
-                                            <div class="text-xs text-[#9CA3AF]">{{ $w->issue_date ? \Illuminate\Support\Carbon::parse($w->issue_date)->format('d M Y') : '—' }}</div>
+                                            <div class="text-xs text-[#98A2B3]">{{ $w->issue_date ? \Illuminate\Support\Carbon::parse($w->issue_date)->format('d M Y') : '—' }}</div>
                                         </div>
                                         <span class="badge-warning-{{ $w->status }}">{{ strtoupper(str_replace('_', ' ', $w->status)) }}</span>
                                     </div>
@@ -764,13 +879,13 @@
                     {{-- ── PIP Tab ── --}}
                     @elseif($activeTab === 'PIP')
                         <div wire:key="tab-pip" class="space-y-4">
-                            <h3 class="text-base font-bold text-[#111827] dark:text-white">Performance Improvement Plans</h3>
+                            <h3 class="text-base font-bold text-[#101828] dark:text-white">Performance Improvement Plans</h3>
                             <div class="space-y-2">
                                 @forelse($pipHistory as $pip)
-                                    <div class="flex items-center justify-between gap-3 rounded-xl border border-[#F3E8DD] px-4 py-3 dark:border-zinc-800">
+                                    <div class="flex items-center justify-between gap-3 rounded-xl border border-[#EAECF0] px-4 py-3 dark:border-zinc-800">
                                         <div class="min-w-0">
                                             <div class="text-sm font-semibold text-zinc-900 dark:text-white">PIP · {{ $pip->start_date ? \Illuminate\Support\Carbon::parse($pip->start_date)->format('d M Y') : '—' }} &rarr; {{ $pip->end_date ? \Illuminate\Support\Carbon::parse($pip->end_date)->format('d M Y') : '—' }}</div>
-                                            @if($pip->outcome)<div class="text-xs text-[#9CA3AF]">Outcome: {{ ucfirst($pip->outcome) }}</div>@endif
+                                            @if($pip->outcome)<div class="text-xs text-[#98A2B3]">Outcome: {{ ucfirst($pip->outcome) }}</div>@endif
                                         </div>
                                         <span class="rounded-full bg-zinc-100 px-2.5 py-0.5 text-[11px] font-bold uppercase text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">{{ str_replace('_', ' ', $pip->status) }}</span>
                                     </div>
@@ -783,13 +898,13 @@
                     {{-- ── Promotions Tab ── --}}
                     @elseif($activeTab === 'Promotions')
                         <div wire:key="tab-promotions" class="space-y-4">
-                            <h3 class="text-base font-bold text-[#111827] dark:text-white">Promotions &amp; Recommendations</h3>
+                            <h3 class="text-base font-bold text-[#101828] dark:text-white">Promotions &amp; Recommendations</h3>
                             <div class="space-y-2">
                                 @forelse($promotionHistory as $promo)
-                                    <div class="flex items-center justify-between gap-3 rounded-xl border border-[#F3E8DD] px-4 py-3 dark:border-zinc-800">
+                                    <div class="flex items-center justify-between gap-3 rounded-xl border border-[#EAECF0] px-4 py-3 dark:border-zinc-800">
                                         <div class="min-w-0">
                                             <div class="text-sm font-semibold text-zinc-900 dark:text-white">{{ ucwords(str_replace('_', ' ', $promo->recommendation_type)) }}</div>
-                                            <div class="text-xs text-[#9CA3AF]">{{ $promo->current_role ?? '' }} @if($promo->proposed_role)&rarr; {{ $promo->proposed_role }}@endif</div>
+                                            <div class="text-xs text-[#98A2B3]">{{ $promo->current_role ?? '' }} @if($promo->proposed_role)&rarr; {{ $promo->proposed_role }}@endif</div>
                                         </div>
                                         <span class="rounded-full bg-zinc-100 px-2.5 py-0.5 text-[11px] font-bold uppercase text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">{{ str_replace('_', ' ', $promo->status) }}</span>
                                     </div>
@@ -802,12 +917,12 @@
                     {{-- ── Timeline Tab ── --}}
                     @elseif($activeTab === 'Timeline')
                         <div wire:key="tab-timeline" class="space-y-4">
-                            <h3 class="text-base font-bold text-[#111827] dark:text-white">Career Timeline</h3>
+                            <h3 class="text-base font-bold text-[#101828] dark:text-white">Career Timeline</h3>
                             <div class="relative space-y-4 border-l border-zinc-200 pl-6 dark:border-zinc-700">
                                 @forelse($timeline as $event)
                                     <div class="relative">
                                         <span class="absolute -left-[26px] top-1 size-3 rounded-full bg-brand-500 ring-4 ring-white dark:ring-zinc-900"></span>
-                                        <div class="text-xs text-[#9CA3AF]">{{ $event->event_date ? \Illuminate\Support\Carbon::parse($event->event_date)->format('d M Y') : '' }}</div>
+                                        <div class="text-xs text-[#98A2B3]">{{ $event->event_date ? \Illuminate\Support\Carbon::parse($event->event_date)->format('d M Y') : '' }}</div>
                                         <div class="text-sm font-semibold text-zinc-900 dark:text-white">{{ $event->title }}</div>
                                         @if($event->description)<div class="text-xs text-zinc-500">{{ $event->description }}</div>@endif
                                     </div>
@@ -822,8 +937,8 @@
                         <div wire:key="tab-probation" class="space-y-6">
                             <div class="flex items-start justify-between">
                                 <div>
-                                    <h3 class="text-base font-bold text-[#111827] dark:text-white">Probation Management</h3>
-                                    <p class="mt-0.5 text-sm text-[#6B7280]">Review and action this employee's probation period.</p>
+                                    <h3 class="text-base font-bold text-[#101828] dark:text-white">Probation Management</h3>
+                                    <p class="mt-0.5 text-sm text-[#667085]">Review and action this employee's probation period.</p>
                                 </div>
                                 @if($employee->status->value === 'probation')
                                     <flux:badge color="amber">On Probation</flux:badge>
@@ -832,7 +947,7 @@
                                 @endif
                             </div>
 
-                            <div class="grid grid-cols-2 gap-4 rounded-xl border border-[#F3E8DD] bg-[#FFFDF8] p-4 text-sm dark:border-zinc-800 dark:bg-zinc-900">
+                            <div class="grid grid-cols-2 gap-4 rounded-xl border border-[#EAECF0] bg-[#F9FAFB] p-4 text-sm dark:border-zinc-800 dark:bg-zinc-900">
                                 <div>
                                     <div class="mb-1 text-zinc-400">Joining Date</div>
                                     <div class="font-bold text-zinc-900 dark:text-white">{{ $employee->joining_date?->format('d M Y') ?? 'Not set' }}</div>
@@ -876,7 +991,7 @@
                                         <flux:icon.check-circle class="size-8 text-emerald-500" />
                                     </div>
                                     <h3 class="font-bold text-zinc-900 dark:text-white">Probation Completed</h3>
-                                    <p class="mt-1 text-sm text-[#6B7280]">This employee has completed their probation period.</p>
+                                    <p class="mt-1 text-sm text-[#667085]">This employee has completed their probation period.</p>
                                 </div>
                             @endif
                         </div>
@@ -891,8 +1006,8 @@
                         <div wire:key="tab-payroll" class="space-y-6">
                             <div class="flex items-center justify-between">
                                 <div>
-                                    <h3 class="text-base font-bold text-[#111827] dark:text-white">Payroll Summary</h3>
-                                    <p class="mt-0.5 text-sm text-[#6B7280]">Manage salary structure and compensation for this employee</p>
+                                    <h3 class="text-base font-bold text-[#101828] dark:text-white">Payroll Summary</h3>
+                                    <p class="mt-0.5 text-sm text-[#667085]">Manage salary structure and compensation for this employee</p>
                                 </div>
                                 <div class="flex items-center gap-2">
                                     <span class="text-xs font-bold uppercase text-zinc-400">{{ $employee->salaryCycle?->name ?? 'Default Cycle' }}</span>
@@ -901,11 +1016,11 @@
                             </div>
 
                             {{-- Net compensation card --}}
-                            <div class="rounded-2xl border border-[#F3E8DD] bg-white p-5 dark:border-zinc-800 dark:bg-zinc-800/50">
+                            <div class="rounded-2xl border border-[#EAECF0] bg-white p-5 dark:border-zinc-800 dark:bg-zinc-800/50">
                                 <div class="flex flex-col items-start justify-between gap-3 md:flex-row md:items-center">
                                     <div>
                                         <div class="text-sm font-bold text-zinc-900 dark:text-white">Total Net Compensation</div>
-                                        <div class="text-xs text-[#9CA3AF]">Based on assigned salary components</div>
+                                        <div class="text-xs text-[#98A2B3]">Based on assigned salary components</div>
                                     </div>
                                     <div class="text-right">
                                         <div class="text-2xl font-black text-orange-600">₹{{ number_format($netSalary, 2) }}</div>
@@ -921,10 +1036,10 @@
                             <div class="space-y-2">
                                 <div class="flex items-center justify-between">
                                     <h4 class="text-xs font-black uppercase tracking-widest text-emerald-500">Earnings</h4>
-                                    <span class="text-xs text-[#9CA3AF]">₹{{ number_format($grossSalary, 2) }}</span>
+                                    <span class="text-xs text-[#98A2B3]">₹{{ number_format($grossSalary, 2) }}</span>
                                 </div>
                                 @forelse($employee->salaries->where('component.type', 'earning') as $salary)
-                                    <div class="flex items-center justify-between rounded-xl border border-[#F3E8DD] bg-[#FFFDF8] px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900">
+                                    <div class="flex items-center justify-between rounded-xl border border-[#EAECF0] bg-[#F9FAFB] px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900">
                                         <span class="text-sm font-medium text-zinc-900 dark:text-white">{{ $salary->component->name }}</span>
                                         <div class="flex items-center gap-3">
                                             <span class="text-sm font-black text-zinc-900 dark:text-white">₹{{ number_format($salary->amount, 2) }}</span>
@@ -943,10 +1058,10 @@
                             <div class="space-y-2">
                                 <div class="flex items-center justify-between">
                                     <h4 class="text-xs font-black uppercase tracking-widest text-rose-500">Deductions</h4>
-                                    <span class="text-xs text-[#9CA3AF]">-₹{{ number_format($totalDeductions, 2) }}</span>
+                                    <span class="text-xs text-[#98A2B3]">-₹{{ number_format($totalDeductions, 2) }}</span>
                                 </div>
                                 @forelse($employee->salaries->where('component.type', 'deduction') as $salary)
-                                    <div class="flex items-center justify-between rounded-xl border border-[#F3E8DD] bg-[#FFFDF8] px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900">
+                                    <div class="flex items-center justify-between rounded-xl border border-[#EAECF0] bg-[#F9FAFB] px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900">
                                         <span class="text-sm font-medium text-zinc-900 dark:text-white">{{ $salary->component->name }}</span>
                                         <div class="flex items-center gap-3">
                                             <span class="text-sm font-black text-rose-600">-₹{{ number_format($salary->amount, 2) }}</span>
@@ -961,7 +1076,7 @@
                                 @endforelse
                             </div>
 
-                            <div class="flex justify-end border-t border-[#F3E8DD] pt-4 dark:border-zinc-800">
+                            <div class="flex justify-end border-t border-[#EAECF0] pt-4 dark:border-zinc-800">
                                 <flux:button href="{{ route('payroll.components') }}" wire:navigate variant="ghost" icon="cog-6-tooth" size="sm">
                                     Manage Global Components
                                 </flux:button>
@@ -999,8 +1114,8 @@
                                     @error('salaryAmount') <p class="text-xs text-red-500 -mt-2">{{ $message }}</p> @enderror
                                 </div>
 
-                                <div class="flex justify-end gap-3 border-t border-[#F3E8DD] pt-4 dark:border-zinc-800">
-                                    <button type="button" @click="$wire.set('showSalaryModal', false)" class="px-4 py-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-600 rounded-xl hover:bg-[#FFFDF8] dark:hover:bg-zinc-700 transition-colors">Cancel</button>
+                                <div class="flex justify-end gap-3 border-t border-[#EAECF0] pt-4 dark:border-zinc-800">
+                                    <button type="button" @click="$wire.set('showSalaryModal', false)" class="px-4 py-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-600 rounded-xl hover:bg-[#F9FAFB] dark:hover:bg-zinc-700 transition-colors">Cancel</button>
                                     <flux:button
                                         wire:click="saveSalary"
                                         wire:loading.attr="disabled"
@@ -1019,8 +1134,8 @@
                     @elseif($activeTab === 'Documents')
                         <div wire:key="tab-documents" class="space-y-5">
                             <div>
-                                <h3 class="text-base font-bold text-[#111827] dark:text-white">Documents</h3>
-                                <p class="mt-0.5 text-sm text-[#6B7280]">Employee documents and files</p>
+                                <h3 class="text-base font-bold text-[#101828] dark:text-white">Documents</h3>
+                                <p class="mt-0.5 text-sm text-[#667085]">Employee documents and files</p>
                             </div>
                             <livewire:employees.employee-documents :employee="$employee" :key="'docs-'.$employee->id" />
                         </div>
@@ -1029,12 +1144,12 @@
                     @elseif($activeTab === 'Activity')
                         <div wire:key="tab-activity" class="space-y-5">
                             <div>
-                                <h3 class="text-base font-bold text-[#111827] dark:text-white">Activity Log</h3>
-                                <p class="mt-0.5 text-sm text-[#6B7280]">Recent actions and changes for this employee</p>
+                                <h3 class="text-base font-bold text-[#101828] dark:text-white">Activity Log</h3>
+                                <p class="mt-0.5 text-sm text-[#667085]">Recent actions and changes for this employee</p>
                             </div>
                             <div class="flex flex-col items-center justify-center py-16 text-center opacity-60">
                                 <flux:icon.clock class="size-10 text-zinc-400 mb-3" />
-                                <p class="text-sm text-[#6B7280]">Activity log coming soon.</p>
+                                <p class="text-sm text-[#667085]">Activity log coming soon.</p>
                             </div>
                         </div>
 
@@ -1060,7 +1175,7 @@
                 </button>
 
                 <div>
-                    <h2 class="text-base font-bold text-[#111827] dark:text-white">Manage Leave Balance</h2>
+                    <h2 class="text-base font-bold text-[#101828] dark:text-white">Manage Leave Balance</h2>
                     <p class="text-sm text-zinc-500 mt-0.5">For {{ $employee->user->name }} · {{ $leaveBalanceYear }}</p>
                 </div>
 
@@ -1105,9 +1220,9 @@
                     </flux:field>
                 </div>
 
-                <div class="flex justify-end gap-3 border-t border-[#F3E8DD] dark:border-white/10 pt-4">
+                <div class="flex justify-end gap-3 border-t border-[#EAECF0] dark:border-white/10 pt-4">
                     <button type="button" wire:click="closeManageLeaveModal"
-                        class="px-4 py-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-600 rounded-xl hover:bg-[#FFFDF8] dark:hover:bg-zinc-700 transition-colors">
+                        class="px-4 py-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-600 rounded-xl hover:bg-[#F9FAFB] dark:hover:bg-zinc-700 transition-colors">
                         Cancel
                     </button>
                     <flux:button
@@ -1135,7 +1250,7 @@
                     <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                 </button>
                 <div>
-                    <h2 class="text-base font-bold text-[#111827] dark:text-white">Send Email</h2>
+                    <h2 class="text-base font-bold text-[#101828] dark:text-white">Send Email</h2>
                     <p class="text-sm text-zinc-500 mt-0.5">To: {{ $employee->user->email }}</p>
                 </div>
                 <div class="space-y-4">
@@ -1150,9 +1265,9 @@
                         @error('emailBody') <p class="text-xs text-red-500">{{ $message }}</p> @enderror
                     </flux:field>
                 </div>
-                <div class="flex justify-end gap-3 border-t border-[#F3E8DD] dark:border-white/10 pt-4">
+                <div class="flex justify-end gap-3 border-t border-[#EAECF0] dark:border-white/10 pt-4">
                     <button type="button" wire:click="closeEmailModal"
-                        class="px-4 py-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300 bg-white dark:bg-zinc-700 border border-zinc-200 dark:border-zinc-600 rounded-xl hover:bg-[#FFFDF8] transition-colors">
+                        class="px-4 py-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300 bg-white dark:bg-zinc-700 border border-zinc-200 dark:border-zinc-600 rounded-xl hover:bg-[#F9FAFB] transition-colors">
                         Cancel
                     </button>
                     <button type="button" wire:click="sendEmail"
@@ -1177,7 +1292,7 @@
             </div>
             <flux:subheading>Emailed to {{ $employee->user->email }} (if the Welcome Email is enabled). Copy it to share directly.</flux:subheading>
 
-            <div class="flex items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-[#FFFDF8] p-4 dark:border-white/10 dark:bg-zinc-800/50">
+            <div class="flex items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-[#F9FAFB] p-4 dark:border-white/10 dark:bg-zinc-800/50">
                 <code class="rounded-lg bg-white px-2 py-1 font-mono text-sm text-zinc-900 dark:bg-zinc-900 dark:text-white">{{ $generatedPassword }}</code>
                 <button type="button" x-on:click="copy(@js($generatedPassword))"
                     class="rounded-lg bg-orange-500 px-2.5 py-1 text-xs font-bold text-white transition hover:bg-orange-600"
