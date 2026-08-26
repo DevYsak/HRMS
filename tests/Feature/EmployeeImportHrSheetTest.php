@@ -1,7 +1,6 @@
 <?php
 
 use App\Exports\EmployeesExport;
-use App\Mail\WelcomeEmployeeMail;
 use App\Models\Department;
 use App\Models\Employee;
 use App\Models\Office;
@@ -279,7 +278,11 @@ test('a row with no email imports with a generated address and an Email Pending 
         ->and($employee->dataFlags())->toContain('Email Pending');
 });
 
-test('no mail is ever sent to a generated placeholder address', function () {
+test('importing a placeholder address mails nobody', function () {
+    // A row with no email still gets a user record — the importer invents an
+    // address so one can exist at all — and that address belongs to nobody.
+    // Import mails no one now regardless, and the placeholder is additionally
+    // refused at the invitation step; see EmployeeInvitationTest.
     Mail::fake();
     $actor = User::factory()->create();
     $service = hrSheetService();
@@ -289,11 +292,9 @@ test('no mail is ever sent to a generated placeholder address', function () {
         ['employee_id' => 'CNS972', 'employee_name' => 'Real Person', 'email' => 'real.person@example.com', 'date_of_joining' => '2026-07-01'],
     ]);
 
-    // Opt in to welcome emails: only the row with a genuine address gets one.
-    $service->import($parsed, 'skip', $actor, 'welcome.xlsx', sendWelcome: true);
+    $service->import($parsed, 'skip', $actor, 'welcome.xlsx');
 
-    Mail::assertSent(WelcomeEmployeeMail::class, 1);
-    Mail::assertSent(WelcomeEmployeeMail::class, fn ($mail) => $mail->hasTo('real.person@example.com'));
+    Mail::assertNothingSent();
 });
 
 test('a row with no joining date imports and is flagged instead of rejected', function () {
@@ -341,7 +342,7 @@ test('missing departments, designations and shifts are auto-created and linked w
             'department' => 'Brand New Dept', 'designation' => 'Brand New Role', 'shift' => '10.30 AM to 7.30 PM'],
     ]);
 
-    $service->import($parsed, 'skip', $actor, null, false, autoCreateMasterData: true);
+    $service->import($parsed, 'skip', $actor, null, autoCreateMasterData: true);
 
     $employee = Employee::with(['department', 'jobTitle', 'shift'])->where('employee_id', 'CNS980')->first();
 
@@ -364,7 +365,7 @@ test('master data is left alone when auto-create is off', function () {
             'department' => 'Never Created Dept'],
     ]);
 
-    $service->import($parsed, 'skip', $actor, null, false, autoCreateMasterData: false);
+    $service->import($parsed, 'skip', $actor, null, autoCreateMasterData: false);
 
     expect(Department::where('name', 'Never Created Dept')->exists())->toBeFalse();
     expect(Employee::where('employee_id', 'CNS981')->first()->department_id)->toBeNull();

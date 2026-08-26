@@ -2,6 +2,7 @@
 
 namespace App\Services\Notifications;
 
+use App\Mail\EmployeeInvitationMail;
 use App\Mail\PayslipMail;
 use App\Mail\WelcomeEmployeeMail;
 use App\Models\NotificationSetting;
@@ -27,6 +28,11 @@ class NotificationCatalog
      * @var array<class-string, array{label:string, group:string, description:?string}>
      */
     private const MAILABLES = [
+        EmployeeInvitationMail::class => [
+            'label' => 'Employee Invitation',
+            'group' => 'Onboarding',
+            'description' => 'Login invitation and temporary password sent when HR invites an employee.',
+        ],
         WelcomeEmployeeMail::class => [
             'label' => 'Welcome Email',
             'group' => 'Onboarding',

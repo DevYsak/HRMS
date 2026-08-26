@@ -24,8 +24,6 @@ class EmployeeImport extends Component
 
     public string $mode = 'skip';           // skip | update
 
-    public bool $sendWelcome = false;
-
     /** Create departments/designations/shifts/offices the file refers to but the system lacks. */
     public bool $autoCreateMasterData = true;
 
@@ -102,7 +100,6 @@ class EmployeeImport extends Component
             $this->mode,
             auth()->user(),
             is_object($this->file) ? $this->file->getClientOriginalName() : null,
-            $this->sendWelcome,
             $this->autoCreateMasterData,
         );
 

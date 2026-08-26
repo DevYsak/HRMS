@@ -9,9 +9,39 @@
             <flux:breadcrumbs.item>{{ $employee->user?->name ?? 'Profile' }}</flux:breadcrumbs.item>
         </flux:breadcrumbs>
 
-        <flux:button :href="route('employees.edit', $employee)" wire:navigate size="sm" variant="ghost" icon="adjustments-horizontal">
-            Full record
-        </flux:button>
+        <div class="flex items-center gap-2">
+            {{-- Access is granted here, after somebody has checked the record — never
+                 by the importer, which cannot tell a finished row from a stub. --}}
+            {{-- Block form deliberately. The inline parenthesised form of this
+                 directive does not compile in this Laravel version: it emits an
+                 unterminated PHP open tag and silently swallows every directive
+                 after it, which costs an afternoon to find. --}}
+            @php
+                $inviteState = $this->invitationState;
+            @endphp
+            @can('invite', $employee)
+                @if($inviteState === 'active' || $inviteState === 'accepted')
+                    <flux:badge size="sm" color="emerald">{{ $inviteState === 'active' ? 'Active' : 'Accepted' }}</flux:badge>
+                @elseif($inviteState === 'invited')
+                    {{-- Resending revokes the live link and password, so it asks first. --}}
+                    <flux:button wire:click="inviteEmployee" wire:confirm="This will invalidate the previous invitation and send a new temporary password. Continue?" size="sm" variant="ghost" icon="envelope">
+                        Resend invite
+                    </flux:button>
+                @elseif($inviteState === 'expired')
+                    <flux:button wire:click="inviteEmployee" size="sm" variant="ghost" icon="envelope">
+                        Resend invite
+                    </flux:button>
+                @else
+                    <flux:button wire:click="inviteEmployee" size="sm" variant="primary" icon="envelope">
+                        Invite
+                    </flux:button>
+                @endif
+            @endcan
+
+            <flux:button :href="route('employees.edit', $employee)" wire:navigate size="sm" variant="ghost" icon="adjustments-horizontal">
+                Full record
+            </flux:button>
+        </div>
     </div>
 
     {{-- Same hero as the employee's own page --}}

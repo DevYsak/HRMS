@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Enums\EmployeeStatus;
 use App\Enums\UserRole;
-use App\Mail\WelcomeEmployeeMail;
 use App\Models\AuditLog;
 use App\Models\Company;
 use App\Models\Department;
@@ -12,7 +11,6 @@ use App\Models\Employee;
 use App\Models\EmployeeImportLog;
 use App\Models\EmploymentType;
 use App\Models\JobTitle;
-use App\Models\NotificationSetting;
 use App\Models\Office;
 use App\Models\ShiftSetting;
 use App\Models\User;
@@ -20,7 +18,6 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 
@@ -463,7 +460,6 @@ class EmployeeImportService
         string $mode,
         User $actor,
         ?string $filename = null,
-        bool $sendWelcome = false,
         bool $autoCreateMasterData = false,
     ): EmployeeImportLog {
         $mode = $mode === 'update' ? 'update' : 'skip';
@@ -542,25 +538,12 @@ class EmployeeImportService
             ]);
         }
 
-        // Deliver credentials after commit so a rollback never emails a phantom user.
-        // Only when explicitly opted-in AND the Welcome Email is enabled in
-        // Settings > Notifications & Email (a disabled toggle wins).
-        $welcomeEnabled = NotificationSetting::for(WelcomeEmployeeMail::class)?->mail_enabled ?? true;
-
-        if ($sendWelcome && $welcomeEnabled) {
-            foreach ($newlyCreated as $entry) {
-                // Never mail a generated stand-in address — it belongs to no one.
-                if (Str::endsWith(Str::lower($entry['user']->email), '@'.self::PLACEHOLDER_EMAIL_DOMAIN)) {
-                    continue;
-                }
-
-                try {
-                    Mail::to($entry['user']->email)->send(new WelcomeEmployeeMail($entry['user'], $entry['plain']));
-                } catch (\Throwable) {
-                    // A mail failure must not fail the import.
-                }
-            }
-        }
+        // Import does not hand out credentials.
+        //
+        // An imported row may be half-finished, may carry a generated
+        // placeholder address, may be a duplicate of somebody already here.
+        // Access is granted afterwards, per employee, by an HR admin who has
+        // looked at the record: see EmployeeInvitationService.
 
         return EmployeeImportLog::create([
             'user_id' => $actor->id,

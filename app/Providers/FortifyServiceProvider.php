@@ -8,6 +8,7 @@ use App\Http\Responses\LoginResponse;
 use App\Http\Responses\RegisterResponse;
 use App\Http\Responses\TwoFactorLoginResponse;
 use App\Models\User;
+use App\Services\EmployeeInvitationService;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -57,9 +58,19 @@ class FortifyServiceProvider extends ServiceProvider
             $user = $event->user;
 
             if ($user instanceof User) {
+                $firstLogin = $user->last_login_at === null;
+
                 $user->timestamps = false;
                 $user->forceFill(['last_login_at' => now()])->save();
                 $user->timestamps = true;
+
+                // An invited employee who types the emailed password straight
+                // into this form never opens the invitation link, so nothing
+                // else would ever close their invitation. Signing in is the
+                // acceptance the invitation was asking for.
+                if ($firstLogin) {
+                    app(EmployeeInvitationService::class)->markAcceptedOnLogin($user);
+                }
             }
         });
     }

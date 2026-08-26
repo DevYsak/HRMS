@@ -5,6 +5,7 @@ use App\Http\Controllers\BiometricDashboardController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\DocumentUploadController;
 use App\Http\Controllers\ImpersonationController;
+use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\PayslipController;
 use App\Http\Controllers\ReportController;
 use App\Livewire\AiAssistantPage;
@@ -125,6 +126,13 @@ Route::view('/welcome', 'welcome', [
 Route::get('/payslips/{payslip}/verify', [PayslipController::class, 'verify'])
     ->middleware('signed')
     ->name('payroll.payslips.verify');
+
+// Accepting a login invitation. Public by necessity — the employee has no
+// session yet — and safe because the token is single-use, expiring, and
+// revoked the moment HR resends. Accepting grants nothing on its own: the
+// employee still signs in through the normal login form.
+Route::get('/invite/accept/{token}', [InvitationController::class, 'accept'])
+    ->name('invite.accept');
 
 // ======================================================
 // Authenticated + Email Verified routes

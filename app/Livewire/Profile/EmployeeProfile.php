@@ -2,9 +2,11 @@
 
 namespace App\Livewire\Profile;
 
+use App\Exceptions\InvitationNotAllowed;
 use App\Livewire\Profile\Concerns\ShowsProfileSummary;
 use App\Models\Employee;
 use App\Models\ProfileChangeRequest;
+use App\Services\EmployeeInvitationService;
 use App\Services\Profile\ProfileChangeService;
 use App\Services\Profile\ProfileFieldRegistry as Registry;
 use Illuminate\Support\Facades\Auth;
@@ -52,7 +54,39 @@ class EmployeeProfile extends Component
 
         $this->employee = $employee->load([
             'user', 'department', 'jobTitle', 'manager', 'shift', 'office', 'employmentType', 'payrollSettings',
+            'latestInvitation',
         ]);
+    }
+
+    /**
+     * Issue this employee a login, or replace an invitation already out there.
+     *
+     * The same action as the employee list, offered here because this is the
+     * screen HR is on when they finish checking an imported record.
+     */
+    public function inviteEmployee(EmployeeInvitationService $invitations): void
+    {
+        $this->authorize('invite', $this->employee);
+
+        try {
+            $invitation = $invitations->invite($this->employee, auth()->user());
+        } catch (InvitationNotAllowed $e) {
+            \Flux::toast($e->getMessage(), variant: 'danger');
+
+            return;
+        }
+
+        $this->employee->load('user', 'latestInvitation');
+
+        \Flux::toast(
+            'Invitation sent to '.$invitation->sent_to.'. It expires '.$invitation->expires_at->diffForHumans().'.'
+        );
+    }
+
+    /** not_invited | invited | accepted | expired | active */
+    public function getInvitationStateProperty(): string
+    {
+        return app(EmployeeInvitationService::class)->statusFor($this->employee);
     }
 
     public function setTab(string $tab): void

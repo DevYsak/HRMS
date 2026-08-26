@@ -2,12 +2,15 @@
 
 namespace App\Livewire\Employees;
 
+use App\Exceptions\InvitationNotAllowed;
 use App\Models\AuditLog;
 use App\Models\Department;
 use App\Models\Employee;
 use App\Models\JobTitle;
 use App\Models\Office;
 use App\Services\Biometric\BiometricCodeService;
+use App\Services\EmployeeInvitationService;
+use Illuminate\Database\Eloquent\Builder;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -26,6 +29,13 @@ class EmployeeIndex extends Component
     public $status = '';
 
     /**
+     * Filter by where each employee stands on getting a login: not invited,
+     * invited, accepted, expired, or already active. After a bulk import this
+     * is the list HR works through — "who still cannot get in".
+     */
+    public string $invitation = '';
+
+    /**
      * Show deleted employees instead of active ones.
      *
      * Deleting soft-deletes both records and leaves every leave balance,
@@ -41,6 +51,11 @@ class EmployeeIndex extends Component
     }
 
     public function updatingSearch(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatingInvitation(): void
     {
         $this->resetPage();
     }
@@ -148,11 +163,72 @@ class EmployeeIndex extends Component
             : 'Employee deleted successfully.');
     }
 
+    /**
+     * Issue this employee a login.
+     *
+     * Kept separate from import on purpose: an imported row may be
+     * half-finished or a duplicate, so somebody looks at the record and decides
+     * it is ready before credentials go anywhere. A resend revokes the previous
+     * link and password, so only one invitation is ever live.
+     */
+    public function inviteEmployee($id): void
+    {
+        $employee = Employee::with('user')->findOrFail($id);
+        $this->authorize('invite', $employee);
+
+        try {
+            $invitation = app(EmployeeInvitationService::class)->invite($employee, auth()->user());
+        } catch (InvitationNotAllowed $e) {
+            // The service writes these to be read by HR, so they are shown as-is.
+            \Flux::toast($e->getMessage(), variant: 'danger');
+
+            return;
+        }
+
+        \Flux::toast(
+            'Invitation sent to '.$invitation->sent_to.'. It expires '.$invitation->expires_at->diffForHumans().'.'
+        );
+    }
+
+    /**
+     * Narrow the list to one stage of the invitation journey.
+     *
+     * Inviting revokes every earlier unaccepted invitation, so an employee has
+     * at most one live one. "Expired" is therefore not a row that says expired
+     * — it is an employee who has been invited at some point, has not accepted,
+     * and has nothing live left.
+     *
+     * @param  Builder<Employee>  $query
+     */
+    private function filterByInvitation($query): void
+    {
+        $notSignedIn = fn ($q) => $q->whereHas('user', fn ($u) => $u->whereNull('last_login_at'));
+        $live = fn ($i) => $i->whereNull('accepted_at')->whereNull('revoked_at')->where('expires_at', '>', now());
+
+        match ($this->invitation) {
+            'active' => $query->whereHas('user', fn ($u) => $u->whereNotNull('last_login_at')),
+
+            'accepted' => $notSignedIn($query)
+                ->whereHas('invitations', fn ($i) => $i->whereNotNull('accepted_at')),
+
+            'invited' => $notSignedIn($query)->whereHas('invitations', $live),
+
+            'expired' => $notSignedIn($query)
+                ->whereHas('invitations')
+                ->whereDoesntHave('invitations', fn ($i) => $i->whereNotNull('accepted_at'))
+                ->whereDoesntHave('invitations', $live),
+
+            'not_invited' => $notSignedIn($query)->whereDoesntHave('invitations'),
+
+            default => $query,
+        };
+    }
+
     public function render()
     {
         $user = auth()->user();
 
-        $employees = Employee::with(['user' => fn ($q) => $q->withTrashed(), 'office', 'department', 'jobTitle', 'manager', 'shift'])
+        $employees = Employee::with(['user' => fn ($q) => $q->withTrashed(), 'office', 'department', 'jobTitle', 'manager', 'shift', 'latestInvitation'])
             ->when($this->showDeleted, fn ($q) => $q->onlyTrashed())
             ->when(! $user->canManageEmployees(), function ($query) use ($user) {
                 $query->where('manager_id', $user->employee?->id);
@@ -168,6 +244,7 @@ class EmployeeIndex extends Component
             ->when($this->department_id, fn ($q) => $q->where('department_id', $this->department_id))
             ->when($this->job_title_id, fn ($q) => $q->where('job_title_id', $this->job_title_id))
             ->when($this->status, fn ($q) => $q->where('status', $this->status))
+            ->when($this->invitation, fn ($q) => $this->filterByInvitation($q))
             ->orderByDesc('id')
             ->paginate(15);
 
