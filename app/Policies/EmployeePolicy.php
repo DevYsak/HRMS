@@ -37,4 +37,17 @@ class EmployeePolicy
     {
         return $user->canManageEmployees();
     }
+
+    /**
+     * Erasing a deleted employee for good, along with their leave, attendance,
+     * payslips and audit trail.
+     *
+     * Narrower than delete() on purpose: a soft delete is recoverable and a
+     * permanent one is not, so it takes the dedicated delete_employee
+     * permission rather than general employee management.
+     */
+    public function forceDelete(User $user, Employee $employee): bool
+    {
+        return $user->hasPermission('delete_employee');
+    }
 }
