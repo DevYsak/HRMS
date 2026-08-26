@@ -124,11 +124,23 @@ class EmployeeImportService
         $employmentTypes = $this->lookup(EmploymentType::all());
         $shifts = $this->lookup(ShiftSetting::all());
         $offices = $this->lookup(Office::all());
-        $existingEmails = User::query()->pluck('id', 'email')
+        // withTrashed() throughout: a soft-deleted user still occupies its row
+        // in `users`, and users_email_unique knows nothing about deleted_at. A
+        // scoped lookup made those identities invisible to the importer while
+        // MySQL still enforced them, so the row was classified new and the
+        // INSERT died on "Duplicate entry ... for key 'users_email_unique'".
+        $existingEmails = User::withTrashed()->pluck('id', 'email')
             ->mapWithKeys(fn ($id, $email) => [Str::lower((string) $email) => $id]);
-        $existingByEmployeeId = Employee::query()->whereNotNull('employee_id')
+        $trashedUserIds = User::onlyTrashed()->pluck('id')->flip();
+        $existingByEmployeeId = Employee::withTrashed()->whereNotNull('employee_id')
             ->pluck('user_id', 'employee_id')
             ->mapWithKeys(fn ($userId, $empId) => [Str::lower(trim((string) $empId)) => $userId]);
+        // employee_code is the authoritative attendance key, so a clash on it
+        // is an identity conflict rather than something to merge through.
+        $codeOwners = Employee::withTrashed()->whereNotNull('employee_code')
+            ->get(['employee_code', 'employee_id', 'user_id'])
+            ->mapWithKeys(fn ($e) => [(int) $e->employee_code => $e]);
+        $usersWithEmployee = Employee::withTrashed()->whereNotNull('user_id')->pluck('user_id')->flip();
 
         // Manager can be given as an email, an Employee ID, or a plain name —
         // HR sheets in the wild use all three.
@@ -152,8 +164,18 @@ class EmployeeImportService
             }
         }
 
-        $existingBioCodes = Employee::query()->whereNotNull('biometric_id')
-            ->pluck('biometric_id')->mapWithKeys(fn ($v) => [(string) $v => true])->all();
+        // Who currently holds each attendance identifier. Both columns are
+        // consulted — employee_code is authoritative, biometric_id mirrors it —
+        // and soft-deleted rows count, because a deleted employee still holds
+        // the value until it is explicitly released.
+        $bioCodeOwners = [];
+        foreach (Employee::withTrashed()->get(['employee_id', 'user_id', 'employee_code', 'biometric_id']) as $holder) {
+            foreach ([$holder->employee_code, $holder->biometric_id] as $identifier) {
+                if ($identifier !== null && (string) $identifier !== '') {
+                    $bioCodeOwners[(string) $identifier] ??= $holder;
+                }
+            }
+        }
 
         $seen = [];
         $seenEmpIds = [];
@@ -222,6 +244,10 @@ class EmployeeImportService
             $existingUserId = ($empId !== '' ? ($existingByEmployeeId[Str::lower($empId)] ?? null) : null)
                 ?? ($existingEmails[$email] ?? null);
 
+            // What the preview should show for each half of the identity.
+            $userState = $existingUserId ? 'existing' : 'new';
+            $employeeState = $existingUserId && $usersWithEmployee->has($existingUserId) ? 'existing' : 'new';
+
             if ($existingUserId === null) {
                 // Creating: Employee ID is required and must be unique.
                 if ($empId === '') {
@@ -237,6 +263,16 @@ class EmployeeImportService
                 // letting this through would hit the users.email unique index.
                 $errors[] = "Email '{$email}' is already used by another employee.";
                 $quality['duplicate_emails']++;
+            }
+
+            // A deleted identity still holds the email at database level.
+            // Blocking is deliberate: restoring somebody, or releasing their
+            // address, is an HR decision and not something an import should
+            // make on its own.
+            if ($existingUserId !== null && $trashedUserIds->has($existingUserId)) {
+                $errors[] = "'{$email}' belongs to a deleted employee record. Restore them from Manage Employees, or use a different address — an import must not resurrect or overwrite a deleted identity on its own.";
+                $quality['duplicate_emails']++;
+                $userState = 'deleted';
             }
 
             if ($empId !== '') {
@@ -264,8 +300,10 @@ class EmployeeImportService
                 if (isset($seenBioCodes[$bioCode])) {
                     $errors[] = "Duplicate Bio Code '{$bioCode}' within the file (row {$seenBioCodes[$bioCode]}) — biometric punches would attach to the wrong employee.";
                     $quality['duplicate_bio_codes']++;
-                } elseif (isset($existingBioCodes[$bioCode])) {
-                    $errors[] = "Bio Code '{$bioCode}' is already assigned to another employee.";
+                } elseif (($owner = $bioCodeOwners[$bioCode] ?? null) && $owner->user_id !== $existingUserId) {
+                    // Naming the holder matters: "already assigned" leaves HR
+                    // hunting through the directory for which record to fix.
+                    $errors[] = "Bio Code '{$bioCode}' already belongs to {$owner->employee_id}. Two employees cannot share an attendance code.";
                     $quality['duplicate_bio_codes']++;
                 }
                 $seenBioCodes[$bioCode] = $line;
@@ -348,6 +386,8 @@ class EmployeeImportService
                     'email' => $email,
                     'role' => $role ?? UserRole::Employee,
                     'existing_user_id' => $existingUserId,
+                    'user_state' => $userState,
+                    'employee_state' => $employeeState,
                     'password' => (string) $r['password'],
                     // Kept so import() can re-resolve managers that are themselves
                     // rows in this same file, once every row has been created.
@@ -466,11 +506,6 @@ class EmployeeImportService
                         'name' => $row['data']['name'],
                         'email' => $row['data']['email'],
                         'password' => Hash::make($plain),
-                        // Whether generated or supplied in the sheet, this
-                        // password has been handled by someone other than its
-                        // owner. A sheet-supplied one is often the same value
-                        // down the whole column, so the flag matters most there.
-                        'must_change_password' => true,
                         'role' => $row['data']['role'],
                     ]);
                     $passwords->recordHistory($user, $user->password, $actor);
@@ -562,7 +597,18 @@ class EmployeeImportService
             $user->employee->payrollSettings
                 ? $user->employee->payrollSettings->update(array_filter($data['payroll'], fn ($v) => $v !== null))
                 : $user->employee->payrollSettings()->create($data['payroll']);
+
+            return;
         }
+
+        // A user with no employee record — someone onboarded as a login before
+        // their HR record existed. The account is reused rather than a second
+        // one created for the same person, which is what the email unique index
+        // would refuse anyway.
+        // Hold the new record directly: `$user->employee` was eager-loaded as
+        // null above, and the relation stays cached that way.
+        $employee = $user->employee()->create($data['employee']);
+        $employee->payrollSettings()->create($data['payroll']);
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────

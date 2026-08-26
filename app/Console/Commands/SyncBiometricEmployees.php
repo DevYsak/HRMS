@@ -146,12 +146,11 @@ class SyncBiometricEmployees extends Command
                     $user = User::create([
                         'name' => $data['name'],
                         'email' => $data['email'],
-                        'password' => Hash::make(app(PasswordService::class)->generate()),
                         // Nobody has been told this password — it exists only so
                         // the account is never left with a guessable one. The
-                        // employee arrives through the reset-password flow, and
-                        // the flag holds them there until they set their own.
-                        'must_change_password' => true,
+                        // employee reaches their account through the
+                        // forgot-password flow.
+                        'password' => Hash::make(app(PasswordService::class)->generate()),
                         'role' => 'employee',
                     ]);
                 }
