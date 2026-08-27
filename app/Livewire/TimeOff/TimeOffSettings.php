@@ -2,6 +2,7 @@
 
 namespace App\Livewire\TimeOff;
 
+use App\Models\LeavePolicy;
 use App\Models\LeaveType;
 use App\Services\LeaveService;
 use Illuminate\Support\Facades\Auth;
@@ -217,7 +218,15 @@ class TimeOffSettings extends Component
         abort_unless(Auth::user()->canManageSettings(), 403);
 
         return view('livewire.time-off.time-off-settings', [
+            // Only live types. Retired ones keep their history but must not
+            // appear as something HR can still assign.
             'leaveTypes' => LeaveType::orderBy('name')->get(),
+            'retiredCount' => LeaveType::onlyTrashed()->count(),
+            // The carry-forward ceiling is a property of the leave policy, not
+            // of the type, so the screen has to read it from there or it will
+            // describe a limit that no longer decides anything.
+            'defaultPolicy' => LeavePolicy::where('is_default', true)->first()
+                ?? LeavePolicy::where('is_active', true)->first(),
         ])->layout('layouts.app', ['title' => 'Leave Settings']);
     }
 }

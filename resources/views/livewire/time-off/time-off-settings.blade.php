@@ -67,12 +67,68 @@
                                         only</span>
                                 @endif
                             </div>
+                            @php
+                                // Written out rather than "CF: Yes". A yes/no cannot say
+                                // whether carrying needs approval, or how much may carry,
+                                // and HR should not have to open the record to find out.
+                                $policyDriven = $type->category === 'annual' && $type->annual_allocation_days === null;
+
+                                $entitlement = match (true) {
+                                    $policyDriven => 'Policy / working pattern — '
+                                        .rtrim(rtrim((string) ($defaultPolicy->statutory_weeks ?? '5.6'), '0'), '.')
+                                        .' weeks x verified working days',
+                                    $type->category === 'comp_off' => 'Earned — no fixed annual allocation',
+                                    (float) $type->annual_allocation_days > 0 => rtrim(rtrim((string) $type->annual_allocation_days, '0'), '.').' days per year',
+                                    default => 'No annual allocation',
+                                };
+
+                                // The ceiling lives on the leave policy. A number on the
+                                // type is reference only and no longer decides anything.
+                                $cap = $defaultPolicy?->max_carry_over_days;
+                                $carryForward = ! $type->allow_carry_forward
+                                    ? 'Not carried forward'
+                                    : 'HR approval · '.($cap === null
+                                        ? 'Unlimited'
+                                        : ((float) $cap <= 0 ? 'None permitted by policy' : 'Max '.rtrim(rtrim((string) $cap, '0'), '.').' days'));
+
+                                $sandwich = match ($type->sandwich_mode ?? ($type->is_sandwich_applicable ? 'weekends' : 'off')) {
+                                    'weekends' => 'Weekends bridged',
+                                    'weekends_holidays' => 'Weekends + public holidays bridged',
+                                    'all_non_working' => 'All non-working days bridged',
+                                    'custom' => 'Custom rule',
+                                    default => 'Off',
+                                };
+
+                                $payment = match ($type->payment_mode ?? ($type->is_paid ? 'paid' : 'unpaid')) {
+                                    'unpaid' => 'Unpaid — payroll deducts',
+                                    'partial' => 'Partially paid',
+                                    'policy' => 'Paid per policy',
+                                    default => 'Paid',
+                                };
+
+                                $isAttendanceMode = $type->code === 'WFH';
+                            @endphp
+
+                            @if($isAttendanceMode)
+                                {{-- Kept for its history, but it is a work mode, not an
+                                     entitlement, and must not read as leave. --}}
+                                <div class="mb-1 inline-flex items-center gap-1.5 rounded bg-sky-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-sky-700 dark:bg-sky-500/10 dark:text-sky-400">
+                                    <flux:icon.home-modern class="size-3" />
+                                    Work from home / attendance mode — not leave entitlement
+                                </div>
+                            @endif
+
+                            <div class="mb-1 text-xs font-medium text-zinc-600 dark:text-zinc-300">
+                                Entitlement: {{ $entitlement }}
+                            </div>
+
                             <div class="text-xs text-zinc-500 dark:text-zinc-400 flex flex-wrap gap-x-3 gap-y-0.5">
-                                <span>CF:
-                                    {{ $type->allow_carry_forward ? ($type->carry_forward_limit > 0 ? 'Yes (' . $type->carry_forward_limit . 'd)' : 'Yes') : 'No' }}</span>
-                                <span>Encash: {{ $type->allow_encashment ? 'Yes' : 'No' }}</span>
-                                <span>Half Day: {{ $type->allow_half_day ? 'Yes' : 'No' }}</span>
-                                <span>Sandwich: {{ $type->is_sandwich_applicable ? 'Yes' : 'No' }}</span>
+                                <span>{{ $payment }}</span>
+                                <span>Carry forward: {{ $carryForward }}</span>
+                                <span>Encashment: {{ $type->allow_encashment ? 'Allowed' : 'Not allowed' }}</span>
+                                <span>Half day: {{ $type->allow_half_day ? 'Allowed' : 'Not allowed' }}</span>
+                                <span>Sandwich: {{ $sandwich }}</span>
+                                <span>Regularisation: global policy</span>
                                 @if($type->attachment_required) <span class="text-amber-600 dark:text-amber-400">Attachment
                                 req.</span> @endif
                                 @if($type->probation_restricted) <span class="text-red-500">No probation</span> @endif

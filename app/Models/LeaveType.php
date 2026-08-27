@@ -11,7 +11,13 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     'name', 'code', 'is_paid',
     'allow_paid_request', 'allow_unpaid_request', 'allow_hr_override', 'hr_remark_required',
     'color', 'category',
-    'allow_carry_forward', 'carry_forward_limit',
+    'allow_carry_forward',
+    // How a rule applies, not merely whether. Without these in fillable
+    // every mass assignment silently dropped them and the record kept the
+    // column default.
+    'payment_mode',
+    'sandwich_mode',
+    'carry_forward_mode', 'carry_forward_limit',
     'allow_encashment', 'max_encashable_days', 'encashment_rate_multiplier', 'allow_current_year_encashment',
     'is_sandwich_applicable', 'sandwich_min_days', 'allow_half_day',
     'is_monthly_accrual', 'accrual_days_per_month',
