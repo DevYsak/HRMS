@@ -4,6 +4,7 @@ use App\Enums\UserRole;
 use App\Models\Company;
 use App\Models\Employee;
 use App\Models\LeaveBalance;
+use App\Models\LeavePolicy;
 use App\Models\LeaveType;
 use App\Models\User;
 use App\Services\Leave\LeaveCarryOverService;
@@ -34,6 +35,32 @@ function lcoSetup(): array
         $resolver->forDate(Carbon::parse('2025-09-01')),  // 2025/26
         $resolver->forDate(Carbon::parse('2026-09-01')),  // 2026/27
     ];
+}
+
+/**
+ * An employee on a policy with a given carry-over ceiling.
+ *
+ * The ceiling moved to the leave policy: one limit for one decision, rather
+ * than a policy value and a leave-type value that could disagree. null is
+ * unlimited, 0 is no carry-forward.
+ */
+function lcoEmployeeCappedAt(?float $maxCarryOver): Employee
+{
+    $policy = LeavePolicy::create([
+        'name' => 'Cap '.Str::random(5),
+        'statutory_weeks' => 5.60,
+        'contractual_additional_weeks' => 0,
+        'bank_holiday_treatment' => 'additional',
+        'max_carry_over_days' => $maxCarryOver,
+        'irregular_accrual_rate' => 0.1207,
+        'is_default' => false,
+        'is_active' => true,
+    ]);
+
+    $employee = lcoEmployee();
+    $employee->update(['leave_policy_id' => $policy->id]);
+
+    return $employee->fresh();
 }
 
 function lcoEmployee(): Employee
@@ -85,10 +112,12 @@ test('eligible days subtract both used and encashed', function () {
     expect(app(LeaveCarryOverService::class)->eligibleDays($balance))->toBe(12.0);
 });
 
-test('the carry is capped by the leave type limit', function () {
+test('the carry is capped by the leave policy limit', function () {
+    // The ceiling comes from the policy now. The type keeps a limit of its own
+    // for reference, and it must have no effect.
     [$from, $to] = lcoSetup();
-    $employee = lcoEmployee();
-    $type = lcoType(['carry_forward_limit' => 5]);
+    $employee = lcoEmployeeCappedAt(5);
+    $type = lcoType(['carry_forward_limit' => 99]);
 
     lcoBalance($employee, $type, $from, ['allocated_days' => 20, 'used_days' => 0, 'encashed_days' => 0]);
 
@@ -231,8 +260,8 @@ test('the new balance is linked to the target leave year', function () {
 
 test('the preview reports its working and changes nothing', function () {
     [$from, $to] = lcoSetup();
-    $employee = lcoEmployee();
-    $type = lcoType(['carry_forward_limit' => 5]);
+    $employee = lcoEmployeeCappedAt(5);
+    $type = lcoType(['carry_forward_limit' => 99]);
 
     lcoBalance($employee, $type, $from, ['allocated_days' => 20, 'used_days' => 4, 'encashed_days' => 2]);
 

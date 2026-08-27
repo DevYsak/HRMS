@@ -6,6 +6,7 @@ use App\Models\AuditLog;
 use App\Models\Employee;
 use App\Models\LeaveBalance;
 use App\Models\LeaveCarryForwardTransaction as Transaction;
+use App\Models\LeavePolicy;
 use App\Models\LeaveType;
 use App\Models\LeaveYear;
 use App\Models\User;
@@ -116,10 +117,22 @@ test('nothing is carried when the previous year is fully used', function () {
 });
 
 test('the policy limit caps what may be carried', function () {
-    // Eligibility is not the same as entitlement to carry all of it.
+    // Eligibility is not the same as entitlement to carry all of it — and the
+    // cap now lives on the leave policy, not the leave type.
     [$prev, $curr] = lcfYears();
     $employee = lcfEmployee();
-    $type = lcfType(limit: 5);
+    $policy = LeavePolicy::create([
+        'name' => 'Cap '.Str::random(5),
+        'statutory_weeks' => 5.60,
+        'bank_holiday_treatment' => 'additional',
+        'max_carry_over_days' => 5,
+        'is_default' => false,
+        'is_active' => true,
+    ]);
+    $employee->update(['leave_policy_id' => $policy->id]);
+    $employee = $employee->fresh();
+
+    $type = lcfType();
     lcfBalance($employee, $type, $prev, allocated: 28, used: 20);
 
     $row = lcfService()->preview($prev, $curr)->firstWhere('employee_id', $employee->id);

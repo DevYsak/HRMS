@@ -7,6 +7,13 @@ use Illuminate\Database\Seeder;
 
 class LeaveTypeSeeder extends Seeder
 {
+    /**
+     * Default leave master data.
+     *
+     * Idempotent and non-destructive: existing types are left exactly as they
+     * are, including ones an administrator has since retired. Re-running
+     * creates nothing and changes nothing.
+     */
     public function run(): void
     {
         $types = [
@@ -288,7 +295,15 @@ class LeaveTypeSeeder extends Seeder
         ];
 
         foreach ($types as $data) {
-            LeaveType::updateOrCreate(['code' => $data['code']], $data);
+            // Create missing master data only.
+            //
+            // This used to updateOrCreate with a full payload, so every run
+            // rewrote live configuration from a file: it would have disabled
+            // carry-forward on CL, which had it enabled and eight balances
+            // against it. Approved changes to existing records go through an
+            // explicit, reviewed migration; a seeder's job here is to fill in
+            // what is absent.
+            LeaveType::withTrashed()->firstOrCreate(['code' => $data['code']], $data);
         }
     }
 }
