@@ -4,7 +4,7 @@ namespace App\Observers;
 
 use App\Models\AuditLog;
 use App\Models\Employee;
-use App\Services\LeaveBalanceService;
+use App\Services\Leave\LeaveProvisioningService;
 use App\Services\OnboardingService;
 
 class EmployeeObserver
@@ -15,11 +15,20 @@ class EmployeeObserver
 
         app(OnboardingService::class)->assignTemplate($employee);
 
-        // Auto-assign default leave so every new hire (form, import, API or
-        // seeder) starts with balances — no manual step required. Uses the
-        // conditional allocation policies, falling back to each type's uniform
-        // default when none match. Idempotent; the create form may still override.
-        app(LeaveBalanceService::class)->initializeFromPolicy($employee, now()->year);
+        // Every new hire — form, import, API or seeder — starts with the annual
+        // leave their policy and working pattern produce.
+        //
+        // This used to seed a flat allocation per leave type keyed on
+        // now()->year: a calendar year, in a company whose leave year runs
+        // 1 July to 30 June, with no leave policy assigned at all. Where the
+        // policy or the pattern is missing, provisioning reports the gap rather
+        // than defaulting past it — an entitlement resting on an assumed
+        // pattern is a guess with a number in front of it.
+        //
+        // No previous-year balance and no carry-forward: a new employee has no
+        // history, and carry forward is a decision HR makes about a year that
+        // actually happened.
+        app(LeaveProvisioningService::class)->provision($employee);
     }
 
     public function updated(Employee $employee): void

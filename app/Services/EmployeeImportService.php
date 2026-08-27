@@ -14,6 +14,7 @@ use App\Models\JobTitle;
 use App\Models\Office;
 use App\Models\ShiftSetting;
 use App\Models\User;
+use App\Services\Leave\LeaveProvisioningService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -379,11 +380,25 @@ class EmployeeImportService
             $status_ = ! empty($errors) ? 'error' : ($existingUserId ? 'update' : 'new');
             $summary[$status_ === 'error' ? 'error' : ($status_ === 'update' ? 'update' : 'new')]++;
 
+            // What this row's leave will be, shown before anything is written.
+            // Annual leave is calculated from the policy and the working
+            // pattern, so the preview has to say which policy, which pattern
+            // and how many days — otherwise HR approves a number they cannot
+            // see. Nothing is created here.
+            $leave = $status_ === 'new' ? $this->previewLeave($r) : null;
+
+            if ($leave !== null) {
+                foreach ($leave['issues'] as $issue) {
+                    $warnings[] = $issue;
+                }
+            }
+
             $out[] = [
                 'line' => $line,
                 'status' => $status_,
                 'errors' => $errors,
                 'warnings' => $warnings,
+                'leave' => $leave,
                 'data' => [
                     'name' => $name,
                     'email' => $email,
@@ -662,6 +677,50 @@ class EmployeeImportService
         return ShiftSetting::whereTime('start_time', $start)
             ->whereTime('end_time', $end)
             ->value('id');
+    }
+
+    /**
+     * The leave a new row would receive, without creating anything.
+     *
+     * Built on an unsaved Employee so the entitlement engine sees the working
+     * pattern the file supplies rather than a default. Existing employees are
+     * skipped: their policy and balances are not the importer's to restate.
+     *
+     * @param  array<string, mixed>  $row
+     * @return array<string, mixed>
+     */
+    private function previewLeave(array $row): array
+    {
+        // The file's own pattern wins. Failing that, the approved company
+        // default fills it — a stated policy, not an assumption. With neither,
+        // the pattern stays unset and provisioning reports the gap rather than
+        // producing an entitlement nobody verified.
+        $daysPerWeek = $this->numericOrNull($row['working_days_per_week'] ?? null)
+            ?? $this->numericOrNull(config('leave_provisioning.default_working_days_per_week'));
+
+        $employee = new Employee([
+            'working_pattern' => 'regular',
+            'working_days_per_week' => $daysPerWeek,
+            'joining_date' => $row['joining_date'] ?? null,
+        ]);
+
+        $preview = app(LeaveProvisioningService::class)->preview($employee);
+
+        return [
+            'policy' => $preview['policy_name'],
+            'pattern' => $preview['pattern'],
+            'pattern_verified' => $preview['pattern_verified'],
+            'annual_leave' => $preview['entitlement'],
+            'carry_forward' => $preview['carry_forward'],
+            'issues' => $preview['issues'],
+        ];
+    }
+
+    private function numericOrNull(mixed $value): ?float
+    {
+        $value = is_string($value) ? trim($value) : $value;
+
+        return ($value === null || $value === '' || ! is_numeric($value)) ? null : (float) $value;
     }
 
     private function lookup($models): Collection

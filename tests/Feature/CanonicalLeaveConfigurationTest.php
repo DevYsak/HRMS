@@ -205,13 +205,19 @@ test('unlimited still requires an explicit HR decision', function () {
     clcPrevious($employee, $type, $prev, allocated: 28, used: 8);
 
     // Nothing has been carried merely because the policy permits it.
-    $balance = LeaveBalance::where('employee_id', $employee->id)->where('year', $curr->legacyYear())->first();
+    // Scoped to this leave type: onboarding provisions Annual Leave for the
+    // current year, which is a different row and a different question.
+    $balance = LeaveBalance::where('employee_id', $employee->id)
+        ->where('leave_type_id', $type->id)
+        ->where('year', $curr->legacyYear())
+        ->first();
 
     expect($balance)->toBeNull();
 
     app(LeaveCarryForwardService::class)->apply($employee, $type, $prev, $curr, $hr, days: 6);
 
     expect((float) LeaveBalance::where('employee_id', $employee->id)
+        ->where('leave_type_id', $type->id)
         ->where('year', $curr->legacyYear())->value('carried_forward_days'))->toBe(6.0);
 });
 
