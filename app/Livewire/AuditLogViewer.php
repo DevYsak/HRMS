@@ -3,6 +3,10 @@
 namespace App\Livewire;
 
 use App\Models\AuditLog;
+use App\Models\Employee;
+use App\Models\LeaveType;
+use App\Models\User;
+use App\Services\Leave\LeaveAuditCategoriser;
 use App\Services\SpreadsheetService;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -26,6 +30,19 @@ class AuditLogViewer extends Component
 
     public string $to = '';
 
+    /**
+     * Leave-specific filters. A generic action/model pair cannot answer "show
+     * me every carry forward" — the actions are all called "created" — so the
+     * category is derived and filtered through LeaveAuditCategoriser.
+     */
+    public string $category = '';
+
+    public ?int $employeeId = null;
+
+    public ?int $leaveTypeId = null;
+
+    public ?int $performedBy = null;
+
     public ?int $expandedId = null;
 
     public function mount(): void
@@ -34,6 +51,26 @@ class AuditLogViewer extends Component
     }
 
     public function updatedSearch(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatedCategory(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatedEmployeeId(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatedLeaveTypeId(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatedPerformedBy(): void
     {
         $this->resetPage();
     }
@@ -65,6 +102,7 @@ class AuditLogViewer extends Component
 
     public function clearFilters(): void
     {
+        $this->reset(['category', 'employeeId', 'leaveTypeId', 'performedBy']);
         $this->reset('search', 'action', 'model', 'from', 'to');
         $this->resetPage();
     }
@@ -81,6 +119,12 @@ class AuditLogViewer extends Component
                 $u->where('name', 'like', '%'.$this->search.'%')
                     ->orWhere('email', 'like', '%'.$this->search.'%');
             }))
+            // Recorded on every leave entry, so this reaches the person the
+            // action was about rather than the person who performed it.
+            ->when($this->employeeId, fn ($q) => $q->where('subject_employee_id', $this->employeeId))
+            ->when($this->performedBy, fn ($q) => $q->where('user_id', $this->performedBy))
+            ->when($this->leaveTypeId, fn ($q) => $q->where('new_values->leave_type_id', $this->leaveTypeId))
+            ->when($this->category !== '', fn ($q) => app(LeaveAuditCategoriser::class)->scopeToCategory($q, $this->category))
             ->orderByDesc('id');
     }
 
@@ -113,7 +157,15 @@ class AuditLogViewer extends Component
         $actions = AuditLog::query()->select('action')->distinct()
             ->orderBy('action')->pluck('action');
 
-        return view('livewire.audit-log-viewer', compact('logs', 'modelTypes', 'actions'))
+        $categoriser = app(LeaveAuditCategoriser::class);
+        $categories = LeaveAuditCategoriser::CATEGORIES;
+        $employees = Employee::with('user')->orderBy('id')->get();
+        $leaveTypes = LeaveType::orderBy('name')->get();
+        $actors = User::orderBy('name')->get(['id', 'name']);
+
+        return view('livewire.audit-log-viewer', compact(
+            'logs', 'modelTypes', 'actions', 'categoriser', 'categories', 'employees', 'leaveTypes', 'actors'
+        ))
             ->layout('layouts.app', ['title' => 'Audit Log']);
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\EmployeeStatus;
+use App\Models\AuditLog;
 use App\Models\Employee;
 use App\Models\LeaveAllocationPolicy;
 use App\Models\LeaveBalance;
@@ -198,10 +199,14 @@ class LeaveBalanceService
                 $balance->decrement('allocated_days', $days);
             }
 
-            return LeaveBalanceAdjustment::create([
+            $adjustment = LeaveBalanceAdjustment::create([
                 'employee_id' => $employee->id,
                 'leave_type_id' => $leaveType->id,
                 'action' => $action,
+                // Tagged so the audit log can tell an HR correction from a
+                // carry forward or a regularisation, all three of which land
+                // in this same table.
+                'source' => 'manual',
                 'days' => $days,
                 'previous_balance' => $previousBalance,
                 'new_balance' => $newBalance,
@@ -210,6 +215,30 @@ class LeaveBalanceService
                 'adjusted_by' => $adjuster->id,
                 'adjusted_at' => now(),
             ]);
+
+            // The adjustment row is the transaction; this is the entry that puts
+            // it in the admin audit log beside every other leave action, with
+            // both sides of the change rather than just where it ended up.
+            AuditLog::record(
+                $adjustment,
+                'created',
+                ['allocated_days' => $previousBalance],
+                [
+                    'allocated_days' => $newBalance,
+                    'action' => $action,
+                    'source' => 'manual',
+                    'days' => $days,
+                    'leave_type' => $leaveType->name,
+                    'leave_type_id' => $leaveType->id,
+                    'leave_year' => $year,
+                    'adjusted_by' => $adjuster->id,
+                    'remarks' => $remarks ?: null,
+                ],
+                $reason,
+                $employee->id,
+            );
+
+            return $adjustment;
         });
     }
 
