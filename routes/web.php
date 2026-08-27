@@ -5,6 +5,7 @@ use App\Http\Controllers\BiometricDashboardController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\DocumentUploadController;
 use App\Http\Controllers\ImpersonationController;
+use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\PayslipController;
 use App\Http\Controllers\ReportController;
 use App\Livewire\AiAssistantPage;
@@ -92,6 +93,8 @@ use App\Livewire\TimeOff\AllTimeOff;
 use App\Livewire\TimeOff\BulkLeaveAssignment;
 use App\Livewire\TimeOff\FinanceEncashments;
 use App\Livewire\TimeOff\LeaveAllocationPolicies;
+use App\Livewire\TimeOff\LeaveCarryForward;
+use App\Livewire\TimeOff\LeaveRegularisation;
 use App\Livewire\TimeOff\MyTimeOff;
 use App\Livewire\TimeOff\TeamTimeOff;
 use App\Livewire\TimeOff\TimeOffSettings;
@@ -125,6 +128,13 @@ Route::view('/welcome', 'welcome', [
 Route::get('/payslips/{payslip}/verify', [PayslipController::class, 'verify'])
     ->middleware('signed')
     ->name('payroll.payslips.verify');
+
+// Accepting a login invitation. Public by necessity — the employee has no
+// session yet — and safe because the token is single-use, expiring, and
+// revoked the moment HR resends. Accepting grants nothing on its own: the
+// employee still signs in through the normal login form.
+Route::get('/invite/accept/{token}', [InvitationController::class, 'accept'])
+    ->name('invite.accept');
 
 // ======================================================
 // Authenticated + Email Verified routes
@@ -195,6 +205,17 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/encashments', FinanceEncashments::class)->name('encashments')->middleware('role:approve-finance');
         Route::get('/bulk-assign', BulkLeaveAssignment::class)->name('bulk-assign')->middleware('role:manage-settings');
         Route::get('/leave-policies', LeaveAllocationPolicies::class)->name('leave-policies')->middleware('role:manage-settings');
+        // Year-end carry forward. Preview is separate from apply on purpose:
+        // this changes entitlement, so nothing runs until HR approves the list.
+        Route::get('/carry-forward', LeaveCarryForward::class)->name('carry-forward')
+            ->middleware('can:view_leave_carry_forward');
+
+        // Leave regularisation. The queue lives here; the approval chain does
+        // not — it is the existing manager -> HR -> admin pipeline in
+        // AttendanceService, shared with attendance corrections.
+        Route::get('/regularisation', LeaveRegularisation::class)->name('regularisation')
+            ->middleware('can:view_leave_regularisation');
+
         Route::get('/settings', TimeOffSettings::class)->name('settings')->middleware('role:manage-settings');
     });
 

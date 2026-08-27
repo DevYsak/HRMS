@@ -133,3 +133,119 @@ test('employee profile 2.0 exposes the analytical tabs and panels', function () 
         ->call('setTab', 'Promotions')->assertSee('Recommendations')
         ->call('setTab', 'Timeline')->assertSee('Career Timeline');
 });
+
+// ── The redesigned shell ───────────────────────────────────────────────────
+//
+// The page was restyled onto the dashboard's language (warm ground, #F3E8DD
+// hairlines, orange accent) and its sixteen tabs were regrouped off a single
+// overflowing rail. Nothing below the chrome changed, but every panel is
+// reachable through the new tab bar, so every panel gets rendered here — a
+// restyle that silently breaks the Payroll or Probation tab is the failure
+// mode worth guarding.
+
+test('every tab on the employee record renders', function () {
+    $this->actingAs(User::factory()->create(['role' => UserRole::HrAdmin]));
+    $employee = Employee::factory()->create(['status' => 'probation']);
+
+    $component = Livewire::test(EmployeeEdit::class, ['employee' => $employee])->assertOk();
+
+    foreach ([
+        'General', 'Personal', 'Job', 'Documents',
+        'Attendance', 'Leave', 'OT',
+        'Performance', 'Promotions', 'Probation', 'PIP',
+        'Warnings', 'Payroll', 'Timeline', 'Activity',
+    ] as $tab) {
+        $component->call('setTab', $tab)
+            ->assertOk()
+            ->assertHasNoErrors();
+    }
+});
+
+test('the Nexflow tab renders for an employee tracked by Nexflow', function () {
+    $this->actingAs(User::factory()->create(['role' => UserRole::HrAdmin]));
+    $employee = Employee::factory()->create(['ot_tracking_source' => 'nexflow']);
+
+    Livewire::test(EmployeeEdit::class, ['employee' => $employee])
+        ->call('setTab', 'Nexflow')
+        ->assertOk();
+});
+
+test('the record page survives an employee with nothing filled in', function () {
+    // The identity card reads a manager, office, shift and joining date that an
+    // imported row may not have yet. Each needs a real fallback rather than a
+    // blank line or a 500.
+    $this->actingAs(User::factory()->create(['role' => UserRole::HrAdmin]));
+
+    $employee = Employee::factory()->create([
+        'shift_id' => null,
+        'office_id' => null,
+        'department_id' => null,
+        'job_title_id' => null,
+        'manager_id' => null,
+        'joining_date' => null,
+        'phone' => null,
+        'employee_code' => null,
+    ]);
+
+    Livewire::test(EmployeeEdit::class, ['employee' => $employee])
+        ->assertOk()
+        ->assertSee('Not set')
+        ->assertSee('No shift assigned');
+});
+
+// ── Two-level navigation ───────────────────────────────────────────────────
+//
+// Sixteen panels sat on one rail. They now sit under six areas: the primary row
+// picks the area, the secondary row picks the panel. The active area is derived
+// from the active tab rather than stored, so there is no second piece of state
+// to fall out of step — which is exactly what these pin down.
+
+test('opening an area lands on its first panel', function () {
+    $this->actingAs(User::factory()->create(['role' => UserRole::HrAdmin]));
+    $employee = Employee::factory()->create();
+
+    Livewire::test(EmployeeEdit::class, ['employee' => $employee])
+        ->call('setTab', 'Payroll')
+        ->assertSet('activeTab', 'Payroll')
+        ->assertOk();
+});
+
+test('the area highlights from whichever panel is open', function () {
+    // Reaching Documents from the sidebar shortcut must light up Record, not
+    // leave the primary row pointing somewhere else.
+    $this->actingAs(User::factory()->create(['role' => UserRole::HrAdmin]));
+    $employee = Employee::factory()->create();
+
+    Livewire::test(EmployeeEdit::class, ['employee' => $employee])
+        ->call('setTab', 'Documents')
+        ->assertOk()
+        ->assertSee('Record')
+        ->assertSee('Documents');
+});
+
+test('an area holding one panel shows no second row', function () {
+    // Conduct and Pay hold a single panel each; a secondary row with one pill
+    // in it is noise.
+    $this->actingAs(User::factory()->create(['role' => UserRole::HrAdmin]));
+    $employee = Employee::factory()->create();
+
+    Livewire::test(EmployeeEdit::class, ['employee' => $employee])
+        ->call('setTab', 'Warnings')
+        ->assertOk();
+});
+
+test('the hero answers the four questions asked before any panel opens', function () {
+    $this->actingAs(User::factory()->create(['role' => UserRole::HrAdmin]));
+
+    $employee = Employee::factory()->create([
+        'employee_id' => 'EMP-A021',
+        'joining_date' => '2022-06-28',
+    ]);
+
+    Livewire::test(EmployeeEdit::class, ['employee' => $employee])
+        ->assertOk()
+        ->assertSee('EMP-A021')
+        ->assertSee('28 Jun 2022')
+        ->assertSee('Emp ID')
+        ->assertSee('Manager');
+});

@@ -10,6 +10,7 @@ use App\Models\LeaveType;
 use App\Models\Office;
 use App\Models\ShiftSetting;
 use App\Services\BulkLeaveService;
+use App\Services\Leave\LeaveYearResolver;
 use Livewire\Component;
 
 /**
@@ -52,7 +53,7 @@ class BulkLeaveAssignment extends Component
     public function mount(): void
     {
         $this->authorize('manage-settings');
-        $this->year = now()->year;
+        $this->year = app(LeaveYearResolver::class)->legacyYearFor();
     }
 
     /** @return array<string, mixed> */

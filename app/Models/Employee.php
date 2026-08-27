@@ -41,6 +41,25 @@ class Employee extends Model
     use HasFactory;
     use SoftDeletes;
 
+    /**
+     * Login invitations issued for this employee, newest first. Kept as
+     * history rather than a single column: a resend supersedes the previous
+     * invitation but does not erase that it was sent.
+     */
+    public function invitations(): HasMany
+    {
+        return $this->hasMany(EmployeeInvitation::class)->orderByDesc('id');
+    }
+
+    /**
+     * The invitation that currently governs this employee's access. Everything
+     * older has been revoked by a resend, so only the newest one is live.
+     */
+    public function latestInvitation(): HasOne
+    {
+        return $this->hasOne(EmployeeInvitation::class)->latestOfMany();
+    }
+
     public function leaveBalances(): HasMany
     {
         return $this->hasMany(LeaveBalance::class);

@@ -101,7 +101,7 @@ test('auto-create makes one master record per unique name, not one per row', fun
     $service = app(EmployeeImportService::class);
     $parsed = $service->parse(imdRows());
 
-    $log = $service->import($parsed, 'skip', User::factory()->create(), 'demo.xlsx', false, true);
+    $log = $service->import($parsed, 'skip', User::factory()->create(), 'demo.xlsx', autoCreateMasterData: true);
 
     expect($log->imported)->toBe(28)
         ->and($log->failed)->toBe(0)
@@ -114,7 +114,7 @@ test('auto-create makes one master record per unique name, not one per row', fun
 test('rows sharing a designation share the same job title id', function () {
     $service = app(EmployeeImportService::class);
     $parsed = $service->parse(imdRows());
-    $service->import($parsed, 'skip', User::factory()->create(), 'demo.xlsx', false, true);
+    $service->import($parsed, 'skip', User::factory()->create(), 'demo.xlsx', autoCreateMasterData: true);
 
     // DEMO008 and DEMO009 are both Sr. Web Developer.
     $a = Employee::where('employee_id', 'DEMO008')->first();
@@ -128,7 +128,7 @@ test('rows sharing a designation share the same job title id', function () {
 test('every duplicated designation resolves to exactly one master record', function () {
     $service = app(EmployeeImportService::class);
     $parsed = $service->parse(imdRows());
-    $service->import($parsed, 'skip', User::factory()->create(), 'demo.xlsx', false, true);
+    $service->import($parsed, 'skip', User::factory()->create(), 'demo.xlsx', autoCreateMasterData: true);
 
     foreach (['Sr. Web Developer', 'Software Developer', 'SEO Executive',
         'Flutter Developer', 'HR Executive', 'Social Media Executive'] as $name) {
@@ -140,7 +140,7 @@ test('every duplicated designation resolves to exactly one master record', funct
 test('every one of the 28 demo employees is mapped to a department and designation', function () {
     $service = app(EmployeeImportService::class);
     $parsed = $service->parse(imdRows());
-    $service->import($parsed, 'skip', User::factory()->create(), 'demo.xlsx', false, true);
+    $service->import($parsed, 'skip', User::factory()->create(), 'demo.xlsx', autoCreateMasterData: true);
 
     $demo = Employee::where('employee_id', 'like', 'DEMO%')->get();
 
@@ -155,13 +155,13 @@ test('re-importing the same file creates no further master records', function ()
     $service = app(EmployeeImportService::class);
     $actor = User::factory()->create();
 
-    $service->import($service->parse(imdRows()), 'skip', $actor, 'demo.xlsx', false, true);
+    $service->import($service->parse(imdRows()), 'skip', $actor, 'demo.xlsx', autoCreateMasterData: true);
 
     $departments = Department::count();
     $titles = JobTitle::count();
     $shifts = ShiftSetting::count();
 
-    $service->import($service->parse(imdRows()), 'skip', $actor, 'demo.xlsx', false, true);
+    $service->import($service->parse(imdRows()), 'skip', $actor, 'demo.xlsx', autoCreateMasterData: true);
 
     expect(Department::count())->toBe($departments)
         ->and(JobTitle::count())->toBe($titles)
@@ -174,7 +174,7 @@ test('an existing master record is reused rather than duplicated', function () {
     $titlesBefore = JobTitle::count();
 
     $service = app(EmployeeImportService::class);
-    $service->import($service->parse(imdRows()), 'skip', User::factory()->create(), 'demo.xlsx', false, true);
+    $service->import($service->parse(imdRows()), 'skip', User::factory()->create(), 'demo.xlsx', autoCreateMasterData: true);
 
     expect(JobTitle::whereRaw('LOWER(TRIM(name)) = ?', ['quality analyst'])->count())->toBe(1)
         // 22 designations, one of which already existed.

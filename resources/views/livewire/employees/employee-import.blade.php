@@ -30,11 +30,6 @@
                         :options="[['value' => 'skip', 'label' => 'Skip (leave unchanged)'], ['value' => 'update', 'label' => 'Update from file']]" />
                 </div>
                 <label class="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
-                    <input type="checkbox" wire:model="sendWelcome" class="rounded border-zinc-300 text-orange-500 focus:ring-orange-400">
-                    Email welcome + credentials to new hires
-                    <span class="text-[11px] text-zinc-400">(off by default; also respects the Welcome Email toggle)</span>
-                </label>
-                <label class="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
                     <input type="checkbox" wire:model="autoCreateMasterData" class="rounded border-zinc-300 text-orange-500 focus:ring-orange-400">
                     Create missing departments, designations &amp; shifts
                     <span class="text-[11px] text-zinc-400">(rather than importing those fields blank)</span>

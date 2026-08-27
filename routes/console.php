@@ -126,11 +126,17 @@ Schedule::command('hrms:generate-attendance-summary')
     ->withoutOverlapping()
     ->runInBackground();
 
-// Roll over remaining leave balances to new year → 1 Jan 02:00 (after attendance summary)
-Schedule::command('hrms:carry-forward-leaves')
-    ->yearlyOn(1, 1, '02:00')
-    ->withoutOverlapping()
-    ->runInBackground();
+// Leave carry-forward is deliberately NOT scheduled.
+//
+// It ran unattended every 1 January at 02:00 — automatic, attributable to
+// nobody, and on a date that is not a boundary of a leave year that runs
+// 1 July to 30 June. Under the agreed process the previous year's balance is
+// never carried automatically: HR reviews what is known, decides an amount per
+// employee, and applies it from Leave > Carry Forward, where the decision is
+// recorded against the person who made it.
+//
+// A leave type marked allow_carry_forward is eligible for consideration. It is
+// not an instruction to carry anything.
 
 // Flag previous day absences without approved leave as Unauthorized Leave → 09:30 IST (after grace window)
 Schedule::command('hrms:flag-unauthorized-absences')

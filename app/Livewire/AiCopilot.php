@@ -11,6 +11,7 @@ use App\Models\PipRecord;
 use App\Models\User;
 use App\Models\WarningLetter;
 use App\Services\AiAssistant;
+use App\Services\Leave\LeaveYearResolver;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 
@@ -88,7 +89,7 @@ class AiCopilot extends Component
         if ($employee) {
             $context['me'] = [
                 'name' => $user->name,
-                'leave_balances' => $employee->leaveBalances()->with('leaveType')->where('year', now()->year)->get()
+                'leave_balances' => $employee->leaveBalances()->with('leaveType')->where('year', app(LeaveYearResolver::class)->legacyYearFor())->get()
                     ->mapWithKeys(fn ($b) => [($b->leaveType?->name ?? 'Leave') => max(0, (float) $b->allocated_days - (float) $b->used_days)]),
                 'my_pending_leave_requests' => $employee->leaveRequests()->whereIn('status', ['pending', 'pending_hr'])->count(),
             ];

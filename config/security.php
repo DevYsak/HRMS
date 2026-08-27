@@ -31,4 +31,30 @@ return [
 
     'logout_other_devices_on_password_change' => (bool) env('LOGOUT_OTHER_DEVICES_ON_PASSWORD_CHANGE', true),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Login invitation expiry
+    |--------------------------------------------------------------------------
+    |
+    | How many hours an invitation link stays redeemable. Short enough that a
+    | forwarded or forgotten invitation stops being a way in; long enough to
+    | survive a weekend. HR can always resend, which revokes the old link.
+    |
+    */
+
+    'invitation_expiry_hours' => (int) env('INVITATION_EXPIRY_HOURS', 48),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Invitation resend throttle
+    |--------------------------------------------------------------------------
+    |
+    | Maximum resends per employee per hour. Each resend mails out a fresh
+    | password, so an unthrottled button is a way to flood somebody's inbox
+    | with live credentials.
+    |
+    */
+
+    'invitation_resend_per_hour' => (int) env('INVITATION_RESEND_PER_HOUR', 5),
+
 ];

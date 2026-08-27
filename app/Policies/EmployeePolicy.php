@@ -39,6 +39,19 @@ class EmployeePolicy
     }
 
     /**
+     * Issuing somebody a login.
+     *
+     * Employee management, not a separate permission: whoever HR trusts to
+     * create and edit employee records is the same person who decides that a
+     * checked record is ready for access. An employee cannot invite anybody,
+     * including themselves, because they do not hold manage_employees.
+     */
+    public function invite(User $user, Employee $employee): bool
+    {
+        return $user->canManageEmployees();
+    }
+
+    /**
      * Erasing a deleted employee for good, along with their leave, attendance,
      * payslips and audit trail.
      *

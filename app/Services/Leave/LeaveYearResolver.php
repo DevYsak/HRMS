@@ -39,6 +39,24 @@ class LeaveYearResolver
         );
     }
 
+    /**
+     * The `leave_balances.year` integer for the leave year containing a date.
+     *
+     * This is the fix for a whole class of quiet error. Balances are keyed on a
+     * legacy calendar-year integer, and code that wanted "this year's balance"
+     * reached for now()->year — which is the calendar year, not the leave year.
+     * With a 1 July start those disagree for six months of every year: 20 June
+     * 2025 belongs to leave year 2024/25 (integer 2024), but now()->year said
+     * 2025 and the days were deducted from the wrong year's balance.
+     *
+     * Anything touching a balance for a known leave date must resolve through
+     * here rather than reading a clock.
+     */
+    public function legacyYearFor(?CarbonInterface $date = null): int
+    {
+        return $this->forDate($date)->legacyYear();
+    }
+
     public function current(): LeaveYear
     {
         return $this->forDate();

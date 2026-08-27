@@ -2,10 +2,8 @@
 
 use App\Enums\UserRole;
 use App\Livewire\Employees\EmployeeImport;
-use App\Mail\WelcomeEmployeeMail;
 use App\Models\Employee;
 use App\Models\EmployeeImportLog;
-use App\Models\NotificationSetting;
 use App\Models\User;
 use App\Services\EmployeeImportService;
 use App\Services\SpreadsheetService;
@@ -127,7 +125,13 @@ test('an import log records the run', function () {
     expect(EmployeeImportLog::where('filename', 'run.xlsx')->where('imported', 1)->exists())->toBeTrue();
 });
 
-test('import does not email new hires by default', function () {
+test('import never emails credentials to anybody', function () {
+    // Import creates records; it does not create access. It used to be able to
+    // mail a temporary password to everyone it created, which meant a
+    // half-finished row, a duplicate, or somebody with a generated placeholder
+    // address could all be handed a live login before a human looked at them.
+    // Access is now issued per employee from the employee list, after HR has
+    // checked the record. See EmployeeInvitationTest.
     Mail::fake();
     $actor = User::factory()->create();
     $service = app(EmployeeImportService::class);
@@ -135,43 +139,31 @@ test('import does not email new hires by default', function () {
     $parsed = $service->parse([
         ['employee_id' => 'EMP-N', 'first_name' => 'Silent', 'email' => 'silent@example.com', 'joining_date' => '2026-07-01'],
     ]);
-    $service->import($parsed, 'skip', $actor); // no sendWelcome → default off
+    $service->import($parsed, 'skip', $actor);
+
+    expect(User::where('email', 'silent@example.com')->exists())->toBeTrue();
 
     Mail::assertNothingSent();
 });
 
-test('a disabled Welcome Email setting suppresses import emails even when opted in', function () {
-    Mail::fake();
-    NotificationSetting::create([
-        'key' => WelcomeEmployeeMail::class,
-        'label' => 'Welcome Email',
-        'group' => 'Onboarding',
-        'mail_enabled' => false,
-        'database_enabled' => true,
-        'is_automatic' => true,
-    ]);
-
-    $actor = User::factory()->create();
-    $service = app(EmployeeImportService::class);
-    $parsed = $service->parse([
-        ['employee_id' => 'EMP-D', 'first_name' => 'Blocked', 'email' => 'blocked@example.com', 'joining_date' => '2026-07-01'],
-    ]);
-    $service->import($parsed, 'skip', $actor, null, true); // opted in, but toggle off
-
-    Mail::assertNothingSent();
-});
-
-test('new hires receive a welcome email with generated credentials when opted in', function () {
+test('import still creates the account, it just does not announce it', function () {
+    // The account has to exist for HR to be able to invite it afterwards.
     Mail::fake();
     $actor = User::factory()->create();
     $service = app(EmployeeImportService::class);
 
     $parsed = $service->parse([
-        ['employee_id' => 'EMP-M', 'first_name' => 'Mail', 'email' => 'mail@example.com', 'joining_date' => '2026-07-01'],
+        ['employee_id' => 'EMP-Q', 'first_name' => 'Quiet', 'email' => 'quiet@example.com', 'joining_date' => '2026-07-01'],
     ]);
-    $service->import($parsed, 'skip', $actor, null, true);
+    $service->import($parsed, 'skip', $actor);
 
-    Mail::assertSent(WelcomeEmployeeMail::class, fn ($mail) => $mail->hasTo('mail@example.com'));
+    $user = User::where('email', 'quiet@example.com')->first();
+
+    expect($user)->not->toBeNull()
+        ->and($user->last_login_at)->toBeNull()
+        ->and(Employee::where('user_id', $user->id)->exists())->toBeTrue();
+
+    Mail::assertNothingSent();
 });
 
 test('admin can open the import page and download the template', function () {

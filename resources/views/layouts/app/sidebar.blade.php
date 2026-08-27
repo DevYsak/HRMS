@@ -509,6 +509,12 @@
                         @if($isFin || $isHr)
                             <flux:sidebar.item :href="route('time-off.encashments')" :current="request()->routeIs('time-off.encashments')" wire:navigate>Encashments</flux:sidebar.item>
                         @endif
+                        @can('view_leave_regularisation')
+                            <flux:sidebar.item :href="route('time-off.regularisation')" :current="request()->routeIs('time-off.regularisation')" wire:navigate>Regularisation</flux:sidebar.item>
+                        @endcan
+                        @can('view_leave_carry_forward')
+                            <flux:sidebar.item :href="route('time-off.carry-forward')" :current="request()->routeIs('time-off.carry-forward')" wire:navigate>Carry Forward</flux:sidebar.item>
+                        @endcan
                         @can('manage_settings')
                             <flux:sidebar.item :href="route('time-off.bulk-assign')" :current="request()->routeIs('time-off.bulk-assign')" wire:navigate>Bulk Leave</flux:sidebar.item>
                             <flux:sidebar.item :href="route('time-off.leave-policies')" :current="request()->routeIs('time-off.leave-policies')" wire:navigate>Leave Policies</flux:sidebar.item>

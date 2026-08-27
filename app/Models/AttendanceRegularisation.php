@@ -12,6 +12,17 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'attendance_id',
     'work_date',
     'regularisation_type',
+    'category',
+    'leave_type_id',
+    'from_date',
+    'to_date',
+    'duration',
+    'remarks',
+    'previous_balance',
+    'new_balance',
+    'previous_attendance_status',
+    'cancelled_by',
+    'cancelled_at',
     'half_day_period',
     'requested_check_in',
     'requested_check_out',
@@ -38,11 +49,33 @@ class AttendanceRegularisation extends Model
     {
         return [
             'work_date' => 'date',
+            'from_date' => 'date',
+            'to_date' => 'date',
+            'duration' => 'float',
+            'previous_balance' => 'float',
+            'new_balance' => 'float',
+            'cancelled_at' => 'datetime',
             'reviewed_at' => 'datetime',
             'applied_at' => 'datetime',
             'approval_trail' => 'array',
             'claimed_at' => 'datetime',
         ];
+    }
+
+    /** A leave regularisation converts an absence; the default corrects punches. */
+    public function isLeave(): bool
+    {
+        return $this->category === 'leave';
+    }
+
+    public function leaveType(): BelongsTo
+    {
+        return $this->belongsTo(LeaveType::class);
+    }
+
+    public function cancelledBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'cancelled_by');
     }
 
     /** Human label for the current workflow position. */

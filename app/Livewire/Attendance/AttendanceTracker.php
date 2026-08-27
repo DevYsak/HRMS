@@ -30,6 +30,7 @@ use App\Services\Attendance\PunchTimeline as PunchTimelineEngine;
 use App\Services\Attendance\ShiftProgress;
 use App\Services\Attendance\ShiftResolver;
 use App\Services\AttendanceService;
+use App\Services\Leave\LeaveYearResolver;
 use App\Services\WfhService;
 use App\Support\UserAgent;
 use Carbon\CarbonPeriod;
@@ -416,7 +417,7 @@ class AttendanceTracker extends Component
 
         // 12. Total available leave balance (current year)
         $this->leaveBalance = LeaveBalance::where('employee_id', $employee->id)
-            ->where('year', now()->year)
+            ->where('year', app(LeaveYearResolver::class)->legacyYearFor())
             ->get()
             ->sum(fn ($b) => $b->available() + (float) ($b->comp_off_credits ?? 0));
 

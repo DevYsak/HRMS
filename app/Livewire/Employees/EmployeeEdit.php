@@ -12,6 +12,7 @@ use App\Models\EmployeeSalary;
 use App\Models\EmploymentType;
 use App\Models\JobTitle;
 use App\Models\LeaveType;
+use App\Models\LeaveYear;
 use App\Models\Office;
 use App\Models\Role;
 use App\Models\SalaryComponent;
@@ -21,9 +22,11 @@ use App\Models\User;
 use App\Models\WorkMode;
 use App\Services\Biometric\BiometricCodeService;
 use App\Services\Biometric\EngineAttendanceSyncService;
+use App\Services\Leave\LeaveYearResolver;
 use App\Services\LeaveBalanceService;
 use App\Services\PasswordService;
 use App\Services\ProbationEngine;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Password;
@@ -178,7 +181,7 @@ class EmployeeEdit extends Component
         $this->resignation_date = $this->employee->resignation_date?->format('Y-m-d') ?? '';
         $this->termination_date = $this->employee->termination_date?->format('Y-m-d') ?? '';
         $this->notice_period_end_date = $this->employee->notice_period_end_date?->format('Y-m-d') ?? '';
-        $this->leaveBalanceYear = (string) now()->year;
+        $this->leaveBalanceYear = (string) app(LeaveYearResolver::class)->legacyYearFor();
     }
 
     public function setTab(string $tab): void
@@ -592,11 +595,22 @@ class EmployeeEdit extends Component
 
     // ── Manage Leave Balance ──────────────────────────────────────────────────
 
+    /** 'adjust' (credit/debit) or 'historical' (state a past year outright). */
+    public string $leaveAdjustMode = 'adjust';
+
+    public $historicalAllocated = null;
+
+    public $historicalUsed = null;
+
+    public $historicalEncashed = null;
+
     public function openManageLeaveModal(): void
     {
-        abort_unless(auth()->user()->isHrAdmin() || auth()->user()->isSuperAdmin(), 403);
+        $this->authorize('manage_leave_balances');
 
-        $this->reset(['leaveAdjustTypeId', 'leaveAdjustDays', 'leaveAdjustReason', 'leaveAdjustRemarks']);
+        $this->reset(['leaveAdjustTypeId', 'leaveAdjustDays', 'leaveAdjustReason', 'leaveAdjustRemarks',
+            'historicalAllocated', 'historicalUsed', 'historicalEncashed']);
+        $this->leaveAdjustMode = 'adjust';
         $this->leaveAdjustAction = 'credit';
         $this->showManageLeaveModal = true;
     }
@@ -607,9 +621,60 @@ class EmployeeEdit extends Component
         $this->resetErrorBag();
     }
 
+    /**
+     * Enter an employee's position in a past leave year outright.
+     *
+     * Separate from credit/debit because a historical year is three facts —
+     * allocated, used, encashed — and a single credit can only express one of
+     * them. It writes to the leave year selected on the page, never to today.
+     */
+    public function submitHistoricalBalance(): void
+    {
+        $this->authorize('manage_leave_balances');
+
+        $this->validate([
+            'leaveAdjustTypeId' => 'required|exists:leave_types,id',
+            'historicalAllocated' => 'required|numeric|min:0|max:365',
+            'historicalUsed' => 'required|numeric|min:0|max:365',
+            'historicalEncashed' => 'nullable|numeric|min:0|max:365',
+            'leaveAdjustReason' => 'required|string|min:5|max:500',
+            'leaveAdjustRemarks' => 'nullable|string|max:1000',
+        ]);
+
+        $leaveYear = app(LeaveYearResolver::class)
+            ->forDate(Carbon::create((int) $this->leaveBalanceYear, 7, 1));
+
+        try {
+            app(LeaveBalanceService::class)->setHistoricalBalance(
+                $this->employee,
+                LeaveType::findOrFail($this->leaveAdjustTypeId),
+                $leaveYear,
+                (float) $this->historicalAllocated,
+                (float) $this->historicalUsed,
+                (float) ($this->historicalEncashed ?: 0),
+                $this->leaveAdjustReason,
+                $this->leaveAdjustRemarks,
+                auth()->user(),
+            );
+        } catch (\DomainException $e) {
+            $this->addError('historicalAllocated', $e->getMessage());
+
+            return;
+        }
+
+        $this->closeManageLeaveModal();
+
+        $eligible = max(0, (float) $this->historicalAllocated - (float) $this->historicalUsed - (float) ($this->historicalEncashed ?: 0));
+
+        \Flux::toast(
+            "{$leaveYear->label} balance recorded. {$eligible} day(s) eligible to carry forward.",
+            variant: 'success',
+        );
+    }
+
     public function submitLeaveAdjustment(): void
     {
-        abort_unless(auth()->user()->isHrAdmin() || auth()->user()->isSuperAdmin(), 403);
+        $this->authorize('manage_leave_balances');
 
         $this->validate([
             'leaveAdjustTypeId' => 'required|exists:leave_types,id',
@@ -650,6 +715,17 @@ class EmployeeEdit extends Component
         $this->employee->load(['salaries.component', 'shift']);
 
         $leaveService = app(LeaveBalanceService::class);
+
+        // Opening the Leave tab guarantees the three years a person actually
+        // switches between exist, so the selector is never empty on a fresh
+        // database. forDate() creates the row if it is missing.
+        if ($this->activeTab === 'Leave') {
+            $resolver = app(LeaveYearResolver::class);
+            $current = $resolver->current();
+            $resolver->previous($current);
+            $resolver->next($current);
+        }
+
         $balanceSummary = $this->activeTab === 'Leave'
             ? $leaveService->getBalanceSummary($this->employee, (int) $this->leaveBalanceYear)
             : collect();
@@ -702,7 +778,18 @@ class EmployeeEdit extends Component
             'balanceSummary' => $balanceSummary,
             'adjustmentHistory' => $adjustmentHistory,
             'adjustableLeaveTypes' => LeaveType::where('is_system_controlled', false)->whereNull('deleted_at')->orderBy('name')->get(),
-            'canManageLeaveBalance' => auth()->user()->isHrAdmin() || auth()->user()->isSuperAdmin(),
+            // Permission-based, not role-based. A role check cannot express a
+            // custom role that HR has been given manage_leave_balances, and it
+            // silently disagrees with the backend gate that actually decides.
+            'canManageLeaveBalance' => auth()->user()->hasPermission('manage_leave_balances'),
+            'canCarryForward' => auth()->user()->hasPermission('manage_leave_carry_forward'),
+            'canRegulariseLeave' => auth()->user()->hasPermission('create_leave_regularisation'),
+            // Leave years, not calendar years. The selector offered 2025, 2026,
+            // 2027 — none of which is a leave year when the year runs July to
+            // June.
+            'leaveYearOptions' => LeaveYear::orderByDesc('starts_on')->get()
+                ->map(fn (LeaveYear $y) => ['value' => (string) $y->legacyYear(), 'label' => $y->label])
+                ->all(),
             'attendanceRecords' => $attendanceRecords,
             'reviewHistory' => $reviewHistory,
             'kpiHistory' => $kpiHistory,

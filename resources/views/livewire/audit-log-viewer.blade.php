@@ -26,6 +26,20 @@
         <input type="date" wire:model.live="to" class="{{ $selectClass }}" title="To">
     </div>
 
+    {{-- Leave filters. Kept on their own row: a generic action/model pair
+         cannot answer "show me every carry forward", because every one of those
+         actions is recorded as "created". --}}
+    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <x-clean-select model="category" :live="true"
+            :options="array_merge([['value' => '', 'label' => 'All leave categories']], collect($categories)->map(fn ($label, $key) => ['value' => $key, 'label' => $label])->values()->all())" />
+        <x-clean-select model="employeeId" :live="true"
+            :options="array_merge([['value' => '', 'label' => 'All employees']], $employees->map(fn ($e) => ['value' => $e->id, 'label' => $e->user?->name ?? $e->employee_id])->all())" />
+        <x-clean-select model="leaveTypeId" :live="true"
+            :options="array_merge([['value' => '', 'label' => 'All leave types']], $leaveTypes->map(fn ($t) => ['value' => $t->id, 'label' => $t->name])->all())" />
+        <x-clean-select model="performedBy" :live="true"
+            :options="array_merge([['value' => '', 'label' => 'Performed by anyone']], $actors->map(fn ($u) => ['value' => $u->id, 'label' => $u->name])->all())" />
+    </div>
+
     {{-- Table --}}
     <div class="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-white/10 dark:bg-zinc-900">
         <table class="w-full text-sm">
@@ -45,13 +59,28 @@
                         <td class="px-5 py-3 whitespace-nowrap text-zinc-500">{{ $log->created_at?->format('d M Y, H:i') }}</td>
                         <td class="px-3 py-3 font-medium text-zinc-800 dark:text-zinc-200">{{ $log->user?->name ?? 'System' }}</td>
                         <td class="px-3 py-3">
-                            <span @class([
-                                'inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold',
-                                'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' => $log->action === 'created',
-                                'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' => $log->action === 'updated',
-                                'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400' => $log->action === 'deleted',
-                                'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300' => ! in_array($log->action, ['created','updated','deleted'], true),
-                            ])>{{ ucfirst($log->action) }}</span>
+                            @php
+                                $leaveLabel = $categoriser->labelFor($log);
+                                $leaveSummary = $leaveLabel ? $categoriser->summarise($log) : null;
+                            @endphp
+                            @if($leaveLabel)
+                                {{-- A leave entry describes itself. "Created" would be
+                                     technically accurate and tell nobody anything. --}}
+                                <span class="inline-flex rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-bold text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">
+                                    {{ $leaveLabel }}
+                                </span>
+                                @if($leaveSummary)
+                                    <div class="mt-1 text-xs text-zinc-600 dark:text-zinc-300">{{ $leaveSummary }}</div>
+                                @endif
+                            @else
+                                <span @class([
+                                    'inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold',
+                                    'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' => $log->action === 'created',
+                                    'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' => $log->action === 'updated',
+                                    'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400' => $log->action === 'deleted',
+                                    'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300' => ! in_array($log->action, ['created','updated','deleted'], true),
+                                ])>{{ ucfirst($log->action) }}</span>
+                            @endif
                         </td>
                         <td class="px-3 py-3 text-zinc-600 dark:text-zinc-300">{{ class_basename($log->auditable_type) }} <span class="text-zinc-400">#{{ $log->auditable_id }}</span></td>
                         <td class="px-3 py-3 text-xs text-zinc-400">{{ $log->ip_address ?? '—' }}</td>
