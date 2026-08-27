@@ -16,6 +16,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'encashed_days',
     'comp_off_credits',
     'year',
+    // The authoritative link to the leave year. Absent from fillable, every
+    // mass assignment left it null and the row was only ever found by the
+    // legacy-integer fallback.
+    'leave_year_id',
 ])]
 class LeaveBalance extends Model
 {

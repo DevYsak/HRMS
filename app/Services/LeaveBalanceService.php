@@ -174,9 +174,15 @@ class LeaveBalanceService
         $year ??= app(LeaveYearResolver::class)->legacyYearFor();
 
         return DB::transaction(function () use ($employee, $leaveType, $action, $days, $reason, $remarks, $adjuster, $year) {
+            $leaveYear = app(LeaveYearResolver::class)->forDate(Carbon::create($year, 7, 1));
+
             $balance = LeaveBalance::firstOrCreate(
                 ['employee_id' => $employee->id, 'leave_type_id' => $leaveType->id, 'year' => $year],
                 [
+                    // The authoritative identity of the year, not just its legacy
+                    // integer. Without it the row is only ever found by the
+                    // fallback that exists for rows predating leave years.
+                    'leave_year_id' => $leaveYear->id,
                     'allocated_days' => 0,
                     'used_days' => 0,
                     'carried_forward_days' => 0,
@@ -184,6 +190,10 @@ class LeaveBalanceService
                     'comp_off_credits' => 0,
                 ],
             );
+
+            if ($balance->leave_year_id === null) {
+                $balance->forceFill(['leave_year_id' => $leaveYear->id])->save();
+            }
 
             $previousBalance = (float) $balance->allocated_days;
 
@@ -232,6 +242,8 @@ class LeaveBalanceService
                     'leave_type' => $leaveType->name,
                     'leave_type_id' => $leaveType->id,
                     'leave_year' => $year,
+                    'leave_year_id' => $leaveYear->id,
+                    'leave_year_label' => $leaveYear->label,
                     'adjusted_by' => $adjuster->id,
                     'remarks' => $remarks ?: null,
                 ],
@@ -247,6 +259,122 @@ class LeaveBalanceService
      * Return an enriched balance summary collection for a given employee and year.
      * Each item includes: balance row, leave type, pending_days computed live.
      */
+    /**
+     * Record an employee's position in a past leave year.
+     *
+     * A credit/debit adjustment can only move allocated days, so a historical
+     * year could never be stated properly: 28 allocated with 10 used is two
+     * facts, and crediting 18 to express it loses both.
+     *
+     * Deliberately not carry forward. Carry forward derives its own number from
+     * the previous year and stays traceable to it; this states what that
+     * previous year was. Using this to credit the current year instead would
+     * produce days with no year of origin, which is exactly what the
+     * carry-forward transaction exists to prevent.
+     *
+     * @throws \DomainException when the figures cannot describe a real year
+     */
+    public function setHistoricalBalance(
+        Employee $employee,
+        LeaveType $leaveType,
+        LeaveYear $leaveYear,
+        float $allocated,
+        float $used,
+        float $encashed,
+        string $reason,
+        ?string $remarks,
+        User $actor,
+    ): LeaveBalanceAdjustment {
+        foreach (['allocated' => $allocated, 'used' => $used, 'encashed' => $encashed] as $label => $value) {
+            if ($value < 0) {
+                throw new \DomainException(ucfirst($label).' days cannot be negative.');
+            }
+        }
+
+        if ($used + $encashed > $allocated) {
+            // Not merely odd: carry forward would compute a negative eligible
+            // figure and clamp it to zero, silently discarding entitlement.
+            throw new \DomainException(
+                "Used ({$used}) plus encashed ({$encashed}) cannot exceed allocated ({$allocated})."
+            );
+        }
+
+        if (trim($reason) === '') {
+            throw new \DomainException('A historical balance entry needs a reason.');
+        }
+
+        return DB::transaction(function () use ($employee, $leaveType, $leaveYear, $allocated, $used, $encashed, $reason, $remarks, $actor) {
+            $balance = LeaveBalance::firstOrNew([
+                'employee_id' => $employee->id,
+                'leave_type_id' => $leaveType->id,
+                'year' => $leaveYear->legacyYear(),
+            ]);
+
+            $before = [
+                'allocated' => (float) ($balance->allocated_days ?? 0),
+                'used' => (float) ($balance->used_days ?? 0),
+                'encashed' => (float) ($balance->encashed_days ?? 0),
+            ];
+
+            $balance->fill([
+                // The authoritative identity of the year, not just its legacy
+                // integer.
+                'leave_year_id' => $leaveYear->id,
+                'allocated_days' => $allocated,
+                'used_days' => $used,
+                'encashed_days' => $encashed,
+                // Untouched: days carried into this year came from the year
+                // before it and are not part of stating this one.
+                'carried_forward_days' => (float) ($balance->carried_forward_days ?? 0),
+                'comp_off_credits' => (float) ($balance->comp_off_credits ?? 0),
+            ])->save();
+
+            $adjustment = LeaveBalanceAdjustment::create([
+                'employee_id' => $employee->id,
+                'leave_type_id' => $leaveType->id,
+                'action' => $allocated >= $before['allocated'] ? 'credit' : 'debit',
+                'source' => 'historical',
+                'days' => round(abs($allocated - $before['allocated']), 2),
+                'previous_balance' => $before['allocated'],
+                'new_balance' => $allocated,
+                'reason' => $reason,
+                'remarks' => $remarks ?: null,
+                'adjusted_by' => $actor->id,
+                'adjusted_at' => now(),
+            ]);
+
+            // All three figures, both sides. A final allocated number alone
+            // cannot describe a year in which usage also changed.
+            AuditLog::record(
+                $adjustment,
+                'leave.historical_balance_set',
+                [
+                    'allocated_days' => $before['allocated'],
+                    'used_days' => $before['used'],
+                    'encashed_days' => $before['encashed'],
+                ],
+                [
+                    'allocated_days' => $allocated,
+                    'used_days' => $used,
+                    'encashed_days' => $encashed,
+                    'source' => 'historical',
+                    'leave_type' => $leaveType->name,
+                    'leave_type_id' => $leaveType->id,
+                    'leave_year' => $leaveYear->legacyYear(),
+                    'leave_year_id' => $leaveYear->id,
+                    'leave_year_label' => $leaveYear->label,
+                    'eligible_for_carry_forward' => round(max(0, $allocated - $used - $encashed), 2),
+                    'performed_by' => $actor->id,
+                    'remarks' => $remarks ?: null,
+                ],
+                $reason,
+                $employee->id,
+            );
+
+            return $adjustment;
+        });
+    }
+
     public function getBalanceSummary(Employee $employee, int $year): Collection
     {
         // Get all active leave types

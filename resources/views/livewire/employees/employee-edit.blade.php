@@ -1226,6 +1226,32 @@
                 </div>
 
                 <div class="space-y-4">
+                    {{-- The year being edited, stated rather than implied. The
+                         adjustment writes to whichever leave year is selected on the
+                         page behind this modal. --}}
+                    <div class="flex items-center gap-2 rounded-lg bg-[#F9FAFB] px-3 py-2 text-xs dark:bg-white/5">
+                        <flux:icon.calendar class="size-3.5 text-orange-500" />
+                        <span class="text-[#667085] dark:text-zinc-400">Leave year</span>
+                        <span class="font-bold text-[#101828] dark:text-zinc-100">
+                            {{ collect($leaveYearOptions)->firstWhere('value', (string) $leaveBalanceYear)['label'] ?? $leaveBalanceYear }}
+                        </span>
+                    </div>
+
+                    <div class="flex gap-1 rounded-lg bg-[#F2F4F7] p-1 dark:bg-white/5">
+                        <button type="button" wire:click="$set('leaveAdjustMode', 'adjust')"
+                            @class([
+                                'flex-1 rounded-md px-3 py-1.5 text-xs font-semibold transition',
+                                'bg-white text-[#101828] shadow-sm dark:bg-zinc-800 dark:text-white' => $leaveAdjustMode === 'adjust',
+                                'text-[#667085] hover:text-[#101828] dark:text-zinc-400' => $leaveAdjustMode !== 'adjust',
+                            ])>Adjust balance</button>
+                        <button type="button" wire:click="$set('leaveAdjustMode', 'historical')"
+                            @class([
+                                'flex-1 rounded-md px-3 py-1.5 text-xs font-semibold transition',
+                                'bg-white text-[#101828] shadow-sm dark:bg-zinc-800 dark:text-white' => $leaveAdjustMode === 'historical',
+                                'text-[#667085] hover:text-[#101828] dark:text-zinc-400' => $leaveAdjustMode !== 'historical',
+                            ])>Record historical balance</button>
+                    </div>
+
                     {{-- Leave Type --}}
                     <flux:field>
                         <x-clean-select model="leaveAdjustTypeId" label="Leave Type" :required="true" :live="false" placeholder="Select leave type…"
@@ -1233,6 +1259,20 @@
                         @error('leaveAdjustTypeId') <flux:error>{{ $message }}</flux:error> @enderror
                     </flux:field>
 
+                    @if($leaveAdjustMode === 'historical')
+                        {{-- Three facts, not one. A credit of 18 cannot express
+                             "28 allocated, 10 used" — and carry forward needs both. --}}
+                        <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                            <flux:input wire:model="historicalAllocated" type="number" step="0.5" min="0" label="Allocated" placeholder="28" required />
+                            <flux:input wire:model="historicalUsed" type="number" step="0.5" min="0" label="Used" placeholder="10" required />
+                            <flux:input wire:model="historicalEncashed" type="number" step="0.5" min="0" label="Encashed" placeholder="0" />
+                        </div>
+                        @error('historicalAllocated') <flux:error>{{ $message }}</flux:error> @enderror
+
+                        <div class="rounded-lg border border-blue-100 bg-blue-50/60 px-3 py-2 text-xs text-blue-800 dark:border-blue-500/20 dark:bg-blue-500/5 dark:text-blue-300">
+                            Eligible to carry forward = allocated − used − encashed, capped by the leave type's policy limit.
+                        </div>
+                    @else
                     {{-- Action --}}
                     <div>
                         <flux:label>Action <span class="text-red-500">*</span></flux:label>
@@ -1250,6 +1290,7 @@
 
                     {{-- Days --}}
                     <flux:input wire:model="leaveAdjustDays" type="number" step="0.5" min="0.5" label="Days" placeholder="e.g. 2" required />
+                    @endif
                     @error('leaveAdjustDays') <p class="text-xs text-red-500 -mt-2">{{ $message }}</p> @enderror
 
                     {{-- Reason --}}
@@ -1272,13 +1313,13 @@
                         Cancel
                     </button>
                     <flux:button
-                        wire:click="submitLeaveAdjustment"
+                        wire:click="{{ $leaveAdjustMode === 'historical' ? 'submitHistoricalBalance' : 'submitLeaveAdjustment' }}"
                         wire:loading.attr="disabled"
-                        wire:target="submitLeaveAdjustment"
+                        wire:target="submitLeaveAdjustment,submitHistoricalBalance"
                         variant="primary"
                         icon="check">
-                        <span wire:loading.remove wire:target="submitLeaveAdjustment">Apply Adjustment</span>
-                        <span wire:loading wire:target="submitLeaveAdjustment">Applying…</span>
+                        <span wire:loading.remove wire:target="submitLeaveAdjustment,submitHistoricalBalance">{{ $leaveAdjustMode === 'historical' ? 'Record balance' : 'Apply Adjustment' }}</span>
+                        <span wire:loading wire:target="submitLeaveAdjustment,submitHistoricalBalance">Saving…</span>
                     </flux:button>
                 </div>
             </div>
