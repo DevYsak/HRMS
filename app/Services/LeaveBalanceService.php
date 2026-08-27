@@ -279,19 +279,25 @@ class LeaveBalanceService
         LeaveType $leaveType,
         LeaveYear $leaveYear,
         float $allocated,
-        float $used,
-        float $encashed,
+        // null means the figure is genuinely unknown, which is the normal case
+        // for a closed year we only hold a closing balance for. It is recorded
+        // as unknown rather than assumed to be zero.
+        ?float $used,
+        ?float $encashed,
         string $reason,
         ?string $remarks,
         User $actor,
     ): LeaveBalanceAdjustment {
         foreach (['allocated' => $allocated, 'used' => $used, 'encashed' => $encashed] as $label => $value) {
-            if ($value < 0) {
+            if ($value !== null && $value < 0) {
                 throw new \DomainException(ucfirst($label).' days cannot be negative.');
             }
         }
 
-        if ($used + $encashed > $allocated) {
+        // Only checkable when both figures are actually known. Comparing an
+        // unknown against the allocation would be inventing the very number
+        // this method exists to avoid inventing.
+        if ($used !== null && $encashed !== null && $used + $encashed > $allocated) {
             // Not merely odd: carry forward would compute a negative eligible
             // figure and clamp it to zero, silently discarding entitlement.
             throw new \DomainException(
@@ -321,8 +327,13 @@ class LeaveBalanceService
                 // integer.
                 'leave_year_id' => $leaveYear->id,
                 'allocated_days' => $allocated,
-                'used_days' => $used,
-                'encashed_days' => $encashed,
+                // The column stays 0 because the live engine reads it on every
+                // balance; the flag beside it is what stops that 0 being read
+                // as a measurement.
+                'used_days' => $used ?? 0,
+                'used_days_unknown' => $used === null,
+                'encashed_days' => $encashed ?? 0,
+                'encashed_days_unknown' => $encashed === null,
                 // Untouched: days carried into this year came from the year
                 // before it and are not part of stating this one.
                 'carried_forward_days' => (float) ($balance->carried_forward_days ?? 0),
@@ -355,15 +366,23 @@ class LeaveBalanceService
                 ],
                 [
                     'allocated_days' => $allocated,
-                    'used_days' => $used,
-                    'encashed_days' => $encashed,
+                    // Recorded as the word, not as a number. An audit entry must
+                    // never claim a historical figure was known when it was not.
+                    'used_days' => $used ?? 'not_available',
+                    'encashed_days' => $encashed ?? 'not_available',
+                    'used_days_known' => $used !== null,
+                    'encashed_days_known' => $encashed !== null,
                     'source' => 'historical',
                     'leave_type' => $leaveType->name,
                     'leave_type_id' => $leaveType->id,
                     'leave_year' => $leaveYear->legacyYear(),
                     'leave_year_id' => $leaveYear->id,
                     'leave_year_label' => $leaveYear->label,
-                    'eligible_for_carry_forward' => round(max(0, $allocated - $used - $encashed), 2),
+                    // Not derivable without both figures. HR decides the amount
+                    // instead of the system guessing it.
+                    'eligible_for_carry_forward' => ($used === null || $encashed === null)
+                        ? 'not_derivable'
+                        : round(max(0, $allocated - $used - $encashed), 2),
                     'performed_by' => $actor->id,
                     'remarks' => $remarks ?: null,
                 ],

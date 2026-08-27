@@ -20,6 +20,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     // mass assignment left it null and the row was only ever found by the
     // legacy-integer fallback.
     'leave_year_id',
+    // Whether the figure beside it is a measurement or a placeholder. A
+    // closed year we never had usage data for must not claim zero.
+    'used_days_unknown',
+    'encashed_days_unknown',
 ])]
 class LeaveBalance extends Model
 {

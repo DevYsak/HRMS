@@ -58,16 +58,30 @@ class LeaveCarryOverService
                     continue;
                 }
 
-                $eligible = $this->eligibleDays($balance);
-                $carry = $this->cappedCarry($eligible, $type);
+                // A closed year we hold no usage figure for cannot yield an
+                // eligible amount. Deriving one from used_days = 0 would offer
+                // HR the whole allocation as carryable on the strength of a
+                // placeholder nobody measured.
+                $figuresKnown = ! $balance->used_days_unknown && ! $balance->encashed_days_unknown;
 
-                if ($carry <= 0) {
+                $eligible = $figuresKnown ? $this->eligibleDays($balance) : null;
+                $carry = $figuresKnown ? $this->cappedCarry($eligible, $type) : 0.0;
+
+                // Rows with unknown figures still surface: HR has to see the
+                // recorded closing balance in order to decide an amount. Rows
+                // with known figures and nothing to carry do not.
+                if ($figuresKnown && $carry <= 0) {
                     continue;
                 }
 
                 $target = $this->balanceFor($employee, $type, $to);
 
                 $rows->push([
+                    // Whether the eligible figure below is a calculation or a
+                    // gap. Everything downstream branches on this rather than
+                    // on a zero that could mean either.
+                    'figures_known' => $figuresKnown,
+                    'closing_balance' => (float) $balance->allocated_days,
                     'employee_id' => $employee->id,
                     'employee' => $employee->user?->name,
                     'leave_type_id' => $type->id,
@@ -82,7 +96,7 @@ class LeaveCarryOverService
                     // before as well as the after.
                     'target_allocated_now' => $target ? (float) $target->allocated_days : 0.0,
                     'target_carried_now' => $target ? (float) $target->carried_forward_days : 0.0,
-                    'already_applied' => $target && (float) $target->carried_forward_days === $carry,
+                    'already_applied' => $figuresKnown && $target && (float) $target->carried_forward_days === $carry,
                 ]);
             }
         }

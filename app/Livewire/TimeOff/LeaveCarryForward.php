@@ -124,6 +124,26 @@ class LeaveCarryForward extends Component
         return round($this->rows->sum('remaining_eligible'), 2);
     }
 
+    /**
+     * Rows the system can actually compute an amount for.
+     *
+     * A row whose closed year has no usage figure is real and must be shown,
+     * but nothing may be applied to it in bulk — HR decides that amount one
+     * employee at a time. Without this the screen would see rows with zero
+     * outstanding days and report the work as finished.
+     */
+    public function getHasDerivableRowsProperty(): bool
+    {
+        return $this->rows->contains(fn (array $row) => ($row['figures_known'] ?? true) === true);
+    }
+
+    /** Rows waiting on an HR decision because their figures are unknown. */
+    public function getUndecidedRowCountProperty(): int
+    {
+        return $this->rows->filter(fn (array $row) => ($row['figures_known'] ?? true) === false
+            && ($row['applied'] ?? 0) <= 0)->count();
+    }
+
     public function applyRow(int $employeeId, int $leaveTypeId): void
     {
         $this->authorize('manage_leave_carry_forward');
@@ -159,6 +179,15 @@ class LeaveCarryForward extends Component
             $previous = LeaveYear::find($this->previousYearId)?->label ?? 'the previous leave year';
 
             \Flux::toast("No eligible leave is available to carry forward for {$previous}.", variant: 'warning');
+
+            return;
+        }
+
+        if (! $this->hasDerivableRows) {
+            \Flux::toast(
+                'Historical used days are not available for these employees. Enter the approved carry-forward days for each one — the system cannot derive them.',
+                variant: 'warning',
+            );
 
             return;
         }
@@ -246,6 +275,8 @@ class LeaveCarryForward extends Component
             'totals' => $this->totals,
             'hasEligibleRows' => $this->hasEligibleRows,
             'outstandingDays' => $this->outstandingDays,
+            'hasDerivableRows' => $this->hasDerivableRows,
+            'undecidedRowCount' => $this->undecidedRowCount,
             'leaveYears' => LeaveYear::orderByDesc('starts_on')->get(),
             'departments' => Department::orderBy('name')->get(),
             'leaveTypes' => LeaveType::where('allow_carry_forward', true)->orderBy('name')->get(),

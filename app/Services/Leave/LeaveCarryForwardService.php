@@ -102,18 +102,47 @@ class LeaveCarryForwardService
             throw new RuntimeException('This employee has nothing to carry forward for '.$type->name.' from '.$from->label.'.');
         }
 
-        $eligible = (float) $source['carry'];
-        $applied = $days === null ? $eligible : round((float) $days, 2);
+        $figuresKnown = $source['figures_known'] ?? true;
 
-        if ($applied < 0) {
-            throw new RuntimeException('Carry forward days cannot be negative.');
+        // With no usage figure for the closed year there is nothing to derive
+        // an eligible amount from, so HR states the amount and the ceiling is
+        // the recorded closing balance rather than a calculation.
+        if (! $figuresKnown) {
+            if ($days === null) {
+                throw new RuntimeException(
+                    'Historical used days are not available for '.$type->name.' in '.$from->label
+                    .'. Enter the carry-forward days HR has approved — the system cannot derive them.'
+                );
+            }
+
+            $applied = round((float) $days, 2);
+            $ceiling = (float) $source['closing_balance'];
+
+            if ($applied < 0) {
+                throw new RuntimeException('Carry forward days cannot be negative.');
+            }
+
+            if ($applied > $ceiling) {
+                throw new RuntimeException("Cannot carry forward {$applied} days — the recorded {$from->label} balance is {$ceiling}.");
+            }
+
+            // eligible_days records the ceiling, not a derived entitlement: the
+            // audit must not claim an eligibility that was never calculated.
+            $eligible = $ceiling;
+        } else {
+            $eligible = (float) $source['carry'];
+            $applied = $days === null ? $eligible : round((float) $days, 2);
+
+            if ($applied < 0) {
+                throw new RuntimeException('Carry forward days cannot be negative.');
+            }
+
+            if ($applied > $eligible) {
+                throw new RuntimeException("Cannot carry forward {$applied} days — only {$eligible} are eligible.");
+            }
         }
 
-        if ($applied > $eligible) {
-            throw new RuntimeException("Cannot carry forward {$applied} days — only {$eligible} are eligible.");
-        }
-
-        return DB::transaction(function () use ($employee, $type, $from, $to, $actor, $source, $eligible, $applied, $reason) {
+        return DB::transaction(function () use ($employee, $type, $from, $to, $actor, $source, $eligible, $applied, $reason, $figuresKnown) {
             $tx = Transaction::firstOrNew([
                 'employee_id' => $employee->id,
                 'leave_type_id' => $type->id,
@@ -148,6 +177,10 @@ class LeaveCarryForwardService
                 'eligible_days' => $eligible,
                 'applied_days' => $applied,
                 'partial' => $applied < $eligible,
+                // The audit must never imply the system calculated an
+                // entitlement it could not calculate.
+                'historical_figures_known' => $figuresKnown,
+                'carry_forward_decided_by' => $figuresKnown ? 'calculated' : 'hr_approved',
                 'reason' => $reason,
             ]);
 
@@ -213,6 +246,14 @@ class LeaveCarryForwardService
             // Already carried at the full eligible amount: nothing to do, and
             // re-applying would only rewrite applied_at.
             if ($row['status'] === Transaction::STATUS_APPLIED) {
+                $skipped++;
+
+                continue;
+            }
+
+            // No usage figure means no derivable amount. Bulk apply must not
+            // guess one — these rows need HR to decide, one at a time.
+            if (($row['figures_known'] ?? true) === false) {
                 $skipped++;
 
                 continue;
