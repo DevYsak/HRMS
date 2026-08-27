@@ -10,6 +10,7 @@ use App\Models\LeaveYear;
 use App\Services\Leave\LeaveCarryForwardService;
 use App\Services\Leave\LeaveYearResolver;
 use Illuminate\Support\Collection;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 use RuntimeException;
 
@@ -31,6 +32,11 @@ class LeaveCarryForward extends Component
 
     public ?int $departmentId = null;
 
+    /**
+     * Pre-filled when HR arrives from an employee's own Leave tab, so the
+     * person does not have to be searched for a second time.
+     */
+    #[Url(as: 'employeeId')]
     public ?int $employeeId = null;
 
     public ?int $leaveTypeId = null;

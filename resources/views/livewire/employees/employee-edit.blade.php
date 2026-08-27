@@ -634,8 +634,9 @@
                                 </div>
                                 <div class="flex items-center gap-2">
                                     {{-- Year selector --}}
-                                    <x-clean-select model="leaveBalanceYear" :live="true"
-                                        :options="collect([now()->year - 1, now()->year, now()->year + 1])->map(fn ($yr) => ['value' => $yr, 'label' => $yr])->all()" />
+                                    {{-- Leave years, not calendar years. The year runs 1 July to
+                                         30 June, so "2026" was never a leave year at all. --}}
+                                    <x-clean-select model="leaveBalanceYear" :live="true" :options="$leaveYearOptions" />
                                     @if($canManageLeaveBalance)
                                         <flux:button wire:click="openManageLeaveModal" variant="primary" icon="adjustments-horizontal" size="sm">
                                             Manage Balance
@@ -650,12 +651,13 @@
                                     <thead>
                                         <tr class="border-b border-[#EAECF0] dark:border-white/10 bg-[#F9FAFB] dark:bg-zinc-800/50">
                                             <th class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-zinc-400">Leave Type</th>
-                                            <th class="px-4 py-3 text-center text-xs font-bold uppercase tracking-wide text-zinc-400">Allocated</th>
+                                            <th class="px-4 py-3 text-center text-xs font-bold uppercase tracking-wide text-zinc-400">Fresh</th>
                                             <th class="px-4 py-3 text-center text-xs font-bold uppercase tracking-wide text-zinc-400">Carried Fwd</th>
                                             <th class="px-4 py-3 text-center text-xs font-bold uppercase tracking-wide text-zinc-400">Used</th>
                                             <th class="px-4 py-3 text-center text-xs font-bold uppercase tracking-wide text-zinc-400">Encashed</th>
                                             <th class="px-4 py-3 text-center text-xs font-bold uppercase tracking-wide text-zinc-400">Available</th>
                                             <th class="px-4 py-3 text-center text-xs font-bold uppercase tracking-wide text-zinc-400">Pending</th>
+                                            <th class="px-4 py-3 text-right text-xs font-bold uppercase tracking-wide text-zinc-400">Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
@@ -673,7 +675,10 @@
                                                         @endif
                                                     </div>
                                                 </td>
-                                                <td class="px-4 py-3 text-center font-semibold text-zinc-700 dark:text-zinc-300">{{ $row->allocated > 0 ? $row->allocated : '—' }}</td>
+                                                {{-- Fresh entitlement, with carried days taken out. allocated_days
+                                                     holds both, so printing it beside "Carried Fwd" showed the same
+                                                     days in two columns. --}}
+                                                <td class="px-4 py-3 text-center font-semibold text-zinc-700 dark:text-zinc-300">{{ $row->fresh > 0 ? $row->fresh : '—' }}</td>
                                                 <td class="px-4 py-3 text-center text-zinc-500">{{ $row->carried_forward > 0 ? $row->carried_forward : '—' }}</td>
                                                 <td class="px-4 py-3 text-center text-amber-600 dark:text-amber-400 font-semibold">{{ $row->used > 0 ? $row->used : '—' }}</td>
                                                 <td class="px-4 py-3 text-center text-zinc-500">{{ $row->encashed > 0 ? $row->encashed : '—' }}</td>
@@ -691,10 +696,38 @@
                                                         <span class="text-zinc-300 dark:text-zinc-600">—</span>
                                                     @endif
                                                 </td>
+                                                <td class="px-4 py-3 text-right">
+                                                    {{-- Each action goes to the service that owns it. None of them is a
+                                                         generic credit: carry forward stays traceable to the year it came
+                                                         from, and a regularisation goes through the approval chain. --}}
+                                                    <div class="flex items-center justify-end gap-1">
+                                                        <flux:tooltip content="{{ $row->fresh }} fresh + {{ $row->carried_forward }} carried − {{ $row->used }} used − {{ $row->encashed }} encashed = {{ $row->available }} available">
+                                                            <flux:button variant="ghost" size="xs" icon="information-circle" class="text-zinc-400" />
+                                                        </flux:tooltip>
+
+                                                        @if($canManageLeaveBalance)
+                                                            <flux:tooltip content="Manual balance adjustment — HR corrections only">
+                                                                <flux:button wire:click="openManageLeaveModal" variant="ghost" size="xs" icon="adjustments-horizontal" class="text-zinc-400 hover:text-orange-600" />
+                                                            </flux:tooltip>
+                                                        @endif
+
+                                                        @if($canCarryForward)
+                                                            <flux:tooltip content="Carry forward from the previous leave year">
+                                                                <flux:button :href="route('time-off.carry-forward', ['employeeId' => $employee->id])" wire:navigate variant="ghost" size="xs" icon="arrow-right-circle" class="text-zinc-400 hover:text-orange-600" />
+                                                            </flux:tooltip>
+                                                        @endif
+
+                                                        @if($canRegulariseLeave)
+                                                            <flux:tooltip content="Regularise a past absence as leave">
+                                                                <flux:button :href="route('time-off.regularisation', ['employeeId' => $employee->id])" wire:navigate variant="ghost" size="xs" icon="calendar-days" class="text-zinc-400 hover:text-orange-600" />
+                                                            </flux:tooltip>
+                                                        @endif
+                                                    </div>
+                                                </td>
                                             </tr>
                                         @empty
                                             <tr>
-                                                <td colspan="7" class="px-4 py-10 text-center text-sm text-zinc-400">
+                                                <td colspan="8" class="px-4 py-10 text-center text-sm text-zinc-400">
                                                     No leave balances found for {{ $leaveBalanceYear }}. Balance initializes when leave is allocated via Leave Settings.
                                                 </td>
                                             </tr>

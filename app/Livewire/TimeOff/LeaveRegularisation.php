@@ -9,6 +9,7 @@ use App\Notifications\RegularisationReviewedNotification;
 use App\Services\AttendanceService;
 use App\Services\Leave\LeaveRegularisationService;
 use Illuminate\Support\Carbon;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
 use RuntimeException;
@@ -27,6 +28,8 @@ class LeaveRegularisation extends Component
 
     public string $statusFilter = 'pending';
 
+    /** Pre-filled when HR arrives from an employee's own Leave tab. */
+    #[Url(as: 'employeeId')]
     public ?int $employeeFilter = null;
 
     /** Raise-a-request form. */

@@ -10,6 +10,7 @@ use App\Models\LeaveBalance;
 use App\Models\LeaveBalanceAdjustment;
 use App\Models\LeaveRequest;
 use App\Models\LeaveType;
+use App\Models\LeaveYear;
 use App\Models\User;
 use App\Services\Leave\LeaveYearResolver;
 use Illuminate\Support\Carbon;
@@ -259,9 +260,18 @@ class LeaveBalanceService
             ->keyBy('leave_type_id');
 
         // Load pending request days per leave type in one query
+        // Bounded by the leave year, not the calendar year. whereYear() counted
+        // January to December, so a request in June was attributed to the wrong
+        // year for six months of every year.
+        $bounds = LeaveYear::where('starts_on', '<=', Carbon::create($year, 7, 1))
+            ->orderByDesc('starts_on')->first();
+        $startsOn = $bounds?->starts_on ?? Carbon::create($year, 7, 1);
+        $endsOn = $bounds?->ends_on ?? Carbon::create($year + 1, 6, 30);
+
         $pendingDays = LeaveRequest::where('employee_id', $employee->id)
             ->whereIn('status', ['pending', 'pending_hr'])
-            ->whereYear('start_date', $year)
+            ->whereDate('start_date', '>=', $startsOn)
+            ->whereDate('start_date', '<=', $endsOn)
             ->selectRaw('leave_type_id, SUM(days) as total_pending')
             ->groupBy('leave_type_id')
             ->pluck('total_pending', 'leave_type_id');
@@ -274,6 +284,11 @@ class LeaveBalanceService
                 'leave_type_id' => $type->id,
                 'year' => $year,
                 'allocated' => $balance ? (float) $balance->allocated_days : 0.0,
+                // allocated_days already includes carried days, so showing both
+                // columns without subtracting presents the same days twice.
+                'fresh' => $balance
+                    ? round((float) $balance->allocated_days - (float) $balance->carried_forward_days, 2)
+                    : 0.0,
                 'used' => $balance ? (float) $balance->used_days : 0.0,
                 'carried_forward' => $balance ? (float) $balance->carried_forward_days : 0.0,
                 'encashed' => $balance ? (float) $balance->encashed_days : 0.0,

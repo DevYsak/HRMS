@@ -12,6 +12,7 @@ use App\Models\EmployeeSalary;
 use App\Models\EmploymentType;
 use App\Models\JobTitle;
 use App\Models\LeaveType;
+use App\Models\LeaveYear;
 use App\Models\Office;
 use App\Models\Role;
 use App\Models\SalaryComponent;
@@ -651,6 +652,17 @@ class EmployeeEdit extends Component
         $this->employee->load(['salaries.component', 'shift']);
 
         $leaveService = app(LeaveBalanceService::class);
+
+        // Opening the Leave tab guarantees the three years a person actually
+        // switches between exist, so the selector is never empty on a fresh
+        // database. forDate() creates the row if it is missing.
+        if ($this->activeTab === 'Leave') {
+            $resolver = app(LeaveYearResolver::class);
+            $current = $resolver->current();
+            $resolver->previous($current);
+            $resolver->next($current);
+        }
+
         $balanceSummary = $this->activeTab === 'Leave'
             ? $leaveService->getBalanceSummary($this->employee, (int) $this->leaveBalanceYear)
             : collect();
@@ -703,7 +715,18 @@ class EmployeeEdit extends Component
             'balanceSummary' => $balanceSummary,
             'adjustmentHistory' => $adjustmentHistory,
             'adjustableLeaveTypes' => LeaveType::where('is_system_controlled', false)->whereNull('deleted_at')->orderBy('name')->get(),
-            'canManageLeaveBalance' => auth()->user()->isHrAdmin() || auth()->user()->isSuperAdmin(),
+            // Permission-based, not role-based. A role check cannot express a
+            // custom role that HR has been given manage_leave_balances, and it
+            // silently disagrees with the backend gate that actually decides.
+            'canManageLeaveBalance' => auth()->user()->hasPermission('manage_leave_balances'),
+            'canCarryForward' => auth()->user()->hasPermission('manage_leave_carry_forward'),
+            'canRegulariseLeave' => auth()->user()->hasPermission('create_leave_regularisation'),
+            // Leave years, not calendar years. The selector offered 2025, 2026,
+            // 2027 — none of which is a leave year when the year runs July to
+            // June.
+            'leaveYearOptions' => LeaveYear::orderByDesc('starts_on')->get()
+                ->map(fn (LeaveYear $y) => ['value' => (string) $y->legacyYear(), 'label' => $y->label])
+                ->all(),
             'attendanceRecords' => $attendanceRecords,
             'reviewHistory' => $reviewHistory,
             'kpiHistory' => $kpiHistory,
