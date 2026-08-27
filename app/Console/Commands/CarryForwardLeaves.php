@@ -15,27 +15,46 @@ use Illuminate\Support\Carbon;
  * with the carried figure and reset used_days to zero. Running it by mistake
  * erased every booking in the target year for every active employee.
  *
- * It now previews by default and writes only with --apply, through the same
- * engine the Carry Forward screen uses, so the console and the UI cannot
- * produce different answers from the same data.
+ * It is now read-only. It previews through the same engine the Carry Forward
+ * screen uses, so the console and the UI cannot produce different answers from
+ * the same data — but applying happens in the UI, where the amount HR decided,
+ * the person who decided it and the reason are all recorded. A console run is
+ * attributable to a shell, and carrying everybody's leave with no decision
+ * behind it is exactly what the agreed process forbids.
  */
 class CarryForwardLeaves extends Command
 {
     protected $signature = 'hrms:carry-forward-leaves
         {year? : Leave year to carry INTO, as its starting year (2026 means 2026/27). Defaults to the current leave year}
-        {--apply : Actually write the balances. Without this the command only previews}';
+        {--apply : Refused. Carry forward is applied from the UI so the decision is attributable}';
 
-    protected $description = 'Preview or apply leave carry-forward between leave years (previews by default)';
+    protected $description = 'Preview leave carry-forward between leave years (read-only; apply from the UI)';
 
     public function handle(LeaveYearResolver $resolver, LeaveCarryOverService $engine): int
     {
+        if ($this->option('apply')) {
+            // Refused up front, before any preview work: whether there happens
+            // to be anything to carry has no bearing on whether the console may
+            // carry it. Carry forward is an HR decision per employee, and a
+            // console run is attributable to a shell rather than to a person.
+            $this->error('Applying carry forward from the console is not supported.');
+            $this->newLine();
+            $this->line('Carry forward is decided per employee by HR and recorded against whoever');
+            $this->line('approved it. Apply it from <fg=cyan>Leave > Carry Forward</>, where the amount,');
+            $this->line('the actor and the reason are all captured.');
+            $this->newLine();
+            $this->line('Re-run without <fg=cyan>--apply</> for a read-only preview.');
+
+            return self::FAILURE;
+        }
+
         $to = $this->argument('year')
             ? $resolver->forDate(Carbon::create((int) $this->argument('year'), 7, 1))
             : $resolver->current();
 
         $from = $resolver->previous($to);
 
-        $this->info(($this->option('apply') ? 'Applying' : 'PREVIEW — nothing will be written').' carry-forward');
+        $this->info('PREVIEW — nothing will be written');
         $this->line("  From: <fg=cyan>{$from->label}</> ({$from->starts_on->toDateString()} to {$from->ends_on->toDateString()})");
         $this->line("  Into: <fg=cyan>{$to->label}</> ({$to->starts_on->toDateString()} to {$to->ends_on->toDateString()})");
         $this->newLine();
@@ -67,19 +86,10 @@ class CarryForwardLeaves extends Command
         $this->line('  Employees: '.$rows->pluck('employee_id')->unique()->count());
         $this->line('  Days to carry: '.round($rows->sum('carry'), 2));
 
-        if (! $this->option('apply')) {
-            $this->newLine();
-            $this->line('Nothing was written. Re-run with <fg=cyan>--apply</> to commit,');
-            $this->line('or use the Carry Forward screen, which records who approved each row.');
-
-            return self::SUCCESS;
-        }
-
-        $result = $engine->execute($from, $to);
-
         $this->newLine();
-        $this->info("Carried {$result['days']} day(s) across {$result['rows']} row(s) for {$result['employees']} employee(s).");
-        $this->line('Fresh entitlement was preserved and used_days left untouched.');
+        $this->line('Preview only — nothing was written.');
+        $this->line('Apply from <fg=cyan>Leave > Carry Forward</>, where each decision is recorded');
+        $this->line('against the person who made it.');
 
         return self::SUCCESS;
     }

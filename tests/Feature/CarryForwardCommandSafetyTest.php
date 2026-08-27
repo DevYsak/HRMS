@@ -50,7 +50,7 @@ function cfcSetup(): array
     return [$employee, $type, $target];
 }
 
-test('the command previews and writes nothing by default', function () {
+test('the command previews and writes nothing', function () {
     [, , $target] = cfcSetup();
 
     $this->artisan('hrms:carry-forward-leaves', ['year' => 2026])
@@ -62,23 +62,39 @@ test('the command previews and writes nothing by default', function () {
         ->and((float) $target->fresh()->carried_forward_days)->toBe(0.0);
 });
 
-test('applying preserves fresh entitlement instead of replacing it', function () {
+test('the command refuses to apply at all', function () {
+    // Carry forward is an HR decision per employee, recorded against whoever
+    // made it. A console run is attributable to a shell, so the one thing this
+    // must not offer is a way to carry everybody's leave with no decision
+    // behind it.
     [, , $target] = cfcSetup();
 
     $this->artisan('hrms:carry-forward-leaves', ['year' => 2026, '--apply' => true])
-        ->assertSuccessful();
+        ->expectsOutputToContain('not supported')
+        ->assertFailed();
+
+    expect((float) $target->fresh()->allocated_days)->toBe(28.0)
+        ->and((float) $target->fresh()->carried_forward_days)->toBe(0.0);
+});
+
+test('the engine preserves fresh entitlement instead of replacing it', function () {
+    // The property the old command destroyed, now asserted where the work
+    // actually happens rather than through a console path that no longer
+    // writes.
+    [, , $target] = cfcSetup();
+
+    app(LeaveService::class)->carryForwardBalances(2026);
 
     // 28 fresh + 8 carried, not 8.
     expect((float) $target->fresh()->allocated_days)->toBe(36.0)
         ->and((float) $target->fresh()->carried_forward_days)->toBe(8.0);
 });
 
-test('applying never resets used days', function () {
-    // The single worst thing the old command did.
+test('the engine never resets used days', function () {
+    // The single worst thing the old implementation did.
     [, , $target] = cfcSetup();
 
-    $this->artisan('hrms:carry-forward-leaves', ['year' => 2026, '--apply' => true])
-        ->assertSuccessful();
+    app(LeaveService::class)->carryForwardBalances(2026);
 
     expect((float) $target->fresh()->used_days)->toBe(3.0);
 });
@@ -103,7 +119,7 @@ test('an empty previous year points at the audit rather than writing', function 
         'status' => 'active',
     ]);
 
-    $this->artisan('hrms:carry-forward-leaves', ['year' => 2026, '--apply' => true])
+    $this->artisan('hrms:carry-forward-leaves', ['year' => 2026])
         ->expectsOutputToContain('Nothing to carry forward')
         ->assertSuccessful();
 
