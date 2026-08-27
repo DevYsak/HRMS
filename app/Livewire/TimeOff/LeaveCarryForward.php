@@ -105,6 +105,25 @@ class LeaveCarryForward extends Component
         ];
     }
 
+    /**
+     * Whether the engine found anything at all for this selection.
+     *
+     * Distinct from "everything is already carried". Zero eligible rows means
+     * there is no previous-year data to work from; zero outstanding days means
+     * the work is done. Reporting the second when the first is true tells HR
+     * the operation succeeded when it never ran.
+     */
+    public function getHasEligibleRowsProperty(): bool
+    {
+        return $this->rows->isNotEmpty();
+    }
+
+    /** Days still eligible but not yet carried, across the current selection. */
+    public function getOutstandingDaysProperty(): float
+    {
+        return round($this->rows->sum('remaining_eligible'), 2);
+    }
+
     public function applyRow(int $employeeId, int $leaveTypeId): void
     {
         $this->authorize('manage_leave_carry_forward');
@@ -133,6 +152,23 @@ class LeaveCarryForward extends Component
     {
         $this->authorize('manage_leave_carry_forward');
 
+        // Guarded here as well as in the view. A disabled button is a courtesy;
+        // this is what actually stops an empty run, and it is what a test can
+        // hold onto.
+        if (! $this->hasEligibleRows) {
+            $previous = LeaveYear::find($this->previousYearId)?->label ?? 'the previous leave year';
+
+            \Flux::toast("No eligible leave is available to carry forward for {$previous}.", variant: 'warning');
+
+            return;
+        }
+
+        if ($this->outstandingDays <= 0) {
+            \Flux::toast('Nothing to apply — all eligible rows have already been carried forward.');
+
+            return;
+        }
+
         $result = app(LeaveCarryForwardService::class)->applyAll(
             LeaveYear::find($this->previousYearId),
             LeaveYear::find($this->currentYearId),
@@ -146,7 +182,7 @@ class LeaveCarryForward extends Component
 
         \Flux::toast(
             $result['applied'] === 0
-                ? 'Nothing to apply — every eligible row is already carried forward.'
+                ? 'Nothing to apply — all eligible rows have already been carried forward.'
                 : "Carried {$result['days']} days forward across {$result['applied']} rows."
                     .($result['skipped'] > 0 ? " {$result['skipped']} already applied." : '')
         );
@@ -208,6 +244,8 @@ class LeaveCarryForward extends Component
         return view('livewire.time-off.leave-carry-forward', [
             'rows' => $this->rows,
             'totals' => $this->totals,
+            'hasEligibleRows' => $this->hasEligibleRows,
+            'outstandingDays' => $this->outstandingDays,
             'leaveYears' => LeaveYear::orderByDesc('starts_on')->get(),
             'departments' => Department::orderBy('name')->get(),
             'leaveTypes' => LeaveType::where('allow_carry_forward', true)->orderBy('name')->get(),

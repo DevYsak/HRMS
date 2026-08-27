@@ -13,11 +13,34 @@
         </div>
 
         @can('manage_leave_carry_forward')
-            <flux:button wire:click="applyAll"
-                wire:confirm="Apply carry forward to every eligible row currently listed? Rows already carried at their full eligible amount are skipped."
-                variant="primary" icon="arrow-right-circle">
-                Apply carry forward
-            </flux:button>
+            {{-- Branched rather than a conditional attribute: a disabled button must
+                 not carry a wire:confirm, or an empty selection still opens a dialog
+                 asking to confirm nothing. --}}
+            @if(! $hasEligibleRows)
+                <flux:tooltip content="No eligible {{ $leaveYears->firstWhere('id', $previousYearId)?->label ?? 'previous year' }} leave was found for this selection">
+                    <flux:button variant="primary" icon="arrow-right-circle" disabled>
+                        Apply carry forward
+                    </flux:button>
+                </flux:tooltip>
+            @elseif($outstandingDays <= 0)
+                <flux:tooltip content="Every eligible row has already been carried forward">
+                    <flux:button variant="primary" icon="check" disabled>
+                        Already carried forward
+                    </flux:button>
+                </flux:tooltip>
+            @else
+                <flux:button wire:click="applyAll"
+                    wire:confirm="Apply carry forward for all eligible rows?
+
+{{ $totals['employees'] }} employee(s) across {{ $totals['rows'] }} row(s)
+{{ $outstandingDays }} day(s) to carry
+{{ $leaveYears->firstWhere('id', $previousYearId)?->label ?? '—' }} → {{ $leaveYears->firstWhere('id', $currentYearId)?->label ?? '—' }}
+
+Rows already carried at their full eligible amount are skipped."
+                    variant="primary" icon="arrow-right-circle">
+                    Apply carry forward
+                </flux:button>
+            @endif
         @endcan
     </div>
 
@@ -147,8 +170,26 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="11" class="px-4 py-10 text-center text-sm text-[#98A2B3]">
-                                Nothing to carry forward for this selection.
+                            <td colspan="11" class="px-4 py-12">
+                                {{-- Zero here means "no source data", not "operation complete".
+                                     Neutral rather than red: nothing has gone wrong. --}}
+                                <div class="mx-auto flex max-w-lg flex-col items-center gap-3 text-center">
+                                    <div class="flex size-11 items-center justify-center rounded-full bg-[#F2F4F7] text-[#98A2B3] dark:bg-white/5">
+                                        <flux:icon.information-circle class="size-5" />
+                                    </div>
+                                    <div>
+                                        <p class="text-sm font-bold text-[#101828] dark:text-zinc-100">No carry-forwardable leave</p>
+                                        <p class="mt-1 text-sm text-[#667085] dark:text-zinc-400">
+                                            No eligible {{ $leaveYears->firstWhere('id', $previousYearId)?->label ?? 'previous year' }}
+                                            leave balance was found for the selected filters.
+                                        </p>
+                                        <p class="mt-2 text-xs text-[#98A2B3]">
+                                            Carry forward is calculated from previous allocated − used − encashed,
+                                            subject to the leave type's policy limit. Historical balances for this
+                                            leave year may not be configured yet.
+                                        </p>
+                                    </div>
+                                </div>
                             </td>
                         </tr>
                     @endforelse
