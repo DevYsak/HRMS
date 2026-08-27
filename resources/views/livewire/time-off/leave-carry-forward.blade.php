@@ -17,15 +17,20 @@
                  not carry a wire:confirm, or an empty selection still opens a dialog
                  asking to confirm nothing. --}}
             @if(! $hasEligibleRows)
-                <flux:tooltip content="No eligible {{ $leaveYears->firstWhere('id', $previousYearId)?->label ?? 'previous year' }} leave was found for this selection">
-                    <flux:button variant="primary" icon="arrow-right-circle" disabled>
+                {{-- Grey, not primary. Flux's disabled state on a primary button is
+                     only opacity-75, so it stays orange and still reads as the thing
+                     to click. An inert control has to look inert. --}}
+                <flux:tooltip content="No eligible leave to carry forward">
+                    <flux:button variant="filled" icon="arrow-right-circle" disabled
+                        class="cursor-not-allowed! text-[#98A2B3]! opacity-60">
                         Apply carry forward
                     </flux:button>
                 </flux:tooltip>
             @elseif($outstandingDays <= 0)
-                <flux:tooltip content="Every eligible row has already been carried forward">
-                    <flux:button variant="primary" icon="check" disabled>
-                        Already carried forward
+                <flux:tooltip content="All eligible leave has already been carried forward">
+                    <flux:button variant="filled" icon="check" disabled
+                        class="cursor-not-allowed! text-[#98A2B3]! opacity-60">
+                        All eligible leave carried forward
                     </flux:button>
                 </flux:tooltip>
             @else

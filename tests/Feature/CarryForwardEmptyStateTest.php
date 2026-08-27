@@ -74,6 +74,10 @@ function cfeEligible(): array
 // ── Case 1: no eligible rows ───────────────────────────────────────────────
 
 test('with no eligible rows the apply button is disabled', function () {
+    // Asserted on disabled="disabled" and the absence of a click handler.
+    // Matching the bare word "disabled" is useless: Flux emits
+    // disabled:opacity-75 and friends on every button, so that assertion passes
+    // whether or not the control is actually inert.
     cfeYears();
     cfeEmployee();
     cfeType();
@@ -81,7 +85,23 @@ test('with no eligible rows the apply button is disabled', function () {
     Livewire::actingAs(cfeHr())->test(LeaveCarryForward::class)
         ->assertOk()
         ->assertSet('hasEligibleRows', false)
-        ->assertSeeHtml('disabled');
+        ->assertSeeHtml('disabled="disabled"')
+        ->assertDontSeeHtml('wire:click="applyAll"');
+});
+
+test('the disabled button does not look like the primary action', function () {
+    // Flux's disabled state on a primary button is opacity-75, which leaves it
+    // orange and still reading as the thing to click.
+    cfeYears();
+    cfeEmployee();
+    cfeType();
+
+    $html = Livewire::actingAs(cfeHr())->test(LeaveCarryForward::class)->html();
+    $button = substr($html, max(0, strpos($html, 'Apply carry forward') - 900), 1000);
+
+    expect($button)->toContain('disabled="disabled"')
+        ->and($button)->toContain('cursor-not-allowed')
+        ->and($button)->not->toContain('wire:click');
 });
 
 test('with no eligible rows the button carries no confirmation', function () {
@@ -156,6 +176,7 @@ test('with eligible rows the apply button is live and confirms', function () {
     Livewire::actingAs(cfeHr())->test(LeaveCarryForward::class)
         ->assertOk()
         ->assertSet('hasEligibleRows', true)
+        ->assertSeeHtml('wire:click="applyAll"')
         ->assertSeeHtml('Apply carry forward for all eligible rows?');
 });
 
@@ -193,7 +214,9 @@ test('once everything is carried the button says so and is disabled', function (
         ->assertOk()
         ->assertSet('hasEligibleRows', true)
         ->assertSet('outstandingDays', 0.0)
-        ->assertSee('Already carried forward');
+        ->assertSee('All eligible leave carried forward')
+        ->assertSeeHtml('disabled="disabled"')
+        ->assertDontSeeHtml('wire:click="applyAll"');
 });
 
 test('applying again reports the work as done, not as impossible', function () {

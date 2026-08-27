@@ -164,7 +164,7 @@ class LeaveCarryForward extends Component
         }
 
         if ($this->outstandingDays <= 0) {
-            \Flux::toast('Nothing to apply — all eligible rows have already been carried forward.');
+            \Flux::toast('All eligible leave has already been carried forward.');
 
             return;
         }
@@ -182,7 +182,7 @@ class LeaveCarryForward extends Component
 
         \Flux::toast(
             $result['applied'] === 0
-                ? 'Nothing to apply — all eligible rows have already been carried forward.'
+                ? 'All eligible leave has already been carried forward.'
                 : "Carried {$result['days']} days forward across {$result['applied']} rows."
                     .($result['skipped'] > 0 ? " {$result['skipped']} already applied." : '')
         );
