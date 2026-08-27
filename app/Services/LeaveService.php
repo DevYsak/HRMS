@@ -17,6 +17,7 @@ use App\Notifications\LeaveEncashmentNotification;
 use App\Notifications\LeaveMonthlyAccrualNotification;
 use App\Notifications\LeavePaymentStatusChangedNotification;
 use App\Notifications\LeaveRequestNotification;
+use App\Services\Leave\LeaveCarryOverService;
 use App\Services\Leave\LeaveYearResolver;
 use App\Services\Teams\ApprovalRoutingService;
 use Carbon\CarbonInterface;
@@ -772,47 +773,33 @@ class LeaveService
         $leaveType->delete();
     }
 
-    public function carryForwardBalances(int $targetYear): void
+    /**
+     * Carry unused leave into the next leave year.
+     *
+     * Delegates to LeaveCarryOverService, which is the only correct
+     * implementation. What used to be here did four destructive things: it
+     * wrote the carried amount into allocated_days, replacing the new year's
+     * fresh entitlement rather than adding to it; it set used_days to 0,
+     * erasing every booking anyone had made; it ignored encashed_days, so days
+     * already paid out were carried and counted twice; and it worked in
+     * calendar years, which cannot express a 1 July to 30 June leave year at
+     * all.
+     *
+     * Kept as a method rather than deleted because a console command still
+     * calls it, and a caller reaching a removed method is a fatal error where
+     * a caller reaching a corrected one simply behaves.
+     *
+     * @param  int  $targetYear  the leave year to carry INTO, as its start year
+     * @return array{employees:int, rows:int, days:float}
+     */
+    public function carryForwardBalances(int $targetYear): array
     {
-        $sourceYear = $targetYear - 1;
-        $activeEmployees = Employee::where('status', 'active')->get();
-        $leaveTypes = LeaveType::all();
+        $resolver = app(LeaveYearResolver::class);
 
-        DB::transaction(function () use ($activeEmployees, $leaveTypes, $targetYear, $sourceYear) {
-            foreach ($activeEmployees as $employee) {
-                foreach ($leaveTypes as $type) {
-                    if (! $type->allow_carry_forward) {
-                        continue;
-                    }
+        $to = $resolver->forDate(Carbon::create($targetYear, 7, 1));
+        $from = $resolver->previous($to);
 
-                    $balance = LeaveBalance::where('employee_id', $employee->id)
-                        ->where('leave_type_id', $type->id)
-                        ->where('year', $sourceYear)
-                        ->first();
-
-                    if (! $balance) {
-                        continue;
-                    }
-
-                    $remaining = max(0, (float) $balance->allocated_days - (float) $balance->used_days);
-
-                    $limit = $type->carry_forward_limit > 0 ? $type->carry_forward_limit : $remaining;
-                    $carryForward = min($remaining, $limit);
-
-                    LeaveBalance::updateOrCreate([
-                        'employee_id' => $employee->id,
-                        'leave_type_id' => $type->id,
-                        'year' => $targetYear,
-                    ], [
-                        'allocated_days' => $carryForward,
-                        'used_days' => 0,
-                        'carried_forward_days' => $carryForward,
-                        'encashed_days' => 0,
-                        'comp_off_credits' => 0,
-                    ]);
-                }
-            }
-        });
+        return app(LeaveCarryOverService::class)->execute($from, $to);
     }
 
     public function creditCompOff(Employee $employee, Carbon $date, float $days = 1.0): LeaveBalance
