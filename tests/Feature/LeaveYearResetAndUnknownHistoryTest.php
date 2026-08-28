@@ -96,8 +96,8 @@ test('the new year gets fresh entitlement without touching the old one', functio
 
     app(LeaveBalanceService::class)->initializeForEmployee($employee, $curr->legacyYear());
 
-    $previous = LeaveBalance::where('employee_id', $employee->id)->where('year', $prev->legacyYear())->first();
-    $current = LeaveBalance::where('employee_id', $employee->id)->where('year', $curr->legacyYear())->first();
+    $previous = LeaveBalance::where('employee_id', $employee->id)->where('leave_type_id', $type->id)->where('year', $prev->legacyYear())->first();
+    $current = LeaveBalance::where('employee_id', $employee->id)->where('leave_type_id', $type->id)->where('year', $curr->legacyYear())->first();
 
     expect((float) $current->allocated_days)->toBe(28.0)
         ->and((float) $current->carried_forward_days)->toBe(0.0)
@@ -118,7 +118,7 @@ test('the previous year survives a carry forward into the new one', function () 
 
     app(LeaveCarryForwardService::class)->apply($employee, $type, $prev, $curr, $hr, days: 6);
 
-    $previous = LeaveBalance::where('employee_id', $employee->id)->where('year', $prev->legacyYear())->first();
+    $previous = LeaveBalance::where('employee_id', $employee->id)->where('leave_type_id', $type->id)->where('year', $prev->legacyYear())->first();
 
     expect((float) $previous->allocated_days)->toBe(10.0)
         ->and($previous->leave_year_id)->toBe($prev->id);
@@ -185,7 +185,7 @@ test('HR can approve a partial amount against an unknown history', function () {
 
     app(LeaveCarryForwardService::class)->apply($employee, $type, $prev, $curr, $hr, days: 6);
 
-    $current = LeaveBalance::where('employee_id', $employee->id)->where('year', $curr->legacyYear())->first();
+    $current = LeaveBalance::where('employee_id', $employee->id)->where('leave_type_id', $type->id)->where('year', $curr->legacyYear())->first();
 
     expect((float) $current->carried_forward_days)->toBe(6.0)
         // 28 fresh + 6 carried
@@ -204,7 +204,7 @@ test('HR can approve zero', function () {
 
     app(LeaveCarryForwardService::class)->apply($employee, $type, $prev, $curr, $hr, days: 0);
 
-    $current = LeaveBalance::where('employee_id', $employee->id)->where('year', $curr->legacyYear())->first();
+    $current = LeaveBalance::where('employee_id', $employee->id)->where('leave_type_id', $type->id)->where('year', $curr->legacyYear())->first();
 
     expect((float) $current->carried_forward_days)->toBe(0.0)
         ->and((float) $current->allocated_days)->toBe(28.0);
@@ -243,7 +243,7 @@ test('a pending request does not become used days', function () {
         'status' => 'pending',
     ]);
 
-    $balance = LeaveBalance::where('employee_id', $employee->id)->where('year', $prev->legacyYear())->first();
+    $balance = LeaveBalance::where('employee_id', $employee->id)->where('leave_type_id', $type->id)->where('year', $prev->legacyYear())->first();
 
     expect((float) $balance->used_days)->toBe(0.0)
         ->and((bool) $balance->used_days_unknown)->toBeTrue();
@@ -345,7 +345,7 @@ test('an HR-decided carry forward can be reversed', function () {
     $tx = $service->apply($employee, $type, $prev, $curr, $hr, days: 6);
     $service->reverse($tx->fresh(), $hr, 'Approved in error');
 
-    $current = LeaveBalance::where('employee_id', $employee->id)->where('year', $curr->legacyYear())->first();
+    $current = LeaveBalance::where('employee_id', $employee->id)->where('leave_type_id', $type->id)->where('year', $curr->legacyYear())->first();
 
     expect((float) $current->carried_forward_days)->toBe(0.0)
         ->and((float) $current->allocated_days)->toBe(28.0)
@@ -366,7 +366,7 @@ test('re-approving the same amount does not duplicate days', function () {
     $service->apply($employee, $type, $prev, $curr, $hr, days: 6);
     $service->apply($employee, $type, $prev, $curr, $hr, days: 6);
 
-    $current = LeaveBalance::where('employee_id', $employee->id)->where('year', $curr->legacyYear())->first();
+    $current = LeaveBalance::where('employee_id', $employee->id)->where('leave_type_id', $type->id)->where('year', $curr->legacyYear())->first();
 
     expect((float) $current->carried_forward_days)->toBe(6.0)
         ->and((float) $current->allocated_days)->toBe(34.0)

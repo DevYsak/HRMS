@@ -7,6 +7,7 @@ use App\Models\Employee;
 use App\Models\LeaveBalance;
 use App\Models\LeavePolicy;
 use App\Models\LeaveType;
+use App\Services\LeaveBalanceService;
 
 /**
  * What a new employee starts with.
@@ -34,6 +35,7 @@ class LeaveProvisioningService
     public function __construct(
         private readonly LeaveEntitlementService $entitlements,
         private readonly LeaveYearResolver $years,
+        private readonly LeaveBalanceService $balances,
     ) {}
 
     /**
@@ -128,6 +130,24 @@ class LeaveProvisioningService
      */
     public function provision(Employee $employee, ?LeavePolicy $explicit = null): array
     {
+        $type = LeaveType::where('code', self::ANNUAL_CODE)->first();
+        $year = $this->years->current();
+
+        // Every other leave type keeps its configured allocation, and gets it
+        // whatever happens to annual leave below. Sick leave does not depend on
+        // whether somebody's annual entitlement can be calculated, and refusing
+        // it because the working pattern is unrecorded would deny a real
+        // entitlement over an unrelated gap.
+        //
+        // Two faults of the legacy call are fixed here rather than inherited:
+        // this is keyed on the LEAVE year, and annual leave is excluded so a
+        // flat annual_allocation_days can never stand in for a calculated one.
+        $this->balances->initializeFromPolicy(
+            $employee,
+            $year->legacyYear(),
+            $type !== null ? [$type->id] : [],
+        );
+
         $preview = $this->preview($employee, $explicit);
 
         if ($preview['policy'] === null || ! $preview['pattern_verified']) {
@@ -142,8 +162,6 @@ class LeaveProvisioningService
             $employee->forceFill(['leave_policy_id' => $preview['policy']->id])->save();
         }
 
-        $type = LeaveType::where('code', self::ANNUAL_CODE)->first();
-
         if ($type === null) {
             return [
                 'provisioned' => false,
@@ -151,8 +169,6 @@ class LeaveProvisioningService
                 'issues' => ['Annual Leave ('.self::ANNUAL_CODE.') is not configured.'],
             ];
         }
-
-        $year = $this->years->current();
 
         $existing = LeaveBalance::where('employee_id', $employee->id)
             ->where('leave_type_id', $type->id)

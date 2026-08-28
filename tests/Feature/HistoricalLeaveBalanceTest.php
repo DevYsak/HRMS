@@ -73,7 +73,7 @@ test('a historical balance lands in the selected leave year', function () {
         $employee, $type, $prev, 28, 10, 0, 'Historical 2025/26 opening entitlement', null, $hr
     );
 
-    $balance = LeaveBalance::where('employee_id', $employee->id)->where('year', 2025)->first();
+    $balance = LeaveBalance::where('employee_id', $employee->id)->where('leave_type_id', $type->id)->where('year', 2025)->first();
 
     expect($balance)->not->toBeNull()
         ->and((float) $balance->allocated_days)->toBe(28.0)
@@ -94,8 +94,8 @@ test('recording 2025/26 does not write to 2026/27', function () {
         $employee, $type, $prev, 28, 10, 0, 'Historical opening entitlement', null, $hr
     );
 
-    expect(LeaveBalance::where('employee_id', $employee->id)->where('year', $curr->legacyYear())->exists())->toBeFalse()
-        ->and(LeaveBalance::where('employee_id', $employee->id)->count())->toBe(1);
+    expect(LeaveBalance::where('employee_id', $employee->id)->where('leave_type_id', $type->id)->where('year', $curr->legacyYear())->exists())->toBeFalse()
+        ->and(LeaveBalance::where('employee_id', $employee->id)->where('leave_type_id', $type->id)->count())->toBe(1);
 });
 
 test('the modal writes to the year selected on the page', function () {
@@ -117,7 +117,7 @@ test('the modal writes to the year selected on the page', function () {
         ->call('submitHistoricalBalance')
         ->assertHasNoErrors();
 
-    $balance = LeaveBalance::where('employee_id', $employee->id)->first();
+    $balance = LeaveBalance::where('employee_id', $employee->id)->where('leave_type_id', $type->id)->first();
 
     expect((int) $balance->year)->toBe($prev->legacyYear())
         ->and($balance->leave_year_id)->toBe($prev->id)
@@ -136,7 +136,7 @@ test('a credit adjustment also links the selected leave year', function () {
         $employee, $type, 'credit', 5, 'Correction', '', $hr, $prev->legacyYear()
     );
 
-    $balance = LeaveBalance::where('employee_id', $employee->id)->first();
+    $balance = LeaveBalance::where('employee_id', $employee->id)->where('leave_type_id', $type->id)->first();
 
     expect((int) $balance->year)->toBe($prev->legacyYear())
         ->and($balance->leave_year_id)->toBe($prev->id);
@@ -234,12 +234,12 @@ test('applying carry forward moves 18 days into the next year', function () {
 
     Livewire::actingAs($hr)->test(LeaveCarryForward::class)->call('applyAll');
 
-    $target = LeaveBalance::where('employee_id', $employee->id)->where('year', $curr->legacyYear())->first();
+    $target = LeaveBalance::where('employee_id', $employee->id)->where('leave_type_id', $type->id)->where('year', $curr->legacyYear())->first();
 
     expect($target)->not->toBeNull()
         ->and((float) $target->carried_forward_days)->toBe(18.0)
         // The previous year is left exactly as recorded.
-        ->and((float) LeaveBalance::where('employee_id', $employee->id)->where('year', $prev->legacyYear())->value('used_days'))->toBe(10.0);
+        ->and((float) LeaveBalance::where('employee_id', $employee->id)->where('leave_type_id', $type->id)->where('year', $prev->legacyYear())->value('used_days'))->toBe(10.0);
 });
 
 test('applying twice does not duplicate the carried days', function () {
@@ -256,7 +256,7 @@ test('applying twice does not duplicate the carried days', function () {
     Livewire::actingAs($hr)->test(LeaveCarryForward::class)->call('applyAll');
     Livewire::actingAs($hr)->test(LeaveCarryForward::class)->call('applyAll');
 
-    $target = LeaveBalance::where('employee_id', $employee->id)->where('year', $curr->legacyYear())->first();
+    $target = LeaveBalance::where('employee_id', $employee->id)->where('leave_type_id', $type->id)->where('year', $curr->legacyYear())->first();
 
     expect((float) $target->carried_forward_days)->toBe(18.0)
         ->and(LeaveCarryForwardTransaction::count())->toBe(1);

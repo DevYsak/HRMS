@@ -381,11 +381,13 @@ test('the preview writes nothing', function () {
 
 // ── 16. No legacy provisioning path survives ───────────────────────────────
 
-test('no runtime path calls the legacy flat allocation', function () {
-    // Structural. The old call seeded flat per-type days keyed on the calendar
-    // year and assigned no policy; a single surviving caller reintroduces all
-    // three faults.
-    $offenders = [];
+test('the legacy flat allocation has exactly one caller, and it is the provisioning service', function () {
+    // The old call had three faults: it seeded flat per-type days, keyed them
+    // on the calendar year, and assigned no policy. Flat days are correct for
+    // sick and bereavement leave, so the call survives — but only behind the
+    // provisioning service, which supplies the leave year and excludes annual
+    // leave. Any other caller reintroduces the faults.
+    $callers = [];
 
     foreach (['app', 'routes'] as $dir) {
         $directory = new RecursiveDirectoryIterator(base_path($dir));
@@ -395,18 +397,61 @@ test('no runtime path calls the legacy flat allocation', function () {
                 continue;
             }
 
-            $contents = file_get_contents($file->getPathname());
+            $path = $file->getPathname();
+            $contents = file_get_contents($path);
 
-            // The definition itself is allowed to remain; a call is not.
-            if (str_contains($contents, 'initializeFromPolicy($') || str_contains($contents, 'initializeForEmployee($')) {
-                if (! str_contains($file->getPathname(), 'LeaveBalanceService.php')) {
-                    $offenders[] = $file->getPathname();
-                }
+            // Matches a call however it is wrapped across lines. The earlier
+            // form of this guard looked for "initializeFromPolicy($" and a
+            // multi-line call slipped straight past it.
+            $calls = preg_match('/->\s*initializeFrom(Policy|Employee)\s*\(/', $contents)
+                || preg_match('/->\s*initializeForEmployee\s*\(/', $contents);
+
+            if ($calls && ! str_contains($path, 'LeaveBalanceService.php')) {
+                $callers[] = basename($path);
             }
         }
     }
 
-    expect($offenders)->toBeEmpty();
+    expect($callers)->toBe(['LeaveProvisioningService.php']);
+});
+
+test('the surviving caller excludes annual leave and uses the leave year', function () {
+    // The two properties that make the one permitted caller safe.
+    $source = file_get_contents(app_path('Services/Leave/LeaveProvisioningService.php'));
+
+    expect($source)->toMatch('/initializeFromPolicy\s*\(\s*\$employee,\s*\$year->legacyYear\(\),/')
+        ->and($source)->toContain('$type !== null ? [$type->id] : []');
+
+    // And proved behaviourally: a flat number on AL never reaches the balance.
+    elpYears();
+    elpUkPolicy();
+    $type = elpAnnualType();
+    $type->update(['annual_allocation_days' => 99]);
+
+    $employee = elpHire(daysPerWeek: 5);
+
+    expect((float) LeaveBalance::where('employee_id', $employee->id)
+        ->where('leave_type_id', $type->id)->value('allocated_days'))->toBe(28.0);
+});
+
+test('other leave types are still allocated when annual leave cannot be calculated', function () {
+    // Sick leave does not depend on the annual entitlement. Withholding it
+    // because a working pattern is unrecorded denies a real entitlement over
+    // an unrelated gap.
+    elpYears();
+    elpAnnualType();
+    LeavePolicy::query()->forceDelete();
+
+    $sick = LeaveType::firstOrCreate(['code' => 'SL'], [
+        'name' => 'Sick Leave', 'annual_allocation_days' => 10, 'is_active' => true,
+    ]);
+    $sick->update(['annual_allocation_days' => 10, 'deleted_at' => null]);
+
+    $employee = elpHire();
+    app(LeaveProvisioningService::class)->provision($employee->fresh());
+
+    expect((float) LeaveBalance::where('employee_id', $employee->id)
+        ->where('leave_type_id', $sick->id)->value('allocated_days'))->toBe(10.0);
 });
 
 test('the employee create form writes into the leave year', function () {

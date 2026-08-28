@@ -7,6 +7,7 @@ use App\Models\Employee;
 use App\Models\LeaveBalance;
 use App\Models\LeaveType;
 use App\Models\User;
+use App\Services\Leave\LeaveProvisioningService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Livewire\Livewire;
@@ -93,7 +94,11 @@ test('restoring keeps their history', function () {
     Livewire::actingAs(erpAdmin())->test(EmployeeIndex::class)
         ->call('restoreEmployee', $deleted->id);
 
-    $balance = LeaveBalance::where('employee_id', $deleted->id)->first();
+    // The row seeded before deletion, not the one onboarding provisions for
+    // every employee — both sit in the same year.
+    $balance = LeaveBalance::where('employee_id', $deleted->id)
+        ->whereRelation('leaveType', 'code', '!=', LeaveProvisioningService::ANNUAL_CODE)
+        ->first();
 
     expect($balance)->not->toBeNull()
         ->and((float) $balance->allocated_days)->toBe(28.0)

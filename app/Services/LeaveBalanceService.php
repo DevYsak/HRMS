@@ -54,10 +54,17 @@ class LeaveBalanceService
      * Initialize leave balances using the conditional allocation policies, falling
      * back to each leave type's uniform annual_allocation_days when no policy
      * matches. Safe to call repeatedly (firstOrCreate).
+     *
+     * Annual leave is excluded by its caller: it is calculated from the policy
+     * and the working pattern, so a flat number on the type must not reach it.
+     *
+     * @param  array<int, int>  $excludeTypeIds
      */
-    public function initializeFromPolicy(Employee $employee, int $year): void
+    public function initializeFromPolicy(Employee $employee, int $year, array $excludeTypeIds = []): void
     {
-        $types = LeaveType::whereNull('deleted_at')->get();
+        $types = LeaveType::whereNull('deleted_at')
+            ->when($excludeTypeIds !== [], fn ($q) => $q->whereNotIn('id', $excludeTypeIds))
+            ->get();
         $policiesByType = LeaveAllocationPolicy::where('is_active', true)->get()->groupBy('leave_type_id');
 
         foreach ($types as $type) {
@@ -70,6 +77,8 @@ class LeaveBalanceService
             LeaveBalance::firstOrCreate(
                 ['employee_id' => $employee->id, 'leave_type_id' => $type->id, 'year' => $year],
                 [
+                    // Linked to the leave year, not only its legacy integer.
+                    'leave_year_id' => app(LeaveYearResolver::class)->forDate(Carbon::create($year, 7, 1))->id,
                     'allocated_days' => $days,
                     'used_days' => 0,
                     'carried_forward_days' => 0,

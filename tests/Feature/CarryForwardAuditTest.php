@@ -55,12 +55,16 @@ test('the audit writes nothing at all', function () {
         'category' => 'annual', 'allow_carry_forward' => true,
     ]);
 
+    // Onboarding provisions this employee's own leave, so the starting point
+    // is whatever they were legitimately given. What must not change is that
+    // the audit adds nothing to it.
     $before = LeaveBalance::count();
+    $mine = LeaveBalance::where('employee_id', $employee->id)->count();
 
     $this->artisan('leave:carry-forward-audit')->assertSuccessful();
 
     expect(LeaveBalance::count())->toBe($before)
-        ->and(LeaveBalance::where('employee_id', $employee->id)->exists())->toBeFalse();
+        ->and(LeaveBalance::where('employee_id', $employee->id)->count())->toBe($mine);
 });
 
 test('the audit names the missing precondition rather than saying zero', function () {

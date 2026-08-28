@@ -96,7 +96,7 @@ test('the console refusal does not depend on there being data', function () {
     $this->artisan('hrms:carry-forward-leaves', ['--apply' => true])->assertFailed();
 
     expect(LeaveCarryForwardTransaction::count())->toBe(0)
-        ->and(LeaveBalance::where('employee_id', $employee->id)->where('year', $curr->legacyYear())->exists())->toBeFalse();
+        ->and(LeaveBalance::where('employee_id', $employee->id)->where('leave_type_id', $type->id)->where('year', $curr->legacyYear())->exists())->toBeFalse();
 });
 
 test('the console preview still works and writes nothing', function () {
@@ -133,7 +133,7 @@ test('an unlimited no-lapse leave type does not carry itself forward', function 
     // The new leave year opens with fresh entitlement and nothing else.
     app(LeaveBalanceService::class)->initializeForEmployee($employee, $curr->legacyYear());
 
-    $current = LeaveBalance::where('employee_id', $employee->id)->where('year', $curr->legacyYear())->first();
+    $current = LeaveBalance::where('employee_id', $employee->id)->where('leave_type_id', $type->id)->where('year', $curr->legacyYear())->first();
 
     expect((float) ($current->carried_forward_days ?? 0))->toBe(0.0)
         ->and(LeaveCarryForwardTransaction::count())->toBe(0);
@@ -197,7 +197,7 @@ test('HR may approve less than the unlimited eligible amount', function () {
 
     app(LeaveCarryForwardService::class)->apply($employee, $type, $prev, $curr, $hr, days: 6);
 
-    $current = LeaveBalance::where('employee_id', $employee->id)->where('year', $curr->legacyYear())->first();
+    $current = LeaveBalance::where('employee_id', $employee->id)->where('leave_type_id', $type->id)->where('year', $curr->legacyYear())->first();
 
     expect((float) $current->carried_forward_days)->toBe(6.0);
 });
@@ -216,7 +216,7 @@ test('HR may approve zero against an unlimited type', function () {
 
     app(LeaveCarryForwardService::class)->apply($employee, $type, $prev, $curr, $hr, days: 0);
 
-    $current = LeaveBalance::where('employee_id', $employee->id)->where('year', $curr->legacyYear())->first();
+    $current = LeaveBalance::where('employee_id', $employee->id)->where('leave_type_id', $type->id)->where('year', $curr->legacyYear())->first();
 
     expect((float) $current->carried_forward_days)->toBe(0.0)
         ->and(LeaveCarryForwardTransaction::where('employee_id', $employee->id)->exists())->toBeTrue();
@@ -235,11 +235,11 @@ test('carrying forward never edits the previous year', function () {
         $employee, $type, $prev, 28, 8, 2, 'Complete record', null, $hr
     );
 
-    $before = LeaveBalance::where('employee_id', $employee->id)->where('year', $prev->legacyYear())->first()->toArray();
+    $before = LeaveBalance::where('employee_id', $employee->id)->where('leave_type_id', $type->id)->where('year', $prev->legacyYear())->first()->toArray();
 
     app(LeaveCarryForwardService::class)->apply($employee, $type, $prev, $curr, $hr, days: 5);
 
-    $after = LeaveBalance::where('employee_id', $employee->id)->where('year', $prev->legacyYear())->first();
+    $after = LeaveBalance::where('employee_id', $employee->id)->where('leave_type_id', $type->id)->where('year', $prev->legacyYear())->first();
 
     expect((float) $after->allocated_days)->toBe((float) $before['allocated_days'])
         ->and((float) $after->used_days)->toBe((float) $before['used_days'])

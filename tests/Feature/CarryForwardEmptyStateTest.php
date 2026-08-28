@@ -123,12 +123,16 @@ test('applying with no eligible rows writes nothing', function () {
     cfeEmployee();
     cfeType();
 
+    // A delta, because onboarding legitimately gives the employee leave of
+    // their own; the point is that applyAll adds none.
+    $before = LeaveBalance::count();
+
     Livewire::actingAs(cfeHr())->test(LeaveCarryForward::class)
         ->call('applyAll')
         ->assertOk();
 
     expect(LeaveCarryForwardTransaction::count())->toBe(0)
-        ->and(LeaveBalance::count())->toBe(0);
+        ->and(LeaveBalance::count())->toBe($before);
 });
 
 test('the message names the real situation, not a completed operation', function () {
@@ -197,6 +201,7 @@ test('applying with eligible rows carries the days', function () {
         ->assertOk();
 
     $balance = LeaveBalance::where('employee_id', $employee->id)
+        ->where('leave_type_id', $type->id)
         ->where('year', $curr->legacyYear())->first();
 
     expect((float) $balance->carried_forward_days)->toBe(8.0);
@@ -241,17 +246,20 @@ test('opening the page changes nothing', function () {
     Livewire::actingAs(cfeHr())->test(LeaveCarryForward::class)->assertOk();
 
     expect(LeaveCarryForwardTransaction::count())->toBe(0)
-        ->and(LeaveBalance::where('year', $curr->legacyYear())->count())->toBe(0);
+        // Nothing carried into the current year for the type under test.
+        ->and(LeaveBalance::where('year', $curr->legacyYear())
+            ->where('leave_type_id', $type->id)->count())->toBe(0);
 });
 
 test('applying twice does not double the days', function () {
-    [$employee, , , $curr] = cfeEligible();
+    [$employee, $type, , $curr] = cfeEligible();
     $hr = cfeHr();
 
     Livewire::actingAs($hr)->test(LeaveCarryForward::class)->call('applyAll');
     Livewire::actingAs($hr)->test(LeaveCarryForward::class)->call('applyAll');
 
     $balance = LeaveBalance::where('employee_id', $employee->id)
+        ->where('leave_type_id', $type->id)
         ->where('year', $curr->legacyYear())->first();
 
     expect((float) $balance->carried_forward_days)->toBe(8.0)
