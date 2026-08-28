@@ -287,7 +287,9 @@ test('a manual HR adjustment lands in the current leave year', function () {
     );
 
     expect((float) $balance->fresh()->allocated_days)->toBe(30.0)
-        ->and(LeaveBalance::where('employee_id', $employee->id)->count())->toBe(1);
+        // One row for this type, not a second one in a neighbouring year.
+        ->and(LeaveBalance::where('employee_id', $employee->id)
+            ->where('leave_type_id', $type->id)->count())->toBe(1);
 });
 
 // ── 5. Carry forward reads the right previous year ─────────────────────────

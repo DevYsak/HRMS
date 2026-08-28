@@ -6,6 +6,7 @@ use App\Models\AuditLog;
 use App\Models\Employee;
 use App\Models\LeaveBalance;
 use App\Models\LeaveCarryForwardTransaction as Transaction;
+use App\Models\LeavePolicy;
 use App\Models\LeaveType;
 use App\Models\LeaveYear;
 use App\Models\User;
@@ -116,10 +117,22 @@ test('nothing is carried when the previous year is fully used', function () {
 });
 
 test('the policy limit caps what may be carried', function () {
-    // Eligibility is not the same as entitlement to carry all of it.
+    // Eligibility is not the same as entitlement to carry all of it — and the
+    // cap now lives on the leave policy, not the leave type.
     [$prev, $curr] = lcfYears();
     $employee = lcfEmployee();
-    $type = lcfType(limit: 5);
+    $policy = LeavePolicy::create([
+        'name' => 'Cap '.Str::random(5),
+        'statutory_weeks' => 5.60,
+        'bank_holiday_treatment' => 'additional',
+        'max_carry_over_days' => 5,
+        'is_default' => false,
+        'is_active' => true,
+    ]);
+    $employee->update(['leave_policy_id' => $policy->id]);
+    $employee = $employee->fresh();
+
+    $type = lcfType();
     lcfBalance($employee, $type, $prev, allocated: 28, used: 20);
 
     $row = lcfService()->preview($prev, $curr)->firstWhere('employee_id', $employee->id);
@@ -139,7 +152,7 @@ test('applying carries the full eligible amount', function () {
 
     $tx = lcfService()->apply($employee, $type, $prev, $curr, lcfHr());
 
-    $balance = LeaveBalance::where('employee_id', $employee->id)->where('year', $curr->legacyYear())->first();
+    $balance = LeaveBalance::where('employee_id', $employee->id)->where('leave_type_id', $type->id)->where('year', $curr->legacyYear())->first();
 
     expect($tx->applied_days)->toBe(8.0)
         ->and($tx->status)->toBe(Transaction::STATUS_APPLIED)
@@ -202,7 +215,7 @@ test('applying twice does not double the days', function () {
     $service->apply($employee, $type, $prev, $curr, lcfHr());
     $service->apply($employee, $type, $prev, $curr, lcfHr());
 
-    $balance = LeaveBalance::where('employee_id', $employee->id)->where('year', $curr->legacyYear())->first();
+    $balance = LeaveBalance::where('employee_id', $employee->id)->where('leave_type_id', $type->id)->where('year', $curr->legacyYear())->first();
 
     expect((float) $balance->carried_forward_days)->toBe(8.0)
         ->and((float) $balance->allocated_days)->toBe(36.0)
@@ -220,7 +233,7 @@ test('applying in bulk twice is also safe', function () {
     $service->applyAll($prev, $curr, lcfHr());
     $second = $service->applyAll($prev, $curr, lcfHr());
 
-    $balance = LeaveBalance::where('employee_id', $employee->id)->where('year', $curr->legacyYear())->first();
+    $balance = LeaveBalance::where('employee_id', $employee->id)->where('leave_type_id', $type->id)->where('year', $curr->legacyYear())->first();
 
     expect((float) $balance->carried_forward_days)->toBe(8.0)
         ->and($second['applied'])->toBe(0)
@@ -238,7 +251,7 @@ test('re-applying a partial at a new figure replaces rather than stacks', functi
     $service->apply($employee, $type, $prev, $curr, lcfHr(), days: 3);
     $service->apply($employee, $type, $prev, $curr, lcfHr(), days: 6);
 
-    $balance = LeaveBalance::where('employee_id', $employee->id)->where('year', $curr->legacyYear())->first();
+    $balance = LeaveBalance::where('employee_id', $employee->id)->where('leave_type_id', $type->id)->where('year', $curr->legacyYear())->first();
 
     expect((float) $balance->carried_forward_days)->toBe(6.0)
         ->and((float) $balance->allocated_days)->toBe(34.0);
@@ -257,7 +270,7 @@ test('reversing returns the balance to its fresh entitlement', function () {
     $tx = $service->apply($employee, $type, $prev, $curr, lcfHr());
     $service->reverse($tx, lcfHr(), 'Carried in error');
 
-    $balance = LeaveBalance::where('employee_id', $employee->id)->where('year', $curr->legacyYear())->first();
+    $balance = LeaveBalance::where('employee_id', $employee->id)->where('leave_type_id', $type->id)->where('year', $curr->legacyYear())->first();
 
     expect((float) $balance->carried_forward_days)->toBe(0.0)
         ->and((float) $balance->allocated_days)->toBe(28.0);
@@ -328,7 +341,7 @@ test('re-applying after a reversal clears the reversal', function () {
     $service->reverse($tx->fresh(), $hr, 'Wrong');
     $again = $service->apply($employee, $type, $prev, $curr, $hr);
 
-    $balance = LeaveBalance::where('employee_id', $employee->id)->where('year', $curr->legacyYear())->first();
+    $balance = LeaveBalance::where('employee_id', $employee->id)->where('leave_type_id', $type->id)->where('year', $curr->legacyYear())->first();
 
     expect($again->reversed_days)->toBe(0.0)
         ->and($again->status)->toBe(Transaction::STATUS_APPLIED)
@@ -373,7 +386,7 @@ test('carried days are visible separately from the fresh allocation', function (
 
     lcfService()->apply($employee, $type, $prev, $curr, lcfHr());
 
-    $balance = LeaveBalance::where('employee_id', $employee->id)->where('year', $curr->legacyYear())->first();
+    $balance = LeaveBalance::where('employee_id', $employee->id)->where('leave_type_id', $type->id)->where('year', $curr->legacyYear())->first();
     $fresh = (float) $balance->allocated_days - (float) $balance->carried_forward_days;
 
     expect($fresh)->toBe(28.0)
@@ -578,7 +591,7 @@ test('the screen previews without applying anything', function () {
         ->test(LeaveCarryForward::class)
         ->assertOk();
 
-    $balance = LeaveBalance::where('employee_id', $employee->id)->where('year', $curr->legacyYear())->first();
+    $balance = LeaveBalance::where('employee_id', $employee->id)->where('leave_type_id', $type->id)->where('year', $curr->legacyYear())->first();
 
     expect((float) $balance->carried_forward_days)->toBe(0.0)
         ->and((float) $balance->allocated_days)->toBe(28.0)
@@ -596,7 +609,7 @@ test('applying from the screen carries the days', function () {
         ->test(LeaveCarryForward::class)
         ->call('applyRow', $employee->id, $type->id);
 
-    $balance = LeaveBalance::where('employee_id', $employee->id)->where('year', $curr->legacyYear())->first();
+    $balance = LeaveBalance::where('employee_id', $employee->id)->where('leave_type_id', $type->id)->where('year', $curr->legacyYear())->first();
 
     expect((float) $balance->carried_forward_days)->toBe(8.0);
 });

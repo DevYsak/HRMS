@@ -7,6 +7,7 @@ use App\Models\LeaveBalance;
 use App\Models\LeaveType;
 use App\Models\User;
 use App\Services\EmployeeImportService;
+use App\Services\Leave\LeaveProvisioningService;
 use Illuminate\Support\Str;
 
 /**
@@ -117,7 +118,11 @@ test('history survives the restore', function () {
     $service = app(EmployeeImportService::class);
     $service->import($service->parse([irdRow()], true), 'update', User::factory()->create());
 
-    $balance = LeaveBalance::where('employee_id', $employee->id)->first();
+    // The row seeded before deletion, not the one onboarding provisions for
+    // every employee — both sit in the same year.
+    $balance = LeaveBalance::where('employee_id', $employee->id)
+        ->whereRelation('leaveType', 'code', '!=', LeaveProvisioningService::ANNUAL_CODE)
+        ->first();
 
     expect($balance)->not->toBeNull()
         ->and((float) $balance->allocated_days)->toBe(28.0)

@@ -65,7 +65,7 @@ class LeaveCarryOverService
                 $figuresKnown = ! $balance->used_days_unknown && ! $balance->encashed_days_unknown;
 
                 $eligible = $figuresKnown ? $this->eligibleDays($balance) : null;
-                $carry = $figuresKnown ? $this->cappedCarry($eligible, $type) : 0.0;
+                $carry = $figuresKnown ? $this->cappedCarry($eligible, $employee) : 0.0;
 
                 // Rows with unknown figures still surface: HR has to see the
                 // recorded closing balance in order to decide an amount. Rows
@@ -90,7 +90,10 @@ class LeaveCarryOverService
                     'used' => (float) $balance->used_days,
                     'encashed' => (float) ($balance->encashed_days ?? 0),
                     'eligible' => $eligible,
-                    'limit' => $type->carry_forward_limit > 0 ? (float) $type->carry_forward_limit : null,
+                    // From the policy, which is canonical. null means unlimited.
+                    'limit' => $employee->leavePolicy?->max_carry_over_days !== null
+                        ? (float) $employee->leavePolicy->max_carry_over_days
+                        : null,
                     'carry' => $carry,
                     // What the target year holds now, so the preview shows the
                     // before as well as the after.
@@ -163,11 +166,36 @@ class LeaveCarryOverService
             - (float) ($balance->encashed_days ?? 0)), 2);
     }
 
-    private function cappedCarry(float $eligible, LeaveType $type): float
+    /**
+     * The ceiling on what may be carried, from the employee's leave policy.
+     *
+     * The policy is canonical. leave_types.carry_forward_limit is kept for
+     * reference and deliberately not consulted: two limits for one decision is
+     * two answers, and the type-level number was the older of the pair.
+     *
+     *   null   unlimited — no numeric ceiling
+     *   0      no carry-forward permitted under this policy
+     *   > 0    cap in days
+     *
+     * Unlimited removes the ceiling, never the approval. Nothing carries
+     * without an explicit HR decision, and nothing carries more than the
+     * eligible amount calculated from the previous year.
+     */
+    private function cappedCarry(float $eligible, Employee $employee): float
     {
-        $limit = (float) ($type->carry_forward_limit ?? 0);
+        $policy = $employee->leavePolicy;
 
-        return $limit > 0 ? min($eligible, $limit) : $eligible;
+        if ($policy === null) {
+            return $eligible;
+        }
+
+        $limit = $policy->max_carry_over_days;
+
+        if ($limit === null) {
+            return $eligible;
+        }
+
+        return min($eligible, (float) $limit);
     }
 
     private function balanceFor(Employee $employee, LeaveType $type, LeaveYear $year): ?LeaveBalance
@@ -188,7 +216,7 @@ class LeaveCarryOverService
     /** @return Collection<int, Employee> */
     private function eligibleEmployees(): Collection
     {
-        return Employee::with('user')->where('status', 'active')->get();
+        return Employee::with(['user', 'leavePolicy'])->where('status', 'active')->get();
     }
 
     /** @return Collection<int, LeaveType> */

@@ -161,7 +161,7 @@ test('a manager approval advances the stage rather than applying it', function (
 
     app(AttendanceService::class)->approveRegularisation($reg, lrManager()->id);
 
-    $balance = LeaveBalance::where('employee_id', $employee->id)->first();
+    $balance = LeaveBalance::where('employee_id', $employee->id)->where('leave_type_id', $type->id)->first();
 
     expect($reg->fresh()->stage)->toBe('hr_review')
         ->and($reg->fresh()->status)->toBe('pending')
@@ -181,7 +181,7 @@ test('HR approval advances to admin approval, still without applying', function 
 
     expect($reg->fresh()->stage)->toBe('admin_approval')
         ->and($reg->fresh()->status)->toBe('pending')
-        ->and((float) LeaveBalance::where('employee_id', $employee->id)->value('used_days'))->toBe(0.0);
+        ->and((float) LeaveBalance::where('employee_id', $employee->id)->where('leave_type_id', $type->id)->value('used_days'))->toBe(0.0);
 });
 
 test('final approval applies it', function () {
@@ -227,7 +227,7 @@ test('the balance is reduced by the approved duration', function () {
 
     app(AttendanceService::class)->approveRegularisation($reg, lrAdmin()->id);
 
-    $balance = LeaveBalance::where('employee_id', $employee->id)->first();
+    $balance = LeaveBalance::where('employee_id', $employee->id)->where('leave_type_id', $type->id)->first();
     $available = (float) $balance->allocated_days - (float) $balance->used_days;
 
     expect($available)->toBe(9.0);
@@ -334,7 +334,7 @@ test('a rejection leaves the balance alone', function () {
     app(AttendanceService::class)->rejectRegularisation($reg, lrHr()->id, 'Absence was unauthorised');
 
     expect($reg->fresh()->status)->toBe('rejected')
-        ->and((float) LeaveBalance::where('employee_id', $employee->id)->value('used_days'))->toBe(0.0)
+        ->and((float) LeaveBalance::where('employee_id', $employee->id)->where('leave_type_id', $type->id)->value('used_days'))->toBe(0.0)
         ->and(LeaveBalanceAdjustment::where('employee_id', $employee->id)->exists())->toBeFalse();
 });
 
@@ -550,7 +550,7 @@ test('an employee cannot approve their own regularisation to completion', functi
     app(AttendanceService::class)->approveRegularisation($reg, $employee->user_id);
 
     expect($reg->fresh()->status)->toBe('pending')
-        ->and((float) LeaveBalance::where('employee_id', $employee->id)->value('used_days'))->toBe(0.0);
+        ->and((float) LeaveBalance::where('employee_id', $employee->id)->where('leave_type_id', $type->id)->value('used_days'))->toBe(0.0);
 });
 
 test('the regularisation permissions exist and reach HR', function () {

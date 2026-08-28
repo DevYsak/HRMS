@@ -89,8 +89,11 @@ test('filtering by employee shows only that person', function () {
     Livewire::actingAs($hr)->test(AuditLogViewer::class)
         ->set('employeeId', $mine->id)
         ->assertOk()
-        ->assertViewHas('logs', fn ($logs) => $logs->count() === 1
-            && $logs->first()->subject_employee_id === $mine->id);
+        // The filter's job is exclusion, not a fixed tally: onboarding also
+        // logs against this person, so assert whose logs these are.
+        ->assertViewHas('logs', fn ($logs) => $logs->isNotEmpty()
+            && $logs->every(fn ($l) => $l->subject_employee_id === $mine->id)
+            && $logs->contains(fn ($l) => str_contains($l->action, 'carry_forward')));
 });
 
 test('the log describes a leave entry rather than saying created', function () {

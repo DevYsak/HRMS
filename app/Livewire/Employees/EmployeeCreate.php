@@ -20,6 +20,8 @@ use App\Models\ShiftSetting;
 use App\Models\User;
 use App\Models\WorkMode;
 use App\Notifications\WelcomeOnboardingNotification;
+use App\Services\Leave\LeaveProvisioningService;
+use App\Services\Leave\LeaveYearResolver;
 use App\Services\OnboardingService;
 use App\Services\PasswordService;
 use Illuminate\Support\Facades\Auth;
@@ -326,10 +328,16 @@ class EmployeeCreate extends Component
         $this->generatedPassword = $plainPassword;
         $this->showCredentialsModal = true;
 
-        // Override the auto-assigned defaults (seeded by EmployeeObserver) with any
-        // per-employee allocations entered on the form. updateOrCreate avoids
-        // colliding with the observer-seeded rows on the unique (employee, type, year) key.
-        foreach (LeaveType::all() as $lt) {
+        // Per-employee allocations entered on the form, written into the LEAVE
+        // year rather than the calendar year. Those differ from January to June
+        // under a 1 July start, so now()->year put a new hire's opening balance
+        // into a year they had not reached.
+        //
+        // Annual leave is not set here: it comes from the policy and the working
+        // pattern via LeaveProvisioningService, which the observer already ran.
+        $leaveYear = app(LeaveYearResolver::class)->current();
+
+        foreach (LeaveType::where('code', '!=', LeaveProvisioningService::ANNUAL_CODE)->get() as $lt) {
             $allocated = isset($this->leave_allocations[$lt->id]) ? (float) $this->leave_allocations[$lt->id] : 0.0;
             if ($allocated <= 0) {
                 continue;
@@ -339,9 +347,10 @@ class EmployeeCreate extends Component
                 [
                     'employee_id' => $user->employee->id,
                     'leave_type_id' => $lt->id,
-                    'year' => now()->year,
+                    'year' => $leaveYear->legacyYear(),
                 ],
                 [
+                    'leave_year_id' => $leaveYear->id,
                     'allocated_days' => $allocated,
                     'used_days' => 0,
                     'carried_forward_days' => 0,

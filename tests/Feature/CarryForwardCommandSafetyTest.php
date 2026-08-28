@@ -119,9 +119,13 @@ test('an empty previous year points at the audit rather than writing', function 
         'status' => 'active',
     ]);
 
+    // Measured as a delta: the employee arrives with the leave onboarding
+    // gave them, and the command must add nothing to it.
+    $before = LeaveBalance::count();
+
     $this->artisan('hrms:carry-forward-leaves', ['year' => 2026])
         ->expectsOutputToContain('Nothing to carry forward')
         ->assertSuccessful();
 
-    expect(LeaveBalance::count())->toBe(0);
+    expect(LeaveBalance::count())->toBe($before);
 });
