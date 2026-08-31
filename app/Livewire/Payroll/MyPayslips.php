@@ -3,6 +3,7 @@
 namespace App\Livewire\Payroll;
 
 use App\Http\Controllers\PayslipController;
+use App\Mail\PayslipMail;
 use App\Models\AuditLog;
 use App\Models\Payslip;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -187,13 +188,19 @@ class MyPayslips extends Component
             Mail::send([], [], function ($message) use ($email, $pdf, $month, $slip) {
                 $message->to($email)
                     ->subject("Your Payslip for {$month}")
-                    ->setBody(
+                    ->html(
                         "<p>Dear {$slip->employee->user->name},</p>".
                         "<p>Please find attached your salary slip for <strong>{$month}</strong>.</p>".
                         '<p>If you have any questions, please contact HR.</p><br><p>Regards,<br>HR Team</p>',
-                        'text/html'
                     )
                     ->attachData($pdf->output(), "payslip_{$month}.pdf", ['mime' => 'application/pdf']);
+
+                // Governed by the same "Payslip Email" toggle as the automatic
+                // send, and logged the same way — this button previously
+                // bypassed both. Marked manual: an explicit click here must
+                // still respect mail_enabled, but not Auto-Send.
+                $message->getHeaders()->addTextHeader('X-Notification-Key', PayslipMail::class);
+                $message->getHeaders()->addTextHeader('X-Notification-Manual', '1');
             });
 
             AuditLog::record($slip, 'emailed', null, ['to' => $email], subjectEmployeeId: $slip->employee_id);

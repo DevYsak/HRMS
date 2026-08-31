@@ -91,7 +91,7 @@ class ManageWfhRequests extends Component
         }
 
         $request->employee->user->notify(
-            new WfhRequestNotification($request->fresh())
+            (new WfhRequestNotification($request->fresh()))->forRole('employee')
         );
 
         $this->closeReviewModal();

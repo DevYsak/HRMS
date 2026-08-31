@@ -63,7 +63,10 @@ test('disabling mail keeps the in-app notification but suppresses the email', fu
     $user->notify(new GateProbeNotification);
 
     expect($user->notifications()->count())->toBe(1);
-    expect(EmailLog::where('notification_key', GateProbeNotification::class)->count())->toBe(0);
+    // Blocked, not silently dropped: no SENT row, but a SKIPPED one with a reason.
+    expect(EmailLog::where('notification_key', GateProbeNotification::class)->where('status', 'sent')->count())->toBe(0);
+    expect(EmailLog::where('notification_key', GateProbeNotification::class)->where('status', 'skipped')
+        ->where('skip_reason', 'notification_email_disabled')->count())->toBe(1);
 });
 
 test('disabling the database channel suppresses the in-app notification only', function () {
@@ -99,7 +102,9 @@ test('is_automatic=false suppresses automatic email', function () {
     $user->notify(new GateProbeNotification);
 
     expect($user->notifications()->count())->toBe(1);
-    expect(EmailLog::where('notification_key', GateProbeNotification::class)->count())->toBe(0);
+    expect(EmailLog::where('notification_key', GateProbeNotification::class)->where('status', 'sent')->count())->toBe(0);
+    expect(EmailLog::where('notification_key', GateProbeNotification::class)->where('status', 'skipped')
+        ->where('skip_reason', 'auto_send_disabled')->count())->toBe(1);
 });
 
 test('custom subject and body override the mail message', function () {

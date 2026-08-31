@@ -48,10 +48,10 @@ class CheckExcessBreaks extends Command
                 $employee = $record->employee;
                 $notification = new ExcessBreakNotification($record, $totalBreakMins);
 
-                $employee->user?->notify($notification);
+                $employee->user?->notify($notification->forRole('employee'));
 
                 if ($employee->manager_id) {
-                    $employee->manager?->notify($notification);
+                    $employee->manager?->notify($notification->forRole('manager'));
                 }
 
                 $flagged++;

@@ -7,6 +7,7 @@ use App\Models\Employee;
 use App\Models\ExpenseClaim;
 use App\Models\User;
 use App\Notifications\ExpenseClaimNotification;
+use App\Services\Notifications\NotificationRecipients;
 use Illuminate\Support\Facades\DB;
 
 class ExpenseClaimService
@@ -29,10 +30,11 @@ class ExpenseClaimService
         // Notify manager; fall back to HR/super admins if no manager assigned
         $manager = $employee->manager;
         if ($manager) {
-            $manager->notify(new ExpenseClaimNotification($claim));
+            $manager->notify((new ExpenseClaimNotification($claim))->forRole('manager'));
         } else {
-            User::whereIn('role', ['hr_admin', 'super_admin'])->each(
-                fn ($hr) => $hr->notify(new ExpenseClaimNotification($claim))
+            // No manager assigned, so the claim falls to HR as a queue.
+            app(NotificationRecipients::class)->hrQueue()->each(
+                fn (User $hr) => $hr->notify((new ExpenseClaimNotification($claim))->forRole('hr_admin'))
             );
         }
 
@@ -66,7 +68,7 @@ class ExpenseClaimService
 
             $fresh = $claim->fresh(['employee.user', 'approver']);
 
-            $fresh->employee->user->notify(new ExpenseClaimNotification($fresh));
+            $fresh->employee->user->notify((new ExpenseClaimNotification($fresh))->forRole('employee'));
 
             return $fresh;
         });
@@ -86,7 +88,7 @@ class ExpenseClaimService
 
         $fresh = $claim->fresh(['employee.user', 'approver']);
 
-        $fresh->employee->user->notify(new ExpenseClaimNotification($fresh));
+        $fresh->employee->user->notify((new ExpenseClaimNotification($fresh))->forRole('employee'));
 
         return $fresh;
     }

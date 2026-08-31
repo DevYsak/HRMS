@@ -167,8 +167,11 @@ test('calendar month navigation updates the calendar label', function () {
     $employee = timeOffEmployee();
     $this->actingAs($employee->user);
 
+    // Anchored to the 1st: now()->addMonth() on the 31st overflows a short
+    // month and names the month after next, which is the bug the calendar
+    // itself used to have.
     $currentLabel = now()->format('F Y');
-    $nextLabel = now()->addMonth()->format('F Y');
+    $nextLabel = now()->startOfMonth()->addMonth()->format('F Y');
 
     Livewire::test(MyTimeOff::class)
         ->assertViewHas('calendarLabel', $currentLabel)

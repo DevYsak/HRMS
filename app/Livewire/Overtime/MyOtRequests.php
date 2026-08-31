@@ -5,6 +5,7 @@ namespace App\Livewire\Overtime;
 use App\Models\OtRequest;
 use App\Models\User;
 use App\Notifications\OtRequestNotification;
+use App\Services\Notifications\NotificationRecipients;
 use App\Services\OvertimeService;
 use App\Services\Teams\ApprovalRoutingService;
 use Illuminate\Support\Carbon;
@@ -97,10 +98,17 @@ class MyOtRequests extends Component
             ->each($push);
 
         if ($recipients->isEmpty()) {
-            $recipients = User::whereIn('role', ['hr_admin', 'super_admin', 'manager'])->get();
+            // Neither a manager nor an approver chain resolved, so this falls
+            // to HR. It previously also went to every manager in the company,
+            // who have no relationship to this employee's request.
+            $recipients = app(NotificationRecipients::class)->hrQueue();
         }
 
-        $recipients->each(fn (User $u) => $u->notify(new OtRequestNotification($request)));
+        // Approver chain or manager; HR only when neither resolved.
+        $role = $employee->manager && $recipients->contains('id', $employee->manager->id) ? 'approver' : 'hr_admin';
+        $recipients->each(fn (User $u) => $u->notify(
+            (new OtRequestNotification($request))->forRole($u->id === $employee->manager?->id ? 'manager' : $role)
+        ));
 
         $this->showModal = false;
         \Flux::toast('OT request submitted successfully.');

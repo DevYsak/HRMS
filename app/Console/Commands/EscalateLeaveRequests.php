@@ -4,8 +4,8 @@ namespace App\Console\Commands;
 
 use App\Models\LeaveEscalation;
 use App\Models\LeaveRequest;
-use App\Models\User;
 use App\Notifications\LeaveRequestNotification;
+use App\Services\Notifications\NotificationRecipients;
 use Illuminate\Console\Command;
 
 class EscalateLeaveRequests extends Command
@@ -30,9 +30,9 @@ class EscalateLeaveRequests extends Command
             return self::SUCCESS;
         }
 
-        // Find HR admins to escalate to
-        $hrAdmins = User::whereIn('role', ['super_admin', 'hr_admin'])
-            ->get();
+        // Escalation goes to HR as a queue: the point is that the manager did
+        // not respond, so it needs whoever is available, not another individual.
+        $hrAdmins = app(NotificationRecipients::class)->hrQueue();
 
         foreach ($pending as $request) {
             foreach ($hrAdmins as $hr) {
@@ -43,7 +43,7 @@ class EscalateLeaveRequests extends Command
                     'escalated_at' => now(),
                 ]);
 
-                $hr->notify(new LeaveRequestNotification($request));
+                $hr->notify((new LeaveRequestNotification($request))->forRole('hr_admin'));
             }
 
             $this->line("Escalated leave request #{$request->id} for {$request->employee->user->name}");

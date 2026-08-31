@@ -3,8 +3,8 @@
 namespace App\Console\Commands;
 
 use App\Models\Employee;
-use App\Models\User;
 use App\Notifications\ProbationDueNotification;
+use App\Services\Notifications\NotificationRecipients;
 use Illuminate\Console\Command;
 
 class CheckProbationDue extends Command
@@ -34,7 +34,7 @@ class CheckProbationDue extends Command
             return self::SUCCESS;
         }
 
-        $hrAdmins = User::whereIn('role', ['super_admin', 'hr_admin'])->get();
+        $hrAdmins = app(NotificationRecipients::class)->hrQueue();
 
         foreach ($hrAdmins as $hr) {
             $hr->notify(new ProbationDueNotification($due));

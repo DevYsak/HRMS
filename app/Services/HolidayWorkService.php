@@ -9,8 +9,8 @@ use App\Models\HolidayPaySetting;
 use App\Models\HolidayWorkRequest;
 use App\Models\OtRequest;
 use App\Models\PublicHoliday;
-use App\Models\User;
 use App\Notifications\HolidayWorkRequestNotification;
+use App\Services\Notifications\NotificationRecipients;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -77,12 +77,16 @@ class HolidayWorkService
             'status' => 'pending',
         ]);
 
-        // Notify the manager AND HR/Admin (queued — never blocks the request).
-        $approvers = User::whereIn('role', ['hr_admin', 'super_admin'])->get();
+        // The manager plus HR as a queue — HR approves holiday work centrally,
+        // so this broadcast is deliberate rather than a missing owner.
+        $approvers = app(NotificationRecipients::class)->hrQueue();
         if ($employee->manager) {
             $approvers->push($employee->manager);
         }
-        $approvers->unique('id')->each(fn ($u) => $u->notify(new HolidayWorkRequestNotification($request)));
+        $manager = $employee->manager;
+        $approvers->unique('id')->each(fn ($u) => $u->notify(
+            (new HolidayWorkRequestNotification($request))->forRole($manager && $u->id === $manager->id ? 'manager' : 'hr_admin')
+        ));
 
         return $request;
     }
@@ -180,7 +184,7 @@ class HolidayWorkService
 
             AuditLog::record($attendance, 'holiday_worked', null, $attendance->toArray());
 
-            $request->employee->user?->notify(new HolidayWorkRequestNotification($request->fresh()));
+            $request->employee->user?->notify((new HolidayWorkRequestNotification($request->fresh()))->forRole('employee'));
 
             return $attendance;
         });
@@ -199,7 +203,7 @@ class HolidayWorkService
             'reviewed_at' => now(),
         ]);
 
-        $request->employee->user?->notify(new HolidayWorkRequestNotification($request->fresh()));
+        $request->employee->user?->notify((new HolidayWorkRequestNotification($request->fresh()))->forRole('employee'));
     }
 
     public function cancel(HolidayWorkRequest $request): void

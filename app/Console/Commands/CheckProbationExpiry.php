@@ -6,6 +6,7 @@ use App\Enums\EmployeeStatus;
 use App\Models\Employee;
 use App\Models\User;
 use App\Notifications\ProbationDueNotification;
+use App\Services\Notifications\NotificationRecipients;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -41,8 +42,9 @@ class CheckProbationExpiry extends Command
             return self::SUCCESS;
         }
 
-        // Notify all HR admins and super admins
-        $recipients = User::whereIn('role', ['hr_admin', 'super_admin'])->get();
+        // The shared HR queue, deliberately: a probation falling due is HR's as a
+        // function, not one named person's.
+        $recipients = app(NotificationRecipients::class)->hrQueue();
 
         foreach ($overdue->merge($dueSoon) as $employee) {
             $recipients->each(fn (User $hr) => $hr->notify(new ProbationDueNotification($employee)));

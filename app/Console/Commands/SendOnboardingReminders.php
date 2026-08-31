@@ -6,6 +6,7 @@ use App\Models\Employee;
 use App\Models\OnboardingTask;
 use App\Models\User;
 use App\Notifications\OnboardingTaskOverdueNotification;
+use App\Services\Notifications\NotificationRecipients;
 use App\Services\OnboardingService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
@@ -52,9 +53,18 @@ class SendOnboardingReminders extends Command
             $recipients = $this->resolveRecipients($task->owner_role, $employee);
 
             $notification = new OnboardingTaskOverdueNotification($task, $employee);
+            // The task's own owner_role is the role each recipient is being
+            // notified as, so an HR-owned and a finance-owned task can carry
+            // different wording.
+            $role = match ($task->owner_role) {
+                'manager' => 'manager',
+                'employee' => 'employee',
+                'finance' => 'finance',
+                default => 'hr_admin',
+            };
 
             foreach ($recipients as $user) {
-                $user->notify($notification);
+                $user->notify($notification->forRole($role));
                 $notified++;
             }
         }
@@ -67,13 +77,19 @@ class SendOnboardingReminders extends Command
      */
     private function resolveRecipients(?string $ownerRole, Employee $employee): Collection
     {
+        $recipients = app(NotificationRecipients::class);
+
         return match ($ownerRole) {
-            'hr', 'hr_admin' => User::whereIn('role', ['hr_admin', 'super_admin'])->get(),
+            'hr', 'hr_admin' => $recipients->hrQueue(),
             'manager' => User::where('id', $employee->manager_id)->get(),
-            'it' => User::whereIn('role', ['hr_admin', 'super_admin'])->get(),
-            'finance' => User::whereIn('role', ['hr_admin', 'super_admin'])->get(),
+            // A finance-owned task belongs to finance. This previously
+            // notified HR, so the people who owned the task never heard.
+            'finance' => $recipients->financeApprovers(),
+            // There is no IT role in UserRole, so IT-owned tasks genuinely
+            // fall to HR until one exists.
+            'it' => $recipients->hrQueue(),
             'employee' => $employee->user ? collect([$employee->user]) : collect(),
-            default => User::whereIn('role', ['hr_admin', 'super_admin'])->get(),
+            default => $recipients->hrQueue(),
         };
     }
 

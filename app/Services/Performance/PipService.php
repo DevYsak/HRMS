@@ -49,7 +49,7 @@ class PipService
                 ]);
             }
 
-            $pip->manager->notify(new PipCreatedNotification($pip));
+            $pip->manager->notify((new PipCreatedNotification($pip))->forRole('manager'));
 
             return $pip;
         });

@@ -384,6 +384,12 @@ class EmployeeEdit extends Component
         try {
             Mail::raw($body, function ($msg) use ($to, $subject) {
                 $msg->to($to)->subject($subject);
+                // Traceable in the email log rather than arriving with no
+                // source. Marked manual: an HR admin composed and sent this
+                // deliberately, so Auto-Send does not apply — the global
+                // pause still does.
+                $msg->getHeaders()->addTextHeader('X-Notification-Key', 'employee.direct_email');
+                $msg->getHeaders()->addTextHeader('X-Notification-Manual', '1');
             });
             \Flux::toast('Email sent to '.$to, variant: 'success');
         } catch (\Throwable $e) {

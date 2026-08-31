@@ -36,7 +36,9 @@ test('disabling the master switch cancels every outgoing email', function () {
         $message->getHeaders()->addTextHeader('X-Notification-Key', 'system.killswitch-test');
     });
 
-    expect(EmailLog::count())->toBe(0);
+    // Nothing sent — but the attempt is recorded, not silently dropped.
+    expect(EmailLog::where('status', 'sent')->count())->toBe(0)
+        ->and(EmailLog::where('status', 'skipped')->where('skip_reason', 'outgoing_email_paused')->count())->toBe(1);
 });
 
 test('with the master switch on, outgoing email is logged and sent', function () {

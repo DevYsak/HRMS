@@ -3,12 +3,15 @@
 namespace App\Livewire\Settings;
 
 use App\Mail\CustomBroadcastMail;
+use App\Models\AuditLog;
 use App\Models\EmailLog;
 use App\Models\MailSetting;
+use App\Models\NotificationRoleSetting;
 use App\Models\NotificationSetting;
 use App\Models\User;
 use App\Services\AiAssistant;
 use App\Services\Notifications\NotificationCatalog;
+use App\Services\Notifications\TemplateVariableRenderer;
 use Illuminate\Contracts\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Auth;
@@ -25,14 +28,26 @@ class NotificationSettings extends Component
 {
     public string $search = '';
 
-    // ── Edit modal ────────────────────────────────────────────────────────────
+    // ── Edit modal (event-level, or one role of an event — never both) ─────────
     public bool $showEditModal = false;
 
     public ?int $editingId = null;
 
+    public ?int $editingRoleId = null;
+
     public string $custom_subject = '';
 
     public string $custom_body = '';
+
+    /** @var array<string, string> variable => description, for whichever event is open */
+    public array $editVariables = [];
+
+    // ── Preview modal ────────────────────────────────────────────────────────
+    public bool $showPreviewModal = false;
+
+    public string $previewSubject = '';
+
+    public string $previewBody = '';
 
     // ── Test email ──────────────────────────────────────────────────────────────
     public string $testEmail = '';
@@ -249,6 +264,8 @@ class NotificationSettings extends Component
             ->orderBy('name');
     }
 
+    private const CHANNEL_FIELDS = ['mail_enabled', 'database_enabled', 'is_automatic'];
+
     /**
      * Flip a boolean channel flag for a single notification type.
      */
@@ -256,7 +273,7 @@ class NotificationSettings extends Component
     {
         $this->authorize('manage-settings');
 
-        if (! in_array($field, ['mail_enabled', 'database_enabled', 'is_automatic'], true)) {
+        if (! in_array($field, self::CHANNEL_FIELDS, true)) {
             return;
         }
 
@@ -266,14 +283,51 @@ class NotificationSettings extends Component
         \Flux::toast('Setting updated.', variant: 'success');
     }
 
-    public function openEdit(int $id): void
+    /**
+     * The same toggle, for one role's override within an event.
+     */
+    public function toggleRole(int $id, string $field): void
     {
         $this->authorize('manage-settings');
 
+        if (! in_array($field, self::CHANNEL_FIELDS, true)) {
+            return;
+        }
+
+        $setting = NotificationRoleSetting::findOrFail($id);
+        $setting->update([$field => ! $setting->{$field}]);
+
+        \Flux::toast('Setting updated.', variant: 'success');
+    }
+
+    public function openEdit(int $id): void
+    {
+        $this->authorize('manage-settings');
+        $catalog = app(NotificationCatalog::class);
+
         $setting = NotificationSetting::findOrFail($id);
         $this->editingId = $setting->id;
+        $this->editingRoleId = null;
         $this->custom_subject = (string) ($setting->custom_subject ?? '');
         $this->custom_body = (string) ($setting->custom_body ?? '');
+        $this->editVariables = $catalog->variablesFor($setting->key);
+        $this->showEditModal = true;
+    }
+
+    /**
+     * The same edit modal, scoped to one role's template within an event.
+     */
+    public function openEditRole(int $id): void
+    {
+        $this->authorize('manage-settings');
+        $catalog = app(NotificationCatalog::class);
+
+        $roleSetting = NotificationRoleSetting::with('notificationSetting')->findOrFail($id);
+        $this->editingId = null;
+        $this->editingRoleId = $roleSetting->id;
+        $this->custom_subject = (string) ($roleSetting->custom_subject ?? '');
+        $this->custom_body = (string) ($roleSetting->custom_body ?? '');
+        $this->editVariables = $catalog->variablesFor($roleSetting->notificationSetting->key);
         $this->showEditModal = true;
     }
 
@@ -286,14 +340,113 @@ class NotificationSettings extends Component
             'custom_body' => ['nullable', 'string', 'max:2000'],
         ]);
 
-        $setting = NotificationSetting::findOrFail($this->editingId);
-        $setting->update([
-            'custom_subject' => $this->custom_subject ?: null,
-            'custom_body' => $this->custom_body ?: null,
+        $allowed = array_keys($this->editVariables);
+        $renderer = app(TemplateVariableRenderer::class);
+        $unknown = array_unique([
+            ...$renderer->unknownVariables($this->custom_subject, $allowed),
+            ...$renderer->unknownVariables($this->custom_body, $allowed),
         ]);
+
+        if ($unknown !== []) {
+            $this->addError('custom_body', 'Unknown variable(s) for this event: '.implode(', ', array_map(
+                fn (string $v) => '{{'.$v.'}}', $unknown,
+            )));
+
+            return;
+        }
+
+        $model = $this->editingRoleId !== null
+            ? NotificationRoleSetting::findOrFail($this->editingRoleId)
+            : NotificationSetting::findOrFail($this->editingId);
+
+        $old = ['custom_subject' => $model->custom_subject, 'custom_body' => $model->custom_body];
+        $new = ['custom_subject' => $this->custom_subject ?: null, 'custom_body' => $this->custom_body ?: null];
+
+        $model->update($new);
+
+        if ($old !== $new) {
+            AuditLog::record($model, 'notification.template_updated', $old, $new);
+        }
 
         $this->showEditModal = false;
         \Flux::toast('Template saved.', variant: 'success');
+    }
+
+    /**
+     * Render the currently-open template with sample data — never real
+     * employee data — so an admin can see it before saving or testing it.
+     */
+    public function previewEdit(): void
+    {
+        $this->authorize('manage-settings');
+        $catalog = app(NotificationCatalog::class);
+
+        $key = $this->currentEditEventKey();
+        $samples = $key !== null ? $catalog->sampleDataFor($key) : [];
+        $renderer = app(TemplateVariableRenderer::class);
+
+        $this->previewSubject = $this->custom_subject !== ''
+            ? $renderer->render($this->custom_subject, $samples)
+            : '(default subject — no custom template set)';
+        $this->previewBody = $this->custom_body !== ''
+            ? $renderer->render($this->custom_body, $samples)
+            : '(default body — no custom template set)';
+
+        $this->showPreviewModal = true;
+    }
+
+    /**
+     * Send the currently-open, unsaved template to the test address — through
+     * the real mail pipeline so it is logged and still stopped by the global
+     * pause and this event's Email toggle, but not by Auto-Send: a deliberate
+     * test click is a manual send.
+     */
+    public function sendTestFromEdit(): void
+    {
+        $this->authorize('manage-settings');
+        $catalog = app(NotificationCatalog::class);
+
+        $this->validate(['testEmail' => ['required', 'email']]);
+
+        $key = $this->currentEditEventKey();
+
+        if ($key === null) {
+            return;
+        }
+
+        $role = $this->editingRoleId !== null
+            ? NotificationRoleSetting::find($this->editingRoleId)?->role
+            : null;
+
+        $samples = $catalog->sampleDataFor($key);
+        $renderer = app(TemplateVariableRenderer::class);
+        $subject = $this->custom_subject !== '' ? $renderer->render($this->custom_subject, $samples) : '[Test] '.$key;
+        $body = $this->custom_body !== '' ? $renderer->render($this->custom_body, $samples) : 'This is a test send with no custom template — sample data only.';
+
+        try {
+            Mail::send([], [], function ($message) use ($subject, $body, $key, $role): void {
+                $message->to($this->testEmail)->subject('[Test] '.$subject)->text($body);
+                $message->getHeaders()->addTextHeader('X-Notification-Key', $key);
+                if ($role !== null) {
+                    $message->getHeaders()->addTextHeader('X-Notification-Role', $role);
+                }
+                $message->getHeaders()->addTextHeader('X-Notification-Manual', '1');
+            });
+
+            \Flux::toast('Test email sent to '.$this->testEmail, variant: 'success');
+        } catch (\Throwable $e) {
+            \Flux::toast('Send failed: '.$e->getMessage(), variant: 'danger');
+        }
+    }
+
+    private function currentEditEventKey(): ?string
+    {
+        if ($this->editingRoleId !== null) {
+            return NotificationRoleSetting::with('notificationSetting')->find($this->editingRoleId)
+                ?->notificationSetting->key;
+        }
+
+        return NotificationSetting::find($this->editingId)?->key;
     }
 
     /**
@@ -352,6 +505,7 @@ class NotificationSettings extends Component
     public function render()
     {
         $settings = NotificationSetting::query()
+            ->with('roleSettings')
             ->when($this->search !== '', function ($q): void {
                 $q->where(function ($w): void {
                     $w->where('label', 'like', '%'.$this->search.'%')
@@ -383,7 +537,9 @@ class NotificationSettings extends Component
 
         $aiEnabled = Auth::user() ? app(AiAssistant::class)->enabledForUser(Auth::user()) : false;
 
-        return view('livewire.settings.notification-settings', compact('settings', 'queue', 'smtp', 'logs', 'recipientList', 'aiEnabled'))
+        $catalog = app(NotificationCatalog::class);
+
+        return view('livewire.settings.notification-settings', compact('settings', 'queue', 'smtp', 'logs', 'recipientList', 'aiEnabled', 'catalog'))
             ->layout('layouts.app', ['title' => 'Notifications & Email']);
     }
 

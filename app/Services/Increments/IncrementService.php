@@ -15,6 +15,7 @@ use App\Models\SalaryRevision;
 use App\Models\User;
 use App\Notifications\IncrementAppliedNotification;
 use App\Notifications\PipCreatedNotification;
+use App\Services\Notifications\NotificationRecipients;
 use App\Services\Performance\PipService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\CarbonInterface;
@@ -181,9 +182,10 @@ class IncrementService
         $cycle->update(['status' => 'proposed']);
         AuditLog::record($cycle, 'submitted_for_approval');
 
-        // Calibration-ready ping to the approvers (in-app only).
-        User::whereIn('role', [UserRole::Director, UserRole::SuperAdmin])->get()
-            ->each(fn (User $u) => $u->notify(new IncrementAppliedNotification(null, $cycle, 'cycle_proposed')));
+        // Calibration-ready ping to the approvers (in-app only). Every
+        // director sees a cycle proposed for approval — deliberate.
+        app(NotificationRecipients::class)->directors()
+            ->each(fn (User $u) => $u->notify((new IncrementAppliedNotification(null, $cycle, 'cycle_proposed'))->forRole('director')));
     }
 
     /**
@@ -370,7 +372,7 @@ class IncrementService
             Mail::to($employee->user->email)->queue(new IncrementLetterMail($proposal));
         }
 
-        $employee->user->notify(new IncrementAppliedNotification($proposal, $proposal->cycle, 'increment_applied'));
+        $employee->user->notify((new IncrementAppliedNotification($proposal, $proposal->cycle, 'increment_applied'))->forRole('employee'));
     }
 
     /** Band E → auto-draft a 90-day PIP and alert HR + department head. */
@@ -398,7 +400,7 @@ class IncrementService
         if ($head = $employee->department?->head) {
             $notifiables->push($head);
         }
-        $notifiables->unique('id')->each(fn (User $u) => $u->notify(new PipCreatedNotification($pip)));
+        $notifiables->unique('id')->each(fn (User $u) => $u->notify((new PipCreatedNotification($pip))->forRole('hr_admin')));
 
         AuditLog::record($pip, 'auto_flagged_band_e', null, ['increment_proposal_id' => $proposal->id]);
     }

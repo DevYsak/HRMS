@@ -4,11 +4,13 @@ namespace App\Notifications;
 
 use App\Models\Payroll;
 use App\Models\PayrollApprovalStep;
+use App\Notifications\Concerns\NotifiesByRole;
 use App\Notifications\Concerns\SendsMailChannel;
 use Illuminate\Notifications\Notification;
 
 class PayrollApprovalNotification extends Notification
 {
+    use NotifiesByRole;
     use SendsMailChannel;
 
     public function __construct(

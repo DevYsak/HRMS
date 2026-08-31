@@ -200,11 +200,11 @@ class AllAttendance extends Component
         );
 
         // Tell the employee their day was corrected — they did not ask for it.
-        $employee->user?->notify(new AttendanceRegularisationNotification(
+        $employee->user?->notify((new AttendanceRegularisationNotification(
             $employee->user->name,
             Carbon::parse($this->markDate)->format('d M Y'),
             'approved',
-        ));
+        ))->forRole('employee'));
 
         $this->showMarkModal = false;
         \Flux::toast("Attendance updated for {$employee->user->name} and recorded against your name.");

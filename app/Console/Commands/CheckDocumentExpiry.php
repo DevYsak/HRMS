@@ -3,8 +3,8 @@
 namespace App\Console\Commands;
 
 use App\Models\Document;
-use App\Models\User;
 use App\Notifications\DocumentExpiryNotification;
+use App\Services\Notifications\NotificationRecipients;
 use Illuminate\Console\Command;
 
 class CheckDocumentExpiry extends Command
@@ -25,7 +25,7 @@ class CheckDocumentExpiry extends Command
             return self::SUCCESS;
         }
 
-        $hrAdmins = User::whereIn('role', ['super_admin', 'hr_admin'])->get();
+        $hrAdmins = app(NotificationRecipients::class)->hrQueue();
 
         foreach ($hrAdmins as $hr) {
             $hr->notify(new DocumentExpiryNotification($expiring));

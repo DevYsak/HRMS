@@ -232,7 +232,7 @@ class CommandCenter extends Component
             ? app(WfhService::class)->approve($request, Auth::id(), $comment)
             : app(WfhService::class)->reject($request, Auth::id(), $comment ?? '');
 
-        $request->employee->user?->notify(new WfhRequestNotification($request->fresh()));
+        $request->employee->user?->notify((new WfhRequestNotification($request->fresh()))->forRole('employee'));
     }
 
     protected function decideOvertime(int $id, string $decision, ?string $comment = null): void
@@ -247,7 +247,7 @@ class CommandCenter extends Component
             ? app(OvertimeService::class)->approve($request, Auth::id(), $comment)
             : app(OvertimeService::class)->reject($request, Auth::id(), $comment ?? '');
 
-        $request->employee->user?->notify(new OtRequestNotification($request->fresh()));
+        $request->employee->user?->notify((new OtRequestNotification($request->fresh()))->forRole('employee'));
     }
 
     protected function decideHolidayWork(int $id, string $decision, ?string $comment = null): void

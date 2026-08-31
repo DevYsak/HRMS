@@ -46,7 +46,12 @@ class CheckPipWeeklyReview extends Command
             }
 
             foreach ($recipients->unique('id') as $user) {
-                $user->notify(new PipWeeklyReviewDueNotification($pip));
+                $role = match (true) {
+                    $pip->manager instanceof User && $user->id === $pip->manager->id => 'manager',
+                    $pip->hrReviewer instanceof User && $user->id === $pip->hrReviewer->id => 'hr_admin',
+                    default => 'employee',
+                };
+                $user->notify((new PipWeeklyReviewDueNotification($pip))->forRole($role));
                 $notified++;
             }
         }

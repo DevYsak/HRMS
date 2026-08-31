@@ -5,6 +5,7 @@ namespace App\Livewire\Wfh;
 use App\Models\User;
 use App\Models\WfhRequest;
 use App\Notifications\WfhRequestNotification;
+use App\Services\Notifications\NotificationRecipients;
 use App\Services\WfhService;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
@@ -91,13 +92,15 @@ class MyWfhRequests extends Component
             return;
         }
 
-        // Notify manager; fallback to HR/SuperAdmin if no manager assigned
+        // Notify manager; fallback to HR if no manager assigned. The fallback
+        // used to include every manager in the company, which the comment
+        // above never claimed and the employee's own manager is not among.
         $manager = $employee->manager;
         if ($manager) {
-            $manager->notify(new WfhRequestNotification($request));
+            $manager->notify((new WfhRequestNotification($request))->forRole('manager'));
         } else {
-            User::whereIn('role', ['hr_admin', 'super_admin', 'manager'])
-                ->each(fn ($u) => $u->notify(new WfhRequestNotification($request)));
+            app(NotificationRecipients::class)->hrQueue()
+                ->each(fn (User $u) => $u->notify((new WfhRequestNotification($request))->forRole('hr_admin')));
         }
 
         $this->closeModal();
