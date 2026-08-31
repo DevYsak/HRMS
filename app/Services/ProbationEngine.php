@@ -8,6 +8,7 @@ use App\Models\ProbationSetting;
 use App\Models\User;
 use App\Notifications\ProbationConfirmedNotification;
 use App\Notifications\ProbationExtendedNotification;
+use App\Services\Notifications\NotificationRecipients;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -92,9 +93,10 @@ class ProbationEngine
             'probation_extension_reason' => $comment ?? $employee->probation_extension_reason,
         ]);
 
-        // Notify all HR admins to perform the second-stage sign-off
-        User::whereIn('role', ['hr_admin', 'super_admin'])
-            ->each(fn (User $hr) => $hr->notify(new ProbationConfirmedNotification($employee->fresh(), 'manager_confirmed')));
+        // The whole HR queue: second-stage sign-off is not assigned to an
+        // individual, and routing it to one would stall while they are away.
+        app(NotificationRecipients::class)->hrQueue()
+            ->each(fn (User $hr) => $hr->notify((new ProbationConfirmedNotification($employee->fresh(), 'manager_confirmed'))->forRole('hr_admin')));
     }
 
     /** Step 2: HR Admin co-approves and moves employee to Confirmed status. */
@@ -123,7 +125,7 @@ class ProbationEngine
             ]);
         });
 
-        $employee->user->notify(new ProbationConfirmedNotification($employee->fresh(), 'hr_approved'));
+        $employee->user->notify((new ProbationConfirmedNotification($employee->fresh(), 'hr_approved'))->forRole('employee'));
     }
 
     /** Extend probation period with a reason. Notifies manager. */

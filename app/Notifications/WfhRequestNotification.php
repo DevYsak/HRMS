@@ -3,6 +3,7 @@
 namespace App\Notifications;
 
 use App\Models\WfhRequest;
+use App\Notifications\Concerns\NotifiesByRole;
 use App\Notifications\Concerns\SendsMailChannel;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -11,6 +12,7 @@ use Illuminate\Queue\SerializesModels;
 
 class WfhRequestNotification extends Notification implements ShouldQueue
 {
+    use NotifiesByRole;
     use Queueable, SendsMailChannel, SerializesModels;
 
     public function __construct(public readonly WfhRequest $wfhRequest) {}

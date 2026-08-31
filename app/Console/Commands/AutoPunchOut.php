@@ -91,8 +91,8 @@ class AutoPunchOut extends Command
             app(AttendanceScoreEngine::class)->scoreDay($employee, $date);
 
             $notification = new MissingCheckoutNotification($attendance->fresh());
-            $employee->user?->notify($notification);
-            $employee->manager?->notify($notification);
+            $employee->user?->notify($notification->forRole('employee'));
+            $employee->manager?->notify($notification->forRole('manager'));
         }
 
         $this->info("Auto punch-out closed {$closed} open day(s) for {$date->toDateString()}.");

@@ -7,6 +7,7 @@ use App\Models\LeaveRequest;
 use App\Models\LeaveType;
 use App\Models\PublicHoliday;
 use App\Models\User;
+use Illuminate\Support\Carbon;
 use Livewire\Livewire;
 
 test('team time off shows a colour-coded team leave calendar', function () {
@@ -107,4 +108,23 @@ test('the calendar surfaces comp-offs distinctly', function () {
         ->assertSee('Comp-Off')          // legend
         ->assertSee('COMPOFFMEMBER')
         ->assertSee('comp-off');         // per-day badge title
+});
+
+test('month navigation does not skip a month when today is the 31st', function () {
+    // createFromFormat('Y-m', ...) fills the day from today. On 31 August,
+    // addMonth() lands on a non-existent 31 September and overflows to
+    // 1 October — skipping September entirely in the calendar.
+    $this->travelTo(Carbon::create(2026, 8, 31, 12));
+
+    $manager = User::factory()->create(['role' => UserRole::Manager]);
+    $this->actingAs($manager);
+
+    Livewire::test(TeamTimeOff::class)
+        ->assertOk()
+        ->call('nextCalMonth')
+        ->assertSet('calendarMonth', '2026-09')
+        ->call('prevCalMonth')
+        ->assertSet('calendarMonth', '2026-08')
+        ->call('prevCalMonth')
+        ->assertSet('calendarMonth', '2026-07');
 });

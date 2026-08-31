@@ -3,6 +3,7 @@
 namespace App\Notifications;
 
 use App\Models\HolidayWorkRequest;
+use App\Notifications\Concerns\NotifiesByRole;
 use App\Notifications\Concerns\SendsMailChannel;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -16,6 +17,7 @@ use Illuminate\Support\Carbon;
  */
 class HolidayWorkRequestNotification extends Notification implements ShouldQueue
 {
+    use NotifiesByRole;
     use Queueable, SendsMailChannel, SerializesModels;
 
     public function __construct(public HolidayWorkRequest $request) {}

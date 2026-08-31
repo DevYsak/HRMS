@@ -10,7 +10,6 @@ use App\Models\EmployeeSalary;
 use App\Models\Incentive;
 use App\Models\LeaveRequest;
 use App\Models\MailSetting;
-use App\Models\NotificationSetting;
 use App\Models\OtRequest;
 use App\Models\Payroll;
 use App\Models\Payslip;
@@ -29,7 +28,9 @@ use App\Observers\PayslipObserver;
 use App\Observers\ReimbursementObserver;
 use App\Observers\UserObserver;
 use App\Services\EmployeeImportService;
+use App\Services\Notifications\NotificationDeliveryGate;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Mail\Events\MessageSending;
 use Illuminate\Mail\Events\MessageSent;
 use Illuminate\Notifications\DatabaseNotification;
@@ -163,22 +164,59 @@ class AppServiceProvider extends ServiceProvider
     protected function configureNotificationGates(): void
     {
         Event::listen(function (NotificationSending $event): ?bool {
-            $setting = NotificationSetting::for($event->notification::class);
+            $key = $event->notification::class;
+            $role = method_exists($event->notification, 'notificationRole')
+                ? $event->notification->notificationRole()
+                : null;
+            $gate = app(NotificationDeliveryGate::class);
 
-            if (! $setting) {
-                return null; // no row → allow (preserves existing behaviour)
+            if ($event->channel === 'mail') {
+                $decision = $gate->mail($key, $role);
+
+                if (! $decision->allowed) {
+                    $this->logSkippedMail($key, $event->notifiable, $decision->reason);
+
+                    return false;
+                }
+
+                return null;
             }
 
-            if ($event->channel === 'mail' && (! $setting->mail_enabled || ! $setting->is_automatic)) {
-                return false;
-            }
-
-            if ($event->channel === 'database' && ! $setting->database_enabled) {
+            if ($event->channel === 'database' && ! $gate->database($key, $role)->allowed) {
                 return false;
             }
 
             return null;
         });
+    }
+
+    /**
+     * Record a blocked send the same way a real one is recorded, so "Recent
+     * Emails" shows why nothing went out instead of showing nothing at all.
+     */
+    private function logSkippedMail(string $key, mixed $notifiable, ?string $reason): void
+    {
+        try {
+            $email = method_exists($notifiable, 'routeNotificationForMail')
+                ? $notifiable->routeNotificationForMail()
+                : ($notifiable->email ?? null);
+
+            if (! is_string($email)) {
+                return;
+            }
+
+            EmailLog::create([
+                'notification_key' => $key,
+                'to_email' => $email,
+                'to_name' => $notifiable->name ?? null,
+                'status' => 'skipped',
+                'skip_reason' => $reason,
+                'notifiable_type' => $notifiable instanceof Model ? $notifiable::class : null,
+                'notifiable_id' => $notifiable instanceof Model ? $notifiable->getKey() : null,
+            ]);
+        } catch (\Throwable) {
+            // Logging a skip must never itself block or break a send decision.
+        }
     }
 
     /**
@@ -190,11 +228,14 @@ class AppServiceProvider extends ServiceProvider
     {
         Event::listen(function (MessageSending $event): ?bool {
             $message = $event->message;
+            $key = $this->mailHeader($message, 'X-Notification-Key');
 
             // Global master kill switch — cancels every outgoing message
             // (transactional notifications AND directly-sent Mailables).
             // Fail-open: a config/schema error never blocks all mail.
             if (! $this->globalMailEnabled()) {
+                $this->logSkippedMessage($message, $key, 'outgoing_email_paused');
+
                 return false;
             }
 
@@ -203,17 +244,26 @@ class AppServiceProvider extends ServiceProvider
             // no real mailbox — until HR fills in the genuine address.
             foreach (($message->getTo() ?: []) as $address) {
                 if (str_ends_with(strtolower($address->getAddress()), '@'.EmployeeImportService::PLACEHOLDER_EMAIL_DOMAIN)) {
+                    $this->logSkippedMessage($message, $key, 'recipient_email_missing');
+
                     return false;
                 }
             }
 
-            $key = $this->mailHeader($message, 'X-Notification-Key');
-
-            // Gate directly-sent Mailables (notifications are gated upstream).
+            // The final, authoritative check — re-verified here rather than
+            // trusted from whenever the send was first queued, so a setting
+            // flipped after a job was dispatched is still honoured. Covers
+            // directly-sent Mailables too: is_automatic previously had no
+            // effect on them at all.
             if ($key !== null) {
-                $setting = NotificationSetting::for($key);
-                if ($setting && ! $setting->mail_enabled) {
-                    return false; // cancel send
+                $role = $this->mailHeader($message, 'X-Notification-Role');
+                $manual = $this->mailHeader($message, 'X-Notification-Manual') !== null;
+                $decision = app(NotificationDeliveryGate::class)->mail($key, $role, $manual);
+
+                if (! $decision->allowed) {
+                    $this->logSkippedMessage($message, $key, $decision->reason);
+
+                    return false;
                 }
             }
 
@@ -248,6 +298,28 @@ class AppServiceProvider extends ServiceProvider
             EmailLog::whereIn('id', explode(',', $ids))
                 ->update(['status' => 'sent', 'sent_at' => now()]);
         });
+    }
+
+    /**
+     * Record every recipient of a message the gate just cancelled, mirroring
+     * the one-row-per-recipient shape of a real send.
+     */
+    private function logSkippedMessage(object $message, ?string $key, string $reason): void
+    {
+        try {
+            foreach (($message->getTo() ?: []) as $address) {
+                EmailLog::create([
+                    'notification_key' => $key,
+                    'to_email' => $address->getAddress(),
+                    'to_name' => $address->getName() ?: null,
+                    'subject' => $message->getSubject(),
+                    'status' => 'skipped',
+                    'skip_reason' => $reason,
+                ]);
+            }
+        } catch (\Throwable) {
+            // Logging a skip must never itself block or break a send decision.
+        }
     }
 
     /**

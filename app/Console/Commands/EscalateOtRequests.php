@@ -3,8 +3,8 @@
 namespace App\Console\Commands;
 
 use App\Models\OtRequest;
-use App\Models\User;
 use App\Notifications\OtRequestNotification;
+use App\Services\Notifications\NotificationRecipients;
 use Illuminate\Console\Command;
 
 class EscalateOtRequests extends Command
@@ -28,11 +28,11 @@ class EscalateOtRequests extends Command
             return self::SUCCESS;
         }
 
-        $hrAdmins = User::whereIn('role', ['super_admin', 'hr_admin'])->get();
+        $hrAdmins = app(NotificationRecipients::class)->hrQueue();
 
         foreach ($pending as $request) {
             foreach ($hrAdmins as $hr) {
-                $hr->notify(new OtRequestNotification($request));
+                $hr->notify((new OtRequestNotification($request))->forRole('hr_admin'));
             }
 
             $this->line("Escalated OT request #{$request->id} for {$request->employee->user->name}");

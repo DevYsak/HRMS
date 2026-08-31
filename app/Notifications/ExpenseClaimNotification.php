@@ -3,11 +3,13 @@
 namespace App\Notifications;
 
 use App\Models\ExpenseClaim;
+use App\Notifications\Concerns\NotifiesByRole;
 use App\Notifications\Concerns\SendsMailChannel;
 use Illuminate\Notifications\Notification;
 
 class ExpenseClaimNotification extends Notification
 {
+    use NotifiesByRole;
     use SendsMailChannel;
 
     public function __construct(public readonly ExpenseClaim $claim) {}

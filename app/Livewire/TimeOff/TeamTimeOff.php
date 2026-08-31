@@ -276,13 +276,16 @@ class TeamTimeOff extends Component
 
     public function prevCalMonth(): void
     {
-        $this->calendarMonth = Carbon::createFromFormat('Y-m', $this->calendarMonth ?: now()->format('Y-m'))
+        // '!Y-m' resets the unspecified day to the 1st. Without the '!',
+        // createFromFormat fills it from today, so on the 31st this parses as
+        // e.g. 31 September, overflows to 1 October, and skips a month.
+        $this->calendarMonth = Carbon::createFromFormat('!Y-m', $this->calendarMonth ?: now()->format('Y-m'))
             ->subMonth()->format('Y-m');
     }
 
     public function nextCalMonth(): void
     {
-        $this->calendarMonth = Carbon::createFromFormat('Y-m', $this->calendarMonth ?: now()->format('Y-m'))
+        $this->calendarMonth = Carbon::createFromFormat('!Y-m', $this->calendarMonth ?: now()->format('Y-m'))
             ->addMonth()->format('Y-m');
     }
 
@@ -345,7 +348,7 @@ class TeamTimeOff extends Component
         $leaveTypes = LeaveType::orderBy('name')->get();
 
         // ── Team leave calendar (monthly, colour-coded by leave type) ──
-        $monthStart = Carbon::createFromFormat('Y-m', $this->calendarMonth ?: now()->format('Y-m'))->startOfMonth();
+        $monthStart = Carbon::createFromFormat('!Y-m', $this->calendarMonth ?: now()->format('Y-m'))->startOfMonth();
         $monthEnd = $monthStart->copy()->endOfMonth();
         $gridStart = $monthStart->copy()->startOfWeek(Carbon::MONDAY);
         $gridEnd = $monthEnd->copy()->endOfWeek(Carbon::SUNDAY);

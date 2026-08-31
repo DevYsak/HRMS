@@ -4,11 +4,13 @@ namespace App\Notifications;
 
 use App\Models\Employee;
 use App\Models\OnboardingTask;
+use App\Notifications\Concerns\NotifiesByRole;
 use App\Notifications\Concerns\SendsMailChannel;
 use Illuminate\Notifications\Notification;
 
 class OnboardingTaskOverdueNotification extends Notification
 {
+    use NotifiesByRole;
     use SendsMailChannel;
 
     public function __construct(

@@ -92,7 +92,7 @@ class ApprovalCenter extends Component
                     } else {
                         app(OvertimeService::class)->reject($req, $user->id, $comment);
                     }
-                    $req->employee?->user?->notify(new OtRequestNotification($req->fresh()));
+                    $req->employee?->user?->notify((new OtRequestNotification($req->fresh()))->forRole('employee'));
                     break;
 
                 case 'regularisation':

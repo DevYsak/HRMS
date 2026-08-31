@@ -193,7 +193,7 @@ class ManageOtRequests extends Component
         }
 
         $request->employee->user->notify(
-            new OtRequestNotification($request->fresh())
+            (new OtRequestNotification($request->fresh()))->forRole('employee')
         );
 
         $this->releaseClaim($request);

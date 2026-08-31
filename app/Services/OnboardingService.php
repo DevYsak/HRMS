@@ -8,6 +8,7 @@ use App\Models\OnboardingTemplate;
 use App\Models\User;
 use App\Notifications\OffboardingCompletedNotification;
 use App\Notifications\OnboardingCompletedNotification;
+use App\Services\Notifications\NotificationRecipients;
 
 class OnboardingService
 {
@@ -202,10 +203,11 @@ class OnboardingService
 
         $notification = new OnboardingCompletedNotification($employee);
 
-        $employee->user->notify($notification);
+        $employee->user->notify($notification->forRole('employee'));
 
-        User::whereIn('role', ['super_admin', 'hr_admin'])->each(
-            fn (User $user) => $user->notify($notification)
+        // Completion is HR-wide news, not one administrator's.
+        app(NotificationRecipients::class)->hrQueue()->each(
+            fn (User $user) => $user->notify($notification->forRole('hr_admin'))
         );
     }
 
@@ -226,11 +228,12 @@ class OnboardingService
         $notification = new OffboardingCompletedNotification($employee);
 
         if ($employee->user) {
-            $employee->user->notify($notification);
+            $employee->user->notify($notification->forRole('employee'));
         }
 
-        User::whereIn('role', ['super_admin', 'hr_admin'])->each(
-            fn (User $user) => $user->notify($notification)
+        // Completion is HR-wide news, not one administrator's.
+        app(NotificationRecipients::class)->hrQueue()->each(
+            fn (User $user) => $user->notify($notification->forRole('hr_admin'))
         );
     }
 

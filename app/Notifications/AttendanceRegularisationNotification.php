@@ -2,6 +2,7 @@
 
 namespace App\Notifications;
 
+use App\Notifications\Concerns\NotifiesByRole;
 use App\Notifications\Concerns\SendsMailChannel;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -9,6 +10,7 @@ use Illuminate\Notifications\Notification;
 
 class AttendanceRegularisationNotification extends Notification implements ShouldQueue
 {
+    use NotifiesByRole;
     use Queueable, SendsMailChannel;
 
     public function __construct(

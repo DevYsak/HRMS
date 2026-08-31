@@ -11,13 +11,13 @@ use App\Models\LeaveEncashment;
 use App\Models\LeaveRequest;
 use App\Models\LeaveType;
 use App\Models\PublicHoliday;
-use App\Models\User;
 use App\Models\WfhRequest;
 use App\Notifications\LeaveEncashmentNotification;
 use App\Services\Attendance\HolidayResolver;
 use App\Services\HolidayWorkService;
 use App\Services\Leave\LeaveYearResolver;
 use App\Services\LeaveService;
+use App\Services\Notifications\NotificationRecipients;
 use Carbon\Carbon;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
@@ -140,12 +140,15 @@ class MyTimeOff extends Component
 
     public function previousCalendarMonth(): void
     {
-        $this->calendarMonth = \Illuminate\Support\Carbon::createFromFormat('Y-m', $this->calendarMonth)->subMonth()->format('Y-m');
+        // '!Y-m' resets the unspecified day to the 1st. Without the '!',
+        // createFromFormat fills it from today, so on the 31st this parses as
+        // e.g. 31 September, overflows to 1 October, and skips a month.
+        $this->calendarMonth = \Illuminate\Support\Carbon::createFromFormat('!Y-m', $this->calendarMonth)->subMonth()->format('Y-m');
     }
 
     public function nextCalendarMonth(): void
     {
-        $this->calendarMonth = \Illuminate\Support\Carbon::createFromFormat('Y-m', $this->calendarMonth)->addMonth()->format('Y-m');
+        $this->calendarMonth = \Illuminate\Support\Carbon::createFromFormat('!Y-m', $this->calendarMonth)->addMonth()->format('Y-m');
     }
 
     public function goToCurrentCalendarMonth(): void
@@ -513,8 +516,8 @@ class MyTimeOff extends Component
         }
 
         $encashment->load(['employee.user', 'leaveType']);
-        User::whereIn('role', ['hr_admin', 'super_admin'])
-            ->each(fn ($u) => $u->notify(new LeaveEncashmentNotification($encashment, 'submitted')));
+        app(NotificationRecipients::class)->hrQueue()
+            ->each(fn ($u) => $u->notify((new LeaveEncashmentNotification($encashment, 'submitted'))->forRole('hr_admin')));
 
         $this->showEncashModal = false;
         \Flux::toast('Encashment request submitted. Pending HR approval.');
@@ -678,7 +681,7 @@ class MyTimeOff extends Component
             : null;
 
         // ── Calendar Widget ──────────────────────────────────────────────
-        $calendarCursor = \Illuminate\Support\Carbon::createFromFormat('Y-m', $this->calendarMonth ?: now()->format('Y-m'))->startOfMonth();
+        $calendarCursor = \Illuminate\Support\Carbon::createFromFormat('!Y-m', $this->calendarMonth ?: now()->format('Y-m'))->startOfMonth();
         $monthStart = $calendarCursor->copy()->startOfMonth();
         $monthEnd = $calendarCursor->copy()->endOfMonth();
         $gridStart = $monthStart->copy()->startOfWeek(Carbon::MONDAY);

@@ -19,6 +19,7 @@ use App\Models\User;
 use App\Notifications\PayrollApprovalNotification;
 use App\Notifications\PayslipGeneratedNotification;
 use App\Notifications\SalaryStructureAssignedNotification;
+use App\Services\Notifications\NotificationRecipients;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
@@ -204,8 +205,11 @@ class PayrollService
             PayrollApprovalStep::where('payroll_id', $payroll->id)->delete();
 
             if ($activeSteps->isEmpty()) {
-                foreach (User::whereIn('role', ['super_admin', 'finance', 'director'])->get() as $approver) {
-                    $approver->notify(new PayrollApprovalNotification($payroll->fresh(), 'submitted'));
+                // Fallback only: with an approval policy configured, the step
+                // approvers below are notified instead of everyone who could
+                // conceivably approve.
+                foreach (app(NotificationRecipients::class)->payrollApprovers() as $approver) {
+                    $approver->notify((new PayrollApprovalNotification($payroll->fresh(), 'submitted'))->forRole('approver'));
                 }
 
                 return $payroll->fresh(['payslips.employee.user']);
@@ -358,7 +362,7 @@ class PayrollService
             : User::where('role', $step->approver_type)->get();
 
         foreach ($recipients as $recipient) {
-            $recipient->notify(new PayrollApprovalNotification($payroll, 'step_ready', $step));
+            $recipient->notify((new PayrollApprovalNotification($payroll, 'step_ready', $step))->forRole('approver'));
         }
     }
 
@@ -383,7 +387,7 @@ class PayrollService
             }
         }
 
-        $payroll->processedBy?->notify(new PayrollApprovalNotification($payroll, 'finance_approved'));
+        $payroll->processedBy?->notify((new PayrollApprovalNotification($payroll, 'finance_approved'))->forRole('employee'));
 
         return $payroll->fresh(['payslips.employee.user']);
     }
@@ -402,7 +406,7 @@ class PayrollService
         ]);
         AuditLog::record($payroll, 'rejected', null, ['status' => 'draft'], reason: $note);
 
-        $payroll->loadMissing('processedBy')->processedBy?->notify(new PayrollApprovalNotification($payroll, 'rejected'));
+        $payroll->loadMissing('processedBy')->processedBy?->notify((new PayrollApprovalNotification($payroll, 'rejected'))->forRole('employee'));
 
         return $payroll->fresh(['payslips.employee.user']);
     }

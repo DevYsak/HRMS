@@ -19,6 +19,7 @@ use App\Notifications\LeavePaymentStatusChangedNotification;
 use App\Notifications\LeaveRequestNotification;
 use App\Services\Leave\LeaveCarryOverService;
 use App\Services\Leave\LeaveYearResolver;
+use App\Services\Notifications\NotificationRecipients;
 use App\Services\Teams\ApprovalRoutingService;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
@@ -343,12 +344,23 @@ class LeaveService
             ->getApproverChain($employee, Carbon::parse($startDate))
             ->each($push);
 
+        // The HR queue as well as the approver chain, minus anyone the chain
+        // already covered. Deliberate: HR tracks every request centrally.
         $notifiedIds = $recipients->pluck('id')->all();
-        User::whereIn('role', ['hr_admin', 'super_admin'])
-            ->when(\count($notifiedIds), fn ($q) => $q->whereNotIn('id', $notifiedIds))
-            ->get()->each($push);
+        app(NotificationRecipients::class)->hrQueue()
+            ->reject(fn (User $u) => \in_array($u->id, $notifiedIds, true))
+            ->each($push);
 
-        $recipients->each(fn (User $u) => $u->notify(new LeaveRequestNotification($request)));
+        // Manager, approver chain and HR each tagged with the role they are
+        // being notified as, so all three can be configured separately.
+        $managerId = $employee->manager_id;
+        $recipients->each(fn (User $u) => $u->notify(
+            (new LeaveRequestNotification($request))->forRole(match (true) {
+                $managerId !== null && $u->id === $managerId => 'manager',
+                \in_array($u->role?->value ?? $u->role, ['hr_admin', 'super_admin'], true) => 'hr_admin',
+                default => 'approver',
+            })
+        ));
 
         return $request;
     }
@@ -417,11 +429,12 @@ class LeaveService
             }
 
             $fresh = $leaveRequest->fresh(['employee.user', 'leaveType', 'reviewer']);
-            $fresh->employee->user->notify(new LeaveRequestNotification($fresh));
+            $fresh->employee->user->notify((new LeaveRequestNotification($fresh))->forRole('employee'));
 
             if ($resolvedStatus === 'pending_hr') {
-                User::whereIn('role', ['hr_admin', 'super_admin'])
-                    ->each(fn ($hr) => $hr->notify(new LeaveRequestNotification($fresh)));
+                // Routed to HR as a queue — whoever picks it up first acts.
+                app(NotificationRecipients::class)->hrQueue()
+                    ->each(fn (User $hr) => $hr->notify((new LeaveRequestNotification($fresh))->forRole('hr_admin')));
             }
 
             return $fresh;
@@ -487,12 +500,12 @@ class LeaveService
         // Notify the other side.
         if ($isEmployee) {
             $manager = $fresh->employee->manager;
-            $manager?->notify(new LeaveRequestNotification($fresh));
-            User::whereIn('role', ['hr_admin', 'super_admin'])
-                ->when($manager, fn ($q) => $q->where('id', '!=', $manager->id))
-                ->each(fn ($hr) => $hr->notify(new LeaveRequestNotification($fresh)));
+            $manager?->notify((new LeaveRequestNotification($fresh))->forRole('manager'));
+            app(NotificationRecipients::class)->hrQueue()
+                ->reject(fn (User $hr) => $manager && $hr->id === $manager->id)
+                ->each(fn (User $hr) => $hr->notify((new LeaveRequestNotification($fresh))->forRole('hr_admin')));
         } else {
-            $fresh->employee->user?->notify(new LeaveRequestNotification($fresh));
+            $fresh->employee->user?->notify((new LeaveRequestNotification($fresh))->forRole('employee'));
         }
 
         return $fresh;
@@ -559,7 +572,7 @@ class LeaveService
             }
 
             $fresh = $leaveRequest->fresh(['employee.user', 'leaveType', 'reviewer', 'hrReviewer']);
-            $fresh->employee->user->notify(new LeaveRequestNotification($fresh));
+            $fresh->employee->user->notify((new LeaveRequestNotification($fresh))->forRole('employee'));
 
             return $fresh;
         });
@@ -720,10 +733,10 @@ class LeaveService
             }
         });
 
-        // Notify HR admins with summary
+        // A monthly summary for HR as a team, not for any one administrator.
         if ($count > 0) {
-            User::whereIn('role', ['hr_admin', 'super_admin'])
-                ->each(fn ($hr) => $hr->notify(new LeaveMonthlyAccrualNotification($count, $year, $month)));
+            app(NotificationRecipients::class)->hrQueue()
+                ->each(fn (User $hr) => $hr->notify(new LeaveMonthlyAccrualNotification($count, $year, $month)));
         }
 
         return $count;
@@ -956,13 +969,14 @@ class LeaveService
             'reviewed_at' => now(),
         ]);
 
-        // Notify finance team
+        // Finance as a team: an encashment awaiting sign-off is theirs
+        // collectively, not one named approver's.
         $encashment->load(['employee.user', 'leaveType']);
-        User::whereIn('role', ['finance', 'super_admin'])
-            ->each(fn ($u) => $u->notify(new LeaveEncashmentNotification($encashment, 'pending_finance')));
+        app(NotificationRecipients::class)->financeApprovers()
+            ->each(fn (User $u) => $u->notify((new LeaveEncashmentNotification($encashment, 'pending_finance'))->forRole('finance')));
 
         // Notify employee
-        $encashment->employee->user->notify(new LeaveEncashmentNotification($encashment, 'pending_finance_employee'));
+        $encashment->employee->user->notify((new LeaveEncashmentNotification($encashment, 'pending_finance_employee'))->forRole('employee'));
     }
 
     /**
@@ -992,7 +1006,7 @@ class LeaveService
         ));
 
         $encashment->load(['employee.user', 'leaveType']);
-        $encashment->employee->user->notify(new LeaveEncashmentNotification($encashment, 'rejected'));
+        $encashment->employee->user->notify((new LeaveEncashmentNotification($encashment, 'rejected'))->forRole('employee'));
     }
 
     /**
@@ -1025,7 +1039,7 @@ class LeaveService
         });
 
         $encashment->load(['employee.user', 'leaveType']);
-        $encashment->employee->user->notify(new LeaveEncashmentNotification($encashment, 'approved'));
+        $encashment->employee->user->notify((new LeaveEncashmentNotification($encashment, 'approved'))->forRole('employee'));
     }
 
     /**

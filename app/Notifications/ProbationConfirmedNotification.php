@@ -3,11 +3,13 @@
 namespace App\Notifications;
 
 use App\Models\Employee;
+use App\Notifications\Concerns\NotifiesByRole;
 use App\Notifications\Concerns\SendsMailChannel;
 use Illuminate\Notifications\Notification;
 
 class ProbationConfirmedNotification extends Notification
 {
+    use NotifiesByRole;
     use SendsMailChannel;
 
     /**

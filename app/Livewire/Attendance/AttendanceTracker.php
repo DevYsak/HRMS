@@ -17,7 +17,6 @@ use App\Models\LeaveBalance;
 use App\Models\LeaveRequest;
 use App\Models\ShiftSetting;
 use App\Models\Task;
-use App\Models\User;
 use App\Models\WfhReport;
 use App\Notifications\AttendanceRegularisationNotification;
 use App\Notifications\RegularisationReviewedNotification;
@@ -31,6 +30,7 @@ use App\Services\Attendance\ShiftProgress;
 use App\Services\Attendance\ShiftResolver;
 use App\Services\AttendanceService;
 use App\Services\Leave\LeaveYearResolver;
+use App\Services\Notifications\NotificationRecipients;
 use App\Services\WfhService;
 use App\Support\UserAgent;
 use Carbon\CarbonPeriod;
@@ -1970,12 +1970,15 @@ class AttendanceTracker extends Component
             );
             // Route to HR whose department/shift scope covers this employee
             // (company-wide HR + super admins always included), plus the manager.
-            $approvers = User::whereIn('role', ['hr_admin', 'super_admin'])->get()
-                ->filter(fn ($u) => $u->coversEmployee($employee));
-            if ($employee->manager) {
-                $approvers->push($employee->manager);
-            }
-            $approvers->unique('id')->each(fn ($u) => $u->notify($notification));
+            $hr = app(NotificationRecipients::class)->hrCovering($employee);
+            $manager = $employee->manager;
+
+            // Tagged per recipient so HR and the manager can be configured
+            // and templated separately for the same request.
+            $hr->reject(fn ($u) => $manager && $u->id === $manager->id)
+                ->unique('id')
+                ->each(fn ($u) => $u->notify($notification->forRole('hr_admin')));
+            $manager?->notify($notification->forRole('manager'));
 
             // Notify the employee themselves so the request appears in their inbox
             Auth::user()->notify(new RegularisationReviewedNotification($regularisation));

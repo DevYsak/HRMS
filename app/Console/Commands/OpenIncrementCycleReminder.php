@@ -2,10 +2,10 @@
 
 namespace App\Console\Commands;
 
-use App\Enums\UserRole;
 use App\Models\IncrementCycle;
 use App\Models\User;
 use App\Notifications\IncrementCycleReminderNotification;
+use App\Services\Notifications\NotificationRecipients;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -25,7 +25,7 @@ class OpenIncrementCycleReminder extends Command
             return self::SUCCESS;
         }
 
-        $recipients = User::whereIn('role', [UserRole::HrAdmin, UserRole::SuperAdmin])->get();
+        $recipients = app(NotificationRecipients::class)->hrQueue();
         $recipients->each(fn (User $u) => $u->notify(new IncrementCycleReminderNotification($financialYear)));
 
         $this->info("Reminded {$recipients->count()} HR/admin user(s) to open cycle {$financialYear}.");

@@ -4,6 +4,7 @@ namespace App\Notifications;
 
 use App\Models\IncrementCycle;
 use App\Models\IncrementProposal;
+use App\Notifications\Concerns\NotifiesByRole;
 use Illuminate\Notifications\Notification;
 
 /**
@@ -12,6 +13,8 @@ use Illuminate\Notifications\Notification;
  */
 class IncrementAppliedNotification extends Notification
 {
+    use NotifiesByRole;
+
     public function __construct(
         public readonly ?IncrementProposal $proposal,
         public readonly IncrementCycle $cycle,

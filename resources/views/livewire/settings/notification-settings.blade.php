@@ -119,6 +119,14 @@
         <flux:input wire:model.live.debounce.300ms="search" icon="magnifying-glass" placeholder="Search notifications…" size="sm" />
     </div>
 
+    <p class="text-xs text-zinc-400">
+        <b>Email</b> / <b>In-App</b> control whether that channel fires at all for this event.
+        <b>Auto-send</b> only affects email, and only automatic sends the system triggers on its own —
+        turning it off does not stop the event from happening or from appearing in-app, and does not
+        block a deliberate action like Send Test. An event that notifies more than one role (↳ rows
+        below its name) can have each role's channels and template configured independently.
+    </p>
+
     {{-- Notification settings grouped --}}
     <div class="space-y-6">
         @forelse($settings as $group => $rows)
@@ -138,10 +146,13 @@
                     </thead>
                     <tbody class="divide-y divide-zinc-100 dark:divide-white/5">
                         @foreach($rows as $s)
+                            @php($roles = $catalog->rolesFor($s->key))
                             <tr class="transition hover:bg-zinc-50/60 dark:hover:bg-zinc-800/30">
                                 <td class="px-5 py-3">
                                     <div class="font-semibold text-zinc-900 dark:text-white">{{ $s->label }}</div>
-                                    @if($s->custom_subject)
+                                    @if($roles !== [])
+                                        <div class="mt-0.5 text-[11px] text-zinc-400">Default — applies to any role below with no override</div>
+                                    @elseif($s->custom_subject)
                                         <div class="mt-0.5 truncate text-[11px] text-zinc-400">Subject: {{ $s->custom_subject }}</div>
                                     @endif
                                 </td>
@@ -166,6 +177,37 @@
                                     <flux:button wire:click="openEdit({{ $s->id }})" size="xs" variant="ghost" icon="pencil-square">Edit</flux:button>
                                 </td>
                             </tr>
+                            {{-- Per-role overrides: only for events that notify more than one role --}}
+                            @foreach($s->roleSettings as $rs)
+                                <tr class="bg-zinc-50/40 dark:bg-zinc-800/20">
+                                    <td class="py-2 pl-10 pr-5 text-xs text-zinc-500 dark:text-zinc-400">
+                                        ↳ {{ $roles[$rs->role] ?? \Illuminate\Support\Str::headline($rs->role) }}
+                                        @if($rs->custom_subject)
+                                            <div class="mt-0.5 truncate text-[11px] text-zinc-400">Subject: {{ $rs->custom_subject }}</div>
+                                        @endif
+                                    </td>
+                                    @foreach(['mail_enabled', 'database_enabled', 'is_automatic'] as $field)
+                                        <td class="px-3 py-2 text-center">
+                                            <button type="button" wire:click="toggleRole({{ $rs->id }}, '{{ $field }}')"
+                                                @class([
+                                                    'relative inline-flex h-4 w-8 shrink-0 items-center rounded-full transition',
+                                                    'bg-orange-400' => $rs->{$field},
+                                                    'bg-zinc-200 dark:bg-zinc-700' => ! $rs->{$field},
+                                                ])
+                                                aria-label="Toggle {{ $roles[$rs->role] ?? $rs->role }} {{ $field }}">
+                                                <span @class([
+                                                    'inline-block size-3 transform rounded-full bg-white shadow transition',
+                                                    'translate-x-4' => $rs->{$field},
+                                                    'translate-x-0.5' => ! $rs->{$field},
+                                                ])></span>
+                                            </button>
+                                        </td>
+                                    @endforeach
+                                    <td class="px-5 py-2 text-right">
+                                        <flux:button wire:click="openEditRole({{ $rs->id }})" size="xs" variant="ghost" icon="pencil-square">Edit</flux:button>
+                                    </td>
+                                </tr>
+                            @endforeach
                         @endforeach
                     </tbody>
                 </table>
@@ -205,7 +247,10 @@
                                     'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' => $log->status === 'sent',
                                     'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' => $log->status === 'sending',
                                     'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400' => $log->status === 'failed',
-                                ])>{{ ucfirst($log->status) }}</span>
+                                    'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400' => $log->status === 'skipped',
+                                ])
+                                    title="{{ $log->skip_reason }}"
+                                >{{ ucfirst($log->status) }}{{ $log->skip_reason ? ' — '.\Illuminate\Support\Str::headline($log->skip_reason) : '' }}</span>
                             </td>
                             <td class="px-5 py-2.5 text-right text-[11px] text-zinc-400">{{ $log->created_at?->diffForHumans() }}</td>
                         </tr>
@@ -311,9 +356,47 @@
             </div>
             <flux:input wire:model="custom_subject" label="Custom Subject" placeholder="Default subject" />
             <flux:textarea wire:model="custom_body" label="Custom Body" rows="5" placeholder="Default message body" />
-            <div class="flex justify-end gap-2">
-                <flux:button wire:click="$set('showEditModal', false)" variant="ghost">Cancel</flux:button>
-                <flux:button wire:click="saveEdit" variant="primary">Save</flux:button>
+            <flux:error name="custom_body" />
+
+            @if($editVariables !== [])
+                <div class="rounded-xl border border-zinc-200 bg-zinc-50/60 p-3 text-xs dark:border-white/10 dark:bg-zinc-800/30">
+                    <div class="mb-1.5 font-bold uppercase tracking-wide text-zinc-500">Available variables</div>
+                    <div class="flex flex-wrap gap-1.5">
+                        @foreach($editVariables as $name => $description)
+                            @php($token = '{{'.$name.'}}')
+                            <span class="rounded-md bg-white px-1.5 py-0.5 font-mono text-[11px] text-orange-600 shadow-sm dark:bg-zinc-900 dark:text-orange-400"
+                                title="{{ $description }}">{{ $token }}</span>
+                        @endforeach
+                    </div>
+                </div>
+            @endif
+
+            <div class="flex items-center justify-between gap-2 border-t border-zinc-100 pt-3 dark:border-white/5">
+                <div class="flex gap-2">
+                    <flux:button wire:click="previewEdit" size="sm" variant="ghost" icon="eye">Preview</flux:button>
+                    <flux:button wire:click="sendTestFromEdit" size="sm" variant="ghost" icon="paper-airplane">Send test</flux:button>
+                </div>
+                <div class="flex justify-end gap-2">
+                    <flux:button wire:click="$set('showEditModal', false)" variant="ghost">Cancel</flux:button>
+                    <flux:button wire:click="saveEdit" variant="primary">Save</flux:button>
+                </div>
+            </div>
+        </div>
+    </flux:modal>
+
+    {{-- Preview modal --}}
+    <flux:modal wire:model.self="showPreviewModal" class="w-full max-w-lg">
+        <div class="space-y-3">
+            <flux:heading size="lg">Preview</flux:heading>
+            <flux:subheading>Rendered with sample data — never a real employee's.</flux:subheading>
+            <div class="rounded-xl border border-zinc-200 p-4 dark:border-white/10">
+                <div class="mb-2 border-b border-zinc-100 pb-2 text-sm font-bold text-zinc-900 dark:border-white/5 dark:text-white">
+                    {{ $previewSubject }}
+                </div>
+                <div class="whitespace-pre-line text-sm text-zinc-600 dark:text-zinc-300">{{ $previewBody }}</div>
+            </div>
+            <div class="flex justify-end">
+                <flux:button wire:click="$set('showPreviewModal', false)" variant="ghost">Close</flux:button>
             </div>
         </div>
     </flux:modal>
