@@ -12,6 +12,7 @@ use App\Models\Employee;
 use App\Models\PublicHoliday;
 use App\Models\ShiftSetting;
 use App\Models\User;
+use App\Services\Approvals\ApprovalGuard;
 use App\Services\Attendance\AttendanceScoreEngine;
 use App\Services\Attendance\HolidayResolver;
 use App\Services\Attendance\ResolvedShift;
@@ -140,6 +141,8 @@ class AttendanceService
             return $regularisation->attendance;
         }
 
+        app(ApprovalGuard::class)->assertCanDecide($reviewerId, $regularisation->employee);
+
         $reviewer = User::find($reviewerId);
         $level = $this->approvalLevel($reviewer);
         $currentStage = $regularisation->stage ?: 'manager_review';
@@ -191,6 +194,8 @@ class AttendanceService
         if ($regularisation->status !== 'pending') {
             return $regularisation->attendance;
         }
+
+        app(ApprovalGuard::class)->assertCanDecide($reviewerId, $regularisation->employee);
 
         $reviewer = User::find($reviewerId);
 
@@ -422,6 +427,8 @@ class AttendanceService
     /** A rejection at ANY stage ends the workflow; the action joins the audit trail. */
     public function rejectRegularisation(AttendanceRegularisation $regularisation, int $reviewerId, string $comment): AttendanceRegularisation
     {
+        app(ApprovalGuard::class)->assertCanDecide($reviewerId, $regularisation->employee);
+
         $trail = $regularisation->approval_trail ?? [];
         $trail[] = [
             'stage' => $regularisation->stage ?: 'manager_review',

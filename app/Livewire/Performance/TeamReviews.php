@@ -27,6 +27,7 @@ class TeamReviews extends Component
     public function openManagerReview(int $reviewId): void
     {
         $this->activeReview = PerformanceReview::with(['componentScores.component.autoScoreConfig', 'template.categories.components', 'employee.user', 'documents'])->findOrFail($reviewId);
+        app(ReviewWorkflowService::class)->assertCanManagerReview($this->activeReview, Auth::user());
 
         $this->manager_feedback = $this->activeReview->manager_feedback ?? '';
         $this->promotion_recommended = $this->activeReview->promotion_recommended ?? false;

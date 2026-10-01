@@ -659,15 +659,16 @@
                                 <flux:sidebar.item :href="route('reports.payroll-yearly-summary')">Payroll Yearly Summary</flux:sidebar.item>
                                 <flux:sidebar.item :href="route('reports.payroll-variance-report')">Payroll Variance Report</flux:sidebar.item>
                             @endcan
-                            @can('approve_leave')
+                            {{-- Company-wide exports: hidden from scoped approvers (server enforces it too). --}}
+                            @if(auth()->user()->can('approve_leave') && auth()->user()->isCompanyWideApprover())
                                 <flux:sidebar.item :href="route('reports.attendance-summary')">Attendance Summary</flux:sidebar.item>
                                 <flux:sidebar.item :href="route('reports.leave-utilization')">Leave Utilization</flux:sidebar.item>
                                 <flux:sidebar.item :href="route('reports.leave-encashment-report')">Leave Encashments</flux:sidebar.item>
                                 <flux:sidebar.item :href="route('reports.attendance-compliance')">Attendance Compliance</flux:sidebar.item>
-                            @endcan
-                            @can('approve_overtime')
+                            @endif
+                            @if(auth()->user()->can('approve_overtime') && auth()->user()->isCompanyWideApprover())
                                 <flux:sidebar.item :href="route('reports.ot-records')">Overtime Records</flux:sidebar.item>
-                            @endcan
+                            @endif
                             @can('manage_employees')
                                 <flux:sidebar.item :href="route('reports.performance-summary')">Performance Summary</flux:sidebar.item>
                                 <flux:sidebar.item :href="route('reports.kpi-summary')">KPI Summary</flux:sidebar.item>

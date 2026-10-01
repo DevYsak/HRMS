@@ -7,6 +7,7 @@ use App\Models\Employee;
 use App\Models\ExpenseClaim;
 use App\Models\User;
 use App\Notifications\ExpenseClaimNotification;
+use App\Services\Approvals\ApprovalGuard;
 use App\Services\Notifications\NotificationRecipients;
 use Illuminate\Support\Facades\DB;
 
@@ -47,7 +48,16 @@ class ExpenseClaimService
             throw new \DomainException('Only pending claims can be approved.');
         }
 
+        app(ApprovalGuard::class)->assertCanDecide($approverId, $claim->employee);
+
         return DB::transaction(function () use ($claim, $approverId, $reimbursementService) {
+            // Row lock + re-check: a double submit must not create two reimbursements.
+            $claim = ExpenseClaim::whereKey($claim->getKey())->lockForUpdate()->firstOrFail();
+
+            if ($claim->status !== ExpenseStatus::Pending) {
+                throw new \DomainException('Only pending claims can be approved.');
+            }
+
             $reimbursement = $reimbursementService->submit($claim->employee, [
                 'title' => $claim->title,
                 'description' => $claim->notes,
@@ -79,6 +89,8 @@ class ExpenseClaimService
         if ($claim->status !== ExpenseStatus::Pending) {
             throw new \DomainException('Only pending claims can be rejected.');
         }
+
+        app(ApprovalGuard::class)->assertCanDecide($approverId, $claim->employee);
 
         $claim->update([
             'status' => ExpenseStatus::Rejected,

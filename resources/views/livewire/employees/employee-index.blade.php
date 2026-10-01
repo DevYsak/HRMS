@@ -160,15 +160,19 @@
                             <td class="pulse-td pr-6 text-right!">
                                 <div class="flex items-center justify-end gap-2">
                                     @if(auth()->user()->isSuperAdmin() && $emp->user_id)
-                                        <flux:tooltip content="View as this employee">
-                                            <flux:button
-                                                href="{{ route('impersonate.start', $emp->user_id) }}"
-                                                variant="ghost"
-                                                size="sm"
-                                                icon="eye"
-                                                class="text-zinc-400 hover:text-amber-600"
-                                            />
-                                        </flux:tooltip>
+                                        {{-- POST (CSRF-protected): a crafted link must not start an impersonation. --}}
+                                        <form method="POST" action="{{ route('impersonate.start', $emp->user_id) }}" class="inline">
+                                            @csrf
+                                            <flux:tooltip content="View as this employee">
+                                                <flux:button
+                                                    type="submit"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    icon="eye"
+                                                    class="text-zinc-400 hover:text-amber-600"
+                                                />
+                                            </flux:tooltip>
+                                        </form>
                                     @endif
 
                                     {{-- Inviting is deliberately not part of import: an imported row

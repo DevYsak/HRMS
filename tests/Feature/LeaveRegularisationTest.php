@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\UserRole;
+use App\Exceptions\ApprovalNotPermitted;
 use App\Models\Attendance;
 use App\Models\AttendanceRegularisation;
 use App\Models\AuditLog;
@@ -67,7 +68,7 @@ function lrService(): LeaveRegularisationService
 
 function lrManager(): User
 {
-    return User::factory()->create(['role' => UserRole::Manager]);
+    return lineManager();
 }
 
 function lrHr(): User
@@ -545,9 +546,9 @@ test('an employee cannot approve their own regularisation to completion', functi
     lrBalance($employee, $type, allocated: 10);
     $reg = lrSubmit($employee, $type);
 
-    // approvalLevel() gives a plain employee no standing in the chain, so the
-    // request cannot move.
-    app(AttendanceService::class)->approveRegularisation($reg, $employee->user_id);
+    // Self-approval is refused outright, so the request cannot move.
+    expect(fn () => app(AttendanceService::class)->approveRegularisation($reg, $employee->user_id))
+        ->toThrow(ApprovalNotPermitted::class);
 
     expect($reg->fresh()->status)->toBe('pending')
         ->and((float) LeaveBalance::where('employee_id', $employee->id)->where('leave_type_id', $type->id)->value('used_days'))->toBe(0.0);

@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\UserRole;
 use App\Models\Employee;
 use App\Models\User;
 use App\Models\WfhRequest;
@@ -76,7 +77,7 @@ it('treats a half-day request as half a day', function () {
 
 it('approves a pending request and stamps reviewer metadata', function () {
     $employee = wfhEmployee();
-    $reviewer = User::factory()->create();
+    $reviewer = User::factory()->create(['role' => UserRole::HrAdmin]);
     $service = app(WfhService::class);
 
     $request = $service->submitRequest($employee, [
@@ -96,7 +97,7 @@ it('approves a pending request and stamps reviewer metadata', function () {
 
 it('rejects a pending request with a comment', function () {
     $employee = wfhEmployee();
-    $reviewer = User::factory()->create();
+    $reviewer = User::factory()->create(['role' => UserRole::HrAdmin]);
     $service = app(WfhService::class);
 
     $request = $service->submitRequest($employee, [
@@ -114,7 +115,7 @@ it('rejects a pending request with a comment', function () {
 
 it('blocks approving a request that is not pending', function () {
     $employee = wfhEmployee();
-    $reviewer = User::factory()->create();
+    $reviewer = User::factory()->create(['role' => UserRole::HrAdmin]);
     $service = app(WfhService::class);
 
     $request = $service->submitRequest($employee, [
@@ -130,7 +131,7 @@ it('blocks approving a request that is not pending', function () {
 
 it('blocks rejecting a request that is not pending', function () {
     $employee = wfhEmployee();
-    $reviewer = User::factory()->create();
+    $reviewer = User::factory()->create(['role' => UserRole::HrAdmin]);
     $service = app(WfhService::class);
 
     $request = $service->submitRequest($employee, [
@@ -146,7 +147,7 @@ it('blocks rejecting a request that is not pending', function () {
 
 it('allows a new overlapping request once the prior one is no longer pending or approved', function () {
     $employee = wfhEmployee();
-    $reviewer = User::factory()->create();
+    $reviewer = User::factory()->create(['role' => UserRole::HrAdmin]);
     $service = app(WfhService::class);
 
     $first = $service->submitRequest($employee, [
@@ -182,7 +183,7 @@ it('cancels a pending request', function () {
 
 it('blocks cancelling a request that is no longer pending', function () {
     $employee = wfhEmployee();
-    $reviewer = User::factory()->create();
+    $reviewer = User::factory()->create(['role' => UserRole::HrAdmin]);
     $service = app(WfhService::class);
 
     $request = $service->submitRequest($employee, [

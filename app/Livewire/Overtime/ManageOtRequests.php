@@ -6,8 +6,10 @@ use App\Livewire\Concerns\HandlesClaimLock;
 use App\Models\AuditLog;
 use App\Models\OtRequest;
 use App\Notifications\OtRequestNotification;
+use App\Services\Approvals\ApprovalGuard;
 use App\Services\OvertimeService;
 use Illuminate\Support\Facades\Auth;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -19,6 +21,9 @@ class ManageOtRequests extends Component
     public string $filterStatus = '';
 
     public string $filterSearch = '';
+
+    /** Columns the list may be sorted by (never a raw client string). */
+    private const SORTABLE = ['work_date', 'created_at', 'status'];
 
     public string $sortField = 'work_date';
 
@@ -41,6 +46,7 @@ class ManageOtRequests extends Component
     // Review modal
     public bool $showReviewModal = false;
 
+    #[Locked]
     public ?int $reviewingId = null;
 
     public string $reviewAction = '';
@@ -56,6 +62,7 @@ class ManageOtRequests extends Component
     {
         $this->checkOtPermission();
         $this->selectedRequest = OtRequest::with(['employee.user', 'employee.department', 'attendance', 'reviewer'])->findOrFail($id);
+        app(ApprovalGuard::class)->assertCanView(Auth::user(), $this->selectedRequest->employee);
         $this->viewHistory = $this->historyFor($id);
         $this->showViewModal = true;
         $this->dispatch('modal-show', name: 'view-ot-modal');
@@ -87,6 +94,7 @@ class ManageOtRequests extends Component
     {
         $this->checkOtPermission();
         $req = OtRequest::with(['employee.user', 'employee.department'])->findOrFail($id);
+        app(ApprovalGuard::class)->assertCanDecide(Auth::user(), $req->employee);
         $this->selectedRequest = $req;
         $this->reviewingId = $id;
         $this->editWorkDate = $req->work_date->format('Y-m-d');
@@ -109,7 +117,10 @@ class ManageOtRequests extends Component
             'editReason' => ['required', 'string', 'max:1000'],
         ]);
 
-        OtRequest::findOrFail($this->reviewingId)->update([
+        $editing = OtRequest::with('employee')->findOrFail($this->reviewingId);
+        app(ApprovalGuard::class)->assertCanDecide(Auth::user(), $editing->employee);
+
+        $editing->update([
             'work_date' => $this->editWorkDate,
             'start_time' => $this->editStartTime,
             'end_time' => $this->editEndTime,
@@ -135,6 +146,7 @@ class ManageOtRequests extends Component
     {
         $this->checkOtPermission();
         $this->selectedRequest = OtRequest::with(['employee.user', 'employee.department', 'attendance', 'claimer'])->findOrFail($id);
+        app(ApprovalGuard::class)->assertCanDecide(Auth::user(), $this->selectedRequest->employee);
 
         if (! $this->claimForReview($this->selectedRequest)) {
             $this->selectedRequest = null;
@@ -228,7 +240,7 @@ class ManageOtRequests extends Component
         if ($this->sortField === $field) {
             $this->sortDirection = $this->sortDirection === 'asc' ? 'desc' : 'asc';
         } else {
-            $this->sortField = $field;
+            $this->sortField = in_array($field, self::SORTABLE, true) ? $field : 'work_date';
             $this->sortDirection = 'desc';
         }
     }
@@ -266,17 +278,23 @@ class ManageOtRequests extends Component
     {
         $this->checkOtPermission();
 
+        // Fail closed: only the approver's reporting line / HR scope.
+        $scopeIds = Auth::user()->accessibleEmployeeIds();
+        $inReach = fn ($q) => $q->when($scopeIds !== null, fn ($q) => $q->whereIn('employee_id', $scopeIds));
+
         $query = OtRequest::with(['employee.user', 'employee.department', 'reviewer'])
+            ->tap($inReach)
             ->when($this->filterStatus, fn ($q) => $q->where('status', $this->filterStatus))
             ->when($this->filterSearch, function ($q) {
                 $q->whereHas('employee.user', fn ($u) => $u->where('name', 'like', "%{$this->filterSearch}%"));
             })
-            ->orderBy($this->sortField, $this->sortDirection);
+            ->orderBy(in_array($this->sortField, self::SORTABLE, true) ? $this->sortField : 'work_date', $this->sortDirection === 'asc' ? 'asc' : 'desc');
 
         $requests = $query->paginate(15);
 
         // Overall status mix (unfiltered) for the summary strip.
         $byStatus = OtRequest::query()
+            ->tap($inReach)
             ->selectRaw('status, COUNT(*) as total')
             ->groupBy('status')
             ->pluck('total', 'status');
@@ -286,7 +304,7 @@ class ManageOtRequests extends Component
             'pendingCount' => (int) ($byStatus['pending'] ?? 0),
             'approvedCount' => (int) ($byStatus['approved'] ?? 0),
             'rejectedCount' => (int) ($byStatus['rejected'] ?? 0),
-            'nexflowCount' => OtRequest::where('source', 'nexflow')->count(),
+            'nexflowCount' => OtRequest::where('source', 'nexflow')->tap($inReach)->count(),
         ])->layout('layouts.app', ['title' => 'Manage OT Requests']);
     }
 }

@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Concerns\HasTeams;
 use App\Enums\ThemePreference;
 use App\Enums\UserRole;
+use App\Services\Approvals\ApprovalGuard;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -59,28 +60,21 @@ class User extends Authenticatable
     }
 
     /**
-     * Whether this approver acts company-wide (super admins always do, as does
-     * any HR/manager with no department/shift scope set). When false, the
-     * user's reach is narrowed to their scoped departments/shifts.
+     * Whether this user reaches every employee. Fails closed: only Super
+     * Admins and unscoped employee-management roles (HR Admin, Director)
+     * are company-wide — an unscoped manager is NOT.
+     *
+     * @see ApprovalGuard
      */
     public function isCompanyWideApprover(): bool
     {
-        return $this->isSuperAdmin()
-            || $this->assignedRole?->slug === 'super_admin'
-            || (empty($this->scope_departments) && empty($this->scope_shifts));
+        return app(ApprovalGuard::class)->isCompanyWide($this);
     }
 
-    /** Does this user's attendance scope cover the given employee? */
+    /** Does this user's scope or reporting line cover the given employee? */
     public function coversEmployee(Employee $employee): bool
     {
-        if ($this->isCompanyWideApprover()) {
-            return true;
-        }
-
-        $deptOk = empty($this->scope_departments) || in_array($employee->department_id, $this->scope_departments);
-        $shiftOk = empty($this->scope_shifts) || in_array($employee->shift_id, $this->scope_shifts);
-
-        return $deptOk && $shiftOk;
+        return app(ApprovalGuard::class)->covers($this, $employee);
     }
 
     /**
@@ -91,14 +85,7 @@ class User extends Authenticatable
      */
     public function accessibleEmployeeIds(): ?array
     {
-        if ($this->isCompanyWideApprover()) {
-            return null;
-        }
-
-        return Employee::query()
-            ->when($this->scope_departments, fn ($q, $d) => $q->whereIn('department_id', $d))
-            ->when($this->scope_shifts, fn ($q, $s) => $q->whereIn('shift_id', $s))
-            ->pluck('id')->all();
+        return app(ApprovalGuard::class)->accessibleEmployeeIds($this);
     }
 
     /**

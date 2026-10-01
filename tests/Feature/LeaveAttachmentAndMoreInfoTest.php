@@ -98,7 +98,7 @@ test('submitRequest blocks a non-working start or end date', function () {
 test('requestMoreInfo moves a pending request to more_info_requested and blocks on non-pending', function () {
     Notification::fake();
     $employee = lamEmployee();
-    $reviewer = User::factory()->create();
+    $reviewer = User::factory()->create(['role' => UserRole::HrAdmin]);
     $type = lamLeaveType();
     // 2026-09-11 is a Friday.
     $request = app(LeaveService::class)->submitRequest($employee, $type, '2026-09-11', '2026-09-11', 'trip', requestedLeaveStatus: 'unpaid');

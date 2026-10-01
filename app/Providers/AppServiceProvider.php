@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Http\Middleware\EnsureRole;
 use App\Models\AttendanceRegularisation;
 use App\Models\DocumentAcknowledgement;
 use App\Models\EmailLog;
@@ -30,6 +31,7 @@ use App\Observers\UserObserver;
 use App\Services\EmployeeImportService;
 use App\Services\Notifications\NotificationDeliveryGate;
 use Carbon\CarbonImmutable;
+use Illuminate\Auth\Middleware\Authorize;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Mail\Events\MessageSending;
 use Illuminate\Mail\Events\MessageSent;
@@ -42,6 +44,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
+use Livewire\Livewire;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -68,6 +71,11 @@ class AppServiceProvider extends ServiceProvider
 
         $this->configureDefaults();
         $this->registerObservers();
+
+        // Re-apply the route's role:/can: checks on every Livewire update
+        // request too, not only on the initial page load — a user demoted
+        // mid-session cannot keep acting through an open tab.
+        Livewire::addPersistentMiddleware([EnsureRole::class, Authorize::class]);
         $this->configureNotificationPriority();
         $this->configureNotificationGates();
         $this->configureMailLogging();

@@ -57,10 +57,8 @@ class DataPurgeService
             'label' => 'Notifications & email logs',
             'tables' => ['notifications', 'email_logs'],
         ],
-        'audit' => [
-            'label' => 'Audit logs',
-            'tables' => ['audit_logs'],
-        ],
+        // Audit logs are deliberately NOT purgeable: the trail is append-only
+        // and must not be erasable from the UI, not even by a Super Admin.
     ];
 
     /**

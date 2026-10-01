@@ -15,6 +15,7 @@ use App\Models\Office;
 use App\Models\ShiftSetting;
 use App\Models\User;
 use App\Services\Leave\LeaveProvisioningService;
+use App\Services\Security\RoleDelegationGuard;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -485,6 +486,18 @@ class EmployeeImportService
         $errorLog = [];
         $newlyCreated = [];
         $createdMasterData = [];
+
+        // Privilege-escalation guard: a spreadsheet must not mint a Super Admin
+        // or any role above the importing user's delegation level.
+        $roles = app(RoleDelegationGuard::class);
+        foreach ($parsed['rows'] as $i => $row) {
+            $role = $row['data']['role'] ?? null;
+            if ($row['status'] !== 'error' && $row['status'] !== 'update' && $role instanceof UserRole
+                && ($refusal = $roles->refusalToAssignLegacy($actor, $role))) {
+                $parsed['rows'][$i]['status'] = 'error';
+                $parsed['rows'][$i]['errors'] = [...($row['errors'] ?? []), "Role '{$role->label()}': {$refusal}"];
+            }
+        }
 
         foreach ($parsed['rows'] as $row) {
             if ($row['status'] === 'error') {

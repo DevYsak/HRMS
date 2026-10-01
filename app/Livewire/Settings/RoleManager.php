@@ -4,8 +4,12 @@ namespace App\Livewire\Settings;
 
 use App\Models\Permission;
 use App\Models\Role;
+use App\Services\Audit\AuditService;
+use App\Services\Security\RoleDelegationGuard;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 
 class RoleManager extends Component
@@ -13,6 +17,7 @@ class RoleManager extends Component
     // ── Edit Role modal state ─────────────────────────────────────────────────
     public bool $showModal = false;
 
+    #[Locked]
     public ?int $editingId = null;
 
     public string $name = '';
@@ -27,16 +32,33 @@ class RoleManager extends Component
     // ── View Users modal state ────────────────────────────────────────────────
     public bool $showUsersModal = false;
 
+    #[Locked]
     public ?int $viewingRoleId = null;
 
     // ── Delete confirmation state ─────────────────────────────────────────────
     public bool $showDeleteModal = false;
 
+    #[Locked]
     public ?int $deletingId = null;
 
     public function mount(): void
     {
+        $this->authorizeRoleManagement();
+    }
+
+    /**
+     * Role management is a privileged capability (manage_roles). Every action
+     * re-checks it server-side; the delegation ceiling is applied per role.
+     */
+    protected function authorizeRoleManagement(): void
+    {
         $this->authorize('manage-settings');
+        abort_unless(Auth::user()->hasPermission('manage_roles'), 403);
+    }
+
+    protected function guard(): RoleDelegationGuard
+    {
+        return app(RoleDelegationGuard::class);
     }
 
     // ── Edit Role modal helpers ───────────────────────────────────────────────
@@ -49,7 +71,14 @@ class RoleManager extends Component
 
     public function openEdit(int $id): void
     {
+        $this->authorizeRoleManagement();
         $role = Role::with('permissions')->findOrFail($id);
+
+        if ($refusal = $this->guard()->refusalToManageRole(Auth::user(), $role)) {
+            \Flux::toast($refusal, variant: 'danger');
+
+            return;
+        }
 
         $this->editingId = $role->id;
         $this->name = $role->name;
@@ -103,7 +132,17 @@ class RoleManager extends Component
 
     public function save(): void
     {
-        $this->authorize('manage-settings');
+        $this->authorizeRoleManagement();
+
+        $this->selectedPermissions = array_values(array_unique(array_map('intval', $this->selectedPermissions)));
+        $existing = $this->editingId ? Role::with('permissions')->findOrFail($this->editingId) : null;
+
+        if ($refusal = $this->guard()->refusalToEditRole(Auth::user(), $existing, $this->selectedPermissions)) {
+            $this->addError('selectedPermissions', $refusal);
+            \Flux::toast($refusal, variant: 'danger');
+
+            return;
+        }
 
         $data = $this->validate([
             'name' => ['required', 'string', 'max:100', Rule::unique('roles', 'name')->ignore($this->editingId)],
@@ -114,8 +153,11 @@ class RoleManager extends Component
             ? Role::findOrFail($this->editingId)->slug
             : $this->uniqueSlug(Str::slug($data['name']));
 
-        if ($this->editingId) {
-            $role = Role::findOrFail($this->editingId);
+        $oldPermissionKeys = $existing?->permissions->pluck('key')->sort()->values()->all() ?? [];
+        $oldDetails = $existing?->only(['name', 'description']);
+
+        if ($existing) {
+            $role = $existing;
             $role->update($data);
         } else {
             $role = Role::create([...$data, 'is_system' => false, 'is_active' => true]);
@@ -124,6 +166,22 @@ class RoleManager extends Component
         $role->permissions()->sync($this->selectedPermissions);
         $role->flushPermissionCache();
 
+        $newPermissionKeys = $role->permissions()->pluck('key')->sort()->values()->all();
+        $audit = app(AuditService::class);
+        $audit->event($existing ? 'ROLE_UPDATED' : 'ROLE_CREATED', AuditService::ROLES, $role,
+            old: $oldDetails, new: $role->only(['name', 'description']), module: AuditService::SETTINGS);
+
+        if ($oldPermissionKeys !== $newPermissionKeys) {
+            $audit->event('ROLE_PERMISSIONS_CHANGED', AuditService::PERMISSIONS, $role,
+                old: ['permissions' => $oldPermissionKeys],
+                new: [
+                    'permissions' => $newPermissionKeys,
+                    'granted' => array_values(array_diff($newPermissionKeys, $oldPermissionKeys)),
+                    'revoked' => array_values(array_diff($oldPermissionKeys, $newPermissionKeys)),
+                ],
+                module: AuditService::SETTINGS);
+        }
+
         \Flux::toast($this->editingId ? 'Role updated.' : 'Role created.', variant: 'success');
 
         $this->closeModal();
@@ -131,9 +189,16 @@ class RoleManager extends Component
 
     public function cloneRole(int $id): void
     {
-        $this->authorize('manage-settings');
+        $this->authorizeRoleManagement();
 
         $source = Role::with('permissions')->findOrFail($id);
+
+        // Cloning must not copy permissions the actor could not grant directly.
+        if ($refusal = $this->guard()->refusalToEditRole(Auth::user(), null, $source->permissions->pluck('id')->all())) {
+            \Flux::toast($refusal, variant: 'danger');
+
+            return;
+        }
         $name = $this->uniqueName($source->name.' (Copy)');
 
         $clone = Role::create([
@@ -147,12 +212,16 @@ class RoleManager extends Component
         $clone->permissions()->sync($source->permissions->pluck('id')->all());
         $clone->flushPermissionCache();
 
+        app(AuditService::class)->event('ROLE_CLONED', AuditService::ROLES, $clone,
+            new: ['name' => $clone->name, 'cloned_from' => $source->name, 'permissions' => $source->permissions->pluck('key')->sort()->values()->all()],
+            module: AuditService::SETTINGS);
+
         \Flux::toast("Role cloned as \"{$name}\".", variant: 'success');
     }
 
     public function toggleActive(int $id): void
     {
-        $this->authorize('manage-settings');
+        $this->authorizeRoleManagement();
 
         $role = Role::findOrFail($id);
 
@@ -162,7 +231,15 @@ class RoleManager extends Component
             return;
         }
 
+        if ($refusal = $this->guard()->refusalToManageRole(Auth::user(), $role)) {
+            \Flux::toast($refusal, variant: 'danger');
+
+            return;
+        }
+
         $role->update(['is_active' => ! $role->is_active]);
+        app(AuditService::class)->event($role->is_active ? 'ROLE_ACTIVATED' : 'ROLE_DEACTIVATED', AuditService::ROLES, $role,
+            old: ['is_active' => ! $role->is_active], new: ['is_active' => $role->is_active], module: AuditService::SETTINGS);
         \Flux::toast($role->is_active ? 'Role activated.' : 'Role deactivated.', variant: 'success');
     }
 
@@ -174,9 +251,16 @@ class RoleManager extends Component
 
     public function deleteRole(): void
     {
-        $this->authorize('manage-settings');
+        $this->authorizeRoleManagement();
 
         $role = Role::findOrFail($this->deletingId);
+
+        if ($refusal = $this->guard()->refusalToManageRole(Auth::user(), $role)) {
+            \Flux::toast($refusal, variant: 'danger');
+            $this->closeDeleteModal();
+
+            return;
+        }
 
         if ($role->is_system) {
             \Flux::toast('System roles cannot be deleted.', variant: 'danger');
@@ -191,6 +275,9 @@ class RoleManager extends Component
 
             return;
         }
+
+        app(AuditService::class)->event('ROLE_DELETED', AuditService::ROLES, $role,
+            old: ['name' => $role->name, 'permissions' => $role->permissionKeys()], module: AuditService::SETTINGS);
 
         $role->flushPermissionCache();
         $role->delete();

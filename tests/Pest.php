@@ -1,5 +1,8 @@
 <?php
 
+use App\Enums\UserRole;
+use App\Models\Employee;
+use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Database\Seeders\StatutoryRuleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -55,4 +58,18 @@ expect()->extend('toBeOne', function () {
 function something()
 {
     // ..
+}
+
+/**
+ * A Manager-role user whom every employee in the test reports to.
+ * Approvals are reporting-line scoped (fail closed), so an unrelated
+ * manager is — correctly — refused; chain tests need a real line manager.
+ */
+function lineManager(): User
+{
+    $manager = User::factory()->create(['role' => UserRole::Manager]);
+
+    Employee::where('user_id', '!=', $manager->id)->update(['manager_id' => $manager->id]);
+
+    return $manager;
 }

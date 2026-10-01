@@ -6,6 +6,7 @@ use App\Models\Department;
 use App\Models\Document;
 use App\Models\Employee;
 use App\Models\PromotionRecommendation;
+use App\Services\Approvals\ApprovalGuard;
 use App\Services\Performance\PromotionService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
@@ -94,6 +95,7 @@ class ManagePromotions extends Component
         ]);
 
         $employee = Employee::findOrFail($this->employee_id);
+        app(ApprovalGuard::class)->assertCanDecide(Auth::user(), $employee);
 
         $service->recommend($employee, [
             'recommendation_type' => $this->recommendation_type,
@@ -114,7 +116,20 @@ class ManagePromotions extends Component
     public function viewRecommendation(int $id): void
     {
         $this->checkPermission();
-        $this->activeRecommendation = PromotionRecommendation::with(['employee.user', 'employee.jobTitle', 'recommendedBy', 'targetDepartment', 'documents'])->findOrFail($id);
+        $recommendation = PromotionRecommendation::with(['employee.user', 'employee.jobTitle', 'recommendedBy', 'targetDepartment', 'documents'])->findOrFail($id);
+
+        // Your own recommendations, or ones inside your reach — never a
+        // recommendation about yourself.
+        $user = Auth::user();
+        $guard = app(ApprovalGuard::class);
+        abort_if($guard->isSelf($user, $recommendation->employee), 403);
+        abort_unless(
+            (int) $recommendation->recommended_by === (int) $user->id
+                || ($recommendation->employee && $guard->covers($user, $recommendation->employee)),
+            403,
+        );
+
+        $this->activeRecommendation = $recommendation;
         $this->reviewComments = '';
         $this->showDocUploadModal = false;
         $this->resetErrorBag();
@@ -226,6 +241,8 @@ class ManagePromotions extends Component
         if (! $this->activeRecommendation || ! $this->canActOnCurrentStage()) {
             abort(403);
         }
+
+        app(ApprovalGuard::class)->assertCanDecide(Auth::user(), $this->activeRecommendation->employee);
     }
 
     public function clearFilters(): void
@@ -257,9 +274,11 @@ class ManagePromotions extends Component
             $query->where('recommended_by', $user->id);
         }
 
-        $employees = $user->canManageEmployees()
-            ? Employee::with('user')->where('status', 'active')->get()
-            : Employee::with('user')->where('manager_id', $user->id)->where('status', 'active')->get();
+        $scopeIds = $user->accessibleEmployeeIds();
+        $employees = Employee::with('user')->where('status', 'active')
+            ->when($scopeIds !== null, fn ($q) => $q->whereIn('id', $scopeIds))
+            ->where('user_id', '!=', $user->id)
+            ->get();
 
         return view('livewire.performance.manage-promotions', [
             'recommendations' => $query->latest()->paginate(15),

@@ -12,9 +12,11 @@
                 <span wire:loading.remove wire:target="syncFromNexflow">Sync from Nexflow</span>
                 <span wire:loading wire:target="syncFromNexflow">Syncing…</span>
             </flux:button>
+            @if(auth()->user()->isCompanyWideApprover())
             <flux:button href="{{ route('reports.ot-records', ['month' => now()->month, 'year' => now()->year]) }}" variant="outline" icon="arrow-down-tray" target="_blank">
                 Export CSV
             </flux:button>
+            @endif
         </div>
     </div>
     <p class="-mt-3 text-[11px] text-zinc-400">Overtime from Nexflow syncs automatically every 10 minutes — approved OT is imported for payroll, rejected OT is shown for reference. Click <strong>Sync from Nexflow</strong> to pull now.</p>

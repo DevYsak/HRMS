@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Employee;
 use App\Models\WfhRequest;
+use App\Services\Approvals\ApprovalGuard;
 use Carbon\Carbon;
 
 class WfhService
@@ -66,6 +67,8 @@ class WfhService
             throw new \DomainException('Only pending work-from-home requests can be approved.');
         }
 
+        app(ApprovalGuard::class)->assertCanDecide($reviewerId, $request->employee);
+
         $request->update([
             'status' => 'approved',
             'reviewer_id' => $reviewerId,
@@ -79,6 +82,8 @@ class WfhService
         if (! $request->isPending()) {
             throw new \DomainException('Only pending work-from-home requests can be rejected.');
         }
+
+        app(ApprovalGuard::class)->assertCanDecide($reviewerId, $request->employee);
 
         $request->update([
             'status' => 'rejected',

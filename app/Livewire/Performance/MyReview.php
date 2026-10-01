@@ -28,7 +28,10 @@ class MyReview extends Component
 
     public function openReview(int $reviewId): void
     {
-        $this->activeReview = PerformanceReview::with(['componentScores.component.autoScoreConfig', 'template.categories.components', 'documents'])->findOrFail($reviewId);
+        // Own reviews only — the id comes from the client.
+        $this->activeReview = PerformanceReview::with(['componentScores.component.autoScoreConfig', 'template.categories.components', 'documents'])
+            ->where('employee_id', Auth::user()->employee?->id ?? 0)
+            ->findOrFail($reviewId);
 
         $this->strengths = $this->activeReview->strengths ?? '';
         $this->improvements = $this->activeReview->improvements ?? '';

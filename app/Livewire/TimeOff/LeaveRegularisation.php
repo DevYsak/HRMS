@@ -6,9 +6,11 @@ use App\Models\AttendanceRegularisation;
 use App\Models\Employee;
 use App\Models\LeaveType;
 use App\Notifications\RegularisationReviewedNotification;
+use App\Services\Approvals\ApprovalGuard;
 use App\Services\AttendanceService;
 use App\Services\Leave\LeaveRegularisationService;
 use Illuminate\Support\Carbon;
+use Livewire\Attributes\Locked;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -50,6 +52,7 @@ class LeaveRegularisation extends Component
     public string $formRemarks = '';
 
     /** Review prompt — rejecting requires a comment, so it needs a field. */
+    #[Locked]
     public ?int $reviewId = null;
 
     public string $reviewComment = '';
@@ -72,7 +75,7 @@ class LeaveRegularisation extends Component
     /** @return array<string, int> */
     public function getCountsProperty(): array
     {
-        $base = fn () => AttendanceRegularisation::where('category', 'leave');
+        $base = fn () => $this->inReach(AttendanceRegularisation::where('category', 'leave'));
 
         return [
             'pending' => $base()->where('status', 'pending')->count(),
@@ -104,8 +107,11 @@ class LeaveRegularisation extends Component
         ]);
 
         try {
+            $employee = Employee::findOrFail($this->formEmployeeId);
+            app(ApprovalGuard::class)->assertCanView(auth()->user(), $employee);
+
             app(LeaveRegularisationService::class)->submit(
-                employee: Employee::findOrFail($this->formEmployeeId),
+                employee: $employee,
                 type: LeaveType::findOrFail($this->formLeaveTypeId),
                 from: Carbon::parse($this->formFrom),
                 to: Carbon::parse($this->formTo),
@@ -192,9 +198,41 @@ class LeaveRegularisation extends Component
         \Flux::toast('Regularisation cancelled.');
     }
 
+    /**
+     * Employee ids this user may see here — their reporting line / HR scope
+     * plus their own record — or null when company-wide.
+     *
+     * @return array<int, int>|null
+     */
+    protected function reachableIds(): ?array
+    {
+        $ids = auth()->user()->accessibleEmployeeIds();
+
+        if ($ids === null) {
+            return null;
+        }
+
+        $own = auth()->user()->employee?->id;
+
+        return $own ? array_values(array_unique([...$ids, $own])) : $ids;
+    }
+
+    /**
+     * @template TQuery of \Illuminate\Database\Eloquent\Builder
+     *
+     * @param  TQuery  $query
+     * @return TQuery
+     */
+    protected function inReach($query)
+    {
+        $ids = $this->reachableIds();
+
+        return $query->when($ids !== null, fn ($q) => $q->whereIn('employee_id', $ids));
+    }
+
     public function render()
     {
-        $requests = AttendanceRegularisation::with(['employee.user', 'leaveType', 'attendance', 'reviewer'])
+        $requests = $this->inReach(AttendanceRegularisation::with(['employee.user', 'leaveType', 'attendance', 'reviewer']))
             ->where('category', 'leave')
             ->when($this->statusFilter, fn ($q) => $q->where('status', $this->statusFilter))
             ->when($this->employeeFilter, fn ($q) => $q->where('employee_id', $this->employeeFilter))
@@ -204,7 +242,9 @@ class LeaveRegularisation extends Component
         return view('livewire.time-off.leave-regularisation', [
             'requests' => $requests,
             'counts' => $this->counts,
-            'employees' => Employee::with('user')->where('status', 'active')->get(),
+            'employees' => Employee::with('user')->where('status', 'active')
+                ->when($this->reachableIds() !== null, fn ($q) => $q->whereIn('id', $this->reachableIds()))
+                ->get(),
             'leaveTypes' => LeaveType::orderBy('name')->get(),
             'windowDays' => (int) config('leave_regularisation.window_days', 30),
         ])->layout('layouts.app', ['title' => 'Leave Regularisation']);

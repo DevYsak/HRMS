@@ -7,6 +7,7 @@ use App\Models\LeaveBalance;
 use App\Models\LeaveRequest;
 use App\Models\LeaveType;
 use App\Models\PublicHoliday;
+use App\Services\Approvals\ApprovalGuard;
 use App\Services\LeaveService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -97,6 +98,7 @@ class TeamTimeOff extends Component
         abort_unless(Auth::user()->canApproveLeave(), 403);
 
         $req = LeaveRequest::with(['employee.user', 'leaveType', 'paymentAuditLogs.changedByUser', 'reviewer', 'hrReviewer', 'attachments', 'messages.user'])->findOrFail($id);
+        app(ApprovalGuard::class)->assertCanView(Auth::user(), $req->employee);
 
         $this->selectedRequestId = $id;
         $this->selectedRequest = $req;
@@ -171,6 +173,7 @@ class TeamTimeOff extends Component
         ]);
 
         $leaveRequest = LeaveRequest::findOrFail($this->selectedRequestId);
+        app(ApprovalGuard::class)->assertCanView(Auth::user(), $leaveRequest->employee);
 
         $path = null;
         $name = null;
@@ -293,11 +296,13 @@ class TeamTimeOff extends Component
     {
         abort_unless(Auth::user()->canApproveLeave(), 403);
 
-        $managerId = Auth::id();
+        // The approver's reporting line: direct reports, teams they lead and
+        // departments they head (never their own record).
+        $teamIds = app(ApprovalGuard::class)->reportingLineIds(Auth::user());
 
         $pendingRequests = LeaveRequest::with(['employee.user', 'employee.department', 'leaveType'])
             ->whereIn('status', ['pending', 'pending_hr'])
-            ->whereHas('employee', fn ($q) => $q->where('manager_id', $managerId))
+            ->whereIn('employee_id', $teamIds)
             ->latest()
             ->get();
 
@@ -310,7 +315,7 @@ class TeamTimeOff extends Component
         });
 
         $historyQuery = LeaveRequest::with(['employee.user', 'employee.department', 'leaveType'])
-            ->whereHas('employee', fn ($q) => $q->where('manager_id', $managerId));
+            ->whereIn('employee_id', $teamIds);
 
         if ($this->filterFrom) {
             $historyQuery->where('start_date', '>=', $this->filterFrom);
@@ -329,19 +334,19 @@ class TeamTimeOff extends Component
 
         $history = $historyQuery->latest()->paginate($this->perPage);
 
-        $approvedThisMonth = LeaveRequest::whereHas('employee', fn ($q) => $q->where('manager_id', $managerId))
+        $approvedThisMonth = LeaveRequest::whereIn('employee_id', $teamIds)
             ->where('status', 'approved')
             ->whereMonth('updated_at', now()->month)
             ->whereYear('updated_at', now()->year)
             ->count();
 
-        $totalDaysThisMonth = LeaveRequest::whereHas('employee', fn ($q) => $q->where('manager_id', $managerId))
+        $totalDaysThisMonth = LeaveRequest::whereIn('employee_id', $teamIds)
             ->where('status', 'approved')
             ->whereMonth('updated_at', now()->month)
             ->whereYear('updated_at', now()->year)
             ->sum('days');
 
-        $teamMembersCount = Employee::where('manager_id', $managerId)
+        $teamMembersCount = Employee::whereIn('id', $teamIds)
             ->where('status', 'active')
             ->count();
 
@@ -354,7 +359,7 @@ class TeamTimeOff extends Component
         $gridEnd = $monthEnd->copy()->endOfWeek(Carbon::SUNDAY);
 
         $teamLeaves = LeaveRequest::with(['employee.user', 'leaveType'])
-            ->whereHas('employee', fn ($q) => $q->where('manager_id', $managerId))
+            ->whereIn('employee_id', $teamIds)
             ->where('status', 'approved')
             ->where('start_date', '<=', $gridEnd->toDateString())
             ->where('end_date', '>=', $gridStart->toDateString())

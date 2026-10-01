@@ -4,8 +4,10 @@ namespace App\Livewire\Wfh;
 
 use App\Models\WfhRequest;
 use App\Notifications\WfhRequestNotification;
+use App\Services\Approvals\ApprovalGuard;
 use App\Services\WfhService;
 use Illuminate\Support\Facades\Auth;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -17,6 +19,9 @@ class ManageWfhRequests extends Component
 
     public string $filterSearch = '';
 
+    /** Columns the list may be sorted by (never a raw client string). */
+    private const SORTABLE = ['start_date', 'end_date', 'created_at', 'status'];
+
     public string $sortField = 'start_date';
 
     public string $sortDirection = 'desc';
@@ -27,6 +32,7 @@ class ManageWfhRequests extends Component
     // Review modal
     public bool $showReviewModal = false;
 
+    #[Locked]
     public ?int $reviewingId = null;
 
     public string $reviewAction = '';
@@ -39,6 +45,7 @@ class ManageWfhRequests extends Component
     {
         $this->checkWfhPermission();
         $this->selectedRequest = WfhRequest::with(['employee.user', 'employee.department', 'reviewer'])->findOrFail($id);
+        app(ApprovalGuard::class)->assertCanView(Auth::user(), $this->selectedRequest->employee);
         $this->showViewModal = true;
         $this->dispatch('modal-show', name: 'view-wfh-modal');
     }
@@ -47,6 +54,7 @@ class ManageWfhRequests extends Component
     {
         $this->checkWfhPermission();
         $this->selectedRequest = WfhRequest::with(['employee.user', 'employee.department'])->findOrFail($id);
+        app(ApprovalGuard::class)->assertCanDecide(Auth::user(), $this->selectedRequest->employee);
         $this->reviewingId = $id;
         $this->reviewAction = $action;
         $this->reviewComment = $this->selectedRequest->reviewer_comment ?? '';
@@ -117,7 +125,7 @@ class ManageWfhRequests extends Component
         if ($this->sortField === $field) {
             $this->sortDirection = $this->sortDirection === 'asc' ? 'desc' : 'asc';
         } else {
-            $this->sortField = $field;
+            $this->sortField = in_array($field, self::SORTABLE, true) ? $field : 'start_date';
             $this->sortDirection = 'desc';
         }
     }
@@ -133,18 +141,23 @@ class ManageWfhRequests extends Component
     {
         $this->checkWfhPermission();
 
+        // Fail closed: only the approver's reporting line / HR scope.
+        $scopeIds = Auth::user()->accessibleEmployeeIds();
+        $inReach = fn ($q) => $q->when($scopeIds !== null, fn ($q) => $q->whereIn('employee_id', $scopeIds));
+
         $query = WfhRequest::with(['employee.user', 'employee.department', 'reviewer'])
+            ->tap($inReach)
             ->when($this->filterStatus, fn ($q) => $q->where('status', $this->filterStatus))
             ->when($this->filterSearch, function ($q) {
                 $q->whereHas('employee.user', fn ($u) => $u->where('name', 'like', "%{$this->filterSearch}%"));
             })
-            ->orderBy($this->sortField, $this->sortDirection);
+            ->orderBy(in_array($this->sortField, self::SORTABLE, true) ? $this->sortField : 'start_date', $this->sortDirection === 'asc' ? 'asc' : 'desc');
 
         $requests = $query->paginate(15);
 
         return view('livewire.wfh.manage-wfh-requests', [
             'requests' => $requests,
-            'pendingCount' => WfhRequest::where('status', 'pending')->count(),
+            'pendingCount' => WfhRequest::where('status', 'pending')->tap($inReach)->count(),
         ])->layout('layouts.app', ['title' => 'Manage WFH Requests']);
     }
 }

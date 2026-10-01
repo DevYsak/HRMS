@@ -153,7 +153,7 @@ Route::middleware(['auth'])->group(function () {
     // "View as" impersonation — Super Admin tests another user's experience.
     // (stop is declared first so it isn't captured by the {user} binding)
     Route::get('/impersonate/stop', [ImpersonationController::class, 'stop'])->name('impersonate.stop');
-    Route::get('/impersonate/{user}', [ImpersonationController::class, 'start'])->name('impersonate.start');
+    Route::post('/impersonate/{user}', [ImpersonationController::class, 'start'])->name('impersonate.start');
 
     // AI Assistant full page
     Route::get('/ai-assistant', AiAssistantPage::class)->name('ai.assistant');
@@ -309,12 +309,19 @@ Route::middleware(['auth'])->group(function () {
     // --------------------------------------------------
     // Role-specific Dashboards
     // --------------------------------------------------
-    Route::get('/dashboard/executive', ExecutiveDashboard::class)->name('dashboard.executive');
+    // Each role dashboard is gated server-side — company-wide figures and
+    // payroll data must not be reachable by typing the URL.
+    Route::get('/dashboard/executive', ExecutiveDashboard::class)->name('dashboard.executive')
+        ->middleware('can:view_executive_dashboard');
     // Director landing — reuses the ExecutiveDashboard component (no new page/component).
-    Route::get('/dashboard/director', ExecutiveDashboard::class)->name('dashboard.director');
-    Route::get('/dashboard/finance', FinanceDashboard::class)->name('dashboard.finance');
-    Route::get('/dashboard/hr-admin', HrAdminDashboard::class)->name('dashboard.hr-admin');
-    Route::get('/dashboard/manager', ManagerDashboard::class)->name('dashboard.manager');
+    Route::get('/dashboard/director', ExecutiveDashboard::class)->name('dashboard.director')
+        ->middleware('can:view_executive_dashboard');
+    Route::get('/dashboard/finance', FinanceDashboard::class)->name('dashboard.finance')
+        ->middleware('role:run-payroll,approve-finance');
+    Route::get('/dashboard/hr-admin', HrAdminDashboard::class)->name('dashboard.hr-admin')
+        ->middleware('can:view_hr_dashboard');
+    Route::get('/dashboard/manager', ManagerDashboard::class)->name('dashboard.manager')
+        ->middleware('role:approve-leave');
     Route::get('/dashboard/department', DepartmentDashboard::class)->name('dashboard.department');
 
     // --------------------------------------------------

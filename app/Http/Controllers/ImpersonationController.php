@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\AuditLog;
 use App\Models\User;
+use App\Services\Audit\AuditService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -15,7 +16,7 @@ use Illuminate\Support\Facades\Auth;
  */
 class ImpersonationController extends Controller
 {
-    private const SESSION_KEY = 'impersonator_id';
+    private const SESSION_KEY = AuditLog::IMPERSONATOR_SESSION_KEY;
 
     public function start(Request $request, User $user): RedirectResponse
     {
@@ -31,10 +32,15 @@ class ImpersonationController extends Controller
             return back();
         }
 
+        // Recorded while still signed in as the Super Admin, so the actor is the real person.
+        app(AuditService::class)->event('IMPERSONATION_STARTED', AuditService::SECURITY, $user,
+            new: ['impersonated_user_id' => $user->id, 'impersonated_user' => $user->name],
+            subjectEmployeeId: $user->employee?->id);
+
+        // Fresh session id on every identity switch (session fixation).
+        $request->session()->regenerate();
         $request->session()->put(self::SESSION_KEY, $current->id);
         Auth::login($user);
-
-        AuditLog::record($user, 'impersonated', null, ['by_user_id' => $current->id]);
 
         return redirect()->route('dashboard');
     }
@@ -44,7 +50,15 @@ class ImpersonationController extends Controller
         $originalId = $request->session()->pull(self::SESSION_KEY);
 
         if ($originalId && ($original = User::find($originalId))) {
+            $impersonated = $request->user();
             Auth::login($original);
+            $request->session()->regenerate();
+
+            if ($impersonated) {
+                app(AuditService::class)->event('IMPERSONATION_ENDED', AuditService::SECURITY, $impersonated,
+                    new: ['impersonated_user_id' => $impersonated->id],
+                    subjectEmployeeId: $impersonated->employee?->id);
+            }
         }
 
         return redirect()->route('dashboard');

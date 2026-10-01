@@ -24,6 +24,7 @@ use App\Services\Leave\LeaveProvisioningService;
 use App\Services\Leave\LeaveYearResolver;
 use App\Services\OnboardingService;
 use App\Services\PasswordService;
+use App\Services\Security\RoleDelegationGuard;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
@@ -249,6 +250,13 @@ class EmployeeCreate extends Component
         $plainPassword = app(PasswordService::class)->generate();
         $chosenRole = Role::findOrFail($this->roleId);
 
+        // Privilege-escalation guard (Super Admin, delegation ceiling) — server side.
+        if ($refusal = app(RoleDelegationGuard::class)->refusalToAssign(Auth::user(), $chosenRole)) {
+            $this->addError('roleId', $refusal);
+
+            return;
+        }
+
         $user = User::create([
             'name' => $this->name,
             'email' => $this->email,
@@ -374,7 +382,9 @@ class EmployeeCreate extends Component
                 UserRole::Director,
                 UserRole::Manager,
             ])->get(),
-            'roles' => Role::where('is_active', true)->orderBy('name')->get(),
+            'roles' => Role::where('is_active', true)->orderBy('name')->get()
+                ->filter(fn (Role $role) => app(RoleDelegationGuard::class)->refusalToAssign(Auth::user(), $role) === null)
+                ->values(),
             'statuses' => EmployeeStatus::cases(),
             'employmentTypes' => EmploymentType::active()->get(),
             'workModes' => WorkMode::active()->get(),

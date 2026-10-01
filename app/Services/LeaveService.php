@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\EmployeeStatus;
+use App\Exceptions\ApprovalNotPermitted;
 use App\Models\AttendanceSetting;
 use App\Models\Employee;
 use App\Models\LeaveAccrualLog;
@@ -17,6 +18,7 @@ use App\Notifications\LeaveEncashmentNotification;
 use App\Notifications\LeaveMonthlyAccrualNotification;
 use App\Notifications\LeavePaymentStatusChangedNotification;
 use App\Notifications\LeaveRequestNotification;
+use App\Services\Approvals\ApprovalGuard;
 use App\Services\Leave\LeaveCarryOverService;
 use App\Services\Leave\LeaveYearResolver;
 use App\Services\Notifications\NotificationRecipients;
@@ -376,6 +378,8 @@ class LeaveService
         int $reviewerId,
         ?string $comment = null,
     ): LeaveRequest {
+        $this->assertCanReview($leaveRequest, $reviewerId);
+
         return DB::transaction(function () use ($leaveRequest, $data, $status, $reviewerId, $comment) {
             $oldStatus = $leaveRequest->status;
             $oldDays = (float) $leaveRequest->days;
@@ -452,6 +456,8 @@ class LeaveService
         if (! in_array($leaveRequest->status, ['pending', 'pending_hr'], true)) {
             throw new \DomainException('Only a pending leave request can have more information requested.');
         }
+
+        app(ApprovalGuard::class)->assertCanDecide($reviewerId, $leaveRequest->employee);
 
         $reviewer = User::findOrFail($reviewerId);
 
@@ -591,6 +597,8 @@ class LeaveService
         if (! \in_array($hr->role?->value ?? $hr->role, ['hr_admin', 'super_admin'], true)) {
             abort(403, 'Only HR Admins or Super Admins can override payment status.');
         }
+
+        app(ApprovalGuard::class)->assertCanDecide($hr, $leaveRequest->employee);
 
         $leaveType = $leaveRequest->leaveType;
 
@@ -962,6 +970,8 @@ class LeaveService
             throw new \DomainException('Only pending encashment requests can be approved at this stage.');
         }
 
+        app(ApprovalGuard::class)->assertNotSelf($reviewer, $encashment->employee);
+
         $encashment->update([
             'status' => 'pending_finance',
             'reviewer_id' => $reviewer->id,
@@ -987,6 +997,8 @@ class LeaveService
         if (! in_array($encashment->status, ['pending', 'pending_finance'])) {
             throw new \DomainException('Only pending or pending-finance encashments may be rejected.');
         }
+
+        app(ApprovalGuard::class)->assertNotSelf($reviewer, $encashment->employee);
 
         $isFinanceStage = $encashment->status === 'pending_finance';
 
@@ -1018,6 +1030,8 @@ class LeaveService
         if ($encashment->status !== 'pending_finance') {
             throw new \DomainException('Only pending-finance encashments can be finance-approved.');
         }
+
+        app(ApprovalGuard::class)->assertNotSelf($reviewer, $encashment->employee);
 
         DB::transaction(function () use ($reviewer, $encashment, $comment) {
             $encashment->update([
@@ -1135,6 +1149,28 @@ class LeaveService
         }
 
         $leaveRequest->update(['status' => 'cancelled']);
+    }
+
+    /**
+     * Reviewer must be in scope and not the requester. A still-open request
+     * (pending / pending_hr / more_info_requested) may be decided by any
+     * in-scope approver; re-opening an already-decided one (approved,
+     * rejected, cancelled) is an HR correction and needs employee-management
+     * authority.
+     *
+     * @throws ApprovalNotPermitted
+     */
+    private function assertCanReview(LeaveRequest $leaveRequest, int $reviewerId): void
+    {
+        $reviewer = User::find($reviewerId);
+
+        app(ApprovalGuard::class)->assertCanDecide($reviewer, $leaveRequest->employee);
+
+        $isOpen = in_array($leaveRequest->status, ['pending', 'pending_hr', 'more_info_requested'], true);
+
+        if (! $isOpen && ! ($reviewer->isSuperAdmin() || $reviewer->canManageEmployees())) {
+            throw new \DomainException('This leave request has already been decided and can only be corrected by HR.');
+        }
     }
 
     private function wasApprovedAsPaid(LeaveRequest $leaveRequest): bool
