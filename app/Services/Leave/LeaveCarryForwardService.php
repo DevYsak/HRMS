@@ -126,10 +126,14 @@ class LeaveCarryForwardService
                 throw new RuntimeException("Cannot carry forward {$applied} days — the recorded {$from->label} balance is {$ceiling}.");
             }
 
-            // eligible_days records the ceiling, not a derived entitlement: the
-            // audit must not claim an eligibility that was never calculated.
-            $eligible = $ceiling;
+            // Nothing was calculated, so eligible_days stays null: a number
+            // there would claim an entitlement the inputs never supported.
+            // The ceiling is recorded in its own field, as what HR was told
+            // the year closed at.
+            $eligible = null;
+            $closingBalance = $ceiling;
         } else {
+            $closingBalance = $source['closing_balance'] ?? null;
             $eligible = (float) $source['carry'];
             $applied = $days === null ? $eligible : round((float) $days, 2);
 
@@ -142,7 +146,7 @@ class LeaveCarryForwardService
             }
         }
 
-        return DB::transaction(function () use ($employee, $type, $from, $to, $actor, $source, $eligible, $applied, $reason, $figuresKnown) {
+        return DB::transaction(function () use ($employee, $type, $from, $to, $actor, $source, $eligible, $applied, $reason, $figuresKnown, $closingBalance) {
             $tx = Transaction::firstOrNew([
                 'employee_id' => $employee->id,
                 'leave_type_id' => $type->id,
@@ -154,8 +158,13 @@ class LeaveCarryForwardService
 
             $tx->fill([
                 'previous_allocated_days' => $source['allocated'],
-                'previous_used_days' => $source['used'],
-                'previous_encashed_days' => $source['encashed'],
+                // An unrecorded figure is stored as unknown, never as zero:
+                // zero would say the employee took no leave that year.
+                'previous_used_days' => $figuresKnown ? $source['used'] : 0,
+                'previous_encashed_days' => $figuresKnown ? $source['encashed'] : 0,
+                'used_status' => $figuresKnown ? Transaction::FIGURE_KNOWN : Transaction::FIGURE_UNKNOWN,
+                'encashed_status' => $figuresKnown ? Transaction::FIGURE_KNOWN : Transaction::FIGURE_UNKNOWN,
+                'historical_closing_balance' => $closingBalance,
                 'eligible_days' => $eligible,
                 'applied_days' => $applied,
                 // Re-applying supersedes any earlier reversal rather than
@@ -274,6 +283,60 @@ class LeaveCarryForwardService
         }
 
         return ['applied' => $applied, 'skipped' => $skipped, 'days' => round($days, 2)];
+    }
+
+    /**
+     * Apply a set of decisions HR has made, each with its own amount.
+     *
+     * This is the path for the years we are migrating: their usage was never
+     * recorded, so no amount can be derived and applyAll() rightly refuses
+     * them. Here HR supplies the figure per employee — including zero, which
+     * is a decision to carry nothing and is recorded as such rather than
+     * skipped.
+     *
+     * One decision failing does not discard the rest: each is attempted on its
+     * own and its error reported against its row, because a single bad figure
+     * in a hundred should not cost HR the other ninety-nine.
+     *
+     * @param  array<int, array{employee_id:int, leave_type_id:int, days:float}>  $decisions
+     * @return array{applied:int, failed:int, days:float, errors:array<int, string>}
+     */
+    public function applyDecisions(
+        LeaveYear $from,
+        LeaveYear $to,
+        array $decisions,
+        User $actor,
+        ?string $reason = null,
+    ): array {
+        $applied = 0;
+        $failed = 0;
+        $days = 0.0;
+        $errors = [];
+
+        foreach ($decisions as $decision) {
+            $employee = Employee::find($decision['employee_id'] ?? null);
+            $type = LeaveType::find($decision['leave_type_id'] ?? null);
+
+            if (! $employee || ! $type) {
+                $failed++;
+                $errors[] = 'Unknown employee or leave type in the selection.';
+
+                continue;
+            }
+
+            $label = ($employee->user?->name ?? 'Employee #'.$employee->id).' / '.$type->name;
+
+            try {
+                $tx = $this->apply($employee, $type, $from, $to, $actor, (float) ($decision['days'] ?? 0), $reason);
+                $applied++;
+                $days += $tx->netApplied();
+            } catch (\Throwable $e) {
+                $failed++;
+                $errors[] = $label.': '.$e->getMessage();
+            }
+        }
+
+        return ['applied' => $applied, 'failed' => $failed, 'days' => round($days, 2), 'errors' => $errors];
     }
 
     /**

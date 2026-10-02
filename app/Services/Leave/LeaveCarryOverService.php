@@ -222,6 +222,11 @@ class LeaveCarryOverService
     /** @return Collection<int, LeaveType> */
     private function carryableTypes(): Collection
     {
-        return LeaveType::where('allow_carry_forward', true)->get();
+        // The mode has the final say. allow_carry_forward alone let a type
+        // configured as 'none' be carried anyway, because nothing read the
+        // mode the settings screen offered.
+        return LeaveType::where('allow_carry_forward', true)->get()
+            ->filter(fn (LeaveType $type) => $type->permitsCarryForward())
+            ->values();
     }
 }

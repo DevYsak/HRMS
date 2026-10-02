@@ -6,6 +6,7 @@ use App\Enums\EmployeeStatus;
 use App\Enums\UserRole;
 use App\Mail\WelcomeEmployeeMail;
 use App\Models\Attendance;
+use App\Models\AttendanceRegularisation;
 use App\Models\Department;
 use App\Models\Employee;
 use App\Models\EmployeeSalary;
@@ -22,6 +23,7 @@ use App\Models\User;
 use App\Models\WorkMode;
 use App\Services\Biometric\BiometricCodeService;
 use App\Services\Biometric\EngineAttendanceSyncService;
+use App\Services\Leave\LeaveCarryForwardService;
 use App\Services\Leave\LeaveYearResolver;
 use App\Services\LeaveBalanceService;
 use App\Services\PasswordService;
@@ -810,6 +812,22 @@ class EmployeeEdit extends Component
             ? $leaveService->getAdjustmentHistory($this->employee)
             : collect();
 
+        // Read-only history for the Leave tab. Both read records the existing
+        // workflows already write — nothing here creates or amends a
+        // transaction — and both load only while that tab is open.
+        $carryForwardHistory = ($this->activeTab === 'Leave')
+            ? app(LeaveCarryForwardService::class)->historyFor($this->employee)
+            : collect();
+
+        $regularisationHistory = ($this->activeTab === 'Leave')
+            ? AttendanceRegularisation::with(['leaveType', 'reviewer'])
+                ->where('employee_id', $this->employee->id)
+                ->where('category', 'leave')
+                ->orderByDesc('id')
+                ->limit(50)
+                ->get()
+            : collect();
+
         // ── Phase 4: Profile 2.0 analytical tabs (loaded only for the active tab) ──
         $tab = $this->activeTab;
         $attendanceRecords = $tab === 'Attendance'
@@ -854,6 +872,8 @@ class EmployeeEdit extends Component
             'salaryCycles' => SalaryCycle::active()->get(),
             'balanceSummary' => $balanceSummary,
             'adjustmentHistory' => $adjustmentHistory,
+            'carryForwardHistory' => $carryForwardHistory,
+            'regularisationHistory' => $regularisationHistory,
             'adjustableLeaveTypes' => LeaveType::where('is_system_controlled', false)->whereNull('deleted_at')->orderBy('name')->get(),
             // Permission-based, not role-based. A role check cannot express a
             // custom role that HR has been given manage_leave_balances, and it

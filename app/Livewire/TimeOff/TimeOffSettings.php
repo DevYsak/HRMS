@@ -34,6 +34,9 @@ class TimeOffSettings extends Component
     // ── Leave rules ──────────────────────────────────────────────────────────
     public bool $allow_carry_forward = false;
 
+    /** none | hr_approval | automatic. Default matches company policy. */
+    public string $carry_forward_mode = 'hr_approval';
+
     public int $carry_forward_limit = 0;
 
     public bool $allow_encashment = false;
@@ -94,6 +97,7 @@ class TimeOffSettings extends Component
             $this->allow_hr_override = (bool) $type->allow_hr_override;
             $this->hr_remark_required = (bool) $type->hr_remark_required;
             $this->allow_carry_forward = (bool) $type->allow_carry_forward;
+            $this->carry_forward_mode = $type->carry_forward_mode ?: LeaveType::CARRY_HR_APPROVAL;
             $this->carry_forward_limit = (int) $type->carry_forward_limit;
             $this->allow_encashment = (bool) $type->allow_encashment;
             $this->max_encashable_days = $type->max_encashable_days ? (int) $type->max_encashable_days : null;
@@ -115,7 +119,7 @@ class TimeOffSettings extends Component
             $this->reset([
                 'name', 'code', 'is_paid', 'color', 'category',
                 'allow_paid_request', 'allow_unpaid_request', 'allow_hr_override', 'hr_remark_required',
-                'allow_carry_forward', 'carry_forward_limit',
+                'allow_carry_forward', 'carry_forward_mode', 'carry_forward_limit',
                 'allow_encashment', 'max_encashable_days', 'encashment_rate_multiplier', 'allow_current_year_encashment',
                 'is_sandwich_applicable', 'sandwich_min_days', 'allow_half_day',
                 'is_monthly_accrual', 'accrual_days_per_month',
@@ -152,6 +156,7 @@ class TimeOffSettings extends Component
             'allow_hr_override' => 'required|boolean',
             'hr_remark_required' => 'required|boolean',
             'allow_carry_forward' => 'required|boolean',
+            'carry_forward_mode' => 'required|in:none,hr_approval,automatic',
             'carry_forward_limit' => 'required|integer|min:0',
             'allow_encashment' => 'required|boolean',
             'max_encashable_days' => 'nullable|integer|min:1|max:365',
@@ -182,6 +187,7 @@ class TimeOffSettings extends Component
             'allow_hr_override' => $this->allow_hr_override,
             'hr_remark_required' => $this->hr_remark_required,
             'allow_carry_forward' => $this->allow_carry_forward,
+            'carry_forward_mode' => $this->carry_forward_mode,
             'carry_forward_limit' => $this->carry_forward_limit,
             'allow_encashment' => $this->allow_encashment,
             'max_encashable_days' => $this->max_encashable_days ?: null,

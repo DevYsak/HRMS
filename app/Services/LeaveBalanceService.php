@@ -318,6 +318,17 @@ class LeaveBalanceService
             throw new \DomainException('A historical balance entry needs a reason.');
         }
 
+        // Closed years only. Stating a year rewrites its allocated and used
+        // figures wholesale, which is correct for a year that has ended and
+        // destructive for the live one: it would discard leave taken, carried
+        // and adjusted since. Enforced here so no screen or import can reach it.
+        $current = app(LeaveYearResolver::class)->current();
+        if ($leaveYear->starts_on->gte($current->starts_on)) {
+            throw new \DomainException(
+                "Historical balances can only be recorded for closed leave years. {$leaveYear->label} is the current or a future leave year."
+            );
+        }
+
         return DB::transaction(function () use ($employee, $leaveType, $leaveYear, $allocated, $used, $encashed, $reason, $remarks, $actor) {
             $balance = LeaveBalance::firstOrNew([
                 'employee_id' => $employee->id,
@@ -397,6 +408,7 @@ class LeaveBalanceService
                 ],
                 $reason,
                 $employee->id,
+                ['module' => 'leave', 'category' => 'leave', 'event' => 'LEAVE_HISTORICAL_BALANCE_SET'],
             );
 
             return $adjustment;

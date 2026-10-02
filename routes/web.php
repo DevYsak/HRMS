@@ -92,6 +92,7 @@ use App\Livewire\Settings\WorkModeManager;
 use App\Livewire\TimeOff\AllTimeOff;
 use App\Livewire\TimeOff\BulkLeaveAssignment;
 use App\Livewire\TimeOff\FinanceEncashments;
+use App\Livewire\TimeOff\HistoricalBalances;
 use App\Livewire\TimeOff\LeaveAllocationPolicies;
 use App\Livewire\TimeOff\LeaveCarryForward;
 use App\Livewire\TimeOff\LeaveRegularisation;
@@ -205,6 +206,13 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/encashments', FinanceEncashments::class)->name('encashments')->middleware('role:approve-finance');
         Route::get('/bulk-assign', BulkLeaveAssignment::class)->name('bulk-assign')->middleware('role:manage-settings');
         Route::get('/leave-policies', LeaveAllocationPolicies::class)->name('leave-policies')->middleware('role:manage-settings');
+        // Bulk migration of years that were never kept in this system. Import
+        // is preview-first because most of those years arrive with a closing
+        // balance and no usage, and what that means has to be visible before
+        // anything is written.
+        Route::get('/historical-balances', HistoricalBalances::class)->name('historical-balances')
+            ->middleware('can:manage_leave_balances');
+
         // Year-end carry forward. Preview is separate from apply on purpose:
         // this changes entitlement, so nothing runs until HR approves the list.
         Route::get('/carry-forward', LeaveCarryForward::class)->name('carry-forward')

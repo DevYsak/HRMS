@@ -85,11 +85,21 @@
                                 // The ceiling lives on the leave policy. A number on the
                                 // type is reference only and no longer decides anything.
                                 $cap = $defaultPolicy?->max_carry_over_days;
-                                $carryForward = ! $type->allow_carry_forward
-                                    ? 'Not carried forward'
-                                    : 'HR approval · '.($cap === null
-                                        ? 'Unlimited'
-                                        : ((float) $cap <= 0 ? 'None permitted by policy' : 'Max '.rtrim(rtrim((string) $cap, '0'), '.').' days'));
+
+                                // The stored mode, not an assumption. This said "HR
+                                // approval" for every carried type regardless of what
+                                // the type was actually set to.
+                                $limitText = $cap === null
+                                    ? 'Unlimited'
+                                    : ((float) $cap <= 0 ? 'None permitted by policy' : 'Max '.rtrim(rtrim((string) $cap, '0'), '.').' days');
+
+                                $carryForward = match ($type->carryForwardMode()) {
+                                    \App\Models\LeaveType::CARRY_NONE => 'Not permitted',
+                                    // Nothing is applied unattended, so this is stated
+                                    // as what it actually does rather than as automatic.
+                                    \App\Models\LeaveType::CARRY_AUTOMATIC => 'Automatic (applied only on HR action) · '.$limitText,
+                                    default => 'HR approval · '.$limitText,
+                                };
 
                                 $sandwich = match ($type->sandwich_mode ?? ($type->is_sandwich_applicable ? 'weekends' : 'off')) {
                                     'weekends' => 'Weekends bridged',
@@ -319,7 +329,7 @@
                                     <span class="text-zinc-700 dark:text-zinc-300">Sandwich Policy</span>
                                 </label>
                                 <label class="flex items-center gap-2 cursor-pointer text-sm">
-                                    <flux:checkbox wire:model="allow_carry_forward" />
+                                    <flux:checkbox wire:model.live="allow_carry_forward" />
                                     <span class="text-zinc-700 dark:text-zinc-300">Carry Forward</span>
                                 </label>
                                 <label class="flex items-center gap-2 cursor-pointer text-sm">
@@ -340,9 +350,31 @@
                                 </div>
                             @endif
 
+                            {{-- How carry forward is decided for this type. Nothing
+                                 applies it unattended, which is why "automatic" says
+                                 what it actually does. --}}
+                            @if($allow_carry_forward)
+                                <div class="rounded-xl border border-orange-100 bg-orange-50/50 p-4 dark:border-orange-900/40 dark:bg-orange-900/10">
+                                    <flux:select wire:model="carry_forward_mode" label="Carry forward mode"
+                                        description="The company policy is HR approval: carry forward is never applied just because a year ended or a balance exists.">
+                                        <flux:select.option value="hr_approval">HR approval — HR decides the amount per employee</flux:select.option>
+                                        <flux:select.option value="automatic">Automatic — reserved; still applied only on HR action</flux:select.option>
+                                        <flux:select.option value="none">None — this type is never carried forward</flux:select.option>
+                                    </flux:select>
+                                    <p class="mt-2 text-[11px] text-zinc-500 dark:text-zinc-400">
+                                        The numeric ceiling comes from the leave policy, not from this type:
+                                        <b>no limit set = unlimited</b>, and <b>0 = no carry forward permitted</b>.
+                                    </p>
+                                </div>
+                            @endif
+
                             <div class="grid grid-cols-2 gap-3">
+                                {{-- Reference only. The policy's max_carry_over_days is
+                                     what the engine caps against; this label used to say
+                                     "0 = unlimited", which is the opposite of what 0 means. --}}
                                 <flux:input wire:model="carry_forward_limit" type="number" min="0"
-                                    label="CF Limit (days, 0 = unlimited)" />
+                                    label="CF limit (legacy, reference only)"
+                                    description="Superseded by the leave policy limit. 0 means no carry forward, not unlimited." />
                                 <flux:input wire:model="max_consecutive_days" type="number" min="1"
                                     label="Max Consecutive Days" placeholder="blank = no limit" />
                             </div>

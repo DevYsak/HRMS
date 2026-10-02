@@ -36,6 +36,11 @@ class LeaveBalance extends Model
             'encashed_days' => 'decimal:2',
             'comp_off_credits' => 'decimal:2',
             'year' => 'integer',
+            // Without these the flags come back as 1/0, so a strict check for
+            // "is this figure unknown" silently fails and the absence reads
+            // as a recorded value.
+            'used_days_unknown' => 'boolean',
+            'encashed_days_unknown' => 'boolean',
         ];
     }
 

@@ -90,7 +90,8 @@ class CarryForwardAudit extends Command
     private function preconditions(LeaveYear $previous): array
     {
         $activeEmployees = Employee::where('status', 'active')->count();
-        $carryableTypes = LeaveType::where('allow_carry_forward', true)->count();
+        $carryableTypes = LeaveType::where('allow_carry_forward', true)->get()
+            ->filter(fn (LeaveType $t) => $t->permitsCarryForward())->count();
         $previousBalances = $this->previousYearBalanceQuery($previous)->count();
         $previousRequests = LeaveRequest::whereDate('start_date', '>=', $previous->starts_on)
             ->whereDate('start_date', '<=', $previous->ends_on)
@@ -140,7 +141,8 @@ class CarryForwardAudit extends Command
             return;
         }
 
-        $types = LeaveType::where('allow_carry_forward', true)->get();
+        $types = LeaveType::where('allow_carry_forward', true)->get()
+            ->filter(fn (LeaveType $t) => $t->permitsCarryForward())->values();
         $rows = [];
 
         foreach ($employees as $employee) {

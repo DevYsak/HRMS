@@ -17,6 +17,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Fillable([
     'employee_id', 'leave_type_id', 'previous_leave_year_id', 'current_leave_year_id',
     'previous_allocated_days', 'previous_used_days', 'previous_encashed_days',
+    'used_status', 'encashed_status', 'historical_closing_balance',
     'eligible_days', 'applied_days', 'reversed_days', 'status', 'reason',
     'applied_by', 'applied_at', 'reversed_by', 'reversed_at', 'reversal_reason',
 ])]
@@ -34,12 +35,34 @@ class LeaveCarryForwardTransaction extends Model
 
     public const STATUS_NOT_ELIGIBLE = 'not_eligible';
 
+    /** The figure beside this one is a record. */
+    public const FIGURE_KNOWN = 'known';
+
+    /**
+     * The figure was never recorded for that year. Distinct from zero, which
+     * would claim the employee took none.
+     */
+    public const FIGURE_UNKNOWN = 'unknown';
+
+    /** Whether an eligible amount could be calculated at all. */
+    public function isCalculable(): bool
+    {
+        return $this->eligible_days !== null;
+    }
+
+    public function historicalFiguresKnown(): bool
+    {
+        return $this->used_status === self::FIGURE_KNOWN
+            && $this->encashed_status === self::FIGURE_KNOWN;
+    }
+
     protected function casts(): array
     {
         return [
             'previous_allocated_days' => 'float',
             'previous_used_days' => 'float',
             'previous_encashed_days' => 'float',
+            'historical_closing_balance' => 'float',
             'eligible_days' => 'float',
             'applied_days' => 'float',
             'reversed_days' => 'float',
@@ -106,6 +129,17 @@ class LeaveCarryForwardTransaction extends Model
      */
     public function deriveStatus(): string
     {
+        // A null eligible_days means no amount could be calculated, not that
+        // none was eligible — PHP would read null <= 0 as true and mark an
+        // HR-approved carry forward "not eligible".
+        if ($this->eligible_days === null) {
+            return match (true) {
+                $this->reversed_days > 0 && $this->netApplied() <= 0 => self::STATUS_REVERSED,
+                $this->netApplied() <= 0 => self::STATUS_ELIGIBLE,
+                default => self::STATUS_APPLIED,
+            };
+        }
+
         return match (true) {
             $this->reversed_days > 0 && $this->netApplied() <= 0 => self::STATUS_REVERSED,
             $this->eligible_days <= 0 => self::STATUS_NOT_ELIGIBLE,

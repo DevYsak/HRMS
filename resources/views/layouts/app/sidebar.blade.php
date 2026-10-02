@@ -512,6 +512,9 @@
                         @can('view_leave_regularisation')
                             <flux:sidebar.item :href="route('time-off.regularisation')" :current="request()->routeIs('time-off.regularisation')" wire:navigate>Regularisation</flux:sidebar.item>
                         @endcan
+                        @can('manage_leave_balances')
+                            <flux:sidebar.item :href="route('time-off.historical-balances')" :current="request()->routeIs('time-off.historical-balances')" wire:navigate>Historical Balances</flux:sidebar.item>
+                        @endcan
                         @can('view_leave_carry_forward')
                             <flux:sidebar.item :href="route('time-off.carry-forward')" :current="request()->routeIs('time-off.carry-forward')" wire:navigate>Carry Forward</flux:sidebar.item>
                         @endcan

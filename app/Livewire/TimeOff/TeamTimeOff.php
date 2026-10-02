@@ -8,6 +8,7 @@ use App\Models\LeaveRequest;
 use App\Models\LeaveType;
 use App\Models\PublicHoliday;
 use App\Services\Approvals\ApprovalGuard;
+use App\Services\Leave\LeaveYearResolver;
 use App\Services\LeaveService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -307,10 +308,15 @@ class TeamTimeOff extends Component
             ->get();
 
         // Attach available balance to each pending request
-        $pendingRequests->each(function (LeaveRequest $req) {
+        // The leave year runs 1 July to 30 June, so the calendar year and the
+        // leave year's integer disagree from January to June — a manager was
+        // shown no balance at all for six months of every year.
+        $leaveYear = app(LeaveYearResolver::class)->legacyYearFor();
+
+        $pendingRequests->each(function (LeaveRequest $req) use ($leaveYear) {
             $req->availableBalance = LeaveBalance::where('employee_id', $req->employee_id)
                 ->where('leave_type_id', $req->leave_type_id)
-                ->where('year', now()->year)
+                ->where('year', $leaveYear)
                 ->first();
         });
 

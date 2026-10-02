@@ -768,6 +768,9 @@ class LeaveService
                 'color' => $data['color'],
                 'category' => $data['category'],
                 'allow_carry_forward' => $data['allow_carry_forward'],
+                // The mode is what the engine consults; without it here the
+                // settings screen would collect a choice that never persisted.
+                'carry_forward_mode' => $data['carry_forward_mode'] ?? LeaveType::CARRY_HR_APPROVAL,
                 'carry_forward_limit' => $data['carry_forward_limit'],
                 'allow_encashment' => $data['allow_encashment'],
                 'max_encashable_days' => $data['max_encashable_days'] ?? null,
