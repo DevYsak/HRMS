@@ -22,6 +22,7 @@ use Carbon\Carbon;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Livewire\Attributes\On;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 use Livewire\WithPagination;
@@ -213,6 +214,14 @@ class MyTimeOff extends Component
         $this->resetValidation();
         $this->requested_leave_status = 'paid';
         $this->showRequestModal = true;
+    }
+
+    /** "Apply Leave" on a balance card (MyLeaveBalances): open the form for that type. */
+    #[On('apply-leave')]
+    public function applyForType(int $leaveTypeId): void
+    {
+        $this->openRequestModal();
+        $this->leave_type_id = (string) $leaveTypeId;
     }
 
     /**
