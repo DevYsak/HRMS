@@ -6,6 +6,7 @@ use App\Enums\EmployeeStatus;
 use App\Models\Employee;
 use App\Models\LeaveBalance;
 use App\Models\LeaveBulkRun;
+use App\Models\LeaveCarryForwardTransaction;
 use App\Models\LeaveLedgerEntry;
 use App\Models\LeaveRequest;
 use App\Models\LeaveRolloverRecord;
@@ -290,11 +291,24 @@ class LeaveRolloverService
         }
 
         [$carry, $carryNote] = $this->carryFor($employee, $type, $settings, max(0.0, $closing), $to);
+
+        // HR already entered this employee's carry forward (Carry Forward
+        // action): that decision stands — never recalculated or overwritten.
+        $decided = LeaveCarryForwardTransaction::where('employee_id', $balance->employee_id)
+            ->where('leave_type_id', $balance->leave_type_id)
+            ->where('previous_leave_year_id', $from->id)->where('current_leave_year_id', $to->id)
+            ->first();
+        if ($decided?->isApplied()) {
+            $carry = min(max(0.0, $closing), $decided->netApplied());
+            $carryNote = 'Carry forward entered by HR ('.$decided->netApplied().' day(s)).';
+            $row['hr_decided_transaction_id'] = $decided->id;
+        }
+
         $row['carry'] = $carry;
         $row['expire'] = round(max(0.0, $closing) - $carry, 2);
         $row['expires_on'] = $carry > 0 ? $this->carryExpiry($settings, $to) : null;
 
-        if ($carry > 0 && $type->carry_forward_mode !== LeaveType::CARRY_AUTOMATIC && $settings['carry_forward_enabled'] && ! $this->ruleSaysAutomatic($settings)) {
+        if (! $decided?->isApplied() && $carry > 0 && $type->carry_forward_mode !== LeaveType::CARRY_AUTOMATIC && $settings['carry_forward_enabled'] && ! $this->ruleSaysAutomatic($settings)) {
             $reasons[] = 'Carry forward for '.$type->name.' is an HR decision (mode: '.($type->carry_forward_mode ?? 'unset').').';
         }
 
@@ -384,7 +398,10 @@ class LeaveRolloverService
             }
 
             $txId = null;
-            if ($row['carry'] > 0) {
+            if (! empty($row['hr_decided_transaction_id'])) {
+                // HR's own entry is already posted; keep it exactly.
+                $txId = $row['hr_decided_transaction_id'];
+            } elseif ($row['carry'] > 0) {
                 $tx = $this->carryForward->apply($employee, $type, $from, $to, $actor ?? $this->systemActor(), $row['carry'], 'Automatic year-end rollover');
                 $txId = $tx->id;
             }

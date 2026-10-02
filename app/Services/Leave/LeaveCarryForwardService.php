@@ -198,6 +198,161 @@ class LeaveCarryForwardService
     }
 
     /**
+     * What HR may carry forward for one employee and leave type, for the
+     * Carry Forward action on the employee's leave screen.
+     *
+     *  - source_found: the previous year has a balance in this system;
+     *  - figures_known: its usage is recorded, so an eligible amount (closing
+     *    balance capped by the policy) can be calculated;
+     *  - max_allowed: the ceiling HR may enter — the calculated eligible
+     *    amount, the recorded closing balance when usage is unknown, or the
+     *    policy cap when the previous year was never kept here (null =
+     *    no ceiling: HR states the figure and owns it, with a reason).
+     *
+     * @return array{carryable: bool, message: ?string, source_found: bool, figures_known: bool, closing_balance: ?float,
+     *     allocated: ?float, used: ?float, encashed: ?float, eligible: ?float, cap: ?float, max_allowed: ?float,
+     *     already_applied: float, transaction: ?Transaction, to_year_closed: bool}
+     */
+    public function eligibilityFor(Employee $employee, LeaveType $type, LeaveYear $from, LeaveYear $to): array
+    {
+        $settings = app(LeaveRuleResolver::class)->settings($employee, $type);
+        $carryable = $settings['carry_forward_by_rule'] || ($type->allow_carry_forward && $type->permitsCarryForward());
+
+        $tx = Transaction::where('employee_id', $employee->id)->where('leave_type_id', $type->id)
+            ->where('previous_leave_year_id', $from->id)->where('current_leave_year_id', $to->id)->first();
+
+        $source = LeaveBalance::where('employee_id', $employee->id)->where('leave_type_id', $type->id)
+            ->where(fn ($q) => $q->where('leave_year_id', $from->id)
+                ->orWhere(fn ($w) => $w->whereNull('leave_year_id')->where('year', $from->legacyYear())))
+            ->first();
+
+        $row = $source ? $this->engine->preview($from, $to, $employee->id)->firstWhere('leave_type_id', $type->id) : null;
+        $figuresKnown = $source ? (! $source->used_days_unknown && ! $source->encashed_days_unknown) : false;
+        $closing = $source ? round((float) $source->allocated_days - (float) $source->used_days - (float) ($source->encashed_days ?? 0), 2) : null;
+        $eligible = $source && $figuresKnown ? (float) ($row['carry'] ?? 0.0) : null;
+
+        $maxAllowed = match (true) {
+            ! $source => $settings['carry_forward_max_days'],
+            $figuresKnown => $eligible,
+            default => max(0.0, (float) $source->allocated_days),
+        };
+
+        $message = match (true) {
+            ! $carryable => "Carry forward is switched off for {$type->name}.",
+            $to->isClosed() => "{$to->label} is closed.",
+            ! $source => "No {$from->label} balance is held in this system. Enter the carry forward HR has approved; the reason is required.",
+            ! $figuresKnown => "{$from->label} usage was never recorded. Enter the approved amount, up to the recorded balance.",
+            default => null,
+        };
+
+        return [
+            'carryable' => $carryable,
+            'message' => $message,
+            'source_found' => $source !== null,
+            'figures_known' => $figuresKnown,
+            'closing_balance' => $closing,
+            'allocated' => $source ? (float) $source->allocated_days : null,
+            'used' => $source && ! $source->used_days_unknown ? (float) $source->used_days : null,
+            'encashed' => $source && ! $source->encashed_days_unknown ? (float) ($source->encashed_days ?? 0) : null,
+            'eligible' => $eligible,
+            'cap' => $settings['carry_forward_max_days'],
+            'max_allowed' => $maxAllowed !== null ? round((float) $maxAllowed, 2) : null,
+            'already_applied' => $tx ? $tx->netApplied() : 0.0,
+            'transaction' => $tx,
+            'to_year_closed' => $to->isClosed(),
+        ];
+    }
+
+    /**
+     * HR enters an employee's carry forward directly (employee leave screen).
+     *
+     * Not a manual balance adjustment: it is recorded as a carry-forward
+     * transaction (from year, to year, eligible, applied, reason, who),
+     * posted to the new year as its own CARRY_FORWARD lot with the policy
+     * expiry, and audited. Re-entering replaces the earlier figure rather
+     * than adding to it. Works even when the previous year was never kept in
+     * this system — then HR's stated figure is recorded as such.
+     */
+    public function applyForEmployee(Employee $employee, LeaveType $type, LeaveYear $from, LeaveYear $to, float $days, string $reason, User $actor): Transaction
+    {
+        if (trim($reason) === '') {
+            throw new RuntimeException('A carry forward entered by HR needs a reason.');
+        }
+
+        if ($from->starts_on->gte($to->starts_on)) {
+            throw new RuntimeException('The "from" leave year must be before the "to" leave year.');
+        }
+
+        $days = round($days, 2);
+        $info = $this->eligibilityFor($employee, $type, $from, $to);
+
+        if (! $info['carryable']) {
+            throw new RuntimeException($info['message']);
+        }
+
+        if ($info['to_year_closed']) {
+            throw new RuntimeException("{$to->label} is closed; its balances can only change through an authorised historical correction.");
+        }
+
+        if ($days < 0) {
+            throw new RuntimeException('Carry forward days cannot be negative.');
+        }
+
+        if ($info['max_allowed'] !== null && $days > $info['max_allowed'] + 0.001) {
+            throw new RuntimeException("Cannot carry forward {$days} day(s): the most allowed is {$info['max_allowed']}.");
+        }
+
+        if ($info['source_found']) {
+            return $this->apply($employee, $type, $from, $to, $actor, $days, $reason);
+        }
+
+        // No previous-year record in this system: HR states the figure.
+        return DB::transaction(function () use ($employee, $type, $from, $to, $actor, $days, $reason) {
+            $tx = Transaction::firstOrNew([
+                'employee_id' => $employee->id,
+                'leave_type_id' => $type->id,
+                'previous_leave_year_id' => $from->id,
+                'current_leave_year_id' => $to->id,
+            ]);
+
+            $before = $this->currentCarried($employee, $type, $to);
+
+            $tx->fill([
+                'previous_allocated_days' => 0,
+                'previous_used_days' => 0,
+                'previous_encashed_days' => 0,
+                // Nothing about that year is known here; never recorded as zero.
+                'used_status' => Transaction::FIGURE_UNKNOWN,
+                'encashed_status' => Transaction::FIGURE_UNKNOWN,
+                'historical_closing_balance' => null,
+                'eligible_days' => null,
+                'applied_days' => $days,
+                'reversed_days' => 0,
+                'reversed_by' => null,
+                'reversed_at' => null,
+                'reversal_reason' => null,
+                'reason' => $reason,
+                'applied_by' => $actor->id,
+                'applied_at' => now(),
+            ]);
+            $tx->status = $tx->deriveStatus();
+            $tx->save();
+
+            $after = $this->writeBalance($employee, $type, $to, $days, $tx->id, $actor);
+
+            $this->audit($tx, 'leave.carry_forward_applied', $before, $after, $actor, [
+                'eligible_days' => null,
+                'applied_days' => $days,
+                'historical_figures_known' => false,
+                'carry_forward_decided_by' => 'hr_stated_no_previous_year_record',
+                'reason' => $reason,
+            ]);
+
+            return $tx;
+        });
+    }
+
+    /**
      * Undo a carry-forward without erasing that it happened.
      *
      * The row stays, gains a reversal, and the balance drops back to its fresh

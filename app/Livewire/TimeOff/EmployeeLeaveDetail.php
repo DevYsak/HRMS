@@ -2,9 +2,11 @@
 
 namespace App\Livewire\TimeOff;
 
+use App\Models\AuditLog;
 use App\Models\Employee;
 use App\Models\EmployeeLeaveOverride;
 use App\Models\LeaveBalance;
+use App\Models\LeaveCarryForwardTransaction;
 use App\Models\LeaveRequest;
 use App\Models\LeaveType;
 use App\Models\LeaveYear;
@@ -12,6 +14,7 @@ use App\Models\User;
 use App\Notifications\LeaveBalanceChangedNotification;
 use App\Services\Leave\EmployeeLeaveOverrideService;
 use App\Services\Leave\LeaveBalanceCalculator;
+use App\Services\Leave\LeaveCarryForwardService;
 use App\Services\Leave\LeaveManagementService;
 use App\Services\Leave\LeaveStatementService;
 use App\Services\Leave\LeaveYearResolver;
@@ -97,6 +100,22 @@ class EmployeeLeaveDetail extends Component
 
     public string $paymentStatus = 'paid';
 
+    // Carry forward (HR enters it directly — not a balance adjustment).
+    public ?int $cfFromYearId = null;
+
+    public ?int $cfToYearId = null;
+
+    public string $carryDays = '';
+
+    /** Opens the Carry Forward dialog for this leave type on arrival (from Leave Management). */
+    #[Url(as: 'cf')]
+    public ?int $openCarryForwardFor = null;
+
+    /** Carry-forward transaction being reversed, and why. */
+    public ?int $reverseTxId = null;
+
+    public string $reverseReason = '';
+
     /** @var TemporaryUploadedFile|null */
     public $attachment = null;
 
@@ -106,6 +125,51 @@ class EmployeeLeaveDetail extends Component
 
         $this->employee = $employee->load(['user', 'department', 'leavePolicy', 'manager']);
         $this->leaveYearId ??= $years->current()->id;
+
+        if ($this->openCarryForwardFor && Auth::user()->can('manage_leave_carry_forward')) {
+            $this->openAction('carry_forward', $this->openCarryForwardFor);
+            $this->openCarryForwardFor = null;
+        }
+    }
+
+    /**
+     * The eligible balance for the Carry Forward dialog, recalculated as HR
+     * changes the years or the leave type.
+     *
+     * @return array<string, mixed>|null
+     */
+    #[Computed]
+    public function carryInfo(): ?array
+    {
+        if ($this->action !== 'carry_forward' || ! $this->formTypeId || ! $this->cfFromYearId || ! $this->cfToYearId) {
+            return null;
+        }
+
+        $type = LeaveType::withTrashed()->find($this->formTypeId);
+        $from = LeaveYear::find($this->cfFromYearId);
+        $to = LeaveYear::find($this->cfToYearId);
+
+        if (! $type || ! $from || ! $to || $from->starts_on->gte($to->starts_on)) {
+            return null;
+        }
+
+        return app(LeaveCarryForwardService::class)->eligibilityFor($this->employee, $type, $from, $to);
+    }
+
+    /** Every carry-forward decision for this employee, with its audit trail. */
+    #[Computed]
+    public function carryHistory(): Collection
+    {
+        return app(LeaveCarryForwardService::class)->historyFor($this->employee);
+    }
+
+    #[Computed]
+    public function carryAudit(): Collection
+    {
+        return AuditLog::with('user')
+            ->where('auditable_type', LeaveCarryForwardTransaction::class)
+            ->where('subject_employee_id', $this->employee->id)
+            ->latest('id')->limit(100)->get();
     }
 
     #[Computed]
@@ -177,6 +241,14 @@ class EmployeeLeaveDetail extends Component
         $this->effectiveDate = Carbon::today()->between($this->year->starts_on, $this->year->ends_on)
             ? Carbon::today()->toDateString() : $this->year->starts_on->toDateString();
         $this->notifyEmployee = true;
+
+        if ($action === 'carry_forward') {
+            $years = app(LeaveYearResolver::class);
+            $this->cfToYearId = $this->leaveYearId;
+            $this->cfFromYearId = $years->previous($this->year)->id;
+            $this->carryDays = '';
+            unset($this->carryInfo);
+        }
     }
 
     public function closeAction(): void
@@ -209,10 +281,11 @@ class EmployeeLeaveDetail extends Component
                 'correct' => $this->doCorrect($hr),
                 'override' => $this->doOverride($hr),
                 'apply' => $this->doApply($hr),
+                'carry_forward' => $this->doCarryForward($hr),
             };
         } catch (ValidationException $e) {
             throw $e;
-        } catch (\DomainException|\InvalidArgumentException $e) {
+        } catch (\DomainException|\InvalidArgumentException|\RuntimeException $e) {
             $this->addError('form', $e->getMessage());
 
             return;
@@ -224,7 +297,53 @@ class EmployeeLeaveDetail extends Component
         }
 
         $this->action = null;
-        unset($this->balances, $this->history, $this->statement, $this->overrides, $this->requests);
+        unset($this->balances, $this->history, $this->statement, $this->overrides, $this->requests, $this->carryHistory, $this->carryAudit, $this->carryInfo);
+    }
+
+    public function startReverseCarryForward(int $transactionId): void
+    {
+        $this->authorize('manage_leave_carry_forward');
+
+        $this->reverseTxId = $transactionId;
+        $this->reverseReason = '';
+        $this->resetErrorBag();
+    }
+
+    public function reverseCarryForward(): void
+    {
+        $this->authorize('manage_leave_carry_forward');
+        $this->validate(['reverseReason' => ['required', 'string', 'min:3', 'max:500']]);
+
+        $tx = LeaveCarryForwardTransaction::where('employee_id', $this->employee->id)->findOrFail($this->reverseTxId);
+
+        try {
+            app(LeaveCarryForwardService::class)->reverse($tx, Auth::user(), $this->reverseReason);
+            session()->flash('success', 'Carry forward reversed; the history keeps both entries.');
+            $this->reverseTxId = null;
+        } catch (\RuntimeException|\DomainException $e) {
+            $this->addError('reverseReason', $e->getMessage());
+        }
+
+        unset($this->balances, $this->carryHistory, $this->carryAudit, $this->history);
+    }
+
+    private function doCarryForward(User $hr): void
+    {
+        $this->validate([
+            'formTypeId' => ['required', 'exists:leave_types,id'],
+            'cfFromYearId' => ['required', 'exists:leave_years,id'],
+            'cfToYearId' => ['required', 'exists:leave_years,id', 'different:cfFromYearId'],
+            'carryDays' => ['required', 'numeric', 'min:0', 'max:365'],
+            'reason' => ['required', 'string', 'min:3', 'max:500'],
+        ], [], ['cfFromYearId' => 'from year', 'cfToYearId' => 'to year', 'carryDays' => 'carry forward days']);
+
+        $type = LeaveType::findOrFail($this->formTypeId);
+        $from = LeaveYear::findOrFail($this->cfFromYearId);
+        $to = LeaveYear::findOrFail($this->cfToYearId);
+
+        app(LeaveCarryForwardService::class)->applyForEmployee($this->employee, $type, $from, $to, (float) $this->carryDays, $this->reason, $hr);
+
+        session()->flash('success', "Carried forward {$this->carryDays} day(s) of {$type->name} from {$from->label} into {$to->label}.");
     }
 
     public function revokeOverride(int $overrideId, string $why = 'Revoked by HR'): void
@@ -388,6 +507,7 @@ class EmployeeLeaveDetail extends Component
             'correct' => 'correct_leave_balance',
             'override' => 'override_leave_policy',
             'apply' => 'apply_leave_on_behalf',
+            'carry_forward' => 'manage_leave_carry_forward',
             default => abort(404),
         };
     }

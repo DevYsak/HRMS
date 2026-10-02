@@ -14,6 +14,9 @@
             </p>
         </div>
         <div class="flex flex-wrap gap-2">
+            @can('view_leave_carry_forward')
+                <flux:button size="sm" icon="arrow-right-circle" :href="route('time-off.carry-forward')" wire:navigate>Carry Forward</flux:button>
+            @endcan
             @can('run_leave_rollover')
                 <flux:button size="sm" icon="arrow-path" :href="route('time-off.year-rollover')" wire:navigate>Year Rollover</flux:button>
             @endcan
@@ -169,7 +172,11 @@
                                 </td>
                             @endif
                             <td class="px-3 py-2 text-[11px] text-[#667085]">{{ $row['next_accrual'] ?? '—' }}</td>
-                            <td class="px-3 py-2 text-right">
+                            <td class="whitespace-nowrap px-3 py-2 text-right">
+                                @can('manage_leave_carry_forward')
+                                    <flux:button size="xs" icon="arrow-right-circle"
+                                        :href="route('time-off.leave-management.employee', ['employee' => $row['employee_id'], 'year' => $leaveYearId, 'tab' => 'carry_forward', 'cf' => $leaveTypeId])" wire:navigate>Carry Fwd</flux:button>
+                                @endcan
                                 <flux:button size="xs" icon="arrow-top-right-on-square"
                                     :href="route('time-off.leave-management.employee', ['employee' => $row['employee_id'], 'year' => $leaveYearId])" wire:navigate>Open</flux:button>
                             </td>

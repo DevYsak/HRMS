@@ -17,6 +17,9 @@
             <div class="w-40">
                 <x-clean-select model="leaveYearId" label="Leave year" :options="$leaveYears->map(fn ($y) => ['value' => $y->id, 'label' => $y->label])->all()" />
             </div>
+            @can('manage_leave_carry_forward')
+                <flux:button icon="arrow-right-circle" wire:click="openAction('carry_forward')">Carry Forward</flux:button>
+            @endcan
             @can('apply_leave_on_behalf')
                 <flux:button icon="calendar-days" wire:click="openAction('apply')">Apply on behalf</flux:button>
             @endcan
@@ -37,7 +40,7 @@
     @endif
 
     <div class="flex gap-1 border-b border-[#EAECF0] dark:border-white/10">
-        @foreach(['balances' => 'Balances', 'history' => 'History', 'statement' => 'Month-wise Statement', 'requests' => 'Requests', 'overrides' => 'Overrides'] as $key => $label)
+        @foreach(['balances' => 'Balances', 'history' => 'History', 'statement' => 'Month-wise Statement', 'carry_forward' => 'Carry Forward', 'requests' => 'Requests', 'overrides' => 'Overrides'] as $key => $label)
             <button type="button" wire:click="$set('tab', '{{ $key }}')"
                 class="-mb-px border-b-2 px-4 py-2 text-sm font-semibold {{ $tab === $key ? 'border-orange-500 text-orange-600' : 'border-transparent text-[#667085] hover:text-[#101828]' }}">{{ $label }}</button>
         @endforeach
@@ -78,6 +81,7 @@
                                 @can('add_leave_balance')<flux:button size="xs" wire:click="openAction('add', {{ $b['leave_type']?->id }})">Add</flux:button>@endcan
                                 @can('deduct_leave_balance')<flux:button size="xs" wire:click="openAction('deduct', {{ $b['leave_type']?->id }})">Deduct</flux:button>@endcan
                                 @can('correct_leave_balance')<flux:button size="xs" wire:click="openAction('correct', {{ $b['leave_type']?->id }})">Correct</flux:button>@endcan
+                                @can('manage_leave_carry_forward')<flux:button size="xs" wire:click="openAction('carry_forward', {{ $b['leave_type']?->id }})">Carry Fwd</flux:button>@endcan
                                 <flux:button size="xs" variant="ghost" wire:click="$set('historyTypeId', {{ $b['leave_type']?->id }}); $set('tab', 'history')">History</flux:button>
                             </td>
                         </tr>
@@ -130,6 +134,66 @@
                     :options="$this->balances->map(fn ($b) => ['value' => $b['leave_type']?->id, 'label' => $b['leave_type']?->name])->values()->all()" />
             </div>
             @include('livewire.time-off.partials.monthly-statement', ['months' => $this->statement, 'fmt' => $fmt])
+        </div>
+    @endif
+
+    @if($tab === 'carry_forward')
+        <div class="space-y-4">
+            <div class="flex items-center justify-between">
+                <p class="text-sm text-[#667085]">Carry forward is recorded as its own transaction (from year → to year), posted to the new year as a separate Carry Forward bucket with the policy expiry — never as a manual adjustment.</p>
+                @can('manage_leave_carry_forward')
+                    <flux:button size="sm" variant="primary" icon="arrow-right-circle" wire:click="openAction('carry_forward')">Enter carry forward</flux:button>
+                @endcan
+            </div>
+            <div class="overflow-x-auto rounded-2xl border border-[#EAECF0] bg-white shadow-sm dark:border-white/10 dark:bg-zinc-900">
+                <table class="min-w-full text-xs">
+                    <thead class="bg-[#F9FAFB] text-left text-[10px] font-bold uppercase tracking-wider text-[#667085] dark:bg-white/5">
+                        <tr>
+                            <th class="px-3 py-2">From → To</th><th class="px-3 py-2">Leave type</th>
+                            <th class="px-3 py-2 text-right">Eligible</th><th class="px-3 py-2 text-right">Carried</th><th class="px-3 py-2 text-right">Reversed</th>
+                            <th class="px-3 py-2">Status</th><th class="px-3 py-2">Reason</th><th class="px-3 py-2">By</th><th></th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-[#EAECF0] dark:divide-white/5">
+                        @forelse($this->carryHistory as $tx)
+                            <tr wire:key="cf-{{ $tx->id }}">
+                                <td class="px-3 py-2 font-semibold">{{ $tx->previousLeaveYear?->label }} → {{ $tx->currentLeaveYear?->label }}</td>
+                                <td class="px-3 py-2">{{ $tx->leaveType?->name }}</td>
+                                <td class="px-3 py-2 text-right">{{ $tx->eligible_days === null ? 'HR stated' : $fmt($tx->eligible_days) }}</td>
+                                <td class="px-3 py-2 text-right font-bold">{{ $fmt($tx->applied_days) }}</td>
+                                <td class="px-3 py-2 text-right">{{ $tx->reversed_days > 0 ? $fmt($tx->reversed_days) : '—' }}</td>
+                                <td class="px-3 py-2"><flux:badge size="sm">{{ str_replace('_', ' ', $tx->status) }}</flux:badge></td>
+                                <td class="max-w-xs px-3 py-2 text-[#667085]">{{ $tx->reason ?? '—' }}@if($tx->reversal_reason)<div class="text-rose-600">Reversed: {{ $tx->reversal_reason }}</div>@endif</td>
+                                <td class="px-3 py-2">{{ $tx->appliedBy?->name ?? '—' }}<div class="text-[11px] text-[#98A2B3]">{{ $tx->applied_at?->format('d M Y H:i') }}</div></td>
+                                <td class="px-3 py-2 text-right">
+                                    @if($tx->isApplied())
+                                        @can('manage_leave_carry_forward')<flux:button size="xs" wire:click="startReverseCarryForward({{ $tx->id }})">Reverse</flux:button>@endcan
+                                    @endif
+                                </td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="9" class="px-3 py-8 text-center text-sm text-[#98A2B3]">No carry forward recorded for this employee.</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+            <div class="rounded-2xl border border-[#EAECF0] bg-white p-4 text-xs shadow-sm dark:border-white/10 dark:bg-zinc-900">
+                <div class="mb-2 font-bold text-[#101828] dark:text-white">Audit history</div>
+                @forelse($this->carryAudit as $log)
+                    <div class="flex flex-wrap gap-3 border-t border-[#EAECF0] py-1.5 dark:border-white/5">
+                        <span class="w-32 text-[#98A2B3]">{{ $log->created_at->format('d M Y H:i') }}</span>
+                        <span class="font-semibold">{{ str_replace(['leave.', '_'], ['', ' '], $log->action) }}</span>
+                        <span>{{ $log->user?->name ?? 'System' }}</span>
+                        <span class="text-[#667085]">
+                            {{ $fmt($log->old_values['carried_forward_days'] ?? 0) }} → {{ $fmt($log->new_values['carried_forward_days'] ?? 0) }} day(s)
+                            · {{ $log->new_values['previous_leave_year'] ?? '' }} → {{ $log->new_values['current_leave_year'] ?? '' }}
+                        </span>
+                        @if($log->reason)<span class="text-[#667085]">“{{ $log->reason }}”</span>@endif
+                    </div>
+                @empty
+                    <div class="text-[#98A2B3]">No carry-forward audit entries.</div>
+                @endforelse
+            </div>
         </div>
     @endif
 
@@ -193,7 +257,7 @@
         <x-leave.overlay max="max-w-lg">
             <form wire:submit="submitAction" class="space-y-4">
                 <flux:heading size="lg">
-                    {{ ['add' => 'Add Leave', 'deduct' => 'Deduct Leave', 'correct' => 'Correct Balance', 'override' => 'Employee Override', 'apply' => 'Apply Leave on Behalf'][$action] }}
+                    {{ ['add' => 'Add Leave', 'deduct' => 'Deduct Leave', 'correct' => 'Correct Balance', 'override' => 'Employee Override', 'apply' => 'Apply Leave on Behalf', 'carry_forward' => 'Carry Forward'][$action] }}
                     <span class="font-normal text-[#98A2B3]">· {{ $employee->user?->name }} · {{ $this->year->label }}</span>
                 </flux:heading>
 
@@ -223,6 +287,35 @@
                     </flux:select>
                     <flux:input type="number" step="0.5" wire:model="days" label="Days" />
                     <flux:checkbox wire:model="overrideThisYearOnly" label="Only {{ $this->year->label }} (otherwise ongoing from this year)" />
+                @elseif($action === 'carry_forward')
+                    <div class="grid grid-cols-2 gap-3">
+                        <flux:select wire:model.live="cfFromYearId" label="From year">
+                            @foreach($leaveYears as $y)<flux:select.option value="{{ $y->id }}">{{ $y->label }}</flux:select.option>@endforeach
+                        </flux:select>
+                        <flux:select wire:model.live="cfToYearId" label="To year">
+                            @foreach($leaveYears as $y)<flux:select.option value="{{ $y->id }}">{{ $y->label }}</flux:select.option>@endforeach
+                        </flux:select>
+                    </div>
+                    @error('cfToYearId')<p class="text-xs text-rose-600">{{ $message }}</p>@enderror
+                    @php $cf = $this->carryInfo; @endphp
+                    @if($cf)
+                        <div class="space-y-1 rounded-lg bg-[#F9FAFB] p-3 text-xs dark:bg-white/5">
+                            <div class="grid grid-cols-3 gap-2 text-center">
+                                <div><div class="text-[10px] font-bold uppercase text-[#98A2B3]">Closing balance</div><div class="text-base font-bold">{{ $fmt($cf['closing_balance']) }}</div></div>
+                                <div><div class="text-[10px] font-bold uppercase text-[#98A2B3]">Eligible</div><div class="text-base font-bold text-emerald-600">{{ $cf['eligible'] === null ? '—' : $fmt($cf['eligible']) }}</div></div>
+                                <div><div class="text-[10px] font-bold uppercase text-[#98A2B3]">Max allowed</div><div class="text-base font-bold">{{ $cf['max_allowed'] === null ? 'No cap' : $fmt($cf['max_allowed']) }}</div></div>
+                            </div>
+                            @if($cf['source_found'])
+                                <div class="text-[#667085]">Previous year: allocated {{ $fmt($cf['allocated']) }}, used {{ $cf['used'] === null ? 'unknown' : $fmt($cf['used']) }}, encashed {{ $cf['encashed'] === null ? 'unknown' : $fmt($cf['encashed']) }}@if($cf['cap'] !== null); policy cap {{ $fmt($cf['cap']) }}@endif.</div>
+                            @endif
+                            @if($cf['already_applied'] > 0)
+                                <div class="text-amber-700">Already carried: {{ $fmt($cf['already_applied']) }} day(s). Saving replaces that figure; it does not add to it.</div>
+                            @endif
+                            @if($cf['message'])<div class="{{ $cf['carryable'] && ! $cf['to_year_closed'] ? 'text-[#667085]' : 'text-rose-600' }}">{{ $cf['message'] }}</div>@endif
+                        </div>
+                    @endif
+                    <flux:input type="number" step="0.5" min="0" wire:model="carryDays" label="Carry forward days" />
+                    @error('carryDays')<p class="text-xs text-rose-600">{{ $message }}</p>@enderror
                 @elseif($action === 'apply')
                     <div class="grid grid-cols-2 gap-3">
                         <flux:input type="date" wire:model="startDate" label="From" />
@@ -256,9 +349,9 @@
                     </div>
                 @endif
 
-                <flux:textarea wire:model="reason" rows="2" label="Reason (required{{ $action === 'override' ? '' : ', shown to the employee' }})" />
+                <flux:textarea wire:model="reason" rows="2" label="Reason (required{{ in_array($action, ['override', 'carry_forward'], true) ? ', recorded in the audit history' : ', shown to the employee' }})" />
                 @error('reason')<p class="text-xs text-rose-600">{{ $message }}</p>@enderror
-                @if($action !== 'override')
+                @if(! in_array($action, ['override', 'carry_forward'], true))
                     <flux:textarea wire:model="internalNote" rows="2" label="HR internal note (never shown to the employee)" />
                     <flux:checkbox wire:model="notifyEmployee" label="Notify the employee" />
                 @endif
@@ -266,6 +359,20 @@
                 <div class="flex justify-end gap-2">
                     <flux:button type="button" wire:click="closeAction">Cancel</flux:button>
                     <flux:button type="submit" variant="primary" wire:loading.attr="disabled">Save</flux:button>
+                </div>
+            </form>
+        </x-leave.overlay>
+    @endif
+    @if($reverseTxId)
+        <x-leave.overlay max="max-w-md">
+            <form wire:submit="reverseCarryForward" class="space-y-4">
+                <flux:heading size="lg">Reverse carry forward</flux:heading>
+                <flux:text>The carried days are taken back out of the new year. The original entry and this reversal both stay in the history.</flux:text>
+                <flux:textarea wire:model="reverseReason" rows="2" label="Reason (required)" />
+                @error('reverseReason')<p class="text-xs text-rose-600">{{ $message }}</p>@enderror
+                <div class="flex justify-end gap-2">
+                    <flux:button type="button" wire:click="$set('reverseTxId', null)">Cancel</flux:button>
+                    <flux:button type="submit" variant="danger">Reverse</flux:button>
                 </div>
             </form>
         </x-leave.overlay>
