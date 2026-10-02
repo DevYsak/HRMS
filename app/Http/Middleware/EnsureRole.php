@@ -38,7 +38,12 @@ class EnsureRole
         abort(403);
     }
 
-    protected function check(User $user, string $ability): bool
+    /**
+     * Whether the user satisfies one ability string. Public so code that has to
+     * predict this middleware's verdict (e.g. deciding whether to show a link)
+     * asks the same question rather than re-implementing the mapping.
+     */
+    public function check(User $user, string $ability): bool
     {
         return match ($ability) {
             'manage-employees' => $user->canManageEmployees(),

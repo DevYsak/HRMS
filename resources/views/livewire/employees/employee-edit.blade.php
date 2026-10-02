@@ -112,6 +112,18 @@
                         <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset {{ $statusTone }}">
                             {{ $employee->status?->label() ?? '—' }}
                         </span>
+                        @if($employee->user)
+                            @if($employee->user->requiresPasswordChange())
+                                <span class="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700 ring-1 ring-inset ring-amber-600/20 dark:bg-amber-400/10 dark:text-amber-300 dark:ring-amber-400/20" data-test="password-status">
+                                    Temporary password · Reset required
+                                </span>
+                            @else
+                                <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-600/20 dark:bg-emerald-400/10 dark:text-emerald-300 dark:ring-emerald-400/20" data-test="password-status"
+                                    @if($employee->user->password_changed_at) title="Set {{ $employee->user->password_changed_at->format('d M Y') }}" @endif>
+                                    Password set
+                                </span>
+                            @endif
+                        @endif
                     </div>
                 </div>
             </div>
@@ -165,6 +177,18 @@
                                 <span class="block text-xs text-[#667085] dark:text-zinc-400">Replaces their password immediately</span>
                             </span>
                         </button>
+
+                        @unless($employee->user?->requiresPasswordChange())
+                            <button type="button" wire:click="forcePasswordReset" wire:loading.attr="disabled" wire:target="forcePasswordReset"
+                                wire:confirm="They will have to set a new password the next time they sign in. Their current password is not changed or shown. Continue?" @click="open = false"
+                                class="flex w-full items-start gap-3 px-4 py-2.5 text-left transition hover:bg-orange-50/70 dark:hover:bg-white/5">
+                                <flux:icon.arrow-path class="mt-0.5 size-4 shrink-0 text-orange-500" />
+                                <span>
+                                    <span class="block text-sm font-semibold text-[#101828] dark:text-zinc-100">Force password reset</span>
+                                    <span class="block text-xs text-[#667085] dark:text-zinc-400">They must choose a new one at next sign-in</span>
+                                </span>
+                            </button>
+                        @endunless
 
                         <div class="my-1 border-t border-[#EAECF0] dark:border-white/10"></div>
                         <div class="px-4 pb-1 pt-2 text-[10px] font-bold uppercase tracking-widest text-[#98A2B3]">Record</div>

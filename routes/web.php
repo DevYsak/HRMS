@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AdmsController;
+use App\Http\Controllers\Auth\FirstPasswordController;
 use App\Http\Controllers\BiometricDashboardController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\DocumentUploadController;
@@ -33,6 +34,7 @@ use App\Livewire\Employees\ProbationConfirmation;
 use App\Livewire\Employees\TeamManagement;
 use App\Livewire\ExecutiveDashboard;
 use App\Livewire\FinanceDashboard;
+use App\Livewire\Help\EmployeeGuide;
 use App\Livewire\HrAdminDashboard;
 use App\Livewire\ManagerDashboard;
 use App\Livewire\NotificationsPage;
@@ -152,6 +154,13 @@ Route::get('/invite/accept/{token}', [InvitationController::class, 'accept'])
 // CheckActiveEmployee instead.
 Route::middleware(['auth'])->group(function () {
 
+    // First sign-in on an issued credential. EnsurePasswordChanged confines a
+    // reset-required account to these two routes (and logout).
+    Route::get('/set-password', [FirstPasswordController::class, 'show'])->name('password.first-change');
+    Route::post('/set-password', [FirstPasswordController::class, 'update'])
+        ->middleware('throttle:6,1')
+        ->name('password.first-change.update');
+
     // Dashboard
     Route::get('/', Dashboard::class)->name('dashboard');
 
@@ -166,6 +175,10 @@ Route::middleware(['auth'])->group(function () {
     // The employee's own profile. Distinct from /settings/profile, which stays
     // account-level (email verification, deletion) inside the settings shell.
     Route::get('/my-profile', MyProfile::class)->name('profile.me');
+
+    // Employee Guide — how-to for every employee feature. Open to any signed-in
+    // user; it only links to pages, each of which keeps its own guards.
+    Route::get('/help/employee-guide', EmployeeGuide::class)->name('help.employee-guide');
 
     // --------------------------------------------------
     // Employees module

@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Concerns\HasTeams;
 use App\Enums\ThemePreference;
 use App\Enums\UserRole;
+use App\Http\Middleware\EnsurePasswordChanged;
 use App\Services\Approvals\ApprovalGuard;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -49,6 +50,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'must_change_password' => 'boolean',
             'password_changed_at' => 'datetime',
             'last_login_at' => 'datetime',
             'two_factor_confirmed_at' => 'datetime',
@@ -57,6 +59,17 @@ class User extends Authenticatable
             'scope_departments' => 'array',
             'scope_shifts' => 'array',
         ];
+    }
+
+    /**
+     * Still on an issued credential: confined to the "Set your password" page
+     * until the owner chooses their own.
+     *
+     * @see EnsurePasswordChanged
+     */
+    public function requiresPasswordChange(): bool
+    {
+        return (bool) $this->must_change_password;
     }
 
     /**

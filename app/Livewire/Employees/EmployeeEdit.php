@@ -374,6 +374,38 @@ class EmployeeEdit extends Component
         $this->showCredentialsModal = true;
     }
 
+    /**
+     * Put the employee back behind the first-login password page. Their
+     * current password is neither changed nor revealed; they sign in with it
+     * and must then choose a new one.
+     */
+    public function forcePasswordReset(): void
+    {
+        $this->authorize('update', $this->employee);
+
+        $user = $this->employee->user;
+        $actor = Auth::user();
+
+        if ($user === null) {
+            \Flux::toast('This employee has no login account.', variant: 'danger');
+
+            return;
+        }
+
+        // Employee management does not reach a Super Admin's credentials.
+        if ($user->isSuperAdmin() && ! $actor->isSuperAdmin()) {
+            \Flux::toast('Only a Super Admin can force a Super Admin to reset their password.', variant: 'danger');
+
+            return;
+        }
+
+        app(PasswordService::class)->forceReset($user, $actor);
+
+        $this->employee->setRelation('user', $user->fresh());
+
+        \Flux::toast('They will be asked to set a new password at their next sign-in.', variant: 'success');
+    }
+
     public function openEmailModal(): void
     {
         $this->emailSubject = '';

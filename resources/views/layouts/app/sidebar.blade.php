@@ -804,6 +804,7 @@
                     <flux:menu.item :href="route('profile.me')" icon="user" wire:navigate>My Profile</flux:menu.item>
                     <flux:menu.item :href="route('profile.edit')" icon="cog-6-tooth" wire:navigate>Account settings</flux:menu.item>
                     <flux:menu.item :href="route('settings.preferences')" icon="adjustments-horizontal" wire:navigate>Preferences</flux:menu.item>
+                    <flux:menu.item :href="route('help.employee-guide')" icon="lifebuoy" wire:navigate>Help &amp; Employee Guide</flux:menu.item>
                     @can('manage_settings')
                         <flux:menu.item :href="route('settings.general')" icon="cog-6-tooth" wire:navigate>Settings
                         </flux:menu.item>
@@ -881,6 +882,7 @@
                     <flux:menu.item :href="route('profile.me')" icon="user" wire:navigate>My Profile</flux:menu.item>
                     <flux:menu.item :href="route('profile.edit')" icon="cog-6-tooth" wire:navigate>Account settings</flux:menu.item>
                     <flux:menu.item :href="route('settings.preferences')" icon="adjustments-horizontal" wire:navigate>Preferences</flux:menu.item>
+                    <flux:menu.item :href="route('help.employee-guide')" icon="lifebuoy" wire:navigate>Help &amp; Employee Guide</flux:menu.item>
                     <flux:menu.item :href="route('appearance.edit')" icon="paint-brush" wire:navigate>Appearance</flux:menu.item>
                     <flux:menu.separator />
                     <form method="POST" action="{{ route('logout') }}">

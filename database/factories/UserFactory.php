@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Enums\TeamRole;
+use App\Enums\UserRole;
 use App\Models\Team;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -35,7 +36,7 @@ class UserFactory extends Factory
             'two_factor_secret' => null,
             'two_factor_recovery_codes' => null,
             'two_factor_confirmed_at' => null,
-            'role' => \App\Enums\UserRole::Employee,
+            'role' => UserRole::Employee,
         ];
     }
 
@@ -64,6 +65,19 @@ class UserFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'email_verified_at' => null,
+        ]);
+    }
+
+    /**
+     * A freshly issued account: on the shared temporary password and
+     * confined to the first-login password page.
+     */
+    public function onTemporaryPassword(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'password' => Hash::make(config('security.temporary_password')),
+            'must_change_password' => true,
+            'password_changed_at' => null,
         ]);
     }
 

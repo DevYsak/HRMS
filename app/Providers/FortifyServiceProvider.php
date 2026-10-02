@@ -9,6 +9,7 @@ use App\Http\Responses\RegisterResponse;
 use App\Http\Responses\TwoFactorLoginResponse;
 use App\Models\User;
 use App\Services\EmployeeInvitationService;
+use App\Services\PasswordService;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -60,8 +61,16 @@ class FortifyServiceProvider extends ServiceProvider
             if ($user instanceof User) {
                 $firstLogin = $user->last_login_at === null;
 
+                $stamp = ['last_login_at' => now()];
+
+                // Whatever route put the shared temporary password on this
+                // account, holding it means the account is not yet its owner's.
+                if (! $user->requiresPasswordChange() && app(PasswordService::class)->isOnTemporaryPassword($user)) {
+                    $stamp['must_change_password'] = true;
+                }
+
                 $user->timestamps = false;
-                $user->forceFill(['last_login_at' => now()])->save();
+                $user->forceFill($stamp)->save();
                 $user->timestamps = true;
 
                 // An invited employee who types the emailed password straight

@@ -143,14 +143,15 @@ class SyncBiometricEmployees extends Command
 
                     $user->update(['name' => $data['name'], 'email' => $data['email']]);
                 } else {
-                    $user = User::create([
+                    $user = User::forceCreate([
                         'name' => $data['name'],
                         'email' => $data['email'],
-                        // Nobody has been told this password — it exists only so
-                        // the account is never left with a guessable one. The
-                        // employee reaches their account through the
-                        // forgot-password flow.
-                        'password' => Hash::make(app(PasswordService::class)->generate()),
+                        // The shared temporary password: it opens nothing but
+                        // the first-login page, where the employee must choose
+                        // their own before reaching anything else.
+                        'password' => Hash::make(app(PasswordService::class)->temporaryPassword()),
+                        'must_change_password' => true,
+                        'password_changed_at' => null,
                         'role' => 'employee',
                     ]);
                 }

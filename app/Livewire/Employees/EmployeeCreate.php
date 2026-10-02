@@ -248,7 +248,9 @@ class EmployeeCreate extends Component
 
         $photoPath = $this->photo?->store('employee-photos', 'public');
 
-        $plainPassword = app(PasswordService::class)->generate();
+        // The shared bootstrap credential. It opens nothing but the
+        // first-login password page until the employee chooses their own.
+        $plainPassword = app(PasswordService::class)->temporaryPassword();
         $chosenRole = Role::findOrFail($this->roleId);
 
         // Privilege-escalation guard (Super Admin, delegation ceiling) — server side.
@@ -258,10 +260,12 @@ class EmployeeCreate extends Component
             return;
         }
 
-        $user = User::create([
+        $user = User::forceCreate([
             'name' => $this->name,
             'email' => $this->email,
             'password' => Hash::make($plainPassword),
+            'must_change_password' => true,
+            'password_changed_at' => null,
             'role' => $chosenRole->legacyBucket(),
             'role_id' => $chosenRole->id,
         ]);

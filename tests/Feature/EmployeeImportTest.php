@@ -175,15 +175,13 @@ test('admin can open the import page and download the template', function () {
         ->assertFileDownloaded('employee-import-template.xlsx');
 });
 
-// ── The dropped must_change_password column ───────────────────────────────
+// ── must_change_password ───────────────────────────────────────────────────
 
-test('importing a new employee does not write a must_change_password column', function () {
-    // The regression: the importer set `must_change_password` on every new
-    // user. When the forced first-login change was withdrawn the column went
-    // away, and the import died with
-    // "Unknown column 'must_change_password' in 'field list'" — a whole
-    // transaction rolled back because of a flag nothing read.
-    expect(Schema::hasColumn('users', 'must_change_password'))->toBeFalse();
+test('importing new employees succeeds and flags them for a first-login reset', function () {
+    // The original regression: the importer wrote `must_change_password`
+    // against a database where the column had been dropped, and the whole
+    // transaction rolled back. The column is back, and now enforced.
+    expect(Schema::hasColumn('users', 'must_change_password'))->toBeTrue();
 
     $service = app(EmployeeImportService::class);
 
@@ -207,12 +205,15 @@ test('importing a new employee does not write a must_change_password column', fu
     expect($mayuresh)->not->toBeNull()
         ->and((int) $mayuresh->employee_code)->toBe(16)
         ->and($yogesh)->not->toBeNull()
-        ->and((int) $yogesh->employee_code)->toBe(17);
+        ->and((int) $yogesh->employee_code)->toBe(17)
+        ->and($mayuresh->user->requiresPasswordChange())->toBeTrue()
+        ->and($mayuresh->user->password_changed_at)->toBeNull()
+        ->and(Hash::check(config('security.temporary_password'), $mayuresh->user->password))->toBeTrue();
 });
 
-test('an imported employee gets a real password, not a guessable one', function () {
-    // Dropping the flag must not weaken what replaced it: the generated
-    // credential still has to be unguessable.
+test('an imported employee never gets a trivially guessable password', function () {
+    // The shared temporary password is the only bootstrap credential, and it
+    // is gated behind the first-login reset; old literals must never return.
     $service = app(EmployeeImportService::class);
 
     $parsed = $service->parse([

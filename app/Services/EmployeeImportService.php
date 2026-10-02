@@ -532,11 +532,21 @@ class EmployeeImportService
                     }
 
                     // new
-                    $plain = $row['data']['password'] ?: $passwords->generate();
-                    $user = User::create([
+                    // New logins start on the shared temporary password and
+                    // must choose their own at first sign-in. A generated
+                    // placeholder address belongs to nobody, so it gets an
+                    // unknowable password instead of the guessable one.
+                    $plain = $row['data']['password'] ?: (
+                        ! empty($row['data']['employee']['has_placeholder_email'])
+                            ? $passwords->generate()
+                            : $passwords->temporaryPassword()
+                    );
+                    $user = User::forceCreate([
                         'name' => $row['data']['name'],
                         'email' => $row['data']['email'],
                         'password' => Hash::make($plain),
+                        'must_change_password' => true,
+                        'password_changed_at' => null,
                         'role' => $row['data']['role'],
                     ]);
                     $passwords->recordHistory($user, $user->password, $actor);

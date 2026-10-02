@@ -29,7 +29,7 @@ test('PasswordService generates a strong password and records history', function
     expect(PasswordHistory::where('user_id', $user->id)->count())->toBe(1);
 });
 
-test('creating an employee generates a secure password, records history and reveals it once', function () {
+test('creating an employee issues the temporary password, records history and reveals it once', function () {
     Mail::fake();
     Notification::fake();
 
@@ -48,9 +48,11 @@ test('creating an employee generates a secure password, records history and reve
     expect($plain)->not->toBe('');
     expect(Hash::check('Password@123', $user->password))->toBeFalse();       // no longer the hardcoded default
     expect(Hash::check($plain, $user->password))->toBeTrue();
+    expect($plain)->toBe(config('security.temporary_password'));
+    expect($user->requiresPasswordChange())->toBeTrue();
     expect(PasswordHistory::where('user_id', $user->id)->count())->toBe(1);
 
-    // The welcome email carries the real generated password, not the default.
+    // The welcome email carries the issued password, not the old default.
     Mail::assertSent(WelcomeEmployeeMail::class, fn ($mail) => $mail->temporaryPassword === $plain);
 });
 

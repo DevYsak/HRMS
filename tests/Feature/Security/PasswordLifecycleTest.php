@@ -24,15 +24,10 @@ function plcUser(array $attributes = []): User
 
 // ── Self-service change ────────────────────────────────────────────────────
 //
-// Employees change their own password from Settings > Security. There is no
-// forced first-login flow: it was built and then withdrawn on the user's
-// instruction, and the `must_change_password` column has since been dropped
-// entirely — it was still being written on employee creation, import and
-// biometric sync, which broke imports against databases that never had it.
-//
-// An HR-issued password stays valid until the employee replaces it. What is
-// still recorded is `password_changed_at`: null means nobody has chosen this
-// password themselves.
+// Employees change their own password from Settings > Security, or on the
+// forced first-login page when an account carries `must_change_password`
+// (see FirstLoginPasswordTest). `password_changed_at` null means nobody has
+// chosen this password themselves.
 
 test('changing the password stamps when it was chosen', function () {
     $user = plcUser(['password' => 'Issued!ByHr#2026']);
@@ -132,10 +127,11 @@ test('an admin reset always succeeds and re-flags the account', function () {
 
     $fresh = $user->fresh();
 
-    // password_changed_at null records that the employee has not chosen this
-    // password themselves. It gates nothing.
+    // The admin knows the result, so the employee must replace it at their
+    // next sign-in.
     expect($plain)->toBe('Known!Passw0rd#26')
-        ->and($fresh->password_changed_at)->toBeNull();
+        ->and($fresh->password_changed_at)->toBeNull()
+        ->and($fresh->requiresPasswordChange())->toBeTrue();
 });
 
 test('a generated reset password is not a guessable literal', function () {
