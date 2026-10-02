@@ -14,7 +14,7 @@ use App\Services\Leave\LeaveYearResolver;
 use Livewire\Component;
 
 /**
- * Bulk assign / increase / decrease / reset leave balances across a filtered
+ * Bulk assign / increase / decrease leave balances across a filtered
  * set of employees, with a dry-run preview. (Phase 2 — Feature 6.)
  */
 class BulkLeaveAssignment extends Component
@@ -76,7 +76,7 @@ class BulkLeaveAssignment extends Component
         return [
             'leave_type_id' => ['required', 'exists:leave_types,id'],
             'action' => ['required', 'in:'.implode(',', BulkLeaveService::ACTIONS)],
-            'days' => [$this->action === 'reset' ? 'nullable' : 'required', 'numeric', 'min:0.5'],
+            'days' => ['required', 'numeric', 'min:0.5'],
             'reason' => ['nullable', 'string', 'max:255'],
         ];
     }

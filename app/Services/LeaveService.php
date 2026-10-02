@@ -6,7 +6,6 @@ use App\Enums\EmployeeStatus;
 use App\Exceptions\ApprovalNotPermitted;
 use App\Models\AttendanceSetting;
 use App\Models\Employee;
-use App\Models\LeaveAccrualLog;
 use App\Models\LeaveBalance;
 use App\Models\LeaveEncashment;
 use App\Models\LeaveLedgerEntry;
@@ -20,10 +19,12 @@ use App\Notifications\LeaveMonthlyAccrualNotification;
 use App\Notifications\LeavePaymentStatusChangedNotification;
 use App\Notifications\LeaveRequestNotification;
 use App\Services\Approvals\ApprovalGuard;
+use App\Services\Leave\LeaveAccrualService;
 use App\Services\Leave\LeaveBalanceCalculator;
 use App\Services\Leave\LeaveCarryOverService;
 use App\Services\Leave\LeaveLedgerService;
 use App\Services\Leave\LeaveMovementService;
+use App\Services\Leave\LeaveRuleResolver;
 use App\Services\Leave\LeaveYearResolver;
 use App\Services\Notifications\NotificationRecipients;
 use App\Services\Teams\ApprovalRoutingService;
@@ -193,13 +194,17 @@ class LeaveService
 
         // ── Policy Validations ────────────────────────────────────────────────
 
+        // The employee's policy rule for this type, falling back to the
+        // type's own settings where the rule says nothing.
+        $rules = app(LeaveRuleResolver::class)->settings($employee, $leaveType);
+
         // Half-day period required when half day selected
         if ($isHalfDay && $halfDayPeriod === null) {
             throw new \DomainException('Please specify first half or second half for the half-day leave.');
         }
 
         // Half day allowed by leave type
-        if ($isHalfDay && ! $leaveType->allow_half_day) {
+        if ($isHalfDay && ! $rules['allow_half_day']) {
             throw new \DomainException("'{$leaveType->name}' does not allow half-day requests.");
         }
 
@@ -217,12 +222,12 @@ class LeaveService
         }
 
         // Probation restriction
-        if ($leaveType->probation_restricted && $employee->status === EmployeeStatus::Probation) {
+        if ($rules['probation_restricted'] && $employee->status === EmployeeStatus::Probation) {
             throw new \DomainException("'{$leaveType->name}' is not available during probation.");
         }
 
         // Notice period restriction
-        if ($leaveType->notice_period_restricted && $employee->status === EmployeeStatus::NoticePeriod) {
+        if ($rules['notice_period_restricted'] && $employee->status === EmployeeStatus::NoticePeriod) {
             throw new \DomainException("'{$leaveType->name}' is not available during notice period.");
         }
 
@@ -263,14 +268,14 @@ class LeaveService
         // Max consecutive days
         $days = $isHalfDay ? 0.5 : $this->calculateLeaveDays($start, $end, (bool) $leaveType->is_sandwich_applicable, (int) $leaveType->sandwich_min_days);
 
-        if ($leaveType->max_consecutive_days !== null && $days > $leaveType->max_consecutive_days) {
+        if ($rules['max_consecutive_days'] !== null && $days > $rules['max_consecutive_days']) {
             throw new \DomainException(
-                "'{$leaveType->name}' allows a maximum of {$leaveType->max_consecutive_days} consecutive day(s)."
+                "'{$leaveType->name}' allows a maximum of {$rules['max_consecutive_days']} consecutive day(s)."
             );
         }
 
         // Attachment required
-        if ($leaveType->attachment_required && $attachmentPath === null) {
+        if ($rules['attachment_required'] && $attachmentPath === null) {
             throw new \DomainException("An attachment is required for '{$leaveType->name}'.");
         }
 
@@ -677,70 +682,11 @@ class LeaveService
      */
     public function accrueMonthly(int $year, int $month): int
     {
-        $accrualTypes = LeaveType::where('is_monthly_accrual', true)
-            ->where('accrual_days_per_month', '>', 0)
-            ->get();
-
-        if ($accrualTypes->isEmpty()) {
-            return 0;
-        }
-
-        $count = 0;
-        // 'on-leave' is the enum value; 'on_leave' matched nobody, so staff
-        // on leave silently stopped accruing.
-        $employees = Employee::whereIn('status', [
-            'active', 'probation', 'confirmed', 'on-leave',
-        ])->get();
-
-        DB::transaction(function () use ($employees, $accrualTypes, $year, $month, &$count) {
-            foreach ($employees as $employee) {
-                foreach ($accrualTypes as $type) {
-                    // Skip if probation restricted and employee is on probation
-                    if ($type->probation_restricted && $employee->status->value === 'probation') {
-                        continue;
-                    }
-
-                    // Skip if gender restricted
-                    if (! $type->isGenderEligible($employee->gender)) {
-                        continue;
-                    }
-
-                    // Skip if already accrued this month
-                    $alreadyAccrued = LeaveAccrualLog::where('employee_id', $employee->id)
-                        ->where('leave_type_id', $type->id)
-                        ->where('year', $year)
-                        ->where('month', $month)
-                        ->exists();
-
-                    if ($alreadyAccrued) {
-                        continue;
-                    }
-
-                    $days = (float) $type->accrual_days_per_month;
-                    $monthStart = Carbon::create($year, $month, 1);
-
-                    // The month's LEAVE-year balance, created if missing and
-                    // otherwise left exactly as it is. (This used to reset
-                    // allocated, used and carried-forward to zero first.)
-                    $balance = app(LeaveMovementService::class)->balanceFor($employee->id, $type->id, $monthStart);
-
-                    // The log is the idempotency anchor: one per employee,
-                    // type and month. The ledger entry is keyed on it.
-                    $log = LeaveAccrualLog::create([
-                        'employee_id' => $employee->id,
-                        'leave_type_id' => $type->id,
-                        'days_credited' => $days,
-                        'year' => $year,
-                        'month' => $month,
-                        'credited_at' => now(),
-                    ]);
-
-                    app(LeaveMovementService::class)->creditAccrual($balance, $log->id, $days, $monthStart);
-
-                    $count++;
-                }
-            }
-        });
+        // Rule-driven (policy rule, falling back to the leave type), credited
+        // as its own ACCRUAL lot in the month's leave year; never resets any
+        // other figure. Idempotent per employee, type and month.
+        $result = app(LeaveAccrualService::class)->run($year, $month);
+        $count = $result['credited'];
 
         // A monthly summary for HR as a team, not for any one administrator.
         if ($count > 0) {

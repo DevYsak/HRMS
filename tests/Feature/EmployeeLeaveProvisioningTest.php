@@ -381,12 +381,12 @@ test('the preview writes nothing', function () {
 
 // ── 16. No legacy provisioning path survives ───────────────────────────────
 
-test('the legacy flat allocation has exactly one caller, and it is the provisioning service', function () {
+test('the legacy flat allocation has no callers left', function () {
     // The old call had three faults: it seeded flat per-type days, keyed them
-    // on the calendar year, and assigned no policy. Flat days are correct for
-    // sick and bereavement leave, so the call survives — but only behind the
-    // provisioning service, which supplies the leave year and excludes annual
-    // leave. Any other caller reintroduces the faults.
+    // on the calendar year, and assigned no policy. Every type is now
+    // provisioned through EnsureEmployeeLeaveBalancesService and the rule
+    // resolver, on the leave year and through the ledger. Any caller of the
+    // old flat seeding reintroduces the faults.
     $callers = [];
 
     foreach (['app', 'routes'] as $dir) {
@@ -412,15 +412,14 @@ test('the legacy flat allocation has exactly one caller, and it is the provision
         }
     }
 
-    expect($callers)->toBe(['LeaveProvisioningService.php']);
+    expect($callers)->toBe([]);
 });
 
-test('the surviving caller excludes annual leave and uses the leave year', function () {
-    // The two properties that make the one permitted caller safe.
+test('provisioning runs every type through the ensure service on the leave year', function () {
     $source = file_get_contents(app_path('Services/Leave/LeaveProvisioningService.php'));
 
-    expect($source)->toMatch('/initializeFromPolicy\s*\(\s*\$employee,\s*\$year->legacyYear\(\),/')
-        ->and($source)->toContain('$type !== null ? [$type->id] : []');
+    expect($source)->toContain('EnsureEmployeeLeaveBalancesService')
+        ->and($source)->toContain('$this->years->current()');
 
     // And proved behaviourally: a flat number on AL never reaches the balance.
     elpYears();
@@ -464,5 +463,8 @@ test('the employee create form writes into the leave year', function () {
 
     // The only surviving mention is the comment explaining the fix.
     expect(substr_count($source, 'now()->year'))->toBe(1)
-        ->and($source)->toContain('legacyYear()');
+        // Form allocations become audited overrides for the leave year,
+        // posted through the ledger rather than written over the balance.
+        ->and($source)->toContain('EmployeeLeaveOverrideService')
+        ->and($source)->toContain('LeaveYearResolver::class)->current()');
 });

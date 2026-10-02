@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Models\Employee;
 use App\Models\LeaveBalance;
-use App\Models\LeaveBalanceAdjustment;
 use App\Models\LeaveType;
 use App\Models\User;
 use Illuminate\Support\Collection;
@@ -21,7 +20,12 @@ use Illuminate\Support\Facades\DB;
  */
 class BulkLeaveService
 {
-    public const ACTIONS = ['assign', 'increase', 'decrease', 'reset'];
+    /**
+     * 'reset' (back to the type default, discarding whatever HR had granted)
+     * was removed in Phase 2: missing entitlement is provisioned from the
+     * policy instead (EnsureEmployeeLeaveBalancesService), never by a blind reset.
+     */
+    public const ACTIONS = ['assign', 'increase', 'decrease'];
 
     /**
      * Resolve the employees matching the given filters.
@@ -80,6 +84,10 @@ class BulkLeaveService
      */
     public function apply(Collection $employees, LeaveType $leaveType, string $action, float $days, string $reason, User $actor, int $year): int
     {
+        if ($action === 'reset') {
+            throw new \InvalidArgumentException('Bulk reset is no longer available. Use Bulk Provision Missing to grant policy entitlement.');
+        }
+
         if (! \in_array($action, self::ACTIONS, true)) {
             throw new \InvalidArgumentException('Invalid bulk action.');
         }
@@ -102,13 +110,6 @@ class BulkLeaveService
                     ['allocated_days' => 0, 'used_days' => 0, 'carried_forward_days' => 0, 'encashed_days' => 0, 'comp_off_credits' => 0],
                 );
 
-                // Ledger-backed balances only move through the ledger; the
-                // preview-first bulk tools (Phase 2D) handle them. Skipped, never
-                // overwritten.
-                if ($balance->isLedgerBacked()) {
-                    continue;
-                }
-
                 $current = (float) $balance->allocated_days;
                 $floor = (float) $balance->used_days + (float) ($balance->encashed_days ?? 0);
                 $new = $this->computeNew($current, $action, $days, $floor, $default);
@@ -117,20 +118,13 @@ class BulkLeaveService
                     continue; // no-op
                 }
 
-                $balance->update(['allocated_days' => $new]);
-
-                LeaveBalanceAdjustment::create([
-                    'employee_id' => $employee->id,
-                    'leave_type_id' => $leaveType->id,
-                    'action' => $new > $current ? 'credit' : 'debit',
-                    'days' => round(abs($new - $current), 2),
-                    'previous_balance' => $current,
-                    'new_balance' => $new,
-                    'reason' => $reason ?: 'Bulk '.$action,
-                    'remarks' => 'Bulk '.$action,
-                    'adjusted_by' => $actor->id,
-                    'adjusted_at' => now(),
-                ]);
+                // One audited adjustment per employee, posted through the
+                // ledger when the balance is ledger-backed — never a direct
+                // overwrite of the stored figure.
+                app(LeaveBalanceService::class)->adjust(
+                    $employee, $leaveType, $new > $current ? 'credit' : 'debit', round(abs($new - $current), 2),
+                    $reason ?: 'Bulk '.$action, 'Bulk '.$action, $actor, $year,
+                );
 
                 $updated++;
             }
@@ -149,7 +143,6 @@ class BulkLeaveService
             'assign' => max($floor, $days),
             'increase' => $current + $days,
             'decrease' => max($floor, $current - $days),
-            'reset' => max($floor, $default),
             default => $current,
         }, 2);
     }

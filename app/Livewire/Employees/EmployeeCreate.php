@@ -7,9 +7,9 @@ use App\Enums\UserRole;
 use App\Mail\WelcomeEmployeeMail;
 use App\Models\Department;
 use App\Models\Employee;
+use App\Models\EmployeeLeaveOverride;
 use App\Models\EmploymentType;
 use App\Models\JobTitle;
-use App\Models\LeaveBalance;
 use App\Models\LeaveType;
 use App\Models\Office;
 use App\Models\ProbationSetting;
@@ -20,6 +20,7 @@ use App\Models\ShiftSetting;
 use App\Models\User;
 use App\Models\WorkMode;
 use App\Notifications\WelcomeOnboardingNotification;
+use App\Services\Leave\EmployeeLeaveOverrideService;
 use App\Services\Leave\LeaveProvisioningService;
 use App\Services\Leave\LeaveYearResolver;
 use App\Services\OnboardingService;
@@ -351,20 +352,17 @@ class EmployeeCreate extends Component
                 continue;
             }
 
-            LeaveBalance::updateOrCreate(
-                [
-                    'employee_id' => $user->employee->id,
-                    'leave_type_id' => $lt->id,
-                    'year' => $leaveYear->legacyYear(),
-                ],
-                [
-                    'leave_year_id' => $leaveYear->id,
-                    'allocated_days' => $allocated,
-                    'used_days' => 0,
-                    'carried_forward_days' => 0,
-                    'encashed_days' => 0,
-                    'comp_off_credits' => 0,
-                ],
+            // Recorded as this employee's override for the year, so the
+            // figure is audited and posted through the leave ledger instead
+            // of written over the balance provisioning just created.
+            app(EmployeeLeaveOverrideService::class)->create(
+                $user->employee,
+                $lt,
+                EmployeeLeaveOverride::MODE_SET,
+                $allocated,
+                'Allocation entered on the new employee form',
+                Auth::user(),
+                $leaveYear,
             );
         }
     }

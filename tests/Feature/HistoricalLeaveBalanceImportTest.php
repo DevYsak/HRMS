@@ -405,18 +405,19 @@ test('a historical balance can never be written to the live year, from any scree
     [, $curr] = hliYears();
     $type = hliType();
     $employee = hliEmployee('CNS018');
-    LeaveBalance::updateOrCreate(
+    // The live year's balance as hiring provisioned it (or a legacy row).
+    $live = LeaveBalance::firstOrCreate(
         ['employee_id' => $employee->id, 'leave_type_id' => $type->id, 'year' => 2026],
         ['leave_year_id' => $curr->id, 'allocated_days' => 28, 'used_days' => 6],
     );
+    $before = [(float) $live->allocated_days, (float) $live->used_days];
 
     expect(fn () => app(LeaveBalanceService::class)->setHistoricalBalance(
         $employee, $type, $curr, 10, 0, 0, 'Trying to reset this year', null, hliHr(),
     ))->toThrow(DomainException::class, 'closed leave years');
 
-    $balance = LeaveBalance::where('employee_id', $employee->id)->where('year', 2026)->first();
-    expect((float) $balance->allocated_days)->toBe(28.0)
-        ->and((float) $balance->used_days)->toBe(6.0);
+    $balance = $live->fresh();
+    expect([(float) $balance->allocated_days, (float) $balance->used_days])->toBe($before);
 });
 
 test('the preview cannot be edited from the browser', function () {

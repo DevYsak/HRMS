@@ -215,6 +215,13 @@ Schedule::command('hrms:monthly-leave-accrual')
     ->withoutOverlapping()
     ->runInBackground();
 
+// Phase 2B — provision any eligible employee missing this leave year's base
+// entitlement (idempotent; mismatches and ambiguous balances are only reported)
+Schedule::command('leave:ensure-balances --apply')
+    ->dailyAt('05:30')
+    ->withoutOverlapping()
+    ->runInBackground();
+
 // Onboarding — Mark overdue tasks and notify owners → daily 09:00
 Schedule::command('hrms:send-onboarding-reminders')
     ->dailyAt('09:00')

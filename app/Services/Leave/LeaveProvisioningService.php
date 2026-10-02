@@ -2,12 +2,12 @@
 
 namespace App\Services\Leave;
 
-use App\Models\AuditLog;
 use App\Models\Employee;
 use App\Models\LeaveBalance;
 use App\Models\LeavePolicy;
 use App\Models\LeaveType;
-use App\Services\LeaveBalanceService;
+use App\Models\LeaveYear;
+use App\Observers\EmployeeObserver;
 
 /**
  * What a new employee starts with.
@@ -35,7 +35,6 @@ class LeaveProvisioningService
     public function __construct(
         private readonly LeaveEntitlementService $entitlements,
         private readonly LeaveYearResolver $years,
-        private readonly LeaveBalanceService $balances,
     ) {}
 
     /**
@@ -61,7 +60,7 @@ class LeaveProvisioningService
      *
      * @return array{policy:?LeavePolicy, policy_name:string, pattern:string, pattern_verified:bool, entitlement:?float, carry_forward:string, issues:array<int,string>}
      */
-    public function preview(Employee $employee, ?LeavePolicy $explicit = null): array
+    public function preview(Employee $employee, ?LeavePolicy $explicit = null, ?LeaveYear $year = null): array
     {
         $policy = $this->resolvePolicy($employee, $explicit);
         $issues = [];
@@ -104,7 +103,7 @@ class LeaveProvisioningService
             $probe = clone $subject;
             $probe->setRelation('leavePolicy', $policy);
 
-            $entitlement = round($this->entitlements->for($probe, $this->years->current())->totalDays(), 2);
+            $entitlement = round($this->entitlements->for($probe, $year ?? $this->years->current())->totalDays(), 2);
         }
 
         return [
@@ -120,11 +119,14 @@ class LeaveProvisioningService
     }
 
     /**
-     * Give a new employee their policy and their current-year annual leave.
+     * Give a new employee their policy and their current-year leave.
      *
-     * Idempotent: an employee who already holds a policy keeps it, and an
-     * existing annual balance is never overwritten. Re-importing somebody must
-     * not reset the leave they have already taken.
+     * The policy is assigned here (an existing assignment is a decision
+     * somebody made and is kept); every leave type's base entitlement is then
+     * posted by EnsureEmployeeLeaveBalancesService — Annual Leave from the UK
+     * engine, other types from their policy rule or legacy setting, all keyed
+     * on the LEAVE year. Idempotent: an existing balance is never rewritten,
+     * and re-running grants nothing twice.
      *
      * @return array{provisioned:bool, entitlement:?float, issues:array<int,string>}
      */
@@ -132,34 +134,30 @@ class LeaveProvisioningService
     {
         $type = LeaveType::where('code', self::ANNUAL_CODE)->first();
         $year = $this->years->current();
+        $preview = $this->preview($employee, $explicit, $year);
 
-        // Every other leave type keeps its configured allocation, and gets it
-        // whatever happens to annual leave below. Sick leave does not depend on
-        // whether somebody's annual entitlement can be calculated, and refusing
-        // it because the working pattern is unrecorded would deny a real
-        // entitlement over an unrelated gap.
-        //
-        // Two faults of the legacy call are fixed here rather than inherited:
-        // this is keyed on the LEAVE year, and annual leave is excluded so a
-        // flat annual_allocation_days can never stand in for a calculated one.
-        $this->balances->initializeFromPolicy(
-            $employee,
-            $year->legacyYear(),
-            $type !== null ? [$type->id] : [],
-        );
+        if ($preview['policy'] !== null && $employee->leave_policy_id === null) {
+            EmployeeObserver::$provisioningInProgress = true;
 
-        $preview = $this->preview($employee, $explicit);
+            try {
+                $employee->forceFill(['leave_policy_id' => $preview['policy']->id])->save();
+            } finally {
+                EmployeeObserver::$provisioningInProgress = false;
+            }
+            $employee->setRelation('leavePolicy', $preview['policy']);
+        }
+
+        // Every type, including the ones that do not depend on the annual
+        // entitlement — sick leave is not withheld because a working pattern
+        // is unrecorded.
+        $rows = app(EnsureEmployeeLeaveBalancesService::class)
+            ->ensure($employee, $year, auth()->user(), trigger: 'onboarding')
+            ->keyBy('leave_type_id');
 
         if ($preview['policy'] === null || ! $preview['pattern_verified']) {
             // Reported, not worked around. A flat fallback here is how an
             // unverified number becomes somebody's entitlement.
             return ['provisioned' => false, 'entitlement' => null, 'issues' => $preview['issues']];
-        }
-
-        // An existing assignment is a decision somebody made; this is not the
-        // place to revisit it.
-        if ($employee->leave_policy_id === null) {
-            $employee->forceFill(['leave_policy_id' => $preview['policy']->id])->save();
         }
 
         if ($type === null) {
@@ -170,51 +168,21 @@ class LeaveProvisioningService
             ];
         }
 
-        $existing = LeaveBalance::where('employee_id', $employee->id)
-            ->where('leave_type_id', $type->id)
-            ->where('year', $year->legacyYear())
-            ->first();
+        $annual = $rows->get($type->id);
 
-        if ($existing !== null) {
+        if (($annual['status'] ?? null) !== EnsureEmployeeLeaveBalancesService::PROVISIONED) {
             // Already has this year's annual leave. Rewriting it would discard
             // whatever has been taken, carried or encashed since.
-            return ['provisioned' => false, 'entitlement' => (float) $existing->allocated_days, 'issues' => []];
+            $existing = LeaveBalance::where('employee_id', $employee->id)
+                ->where('leave_type_id', $type->id)
+                ->where('year', $year->legacyYear())
+                ->first();
+
+            return ['provisioned' => false, 'entitlement' => $existing ? (float) $existing->allocated_days : null, 'issues' => []];
         }
 
-        $balance = LeaveBalance::create([
-            'employee_id' => $employee->id,
-            'leave_type_id' => $type->id,
-            'leave_year_id' => $year->id,
-            'year' => $year->legacyYear(),
-            'allocated_days' => $preview['entitlement'],
-            'used_days' => 0,
-            // No history to carry from, and none invented.
-            'carried_forward_days' => 0,
-            'encashed_days' => 0,
-            'comp_off_credits' => 0,
-        ]);
-
-        AuditLog::record(
-            $balance,
-            'leave.entitlement_provisioned',
-            null,
-            [
-                'employee_id' => $employee->id,
-                'leave_type' => $type->name,
-                'leave_type_id' => $type->id,
-                'leave_year' => $year->label,
-                'leave_year_id' => $year->id,
-                'leave_policy' => $preview['policy']->name,
-                'leave_policy_id' => $preview['policy']->id,
-                'working_pattern' => $preview['pattern'],
-                'allocated_days' => $preview['entitlement'],
-                'carried_forward_days' => 0,
-                'source' => 'onboarding',
-            ],
-            'Calculated from leave policy and working pattern',
-            $employee->id,
-        );
-
+        // Audited by the ensure service (leave.entitlement_provisioned), with
+        // the policy, the working pattern and how the figure was reached.
         return ['provisioned' => true, 'entitlement' => $preview['entitlement'], 'issues' => []];
     }
 

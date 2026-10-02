@@ -2,7 +2,9 @@
 
 use App\Models\Employee;
 use App\Models\LeaveBalance;
+use App\Models\LeaveLedgerEntry;
 use App\Models\LeaveType;
+use App\Services\Leave\LeaveLedgerService;
 use App\Services\LeaveBalanceService;
 
 test('creating an employee auto-assigns balances from types with a default allocation', function () {
@@ -10,7 +12,8 @@ test('creating an employee auto-assigns balances from types with a default alloc
     $sick = LeaveType::create(['name' => 'Sick Leave', 'annual_allocation_days' => 7]);
     $lop = LeaveType::create(['name' => 'Loss of Pay']); // no default allocation
 
-    $employee = Employee::factory()->create();
+    // Leave is provisioned for employees in a status that holds it.
+    $employee = Employee::factory()->create(['status' => 'active']);
     $year = now()->year;
 
     $annualBalance = LeaveBalance::where('employee_id', $employee->id)
@@ -28,10 +31,13 @@ test('creating an employee auto-assigns balances from types with a default alloc
 
 test('re-initializing is idempotent and never resets used balances', function () {
     $annual = LeaveType::create(['name' => 'Annual Leave', 'annual_allocation_days' => 12]);
-    $employee = Employee::factory()->create();
+    // Leave is provisioned for employees in a status that holds it.
+    $employee = Employee::factory()->create(['status' => 'active']);
 
     $balance = LeaveBalance::where('employee_id', $employee->id)->where('leave_type_id', $annual->id)->first();
-    $balance->update(['used_days' => 3]);
+    // Usage on a provisioned (ledger-backed) balance is a ledger debit.
+    app(LeaveLedgerService::class)->debit($balance, LeaveLedgerEntry::TYPE_USAGE, 3, now(), 'test:usage:'.$balance->id);
+    app(LeaveLedgerService::class)->rebuild($balance);
 
     app(LeaveBalanceService::class)->initializeForEmployee($employee, now()->year);
 

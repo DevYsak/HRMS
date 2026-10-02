@@ -51,6 +51,8 @@ function llEmployee(): Employee
     return Employee::factory()->create([
         'user_id' => User::factory()->create(['role' => UserRole::Employee])->id,
         'status' => 'active',
+        // Settled staff: accrual starts from the joining month.
+        'joining_date' => '2024-01-10',
     ]);
 }
 
@@ -509,8 +511,10 @@ test('the backfill preview changes nothing', function () {
 
     $this->artisan('leave:ledger-backfill', ['--employee' => $employee->id])->assertSuccessful();
 
-    expect(LeaveLedgerEntry::count())->toBe(0)
-        ->and(LeaveBalance::whereNotNull('ledger_migrated_at')->count())->toBe(0);
+    // Only the legacy row is in question; hiring may have provisioned other
+    // types straight onto the ledger.
+    expect(LeaveLedgerEntry::where('leave_type_id', $type->id)->count())->toBe(0)
+        ->and(LeaveBalance::where('leave_type_id', $type->id)->whereNotNull('ledger_migrated_at')->count())->toBe(0);
 });
 
 // ── Leave-year lifecycle ─────────────────────────────────────────────────────
