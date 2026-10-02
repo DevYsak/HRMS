@@ -237,7 +237,15 @@ class EmployeeLeaveDetail extends Component
         $this->resetErrorBag();
         $this->reset(['days', 'targetBalance', 'reason', 'internalNote', 'expiresOn', 'startDate', 'endDate', 'isHalfDay', 'attachment']);
         $this->action = $action;
-        $this->formTypeId = $leaveTypeId ?? $this->balances->first()['leave_type']?->id;
+        $firstBalance = $this->balances->first();
+
+$this->formTypeId = $leaveTypeId ?? data_get($firstBalance, 'leave_type.id');
+if (! $this->formTypeId) {
+    $this->action = null;
+    $this->addError('formTypeId', 'No leave balance exists for this employee for the selected leave year.');
+
+    return;
+}
         $this->effectiveDate = Carbon::today()->between($this->year->starts_on, $this->year->ends_on)
             ? Carbon::today()->toDateString() : $this->year->starts_on->toDateString();
         $this->notifyEmployee = true;
