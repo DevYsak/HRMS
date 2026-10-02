@@ -28,6 +28,7 @@ use App\Services\Security\RoleDelegationGuard;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Notification;
 use Livewire\Livewire;
 
@@ -323,4 +324,78 @@ test('the month-wise statement and timeline come from the ledger', function () {
 
     expect($timeline->pluck('label')->all())->toBe(['Base Entitlement', 'Carry Forward', 'Monthly Accrual', 'Leave Taken'])
         ->and($timeline->last()['running'])->toBe(14.5);
+});
+
+// ── Employees with no balance in the year (production crash, lines 203/240) ──
+
+/** An eligible employee with no leave balance at all — provisioning never ran for them. */
+function lmpUnprovisioned(): Employee
+{
+    return Employee::withoutEvents(fn () => Employee::factory()->create([
+        'user_id' => lmpUser('employee', UserRole::Employee)->id,
+        'status' => 'active', 'joining_date' => '2024-02-01',
+    ]));
+}
+
+test('A: an employee with zero leave balances can open the leave detail page and every tab', function () {
+    lmpSetup();
+    $employee = lmpUnprovisioned();
+
+    $component = Livewire::actingAs(lmpHr())->test(EmployeeLeaveDetail::class, ['employee' => $employee])
+        ->assertOk()
+        ->assertSee('No leave balances in 2026/27');
+
+    foreach (['history', 'statement', 'carry_forward', 'requests', 'overrides', 'balances'] as $tab) {
+        $component->set('tab', $tab)->assertOk();
+    }
+});
+
+test('B: the statement is an empty collection when there is no type and no balance', function () {
+    lmpSetup();
+    $employee = lmpUnprovisioned();
+
+    $statement = Livewire::actingAs(lmpHr())->test(EmployeeLeaveDetail::class, ['employee' => $employee])
+        ->set('tab', 'statement')
+        ->get('statement');
+
+    expect($statement)->toBeInstanceOf(Collection::class)->toBeEmpty();
+});
+
+test('C: opening an action with no balances fails gracefully with a visible message', function () {
+    lmpSetup();
+    $employee = lmpUnprovisioned();
+
+    Livewire::actingAs(lmpHr())->test(EmployeeLeaveDetail::class, ['employee' => $employee])
+        ->call('openAction', 'add')
+        ->assertOk()
+        ->assertSet('action', null)
+        ->assertHasErrors('formTypeId')
+        ->assertSee('No leave balance exists for this employee for the selected leave year.');
+});
+
+test('D: an employee with a balance still gets the correct statement', function () {
+    [$employee, $type] = lmpSetup();
+
+    // With no type chosen it defaults to the first balance; choose this one.
+    $statement = Livewire::actingAs(lmpHr())->test(EmployeeLeaveDetail::class, ['employee' => $employee])
+        ->set('tab', 'statement')
+        ->set('statementTypeId', $type->id)
+        ->get('statement');
+
+    expect($statement)->not->toBeEmpty()
+        ->and($statement->firstWhere('month', '2026-07')['opening'])->toBe(12.0)
+        ->and($statement->firstWhere('month', '2026-07')['closing'])->toBe(12.0);
+});
+
+test('E: viewing the page never provisions a balance', function () {
+    lmpSetup();
+    $employee = lmpUnprovisioned();
+
+    Livewire::actingAs(lmpHr())->test(EmployeeLeaveDetail::class, ['employee' => $employee])
+        ->set('tab', 'statement')
+        ->set('tab', 'history')
+        ->call('openAction', 'add');
+
+    expect(LeaveBalance::where('employee_id', $employee->id)->count())->toBe(0)
+        ->and(LeaveLedgerEntry::where('employee_id', $employee->id)->count())->toBe(0);
 });

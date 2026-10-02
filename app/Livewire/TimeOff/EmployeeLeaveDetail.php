@@ -200,7 +200,10 @@ class EmployeeLeaveDetail extends Component
     #[Computed]
     public function statement(): Collection
     {
-        $type = LeaveType::withTrashed()->find($this->statementTypeId ?? $this->balances->first()['leave_type']?->id);
+        // An employee may have no balance in this year yet: no type to infer,
+        // so an empty statement rather than an error.
+        $typeId = $this->statementTypeId ?? data_get($this->balances->first(), 'leave_type.id');
+        $type = $typeId ? LeaveType::withTrashed()->find($typeId) : null;
 
         return $type ? app(LeaveStatementService::class)->monthly($this->employee, $type, $this->year) : collect();
     }
@@ -237,15 +240,18 @@ class EmployeeLeaveDetail extends Component
         $this->resetErrorBag();
         $this->reset(['days', 'targetBalance', 'reason', 'internalNote', 'expiresOn', 'startDate', 'endDate', 'isHalfDay', 'attachment']);
         $this->action = $action;
-        $firstBalance = $this->balances->first();
 
-$this->formTypeId = $leaveTypeId ?? data_get($firstBalance, 'leave_type.id');
-if (! $this->formTypeId) {
-    $this->action = null;
-    $this->addError('formTypeId', 'No leave balance exists for this employee for the selected leave year.');
+        // No type passed and no balance to take one from: refuse with a
+        // message shown on the page, never a 500. Nothing is provisioned here.
+        $this->formTypeId = $leaveTypeId ?? data_get($this->balances->first(), 'leave_type.id');
 
-    return;
-}
+        if (! $this->formTypeId) {
+            $this->action = null;
+            $this->addError('formTypeId', 'No leave balance exists for this employee for the selected leave year.');
+
+            return;
+        }
+
         $this->effectiveDate = Carbon::today()->between($this->year->starts_on, $this->year->ends_on)
             ? Carbon::today()->toDateString() : $this->year->starts_on->toDateString();
         $this->notifyEmployee = true;
