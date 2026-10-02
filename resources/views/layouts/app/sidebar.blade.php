@@ -506,6 +506,9 @@
                         @can('approve_leave')
                             <flux:sidebar.item :href="route('time-off.employees')" :current="request()->routeIs('time-off.employees')" wire:navigate>All Leave</flux:sidebar.item>
                         @endcan
+                        @can('view_leave_management')
+                            <flux:sidebar.item :href="route('time-off.leave-management')" :current="request()->routeIs('time-off.leave-management*', 'time-off.year-rollover', 'time-off.reconciliation')" wire:navigate>Leave Management</flux:sidebar.item>
+                        @endcan
                         @if($isFin || $isHr)
                             <flux:sidebar.item :href="route('time-off.encashments')" :current="request()->routeIs('time-off.encashments')" wire:navigate>Encashments</flux:sidebar.item>
                         @endif

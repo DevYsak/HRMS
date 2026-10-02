@@ -91,11 +91,15 @@ use App\Livewire\Settings\SalaryCycleManager;
 use App\Livewire\Settings\WorkModeManager;
 use App\Livewire\TimeOff\AllTimeOff;
 use App\Livewire\TimeOff\BulkLeaveAssignment;
+use App\Livewire\TimeOff\EmployeeLeaveDetail;
 use App\Livewire\TimeOff\FinanceEncashments;
 use App\Livewire\TimeOff\HistoricalBalances;
 use App\Livewire\TimeOff\LeaveAllocationPolicies;
 use App\Livewire\TimeOff\LeaveCarryForward;
+use App\Livewire\TimeOff\LeaveManagement;
+use App\Livewire\TimeOff\LeaveReconciliation;
 use App\Livewire\TimeOff\LeaveRegularisation;
+use App\Livewire\TimeOff\LeaveYearRollover;
 use App\Livewire\TimeOff\MyTimeOff;
 use App\Livewire\TimeOff\TeamTimeOff;
 use App\Livewire\TimeOff\TimeOffSettings;
@@ -225,6 +229,17 @@ Route::middleware(['auth'])->group(function () {
             ->middleware('can:view_leave_regularisation');
 
         Route::get('/settings', TimeOffSettings::class)->name('settings')->middleware('role:manage-settings');
+
+        // HR Leave Management (Phase 2D). Each action inside re-authorises on
+        // the server; the route gate only decides who may open the page.
+        Route::get('/leave-management', LeaveManagement::class)->name('leave-management')
+            ->middleware('can:view_leave_management');
+        Route::get('/leave-management/employees/{employee}', EmployeeLeaveDetail::class)->name('leave-management.employee')
+            ->middleware('can:view_leave_management');
+        Route::get('/leave-management/year-rollover', LeaveYearRollover::class)->name('year-rollover')
+            ->middleware('can:run_leave_rollover');
+        Route::get('/leave-management/reconciliation', LeaveReconciliation::class)->name('reconciliation')
+            ->middleware('can:reconcile_leave');
     });
 
     // --------------------------------------------------

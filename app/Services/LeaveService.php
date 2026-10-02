@@ -14,11 +14,13 @@ use App\Models\LeaveRequest;
 use App\Models\LeaveType;
 use App\Models\PublicHoliday;
 use App\Models\User;
+use App\Notifications\LeaveAppliedOnBehalfNotification;
 use App\Notifications\LeaveEncashmentNotification;
 use App\Notifications\LeaveMonthlyAccrualNotification;
 use App\Notifications\LeavePaymentStatusChangedNotification;
 use App\Notifications\LeaveRequestNotification;
 use App\Services\Approvals\ApprovalGuard;
+use App\Services\Audit\AuditService;
 use App\Services\Leave\LeaveAccrualService;
 use App\Services\Leave\LeaveBalanceCalculator;
 use App\Services\Leave\LeaveCarryOverService;
@@ -29,6 +31,7 @@ use App\Services\Leave\LeaveYearResolver;
 use App\Services\Notifications\NotificationRecipients;
 use App\Services\Teams\ApprovalRoutingService;
 use Carbon\CarbonInterface;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -377,6 +380,69 @@ class LeaveService
         ));
 
         return $request;
+    }
+
+    /**
+     * HR submits a leave request for another employee.
+     *
+     * Exactly the employee's own path — every policy, overlap and balance
+     * check of submitRequest() applies — with the submitting HR user and an
+     * internal note recorded on the request, and an audit entry that names
+     * both the actor (HR) and the subject (the employee). The request then
+     * goes through the normal approval chain.
+     *
+     * @param  array<int, array{path: string, name?: string|null, mime?: string|null, size?: int|null}>  $attachments
+     */
+    public function applyOnBehalf(
+        User $hr,
+        Employee $employee,
+        LeaveType $leaveType,
+        string $startDate,
+        string $endDate,
+        string $reason,
+        bool $isHalfDay = false,
+        ?string $halfDayPeriod = null,
+        string $requestedLeaveStatus = 'paid',
+        ?string $internalNote = null,
+        bool $notifyEmployee = true,
+        array $attachments = [],
+    ): LeaveRequest {
+        if (! $hr->hasPermission('apply_leave_on_behalf')) {
+            throw new AuthorizationException('You may not apply leave on behalf of another employee.');
+        }
+
+        if ($hr->employee?->id === $employee->id) {
+            throw new \DomainException('Use My Time Off to apply for your own leave.');
+        }
+
+        return DB::transaction(function () use ($hr, $employee, $leaveType, $startDate, $endDate, $reason, $isHalfDay, $halfDayPeriod, $requestedLeaveStatus, $internalNote, $notifyEmployee, $attachments) {
+            $request = $this->submitRequest(
+                $employee, $leaveType, $startDate, $endDate, $reason, $isHalfDay, $halfDayPeriod,
+                $requestedLeaveStatus, attachments: $attachments,
+            );
+
+            $request->forceFill(['applied_by_user_id' => $hr->id, 'hr_internal_note' => $internalNote ?: null])->save();
+
+            app(AuditService::class)->event('LEAVE_APPLIED_ON_BEHALF', AuditService::LEAVE, $request,
+                new: [
+                    'actor_user_id' => $hr->id,
+                    'subject_employee_id' => $employee->id,
+                    'leave_type' => $leaveType->name,
+                    'start_date' => $request->start_date->toDateString(),
+                    'end_date' => $request->end_date->toDateString(),
+                    'days' => (float) $request->days,
+                    'half_day' => $isHalfDay ? $halfDayPeriod : null,
+                    'requested_leave_status' => $requestedLeaveStatus,
+                    'notify_employee' => $notifyEmployee,
+                ],
+                reason: $reason, subjectEmployeeId: $employee->id);
+
+            if ($notifyEmployee && $employee->user) {
+                $employee->user->notify(new LeaveAppliedOnBehalfNotification($request->fresh('leaveType'), $hr->name));
+            }
+
+            return $request;
+        });
     }
 
     /**

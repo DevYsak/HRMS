@@ -46,6 +46,9 @@ class RoleDelegationGuard
         'audit.view_all',
         'settings.roles',
         'settings.permissions',
+        // Year-wide leave operations: they move every employee's balance.
+        'run_leave_rollover',
+        'reconcile_leave',
     ];
 
     public function isSuperAdmin(?User $user): bool
