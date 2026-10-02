@@ -9,16 +9,23 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Fillable([
     'employee_id',
     'leave_type_id',
+    'leave_year_id',
     'action',
     // manual | regularisation | carry_forward — so payroll and reporting can
     // tell an automated deduction from an HR correction.
     'source',
+    // adjustment | add_on | correction — what kind of HR movement this is.
+    'category',
+    'add_on_type',
+    'effective_date',
+    'expires_on',
     'source_id',
     'days',
     'previous_balance',
     'new_balance',
     'reason',
     'remarks',
+    'internal_note',
     'adjusted_by',
     'adjusted_at',
 ])]
@@ -33,6 +40,8 @@ class LeaveBalanceAdjustment extends Model
             'previous_balance' => 'decimal:2',
             'new_balance' => 'decimal:2',
             'adjusted_at' => 'datetime',
+            'effective_date' => 'date',
+            'expires_on' => 'date',
         ];
     }
 

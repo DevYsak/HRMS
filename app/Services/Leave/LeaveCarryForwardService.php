@@ -180,7 +180,7 @@ class LeaveCarryForwardService
             $tx->status = $tx->deriveStatus();
             $tx->save();
 
-            $after = $this->writeBalance($employee, $type, $to, $applied);
+            $after = $this->writeBalance($employee, $type, $to, $applied, $tx->id, $actor);
 
             $this->audit($tx, 'leave.carry_forward_applied', $before, $after, $actor, [
                 'eligible_days' => $eligible,
@@ -228,7 +228,7 @@ class LeaveCarryForwardService
             $tx->status = $tx->deriveStatus();
             $tx->save();
 
-            $after = $this->writeBalance($employee, $type, $year, 0.0);
+            $after = $this->writeBalance($employee, $type, $year, 0.0, $tx->id, $actor);
 
             $this->audit($tx, 'leave.carry_forward_reversed', $before, $after, $actor, [
                 'reversed_days' => (float) $tx->reversed_days,
@@ -360,23 +360,21 @@ class LeaveCarryForwardService
      * arithmetic that added to whatever was already there, so a second run
      * compounded. Recomputing from the entitlement converges instead.
      */
-    private function writeBalance(Employee $employee, LeaveType $type, LeaveYear $year, float $carried): float
+    private function writeBalance(Employee $employee, LeaveType $type, LeaveYear $year, float $carried, int $transactionId, ?User $actor = null): float
     {
-        $balance = LeaveBalance::firstOrNew([
-            'employee_id' => $employee->id,
-            'leave_type_id' => $type->id,
-            'year' => $year->legacyYear(),
-        ]);
+        $balance = LeaveBalance::firstOrCreate(
+            ['employee_id' => $employee->id, 'leave_type_id' => $type->id, 'year' => $year->legacyYear()],
+            [
+                'leave_year_id' => $year->id,
+                'allocated_days' => 0, 'used_days' => 0, 'carried_forward_days' => 0,
+                'encashed_days' => 0, 'comp_off_credits' => 0,
+            ],
+        );
 
-        $fresh = (float) ($balance->allocated_days ?? 0) - (float) ($balance->carried_forward_days ?? 0);
-
-        $balance->leave_year_id = $year->id;
-        $balance->allocated_days = round($fresh + $carried, 2);
-        $balance->carried_forward_days = round($carried, 2);
-        $balance->used_days = (float) ($balance->used_days ?? 0);
-        $balance->encashed_days = (float) ($balance->encashed_days ?? 0);
-        $balance->comp_off_credits = (float) ($balance->comp_off_credits ?? 0);
-        $balance->save();
+        // A ledger-backed target gets a carry-forward credit lot (traceable to
+        // this transaction, with its policy expiry); a legacy row keeps the
+        // non-incremental column arithmetic.
+        $balance = app(LeaveMovementService::class)->setCarriedForward($balance, $carried, $transactionId, $actor);
 
         return (float) $balance->carried_forward_days;
     }

@@ -265,9 +265,11 @@ test('filtering by employee returns every leave action for that person', functio
 
     $forMine = AuditLog::where('subject_employee_id', $mine->id)->get();
 
-    // Three: onboarding provisioned their entitlement, HR carried leave
-    // forward, HR adjusted it. All three are leave actions about this person.
-    expect($forMine)->toHaveCount(3)
+    // Four: onboarding provisioned their entitlement, the new year's balance
+    // moved onto the leave ledger, HR carried leave forward, HR adjusted it.
+    // All four are leave actions about this person.
+    expect($forMine)->toHaveCount(4)
+        ->and($forMine->pluck('event')->all())->toContain('LEAVE_LEDGER_MIGRATED')
         ->and($forMine->pluck('action')->all())->toContain('leave.entitlement_provisioned')
         ->and($forMine->every(fn ($l) => $l->subject_employee_id === $mine->id))->toBeTrue();
 });

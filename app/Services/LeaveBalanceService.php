@@ -8,11 +8,16 @@ use App\Models\Employee;
 use App\Models\LeaveAllocationPolicy;
 use App\Models\LeaveBalance;
 use App\Models\LeaveBalanceAdjustment;
+use App\Models\LeaveLedgerEntry;
 use App\Models\LeaveRequest;
 use App\Models\LeaveType;
 use App\Models\LeaveYear;
 use App\Models\User;
+use App\Services\Leave\LeaveBalanceCalculator;
+use App\Services\Leave\LeaveLedgerService;
+use App\Services\Leave\LeaveMovementService;
 use App\Services\Leave\LeaveYearResolver;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -147,11 +152,32 @@ class LeaveBalanceService
         return true;
     }
 
+    /** Kinds of HR movement an adjustment can be. */
+    public const CATEGORY_ADJUSTMENT = 'adjustment';
+
+    public const CATEGORY_ADD_ON = 'add_on';
+
+    public const CATEGORY_CORRECTION = 'correction';
+
+    /** @var array<int, string> */
+    public const ADD_ON_TYPES = [
+        'manual_adjustment', 'special_leave', 'management_grant', 'comp_off_credit',
+        'opening_balance_correction', 'historical_balance', 'other',
+    ];
+
     /**
-     * Manually credit or debit leave balance for an employee.
-     * Writes an immutable audit log entry for every change.
+     * Manually credit or debit an employee's leave balance.
      *
-     * @throws \DomainException if the leave type is system-controlled or debit exceeds balance
+     * On a ledger-backed balance the movement is posted as its own bucket —
+     * an add-on lot (with its own expiry), an HR credit or an HR debit — so
+     * the balance always shows where its days came from. A legacy row keeps
+     * the old allocated arithmetic for plain adjustments and refuses add-on
+     * leave until its history has been migrated (otherwise the add-on would
+     * vanish into an undecomposed figure).
+     *
+     * Writes an immutable LeaveBalanceAdjustment plus an audit event.
+     *
+     * @throws \DomainException if the leave type is system-controlled, the debit exceeds the balance, or the row cannot hold an add-on yet
      */
     public function adjust(
         Employee $employee,
@@ -162,13 +188,34 @@ class LeaveBalanceService
         string $remarks,
         User $adjuster,
         ?int $year = null,
+        string $category = self::CATEGORY_ADJUSTMENT,
+        ?string $addOnType = null,
+        ?CarbonInterface $effectiveDate = null,
+        ?CarbonInterface $expiresOn = null,
+        ?string $internalNote = null,
     ): LeaveBalanceAdjustment {
         if (! \in_array($action, ['credit', 'debit'], true)) {
             throw new \InvalidArgumentException("Action must be 'credit' or 'debit'.");
         }
 
+        if (! \in_array($category, [self::CATEGORY_ADJUSTMENT, self::CATEGORY_ADD_ON, self::CATEGORY_CORRECTION], true)) {
+            throw new \InvalidArgumentException("Unknown adjustment category '{$category}'.");
+        }
+
+        if ($category === self::CATEGORY_ADD_ON && $action !== 'credit') {
+            throw new \DomainException('Add-on leave is always a credit.');
+        }
+
+        if ($addOnType !== null && ! \in_array($addOnType, self::ADD_ON_TYPES, true)) {
+            throw new \DomainException("Unknown add-on type '{$addOnType}'.");
+        }
+
         if ($days <= 0) {
             throw new \DomainException('Days must be greater than zero.');
+        }
+
+        if (trim($reason) === '') {
+            throw new \DomainException('A reason is required for every leave adjustment.');
         }
 
         if ($leaveType->is_system_controlled) {
@@ -182,8 +229,15 @@ class LeaveBalanceService
         // March would otherwise land in a year that has not begun.
         $year ??= app(LeaveYearResolver::class)->legacyYearFor();
 
-        return DB::transaction(function () use ($employee, $leaveType, $action, $days, $reason, $remarks, $adjuster, $year) {
-            $leaveYear = app(LeaveYearResolver::class)->forDate(Carbon::create($year, 7, 1));
+        return DB::transaction(function () use ($employee, $leaveType, $action, $days, $reason, $remarks, $adjuster, $year, $category, $addOnType, $effectiveDate, $expiresOn, $internalNote) {
+            $leaveYear = app(LeaveYearResolver::class)->forDate(Carbon::create($year, 12, 31));
+            $effectiveDate ??= Carbon::today()->between($leaveYear->starts_on, $leaveYear->ends_on)
+                ? Carbon::today()
+                : $leaveYear->starts_on->copy();
+
+            if ($expiresOn !== null && $expiresOn->lt($effectiveDate)) {
+                throw new \DomainException('An add-on cannot expire before it takes effect.');
+            }
 
             $balance = LeaveBalance::firstOrCreate(
                 ['employee_id' => $employee->id, 'leave_type_id' => $leaveType->id, 'year' => $year],
@@ -200,41 +254,79 @@ class LeaveBalanceService
                 ],
             );
 
-            if ($balance->leave_year_id === null) {
+            if ($balance->leave_year_id === null && ! $balance->isLedgerBacked()) {
                 $balance->forceFill(['leave_year_id' => $leaveYear->id])->save();
             }
 
-            $previousBalance = (float) $balance->allocated_days;
+            $movements = app(LeaveMovementService::class);
+            $ledgerBacked = $movements->ledgerReady($balance);
+            $balance->refresh();
 
-            if ($action === 'credit') {
-                $newBalance = $previousBalance + $days;
-                $balance->increment('allocated_days', $days);
-            } else {
-                if ($days > $balance->available()) {
-                    throw new \DomainException(
-                        "Cannot debit {$days} day(s): only {$balance->available()} day(s) available."
-                    );
-                }
-                $newBalance = max(0, $previousBalance - $days);
-                $balance->decrement('allocated_days', $days);
+            if (! $ledgerBacked && $category === self::CATEGORY_ADD_ON) {
+                throw new \DomainException(
+                    'This balance has not been migrated to the leave ledger yet, so add-on leave could not be tracked separately. Resolve it in the ledger backfill first.'
+                );
             }
+
+            $calculator = app(LeaveBalanceCalculator::class);
+            $availableBefore = $calculator->summary($balance)['approved_available'];
+            $previousAllocated = (float) $balance->allocated_days;
+
+            if ($action === 'debit' && $days > $availableBefore + 0.001) {
+                $shown = max(0, $availableBefore);
+                throw new \DomainException("Cannot debit {$days} day(s): only {$shown} day(s) available.");
+            }
+
+            $newAllocated = $action === 'credit' ? $previousAllocated + $days : $previousAllocated - $days;
 
             $adjustment = LeaveBalanceAdjustment::create([
                 'employee_id' => $employee->id,
                 'leave_type_id' => $leaveType->id,
+                'leave_year_id' => $leaveYear->id,
                 'action' => $action,
                 // Tagged so the audit log can tell an HR correction from a
                 // carry forward or a regularisation, all three of which land
                 // in this same table.
                 'source' => 'manual',
+                'category' => $category,
+                'add_on_type' => $addOnType,
+                'effective_date' => $effectiveDate->toDateString(),
+                'expires_on' => $expiresOn?->toDateString(),
                 'days' => $days,
-                'previous_balance' => $previousBalance,
-                'new_balance' => $newBalance,
+                'previous_balance' => $previousAllocated,
+                'new_balance' => $newAllocated,
                 'reason' => $reason,
                 'remarks' => $remarks ?: null,
+                'internal_note' => $internalNote ?: null,
                 'adjusted_by' => $adjuster->id,
                 'adjusted_at' => now(),
             ]);
+
+            if ($ledgerBacked) {
+                $ledger = app(LeaveLedgerService::class);
+                $options = [
+                    'source_type' => 'leave_balance_adjustment',
+                    'source_id' => $adjustment->id,
+                    'reason' => $reason,
+                    'actor' => $adjuster,
+                    'meta' => array_filter(['category' => $category, 'add_on_type' => $addOnType]),
+                ];
+
+                if ($action === 'credit') {
+                    $ledger->credit($balance, $category === self::CATEGORY_ADD_ON ? LeaveLedgerEntry::TYPE_ADD_ON : LeaveLedgerEntry::TYPE_ADJUSTMENT_CREDIT,
+                        $days, $effectiveDate, "adjustment:{$adjustment->id}", $options + ['expires_on' => $expiresOn?->toDateString()]);
+                } else {
+                    $ledger->debit($balance, LeaveLedgerEntry::TYPE_ADJUSTMENT_DEBIT, $days, $effectiveDate, "adjustment:{$adjustment->id}", $options);
+                }
+
+                $balance = $ledger->rebuild($balance);
+            } elseif ($action === 'credit') {
+                $balance->increment('allocated_days', $days);
+            } else {
+                $balance->decrement('allocated_days', $days);
+            }
+
+            $availableAfter = $calculator->summary($balance->fresh())['approved_available'];
 
             // The adjustment row is the transaction; this is the entry that puts
             // it in the admin audit log beside every other leave action, with
@@ -242,12 +334,17 @@ class LeaveBalanceService
             AuditLog::record(
                 $adjustment,
                 'created',
-                ['allocated_days' => $previousBalance],
+                ['allocated_days' => $previousAllocated, 'available' => $availableBefore],
                 [
-                    'allocated_days' => $newBalance,
+                    'allocated_days' => $newAllocated,
+                    'available' => $availableAfter,
                     'action' => $action,
+                    'category' => $category,
+                    'add_on_type' => $addOnType,
                     'source' => 'manual',
                     'days' => $days,
+                    'effective_date' => $effectiveDate->toDateString(),
+                    'expires_on' => $expiresOn?->toDateString(),
                     'leave_type' => $leaveType->name,
                     'leave_type_id' => $leaveType->id,
                     'leave_year' => $year,
@@ -255,13 +352,63 @@ class LeaveBalanceService
                     'leave_year_label' => $leaveYear->label,
                     'adjusted_by' => $adjuster->id,
                     'remarks' => $remarks ?: null,
+                    'ledger_backed' => $ledgerBacked,
                 ],
                 $reason,
                 $employee->id,
+                [
+                    'module' => 'leave',
+                    'category' => 'leave',
+                    'event' => match ($category) {
+                        self::CATEGORY_ADD_ON => 'LEAVE_ADD_ON_GRANTED',
+                        self::CATEGORY_CORRECTION => 'LEAVE_BALANCE_CORRECTED',
+                        default => $action === 'credit' ? 'LEAVE_BALANCE_ADJUSTED' : 'LEAVE_DEDUCTED',
+                    },
+                ],
             );
 
             return $adjustment;
         });
+    }
+
+    /**
+     * "Set correct balance": HR states what the available balance should
+     * be; the difference is posted as an ordinary credit or debit. The
+     * stored figure is never simply overwritten.
+     */
+    public function setCorrectBalance(
+        Employee $employee,
+        LeaveType $leaveType,
+        float $correctAvailable,
+        string $reason,
+        string $remarks,
+        User $adjuster,
+        ?int $year = null,
+        ?string $internalNote = null,
+    ): LeaveBalanceAdjustment {
+        if ($correctAvailable < 0) {
+            throw new \DomainException('A corrected balance cannot be negative.');
+        }
+
+        $year ??= app(LeaveYearResolver::class)->legacyYearFor();
+
+        $balance = LeaveBalance::where('employee_id', $employee->id)
+            ->where('leave_type_id', $leaveType->id)
+            ->where('year', $year)
+            ->first();
+
+        $current = $balance ? app(LeaveBalanceCalculator::class)->summary($balance)['approved_available'] : 0.0;
+        $delta = round($correctAvailable - $current, 2);
+
+        if (abs($delta) < 0.005) {
+            throw new \DomainException("The available balance is already {$current} day(s).");
+        }
+
+        return $this->adjust(
+            $employee, $leaveType, $delta > 0 ? 'credit' : 'debit', abs($delta),
+            $reason, $remarks, $adjuster, $year, self::CATEGORY_CORRECTION,
+            internalNote: $internalNote,
+        );
     }
 
     /**
@@ -336,6 +483,12 @@ class LeaveBalanceService
                 'year' => $leaveYear->legacyYear(),
             ]);
 
+            // A ledger-backed year is described by its ledger; restating it
+            // wholesale would silently contradict every posted movement.
+            if ($balance->exists && $balance->isLedgerBacked()) {
+                throw new \DomainException('This leave year is already on the leave ledger; correct it with a ledger adjustment instead of restating it.');
+            }
+
             $before = [
                 'allocated' => (float) ($balance->allocated_days ?? 0),
                 'used' => (float) ($balance->used_days ?? 0),
@@ -363,6 +516,9 @@ class LeaveBalanceService
             $adjustment = LeaveBalanceAdjustment::create([
                 'employee_id' => $employee->id,
                 'leave_type_id' => $leaveType->id,
+                // The year being stated. adjusted_at is only when HR typed it
+                // in, which says nothing about which year it describes.
+                'leave_year_id' => $leaveYear->id,
                 'action' => $allocated >= $before['allocated'] ? 'credit' : 'debit',
                 'source' => 'historical',
                 'days' => round(abs($allocated - $before['allocated']), 2),

@@ -112,8 +112,9 @@ class LeaveRegularisationService
             $balance = $this->balanceFor($employee, $type, $from);
             $before = $this->available($balance);
 
-            $balance->used_days = round((float) $balance->used_days + $days, 2);
-            $balance->save();
+            // Posted as usage in the leave year of the absence; on a
+            // ledger-backed balance it consumes credit lots like any leave.
+            $balance = app(LeaveMovementService::class)->recordRegularisationUsage($employee->id, $type->id, $reg->id, $days, $from, User::find($reviewerId));
 
             $after = $this->available($balance->fresh());
 

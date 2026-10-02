@@ -131,6 +131,12 @@ class LeaveCarryOverService
                     'year' => $to->legacyYear(),
                 ]);
 
+                // Ledger-backed rows only take carry forward through
+                // LeaveCarryForwardService, which records the transaction.
+                if ($target->exists && $target->isLedgerBacked()) {
+                    continue;
+                }
+
                 // Fresh entitlement minus whatever a previous run of this same
                 // operation had added, so the base is the entitlement itself
                 // and not the result of the last run.

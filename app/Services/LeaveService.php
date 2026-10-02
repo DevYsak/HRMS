@@ -9,6 +9,7 @@ use App\Models\Employee;
 use App\Models\LeaveAccrualLog;
 use App\Models\LeaveBalance;
 use App\Models\LeaveEncashment;
+use App\Models\LeaveLedgerEntry;
 use App\Models\LeavePaymentAuditLog;
 use App\Models\LeaveRequest;
 use App\Models\LeaveType;
@@ -19,7 +20,10 @@ use App\Notifications\LeaveMonthlyAccrualNotification;
 use App\Notifications\LeavePaymentStatusChangedNotification;
 use App\Notifications\LeaveRequestNotification;
 use App\Services\Approvals\ApprovalGuard;
+use App\Services\Leave\LeaveBalanceCalculator;
 use App\Services\Leave\LeaveCarryOverService;
+use App\Services\Leave\LeaveLedgerService;
+use App\Services\Leave\LeaveMovementService;
 use App\Services\Leave\LeaveYearResolver;
 use App\Services\Notifications\NotificationRecipients;
 use App\Services\Teams\ApprovalRoutingService;
@@ -286,9 +290,12 @@ class LeaveService
 
         // Balance check — only for paid requests (after overlap so conflict errors surface first)
         if ($requestedLeaveStatus === 'paid') {
-            $balance = $this->getBalance($employee->id, $leaveType->id);
+            // The leave year the leave falls in, and net of the days other
+            // pending requests already reserve — two requests must not each
+            // be accepted against the same available days.
+            $balance = $this->balanceForDate($employee->id, $leaveType->id, Carbon::parse($startDate));
             $available = $balance
-                ? max(0, (float) $balance->allocated_days - (float) $balance->used_days - (float) ($balance->encashed_days ?? 0))
+                ? max(0, app(LeaveBalanceCalculator::class)->summary($balance)['available_to_request'])
                 : 0;
 
             if ($available < $days) {
@@ -384,6 +391,7 @@ class LeaveService
             $oldStatus = $leaveRequest->status;
             $oldDays = (float) $leaveRequest->days;
             $oldTypeId = $leaveRequest->leave_type_id;
+            $oldStart = Carbon::parse($leaveRequest->start_date);
             $employee = $leaveRequest->employee;
 
             $start = Carbon::parse($data['start_date']);
@@ -408,7 +416,7 @@ class LeaveService
 
             // Reverse any prior balance deduction if it was approved+paid
             if ($oldStatus === 'approved' && $this->wasApprovedAsPaid($leaveRequest)) {
-                $this->getBalance($employee->id, $oldTypeId)?->decrement('used_days', $oldDays);
+                app(LeaveMovementService::class)->reverseUsage($leaveRequest, (int) $oldTypeId, $oldDays, $oldStart, 'Leave re-reviewed', User::find($reviewerId));
             }
 
             $reviewer = User::find($reviewerId);
@@ -622,15 +630,15 @@ class LeaveService
         DB::transaction(function () use ($leaveRequest, $hr, $newStatus, $remark, $currentStatus, $employee, $days) {
             // Reverse / apply balance changes
             if ($leaveRequest->status === 'approved') {
+                $movements = app(LeaveMovementService::class);
+                $start = Carbon::parse($leaveRequest->start_date);
+
                 if ($currentStatus === 'paid' && $newStatus === 'unpaid') {
-                    // Reverse the deduction
-                    $this->getBalance($employee->id, $leaveRequest->leave_type_id)?->decrement('used_days', $days);
+                    // Return the days to the leave year the leave was taken in.
+                    $movements->reverseUsage($leaveRequest, (int) $leaveRequest->leave_type_id, $days, $start, 'Changed to unpaid by HR', $hr);
                 } elseif ($currentStatus === 'unpaid' && $newStatus === 'paid') {
-                    // Check balance and apply
-                    $balance = $this->getBalance($employee->id, $leaveRequest->leave_type_id);
-                    $available = $balance
-                        ? max(0, (float) $balance->allocated_days - (float) $balance->used_days - (float) ($balance->encashed_days ?? 0))
-                        : 0;
+                    $balance = $movements->balanceFor($employee->id, (int) $leaveRequest->leave_type_id, $start);
+                    $available = max(0, $movements->approvedAvailable($balance));
 
                     if ($available < $days) {
                         throw new \DomainException(
@@ -638,7 +646,7 @@ class LeaveService
                         );
                     }
 
-                    $balance->increment('used_days', $days);
+                    $movements->recordUsage($leaveRequest, $days, (int) $leaveRequest->leave_type_id, $start, enforceBalance: false, actor: $hr);
                 }
             }
 
@@ -678,8 +686,10 @@ class LeaveService
         }
 
         $count = 0;
+        // 'on-leave' is the enum value; 'on_leave' matched nobody, so staff
+        // on leave silently stopped accruing.
         $employees = Employee::whereIn('status', [
-            'active', 'probation', 'confirmed', 'on_leave',
+            'active', 'probation', 'confirmed', 'on-leave',
         ])->get();
 
         DB::transaction(function () use ($employees, $accrualTypes, $year, $month, &$count) {
@@ -707,27 +717,16 @@ class LeaveService
                     }
 
                     $days = (float) $type->accrual_days_per_month;
+                    $monthStart = Carbon::create($year, $month, 1);
 
-                    // Credit to leave balance
-                    LeaveBalance::updateOrCreate([
-                        'employee_id' => $employee->id,
-                        'leave_type_id' => $type->id,
-                        'year' => $year,
-                    ], [
-                        'allocated_days' => 0,
-                        'used_days' => 0,
-                        'carried_forward_days' => 0,
-                        'encashed_days' => 0,
-                        'comp_off_credits' => 0,
-                    ]);
+                    // The month's LEAVE-year balance, created if missing and
+                    // otherwise left exactly as it is. (This used to reset
+                    // allocated, used and carried-forward to zero first.)
+                    $balance = app(LeaveMovementService::class)->balanceFor($employee->id, $type->id, $monthStart);
 
-                    LeaveBalance::where('employee_id', $employee->id)
-                        ->where('leave_type_id', $type->id)
-                        ->where('year', $year)
-                        ->increment('allocated_days', $days);
-
-                    // Write accrual log
-                    LeaveAccrualLog::create([
+                    // The log is the idempotency anchor: one per employee,
+                    // type and month. The ledger entry is keyed on it.
+                    $log = LeaveAccrualLog::create([
                         'employee_id' => $employee->id,
                         'leave_type_id' => $type->id,
                         'days_credited' => $days,
@@ -735,6 +734,8 @@ class LeaveService
                         'month' => $month,
                         'credited_at' => now(),
                     ]);
+
+                    app(LeaveMovementService::class)->creditAccrual($balance, $log->id, $days, $monthStart);
 
                     $count++;
                 }
@@ -841,24 +842,9 @@ class LeaveService
             ],
         );
 
-        $balance = LeaveBalance::firstOrCreate([
-            'employee_id' => $employee->id,
-            'leave_type_id' => $leaveType->id,
-            'year' => $date->year,
-        ], [
-            'allocated_days' => 0,
-            'used_days' => 0,
-            'carried_forward_days' => 0,
-            'encashed_days' => 0,
-            'comp_off_credits' => 0,
-        ]);
-
-        $balance->incrementEach([
-            'allocated_days' => $days,
-            'comp_off_credits' => $days,
-        ]);
-
-        return $balance->fresh();
+        // The leave year of the day worked (not its calendar year), recorded
+        // as an add-on lot so it can expire and be consumed traceably.
+        return app(LeaveMovementService::class)->creditCompOff($employee, $leaveType, $date, $days);
     }
 
     /**
@@ -1044,14 +1030,30 @@ class LeaveService
                 'finance_reviewed_at' => now(),
             ]);
 
-            // Commit balance deduction only on final approval
+            // Commit balance deduction only on final approval — against the
+            // balance the days were requested from: the leave year the request
+            // was made in (carried-forward days live in that year's row even
+            // though source_leave_year names the year they originated in), so
+            // a finance sign-off after 1 July still debits the right row.
+            $year = app(LeaveYearResolver::class)->legacyYearFor($encashment->created_at ?? now());
             $balance = LeaveBalance::where('employee_id', $encashment->employee_id)
                 ->where('leave_type_id', $encashment->leave_type_id)
-                ->where('year', app(LeaveYearResolver::class)->legacyYearFor())
+                ->where('year', $year)
                 ->first();
 
             if ($balance) {
-                $balance->increment('encashed_days', $encashment->requested_days);
+                $movements = app(LeaveMovementService::class);
+                if ($movements->ledgerReady($balance)) {
+                    $ledger = app(LeaveLedgerService::class);
+                    $ledger->debit($balance, LeaveLedgerEntry::TYPE_ENCASHMENT, (float) $encashment->requested_days,
+                        Carbon::today(), "encashment:{$encashment->id}", [
+                            'source_type' => 'leave_encashment', 'source_id' => $encashment->id,
+                            'reason' => 'Leave encashment approved by finance', 'actor' => $reviewer,
+                        ]);
+                    $ledger->rebuild($balance);
+                } else {
+                    $balance->increment('encashed_days', $encashment->requested_days);
+                }
             }
         });
 
@@ -1147,8 +1149,16 @@ class LeaveService
         $employee = $leaveRequest->employee;
 
         if ($leaveRequest->status === 'approved' && $this->wasApprovedAsPaid($leaveRequest)) {
-            $this->getBalance($employee->id, $leaveRequest->leave_type_id)
-                ?->decrement('used_days', $leaveRequest->days);
+            // Returned to the leave year the leave was taken in — cancelling
+            // June leave in July must not credit the new year.
+            app(LeaveMovementService::class)->reverseUsage(
+                $leaveRequest,
+                (int) $leaveRequest->leave_type_id,
+                (float) $leaveRequest->days,
+                Carbon::parse($leaveRequest->start_date),
+                'Leave cancelled',
+                auth()->user(),
+            );
         }
 
         $leaveRequest->update(['status' => 'cancelled']);
@@ -1209,29 +1219,14 @@ class LeaveService
             ?? ($leaveRequest->leaveType?->is_paid ? 'paid' : 'unpaid');
 
         if ($effectiveStatus === 'paid') {
-            // The leave year the leave itself falls in — not today's. Approving
-            // June leave in July would otherwise debit the wrong year.
-            $leaveYear = app(LeaveYearResolver::class)->legacyYearFor(Carbon::parse($data['start_date']));
-
-            $balance = $this->getBalance($employee->id, (int) $data['leave_type_id'], $leaveYear)
-                ?? LeaveBalance::create([
-                    'employee_id' => $employee->id,
-                    'leave_type_id' => (int) $data['leave_type_id'],
-                    'year' => $leaveYear,
-                    'allocated_days' => 0,
-                    'used_days' => 0,
-                    'carried_forward_days' => 0,
-                    'encashed_days' => 0,
-                    'comp_off_credits' => 0,
-                ]);
-
-            $available = max(0, (float) $balance->allocated_days - (float) $balance->used_days - (float) ($balance->encashed_days ?? 0));
-
-            if ($available < $newDays) {
-                throw new \DomainException("Insufficient leave balance. Available: {$available} day(s), requested: {$newDays}.");
-            }
-
-            $balance->increment('used_days', $newDays);
+            // Posted to the leave year the leave itself falls in — not today's.
+            // A ledger-backed balance records which credit lots it consumed.
+            app(LeaveMovementService::class)->recordUsage(
+                $leaveRequest,
+                $newDays,
+                (int) $data['leave_type_id'],
+                Carbon::parse($data['start_date']),
+            );
         }
     }
 

@@ -102,6 +102,13 @@ class BulkLeaveService
                     ['allocated_days' => 0, 'used_days' => 0, 'carried_forward_days' => 0, 'encashed_days' => 0, 'comp_off_credits' => 0],
                 );
 
+                // Ledger-backed balances only move through the ledger; the
+                // preview-first bulk tools (Phase 2D) handle them. Skipped, never
+                // overwritten.
+                if ($balance->isLedgerBacked()) {
+                    continue;
+                }
+
                 $current = (float) $balance->allocated_days;
                 $floor = (float) $balance->used_days + (float) ($balance->encashed_days ?? 0);
                 $new = $this->computeNew($current, $action, $days, $floor, $default);
