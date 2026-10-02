@@ -2,6 +2,7 @@
 
 namespace App\Services\Performance;
 
+use App\Exceptions\ApprovalNotPermitted;
 use App\Models\Employee;
 use App\Models\EmployeeKpi;
 use App\Models\PerformanceCycle;
@@ -12,6 +13,7 @@ use App\Models\ReviewWeightage;
 use App\Models\User;
 use App\Notifications\KpiAssignedNotification;
 use App\Notifications\ReviewCycleStartedNotification;
+use App\Services\Approvals\ApprovalGuard;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -84,6 +86,11 @@ class ReviewWorkflowService
      */
     public function submitSelfReview(PerformanceReview $review, array $scores, User $actor): void
     {
+        // Only the reviewee may submit their own self review.
+        if ((int) $review->employee?->user_id !== (int) $actor->id) {
+            throw new ApprovalNotPermitted('You can only submit your own self review.');
+        }
+
         $this->assertReviewEditable($review, ['draft', 'in_progress']);
 
         $participant = $review->participants()->where('reviewer_role', 'self')->first()
@@ -112,6 +119,8 @@ class ReviewWorkflowService
      */
     public function submitManagerReview(PerformanceReview $review, array $scores, string $managerFeedback, User $manager): void
     {
+        $this->assertCanManagerReview($review, $manager);
+
         $this->assertReviewEditable($review, ['submitted']);
 
         $participant = $review->participants()->where('reviewer_id', $manager->id)->first()
@@ -238,5 +247,27 @@ class ReviewWorkflowService
             'branch' => $query->where('office_id', $template->applies_to_id)->get(),
             default => $query->get(),
         };
+    }
+
+    /**
+     * A manager review must be independent: never your own review, and only
+     * for an employee you are an assigned reviewer of or whose reporting
+     * line / HR scope you cover.
+     *
+     * @throws ApprovalNotPermitted
+     */
+    public function assertCanManagerReview(PerformanceReview $review, User $manager): void
+    {
+        $guard = app(ApprovalGuard::class);
+
+        if ($guard->isSelf($manager, $review->employee)) {
+            throw ApprovalNotPermitted::selfApproval();
+        }
+
+        $isAssigned = $review->participants()->where('reviewer_id', $manager->id)->exists();
+
+        if (! $isAssigned && ($review->employee === null || ! $guard->covers($manager, $review->employee))) {
+            throw ApprovalNotPermitted::outOfScope();
+        }
     }
 }

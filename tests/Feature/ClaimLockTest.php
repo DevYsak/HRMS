@@ -136,9 +136,10 @@ test('a stale claim no longer blocks another HR from taking over', function () {
 });
 
 test('opening an OT request for review claims it against other reviewers', function () {
+    // Two reviewers who both reach the employee: its line manager and an HR admin.
     $mgrA = User::factory()->create(['role' => UserRole::Manager]);
-    $mgrB = User::factory()->create(['role' => UserRole::Manager]);
-    $employee = Employee::factory()->create(['status' => 'active']);
+    $mgrB = User::factory()->create(['role' => UserRole::HrAdmin]);
+    $employee = Employee::factory()->create(['status' => 'active', 'manager_id' => $mgrA->id]);
     $date = today()->subDay()->toDateString();
     $ot = OtRequest::create([
         'employee_id' => $employee->id, 'work_date' => $date,

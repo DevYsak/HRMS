@@ -44,7 +44,7 @@ test('a half-day regularisation marks the day half_day on final approval', funct
     ]);
     $service = app(AttendanceService::class);
 
-    $service->approveRegularisation($reg, User::factory()->create(['role' => UserRole::Manager])->id);
+    $service->approveRegularisation($reg, lineManager()->id);
     $service->approveRegularisation($reg->refresh(), User::factory()->create(['role' => UserRole::HrAdmin])->id);
     $attendance = $service->approveRegularisation($reg->refresh(), User::factory()->create(['role' => UserRole::SuperAdmin])->id);
 
@@ -61,7 +61,7 @@ test('the request climbs manager → HR → admin, and only final approval write
     $service = app(AttendanceService::class);
 
     // 1 · Manager clears manager_review only — no attendance yet.
-    $manager = User::factory()->create(['role' => UserRole::Manager]);
+    $manager = lineManager();
     expect($service->approveRegularisation($reg, $manager->id))->toBeNull();
     $reg->refresh();
     expect($reg->stage)->toBe('hr_review')
@@ -116,7 +116,7 @@ test('a rejection at any stage ends the workflow with an audit entry', function 
     $reg = makeRegularisation($employee);
     $service = app(AttendanceService::class);
 
-    $manager = User::factory()->create(['role' => UserRole::Manager]);
+    $manager = lineManager();
     $service->approveRegularisation($reg, $manager->id);   // → hr_review
     $reg->refresh();
 

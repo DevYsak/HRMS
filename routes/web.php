@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AdmsController;
+use App\Http\Controllers\Auth\FirstPasswordController;
 use App\Http\Controllers\BiometricDashboardController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\DocumentUploadController;
@@ -33,6 +34,7 @@ use App\Livewire\Employees\ProbationConfirmation;
 use App\Livewire\Employees\TeamManagement;
 use App\Livewire\ExecutiveDashboard;
 use App\Livewire\FinanceDashboard;
+use App\Livewire\Help\EmployeeGuide;
 use App\Livewire\HrAdminDashboard;
 use App\Livewire\ManagerDashboard;
 use App\Livewire\NotificationsPage;
@@ -91,10 +93,15 @@ use App\Livewire\Settings\SalaryCycleManager;
 use App\Livewire\Settings\WorkModeManager;
 use App\Livewire\TimeOff\AllTimeOff;
 use App\Livewire\TimeOff\BulkLeaveAssignment;
+use App\Livewire\TimeOff\EmployeeLeaveDetail;
 use App\Livewire\TimeOff\FinanceEncashments;
+use App\Livewire\TimeOff\HistoricalBalances;
 use App\Livewire\TimeOff\LeaveAllocationPolicies;
 use App\Livewire\TimeOff\LeaveCarryForward;
+use App\Livewire\TimeOff\LeaveManagement;
+use App\Livewire\TimeOff\LeaveReconciliation;
 use App\Livewire\TimeOff\LeaveRegularisation;
+use App\Livewire\TimeOff\LeaveYearRollover;
 use App\Livewire\TimeOff\MyTimeOff;
 use App\Livewire\TimeOff\TeamTimeOff;
 use App\Livewire\TimeOff\TimeOffSettings;
@@ -147,13 +154,20 @@ Route::get('/invite/accept/{token}', [InvitationController::class, 'accept'])
 // CheckActiveEmployee instead.
 Route::middleware(['auth'])->group(function () {
 
+    // First sign-in on an issued credential. EnsurePasswordChanged confines a
+    // reset-required account to these two routes (and logout).
+    Route::get('/set-password', [FirstPasswordController::class, 'show'])->name('password.first-change');
+    Route::post('/set-password', [FirstPasswordController::class, 'update'])
+        ->middleware('throttle:6,1')
+        ->name('password.first-change.update');
+
     // Dashboard
     Route::get('/', Dashboard::class)->name('dashboard');
 
     // "View as" impersonation — Super Admin tests another user's experience.
     // (stop is declared first so it isn't captured by the {user} binding)
     Route::get('/impersonate/stop', [ImpersonationController::class, 'stop'])->name('impersonate.stop');
-    Route::get('/impersonate/{user}', [ImpersonationController::class, 'start'])->name('impersonate.start');
+    Route::post('/impersonate/{user}', [ImpersonationController::class, 'start'])->name('impersonate.start');
 
     // AI Assistant full page
     Route::get('/ai-assistant', AiAssistantPage::class)->name('ai.assistant');
@@ -161,6 +175,10 @@ Route::middleware(['auth'])->group(function () {
     // The employee's own profile. Distinct from /settings/profile, which stays
     // account-level (email verification, deletion) inside the settings shell.
     Route::get('/my-profile', MyProfile::class)->name('profile.me');
+
+    // Employee Guide — how-to for every employee feature. Open to any signed-in
+    // user; it only links to pages, each of which keeps its own guards.
+    Route::get('/help/employee-guide', EmployeeGuide::class)->name('help.employee-guide');
 
     // --------------------------------------------------
     // Employees module
@@ -205,6 +223,13 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/encashments', FinanceEncashments::class)->name('encashments')->middleware('role:approve-finance');
         Route::get('/bulk-assign', BulkLeaveAssignment::class)->name('bulk-assign')->middleware('role:manage-settings');
         Route::get('/leave-policies', LeaveAllocationPolicies::class)->name('leave-policies')->middleware('role:manage-settings');
+        // Bulk migration of years that were never kept in this system. Import
+        // is preview-first because most of those years arrive with a closing
+        // balance and no usage, and what that means has to be visible before
+        // anything is written.
+        Route::get('/historical-balances', HistoricalBalances::class)->name('historical-balances')
+            ->middleware('can:manage_leave_balances');
+
         // Year-end carry forward. Preview is separate from apply on purpose:
         // this changes entitlement, so nothing runs until HR approves the list.
         Route::get('/carry-forward', LeaveCarryForward::class)->name('carry-forward')
@@ -217,6 +242,17 @@ Route::middleware(['auth'])->group(function () {
             ->middleware('can:view_leave_regularisation');
 
         Route::get('/settings', TimeOffSettings::class)->name('settings')->middleware('role:manage-settings');
+
+        // HR Leave Management (Phase 2D). Each action inside re-authorises on
+        // the server; the route gate only decides who may open the page.
+        Route::get('/leave-management', LeaveManagement::class)->name('leave-management')
+            ->middleware('can:view_leave_management');
+        Route::get('/leave-management/employees/{employee}', EmployeeLeaveDetail::class)->name('leave-management.employee')
+            ->middleware('can:view_leave_management');
+        Route::get('/leave-management/year-rollover', LeaveYearRollover::class)->name('year-rollover')
+            ->middleware('can:run_leave_rollover');
+        Route::get('/leave-management/reconciliation', LeaveReconciliation::class)->name('reconciliation')
+            ->middleware('can:reconcile_leave');
     });
 
     // --------------------------------------------------
@@ -309,12 +345,19 @@ Route::middleware(['auth'])->group(function () {
     // --------------------------------------------------
     // Role-specific Dashboards
     // --------------------------------------------------
-    Route::get('/dashboard/executive', ExecutiveDashboard::class)->name('dashboard.executive');
+    // Each role dashboard is gated server-side — company-wide figures and
+    // payroll data must not be reachable by typing the URL.
+    Route::get('/dashboard/executive', ExecutiveDashboard::class)->name('dashboard.executive')
+        ->middleware('can:view_executive_dashboard');
     // Director landing — reuses the ExecutiveDashboard component (no new page/component).
-    Route::get('/dashboard/director', ExecutiveDashboard::class)->name('dashboard.director');
-    Route::get('/dashboard/finance', FinanceDashboard::class)->name('dashboard.finance');
-    Route::get('/dashboard/hr-admin', HrAdminDashboard::class)->name('dashboard.hr-admin');
-    Route::get('/dashboard/manager', ManagerDashboard::class)->name('dashboard.manager');
+    Route::get('/dashboard/director', ExecutiveDashboard::class)->name('dashboard.director')
+        ->middleware('can:view_executive_dashboard');
+    Route::get('/dashboard/finance', FinanceDashboard::class)->name('dashboard.finance')
+        ->middleware('role:run-payroll,approve-finance');
+    Route::get('/dashboard/hr-admin', HrAdminDashboard::class)->name('dashboard.hr-admin')
+        ->middleware('can:view_hr_dashboard');
+    Route::get('/dashboard/manager', ManagerDashboard::class)->name('dashboard.manager')
+        ->middleware('role:approve-leave');
     Route::get('/dashboard/department', DepartmentDashboard::class)->name('dashboard.department');
 
     // --------------------------------------------------

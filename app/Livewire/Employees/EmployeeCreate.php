@@ -7,9 +7,9 @@ use App\Enums\UserRole;
 use App\Mail\WelcomeEmployeeMail;
 use App\Models\Department;
 use App\Models\Employee;
+use App\Models\EmployeeLeaveOverride;
 use App\Models\EmploymentType;
 use App\Models\JobTitle;
-use App\Models\LeaveBalance;
 use App\Models\LeaveType;
 use App\Models\Office;
 use App\Models\ProbationSetting;
@@ -20,10 +20,12 @@ use App\Models\ShiftSetting;
 use App\Models\User;
 use App\Models\WorkMode;
 use App\Notifications\WelcomeOnboardingNotification;
+use App\Services\Leave\EmployeeLeaveOverrideService;
 use App\Services\Leave\LeaveProvisioningService;
 use App\Services\Leave\LeaveYearResolver;
 use App\Services\OnboardingService;
 use App\Services\PasswordService;
+use App\Services\Security\RoleDelegationGuard;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
@@ -246,13 +248,24 @@ class EmployeeCreate extends Component
 
         $photoPath = $this->photo?->store('employee-photos', 'public');
 
-        $plainPassword = app(PasswordService::class)->generate();
+        // The shared bootstrap credential. It opens nothing but the
+        // first-login password page until the employee chooses their own.
+        $plainPassword = app(PasswordService::class)->temporaryPassword();
         $chosenRole = Role::findOrFail($this->roleId);
 
-        $user = User::create([
+        // Privilege-escalation guard (Super Admin, delegation ceiling) — server side.
+        if ($refusal = app(RoleDelegationGuard::class)->refusalToAssign(Auth::user(), $chosenRole)) {
+            $this->addError('roleId', $refusal);
+
+            return;
+        }
+
+        $user = User::forceCreate([
             'name' => $this->name,
             'email' => $this->email,
             'password' => Hash::make($plainPassword),
+            'must_change_password' => true,
+            'password_changed_at' => null,
             'role' => $chosenRole->legacyBucket(),
             'role_id' => $chosenRole->id,
         ]);
@@ -343,20 +356,17 @@ class EmployeeCreate extends Component
                 continue;
             }
 
-            LeaveBalance::updateOrCreate(
-                [
-                    'employee_id' => $user->employee->id,
-                    'leave_type_id' => $lt->id,
-                    'year' => $leaveYear->legacyYear(),
-                ],
-                [
-                    'leave_year_id' => $leaveYear->id,
-                    'allocated_days' => $allocated,
-                    'used_days' => 0,
-                    'carried_forward_days' => 0,
-                    'encashed_days' => 0,
-                    'comp_off_credits' => 0,
-                ],
+            // Recorded as this employee's override for the year, so the
+            // figure is audited and posted through the leave ledger instead
+            // of written over the balance provisioning just created.
+            app(EmployeeLeaveOverrideService::class)->create(
+                $user->employee,
+                $lt,
+                EmployeeLeaveOverride::MODE_SET,
+                $allocated,
+                'Allocation entered on the new employee form',
+                Auth::user(),
+                $leaveYear,
             );
         }
     }
@@ -374,7 +384,9 @@ class EmployeeCreate extends Component
                 UserRole::Director,
                 UserRole::Manager,
             ])->get(),
-            'roles' => Role::where('is_active', true)->orderBy('name')->get(),
+            'roles' => Role::where('is_active', true)->orderBy('name')->get()
+                ->filter(fn (Role $role) => app(RoleDelegationGuard::class)->refusalToAssign(Auth::user(), $role) === null)
+                ->values(),
             'statuses' => EmployeeStatus::cases(),
             'employmentTypes' => EmploymentType::active()->get(),
             'workModes' => WorkMode::active()->get(),

@@ -29,6 +29,43 @@ class LeaveType extends Model
 {
     use SoftDeletes;
 
+    /**
+     * How carry forward is decided for this type.
+     *
+     * The column existed and was written by the master-data migration, but
+     * nothing read it — a type set to NONE was still carried forward, because
+     * only allow_carry_forward was ever consulted. These make the setting mean
+     * something.
+     */
+    public const CARRY_NONE = 'none';
+
+    public const CARRY_HR_APPROVAL = 'hr_approval';
+
+    /**
+     * Reserved. Nothing applies carry forward unattended: carry forward is
+     * never triggered by a balance existing, a year ending, or a type
+     * permitting it. A type stored as automatic therefore behaves as
+     * hr_approval until that decision is revisited, and the settings screen
+     * says so rather than implying otherwise.
+     */
+    public const CARRY_AUTOMATIC = 'automatic';
+
+    /** The effective mode, defaulting from the older boolean flag. */
+    public function carryForwardMode(): string
+    {
+        if (! $this->allow_carry_forward) {
+            return self::CARRY_NONE;
+        }
+
+        return $this->carry_forward_mode ?: self::CARRY_HR_APPROVAL;
+    }
+
+    /** Whether this type may be carried forward at all. */
+    public function permitsCarryForward(): bool
+    {
+        return $this->carryForwardMode() !== self::CARRY_NONE;
+    }
+
     protected function casts(): array
     {
         return [

@@ -9,6 +9,7 @@ use App\Models\LeaveRequest;
 use App\Models\OtRequest;
 use App\Notifications\OtRequestNotification;
 use App\Notifications\RegularisationReviewedNotification;
+use App\Services\Approvals\ApprovalGuard;
 use App\Services\AttendanceService;
 use App\Services\LeaveService;
 use App\Services\OvertimeService;
@@ -68,6 +69,7 @@ class ApprovalCenter extends Component
                 case 'leave':
                     abort_unless($user->canApproveLeave(), 403);
                     $req = LeaveRequest::with('claimer')->findOrFail($id);
+                    app(ApprovalGuard::class)->assertCanDecide($user, $req->employee);
                     if (! $this->guardClaim($req)) {
                         return;
                     }
@@ -84,6 +86,7 @@ class ApprovalCenter extends Component
                 case 'ot':
                     abort_unless($user->canApproveOt(), 403);
                     $req = OtRequest::with('claimer')->findOrFail($id);
+                    app(ApprovalGuard::class)->assertCanDecide($user, $req->employee);
                     if (! $this->guardClaim($req)) {
                         return;
                     }
@@ -98,6 +101,7 @@ class ApprovalCenter extends Component
                 case 'regularisation':
                     abort_unless($user->canApproveLeave(), 403);
                     $req = AttendanceRegularisation::with('claimer')->findOrFail($id);
+                    app(ApprovalGuard::class)->assertCanDecide($user, $req->employee);
                     if (! $this->guardClaim($req)) {
                         return;
                     }
@@ -112,6 +116,7 @@ class ApprovalCenter extends Component
                 case 'encashment':
                     abort_unless($user->canApproveFinance(), 403);
                     $enc = LeaveEncashment::with('claimer')->findOrFail($id);
+                    app(ApprovalGuard::class)->assertNotSelf($user, $enc->employee);
                     if (! $this->guardClaim($enc)) {
                         return;
                     }
@@ -157,8 +162,16 @@ class ApprovalCenter extends Component
 
         $rows = collect();
 
+        // Fail closed: only requests inside the approver's reach, never their own.
+        $scopeIds = $user->accessibleEmployeeIds();   // null = company-wide
+        $ownEmployeeId = $user->employee?->id;
+        $inReach = fn ($q) => $q
+            ->when($scopeIds !== null, fn ($q) => $q->whereIn('employee_id', $scopeIds))
+            ->when($ownEmployeeId, fn ($q) => $q->where('employee_id', '!=', $ownEmployeeId));
+
         if ($canLeave) {
             foreach (LeaveRequest::whereIn('status', ['pending', 'pending_hr'])
+                ->tap($inReach)
                 ->with('employee.user', 'employee.department', 'leaveType')
                 ->whereHas('employee.user')->latest()->get() as $r) {
                 [$pl, $pc] = $this->priority($r->created_at);
@@ -177,6 +190,7 @@ class ApprovalCenter extends Component
 
         if ($canOt) {
             foreach (OtRequest::where('status', 'pending')
+                ->tap($inReach)
                 ->with('employee.user', 'employee.department')
                 ->whereHas('employee.user')->latest()->get() as $r) {
                 [$pl, $pc] = $this->priority($r->created_at);
@@ -194,10 +208,9 @@ class ApprovalCenter extends Component
         }
 
         if ($canLeave) {
-            $scopeIds = $user->accessibleEmployeeIds();   // null = company-wide
             foreach (AttendanceRegularisation::where('status', 'pending')
+                ->tap($inReach)
                 ->with('employee.user', 'employee.department')
-                ->when($scopeIds !== null, fn ($q) => $q->whereIn('employee_id', $scopeIds))
                 ->whereHas('employee.user')->latest()->get() as $r) {
                 [$pl, $pc] = $this->priority($r->created_at);
                 $rows->push([
@@ -215,6 +228,7 @@ class ApprovalCenter extends Component
 
         if ($canFin) {
             foreach (LeaveEncashment::where('status', 'pending')
+                ->when($ownEmployeeId, fn ($q) => $q->where('employee_id', '!=', $ownEmployeeId))
                 ->with('employee.user', 'employee.department')
                 ->whereHas('employee.user')->latest()->get() as $r) {
                 [$pl, $pc] = $this->priority($r->created_at);

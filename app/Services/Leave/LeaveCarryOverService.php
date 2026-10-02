@@ -46,11 +46,11 @@ class LeaveCarryOverService
      *
      * @return Collection<int, array<string, mixed>>
      */
-    public function preview(LeaveYear $from, LeaveYear $to): Collection
+    public function preview(LeaveYear $from, LeaveYear $to, ?int $employeeId = null): Collection
     {
         $rows = collect();
 
-        foreach ($this->eligibleEmployees() as $employee) {
+        foreach ($this->eligibleEmployees($employeeId) as $employee) {
             foreach ($this->carryableTypes() as $type) {
                 $balance = $this->balanceFor($employee, $type, $from);
 
@@ -65,7 +65,7 @@ class LeaveCarryOverService
                 $figuresKnown = ! $balance->used_days_unknown && ! $balance->encashed_days_unknown;
 
                 $eligible = $figuresKnown ? $this->eligibleDays($balance) : null;
-                $carry = $figuresKnown ? $this->cappedCarry($eligible, $employee) : 0.0;
+                $carry = $figuresKnown ? $this->cappedCarry($eligible, $employee, $type) : 0.0;
 
                 // Rows with unknown figures still surface: HR has to see the
                 // recorded closing balance in order to decide an amount. Rows
@@ -91,9 +91,7 @@ class LeaveCarryOverService
                     'encashed' => (float) ($balance->encashed_days ?? 0),
                     'eligible' => $eligible,
                     // From the policy, which is canonical. null means unlimited.
-                    'limit' => $employee->leavePolicy?->max_carry_over_days !== null
-                        ? (float) $employee->leavePolicy->max_carry_over_days
-                        : null,
+                    'limit' => app(LeaveRuleResolver::class)->settings($employee, $type)['carry_forward_max_days'],
                     'carry' => $carry,
                     // What the target year holds now, so the preview shows the
                     // before as well as the after.
@@ -130,6 +128,12 @@ class LeaveCarryOverService
                     'leave_type_id' => $row['leave_type_id'],
                     'year' => $to->legacyYear(),
                 ]);
+
+                // Ledger-backed rows only take carry forward through
+                // LeaveCarryForwardService, which records the transaction.
+                if ($target->exists && $target->isLedgerBacked()) {
+                    continue;
+                }
 
                 // Fresh entitlement minus whatever a previous run of this same
                 // operation had added, so the base is the entitlement itself
@@ -181,21 +185,22 @@ class LeaveCarryOverService
      * without an explicit HR decision, and nothing carries more than the
      * eligible amount calculated from the previous year.
      */
-    private function cappedCarry(float $eligible, Employee $employee): float
+    private function cappedCarry(float $eligible, Employee $employee, LeaveType $type): float
     {
-        $policy = $employee->leavePolicy;
+        // The employee's policy rule for the type, falling back to the
+        // policy's own cap — one resolver, not a second rule engine.
+        $settings = app(LeaveRuleResolver::class)->settings($employee, $type);
+        $carry = $eligible;
 
-        if ($policy === null) {
-            return $eligible;
+        if ($settings['carry_forward_max_days'] !== null) {
+            $carry = min($carry, $settings['carry_forward_max_days']);
         }
 
-        $limit = $policy->max_carry_over_days;
-
-        if ($limit === null) {
-            return $eligible;
+        if ($settings['carry_forward_percent'] !== null) {
+            $carry = min($carry, round($eligible * $settings['carry_forward_percent'] / 100, 2));
         }
 
-        return min($eligible, (float) $limit);
+        return round(max(0, $carry), 2);
     }
 
     private function balanceFor(Employee $employee, LeaveType $type, LeaveYear $year): ?LeaveBalance
@@ -214,14 +219,24 @@ class LeaveCarryOverService
     }
 
     /** @return Collection<int, Employee> */
-    private function eligibleEmployees(): Collection
+    private function eligibleEmployees(?int $employeeId = null): Collection
     {
-        return Employee::with(['user', 'leavePolicy'])->where('status', 'active')->get();
+        // Everyone who holds leave — probation and notice period included,
+        // not only 'active'.
+        return Employee::with(['user', 'leavePolicy'])
+            ->whereIn('status', LeaveRuleResolver::ELIGIBLE_STATUSES)
+            ->when($employeeId, fn ($q, $id) => $q->whereKey($id))
+            ->get();
     }
 
     /** @return Collection<int, LeaveType> */
     private function carryableTypes(): Collection
     {
-        return LeaveType::where('allow_carry_forward', true)->get();
+        // The mode has the final say. allow_carry_forward alone let a type
+        // configured as 'none' be carried anyway, because nothing read the
+        // mode the settings screen offered.
+        return LeaveType::where('allow_carry_forward', true)->get()
+            ->filter(fn (LeaveType $type) => $type->permitsCarryForward())
+            ->values();
     }
 }

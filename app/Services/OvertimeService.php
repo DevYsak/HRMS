@@ -9,6 +9,7 @@ use App\Models\Employee;
 use App\Models\OtRequest;
 use App\Models\OtWindow;
 use App\Models\OvertimeRecord;
+use App\Services\Approvals\ApprovalGuard;
 use App\Services\Attendance\ShiftResolver;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Collection;
@@ -124,7 +125,13 @@ class OvertimeService
      */
     public function approve(OtRequest $request, int $reviewerId, ?string $comment = null): OvertimeRecord
     {
+        app(ApprovalGuard::class)->assertCanDecide($reviewerId, $request->employee);
+
         return DB::transaction(function () use ($request, $reviewerId, $comment) {
+            // Row lock: two concurrent approvals must not both materialise a
+            // paid OvertimeRecord.
+            $request = OtRequest::whereKey($request->getKey())->lockForUpdate()->firstOrFail();
+
             if ($request->status !== 'pending') {
                 throw new \DomainException('Only pending OT requests can be approved.');
             }
@@ -145,6 +152,12 @@ class OvertimeService
      */
     public function reject(OtRequest $request, int $reviewerId, string $comment): void
     {
+        app(ApprovalGuard::class)->assertCanDecide($reviewerId, $request->employee);
+
+        if ($request->status !== 'pending') {
+            throw new \DomainException('Only pending OT requests can be rejected.');
+        }
+
         $request->update([
             'status' => 'rejected',
             'reviewer_id' => $reviewerId,

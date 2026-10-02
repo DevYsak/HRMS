@@ -3,25 +3,35 @@
 namespace App\Services;
 
 use App\Enums\EmployeeStatus;
+use App\Exceptions\ApprovalNotPermitted;
 use App\Models\AttendanceSetting;
 use App\Models\Employee;
-use App\Models\LeaveAccrualLog;
 use App\Models\LeaveBalance;
 use App\Models\LeaveEncashment;
+use App\Models\LeaveLedgerEntry;
 use App\Models\LeavePaymentAuditLog;
 use App\Models\LeaveRequest;
 use App\Models\LeaveType;
 use App\Models\PublicHoliday;
 use App\Models\User;
+use App\Notifications\LeaveAppliedOnBehalfNotification;
 use App\Notifications\LeaveEncashmentNotification;
 use App\Notifications\LeaveMonthlyAccrualNotification;
 use App\Notifications\LeavePaymentStatusChangedNotification;
 use App\Notifications\LeaveRequestNotification;
+use App\Services\Approvals\ApprovalGuard;
+use App\Services\Audit\AuditService;
+use App\Services\Leave\LeaveAccrualService;
+use App\Services\Leave\LeaveBalanceCalculator;
 use App\Services\Leave\LeaveCarryOverService;
+use App\Services\Leave\LeaveLedgerService;
+use App\Services\Leave\LeaveMovementService;
+use App\Services\Leave\LeaveRuleResolver;
 use App\Services\Leave\LeaveYearResolver;
 use App\Services\Notifications\NotificationRecipients;
 use App\Services\Teams\ApprovalRoutingService;
 use Carbon\CarbonInterface;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -187,13 +197,17 @@ class LeaveService
 
         // ── Policy Validations ────────────────────────────────────────────────
 
+        // The employee's policy rule for this type, falling back to the
+        // type's own settings where the rule says nothing.
+        $rules = app(LeaveRuleResolver::class)->settings($employee, $leaveType);
+
         // Half-day period required when half day selected
         if ($isHalfDay && $halfDayPeriod === null) {
             throw new \DomainException('Please specify first half or second half for the half-day leave.');
         }
 
         // Half day allowed by leave type
-        if ($isHalfDay && ! $leaveType->allow_half_day) {
+        if ($isHalfDay && ! $rules['allow_half_day']) {
             throw new \DomainException("'{$leaveType->name}' does not allow half-day requests.");
         }
 
@@ -211,12 +225,12 @@ class LeaveService
         }
 
         // Probation restriction
-        if ($leaveType->probation_restricted && $employee->status === EmployeeStatus::Probation) {
+        if ($rules['probation_restricted'] && $employee->status === EmployeeStatus::Probation) {
             throw new \DomainException("'{$leaveType->name}' is not available during probation.");
         }
 
         // Notice period restriction
-        if ($leaveType->notice_period_restricted && $employee->status === EmployeeStatus::NoticePeriod) {
+        if ($rules['notice_period_restricted'] && $employee->status === EmployeeStatus::NoticePeriod) {
             throw new \DomainException("'{$leaveType->name}' is not available during notice period.");
         }
 
@@ -257,14 +271,14 @@ class LeaveService
         // Max consecutive days
         $days = $isHalfDay ? 0.5 : $this->calculateLeaveDays($start, $end, (bool) $leaveType->is_sandwich_applicable, (int) $leaveType->sandwich_min_days);
 
-        if ($leaveType->max_consecutive_days !== null && $days > $leaveType->max_consecutive_days) {
+        if ($rules['max_consecutive_days'] !== null && $days > $rules['max_consecutive_days']) {
             throw new \DomainException(
-                "'{$leaveType->name}' allows a maximum of {$leaveType->max_consecutive_days} consecutive day(s)."
+                "'{$leaveType->name}' allows a maximum of {$rules['max_consecutive_days']} consecutive day(s)."
             );
         }
 
         // Attachment required
-        if ($leaveType->attachment_required && $attachmentPath === null) {
+        if ($rules['attachment_required'] && $attachmentPath === null) {
             throw new \DomainException("An attachment is required for '{$leaveType->name}'.");
         }
 
@@ -284,9 +298,12 @@ class LeaveService
 
         // Balance check — only for paid requests (after overlap so conflict errors surface first)
         if ($requestedLeaveStatus === 'paid') {
-            $balance = $this->getBalance($employee->id, $leaveType->id);
+            // The leave year the leave falls in, and net of the days other
+            // pending requests already reserve — two requests must not each
+            // be accepted against the same available days.
+            $balance = $this->balanceForDate($employee->id, $leaveType->id, Carbon::parse($startDate));
             $available = $balance
-                ? max(0, (float) $balance->allocated_days - (float) $balance->used_days - (float) ($balance->encashed_days ?? 0))
+                ? max(0, app(LeaveBalanceCalculator::class)->summary($balance)['available_to_request'])
                 : 0;
 
             if ($available < $days) {
@@ -366,6 +383,69 @@ class LeaveService
     }
 
     /**
+     * HR submits a leave request for another employee.
+     *
+     * Exactly the employee's own path — every policy, overlap and balance
+     * check of submitRequest() applies — with the submitting HR user and an
+     * internal note recorded on the request, and an audit entry that names
+     * both the actor (HR) and the subject (the employee). The request then
+     * goes through the normal approval chain.
+     *
+     * @param  array<int, array{path: string, name?: string|null, mime?: string|null, size?: int|null}>  $attachments
+     */
+    public function applyOnBehalf(
+        User $hr,
+        Employee $employee,
+        LeaveType $leaveType,
+        string $startDate,
+        string $endDate,
+        string $reason,
+        bool $isHalfDay = false,
+        ?string $halfDayPeriod = null,
+        string $requestedLeaveStatus = 'paid',
+        ?string $internalNote = null,
+        bool $notifyEmployee = true,
+        array $attachments = [],
+    ): LeaveRequest {
+        if (! $hr->hasPermission('apply_leave_on_behalf')) {
+            throw new AuthorizationException('You may not apply leave on behalf of another employee.');
+        }
+
+        if ($hr->employee?->id === $employee->id) {
+            throw new \DomainException('Use My Time Off to apply for your own leave.');
+        }
+
+        return DB::transaction(function () use ($hr, $employee, $leaveType, $startDate, $endDate, $reason, $isHalfDay, $halfDayPeriod, $requestedLeaveStatus, $internalNote, $notifyEmployee, $attachments) {
+            $request = $this->submitRequest(
+                $employee, $leaveType, $startDate, $endDate, $reason, $isHalfDay, $halfDayPeriod,
+                $requestedLeaveStatus, attachments: $attachments,
+            );
+
+            $request->forceFill(['applied_by_user_id' => $hr->id, 'hr_internal_note' => $internalNote ?: null])->save();
+
+            app(AuditService::class)->event('LEAVE_APPLIED_ON_BEHALF', AuditService::LEAVE, $request,
+                new: [
+                    'actor_user_id' => $hr->id,
+                    'subject_employee_id' => $employee->id,
+                    'leave_type' => $leaveType->name,
+                    'start_date' => $request->start_date->toDateString(),
+                    'end_date' => $request->end_date->toDateString(),
+                    'days' => (float) $request->days,
+                    'half_day' => $isHalfDay ? $halfDayPeriod : null,
+                    'requested_leave_status' => $requestedLeaveStatus,
+                    'notify_employee' => $notifyEmployee,
+                ],
+                reason: $reason, subjectEmployeeId: $employee->id);
+
+            if ($notifyEmployee && $employee->user) {
+                $employee->user->notify(new LeaveAppliedOnBehalfNotification($request->fresh('leaveType'), $hr->name));
+            }
+
+            return $request;
+        });
+    }
+
+    /**
      * First-stage review (manager / dept head).
      * Managers route to pending_hr; HR Admins and Super Admins approve directly.
      */
@@ -376,10 +456,13 @@ class LeaveService
         int $reviewerId,
         ?string $comment = null,
     ): LeaveRequest {
+        $this->assertCanReview($leaveRequest, $reviewerId);
+
         return DB::transaction(function () use ($leaveRequest, $data, $status, $reviewerId, $comment) {
             $oldStatus = $leaveRequest->status;
             $oldDays = (float) $leaveRequest->days;
             $oldTypeId = $leaveRequest->leave_type_id;
+            $oldStart = Carbon::parse($leaveRequest->start_date);
             $employee = $leaveRequest->employee;
 
             $start = Carbon::parse($data['start_date']);
@@ -404,7 +487,7 @@ class LeaveService
 
             // Reverse any prior balance deduction if it was approved+paid
             if ($oldStatus === 'approved' && $this->wasApprovedAsPaid($leaveRequest)) {
-                $this->getBalance($employee->id, $oldTypeId)?->decrement('used_days', $oldDays);
+                app(LeaveMovementService::class)->reverseUsage($leaveRequest, (int) $oldTypeId, $oldDays, $oldStart, 'Leave re-reviewed', User::find($reviewerId));
             }
 
             $reviewer = User::find($reviewerId);
@@ -452,6 +535,8 @@ class LeaveService
         if (! in_array($leaveRequest->status, ['pending', 'pending_hr'], true)) {
             throw new \DomainException('Only a pending leave request can have more information requested.');
         }
+
+        app(ApprovalGuard::class)->assertCanDecide($reviewerId, $leaveRequest->employee);
 
         $reviewer = User::findOrFail($reviewerId);
 
@@ -592,6 +677,8 @@ class LeaveService
             abort(403, 'Only HR Admins or Super Admins can override payment status.');
         }
 
+        app(ApprovalGuard::class)->assertCanDecide($hr, $leaveRequest->employee);
+
         $leaveType = $leaveRequest->leaveType;
 
         if (! $leaveType?->allow_hr_override) {
@@ -614,15 +701,15 @@ class LeaveService
         DB::transaction(function () use ($leaveRequest, $hr, $newStatus, $remark, $currentStatus, $employee, $days) {
             // Reverse / apply balance changes
             if ($leaveRequest->status === 'approved') {
+                $movements = app(LeaveMovementService::class);
+                $start = Carbon::parse($leaveRequest->start_date);
+
                 if ($currentStatus === 'paid' && $newStatus === 'unpaid') {
-                    // Reverse the deduction
-                    $this->getBalance($employee->id, $leaveRequest->leave_type_id)?->decrement('used_days', $days);
+                    // Return the days to the leave year the leave was taken in.
+                    $movements->reverseUsage($leaveRequest, (int) $leaveRequest->leave_type_id, $days, $start, 'Changed to unpaid by HR', $hr);
                 } elseif ($currentStatus === 'unpaid' && $newStatus === 'paid') {
-                    // Check balance and apply
-                    $balance = $this->getBalance($employee->id, $leaveRequest->leave_type_id);
-                    $available = $balance
-                        ? max(0, (float) $balance->allocated_days - (float) $balance->used_days - (float) ($balance->encashed_days ?? 0))
-                        : 0;
+                    $balance = $movements->balanceFor($employee->id, (int) $leaveRequest->leave_type_id, $start);
+                    $available = max(0, $movements->approvedAvailable($balance));
 
                     if ($available < $days) {
                         throw new \DomainException(
@@ -630,7 +717,7 @@ class LeaveService
                         );
                     }
 
-                    $balance->increment('used_days', $days);
+                    $movements->recordUsage($leaveRequest, $days, (int) $leaveRequest->leave_type_id, $start, enforceBalance: false, actor: $hr);
                 }
             }
 
@@ -661,77 +748,11 @@ class LeaveService
      */
     public function accrueMonthly(int $year, int $month): int
     {
-        $accrualTypes = LeaveType::where('is_monthly_accrual', true)
-            ->where('accrual_days_per_month', '>', 0)
-            ->get();
-
-        if ($accrualTypes->isEmpty()) {
-            return 0;
-        }
-
-        $count = 0;
-        $employees = Employee::whereIn('status', [
-            'active', 'probation', 'confirmed', 'on_leave',
-        ])->get();
-
-        DB::transaction(function () use ($employees, $accrualTypes, $year, $month, &$count) {
-            foreach ($employees as $employee) {
-                foreach ($accrualTypes as $type) {
-                    // Skip if probation restricted and employee is on probation
-                    if ($type->probation_restricted && $employee->status->value === 'probation') {
-                        continue;
-                    }
-
-                    // Skip if gender restricted
-                    if (! $type->isGenderEligible($employee->gender)) {
-                        continue;
-                    }
-
-                    // Skip if already accrued this month
-                    $alreadyAccrued = LeaveAccrualLog::where('employee_id', $employee->id)
-                        ->where('leave_type_id', $type->id)
-                        ->where('year', $year)
-                        ->where('month', $month)
-                        ->exists();
-
-                    if ($alreadyAccrued) {
-                        continue;
-                    }
-
-                    $days = (float) $type->accrual_days_per_month;
-
-                    // Credit to leave balance
-                    LeaveBalance::updateOrCreate([
-                        'employee_id' => $employee->id,
-                        'leave_type_id' => $type->id,
-                        'year' => $year,
-                    ], [
-                        'allocated_days' => 0,
-                        'used_days' => 0,
-                        'carried_forward_days' => 0,
-                        'encashed_days' => 0,
-                        'comp_off_credits' => 0,
-                    ]);
-
-                    LeaveBalance::where('employee_id', $employee->id)
-                        ->where('leave_type_id', $type->id)
-                        ->where('year', $year)
-                        ->increment('allocated_days', $days);
-
-                    // Write accrual log
-                    LeaveAccrualLog::create([
-                        'employee_id' => $employee->id,
-                        'leave_type_id' => $type->id,
-                        'days_credited' => $days,
-                        'year' => $year,
-                        'month' => $month,
-                        'credited_at' => now(),
-                    ]);
-
-                    $count++;
-                }
-            }
-        });
+        // Rule-driven (policy rule, falling back to the leave type), credited
+        // as its own ACCRUAL lot in the month's leave year; never resets any
+        // other figure. Idempotent per employee, type and month.
+        $result = app(LeaveAccrualService::class)->run($year, $month);
+        $count = $result['credited'];
 
         // A monthly summary for HR as a team, not for any one administrator.
         if ($count > 0) {
@@ -760,6 +781,9 @@ class LeaveService
                 'color' => $data['color'],
                 'category' => $data['category'],
                 'allow_carry_forward' => $data['allow_carry_forward'],
+                // The mode is what the engine consults; without it here the
+                // settings screen would collect a choice that never persisted.
+                'carry_forward_mode' => $data['carry_forward_mode'] ?? LeaveType::CARRY_HR_APPROVAL,
                 'carry_forward_limit' => $data['carry_forward_limit'],
                 'allow_encashment' => $data['allow_encashment'],
                 'max_encashable_days' => $data['max_encashable_days'] ?? null,
@@ -830,24 +854,9 @@ class LeaveService
             ],
         );
 
-        $balance = LeaveBalance::firstOrCreate([
-            'employee_id' => $employee->id,
-            'leave_type_id' => $leaveType->id,
-            'year' => $date->year,
-        ], [
-            'allocated_days' => 0,
-            'used_days' => 0,
-            'carried_forward_days' => 0,
-            'encashed_days' => 0,
-            'comp_off_credits' => 0,
-        ]);
-
-        $balance->incrementEach([
-            'allocated_days' => $days,
-            'comp_off_credits' => $days,
-        ]);
-
-        return $balance->fresh();
+        // The leave year of the day worked (not its calendar year), recorded
+        // as an add-on lot so it can expire and be consumed traceably.
+        return app(LeaveMovementService::class)->creditCompOff($employee, $leaveType, $date, $days);
     }
 
     /**
@@ -962,6 +971,8 @@ class LeaveService
             throw new \DomainException('Only pending encashment requests can be approved at this stage.');
         }
 
+        app(ApprovalGuard::class)->assertNotSelf($reviewer, $encashment->employee);
+
         $encashment->update([
             'status' => 'pending_finance',
             'reviewer_id' => $reviewer->id,
@@ -987,6 +998,8 @@ class LeaveService
         if (! in_array($encashment->status, ['pending', 'pending_finance'])) {
             throw new \DomainException('Only pending or pending-finance encashments may be rejected.');
         }
+
+        app(ApprovalGuard::class)->assertNotSelf($reviewer, $encashment->employee);
 
         $isFinanceStage = $encashment->status === 'pending_finance';
 
@@ -1019,6 +1032,8 @@ class LeaveService
             throw new \DomainException('Only pending-finance encashments can be finance-approved.');
         }
 
+        app(ApprovalGuard::class)->assertNotSelf($reviewer, $encashment->employee);
+
         DB::transaction(function () use ($reviewer, $encashment, $comment) {
             $encashment->update([
                 'status' => 'approved',
@@ -1027,14 +1042,30 @@ class LeaveService
                 'finance_reviewed_at' => now(),
             ]);
 
-            // Commit balance deduction only on final approval
+            // Commit balance deduction only on final approval — against the
+            // balance the days were requested from: the leave year the request
+            // was made in (carried-forward days live in that year's row even
+            // though source_leave_year names the year they originated in), so
+            // a finance sign-off after 1 July still debits the right row.
+            $year = app(LeaveYearResolver::class)->legacyYearFor($encashment->created_at ?? now());
             $balance = LeaveBalance::where('employee_id', $encashment->employee_id)
                 ->where('leave_type_id', $encashment->leave_type_id)
-                ->where('year', app(LeaveYearResolver::class)->legacyYearFor())
+                ->where('year', $year)
                 ->first();
 
             if ($balance) {
-                $balance->increment('encashed_days', $encashment->requested_days);
+                $movements = app(LeaveMovementService::class);
+                if ($movements->ledgerReady($balance)) {
+                    $ledger = app(LeaveLedgerService::class);
+                    $ledger->debit($balance, LeaveLedgerEntry::TYPE_ENCASHMENT, (float) $encashment->requested_days,
+                        Carbon::today(), "encashment:{$encashment->id}", [
+                            'source_type' => 'leave_encashment', 'source_id' => $encashment->id,
+                            'reason' => 'Leave encashment approved by finance', 'actor' => $reviewer,
+                        ]);
+                    $ledger->rebuild($balance);
+                } else {
+                    $balance->increment('encashed_days', $encashment->requested_days);
+                }
             }
         });
 
@@ -1130,11 +1161,41 @@ class LeaveService
         $employee = $leaveRequest->employee;
 
         if ($leaveRequest->status === 'approved' && $this->wasApprovedAsPaid($leaveRequest)) {
-            $this->getBalance($employee->id, $leaveRequest->leave_type_id)
-                ?->decrement('used_days', $leaveRequest->days);
+            // Returned to the leave year the leave was taken in — cancelling
+            // June leave in July must not credit the new year.
+            app(LeaveMovementService::class)->reverseUsage(
+                $leaveRequest,
+                (int) $leaveRequest->leave_type_id,
+                (float) $leaveRequest->days,
+                Carbon::parse($leaveRequest->start_date),
+                'Leave cancelled',
+                auth()->user(),
+            );
         }
 
         $leaveRequest->update(['status' => 'cancelled']);
+    }
+
+    /**
+     * Reviewer must be in scope and not the requester. A still-open request
+     * (pending / pending_hr / more_info_requested) may be decided by any
+     * in-scope approver; re-opening an already-decided one (approved,
+     * rejected, cancelled) is an HR correction and needs employee-management
+     * authority.
+     *
+     * @throws ApprovalNotPermitted
+     */
+    private function assertCanReview(LeaveRequest $leaveRequest, int $reviewerId): void
+    {
+        $reviewer = User::find($reviewerId);
+
+        app(ApprovalGuard::class)->assertCanDecide($reviewer, $leaveRequest->employee);
+
+        $isOpen = in_array($leaveRequest->status, ['pending', 'pending_hr', 'more_info_requested'], true);
+
+        if (! $isOpen && ! ($reviewer->isSuperAdmin() || $reviewer->canManageEmployees())) {
+            throw new \DomainException('This leave request has already been decided and can only be corrected by HR.');
+        }
     }
 
     private function wasApprovedAsPaid(LeaveRequest $leaveRequest): bool
@@ -1170,29 +1231,14 @@ class LeaveService
             ?? ($leaveRequest->leaveType?->is_paid ? 'paid' : 'unpaid');
 
         if ($effectiveStatus === 'paid') {
-            // The leave year the leave itself falls in — not today's. Approving
-            // June leave in July would otherwise debit the wrong year.
-            $leaveYear = app(LeaveYearResolver::class)->legacyYearFor(Carbon::parse($data['start_date']));
-
-            $balance = $this->getBalance($employee->id, (int) $data['leave_type_id'], $leaveYear)
-                ?? LeaveBalance::create([
-                    'employee_id' => $employee->id,
-                    'leave_type_id' => (int) $data['leave_type_id'],
-                    'year' => $leaveYear,
-                    'allocated_days' => 0,
-                    'used_days' => 0,
-                    'carried_forward_days' => 0,
-                    'encashed_days' => 0,
-                    'comp_off_credits' => 0,
-                ]);
-
-            $available = max(0, (float) $balance->allocated_days - (float) $balance->used_days - (float) ($balance->encashed_days ?? 0));
-
-            if ($available < $newDays) {
-                throw new \DomainException("Insufficient leave balance. Available: {$available} day(s), requested: {$newDays}.");
-            }
-
-            $balance->increment('used_days', $newDays);
+            // Posted to the leave year the leave itself falls in — not today's.
+            // A ledger-backed balance records which credit lots it consumed.
+            app(LeaveMovementService::class)->recordUsage(
+                $leaveRequest,
+                $newDays,
+                (int) $data['leave_type_id'],
+                Carbon::parse($data['start_date']),
+            );
         }
     }
 

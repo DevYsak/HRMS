@@ -7,8 +7,11 @@ use App\Models\Employee;
 use App\Models\LeaveBalance;
 use App\Models\LeaveRequest;
 use App\Models\LeaveType;
+use App\Services\Approvals\ApprovalGuard;
+use App\Services\Leave\LeaveYearResolver;
 use App\Services\LeaveService;
 use Illuminate\Support\Facades\Auth;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 use Livewire\WithPagination;
@@ -35,6 +38,7 @@ class AllTimeOff extends Component
     // Detail side panel
     public bool $showDetailPanel = false;
 
+    #[Locked]
     public $viewingId = null;
 
     public ?LeaveRequest $viewingRequest = null;
@@ -60,6 +64,7 @@ class AllTimeOff extends Component
 
     public string $lockedByName = '';
 
+    #[Locked]
     public $editingId = null;
 
     public array $form = [
@@ -122,6 +127,8 @@ class AllTimeOff extends Component
             'reviewer', 'hrReviewer', 'paymentAuditLogs.changedByUser',
             'attachments', 'messages.user', 'claimer',
         ])->findOrFail($id);
+
+        app(ApprovalGuard::class)->assertCanView(Auth::user(), $this->viewingRequest->employee);
 
         // Claim-lock: another in-scope reviewer is already handling this request.
         if (! $this->claimForReview($this->viewingRequest)) {
@@ -287,6 +294,7 @@ class AllTimeOff extends Component
         ]);
 
         $request = LeaveRequest::findOrFail($this->viewingId);
+        app(ApprovalGuard::class)->assertCanView(Auth::user(), $request->employee);
 
         $path = null;
         $name = null;
@@ -356,7 +364,9 @@ class AllTimeOff extends Component
     {
         abort_unless(Auth::user()->canApproveLeave(), 403);
 
-        $request = LeaveRequest::with(['reviewer', 'paymentAuditLogs.changedByUser'])->findOrFail($id);
+        $request = LeaveRequest::with(['employee', 'reviewer', 'paymentAuditLogs.changedByUser'])->findOrFail($id);
+        app(ApprovalGuard::class)->assertCanView(Auth::user(), $request->employee);
+
         $this->editingId = $id;
         $this->form = [
             'status' => $request->status,
@@ -478,6 +488,7 @@ class AllTimeOff extends Component
         ]);
 
         $employee = Employee::with('user')->findOrFail($this->newForm['employee_id']);
+        abort_unless(Auth::user()->coversEmployee($employee), 403);
         $leaveType = LeaveType::findOrFail($this->newForm['leave_type_id']);
 
         try {
@@ -505,9 +516,13 @@ class AllTimeOff extends Component
     {
         abort_unless(Auth::user()->canApproveLeave(), 403);
 
+        // null = company-wide; otherwise only the approver's reporting line / scope.
+        $scopeIds = Auth::user()->accessibleEmployeeIds();
+
         $query = LeaveRequest::with(['employee.user', 'employee.department', 'leaveType', 'reviewer'])
             ->withCount('messages')
             ->whereHas('employee.user')
+            ->when($scopeIds !== null, fn ($q) => $q->whereIn('employee_id', $scopeIds))
             ->when($this->search, fn ($q) => $q->whereHas('employee.user', fn ($q2) => $q2->where('name', 'like', '%'.$this->search.'%')))
             ->when($this->status, fn ($q) => $q->where('status', $this->status))
             ->when($this->leave_type_id, fn ($q) => $q->where('leave_type_id', $this->leave_type_id))
@@ -517,14 +532,20 @@ class AllTimeOff extends Component
         $requests = $query->latest()->paginate($this->perPage);
 
         // Attach available balance
-        $requests->each(function (LeaveRequest $req) {
+        // The leave year runs 1 July to 30 June, so the calendar year and the
+        // leave year's integer disagree from January to June — an approver was
+        // shown no balance at all for six months of every year.
+        $leaveYear = app(LeaveYearResolver::class)->legacyYearFor();
+
+        $requests->each(function (LeaveRequest $req) use ($leaveYear) {
             $req->availableBalance = LeaveBalance::where('employee_id', $req->employee_id)
                 ->where('leave_type_id', $req->leave_type_id)
-                ->where('year', now()->year)
+                ->where('year', $leaveYear)
                 ->first();
         });
 
         $kpiBase = LeaveRequest::whereHas('employee.user')
+            ->when($scopeIds !== null, fn ($q) => $q->whereIn('employee_id', $scopeIds))
             ->whereMonth('created_at', now()->month)
             ->whereYear('created_at', now()->year);
 
@@ -535,7 +556,9 @@ class AllTimeOff extends Component
             'rejected' => (clone $kpiBase)->where('status', 'rejected')->count(),
         ];
 
-        $allEmployees = Employee::with('user')->whereHas('user')->where('status', 'active')->orderBy('id')->get();
+        $allEmployees = Employee::with('user')->whereHas('user')->where('status', 'active')
+            ->when($scopeIds !== null, fn ($q) => $q->whereIn('id', $scopeIds))
+            ->orderBy('id')->get();
 
         return view('livewire.time-off.all-time-off', [
             'requests' => $requests,

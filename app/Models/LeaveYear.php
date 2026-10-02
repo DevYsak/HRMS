@@ -15,7 +15,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * never able to say which twelve months a balance belonged to — and every
  * accrual, carry-over and pro-rata calculation depends on knowing that.
  */
-#[Fillable(['label', 'starts_on', 'ends_on', 'is_closed'])]
+#[Fillable(['label', 'starts_on', 'ends_on', 'is_closed', 'closed_at', 'closed_by'])]
 class LeaveYear extends Model
 {
     protected function casts(): array
@@ -24,12 +24,23 @@ class LeaveYear extends Model
             'starts_on' => 'date',
             'ends_on' => 'date',
             'is_closed' => 'boolean',
+            'closed_at' => 'datetime',
         ];
     }
 
     public function balances(): HasMany
     {
         return $this->hasMany(LeaveBalance::class);
+    }
+
+    /**
+     * A closed year's ledger accepts no ordinary postings. Closing is done by
+     * LeaveYearLifecycleService once the year has ended and every balance in
+     * it is ledger-backed and settled.
+     */
+    public function isClosed(): bool
+    {
+        return (bool) $this->is_closed;
     }
 
     public function contains(CarbonInterface $date): bool

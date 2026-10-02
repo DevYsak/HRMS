@@ -7,7 +7,7 @@ test('a super admin can view as another user and return to their account', funct
     $admin = User::factory()->create(['role' => UserRole::SuperAdmin, 'email_verified_at' => now()]);
     $employee = User::factory()->create(['role' => UserRole::Employee, 'email_verified_at' => now()]);
 
-    $this->actingAs($admin)->get(route('impersonate.start', $employee))
+    $this->actingAs($admin)->post(route('impersonate.start', $employee))
         ->assertRedirect(route('dashboard'));
 
     expect(auth()->id())->toBe($employee->id);
@@ -23,7 +23,7 @@ test('a non-super-admin cannot impersonate', function () {
     $hr = User::factory()->create(['role' => UserRole::HrAdmin, 'email_verified_at' => now()]);
     $employee = User::factory()->create(['role' => UserRole::Employee, 'email_verified_at' => now()]);
 
-    $this->actingAs($hr)->get(route('impersonate.start', $employee))->assertForbidden();
+    $this->actingAs($hr)->post(route('impersonate.start', $employee))->assertForbidden();
 });
 
 test('cannot start a second impersonation while already impersonating', function () {
@@ -31,8 +31,8 @@ test('cannot start a second impersonation while already impersonating', function
     $a = User::factory()->create(['email_verified_at' => now()]);
     $b = User::factory()->create(['email_verified_at' => now()]);
 
-    $this->actingAs($admin)->get(route('impersonate.start', $a))->assertRedirect(route('dashboard'));
+    $this->actingAs($admin)->post(route('impersonate.start', $a))->assertRedirect(route('dashboard'));
 
     // Now impersonating $a — a second start must be refused.
-    $this->get(route('impersonate.start', $b))->assertForbidden();
+    $this->post(route('impersonate.start', $b))->assertForbidden();
 });

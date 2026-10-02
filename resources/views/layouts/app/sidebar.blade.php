@@ -506,11 +506,17 @@
                         @can('approve_leave')
                             <flux:sidebar.item :href="route('time-off.employees')" :current="request()->routeIs('time-off.employees')" wire:navigate>All Leave</flux:sidebar.item>
                         @endcan
+                        @can('view_leave_management')
+                            <flux:sidebar.item :href="route('time-off.leave-management')" :current="request()->routeIs('time-off.leave-management*', 'time-off.year-rollover', 'time-off.reconciliation')" wire:navigate>Leave Management</flux:sidebar.item>
+                        @endcan
                         @if($isFin || $isHr)
                             <flux:sidebar.item :href="route('time-off.encashments')" :current="request()->routeIs('time-off.encashments')" wire:navigate>Encashments</flux:sidebar.item>
                         @endif
                         @can('view_leave_regularisation')
                             <flux:sidebar.item :href="route('time-off.regularisation')" :current="request()->routeIs('time-off.regularisation')" wire:navigate>Regularisation</flux:sidebar.item>
+                        @endcan
+                        @can('manage_leave_balances')
+                            <flux:sidebar.item :href="route('time-off.historical-balances')" :current="request()->routeIs('time-off.historical-balances')" wire:navigate>Historical Balances</flux:sidebar.item>
                         @endcan
                         @can('view_leave_carry_forward')
                             <flux:sidebar.item :href="route('time-off.carry-forward')" :current="request()->routeIs('time-off.carry-forward')" wire:navigate>Carry Forward</flux:sidebar.item>
@@ -659,15 +665,16 @@
                                 <flux:sidebar.item :href="route('reports.payroll-yearly-summary')">Payroll Yearly Summary</flux:sidebar.item>
                                 <flux:sidebar.item :href="route('reports.payroll-variance-report')">Payroll Variance Report</flux:sidebar.item>
                             @endcan
-                            @can('approve_leave')
+                            {{-- Company-wide exports: hidden from scoped approvers (server enforces it too). --}}
+                            @if(auth()->user()->can('approve_leave') && auth()->user()->isCompanyWideApprover())
                                 <flux:sidebar.item :href="route('reports.attendance-summary')">Attendance Summary</flux:sidebar.item>
                                 <flux:sidebar.item :href="route('reports.leave-utilization')">Leave Utilization</flux:sidebar.item>
                                 <flux:sidebar.item :href="route('reports.leave-encashment-report')">Leave Encashments</flux:sidebar.item>
                                 <flux:sidebar.item :href="route('reports.attendance-compliance')">Attendance Compliance</flux:sidebar.item>
-                            @endcan
-                            @can('approve_overtime')
+                            @endif
+                            @if(auth()->user()->can('approve_overtime') && auth()->user()->isCompanyWideApprover())
                                 <flux:sidebar.item :href="route('reports.ot-records')">Overtime Records</flux:sidebar.item>
-                            @endcan
+                            @endif
                             @can('manage_employees')
                                 <flux:sidebar.item :href="route('reports.performance-summary')">Performance Summary</flux:sidebar.item>
                                 <flux:sidebar.item :href="route('reports.kpi-summary')">KPI Summary</flux:sidebar.item>
@@ -797,6 +804,7 @@
                     <flux:menu.item :href="route('profile.me')" icon="user" wire:navigate>My Profile</flux:menu.item>
                     <flux:menu.item :href="route('profile.edit')" icon="cog-6-tooth" wire:navigate>Account settings</flux:menu.item>
                     <flux:menu.item :href="route('settings.preferences')" icon="adjustments-horizontal" wire:navigate>Preferences</flux:menu.item>
+                    <flux:menu.item :href="route('help.employee-guide')" icon="lifebuoy" wire:navigate>Help &amp; Employee Guide</flux:menu.item>
                     @can('manage_settings')
                         <flux:menu.item :href="route('settings.general')" icon="cog-6-tooth" wire:navigate>Settings
                         </flux:menu.item>
@@ -874,6 +882,7 @@
                     <flux:menu.item :href="route('profile.me')" icon="user" wire:navigate>My Profile</flux:menu.item>
                     <flux:menu.item :href="route('profile.edit')" icon="cog-6-tooth" wire:navigate>Account settings</flux:menu.item>
                     <flux:menu.item :href="route('settings.preferences')" icon="adjustments-horizontal" wire:navigate>Preferences</flux:menu.item>
+                    <flux:menu.item :href="route('help.employee-guide')" icon="lifebuoy" wire:navigate>Help &amp; Employee Guide</flux:menu.item>
                     <flux:menu.item :href="route('appearance.edit')" icon="paint-brush" wire:navigate>Appearance</flux:menu.item>
                     <flux:menu.separator />
                     <form method="POST" action="{{ route('logout') }}">

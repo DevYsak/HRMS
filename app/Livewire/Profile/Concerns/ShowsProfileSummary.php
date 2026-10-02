@@ -7,6 +7,7 @@ use App\Models\AttendanceDailyScore;
 use App\Models\AttendanceSetting;
 use App\Models\Employee;
 use App\Models\LeaveBalance;
+use App\Services\Leave\LeaveYearResolver;
 use App\Services\Profile\ProfileCompletionService;
 
 /**
@@ -35,9 +36,12 @@ trait ShowsProfileSummary
 
         $workingDays = max(1, AttendanceSetting::workingDaysBetween($from, now()));
 
+        // The leave year runs 1 July to 30 June, so the calendar year and the
+        // leave year's integer disagree from January to June. Reading
+        // now()->year there returned no balance at all.
         $balances = LeaveBalance::with('leaveType')
             ->where('employee_id', $employee->id)
-            ->where('year', now()->year)
+            ->where('year', app(LeaveYearResolver::class)->legacyYearFor())
             ->get();
 
         // Read the engine's own daily scores rather than recomputing, so the

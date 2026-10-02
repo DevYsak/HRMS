@@ -110,6 +110,12 @@
         </div>
     @endif
 
+    {{-- Phase 2E: every leave type bucket by bucket (base, carry forward, add-on,
+         accrual, adjustments, used, pending, expired), available-to-request,
+         expiry alerts, pending/upcoming requests, the ledger timeline and the
+         month-wise statement. --}}
+    <livewire:time-off.my-leave-balances />
+
     {{-- â"€â"€â"€ LEAVE BALANCE CARDS â"€â"€â"€ --}}
     {{-- Each card shows: Available days clearly, plus a plain breakdown row --}}
     @php

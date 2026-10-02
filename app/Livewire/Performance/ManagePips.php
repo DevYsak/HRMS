@@ -6,9 +6,11 @@ use App\Models\Document;
 use App\Models\Employee;
 use App\Models\PipGoal;
 use App\Models\PipRecord;
+use App\Services\Approvals\ApprovalGuard;
 use App\Services\Performance\PipService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 use Livewire\WithPagination;
@@ -58,6 +60,7 @@ class ManagePips extends Component
     public $goal_weightage = 0;
 
     // Progress form
+    #[Locked]
     public ?int $progressGoalId = null;
 
     public $progress_percent = 0;
@@ -107,6 +110,7 @@ class ManagePips extends Component
         ]);
 
         $employee = Employee::findOrFail($this->employee_id);
+        app(ApprovalGuard::class)->assertCanDecide(Auth::user(), $employee);
 
         $service->create($employee, [
             'review_period_days' => (int) $this->review_period_days,
@@ -123,7 +127,7 @@ class ManagePips extends Component
     public function viewRecord(int $id): void
     {
         $this->checkPermission();
-        $this->activeRecord = PipRecord::with(['employee.user', 'employee.jobTitle', 'manager', 'hrReviewer', 'goals', 'documents'])->findOrFail($id);
+        $this->activeRecord = $this->inReach(PipRecord::with(['employee.user', 'employee.jobTitle', 'manager', 'hrReviewer', 'goals', 'documents']))->findOrFail($id);
         $this->showGoalModal = false;
         $this->showProgressModal = false;
         $this->showOutcomeModal = false;
@@ -188,6 +192,7 @@ class ManagePips extends Component
     public function activate(PipService $service): void
     {
         $this->checkPermission();
+        $this->assertActiveRecordInReach();
 
         try {
             $service->activate($this->activeRecord, Auth::user());
@@ -211,6 +216,9 @@ class ManagePips extends Component
 
     public function addGoal(PipService $service): void
     {
+        $this->checkPermission();
+        $this->assertActiveRecordInReach();
+
         $this->validate([
             'goal_title' => 'required|string|max:255',
             'goal_description' => 'nullable|string|max:1000',
@@ -238,7 +246,8 @@ class ManagePips extends Component
 
     public function openProgressModal(int $goalId): void
     {
-        $goal = PipGoal::findOrFail($goalId);
+        $this->checkPermission();
+        $goal = $this->activeGoals()->findOrFail($goalId);
         $this->progressGoalId = $goal->id;
         $this->progress_percent = $goal->progress_percent;
         $this->progress_notes = $goal->manager_notes ?? '';
@@ -253,7 +262,8 @@ class ManagePips extends Component
             'progress_notes' => 'nullable|string|max:1000',
         ]);
 
-        $goal = PipGoal::findOrFail($this->progressGoalId);
+        $this->checkPermission();
+        $goal = $this->activeGoals()->findOrFail($this->progressGoalId);
 
         $service->updateGoalProgress($goal, (float) $this->progress_percent, $this->progress_notes ?: null, Auth::user());
 
@@ -271,6 +281,9 @@ class ManagePips extends Component
 
     public function recordOutcome(PipService $service): void
     {
+        $this->checkPermission();
+        $this->assertActiveRecordInReach();
+
         $this->validate([
             'outcome' => 'required|in:successful,extended,failed,escalated',
         ]);
@@ -301,32 +314,68 @@ class ManagePips extends Component
         abort_unless($user->canManageEmployees() || $user->canReviewPerformance(), 403);
     }
 
+    /**
+     * PIP records inside the user's reach (reporting line / HR scope) and
+     * never the user's own — nobody manages their own improvement plan.
+     *
+     * @template TQuery of \Illuminate\Database\Eloquent\Builder
+     *
+     * @param  TQuery  $query
+     * @return TQuery
+     */
+    protected function inReach($query)
+    {
+        $ids = Auth::user()->accessibleEmployeeIds();
+        $own = Auth::user()->employee?->id;
+
+        return $query
+            ->when($ids !== null, fn ($q) => $q->whereIn('employee_id', $ids))
+            ->when($own, fn ($q) => $q->where('employee_id', '!=', $own));
+    }
+
+    /** Goals of the open PIP only — a goal id from the client cannot reach another plan. */
+    protected function activeGoals()
+    {
+        return PipGoal::where('pip_record_id', $this->activeRecord?->id ?? 0);
+    }
+
+    protected function assertActiveRecordInReach(): void
+    {
+        abort_unless($this->activeRecord !== null, 422);
+        app(ApprovalGuard::class)->assertCanDecide(Auth::user(), $this->activeRecord->employee);
+    }
+
     public function render()
     {
         $this->checkPermission();
 
-        $query = PipRecord::with(['employee.user', 'employee.jobTitle', 'manager', 'goals'])
+        $scopeIds = Auth::user()->accessibleEmployeeIds();
+
+        $query = $this->inReach(PipRecord::with(['employee.user', 'employee.jobTitle', 'manager', 'goals']))
             ->when($this->search, function ($q) {
                 $q->whereHas('employee.user', fn ($u) => $u->where('name', 'like', "%{$this->search}%"));
             })
             ->when($this->status, fn ($q) => $q->where('status', $this->status));
 
-        $dueThisWeek = PipRecord::where('status', 'active')
+        $dueThisWeek = $this->inReach(PipRecord::query())->where('status', 'active')
             ->whereBetween('end_date', [now()->toDateString(), now()->addDays(7)->toDateString()])
             ->count();
 
-        $overdueReviews = PipRecord::where('status', 'active')
+        $overdueReviews = $this->inReach(PipRecord::query())->where('status', 'active')
             ->where('end_date', '<', now()->toDateString())
             ->count();
 
-        $completedReviews = PipRecord::whereIn('status', ['successful', 'failed', 'extended', 'escalated'])
+        $completedReviews = $this->inReach(PipRecord::query())->whereIn('status', ['successful', 'failed', 'extended', 'escalated'])
             ->whereMonth('outcome_date', now()->month)
             ->whereYear('outcome_date', now()->year)
             ->count();
 
         return view('livewire.performance.manage-pips', [
             'records' => $query->latest('start_date')->paginate(15),
-            'employees' => Employee::with('user')->where('status', 'active')->get(),
+            'employees' => Employee::with('user')->where('status', 'active')
+                ->when($scopeIds !== null, fn ($q) => $q->whereIn('id', $scopeIds))
+                ->where('user_id', '!=', Auth::id())
+                ->get(),
             'dueThisWeek' => $dueThisWeek,
             'overdueReviews' => $overdueReviews,
             'completedReviews' => $completedReviews,

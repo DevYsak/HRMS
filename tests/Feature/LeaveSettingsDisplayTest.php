@@ -120,7 +120,8 @@ test('a type that does not carry forward says so plainly', function () {
 
     Livewire::actingAs(lsdAdmin())->test(TimeOffSettings::class)
         ->assertOk()
-        ->assertSee('Not carried forward')
+        // Spec wording: "Carry forward: Not permitted".
+        ->assertSee('Not permitted')
         ->assertSee('6 days per year');
 });
 

@@ -3,13 +3,16 @@
 namespace App\Livewire\Performance;
 
 use App\Models\ReviewGoal;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 
 class Goals extends Component
 {
     public bool $showModal = false;
 
+    #[Locked]
     public ?int $editingId = null;
 
     // Form fields
@@ -27,7 +30,7 @@ class Goals extends Component
 
     public function edit(int $id): void
     {
-        $goal = ReviewGoal::findOrFail($id);
+        $goal = $this->ownGoals()->findOrFail($id);
         $this->editingId = $id;
         $this->title = $goal->title;
         $this->description = $goal->description ?? '';
@@ -46,7 +49,7 @@ class Goals extends Component
         $employee = Auth::user()->employee;
 
         if ($this->editingId) {
-            ReviewGoal::findOrFail($this->editingId)->update([
+            $this->ownGoals()->findOrFail($this->editingId)->update([
                 'title' => $this->title,
                 'description' => $this->description ?: null,
                 'due_date' => $this->due_date ?: null,
@@ -67,7 +70,7 @@ class Goals extends Component
 
     public function toggleComplete(int $id): void
     {
-        $goal = ReviewGoal::findOrFail($id);
+        $goal = $this->ownGoals()->findOrFail($id);
         $goal->update([
             'is_completed' => ! $goal->is_completed,
             'completed_at' => $goal->is_completed ? null : now(),
@@ -76,8 +79,19 @@ class Goals extends Component
 
     public function delete(int $id): void
     {
-        ReviewGoal::findOrFail($id)->delete();
+        $this->ownGoals()->findOrFail($id)->delete();
         \Flux::toast('Goal deleted.');
+    }
+
+    /**
+     * The signed-in employee's own goals — every id from the client resolves
+     * through this so nobody can touch a colleague's goal.
+     *
+     * @return Builder<ReviewGoal>
+     */
+    protected function ownGoals()
+    {
+        return ReviewGoal::where('employee_id', Auth::user()->employee?->id ?? 0);
     }
 
     public function render()

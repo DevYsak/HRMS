@@ -22,10 +22,16 @@ class EmployeeScorecard extends Component
         ])->findOrFail($id);
 
         // Check authorization (Employee, Manager, or HR)
+        // A user with no employee record must not match a null id.
         $user = Auth::user();
-        if ($this->review->employee_id !== $user->employee?->id &&
-            $this->review->reviewer_id !== $user->employee?->id &&
-            ! $user->canManageEmployees()) {
+        $ownEmployeeId = $user->employee?->id;
+        $isOwn = $ownEmployeeId !== null && (int) $this->review->employee_id === (int) $ownEmployeeId;
+        $isReviewer = $ownEmployeeId !== null && (int) $this->review->reviewer_id === (int) $ownEmployeeId;
+        $inReach = $this->review->employee !== null
+            && ($user->canManageEmployees() || $user->canReviewPerformance())
+            && $user->coversEmployee($this->review->employee);
+
+        if (! $isOwn && ! $isReviewer && ! $inReach) {
             abort(403);
         }
 

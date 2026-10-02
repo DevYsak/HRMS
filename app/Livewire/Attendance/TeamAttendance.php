@@ -8,6 +8,7 @@ use App\Models\AttendanceRegularisation;
 use App\Models\AuditLog;
 use App\Models\LeaveRequest;
 use App\Notifications\RegularisationReviewedNotification;
+use App\Services\Approvals\ApprovalGuard;
 use App\Services\AttendanceService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -57,6 +58,7 @@ class TeamAttendance extends Component
         abort_unless(Auth::user()->canApproveLeave(), 403);
 
         $this->activeRequest = AttendanceRegularisation::with('employee.user', 'attendance')->findOrFail($id);
+        app(ApprovalGuard::class)->assertCanDecide(Auth::user(), $this->activeRequest->employee);
         $this->reviewComment = '';
         $this->showReviewModal = true;
     }

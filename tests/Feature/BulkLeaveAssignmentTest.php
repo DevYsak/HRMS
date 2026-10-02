@@ -57,14 +57,16 @@ test('decrease never drops a balance below days already used', function () {
     expect((float) LeaveBalance::where('employee_id', $e->id)->where('leave_type_id', $type->id)->value('allocated_days'))->toBe(8.0);
 });
 
-test('reset restores the leave type default allocation', function () {
+test('bulk reset has been removed; it can no longer discard granted leave', function () {
+    // Phase 2: missing entitlement is provisioned from the policy instead.
     $type = LeaveType::create(['name' => 'Annual', 'annual_allocation_days' => 14]);
-    $e = Employee::factory()->create(); // auto-seeded with 14 by the observer
-    LeaveBalance::where('employee_id', $e->id)->where('leave_type_id', $type->id)->update(['allocated_days' => 25]);
+    $e = Employee::factory()->create(['status' => 'active']);
+    $before = (float) LeaveBalance::where('employee_id', $e->id)->where('leave_type_id', $type->id)->value('allocated_days');
 
-    app(BulkLeaveService::class)->apply(collect([$e]), $type, 'reset', 0, 'Year reset', User::factory()->create(), now()->year);
+    expect(fn () => app(BulkLeaveService::class)->apply(collect([$e]), $type, 'reset', 0, 'Year reset', User::factory()->create(), now()->year))
+        ->toThrow(InvalidArgumentException::class, 'no longer available');
 
-    expect((float) LeaveBalance::where('employee_id', $e->id)->where('leave_type_id', $type->id)->value('allocated_days'))->toBe(14.0);
+    expect((float) LeaveBalance::where('employee_id', $e->id)->where('leave_type_id', $type->id)->value('allocated_days'))->toBe($before);
 });
 
 test('system-controlled leave types cannot be bulk-assigned', function () {

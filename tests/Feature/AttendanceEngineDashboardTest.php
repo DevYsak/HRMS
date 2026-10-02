@@ -28,6 +28,10 @@ function dashboardEmployee(): Employee
 }
 
 test('period working hours come from engine sessions, not the mis-paired attendance row', function () {
+    // The period view is the current month, and "two days ago" falls in last
+    // month on the 1st and 2nd. Run on a fixed mid-month day instead.
+    $this->travelTo(today()->startOfMonth()->addDays(14)->setTime(12, 0));
+
     $employee = dashboardEmployee();
     $day = today()->subDays(2);
 
@@ -113,7 +117,12 @@ test('changing the stats period recalculates the history list, not just the char
 
 test('the day log exposes engine sessions and ignored card scans', function () {
     $employee = dashboardEmployee();
-    $day = today()->subDays(3);
+
+    // The Attendance Log is a month view: history is filtered to the current
+    // calendar month. today()->subDays(3) falls into the previous month on
+    // the 1st to the 3rd, leaving the timeline empty for reasons that have
+    // nothing to do with engine sessions. Anchored inside this month instead.
+    $day = today()->day > 3 ? today()->subDays(3) : today()->startOfMonth()->addDays(3);
 
     Attendance::create([
         'employee_id' => $employee->id,

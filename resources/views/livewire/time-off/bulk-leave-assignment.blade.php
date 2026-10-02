@@ -7,7 +7,7 @@
 
     <div>
         <flux:heading size="xl">Bulk Leave Assignment</flux:heading>
-        <flux:subheading>Assign, increase, decrease or reset leave balances for many employees at once.</flux:subheading>
+        <flux:subheading>Assign, increase or decrease leave balances for many employees at once. Every change is an audited adjustment.</flux:subheading>
     </div>
 
     {{-- Filters --}}
@@ -67,12 +67,12 @@
             </div>
             <div>
                 <x-clean-select model="action" label="Action" :live="true"
-                    :options="[['value' => 'assign', 'label' => 'Set to (assign)'], ['value' => 'increase', 'label' => 'Increase by'], ['value' => 'decrease', 'label' => 'Decrease by'], ['value' => 'reset', 'label' => 'Reset to default']]" />
+                    :options="[['value' => 'assign', 'label' => 'Set to (assign)'], ['value' => 'increase', 'label' => 'Increase by'], ['value' => 'decrease', 'label' => 'Decrease by']]" />
             </div>
             <div>
                 <label class="{{ $labelClass }}">Days</label>
-                <input type="number" step="0.5" min="0.5" wire:model="days" @disabled($action === 'reset')
-                    class="{{ $selectClass }} disabled:opacity-40" placeholder="{{ $action === 'reset' ? 'n/a' : 'e.g. 12' }}">
+                <input type="number" step="0.5" min="0.5" wire:model="days"
+                    class="{{ $selectClass }} disabled:opacity-40" placeholder="e.g. 12">
                 @error('days')<p class="mt-1 text-xs text-rose-500">{{ $message }}</p>@enderror
             </div>
             <div>

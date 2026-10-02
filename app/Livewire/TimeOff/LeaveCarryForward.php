@@ -10,6 +10,7 @@ use App\Models\LeaveYear;
 use App\Services\Leave\LeaveCarryForwardService;
 use App\Services\Leave\LeaveYearResolver;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 use RuntimeException;
@@ -54,6 +55,23 @@ class LeaveCarryForward extends Component
     public ?int $reverseId = null;
 
     public string $reverseReason = '';
+
+    // ── Bulk decision ─────────────────────────────────────────────────────
+    /**
+     * Amounts HR has typed, keyed "employeeId:leaveTypeId".
+     *
+     * The migrated years have no usage on record, so applyAll cannot derive
+     * anything for them. This is how those rows get decided: HR states the
+     * figure per employee and applies the selection in one action.
+     *
+     * @var array<string, string>
+     */
+    public array $decisions = [];
+
+    /** @var array<int, string> keys of the rows ticked for a bulk decision */
+    public array $selected = [];
+
+    public string $decisionReason = '';
 
     public function mount(LeaveYearResolver $resolver): void
     {
@@ -168,6 +186,85 @@ class LeaveCarryForward extends Component
         $this->partialFor = null;
     }
 
+    /** Stable identity for a preview row across re-renders. */
+    public static function rowKey(int $employeeId, int $leaveTypeId): string
+    {
+        return $employeeId.':'.$leaveTypeId;
+    }
+
+    public function toggleAllSelected(): void
+    {
+        $keys = $this->rows
+            ->filter(fn (array $r) => $r['status'] !== Transaction::STATUS_APPLIED)
+            ->map(fn (array $r) => self::rowKey($r['employee_id'], $r['leave_type_id']))
+            ->values()->all();
+
+        $this->selected = count($this->selected) === count($keys) ? [] : $keys;
+    }
+
+    /**
+     * Apply the amounts HR typed against the ticked rows.
+     *
+     * A blank amount is not zero — it means HR has not decided yet, so the
+     * row is left alone rather than carried at nothing. Zero typed explicitly
+     * is a decision and is applied.
+     */
+    public function applySelected(): void
+    {
+        $this->authorize('manage_leave_carry_forward');
+
+        if ($this->selected === []) {
+            \Flux::toast('Tick the rows you want to apply.', variant: 'warning');
+
+            return;
+        }
+
+        $decisions = [];
+
+        foreach ($this->selected as $key) {
+            $amount = trim((string) ($this->decisions[$key] ?? ''));
+
+            if ($amount === '') {
+                continue;
+            }
+
+            [$employeeId, $leaveTypeId] = array_map('intval', explode(':', $key));
+            $decisions[] = [
+                'employee_id' => $employeeId,
+                'leave_type_id' => $leaveTypeId,
+                'days' => (float) $amount,
+            ];
+        }
+
+        if ($decisions === []) {
+            \Flux::toast('Enter the days HR has approved for each ticked row.', variant: 'warning');
+
+            return;
+        }
+
+        $result = app(LeaveCarryForwardService::class)->applyDecisions(
+            LeaveYear::find($this->previousYearId),
+            LeaveYear::find($this->currentYearId),
+            $decisions,
+            Auth::user(),
+            $this->decisionReason !== '' ? $this->decisionReason : null,
+        );
+
+        $this->selected = [];
+        $this->decisions = [];
+
+        if ($result['failed'] > 0) {
+            \Flux::toast(
+                "Applied {$result['applied']}, {$result['failed']} could not be applied: ".implode(' ', array_slice($result['errors'], 0, 2)),
+                variant: 'warning',
+            );
+
+            return;
+        }
+
+        \Flux::toast("Carried {$result['days']} day(s) forward for {$result['applied']} row(s).", variant: 'success');
+    }
+
     public function applyAll(): void
     {
         $this->authorize('manage_leave_carry_forward');
@@ -279,7 +376,10 @@ class LeaveCarryForward extends Component
             'undecidedRowCount' => $this->undecidedRowCount,
             'leaveYears' => LeaveYear::orderByDesc('starts_on')->get(),
             'departments' => Department::orderBy('name')->get(),
-            'leaveTypes' => LeaveType::where('allow_carry_forward', true)->orderBy('name')->get(),
+            // Filtered by the mode as well: offering a type the engine will
+            // never produce a row for is a filter that returns nothing.
+            'leaveTypes' => LeaveType::where('allow_carry_forward', true)->orderBy('name')->get()
+                ->filter(fn (LeaveType $t) => $t->permitsCarryForward())->values(),
         ])->layout('layouts.app', ['title' => 'Leave Carry Forward']);
     }
 }

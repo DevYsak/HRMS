@@ -18,6 +18,8 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     'status', 'approved_at',
     'reviewer_id', 'reviewer_comment',
     'hr_reviewer_id', 'hr_reviewer_comment', 'hr_reviewed_at',
+    // Set when HR applied on the employee's behalf (hr_internal_note is never shown to them).
+    'applied_by_user_id', 'hr_internal_note',
 ])]
 class LeaveRequest extends Model
 {

@@ -71,7 +71,7 @@ test('1 — an employee submission starts at manager review', function () {
 test('2 — a manager rejection ends the workflow and writes no attendance', function () {
     $employee = fpEmployee();
     $reg = fpRequest($employee);
-    $manager = User::factory()->create(['role' => UserRole::Manager]);
+    $manager = lineManager();
 
     app(AttendanceService::class)->rejectRegularisation($reg, $manager->id, 'Punch looks correct');
 
@@ -85,7 +85,7 @@ test('2 — a manager rejection ends the workflow and writes no attendance', fun
 test('3 — a manager approval advances to HR without touching attendance', function () {
     $employee = fpEmployee();
     $reg = fpRequest($employee);
-    $manager = User::factory()->create(['role' => UserRole::Manager]);
+    $manager = lineManager();
 
     expect(app(AttendanceService::class)->approveRegularisation($reg, $manager->id))->toBeNull();
 
@@ -100,7 +100,7 @@ test('4 and 7 — HR approving advances to admin, still applying nothing', funct
     $reg = fpRequest($employee);
     $service = app(AttendanceService::class);
 
-    $service->approveRegularisation($reg, User::factory()->create(['role' => UserRole::Manager])->id);
+    $service->approveRegularisation($reg, lineManager()->id);
     $result = $service->approveRegularisation($reg->refresh(), User::factory()->create(['role' => UserRole::HrAdmin])->id);
 
     expect($result)->toBeNull();
@@ -116,7 +116,7 @@ test('5 — an HR rejection ends the workflow', function () {
     $reg = fpRequest($employee);
     $service = app(AttendanceService::class);
 
-    $service->approveRegularisation($reg, User::factory()->create(['role' => UserRole::Manager])->id);
+    $service->approveRegularisation($reg, lineManager()->id);
     $service->rejectRegularisation($reg->refresh(), User::factory()->create(['role' => UserRole::HrAdmin])->id, 'No evidence');
 
     expect($reg->refresh()->status)->toBe('rejected')
@@ -128,7 +128,7 @@ test('8 — the super admin finalises through the full chain', function () {
     $reg = fpRequest($employee);
     $service = app(AttendanceService::class);
 
-    $service->approveRegularisation($reg, User::factory()->create(['role' => UserRole::Manager])->id);
+    $service->approveRegularisation($reg, lineManager()->id);
     $service->approveRegularisation($reg->refresh(), User::factory()->create(['role' => UserRole::HrAdmin])->id);
     $attendance = $service->approveRegularisation($reg->refresh(), User::factory()->create(['role' => UserRole::SuperAdmin])->id);
 
@@ -146,7 +146,7 @@ test('6 — HR fast-path applies the correction immediately', function () {
     $reg = fpRequest($employee);
     $hr = User::factory()->create(['role' => UserRole::HrAdmin, 'name' => 'HR Officer']);
 
-    app(AttendanceService::class)->approveRegularisation($reg, User::factory()->create(['role' => UserRole::Manager])->id);
+    app(AttendanceService::class)->approveRegularisation($reg, lineManager()->id);
 
     $attendance = app(AttendanceService::class)
         ->fastTrackRegularisation($reg->refresh(), $hr->id, 'Gate log confirms 09:00');
@@ -179,7 +179,7 @@ test('the fast-path can be used without a manager decision first', function () {
 test('9 — a manager cannot fast-path, even though they may approve', function () {
     $employee = fpEmployee();
     $reg = fpRequest($employee);
-    $manager = User::factory()->create(['role' => UserRole::Manager]);
+    $manager = lineManager();
 
     // Approving is theirs; applying unreviewed is not.
     expect($manager->hasPermission('approve_regularisation'))->toBeTrue()
@@ -199,8 +199,9 @@ test('9b — an employee and a finance user cannot fast-path', function () {
         $reg = fpRequest($employee);
         $actor = User::factory()->create(['role' => $role]);
 
+        // Refused either way: out of the actor's reach, or not authorised to fast-path.
         expect(fn () => app(AttendanceService::class)->fastTrackRegularisation($reg, $actor->id))
-            ->toThrow(DomainException::class);
+            ->toThrow(Exception::class);
 
         expect($reg->refresh()->status)->toBe('pending');
     }
@@ -211,7 +212,7 @@ test('the guard is in the service, so the Livewire route cannot be used to bypas
     // concern here.
     $employee = fpEmployee();
     $reg = fpRequest($employee);
-    $manager = User::factory()->create(['role' => UserRole::Manager]);
+    $manager = lineManager();
 
     Livewire::actingAs($manager)->test(AllAttendance::class)
         ->set('markEmployeeId', $employee->id)
@@ -242,7 +243,7 @@ test('10 and 11 — both routes preserve the original values and write the same 
 
     // Route A — full chain.
     [$empA, $regA] = $mk();
-    $service->approveRegularisation($regA, User::factory()->create(['role' => UserRole::Manager])->id);
+    $service->approveRegularisation($regA, lineManager()->id);
     $service->approveRegularisation($regA->refresh(), User::factory()->create(['role' => UserRole::HrAdmin])->id);
     $attA = $service->approveRegularisation($regA->refresh(), User::factory()->create(['role' => UserRole::SuperAdmin])->id);
 
@@ -276,7 +277,7 @@ test('the trail records every decision on the long route and the shortcut on the
     $service = app(AttendanceService::class);
 
     $regLong = fpRequest(fpEmployee());
-    $service->approveRegularisation($regLong, User::factory()->create(['role' => UserRole::Manager])->id);
+    $service->approveRegularisation($regLong, lineManager()->id);
     $service->approveRegularisation($regLong->refresh(), User::factory()->create(['role' => UserRole::HrAdmin])->id);
     $service->approveRegularisation($regLong->refresh(), User::factory()->create(['role' => UserRole::SuperAdmin])->id);
 

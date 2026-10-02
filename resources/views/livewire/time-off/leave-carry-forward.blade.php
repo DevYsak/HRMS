@@ -105,12 +105,40 @@ Rows already carried at their full eligible amount are skipped."
 
     {{-- Preview --}}
     <div class="overflow-hidden rounded-2xl border border-[#EAECF0] bg-white shadow-sm dark:border-white/10 dark:bg-zinc-900">
+        {{-- Bulk decision. This is the path the migrated years take: their usage
+             was never recorded, so nothing can be derived and "Apply carry
+             forward" rightly refuses them. HR types the figure per employee
+             and applies the selection here. --}}
+        @if(count($selected) > 0)
+            <div class="flex flex-wrap items-center justify-between gap-3 border-b border-[#EAECF0] bg-orange-50/60 px-4 py-3 dark:border-white/10 dark:bg-orange-900/10">
+                <div class="text-sm font-semibold text-orange-800 dark:text-orange-300">
+                    {{ count($selected) }} row(s) selected
+                    <span class="ml-2 text-xs font-normal text-orange-700/70 dark:text-orange-400/70">
+                        Rows with no amount entered are left undecided.
+                    </span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <input type="text" wire:model="decisionReason" placeholder="Reason (optional)"
+                        class="w-56 rounded-lg border-zinc-200 bg-white px-3 py-1.5 text-sm dark:border-white/10 dark:bg-zinc-900" />
+                    <flux:button wire:click="applySelected" variant="primary" size="sm" icon="check"
+                        wire:confirm="Apply the entered carry-forward days to the selected rows?"
+                        wire:loading.attr="disabled" wire:target="applySelected">
+                        Apply selected
+                    </flux:button>
+                </div>
+            </div>
+        @endif
+
         <div class="overflow-x-auto">
             <table class="w-full min-w-max text-sm">
                 <thead>
                     <tr class="border-b border-[#EAECF0] bg-[#F9FAFB] text-left dark:border-white/10 dark:bg-white/[0.02]">
-                        @foreach(['Employee', 'Leave type', 'Previous year', 'Allocated', 'Used', 'Encashed', 'Eligible', 'Carried', 'Remaining', 'Status', ''] as $i => $heading)
-                            <th class="whitespace-nowrap px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-[#98A2B3] {{ in_array($i, [3,4,5,6,7,8]) ? 'text-right' : '' }}">
+                        <th class="px-4 py-3">
+                            <button type="button" wire:click="toggleAllSelected"
+                                class="text-[10px] font-bold uppercase tracking-widest text-[#98A2B3] hover:text-orange-600">All</button>
+                        </th>
+                        @foreach(['Employee', 'Leave type', 'Previous year', 'Allocated', 'Used', 'Encashed', 'Eligible', 'HR approves', 'Carried', 'Remaining', 'Status', ''] as $i => $heading)
+                            <th class="whitespace-nowrap px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-[#98A2B3] {{ in_array($i, [3,4,5,6,7,8,9]) ? 'text-right' : '' }}">
                                 {{ $heading }}
                             </th>
                         @endforeach
@@ -120,6 +148,8 @@ Rows already carried at their full eligible amount are skipped."
                     @forelse($rows as $row)
                         @php
                             $key = $row['employee_id'] * 1000000 + $row['leave_type_id'];
+                            $rowKey = $row['employee_id'].':'.$row['leave_type_id'];
+                            $decided = $row['status'] === 'applied';
                             [$badge, $badgeTone] = match($row['status']) {
                                 'applied'           => ['Applied', 'bg-emerald-50 text-emerald-700 ring-emerald-600/20'],
                                 'partially_applied' => ['Partially applied', 'bg-amber-50 text-amber-700 ring-amber-600/20'],
@@ -130,6 +160,12 @@ Rows already carried at their full eligible amount are skipped."
                             };
                         @endphp
                         <tr class="align-top">
+                            <td class="px-4 py-3">
+                                @unless($decided)
+                                    <input type="checkbox" wire:model.live="selected" value="{{ $rowKey }}"
+                                        class="size-4 rounded border-zinc-300 text-orange-600 focus:ring-orange-500" />
+                                @endunless
+                            </td>
                             <td class="px-4 py-3 font-semibold text-[#101828] dark:text-zinc-100">{{ $row['employee'] ?? '—' }}</td>
                             <td class="px-4 py-3 text-[#667085] dark:text-zinc-400">{{ $row['leave_type'] }}</td>
                             <td class="px-4 py-3 text-[#667085] dark:text-zinc-400">{{ $leaveYears->firstWhere('id', $previousYearId)?->label ?? '—' }}</td>
@@ -157,6 +193,18 @@ Rows already carried at their full eligible amount are skipped."
                                     </flux:tooltip>
                                 @endif
                                 @endif
+                            </td>
+                            {{-- What HR approves. Blank is not zero: it means undecided, and
+                                 the row is left alone. A typed 0 is a decision to carry nothing. --}}
+                            <td class="px-4 py-3 text-right">
+                                @unless($decided)
+                                    <input type="number" step="0.5" min="0"
+                                        wire:model.live="decisions.{{ $rowKey }}"
+                                        placeholder="{{ $row['figures_known'] ? $row['carry'] : $row['closing_balance'] }}"
+                                        class="w-20 rounded-lg border-zinc-200 bg-white px-2 py-1 text-right text-sm tabular-nums dark:border-white/10 dark:bg-zinc-900" />
+                                @else
+                                    <span class="text-xs text-[#98A2B3]">—</span>
+                                @endunless
                             </td>
                             <td class="px-4 py-3 text-right tabular-nums font-semibold text-emerald-600">{{ $row['applied'] }}</td>
                             <td class="px-4 py-3 text-right tabular-nums text-[#667085] dark:text-zinc-400">{{ $row['remaining_eligible'] }}</td>
@@ -197,7 +245,7 @@ Rows already carried at their full eligible amount are skipped."
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="11" class="px-4 py-12">
+                            <td colspan="13" class="px-4 py-12">
                                 {{-- Zero here means "no source data", not "operation complete".
                                      Neutral rather than red: nothing has gone wrong. --}}
                                 <div class="mx-auto flex max-w-lg flex-col items-center gap-3 text-center">

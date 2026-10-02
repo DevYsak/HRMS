@@ -59,7 +59,7 @@ test('duplicate holiday-work requests for the same date are blocked', function (
 test('approving overtime pay creates a holiday-worked attendance and an OT record', function () {
     Notification::fake();
     $employee = Employee::factory()->create(['holiday_calendar' => 'IN']);
-    $reviewer = User::factory()->create();
+    $reviewer = User::factory()->create(['role' => UserRole::HrAdmin]);
     hwHoliday('2026-08-15');
     $req = app(HolidayWorkService::class)->submit($employee, [
         'work_date' => '2026-08-15', 'reason' => 'Prod deploy', 'expected_hours' => 8, 'pay_type' => 'overtime',
@@ -87,7 +87,7 @@ test('approving overtime pay creates a holiday-worked attendance and an OT recor
 test('approving comp-off pay credits a comp-off leave balance instead of OT', function () {
     Notification::fake();
     $employee = Employee::factory()->create(['holiday_calendar' => 'IN']);
-    $reviewer = User::factory()->create();
+    $reviewer = User::factory()->create(['role' => UserRole::HrAdmin]);
     hwHoliday('2026-08-15');
     $req = app(HolidayWorkService::class)->submit($employee, [
         'work_date' => '2026-08-15', 'reason' => 'On-call', 'pay_type' => 'comp_off',
@@ -136,7 +136,7 @@ test('submit is rejected when the chosen pay type is disabled by policy', functi
 test('double pay applies the configured multiplier to the OT rate', function () {
     Notification::fake();
     $employee = Employee::factory()->create(['holiday_calendar' => 'IN']);
-    $reviewer = User::factory()->create();
+    $reviewer = User::factory()->create(['role' => UserRole::HrAdmin]);
     hwHoliday('2026-08-15');
     HolidayPaySetting::current()->update(['double_pay_multiplier' => 2.5, 'ot_rate_per_hour' => 100]);
 
@@ -155,7 +155,7 @@ test('double pay applies the configured multiplier to the OT rate', function () 
 test('comp off credits the configured day count from the policy', function () {
     Notification::fake();
     $employee = Employee::factory()->create(['holiday_calendar' => 'IN']);
-    $reviewer = User::factory()->create();
+    $reviewer = User::factory()->create(['role' => UserRole::HrAdmin]);
     hwHoliday('2026-08-15');
     HolidayPaySetting::current()->update(['comp_off_days_per_holiday' => 1.5]);
 
@@ -172,7 +172,7 @@ test('comp off credits the configured day count from the policy', function () {
 test('half day pay type credits the configured half-day comp-off amount', function () {
     Notification::fake();
     $employee = Employee::factory()->create(['holiday_calendar' => 'IN']);
-    $reviewer = User::factory()->create();
+    $reviewer = User::factory()->create(['role' => UserRole::HrAdmin]);
     hwHoliday('2026-08-15');
 
     $req = app(HolidayWorkService::class)->submit($employee, [

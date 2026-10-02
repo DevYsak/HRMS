@@ -6,6 +6,7 @@ use App\Enums\EmployeeStatus;
 use App\Enums\UserRole;
 use App\Mail\WelcomeEmployeeMail;
 use App\Models\Attendance;
+use App\Models\AttendanceRegularisation;
 use App\Models\Department;
 use App\Models\Employee;
 use App\Models\EmployeeSalary;
@@ -22,15 +23,19 @@ use App\Models\User;
 use App\Models\WorkMode;
 use App\Services\Biometric\BiometricCodeService;
 use App\Services\Biometric\EngineAttendanceSyncService;
+use App\Services\Leave\LeaveCarryForwardService;
 use App\Services\Leave\LeaveYearResolver;
 use App\Services\LeaveBalanceService;
 use App\Services\PasswordService;
 use App\Services\ProbationEngine;
+use App\Services\Security\RoleDelegationGuard;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Validation\Rule;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 
@@ -230,17 +235,33 @@ class EmployeeEdit extends Component
 
         $chosenRole = Role::findOrFail($this->roleId);
 
+        // Privilege-escalation guard: own role, Super Admin and the
+        // delegation ceiling are enforced server-side, whatever the UI showed.
+        if ($refusal = app(RoleDelegationGuard::class)->refusalToAssign(Auth::user(), $chosenRole, $this->employee->user)) {
+            $this->addError('roleId', $refusal);
+
+            return;
+        }
+
         // HR/manager access scope only applies to approver roles; it's cleared
         // for everyone else so a normal employee can never carry a stray scope.
         $scopesApply = in_array($chosenRole->legacyBucket()->value, ['hr_admin', 'manager'], true);
+        $newScopeDepartments = $scopesApply && $this->scopeDepartments ? array_map('intval', $this->scopeDepartments) : null;
+        $newScopeShifts = $scopesApply && $this->scopeShifts ? array_map('intval', $this->scopeShifts) : null;
+
+        if ($refusal = $this->scopeChangeRefusal($newScopeDepartments, $newScopeShifts)) {
+            $this->addError('scopeDepartments', $refusal);
+
+            return;
+        }
 
         $this->employee->user->update([
             'name' => $this->name,
             'email' => $this->email,
             'role' => $chosenRole->legacyBucket(),
             'role_id' => $chosenRole->id,
-            'scope_departments' => $scopesApply && $this->scopeDepartments ? array_map('intval', $this->scopeDepartments) : null,
-            'scope_shifts' => $scopesApply && $this->scopeShifts ? array_map('intval', $this->scopeShifts) : null,
+            'scope_departments' => $newScopeDepartments,
+            'scope_shifts' => $newScopeShifts,
         ]);
 
         $photoPath = $this->photo
@@ -289,6 +310,7 @@ class EmployeeEdit extends Component
     // ── Salary modal ─────────────────────────────────────────────────────────
     public bool $showSalaryModal = false;
 
+    #[Locked]
     public ?int $editingSalaryId = null;
 
     public string $salaryComponentId = '';
@@ -350,6 +372,38 @@ class EmployeeEdit extends Component
         // Reveal once so HR/Admin can copy and share it.
         $this->generatedPassword = $tempPassword;
         $this->showCredentialsModal = true;
+    }
+
+    /**
+     * Put the employee back behind the first-login password page. Their
+     * current password is neither changed nor revealed; they sign in with it
+     * and must then choose a new one.
+     */
+    public function forcePasswordReset(): void
+    {
+        $this->authorize('update', $this->employee);
+
+        $user = $this->employee->user;
+        $actor = Auth::user();
+
+        if ($user === null) {
+            \Flux::toast('This employee has no login account.', variant: 'danger');
+
+            return;
+        }
+
+        // Employee management does not reach a Super Admin's credentials.
+        if ($user->isSuperAdmin() && ! $actor->isSuperAdmin()) {
+            \Flux::toast('Only a Super Admin can force a Super Admin to reset their password.', variant: 'danger');
+
+            return;
+        }
+
+        app(PasswordService::class)->forceReset($user, $actor);
+
+        $this->employee->setRelation('user', $user->fresh());
+
+        \Flux::toast('They will be asked to set a new password at their next sign-in.', variant: 'success');
     }
 
     public function openEmailModal(): void
@@ -421,6 +475,38 @@ class EmployeeEdit extends Component
 
     // ── Salary management ────────────────────────────────────────────────────
 
+    /**
+     * A scope widens or narrows what an approver reaches — clearing it can
+     * make an HR user company-wide. Nobody but a Super Admin changes their
+     * own scope, and a scoped (non-company-wide) actor cannot set anyone's.
+     *
+     * @param  array<int, int>|null  $departments
+     * @param  array<int, int>|null  $shifts
+     */
+    protected function scopeChangeRefusal(?array $departments, ?array $shifts): ?string
+    {
+        $actor = Auth::user();
+        $target = $this->employee->user;
+
+        $normalise = fn (?array $ids) => collect($ids ?? [])->map(fn ($id) => (int) $id)->sort()->values()->all();
+        $changed = $normalise($target->scope_departments) !== $normalise($departments)
+            || $normalise($target->scope_shifts) !== $normalise($shifts);
+
+        if (! $changed || app(RoleDelegationGuard::class)->isSuperAdmin($actor)) {
+            return null;
+        }
+
+        if ($target->is($actor)) {
+            return 'You cannot change your own access scope.';
+        }
+
+        if (! $actor->isCompanyWideApprover()) {
+            return 'Only a company-wide administrator can change access scopes.';
+        }
+
+        return null;
+    }
+
     public function openAddSalary(): void
     {
         $this->editingSalaryId = null;
@@ -432,7 +518,9 @@ class EmployeeEdit extends Component
 
     public function openEditSalary(int $id): void
     {
-        $row = EmployeeSalary::findOrFail($id);
+        $this->authorize('update', $this->employee);
+
+        $row = EmployeeSalary::where('employee_id', $this->employee->id)->findOrFail($id);
         $this->editingSalaryId = $id;
         $this->salaryComponentId = (string) $row->salary_component_id;
         $this->salaryAmount = (string) $row->amount;
@@ -450,7 +538,7 @@ class EmployeeEdit extends Component
         ]);
 
         if ($this->editingSalaryId) {
-            EmployeeSalary::findOrFail($this->editingSalaryId)->update([
+            EmployeeSalary::where('employee_id', $this->employee->id)->findOrFail($this->editingSalaryId)->update([
                 'salary_component_id' => $this->salaryComponentId,
                 'amount' => $this->salaryAmount,
             ]);
@@ -716,6 +804,23 @@ class EmployeeEdit extends Component
         );
     }
 
+    /**
+     * Roles the signed-in user may give this employee — the current role is
+     * always listed so the form can show it.
+     *
+     * @return Collection<int, Role>
+     */
+    protected function assignableRoles()
+    {
+        $guard = app(RoleDelegationGuard::class);
+        $target = $this->employee->user;
+
+        return Role::where('is_active', true)->orderBy('name')->get()
+            ->filter(fn (Role $role) => (int) $role->id === (int) $target?->role_id
+                || $guard->refusalToAssign(Auth::user(), $role, $target) === null)
+            ->values();
+    }
+
     public function render()
     {
         $this->employee->load(['salaries.component', 'shift']);
@@ -737,6 +842,22 @@ class EmployeeEdit extends Component
             : collect();
         $adjustmentHistory = ($this->activeTab === 'Leave')
             ? $leaveService->getAdjustmentHistory($this->employee)
+            : collect();
+
+        // Read-only history for the Leave tab. Both read records the existing
+        // workflows already write — nothing here creates or amends a
+        // transaction — and both load only while that tab is open.
+        $carryForwardHistory = ($this->activeTab === 'Leave')
+            ? app(LeaveCarryForwardService::class)->historyFor($this->employee)
+            : collect();
+
+        $regularisationHistory = ($this->activeTab === 'Leave')
+            ? AttendanceRegularisation::with(['leaveType', 'reviewer'])
+                ->where('employee_id', $this->employee->id)
+                ->where('category', 'leave')
+                ->orderByDesc('id')
+                ->limit(50)
+                ->get()
             : collect();
 
         // ── Phase 4: Profile 2.0 analytical tabs (loaded only for the active tab) ──
@@ -776,13 +897,15 @@ class EmployeeEdit extends Component
                 UserRole::SuperAdmin, UserRole::HrAdmin,
                 UserRole::Director, UserRole::Manager,
             ])->where('id', '!=', $this->employee->user_id)->get(),
-            'roles' => Role::where('is_active', true)->orderBy('name')->get(),
+            'roles' => $this->assignableRoles(),
             'statuses' => EmployeeStatus::cases(),
             'employmentTypes' => EmploymentType::active()->get(),
             'workModes' => WorkMode::active()->get(),
             'salaryCycles' => SalaryCycle::active()->get(),
             'balanceSummary' => $balanceSummary,
             'adjustmentHistory' => $adjustmentHistory,
+            'carryForwardHistory' => $carryForwardHistory,
+            'regularisationHistory' => $regularisationHistory,
             'adjustableLeaveTypes' => LeaveType::where('is_system_controlled', false)->whereNull('deleted_at')->orderBy('name')->get(),
             // Permission-based, not role-based. A role check cannot express a
             // custom role that HR has been given manage_leave_balances, and it

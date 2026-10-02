@@ -104,7 +104,7 @@ test('an HR approval alone does NOT apply the correction', function () {
 
 test('a manager approval still advances rather than finalising', function () {
     $employee = regApplyEmployee();
-    $manager = User::factory()->create(['role' => UserRole::Manager]);
+    $manager = lineManager();
     $date = now()->subDay()->toDateString();
 
     $request = regApplyRequest($employee, $date, '09:00', '18:00');

@@ -69,7 +69,9 @@ class AttendanceReports extends Component
     {
         abort_unless(Auth::user()->canApproveLeave(), 403);
 
-        $report = $builder->build($this->type, $this->filters());
+        // The viewer's reach is applied server-side; never taken from the query string.
+        $reach = Auth::user()->accessibleEmployeeIds();
+        $report = $builder->build($this->type, $this->filters() + ($reach !== null ? ['employee_ids' => $reach] : []));
 
         // Preview is capped; the export streams the full set.
         $previewRows = array_slice($report['rows'], 0, 100);

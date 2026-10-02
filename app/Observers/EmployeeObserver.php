@@ -2,13 +2,19 @@
 
 namespace App\Observers;
 
+use App\Enums\EmployeeStatus;
 use App\Models\AuditLog;
 use App\Models\Employee;
+use App\Services\Leave\EnsureEmployeeLeaveBalancesService;
 use App\Services\Leave\LeaveProvisioningService;
+use App\Services\Leave\LeaveRuleResolver;
 use App\Services\OnboardingService;
 
 class EmployeeObserver
 {
+    /** Set while provisioning assigns a policy itself, so it is not provisioned twice. */
+    public static bool $provisioningInProgress = false;
+
     public function created(Employee $employee): void
     {
         AuditLog::record($employee, 'created', null, $employee->toArray());
@@ -50,10 +56,41 @@ class EmployeeObserver
             Employee::withoutEvents(fn () => $employee->update(['sync_status' => 'pending']));
         }
 
+        $this->ensureLeave($employee);
+
         // Auto-complete biometric enrollment task when sync succeeds.
         if ($employee->wasChanged('sync_status') && $employee->sync_status === 'synced') {
             app(OnboardingService::class)->autoComplete($employee, 'biometric_sync', 0);
         }
+    }
+
+    /**
+     * A new leave policy, or a move into a status that holds leave, changes
+     * what the employee is entitled to now. Idempotent, so a save made while
+     * the create path is still provisioning cannot grant anything twice.
+     */
+    private function ensureLeave(Employee $employee): void
+    {
+        if (static::$provisioningInProgress) {
+            return;
+        }
+
+        $policyChanged = $employee->wasChanged('leave_policy_id') && $employee->leave_policy_id !== null;
+        $status = fn ($value) => $value instanceof EmployeeStatus ? $value->value : (string) $value;
+        $becameEligible = $employee->wasChanged('status')
+            && in_array($status($employee->status), LeaveRuleResolver::ELIGIBLE_STATUSES, true)
+            && ! in_array($status($employee->getOriginal('status')), LeaveRuleResolver::ELIGIBLE_STATUSES, true);
+
+        if (! $policyChanged && ! $becameEligible) {
+            return;
+        }
+
+        app(EnsureEmployeeLeaveBalancesService::class)->ensure(
+            $employee->fresh(),
+            actor: auth()->user(),
+            recalculate: $policyChanged,
+            trigger: $policyChanged ? 'policy_assigned' : 'status_change',
+        );
     }
 
     public function deleted(Employee $employee): void

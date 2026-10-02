@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\CheckActiveEmployee;
+use App\Http\Middleware\EnsurePasswordChanged;
 use App\Http\Middleware\EnsureRole;
 use App\Http\Middleware\SetTeamUrlDefaults;
 use App\Http\Middleware\VerifyBiometricApiKey;
@@ -19,6 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->web(append: [
             SetTeamUrlDefaults::class,
             CheckActiveEmployee::class,
+            EnsurePasswordChanged::class,
         ]);
 
         $middleware->alias([

@@ -29,8 +29,8 @@ test('a matching policy overrides the uniform default on hire; non-matches fall 
     $type = LeaveType::create(['name' => 'Maternity', 'annual_allocation_days' => 12]);
     LeaveAllocationPolicy::create(['leave_type_id' => $type->id, 'gender' => 'female', 'allocated_days' => 26, 'is_active' => true]);
 
-    $female = Employee::factory()->create(['gender' => 'female']);
-    $male = Employee::factory()->create(['gender' => 'male']);
+    $female = Employee::factory()->create(['gender' => 'female', 'status' => 'active']);
+    $male = Employee::factory()->create(['gender' => 'male', 'status' => 'active']);
 
     expect(allocated($female->id, $type->id))->toBe(26.0); // policy
     expect(allocated($male->id, $type->id))->toBe(12.0);   // fallback to uniform default
@@ -59,7 +59,7 @@ test('min service months excludes new joiners', function () {
     $type = LeaveType::create(['name' => 'Annual', 'annual_allocation_days' => 10]);
     LeaveAllocationPolicy::create(['leave_type_id' => $type->id, 'min_service_months' => 12, 'allocated_days' => 25]);
 
-    $newJoiner = Employee::factory()->create(['joining_date' => now()->toDateString()]);
+    $newJoiner = Employee::factory()->create(['joining_date' => now()->toDateString(), 'status' => 'active']);
 
     expect(allocated($newJoiner->id, $type->id))->toBe(10.0); // fallback
 });

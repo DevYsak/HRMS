@@ -4,6 +4,7 @@ namespace App\Livewire\Operations;
 
 use App\Enums\ExpenseStatus;
 use App\Models\ExpenseClaim;
+use App\Services\Approvals\ApprovalGuard;
 use App\Services\ExpenseClaimService;
 use App\Services\ReimbursementService;
 use Illuminate\Support\Facades\Auth;
@@ -184,13 +185,14 @@ class Expenses extends Component
         return Auth::user()->canApproveLeave() || Auth::user()->canManageEmployees();
     }
 
+    /** In the reviewer's reach (reporting line / HR scope) and never their own claim. */
     protected function canReviewClaim(ExpenseClaim $claim): bool
     {
-        if (Auth::user()->canManageEmployees()) {
-            return true;
-        }
+        $guard = app(ApprovalGuard::class);
 
-        return (int) ($claim->employee?->manager_id ?? 0) === (int) Auth::id();
+        return $claim->employee !== null
+            && ! $guard->isSelf(Auth::user(), $claim->employee)
+            && $guard->covers(Auth::user(), $claim->employee);
     }
 
     public function render()
@@ -203,8 +205,9 @@ class Expenses extends Component
         if (! $this->canReviewClaims()) {
             $employeeId = $user->employee?->id;
             $expensesQuery->where('employee_id', $employeeId ?: 0);
-        } elseif (! $user->canManageEmployees()) {
-            $expensesQuery->whereHas('employee', fn ($query) => $query->where('manager_id', $user->id));
+        } elseif (($scopeIds = $user->accessibleEmployeeIds()) !== null) {
+            // Reviewers see their reach plus their own claims; never company-wide by default.
+            $expensesQuery->whereIn('employee_id', array_filter([...$scopeIds, $user->employee?->id]));
         }
 
         $expenses = $expensesQuery

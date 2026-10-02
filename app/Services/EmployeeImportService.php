@@ -15,6 +15,7 @@ use App\Models\Office;
 use App\Models\ShiftSetting;
 use App\Models\User;
 use App\Services\Leave\LeaveProvisioningService;
+use App\Services\Security\RoleDelegationGuard;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -486,6 +487,18 @@ class EmployeeImportService
         $newlyCreated = [];
         $createdMasterData = [];
 
+        // Privilege-escalation guard: a spreadsheet must not mint a Super Admin
+        // or any role above the importing user's delegation level.
+        $roles = app(RoleDelegationGuard::class);
+        foreach ($parsed['rows'] as $i => $row) {
+            $role = $row['data']['role'] ?? null;
+            if ($row['status'] !== 'error' && $row['status'] !== 'update' && $role instanceof UserRole
+                && ($refusal = $roles->refusalToAssignLegacy($actor, $role))) {
+                $parsed['rows'][$i]['status'] = 'error';
+                $parsed['rows'][$i]['errors'] = [...($row['errors'] ?? []), "Role '{$role->label()}': {$refusal}"];
+            }
+        }
+
         foreach ($parsed['rows'] as $row) {
             if ($row['status'] === 'error') {
                 $failed++;
@@ -519,11 +532,21 @@ class EmployeeImportService
                     }
 
                     // new
-                    $plain = $row['data']['password'] ?: $passwords->generate();
-                    $user = User::create([
+                    // New logins start on the shared temporary password and
+                    // must choose their own at first sign-in. A generated
+                    // placeholder address belongs to nobody, so it gets an
+                    // unknowable password instead of the guessable one.
+                    $plain = $row['data']['password'] ?: (
+                        ! empty($row['data']['employee']['has_placeholder_email'])
+                            ? $passwords->generate()
+                            : $passwords->temporaryPassword()
+                    );
+                    $user = User::forceCreate([
                         'name' => $row['data']['name'],
                         'email' => $row['data']['email'],
                         'password' => Hash::make($plain),
+                        'must_change_password' => true,
+                        'password_changed_at' => null,
                         'role' => $row['data']['role'],
                     ]);
                     $passwords->recordHistory($user, $user->password, $actor);

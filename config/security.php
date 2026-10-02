@@ -57,4 +57,21 @@ return [
 
     'invitation_resend_per_hour' => (int) env('INVITATION_RESEND_PER_HOUR', 5),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Temporary (bootstrap) password
+    |--------------------------------------------------------------------------
+    |
+    | The shared password every newly created employee account starts with.
+    | It only ever opens the "Set your password" page: such accounts carry
+    | must_change_password, and EnsurePasswordChanged blocks every other route
+    | until the employee has chosen their own. Anyone still holding this
+    | password at sign-in is flagged the same way.
+    |
+    | Override per environment rather than editing it here.
+    |
+    */
+
+    'temporary_password' => (string) env('EMPLOYEE_TEMPORARY_PASSWORD', 'Conexus@2026!'),
+
 ];

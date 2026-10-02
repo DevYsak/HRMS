@@ -10,6 +10,7 @@ use App\Models\HolidayWorkRequest;
 use App\Models\OtRequest;
 use App\Models\PublicHoliday;
 use App\Notifications\HolidayWorkRequestNotification;
+use App\Services\Approvals\ApprovalGuard;
 use App\Services\Notifications\NotificationRecipients;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -100,6 +101,8 @@ class HolidayWorkService
         if (! $request->isPending()) {
             throw new \DomainException('Only pending holiday-work requests can be approved.');
         }
+
+        app(ApprovalGuard::class)->assertCanDecide($reviewerId, $request->employee);
 
         return DB::transaction(function () use ($request, $reviewerId, $comment) {
             $employee = $request->employee;
@@ -195,6 +198,8 @@ class HolidayWorkService
         if (! $request->isPending()) {
             throw new \DomainException('Only pending holiday-work requests can be rejected.');
         }
+
+        app(ApprovalGuard::class)->assertCanDecide($reviewerId, $request->employee);
 
         $request->update([
             'status' => 'rejected',

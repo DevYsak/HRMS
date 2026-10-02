@@ -31,7 +31,7 @@ class DataPurgeService
         ],
         'leave' => [
             'label' => 'Leave requests & balances',
-            'tables' => ['leave_balance_adjustments', 'leave_encashments', 'leave_accrual_logs', 'leave_escalations', 'leave_payment_audit_logs', 'leave_requests', 'leave_balances'],
+            'tables' => ['leave_credit_consumptions', 'leave_ledger_entries', 'leave_balance_adjustments', 'leave_encashments', 'leave_accrual_logs', 'leave_escalations', 'leave_payment_audit_logs', 'leave_requests', 'leave_balances'],
         ],
         'overtime' => [
             'label' => 'Overtime requests',
@@ -57,10 +57,8 @@ class DataPurgeService
             'label' => 'Notifications & email logs',
             'tables' => ['notifications', 'email_logs'],
         ],
-        'audit' => [
-            'label' => 'Audit logs',
-            'tables' => ['audit_logs'],
-        ],
+        // Audit logs are deliberately NOT purgeable: the trail is append-only
+        // and must not be erasable from the UI, not even by a Super Admin.
     ];
 
     /**

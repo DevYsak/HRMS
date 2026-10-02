@@ -183,7 +183,7 @@ class CommandCenter extends Component
 
     protected function decideRegularisation(int $id, string $decision, ?string $comment = null): void
     {
-        $request = AttendanceRegularisation::with('employee.user', 'claimer')->findOrFail($id);
+        $request = $this->inReach(AttendanceRegularisation::query())->with('employee.user', 'claimer')->findOrFail($id);
         if ($request->status !== 'pending') {
             throw new \DomainException('Already reviewed.');
         }
@@ -203,7 +203,7 @@ class CommandCenter extends Component
 
     protected function decideLeave(int $id, string $decision, ?string $comment = null): void
     {
-        $request = LeaveRequest::with('employee.user', 'claimer')->findOrFail($id);
+        $request = $this->inReach(LeaveRequest::query())->with('employee.user', 'claimer')->findOrFail($id);
         if ($request->status !== 'pending') {
             throw new \DomainException('Already reviewed.');
         }
@@ -223,7 +223,7 @@ class CommandCenter extends Component
 
     protected function decideWfh(int $id, string $decision, ?string $comment = null): void
     {
-        $request = WfhRequest::with('employee.user')->findOrFail($id);
+        $request = $this->inReach(WfhRequest::query())->with('employee.user')->findOrFail($id);
         if (! $request->isPending()) {
             throw new \DomainException('Already reviewed.');
         }
@@ -237,7 +237,7 @@ class CommandCenter extends Component
 
     protected function decideOvertime(int $id, string $decision, ?string $comment = null): void
     {
-        $request = OtRequest::with(['employee.user', 'attendance', 'claimer'])->findOrFail($id);
+        $request = $this->inReach(OtRequest::query())->with(['employee.user', 'attendance', 'claimer'])->findOrFail($id);
         if (! $request->isPending()) {
             throw new \DomainException('Already reviewed.');
         }
@@ -252,7 +252,7 @@ class CommandCenter extends Component
 
     protected function decideHolidayWork(int $id, string $decision, ?string $comment = null): void
     {
-        $request = HolidayWorkRequest::with('employee.user')->findOrFail($id);
+        $request = $this->inReach(HolidayWorkRequest::query())->with('employee.user')->findOrFail($id);
         if (! $request->isPending()) {
             throw new \DomainException('Already reviewed.');
         }
@@ -266,14 +266,41 @@ class CommandCenter extends Component
 
     // ── Data ─────────────────────────────────────────────────────────────────
 
+    /**
+     * Restrict a request query to the approver's reach (reporting line / HR
+     * scope). Company-wide approvers are unfiltered. Fails closed.
+     *
+     * @template TQuery of \Illuminate\Database\Eloquent\Builder
+     *
+     * @param  TQuery  $query
+     * @return TQuery
+     */
+    protected function inReach($query)
+    {
+        // Resolved once per request — protected props are not persisted by Livewire.
+        if (! $this->reachResolved) {
+            $this->reachIds = Auth::user()->accessibleEmployeeIds();
+            $this->reachResolved = true;
+        }
+
+        $ids = $this->reachIds;
+
+        return $query->when($ids !== null, fn ($q) => $q->whereIn('employee_id', $ids));
+    }
+
+    /** @var array<int, int>|null */
+    protected ?array $reachIds = null;
+
+    protected bool $reachResolved = false;
+
     protected function pendingQuery()
     {
         $q = match ($this->tab) {
-            'leave' => LeaveRequest::query()->with(['employee.user', 'leaveType']),
-            'wfh' => WfhRequest::query()->with('employee.user'),
-            'overtime' => OtRequest::query()->with('employee.user'),
-            'holiday' => HolidayWorkRequest::query()->with(['employee.user', 'holiday']),
-            default => AttendanceRegularisation::query()->with('employee.user'),
+            'leave' => $this->inReach(LeaveRequest::query())->with(['employee.user', 'leaveType']),
+            'wfh' => $this->inReach(WfhRequest::query())->with('employee.user'),
+            'overtime' => $this->inReach(OtRequest::query())->with('employee.user'),
+            'holiday' => $this->inReach(HolidayWorkRequest::query())->with(['employee.user', 'holiday']),
+            default => $this->inReach(AttendanceRegularisation::query())->with('employee.user'),
         };
 
         // Status filter: pending (default), a decided state, or the full history.
@@ -338,11 +365,11 @@ class CommandCenter extends Component
             'at' => $r->{$when},
         ]);
 
-        return $map(AttendanceRegularisation::with(['employee.user', 'reviewer'])->whereIn('status', ['approved', 'rejected'])->whereNotNull('reviewed_at')->latest('reviewed_at')->limit(8)->get(), 'Regularisation', 'reviewed_at')
+        return $map($this->inReach(AttendanceRegularisation::query())->with(['employee.user', 'reviewer'])->whereIn('status', ['approved', 'rejected'])->whereNotNull('reviewed_at')->latest('reviewed_at')->limit(8)->get(), 'Regularisation', 'reviewed_at')
             // LeaveRequest has no reviewed_at column — updated_at marks the decision.
-            ->concat($map(LeaveRequest::with(['employee.user', 'reviewer'])->whereIn('status', ['approved', 'rejected'])->latest('updated_at')->limit(8)->get(), 'Leave', 'updated_at'))
-            ->concat($map(WfhRequest::with(['employee.user', 'reviewer'])->whereIn('status', ['approved', 'rejected'])->whereNotNull('reviewed_at')->latest('reviewed_at')->limit(8)->get(), 'WFH', 'reviewed_at'))
-            ->concat($map(OtRequest::with(['employee.user', 'reviewer'])->whereIn('status', ['approved', 'rejected'])->whereNotNull('reviewed_at')->latest('reviewed_at')->limit(8)->get(), 'Overtime', 'reviewed_at'))
+            ->concat($map($this->inReach(LeaveRequest::query())->with(['employee.user', 'reviewer'])->whereIn('status', ['approved', 'rejected'])->latest('updated_at')->limit(8)->get(), 'Leave', 'updated_at'))
+            ->concat($map($this->inReach(WfhRequest::query())->with(['employee.user', 'reviewer'])->whereIn('status', ['approved', 'rejected'])->whereNotNull('reviewed_at')->latest('reviewed_at')->limit(8)->get(), 'WFH', 'reviewed_at'))
+            ->concat($map($this->inReach(OtRequest::query())->with(['employee.user', 'reviewer'])->whereIn('status', ['approved', 'rejected'])->whereNotNull('reviewed_at')->latest('reviewed_at')->limit(8)->get(), 'Overtime', 'reviewed_at'))
             ->sortByDesc('at')
             ->take(15)
             ->values()
@@ -361,11 +388,11 @@ class CommandCenter extends Component
         ]);
 
         return collect()
-            ->concat($map(AttendanceRegularisation::with('employee.user')->where('status', 'pending')->latest()->limit(6)->get(), 'Regularization', 'regularisation', fn ($r) => Carbon::parse($r->work_date)->format('d M Y')))
-            ->concat($map(LeaveRequest::with(['employee.user', 'leaveType'])->where('status', 'pending')->latest()->limit(6)->get(), 'Leave', 'leave', fn ($r) => ($r->leaveType?->name ?? 'Leave').' · '.$r->days.'d'))
-            ->concat($map(WfhRequest::with('employee.user')->where('status', 'pending')->latest()->limit(6)->get(), 'WFH', 'wfh', fn ($r) => Carbon::parse($r->start_date)->format('d M').' – '.Carbon::parse($r->end_date)->format('d M')))
-            ->concat($map(OtRequest::with('employee.user')->where('status', 'pending')->latest()->limit(6)->get(), 'Overtime', 'overtime', fn ($r) => 'OT '.$r->requested_hours.'h'))
-            ->concat($map(HolidayWorkRequest::with(['employee.user', 'holiday'])->where('status', 'pending')->latest()->limit(6)->get(), 'Holiday Work', 'holiday', fn ($r) => 'Work on '.($r->holiday?->name ?? 'holiday')))
+            ->concat($map($this->inReach(AttendanceRegularisation::query())->with('employee.user')->where('status', 'pending')->latest()->limit(6)->get(), 'Regularization', 'regularisation', fn ($r) => Carbon::parse($r->work_date)->format('d M Y')))
+            ->concat($map($this->inReach(LeaveRequest::query())->with(['employee.user', 'leaveType'])->where('status', 'pending')->latest()->limit(6)->get(), 'Leave', 'leave', fn ($r) => ($r->leaveType?->name ?? 'Leave').' · '.$r->days.'d'))
+            ->concat($map($this->inReach(WfhRequest::query())->with('employee.user')->where('status', 'pending')->latest()->limit(6)->get(), 'WFH', 'wfh', fn ($r) => Carbon::parse($r->start_date)->format('d M').' – '.Carbon::parse($r->end_date)->format('d M')))
+            ->concat($map($this->inReach(OtRequest::query())->with('employee.user')->where('status', 'pending')->latest()->limit(6)->get(), 'Overtime', 'overtime', fn ($r) => 'OT '.$r->requested_hours.'h'))
+            ->concat($map($this->inReach(HolidayWorkRequest::query())->with(['employee.user', 'holiday'])->where('status', 'pending')->latest()->limit(6)->get(), 'Holiday Work', 'holiday', fn ($r) => 'Work on '.($r->holiday?->name ?? 'holiday')))
             ->sortByDesc('at')
             ->take(10)
             ->values()
@@ -397,7 +424,10 @@ class CommandCenter extends Component
         $today = Carbon::today();
         $monthStart = $today->copy()->startOfMonth();
 
-        $activeIds = Employee::where('status', 'active')->pluck('id')->all();
+        $scopeIds = Auth::user()->accessibleEmployeeIds();
+        $activeIds = Employee::where('status', 'active')
+            ->when($scopeIds !== null, fn ($q) => $q->whereIn('id', $scopeIds))
+            ->pluck('id')->all();
         $todayAtt = Attendance::whereIn('employee_id', $activeIds)->where('date', $today->toDateString())
             ->get(['check_in', 'is_late']);
         $presentToday = $todayAtt->whereNotNull('check_in')->count();
@@ -420,21 +450,21 @@ class CommandCenter extends Component
         abort_unless(Auth::user()->canApproveLeave(), 403);
 
         $counts = [
-            'regularisation' => AttendanceRegularisation::where('status', 'pending')->count(),
-            'leave' => LeaveRequest::where('status', 'pending')->count(),
-            'wfh' => WfhRequest::where('status', 'pending')->count(),
-            'overtime' => OtRequest::where('status', 'pending')->count(),
-            'holiday' => HolidayWorkRequest::where('status', 'pending')->count(),
+            'regularisation' => $this->inReach(AttendanceRegularisation::query())->where('status', 'pending')->count(),
+            'leave' => $this->inReach(LeaveRequest::query())->where('status', 'pending')->count(),
+            'wfh' => $this->inReach(WfhRequest::query())->where('status', 'pending')->count(),
+            'overtime' => $this->inReach(OtRequest::query())->where('status', 'pending')->count(),
+            'holiday' => $this->inReach(HolidayWorkRequest::query())->where('status', 'pending')->count(),
         ];
         $decided = [
-            'approved' => AttendanceRegularisation::where('status', 'approved')->count()
-                + LeaveRequest::where('status', 'approved')->count()
-                + WfhRequest::where('status', 'approved')->count()
-                + OtRequest::where('status', 'approved')->count(),
-            'rejected' => AttendanceRegularisation::where('status', 'rejected')->count()
-                + LeaveRequest::where('status', 'rejected')->count()
-                + WfhRequest::where('status', 'rejected')->count()
-                + OtRequest::where('status', 'rejected')->count(),
+            'approved' => $this->inReach(AttendanceRegularisation::query())->where('status', 'approved')->count()
+                + $this->inReach(LeaveRequest::query())->where('status', 'approved')->count()
+                + $this->inReach(WfhRequest::query())->where('status', 'approved')->count()
+                + $this->inReach(OtRequest::query())->where('status', 'approved')->count(),
+            'rejected' => $this->inReach(AttendanceRegularisation::query())->where('status', 'rejected')->count()
+                + $this->inReach(LeaveRequest::query())->where('status', 'rejected')->count()
+                + $this->inReach(WfhRequest::query())->where('status', 'rejected')->count()
+                + $this->inReach(OtRequest::query())->where('status', 'rejected')->count(),
         ];
 
         return view('livewire.attendance.command-center', [

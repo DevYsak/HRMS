@@ -69,7 +69,7 @@ class AttendanceReportBuilder
     private const CODE_FUTURE = '-';
 
     /**
-     * @param  array{from?:string,to?:string,department_id?:int|string|null,office_id?:int|string|null,shift_id?:int|string|null,employee_id?:int|string|null,mode?:string|null}  $filters
+     * @param  array{from?:string,to?:string,department_id?:int|string|null,office_id?:int|string|null,shift_id?:int|string|null,employee_id?:int|string|null,employee_ids?:array<int,int>,mode?:string|null}  $filters  employee_ids = the viewer's reach (absent = company-wide)
      * @return array{title:string,subtitle:string,columns:array<int,string>,rows:array<int,array<int,mixed>>,summary:array<int,array{label:string,value:mixed}>,trend:array{labels:array<int,string>,data:array<int,int|float>}|null}
      */
     public function build(string $type, array $filters): array
@@ -131,7 +131,8 @@ class AttendanceReportBuilder
             $e->when($filters['department_id'] ?? null, fn ($q, $v) => $q->where('department_id', $v))
                 ->when($filters['office_id'] ?? null, fn ($q, $v) => $q->where('office_id', $v))
                 ->when($filters['shift_id'] ?? null, fn ($q, $v) => $q->where('shift_id', $v))
-                ->when($filters['employee_id'] ?? null, fn ($q, $v) => $q->where('id', $v));
+                ->when($filters['employee_id'] ?? null, fn ($q, $v) => $q->where('id', $v))
+                ->when(isset($filters['employee_ids']), fn ($q) => $q->whereIn('id', $filters['employee_ids']));
         });
 
         if ($hasMode && ! empty($filters['mode'])) {
@@ -147,6 +148,7 @@ class AttendanceReportBuilder
             ->when($filters['office_id'] ?? null, fn ($q, $v) => $q->where('office_id', $v))
             ->when($filters['shift_id'] ?? null, fn ($q, $v) => $q->where('shift_id', $v))
             ->when($filters['employee_id'] ?? null, fn ($q, $v) => $q->where('id', $v))
+            ->when(isset($filters['employee_ids']), fn ($q) => $q->whereIn('id', $filters['employee_ids']))
             ->where('status', 'active');
     }
 
@@ -654,7 +656,8 @@ class AttendanceReportBuilder
         $q->whereHas('employee', function (Builder $e) use ($filters) {
             $e->when($filters['department_id'] ?? null, fn ($x, $v) => $x->where('department_id', $v))
                 ->when($filters['office_id'] ?? null, fn ($x, $v) => $x->where('office_id', $v))
-                ->when($filters['employee_id'] ?? null, fn ($x, $v) => $x->where('id', $v));
+                ->when($filters['employee_id'] ?? null, fn ($x, $v) => $x->where('id', $v))
+                ->when(isset($filters['employee_ids']), fn ($x) => $x->whereIn('id', $filters['employee_ids']));
         });
         $rows = $q->orderByDesc('start_date')->get();
 
@@ -685,7 +688,8 @@ class AttendanceReportBuilder
         $q->whereHas('employee', function (Builder $e) use ($filters) {
             $e->when($filters['department_id'] ?? null, fn ($x, $v) => $x->where('department_id', $v))
                 ->when($filters['office_id'] ?? null, fn ($x, $v) => $x->where('office_id', $v))
-                ->when($filters['employee_id'] ?? null, fn ($x, $v) => $x->where('id', $v));
+                ->when($filters['employee_id'] ?? null, fn ($x, $v) => $x->where('id', $v))
+                ->when(isset($filters['employee_ids']), fn ($x) => $x->whereIn('id', $filters['employee_ids']));
         });
         $rows = $q->orderBy('work_date')->get();
 
@@ -843,7 +847,8 @@ class AttendanceReportBuilder
             ->whereBetween('work_date', [$from->toDateString(), $to->toDateString()]);
         $q->whereHas('employee', function (Builder $e) use ($filters) {
             $e->when($filters['department_id'] ?? null, fn ($x, $v) => $x->where('department_id', $v))
-                ->when($filters['employee_id'] ?? null, fn ($x, $v) => $x->where('id', $v));
+                ->when($filters['employee_id'] ?? null, fn ($x, $v) => $x->where('id', $v))
+                ->when(isset($filters['employee_ids']), fn ($x) => $x->whereIn('id', $filters['employee_ids']));
         });
         $rows = $q->orderByDesc('work_date')->get();
 

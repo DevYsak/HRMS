@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\PasswordHistory;
 use App\Models\User;
+use App\Services\Audit\AuditService;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -28,6 +29,27 @@ class PasswordService
     public function generate(int $length = 14): string
     {
         return Str::password($length, letters: true, numbers: true, symbols: true, spaces: false);
+    }
+
+    /**
+     * The shared bootstrap password new employee accounts start with.
+     *
+     * It is a credential, so it lives in config rather than in each caller —
+     * and it only ever opens the first-login password page.
+     */
+    public function temporaryPassword(): string
+    {
+        return (string) config('security.temporary_password');
+    }
+
+    /**
+     * Whether this user's stored hash is still the shared temporary password.
+     */
+    public function isOnTemporaryPassword(User $user): bool
+    {
+        $temporary = $this->temporaryPassword();
+
+        return $temporary !== '' && $user->password !== null && Hash::check($temporary, $user->password);
     }
 
     /**
@@ -76,10 +98,20 @@ class PasswordService
      * when it changed and records history — the four things that were
      * previously each done by some callers and not others.
      *
-     * @throws ValidationException when the password repeats a recent one
+     * @throws ValidationException when the password repeats a recent one or is the shared temporary password
      */
     public function changePassword(User $user, string $plain, ?User $changedBy = null): void
     {
+        // Everyone was issued it, so choosing it would leave the account as
+        // open as it was before the change.
+        $temporary = $this->temporaryPassword();
+
+        if ($temporary !== '' && hash_equals($temporary, $plain)) {
+            throw ValidationException::withMessages([
+                'password' => __('Your new password cannot be the temporary password.'),
+            ]);
+        }
+
         if ($this->isReused($user, $plain)) {
             $limit = (int) config('security.password_history_limit', 5);
 
@@ -90,6 +122,7 @@ class PasswordService
 
         $user->forceFill([
             'password' => Hash::make($plain),
+            'must_change_password' => false,
             'password_changed_at' => now(),
         ])->save();
 
@@ -102,6 +135,9 @@ class PasswordService
      *
      * Deliberately skips the reuse check: an admin resetting a locked-out
      * account must always succeed.
+     *
+     * Whoever reset it knows the result, so the account goes back behind the
+     * first-login password page until its owner chooses their own.
      */
     public function resetPassword(User $user, ?string $plain = null, ?User $changedBy = null): string
     {
@@ -109,13 +145,35 @@ class PasswordService
 
         $user->forceFill([
             'password' => Hash::make($plain),
-            // Null marks a credential the employee has not chosen themselves;
-            // it is a record, not a gate. Nothing forces a change.
+            'must_change_password' => true,
             'password_changed_at' => null,
         ])->save();
 
         $this->recordHistory($user, $user->password, $changedBy);
 
         return $plain;
+    }
+
+    /**
+     * Send an account back through the first-login password page without
+     * touching the password itself.
+     *
+     * The owner signs in with what they already have and must then choose a
+     * new one. Nothing about the existing password is read or revealed.
+     */
+    public function forceReset(User $user, User $actor): void
+    {
+        $user->forceFill(['must_change_password' => true])->save();
+
+        // Keys avoid the word "password": the audit sanitiser redacts any key
+        // containing it, which would hide the very state this records.
+        app(AuditService::class)->event(
+            'EMPLOYEE_PASSWORD_RESET_FORCED',
+            AuditService::SECURITY,
+            $user,
+            new: ['reset_required' => true, 'forced_by' => $actor->id],
+            subjectEmployeeId: $user->employee?->id,
+            module: AuditService::EMPLOYEE,
+        );
     }
 }

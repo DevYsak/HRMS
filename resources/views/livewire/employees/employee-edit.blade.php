@@ -112,6 +112,18 @@
                         <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset {{ $statusTone }}">
                             {{ $employee->status?->label() ?? '—' }}
                         </span>
+                        @if($employee->user)
+                            @if($employee->user->requiresPasswordChange())
+                                <span class="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700 ring-1 ring-inset ring-amber-600/20 dark:bg-amber-400/10 dark:text-amber-300 dark:ring-amber-400/20" data-test="password-status">
+                                    Temporary password · Reset required
+                                </span>
+                            @else
+                                <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-600/20 dark:bg-emerald-400/10 dark:text-emerald-300 dark:ring-emerald-400/20" data-test="password-status"
+                                    @if($employee->user->password_changed_at) title="Set {{ $employee->user->password_changed_at->format('d M Y') }}" @endif>
+                                    Password set
+                                </span>
+                            @endif
+                        @endif
                     </div>
                 </div>
             </div>
@@ -165,6 +177,18 @@
                                 <span class="block text-xs text-[#667085] dark:text-zinc-400">Replaces their password immediately</span>
                             </span>
                         </button>
+
+                        @unless($employee->user?->requiresPasswordChange())
+                            <button type="button" wire:click="forcePasswordReset" wire:loading.attr="disabled" wire:target="forcePasswordReset"
+                                wire:confirm="They will have to set a new password the next time they sign in. Their current password is not changed or shown. Continue?" @click="open = false"
+                                class="flex w-full items-start gap-3 px-4 py-2.5 text-left transition hover:bg-orange-50/70 dark:hover:bg-white/5">
+                                <flux:icon.arrow-path class="mt-0.5 size-4 shrink-0 text-orange-500" />
+                                <span>
+                                    <span class="block text-sm font-semibold text-[#101828] dark:text-zinc-100">Force password reset</span>
+                                    <span class="block text-xs text-[#667085] dark:text-zinc-400">They must choose a new one at next sign-in</span>
+                                </span>
+                            </button>
+                        @endunless
 
                         <div class="my-1 border-t border-[#EAECF0] dark:border-white/10"></div>
                         <div class="px-4 pb-1 pt-2 text-[10px] font-bold uppercase tracking-widest text-[#98A2B3]">Record</div>
@@ -711,7 +735,10 @@
                                                             </flux:tooltip>
                                                         @endif
 
-                                                        @if($canCarryForward)
+                                                        {{-- Only where the leave type actually permits it: offering
+                                                             the action on a type that cannot be carried forward
+                                                             invites a decision the engine will refuse. --}}
+                                                        @if($canCarryForward && ($row->leave_type?->permitsCarryForward() ?? false))
                                                             <flux:tooltip content="Carry forward from the previous leave year">
                                                                 <flux:button :href="route('time-off.carry-forward', ['employeeId' => $employee->id])" wire:navigate variant="ghost" size="xs" icon="arrow-right-circle" class="text-zinc-400 hover:text-orange-600" />
                                                             </flux:tooltip>
@@ -777,6 +804,147 @@
                                     </div>
                                 </div>
                             @endif
+
+                            {{-- Carry Forward History. Read-only: this reads the
+                                 transactions the Carry Forward screen writes, and
+                                 shows an unrecorded figure as "Not available"
+                                 rather than as 0, which would say the employee
+                                 took no leave that year. --}}
+                            <details class="group rounded-2xl border border-[#EAECF0] bg-white dark:border-white/10 dark:bg-zinc-900">
+                                <summary class="flex cursor-pointer items-center justify-between px-4 py-3">
+                                    <span class="text-sm font-bold text-zinc-700 dark:text-zinc-300">
+                                        Carry Forward History
+                                        <span class="ml-1 text-xs font-normal text-[#98A2B3]">({{ $carryForwardHistory->count() }})</span>
+                                    </span>
+                                    <flux:icon.chevron-down class="size-4 text-zinc-400 transition group-open:rotate-180" />
+                                </summary>
+
+                                @if($carryForwardHistory->isEmpty())
+                                    <p class="px-4 pb-4 text-sm text-[#98A2B3]">No leave has been carried forward for this employee.</p>
+                                @else
+                                    <div class="overflow-x-auto border-t border-[#EAECF0] dark:border-white/10">
+                                        <table class="w-full min-w-max text-sm">
+                                            <thead>
+                                                <tr class="bg-[#F9FAFB] text-left dark:bg-white/[0.02]">
+                                                    @foreach(['From year', 'To year', 'Leave type', 'Closing balance', 'Used', 'Eligible', 'Approved', 'Status', 'Applied by', 'Applied at', 'Reason'] as $h)
+                                                        <th class="whitespace-nowrap px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-[#98A2B3]">{{ $h }}</th>
+                                                    @endforeach
+                                                </tr>
+                                            </thead>
+                                            <tbody class="divide-y divide-[#F2F4F7] dark:divide-white/5">
+                                                @foreach($carryForwardHistory as $tx)
+                                                    @php
+                                                        $usedKnown = $tx->used_status !== 'unknown';
+                                                        [$cfLabel, $cfTone] = match($tx->status) {
+                                                            'applied' => ['Applied', 'bg-emerald-50 text-emerald-700'],
+                                                            'partially_applied' => ['Partially applied', 'bg-amber-50 text-amber-700'],
+                                                            'reversed' => ['Reversed', 'bg-rose-50 text-rose-700'],
+                                                            'not_eligible' => ['Not eligible', 'bg-zinc-100 text-zinc-600'],
+                                                            default => ['Awaiting HR decision', 'bg-amber-50 text-amber-700'],
+                                                        };
+                                                    @endphp
+                                                    <tr class="align-top">
+                                                        <td class="px-4 py-2.5 text-[#667085] dark:text-zinc-400">{{ $tx->previousLeaveYear?->label ?? '—' }}</td>
+                                                        <td class="px-4 py-2.5 text-[#667085] dark:text-zinc-400">{{ $tx->currentLeaveYear?->label ?? '—' }}</td>
+                                                        <td class="px-4 py-2.5 text-[#667085] dark:text-zinc-400">{{ $tx->leaveType?->name ?? '—' }}</td>
+                                                        <td class="px-4 py-2.5 tabular-nums text-zinc-700 dark:text-zinc-200">
+                                                            {{ $tx->historical_closing_balance ?? $tx->previous_allocated_days }}
+                                                        </td>
+                                                        {{-- "Not available", never 0: the figure was not recorded. --}}
+                                                        <td @class(['px-4 py-2.5 tabular-nums', 'italic text-amber-600' => ! $usedKnown, 'text-zinc-700 dark:text-zinc-200' => $usedKnown])>
+                                                            {{ $usedKnown ? $tx->previous_used_days : 'Not available' }}
+                                                        </td>
+                                                        <td @class(['px-4 py-2.5 tabular-nums', 'italic text-amber-600' => $tx->eligible_days === null, 'text-zinc-700 dark:text-zinc-200' => $tx->eligible_days !== null])>
+                                                            {{ $tx->eligible_days === null ? 'Not calculable' : $tx->eligible_days }}
+                                                        </td>
+                                                        <td class="px-4 py-2.5 font-semibold tabular-nums text-[#101828] dark:text-white">{{ $tx->applied_days }}</td>
+                                                        <td class="px-4 py-2.5">
+                                                            <span class="inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold {{ $cfTone }}">{{ $cfLabel }}</span>
+                                                            @if($tx->reversed_days > 0)
+                                                                <div class="mt-1 text-[11px] text-rose-600">
+                                                                    Reversed {{ $tx->reversed_days }} by {{ $tx->reversedBy?->name ?? '—' }}
+                                                                    @if($tx->reversed_at) on {{ $tx->reversed_at->format('d M Y') }} @endif
+                                                                </div>
+                                                                @if($tx->reversal_reason)
+                                                                    <div class="text-[11px] italic text-[#98A2B3]">{{ $tx->reversal_reason }}</div>
+                                                                @endif
+                                                            @endif
+                                                        </td>
+                                                        <td class="px-4 py-2.5 text-[#667085] dark:text-zinc-400">{{ $tx->appliedBy?->name ?? '—' }}</td>
+                                                        <td class="px-4 py-2.5 text-[11px] text-[#98A2B3]">{{ $tx->applied_at?->format('d M Y, h:i A') ?? '—' }}</td>
+                                                        <td class="px-4 py-2.5 text-[11px] text-[#98A2B3]">{{ $tx->reason ?? '—' }}</td>
+                                                    </tr>
+                                                @endforeach
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                @endif
+                            </details>
+
+                            {{-- Regularisation History. Leave regularisations only —
+                                 attendance corrections have their own tab. --}}
+                            <details class="group rounded-2xl border border-[#EAECF0] bg-white dark:border-white/10 dark:bg-zinc-900">
+                                <summary class="flex cursor-pointer items-center justify-between px-4 py-3">
+                                    <span class="text-sm font-bold text-zinc-700 dark:text-zinc-300">
+                                        Regularisation History
+                                        <span class="ml-1 text-xs font-normal text-[#98A2B3]">({{ $regularisationHistory->count() }})</span>
+                                    </span>
+                                    <flux:icon.chevron-down class="size-4 text-zinc-400 transition group-open:rotate-180" />
+                                </summary>
+
+                                @if($regularisationHistory->isEmpty())
+                                    <p class="px-4 pb-4 text-sm text-[#98A2B3]">No leave regularisation requests for this employee.</p>
+                                @else
+                                    <div class="overflow-x-auto border-t border-[#EAECF0] dark:border-white/10">
+                                        <table class="w-full min-w-max text-sm">
+                                            <thead>
+                                                <tr class="bg-[#F9FAFB] text-left dark:bg-white/[0.02]">
+                                                    @foreach(['Ref', 'From', 'To', 'Leave type', 'Duration', 'Status', 'Stage', 'Reviewed by', 'Reviewed at', 'Reason'] as $h)
+                                                        <th class="whitespace-nowrap px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-[#98A2B3]">{{ $h }}</th>
+                                                    @endforeach
+                                                </tr>
+                                            </thead>
+                                            <tbody class="divide-y divide-[#F2F4F7] dark:divide-white/5">
+                                                @foreach($regularisationHistory as $reg)
+                                                    @php
+                                                        [$rLabel, $rTone] = match($reg->status) {
+                                                            'approved' => ['Approved', 'bg-emerald-50 text-emerald-700'],
+                                                            'rejected' => ['Rejected', 'bg-rose-50 text-rose-700'],
+                                                            'cancelled' => ['Cancelled', 'bg-zinc-100 text-zinc-600'],
+                                                            default => ['Pending', 'bg-amber-50 text-amber-700'],
+                                                        };
+                                                    @endphp
+                                                    <tr class="align-top">
+                                                        <td class="px-4 py-2.5 font-semibold text-[#101828] dark:text-white">
+                                                            @can('view_leave_regularisation')
+                                                                <a href="{{ route('time-off.regularisation') }}" wire:navigate class="underline decoration-dotted hover:text-orange-600">#{{ $reg->id }}</a>
+                                                            @else
+                                                                #{{ $reg->id }}
+                                                            @endcan
+                                                        </td>
+                                                        <td class="px-4 py-2.5 text-[#667085] dark:text-zinc-400">{{ $reg->from_date?->format('d M Y') ?? $reg->work_date?->format('d M Y') ?? '—' }}</td>
+                                                        <td class="px-4 py-2.5 text-[#667085] dark:text-zinc-400">{{ $reg->to_date?->format('d M Y') ?? '—' }}</td>
+                                                        <td class="px-4 py-2.5 text-[#667085] dark:text-zinc-400">{{ $reg->leaveType?->name ?? '—' }}</td>
+                                                        <td class="px-4 py-2.5 tabular-nums text-zinc-700 dark:text-zinc-200">{{ $reg->duration ?? '—' }}</td>
+                                                        <td class="px-4 py-2.5">
+                                                            <span class="inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold {{ $rTone }}">{{ $rLabel }}</span>
+                                                        </td>
+                                                        <td class="px-4 py-2.5 text-[11px] text-[#98A2B3]">{{ $reg->stageLabel() }}</td>
+                                                        <td class="px-4 py-2.5 text-[#667085] dark:text-zinc-400">{{ $reg->reviewer?->name ?? '—' }}</td>
+                                                        <td class="px-4 py-2.5 text-[11px] text-[#98A2B3]">{{ $reg->reviewed_at?->format('d M Y, h:i A') ?? '—' }}</td>
+                                                        <td class="px-4 py-2.5 text-[11px] text-[#98A2B3]">
+                                                            {{ $reg->reason ?? '—' }}
+                                                            @if($reg->status === 'rejected' && $reg->reviewer_comment)
+                                                                <div class="mt-0.5 italic text-rose-600">{{ $reg->reviewer_comment }}</div>
+                                                            @endif
+                                                        </td>
+                                                    </tr>
+                                                @endforeach
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                @endif
+                            </details>
 
                         </div>
 

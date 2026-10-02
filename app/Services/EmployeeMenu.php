@@ -31,6 +31,7 @@ class EmployeeMenu
         ['key' => 'onboarding', 'label' => 'My Onboarding', 'icon' => 'clipboard-document-check', 'type' => 'item', 'route' => 'onboarding.my', 'active' => 'onboarding.my'],
         ['key' => 'documents', 'label' => 'Documents', 'icon' => 'document-text', 'type' => 'item', 'route' => 'documents.index', 'active' => 'documents.*', 'badge' => 'documents'],
         ['key' => 'inbox', 'label' => 'Inbox', 'icon' => 'inbox', 'type' => 'item', 'route' => 'notifications.index', 'active' => 'notifications.*', 'badge' => 'inbox'],
+        ['key' => 'help', 'label' => 'Help & Guide', 'icon' => 'lifebuoy', 'type' => 'item', 'route' => 'help.employee-guide', 'active' => 'help.*'],
     ];
 
     /**

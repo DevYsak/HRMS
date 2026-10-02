@@ -1,0 +1,740 @@
+{
+  "shots": {
+    "dashboard-top": {
+      "file": "dashboard-top.jpg",
+      "annotated": "annotated/dashboard-top.png",
+      "title": "Your dashboard",
+      "width": 1440,
+      "height": 900,
+      "markers": [
+        {
+          "label": "Sidebar menu",
+          "note": "every page you can use"
+        },
+        {
+          "label": "Clock In",
+          "note": "start your working day"
+        },
+        {
+          "label": "Setup prompts",
+          "note": "finish your profile and onboarding"
+        },
+        {
+          "label": "Today at a glance",
+          "note": "attendance, leave, late marks, OT, pending, salary"
+        },
+        {
+          "label": "Notifications",
+          "note": "unread count"
+        },
+        {
+          "label": "Your menu",
+          "note": "profile, settings, this guide, log out"
+        }
+      ]
+    },
+    "dashboard-widgets": {
+      "file": "dashboard-widgets.jpg",
+      "annotated": "annotated/dashboard-widgets.png",
+      "title": "Dashboard widgets",
+      "width": 1440,
+      "height": 900,
+      "markers": [
+        {
+          "label": "Today's timeline",
+          "note": "clock in, breaks and clock out"
+        },
+        {
+          "label": "Payroll",
+          "note": "latest net salary and payslip download"
+        },
+        {
+          "label": "Performance",
+          "note": "current review score"
+        },
+        {
+          "label": "Quick actions",
+          "note": "one-click shortcuts"
+        },
+        {
+          "label": "Announcements",
+          "note": "recent notifications and holidays"
+        }
+      ]
+    },
+    "avatar-menu": {
+      "file": "avatar-menu.jpg",
+      "annotated": "annotated/avatar-menu.png",
+      "title": "Your personal menu (top right)",
+      "width": 1440,
+      "height": 900,
+      "markers": [
+        {
+          "label": "My Profile",
+          "note": "your personal and job details"
+        },
+        {
+          "label": "Account settings",
+          "note": "password and security"
+        },
+        {
+          "label": "Preferences",
+          "note": "timezone and date format"
+        },
+        {
+          "label": "Help & Employee Guide",
+          "note": "this guide"
+        },
+        {
+          "label": "Log out"
+        }
+      ]
+    },
+    "mobile-dashboard": {
+      "file": "mobile-dashboard.jpg",
+      "annotated": "annotated/mobile-dashboard.png",
+      "title": "Pulse on a phone: tap the menu icon to open the sidebar",
+      "width": 390,
+      "height": 844,
+      "markers": []
+    },
+    "profile-overview": {
+      "file": "profile-overview.jpg",
+      "annotated": "annotated/profile-overview.png",
+      "title": "My Profile",
+      "width": 1440,
+      "height": 900,
+      "markers": [
+        {
+          "label": "Your record",
+          "note": "employee ID, manager, joining date, shift"
+        },
+        {
+          "label": "Pending change",
+          "note": "waiting for HR"
+        },
+        {
+          "label": "Tabs",
+          "note": "overview, personal, employment, requests"
+        },
+        {
+          "label": "Finish your profile",
+          "note": "click a field to fill it in"
+        }
+      ]
+    },
+    "profile-request": {
+      "file": "profile-request.jpg",
+      "annotated": "annotated/profile-request.png",
+      "title": "Requesting a change that HR approves",
+      "width": 1440,
+      "height": 900,
+      "markers": [
+        {
+          "label": "New value"
+        },
+        {
+          "label": "Reason",
+          "note": "optional but helpful"
+        },
+        {
+          "label": "Send to HR",
+          "note": "your old value stays until approved"
+        }
+      ]
+    },
+    "profile-requests": {
+      "file": "profile-requests.jpg",
+      "annotated": "annotated/profile-requests.png",
+      "title": "Tracking your change requests",
+      "width": 1440,
+      "height": 900,
+      "markers": [
+        {
+          "label": "Requests tab"
+        },
+        {
+          "label": "Requested change",
+          "note": "old and new value"
+        },
+        {
+          "label": "Status"
+        },
+        {
+          "label": "Progress",
+          "note": "who has it now"
+        },
+        {
+          "label": "Withdraw",
+          "note": "cancel while pending"
+        }
+      ]
+    },
+    "attendance-top": {
+      "file": "attendance-top.jpg",
+      "annotated": "annotated/attendance-top.png",
+      "title": "My Attendance",
+      "width": 1440,
+      "height": 900,
+      "markers": [
+        {
+          "label": "Period",
+          "note": "today, week, month, quarter, year"
+        },
+        {
+          "label": "Attendance score"
+        },
+        {
+          "label": "Clock in / out",
+          "note": "selfie + location"
+        },
+        {
+          "label": "Breaks",
+          "note": "start and end a break"
+        },
+        {
+          "label": "Regularize",
+          "note": "fix a missing or wrong punch"
+        },
+        {
+          "label": "Smart status",
+          "note": "what to do next"
+        }
+      ]
+    },
+    "attendance-timeline": {
+      "file": "attendance-timeline.jpg",
+      "annotated": "annotated/attendance-timeline.png",
+      "title": "Attendance insights and day-by-day history",
+      "width": 1440,
+      "height": 900,
+      "markers": [
+        {
+          "label": "Insights",
+          "note": "averages, streaks, late count, missing punches"
+        },
+        {
+          "label": "Suggestions"
+        },
+        {
+          "label": "Timeline",
+          "note": "one row per day; click a day for its punches"
+        },
+        {
+          "label": "Export",
+          "note": "download your log"
+        }
+      ]
+    },
+    "attendance-regularise": {
+      "file": "attendance-regularise.jpg",
+      "annotated": "annotated/attendance-regularise.png",
+      "title": "Requesting an attendance correction",
+      "width": 1440,
+      "height": 900,
+      "markers": [
+        {
+          "label": "Day"
+        },
+        {
+          "label": "What to fix",
+          "note": "a punch, or a half day"
+        },
+        {
+          "label": "Which punch",
+          "note": "IN, OUT or both"
+        },
+        {
+          "label": "Correct time"
+        },
+        {
+          "label": "Reason & proof",
+          "note": "attachment optional"
+        },
+        {
+          "label": "Approval route",
+          "note": "manager → HR → admin"
+        }
+      ]
+    },
+    "leave-top": {
+      "file": "leave-top.jpg",
+      "annotated": "annotated/leave-top.png",
+      "title": "My Time Off",
+      "width": 1440,
+      "height": 900,
+      "markers": [
+        {
+          "label": "Apply Leave"
+        },
+        {
+          "label": "Your summary",
+          "note": "available, pending, approved, next holiday"
+        },
+        {
+          "label": "Awaiting approval",
+          "note": "requests still with a reviewer"
+        },
+        {
+          "label": "Balance views",
+          "note": "balances, pending & upcoming, history, statement"
+        },
+        {
+          "label": "Leave year",
+          "note": "switch to a previous year"
+        }
+      ]
+    },
+    "leave-balances": {
+      "file": "leave-balances.jpg",
+      "annotated": "annotated/leave-balances.png",
+      "title": "My Balances: one card per leave type",
+      "width": 1440,
+      "height": 900,
+      "markers": [
+        {
+          "label": "Available to request",
+          "note": "what you can apply for now"
+        },
+        {
+          "label": "Approved balance",
+          "note": "before pending requests"
+        },
+        {
+          "label": "Breakdown",
+          "note": "base, carry forward, add-on, used, pending…"
+        },
+        {
+          "label": "Leave year dates"
+        },
+        {
+          "label": "Card actions",
+          "note": "apply, history, statement"
+        }
+      ]
+    },
+    "leave-pending-upcoming": {
+      "file": "leave-pending-upcoming.jpg",
+      "annotated": "annotated/leave-pending-upcoming.png",
+      "title": "Pending & Upcoming: where each request is now",
+      "width": 1440,
+      "height": 900,
+      "markers": [
+        {
+          "label": "Counts",
+          "note": "pending, needs information, upcoming, rejected, encashment"
+        },
+        {
+          "label": "Current stage",
+          "note": "awaiting manager, awaiting HR…"
+        }
+      ]
+    },
+    "leave-history": {
+      "file": "leave-history.jpg",
+      "annotated": "annotated/leave-history.png",
+      "title": "Transaction History: every credit and deduction",
+      "width": 1440,
+      "height": 900,
+      "markers": [
+        {
+          "label": "Filters",
+          "note": "leave type and month"
+        },
+        {
+          "label": "Movement",
+          "note": "date, what happened, + or − days"
+        }
+      ]
+    },
+    "leave-statement": {
+      "file": "leave-statement.jpg",
+      "annotated": "annotated/leave-statement.png",
+      "title": "Month-wise Statement",
+      "width": 1440,
+      "height": 900,
+      "markers": [
+        {
+          "label": "Leave type"
+        },
+        {
+          "label": "Statement",
+          "note": "opening, movements and closing by month"
+        }
+      ]
+    },
+    "leave-apply": {
+      "file": "leave-apply.jpg",
+      "annotated": "annotated/leave-apply.png",
+      "title": "Applying for leave",
+      "width": 1440,
+      "height": 900,
+      "markers": [
+        {
+          "label": "Leave type",
+          "note": "your balance shows below"
+        },
+        {
+          "label": "Dates"
+        },
+        {
+          "label": "Half day"
+        },
+        {
+          "label": "Reason"
+        },
+        {
+          "label": "Attachment",
+          "note": "medical certificate etc."
+        },
+        {
+          "label": "Submit"
+        }
+      ]
+    },
+    "leave-applications": {
+      "file": "leave-applications.jpg",
+      "annotated": "annotated/leave-applications.png",
+      "title": "Tracking your leave applications",
+      "width": 1440,
+      "height": 900,
+      "markers": [
+        {
+          "label": "Filters",
+          "note": "search, status, type, year"
+        },
+        {
+          "label": "Status",
+          "note": "with approval progress dots"
+        },
+        {
+          "label": "Reviewer"
+        },
+        {
+          "label": "Cancel",
+          "note": "withdraw the request"
+        },
+        {
+          "label": "Encashment history"
+        }
+      ]
+    },
+    "leave-calendar": {
+      "file": "leave-calendar.jpg",
+      "annotated": "annotated/leave-calendar.png",
+      "title": "Leave calendar and policy explorer",
+      "width": 1440,
+      "height": 900,
+      "markers": [
+        {
+          "label": "Holiday work",
+          "note": "ask to work on a holiday"
+        },
+        {
+          "label": "Policy explorer",
+          "note": "your leave rules"
+        },
+        {
+          "label": "Leave calendar",
+          "note": "approved, pending, holidays"
+        }
+      ]
+    },
+    "wfh": {
+      "file": "wfh.jpg",
+      "annotated": "annotated/wfh.png",
+      "title": "Work From Home",
+      "width": 1440,
+      "height": 900,
+      "markers": [
+        {
+          "label": "Request WFH"
+        },
+        {
+          "label": "Totals"
+        },
+        {
+          "label": "Filters"
+        },
+        {
+          "label": "Status"
+        },
+        {
+          "label": "Cancel",
+          "note": "while pending"
+        }
+      ]
+    },
+    "wfh-request": {
+      "file": "wfh-request.jpg",
+      "annotated": "annotated/wfh-request.png",
+      "title": "Requesting work from home",
+      "width": 1440,
+      "height": 900,
+      "markers": [
+        {
+          "label": "Dates"
+        },
+        {
+          "label": "Half day"
+        },
+        {
+          "label": "Reason"
+        }
+      ]
+    },
+    "overtime": {
+      "file": "overtime.jpg",
+      "annotated": "annotated/overtime.png",
+      "title": "My Overtime",
+      "width": 1440,
+      "height": 900,
+      "markers": [
+        {
+          "label": "Request OT"
+        },
+        {
+          "label": "Approved OT hours"
+        },
+        {
+          "label": "Status"
+        },
+        {
+          "label": "Reviewer"
+        }
+      ]
+    },
+    "overtime-request": {
+      "file": "overtime-request.jpg",
+      "annotated": "annotated/overtime-request.png",
+      "title": "Requesting overtime",
+      "width": 1440,
+      "height": 900,
+      "markers": [
+        {
+          "label": "Work date"
+        },
+        {
+          "label": "Start and end time"
+        },
+        {
+          "label": "Reason"
+        }
+      ]
+    },
+    "payslips": {
+      "file": "payslips.jpg",
+      "annotated": "annotated/payslips.png",
+      "title": "My Payslips",
+      "width": 1440,
+      "height": 900,
+      "markers": [
+        {
+          "label": "Pay summary",
+          "note": "monthly salary, CTC, last payslip, deductions"
+        },
+        {
+          "label": "Current payslip",
+          "note": "earnings, deductions, net pay"
+        },
+        {
+          "label": "Download / email",
+          "note": "PDF, email, salary structure"
+        },
+        {
+          "label": "Payslip history",
+          "note": "tick months to print together"
+        }
+      ]
+    },
+    "expenses": {
+      "file": "expenses.jpg",
+      "annotated": "annotated/expenses.png",
+      "title": "Expense claims",
+      "width": 1440,
+      "height": 900,
+      "markers": [
+        {
+          "label": "New Claim"
+        },
+        {
+          "label": "Filters"
+        },
+        {
+          "label": "Pending claim"
+        },
+        {
+          "label": "Approved claim",
+          "note": "reimbursed through payroll"
+        }
+      ]
+    },
+    "expense-new": {
+      "file": "expense-new.jpg",
+      "annotated": "annotated/expense-new.png",
+      "title": "Submitting an expense claim",
+      "width": 1440,
+      "height": 900,
+      "markers": [
+        {
+          "label": "Title"
+        },
+        {
+          "label": "Category"
+        },
+        {
+          "label": "Amount"
+        },
+        {
+          "label": "Expense date"
+        },
+        {
+          "label": "Receipt",
+          "note": "PDF, JPG or PNG"
+        },
+        {
+          "label": "Submit"
+        }
+      ]
+    },
+    "performance": {
+      "file": "performance.jpg",
+      "annotated": "annotated/performance.png",
+      "title": "My Performance",
+      "width": 1440,
+      "height": 900,
+      "markers": [
+        {
+          "label": "Cycle score",
+          "note": "appears once a review cycle includes you"
+        },
+        {
+          "label": "Performance timeline"
+        },
+        {
+          "label": "Warnings summary"
+        }
+      ]
+    },
+    "my-review": {
+      "file": "my-review.jpg",
+      "annotated": "annotated/my-review.png",
+      "title": "My Review (self-assessment)",
+      "width": 1440,
+      "height": 900,
+      "markers": [
+        {
+          "label": "Active assessments",
+          "note": "open reviews you need to complete"
+        },
+        {
+          "label": "Past reviews",
+          "note": "finished, locked reviews"
+        }
+      ]
+    },
+    "goals": {
+      "file": "goals.jpg",
+      "annotated": "annotated/goals.png",
+      "title": "My Goals",
+      "width": 1440,
+      "height": 900,
+      "markers": [
+        {
+          "label": "Add Goal"
+        },
+        {
+          "label": "Active goal",
+          "note": "tick the circle when done"
+        },
+        {
+          "label": "Completed"
+        }
+      ]
+    },
+    "goal-new": {
+      "file": "goal-new.jpg",
+      "annotated": "annotated/goal-new.png",
+      "title": "Adding a goal",
+      "width": 1440,
+      "height": 900,
+      "markers": [
+        {
+          "label": "Goal title"
+        },
+        {
+          "label": "How it is measured"
+        },
+        {
+          "label": "Target date",
+          "note": "optional"
+        }
+      ]
+    },
+    "documents": {
+      "file": "documents.jpg",
+      "annotated": "annotated/documents.png",
+      "title": "Documents",
+      "width": 1440,
+      "height": 900,
+      "markers": [
+        {
+          "label": "Upload My Document"
+        },
+        {
+          "label": "Search and filter"
+        },
+        {
+          "label": "Library",
+          "note": "documents shared with you"
+        }
+      ]
+    },
+    "onboarding": {
+      "file": "onboarding.jpg",
+      "annotated": "annotated/onboarding.png",
+      "title": "My Onboarding",
+      "width": 1440,
+      "height": 900,
+      "markers": [
+        {
+          "label": "Progress"
+        },
+        {
+          "label": "Your tasks",
+          "note": "tick when done"
+        },
+        {
+          "label": "Handled for you",
+          "note": "other teams set these up"
+        }
+      ]
+    },
+    "notifications": {
+      "file": "notifications.jpg",
+      "annotated": "annotated/notifications.png",
+      "title": "Inbox (notifications)",
+      "width": 1440,
+      "height": 900,
+      "markers": [
+        {
+          "label": "Mark all read"
+        },
+        {
+          "label": "Filters",
+          "note": "all, unread, read, priority, dates"
+        },
+        {
+          "label": "Unread notification",
+          "note": "blue edge and dot"
+        },
+        {
+          "label": "View",
+          "note": "open the related page"
+        }
+      ]
+    }
+  },
+  "captured_at": "2026-10-02T08:22:40.206Z",
+  "account": "Employee role demo account (php artisan guide:demo-employee); all data fictional"
+}

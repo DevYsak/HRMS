@@ -33,9 +33,22 @@ class ReportController extends Controller
      *
      * @return array<string,mixed>
      */
+    /**
+     * Company-wide aggregate exports are only for users whose reach is the
+     * whole company — a line manager must not download everyone's data.
+     * Fails closed; managers use their scoped team screens and reports.
+     */
+    private function assertCompanyWideReach(): void
+    {
+        abort_unless(auth()->user()?->isCompanyWideApprover(), 403, 'This export covers the whole company and is outside your access scope.');
+    }
+
     private function attendanceReportFilters(Request $request): array
     {
-        return [
+        // The viewer's reach (reporting line / HR scope) is applied server-side.
+        $reach = $request->user()?->accessibleEmployeeIds();
+
+        return ($reach !== null ? ['employee_ids' => $reach] : []) + [
             'from' => $request->string('from')->toString() ?: null,
             'to' => $request->string('to')->toString() ?: null,
             'department_id' => $request->integer('department_id') ?: null,
@@ -100,6 +113,8 @@ class ReportController extends Controller
 
     public function attendanceSummaryCsv(Request $request): StreamedResponse
     {
+        $this->assertCompanyWideReach();
+
         $month = (int) $request->integer('month', now()->month);
         $year = (int) $request->integer('year', now()->year);
 
@@ -146,6 +161,8 @@ class ReportController extends Controller
 
     public function otRecordsCsv(Request $request): StreamedResponse
     {
+        $this->assertCompanyWideReach();
+
         $month = (int) $request->integer('month', now()->month);
         $year = (int) $request->integer('year', now()->year);
 
@@ -365,6 +382,8 @@ class ReportController extends Controller
 
     public function leaveUtilizationCsv(Request $request): StreamedResponse
     {
+        $this->assertCompanyWideReach();
+
         $year = (int) $request->integer('year', now()->year);
 
         $rows = LeaveRequest::with(['employee.user', 'employee.department', 'employee.jobTitle', 'employee.employmentType', 'leaveType'])
@@ -396,6 +415,8 @@ class ReportController extends Controller
 
     public function leaveEncashmentReportCsv(Request $request): StreamedResponse
     {
+        $this->assertCompanyWideReach();
+
         $rows = LeaveEncashment::with(['employee.user', 'employee.department', 'leaveType'])
             ->when($request->department_id, fn ($q) => $q->whereHas('employee', fn ($e) => $e->where('department_id', $request->department_id)))
             ->when($request->from, fn ($q) => $q->whereDate('created_at', '>=', $request->from))
@@ -424,6 +445,8 @@ class ReportController extends Controller
 
     public function attendanceComplianceCsv(Request $request): StreamedResponse
     {
+        $this->assertCompanyWideReach();
+
         $month = (int) $request->integer('month', now()->month);
         $year = (int) $request->integer('year', now()->year);
 
@@ -490,6 +513,8 @@ class ReportController extends Controller
 
     public function departmentOtCsv(Request $request): StreamedResponse
     {
+        $this->assertCompanyWideReach();
+
         $month = (int) $request->integer('month', now()->month);
         $year = (int) $request->integer('year', now()->year);
 
@@ -527,6 +552,8 @@ class ReportController extends Controller
 
     public function monthlyOtCsv(Request $request): StreamedResponse
     {
+        $this->assertCompanyWideReach();
+
         $month = (int) $request->integer('month', now()->month);
         $year = (int) $request->integer('year', now()->year);
 
@@ -569,6 +596,8 @@ class ReportController extends Controller
 
     public function nexflowSyncLogCsv(Request $request): StreamedResponse
     {
+        $this->assertCompanyWideReach();
+
         $month = (int) $request->integer('month', now()->month);
         $year = (int) $request->integer('year', now()->year);
 

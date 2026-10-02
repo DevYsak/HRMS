@@ -40,3 +40,9 @@ PULSE_HRMS_Test_Cases.md
 /public/voucher-R360DEMOEXPIRED.txt
 /public/Gemini_Generated_Image_.png
 /public/c3a15bfe-20a9-4cec-8cf2-496ef95b9039.png
+
+# Playwright (Employee Guide screenshot capture)
+/test-results
+/playwright-report
+/blob-report
+/playwright/.cache
