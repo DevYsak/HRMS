@@ -126,17 +126,19 @@ Schedule::command('hrms:generate-attendance-summary')
     ->withoutOverlapping()
     ->runInBackground();
 
-// Leave carry-forward is deliberately NOT scheduled.
+// The old calendar-year carry-forward command stays unscheduled.
 //
 // It ran unattended every 1 January at 02:00 — automatic, attributable to
 // nobody, and on a date that is not a boundary of a leave year that runs
-// 1 July to 30 June. Under the agreed process the previous year's balance is
-// never carried automatically: HR reviews what is known, decides an amount per
-// employee, and applies it from Leave > Carry Forward, where the decision is
-// recorded against the person who made it.
+// 1 July to 30 June.
 //
-// A leave type marked allow_carry_forward is eligible for consideration. It is
-// not an instruction to carry anything.
+// Year-end now runs through leave:rollover (scheduled below for 1 July). It
+// carries forward automatically only where the configuration states the
+// decision — carry_forward_mode 'automatic', or a policy rule that enables
+// carry forward. A type whose carry forward is an HR decision (hr_approval)
+// is never carried by the schedule: its rows go to Needs HR Review, and HR
+// states the amount on the Year Rollover / Carry Forward screens, recorded
+// against the person who made it.
 
 // Flag previous day absences without approved leave as Unauthorized Leave → 09:30 IST (after grace window)
 Schedule::command('hrms:flag-unauthorized-absences')
@@ -219,6 +221,21 @@ Schedule::command('hrms:monthly-leave-accrual')
 // entitlement (idempotent; mismatches and ambiguous balances are only reported)
 Schedule::command('leave:ensure-balances --apply')
     ->dailyAt('05:30')
+    ->withoutOverlapping()
+    ->runInBackground();
+
+// Phase 2C — year-end rollover on 1 July: SAFE rows only (carry forward,
+// expire the rest, provision the new base); ambiguous rows go to HR review.
+// Idempotent, so re-running it (or the Year Rollover screen) is harmless.
+Schedule::command('leave:rollover --apply')
+    ->yearlyOn(7, 1, '01:30')
+    ->withoutOverlapping()
+    ->runInBackground();
+
+// Phase 2C — expire unused carry-forward/add-on lots past their date and send
+// the 30- and 7-day expiry notices → daily 00:30
+Schedule::command('leave:expire-credits')
+    ->dailyAt('00:30')
     ->withoutOverlapping()
     ->runInBackground();
 

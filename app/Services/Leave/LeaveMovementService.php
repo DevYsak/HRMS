@@ -271,11 +271,18 @@ class LeaveMovementService
             ->get();
     }
 
-    /** Expiry from the employee's leave policy (carry_over_expiry_months), if any. */
+    /** Expiry from the employee's policy rule (fixed date or months), falling back to the policy. */
     private function carryForwardExpiry(LeaveBalance $balance, LeaveYear $year): ?string
     {
-        $months = $balance->employee?->leavePolicy?->carry_over_expiry_months;
+        $employee = $balance->employee;
+        $type = $balance->leaveType;
 
-        return $months ? $year->starts_on->copy()->addMonths((int) $months)->subDay()->toDateString() : null;
+        if ($employee === null || $type === null) {
+            return null;
+        }
+
+        $rules = app(LeaveRuleResolver::class);
+
+        return $rules->carryForwardExpiry($rules->settings($employee, $type), $year);
     }
 }

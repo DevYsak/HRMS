@@ -95,7 +95,7 @@ class LeaveCarryForwardService
         ?float $days = null,
         ?string $reason = null,
     ): Transaction {
-        $source = $this->engine->preview($from, $to)
+        $source = $this->engine->preview($from, $to, $employee->id)
             ->first(fn (array $r) => $r['employee_id'] === $employee->id && $r['leave_type_id'] === $type->id);
 
         if ($source === null) {

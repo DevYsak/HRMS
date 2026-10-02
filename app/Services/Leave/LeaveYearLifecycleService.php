@@ -4,6 +4,7 @@ namespace App\Services\Leave;
 
 use App\Models\LeaveBalance;
 use App\Models\LeaveRequest;
+use App\Models\LeaveRolloverRecord;
 use App\Models\LeaveYear;
 use App\Models\User;
 use App\Services\Audit\AuditService;
@@ -59,6 +60,20 @@ class LeaveYearLifecycleService
         $review = (clone $inYear)->where('ledger_status', LeaveBalance::LEDGER_NEEDS_HR_REVIEW)->count();
         if ($review > 0) {
             $blockers[] = "{$review} balance(s) in {$year->label} still need HR review.";
+        }
+
+        // Every balance must have been rolled over into the next year
+        // (carried, expired, new base provisioned) — not merely previewed.
+        $processed = LeaveRolloverRecord::where('from_leave_year_id', $year->id)
+            ->where('status', LeaveRolloverRecord::PROCESSED)
+            ->get(['employee_id', 'leave_type_id'])
+            ->map(fn ($r) => $r->employee_id.':'.$r->leave_type_id)
+            ->flip();
+        $notRolled = (clone $inYear)->get(['employee_id', 'leave_type_id'])
+            ->reject(fn ($b) => $processed->has($b->employee_id.':'.$b->leave_type_id))
+            ->count();
+        if ($notRolled > 0) {
+            $blockers[] = "{$notRolled} balance(s) in {$year->label} have not completed the year-end rollover.";
         }
 
         return $blockers;
