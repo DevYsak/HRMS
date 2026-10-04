@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\UserRole;
+use App\Models\AttendanceSetting;
 use App\Models\Employee;
 use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
@@ -22,6 +23,10 @@ use Tests\TestCase;
 pest()->extend(TestCase::class)
     ->use(RefreshDatabase::class)
     ->beforeEach(function () {
+        // The weekly-off days are cached statically; the rollback between tests
+        // does not clear it, so one test's off days leaked into the next.
+        AttendanceSetting::flushWeeklyOffCache();
+
         $this->seed(RolesAndPermissionsSeeder::class);
         // Statutory rates are baseline config the payroll engine resolves by date;
         // it fails loud without them, so seed them for every feature test.

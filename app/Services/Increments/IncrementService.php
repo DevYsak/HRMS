@@ -118,6 +118,7 @@ class IncrementService
     public function overrideBand(IncrementProposal $proposal, string $band, string $reason, User $actor): void
     {
         $this->assertCycleEditable($proposal->cycle);
+        $this->assertNotOwnProposal($proposal, $actor);
 
         if (! array_key_exists($band, IncrementCycle::DEFAULT_MATRIX)) {
             throw new \DomainException('Invalid band.');
@@ -144,6 +145,7 @@ class IncrementService
     public function updateProposal(IncrementProposal $proposal, float $percent, ?string $remarks, User $actor, bool $promotionFlag = false, ?string $newDesignation = null): void
     {
         $this->assertCycleEditable($proposal->cycle);
+        $this->assertNotOwnProposal($proposal, $actor);
 
         if (! $proposal->isEligible()) {
             throw new \DomainException('This employee is flagged "insufficient data" — set a band first (override) before proposing a percentage.');
@@ -192,11 +194,23 @@ class IncrementService
      * Director/HR final approval — hard budget gate (spec Part 4.3): the
      * committed annual cost must not exceed budget_percent of payroll.
      */
-    public function approveCycle(IncrementCycle $cycle, User $actor): void
+    /**
+     * @return int how many of the approver's own proposals were held back
+     */
+    public function approveCycle(IncrementCycle $cycle, User $actor): int
     {
         if ($cycle->status !== 'proposed') {
             throw new \DomainException('Only proposed cycles can be approved.');
         }
+
+        // Approving the cycle approves every raise in it except the approver's
+        // own: that one is held (left pending) for another approver —
+        // approveHeldProposal(). Every active employee has a proposal, so
+        // refusing the whole cycle would leave only the Super Admin able to
+        // approve. The Super Admin is exempt: no one sits above them.
+        $ownProposalIds = $actor->isSuperAdmin()
+            ? collect()
+            : $cycle->proposals()->whereHas('employee', fn ($q) => $q->where('user_id', $actor->id))->pluck('id');
 
         $budget = $cycle->budgetAmount();
         $committed = $cycle->committedAmount();
@@ -208,13 +222,41 @@ class IncrementService
             );
         }
 
-        DB::transaction(function () use ($cycle, $actor) {
+        DB::transaction(function () use ($cycle, $actor, $ownProposalIds) {
             // Untouched drafts approve at the matrix default %; rejected rows stay out.
-            $cycle->proposals()->whereIn('status', ['draft', 'pending'])->update(['status' => 'approved', 'approved_by' => $actor->id]);
+            $cycle->proposals()->whereIn('status', ['draft', 'pending'])
+                ->whereNotIn('id', $ownProposalIds)
+                ->update(['status' => 'approved', 'approved_by' => $actor->id]);
+            $cycle->proposals()->whereIn('id', $ownProposalIds)->where('status', 'draft')->update(['status' => 'pending']);
             $cycle->update(['status' => 'approved', 'approved_by' => $actor->id, 'approved_at' => now()]);
         });
 
-        AuditLog::record($cycle, 'approved', null, ['budget' => $budget, 'committed' => $committed]);
+        AuditLog::record($cycle, 'approved', null, ['budget' => $budget, 'committed' => $committed, 'held_own_proposals' => $ownProposalIds->count()]);
+
+        return $ownProposalIds->count();
+    }
+
+    /**
+     * Approve a raise that was held back at cycle approval because it was the
+     * approver's own — by someone else. Applied straight away when the cycle
+     * has already been applied.
+     */
+    public function approveHeldProposal(IncrementProposal $proposal, User $actor): void
+    {
+        $cycle = $proposal->cycle;
+
+        if (! in_array($cycle->status, ['approved', 'applied'], true) || $proposal->status !== 'pending') {
+            throw new \DomainException('Only a raise held back at cycle approval can be approved here.');
+        }
+
+        $this->assertNotOwnProposal($proposal, $actor);
+
+        $proposal->update(['status' => 'approved', 'approved_by' => $actor->id]);
+        AuditLog::record($proposal, 'approved', ['status' => 'pending'], ['status' => 'approved'], reason: 'Held at cycle approval (the approver\'s own raise); approved by another approver.');
+
+        if ($cycle->status === 'applied') {
+            $this->applyProposal($cycle, $proposal->fresh('employee.user'), $actor);
+        }
     }
 
     /**
@@ -222,6 +264,34 @@ class IncrementService
      * trail, increment letters (PDF → email + in-app), promotion designation
      * updates, PIP flag for band E.
      */
+    /** Nobody shapes their own raise (segregation of duties). */
+    private function assertNotOwnProposal(IncrementProposal $proposal, User $actor): void
+    {
+        if ((int) $proposal->employee?->user_id === (int) $actor->id && ! $actor->isSuperAdmin()) {
+            throw new \DomainException('You cannot change your own increment proposal.');
+        }
+    }
+
+    /** Apply one approved raise: salary uplift, promotion, letter. */
+    private function applyProposal(IncrementCycle $cycle, IncrementProposal $proposal, User $actor): bool
+    {
+        if ($proposal->status !== 'approved' || $proposal->proposed_percent <= 0) {
+            return false;
+        }
+
+        DB::transaction(function () use ($cycle, $proposal) {
+            $this->applySalaryUplift($proposal, $cycle->effective_date);
+
+            if ($proposal->promotion_flag && $proposal->new_designation) {
+                $this->applyPromotion($proposal);
+            }
+        });
+
+        $this->issueLetter($proposal, $actor);
+
+        return true;
+    }
+
     public function applyCycle(IncrementCycle $cycle, User $actor): int
     {
         if ($cycle->status !== 'approved') {
@@ -235,20 +305,9 @@ class IncrementService
                 $this->flagPip($proposal, $actor);
             }
 
-            if ($proposal->status !== 'approved' || $proposal->proposed_percent <= 0) {
-                continue;
+            if ($this->applyProposal($cycle, $proposal, $actor)) {
+                $applied++;
             }
-
-            DB::transaction(function () use ($cycle, $proposal) {
-                $this->applySalaryUplift($proposal, $cycle->effective_date);
-
-                if ($proposal->promotion_flag && $proposal->new_designation) {
-                    $this->applyPromotion($proposal);
-                }
-            });
-
-            $this->issueLetter($proposal, $actor);
-            $applied++;
         }
 
         $cycle->update(['status' => 'applied']);

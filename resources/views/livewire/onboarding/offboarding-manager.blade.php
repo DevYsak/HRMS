@@ -69,12 +69,17 @@
                             
                             <flux:textarea wire:model="exitReason" label="Exit Reason" rows="2" />
                             
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <flux:input wire:model="finalSettlementAmount" type="number" label="Final Settlement Amount" step="0.01" icon="banknotes" />
-                                <div class="flex items-end pb-2">
-                                    <flux:checkbox wire:model="finalSettlementDone" label="Final Settlement Completed?" />
+                            @if(auth()->user()->canRunPayroll())
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <flux:input wire:model="finalSettlementAmount" type="number" label="Final Settlement Amount" step="0.01" icon="banknotes" />
+                                    <div class="flex items-end pb-2">
+                                        <flux:checkbox wire:model="finalSettlementDone" label="Final Settlement Completed?" />
+                                    </div>
                                 </div>
-                            </div>
+                            @else
+                                {{-- Spec §3.8: the full & final settlement is entered by payroll (Finance / HR). --}}
+                                <p class="rounded-lg bg-zinc-50 px-3 py-2 text-xs text-zinc-500 dark:bg-white/5 dark:text-zinc-400">The final settlement is entered by payroll (Finance / HR).</p>
+                            @endif
 
                             <flux:textarea wire:model="interviewNotes" label="Exit Interview Notes (Optional)" rows="3" />
                             

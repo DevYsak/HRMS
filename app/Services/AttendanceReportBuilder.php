@@ -814,7 +814,9 @@ class AttendanceReportBuilder
     protected function biometric(Carbon $from, Carbon $to, array $filters): array
     {
         $q = AttendanceDailySummary::with('employee.user')
-            ->whereBetween('date', [$from->toDateString(), $to->toDateString()]);
+            ->whereBetween('date', [$from->toDateString(), $to->toDateString()])
+            // The viewer's reach, as every other report type applies it.
+            ->when(isset($filters['employee_ids']), fn ($x) => $x->whereIn('employee_id', $filters['employee_ids']));
         if (! empty($filters['employee_id'])) {
             $q->where('employee_id', $filters['employee_id']);
         }

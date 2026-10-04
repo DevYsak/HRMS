@@ -70,9 +70,12 @@ test('my time off page renders summary cards, statistics and calendar', function
 
     Livewire::test(MyTimeOff::class)
         ->assertSee($type->name)
-        ->assertSee('Total Leaves Allocated')
-        ->assertSee('Leaves Used')
-        ->assertSee('Leaves Remaining')
+        // The Conexus overview replaced the "Total Leaves Allocated" tiles,
+        // which added every leave type (the 28-day Annual Leave included).
+        ->assertSee('Available Leave')
+        ->assertSee('Current requestable balance')
+        ->assertSee('MDL remaining dates')
+        ->assertDontSee('Total Leaves Allocated')
         ->assertSee('Pending Requests')
         ->assertSee('Leave Calendar')
         ->assertSee('Request ID')

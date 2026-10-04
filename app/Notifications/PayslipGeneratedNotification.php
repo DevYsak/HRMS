@@ -7,10 +7,12 @@ use App\Notifications\Concerns\SendsMailChannel;
 use Illuminate\Notifications\Notification;
 
 /**
- * A lightweight "your payslip is ready" alert — the actual PayslipMail (with
- * the PDF attached) is sent separately by PayrollService, so this uses the
- * generic SendsMailChannel template rather than resending the same PDF mail
- * a second time.
+ * A lightweight in-app "your payslip is ready" alert. The email is the
+ * PayslipMail (with the PDF attached) that PayrollService queues separately —
+ * spec §2.2: "Payslip issued (payslip PDF attached)" is ONE email. This used
+ * to add a mail channel of its own, so every employee got two emails, the
+ * second sent synchronously: one SMTP error then aborted delivery for
+ * everyone after them.
  */
 class PayslipGeneratedNotification extends Notification
 {
@@ -20,7 +22,7 @@ class PayslipGeneratedNotification extends Notification
 
     public function via(object $notifiable): array
     {
-        return ['database', 'mail'];
+        return ['database'];
     }
 
     public function toArray(object $notifiable): array

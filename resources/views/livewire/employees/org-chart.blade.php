@@ -23,7 +23,7 @@
     }">
 
     {{-- ─── HEADER ─── --}}
-    <div class="sticky top-0 z-20 border-b border-zinc-200/80 bg-white/90 backdrop-blur-xl px-6 py-4 shadow-sm dark:border-zinc-800/80 dark:bg-zinc-900/90">
+    <div class="sticky top-14 z-[5] border-b border-zinc-200/80 bg-white/90 backdrop-blur-xl px-6 py-4 shadow-sm dark:border-zinc-800/80 dark:bg-zinc-900/90">
         <div class="flex items-center justify-between">
             <div class="flex items-center gap-4">
                 <div class="flex size-10 items-center justify-center rounded-xl bg-brand-500 shadow-lg shadow-brand-200/40 dark:shadow-brand-900/40">

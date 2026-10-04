@@ -95,6 +95,19 @@ class Process extends Component
         $this->loadCurrentPayroll();
     }
 
+    public function updatedCycle(): void
+    {
+        $this->assertKnownCycle();
+        $this->resetPage();
+        $this->loadCurrentPayroll();
+    }
+
+    /** Spec §3.5: two cycles, a separate run each — nothing else is a run. */
+    private function assertKnownCycle(): void
+    {
+        abort_unless(in_array($this->cycle, ['cycle_a', 'cycle_b'], true), 422, 'Unknown salary cycle.');
+    }
+
     public function updatedSearch(): void
     {
         $this->resetPage();
@@ -197,6 +210,7 @@ class Process extends Component
     public function startProcessing(): void
     {
         abort_unless(Auth::user()->canRunPayroll(), 403);
+        $this->assertKnownCycle();
 
         if ($this->currentPayroll && $this->currentPayroll->status === 'finalized') {
             \Flux::toast('Payroll for this period is already finalized.', variant: 'danger');

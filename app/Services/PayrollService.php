@@ -7,12 +7,16 @@ use App\Models\AuditLog;
 use App\Models\Employee;
 use App\Models\EmployeePayrollSettings;
 use App\Models\EmployeeSalary;
+use App\Models\ExitRecord;
+use App\Models\Incentive;
+use App\Models\LeaveEncashment;
 use App\Models\OvertimeRecord;
 use App\Models\Payroll;
 use App\Models\PayrollApprovalPolicy;
 use App\Models\PayrollApprovalStep;
 use App\Models\PayrollRunFailure;
 use App\Models\Payslip;
+use App\Models\Reimbursement;
 use App\Models\SalaryRevision;
 use App\Models\SalaryStructure;
 use App\Models\User;
@@ -20,6 +24,7 @@ use App\Notifications\PayrollApprovalNotification;
 use App\Notifications\PayslipGeneratedNotification;
 use App\Notifications\SalaryStructureAssignedNotification;
 use App\Services\Notifications\NotificationRecipients;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
@@ -32,6 +37,9 @@ class PayrollService
         protected ReimbursementService $reimbursementService,
         protected SalaryCalculationService $salaryCalculationService,
     ) {}
+
+    /** Employment states that are paid in a payroll run. */
+    public const PAYROLL_STATUSES = ['active', 'probation', 'confirmed', 'on-leave', 'notice_period'];
 
     public function generateDraft(string $month, int $year, string $cycle, int $processedBy): Payroll
     {
@@ -82,14 +90,27 @@ class PayrollService
                 ]);
             }
 
-            $employees = Employee::where('status', 'active')
-                ->where('salary_cycle', $cycle)
+            // Everyone employed in the cycle (spec §3.5 step 26: drafts for all
+            // employees in the cycle) — probation, confirmed, on leave and
+            // serving notice are paid too. Someone who has left is not, nor a
+            // hire whose joining date is after the cycle. A hire still marked
+            // "onboarding" is paid once their joining date falls on or before
+            // the cycle end: they are working, whatever the checklist says.
+            $cycleEnd = $cycleTo->toDateString();
+            $employees = Employee::where('salary_cycle', $cycle)
+                ->where(fn ($q) => $q
+                    ->where(fn ($paid) => $paid->whereIn('status', self::PAYROLL_STATUSES)
+                        ->where(fn ($joined) => $joined->whereNull('joining_date')->orWhereDate('joining_date', '<=', $cycleEnd)))
+                    ->orWhere(fn ($joiner) => $joiner->where('status', 'onboarding')
+                        ->whereNotNull('joining_date')->whereDate('joining_date', '<=', $cycleEnd)))
                 ->with('payrollSettings')
                 ->get();
             $activeEmployeeIds = $employees->pluck('id');
 
             $this->incentiveService->releaseIncludedForEmployeesAndMonth($payroll, $activeEmployeeIds, $monthLabel);
             $this->reimbursementService->releaseIncludedForEmployeesAndMonth($payroll, $activeEmployeeIds, $monthLabel);
+            $this->releaseSettlementsAndEncashments($payroll, Payslip::where('payroll_id', $payroll->id)
+                ->whereNotIn('employee_id', $activeEmployeeIds)->pluck('employee_id')->all());
 
             // Drop payslips belonging to employees who have since left the run — a
             // deactivation or cycle switch between runs would otherwise strand a
@@ -242,6 +263,11 @@ class PayrollService
             throw new \DomainException('This payroll uses a configured approval flow — act on it via the individual approval steps.');
         }
 
+        // Finance's sign-off (spec §3.5): running payroll does not confer it.
+        if (! User::find($approverId)?->canApproveFinance()) {
+            throw new AuthorizationException('Only Finance can approve a payroll run.');
+        }
+
         // Maker-checker: whoever most recently generated/regenerated this draft
         // (processed_by) cannot also be the one who approves it into finalized.
         if ((int) $payroll->processed_by === $approverId) {
@@ -392,11 +418,20 @@ class PayrollService
         return $payroll->fresh(['payslips.employee.user']);
     }
 
-    /** Revert a payroll to draft — shared by the legacy single-hop rejectFinance() and a rejection at any configured step. */
+    /**
+     * Revert a payroll to draft — shared by the legacy single-hop rejectFinance()
+     * and a rejection at any configured step.
+     *
+     * The draft payslips stay, and so do the incentives, reimbursements,
+     * settlements and encashments they pay: those stay linked to this run. A
+     * re-run re-picks rows already linked to it, and a resubmission without a
+     * re-run still matches its payslips. Unlinking them here (as this used to)
+     * let a resubmitted run pay a final settlement while it stayed unlinked —
+     * so the next run paid it again. Money is released only where its payslip
+     * is actually deleted (deletePayslip, employees dropped from a re-run).
+     */
     private function revertToDraft(Payroll $payroll, ?string $note): Payroll
     {
-        $this->incentiveService->releaseIncludedForPayroll($payroll);
-        $this->reimbursementService->releaseIncludedForPayroll($payroll);
 
         $payroll->update([
             'status' => 'draft',
@@ -458,6 +493,8 @@ class PayrollService
         ?string $reason = null,
     ): SalaryRevision {
         $structure->loadMissing('components');
+
+        $this->assertNotOwnPay($actor, $employee);
 
         return DB::transaction(function () use ($structure, $employee, $actor, $effectiveDate, $reason) {
             $effective = Carbon::parse($effectiveDate);
@@ -605,6 +642,10 @@ class PayrollService
             throw new \DomainException('This payslip is locked and can no longer be edited.');
         }
 
+        if ($actor = auth()->user()) {
+            $this->assertNotOwnPay($actor, $payslip->employee);
+        }
+
         return DB::transaction(function () use ($payslip, $items, $reason) {
             $old = $payslip->only(['gross_salary', 'total_deductions', 'net_salary']);
 
@@ -637,6 +678,54 @@ class PayrollService
         });
     }
 
+    /**
+     * Hand one employee's incentives, reimbursements, settlement and
+     * encashments back from a run whose payslip for them is going away, so
+     * the next run pays them instead of stranding them on a deleted payslip.
+     */
+    private function releaseEmployeeInclusions(Payroll $payroll, int $employeeId): void
+    {
+        foreach ([Incentive::class, Reimbursement::class] as $model) {
+            $model::where('payroll_id', $payroll->id)->where('employee_id', $employeeId)->where('status', 'included')
+                ->update(['status' => 'approved', 'payroll_id' => null]);
+        }
+
+        $this->releaseSettlementsAndEncashments($payroll, [$employeeId]);
+    }
+
+    /**
+     * Unlink exit settlements and encashments from a run (all of it, or only
+     * the given employees) so they are picked up again rather than lost.
+     *
+     * @param  array<int, int>|null  $employeeIds
+     */
+    private function releaseSettlementsAndEncashments(Payroll $payroll, ?array $employeeIds = null): void
+    {
+        if ($employeeIds === []) {
+            return;
+        }
+
+        ExitRecord::where('payroll_id', $payroll->id)
+            ->when($employeeIds !== null, fn ($q) => $q->whereIn('employee_id', $employeeIds))
+            ->update(['payroll_id' => null]);
+
+        LeaveEncashment::where('payroll_id', $payroll->id)
+            ->where('status', 'processed')
+            ->when($employeeIds !== null, fn ($q) => $q->whereIn('employee_id', $employeeIds))
+            ->update(['status' => 'approved', 'payroll_id' => null]);
+    }
+
+    /**
+     * Nobody sets their own pay (segregation of duties) — except the Super
+     * Admin, who has no one above them to do it.
+     */
+    private function assertNotOwnPay(User $actor, ?Employee $employee): void
+    {
+        if ($employee !== null && (int) $employee->user_id === (int) $actor->id && ! $actor->isSuperAdmin()) {
+            throw new AuthorizationException('You cannot change your own pay — another payroll user must do it.');
+        }
+    }
+
     /** Delete a draft payslip and recompute the parent payroll's totals. */
     public function deletePayslip(Payslip $payslip): void
     {
@@ -650,6 +739,7 @@ class PayrollService
 
         DB::transaction(function () use ($payslip) {
             $payroll = $payslip->payroll;
+            $this->releaseEmployeeInclusions($payroll, $payslip->employee_id);
             $payslip->delete();
             $this->recalculatePayrollTotals($payroll);
         });
@@ -703,15 +793,25 @@ class PayrollService
                 continue;
             }
 
-            $payslip->employee->user->notify(new PayslipGeneratedNotification($payslip));
-            Mail::to($payslip->employee->user->email)->send(new PayslipMail($payslip));
-            AuditLog::record($payslip, 'emailed', null, ['to' => $payslip->employee->user->email], subjectEmployeeId: $payslip->employee_id);
+            // Per employee: the run is already finalized, so one delivery
+            // failure must never stop everyone else's payslip.
+            try {
+                $payslip->employee->user->notify(new PayslipGeneratedNotification($payslip));
+                Mail::to($payslip->employee->user->email)->send(new PayslipMail($payslip));
+                AuditLog::record($payslip, 'emailed', null, ['to' => $payslip->employee->user->email], subjectEmployeeId: $payslip->employee_id);
+            } catch (\Throwable $e) {
+                report($e);
+            }
         }
     }
 
     public function resolveCycleDates(string $month, int $year, string $cycle): array
     {
         $monthNum = Carbon::parse("1 {$month} {$year}")->month;
+
+        if (! in_array($cycle, ['cycle_a', 'cycle_b'], true)) {
+            throw new \DomainException("Unknown salary cycle '{$cycle}'.");
+        }
 
         if ($cycle === 'cycle_a') {
             $from = Carbon::create($year, $monthNum, 1)->startOfDay();

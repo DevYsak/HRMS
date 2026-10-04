@@ -241,12 +241,32 @@ class ReviewWorkflowService
     {
         $query = Employee::query()->where('status', 'active');
 
-        return match ($template->applies_to_type) {
-            'department' => $query->where('department_id', $template->applies_to_id)->get(),
-            'designation' => $query->where('designation_id', $template->applies_to_id)->get(),
-            'branch' => $query->where('office_id', $template->applies_to_id)->get(),
-            default => $query->get(),
+        // A Role template has no role picker on the form, so it carries no
+        // target and reaches everyone — as before, and as
+        // PerformanceTemplateService resolves it. Any stored id is a leftover
+        // from another type and is ignored.
+        if (in_array($template->applies_to_type, ['global', 'role'], true)) {
+            return $query->get();
+        }
+
+        // Each target is a column on the employee. "designation" is the job
+        // title (there is no designation_id column — activation crashed), and
+        // a target with nothing chosen is refused rather than falling through
+        // to every employee.
+        $column = match ($template->applies_to_type) {
+            'department' => 'department_id',
+            'designation' => 'job_title_id',
+            'employment_type' => 'employment_type_id',
+            'shift' => 'shift_id',
+            'branch' => 'office_id',
+            default => null,
         };
+
+        if ($column === null || ! $template->applies_to_id) {
+            throw new \DomainException('This KPI template targets a '.$template->appliesTo().' but no '.strtolower($template->appliesTo()).' is chosen — pick one on the template, or make it global.');
+        }
+
+        return $query->where($column, $template->applies_to_id)->get();
     }
 
     /**

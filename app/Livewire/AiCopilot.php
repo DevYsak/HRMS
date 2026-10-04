@@ -11,7 +11,7 @@ use App\Models\PipRecord;
 use App\Models\User;
 use App\Models\WarningLetter;
 use App\Services\AiAssistant;
-use App\Services\Leave\LeaveYearResolver;
+use App\Services\Leave\EmployeeLeaveOverviewService;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 
@@ -89,8 +89,9 @@ class AiCopilot extends Component
         if ($employee) {
             $context['me'] = [
                 'name' => $user->name,
-                'leave_balances' => $employee->leaveBalances()->with('leaveType')->where('year', app(LeaveYearResolver::class)->legacyYearFor())->get()
-                    ->mapWithKeys(fn ($b) => [($b->leaveType?->name ?? 'Leave') => max(0, (float) $b->allocated_days - (float) $b->used_days)]),
+                // The Conexus position from the one calculator every screen
+                // uses: CSL + Comp Off, never floored; MDL dates are not a balance.
+                'leave_balances' => $this->leaveContext($employee),
                 'my_pending_leave_requests' => $employee->leaveRequests()->whereIn('status', ['pending', 'pending_hr'])->count(),
             ];
         }
@@ -105,5 +106,18 @@ class AiCopilot extends Component
         return view('livewire.ai-copilot', [
             'enabled' => $user ? app(AiAssistant::class)->enabledForUser($user) : false,
         ]);
+    }
+
+    /** @return array<string, mixed> */
+    private function leaveContext(Employee $employee): array
+    {
+        $overview = app(EmployeeLeaveOverviewService::class)->for($employee);
+
+        return array_filter([
+            'available_leave_csl_plus_comp_off' => $overview['available_leave'] ?? null,
+            'casual_sick_leave' => $overview['csl']['summary']['approved_available'] ?? null,
+            'comp_off' => $overview['comp_off']['summary']['approved_available'] ?? null,
+            'mdl_shutdown_dates' => collect($overview['mdl']['dates'] ?? [])->map(fn ($d) => $d['date']->toDateString())->all(),
+        ], fn ($value) => $value !== null);
     }
 }

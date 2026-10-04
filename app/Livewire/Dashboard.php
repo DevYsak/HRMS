@@ -2,6 +2,7 @@
 
 namespace App\Livewire;
 
+use App\Enums\AttendanceMode;
 use App\Enums\EmployeeStatus;
 use App\Enums\UserRole;
 use App\Models\Attendance;
@@ -10,26 +11,19 @@ use App\Models\AttendanceSetting;
 use App\Models\AuditLog;
 use App\Models\Department;
 use App\Models\Document;
-use App\Models\DocumentAcknowledgement;
 use App\Models\Employee;
-use App\Models\EmployeeScorecard;
-use App\Models\LeaveBalance;
 use App\Models\LeaveEncashment;
 use App\Models\LeaveRequest;
-use App\Models\OnboardingTask;
 use App\Models\OtRequest;
 use App\Models\Payroll;
-use App\Models\Payslip;
-use App\Models\PerformanceCycle;
-use App\Models\PerformanceReview;
 use App\Models\PipRecord;
 use App\Models\PromotionRecommendation;
+use App\Models\User;
 use App\Models\WarningLetter;
-use App\Services\Attendance\HolidayResolver;
 use App\Services\Attendance\ShiftResolver;
 use App\Services\AttendanceService;
-use App\Services\Leave\LeaveYearResolver;
-use App\Services\Profile\ProfileCompletionService;
+use App\Services\EmployeeDashboardService;
+use App\Services\WfhService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
@@ -37,33 +31,62 @@ use Livewire\Component;
 
 class Dashboard extends Component
 {
+    /**
+     * Managers, Finance and Directors land on their own dashboard page.
+     *
+     * Each of those is a full-page component with its own layout and route
+     * gate. Rendering one from here sent its approve / reject clicks to this
+     * component, and mounting it as a child broke the app-shell grid — so
+     * "/" forwards to the page itself.
+     */
+    public function mount(): void
+    {
+        $landing = $this->roleLanding(Auth::user());
+
+        if ($landing !== null) {
+            $this->redirectRoute($landing, navigate: true);
+        }
+    }
+
     public function render()
     {
-        $user = Auth::user();
-        $role = $user->role;
+        $role = Auth::user()->role;
 
         // Super Admin / HR Admin → HR overview
         if ($role === UserRole::SuperAdmin || $role === UserRole::HrAdmin) {
             return $this->renderHrAdmin();
         }
 
-        // Manager → team dashboard
-        if ($role === UserRole::Manager) {
-            return $this->renderManager();
-        }
-
-        // Finance → finance dashboard
-        if ($role === UserRole::Finance) {
-            return $this->renderFinance();
-        }
-
-        // Director / Executive
-        if ($role === UserRole::Director) {
-            return $this->renderExecutive();
-        }
-
-        // Default: Employee self-service
+        // Default: Employee self-service — also for a Manager, Finance user or
+        // Director whose role cannot open their own dashboard page.
         return $this->renderEmployee();
+    }
+
+    /**
+     * The page a role lands on instead of "/", or null to stay here.
+     *
+     * Director / Department Head (spec §5.2): a Director scoped to a
+     * department or shift gets that team's dashboard; an unscoped Director
+     * keeps the executive view. A customised role without the permission its
+     * page requires stays on self-service rather than being sent to a 403.
+     */
+    private function roleLanding(User $user): ?string
+    {
+        $landing = match ($user->role) {
+            UserRole::Manager => 'dashboard.manager',
+            UserRole::Finance => 'dashboard.finance',
+            UserRole::Director => $user->isDepartmentScoped() ? 'dashboard.manager' : 'dashboard.director',
+            default => null,
+        };
+
+        $canOpen = match ($landing) {
+            'dashboard.manager' => $user->canApproveLeave(),
+            'dashboard.finance' => $user->canRunPayroll() || $user->canApproveFinance(),
+            'dashboard.director' => $user->can('view_executive_dashboard'),
+            default => false,
+        };
+
+        return $canOpen ? $landing : null;
     }
 
     private function renderHrAdmin()
@@ -90,7 +113,7 @@ class Dashboard extends Component
             ->count();
 
         // Pending Approvals
-        $pendingLeavesCount = LeaveRequest::where('status', 'pending')->count();
+        $pendingLeavesCount = LeaveRequest::whereIn('status', ['pending', 'pending_hr'])->count();
         $pendingOtCount = OtRequest::where('status', 'pending')->count();
         $pendingLeaveRequests = LeaveRequest::with(['employee.user', 'leaveType'])
             ->where('status', 'pending')
@@ -344,23 +367,6 @@ class Dashboard extends Component
         ))->layout('layouts.app', ['title' => 'Admin Dashboard']);
     }
 
-    private function renderManager()
-    {
-        // Delegate to the canonical ManagerDashboard component (single source of
-        // truth — owns the team KPI widget, review counts and reject-modal flow).
-        return app(ManagerDashboard::class)->render();
-    }
-
-    private function renderFinance()
-    {
-        return app(FinanceDashboard::class)->render();
-    }
-
-    private function renderExecutive()
-    {
-        return app(ExecutiveDashboard::class)->render();
-    }
-
     /**
      * Clock in from the dashboard.
      *
@@ -375,7 +381,7 @@ class Dashboard extends Component
      * without them would quietly defeat the control. Those employees are handed
      * to the attendance page, which does have the capture UI.
      */
-    public function clockIn(?float $lat = null, ?float $lng = null): void
+    public function clockIn(?float $lat = null, ?float $lng = null, ?string $workMode = null): void
     {
         $employee = Auth::user()?->employee;
 
@@ -396,10 +402,25 @@ class Dashboard extends Component
             return;
         }
 
+        // Working from home is an approved arrangement, the same rule the
+        // attendance page enforces. The card only offers WFH on an approved
+        // day; this refuses a stale or forged call.
+        if ($workMode === AttendanceMode::Wfh->value && ! app(WfhService::class)->isApprovedFor($employee, Carbon::today())) {
+            \Flux::toast('You have no approved work-from-home request for today. Submit one under Work From Home, or clock in from the office.', variant: 'danger');
+
+            return;
+        }
+
         app(AttendanceService::class)->checkIn(
             $employee,
             $employee->shift ?? ShiftResolver::companyDefault(),
-            ['ip' => request()->ip(), 'lat' => $lat, 'lng' => $lng],
+            [
+                'ip' => request()->ip(), 'lat' => $lat, 'lng' => $lng,
+                // Spec §3.2: chosen at clock-in. Only Office / WFH from the
+                // dashboard; anything else falls back to Office in the service.
+                'work_mode' => in_array($workMode, [AttendanceMode::Office->value, AttendanceMode::Wfh->value], true)
+                    ? $workMode : AttendanceMode::Office->value,
+            ],
         );
 
         \Flux::toast('Clocked in successfully.');
@@ -454,6 +475,39 @@ class Dashboard extends Component
         return (bool) $settings?->requires_location && ($lat === null || $lng === null);
     }
 
+    /**
+     * Start a break from the dashboard — the same AttendanceService call the
+     * attendance page's break button makes. Ignored once the day is closed.
+     */
+    public function startBreak(): void
+    {
+        $employee = Auth::user()?->employee;
+        $attendance = $employee ? $this->todayAttendanceFor($employee) : null;
+
+        if (! $attendance || $attendance->check_out) {
+            return;
+        }
+
+        if (app(AttendanceService::class)->startBreak($attendance)) {
+            \Flux::toast('Break started.');
+        }
+    }
+
+    /** End the open break. Mirrors startBreak(). */
+    public function endBreak(): void
+    {
+        $employee = Auth::user()?->employee;
+        $attendance = $employee ? $this->todayAttendanceFor($employee) : null;
+
+        if (! $attendance) {
+            return;
+        }
+
+        if (app(AttendanceService::class)->endBreak($attendance)) {
+            \Flux::toast('Break ended. Welcome back!');
+        }
+    }
+
     private function todayAttendanceFor(Employee $employee): ?Attendance
     {
         return Attendance::where('employee_id', $employee->id)
@@ -461,253 +515,18 @@ class Dashboard extends Component
             ->first();
     }
 
+    /**
+     * Employee self-service dashboard.
+     *
+     * Every figure comes from EmployeeDashboardService, which reads the same
+     * services the owning screens use (leave calculator, punch timeline, shift
+     * resolver, holiday resolver) — this component only chooses the view.
+     */
     private function renderEmployee()
     {
-        $user = Auth::user();
-        $employee = $user->employee;
-        $today = Carbon::today();
+        $data = app(EmployeeDashboardService::class)->build(Auth::user());
 
-        // Today's attendance
-        $todayAttendance = $employee
-            ? Attendance::where('employee_id', $employee->id)->where('date', $today)->first()
-            : null;
-
-        // Leave balances (using allocated_days / used_days from schema).
-        // A plain integer comparison: leave_balances.year is a smallint holding
-        // 2026, not a date. whereYear() compiled to YEAR(year), and YEAR(2026)
-        // is NULL in MySQL, so this matched nothing and every employee saw a
-        // zero balance — worse than no data, because it looked authoritative.
-        $leaveBalances = $employee
-            ? LeaveBalance::with('leaveType')->where('employee_id', $employee->id)->where('year', app(LeaveYearResolver::class)->legacyYearFor())->get()
-            : collect();
-
-        // My pending OT requests
-        $myOtRequests = $employee
-            ? OtRequest::where('employee_id', $employee->id)->latest()->take(5)->get()
-            : collect();
-
-        // Recent payslips (last 3)
-        $myPayslips = $employee
-            ? Payslip::where('employee_id', $employee->id)->with('payroll')->latest()->take(3)->get()
-            : collect();
-
-        // Pending leave requests
-        $pendingLeaveRequests = $employee
-            ? LeaveRequest::with('leaveType')->where('employee_id', $employee->id)->where('status', 'pending')->latest()->get()
-            : collect();
-        $pendingLeaveCount = $pendingLeaveRequests->count();
-
-        // Weekly Attendance (Mon-Fri)
-        $startOfWeek = now()->startOfWeek(Carbon::MONDAY);
-        $endOfWeek = now()->endOfWeek(Carbon::FRIDAY);
-
-        $currentWeekAttendance = $employee
-            ? Attendance::where('employee_id', $employee->id)
-                ->whereBetween('date', [$startOfWeek, $endOfWeek])
-                ->get()
-            : collect();
-
-        // Next Public Holiday — on this employee's own calendar. Asking without
-        // a country showed India staff the next UK bank holiday whenever it
-        // happened to fall first, and it also ignored is_active, so archived
-        // holidays could win.
-        $holidays = app(HolidayResolver::class);
-        $nextPublicHoliday = $holidays->nextHoliday($employee, $today);
-
-        // Pending Actions (Documents to Acknowledge, Reviews Due)
-        $pendingActions = collect();
-
-        if ($employee) {
-            $pendingDocs = DocumentAcknowledgement::with('document')
-                ->where('employee_id', $employee->id)
-                ->whereNull('acknowledged_at')
-                ->get();
-
-            foreach ($pendingDocs as $doc) {
-                $pendingActions->push([
-                    'type' => 'document',
-                    'title' => 'Acknowledge: '.$doc->document->title,
-                    'date' => $doc->created_at,
-                    'url' => route('documents.index'),
-                ]);
-            }
-
-            $pendingReviews = PerformanceReview::with('cycle')
-                ->where('employee_id', $employee->id)
-                ->where('type', 'self')
-                ->where('status', 'pending')
-                ->get();
-
-            foreach ($pendingReviews as $rev) {
-                $pendingActions->push([
-                    'type' => 'review',
-                    'title' => 'Self Assessment Due: '.$rev->cycle->name,
-                    'date' => $rev->created_at,
-                    'url' => route('performance.my'),
-                ]);
-            }
-        }
-
-        $pendingActions = $pendingActions->sortByDesc('date');
-
-        // My KPIs (latest performance cycle scorecard)
-        $latestCycle = PerformanceCycle::whereIn('status', ['active', 'completed', 'locked'])
-            ->latest('start_date')
-            ->first();
-        $myScorecard = ($employee && $latestCycle)
-            ? EmployeeScorecard::where('employee_id', $employee->id)
-                ->where('performance_cycle_id', $latestCycle->id)
-                ->first()
-            : null;
-
-        // Recent notifications feed (top 5)
-        $recentNotifications = $user->notifications()->latest()->take(5)->get();
-
-        // ── Profile / team ─────────────────────────────────────────────────
-        $shift = $employee?->shift;
-        $shiftName = $shift?->name;
-        $department = $employee?->department?->name;
-        $designation = $employee?->jobTitle?->name;
-        $manager = $employee?->manager;
-
-        // ── This-month attendance metrics ──────────────────────────────────
-        $monthStart = now()->startOfMonth();
-        $monthAttendance = $employee
-            ? Attendance::where('employee_id', $employee->id)
-                ->whereBetween('date', [$monthStart->toDateString(), $today->toDateString()])
-                ->get()
-            : collect();
-
-        $presentDays = $monthAttendance->whereNotNull('check_in')->count();
-        $lateCount = $monthAttendance->where('is_late', true)->count();
-
-        // isWeekend() is Carbon's Sat+Sun, not the company's configured week.
-        // An office on a Sun-only week lost every Saturday from the denominator
-        // (attendance % overstated); one on a 5-day week counted holidays as
-        // working days (understated). AttendanceSetting::isWeeklyOff is the
-        // same rule the score engine and the muster report use.
-        $workingDaysElapsed = 0;
-        for ($d = $monthStart->copy(); $d->lte($today); $d = $d->addDay()) {
-            if (! AttendanceSetting::isWeeklyOff($d) && ! $holidays->isHoliday($employee, $d)) {
-                $workingDaysElapsed++;
-            }
-        }
-        $attendancePct = $workingDaysElapsed > 0 ? min(100, (int) round(($presentDays / $workingDaysElapsed) * 100)) : 0;
-
-        // Overtime hours this month (approved requests)
-        $otHours = $employee
-            ? (float) OtRequest::where('employee_id', $employee->id)
-                ->where('status', 'approved')
-                ->whereMonth('work_date', now()->month)
-                ->whereYear('work_date', now()->year)
-                ->sum('requested_hours')
-            : 0.0;
-
-        // Daily working-hours series for the current month (area chart)
-        $dailyHours = collect();
-        for ($d = $monthStart->copy(); $d->lte($today); $d = $d->addDay()) {
-            $rec = $monthAttendance->first(fn ($a) => Carbon::parse($a->date)->isSameDay($d));
-            $dailyHours->push([
-                'label' => $d->format('d'),
-                'hours' => $rec && $rec->total_hours ? round((float) $rec->total_hours, 1) : 0,
-            ]);
-        }
-
-        // Minutes worked today (live-timer base)
-        $workedTodayMinutes = ($todayAttendance && $todayAttendance->check_in)
-            ? (int) ($todayAttendance->check_out ?? now())->diffInMinutes($todayAttendance->check_in)
-            : 0;
-
-        // ── Leave totals ───────────────────────────────────────────────────
-        $totalLeaveAllocated = (float) $leaveBalances->sum('allocated_days');
-        $totalLeaveUsed = (float) $leaveBalances->sum('used_days');
-        $totalLeaveRemaining = max(0, $totalLeaveAllocated - $totalLeaveUsed);
-
-        // ── My documents (own + company-wide policies) ─────────────────────
-        $myDocuments = $employee
-            ? Document::whereNull('parent_id')
-                ->where(function ($q) use ($employee) {
-                    $q->where('employee_id', $employee->id)
-                        ->orWhere('visibility', 'all')
-                        ->orWhere('category', 'policy');
-                })
-                ->latest()
-                ->take(6)
-                ->get()
-            : collect();
-
-        // ── Performance ────────────────────────────────────────────────────
-        $performanceScore = $myScorecard?->final_score;
-        $performanceGrade = $myScorecard?->grade;
-
-        // ── Getting started ────────────────────────────────────────────────
-        // Profile completeness and onboarding progress both existed but were
-        // only visible on pages an employee had to go looking for. A new joiner
-        // had no way to learn they had eight tasks waiting.
-        $profileCompletion = $employee
-            ? app(ProfileCompletionService::class)->for($employee)
-            : ['percent' => 100, 'missing' => [], 'completed' => 0, 'total' => 0];
-
-        $onboardingTasks = $employee
-            ? OnboardingTask::where('employee_id', $employee->id)->onboarding()->get()
-            : collect();
-
-        $myOnboardingOpen = $onboardingTasks
-            ->where('owner_role', 'employee')
-            ->where('is_completed', false)
-            ->count();
-
-        // ── Upcoming holidays (next 4) ─────────────────────────────────────
-        // Same calendar as $nextPublicHoliday above — they read from one query
-        // now, so the "next holiday" card and this list cannot disagree.
-        $upcomingHolidays = $holidays->upcomingHolidays($employee, 4, $today);
-
-        // Quote of the day (rotates daily)
-        $quotes = [
-            'Great work leads to great results. Keep going!',
-            'Small steps every day add up to big results.',
-            'Focus on progress, not perfection.',
-            'Your effort today shapes tomorrow.',
-            'Consistency beats intensity — show up.',
-        ];
-        $quote = $quotes[now()->dayOfYear % count($quotes)];
-
-        return view('livewire.employee-dashboard', compact(
-            'employee',
-            'todayAttendance',
-            'leaveBalances',
-            'myOtRequests',
-            'myPayslips',
-            'pendingLeaveCount',
-            'pendingLeaveRequests',
-            'currentWeekAttendance',
-            'nextPublicHoliday',
-            'pendingActions',
-            'myScorecard',
-            'latestCycle',
-            'recentNotifications',
-            'shift',
-            'shiftName',
-            'department',
-            'designation',
-            'manager',
-            'presentDays',
-            'lateCount',
-            'workingDaysElapsed',
-            'attendancePct',
-            'otHours',
-            'dailyHours',
-            'workedTodayMinutes',
-            'totalLeaveAllocated',
-            'totalLeaveUsed',
-            'totalLeaveRemaining',
-            'myDocuments',
-            'performanceScore',
-            'performanceGrade',
-            'upcomingHolidays',
-            'profileCompletion',
-            'myOnboardingOpen',
-            'quote',
-        ))->layout('layouts.app', ['title' => 'My Dashboard']);
+        return view('livewire.employee-dashboard', $data)
+            ->layout('layouts.app', ['title' => 'My Dashboard']);
     }
 }

@@ -4,6 +4,7 @@ use App\Enums\UserRole;
 use App\Livewire\Dashboard;
 use App\Livewire\ExecutiveDashboard;
 use App\Livewire\FinanceDashboard;
+use App\Livewire\ManagerDashboard;
 use App\Livewire\Performance\KpiDashboard;
 use App\Models\Employee;
 use App\Models\PerformanceCycle;
@@ -43,7 +44,10 @@ test('manager dashboard shows team KPI scores', function () {
     Employee::factory()->create(['user_id' => $manager->id, 'status' => 'active']);
     $this->actingAs($manager);
 
-    Livewire::test(Dashboard::class)
+    // "/" forwards a Manager to their own dashboard page.
+    Livewire::test(Dashboard::class)->assertRedirect(route('dashboard.manager'));
+
+    Livewire::test(ManagerDashboard::class)
         ->assertOk()
         ->assertSee('Team KPI Scores');
 });
@@ -55,7 +59,7 @@ test('employee dashboard renders the redesigned self-service widgets', function 
 
     Livewire::test(Dashboard::class)
         ->assertOk()
-        ->assertSee('Monthly Attendance Overview')
+        ->assertSee('Attendance Overview')
         ->assertSee('Leave Summary')
         ->assertSee("Today's Timeline")
         ->assertSee('Quick Actions')

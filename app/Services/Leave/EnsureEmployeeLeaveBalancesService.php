@@ -43,6 +43,9 @@ class EnsureEmployeeLeaveBalancesService
 
     public const NO_ENTITLEMENT = 'no_entitlement';
 
+    /** HR posts the credits (accrual_method manual); the base is never touched here. */
+    public const MANUAL_GRANT = 'manual_grant';
+
     public const INELIGIBLE = 'ineligible';
 
     public const NOT_CALCULABLE = 'not_calculable';
@@ -120,6 +123,18 @@ class EnsureEmployeeLeaveBalancesService
 
         if ($entitlement['issues'] !== []) {
             return ['status' => self::NOT_CALCULABLE, 'message' => implode(' ', $entitlement['issues'])] + $row;
+        }
+
+        if ($entitlement['source'] === 'manual') {
+            // Credits come from HR or a reconciliation. Open the row so it can
+            // be shown and credited, and never post — or, on a recalculation,
+            // withdraw — a base: the base in a manual row is HR's figure, not
+            // one this service derived.
+            if (! $dryRun && $existing === null) {
+                $this->openRow($employee, $type, $year);
+            }
+
+            return ['status' => self::MANUAL_GRANT, 'message' => $entitlement['explanation']] + $row;
         }
 
         if ($entitlement['source'] === 'accrual') {

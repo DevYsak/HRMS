@@ -78,9 +78,15 @@ class LeaveRuleResolver
         $legacyMethod = $type->code === LeaveProvisioningService::ANNUAL_CODE
             ? LeavePolicyRule::ENTITLEMENT_UK_ENGINE
             : LeavePolicyRule::ENTITLEMENT_FIXED;
-        $legacyAccrual = $type->is_monthly_accrual && (float) $type->accrual_days_per_month > 0
-            ? LeavePolicyRule::ACCRUAL_MONTHLY
-            : LeavePolicyRule::ACCRUAL_UPFRONT;
+        // CSL's release schedule is not stated by the Conexus policy, so even
+        // without a rule (an employee on another or no policy, a stale model)
+        // it is manual: never granted up front from a type-level figure, and
+        // never withdrawn by a recalculation. A rule may still choose one.
+        $legacyAccrual = match (true) {
+            $type->code === ConexusLeavePolicyService::CSL_CODE => LeavePolicyRule::ACCRUAL_MANUAL,
+            $type->is_monthly_accrual && (float) $type->accrual_days_per_month > 0 => LeavePolicyRule::ACCRUAL_MONTHLY,
+            default => LeavePolicyRule::ACCRUAL_UPFRONT,
+        };
 
         $carryLegacy = $type->allow_carry_forward && $type->carry_forward_mode !== LeaveType::CARRY_NONE;
 
@@ -181,6 +187,14 @@ class LeaveRuleResolver
             $source = 'allocation_policy';
             $breakdown['allocation_policy_id'] = $group->id;
             $explanation = sprintf('Group allocation %s day(s)', $days);
+        } elseif ($settings['accrual_method'] === LeavePolicyRule::ACCRUAL_MANUAL) {
+            // The annual figure is policy metadata only; credits are posted by
+            // HR. Never an automatic base, and never a withdrawn one.
+            $source = 'manual';
+            $explanation = sprintf(
+                'Policy entitlement %s day(s) a year; credited by HR — no automatic grant schedule is configured.',
+                $settings['fixed_days'] !== null ? (float) $settings['fixed_days'] : 'not stated',
+            );
         } elseif ($settings['accrual_method'] !== LeavePolicyRule::ACCRUAL_UPFRONT) {
             $source = 'accrual';
             $explanation = 'Credited by '.$settings['accrual_method'].' accrual, not up front.';

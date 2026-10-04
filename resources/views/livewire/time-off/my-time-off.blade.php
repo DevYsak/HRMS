@@ -3,7 +3,10 @@
     {{-- â"€â"€â"€ HERO HEADER â"€â"€â"€ --}}
     @php
         $fmt = fn ($n) => (float) $n == (int) $n ? (int) $n : number_format((float) $n, 1);
-        $totalAvailable = (float) $balanceCards->sum('available');
+        // Available Leave = CSL + Comp Off approved available (never MDL, never
+        // the retired Annual Leave), from EmployeeLeaveOverviewService.
+        $totalAvailable = (float) $overview['available_leave'];
+        $nextMdl = $overview['next_mdl'];
         $nextHoliday = $upcomingHolidays->first();
         $hour = (int) now()->format('G');
         $greeting = $hour < 12 ? 'Good Morning' : ($hour < 17 ? 'Good Afternoon' : 'Good Evening');
@@ -44,9 +47,9 @@
             <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
                 @php
                     $heroKpis = [
-                        ['label' => 'Available Leave', 'value' => $fmt($totalAvailable).' Days', 'icon' => 'calendar-days', 'color' => '#10b981'],
+                        ['label' => 'Available Leave', 'value' => $fmt($totalAvailable).' Days', 'icon' => 'calendar-days', 'color' => '#10b981', 'class' => $totalAvailable < 0 ? 'text-rose-600 dark:text-rose-400' : null],
                         ['label' => 'Pending Requests', 'value' => (string) ($pendingCount ?? 0), 'icon' => 'clock', 'color' => '#f59e0b'],
-                        ['label' => 'Approved This Year', 'value' => $fmt($approvedThisYearDays).' Days', 'icon' => 'check-badge', 'color' => '#3b82f6'],
+                        ['label' => 'Taken This Leave Year', 'value' => $fmt($approvedThisYearDays).' Days', 'icon' => 'check-badge', 'color' => '#3b82f6'],
                     ];
                 @endphp
                 @foreach($heroKpis as $kpi)
@@ -56,7 +59,7 @@
                         </span>
                         <div class="min-w-0">
                             <p class="truncate text-[10px] font-bold uppercase tracking-wide text-zinc-400">{{ $kpi['label'] }}</p>
-                            <p class="truncate text-base font-black text-zinc-900 dark:text-white">{{ $kpi['value'] }}</p>
+                            <p class="truncate text-base font-black {{ $kpi['class'] ?? 'text-zinc-900 dark:text-white' }}">{{ $kpi['value'] }}</p>
                         </div>
                     </div>
                 @endforeach
@@ -67,8 +70,11 @@
                         <flux:icon.flag class="size-4 text-rose-500" />
                     </span>
                     <div class="min-w-0">
-                        <p class="truncate text-[10px] font-bold uppercase tracking-wide text-zinc-400">Next Holiday</p>
-                        @if($nextHoliday)
+                        <p class="truncate text-[10px] font-bold uppercase tracking-wide text-zinc-400">Next Holiday / MDL</p>
+                        @if($nextMdl && (! $nextHoliday || $nextMdl->lt($nextHoliday->date)))
+                            <p class="truncate text-sm font-black text-zinc-900 dark:text-white">Mandatory December Leave</p>
+                            <p class="truncate text-[11px] font-medium text-zinc-400">{{ $nextMdl->format('d M Y (D)') }} · company shutdown</p>
+                        @elseif($nextHoliday)
                             <p class="truncate text-sm font-black text-zinc-900 dark:text-white">{{ $nextHoliday->name }}</p>
                             <p class="truncate text-[11px] font-medium text-zinc-400">{{ $nextHoliday->date->format('d M Y (D)') }}</p>
                         @else
@@ -116,94 +122,6 @@
          month-wise statement. --}}
     <livewire:time-off.my-leave-balances />
 
-    {{-- â"€â"€â"€ LEAVE BALANCE CARDS â"€â"€â"€ --}}
-    {{-- Each card shows: Available days clearly, plus a plain breakdown row --}}
-    @php
-        $leaveTypeStyles = [
-            'annual' => ['color' => '#10b981', 'icon' => 'sun'],
-            'earned' => ['color' => '#10b981', 'icon' => 'sun'],
-            'sick' => ['color' => '#ef4444', 'icon' => 'heart'],
-            'casual' => ['color' => '#3b82f6', 'icon' => 'calendar-days'],
-            'maternity' => ['color' => '#a855f7', 'icon' => 'gift'],
-            'paternity' => ['color' => '#6366f1', 'icon' => 'user-group'],
-            'bereavement' => ['color' => '#64748b', 'icon' => 'moon'],
-            'comp' => ['color' => '#14b8a6', 'icon' => 'arrow-path'],
-            'unpaid' => ['color' => '#71717a', 'icon' => 'banknotes'],
-            'without pay' => ['color' => '#71717a', 'icon' => 'banknotes'],
-            'unauthor' => ['color' => '#dc2626', 'icon' => 'exclamation-triangle'],
-        ];
-        $fmt = fn ($n) => (float) $n == (int) $n ? (int) $n : number_format((float) $n, 1);
-    @endphp
-    <div class="pulse-margin">
-        <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-            @forelse($balanceCards as $card)
-                @php
-                    $available = $card->available;
-                    $remPct = $card->allocated > 0 ? min(100, round($available / $card->allocated * 100)) : 0;
-                    $isLow = $available > 0 && $available <= 2 && $card->allocated > 0;
-                    $isEmpty = $available === 0.0 && $card->allocated > 0;
-
-                    $typeName = strtolower($card->name);
-                    $matchedStyle = collect($leaveTypeStyles)->first(fn($s, $key) => str_contains($typeName, $key));
-                    $color = $matchedStyle['color'] ?? ($card->color ?: '#7c3aed');
-                    $typeIcon = $matchedStyle['icon'] ?? 'calendar-days';
-                    $circ = 2 * pi() * 42;
-                @endphp
-                <div class="group rounded-2xl border border-zinc-100 bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900">
-                    <div class="flex items-center justify-between gap-1">
-                        <p class="truncate text-xs font-bold text-zinc-700 dark:text-zinc-200">{{ $card->name }}</p>
-                        @if($isLow)
-                            <span class="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[8px] font-black uppercase text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">Low</span>
-                        @elseif($isEmpty)
-                            <span class="shrink-0 rounded-full bg-zinc-100 px-1.5 py-0.5 text-[8px] font-black uppercase text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">Nil</span>
-                        @endif
-                    </div>
-
-                    {{-- Circular progress --}}
-                    <div class="mt-3 flex justify-center">
-                        <div class="relative size-24">
-                            <svg class="size-24 -rotate-90" viewBox="0 0 100 100">
-                                <circle cx="50" cy="50" r="42" fill="none" stroke="currentColor" stroke-width="9" class="text-zinc-100 dark:text-zinc-800" />
-                                <circle cx="50" cy="50" r="42" fill="none" stroke="{{ $color }}" stroke-width="9" stroke-linecap="round"
-                                    stroke-dasharray="{{ $circ }}" stroke-dashoffset="{{ $circ * (1 - $remPct / 100) }}"
-                                    class="transition-all duration-700" />
-                            </svg>
-                            <div class="absolute inset-0 flex flex-col items-center justify-center">
-                                <span class="text-2xl font-black leading-none tabular-nums text-zinc-900 dark:text-white">{{ $fmt($available) }}</span>
-                                <span class="mt-0.5 text-[9px] font-bold text-zinc-400">/ {{ $card->allocated > 0 ? $fmt($card->allocated) : '–' }} Days</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    {{-- Remaining + icon --}}
-                    <div class="mt-3 flex items-end justify-between gap-1">
-                        <div class="min-w-0">
-                            <p class="text-[9px] font-bold uppercase tracking-wide text-zinc-400">Remaining</p>
-                            <p class="truncate text-sm font-black" style="color: {{ $color }}">{{ $fmt($available) }} Days</p>
-                        </div>
-                        <span class="flex size-8 shrink-0 items-center justify-center rounded-lg" style="background: {{ $color }}14">
-                            <flux:icon :name="$typeIcon" class="size-4" style="color: {{ $color }}" />
-                        </span>
-                    </div>
-
-                    @if($card->carried > 0 || $card->encashed > 0 || $card->comp_off > 0)
-                        <div class="mt-2 flex flex-wrap gap-x-2 gap-y-0.5 border-t border-zinc-100 pt-2 text-[9px] font-semibold dark:border-zinc-800">
-                            @if($card->carried > 0)<span class="text-blue-500">↩ {{ $fmt($card->carried) }} c/f</span>@endif
-                            @if($card->encashed > 0)<span class="text-amber-500">₹ {{ $fmt($card->encashed) }} enc.</span>@endif
-                            @if($card->comp_off > 0)<span class="text-emerald-500">✔ {{ $fmt($card->comp_off) }} comp</span>@endif
-                        </div>
-                    @endif
-                </div>
-            @empty
-                <div
-                    class="col-span-full rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-800 p-10 text-center">
-                    <flux:icon.calendar-days class="mx-auto mb-3 size-10 text-zinc-200 dark:text-zinc-700" />
-                    <p class="text-sm font-medium text-zinc-400">No leave balances found. Contact HR to set up your leave
-                        account.</p>
-                </div>
-            @endforelse
-        </div>
-    </div>
 
     {{-- ─── QUICK ACTIONS ─── --}}
     @php
@@ -350,98 +268,28 @@
             </div>
         </div>
     </div>
-    {{-- â"€â"€â"€ LEAVE STATISTICS (KPI) SECTION â"€â"€â"€ --}}
+    {{-- ─── LEAVE OVERVIEW ─── the Conexus policy and this year's position, from
+         EmployeeLeaveOverviewService (the calculator), never raw columns. --}}
     @php
-        $totalAllocated = (float) $balances->sum('allocated_days');
-        $totalUsedDays = (float) $balances->sum(fn($b) => $b->used_days + ($b->encashed_days ?? 0));
-        $totalRemaining = max(0, $totalAllocated - $totalUsedDays);
-
-        $curMonthIdx = now()->month - 1;
-        $prevMonthIdx = ($curMonthIdx - 1 + 12) % 12;
-        $thisMonthUsed = $monthlyStats[$curMonthIdx] ?? 0;
-        $lastMonthUsed = $monthlyStats[$prevMonthIdx] ?? 0;
-        $usageTrend = $thisMonthUsed - $lastMonthUsed;
-
-        $statCards = [
-            [
-                'label' => 'Total Leaves Allocated',
-                'value' => $totalAllocated,
-                'icon' => 'calendar-days',
-                'color' => '#7c3aed',
-                'sub' => 'Across ' . $balanceCards->count() . ' leave ' . Str::plural('type', $balanceCards->count()),
-            ],
-            [
-                'label' => 'Leaves Used',
-                'value' => $totalUsedDays,
-                'icon' => 'arrow-trending-up',
-                'color' => '#f97316',
-                'sub' => $usageTrend == 0 ? 'No change vs last month' : (($usageTrend > 0 ? '+' . $usageTrend : $usageTrend) . 'd vs last month'),
-                'trend' => $usageTrend,
-            ],
-            [
-                'label' => 'Leaves Remaining',
-                'value' => $totalRemaining,
-                'icon' => 'check-badge',
-                'color' => '#10b981',
-                'sub' => $totalAllocated > 0 ? round(($totalRemaining / $totalAllocated) * 100) . '% of allocation left' : 'No allocation set',
-            ],
-            [
-                'label' => 'Pending Requests',
-                'value' => $pendingCount,
-                'icon' => 'clock',
-                'color' => '#f59e0b',
-                'sub' => $pendingCount > 0 ? 'Awaiting approval' : 'All caught up',
-            ],
-            [
-                'label' => 'Holiday Worked',
-                'value' => $holidayWorkedCount,
-                'icon' => 'briefcase',
-                'color' => '#14b8a6',
-                'sub' => $holidayWorkedCount > 0 ? 'Approved this year' : 'None this year',
-            ],
+        $ov = $overview;
+        $ovCsl = $ov['csl']['summary'] ?? null;
+        $overviewTiles = [
+            ['label' => 'Policy', 'value' => $fmt($ov['policy']['csl_days']).' CSL + '.$ov['policy']['mdl_days'].' MDL', 'sub' => $ov['policy']['name'] ?? 'Leave policy', 'class' => null],
+            ['label' => 'Current requestable balance', 'value' => $fmt($ov['available_to_request']).' days', 'sub' => 'CSL + Comp Off, less pending', 'class' => $ov['available_to_request'] < 0 ? 'text-rose-600 dark:text-rose-400' : null],
+            ['label' => 'CSL carry forward', 'value' => $fmt($ovCsl['carry_forward'] ?? 0).' days', 'sub' => 'No expiry · never lapses', 'class' => null],
+            ['label' => 'Comp Off available', 'value' => $fmt($ov['comp_off']['summary']['approved_available'] ?? 0).' days', 'sub' => 'Earned · no expiry', 'class' => null],
+            ['label' => 'MDL remaining dates', 'value' => $ov['mdl']['remaining'].' of '.$ov['mdl']['expected'], 'sub' => 'December company shutdown', 'class' => null],
         ];
-        // Hide zero-value KPI tiles so the row stays clean (matches the balance cards).
-        $statCards = array_values(array_filter($statCards, fn ($s) => (float) $s['value'] > 0));
     @endphp
-    @if(count($statCards))
-    <div class="pulse-margin grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        @foreach($statCards as $stat)
-            <div
-                class="rounded-2xl border border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900">
-                <div class="flex items-center justify-between">
-                    <div class="flex size-10 items-center justify-center rounded-xl"
-                        style="background: {{ $stat['color'] }}1a">
-                        <flux:icon :name="$stat['icon']" class="size-5" style="color: {{ $stat['color'] }}" />
-                    </div>
-                    @if(isset($stat['trend']))
-                        @if($stat['trend'] > 0)
-                            <span
-                                class="inline-flex items-center gap-0.5 rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-bold text-rose-600 dark:bg-rose-900/20 dark:text-rose-400">
-                                <flux:icon.arrow-up class="size-3" /> {{ $stat['trend'] }}d
-                            </span>
-                        @elseif($stat['trend'] < 0)
-                            <span
-                                class="inline-flex items-center gap-0.5 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400">
-                                <flux:icon.arrow-down class="size-3" /> {{ abs($stat['trend']) }}d
-                            </span>
-                        @else
-                            <span
-                                class="inline-flex items-center gap-0.5 rounded-full bg-zinc-50 dark:bg-zinc-800/50 px-2 py-0.5 text-[10px] font-bold text-zinc-500 dark:text-zinc-400 dark:bg-zinc-800 dark:text-zinc-400">
-                                <flux:icon.minus class="size-3" /> 0d
-                            </span>
-                        @endif
-                    @endif
-                </div>
-                <p class="mt-3 text-3xl font-black tabular-nums text-zinc-900 dark:text-white">
-                    {{ $stat['value'] == (int) $stat['value'] ? (int) $stat['value'] : number_format($stat['value'], 1) }}
-                </p>
-                <p class="mt-0.5 text-xs font-bold uppercase tracking-wide text-zinc-400">{{ $stat['label'] }}</p>
-                <p class="mt-2 text-[11px] text-zinc-400">{{ $stat['sub'] }}</p>
+    <div class="pulse-margin grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        @foreach($overviewTiles as $tile)
+            <div class="rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                <p class="text-[10px] font-bold uppercase tracking-wide text-zinc-400">{{ $tile['label'] }}</p>
+                <p class="mt-1.5 text-xl font-black tabular-nums {{ $tile['class'] ?? 'text-zinc-900 dark:text-white' }}">{{ $tile['value'] }}</p>
+                <p class="mt-1 text-[11px] text-zinc-400">{{ $tile['sub'] }}</p>
             </div>
         @endforeach
     </div>
-    @endif
-
     {{-- â"€â"€â"€ ANALYTICS SECTION â"€â"€â"€ --}}
     @php
         $maxWeekday = max(max($weeklyPattern), 1);
@@ -449,24 +297,29 @@
         $totalUsed = array_sum($weeklyPattern);
         $dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
         $dayShort = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-        $monthShort = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        // Months in leave-year order (the leave year starts in July).
+        $monthShort = collect(range(0, 11))->map(fn ($i) => $overview['year']->starts_on->copy()->addMonths($i)->format('M'))->all();
     @endphp
     <h2 class="pulse-margin text-sm font-black uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Leave Insights</h2>
     <div class="pulse-margin grid grid-cols-1 gap-4 lg:grid-cols-2">
 
         {{-- ── Overview donut (Used / Available / Carry-forward) ── --}}
         @php
-            $insAllocated = (float) $balanceCards->sum('allocated');
-            $insUsed = (float) $balanceCards->sum('used');
-            $insAvailable = (float) $balanceCards->sum('available');
-            $insCarried = (float) $balanceCards->sum('carried');
+            // CSL for the leave year, from the calculator: what the year holds,
+            // what is used (incl. encashed) and what is left — never floored.
+            $insCsl = $overview['csl']['summary'] ?? null;
+            $insUsed = (float) ($insCsl['used'] ?? 0) + (float) ($insCsl['encashed'] ?? 0);
+            $insAvailableReal = (float) ($insCsl['approved_available'] ?? 0);
+            $insAvailable = max(0.0, $insAvailableReal);
+            $insCarried = (float) ($insCsl['carry_forward'] ?? 0);
+            $insAllocated = $insUsed + $insAvailableReal;
             $insBase = max($insUsed + $insAvailable, 0.0001);
             $usedFrac = $insUsed / $insBase;
             $availFrac = $insAvailable / $insBase;
             $dCirc = 2 * pi() * 42;
             $insLegend = [
                 ['label' => 'Used', 'value' => $insUsed, 'color' => '#f97316', 'pct' => round($usedFrac * 100)],
-                ['label' => 'Available', 'value' => $insAvailable, 'color' => '#10b981', 'pct' => round($availFrac * 100)],
+                ['label' => 'Available', 'value' => $insAvailableReal, 'color' => '#10b981', 'pct' => round($availFrac * 100)],
                 ['label' => 'Carry Forward', 'value' => $insCarried, 'color' => '#f59e0b', 'pct' => $insAllocated > 0 ? round($insCarried / $insAllocated * 100) : 0],
             ];
         @endphp
@@ -476,7 +329,7 @@
                     <div class="rounded-lg bg-violet-50 p-1.5 dark:bg-violet-900/20"><flux:icon.chart-pie class="size-4 text-violet-600 dark:text-violet-400" /></div>
                     <h3 class="text-xs font-black uppercase tracking-[0.12em] text-zinc-600 dark:text-zinc-300">Overview</h3>
                 </div>
-                <span class="text-[10px] font-bold text-zinc-400">This Year</span>
+                <span class="text-[10px] font-bold text-zinc-400">CSL · {{ $overview['year']->label }}</span>
             </div>
             <div class="flex items-center gap-5">
                 <div class="relative size-32 shrink-0">
@@ -489,7 +342,7 @@
                     </svg>
                     <div class="absolute inset-0 flex flex-col items-center justify-center">
                         <span class="text-2xl font-black text-zinc-900 dark:text-white">{{ $fmt($insAllocated) }}</span>
-                        <span class="text-[9px] font-bold uppercase text-zinc-400">Total Days</span>
+                        <span class="text-[9px] font-bold uppercase text-zinc-400">CSL this year</span>
                     </div>
                 </div>
                 <div class="min-w-0 flex-1 space-y-2.5">
@@ -524,7 +377,7 @@
             @if($totalUsed === 0)
                 <div class="flex flex-col items-center justify-center py-6 text-center">
                     <flux:icon.calendar class="size-8 mb-2 text-zinc-200 dark:text-zinc-700 dark:text-zinc-200" />
-                    <p class="text-xs font-medium text-zinc-400">No approved leave taken yet this year.</p>
+                    <p class="text-xs font-medium text-zinc-400">No approved leave taken yet this leave year.</p>
                 </div>
             @else
                 <div class="flex items-end gap-1.5 h-24">
@@ -562,37 +415,42 @@
                 <h3 class="text-xs font-black uppercase tracking-[0.12em] text-zinc-600 dark:text-zinc-300">Leave
                     Distribution</h3>
             </div>
-            <p class="mb-4 text-[11px] text-zinc-400">Usage across all leave types this year.</p>
+            <p class="mb-4 text-[11px] text-zinc-400">Usage this leave year ({{ $overview['year']->label }}).</p>
+            @php
+                $distribution = collect([$overview['csl'], $overview['comp_off']])->filter()
+                    ->map(fn ($c) => ['name' => $c['type']->name, 'color' => $c['type']->color, 'summary' => $c['summary']])
+                    ->merge($overview['others']->map(fn ($o) => ['name' => $o['type']->name, 'color' => $o['type']->color, 'summary' => $o['summary']]))
+                    ->filter(fn ($d) => $d['summary']['used'] + $d['summary']['approved_available'] != 0)
+                    ->values();
+            @endphp
 
-            @if($balanceCards->isEmpty())
+            @if($distribution->isEmpty())
                 <div class="flex flex-col items-center justify-center py-6 text-center">
-                    <flux:icon.chart-pie class="size-8 mb-2 text-zinc-200 dark:text-zinc-700 dark:text-zinc-200" />
+                    <flux:icon.chart-pie class="size-8 mb-2 text-zinc-200 dark:text-zinc-700" />
                     <p class="text-xs font-medium text-zinc-400">No leave balances found.</p>
                 </div>
             @else
                 <div class="space-y-3">
-                    @foreach($balanceCards as $bal)
+                    @foreach($distribution as $bal)
                         @php
-                            $alloc = (float) $bal->allocated;
-                            $used = (float) $bal->used;
-                            $pctUsed = $alloc > 0 ? min(100, round(($used / $alloc) * 100)) : 0;
-                            $dColor = $bal->color ?: '#7c3aed';
+                            $used = (float) $bal['summary']['used'];
+                            $pool = $used + (float) $bal['summary']['approved_available'];
+                            $pctUsed = $pool > 0 ? min(100, round(($used / $pool) * 100)) : 0;
+                            $dColor = $bal['color'] ?: '#7c3aed';
                         @endphp
                         <div>
                             <div class="flex items-center justify-between mb-1">
                                 <div class="flex items-center gap-1.5">
                                     <div class="size-2 rounded-full shrink-0" style="background: {{ $dColor }}"></div>
-                                    <span
-                                        class="text-[11px] font-semibold text-zinc-700 dark:text-zinc-200 dark:text-zinc-300">{{ $bal->name }}</span>
+                                    <span class="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300">{{ $bal['name'] }}</span>
                                 </div>
                                 <span class="text-[11px] text-zinc-500 dark:text-zinc-400">
-                                    <span class="font-bold text-zinc-900 dark:text-white">{{ $fmt($used) }}</span> /
-                                    {{ $fmt($alloc) }}d
+                                    <span class="font-bold text-zinc-900 dark:text-white">{{ $fmt($used) }}</span> used ·
+                                    <span @class(['font-bold', 'text-rose-600' => $bal['summary']['approved_available'] < 0])>{{ $fmt($bal['summary']['approved_available']) }}</span> left
                                 </span>
                             </div>
                             <div class="h-2 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
-                                <div class="h-full rounded-full transition-all duration-700"
-                                    style="width: {{ $pctUsed }}%; background: {{ $dColor }}"></div>
+                                <div class="h-full rounded-full transition-all duration-700" style="width: {{ $pctUsed }}%; background: {{ $dColor }}"></div>
                             </div>
                         </div>
                     @endforeach
@@ -1020,10 +878,10 @@
             </div>
             <div class="flex items-end gap-2">
                 <div class="text-3xl font-black text-zinc-900 dark:text-white">{{ $forecast['projected'] }}</div>
-                <div class="pb-1 text-xs text-zinc-400">projected {{ $forecast['label'] }} days this year</div>
+                <div class="pb-1 text-xs text-zinc-400">projected {{ $forecast['label'] }} days this leave year</div>
             </div>
             <div class="mt-2 text-xs font-semibold {{ $forecast['on_track'] ? 'text-emerald-600' : 'text-rose-600' }}">
-                {{ $forecast['on_track'] ? 'On track' : 'Above allocation' }} · {{ $forecast['used'] }} used of {{ $forecast['allocated'] }}
+                {{ $forecast['on_track'] ? 'On track' : 'Above your balance' }} · {{ $forecast['used'] }} used of {{ $forecast['allocated'] }}
             </div>
             @php $fpct = $forecast['allocated'] > 0 ? min(100, round($forecast['used'] / $forecast['allocated'] * 100)) : 0; @endphp
             <div class="mt-3 h-2 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
@@ -1196,12 +1054,15 @@
                 <flux:icon.chevron-down class="size-4 text-zinc-400" x-bind:class="open && 'rotate-180'" />
             </button>
             <ul class="mt-3 space-y-1.5 text-xs text-zinc-600 dark:text-zinc-300" x-show="open" x-transition>
-                <li>&bull; 18 leave days/year = 12 CSL + 6 MDL (Mandatory December Leave).</li>
-                <li>&bull; MDL is the December shutdown — fixed dates, not a balance you apply from.</li>
-                <li>&bull; No lapse — unused leave carries forward.</li>
-                <li>&bull; Encashment is paid on approval.</li>
+                @php $pol = $overview['policy']; @endphp
+                <li>&bull; {{ $pol['name'] ?? 'Leave policy' }}: {{ $fmt($pol['csl_days'] + $pol['mdl_days']) }} leave days/year = {{ $fmt($pol['csl_days']) }} CSL + {{ $pol['mdl_days'] }} MDL (Mandatory December Leave).</li>
+                <li>&bull; CSL never lapses — unused days carry forward with no cap and no expiry.</li>
+                <li>&bull; MDL is the December shutdown — {{ $pol['mdl_days'] }} fixed dates, not a balance you apply from.</li>
+                <li>&bull; Working an MDL day earns one Comp Off credit; Comp Off never expires.</li>
+                <li>&bull; Only CSL can be encashed, with Director or HR Admin approval.</li>
+                <li>&bull; {{ $pol['grant'] }}</li>
                 <li>&bull; Overtime is pre-approved only (₹100/hr), tracked separately.</li>
-                <li>&bull; Financial year runs July 1 – June 30.</li>
+                <li>&bull; The leave year runs 1 July – 30 June.</li>
             </ul>
         </div>
     </div>
@@ -1244,6 +1105,8 @@
                 Pending</span>
             <span class="inline-flex items-center gap-1.5"><span class="size-2.5 rounded-full bg-rose-500"></span>
                 Holiday</span>
+            <span class="inline-flex items-center gap-1.5"><span class="size-2.5 rounded-full bg-orange-400"></span>
+                MDL shutdown</span>
             <span class="inline-flex items-center gap-1.5"><span
                     class="size-2.5 rounded-sm border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-800 dark:border-zinc-700 dark:bg-zinc-800"></span>
                 Weekend</span>
@@ -1266,6 +1129,8 @@
                         $cellClasses .= ' text-zinc-300 dark:text-zinc-700 dark:text-zinc-200';
                     } elseif ($day['holiday']) {
                         $cellClasses .= ' bg-rose-50 text-rose-700 dark:bg-rose-900/20 dark:text-rose-400';
+                    } elseif ($day['shutdown']) {
+                        $cellClasses .= ' bg-orange-50 text-orange-700 dark:bg-orange-900/20 dark:text-orange-400';
                     } elseif ($day['approved']) {
                         $cellClasses .= ' bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400';
                     } elseif ($day['pending']) {
@@ -1282,7 +1147,7 @@
 
                     $isFuture = $day['date']->gte(now()->startOfDay());
                     // Bookable for LEAVE: a free, future, current-month working day.
-                    $bookableLeave = $day['isCurrentMonth'] && ! $day['isWeekend'] && ! $day['holiday']
+                    $bookableLeave = $day['isCurrentMonth'] && ! $day['isWeekend'] && ! $day['holiday'] && ! $day['shutdown']
                         && ! $day['approved'] && ! $day['pending'] && $isFuture;
                     // A future public holiday can be requested to WORK (comp-off / OT).
                     $workableHoliday = $day['isCurrentMonth'] && $day['holiday']
@@ -1295,6 +1160,7 @@
                     }
 
                     $title = $day['holiday']?->name
+                        ?? ($day['shutdown'] ? 'Mandatory December Leave (company shutdown)' : null)
                         ?? ($day['approved'] ? $day['approved']->leaveType->name . ' (Approved)' : null)
                         ?? ($day['pending'] ? $day['pending']->leaveType->name . ' (Pending)' : null);
                 @endphp
@@ -1314,9 +1180,9 @@
                 @else
                     <div class="{{ $cellClasses }}" @if($title) title="{{ $title }}" @endif>
                         {{ $day['date']->day }}
-                        @if($day['approved'] || $day['pending'] || $day['holiday'])
+                        @if($day['approved'] || $day['pending'] || $day['holiday'] || $day['shutdown'])
                             <span
-                                class="mt-0.5 size-1 rounded-full {{ $day['holiday'] ? 'bg-rose-500' : ($day['approved'] ? 'bg-emerald-500' : 'bg-amber-400') }}"></span>
+                                class="mt-0.5 size-1 rounded-full {{ $day['holiday'] ? 'bg-rose-500' : ($day['shutdown'] ? 'bg-orange-400' : ($day['approved'] ? 'bg-emerald-500' : 'bg-amber-400')) }}"></span>
                         @endif
                     </div>
                 @endif
@@ -1362,13 +1228,15 @@
                         @error('leave_type_id') <flux:error>{{ $message }}</flux:error> @enderror
 
                         {{-- Balance preview for selected type --}}
-                        @if($selectedType && $selectedBalance)
-                            <div
-                                class="flex items-center gap-2 rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2 text-xs text-indigo-700 dark:border-indigo-900/40 dark:bg-indigo-950/20 dark:text-indigo-300">
+                        @if($selectedType && $selectedSummary)
+                            <div class="flex items-center gap-2 rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2 text-xs text-indigo-700 dark:border-indigo-900/40 dark:bg-indigo-950/20 dark:text-indigo-300">
                                 <flux:icon.information-circle class="size-3.5 shrink-0" />
-                                <span>Available balance:
-                                    <strong>{{ max(0, $selectedBalance->allocated_days - $selectedBalance->used_days - ($selectedBalance->encashed_days ?? 0)) }}
-                                        day(s)</strong></span>
+                                <span>Available to request:
+                                    <strong @class(['text-rose-600' => $selectedSummary['available_to_request'] < 0])>{{ $fmt($selectedSummary['available_to_request']) }} day(s)</strong>
+                                    @if($selectedSummary['pending'] > 0)
+                                        <span class="text-indigo-500">({{ $fmt($selectedSummary['pending']) }} already pending)</span>
+                                    @endif
+                                </span>
                             </div>
                         @endif
 
@@ -1393,6 +1261,18 @@
                                         <span class="ml-1 text-[10px] font-semibold text-brand-500">(working days)</span>
                                     @endif
                                 </span>
+                            </div>
+                        @endif
+
+                        {{-- MDL warning — the company is shut; no leave is taken on these dates --}}
+                        @if($rangeMdl->isNotEmpty())
+                            <div class="flex items-start gap-2.5 rounded-xl border border-orange-200 bg-orange-50 px-3.5 py-2.5 dark:border-orange-900/40 dark:bg-orange-950/20">
+                                <flux:icon.exclamation-triangle class="mt-0.5 size-4 shrink-0 text-orange-500" />
+                                <p class="text-xs text-orange-700 dark:text-orange-300">
+                                    <span class="font-bold">Mandatory December Leave:</span>
+                                    @foreach($rangeMdl as $md)<span class="font-semibold">{{ $md->date->format('d M') }}</span>@if(! $loop->last), @endif @endforeach
+                                    {{ $rangeMdl->count() === 1 ? 'is a' : 'are' }} company shutdown {{ \Illuminate\Support\Str::plural('day', $rangeMdl->count()) }} and not charged to your leave. Please exclude {{ $rangeMdl->count() === 1 ? 'it' : 'them' }}.
+                                </p>
                             </div>
                         @endif
 
@@ -1537,9 +1417,9 @@
                         <div class="flex justify-end gap-3 pt-2">
                             <button type="button" @click="$wire.closeRequestModal()"
                                 class="px-4 py-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-800 dark:border-zinc-600 rounded-xl hover:bg-zinc-50 dark:bg-zinc-800/50 dark:hover:bg-zinc-700 transition-colors">Cancel</button>
-                            <button type="submit" wire:loading.attr="disabled" wire:target="submitRequest,attachment" @disabled($rangeHolidays->isNotEmpty() || $rangeWeekendDays->isNotEmpty())
+                            <button type="submit" wire:loading.attr="disabled" wire:target="submitRequest,attachment" @disabled($rangeHolidays->isNotEmpty() || $rangeMdl->isNotEmpty() || $rangeWeekendDays->isNotEmpty())
                                 class="inline-flex items-center gap-2 px-5 py-2 text-sm font-bold text-white bg-brand-600 hover:bg-brand-700 rounded-xl transition-colors disabled:cursor-not-allowed disabled:opacity-60">
-                                <span wire:loading.remove wire:target="submitRequest,attachment">{{ $rangeHolidays->isNotEmpty() ? 'Holiday in range' : ($rangeWeekendDays->isNotEmpty() ? 'Weekend selected' : 'Submit Request') }}</span>
+                                <span wire:loading.remove wire:target="submitRequest,attachment">{{ $rangeHolidays->isNotEmpty() ? 'Holiday in range' : ($rangeMdl->isNotEmpty() ? 'MDL date in range' : ($rangeWeekendDays->isNotEmpty() ? 'Weekend selected' : 'Submit Request')) }}</span>
                                 <span wire:loading wire:target="submitRequest,attachment">Submitting...</span>
                             </button>
                         </div>

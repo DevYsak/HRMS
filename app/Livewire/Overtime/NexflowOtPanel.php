@@ -3,9 +3,11 @@
 namespace App\Livewire\Overtime;
 
 use App\Models\Employee;
+use App\Services\Approvals\ApprovalGuard;
 use App\Services\NexflowApiService;
 use App\Services\OvertimeService;
 use Illuminate\Support\Facades\Auth;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 
 /**
@@ -18,6 +20,8 @@ class NexflowOtPanel extends Component
 {
     public string $search = '';
 
+    /** Set only through selectEmployee(), which checks reach — never by the client. */
+    #[Locked]
     public ?int $employeeId = null;
 
     public string $from = '';
@@ -27,7 +31,11 @@ class NexflowOtPanel extends Component
     /** Status filter sent to Nexflow: '' (all) | approved | pending | rejected. */
     public string $status = '';
 
-    /** Parsed Nexflow payload for the current selection, or null. */
+    /**
+     * Parsed Nexflow payload for the current selection, or null. Locked: the
+     * import pays what is in here, so the browser must never be able to edit it.
+     */
+    #[Locked]
     public ?array $data = null;
 
     public bool $loading = false;
@@ -43,6 +51,9 @@ class NexflowOtPanel extends Component
 
     public function selectEmployee(int $id): void
     {
+        abort_unless(Auth::user()->canApproveOt(), 403);
+        app(ApprovalGuard::class)->assertCanView(Auth::user(), Employee::findOrFail($id));
+
         $this->employeeId = $id;
         $this->data = null;
         $this->error = null;
@@ -89,6 +100,9 @@ class NexflowOtPanel extends Component
         abort_unless(Auth::user()->canApproveOt(), 403);
 
         $employee = $this->selectedEmployee();
+        // Importing creates payable OT: the same rule as approving it — inside
+        // the importer's reach, and never their own.
+        app(ApprovalGuard::class)->assertCanDecide(Auth::user(), $employee);
         $record = collect($this->data['ot_records'] ?? [])->firstWhere('id', $recordId);
 
         if (! $employee || ! $record) {
@@ -117,6 +131,8 @@ class NexflowOtPanel extends Component
             return;
         }
 
+        app(ApprovalGuard::class)->assertCanDecide(Auth::user(), $employee);
+
         $imported = 0;
         $skipped = 0;
         foreach ($this->data['ot_records'] ?? [] as $record) {
@@ -137,9 +153,12 @@ class NexflowOtPanel extends Component
 
     public function render()
     {
+        $reach = Auth::user()->accessibleEmployeeIds();
+
         $employees = Employee::query()
             ->where('status', 'active')
             ->whereHas('user')
+            ->when($reach !== null, fn ($q) => $q->whereIn('id', $reach))
             ->with('user')
             ->when($this->search, fn ($q) => $q->whereHas('user', fn ($u) => $u->where('name', 'like', '%'.$this->search.'%')->orWhere('email', 'like', '%'.$this->search.'%')))
             ->orderBy('id')

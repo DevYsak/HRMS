@@ -49,8 +49,20 @@ new #[Title('Company Settings')] class extends Component {
 
     public function mount(): void
     {
+        $this->authorizeSettings();
+
         $this->company = Company::first() ?? new Company();
         $this->fillCompanyDetails();
+    }
+
+    /**
+     * Company, office and department settings are system configuration
+     * (spec §4: Super Admin full, HR partial, nobody else). Checked on every
+     * action, not only on page load — each one is callable directly.
+     */
+    protected function authorizeSettings(): void
+    {
+        abort_unless(auth()->user()?->canManageSettings(), 403);
     }
 
     protected function fillCompanyDetails(): void
@@ -83,14 +95,17 @@ new #[Title('Company Settings')] class extends Component {
 
     public function updateCompany(): void
     {
+        $this->authorizeSettings();
+
         $this->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|email',
             'website' => 'nullable|url',
-            // Logo: any raster/vector image up to 2 MB.
-            'logo' => 'nullable|image|mimes:png,jpg,jpeg,webp,svg|max:2048',
+            // Logo: raster image up to 2 MB. No SVG — it is served from the
+            // public disk and an SVG can carry script.
+            'logo' => 'nullable|image|mimes:png,jpg,jpeg,webp|max:2048',
             // Favicon: square-ish icon; .ico is not an "image" mime, so list it explicitly.
-            'favicon' => 'nullable|mimes:png,ico,svg,jpg|max:1024',
+            'favicon' => 'nullable|mimes:png,ico,jpg|max:1024',
         ]);
 
         $this->company->fill([
@@ -130,6 +145,8 @@ new #[Title('Company Settings')] class extends Component {
 
     public function editOffice($id = null): void
     {
+        $this->authorizeSettings();
+
         if ($id) {
             $office = Office::findOrFail($id);
             $this->officeId = $office->id;
@@ -151,6 +168,8 @@ new #[Title('Company Settings')] class extends Component {
 
     public function saveOffice(): void
     {
+        $this->authorizeSettings();
+
         $this->validate([
             'officeName' => 'required|string|max:255',
             'officeCity' => 'required|string',
@@ -180,6 +199,8 @@ new #[Title('Company Settings')] class extends Component {
 
     public function deleteOffice($id): void
     {
+        $this->authorizeSettings();
+
         Office::findOrFail($id)->delete();
         Flux::toast(text: __('Office removed.'));
     }
@@ -188,6 +209,8 @@ new #[Title('Company Settings')] class extends Component {
 
     public function editDepartment($id = null): void
     {
+        $this->authorizeSettings();
+
         if ($id) {
             $dept = Department::findOrFail($id);
             $this->deptId = $dept->id;
@@ -203,6 +226,8 @@ new #[Title('Company Settings')] class extends Component {
 
     public function saveDepartment(): void
     {
+        $this->authorizeSettings();
+
         $this->validate([
             'deptName' => 'required|string|max:255',
             'deptCode' => 'required|string|max:10',
@@ -224,6 +249,8 @@ new #[Title('Company Settings')] class extends Component {
 
     public function deleteDepartment($id): void
     {
+        $this->authorizeSettings();
+
         Department::findOrFail($id)->delete();
         Flux::toast(text: __('Department removed.'));
     }

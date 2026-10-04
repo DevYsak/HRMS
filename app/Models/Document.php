@@ -15,7 +15,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     'title', 'description', 'file_path', 'file_name', 'mime_type', 'file_size',
     'version', 'parent_id', 'category', 'visibility',
     'department_id', 'employee_id', 'requires_acknowledgement',
-    'expires_at', 'uploaded_by', 'documentable_type', 'documentable_id',
+    'expires_at', 'expiry_notified_for', 'uploaded_by', 'documentable_type', 'documentable_id',
 ])]
 class Document extends Model
 {
@@ -25,6 +25,7 @@ class Document extends Model
     {
         return [
             'expires_at' => 'date',
+            'expiry_notified_for' => 'date',
             'requires_acknowledgement' => 'boolean',
         ];
     }

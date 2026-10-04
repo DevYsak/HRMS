@@ -237,6 +237,9 @@ class CommandCenter extends Component
 
     protected function decideOvertime(int $id, string $decision, ?string $comment = null): void
     {
+        // The page admits leave approvers; OT is its own permission.
+        abort_unless(Auth::user()->canApproveOt(), 403);
+
         $request = $this->inReach(OtRequest::query())->with(['employee.user', 'attendance', 'claimer'])->findOrFail($id);
         if (! $request->isPending()) {
             throw new \DomainException('Already reviewed.');

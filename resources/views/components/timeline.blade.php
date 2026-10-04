@@ -2,7 +2,7 @@
 
 {{--
     Generic vertical dot-and-connector timeline. Visually modeled on
-    x-employee.timeline (attendance's fixed 4-step Clock In/Break/Clock Out
+    x-employee.dashboard.today-timeline (the fixed 4-step Clock In/Break/Clock Out
     timeline) but data-driven for an arbitrary sequence of events instead of a
     hardcoded 4 steps — e.g. a payslip's Created → Approved → Downloaded →
     Emailed history.

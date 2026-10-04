@@ -8,7 +8,9 @@ use Illuminate\Console\Command;
 
 class NormalizeSalaryCycles extends Command
 {
-    protected $signature = 'hrms:normalize-salary-cycles {--dry-run : Report planned changes without writing anything}';
+    protected $signature = 'hrms:normalize-salary-cycles
+        {--dry-run : Report planned changes without writing anything}
+        {--sync-from-form : Also move employees whose payroll run differs from the cycle chosen on their form}';
 
     protected $description = "Normalize legacy employees.salary_cycle values (e.g. 'A'/'B') to 'cycle_a'/'cycle_b' as expected by PayrollService, and backfill salary_cycle_id from the salary_cycles table.";
 
@@ -75,7 +77,57 @@ class NormalizeSalaryCycles extends Command
         $this->backfillCycleId('cycle_a', $cycleAId, $dryRun);
         $this->backfillCycleId('cycle_b', $cycleBId, $dryRun);
 
+        $this->reconcileWithForm($dryRun, (bool) $this->option('sync-from-form'));
+
         return self::SUCCESS;
+    }
+
+    /**
+     * Employees whose run key (salary_cycle) disagrees with the cycle HR
+     * picked on their form (salary_cycle_id). Before the employee observer
+     * kept the two in step, moving someone to Cycle B on screen left them in
+     * the Cycle A run.
+     *
+     * Always listed; moved only with --sync-from-form. The move changes which
+     * run pays them (Cycle A pays the 1st–last, Cycle B the 21st–20th), so
+     * HR and Finance settle each one's transition month first.
+     */
+    private function reconcileWithForm(bool $dryRun, bool $sync): void
+    {
+        $keyBySlug = ['cycle-a' => 'cycle_a', 'cycle-b' => 'cycle_b'];
+        $slugById = SalaryCycle::pluck('slug', 'id');
+        $formKey = fn (Employee $employee): ?string => $keyBySlug[$slugById->get($employee->salary_cycle_id)] ?? null;
+
+        $mismatched = Employee::with('user')->whereNotNull('salary_cycle_id')->get()
+            ->filter(fn (Employee $employee) => $formKey($employee) !== null
+                && (self::MAP[$employee->salary_cycle] ?? $employee->salary_cycle) !== $formKey($employee))
+            ->values();
+
+        if ($mismatched->isEmpty()) {
+            $this->line('  Every employee is paid in the run their form names.');
+
+            return;
+        }
+
+        $this->warn("  {$mismatched->count()} employee(s) are paid in a different run from the cycle on their form:");
+        $this->table(['Employee', 'Code', 'Paid in (salary_cycle)', 'Form says'], $mismatched->map(fn (Employee $employee) => [
+            $employee->user?->name ?? '#'.$employee->id,
+            $employee->employee_code ?? '—',
+            $employee->salary_cycle ?? 'NULL',
+            $formKey($employee),
+        ])->all());
+
+        if ($dryRun || ! $sync) {
+            $this->line('  Not changed. Settle each transition month with Finance, then re-run with --sync-from-form to move them.');
+
+            return;
+        }
+
+        foreach ($mismatched as $employee) {
+            $employee->forceFill(['salary_cycle' => $formKey($employee)])->save();
+        }
+
+        $this->info("  Moved {$mismatched->count()} employee(s) to the run their form names.");
     }
 
     private function backfillCycleId(string $cycleValue, ?int $cycleId, bool $dryRun): void

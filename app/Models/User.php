@@ -243,4 +243,13 @@ class User extends Authenticatable
     {
         return Department::where('head_id', $this->id)->exists();
     }
+
+    /**
+     * Whether HR has narrowed this account to departments or shifts. A scoped
+     * account is never shown company-wide figures, whatever its role.
+     */
+    public function isDepartmentScoped(): bool
+    {
+        return ! empty($this->scope_departments) || ! empty($this->scope_shifts);
+    }
 }

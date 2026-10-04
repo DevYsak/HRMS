@@ -124,7 +124,7 @@ class PerformanceTemplateService
 
         // 1. Employee-level override (future: store performance_template_id on employees)
         // 2. Designation
-        if ($employee->designation_id && $t = $active->firstWhere(fn ($t) => $t->applies_to_type === 'designation' && $t->applies_to_id === $employee->designation_id)) {
+        if ($employee->job_title_id && $t = $active->firstWhere(fn ($t) => $t->applies_to_type === 'designation' && $t->applies_to_id === $employee->job_title_id)) {
             return $t;
         }
         // 3. Department

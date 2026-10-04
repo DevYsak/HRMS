@@ -14,6 +14,7 @@
                     <div>
                         <div class="flex items-center gap-3">
                             <h3 class="text-xl font-black text-zinc-900 dark:text-white uppercase tracking-tighter">{{ $payroll->month }} {{ $payroll->year }}</h3>
+                            <span class="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-semibold text-zinc-600 dark:bg-white/10 dark:text-zinc-300">{{ $payroll->cycleLabel() }}</span>
                             <span class="badge-manager">PENDING FINANCE</span>
                         </div>
                         <p class="text-sm text-zinc-500 mt-1">Processed by {{ $payroll->processedBy->name }} on {{ $payroll->processed_at->format('M d, H:i') }}</p>
@@ -21,12 +22,16 @@
                     <div class="text-right flex items-center gap-6">
                         <div>
                             <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Total Net Payout</div>
-                            <div class="text-2xl font-black text-zinc-900 dark:text-white">IDR {{ number_format($payroll->computeTotal(), 0) }}</div>
+                            <div class="text-2xl font-black text-zinc-900 dark:text-white">₹{{ \App\Support\IndianCurrency::format($payroll->computeTotal(), 0) }}</div>
                         </div>
                         <div class="flex gap-2">
                             @if($payroll->approvalSteps->isEmpty())
-                                <flux:button wire:click="openReject({{ $payroll->id }})" variant="ghost" class="text-red-600 hover:text-red-700">Reject</flux:button>
-                                <flux:button wire:click="approve({{ $payroll->id }})" variant="primary">Approve & Finalize</flux:button>
+                                @if(auth()->user()->canApproveFinance())
+                                    <flux:button wire:click="openReject({{ $payroll->id }})" variant="ghost" class="text-red-600 hover:text-red-700">Reject</flux:button>
+                                    <flux:button wire:click="approve({{ $payroll->id }})" variant="primary">Approve & Finalize</flux:button>
+                                @else
+                                    <span class="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">Waiting on Finance</span>
+                                @endif
                             @elseif($currentStep && $currentStep->isEligible(auth()->user()))
                                 <flux:button wire:click="openRejectStep({{ $currentStep->id }})" variant="ghost" class="text-red-600 hover:text-red-700">Reject</flux:button>
                                 <flux:button wire:click="approveStep({{ $currentStep->id }})" variant="primary">Approve Step</flux:button>
@@ -71,20 +76,20 @@
 
                 <div class="p-6 grid grid-cols-1 md:grid-cols-4 gap-6">
                     <div class="pulse-card bg-zinc-50/50 p-4 border-none dark:bg-zinc-900/50">
-                        <div class="text-[10px] font-bold text-zinc-400 uppercase">Salaries</div>
-                        <div class="text-lg font-bold text-zinc-900 dark:text-white">IDR {{ number_format($payroll->total_payout, 0) }}</div>
+                        <div class="text-[10px] font-bold text-zinc-400 uppercase">Net payout</div>
+                        <div class="text-lg font-bold text-zinc-900 dark:text-white">₹{{ number_format($payroll->total_payout, 0) }}</div>
                     </div>
                     <div class="pulse-card bg-zinc-50/50 p-4 border-none dark:bg-zinc-900/50">
                         <div class="text-[10px] font-bold text-zinc-400 uppercase">Overtime</div>
-                        <div class="text-lg font-bold text-zinc-900 dark:text-white">IDR {{ number_format($payroll->ot_amount, 0) }}</div>
+                        <div class="text-lg font-bold text-zinc-900 dark:text-white">₹{{ number_format($payroll->ot_amount, 0) }}</div>
                     </div>
                     <div class="pulse-card bg-zinc-50/50 p-4 border-none dark:bg-zinc-900/50">
                         <div class="text-[10px] font-bold text-zinc-400 uppercase">Incentives</div>
-                        <div class="text-lg font-bold text-zinc-900 dark:text-white">IDR {{ number_format($payroll->incentives, 0) }}</div>
+                        <div class="text-lg font-bold text-zinc-900 dark:text-white">₹{{ number_format($payroll->incentives, 0) }}</div>
                     </div>
                     <div class="pulse-card bg-zinc-50/50 p-4 border-none dark:bg-zinc-900/50">
                         <div class="text-[10px] font-bold text-zinc-400 uppercase font-black text-red-500 uppercase">Deductions</div>
-                        <div class="text-lg font-bold text-red-500">- IDR {{ number_format($payroll->deductions, 0) }}</div>
+                        <div class="text-lg font-bold text-red-500">- ₹{{ number_format($payroll->deductions, 0) }}</div>
                     </div>
                 </div>
 
@@ -107,9 +112,9 @@
                                             <div class="font-bold text-zinc-900 dark:text-white">{{ $slp->employee?->user?->name ?? 'Unknown Employee' }}</div>
                                             <div class="text-[10px] text-zinc-400 uppercase">{{ $slp->employee?->job_title ?? 'Unknown Title' }}</div>
                                         </td>
-                                        <td class="py-3 text-zinc-600 dark:text-zinc-300">IDR {{ number_format($slp->gross_salary, 0) }}</td>
-                                        <td class="py-3 text-red-500">IDR {{ number_format($slp->total_deductions, 0) }}</td>
-                                        <td class="py-3 pr-6 text-right font-black text-zinc-900 dark:text-white">IDR {{ number_format($slp->net_salary, 0) }}</td>
+                                        <td class="py-3 text-zinc-600 dark:text-zinc-300">₹{{ number_format($slp->gross_salary, 0) }}</td>
+                                        <td class="py-3 text-red-500">₹{{ number_format($slp->total_deductions, 0) }}</td>
+                                        <td class="py-3 pr-6 text-right font-black text-zinc-900 dark:text-white">₹{{ number_format($slp->net_salary, 0) }}</td>
                                     </tr>
                                 @endforeach
                             </tbody>

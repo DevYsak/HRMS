@@ -30,56 +30,151 @@
     </div>
 
     @if($panel === 'balances')
-        <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-            @forelse($this->cards as $card)
-                @php $s = $card['summary']; $t = $card['type']; @endphp
-                <div wire:key="card-{{ $t->id }}" class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-zinc-900">
-                    <div class="flex items-start justify-between">
-                        <div class="text-xs font-bold uppercase tracking-widest text-zinc-500">{{ $t->name }}</div>
-                        @if($s['ledger_status'] === 'needs_hr_review')<flux:badge size="sm" color="amber">Being reviewed by HR</flux:badge>@endif
+        @php
+            $o = $this->overview;
+            $c = $o['csl'];
+            $co = $o['comp_off'];
+            $num = fn ($v) => $fmt($v);
+            $negClass = fn ($v) => (float) $v < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-zinc-900 dark:text-white';
+            $mdlColor = fn ($status) => match ($status) { 'worked' => 'emerald', 'completed' => 'zinc', default => 'orange' };
+        @endphp
+
+        {{-- Conexus policy: 12 CSL + 6 MDL, Comp Off earned. Every figure is the
+             calculator's for the selected leave year, never floored. --}}
+        <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
+
+            {{-- CSL --}}
+            <div class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-zinc-900">
+                <div class="flex items-start justify-between gap-2">
+                    <div>
+                        <div class="text-xs font-bold uppercase tracking-widest text-zinc-500">{{ $c['type']->name ?? 'Casual / Sick Leave' }}</div>
+                        <div class="mt-0.5 text-[11px] text-zinc-400">Policy entitlement {{ $num($o['policy']['csl_days']) }} days a year</div>
                     </div>
+                    <flux:badge size="sm" color="emerald">No expiry · never lapses</flux:badge>
+                </div>
+
+                @if($c && $c['balance'])
+                    @php $s = $c['summary']; $addOns = round($s['add_on'] + $s['adjustment_credit'] - $s['adjustment_debit'] + $s['opening'], 2); @endphp
                     <div class="mt-3 flex items-end gap-6">
                         <div>
-                            <div class="text-3xl font-extrabold {{ $s['available_to_request'] < 0 ? 'text-rose-600' : 'text-zinc-900 dark:text-white' }}">{{ $fmt($s['available_to_request']) }}</div>
-                            <div class="text-[11px] text-zinc-500">Available to request</div>
+                            <div class="text-3xl font-extrabold tabular-nums {{ $negClass($s['approved_available']) }}">{{ $num($s['approved_available']) }}</div>
+                            <div class="text-[11px] text-zinc-500">Approved available</div>
                         </div>
                         <div>
-                            <div class="text-lg font-bold text-zinc-700 dark:text-zinc-200">{{ $fmt($s['approved_available']) }}</div>
-                            <div class="text-[11px] text-zinc-500">Approved balance</div>
+                            <div class="text-lg font-bold tabular-nums {{ (float) $s['available_to_request'] < 0 ? 'text-rose-600' : 'text-zinc-700 dark:text-zinc-200' }}">{{ $num($s['available_to_request']) }}</div>
+                            <div class="text-[11px] text-zinc-500">Available to request</div>
                         </div>
                     </div>
-                    <dl class="mt-4 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                        @foreach([
-                            'Base Entitlement' => $s['base'],
-                            'Carry Forward' => $s['carry_forward'],
-                            'Add-On' => $s['add_on'],
-                            'Accrued' => $s['accrued'],
-                            'Adjustments' => round($s['adjustment_credit'] - $s['adjustment_debit'], 2),
-                            'Opening Balance' => $s['opening'],
-                            'Used' => $s['used'],
-                            'Pending' => $s['pending'],
-                            'Expired' => $s['expired'],
-                            'Encashed' => $s['encashed'],
-                        ] as $label => $value)
-                            @if($value != 0 || in_array($label, ['Base Entitlement', 'Used', 'Pending'], true))
-                                <div class="flex justify-between border-b border-dashed border-zinc-100 py-0.5 dark:border-white/5">
-                                    <dt class="text-zinc-500">{{ $label }}</dt>
-                                    <dd class="font-semibold text-zinc-800 dark:text-zinc-200">{{ $label === 'Adjustments' ? $signed($value) : $fmt($value) }}</dd>
-                                </div>
-                            @endif
+                    <dl class="mt-4 space-y-1 text-xs">
+                        @foreach(array_filter([
+                            ['Current-year CSL credit', round($s['base'] + $s['accrued'], 2), true],
+                            ['Carry forward', $s['carry_forward'], true],
+                            ['Add-ons / adjustments', $addOns, $addOns != 0],
+                            ['Used', -$s['used'], true],
+                            ['Encashed', -$s['encashed'], $s['encashed'] != 0],
+                            ['Expired', -$s['expired'], $s['expired'] != 0],
+                            ['Pending approval', -$s['pending'], true],
+                        ], fn ($r) => $r[2]) as [$label, $value])
+                            <div class="flex justify-between border-b border-dashed border-zinc-100 py-0.5 dark:border-white/5">
+                                <dt class="text-zinc-500">{{ $label }}</dt>
+                                <dd class="font-semibold tabular-nums text-zinc-800 dark:text-zinc-200">{{ $value > 0 ? '+' : '' }}{{ $num($value) }}</dd>
+                            </div>
                         @endforeach
                     </dl>
-                    <div class="mt-2 text-[11px] text-zinc-400">Leave year {{ $this->year->starts_on->format('d M Y') }} – {{ $this->year->ends_on->format('d M Y') }}</div>
-                    <div class="mt-3 flex flex-wrap gap-2">
-                        <flux:button size="xs" variant="primary" wire:click="apply({{ $t->id }})">Apply Leave</flux:button>
-                        <flux:button size="xs" wire:click="showHistory({{ $t->id }})">View History</flux:button>
-                        <flux:button size="xs" variant="ghost" wire:click="showStatement({{ $t->id }})">Statement</flux:button>
+                    @if($s['ledger_status'] === 'needs_hr_review')
+                        <p class="mt-2 text-[11px] text-amber-600">HR is reviewing this balance.</p>
+                    @endif
+                    <div class="mt-4 flex flex-wrap gap-2">
+                        @if($c['requestable'])
+                            <flux:button size="xs" variant="primary" wire:click="apply({{ $c['type']->id }})">Apply CSL</flux:button>
+                        @endif
+                        <flux:button size="xs" wire:click="showHistory({{ $c['type']->id }})">View history</flux:button>
+                        <flux:button size="xs" variant="ghost" wire:click="showStatement({{ $c['type']->id }})">Statement</flux:button>
+                        @if($c['encashable'] && $s['available_to_request'] > 0)
+                            <flux:button size="xs" variant="ghost" icon="banknotes" wire:click="encash({{ $c['type']->id }})">Encash</flux:button>
+                        @endif
                     </div>
+                @else
+                    <p class="mt-4 text-sm text-zinc-500">No Casual / Sick Leave balance for {{ $this->year->label }} yet. HR posts CSL credits; contact HR if this looks wrong.</p>
+                @endif
+            </div>
+
+            {{-- MDL --}}
+            <div class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-zinc-900">
+                <div class="flex items-start justify-between gap-2">
+                    <div>
+                        <div class="text-xs font-bold uppercase tracking-widest text-zinc-500">Mandatory December Leave</div>
+                        <div class="mt-0.5 text-[11px] text-zinc-400">{{ $o['mdl']['expected'] }} mandatory company shutdown days</div>
+                    </div>
+                    <flux:badge size="sm">Not a balance</flux:badge>
                 </div>
-            @empty
-                <div class="col-span-full rounded-2xl border border-dashed border-zinc-300 p-8 text-center text-sm text-zinc-500">No leave balances for {{ $this->year->label }} yet.</div>
-            @endforelse
+                <p class="mt-3 text-xs text-zinc-500">The company is closed on these dates. They are not taken from your CSL and you don't apply for them.</p>
+                <ul class="mt-3 space-y-1.5 text-xs">
+                    @forelse($o['mdl']['dates'] as $d)
+                        <li class="flex items-center justify-between gap-2">
+                            <span class="font-medium text-zinc-700 dark:text-zinc-200">{{ $d['date']->format('D, j M Y') }}</span>
+                            <span class="flex items-center gap-1.5">
+                                @if($d['comp_off_earned'])<flux:badge size="sm" color="emerald">Comp Off earned</flux:badge>@endif
+                                <flux:badge size="sm" :color="$mdlColor($d['status'])">{{ ucfirst($d['status']) }}</flux:badge>
+                            </span>
+                        </li>
+                    @empty
+                        <li class="text-zinc-500">HR has not configured the December dates for {{ $this->year->label }} yet.</li>
+                    @endforelse
+                </ul>
+                @if($o['mdl']['configured'] > 0 && $o['mdl']['configured'] !== $o['mdl']['expected'])
+                    <p class="mt-2 text-[11px] text-amber-600">{{ $o['mdl']['configured'] }} of {{ $o['mdl']['expected'] }} dates are configured.</p>
+                @endif
+                <p class="mt-3 text-[11px] text-zinc-400">Working an MDL day earns one Comp Off credit.</p>
+            </div>
+
+            {{-- Comp Off --}}
+            <div class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-zinc-900">
+                <div class="flex items-start justify-between gap-2">
+                    <div>
+                        <div class="text-xs font-bold uppercase tracking-widest text-zinc-500">Comp Off</div>
+                        <div class="mt-0.5 text-[11px] text-zinc-400">Earned by working an MDL day or applicable public holiday</div>
+                    </div>
+                    <flux:badge size="sm" color="emerald">No expiry</flux:badge>
+                </div>
+                @php $cs = $co['summary'] ?? null; @endphp
+                <div class="mt-3">
+                    <div class="text-3xl font-extrabold tabular-nums {{ $negClass($cs['approved_available'] ?? 0) }}">{{ $num($cs['approved_available'] ?? 0) }}</div>
+                    <div class="text-[11px] text-zinc-500">Available</div>
+                </div>
+                <dl class="mt-4 space-y-1 text-xs">
+                    @foreach([['Credits earned', $co['earned'] ?? 0], ['Used', -($cs['used'] ?? 0)], ['Pending approval', -($cs['pending'] ?? 0)]] as [$label, $value])
+                        <div class="flex justify-between border-b border-dashed border-zinc-100 py-0.5 dark:border-white/5">
+                            <dt class="text-zinc-500">{{ $label }}</dt>
+                            <dd class="font-semibold tabular-nums text-zinc-800 dark:text-zinc-200">{{ $value > 0 ? '+' : '' }}{{ $num($value) }}</dd>
+                        </div>
+                    @endforeach
+                </dl>
+                <div class="mt-4 flex flex-wrap gap-2">
+                    @if($co && $co['requestable'] && ($cs['available_to_request'] ?? 0) > 0)
+                        <flux:button size="xs" variant="primary" wire:click="apply({{ $co['type']->id }})">Apply Comp Off</flux:button>
+                    @endif
+                    @if($co)
+                        <flux:button size="xs" wire:click="showHistory({{ $co['type']->id }})">View history</flux:button>
+                    @endif
+                </div>
+            </div>
         </div>
+
+        @if($o['others']->isNotEmpty())
+            <div class="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-zinc-900">
+                <div class="text-xs font-bold uppercase tracking-widest text-zinc-500">Other leave</div>
+                <p class="mt-0.5 text-[11px] text-zinc-400">Special or statutory leave. Not part of your Available Leave.</p>
+                <div class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                    @foreach($o['others'] as $other)
+                        <div wire:key="other-{{ $other['type']->id }}" class="flex items-center justify-between rounded-lg bg-zinc-50 px-3 py-2 text-xs dark:bg-white/5">
+                            <span class="text-zinc-600 dark:text-zinc-300">{{ $other['type']->name }}</span>
+                            <span class="font-semibold tabular-nums {{ $negClass($other['summary']['approved_available']) }}">{{ $num($other['summary']['approved_available']) }}</span>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+        @endif
     @endif
 
     @if($panel === 'requests')

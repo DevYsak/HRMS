@@ -27,10 +27,16 @@ class EmployeeSalary extends Model
      */
     public function scopeEffectiveOn(Builder $query, Carbon $date): void
     {
-        $query->where(function ($q) use ($date) {
-            $q->whereNull('effective_from')->orWhere('effective_from', '<=', $date);
-        })->where(function ($q) use ($date) {
-            $q->whereNull('effective_to')->orWhere('effective_to', '>=', $date);
+        // effective_from/to are DATE columns: compare dates, not datetimes. A
+        // cycle end of "31 Jul 23:59:59" against a row ending "2026-07-31"
+        // matched neither the old row nor the next one starting 1 Aug, so the
+        // month before a revision paid no salary at all.
+        $day = $date->toDateString();
+
+        $query->where(function ($q) use ($day) {
+            $q->whereNull('effective_from')->orWhere('effective_from', '<=', $day);
+        })->where(function ($q) use ($day) {
+            $q->whereNull('effective_to')->orWhere('effective_to', '>=', $day);
         });
     }
 

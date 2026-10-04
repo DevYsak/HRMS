@@ -101,9 +101,10 @@ test('the dashboard sidebar shows the logo with no box and no company name', fun
         ->and($brand)->not->toContain('bg-gradient-to-br')
         ->and($brand)->not->toContain('rounded-xl')
         ->and($brand)->not->toContain('shadow-lg')
-        // .pulse-sidebar pins a cream background in both themes, so the
-        // dark-mode inversion must not apply — white on cream is invisible.
-        ->and($brand)->not->toContain('dark:brightness-0');
+        // The rail is cream in light mode but navy in dark mode (`.dark
+        // .pulse-sidebar` in app.css outranks the cream rule), so the black
+        // mark must be repainted white there or it disappears.
+        ->and($brand)->toContain('dark:brightness-0 dark:invert');
 
     // The company name survives only as the img's alt text — never as a text
     // label rendered beside the mark.

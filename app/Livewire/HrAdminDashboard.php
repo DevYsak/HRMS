@@ -33,7 +33,7 @@ class HrAdminDashboard extends Component
         $pendingReg = AttendanceRegularisation::where('status', 'pending')->count();
 
         // --- Leave Exceptions ---
-        $pendingLeaves = LeaveRequest::where('status', 'pending')->count();
+        $pendingLeaves = LeaveRequest::whereIn('status', ['pending', 'pending_hr'])->count();
         $escalatedLeaves = LeaveRequest::where('status', 'escalated')->count();
 
         // --- Payroll ---

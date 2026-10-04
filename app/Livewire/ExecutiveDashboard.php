@@ -15,10 +15,21 @@ use App\Models\PipRecord;
 use App\Models\PromotionRecommendation;
 use App\Models\WarningLetter;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 
 class ExecutiveDashboard extends Component
 {
+    /**
+     * Company-wide figures are for company-wide accounts. The route checks
+     * the permission, which a Director narrowed to a department or shift
+     * still holds — so the scope is checked here.
+     */
+    public function mount(): void
+    {
+        abort_if(Auth::user()->isDepartmentScoped() && ! Auth::user()->isSuperAdmin(), 403);
+    }
+
     public function render()
     {
         $today = Carbon::today();
@@ -40,7 +51,7 @@ class ExecutiveDashboard extends Component
             ->count();
 
         // --- Pending Approvals (company-wide) ---
-        $pendingLeaves = LeaveRequest::where('status', 'pending')->count();
+        $pendingLeaves = LeaveRequest::whereIn('status', ['pending', 'pending_hr'])->count();
         $pendingOt = OtRequest::where('status', 'pending')->count();
 
         // --- Payroll Status ---

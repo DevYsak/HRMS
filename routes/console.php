@@ -26,8 +26,15 @@ Schedule::command('hrms:release-stale-claims')
     ->runInBackground();
 
 // Flag today's missing check-outs → 21:00 IST (IT shift ends 19:30 + 1 hr buffer; spec §7)
+// and 23:05 IST (UK Sales shift ends 22:00 + 1 hr). Each run flags only days
+// whose own shift deadline has passed; an already-flagged day is skipped.
 Schedule::command('hrms:flag-missing-checkouts')
     ->dailyAt('21:00')
+    ->withoutOverlapping()
+    ->runInBackground();
+
+Schedule::command('hrms:flag-missing-checkouts')
+    ->dailyAt('23:05')
     ->withoutOverlapping()
     ->runInBackground();
 

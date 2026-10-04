@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
     'employee_id', 'leave_type_id', 'requested_days',
-    'status', 'reviewer_id', 'reviewer_comment', 'reviewed_at', 'payout_month',
+    'status', 'reviewer_id', 'reviewer_comment', 'reviewed_at', 'payout_month', 'payroll_id',
     'source_leave_year',
     'finance_reviewer_id', 'finance_reviewer_comment', 'finance_reviewed_at',
 ])]

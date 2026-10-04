@@ -81,7 +81,9 @@ test('each card separates every bucket and shows available-to-request', function
         ->and($card['available_to_request'])->toBe(18.0);
 
     Livewire::actingAs($employee->user)->test(MyLeaveBalances::class)
-        ->assertSee('Annual Holiday')->assertSee('Available to request')->assertSee('01 Jul 2026 – 30 Jun 2027');
+        // Under the Conexus model a type other than CSL / Comp Off is listed as
+        // other (special) leave, with its calculator figure.
+        ->assertSee('Annual Holiday')->assertSee('Other leave')->assertSee('01 Jul 2026 – 30 Jun 2027');
 });
 
 test('an expiry alert names the days and the date', function () {
@@ -120,8 +122,12 @@ test('the month-wise statement opens, credits, uses and closes per month', funct
         ->assertSee('July 2026')
         ->get('statement');
 
-    expect($months->firstWhere('month', '2026-07')['opening'])->toBe(23.0)
+    // The year opens at zero; the 1 July credit and carry forward sit in their own columns.
+    expect($months->firstWhere('month', '2026-07')['opening'])->toBe(0.0)
+        ->and($months->firstWhere('month', '2026-07')['current_credits'])->toBe(20.0)
+        ->and($months->firstWhere('month', '2026-07')['carry_forward'])->toBe(3.0)
         ->and($months->firstWhere('month', '2026-07')['used'])->toBe(6.0)
+        ->and($months->firstWhere('month', '2026-07')['closing'])->toBe(17.0)
         ->and($months->firstWhere('month', '2026-08')['credits'])->toBe(3.0);
 });
 

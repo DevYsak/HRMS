@@ -48,6 +48,7 @@ use App\Livewire\Operations\Expenses;
 use App\Livewire\Overtime\ManageOtRequests;
 use App\Livewire\Overtime\MyOtRequests;
 use App\Livewire\Overtime\NexflowOtPanel;
+use App\Livewire\Overtime\OtWindows;
 use App\Livewire\Payroll\AuditTrail as PayrollAuditTrail;
 use App\Livewire\Payroll\Components;
 use App\Livewire\Payroll\FinanceApproval;
@@ -286,6 +287,8 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/my', MyOtRequests::class)->name('my');
         Route::get('/manage', ManageOtRequests::class)->name('manage')->middleware('role:approve-ot');
         Route::get('/nexflow', NexflowOtPanel::class)->name('nexflow')->middleware('role:approve-ot');
+        // Company-approved OT windows (HR / Director) — requests are refused outside one.
+        Route::get('/windows', OtWindows::class)->name('windows')->middleware('role:manage-employees');
     });
 
     // --------------------------------------------------
@@ -379,7 +382,12 @@ Route::middleware(['auth'])->group(function () {
         // Increment letter download — own letter, or HR/admin
         Route::get('/increments/letter/{proposal}', function (IncrementProposal $proposal) {
             $user = auth()->user();
-            abort_unless($user->canManageEmployees() || $proposal->employee?->user_id === $user->id, 403);
+            // Own letter, or HR within reach — the letter states revised pay.
+            abort_unless(
+                $proposal->employee?->user_id === $user->id
+                || ($user->canManageEmployees() && $proposal->employee && $user->coversEmployee($proposal->employee)),
+                403,
+            );
             abort_unless($proposal->letter_path && Storage::disk('local')->exists($proposal->letter_path), 404);
 
             return Storage::disk('local')->download(
@@ -539,7 +547,8 @@ Route::middleware(['auth'])->group(function () {
     // --------------------------------------------------
     // Settings (general — company settings)
     // --------------------------------------------------
-    Route::livewire('settings/general', 'pages::settings.general')->name('settings.general');
+    Route::livewire('settings/general', 'pages::settings.general')->name('settings.general')
+        ->middleware('role:manage-settings');
 
     // --------------------------------------------------
     // Phase 1A — Employee configuration settings

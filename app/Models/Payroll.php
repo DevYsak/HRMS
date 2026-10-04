@@ -72,15 +72,20 @@ class Payroll extends Model
     }
 
     /** Gross total including OT, incentives, reimbursements, minus deductions. */
+    /**
+     * The run's net payout. total_payout is already SUM(payslips.net_salary),
+     * with OT, incentives, reimbursements and encashment inside and deductions
+     * taken off — adding them again (as this used to) double-counted them on
+     * the screen Finance approves from.
+     */
     public function computeTotal(): float
     {
-        return round(
-            (float) $this->total_payout
-            + (float) $this->ot_amount
-            + (float) $this->incentives
-            + (float) $this->reimbursements
-            - (float) $this->deductions,
-            2
-        );
+        return round((float) $this->total_payout, 2);
+    }
+
+    /** "Cycle A" / "Cycle B" for display. */
+    public function cycleLabel(): string
+    {
+        return $this->cycle === 'cycle_b' ? 'Cycle B (21st–20th)' : 'Cycle A (1st–31st)';
     }
 }

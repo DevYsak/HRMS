@@ -30,11 +30,25 @@ class EmployeeDocuments extends Component
 
     public function mount(Employee $employee): void
     {
+        $this->authorizeDocuments();
+
         $this->employee = $employee;
+    }
+
+    /**
+     * Employee documents are HR's (spec §4 "Documents (HR)": Director and
+     * Manager see policies only). The parent page's route admits anyone who
+     * manages employees, so the tab checks document management itself.
+     */
+    private function authorizeDocuments(): void
+    {
+        abort_unless(Auth::user()?->canManageDocuments(), 403);
     }
 
     public function openUpload(): void
     {
+        $this->authorizeDocuments();
+
         $this->reset(['title', 'description', 'category', 'expires_at', 'file']);
         $this->showUploadModal = true;
         $this->dispatch('modal-show', name: 'doc-upload-modal');
@@ -42,12 +56,15 @@ class EmployeeDocuments extends Component
 
     public function upload(): void
     {
+        $this->authorizeDocuments();
+
         $this->validate([
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:1000'],
             'category' => ['required', 'in:policy,contract,form,notice,other'],
             'expires_at' => ['nullable', 'date', 'after:today'],
-            'file' => ['required', 'file', 'max:10240'],
+            // Spec §9: PDF and images only.
+            'file' => ['required', 'file', 'mimes:pdf,png,jpg,jpeg', 'max:10240'],
         ]);
 
         $path = $this->file->store("documents/employee/{$this->employee->id}", 'local');
@@ -77,6 +94,8 @@ class EmployeeDocuments extends Component
 
     public function delete(int $id): void
     {
+        $this->authorizeDocuments();
+
         $doc = Document::where('employee_id', $this->employee->id)->findOrFail($id);
         Storage::disk('local')->delete($doc->file_path);
         $doc->delete();

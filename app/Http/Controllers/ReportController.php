@@ -201,6 +201,9 @@ class ReportController extends Controller
 
     public function performanceSummaryCsv(Request $request): StreamedResponse
     {
+        // Company-wide HR data: a department-scoped user must not export it.
+        $this->assertCompanyWideReach();
+
         $rows = PerformanceReview::with(['employee.user', 'employee.department', 'employee.jobTitle', 'employee.employmentType', 'performanceCycle'])
             ->when($request->department_id, fn ($q) => $q->whereHas('employee', fn ($e) => $e->where('department_id', $request->department_id)))
             ->when($request->designation_id, fn ($q) => $q->whereHas('employee', fn ($e) => $e->where('job_title_id', $request->designation_id)))
@@ -232,6 +235,9 @@ class ReportController extends Controller
 
     public function kpiSummaryCsv(Request $request): StreamedResponse
     {
+        // Company-wide HR data: a department-scoped user must not export it.
+        $this->assertCompanyWideReach();
+
         $rows = EmployeeKpi::with(['employee.user', 'employee.department', 'employee.jobTitle', 'component', 'cycle'])
             ->when($request->department_id, fn ($q) => $q->whereHas('employee', fn ($e) => $e->where('department_id', $request->department_id)))
             ->when($request->designation_id, fn ($q) => $q->whereHas('employee', fn ($e) => $e->where('job_title_id', $request->designation_id)))
@@ -263,6 +269,9 @@ class ReportController extends Controller
 
     public function departmentPerformanceCsv(Request $request): StreamedResponse
     {
+        // Company-wide HR data: a department-scoped user must not export it.
+        $this->assertCompanyWideReach();
+
         $rows = PerformanceReview::with(['employee.department', 'employee.user', 'performanceCycle'])
             ->when($request->department_id, fn ($q) => $q->whereHas('employee', fn ($e) => $e->where('department_id', $request->department_id)))
             ->when($request->from, fn ($q) => $q->whereDate('submitted_at', '>=', $request->from))
@@ -290,6 +299,9 @@ class ReportController extends Controller
 
     public function promotionPipelineCsv(Request $request): StreamedResponse
     {
+        // Company-wide HR data: a department-scoped user must not export it.
+        $this->assertCompanyWideReach();
+
         $rows = PromotionRecommendation::with(['employee.user', 'employee.department', 'employee.jobTitle', 'recommendedBy'])
             ->when($request->department_id, fn ($q) => $q->whereHas('employee', fn ($e) => $e->where('department_id', $request->department_id)))
             ->when($request->employment_type_id, fn ($q) => $q->whereHas('employee', fn ($e) => $e->where('employment_type_id', $request->employment_type_id)))
@@ -320,6 +332,9 @@ class ReportController extends Controller
 
     public function warningLetterReportCsv(Request $request): StreamedResponse
     {
+        // Company-wide HR data: a department-scoped user must not export it.
+        $this->assertCompanyWideReach();
+
         $rows = WarningLetter::with(['employee.user', 'employee.department', 'issuedBy'])
             ->when($request->department_id, fn ($q) => $q->where('department_id', $request->department_id))
             ->when($request->employment_type_id, fn ($q) => $q->whereHas('employee', fn ($e) => $e->where('employment_type_id', $request->employment_type_id)))
@@ -350,6 +365,9 @@ class ReportController extends Controller
 
     public function pipProgressReportCsv(Request $request): StreamedResponse
     {
+        // Company-wide HR data: a department-scoped user must not export it.
+        $this->assertCompanyWideReach();
+
         $rows = PipRecord::with(['employee.user', 'employee.department', 'manager', 'goals'])
             ->when($request->department_id, fn ($q) => $q->whereHas('employee', fn ($e) => $e->where('department_id', $request->department_id)))
             ->when($request->employment_type_id, fn ($q) => $q->whereHas('employee', fn ($e) => $e->where('employment_type_id', $request->employment_type_id)))
@@ -483,6 +501,9 @@ class ReportController extends Controller
 
     public function employeeLifecycleCsv(Request $request): StreamedResponse
     {
+        // Company-wide HR data: a department-scoped user must not export it.
+        $this->assertCompanyWideReach();
+
         $rows = Employee::with(['user', 'department', 'jobTitle', 'employmentType'])
             ->when($request->department_id, fn ($q) => $q->where('department_id', $request->department_id))
             ->when($request->designation_id, fn ($q) => $q->where('job_title_id', $request->designation_id))

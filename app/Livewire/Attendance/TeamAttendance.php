@@ -98,7 +98,14 @@ class TeamAttendance extends Component
         }
 
         $this->validate(['reviewComment' => 'required|string|min:5']);
-        app(AttendanceService::class)->rejectRegularisation($this->activeRequest, Auth::id(), $this->reviewComment);
+
+        try {
+            app(AttendanceService::class)->rejectRegularisation($this->activeRequest, Auth::id(), $this->reviewComment);
+        } catch (\DomainException $e) {
+            \Flux::toast($e->getMessage(), variant: 'danger');
+
+            return;
+        }
 
         $this->activeRequest->employee->user->notify(new RegularisationReviewedNotification($this->activeRequest));
 

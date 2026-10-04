@@ -328,6 +328,12 @@ class LeaveCarryForward extends Component
 
         $tx = Transaction::findOrFail($this->reverseId);
 
+        if ((int) Employee::whereKey($tx->employee_id)->value('user_id') === (int) auth()->id()) {
+            \Flux::toast('You cannot reverse your own carry forward — another HR user must.', variant: 'danger');
+
+            return;
+        }
+
         try {
             app(LeaveCarryForwardService::class)->reverse($tx, auth()->user(), $this->reverseReason);
         } catch (RuntimeException $e) {
@@ -342,6 +348,13 @@ class LeaveCarryForward extends Component
 
     private function runApply(int $employeeId, int $leaveTypeId, ?float $days, ?string $reason): void
     {
+        // HR never carries forward their own balance — another HR user must.
+        if ((int) Employee::whereKey($employeeId)->value('user_id') === (int) auth()->id()) {
+            \Flux::toast('You cannot carry forward your own leave — another HR user must.', variant: 'danger');
+
+            return;
+        }
+
         try {
             $tx = app(LeaveCarryForwardService::class)->apply(
                 Employee::findOrFail($employeeId),

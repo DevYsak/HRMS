@@ -11,6 +11,7 @@ use App\Models\Office;
 use App\Services\Biometric\BiometricCodeService;
 use App\Services\EmployeeInvitationService;
 use Illuminate\Database\Eloquent\Builder;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -44,6 +45,14 @@ class EmployeeIndex extends Component
      * deleted employee was unreachable and their email permanently spent.
      */
     public bool $showDeleted = false;
+
+    /**
+     * The HR completion queue: employees missing an HR-owned employment
+     * field (department, designation, manager, shift, joining date, …).
+     * Nothing is defaulted to clear it — HR fills each value in.
+     */
+    #[Url(as: 'incomplete')]
+    public bool $incomplete = false;
 
     public function mount()
     {
@@ -231,7 +240,8 @@ class EmployeeIndex extends Component
         $employees = Employee::with(['user' => fn ($q) => $q->withTrashed(), 'office', 'department', 'jobTitle', 'manager', 'shift', 'latestInvitation'])
             ->when($this->showDeleted, fn ($q) => $q->onlyTrashed())
             ->when(! $user->canManageEmployees(), function ($query) use ($user) {
-                $query->where('manager_id', $user->employee?->id);
+                // manager_id holds the manager's USER id (employees.manager_id → users.id).
+                $query->where('manager_id', $user->id);
             })
             ->when($this->search, function ($query) {
                 $s = '%'.$this->search.'%';
@@ -245,11 +255,13 @@ class EmployeeIndex extends Component
             ->when($this->job_title_id, fn ($q) => $q->where('job_title_id', $this->job_title_id))
             ->when($this->status, fn ($q) => $q->where('status', $this->status))
             ->when($this->invitation, fn ($q) => $this->filterByInvitation($q))
+            ->when($this->incomplete, fn ($q) => $q->incompleteHrProfile())
             ->orderByDesc('id')
             ->paginate(15);
 
         return view('livewire.employees.employee-index', [
             'employees' => $employees,
+            'incompleteCount' => $user->canManageEmployees() ? Employee::incompleteHrProfile()->count() : 0,
             'offices' => Office::all(),
             'departments' => Department::orderBy('name')->get(),
             'jobTitles' => JobTitle::all(),

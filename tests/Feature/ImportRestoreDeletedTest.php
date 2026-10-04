@@ -98,7 +98,7 @@ test('importing restores both records instead of creating new ones', function ()
     $usersBefore = User::withTrashed()->count();
 
     $service = app(EmployeeImportService::class);
-    $service->import($service->parse([irdRow()], true), 'update', User::factory()->create());
+    $service->import($service->parse([irdRow()], true), 'update', User::factory()->create(['role' => UserRole::HrAdmin]));
 
     $freshUser = User::find($user->id);
     $freshEmployee = Employee::find($employee->id);
@@ -116,7 +116,7 @@ test('history survives the restore', function () {
     [, $employee] = irdDeletedEmployee();
 
     $service = app(EmployeeImportService::class);
-    $service->import($service->parse([irdRow()], true), 'update', User::factory()->create());
+    $service->import($service->parse([irdRow()], true), 'update', User::factory()->create(['role' => UserRole::HrAdmin]));
 
     // The row seeded before deletion, not the one onboarding provisions for
     // every employee — both sit in the same year.
@@ -134,7 +134,7 @@ test('a restore is audit logged', function () {
     [, $employee] = irdDeletedEmployee();
 
     $service = app(EmployeeImportService::class);
-    $service->import($service->parse([irdRow()], true), 'update', User::factory()->create());
+    $service->import($service->parse([irdRow()], true), 'update', User::factory()->create(['role' => UserRole::HrAdmin]));
 
     expect(AuditLog::where('auditable_type', Employee::class)
         ->where('auditable_id', $employee->id)
@@ -146,7 +146,7 @@ test('the restored employee is updated from the file', function () {
     [, $employee] = irdDeletedEmployee();
 
     $service = app(EmployeeImportService::class);
-    $service->import($service->parse([irdRow()], true), 'update', User::factory()->create());
+    $service->import($service->parse([irdRow()], true), 'update', User::factory()->create(['role' => UserRole::HrAdmin]));
 
     // Deleting released the code; the import reassigns it from the file.
     expect((int) Employee::find($employee->id)->employee_code)->toBe(17);
@@ -172,7 +172,7 @@ test('the option does not resurrect somebody the file never mentions', function 
     $other->delete();
 
     $service = app(EmployeeImportService::class);
-    $service->import($service->parse([irdRow('untouched@conexus-ns.com')], true), 'update', User::factory()->create());
+    $service->import($service->parse([irdRow('untouched@conexus-ns.com')], true), 'update', User::factory()->create(['role' => UserRole::HrAdmin]));
 
     expect(User::find($other->id))->toBeNull()
         ->and(User::withTrashed()->find($other->id)->trashed())->toBeTrue();

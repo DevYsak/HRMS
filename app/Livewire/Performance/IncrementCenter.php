@@ -157,8 +157,25 @@ class IncrementCenter extends Component
         abort_unless(Auth::user()->canApproveFinance() || Auth::user()->isSuperAdmin(), 403);
 
         try {
-            $service->approveCycle($this->cycle(), Auth::user());
-            \Flux::toast('Cycle approved within budget.');
+            $held = $service->approveCycle($this->cycle(), Auth::user());
+            \Flux::toast($held > 0
+                ? 'Cycle approved within budget. Your own raise is held for another approver.'
+                : 'Cycle approved within budget.');
+        } catch (\DomainException $exception) {
+            \Flux::toast($exception->getMessage(), variant: 'danger');
+        }
+    }
+
+    /** Approve a raise held back at cycle approval (it was that approver's own). */
+    public function approveHeld(int $proposalId, IncrementService $service): void
+    {
+        abort_unless(Auth::user()->canApproveFinance() || Auth::user()->isSuperAdmin(), 403);
+
+        $proposal = IncrementProposal::where('increment_cycle_id', $this->cycleId)->findOrFail($proposalId);
+
+        try {
+            $service->approveHeldProposal($proposal, Auth::user());
+            \Flux::toast('Held raise approved.');
         } catch (\DomainException $exception) {
             \Flux::toast($exception->getMessage(), variant: 'danger');
         }

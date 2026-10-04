@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\UserRole;
 use App\Exports\EmployeesExport;
 use App\Models\Department;
 use App\Models\Employee;
@@ -385,7 +386,8 @@ test('a duplicate bio code blocks the row, since punches would attach to the wro
 
 test('exporting employees, adding new rows and re-importing updates and creates without duplicating', function () {
     Mail::fake();
-    $actor = User::factory()->create();
+    // The importer is HR: an update row is an edit, gated by EmployeePolicy::update.
+    $actor = User::factory()->create(['role' => UserRole::HrAdmin]);
     $service = hrSheetService();
 
     // Two existing employees: one with a real address, one imported without.
@@ -423,7 +425,8 @@ test('exporting employees, adding new rows and re-importing updates and creates 
 
 test('a generated email coming back through export keeps its Email Pending flag', function () {
     Mail::fake();
-    $actor = User::factory()->create();
+    // The importer is HR: an update row is an edit, gated by EmployeePolicy::update.
+    $actor = User::factory()->create(['role' => UserRole::HrAdmin]);
     $service = hrSheetService();
 
     $service->import($service->parse([

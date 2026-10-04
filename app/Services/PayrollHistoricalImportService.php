@@ -214,6 +214,22 @@ class PayrollHistoricalImportService
                     $data = $row['data'];
                     $periodKey = $data['month'].'|'.$data['year'].'|'.$data['cycle'];
 
+                    // An import is written as already finalized by the importer.
+                    // That is only legitimate for history: a pay period that has
+                    // not ended must go through a real run and Finance's
+                    // approval. The test is the period's own last day — a Cycle
+                    // B period (21st–20th) ends before its calendar month does.
+                    [, $periodEnd] = app(PayrollService::class)->resolveCycleDates($data['month'], (int) $data['year'], $data['cycle']);
+
+                    if (! $periodEnd->lt(today())) {
+                        $errorLog[] = [
+                            'row' => $row['line'],
+                            'messages' => ["The {$data['month']} {$data['year']} ({$data['cycle']}) pay period has not ended — run it through payroll instead of importing it."],
+                        ];
+
+                        continue;
+                    }
+
                     if (! isset($payrollCache[$periodKey])) {
                         $payroll = $this->resolvePayroll($data['month'], $data['year'], $data['cycle'], $actor);
 

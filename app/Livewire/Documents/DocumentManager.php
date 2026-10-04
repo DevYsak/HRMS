@@ -7,6 +7,7 @@ use App\Models\DocumentAcknowledgement;
 use App\Models\Employee;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
 use Livewire\Component;
@@ -97,20 +98,7 @@ class DocumentManager extends Component
      */
     protected function assertCanAccess(Document $document): void
     {
-        $user = Auth::user();
-
-        if ($user->canManageDocuments()) {
-            return;
-        }
-
-        $employee = $user->employee;
-
-        $allowed = $document->visibility === 'all'
-            || $document->category === 'policy'
-            || ($employee && $document->employee_id === $employee->id)
-            || ($document->category === 'payslip' && $user->canApproveFinance());
-
-        abort_unless($allowed, 403);
+        abort_unless(Gate::allows('view', $document), 403);
     }
 
     public function acknowledge(int $documentId): void
@@ -119,6 +107,9 @@ class DocumentManager extends Component
         if (! $employee) {
             return;
         }
+
+        // Only a document the employee can read, and one that asks for it.
+        abort_unless(Gate::allows('acknowledge', Document::findOrFail($documentId)), 403);
 
         DocumentAcknowledgement::firstOrCreate(
             ['document_id' => $documentId, 'employee_id' => $employee->id],
@@ -165,12 +156,15 @@ class DocumentManager extends Component
 
         if (! $canManage) {
             $query->where(function ($q) use ($employee, $user) {
-                $q->where('visibility', 'all')->orWhere('category', 'policy');
+                // A policy addressed to one person is that person's, not everyone's.
+                $q->where('visibility', 'all')
+                    ->orWhere(fn ($policy) => $policy->where('category', 'policy')->whereNull('employee_id'));
                 if ($employee) {
                     // Own docs (personal, warning letters, PIPs, promotions, reviews)
                     $q->orWhere('employee_id', $employee->id);
                 }
-                if ($user->canApproveFinance()) {
+                // Payslips: payroll staff only (spec §4 — Director has no access).
+                if ($user->canRunPayroll()) {
                     $q->orWhere('category', 'payslip');
                 }
             });

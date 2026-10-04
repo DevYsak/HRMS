@@ -66,6 +66,13 @@
                         ['value' => 'expired', 'label' => 'Expired'],
                         ['value' => 'active', 'label' => 'Active'],
                     ]" />
+                {{-- HR completion queue: missing employment data, never defaulted. --}}
+                @if($incompleteCount > 0 || $incomplete)
+                    <button type="button" wire:click="$toggle('incomplete')"
+                        class="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition {{ $incomplete ? 'border-amber-400 bg-amber-50 text-amber-800 dark:border-amber-500/50 dark:bg-amber-500/10 dark:text-amber-300' : 'border-zinc-200 bg-white text-zinc-600 hover:border-amber-300 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-300' }}">
+                        <flux:icon.identification class="size-4" /> Incomplete HR profile ({{ $incompleteCount }})
+                    </button>
+                @endif
             </div>
         </div>
 
@@ -104,6 +111,14 @@
                                             {{ $emp->user?->name ?? 'No user account' }}
                                         </div>
                                         <div class="text-xs text-zinc-400">{{ $emp->user?->email ?? '—' }}</div>
+                                        @php $missingHr = $emp->trashed() ? [] : $emp->missingHrFields(); @endphp
+                                        @if($missingHr !== [])
+                                            <flux:tooltip :content="'Missing: '.implode(', ', $missingHr)">
+                                                <span class="mt-0.5 inline-flex items-center gap-1 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-inset ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-300">
+                                                    Incomplete HR profile · {{ count($missingHr) }}
+                                                </span>
+                                            </flux:tooltip>
+                                        @endif
                                     </div>
                                 </div>
                             </td>
@@ -238,7 +253,8 @@
                                         </flux:tooltip>
 
                                         {{-- Irreversible, and it takes their history with it, so the
-                                             confirmation spells out exactly what is lost. --}}
+                                             confirmation spells out exactly what is lost. Super Admin only. --}}
+                                        @can('forceDelete', $emp)
                                         <flux:tooltip content="Delete permanently — cannot be undone">
                                             <flux:button
                                                 wire:click="forceDeleteEmployee({{ $emp->id }})"
@@ -253,6 +269,7 @@ Type DELETE FOREVER to confirm|DELETE FOREVER"
                                                 class="text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10 dark:hover:text-red-400"
                                             />
                                         </flux:tooltip>
+                                        @endcan
                                     @else
                                         <flux:button
                                             wire:click="deleteEmployee({{ $emp->id }})"

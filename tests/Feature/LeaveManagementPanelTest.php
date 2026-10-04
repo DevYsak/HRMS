@@ -313,7 +313,9 @@ test('the month-wise statement and timeline come from the ledger', function () {
     $july = $months->firstWhere('month', '2026-07');
     $august = $months->firstWhere('month', '2026-08');
 
-    expect($july['opening'])->toBe(15.0)
+    // The year opens at zero; the 1 July postings are July's credits.
+    expect($july['opening'])->toBe(0.0)
+        ->and($july['carry_forward'])->toBe(3.0)
         ->and($july['closing'])->toBe(15.0)
         ->and($august['opening'])->toBe(15.0)
         ->and($august['credits'])->toBe(1.5)
@@ -383,7 +385,9 @@ test('D: an employee with a balance still gets the correct statement', function 
         ->get('statement');
 
     expect($statement)->not->toBeEmpty()
-        ->and($statement->firstWhere('month', '2026-07')['opening'])->toBe(12.0)
+        // The year opens at zero; the 1 July entitlement is July's credit.
+        ->and($statement->firstWhere('month', '2026-07')['opening'])->toBe(0.0)
+        ->and($statement->firstWhere('month', '2026-07')['current_credits'])->toBe(12.0)
         ->and($statement->firstWhere('month', '2026-07')['closing'])->toBe(12.0);
 });
 

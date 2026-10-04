@@ -42,8 +42,9 @@ test('offboarding an employee past their last working day releases their card', 
         'status' => 'active',
     ]);
 
+    // Through the screen's own selection (the id itself is #[Locked]).
     Livewire::actingAs($hr)->test(OffboardingManager::class)
-        ->set('selectedEmployeeId', $employee->id)
+        ->call('selectEmployee', $employee->id)
         ->set('lastWorkingDay', today()->subDay()->toDateString())
         ->set('exitType', 'resignation')
         ->call('processOffboarding');

@@ -6,6 +6,7 @@ use App\Models\Employee;
 use App\Models\Payroll;
 use App\Models\Reimbursement;
 use App\Notifications\ReimbursementNotification;
+use App\Services\Approvals\ApprovalGuard;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -28,6 +29,8 @@ class ReimbursementService
 
     public function approve(Reimbursement $reimbursement, int $approverId, ?string $note = null, bool $notify = true): Reimbursement
     {
+        $this->assertDecidable($reimbursement, $approverId, 'approved');
+
         $reimbursement->update([
             'status' => 'approved',
             'approved_by' => $approverId,
@@ -46,6 +49,8 @@ class ReimbursementService
 
     public function reject(Reimbursement $reimbursement, int $approverId, ?string $note = null, bool $notify = true): Reimbursement
     {
+        $this->assertDecidable($reimbursement, $approverId, 'rejected');
+
         $reimbursement->update([
             'status' => 'rejected',
             'approved_by' => $approverId,
@@ -63,12 +68,27 @@ class ReimbursementService
         return $fresh;
     }
 
+    /**
+     * A claim is decided once, while pending (never after payroll paid it),
+     * and never by the claimant.
+     */
+    private function assertDecidable(Reimbursement $reimbursement, int $approverId, string $outcome): void
+    {
+        if ($reimbursement->status !== 'pending') {
+            throw new \DomainException("Only a pending reimbursement can be {$outcome}.");
+        }
+
+        app(ApprovalGuard::class)->assertNotSelf($approverId, $reimbursement->employee);
+    }
+
     public function includeApprovedForEmployeeMonth(Employee $employee, string $monthLabel, Payroll $payroll): array
     {
+        // Approved and not yet in any run — or already in THIS run, so a draft
+        // re-run keeps what its previous pass included instead of dropping it.
         $rows = Reimbursement::where('employee_id', $employee->id)
             ->where('month', $monthLabel)
-            ->where('status', 'approved')
-            ->whereNull('payroll_id')
+            ->where(fn ($q) => $q->where(fn ($open) => $open->where('status', 'approved')->whereNull('payroll_id'))
+                ->orWhere(fn ($mine) => $mine->where('status', 'included')->where('payroll_id', $payroll->id)))
             ->get();
 
         $total = (float) $rows->sum('amount');

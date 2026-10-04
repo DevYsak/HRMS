@@ -109,7 +109,24 @@ class EngineAttendanceSyncService
             );
 
             // Core attendance row so the standard pages + reports + payroll reflect it.
-            if ($firstPunch !== null) {
+            // Never over an approved regularisation: the correction (with its
+            // original-value snapshot) is the record of truth for that day, and
+            // the 10-minute sync / nightly re-sync would otherwise silently put
+            // the raw device punches back.
+            $existing = Attendance::where('employee_id', $employeeId)->where('date', $date)->first();
+
+            if ($firstPunch !== null && $existing?->is_regularized && ! $existing->hasCorrectedPunches()) {
+                // A half-day (status-only) regularisation: record the real
+                // punches, keep the approved status and late flags.
+                $existing->update([
+                    'check_in' => $firstPunch,
+                    'check_out' => $checkOut,
+                    'check_in_method' => $firstMethod,
+                    'check_out_method' => $lastMethod,
+                    'total_hours' => $workingHours,
+                    'break_minutes' => $breakMinutes,
+                ]);
+            } elseif ($firstPunch !== null && ! $existing?->is_regularized) {
                 Attendance::updateOrCreate(
                     ['employee_id' => $employeeId, 'date' => $date],
                     [
@@ -237,7 +254,10 @@ class EngineAttendanceSyncService
             : 0;
         $workingHours = round(max(0, $grossMinutes - $breakMinutes) / 60, 2);
 
+        // Not over corrected punches (see Attendance::hasCorrectedPunches()).
         Attendance::where('employee_id', $employeeId)->whereDate('date', $date)
+            ->where(fn ($q) => $q->where('is_regularized', false)
+                ->orWhere(fn ($statusOnly) => $statusOnly->whereNull('original_check_in')->whereNull('original_check_out')))
             ->update(['break_minutes' => $breakMinutes, 'total_hours' => $workingHours]);
 
         AttendanceDailySummary::where('employee_id', $employeeId)->whereDate('date', $date)

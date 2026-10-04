@@ -45,7 +45,7 @@
     @endif
 
     <div class="flex gap-1 border-b border-[#EAECF0] dark:border-white/10">
-        @foreach(['balances' => 'Balances', 'history' => 'History', 'statement' => 'Month-wise Statement', 'carry_forward' => 'Carry Forward', 'requests' => 'Requests', 'overrides' => 'Overrides'] as $key => $label)
+        @foreach(['balances' => 'Balances', 'history' => 'History', 'statement' => 'Month-wise Statement', 'carry_forward' => 'Carry Forward', 'requests' => 'Requests', 'encashments' => 'Encashments', 'overrides' => 'Overrides'] as $key => $label)
             <button type="button" wire:click="$set('tab', '{{ $key }}')"
                 class="-mb-px border-b-2 px-4 py-2 text-sm font-semibold {{ $tab === $key ? 'border-orange-500 text-orange-600' : 'border-transparent text-[#667085] hover:text-[#101828]' }}">{{ $label }}</button>
         @endforeach
@@ -220,6 +220,31 @@
                         </tr>
                     @empty
                         <tr><td colspan="6" class="px-3 py-8 text-center text-sm text-[#98A2B3]">No requests in {{ $this->year->label }}.</td></tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    @endif
+
+    @if($tab === 'encashments')
+        <div class="overflow-x-auto rounded-2xl border border-[#EAECF0] bg-white shadow-sm dark:border-white/10 dark:bg-zinc-900">
+            <table class="min-w-full text-xs">
+                <thead class="bg-[#F9FAFB] text-left text-[10px] font-bold uppercase tracking-wider text-[#667085] dark:bg-white/5">
+                    <tr><th class="px-3 py-2">Requested</th><th class="px-3 py-2">Type</th><th class="px-3 py-2 text-right">Days</th><th class="px-3 py-2">Status</th><th class="px-3 py-2">Approved by</th><th class="px-3 py-2">Finance</th><th class="px-3 py-2">Payout month</th></tr>
+                </thead>
+                <tbody class="divide-y divide-[#EAECF0] dark:divide-white/5">
+                    @forelse($this->encashments as $enc)
+                        <tr>
+                            <td class="px-3 py-2">{{ $enc->created_at?->format('d M Y') }}</td>
+                            <td class="px-3 py-2">{{ $enc->leaveType?->name }}</td>
+                            <td class="px-3 py-2 text-right">{{ $fmt($enc->requested_days) }}</td>
+                            <td class="px-3 py-2"><flux:badge size="sm">{{ str_replace('_', ' ', $enc->status) }}</flux:badge></td>
+                            <td class="px-3 py-2">{{ $enc->reviewer?->name ?? '—' }}</td>
+                            <td class="px-3 py-2">{{ $enc->financeReviewer?->name ?? '—' }}</td>
+                            <td class="px-3 py-2">{{ $enc->payout_month ?? '—' }}</td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="7" class="px-3 py-8 text-center text-sm text-[#98A2B3]">No encashment requests.</td></tr>
                     @endforelse
                 </tbody>
             </table>

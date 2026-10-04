@@ -178,7 +178,7 @@ class SyncBiometricEmployees extends Command
                         'shift_id' => $shift->id,
                         'joining_date' => $joining,
                         'status' => 'active',
-                        'salary_cycle' => 'A',
+                        'salary_cycle' => 'cycle_a', // the run key PayrollService reads ('A' matched no run)
                         'sync_status' => 'pending',
                     ]);
                     $created++;

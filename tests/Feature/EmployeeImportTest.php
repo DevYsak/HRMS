@@ -85,7 +85,8 @@ test('import creates new employees and skips existing in skip mode', function ()
 
 test('import updates existing employees in update mode', function () {
     Mail::fake();
-    $actor = User::factory()->create();
+    // The importer is HR: an update row is an edit, gated by EmployeePolicy::update.
+    $actor = User::factory()->create(['role' => UserRole::HrAdmin]);
     $employee = Employee::factory()->create();
     $service = app(EmployeeImportService::class);
 

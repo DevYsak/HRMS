@@ -7,6 +7,9 @@
             <p class="pulse-page-subtitle">Review pre-approval requests with clear work windows, duration, and action context.</p>
         </div>
         <div class="flex items-center gap-2">
+            @if(auth()->user()->canManageEmployees())
+                <flux:button href="{{ route('overtime.windows') }}" wire:navigate variant="outline" icon="calendar-days">OT Windows</flux:button>
+            @endif
             <flux:button wire:click="syncFromNexflow" wire:loading.attr="disabled" wire:target="syncFromNexflow"
                 variant="primary" icon="arrow-path">
                 <span wire:loading.remove wire:target="syncFromNexflow">Sync from Nexflow</span>

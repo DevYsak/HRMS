@@ -22,6 +22,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Response;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -71,7 +72,12 @@ class AllAttendance extends Component
     {
         abort_unless(Auth::user()->canApproveLeave(), 403);
 
-        $query = Attendance::query()->with('employee.user', 'employee.office')->whereHas('employee.user');
+        // The same reach as the on-screen list: a manager exports their own
+        // reporting line, never the company.
+        $scopeIds = Auth::user()->accessibleEmployeeIds();
+
+        $query = Attendance::query()->with('employee.user', 'employee.office')->whereHas('employee.user')
+            ->when($scopeIds !== null, fn ($q) => $q->whereIn('employee_id', $scopeIds));
 
         $this->applyFilters($query);
 
@@ -128,6 +134,14 @@ class AllAttendance extends Component
     public bool $showReviewModal = false;
 
     public bool $regularisationLocked = false;
+
+    /**
+     * Set when the reviewer deliberately opened an ALREADY-decided request to
+     * override it (HR only). A request that is decided by someone else while
+     * the modal is open is refused instead of being silently reversed.
+     */
+    #[Locked]
+    public bool $overrideIntended = false;
 
     public string $lockedByName = '';
 
@@ -442,6 +456,7 @@ class AllAttendance extends Component
         $this->reviewComment = '';
         $this->regularisationLocked = false;
         $this->lockedByName = '';
+        $this->overrideIntended = $this->activeRequest->status !== 'pending' && Auth::user()->canManageEmployees();
 
         // Warn HR if this was previously approved by Super Admin
         if (
@@ -512,7 +527,24 @@ class AllAttendance extends Component
 
         $this->validate(['reviewComment' => 'required|string|min:5']);
 
-        app(AttendanceService::class)->rejectRegularisation($this->activeRequest, Auth::id(), $this->reviewComment);
+        // Decided by someone else since this modal opened, and not a deliberate
+        // override: leave it as they decided it.
+        if ($this->activeRequest->fresh()?->status !== 'pending' && ! $this->overrideIntended) {
+            $this->closeDecidedMeanwhile();
+
+            return;
+        }
+
+        try {
+            app(AttendanceService::class)->rejectRegularisation(
+                $this->activeRequest, Auth::id(), $this->reviewComment,
+                override: $this->overrideIntended,
+            );
+        } catch (\DomainException $e) {
+            $this->closeDecidedMeanwhile($e->getMessage());
+
+            return;
+        }
 
         $this->activeRequest->employee->user->notify(new RegularisationReviewedNotification($this->activeRequest));
 
@@ -520,6 +552,14 @@ class AllAttendance extends Component
         $this->showReviewModal = false;
         $this->activeRequest = null;
         \Flux::toast('Regularisation request rejected.');
+    }
+
+    private function closeDecidedMeanwhile(?string $message = null): void
+    {
+        app(ClaimLockService::class)->release($this->activeRequest);
+        $this->showReviewModal = false;
+        $this->activeRequest = null;
+        \Flux::toast($message ?? 'This request was decided by someone else while you had it open — nothing was changed.', variant: 'warning');
     }
 
     /**

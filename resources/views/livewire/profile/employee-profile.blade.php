@@ -72,6 +72,7 @@
     <div class="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
         <div class="flex min-w-max gap-1 border-b border-zinc-200 dark:border-white/10">
             @foreach($this::TABS as $key => $label)
+                @continue($key === 'financial' && ! $this->canSeeFinancial())
                 <button type="button" wire:click="setTab('{{ $key }}')"
                     @class([
                         'relative px-4 py-2.5 text-sm font-semibold transition-colors whitespace-nowrap',
@@ -95,18 +96,18 @@
 
             {{-- as-hr unlocks every registered field; the components are otherwise identical --}}
             @if($activeTab === 'overview')
-                <x-profile.field-group group="identity" :employee="$employee" :pending="$pending" :as-hr="true" icon="user" />
-                <x-profile.field-group group="employment" :employee="$employee" :pending="$pending" :as-hr="true" icon="briefcase" />
+                <x-profile.field-group group="identity" :employee="$employee" :pending="$pending" :as-hr="$this->canEditHere()" icon="user" />
+                <x-profile.field-group group="employment" :employee="$employee" :pending="$pending" :as-hr="$this->canEditHere()" icon="briefcase" />
 
             @elseif($activeTab === 'personal')
-                <x-profile.field-group group="identity" :employee="$employee" :pending="$pending" :as-hr="true" icon="user" />
-                <x-profile.field-group group="contact" :employee="$employee" :pending="$pending" :as-hr="true" icon="phone" />
+                <x-profile.field-group group="identity" :employee="$employee" :pending="$pending" :as-hr="$this->canEditHere()" icon="user" />
+                <x-profile.field-group group="contact" :employee="$employee" :pending="$pending" :as-hr="$this->canEditHere()" icon="phone" />
 
             @elseif($activeTab === 'employment')
-                <x-profile.field-group group="employment" :employee="$employee" :pending="$pending" :as-hr="true" icon="briefcase" />
+                <x-profile.field-group group="employment" :employee="$employee" :pending="$pending" :as-hr="$this->canEditHere()" icon="briefcase" />
 
-            @elseif($activeTab === 'financial')
-                <x-profile.field-group group="financial" :employee="$employee" :pending="$pending" :as-hr="true"
+            @elseif($activeTab === 'financial' && $this->canSeeFinancial())
+                <x-profile.field-group group="financial" :employee="$employee" :pending="$pending" :as-hr="$this->canEditHere()"
                                        icon="banknotes" title="Bank &amp; statutory" />
 
             @elseif($activeTab === 'requests')
@@ -128,9 +129,9 @@
                                         <span class="rounded-md px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide {{ $tone }}">{{ $request->status }}</span>
                                     </div>
                                     <p class="mt-1 text-xs text-zinc-500">
-                                        <span class="line-through">{{ $request->old_value ?: 'empty' }}</span>
+                                        <span class="line-through">{{ $this->requestValue($request, $request->old_value) }}</span>
                                         <span class="mx-1 text-zinc-300">→</span>
-                                        <span class="font-semibold text-zinc-700 dark:text-zinc-200">{{ $request->new_value ?: 'empty' }}</span>
+                                        <span class="font-semibold text-zinc-700 dark:text-zinc-200">{{ $this->requestValue($request, $request->new_value) }}</span>
                                     </p>
                                     <p class="mt-1 text-[11px] text-zinc-400">
                                         Raised by {{ $request->requestedBy?->name }} · {{ $request->created_at->diffForHumans() }}
@@ -184,7 +185,7 @@
                             {{ count($completion['missing']) }} {{ Str::plural('field', count($completion['missing'])) }} empty
                         </p>
                         <div class="space-y-1">
-                            @foreach(array_slice($completion['missing'], 0, 6) as $gap)
+                            @foreach(array_slice($this->editableGaps($completion['missing']), 0, 6) as $gap)
                                 <button type="button" wire:click="editField('{{ $gap['field'] }}')"
                                         class="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left text-sm transition hover:bg-zinc-50 dark:hover:bg-white/5">
                                     <span class="text-zinc-700 dark:text-zinc-200">{{ $gap['label'] }}</span>
@@ -241,9 +242,9 @@
 
                 <div class="rounded-xl border border-zinc-100 bg-zinc-50 p-3 text-sm dark:border-white/5 dark:bg-white/5">
                     <div class="flex items-center gap-2">
-                        <span class="text-zinc-400 line-through">{{ $reviewing->old_value ?: 'empty' }}</span>
+                        <span class="text-zinc-400 line-through">{{ $this->requestValue($reviewing, $reviewing->old_value) }}</span>
                         <flux:icon.arrow-right class="size-3.5 text-zinc-300" />
-                        <span class="font-semibold text-zinc-900 dark:text-white">{{ $reviewing->new_value ?: 'empty' }}</span>
+                        <span class="font-semibold text-zinc-900 dark:text-white">{{ $this->requestValue($reviewing, $reviewing->new_value) }}</span>
                     </div>
                     @if($reviewing->reason)
                         <p class="mt-2 text-xs italic text-zinc-500">“{{ $reviewing->reason }}”</p>

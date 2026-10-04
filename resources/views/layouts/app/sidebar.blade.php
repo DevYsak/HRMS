@@ -48,7 +48,9 @@
             ['label' => 'Notifications', 'route' => $inboxRoute, 'caption' => 'Inbox and recent alerts'],
         ]);
 
-        if (Route::has('employees.index')) {
+        // HR's employee manager (a manager sees their own reports there) — not
+        // offered to staff, who browse the Directory and Org Chart below.
+        if (Route::has('employees.index') && ($user->canManageEmployees() || $isMgr)) {
             $searchLinks->push(['label' => 'Manage Employees', 'route' => route('employees.index'), 'caption' => 'Employee directory and records']);
         }
         if (Route::has('employees.directory')) {
@@ -94,15 +96,23 @@
              "full width, space on the right" asks for. --}}
         {{-- No fixed height: the anchor hugs the logo, so the gap above the nav
              is the padding below and nothing else. --}}
-        <a href="{{ route('dashboard') }}" wire:navigate data-flux-sidebar-brand
-            class="flex shrink-0 items-center pb-1.5 pl-3 pr-6 pt-3 in-data-flux-sidebar-collapsed-desktop:px-1.5">
-            {{-- .pulse-sidebar forces a cream background in both themes, so the
-                 mark must stay dark here — inverting it would render white on
-                 cream and vanish in dark mode. --}}
-            <x-brand-logo size="w-full h-auto" :invert-on-dark="false" /></a>
+        <div class="flex shrink-0 items-center">
+            <a href="{{ route('dashboard') }}" wire:navigate data-flux-sidebar-brand
+                class="flex min-w-0 flex-1 shrink-0 items-center pb-1.5 pl-3 pr-6 pt-3 in-data-flux-sidebar-collapsed-desktop:px-1.5">
+                {{-- The rail is cream in light mode but navy in dark mode
+                     (`.dark .pulse-sidebar` in app.css), so the black mark is
+                     repainted white there — otherwise it vanished on the navy. --}}
+                <x-brand-logo size="w-full h-auto" /></a>
+
+            {{-- Employees can fold the rail to icons on desktop (Flux remembers
+                 the state); on mobile the sidebar is a drawer already. --}}
+            @if($pureEmployee)
+                <flux:sidebar.collapse class="-ms-4 me-1 mt-1.5 max-lg:hidden" />
+            @endif
+        </div>
 
         {{-- Role chip — colored by the current user's role --}}
-        <div class="overflow-hidden whitespace-nowrap px-3 pb-1.5">
+        <div class="overflow-hidden whitespace-nowrap px-3 pb-1.5 in-data-flux-sidebar-collapsed-desktop:hidden">
             <span class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider"
                 style="color: {{ $roleColor }}; background-color: color-mix(in srgb, {{ $roleColor }} 14%, transparent);">
                 <span class="size-1.5 rounded-full" style="background-color: {{ $roleColor }}"></span>
@@ -130,8 +140,9 @@
                             $pendingDocs = \App\Models\Document::whereNull('parent_id')
                                 ->where('requires_acknowledgement', true)
                                 ->where(function ($q) use ($employee) {
+                                    // Same rule as the Documents page: a policy addressed to one person is theirs.
                                     $q->where('visibility', 'all')
-                                        ->orWhere('category', 'policy')
+                                        ->orWhere(fn ($policy) => $policy->where('category', 'policy')->whereNull('employee_id'))
                                         ->orWhere('employee_id', $employee->id);
                                 })
                                 ->whereDoesntHave('acknowledgements', fn ($q) => $q->where('employee_id', $employee->id))
@@ -231,19 +242,22 @@
                                 @break
 
                             @default
-                                @php $miHref = \Illuminate\Support\Facades\Route::has($mi['route'] ?? '') ? route($mi['route']) : '#'; @endphp
-                                <flux:sidebar.item :icon="$mi['icon']" :href="$miHref" :current="request()->routeIs($mi['active'])" wire:navigate>
-                                    <div class="flex items-center gap-2">
-                                        {{ $mi['label'] }}
-                                        @if(($mi['badge'] ?? null) && ($menuBadges[$mi['badge']] ?? 0) > 0)
-                                            <span
-                                                class="inline-flex items-center justify-center rounded-full {{ $mi['badge'] === 'inbox' ? 'bg-red-500' : 'bg-amber-500' }} px-1.5 py-0.5 text-[10px] font-bold text-white">{{ $menuBadges[$mi['badge']] > 9 ? '9+' : $menuBadges[$mi['badge']] }}</span>
-                                        @endif
-                                        @if($mi['key'] === 'overtime' && $showNexflow)
-                                            <span
-                                                class="inline-flex items-center rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-bold text-violet-700 dark:bg-violet-500/20 dark:text-violet-300">Nexflow</span>
-                                        @endif
-                                    </div>
+                                @php
+                                    $miHref = \Illuminate\Support\Facades\Route::has($mi['route'] ?? '') ? route($mi['route']) : '#';
+                                    $miCount = ($mi['badge'] ?? null) ? (int) ($menuBadges[$mi['badge']] ?? 0) : 0;
+                                @endphp
+                                {{-- Flux's own badge slot, so the count hides cleanly when the
+                                     rail is collapsed; the explicit tooltip keeps the collapsed
+                                     hover label plain text. --}}
+                                <flux:sidebar.item :icon="$mi['icon']" :href="$miHref" :current="request()->routeIs($mi['active'])"
+                                    :tooltip="$mi['label']"
+                                    :badge="$miCount > 0 ? ($miCount > 9 ? '9+' : (string) $miCount) : null"
+                                    :badge-color="($mi['badge'] ?? null) === 'inbox' ? 'red' : 'amber'" wire:navigate>
+                                    {{ $mi['label'] }}
+                                    @if($mi['key'] === 'overtime' && $showNexflow)
+                                        <span
+                                            class="ms-1 inline-flex items-center rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-bold text-violet-700 dark:bg-violet-500/20 dark:text-violet-300">Nexflow</span>
+                                    @endif
                                 </flux:sidebar.item>
                         @endswitch
                     @endforeach
@@ -413,7 +427,7 @@
                             <flux:sidebar.item icon="chart-bar-square" :href="route('dashboard.executive')"
                                 :current="request()->routeIs('dashboard.executive')" wire:navigate>Executive View</flux:sidebar.item>
                         @endif
-                        @if($isDir && Route::has('dashboard.director'))
+                        @if($isDir && Route::has('dashboard.director') && ! $user->isDepartmentScoped())
                             <flux:sidebar.item icon="presentation-chart-line" :href="route('dashboard.director')"
                                 :current="request()->routeIs('dashboard.director')" wire:navigate>Director Dashboard</flux:sidebar.item>
                         @endif
@@ -493,7 +507,9 @@
                             <flux:sidebar.item :href="route('attendance.command-center')" :current="request()->routeIs('attendance.command-center')" :badge="$pendingApprovals ?: null" badge-color="amber" wire:navigate>Command Center</flux:sidebar.item>
                             <flux:sidebar.item :href="route('attendance.reports')" :current="request()->routeIs('attendance.reports')" wire:navigate>Attendance Reports</flux:sidebar.item>
                             <flux:sidebar.item :href="route('attendance.executive')" :current="request()->routeIs('attendance.executive')" wire:navigate>Executive View</flux:sidebar.item>
-                            <flux:sidebar.item :href="route('attendance.biometric-control')" :current="request()->routeIs('attendance.biometric-control')" wire:navigate>Biometric Control</flux:sidebar.item>
+                            @can('manage_biometric')
+                                <flux:sidebar.item :href="route('attendance.biometric-control')" :current="request()->routeIs('attendance.biometric-control')" wire:navigate>Biometric Control</flux:sidebar.item>
+                            @endcan
                             <flux:sidebar.item :href="route('attendance.biometric-summary')" :current="request()->routeIs('attendance.biometric-summary')" wire:navigate>Biometric Summary</flux:sidebar.item>
                         @endcan
                         @can('manage_settings')
@@ -750,8 +766,10 @@
             </flux:sidebar.nav>
         @endcan
 
-        {{-- Meet Pulse AI promo --}}
-        @if(Route::has('ai.assistant'))
+        {{-- Meet Pulse AI promo. Not for employees: their nav already carries a
+             plain "AI Assistant" item (shown only when AI is enabled for them),
+             so the promo just crowded out the HR tasks. --}}
+        @if(Route::has('ai.assistant') && ! $pureEmployee)
             <div class="px-3 pb-1 pt-1">
                 <div class="overflow-hidden rounded-2xl bg-gradient-to-br from-orange-500 to-orange-400 p-4 text-white shadow-lg shadow-orange-500/20">
                     <div class="flex items-center gap-2 text-[13px] font-bold">
@@ -766,23 +784,32 @@
             </div>
         @endif
 
-        {{-- User profile --}}
-        <div class="mt-1 border-t border-[#F3E8DD] px-3 pb-3 pt-3">
+        {{-- User profile. Employees see their job title rather than the role
+             name (the role chip under the logo already says "Employee"). --}}
+        @php
+            $miniProfileSub = $pureEmployee ? ($employee?->jobTitle?->name ?? $roleLabel) : $roleLabel;
+            $miniProfilePhoto = $employee?->photo ? \Illuminate\Support\Facades\Storage::url($employee->photo) : null;
+        @endphp
+        <div class="mt-1 border-t border-[#F3E8DD] px-3 pb-3 pt-3 in-data-flux-sidebar-collapsed-desktop:px-0">
             <flux:dropdown position="top" align="start" class="w-full">
-                <button type="button"
-                    class="flex w-full items-center gap-3 rounded-2xl border border-[#F3E8DD] bg-white p-2.5 text-left shadow-sm transition hover:bg-[#FFF2E8]">
+                <button type="button" aria-label="{{ auth()->user()->name }} — account menu"
+                    class="flex w-full items-center gap-3 rounded-2xl border border-[#F3E8DD] bg-white p-2.5 text-left shadow-sm transition hover:bg-[#FFF2E8] focus-visible:outline-2 focus-visible:outline-orange-500 in-data-flux-sidebar-collapsed-desktop:justify-center in-data-flux-sidebar-collapsed-desktop:border-0 in-data-flux-sidebar-collapsed-desktop:bg-transparent in-data-flux-sidebar-collapsed-desktop:p-0 in-data-flux-sidebar-collapsed-desktop:shadow-none">
                     <div class="relative shrink-0">
-                        <div class="flex size-9 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-orange-400 text-[13px] font-bold text-white">
-                            {{ auth()->user()->initials() }}
-                        </div>
+                        @if($miniProfilePhoto)
+                            <img src="{{ $miniProfilePhoto }}" alt="" class="size-9 rounded-xl object-cover">
+                        @else
+                            <div class="flex size-9 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-orange-400 text-[13px] font-bold text-white">
+                                {{ auth()->user()->initials() }}
+                            </div>
+                        @endif
                         <span class="absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-white bg-emerald-500"
                             title="Online"></span>
                     </div>
-                    <div class="min-w-0 flex-1">
+                    <div class="min-w-0 flex-1 in-data-flux-sidebar-collapsed-desktop:hidden">
                         <div class="truncate text-[13px] font-bold text-[#111827]">{{ auth()->user()->name }}</div>
-                        <div class="truncate text-[11px] font-semibold" style="color: {{ $roleColor }}">{{ $roleLabel }}</div>
+                        <div class="truncate text-[11px] font-semibold" style="color: {{ $roleColor }}">{{ $miniProfileSub }}</div>
                     </div>
-                    <flux:icon.chevron-up-down class="size-4 shrink-0 text-[#9CA3AF]" />
+                    <flux:icon.chevron-up-down class="size-4 shrink-0 text-[#9CA3AF] in-data-flux-sidebar-collapsed-desktop:hidden" />
                 </button>
                 <flux:menu class="w-56">
                     <div class="flex items-center gap-3 px-2 py-2">
@@ -821,10 +848,10 @@
 
     </flux:sidebar>
 
-    {{-- TOP HEADER — premium, glassy, role-aware accent --}}
+    {{-- TOP HEADER — compact, sticky, glassy, role-aware accent --}}
     <flux:header
         style="--color-accent: {{ $roleColor }}; --color-accent-content: {{ $roleColor }};"
-        class="border-b border-zinc-200/70 bg-white/75 backdrop-blur-xl dark:border-zinc-800/70 dark:bg-zinc-950/70">
+        class="sticky top-0 border-b border-zinc-200/70 bg-white/80 backdrop-blur-xl dark:border-zinc-800/70 dark:bg-zinc-950/70 {{ session('impersonator_id') ? 'max-sm:flex-wrap max-sm:pb-2' : '' }}">
         <flux:sidebar.toggle class="lg:hidden" icon="bars-2" inset="left" />
 
         {{-- Search --}}
@@ -832,6 +859,24 @@
             <flux:input placeholder="{{ __('Search anything...') }}" icon="magnifying-glass" size="sm"
                 class="w-full cursor-pointer" kbd="⌘ K" readonly @click="$flux.modal('global-search').show()" />
         </div>
+
+        {{-- "View as" impersonation. Lives in the sticky header so it is always
+             on screen without covering page content (it used to float over the
+             bottom of the page). On a phone the header wraps and this becomes a
+             full-width second row, so the name is never squeezed out. --}}
+        @if(session('impersonator_id'))
+            <div role="status"
+                class="ms-2 flex min-w-0 items-center gap-2 rounded-full border border-amber-300 bg-amber-50 py-1 pe-1 ps-2.5 text-amber-900 max-sm:order-last max-sm:ms-0 max-sm:basis-full dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200">
+                <flux:icon.eye class="size-4 shrink-0" />
+                <span class="min-w-0 flex-1 truncate text-xs font-semibold">
+                    Viewing as {{ auth()->user()->name }}
+                </span>
+                <a href="{{ route('impersonate.stop') }}"
+                    class="shrink-0 rounded-full bg-amber-500 px-2.5 py-1 text-xs font-semibold text-white transition hover:bg-amber-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500">
+                    Exit to Admin
+                </a>
+            </div>
+        @endif
 
         <flux:spacer />
 
@@ -930,20 +975,6 @@
     </flux:modal>
 
     <flux:toast />
-
-    {{-- "View as" impersonation banner --}}
-    @if(session('impersonator_id'))
-        <div class="fixed inset-x-0 bottom-4 z-50 flex justify-center px-4">
-            <div class="flex items-center gap-3 rounded-full border border-amber-300 bg-amber-500 px-4 py-2 text-white shadow-lg shadow-amber-500/30">
-                <flux:icon.eye class="size-4" />
-                <span class="text-sm font-bold">Viewing as {{ auth()->user()->name }}</span>
-                <a href="{{ route('impersonate.stop') }}"
-                    class="rounded-full bg-white/95 px-3 py-1 text-xs font-black text-amber-700 transition hover:bg-white">
-                    Exit to admin
-                </a>
-            </div>
-        </div>
-    @endif
 
     {{-- AI HR Copilot — renders nothing unless OPENAI_API_KEY is configured --}}
     @auth

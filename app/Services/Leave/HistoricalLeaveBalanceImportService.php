@@ -206,6 +206,13 @@ class HistoricalLeaveBalanceImportService
 
                 $d = $row['data'];
 
+                // HR does not import their own balance; another HR user must.
+                if ((int) Employee::whereKey($d['employee_id'])->value('user_id') === (int) $actor->id) {
+                    $skipped++;
+
+                    continue;
+                }
+
                 $this->balances->setHistoricalBalance(
                     Employee::findOrFail($d['employee_id']),
                     LeaveType::findOrFail($d['leave_type_id']),

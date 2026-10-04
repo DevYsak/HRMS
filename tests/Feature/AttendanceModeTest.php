@@ -477,7 +477,9 @@ test('regularising only the check-out keeps the recorded check-in', function () 
     $managerUser = User::factory()->create(['role' => UserRole::Manager]);
     $hr = User::factory()->create(['role' => UserRole::HrAdmin]);
     $employee = Employee::factory()->create(['manager_id' => $managerUser->id]);
-    $date = now()->startOfMonth()->addDays(6)->toDateString();
+    // A day that has happened: punch corrections for future dates are refused
+    // (spec §3.2). The 7th of the month was still ahead on the 1st–6th.
+    $date = today()->subDays(2)->toDateString();
     Attendance::create([
         'employee_id' => $employee->id, 'date' => $date,
         'check_in' => "$date 09:17:00", 'check_out' => null, 'missing_checkout' => true,

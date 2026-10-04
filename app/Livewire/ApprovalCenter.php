@@ -2,11 +2,13 @@
 
 namespace App\Livewire;
 
+use App\Enums\UserRole;
 use App\Livewire\Concerns\HandlesClaimLock;
 use App\Models\AttendanceRegularisation;
 use App\Models\LeaveEncashment;
 use App\Models\LeaveRequest;
 use App\Models\OtRequest;
+use App\Models\User;
 use App\Notifications\OtRequestNotification;
 use App\Notifications\RegularisationReviewedNotification;
 use App\Services\Approvals\ApprovalGuard;
@@ -114,16 +116,21 @@ class ApprovalCenter extends Component
                     break;
 
                 case 'encashment':
-                    abort_unless($user->canApproveFinance(), 403);
                     $enc = LeaveEncashment::with('claimer')->findOrFail($id);
+                    // Each stage is decided by whoever owns it: Director / HR
+                    // Admin first, Finance once it has reached Finance.
+                    $financeStage = $enc->status === 'pending_finance';
+                    abort_unless($financeStage ? $user->canApproveFinance() : $this->decidesEncashmentFirstStage($user), 403);
                     app(ApprovalGuard::class)->assertNotSelf($user, $enc->employee);
                     if (! $this->guardClaim($enc)) {
                         return;
                     }
                     if ($action === 'approved') {
-                        app(LeaveService::class)->approveEncashment($user, $enc, $comment);
+                        $financeStage
+                            ? app(LeaveService::class)->financeApproveEncashment($user, $enc, (string) $comment)
+                            : app(LeaveService::class)->approveEncashment($user, $enc, (string) $comment);
                     } else {
-                        app(LeaveService::class)->rejectEncashment($user, $enc, $comment);
+                        app(LeaveService::class)->rejectEncashment($user, $enc, (string) $comment);
                     }
                     break;
 
@@ -151,6 +158,12 @@ class ApprovalCenter extends Component
             $days >= 1 => ['Medium', 'amber'],
             default => ['Normal', 'zinc'],
         };
+    }
+
+    /** First-stage encashment deciders (Conexus policy): Super Admin, HR Admin, Director. */
+    private function decidesEncashmentFirstStage(User $user): bool
+    {
+        return $user->isSuperAdmin() || $user->isHrAdmin() || $user->role === UserRole::Director;
     }
 
     public function render()
@@ -226,8 +239,13 @@ class ApprovalCenter extends Component
             }
         }
 
-        if ($canFin) {
-            foreach (LeaveEncashment::where('status', 'pending')
+        $encashmentStages = array_values(array_filter([
+            $this->decidesEncashmentFirstStage($user) ? 'pending' : null,
+            $canFin ? 'pending_finance' : null,
+        ]));
+
+        if ($encashmentStages !== []) {
+            foreach (LeaveEncashment::whereIn('status', $encashmentStages)
                 ->when($ownEmployeeId, fn ($q) => $q->where('employee_id', '!=', $ownEmployeeId))
                 ->with('employee.user', 'employee.department')
                 ->whereHas('employee.user')->latest()->get() as $r) {

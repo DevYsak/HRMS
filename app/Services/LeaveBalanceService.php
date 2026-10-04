@@ -198,6 +198,8 @@ class LeaveBalanceService
             throw new \InvalidArgumentException("Action must be 'credit' or 'debit'.");
         }
 
+        $this->assertNotOwnBalance($employee, $adjuster);
+
         if (! \in_array($category, [self::CATEGORY_ADJUSTMENT, self::CATEGORY_ADD_ON, self::CATEGORY_CORRECTION], true)) {
             throw new \InvalidArgumentException("Unknown adjustment category '{$category}'.");
         }
@@ -444,6 +446,8 @@ class LeaveBalanceService
         ?string $remarks,
         User $actor,
     ): LeaveBalanceAdjustment {
+        $this->assertNotOwnBalance($employee, $actor);
+
         foreach (['allocated' => $allocated, 'used' => $used, 'encashed' => $encashed] as $label => $value) {
             if ($value !== null && $value < 0) {
                 throw new \DomainException(ucfirst($label).' days cannot be negative.');
@@ -569,6 +573,17 @@ class LeaveBalanceService
 
             return $adjustment;
         });
+    }
+
+    /**
+     * Nobody credits, debits or restates their own leave — every screen and
+     * bulk path reaches the balance through here, so the rule lives here.
+     */
+    private function assertNotOwnBalance(Employee $employee, User $actor): void
+    {
+        if ((int) $employee->user_id === (int) $actor->id) {
+            throw new \DomainException('You cannot change your own leave balance.');
+        }
     }
 
     public function getBalanceSummary(Employee $employee, int $year): Collection

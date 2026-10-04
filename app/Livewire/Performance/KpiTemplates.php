@@ -3,8 +3,12 @@
 namespace App\Livewire\Performance;
 
 use App\Models\Department;
+use App\Models\EmploymentType;
+use App\Models\JobTitle;
+use App\Models\Office;
 use App\Models\PerformanceCycle;
 use App\Models\PerformanceTemplate;
+use App\Models\ShiftSetting;
 use App\Services\Performance\PerformanceTemplateService;
 use App\Services\Performance\ReviewWorkflowService;
 use Illuminate\Support\Facades\Auth;
@@ -14,6 +18,19 @@ use Livewire\Component;
 
 class KpiTemplates extends Component
 {
+    /**
+     * Targeted "Applies To" types: the label and the model each one picks its
+     * target from (ReviewWorkflowService filters employees on the matching
+     * column).
+     */
+    private const TARGETS = [
+        'department' => ['label' => 'Department', 'model' => Department::class],
+        'designation' => ['label' => 'Designation', 'model' => JobTitle::class],
+        'employment_type' => ['label' => 'Employment Type', 'model' => EmploymentType::class],
+        'branch' => ['label' => 'Branch / Office', 'model' => Office::class],
+        'shift' => ['label' => 'Shift', 'model' => ShiftSetting::class],
+    ];
+
     // ── Template list ────────────────────────────────────────────────────────
     public ?int $selectedTemplateId = null;
 
@@ -87,6 +104,17 @@ class KpiTemplates extends Component
         $this->is_active = true;
         $this->categories = [];
         $this->resetErrorBag();
+    }
+
+    /**
+     * Each type reads its own table, so a target kept from another type is
+     * read as the wrong thing (department #3 as job title #3). Switching the
+     * type clears it.
+     */
+    public function updatedAppliesToType(): void
+    {
+        $this->applies_to_id = null;
+        $this->resetValidation('applies_to_id');
     }
 
     private function loadTemplate(int $id): void
@@ -178,6 +206,9 @@ class KpiTemplates extends Component
             'name' => 'required|string|max:255',
             'code' => ['required', 'string', 'max:30', 'alpha_dash', Rule::unique('performance_templates', 'code')->ignore($this->selectedTemplateId)->whereNull('deleted_at')],
             'applies_to_type' => 'required|in:role,department,designation,employment_type,shift,branch,global',
+            'applies_to_id' => isset(self::TARGETS[$this->applies_to_type])
+                ? ['required', 'integer', Rule::exists(self::TARGETS[$this->applies_to_type]['model'], 'id')]
+                : ['nullable'],
             'cycle_type' => 'required|in:monthly,quarterly,half_yearly,annual,custom',
             'categories' => 'array',
             'categories.*.name' => 'required|string|max:100',
@@ -212,7 +243,8 @@ class KpiTemplates extends Component
                         'code' => $this->code,
                         'description' => $this->description ?: null,
                         'applies_to_type' => $this->applies_to_type,
-                        'applies_to_id' => $this->applies_to_id ?: null,
+                        // Only a targeted type keeps a target; Global and Role reach everyone.
+                        'applies_to_id' => isset(self::TARGETS[$this->applies_to_type]) ? $this->applies_to_id : null,
                         'cycle_type' => $this->cycle_type,
                         'is_active' => $this->is_active,
                     ],
@@ -375,7 +407,30 @@ class KpiTemplates extends Component
         return view('livewire.performance.kpi-templates', [
             'templates' => $templates,
             'departments' => $departments,
+            'target' => $this->targetPicker(),
             'totalWeight' => $this->totalWeight(),
         ])->layout('layouts.app', ['title' => 'KPI Templates']);
+    }
+
+    /**
+     * The target picker for the chosen "Applies To" type, or null when the
+     * type has no target.
+     *
+     * @return array{label: string, options: array<int, array{value: int, label: string}>}|null
+     */
+    private function targetPicker(): ?array
+    {
+        $target = self::TARGETS[$this->applies_to_type] ?? null;
+
+        if ($target === null) {
+            return null;
+        }
+
+        return [
+            'label' => $target['label'],
+            'options' => $target['model']::query()->orderBy('name')->get(['id', 'name'])
+                ->map(fn ($row) => ['value' => $row->id, 'label' => $row->name])
+                ->all(),
+        ];
     }
 }

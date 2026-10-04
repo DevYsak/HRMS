@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\Department;
 use App\Models\Employee;
+use App\Models\SalaryCycle;
 use App\Models\ShiftSetting;
 use App\Models\User;
 use Illuminate\Database\Seeder;
@@ -116,7 +117,9 @@ class BiometricEmployeeMasterSeeder extends Seeder
                     'shift_id' => $shift->id,
                     'joining_date' => $joiningDate,
                     'status' => 'active',
-                    'salary_cycle' => 'A',
+                    // The payroll run key — 'A' matched neither run.
+                    'salary_cycle' => 'cycle_a',
+                    'salary_cycle_id' => SalaryCycle::where('slug', 'cycle-a')->value('id'),
                     'sync_status' => 'pending',
                 ]);
                 $created++;

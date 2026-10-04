@@ -140,7 +140,7 @@
                 </flux:select>
             </div>
             <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <flux:input wire:model.live="joining_date" type="date" label="Joining Date" required />
+                <flux:input wire:model.live="joining_date" type="date" label="Joining Date" description="Leave blank if not yet known — the employee is listed in the HR completion queue until it is set." />
                 <flux:field>
                     <flux:label>Probation End Date</flux:label>
                     <flux:input wire:model="probation_end_date" type="date" />

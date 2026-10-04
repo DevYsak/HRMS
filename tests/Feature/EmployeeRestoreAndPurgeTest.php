@@ -26,6 +26,12 @@ function erpAdmin(): User
     return User::factory()->create(['role' => UserRole::HrAdmin]);
 }
 
+/** Purging is the Super Admin's alone (spec §3.1: archived, never deleted). */
+function erpSuperAdmin(): User
+{
+    return User::factory()->create(['role' => UserRole::SuperAdmin]);
+}
+
 function erpDeleted(): Employee
 {
     $user = User::factory()->create(['email' => 'gone'.Str::random(4).'@conexus-ns.com', 'role' => UserRole::Employee]);
@@ -130,7 +136,7 @@ test('permanent delete removes the employee and the user for good', function () 
     $deleted = erpDeleted();
     $userId = $deleted->user_id;
 
-    Livewire::actingAs(erpAdmin())->test(EmployeeIndex::class)
+    Livewire::actingAs(erpSuperAdmin())->test(EmployeeIndex::class)
         ->call('forceDeleteEmployee', $deleted->id);
 
     expect(Employee::withTrashed()->find($deleted->id))->toBeNull()
@@ -142,7 +148,7 @@ test('the email is free again afterwards', function () {
     $deleted = erpDeleted();
     $email = User::withTrashed()->find($deleted->user_id)->email;
 
-    Livewire::actingAs(erpAdmin())->test(EmployeeIndex::class)
+    Livewire::actingAs(erpSuperAdmin())->test(EmployeeIndex::class)
         ->call('forceDeleteEmployee', $deleted->id);
 
     expect(User::withTrashed()->where('email', $email)->exists())->toBeFalse();
@@ -151,7 +157,7 @@ test('the email is free again afterwards', function () {
 test('a permanent delete is audit logged before the row goes', function () {
     $deleted = erpDeleted();
 
-    Livewire::actingAs(erpAdmin())->test(EmployeeIndex::class)
+    Livewire::actingAs(erpSuperAdmin())->test(EmployeeIndex::class)
         ->call('forceDeleteEmployee', $deleted->id);
 
     expect(AuditLog::where('auditable_type', Employee::class)
@@ -162,13 +168,23 @@ test('a live employee cannot be permanently deleted in one step', function () {
     // Removing somebody is always two deliberate actions: delete, then purge.
     $live = Employee::factory()->create(['user_id' => User::factory()->create(['role' => UserRole::Employee])->id]);
 
-    Livewire::actingAs(erpAdmin())->test(EmployeeIndex::class)
+    Livewire::actingAs(erpSuperAdmin())->test(EmployeeIndex::class)
         ->call('forceDeleteEmployee', $live->id);
 
     expect(Employee::find($live->id))->not->toBeNull();
 });
 
 // ── Authorisation ──────────────────────────────────────────────────────────
+
+test('HR Admin cannot permanently delete — records are archived, never deleted', function () {
+    $deleted = erpDeleted();
+
+    Livewire::actingAs(erpAdmin())->test(EmployeeIndex::class)
+        ->call('forceDeleteEmployee', $deleted->id)
+        ->assertForbidden();
+
+    expect(Employee::withTrashed()->find($deleted->id))->not->toBeNull();
+});
 
 test('a manager cannot permanently delete anyone', function () {
     $deleted = erpDeleted();

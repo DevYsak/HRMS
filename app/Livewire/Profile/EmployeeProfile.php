@@ -11,6 +11,7 @@ use App\Services\Profile\ProfileChangeService;
 use App\Services\Profile\ProfileFieldRegistry as Registry;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
+use Livewire\Attributes\Locked;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 
@@ -35,7 +36,8 @@ class EmployeeProfile extends Component
 
     public mixed $editingValue = null;
 
-    /** Request currently being reviewed in the decision modal. */
+    /** Request currently being reviewed in the decision modal (set by openReview only). */
+    #[Locked]
     public ?int $reviewingId = null;
 
     public string $reviewComment = '';
@@ -51,6 +53,8 @@ class EmployeeProfile extends Component
     public function mount(Employee $employee): void
     {
         $this->authorize('manage_employees');
+        // Inside the viewer's reach (a department-scoped user sees their department).
+        $this->authorize('view', $employee);
 
         $this->employee = $employee->load([
             'user', 'department', 'jobTitle', 'manager', 'shift', 'office', 'employmentType', 'payrollSettings',
@@ -91,9 +95,77 @@ class EmployeeProfile extends Component
 
     public function setTab(string $tab): void
     {
-        if (array_key_exists($tab, self::TABS)) {
+        if (array_key_exists($tab, self::TABS) && ($tab !== 'financial' || $this->canSeeFinancial())) {
             $this->activeTab = $tab;
         }
+    }
+
+    /**
+     * Bank account, PAN, Aadhaar and CTC are compensation data (spec §4:
+     * Finance / HR) — not for every holder of employee management.
+     */
+    public function canSeeFinancial(): bool
+    {
+        return Auth::user()->canViewFinanceProfile();
+    }
+
+    /**
+     * HR does not edit their own record on the HR surface: bank, PAN and other
+     * approval-tier data need a second person (My Profile -> change request).
+     * The Super Admin is exempt — no one sits above them.
+     */
+    public function canEditHere(): bool
+    {
+        return (int) $this->employee->user_id !== (int) Auth::id() || Auth::user()->isSuperAdmin();
+    }
+
+    private function refuseOwnRecord(): void
+    {
+        abort_unless($this->canEditHere(), 403, 'Change your own details from My Profile — another HR user approves them.');
+    }
+
+    public function isFinancialField(string $field): bool
+    {
+        return $this->registryGroup($field) === 'financial';
+    }
+
+    /** A change-request value as this viewer may see it (financial values masked without view_finance_profile). */
+    public function requestValue(ProfileChangeRequest $request, ?string $value): string
+    {
+        if ($value === null || $value === '') {
+            return 'empty';
+        }
+
+        if ($this->isFinancialField($request->field) && ! $this->canSeeFinancial()) {
+            return '•••• '.mb_substr($value, -2);
+        }
+
+        return $value;
+    }
+
+    /**
+     * Empty fields this viewer may fill in here.
+     *
+     * @param  array<int, array{field: string, label: string}>  $missing
+     * @return array<int, array{field: string, label: string}>
+     */
+    public function editableGaps(array $missing): array
+    {
+        if (! $this->canEditHere()) {
+            return [];
+        }
+
+        return array_values(array_filter($missing, fn (array $gap) => $this->canSeeFinancial() || ! $this->isFinancialField($gap['field'])));
+    }
+
+    private function authorizeField(string $field): void
+    {
+        abort_if(($this->registryGroup($field) === 'financial') && ! $this->canSeeFinancial(), 403);
+    }
+
+    private function registryGroup(string $field): ?string
+    {
+        return Registry::get($field)['group'] ?? null;
     }
 
     // ── Direct edit (HR may write any registered field) ──────────────────────
@@ -101,10 +173,13 @@ class EmployeeProfile extends Component
     public function editField(string $field): void
     {
         $this->authorize('manage_employees');
+        $this->refuseOwnRecord();
 
         if (! Registry::has($field)) {
             return;
         }
+
+        $this->authorizeField($field);
 
         // Media is uploaded through the avatar control, not a text modal.
         if ((Registry::get($field)['type'] ?? null) === 'image') {
@@ -129,6 +204,11 @@ class EmployeeProfile extends Component
     public function saveField(ProfileChangeService $service): void
     {
         $this->authorize('manage_employees');
+        // Writing is editing the record: inside reach, and never a Super Admin's
+        // record unless you are one (its login email is here).
+        $this->authorize('update', $this->employee);
+        $this->refuseOwnRecord();
+        $this->authorizeField((string) $this->editingField);
 
         try {
             $service->updateAsHr($this->employee, $this->editingField, $this->editingValue, Auth::user());
@@ -163,7 +243,8 @@ class EmployeeProfile extends Component
     {
         $this->authorize('approve_profile_changes');
 
-        $this->reviewingId = $requestId;
+        // Only a request belonging to the employee on this page.
+        $this->reviewingId = ProfileChangeRequest::where('employee_id', $this->employee->id)->findOrFail($requestId)->id;
         $this->reviewComment = '';
         $this->modal('review-request')->show();
     }
@@ -172,7 +253,7 @@ class EmployeeProfile extends Component
     {
         $this->authorize('approve_profile_changes');
 
-        $request = ProfileChangeRequest::findOrFail($this->reviewingId);
+        $request = ProfileChangeRequest::where('employee_id', $this->employee->id)->findOrFail($this->reviewingId);
 
         try {
             $service->approve($request, Auth::user(), $this->comment());
@@ -189,7 +270,7 @@ class EmployeeProfile extends Component
     {
         $this->authorize('approve_profile_changes');
 
-        $request = ProfileChangeRequest::findOrFail($this->reviewingId);
+        $request = ProfileChangeRequest::where('employee_id', $this->employee->id)->findOrFail($this->reviewingId);
 
         try {
             $service->reject($request, Auth::user(), $this->comment());

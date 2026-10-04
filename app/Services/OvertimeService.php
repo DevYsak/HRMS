@@ -51,7 +51,13 @@ class OvertimeService
 
         $start = Carbon::parse("{$data['work_date']} {$data['start_time']}");
         $end = Carbon::parse("{$data['work_date']} {$data['end_time']}");
-        $hours = max(0, $end->floatDiffInHours($start));
+        // An end at or before the start runs past midnight.
+        if ($end->lessThanOrEqualTo($start)) {
+            $end = $end->addDay();
+        }
+        // start → end. (Carbon 3 differences are signed: end->diff(start) is
+        // negative, which max(0, …) turned into 0 requested hours.)
+        $hours = max(0, $start->floatDiffInHours($end));
 
         return OtRequest::create([
             'employee_id' => $employee->id,

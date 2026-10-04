@@ -7,11 +7,16 @@ use App\Notifications\OtRequestNotification;
 use App\Services\Notifications\NotificationRecipients;
 use Illuminate\Console\Command;
 
+/**
+ * Spec §7 — OT requests pending more than 24 hours are escalated to HR Admin
+ * in-app. Runs hourly; each request is escalated ONCE (escalated_at), not
+ * re-announced every hour for as long as it stays pending.
+ */
 class EscalateOtRequests extends Command
 {
     protected $signature = 'hrms:escalate-ot';
 
-    protected $description = 'Escalate OT requests pending more than 24 hours to HR admins.';
+    protected $description = 'Escalate OT requests pending more than 24 hours to HR admins (once per request).';
 
     public function handle(): int
     {
@@ -19,6 +24,7 @@ class EscalateOtRequests extends Command
 
         $pending = OtRequest::with(['employee.user'])
             ->where('status', 'pending')
+            ->whereNull('escalated_at')
             ->where('created_at', '<=', $cutoff)
             ->get();
 
@@ -29,16 +35,25 @@ class EscalateOtRequests extends Command
         }
 
         $hrAdmins = app(NotificationRecipients::class)->hrQueue();
+        $escalated = 0;
 
         foreach ($pending as $request) {
-            foreach ($hrAdmins as $hr) {
-                $hr->notify((new OtRequestNotification($request))->forRole('hr_admin'));
-            }
+            try {
+                foreach ($hrAdmins as $hr) {
+                    $hr->notify((new OtRequestNotification($request))->forRole('hr_admin'));
+                }
 
-            $this->line("Escalated OT request #{$request->id} for {$request->employee->user->name}");
+                $request->forceFill(['escalated_at' => now()])->save();
+                $escalated++;
+
+                $this->line("Escalated OT request #{$request->id} for {$request->employee?->user?->name}");
+            } catch (\Throwable $e) {
+                // One failure never blocks the rest; it is retried next hour.
+                report($e);
+            }
         }
 
-        $this->info("Escalated {$pending->count()} OT request(s).");
+        $this->info("Escalated {$escalated} OT request(s).");
 
         return self::SUCCESS;
     }

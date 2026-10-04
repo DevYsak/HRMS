@@ -464,8 +464,10 @@ class BiometricSyncService
         if ($shift) {
             $shiftStart = Carbon::parse($shift->start_time)->setDateFrom($punchedAt);
             $cutoff = $shiftStart->copy()->addMinutes((int) $shift->grace_minutes);
-            $isLate = $punchedAt->gt($cutoff);
-            $lateMinutes = $isLate ? (int) $cutoff->diffInMinutes($punchedAt) : 0;
+            // Minute precision (spec §3.2: 10:35 is on time, 10:36 is late).
+            $arrivedAt = $punchedAt->copy()->startOfMinute();
+            $isLate = $arrivedAt->gt($cutoff);
+            $lateMinutes = $isLate ? (int) $cutoff->diffInMinutes($arrivedAt) : 0;
         }
 
         return Attendance::create([
@@ -502,8 +504,9 @@ class BiometricSyncService
             ]);
         }
 
-        // Never overwrite a checkout with an earlier time (re-runs / device clock drift).
-        if ($attendance->check_out && $attendance->check_out->gte($punchedAt)) {
+        // Never overwrite a checkout with an earlier time (re-runs / device clock drift),
+        // and never an approved regularisation — the correction is the record.
+        if ($attendance->hasCorrectedPunches() || ($attendance->check_out && $attendance->check_out->gte($punchedAt))) {
             return $attendance;
         }
 

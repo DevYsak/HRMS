@@ -20,6 +20,8 @@ function payrollEmployee(?array $attrs = []): Employee
         'user_id' => $user->id,
         'status' => 'active',
         'salary_cycle' => 'cycle_a',
+        // Joined before every run below: a run pays only people employed in its cycle.
+        'joining_date' => '2024-01-08',
     ], $attrs));
 }
 

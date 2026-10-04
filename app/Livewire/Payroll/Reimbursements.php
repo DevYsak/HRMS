@@ -95,14 +95,30 @@ class Reimbursements extends Component
     public function approve(int $id, ReimbursementService $reimbursementService): void
     {
         $reimbursement = Reimbursement::findOrFail($id);
-        $reimbursementService->approve($reimbursement, Auth::id());
+
+        try {
+            $reimbursementService->approve($reimbursement, Auth::id());
+        } catch (\DomainException $e) {
+            \Flux::toast($e->getMessage(), variant: 'danger');
+
+            return;
+        }
+
         \Flux::toast('Reimbursement approved.');
     }
 
     public function reject(int $id, ReimbursementService $reimbursementService): void
     {
         $reimbursement = Reimbursement::findOrFail($id);
-        $reimbursementService->reject($reimbursement, Auth::id());
+
+        try {
+            $reimbursementService->reject($reimbursement, Auth::id());
+        } catch (\DomainException $e) {
+            \Flux::toast($e->getMessage(), variant: 'danger');
+
+            return;
+        }
+
         \Flux::toast('Reimbursement rejected.', variant: 'danger');
     }
 

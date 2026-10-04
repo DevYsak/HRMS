@@ -5,6 +5,7 @@ namespace App\Observers;
 use App\Enums\EmployeeStatus;
 use App\Models\AuditLog;
 use App\Models\Employee;
+use App\Models\SalaryCycle;
 use App\Services\Leave\EnsureEmployeeLeaveBalancesService;
 use App\Services\Leave\LeaveProvisioningService;
 use App\Services\Leave\LeaveRuleResolver;
@@ -14,6 +15,29 @@ class EmployeeObserver
 {
     /** Set while provisioning assigns a policy itself, so it is not provisioned twice. */
     public static bool $provisioningInProgress = false;
+
+    /**
+     * Keep the payroll run key (salary_cycle: cycle_a / cycle_b) in step with
+     * the cycle HR picks on the employee form (salary_cycle_id). Payroll reads
+     * the key; the form writes the id — without this, moving someone to Cycle
+     * B on screen left them in the Cycle A run.
+     */
+    public function saving(Employee $employee): void
+    {
+        if (! $employee->isDirty('salary_cycle_id') || ! $employee->salary_cycle_id) {
+            return;
+        }
+
+        $key = match (SalaryCycle::whereKey($employee->salary_cycle_id)->value('slug')) {
+            'cycle-a' => 'cycle_a',
+            'cycle-b' => 'cycle_b',
+            default => null,
+        };
+
+        if ($key !== null) {
+            $employee->salary_cycle = $key;
+        }
+    }
 
     public function created(Employee $employee): void
     {

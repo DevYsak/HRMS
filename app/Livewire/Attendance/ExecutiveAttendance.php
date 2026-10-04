@@ -99,7 +99,12 @@ class ExecutiveAttendance extends Component
         [$rangeStart, $rangeEnd] = $this->periodRange();
 
         // ── Reference data, scoped by the department/office filters ───────────
+        // …and by the viewer's reach: a manager's "executive view" is their
+        // reporting line, not the company's named performers.
+        $reach = Auth::user()->accessibleEmployeeIds();
+
         $employees = Employee::where('status', 'active')
+            ->when($reach !== null, fn ($q) => $q->whereIn('id', $reach))
             ->when($this->departmentId, fn ($q) => $q->where('department_id', $this->departmentId))
             ->when($this->officeId, fn ($q) => $q->where('office_id', $this->officeId))
             ->with(['user:id,name', 'department:id,name', 'office:id,name'])

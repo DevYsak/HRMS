@@ -32,6 +32,8 @@ class OnboardingCompletedNotification extends Notification
             'url' => $url,
             'icon' => 'check-badge',
             'color' => 'green',
+            // Lets the daily reminder job see it already announced this person.
+            'employee_id' => $this->employee->id,
         ];
     }
 }

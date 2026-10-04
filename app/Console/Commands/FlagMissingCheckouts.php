@@ -4,44 +4,83 @@ namespace App\Console\Commands;
 
 use App\Models\Attendance;
 use App\Notifications\MissingCheckoutNotification;
+use App\Services\Attendance\ShiftResolver;
 use Illuminate\Console\Command;
+use Illuminate\Support\Carbon;
 
 /**
  * FIX 4 — Spec §3.2 + §3.6
  * Flags missing clock-outs and notifies employee + their manager in-app.
+ *
+ * "Missing" means no clock-out by the employee's OWN shift end + 1 hour: the
+ * IT shift (10:30–19:30) is due at 20:30, the UK Sales shift (13:00–22:00) at
+ * 23:00. Scheduled at 21:00 and 23:05, each run flags only the days whose
+ * deadline has passed — a UK employee still working at 21:00 is not flagged.
+ * Idempotent: a day already flagged is never flagged or notified twice.
  */
 class FlagMissingCheckouts extends Command
 {
+    /** Spec §3.2: shift end + 1 hour. */
+    private const GRACE_MINUTES_AFTER_SHIFT = 60;
+
     protected $signature = 'hrms:flag-missing-checkouts';
 
-    protected $description = 'Flag today\'s attendance records with no check-out. Runs at 21:00 IST (shift end + 1 hr).';
+    protected $description = 'Flag today\'s attendance records with no check-out once the employee\'s shift end + 1 hour has passed.';
 
-    public function handle(): int
+    public function handle(ShiftResolver $shifts): int
     {
         $today = now()->toDateString();
 
-        $records = Attendance::with(['employee.user', 'employee.manager'])
+        $records = Attendance::with(['employee.user', 'employee.manager', 'employee.shift'])
             ->where('date', $today)
             ->whereNotNull('check_in')
             ->whereNull('check_out')
             ->where('missing_checkout', false)
             ->get();
 
+        $flagged = 0;
+
         foreach ($records as $record) {
-            $record->update(['missing_checkout' => true]);
-
             $employee = $record->employee;
-            $notification = new MissingCheckoutNotification($record);
 
-            $employee->user?->notify($notification->forRole('employee'));
+            if (! $employee || ! $this->deadlinePassed($shifts, $record)) {
+                continue;
+            }
 
-            if ($employee->manager_id) {
-                $employee->manager?->notify($notification->forRole('manager'));
+            try {
+                $record->update(['missing_checkout' => true]);
+
+                $notification = new MissingCheckoutNotification($record);
+                $employee->user?->notify($notification->forRole('employee'));
+
+                if ($employee->manager_id) {
+                    $employee->manager?->notify($notification->forRole('manager'));
+                }
+
+                $flagged++;
+            } catch (\Throwable $e) {
+                // One bad record never stops the rest of the run.
+                report($e);
             }
         }
 
-        $this->info("Flagged {$records->count()} attendance record(s) as missing check-out for {$today}.");
+        $this->info("Flagged {$flagged} attendance record(s) as missing check-out for {$today}.");
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Whether the employee's shift end + 1 hour has passed. With no resolvable
+     * shift, the run time itself is the deadline (the original 21:00 rule).
+     */
+    private function deadlinePassed(ShiftResolver $shifts, Attendance $record): bool
+    {
+        $shift = $shifts->resolve($record->employee, Carbon::parse($record->date));
+
+        if ($shift === null) {
+            return true;
+        }
+
+        return now()->greaterThanOrEqualTo($shift->end->copy()->addMinutes(self::GRACE_MINUTES_AFTER_SHIFT));
     }
 }

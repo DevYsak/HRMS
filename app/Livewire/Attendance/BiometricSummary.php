@@ -56,7 +56,8 @@ class BiometricSummary extends Component
      */
     public function syncNow(EngineAttendanceSyncService $service): void
     {
-        abort_unless(Auth::user()->canApproveLeave(), 403);
+        // Re-pulling a day rewrites attendance for the whole company.
+        abort_unless(Auth::user()->hasPermission('manage_biometric'), 403);
 
         $result = $service->syncDate($this->date);
 
@@ -99,10 +100,14 @@ class BiometricSummary extends Component
     {
         abort_unless(Auth::user()->canApproveLeave(), 403);
 
+        // A manager sees their own reporting line; HR / company-wide roles see all.
+        $reach = Auth::user()->accessibleEmployeeIds();
+
         $query = AttendanceDailySummary::query()
             ->with(['employee.user', 'employee.department', 'employee.shift', 'employee.manager'])
             ->whereHas('employee.user')
-            ->where('date', $this->date);
+            ->where('date', $this->date)
+            ->when($reach !== null, fn ($q) => $q->whereIn('employee_id', $reach));
 
         if ($this->search !== '') {
             $search = $this->search;
@@ -121,7 +126,9 @@ class BiometricSummary extends Component
         }
 
         // Aggregate stats for the selected day (unfiltered by search/department).
-        $dayRows = AttendanceDailySummary::where('date', $this->date)->get();
+        $dayRows = AttendanceDailySummary::where('date', $this->date)
+            ->when($reach !== null, fn ($q) => $q->whereIn('employee_id', $reach))
+            ->get();
         $stats = [
             'total' => $dayRows->count(),
             'present' => $dayRows->whereIn('status', ['present', 'late', 'half_day'])->count(),
@@ -137,6 +144,7 @@ class BiometricSummary extends Component
             'statuses' => ['present', 'late', 'half_day', 'absent', 'leave', 'holiday', 'weekly_off'],
             'stats' => $stats,
             'lastSynced' => $dayRows->max('synced_at'),
+            'canSync' => Auth::user()->hasPermission('manage_biometric'),
         ])->layout('layouts.app', ['title' => 'Biometric Attendance Summary']);
     }
 }

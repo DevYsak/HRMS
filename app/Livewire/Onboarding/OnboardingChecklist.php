@@ -6,6 +6,7 @@ use App\Models\Employee;
 use App\Models\OnboardingTask;
 use App\Services\Performance\TimelineService;
 use Illuminate\Support\Facades\Auth;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -13,8 +14,11 @@ class OnboardingChecklist extends Component
 {
     use WithPagination;
 
+    /** Fixed by the route and authorized in mount — never changed by the client. */
+    #[Locked]
     public int $employeeId;
 
+    #[Locked]
     public string $phase = 'onboarding';
 
     public string $statusFilter = 'all';
@@ -43,6 +47,10 @@ class OnboardingChecklist extends Component
 
     public function mount(int $employee, string $phase = 'onboarding'): void
     {
+        // Inside the user's reach (a department-scoped HR user manages only
+        // their departments' checklists).
+        $this->authorize('update', Employee::findOrFail($employee));
+
         $this->employeeId = $employee;
         $this->phase = $phase;
     }

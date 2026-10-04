@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Document;
 use App\Models\Employee;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 
 class DocumentController extends Controller
@@ -28,21 +29,33 @@ class DocumentController extends Controller
         return $pdf->download($filename);
     }
 
+    /** Types a browser may render in a tab without running anything. */
+    private const INLINE_TYPES = ['application/pdf', 'image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+
     public function download(Document $document)
     {
+        Gate::authorize('view', $document);
+
         if (! Storage::disk('local')->exists($document->file_path)) {
             abort(404, 'File not found on server.');
         }
 
         return Storage::disk('local')->download(
             $document->file_path,
-            $document->file_name
+            $document->file_name,
+            ['X-Content-Type-Options' => 'nosniff'],
         );
     }
 
-    /** Serve file inline — PDF/image opens in browser tab. */
+    /**
+     * Serve file inline — PDF/image opens in browser tab. Anything else
+     * (HTML, SVG, office files) is sent as an attachment with a neutral type,
+     * so an uploaded file can never run as a page on this origin.
+     */
     public function view(Document $document)
     {
+        Gate::authorize('view', $document);
+
         $storage = Storage::disk('local');
 
         if (! $storage->exists($document->file_path)) {
@@ -50,10 +63,13 @@ class DocumentController extends Controller
         }
 
         $mime = $document->mime_type ?? $storage->mimeType($document->file_path);
+        $inline = in_array($mime, self::INLINE_TYPES, true);
+        $filename = str_replace(['"', "\r", "\n"], '', (string) $document->file_name);
 
         return response($storage->get($document->file_path), 200, [
-            'Content-Type' => $mime,
-            'Content-Disposition' => 'inline; filename="'.$document->file_name.'"',
+            'Content-Type' => $inline ? $mime : 'application/octet-stream',
+            'Content-Disposition' => ($inline ? 'inline' : 'attachment').'; filename="'.$filename.'"',
+            'X-Content-Type-Options' => 'nosniff',
             'Cache-Control' => 'private, max-age=300',
         ]);
     }

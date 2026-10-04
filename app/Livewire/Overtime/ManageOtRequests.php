@@ -8,6 +8,7 @@ use App\Models\OtRequest;
 use App\Notifications\OtRequestNotification;
 use App\Services\Approvals\ApprovalGuard;
 use App\Services\OvertimeService;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
@@ -95,6 +96,15 @@ class ManageOtRequests extends Component
         $this->checkOtPermission();
         $req = OtRequest::with(['employee.user', 'employee.department'])->findOrFail($id);
         app(ApprovalGuard::class)->assertCanDecide(Auth::user(), $req->employee);
+
+        // A decided request is history: editing an approved one would change
+        // what was approved (and may already be paid) without a new decision.
+        if (! $req->isPending()) {
+            \Flux::toast('Only a pending OT request can be edited.', variant: 'warning');
+
+            return;
+        }
+
         $this->selectedRequest = $req;
         $this->reviewingId = $id;
         $this->editWorkDate = $req->work_date->format('Y-m-d');
@@ -120,10 +130,25 @@ class ManageOtRequests extends Component
         $editing = OtRequest::with('employee')->findOrFail($this->reviewingId);
         app(ApprovalGuard::class)->assertCanDecide(Auth::user(), $editing->employee);
 
+        if (! $editing->isPending()) {
+            \Flux::toast('Only a pending OT request can be edited.', variant: 'warning');
+
+            return;
+        }
+
+        // Keep the requested hours in step with the edited times — approval
+        // pays requested_hours, so stale hours would pay the old window.
+        $start = Carbon::parse("{$this->editWorkDate} {$this->editStartTime}");
+        $end = Carbon::parse("{$this->editWorkDate} {$this->editEndTime}");
+        if ($end->lessThanOrEqualTo($start)) {
+            $end = $end->addDay();
+        }
+
         $editing->update([
             'work_date' => $this->editWorkDate,
             'start_time' => $this->editStartTime,
             'end_time' => $this->editEndTime,
+            'requested_hours' => round($start->floatDiffInHours($end), 2),
             'reason' => $this->editReason,
         ]);
 

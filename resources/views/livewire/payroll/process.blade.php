@@ -30,6 +30,11 @@
                     <option value="2026">2026</option>
                     <option value="2025">2025</option>
                 </flux:select>
+                {{-- Spec §3.5: Cycle A (1st–31st) and Cycle B (21st–20th) run separately. --}}
+                <flux:select wire:model.live="cycle" size="sm" class="w-40" aria-label="Salary cycle">
+                    <option value="cycle_a">Cycle A (1st–31st)</option>
+                    <option value="cycle_b">Cycle B (21st–20th)</option>
+                </flux:select>
             </div>
             <flux:button wire:click="startProcessing" variant="primary" icon="play">
                 {{ $currentPayroll ? 'Re-generate Draft' : 'Generate Draft' }}

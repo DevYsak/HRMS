@@ -21,6 +21,7 @@ use App\Models\SalaryCycle;
 use App\Models\ShiftSetting;
 use App\Models\User;
 use App\Models\WorkMode;
+use App\Services\Approvals\ApprovalGuard;
 use App\Services\Biometric\BiometricCodeService;
 use App\Services\Biometric\EngineAttendanceSyncService;
 use App\Services\Leave\LeaveCarryForwardService;
@@ -227,11 +228,20 @@ class EmployeeEdit extends Component
             'employment_type_id' => 'nullable|exists:employment_types,id',
             'work_mode_id' => 'nullable|exists:work_modes,id',
             'salary_cycle_id' => 'nullable|exists:salary_cycles,id',
-            'status' => 'required|string',
+            'status' => ['required', Rule::in(array_map(fn (EmployeeStatus $s) => $s->value, EmployeeStatus::cases()))],
             'resignation_date' => 'nullable|date',
             'termination_date' => 'nullable|date',
             'notice_period_end_date' => 'nullable|date',
         ]);
+
+        // Nobody changes their own employment status (e.g. probation ->
+        // permanent) — another HR user decides it. The Super Admin is exempt.
+        $currentStatus = $this->employee->status instanceof EmployeeStatus ? $this->employee->status->value : (string) $this->employee->status;
+        if ((int) $this->employee->user_id === (int) Auth::id() && ! Auth::user()->isSuperAdmin() && $this->status !== $currentStatus) {
+            $this->addError('status', 'You cannot change your own employment status — another HR user must.');
+
+            return;
+        }
 
         $chosenRole = Role::findOrFail($this->roleId);
 
@@ -243,9 +253,10 @@ class EmployeeEdit extends Component
             return;
         }
 
-        // HR/manager access scope only applies to approver roles; it's cleared
-        // for everyone else so a normal employee can never carry a stray scope.
-        $scopesApply = in_array($chosenRole->legacyBucket()->value, ['hr_admin', 'manager'], true);
+        // HR/director/manager access scope only applies to approver roles; it's
+        // cleared for everyone else so a normal employee can never carry a stray
+        // scope. Directors included: a Department Head is a scoped Director.
+        $scopesApply = in_array($chosenRole->legacyBucket()->value, ['hr_admin', 'director', 'manager'], true);
         $newScopeDepartments = $scopesApply && $this->scopeDepartments ? array_map('intval', $this->scopeDepartments) : null;
         $newScopeShifts = $scopesApply && $this->scopeShifts ? array_map('intval', $this->scopeShifts) : null;
 
@@ -507,8 +518,23 @@ class EmployeeEdit extends Component
         return null;
     }
 
+    /**
+     * Salary components are compensation (spec §4: Finance/HR, not Director or
+     * Manager), and nobody sets their own pay — except the Super Admin, who has
+     * no one above them to do it.
+     */
+    private function authorizeSalaryChange(): void
+    {
+        $user = Auth::user();
+
+        abort_unless($user->canRunPayroll(), 403);
+        abort_if((int) $this->employee->user_id === (int) $user->id && ! $user->isSuperAdmin(), 403, 'You cannot change your own salary.');
+    }
+
     public function openAddSalary(): void
     {
+        $this->authorizeSalaryChange();
+
         $this->editingSalaryId = null;
         $this->salaryComponentId = '';
         $this->salaryAmount = '';
@@ -519,6 +545,7 @@ class EmployeeEdit extends Component
     public function openEditSalary(int $id): void
     {
         $this->authorize('update', $this->employee);
+        $this->authorizeSalaryChange();
 
         $row = EmployeeSalary::where('employee_id', $this->employee->id)->findOrFail($id);
         $this->editingSalaryId = $id;
@@ -531,6 +558,7 @@ class EmployeeEdit extends Component
     public function saveSalary(): void
     {
         $this->authorize('update', $this->employee);
+        $this->authorizeSalaryChange();
 
         $this->validate([
             'salaryComponentId' => ['required', 'exists:salary_components,id'],
@@ -559,6 +587,7 @@ class EmployeeEdit extends Component
     public function removeSalary(int $id): void
     {
         $this->authorize('update', $this->employee);
+        $this->authorizeSalaryChange();
 
         EmployeeSalary::where('employee_id', $this->employee->id)->findOrFail($id)->delete();
         $this->employee->load('salaries.component');
@@ -570,6 +599,8 @@ class EmployeeEdit extends Component
     public function confirmProbation(): void
     {
         $this->authorize('update', $this->employee);
+        // Probation is confirmed by someone else (spec §3.8: manager + HR).
+        app(ApprovalGuard::class)->assertNotSelf(Auth::user(), $this->employee);
 
         $this->employee->update([
             'status' => EmployeeStatus::Active,
@@ -583,6 +614,7 @@ class EmployeeEdit extends Component
     public function extendProbation(): void
     {
         $this->authorize('update', $this->employee);
+        app(ApprovalGuard::class)->assertNotSelf(Auth::user(), $this->employee);
 
         $this->validate([
             'extend_end_date' => 'required|date|after:today',

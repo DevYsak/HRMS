@@ -1894,17 +1894,24 @@ class AttendanceTracker extends Component
     {
         $isHalfDay = $this->regType === 'half_day';
 
+        // A punch correction is for a day that has happened (spec §3.2: a
+        // missed or wrong clock-in/out), with real HH:MM times.
+        $time = ['regex:/^\d{2}:\d{2}(:\d{2})?$/'];
+
         $this->validate([
-            'regDate' => 'required|date',
+            'regDate' => $isHalfDay ? 'required|date' : 'required|date|before_or_equal:today',
             'regType' => 'required|in:punch,half_day',
             'regHalfDayPeriod' => $isHalfDay ? 'required|in:first,second' : 'nullable',
-            'regCheckIn' => $isHalfDay ? 'nullable' : ($this->regFixIn ? 'required' : 'nullable'),
-            'regCheckOut' => $isHalfDay ? 'nullable' : ($this->regFixOut ? 'required' : 'nullable'),
+            'regCheckIn' => $isHalfDay ? 'nullable' : array_merge([$this->regFixIn ? 'required' : 'nullable'], $time),
+            'regCheckOut' => $isHalfDay ? 'nullable' : array_merge([$this->regFixOut ? 'required' : 'nullable'], $time),
             'regReason' => 'required|min:5',
             'regAttachment' => 'nullable|file|max:5120|mimes:jpg,jpeg,png,pdf,webp',
         ], [
             'regCheckIn.required' => 'Enter the correct check-in time.',
             'regCheckOut.required' => 'Enter the correct check-out time.',
+            'regDate.before_or_equal' => 'You can only correct a day that has already happened.',
+            'regCheckIn.regex' => 'Enter the check-in time as HH:MM.',
+            'regCheckOut.regex' => 'Enter the check-out time as HH:MM.',
             'regAttachment.max' => 'The attachment may not exceed 5 MB.',
         ]);
 

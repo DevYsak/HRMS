@@ -13,7 +13,9 @@
             </flux:subheading>
         </div>
         <div class="flex items-center gap-2">
-            <flux:button wire:click="syncNow" icon="bolt" variant="primary" size="sm">Quick Scan</flux:button>
+            @if($canSync)
+                <flux:button wire:click="syncNow" icon="bolt" variant="primary" size="sm">Quick Scan</flux:button>
+            @endif
             <flux:button wire:click="previousDay" icon="chevron-left" variant="ghost" size="sm">Prev</flux:button>
             <flux:button wire:click="today" variant="ghost" size="sm">Today</flux:button>
             <flux:button wire:click="nextDay" icon="chevron-right" variant="ghost" size="sm">Next</flux:button>

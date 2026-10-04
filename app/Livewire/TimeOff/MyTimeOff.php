@@ -6,7 +6,6 @@ use App\Models\DecemberMandatoryDay;
 use App\Models\Employee;
 use App\Models\HolidayPaySetting;
 use App\Models\HolidayWorkRequest;
-use App\Models\LeaveBalance;
 use App\Models\LeaveEncashment;
 use App\Models\LeaveRequest;
 use App\Models\LeaveType;
@@ -15,11 +14,14 @@ use App\Models\WfhRequest;
 use App\Notifications\LeaveEncashmentNotification;
 use App\Services\Attendance\HolidayResolver;
 use App\Services\HolidayWorkService;
+use App\Services\Leave\EmployeeLeaveOverviewService;
+use App\Services\Leave\LeaveBalanceCalculator;
 use App\Services\Leave\LeaveYearResolver;
 use App\Services\LeaveService;
 use App\Services\Notifications\NotificationRecipients;
 use Carbon\Carbon;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Livewire\Attributes\On;
@@ -108,7 +110,7 @@ class MyTimeOff extends Component
 
     public function mount(): void
     {
-        $this->filterYear = (string) now()->year;
+        $this->filterYear = (string) app(LeaveYearResolver::class)->legacyYearFor();
         $this->calendarMonth = now()->format('Y-m');
     }
 
@@ -478,6 +480,14 @@ class MyTimeOff extends Component
         $this->showEncashModal = true;
     }
 
+    /** "Encash" on the CSL card (MyLeaveBalances): open the form for that type. */
+    #[On('encash-leave')]
+    public function encashForType(int $leaveTypeId): void
+    {
+        $this->openEncashModal();
+        $this->encash_leave_type_id = (string) $leaveTypeId;
+    }
+
     public function submitEncashment(): void
     {
         $this->validateOnly('encash_leave_type_id,encash_days');
@@ -524,9 +534,15 @@ class MyTimeOff extends Component
             return;
         }
 
+        // Conexus policy: a Director or the HR Admin approves encashment, so
+        // both are told it is waiting.
         $encashment->load(['employee.user', 'leaveType']);
-        app(NotificationRecipients::class)->hrQueue()
+        $recipients = app(NotificationRecipients::class);
+        $recipients->hrQueue()
             ->each(fn ($u) => $u->notify((new LeaveEncashmentNotification($encashment, 'submitted'))->forRole('hr_admin')));
+        $recipients->directors()
+            ->reject(fn ($u) => $u->id === Auth::id())
+            ->each(fn ($u) => $u->notify((new LeaveEncashmentNotification($encashment, 'submitted'))->forRole('director')));
 
         $this->showEncashModal = false;
         \Flux::toast('Encashment request submitted. Pending HR approval.');
@@ -536,9 +552,35 @@ class MyTimeOff extends Component
     // Render
     // ================================================================
 
+    /**
+     * MDL shutdown dates inside the apply form's current range — shown as a
+     * warning; the server refuses them too (LeaveService::submitRequest).
+     *
+     * @return Collection<int, DecemberMandatoryDay>
+     */
+    private function mdlInRange(): Collection
+    {
+        if (! $this->start_date || ! $this->end_date) {
+            return collect();
+        }
+
+        try {
+            return DecemberMandatoryDay::whereBetween('date', [Carbon::parse($this->start_date)->toDateString(), Carbon::parse($this->end_date)->toDateString()])
+                ->orderBy('date')->get();
+        } catch (\Throwable) {
+            return collect();
+        }
+    }
+
     public function render()
     {
         $employee = Auth::user()->employee;
+
+        // The single source for every balance figure on this page (and the
+        // dashboard): LeaveBalanceCalculator through EmployeeLeaveOverviewService,
+        // for the current 1 July – 30 June leave year.
+        $overview = app(EmployeeLeaveOverviewService::class)->for($employee);
+        $leaveYear = $overview['year'];
 
         $balances = $employee
             ? $employee->leaveBalances()->with('leaveType')->where('year', $this->filterYear ?: app(LeaveYearResolver::class)->legacyYearFor())->get()
@@ -556,40 +598,16 @@ class MyTimeOff extends Component
                 ->paginate(8)
             : new LengthAwarePaginator([], 0, 8);
 
+        // Encashable types and how much of each: LeaveService::encashable(),
+        // the same check the submission runs.
         $encashableTypes = $employee
-            ? LeaveType::where('allow_encashment', true)
-                ->whereHas('leaveBalances', fn ($q) => $q->where('employee_id', $employee->id)->where('year', app(LeaveYearResolver::class)->legacyYearFor()))
-                ->get()
+            ? LeaveType::where('allow_encashment', true)->where('category', '!=', 'comp_off')->get()
                 ->map(function ($type) use ($employee) {
-                    $balance = LeaveBalance::where('employee_id', $employee->id)
-                        ->where('leave_type_id', $type->id)
-                        ->where('year', app(LeaveYearResolver::class)->legacyYearFor())
-                        ->first();
-
-                    $cfAvailable = $balance
-                        ? max(0, (float) $balance->carried_forward_days - (float) ($balance->encashed_days ?? 0))
-                        : 0.0;
-
-                    $cyAvailable = 0.0;
-                    if ($type->allow_current_year_encashment && $balance) {
-                        $cyAvailable = max(0, (float) $balance->allocated_days - (float) $balance->used_days - (float) ($balance->encashed_days ?? 0));
-                    }
-
-                    $type->available_for_encashment = $cfAvailable + $cyAvailable;
-                    $type->cf_available = $cfAvailable;
-                    $type->cy_available = $cyAvailable;
-
-                    // Remaining cap
-                    if ($type->max_encashable_days !== null) {
-                        $alreadyEncashed = LeaveEncashment::where('employee_id', $employee->id)
-                            ->where('leave_type_id', $type->id)
-                            ->whereNotIn('status', ['rejected'])
-                            ->whereYear('created_at', now()->year)
-                            ->sum('requested_days');
-                        $type->remaining_cap = max(0, $type->max_encashable_days - $alreadyEncashed);
-                    } else {
-                        $type->remaining_cap = null;
-                    }
+                    $figures = app(LeaveService::class)->encashable($employee, $type);
+                    $type->available_for_encashment = $figures['available'];
+                    $type->cf_available = $figures['carry_forward'];
+                    $type->cy_available = $figures['current_year'];
+                    $type->remaining_cap = $figures['remaining_cap'];
 
                     return $type;
                 })
@@ -600,50 +618,29 @@ class MyTimeOff extends Component
             ? LeaveEncashment::where('employee_id', $employee->id)->with('leaveType')->latest()->get()
             : collect();
 
-        $year = now()->year;
-
+        // Approved leave inside the current leave year (1 July – 30 June).
+        // Months are indexed from the leave year's first month.
         $requestsForYear = $employee
             ? $employee->leaveRequests()->with('leaveType')
-                ->where(function ($q) use ($year) {
-                    $q->whereYear('start_date', $year)
-                        ->orWhereYear('end_date', $year)
-                        ->orWhere(fn ($q2) => $q2
-                            ->where('start_date', '<', now()->startOfYear())
-                            ->where('end_date', '>', now()->endOfYear())
-                        );
-                })->get()
+                ->where('status', 'approved')
+                ->whereDate('start_date', '<=', $leaveYear->ends_on->toDateString())
+                ->whereDate('end_date', '>=', $leaveYear->starts_on->toDateString())
+                ->get()
             : collect();
 
         $weeklyPattern = array_fill(0, 7, 0);
         $monthlyStats = array_fill(0, 12, 0);
+        $firstMonth = $leaveYear->starts_on->month;
 
         foreach ($requestsForYear as $r) {
-            if ($r->status !== 'approved') {
-                continue;
-            }
+            $start = Carbon::parse($r->start_date)->max($leaveYear->starts_on);
+            $end = Carbon::parse($r->end_date)->min($leaveYear->ends_on);
 
-            $start = $r->start_date->copy();
-            $end = $r->end_date->copy();
-            $yearStart = now()->startOfYear();
-            $yearEnd = now()->endOfYear();
-
-            if ($start->lt($yearStart)) {
-                $start = $yearStart->copy();
-            }
-            if ($end->gt($yearEnd)) {
-                $end = $yearEnd->copy();
-            }
-
-            $daysCount = min($start->diffInDays($end) + 1, 366);
-
-            for ($i = 0; $i < $daysCount; $i++) {
-                $cursor = $start->copy()->addDays($i);
-                $dow = $cursor->dayOfWeekIso;
-                $weeklyPattern[$dow - 1]++;
-                $monthlyStats[$cursor->month - 1]++;
+            for ($cursor = $start->copy(); $cursor->lte($end); $cursor = $cursor->addDay()) {
+                $weeklyPattern[$cursor->dayOfWeekIso - 1]++;
+                $monthlyStats[($cursor->month - $firstMonth + 12) % 12]++;
             }
         }
-
         $findBalance = function ($keywords) use ($balances) {
             foreach ($balances as $b) {
                 $name = strtolower($b->leaveType->name ?? '');
@@ -679,15 +676,24 @@ class MyTimeOff extends Component
         // third" showed an unrelated leave type under someone else's label —
         // if there is no maternity balance, there is no maternity balance.
 
-        $cslUsed = $csl ? ($csl->used_days + ($csl->encashed_days ?? 0)) : 0;
-        $cslTotal = $csl ? max(0, $csl->allocated_days) : 0;
-        $cslRemaining = max(0, $cslTotal - $cslUsed);
-
         // Active leave types the employee can request
         $selectedType = $this->leave_type_id ? LeaveType::find($this->leave_type_id) : null;
         $selectedBalance = ($selectedType && $employee)
             ? $balances->firstWhere('leave_type_id', $selectedType->id)
             : null;
+
+        // What the server will check on submit: available to request (pending
+        // reservations included), in the leave year of the chosen start date.
+        $selectedSummary = null;
+        if ($selectedType && $employee) {
+            try {
+                $previewYear = $this->start_date ? app(LeaveYearResolver::class)->forDate(Carbon::parse($this->start_date)) : $leaveYear;
+            } catch (\Throwable) {
+                $previewYear = $leaveYear;
+            }
+            $previewBalance = app(EmployeeLeaveOverviewService::class)->balanceFor($employee, $selectedType, $previewYear);
+            $selectedSummary = $previewBalance ? app(LeaveBalanceCalculator::class)->summary($previewBalance) : null;
+        }
 
         // ── Calendar Widget ──────────────────────────────────────────────
         $calendarCursor = \Illuminate\Support\Carbon::createFromFormat('!Y-m', $this->calendarMonth ?: now()->format('Y-m'))->startOfMonth();
@@ -713,6 +719,9 @@ class MyTimeOff extends Component
                 ->get()
             : collect();
 
+        $mdlDays = DecemberMandatoryDay::whereBetween('date', [$gridStart->toDateString(), $gridEnd->toDateString()])->get()
+            ->keyBy(fn ($d) => $d->date->toDateString());
+
         $calendarDays = [];
         $cursor = $gridStart->copy();
         while ($cursor->lte($gridEnd)) {
@@ -728,22 +737,28 @@ class MyTimeOff extends Component
                 'holiday' => $holidays->get($cursor->toDateString()),
                 'approved' => $dayRequests->firstWhere('status', 'approved'),
                 'pending' => $dayRequests->first(fn ($r) => in_array($r->status, ['pending', 'pending_hr'], true)),
+                // A Mandatory December Leave (company shutdown) date.
+                'shutdown' => $mdlDays->get($cursor->toDateString()),
             ];
 
             $cursor->addDay();
         }
 
-        // ── Leave forecast: project full-year usage from the current run rate ──
-        $monthsElapsed = max(1, now()->month);
+        // ── Leave forecast: CSL used so far this leave year, run-rated to a
+        // full year and compared with everything the year holds (credit, carry
+        // forward and add-ons) — the calculator's figures, never raw columns. ──
+        $cslSummary = $overview['csl']['summary'] ?? null;
+        $monthsElapsed = max(1, (int) $leaveYear->starts_on->diffInMonths(Carbon::today()->min($leaveYear->ends_on)) + 1);
+        $cslUsed = (float) ($cslSummary['used'] ?? 0);
+        $cslPool = (float) ($cslSummary ? $cslSummary['approved_available'] + $cslSummary['used'] : 0);
         $projectedYearEnd = round(($cslUsed / $monthsElapsed) * 12, 1);
         $forecast = [
-            'used' => (float) $cslUsed,
-            'allocated' => (float) $cslTotal,
+            'used' => $cslUsed,
+            'allocated' => round($cslPool, 2),
             'projected' => $projectedYearEnd,
-            'on_track' => $cslTotal <= 0 || $projectedYearEnd <= $cslTotal,
-            'label' => $csl?->leaveType->name ?? 'CSL',
+            'on_track' => $cslPool <= 0 || $projectedYearEnd <= $cslPool,
+            'label' => $overview['csl']['type']->name ?? 'CSL',
         ];
-
         // ── Live holiday warning for the currently selected leave range ──
         $rangeHolidays = collect();
         if ($employee && $this->start_date && $this->end_date) {
@@ -811,42 +826,12 @@ class MyTimeOff extends Component
         // The employee's own calendar and scope. This listed every holiday in
         // the system, so India staff planned around UK bank holidays.
         $upcomingHolidays = app(HolidayResolver::class)->upcomingHolidays($employee, 8);
-        $mandatoryDays = DecemberMandatoryDay::where('year', now()->year)
-            ->orderBy('date')
-            ->get();
-
-        // Merge balances by leave-type name for the balance cards. Duplicate
-        // leave types in the data would otherwise render as separate cards
-        // (e.g. two "Casual Leave"). Display-only — the raw $balances collection
-        // is left untouched for the stat/forecast logic above.
-        $balanceCards = $balances
-            ->groupBy(fn ($b) => strtolower(trim($b->leaveType->name ?? 'other')))
-            ->map(function ($group) {
-                $first = $group->first();
-                $allocated = (float) $group->sum('allocated_days');
-                $used = (float) $group->sum('used_days');
-                $encashed = (float) $group->sum(fn ($b) => (float) ($b->encashed_days ?? 0));
-
-                return (object) [
-                    'name' => $first->leaveType->name ?? 'Other',
-                    'color' => $first->leaveType->color,
-                    'allocated' => $allocated,
-                    'used' => $used,
-                    'encashed' => $encashed,
-                    'carried' => (float) $group->sum(fn ($b) => (float) ($b->carried_forward_days ?? 0)),
-                    'comp_off' => (float) $group->sum(fn ($b) => (float) ($b->comp_off_credits ?? 0)),
-                    'available' => max(0, $allocated - $used - $encashed),
-                ];
-            })
-            // Hide leave types with no activity at all — an all-zero card is noise.
-            ->filter(fn ($c) => $c->allocated > 0 || $c->used > 0 || $c->available > 0
-                || $c->carried > 0 || $c->comp_off > 0 || $c->encashed > 0)
-            ->sortByDesc('allocated')
-            ->values();
-
+        // The leave year's own December. The calendar year names the wrong one
+        // from January to June.
+        $mandatoryDays = DecemberMandatoryDay::forLeaveYear($leaveYear);
         // ── Leave Planner: a quick pre-apply breakdown (reuses the same
         // weekend/holiday rules as the Apply flow; no new business logic). ──
-        $availableTotal = (float) $balanceCards->sum('available');
+        $availableTotal = (float) $overview['available_to_request'];
         $plannerResult = null;
         if ($employee && $this->planner_start && $this->planner_end) {
             try {
@@ -874,7 +859,7 @@ class MyTimeOff extends Component
                         'weekend' => $weekend,
                         'holidays' => $holCount,
                         'leaveDays' => $leaveDays,
-                        'remaining' => max(0, $availableTotal - $leaveDays),
+                        'remaining' => round($availableTotal - $leaveDays, 2),
                     ];
                 }
             } catch (\Throwable) {
@@ -911,17 +896,11 @@ class MyTimeOff extends Component
             ->sortByDesc('total')
             ->values();
 
-        // Hero KPI: total approved leave days taken this calendar year.
-        $approvedThisYearDays = $employee
-            ? (float) $employee->leaveRequests()
-                ->where('status', 'approved')
-                ->whereYear('start_date', now()->year)
-                ->sum('days')
-            : 0.0;
+        $approvedThisYearDays = $overview['taken_this_year'];
 
         return view('livewire.time-off.my-time-off', [
             'balances' => $balances,
-            'balanceCards' => $balanceCards,
+            'overview' => $overview,
             'approvedThisYearDays' => $approvedThisYearDays,
             'availableTotal' => $availableTotal,
             'plannerResult' => $plannerResult,
@@ -932,15 +911,9 @@ class MyTimeOff extends Component
             })->orderBy('name')->get()->unique('name')->values(),
             'encashableTypes' => $encashableTypes,
             'encashments' => $encashments,
-            'pendingCount' => $employee ? $employee->leaveRequests()->whereIn('status', ['pending', 'pending_hr'])->count() : 0,
+            'pendingCount' => $overview['pending_requests'],
             'weeklyPattern' => $weeklyPattern,
             'monthlyStats' => $monthlyStats,
-            'cslData' => [
-                'used' => (float) $cslUsed,
-                'remaining' => (float) $cslRemaining,
-                'label' => $csl?->leaveType->name ?? 'CSL',
-                'color' => $csl?->leaveType->color ?? '#f59e0b',
-            ],
             'highlightBalances' => [
                 'csl' => $csl,
                 'compOff' => $compOff,
@@ -951,12 +924,14 @@ class MyTimeOff extends Component
             ],
             'selectedType' => $selectedType,
             'selectedBalance' => $selectedBalance,
+            'selectedSummary' => $selectedSummary,
             'calendarDays' => $calendarDays,
             'calendarLabel' => $monthStart->format('F Y'),
             'forecast' => $forecast,
             'upcomingHolidays' => $upcomingHolidays,
             'mandatoryDays' => $mandatoryDays,
             'rangeHolidays' => $rangeHolidays,
+            'rangeMdl' => $this->mdlInRange(),
             'rangeWeekendDays' => $rangeWeekendDays,
             'rangeDays' => $rangeDays,
             'holidayPaySettings' => HolidayPaySetting::current(),

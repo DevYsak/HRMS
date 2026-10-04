@@ -68,6 +68,13 @@
             $areas['Time']['tabs'][] = 'Nexflow';
         }
 
+        // Individual pay is payroll staff's (spec §4: Director "view dept cost",
+        // Manager "no access"); the component refuses the actions as well.
+        $canSeePay = auth()->user()->canRunPayroll();
+        if (! $canSeePay) {
+            unset($areas['Pay']);
+        }
+
         $activeArea = collect($areas)->search(fn ($a) => in_array($activeTab, $a['tabs'], true)) ?: 'Record';
 
         $quickFacts = [
@@ -398,9 +405,11 @@
                                 <flux:input wire:model="employee_id" label="Employee ID" icon="identification" placeholder="CNX-0001" required />
                             </div>
 
-                            {{-- HR/manager access scope — only for approver roles --}}
+                            {{-- HR/director/manager access scope — only for approver roles.
+                                 A Department Head is a Director scoped to their department
+                                 (spec §4.1 — e.g. UK Sales shift only). --}}
                             @php $selectedBucket = optional($roles->firstWhere('id', (int) $roleId))->legacyBucket()?->value; @endphp
-                            @if(in_array($selectedBucket, ['hr_admin', 'manager'], true))
+                            @if(in_array($selectedBucket, ['hr_admin', 'director', 'manager'], true))
                                 <div class="rounded-2xl border border-orange-200/70 bg-orange-50/40 p-5 dark:border-orange-500/20 dark:bg-orange-500/5">
                                     <div class="mb-1 flex items-center gap-2 text-sm font-bold text-zinc-800 dark:text-zinc-100">
                                         <flux:icon.shield-check class="size-4 text-orange-500" /> Attendance Access Scope
@@ -527,7 +536,7 @@
                                 <p class="mt-0.5 text-sm text-[#667085]">Employment details, role assignments, and leave allocations</p>
                             </div>
                             <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
-                                <flux:input wire:model="joining_date" type="date" label="Joining Date" required />
+                                <flux:input wire:model="joining_date" type="date" label="Joining Date" />
                                 <flux:input wire:model="probation_end_date" type="date" label="Probation End Date" />
                                 <x-clean-select model="status" label="Current Status" :live="false"
                                     :options="collect($statuses)->map(fn ($case) => ['value' => $case->value, 'label' => $case->label()])->all()" />
@@ -1198,7 +1207,7 @@
                         </div>
 
                     {{-- ── Payroll Tab ── --}}
-                    @elseif($activeTab === 'Payroll')
+                    @elseif($activeTab === 'Payroll' && $canSeePay)
                         @php
                             $grossSalary     = $employee->salaries->where('component.type', 'earning')->sum('amount');
                             $totalDeductions = $employee->salaries->where('component.type', 'deduction')->sum('amount');
@@ -1338,7 +1347,13 @@
                                 <h3 class="text-base font-bold text-[#101828] dark:text-white">Documents</h3>
                                 <p class="mt-0.5 text-sm text-[#667085]">Employee documents and files</p>
                             </div>
-                            <livewire:employees.employee-documents :employee="$employee" :key="'docs-'.$employee->id" />
+                            @if(auth()->user()->canManageDocuments())
+                                <livewire:employees.employee-documents :employee="$employee" :key="'docs-'.$employee->id" />
+                            @else
+                                <flux:callout icon="lock-closed" variant="secondary">
+                                    <flux:callout.text>Employee documents are managed by HR.</flux:callout.text>
+                                </flux:callout>
+                            @endif
                         </div>
 
                     {{-- ── Activity Tab ── --}}

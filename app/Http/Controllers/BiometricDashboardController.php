@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\Approvals\ApprovalGuard;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -17,15 +18,32 @@ use Illuminate\View\View;
  */
 class BiometricDashboardController extends Controller
 {
-    /** Engine API paths the proxy is allowed to forward (no open proxy / SSRF). */
+    /**
+     * Engine API paths the proxy is allowed to forward (no open proxy / SSRF).
+     * Read-only paths only: the device actions (set-time, pull-logs) change the
+     * machines' clocks and data and are not used by this page — they must never
+     * be reachable through a GET that any approver (or a cross-site image tag)
+     * can trigger.
+     */
     private const ALLOWED = [
-        'dashboard', 'calendar', 'device-status', 'pull-logs', 'set-time',
+        'dashboard', 'calendar', 'device-status',
     ];
 
     /** The full-page dashboard (its own HTML; not the HRMS app layout). */
     public function index(): View
     {
+        $this->authorizeCompanyWide();
+
         return view('attendance.biometric-dashboard');
+    }
+
+    /**
+     * The engine dashboard shows every employee's punches, so it is for
+     * company-wide roles only — a manager sees their team on Team Attendance.
+     */
+    private function authorizeCompanyWide(): void
+    {
+        abort_unless(app(ApprovalGuard::class)->isCompanyWide(auth()->user()), 403);
     }
 
     /**
@@ -34,6 +52,8 @@ class BiometricDashboardController extends Controller
      */
     public function proxy(Request $request, string $path): JsonResponse
     {
+        $this->authorizeCompanyWide();
+
         if (! in_array($path, self::ALLOWED, true) && ! preg_match('#^employee/\d+$#', $path)) {
             return response()->json(['error' => 'Not found'], 404);
         }

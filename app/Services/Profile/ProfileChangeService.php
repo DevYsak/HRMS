@@ -7,6 +7,7 @@ use App\Models\Employee;
 use App\Models\EmployeePayrollSettings;
 use App\Models\ProfileChangeRequest;
 use App\Models\User;
+use App\Services\Approvals\ApprovalGuard;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
@@ -115,6 +116,8 @@ class ProfileChangeService
     public function approve(ProfileChangeRequest $request, User $reviewer, ?string $comment = null): ProfileChangeRequest
     {
         $this->assertPending($request);
+        // Nobody approves a change to their own record (e.g. their bank account).
+        app(ApprovalGuard::class)->assertCanDecide($reviewer, $request->employee);
 
         return DB::transaction(function () use ($request, $reviewer, $comment) {
             $employee = $request->employee;
@@ -147,6 +150,7 @@ class ProfileChangeService
     public function reject(ProfileChangeRequest $request, User $reviewer, ?string $comment = null): ProfileChangeRequest
     {
         $this->assertPending($request);
+        app(ApprovalGuard::class)->assertCanDecide($reviewer, $request->employee);
 
         $request->update([
             'status' => ProfileChangeRequest::STATUS_REJECTED,

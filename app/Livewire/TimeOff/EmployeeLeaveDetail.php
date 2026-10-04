@@ -7,6 +7,7 @@ use App\Models\Employee;
 use App\Models\EmployeeLeaveOverride;
 use App\Models\LeaveBalance;
 use App\Models\LeaveCarryForwardTransaction;
+use App\Models\LeaveEncashment;
 use App\Models\LeaveRequest;
 use App\Models\LeaveType;
 use App\Models\LeaveYear;
@@ -224,6 +225,20 @@ class EmployeeLeaveDetail extends Component
             ->latest('start_date')->limit(50)->get();
     }
 
+    /**
+     * Encashment history for this employee: every request and where it stands.
+     * The paid days themselves are ENCASHMENT ledger entries (see History).
+     *
+     * @return Collection<int, LeaveEncashment>
+     */
+    #[Computed]
+    public function encashments(): Collection
+    {
+        return LeaveEncashment::with(['leaveType', 'reviewer', 'financeReviewer'])
+            ->where('employee_id', $this->employee->id)
+            ->latest()->limit(50)->get();
+    }
+
     /** Current approved-available figure for the chosen type, for the add/deduct/correct preview. */
     #[Computed]
     public function currentAvailable(): ?float
@@ -323,9 +338,16 @@ class EmployeeLeaveDetail extends Component
         $this->resetErrorBag();
     }
 
+    /** HR never changes their own leave from this screen — another HR user must. */
+    private function refuseOwnRecord(): void
+    {
+        abort_if((int) $this->employee->user_id === (int) Auth::id(), 403, 'You cannot change your own leave.');
+    }
+
     public function reverseCarryForward(): void
     {
         $this->authorize('manage_leave_carry_forward');
+        $this->refuseOwnRecord();
         $this->validate(['reverseReason' => ['required', 'string', 'min:3', 'max:500']]);
 
         $tx = LeaveCarryForwardTransaction::where('employee_id', $this->employee->id)->findOrFail($this->reverseTxId);
@@ -363,6 +385,7 @@ class EmployeeLeaveDetail extends Component
     public function revokeOverride(int $overrideId, string $why = 'Revoked by HR'): void
     {
         $this->authorize('override_leave_policy');
+        $this->refuseOwnRecord();
 
         $override = EmployeeLeaveOverride::where('employee_id', $this->employee->id)->findOrFail($overrideId);
 

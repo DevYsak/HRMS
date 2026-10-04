@@ -294,8 +294,10 @@ test('HR cannot force a Super Admin into a reset', function () {
     $hrAdmin = User::factory()->create(['role' => UserRole::HrAdmin]);
     $superAdmin = flpEmployee(['role' => UserRole::SuperAdmin], temporary: false);
 
+    // HR cannot even open the Super Admin's record (EmployeePolicy::update),
+    // so there is no screen to force the reset from.
     Livewire::actingAs($hrAdmin)->test(EmployeeEdit::class, ['employee' => $superAdmin->employee])
-        ->call('forcePasswordReset');
+        ->assertForbidden();
 
     expect($superAdmin->fresh()->requiresPasswordChange())->toBeFalse();
 });

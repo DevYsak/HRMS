@@ -54,6 +54,7 @@
             ['Carry Forward Review', 'carry_forward_pending', null, 'arrow-right-circle', route('time-off.year-rollover')],
             ['Expiring (30 days)', 'expiring_leave', 'expiring', 'bell-alert', null],
             ['No Leave Policy', 'no_policy', 'no_policy', 'document-minus', null],
+            ['Incomplete HR Profiles', 'incomplete_profiles', 'incomplete_profile', 'identification', null],
             ['Encashment Pending', 'encashment_pending', null, 'banknotes', null],
             ['Reconciliation Issues', 'reconciliation_issues', 'review', 'scale', route('time-off.reconciliation')],
         ] as [$label, $key, $cardFlag, $icon, $href])
@@ -103,6 +104,7 @@
                     ['value' => 'expiring', 'label' => 'Leave expiring soon'],
                     ['value' => 'no_policy', 'label' => 'No leave policy'],
                     ['value' => 'review', 'label' => 'Needs HR review'],
+                    ['value' => 'incomplete_profile', 'label' => 'Incomplete HR profile'],
                 ]" />
         </div>
     </div>
@@ -124,18 +126,16 @@
                         <th class="px-3 py-2"><input type="checkbox" wire:click="toggleSelectPage" class="rounded"></th>
                         <th class="px-3 py-2">Employee</th>
                         <th class="px-3 py-2">Department / Manager</th>
-                        <th class="px-3 py-2">Status</th>
                         <th class="px-3 py-2">Policy</th>
-                        <th class="px-3 py-2 text-right">Base</th>
+                        <th class="px-3 py-2 text-right" title="Base entitlement + accrual credited this leave year">Current-year credit</th>
                         <th class="px-3 py-2 text-right">Carry Fwd</th>
-                        <th class="px-3 py-2 text-right">Add-On</th>
-                        <th class="px-3 py-2 text-right">Accrual</th>
-                        <th class="px-3 py-2 text-right">Adj.</th>
                         <th class="px-3 py-2 text-right">Used</th>
-                        <th class="px-3 py-2 text-right">Pending</th>
-                        <th class="px-3 py-2 text-right">Expired</th>
+                        <th class="px-3 py-2 text-right">Encashed</th>
                         <th class="px-3 py-2 text-right">Available</th>
-                        <th class="px-3 py-2">Next Accrual</th>
+                        <th class="px-3 py-2 text-right">Comp Off</th>
+                        <th class="px-3 py-2 text-right">Pending</th>
+                        <th class="px-3 py-2">MDL</th>
+                        <th class="px-3 py-2">Warnings</th>
                         <th class="px-3 py-2"></th>
                     </tr>
                 </thead>
@@ -151,38 +151,56 @@
                                 <div>{{ $row['department'] ?? '—' }}</div>
                                 <div class="text-[11px] text-[#98A2B3]">{{ $row['manager'] ?? '—' }}</div>
                             </td>
-                            <td class="px-3 py-2">{{ $row['status'] }}</td>
                             <td class="px-3 py-2">
                                 @if($row['policy']) {{ $row['policy'] }} @else <flux:badge size="sm" color="amber">No policy</flux:badge> @endif
+                                <div class="text-[11px] text-[#98A2B3]">{{ $row['status'] }}</div>
                             </td>
                             @if(! $row['has_balance'])
-                                <td colspan="9" class="px-3 py-2 text-center"><flux:badge size="sm" color="red">Missing balance</flux:badge></td>
+                                <td colspan="5" class="px-3 py-2 text-center"><flux:badge size="sm" color="red">Missing balance</flux:badge></td>
                             @else
-                                <td class="px-3 py-2 text-right">{{ $fmt($row['base']) }}</td>
-                                <td class="px-3 py-2 text-right">{{ $fmt($row['carry_forward']) }}</td>
-                                <td class="px-3 py-2 text-right">{{ $fmt($row['add_on']) }}</td>
-                                <td class="px-3 py-2 text-right">{{ $fmt($row['accrued']) }}</td>
-                                <td class="px-3 py-2 text-right">{{ $fmt($row['adjustment']) }}</td>
-                                <td class="px-3 py-2 text-right">{{ $fmt($row['used']) }}</td>
-                                <td class="px-3 py-2 text-right">{{ $fmt($row['pending']) }}</td>
-                                <td class="px-3 py-2 text-right">{{ $fmt($row['expired']) }}</td>
-                                <td class="px-3 py-2 text-right font-bold {{ ($row['available'] ?? 0) < 0 ? 'text-rose-600' : 'text-[#101828] dark:text-white' }}">
+                                <td class="px-3 py-2 text-right tabular-nums">{{ $fmt($row['credit']) }}</td>
+                                <td class="px-3 py-2 text-right tabular-nums">{{ $fmt($row['carry_forward']) }}</td>
+                                <td class="px-3 py-2 text-right tabular-nums">{{ $fmt($row['used']) }}</td>
+                                <td class="px-3 py-2 text-right tabular-nums">{{ $fmt($row['encashed']) }}</td>
+                                <td class="px-3 py-2 text-right font-bold tabular-nums {{ ($row['available'] ?? 0) < 0 ? 'text-rose-600' : 'text-[#101828] dark:text-white' }}">
                                     {{ $fmt($row['available']) }}
-                                    @if($row['flags']['review'])<flux:tooltip content="Needs HR review: history not fully decomposed"><flux:icon.exclamation-triangle class="inline size-3 text-amber-500" /></flux:tooltip>@endif
+                                    @if(($row['other'] ?? 0) != 0)
+                                        <div class="text-[10px] font-normal text-[#98A2B3]" title="Add-ons, adjustments, migrated opening balance and expiry">{{ $row['other'] > 0 ? '+' : '' }}{{ $fmt($row['other']) }} other</div>
+                                    @endif
                                 </td>
                             @endif
-                            <td class="px-3 py-2 text-[11px] text-[#667085]">{{ $row['next_accrual'] ?? '—' }}</td>
+                            <td class="px-3 py-2 text-right tabular-nums">{{ $row['comp_off'] === null ? '—' : $fmt($row['comp_off']) }}</td>
+                            <td class="px-3 py-2 text-right tabular-nums">{{ $fmt($row['pending']) }}</td>
+                            <td class="whitespace-nowrap px-3 py-2 text-[11px]">
+                                @if($row['mdl']['expected'] > 0)
+                                    <span @class(['text-amber-600' => $row['mdl']['configured'] !== $row['mdl']['expected'], 'text-[#667085]' => $row['mdl']['configured'] === $row['mdl']['expected']])>{{ $row['mdl']['configured'] }}/{{ $row['mdl']['expected'] }} dates</span>
+                                    @if($row['mdl']['worked'] > 0)<div class="text-emerald-600">{{ $row['mdl']['worked'] }} worked</div>@endif
+                                @else
+                                    <span class="text-[#98A2B3]">—</span>
+                                @endif
+                            </td>
+                            <td class="px-3 py-2">
+                                @forelse($row['warnings'] as $warning)
+                                    <div class="text-[11px] {{ str_starts_with($warning, 'Negative') ? 'font-semibold text-rose-600' : 'text-amber-700 dark:text-amber-400' }}">{{ $warning }}</div>
+                                @empty
+                                    <span class="text-[11px] text-emerald-600">OK</span>
+                                @endforelse
+                            </td>
                             <td class="whitespace-nowrap px-3 py-2 text-right">
                                 @can('manage_leave_carry_forward')
                                     <flux:button size="xs" icon="arrow-right-circle"
                                         :href="route('time-off.leave-management.employee', ['employee' => $row['employee_id'], 'year' => $leaveYearId, 'tab' => 'carry_forward', 'cf' => $leaveTypeId])" wire:navigate>Carry Fwd</flux:button>
                                 @endcan
+                                <flux:button size="xs" variant="ghost"
+                                    :href="route('time-off.leave-management.employee', ['employee' => $row['employee_id'], 'year' => $leaveYearId, 'tab' => 'statement'])" wire:navigate>Statement</flux:button>
+                                <flux:button size="xs" variant="ghost"
+                                    :href="route('time-off.leave-management.employee', ['employee' => $row['employee_id'], 'year' => $leaveYearId, 'tab' => 'encashments'])" wire:navigate>Encashments</flux:button>
                                 <flux:button size="xs" icon="arrow-top-right-on-square"
                                     :href="route('time-off.leave-management.employee', ['employee' => $row['employee_id'], 'year' => $leaveYearId])" wire:navigate>Open</flux:button>
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="16" class="px-3 py-10 text-center text-sm text-[#98A2B3]">No employees match these filters.</td></tr>
+                        <tr><td colspan="14" class="px-3 py-10 text-center text-sm text-[#98A2B3]">No employees match these filters.</td></tr>
                     @endforelse
                 </tbody>
             </table>

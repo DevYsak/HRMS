@@ -118,6 +118,11 @@ class BulkLeaveService
                     continue; // no-op
                 }
 
+                // The actor's own balance is never part of their bulk change.
+                if ((int) $employee->user_id === (int) $actor->id) {
+                    continue;
+                }
+
                 // One audited adjustment per employee, posted through the
                 // ledger when the balance is ledger-backed — never a direct
                 // overwrite of the stored figure.

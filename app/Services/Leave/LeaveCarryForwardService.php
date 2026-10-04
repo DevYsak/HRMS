@@ -407,6 +407,14 @@ class LeaveCarryForwardService
         $days = 0.0;
 
         foreach ($this->preview($from, $to, $filters) as $row) {
+            // The person running the bulk action never carries their own
+            // balance (the scheduled rollover uses apply() directly).
+            if ((int) Employee::whereKey($row['employee_id'])->value('user_id') === (int) $actor->id) {
+                $skipped++;
+
+                continue;
+            }
+
             // Already carried at the full eligible amount: nothing to do, and
             // re-applying would only rewrite applied_at.
             if ($row['status'] === Transaction::STATUS_APPLIED) {
@@ -480,6 +488,12 @@ class LeaveCarryForwardService
             }
 
             $label = ($employee->user?->name ?? 'Employee #'.$employee->id).' / '.$type->name;
+
+            if ((int) $employee->user_id === (int) $actor->id) {
+                $errors[] = $label.': your own balance is carried forward by another HR user — skipped.';
+
+                continue;
+            }
 
             try {
                 $tx = $this->apply($employee, $type, $from, $to, $actor, (float) ($decision['days'] ?? 0), $reason);

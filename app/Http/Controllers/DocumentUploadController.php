@@ -34,7 +34,10 @@ class DocumentUploadController extends Controller
         $version = 1;
         if (! empty($data['parent_id'])) {
             $parent = Document::findOrFail($data['parent_id']);
-            $version = ((int) $parent->versions()->max('version') ?? 0) + 1;
+            // Next after the highest so far — the parent itself counts (it is
+            // v1); max() over no child rows is null, which made the first
+            // re-upload another "v1".
+            $version = max((int) $parent->version, (int) $parent->versions()->max('version')) + 1;
         }
 
         $document = Document::create([

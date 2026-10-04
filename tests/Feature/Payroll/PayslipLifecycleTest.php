@@ -18,6 +18,8 @@ function lifecycleEmployee(string $name, float $basicAmount): Employee
     $user = User::factory()->create(['name' => $name]);
     $employee = Employee::factory()->create([
         'user_id' => $user->id, 'status' => 'active', 'salary_cycle' => 'cycle_a',
+        // Joined before every run below: a run pays only people employed in its cycle.
+        'joining_date' => '2024-01-08',
     ]);
 
     $basic = SalaryComponent::firstOrCreate(

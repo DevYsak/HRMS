@@ -3,8 +3,10 @@
 namespace App\Models;
 
 use App\Enums\EmployeeStatus;
+use App\Enums\UserRole;
 use App\Services\Attendance\ShiftResolver;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -29,7 +31,8 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     // Shift & OT source
     'shift_id', 'ot_tracking_source',
     // Joining & probation
-    'joining_date', 'probation_end_date', 'probation_extension_reason',
+    'joining_date', 'probation_end_date', 'probation_reminder_sent_for', 'probation_extension_reason',
+    'onboarding_completed_notified_at', 'offboarding_completed_notified_at', 'newhire_checkin_notified_at',
     'probation_confirmed_by', 'probation_confirmed_at', 'probation_hr_approved_by', 'probation_hr_approved_at',
     // Lifecycle status & dates (Phase 1A)
     'status',
@@ -152,6 +155,10 @@ class Employee extends Model
             'joining_date' => 'date',
             'date_of_birth' => 'date',
             'probation_end_date' => 'date',
+            'probation_reminder_sent_for' => 'date',
+            'onboarding_completed_notified_at' => 'datetime',
+            'offboarding_completed_notified_at' => 'datetime',
+            'newhire_checkin_notified_at' => 'datetime',
             'resignation_date' => 'date',
             'termination_date' => 'date',
             'notice_period_end_date' => 'date',
@@ -178,6 +185,91 @@ class Employee extends Model
     public function isMissingJoiningDate(): bool
     {
         return $this->joining_date === null;
+    }
+
+    /** Employment fields HR owns, with the label HR sees. */
+    public const HR_PROFILE_FIELDS = [
+        'department_id' => 'Department',
+        'job_title_id' => 'Designation',
+        'manager_id' => 'Reporting manager',
+        'shift' => 'Shift',
+        'joining_date' => 'Joining date',
+        'employment_type_id' => 'Employment type',
+        'work_mode_id' => 'Work mode',
+        'salary_cycle_id' => 'Salary cycle',
+    ];
+
+    /**
+     * Employment data HR has not recorded yet, as field => label.
+     *
+     * Nothing is ever filled in to make this list shorter: a missing value is
+     * a task for HR (the completion queue on Employee Management), never a
+     * default. Top-of-hierarchy accounts (Super Admin, Director) legitimately
+     * have no reporting manager, and probation end only matters on probation.
+     *
+     * @return array<string, string>
+     */
+    public function missingHrFields(): array
+    {
+        $missing = [];
+
+        foreach (self::HR_PROFILE_FIELDS as $field => $label) {
+            $absent = match ($field) {
+                'shift' => ! ShiftResolver::hasResolvableShift($this),
+                'manager_id' => $this->manager_id === null && ! $this->isTopOfHierarchy(),
+                default => blank($this->{$field}),
+            };
+
+            if ($absent) {
+                $missing[$field] = $label;
+            }
+        }
+
+        if ($this->status === EmployeeStatus::Probation && $this->probation_end_date === null) {
+            $missing['probation_end_date'] = 'Probation end date';
+        }
+
+        return $missing;
+    }
+
+    public function hasIncompleteHrProfile(): bool
+    {
+        return $this->missingHrFields() !== [];
+    }
+
+    /**
+     * Employees missing any HR-owned employment field — the HR completion
+     * queue. The SQL mirror of missingHrFields() (shift resolved the same way:
+     * no own shift and no company default).
+     *
+     * @param  Builder<Employee>  $query
+     * @return Builder<Employee>
+     */
+    public function scopeIncompleteHrProfile(Builder $query): Builder
+    {
+        $noDefaultShift = ShiftResolver::companyDefault() === null;
+
+        return $query->where(function (Builder $q) use ($noDefaultShift) {
+            $q->whereNull('department_id')
+                ->orWhereNull('job_title_id')
+                ->orWhereNull('joining_date')
+                ->orWhereNull('employment_type_id')
+                ->orWhereNull('work_mode_id')
+                ->orWhereNull('salary_cycle_id')
+                ->orWhere(fn (Builder $p) => $p->where('status', EmployeeStatus::Probation->value)->whereNull('probation_end_date'))
+                ->orWhere(fn (Builder $m) => $m->whereNull('manager_id')
+                    ->whereHas('user', fn ($u) => $u->whereNotIn('role', [UserRole::SuperAdmin->value, UserRole::Director->value])));
+
+            if ($noDefaultShift) {
+                $q->orWhereNull('shift_id');
+            }
+        });
+    }
+
+    /** Super Admins and Directors sit at the top: no reporting manager is expected. */
+    private function isTopOfHierarchy(): bool
+    {
+        return in_array($this->user?->role, [UserRole::SuperAdmin, UserRole::Director], true);
     }
 
     /**

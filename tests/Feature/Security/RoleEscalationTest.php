@@ -71,10 +71,10 @@ test('HR cannot change their own role', function () {
 test('HR cannot change a Super Admin\'s role', function () {
     $admin = escalationTarget(UserRole::SuperAdmin);
 
+    // HR cannot even open the Super Admin's record (EmployeePolicy::update),
+    // so the role cannot be changed from it.
     Livewire::actingAs(escalationHr())->test(EmployeeEdit::class, ['employee' => $admin])
-        ->set('roleId', (string) escalationRole('employee')->id)
-        ->call('save')
-        ->assertHasErrors('roleId');
+        ->assertForbidden();
 
     expect($admin->user->fresh()->role)->toBe(UserRole::SuperAdmin);
 });

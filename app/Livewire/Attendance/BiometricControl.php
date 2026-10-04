@@ -28,9 +28,19 @@ class BiometricControl extends Component
 {
     public string $date = '';
 
+    /**
+     * The fleet view is company-wide by nature (every machine, every punch),
+     * so it belongs to whoever manages the biometric estate — not to every
+     * approver. Spec §4: device configuration is System Settings.
+     */
+    private function authorizeFleet(): void
+    {
+        abort_unless(Auth::user()->hasPermission('manage_biometric'), 403);
+    }
+
     public function mount(): void
     {
-        abort_unless(Auth::user()->canApproveLeave(), 403);
+        $this->authorizeFleet();
         $this->date = Carbon::today()->toDateString();
     }
 
@@ -52,7 +62,7 @@ class BiometricControl extends Component
     /** Real action — pull the latest punches for the day from the engine. */
     public function syncNow(EngineAttendanceSyncService $service): void
     {
-        abort_unless(Auth::user()->canApproveLeave(), 403);
+        $this->authorizeFleet();
 
         $result = $service->syncDate($this->date);
 
@@ -71,7 +81,7 @@ class BiometricControl extends Component
 
     public function exportLogs()
     {
-        abort_unless(Auth::user()->canApproveLeave(), 403);
+        $this->authorizeFleet();
 
         $rows = AttendanceDailySummary::with('employee.user')
             ->whereNotNull('synced_at')
@@ -91,7 +101,7 @@ class BiometricControl extends Component
 
     public function render()
     {
-        abort_unless(Auth::user()->canApproveLeave(), 403);
+        $this->authorizeFleet();
 
         $date = Carbon::parse($this->date);
 

@@ -4,6 +4,7 @@ namespace App\Livewire\Performance;
 
 use App\Models\PerformanceCycle;
 use App\Models\PerformanceReview;
+use App\Services\Approvals\ApprovalGuard;
 use App\Services\Performance\ReviewWorkflowService;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
@@ -38,6 +39,9 @@ class AllReviews extends Component
             'reviewer.user', 'componentScores.component.autoScoreConfig', 'template.categories.components', 'documents',
         ])->findOrFail($id);
 
+        // A department-scoped reviewer opens only reviews inside their reach.
+        app(ApprovalGuard::class)->assertCanView(Auth::user(), $this->viewingReview->employee);
+
         $this->hr_comments = $this->viewingReview->hr_comments ?? '';
 
         $this->componentScores = [];
@@ -58,6 +62,9 @@ class AllReviews extends Component
         if (! $this->viewingReview) {
             return;
         }
+
+        // Never your own review, and only inside your reach.
+        app(ApprovalGuard::class)->assertCanDecide(Auth::user(), $this->viewingReview->employee);
 
         $rules = [
             'hr_comments' => 'required|string',
@@ -103,6 +110,8 @@ class AllReviews extends Component
             return;
         }
 
+        app(ApprovalGuard::class)->assertCanDecide(Auth::user(), $this->viewingReview->employee);
+
         // Must be hr_reviewed to lock it, but if we are HR we can lock manager_reviewed too.
         // The workflow allows locking if status is 'manager_reviewed' or 'hr_reviewed'.
 
@@ -122,7 +131,10 @@ class AllReviews extends Component
     {
         abort_unless(Auth::user()->canManageEmployees(), 403);
 
+        $reach = Auth::user()->accessibleEmployeeIds();
+
         $reviews = PerformanceReview::with(['employee.user', 'employee.jobTitle', 'performanceCycle', 'reviewer.user'])
+            ->when($reach !== null, fn ($q) => $q->whereIn('employee_id', $reach))
             ->when($this->search, fn ($q) => $q->whereHas('employee.user', fn ($u) => $u->where('name', 'like', "%{$this->search}%")))
             ->when($this->status, fn ($q) => $q->where('status', $this->status))
             ->when($this->cycle_id, fn ($q) => $q->where('performance_cycle_id', $this->cycle_id))

@@ -148,6 +148,13 @@
                                                 <flux:button wire:click="saveProposal({{ $p->id }})" size="xs" variant="ghost" icon="check">Save</flux:button>
                                             @endif
                                             <flux:button wire:click="openOverride({{ $p->id }})" size="xs" variant="ghost" icon="adjustments-horizontal">Band</flux:button>
+                                        @elseif($p->status === 'pending' && in_array($cycle->status, ['approved', 'applied'], true))
+                                            {{-- Held at cycle approval: it was that approver's own raise. --}}
+                                            @if($canApprove && (int) $p->employee?->user_id !== (int) auth()->id())
+                                                <flux:button wire:click="approveHeld({{ $p->id }})" size="xs" variant="ghost" icon="check-badge">Approve held raise</flux:button>
+                                            @else
+                                                <span class="text-[10px] font-bold uppercase text-amber-600">Held — needs another approver</span>
+                                            @endif
                                         @elseif($p->letter_path)
                                             <span class="text-[10px] font-bold uppercase text-emerald-600">Letter issued</span>
                                         @endif

@@ -2,9 +2,9 @@
 @if($enabled)
     <div x-data="{ open: false }" class="fixed bottom-5 right-5 z-50">
         {{-- Toggle button --}}
-        <button type="button" @click="open = !open" x-show="!open"
-            class="flex size-14 items-center justify-center rounded-full bg-brand-600 text-white shadow-lg shadow-brand-900/30 transition hover:bg-brand-700">
-            <flux:icon.sparkles class="size-6" />
+        <button type="button" @click="open = !open" x-show="!open" aria-label="Open HR Copilot" title="HR Copilot"
+            class="flex size-11 items-center justify-center rounded-full bg-brand-600 text-white shadow-md shadow-brand-900/20 transition hover:bg-brand-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500">
+            <flux:icon.sparkles class="size-5" />
         </button>
 
         {{-- Panel --}}

@@ -79,11 +79,21 @@ class LeaveStatementService
     }
 
     /**
-     * Month by month for one leave type. The first month's opening is what the
-     * year opened with on its first day (base, carry forward, opening
-     * balance); every later month opens at the previous month's closing.
+     * Month by month for one leave type.
      *
-     * @return Collection<int, array{month: string, label: string, opening: float, credits: float, credit_lines: array<string, float>, used: float, expired: float, other_debits: float, closing: float}>
+     * The year opens at zero; every posting — including the 1 July credit and
+     * carry forward — sits in its own column, so a month reads:
+     *
+     *   opening + current-year credits + carry forward + add-ons (Comp Off)
+     *   − used − encashed − expired ± other/reconciliation = closing
+     *
+     * "Other / reconciliation" holds HR adjustments, migrated opening
+     * balances, reversals other than a cancelled leave, and usage the HR
+     * register proves only as a total (its dates were never recorded, so it
+     * is not presented as leave taken in the month it was posted). A
+     * cancelled leave stays under Used, as a negative.
+     *
+     * @return Collection<int, array{month: string, label: string, opening: float, current_credits: float, carry_forward: float, add_ons: float, used: float, encashed: float, expired: float, other: float, closing: float, credits: float, credit_lines: array<string, float>, other_debits: float}>
      */
     public function monthly(Employee $employee, LeaveType $type, LeaveYear $year, ?Carbon $until = null): Collection
     {
@@ -94,38 +104,38 @@ class LeaveStatementService
             ->get();
 
         $until = ($until ?? Carbon::today())->copy()->min($year->ends_on);
-        $firstDay = $year->starts_on->toDateString();
-        $opening = round((float) $entries->filter(fn ($e) => $e->effective_date->toDateString() === $firstDay && (float) $e->days > 0)->sum('days'), 2);
 
         $months = collect();
         $cursor = $year->starts_on->copy()->startOfMonth();
-        $balance = $opening;
+        $balance = 0.0;
 
         while ($cursor->lte($until)) {
             $key = $cursor->format('Y-m');
-            $inMonth = $entries->filter(fn ($e) => $e->effective_date->format('Y-m') === $key
-                && ! ($e->effective_date->toDateString() === $firstDay && (float) $e->days > 0));
+            $inMonth = $entries->filter(fn ($e) => $e->effective_date->format('Y-m') === $key);
+            $column = fn (string $name) => round((float) $inMonth->filter(fn ($e) => $this->column($e) === $name)->sum('days'), 2);
 
+            $opening = $balance;
+            $balance = round($opening + (float) $inMonth->sum('days'), 2);
             $credits = $inMonth->filter(fn ($e) => (float) $e->days > 0);
-            $sumOf = fn (string $type) => round(-(float) $inMonth->where('entry_type', $type)->sum('days'), 2);
-            $used = $sumOf(LeaveLedgerEntry::TYPE_USAGE);
-            $expired = $sumOf(LeaveLedgerEntry::TYPE_EXPIRY);
-            $otherDebits = round(-(float) $inMonth->filter(fn ($e) => (float) $e->days < 0
-                && ! in_array($e->entry_type, [LeaveLedgerEntry::TYPE_USAGE, LeaveLedgerEntry::TYPE_EXPIRY], true))->sum('days'), 2);
-
-            $monthOpening = $months->isEmpty() ? $opening : $balance;
-            $balance = round($monthOpening + (float) $inMonth->sum('days'), 2);
 
             $months->push([
                 'month' => $key,
                 'label' => $cursor->format('F Y'),
-                'opening' => $monthOpening,
+                'opening' => $opening,
+                'current_credits' => $column('current_credits'),
+                'carry_forward' => $column('carry_forward'),
+                'add_ons' => $column('add_ons'),
+                // Debits shown as positive amounts taken off.
+                'used' => -$column('used') + 0.0,
+                'encashed' => -$column('encashed') + 0.0,
+                'expired' => -$column('expired') + 0.0,
+                'other' => $column('other'),
+                'closing' => $balance,
+                // Kept for callers that read the older shape.
                 'credits' => round((float) $credits->sum('days'), 2),
                 'credit_lines' => $credits->groupBy(fn ($e) => $this->label($e))->map(fn ($g) => round((float) $g->sum('days'), 2))->all(),
-                'used' => $used,
-                'expired' => $expired,
-                'other_debits' => $otherDebits,
-                'closing' => $balance,
+                'other_debits' => round(-(float) $inMonth->filter(fn ($e) => (float) $e->days < 0
+                    && ! in_array($e->entry_type, [LeaveLedgerEntry::TYPE_USAGE, LeaveLedgerEntry::TYPE_EXPIRY], true))->sum('days'), 2) + 0.0,
             ]);
 
             $cursor = $cursor->addMonth();
@@ -134,9 +144,46 @@ class LeaveStatementService
         return $months;
     }
 
+    /** Which statement column a ledger entry belongs in. */
+    private function column(LeaveLedgerEntry $e): string
+    {
+        // A cancelled or re-reviewed leave is still a usage movement.
+        if ($e->entry_type === LeaveLedgerEntry::TYPE_USAGE && $e->isReversal() && $e->source_type !== LeaveRegisterReconciliationService::SOURCE_TYPE) {
+            return 'used';
+        }
+
+        if ($e->isReversal()) {
+            return 'other';
+        }
+
+        // The register proves only a total; its dates were never recorded.
+        if ($e->entry_type === LeaveLedgerEntry::TYPE_USAGE && $e->source_type === LeaveRegisterReconciliationService::SOURCE_TYPE) {
+            return 'other';
+        }
+
+        return match ($e->entry_type) {
+            LeaveLedgerEntry::TYPE_BASE, LeaveLedgerEntry::TYPE_ACCRUAL => 'current_credits',
+            LeaveLedgerEntry::TYPE_CARRY_FORWARD => 'carry_forward',
+            LeaveLedgerEntry::TYPE_ADD_ON => 'add_ons',
+            LeaveLedgerEntry::TYPE_USAGE => 'used',
+            LeaveLedgerEntry::TYPE_ENCASHMENT => 'encashed',
+            LeaveLedgerEntry::TYPE_EXPIRY => 'expired',
+            default => 'other',
+        };
+    }
+
     private function label(LeaveLedgerEntry $e): string
     {
         $label = self::LABELS[$e->entry_type] ?? ucfirst(str_replace('_', ' ', $e->entry_type));
+
+        if ($e->source_type === LeaveRegisterReconciliationService::SOURCE_TYPE && ! $e->isReversal()) {
+            $label = match ($e->entry_type) {
+                LeaveLedgerEntry::TYPE_BASE => 'Current-year CSL credit (HR register)',
+                LeaveLedgerEntry::TYPE_CARRY_FORWARD => 'Carry Forward (HR register)',
+                LeaveLedgerEntry::TYPE_USAGE => 'Leave taken per HR register (dates not recorded)',
+                default => $label.' (HR register)',
+            };
+        }
 
         if ($e->entry_type === LeaveLedgerEntry::TYPE_ACCRUAL) {
             $label = 'Monthly Accrual';

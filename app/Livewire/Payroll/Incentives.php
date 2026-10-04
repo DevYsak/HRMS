@@ -69,14 +69,30 @@ class Incentives extends Component
     public function approve(int $id, IncentiveService $incentiveService): void
     {
         $incentive = Incentive::findOrFail($id);
-        $incentiveService->approve($incentive, Auth::id());
+
+        try {
+            $incentiveService->approve($incentive, Auth::id());
+        } catch (\DomainException $e) {
+            \Flux::toast($e->getMessage(), variant: 'danger');
+
+            return;
+        }
+
         \Flux::toast('Incentive approved.');
     }
 
     public function reject(int $id, IncentiveService $incentiveService): void
     {
         $incentive = Incentive::findOrFail($id);
-        $incentiveService->reject($incentive, Auth::id());
+
+        try {
+            $incentiveService->reject($incentive, Auth::id());
+        } catch (\DomainException $e) {
+            \Flux::toast($e->getMessage(), variant: 'danger');
+
+            return;
+        }
+
         \Flux::toast('Incentive rejected.', variant: 'danger');
     }
 

@@ -8,6 +8,7 @@ use App\Models\ProbationSetting;
 use App\Models\User;
 use App\Notifications\ProbationConfirmedNotification;
 use App\Notifications\ProbationExtendedNotification;
+use App\Services\Approvals\ApprovalGuard;
 use App\Services\Notifications\NotificationRecipients;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -83,6 +84,9 @@ class ProbationEngine
             'Only managers, directors, or super admins can confirm probation.'
         );
 
+        // The employee's own line (or a scope covering them), never their own probation.
+        app(ApprovalGuard::class)->assertCanDecide($manager, $employee);
+
         if ($employee->probation_confirmed_at) {
             throw new \DomainException('Manager has already confirmed this probation.');
         }
@@ -107,6 +111,8 @@ class ProbationEngine
             403,
             'Only HR admins or super admins can approve probation.'
         );
+
+        app(ApprovalGuard::class)->assertNotSelf($hr, $employee);
 
         if (! $employee->probation_confirmed_at) {
             throw new \DomainException('Manager must confirm before HR can approve.');

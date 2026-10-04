@@ -25,6 +25,7 @@ use Illuminate\Support\Carbon;
     'reviewed_at',
     'source',
     'nexflow_ref',
+    'escalated_at',
 ])]
 class OtRequest extends Model
 {
@@ -37,6 +38,7 @@ class OtRequest extends Model
             'work_date' => 'date',
             'reviewed_at' => 'datetime',
             'claimed_at' => 'datetime',
+            'escalated_at' => 'datetime',
         ];
     }
 

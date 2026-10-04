@@ -94,11 +94,12 @@
                                     ['value' => 'branch', 'label' => 'Branch / Office'],
                                 ]" />
                         </flux:field>
-                        @if($applies_to_type === 'department')
+                        @if($target)
                             <flux:field>
-                                <flux:label>Department</flux:label>
+                                <flux:label>{{ $target['label'] }} <span class="text-red-500">*</span></flux:label>
                                 <x-clean-select model="applies_to_id" :live="false"
-                                    :options="array_merge([['value' => '', 'label' => '— Select Department —']], collect($departments)->map(fn ($dept) => ['value' => $dept->id, 'label' => $dept->name])->all())" />
+                                    :options="array_merge([['value' => '', 'label' => '— Select '.$target['label'].' —']], $target['options'])" />
+                                <flux:error name="applies_to_id" />
                             </flux:field>
                         @endif
                         <flux:field>

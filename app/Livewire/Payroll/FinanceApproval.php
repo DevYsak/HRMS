@@ -34,6 +34,16 @@ class FinanceApproval extends Component
         abort_unless(Auth::user()->canApproveFinance() || Auth::user()->canRunPayroll(), 403);
     }
 
+    /**
+     * The legacy single-hop path finalizes or rejects a whole run in one step,
+     * so it is Finance's sign-off (spec §3.5 "Finance approves the payroll
+     * run"): running payroll is not enough.
+     */
+    private function authorizeFinanceSignOff(): void
+    {
+        abort_unless(Auth::user()->canApproveFinance(), 403);
+    }
+
     public function loadPending()
     {
         $this->pendingPayrolls = Payroll::where('status', 'pending_finance')
@@ -45,7 +55,7 @@ class FinanceApproval extends Component
     /** Legacy single-hop approval — only valid for a payroll with no configured steps. */
     public function approve($payrollId, PayrollService $payrollService)
     {
-        $this->authorizeAccess();
+        $this->authorizeFinanceSignOff();
 
         $payroll = Payroll::findOrFail($payrollId);
 
@@ -70,7 +80,7 @@ class FinanceApproval extends Component
     /** Open the reject-reason modal for a specific payroll (legacy, no configured steps). */
     public function openReject(int $payrollId): void
     {
-        $this->authorizeAccess();
+        $this->authorizeFinanceSignOff();
 
         $this->rejectingId = $payrollId;
         $this->rejectingStepId = null;
@@ -88,6 +98,8 @@ class FinanceApproval extends Component
 
             return;
         }
+
+        $this->authorizeFinanceSignOff();
 
         $payroll = Payroll::findOrFail($this->rejectingId);
 

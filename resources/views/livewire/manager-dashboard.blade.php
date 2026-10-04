@@ -74,6 +74,39 @@
             </div>
         </div>
 
+        {{-- ── TEAM OT + WHO'S AWAY (spec §5.2) ── --}}
+        <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <div class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                <div class="mb-3 flex items-center justify-between">
+                    <span class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Team OT · {{ now()->format('F') }}</span>
+                    <div class="flex size-8 items-center justify-center rounded-xl bg-orange-50 dark:bg-orange-950/30">
+                        <flux:icon.bolt class="size-4 text-orange-500" />
+                    </div>
+                </div>
+                <div class="flex items-baseline gap-3">
+                    <div class="text-3xl font-black text-zinc-900 dark:text-white">{{ rtrim(rtrim(number_format($teamOtHours, 2), '0'), '.') }}<span class="ml-1 text-sm font-semibold text-zinc-400">h</span></div>
+                    <div class="text-lg font-bold text-orange-600">₹{{ number_format($teamOtAmount) }}</div>
+                </div>
+                <div class="mt-1 text-[10px] text-zinc-400">approved overtime recorded this month</div>
+            </div>
+            <div class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                <div class="mb-3 flex items-center justify-between">
+                    <span class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">On leave this week</span>
+                    <div class="flex size-8 items-center justify-center rounded-xl bg-sky-50 dark:bg-sky-950/30">
+                        <flux:icon.calendar-days class="size-4 text-sky-500" />
+                    </div>
+                </div>
+                @forelse($onLeaveThisWeek as $away)
+                    <div class="flex items-center justify-between py-1 text-sm">
+                        <span class="font-semibold text-zinc-800 dark:text-zinc-100">{{ $away['name'] }}</span>
+                        <span class="text-xs text-zinc-500">{{ $away['from'] === $away['to'] ? $away['from'] : $away['from'].' – '.$away['to'] }}</span>
+                    </div>
+                @empty
+                    <div class="text-sm text-zinc-400">Nobody on approved leave this week.</div>
+                @endforelse
+            </div>
+        </div>
+
         {{-- ── TEAM KPI SCORES ── --}}
         <div class="pulse-card">
             <div class="mb-4 flex items-center justify-between">

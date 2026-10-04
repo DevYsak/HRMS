@@ -129,6 +129,33 @@ class LeaveLedgerBackfillService
     }
 
     /**
+     * Migrate exactly one row, including a NEEDS_HR_REVIEW one, for a caller
+     * that is about to restate the row anyway (the HR register
+     * reconciliation). apply() filters by employee and year, which would
+     * also migrate the employee's other leave types as a side effect.
+     *
+     * @return string the classification the row was migrated under
+     *
+     * @throws \DomainException when the row is BLOCKED
+     */
+    public function migrateRow(LeaveBalance $balance, ?User $actor = null): string
+    {
+        if ($balance->isLedgerBacked()) {
+            return self::SAFE;
+        }
+
+        $plan = $this->classify($balance);
+
+        if ($plan['classification'] === self::BLOCKED) {
+            throw new \DomainException('Balance #'.$balance->id.' cannot be moved onto the ledger: '.$plan['reason']);
+        }
+
+        $this->migrate($balance, $plan, $actor);
+
+        return $plan['classification'];
+    }
+
+    /**
      * The full picture of one row, and the entries that would represent it.
      *
      * @return array<string, mixed>

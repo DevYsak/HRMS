@@ -18,7 +18,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 #[Fillable([
     'name', 'description', 'statutory_weeks', 'contractual_additional_weeks',
     'bank_holiday_treatment', 'max_carry_over_days', 'carry_over_expiry_months',
-    'irregular_accrual_rate', 'is_default', 'is_active',
+    'irregular_accrual_rate', 'mandatory_leave_days', 'is_default', 'is_active',
 ])]
 class LeavePolicy extends Model
 {
@@ -35,6 +35,7 @@ class LeavePolicy extends Model
             'contractual_additional_weeks' => 'decimal:2',
             'max_carry_over_days' => 'decimal:2',
             'irregular_accrual_rate' => 'decimal:4',
+            'mandatory_leave_days' => 'integer',
             'is_default' => 'boolean',
             'is_active' => 'boolean',
         ];
@@ -43,6 +44,11 @@ class LeavePolicy extends Model
     public function employees(): HasMany
     {
         return $this->hasMany(Employee::class);
+    }
+
+    public function rules(): HasMany
+    {
+        return $this->hasMany(LeavePolicyRule::class);
     }
 
     /** Whether bank holidays come out of the entitlement rather than on top. */

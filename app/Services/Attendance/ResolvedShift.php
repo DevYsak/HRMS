@@ -32,16 +32,20 @@ readonly class ResolvedShift
         return $this->start->copy()->addMinutes($this->graceMinutes);
     }
 
-    /** Whether a check-in at the given time is late for this shift. */
+    /**
+     * Whether a check-in at the given time is late for this shift. Compared
+     * at minute precision — spec §3.2: with a 10:30 start and 5 minutes'
+     * grace, 10:35 (any second of it) is on time and 10:36 onwards is late.
+     */
     public function isLate(Carbon $checkIn): bool
     {
-        return $checkIn->gt($this->lateCutoff());
+        return $checkIn->copy()->startOfMinute()->gt($this->lateCutoff());
     }
 
-    /** Minutes past the grace cutoff (0 when on time). */
+    /** Whole minutes past the grace cutoff (0 when on time). */
     public function lateMinutes(Carbon $checkIn): int
     {
-        return $this->isLate($checkIn) ? (int) $this->lateCutoff()->diffInMinutes($checkIn) : 0;
+        return $this->isLate($checkIn) ? (int) $this->lateCutoff()->diffInMinutes($checkIn->copy()->startOfMinute()) : 0;
     }
 
     /** Expected working minutes for a full shift day (standard hours). */

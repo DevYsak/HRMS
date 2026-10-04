@@ -11,9 +11,9 @@ use App\Models\LeaveType;
 use App\Models\LeaveYear;
 use App\Models\Office;
 use App\Models\User;
+use App\Services\Leave\ConexusLeavePolicyService;
 use App\Services\Leave\EnsureEmployeeLeaveBalancesService;
 use App\Services\Leave\LeaveManagementService;
-use App\Services\Leave\LeaveProvisioningService;
 use App\Services\Leave\LeaveYearResolver;
 use App\Services\LeaveBalanceService;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -88,7 +88,8 @@ class LeaveManagement extends Component
         $this->authorize('view_leave_management');
 
         $this->leaveYearId = $years->current()->id;
-        $this->leaveTypeId = LeaveType::where('code', LeaveProvisioningService::ANNUAL_CODE)->value('id')
+        // CSL is the Conexus leave balance; the retired Annual Leave is not the default.
+        $this->leaveTypeId = LeaveType::where('code', ConexusLeavePolicyService::CSL_CODE)->value('id')
             ?? LeaveType::whereNull('deleted_at')->orderBy('id')->value('id');
     }
 
@@ -255,6 +256,12 @@ class LeaveManagement extends Component
         foreach ($this->bulkEmployees() as $employee) {
             $row = $this->rows->firstWhere('employee_id', $employee->id);
             if (! $row || ! $row['has_balance']) {
+                continue;
+            }
+
+            // Nobody credits their own leave (LeaveBalanceService refuses it):
+            // the actor's own row is skipped, not reported as a failure.
+            if ((int) $employee->user_id === (int) $user->id) {
                 continue;
             }
 

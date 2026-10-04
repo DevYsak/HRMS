@@ -5,6 +5,14 @@ namespace App\Policies;
 use App\Models\Employee;
 use App\Models\User;
 
+/**
+ * Employee records (spec v3.1 §4 "Employee Profiles": Super Admin / HR full,
+ * Director own department, Manager own team, employee own record).
+ *
+ * Reach comes from ApprovalGuard via User::coversEmployee(): company-wide for
+ * Super Admin and unscoped HR, the configured department/shift scope plus
+ * reporting line for everyone else — the same population approvals use.
+ */
 class EmployeePolicy
 {
     public function viewAny(User $user): bool
@@ -15,12 +23,13 @@ class EmployeePolicy
 
     public function view(User $user, Employee $employee): bool
     {
-        // 1. Can manage all employees
-        // 2. Is their manager
-        // 3. Is the employee themselves
-        return $user->canManageEmployees()
-            || ($user->isManager() && $employee->manager_id === $user->employee?->id)
-            || ($user->employee?->id === $employee->id);
+        // 1. Is the employee themselves
+        // 2. Manages employees inside their reach
+        // 3. Is their manager
+        return $user->employee?->id === $employee->id
+            || ($user->canManageEmployees() && $user->coversEmployee($employee))
+            // employees.manager_id holds the manager's USER id, not an employee id.
+            || ($user->isManager() && $employee->manager_id === $user->id);
     }
 
     public function create(User $user): bool
@@ -30,12 +39,17 @@ class EmployeePolicy
 
     public function update(User $user, Employee $employee): bool
     {
-        return $user->canManageEmployees();
+        return $user->canManageEmployees()
+            && $user->coversEmployee($employee)
+            && ! $this->isProtectedFrom($user, $employee);
     }
 
     public function delete(User $user, Employee $employee): bool
     {
-        return $user->canManageEmployees();
+        return $user->canManageEmployees()
+            && $user->coversEmployee($employee)
+            && $employee->user_id !== $user->id
+            && ! $this->isProtectedFrom($user, $employee);
     }
 
     /**
@@ -48,19 +62,39 @@ class EmployeePolicy
      */
     public function invite(User $user, Employee $employee): bool
     {
-        return $user->canManageEmployees();
+        return $user->canManageEmployees()
+            && $user->coversEmployee($employee)
+            && ! $this->isProtectedFrom($user, $employee);
     }
 
     /**
      * Erasing a deleted employee for good, along with their leave, attendance,
      * payslips and audit trail.
      *
-     * Narrower than delete() on purpose: a soft delete is recoverable and a
-     * permanent one is not, so it takes the dedicated delete_employee
-     * permission rather than general employee management.
+     * Spec §3.1: records are archived, never deleted. Purging is kept only for
+     * the Super Admin (e.g. removing test data) and still needs the dedicated
+     * delete_employee permission.
      */
     public function forceDelete(User $user, Employee $employee): bool
     {
-        return $user->hasPermission('delete_employee');
+        return $this->isSuperAdmin($user) && $user->hasPermission('delete_employee');
+    }
+
+    /**
+     * A Super Admin's record is the Super Admin's to change: anyone else
+     * editing it could, for example, repoint its login email and take the
+     * account over through a password reset.
+     */
+    private function isProtectedFrom(User $user, Employee $employee): bool
+    {
+        $target = $employee->user;
+
+        return $target !== null && $target->id !== $user->id
+            && $this->isSuperAdmin($target) && ! $this->isSuperAdmin($user);
+    }
+
+    private function isSuperAdmin(User $user): bool
+    {
+        return $user->isSuperAdmin() || $user->assignedRole?->slug === 'super_admin';
     }
 }

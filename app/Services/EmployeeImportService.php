@@ -19,6 +19,7 @@ use App\Services\Security\RoleDelegationGuard;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
@@ -496,6 +497,29 @@ class EmployeeImportService
                 && ($refusal = $roles->refusalToAssignLegacy($actor, $role))) {
                 $parsed['rows'][$i]['status'] = 'error';
                 $parsed['rows'][$i]['errors'] = [...($row['errors'] ?? []), "Role '{$role->label()}': {$refusal}"];
+            }
+        }
+
+        // Updating an existing person is editing their record: the edit
+        // screen's rule (EmployeePolicy::update — inside the importer's reach,
+        // never a Super Admin's record unless they are one) and never the
+        // importer's own record (bank, PAN and pay need a second person).
+        if ($mode === 'update') {
+            foreach ($parsed['rows'] as $i => $row) {
+                if ($row['status'] !== 'update') {
+                    continue;
+                }
+
+                $userId = (int) ($row['data']['existing_user_id'] ?? 0);
+                $target = Employee::withTrashed()->where('user_id', $userId)->first();
+                $own = $userId === (int) $actor->id;
+
+                if ($own || ($target && ! Gate::forUser($actor)->allows('update', $target))) {
+                    $parsed['rows'][$i]['status'] = 'error';
+                    $parsed['rows'][$i]['errors'] = [...($row['errors'] ?? []), $own
+                        ? 'You cannot update your own record by import — another HR user must.'
+                        : 'You may not update this employee: outside your access, or a Super Admin record.'];
+                }
             }
         }
 

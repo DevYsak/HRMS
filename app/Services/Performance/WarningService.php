@@ -9,6 +9,7 @@ use App\Models\WarningAcknowledgement;
 use App\Models\WarningLetter;
 use App\Notifications\WarningEscalatedNotification;
 use App\Notifications\WarningIssuedNotification;
+use App\Services\Approvals\ApprovalGuard;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Request;
@@ -172,6 +173,9 @@ class WarningService
      */
     public function close(WarningLetter $warning, User $closer, string $comment): void
     {
+        // Nobody closes a warning issued to themselves.
+        app(ApprovalGuard::class)->assertCanDecide($closer, $warning->employee);
+
         if ($warning->status === 'closed') {
             throw new \DomainException('Warning is already closed.');
         }

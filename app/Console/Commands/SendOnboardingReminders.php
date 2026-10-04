@@ -93,6 +93,39 @@ class SendOnboardingReminders extends Command
         };
     }
 
+    /**
+     * Whether a completion notice for this employee was already sent.
+     *
+     * The fact lives on the employee ($marker): notification rows are pruned
+     * after 90 days and can be deleted by their recipients, so they cannot be
+     * the record of "sent". Rows written before the marker existed still
+     * count once — they set the marker instead of triggering a resend. (The
+     * original whereJsonContains() check never matched and re-sent daily.)
+     */
+    private function alreadyAnnounced(string $type, Employee $employee, string $legacyBody, string $marker): bool
+    {
+        if ($employee->{$marker} !== null) {
+            return true;
+        }
+
+        $sentBefore = \DB::table('notifications')
+            ->where('type', $type)
+            ->where(fn ($q) => $q->where('data->employee_id', $employee->id)
+                ->orWhere('data->body', $legacyBody))
+            ->exists();
+
+        if ($sentBefore) {
+            $this->markAnnounced($employee, $marker);
+        }
+
+        return $sentBefore;
+    }
+
+    private function markAnnounced(Employee $employee, string $marker): void
+    {
+        Employee::withoutEvents(fn () => $employee->forceFill([$marker => now()])->save());
+    }
+
     private function notifyCompletedEmployees(OnboardingService $service): void
     {
         $employees = Employee::with('user')
@@ -106,13 +139,16 @@ class SendOnboardingReminders extends Command
             if ($employee->onboardingTasks()->where('phase', 'onboarding')->exists() &&
                 $employee->onboardingTasks()->where('phase', 'onboarding')->where('is_completed', false)->doesntExist()) {
 
-                $notified = \DB::table('notifications')
-                    ->where('type', 'App\\Notifications\\OnboardingCompletedNotification')
-                    ->whereJsonContains('data->body', $employee->user?->name)
-                    ->exists();
+                $notified = $this->alreadyAnnounced(
+                    'App\\Notifications\\OnboardingCompletedNotification',
+                    $employee,
+                    ($employee->user?->name ?? 'The employee').' has completed all onboarding tasks.',
+                    'onboarding_completed_notified_at',
+                );
 
                 if (! $notified) {
                     $service->checkAndNotifyCompletion($employee);
+                    $this->markAnnounced($employee, 'onboarding_completed_notified_at');
                     $onboardingCount++;
                 }
             }
@@ -120,13 +156,16 @@ class SendOnboardingReminders extends Command
             if ($employee->onboardingTasks()->where('phase', 'offboarding')->exists() &&
                 $employee->onboardingTasks()->where('phase', 'offboarding')->where('is_completed', false)->doesntExist()) {
 
-                $notifiedOffboarding = \DB::table('notifications')
-                    ->where('type', 'App\\Notifications\\OffboardingCompletedNotification')
-                    ->whereJsonContains('data->body', $employee->user?->name)
-                    ->exists();
+                $notifiedOffboarding = $this->alreadyAnnounced(
+                    'App\\Notifications\\OffboardingCompletedNotification',
+                    $employee,
+                    'The offboarding process for '.($employee->user?->name ?? 'the employee').' has been completed. All tasks have been marked as complete.',
+                    'offboarding_completed_notified_at',
+                );
 
                 if (! $notifiedOffboarding) {
                     $service->checkAndNotifyOffboardingCompletion($employee);
+                    $this->markAnnounced($employee, 'offboarding_completed_notified_at');
                     $offboardingCount++;
                 }
             }

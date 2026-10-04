@@ -150,7 +150,7 @@ class ManagePips extends Component
         $this->validate([
             'doc_title' => 'required|string|max:255',
             'doc_description' => 'nullable|string|max:1000',
-            'doc_file' => 'required|file|max:10240',
+            'doc_file' => 'required|file|mimes:pdf,png,jpg,jpeg|max:10240',
         ]);
 
         $path = $this->doc_file->store("documents/pip/{$this->activeRecord->id}", 'local');

@@ -200,9 +200,10 @@ class SalaryCalculationService
 
         // ── Step 8: Exit settlement ───────────────────────────────────────────
         $exitSettlementAmount = 0.0;
+        // Not yet paid by any run — or already in this one (a draft re-run).
         $exitRecord = ExitRecord::where('employee_id', $employee->id)
             ->where('final_settlement_done', true)
-            ->whereNull('payroll_id')
+            ->where(fn ($q) => $q->whereNull('payroll_id')->orWhere('payroll_id', $payroll->id))
             ->first();
 
         if ($exitRecord && $exitRecord->final_settlement_amount > 0) {
@@ -217,10 +218,13 @@ class SalaryCalculationService
 
         // ── Step 9: Encashments ───────────────────────────────────────────────
         $encashmentAmount = 0.0;
+        // Approved and unpaid — or already processed by this run (a draft
+        // re-run). A processed row without a payroll_id was paid earlier.
         $encashments = LeaveEncashment::with('leaveType')
             ->where('employee_id', $employee->id)
             ->where('payout_month', $monthLabel)
-            ->where('status', 'approved')
+            ->where(fn ($q) => $q->where(fn ($open) => $open->where('status', 'approved')->whereNull('payroll_id'))
+                ->orWhere(fn ($mine) => $mine->where('status', 'processed')->where('payroll_id', $payroll->id)))
             ->get();
 
         if ($encashments->isNotEmpty()) {
@@ -238,7 +242,7 @@ class SalaryCalculationService
                     'amount' => $encashmentAmount,
                     'type' => 'earning',
                 ];
-                $encashments->each(fn ($e) => $e->update(['status' => 'processed']));
+                $encashments->each(fn ($e) => $e->update(['status' => 'processed', 'payroll_id' => $payroll->id]));
             }
         }
 

@@ -33,6 +33,16 @@ class LeavePolicyRule extends Model
 
     public const ACCRUAL_QUARTERLY = 'quarterly';
 
+    /**
+     * Credits are posted by HR (or a reconciliation), never by a schedule.
+     *
+     * For a policy that states an annual figure without saying how it is
+     * released — Conexus CSL is "12 days a year" with no upfront/monthly
+     * rule — so fixed_days is kept as policy metadata and nothing is
+     * credited automatically until HR chooses a schedule.
+     */
+    public const ACCRUAL_MANUAL = 'manual';
+
     public const JOINING_FULL = 'full';
 
     public const JOINING_HALF_MONTH = 'half_month';

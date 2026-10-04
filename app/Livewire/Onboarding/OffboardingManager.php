@@ -7,17 +7,21 @@ use App\Models\Employee;
 use App\Models\ExitRecord;
 use App\Models\OnboardingTask;
 use App\Notifications\OffboardingDetailsNotification;
+use App\Services\Approvals\ApprovalGuard;
 use App\Services\AssetAssignmentService;
 use App\Services\Biometric\BiometricSyncService;
 use App\Services\OnboardingService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 
 class OffboardingManager extends Component
 {
     public $search = '';
 
+    /** Set only by selectEmployee(), which checks reach — never by the client. */
+    #[Locked]
     public $selectedEmployeeId = null;
 
     // Exit Record Form
@@ -43,8 +47,9 @@ class OffboardingManager extends Component
     public function selectEmployee($id)
     {
         abort_unless(Auth::user()->canManageEmployees(), 403);
-        $this->selectedEmployeeId = $id;
         $employee = Employee::with('exitRecord', 'assets')->findOrFail($id);
+        $this->authorizeOffboarding($employee);
+        $this->selectedEmployeeId = $employee->id;
 
         if ($employee->exitRecord) {
             $this->lastWorkingDay = $employee->exitRecord->last_working_day->format('Y-m-d');
@@ -85,6 +90,7 @@ class OffboardingManager extends Component
         ]);
 
         $employee = Employee::findOrFail($this->selectedEmployeeId);
+        $this->authorizeOffboarding($employee);
 
         $exitRecord = $employee->exitRecord ?? new ExitRecord(['employee_id' => $employee->id]);
 
@@ -93,8 +99,12 @@ class OffboardingManager extends Component
         $exitRecord->exit_reason = $this->exitReason;
         $exitRecord->notice_period_served = $this->noticePeriodServed;
         $exitRecord->interview_notes = $this->interviewNotes;
-        $exitRecord->final_settlement_amount = $this->finalSettlementAmount;
-        $exitRecord->final_settlement_done = $this->finalSettlementDone;
+        // The full & final settlement is money paid through payroll — set by
+        // payroll staff (spec §3.8: Finance owns it), kept as-is otherwise.
+        if (Auth::user()->canRunPayroll()) {
+            $exitRecord->final_settlement_amount = $this->finalSettlementAmount;
+            $exitRecord->final_settlement_done = $this->finalSettlementDone;
+        }
 
         $exitRecord->processed_by = Auth::id();
         $exitRecord->processed_at = now();
@@ -123,22 +133,38 @@ class OffboardingManager extends Component
     {
         abort_unless(Auth::user()->canManageEmployees(), 403);
 
-        $asset = Asset::findOrFail($assetId);
+        // Only an asset held by the employee being offboarded.
+        $asset = Asset::where('employee_id', $this->selectedEmployeeId)->findOrFail($assetId);
         $condition = $this->assetConditions[$assetId] ?? 'Good';
         $assetService->returnAsset($asset, Auth::id(), $condition);
 
         \Flux::toast('Asset returned successfully.');
     }
 
+    /**
+     * Offboarding ends someone's access and pays their settlement: inside the
+     * actor's reach, never their own, and never a record above them.
+     */
+    private function authorizeOffboarding(Employee $employee): void
+    {
+        app(ApprovalGuard::class)->assertCanDecide(Auth::user(), $employee);
+        $this->authorize('update', $employee);
+    }
+
     public function render()
     {
         abort_unless(Auth::user()->canManageEmployees(), 403);
+
+        // Inside the actor's reach, and never themselves (they cannot offboard themselves).
+        $reach = Auth::user()->accessibleEmployeeIds();
 
         $employees = Employee::with('user', 'department')
             ->whereHas('user', function ($q) {
                 $q->where('name', 'like', '%'.$this->search.'%');
             })
             ->where('status', '!=', 'inactive')
+            ->where('user_id', '!=', Auth::id())
+            ->when($reach !== null, fn ($q) => $q->whereIn('id', $reach))
             ->get();
 
         $selectedEmployee = $this->selectedEmployeeId ? Employee::with('exitRecord', 'assets')->find($this->selectedEmployeeId) : null;

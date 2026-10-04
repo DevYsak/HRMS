@@ -138,7 +138,9 @@ class EmployeeCreate extends Component
     public function mount(): void
     {
         $this->authorize('create', Employee::class);
-        $this->joining_date = now()->format('Y-m-d');
+        // Joining date starts blank: pre-filling today saved an invented date
+        // whenever HR did not know the real one. Left empty, the employee shows
+        // in the HR completion queue until HR records it.
 
         $lastId = Employee::max('id') ?? 0;
         $this->employee_id = 'CNX-'.str_pad($lastId + 1, 4, '0', STR_PAD_LEFT);
@@ -219,8 +221,8 @@ class EmployeeCreate extends Component
             'address' => ['nullable', 'string', 'max:500'],
             'emergency_contact' => ['nullable', 'string', 'max:255'],
             'photo' => ['nullable', 'image', 'max:2048'],
-            'joining_date' => ['required', 'date'],
-            'probation_end_date' => ['nullable', 'date', 'after:joining_date'],
+            'joining_date' => ['nullable', 'date'],
+            'probation_end_date' => array_merge(['nullable', 'date'], $this->joining_date ? ['after:joining_date'] : []),
             'shift_id' => ['nullable', 'exists:shift_settings,id'],
             'ot_tracking_source' => ['required', 'in:biometric,manual,nexflow,hybrid'],
             'employment_type_id' => ['nullable', 'exists:employment_types,id'],
@@ -292,14 +294,14 @@ class EmployeeCreate extends Component
             'employment_type_id' => $this->employment_type_id ?: null,
             'work_mode_id' => $this->work_mode_id ?: null,
             'salary_cycle_id' => $this->salary_cycle_id ?: null,
-            'joining_date' => $this->joining_date,
+            'joining_date' => $this->joining_date ?: null,
             'probation_end_date' => $this->probation_end_date ?: null,
             'status' => $this->status,
         ]);
 
         if ($this->salary_structure_id) {
             $structure = SalaryStructure::with('components')->find($this->salary_structure_id);
-            $structure?->applyToEmployee($user->employee, $this->joining_date);
+            $structure?->applyToEmployee($user->employee, $this->joining_date ?: null);
         }
 
         $user->employee->payrollSettings()->create([

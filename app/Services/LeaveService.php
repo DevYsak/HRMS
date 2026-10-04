@@ -3,8 +3,10 @@
 namespace App\Services;
 
 use App\Enums\EmployeeStatus;
+use App\Enums\UserRole;
 use App\Exceptions\ApprovalNotPermitted;
 use App\Models\AttendanceSetting;
+use App\Models\DecemberMandatoryDay;
 use App\Models\Employee;
 use App\Models\LeaveBalance;
 use App\Models\LeaveEncashment;
@@ -20,6 +22,7 @@ use App\Notifications\LeaveMonthlyAccrualNotification;
 use App\Notifications\LeavePaymentStatusChangedNotification;
 use App\Notifications\LeaveRequestNotification;
 use App\Services\Approvals\ApprovalGuard;
+use App\Services\Attendance\HolidayResolver;
 use App\Services\Audit\AuditService;
 use App\Services\Leave\LeaveAccrualService;
 use App\Services\Leave\LeaveBalanceCalculator;
@@ -257,6 +260,18 @@ class LeaveService
             );
         }
 
+        // Mandatory December Leave — the company is shut on these dates. They
+        // are not drawn from CSL or any other balance, so no leave can be
+        // applied on them; working one goes through attendance (Comp Off).
+        $shutdown = DecemberMandatoryDay::whereBetween('date', [$start->toDateString(), $end->toDateString()])
+            ->orderBy('date')
+            ->first();
+        if ($shutdown) {
+            throw new \DomainException(
+                $shutdown->date->format('d M Y').' is a Mandatory December Leave (company shutdown) day — it is not charged to your leave. Please exclude it from your leave dates.'
+            );
+        }
+
         // Cross-request sandwich bridge — pull the boundary outward to swallow
         // a weekend trapped between this request and an adjacent leave block
         // (e.g. leave on Fri as one request + Mon as another). No-op for
@@ -282,9 +297,10 @@ class LeaveService
             throw new \DomainException("An attachment is required for '{$leaveType->name}'.");
         }
 
-        // Overlap check — must run before balance check so conflict errors surface first
+        // Overlap check — must run before balance check so conflict errors surface first.
+        // A request waiting on the employee's reply still holds its dates.
         $overlap = LeaveRequest::where('employee_id', $employee->id)
-            ->whereIn('status', ['approved', 'pending', 'pending_hr'])
+            ->whereIn('status', ['approved', 'pending', 'pending_hr', 'more_info_requested'])
             ->where('start_date', '<=', $endDate)
             ->where('end_date', '>=', $startDate)
             ->first();
@@ -903,59 +919,110 @@ class LeaveService
      * employee may also encash from their current-year allocated balance.
      * A per-year encashment cap (max_encashable_days) is enforced when set.
      */
+    /**
+     * What an employee can encash of a leave type right now, in the current
+     * leave year — the same LeaveBalanceCalculator figure every leave screen
+     * shows, less leave awaiting approval and encashments already in the
+     * pipeline (one day can be taken or paid out, never both).
+     *
+     * @return array{available: float, carry_forward: float, current_year: float, in_pipeline: float, remaining_cap: ?float}
+     */
+    public function encashable(Employee $employee, LeaveType $leaveType): array
+    {
+        $none = ['available' => 0.0, 'carry_forward' => 0.0, 'current_year' => 0.0, 'in_pipeline' => 0.0, 'remaining_cap' => null];
+
+        if (! $leaveType->allow_encashment || $leaveType->category === 'comp_off') {
+            return $none;
+        }
+
+        $year = app(LeaveYearResolver::class)->current();
+        $balance = LeaveBalance::where('employee_id', $employee->id)
+            ->where('leave_type_id', $leaveType->id)
+            ->where(fn ($q) => $q->where('leave_year_id', $year->id)->orWhere('year', $year->legacyYear()))
+            ->first();
+
+        if ($balance === null) {
+            return $none;
+        }
+
+        $summary = app(LeaveBalanceCalculator::class)->summary($balance);
+        $inPipeline = round((float) LeaveEncashment::where('employee_id', $employee->id)
+            ->where('leave_type_id', $leaveType->id)
+            ->whereIn('status', ['pending', 'pending_finance'])
+            ->sum('requested_days'), 2);
+
+        $free = max(0.0, round($summary['available_to_request'] - $inPipeline, 2));
+        $carry = max(0.0, min($free, round($summary['carry_forward'] - $summary['encashed'] - $inPipeline, 2)));
+        $current = $leaveType->allow_current_year_encashment ? max(0.0, round($free - $carry, 2)) : 0.0;
+
+        $cap = null;
+        if ($leaveType->max_encashable_days !== null) {
+            $already = (float) LeaveEncashment::where('employee_id', $employee->id)
+                ->where('leave_type_id', $leaveType->id)
+                ->whereNotIn('status', ['rejected'])
+                ->whereBetween('created_at', [$year->starts_on->copy()->startOfDay(), $year->ends_on->copy()->endOfDay()])
+                ->sum('requested_days');
+            $cap = max(0.0, (float) $leaveType->max_encashable_days - $already);
+        }
+
+        return [
+            'available' => round($carry + $current, 2),
+            'carry_forward' => $carry,
+            'current_year' => $current,
+            'in_pipeline' => $inPipeline,
+            'remaining_cap' => $cap,
+        ];
+    }
+
     public function requestEncashment(Employee $employee, LeaveType $leaveType, float $requestedDays, string $payoutMonth): LeaveEncashment
     {
-        if (! $leaveType->allow_encashment) {
+        // Conexus policy: only CSL is encashable. Comp Off never is, whatever
+        // a type's flag says, and MDL is not a balance at all.
+        if (! $leaveType->allow_encashment || $leaveType->category === 'comp_off') {
             throw new \DomainException("Leave type '{$leaveType->name}' is not eligible for encashment.");
         }
 
-        $currentYear = app(LeaveYearResolver::class)->legacyYearFor();
-        $balance = $this->getBalance($employee->id, $leaveType->id, $currentYear);
-
-        // Available carry-forward days (already-encashed CF days are deducted)
-        $cfAvailable = $balance
-            ? max(0, (float) $balance->carried_forward_days - (float) ($balance->encashed_days ?? 0))
-            : 0.0;
-
-        // Available current-year days (only when explicitly enabled)
-        $cyAvailable = 0.0;
-        if ($leaveType->allow_current_year_encashment && $balance) {
-            $cyAvailable = max(0, (float) $balance->allocated_days - (float) $balance->used_days - (float) ($balance->encashed_days ?? 0));
+        if ($requestedDays <= 0) {
+            throw new \DomainException('Enter the number of days to encash.');
         }
 
-        $totalAvailable = $cfAvailable + $cyAvailable;
+        $year = app(LeaveYearResolver::class)->current();
+        $figures = $this->encashable($employee, $leaveType);
+        $encashable = $figures['available'];
+        $inPipeline = $figures['in_pipeline'];
 
-        if ($requestedDays > $totalAvailable) {
+        if ($requestedDays > $encashable + 0.001) {
             throw new \DomainException(
-                "Insufficient encashable balance. Available: {$totalAvailable} day(s) (carry-forward: {$cfAvailable}, current-year: {$cyAvailable}), requested: {$requestedDays}."
+                "Insufficient {$leaveType->name} to encash. Available: {$encashable} day(s)"
+                .($inPipeline > 0 ? " after {$inPipeline} day(s) already awaiting encashment approval" : '')
+                .", requested: {$requestedDays}."
             );
         }
 
-        // Enforce per-year encashment cap
+        // Per-leave-year cap (a leave year, not a calendar year).
         if ($leaveType->max_encashable_days !== null) {
-            $alreadyEncashedThisYear = LeaveEncashment::where('employee_id', $employee->id)
+            $alreadyEncashed = LeaveEncashment::where('employee_id', $employee->id)
                 ->where('leave_type_id', $leaveType->id)
                 ->whereNotIn('status', ['rejected'])
-                ->whereYear('created_at', $currentYear)
+                ->whereBetween('created_at', [$year->starts_on->copy()->startOfDay(), $year->ends_on->copy()->endOfDay()])
                 ->sum('requested_days');
 
-            $remainingCap = max(0, $leaveType->max_encashable_days - $alreadyEncashedThisYear);
+            $remainingCap = max(0, $leaveType->max_encashable_days - $alreadyEncashed);
 
             if ($requestedDays > $remainingCap) {
                 throw new \DomainException(
-                    "Encashment cap of {$leaveType->max_encashable_days} days per year reached. You may encash at most {$remainingCap} more day(s) this year."
+                    "Encashment cap of {$leaveType->max_encashable_days} days per leave year reached. You may encash at most {$remainingCap} more day(s) in {$year->label}."
                 );
             }
         }
-
-        // Source year: carry-forward days come from previous year; current-year from current year
-        $sourceYear = $requestedDays <= $cfAvailable ? $currentYear - 1 : $currentYear;
 
         return LeaveEncashment::create([
             'employee_id' => $employee->id,
             'leave_type_id' => $leaveType->id,
             'requested_days' => $requestedDays,
-            'source_leave_year' => $sourceYear,
+            // Where the days come from: carried-forward days originated in the
+            // previous leave year; anything beyond them is this year's.
+            'source_leave_year' => $requestedDays <= $figures['carry_forward'] + 0.001 ? $year->legacyYear() - 1 : $year->legacyYear(),
             'status' => 'pending',
             'payout_month' => $payoutMonth,
         ]);
@@ -969,6 +1036,12 @@ class LeaveService
     {
         if ($encashment->status !== 'pending') {
             throw new \DomainException('Only pending encashment requests can be approved at this stage.');
+        }
+
+        // Conexus policy: encashment is approved by a Director or the HR
+        // Admin (Super Admin included) — not by any leave approver.
+        if (! ($reviewer->isSuperAdmin() || $reviewer->isHrAdmin() || $reviewer->role === UserRole::Director)) {
+            throw new \DomainException('Leave encashment must be approved by a Director or the HR Admin.');
         }
 
         app(ApprovalGuard::class)->assertNotSelf($reviewer, $encashment->employee);
@@ -1002,6 +1075,16 @@ class LeaveService
         app(ApprovalGuard::class)->assertNotSelf($reviewer, $encashment->employee);
 
         $isFinanceStage = $encashment->status === 'pending_finance';
+
+        // Each stage is rejected by whoever may approve it: the Director / HR
+        // Admin stage first, Finance only once it has reached Finance.
+        if ($isFinanceStage && ! $reviewer->canApproveFinance()) {
+            throw new \DomainException('Only Finance can reject an encashment awaiting Finance.');
+        }
+
+        if (! $isFinanceStage && ! ($reviewer->isSuperAdmin() || $reviewer->isHrAdmin() || $reviewer->role === UserRole::Director)) {
+            throw new \DomainException('Leave encashment must be decided by a Director or the HR Admin at this stage.');
+        }
 
         $encashment->update(array_merge(
             [
@@ -1040,6 +1123,10 @@ class LeaveService
                 'finance_reviewer_id' => $reviewer->id,
                 'finance_reviewer_comment' => $comment,
                 'finance_reviewed_at' => now(),
+                // Payroll picks approved encashments up by payout month. One
+                // signed off after its month's run would never be paid, so it
+                // moves to the current month.
+                'payout_month' => max((string) $encashment->payout_month, now()->format('Y-m')),
             ]);
 
             // Commit balance deduction only on final approval — against the
@@ -1084,10 +1171,25 @@ class LeaveService
             return 0;
         }
 
+        // Not a working day for anyone: the configured weekly off, or a
+        // Mandatory December Leave shutdown day (spec §3.3 — no leave consumed).
+        if (AttendanceSetting::isWeeklyOff($date) || DecemberMandatoryDay::isMandatory($date)) {
+            return 0;
+        }
+
         $flagged = 0;
         $employees = Employee::where('status', 'active')->with(['attendances', 'leaveRequests'])->get();
+        $holidays = app(HolidayResolver::class);
 
         foreach ($employees as $employee) {
+            // Before they joined, and on a public holiday that applies to
+            // them, nobody is absent (spec §3.3: public holidays are
+            // non-working days; no leave is consumed).
+            if (($employee->joining_date && $employee->joining_date->gt($date))
+                || $holidays->isHoliday($employee, $date)) {
+                continue;
+            }
+
             $hasAttendance = $employee->attendances()
                 ->where('date', $date->toDateString())
                 ->whereNotNull('check_in')

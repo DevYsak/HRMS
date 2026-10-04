@@ -46,8 +46,10 @@ class AttendanceService
                 ->setDate($now->year, $now->month, $now->day);
             $cutoff = $shiftStart->copy()->addMinutes((int) $shift->grace_minutes);
 
-            $isLate = $now->gt($cutoff);
-            $lateMinutes = $isLate ? (int) $cutoff->diffInMinutes($now) : 0;
+            // Minute precision (spec §3.2: 10:35 is on time, 10:36 is late).
+            $arrivedAt = $now->copy()->startOfMinute();
+            $isLate = $arrivedAt->gt($cutoff);
+            $lateMinutes = $isLate ? (int) $cutoff->diffInMinutes($arrivedAt) : 0;
         }
 
         return Attendance::create([
@@ -80,6 +82,8 @@ class AttendanceService
             'check_out_photo' => $payload['photo'] ?? null,
             'check_out_user_agent' => $payload['user_agent'] ?? request()->userAgent(),
             'total_hours' => $totalHours,
+            // A real clock-out ends any "missing check-out" flag raised earlier.
+            'missing_checkout' => false,
         ]);
 
         $this->creditCompOffIfEligible($attendance->fresh(['employee.shift', 'employee.office']), $now);
@@ -425,8 +429,20 @@ class AttendanceService
     }
 
     /** A rejection at ANY stage ends the workflow; the action joins the audit trail. */
-    public function rejectRegularisation(AttendanceRegularisation $regularisation, int $reviewerId, string $comment): AttendanceRegularisation
+    /**
+     * @param  bool  $override  HR's explicit, commented override of an already
+     *                          approved request (All Attendance). Every other
+     *                          caller may only reject a pending one.
+     */
+    public function rejectRegularisation(AttendanceRegularisation $regularisation, int $reviewerId, string $comment, bool $override = false): AttendanceRegularisation
     {
+        // Only a request still awaiting a decision: "rejecting" an approved one
+        // flips its status while the corrected attendance, OT and leave it
+        // already applied stay in place — so it is never an incidental action.
+        if ($regularisation->status !== 'pending' && ! $override) {
+            throw new \DomainException('This regularisation has already been decided.');
+        }
+
         app(ApprovalGuard::class)->assertCanDecide($reviewerId, $regularisation->employee);
 
         $trail = $regularisation->approval_trail ?? [];

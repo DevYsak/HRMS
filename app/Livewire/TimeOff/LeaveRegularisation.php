@@ -168,7 +168,14 @@ class LeaveRegularisation extends Component
         }
 
         $reg = AttendanceRegularisation::findOrFail($this->reviewId);
-        app(AttendanceService::class)->rejectRegularisation($reg, auth()->id(), $this->reviewComment);
+
+        try {
+            app(AttendanceService::class)->rejectRegularisation($reg, auth()->id(), $this->reviewComment);
+        } catch (\DomainException $e) {
+            \Flux::toast($e->getMessage(), variant: 'danger');
+
+            return;
+        }
         $reg->fresh()->employee?->user?->notify(new RegularisationReviewedNotification($reg->fresh()));
 
         $this->reviewId = null;

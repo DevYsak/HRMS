@@ -7,6 +7,8 @@ use App\Models\LeaveEncashment;
 use App\Models\LeaveRequest;
 use App\Models\LeaveType;
 use App\Models\LeaveYear;
+use App\Services\Leave\ConexusLeavePolicyService;
+use App\Services\Leave\EmployeeLeaveOverviewService;
 use App\Services\Leave\LeaveBalanceCalculator;
 use App\Services\Leave\LeaveExpiryService;
 use App\Services\Leave\LeaveStatementService;
@@ -68,10 +70,24 @@ class MyLeaveBalances extends Component
             ->where('employee_id', $this->employee->id)
             ->where(fn ($q) => $q->where('leave_year_id', $this->year->id)->orWhere('year', $this->year->legacyYear()))
             ->get()
-            ->filter(fn (LeaveBalance $b) => $b->leaveType !== null)
+            // Retired types (the 28-day Annual Leave) are history, not a
+            // balance to apply against; their movements stay in the timeline.
+            ->filter(fn (LeaveBalance $b) => $b->leaveType !== null && ! $b->leaveType->trashed())
             ->map(fn (LeaveBalance $b) => ['type' => $b->leaveType, 'summary' => $calculator->summary($b)])
-            ->sortBy(fn ($c) => [$c['type']->code === 'AL' ? 0 : 1, $c['type']->name])
+            ->sortBy(fn ($c) => [$c['type']->code === ConexusLeavePolicyService::CSL_CODE ? 0 : 1, $c['type']->name])
             ->values();
+    }
+
+    /**
+     * The Conexus view of the year — CSL, MDL dates and Comp Off — from the
+     * same service the hero and the dashboard read.
+     *
+     * @return array<string, mixed>
+     */
+    #[Computed]
+    public function overview(): array
+    {
+        return app(EmployeeLeaveOverviewService::class)->for($this->employee, $this->year);
     }
 
     #[Computed]
@@ -143,6 +159,12 @@ class MyLeaveBalances extends Component
     {
         // My Time Off owns the request form; hand it the type.
         $this->dispatch('apply-leave', leaveTypeId: $leaveTypeId);
+    }
+
+    public function encash(int $leaveTypeId): void
+    {
+        // My Time Off owns the encashment form too.
+        $this->dispatch('encash-leave', leaveTypeId: $leaveTypeId);
     }
 
     /** Stage of a request in employee terms. */

@@ -5,6 +5,7 @@ namespace App\Livewire\Performance;
 use App\Models\Document;
 use App\Models\Employee;
 use App\Models\WarningLetter;
+use App\Services\Approvals\ApprovalGuard;
 use App\Services\Performance\WarningService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
@@ -130,7 +131,7 @@ class WarningLetters extends Component
         $this->validate([
             'doc_title' => 'required|string|max:255',
             'doc_description' => 'nullable|string|max:1000',
-            'doc_file' => 'required|file|max:10240',
+            'doc_file' => 'required|file|mimes:pdf,png,jpg,jpeg|max:10240',
         ]);
 
         $path = $this->doc_file->store("documents/warning-letters/{$this->activeWarning->id}", 'local');
@@ -185,6 +186,10 @@ class WarningLetters extends Component
             'reason' => 'required|string|max:255',
             'description' => 'nullable|string',
         ]);
+
+        // Disciplinary action is decided about someone else, inside your reach
+        // (the service stays callable by the automated late-warning job).
+        app(ApprovalGuard::class)->assertCanDecide(Auth::user(), $this->activeWarning->employee);
 
         try {
             $warningService->escalate($this->activeWarning, Auth::user(), [
