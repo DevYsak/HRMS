@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Services\Audit\AuditService;
 use DomainException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 /**
@@ -97,8 +98,18 @@ class ModuleFeatureService
         $this->setting = ModuleSetting::current()->fresh();
     }
 
+    /**
+     * The settings row. Fails open — every module enabled, as before the
+     * switch existed — while the module_settings migration has not run yet,
+     * so deploying the code ahead of `php artisan migrate` cannot take every
+     * page down. (Changing a switch still needs the table.)
+     */
     private function setting(): ModuleSetting
     {
+        if ($this->setting === null && ! Schema::hasTable((new ModuleSetting)->getTable())) {
+            return $this->setting = new ModuleSetting(['payroll_enabled' => true, 'payslips_enabled' => true]);
+        }
+
         return $this->setting ??= ModuleSetting::current();
     }
 }

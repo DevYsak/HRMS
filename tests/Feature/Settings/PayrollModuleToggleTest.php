@@ -15,6 +15,7 @@ use App\Services\EmployeeDashboardService;
 use App\Services\ModuleFeatureService;
 use App\Services\PayrollService;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Schema;
 use Livewire\Livewire;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
@@ -204,4 +205,13 @@ test('disabled: an automated payroll run exits safely and generates nothing', fu
         ->expectsOutputToContain('Payroll module disabled — skipped.');
 
     expect(Payroll::count())->toBe(0)->and(Payslip::count())->toBe(0);
+});
+
+test('before the module_settings migration has run, every page still works with payroll enabled', function () {
+    Schema::shouldReceive('hasTable')->with('module_settings')->andReturn(false);
+
+    $features = new ModuleFeatureService;
+
+    expect($features->payrollEnabled())->toBeTrue()
+        ->and($features->payslipsEnabled())->toBeTrue();
 });
