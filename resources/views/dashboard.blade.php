@@ -132,7 +132,7 @@
             ['label' => 'Leave Trend', 'value' => $onLeaveTodayCount, 'accent' => 'blue', 'series' => $spark(max($onLeaveTodayCount, 1))],
             ['label' => 'OT Trend', 'value' => $pendingOtCount, 'accent' => 'amber', 'series' => $spark(max($pendingOtCount, 1))],
             ['label' => 'Performance', 'value' => $readiness, 'accent' => 'green', 'series' => $spark($readiness, 0.1)],
-            ['label' => 'Payroll', 'value' => $activePayrolls->count(), 'accent' => 'red', 'series' => $spark(max($activePayrolls->count(), 1))],
+            ...($payrollEnabled ?? true ? [['label' => 'Payroll', 'value' => $activePayrolls->count(), 'accent' => 'red', 'series' => $spark(max($activePayrolls->count(), 1))]] : []),
             ['label' => 'Headcount', 'value' => $totalActive, 'accent' => 'orange', 'series' => $spark(max($totalActive, 1), 0.2)],
         ];
     @endphp
@@ -246,11 +246,13 @@
                     @empty
                         <p class="py-4 text-center text-sm text-[#9CA3AF] dark:text-zinc-500">No birthdays in the next 30 days.</p>
                     @endforelse
+                    @if($payrollEnabled ?? true)
                     <div class="flex items-center gap-3 rounded-xl p-2">
                         <div class="flex size-9 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-500"><flux:icon.banknotes class="size-[18px]" /></div>
                         <div class="min-w-0 flex-1"><div class="text-sm font-semibold text-[#111827] dark:text-white">Payroll run</div><div class="text-[11px] text-[#6B7280] dark:text-zinc-400">Month-end cycle</div></div>
                         <span class="shrink-0 rounded-lg bg-[#FFFDF8] dark:bg-white/5 px-2 py-1 text-[11px] font-bold text-red-500">{{ now()->endOfMonth()->format('d M') }}</span>
                     </div>
+                    @endif
                 </div>
             </div>
         </div>
@@ -358,12 +360,12 @@
             <div class="rounded-2xl border border-[#F3E8DD] dark:border-white/10 bg-white dark:bg-zinc-900 p-6 shadow-sm">
                 <h3 class="mb-4 text-lg font-bold tracking-tight text-[#111827] dark:text-white">Quick Actions</h3>
                 <div class="grid grid-cols-2 gap-3">
-                    @foreach([
+                    @foreach(array_filter([
                         ['Add Employee', 'user-plus', 'employees.create', 'green'],
-                        ['Run Payroll', 'banknotes', 'payroll.process', 'blue'],
+                        ($payrollEnabled ?? true) ? ['Run Payroll', 'banknotes', 'payroll.process', 'blue'] : ['Documents', 'document-text', 'documents.index', 'blue'],
                         ['Leave Requests', 'calendar-days', 'time-off.employees', 'orange'],
                         ['Attendance', 'clock', 'attendance.employees', 'amber'],
-                    ] as [$l, $i, $route, $t])
+                    ]) as [$l, $i, $route, $t])
                         <a href="{{ $r($route) }}" wire:navigate class="group flex items-center gap-3 rounded-xl border border-[#F3E8DD] dark:border-white/10 bg-[#FFFDF8] dark:bg-white/5 p-3 transition hover:-translate-y-0.5 hover:border-orange-200 hover:shadow-md">
                             <div class="flex size-9 items-center justify-center rounded-lg {{ $toneSoft[$t] }} transition group-hover:scale-110"><flux:icon :name="$i" class="size-[18px]" /></div>
                             <span class="text-xs font-semibold text-[#111827] dark:text-white">{{ $l }}</span>

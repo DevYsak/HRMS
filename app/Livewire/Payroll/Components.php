@@ -2,12 +2,15 @@
 
 namespace App\Livewire\Payroll;
 
+use App\Livewire\Concerns\RequiresPayrollModule;
 use App\Models\SalaryComponent;
 use App\Services\FormulaEvaluator;
 use Livewire\Component;
 
 class Components extends Component
 {
+    use RequiresPayrollModule;
+
     public $showModal = false;
 
     public $editingId = null;

@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Settings;
 
+use App\Livewire\Concerns\RequiresPayrollModule;
 use App\Models\SalaryCycle;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -9,6 +10,8 @@ use Livewire\Component;
 
 class SalaryCycleManager extends Component
 {
+    use RequiresPayrollModule;
+
     public bool $showModal = false;
 
     public ?int $editingId = null;

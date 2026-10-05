@@ -133,7 +133,7 @@
             ['label' => 'Overtime', 'icon' => 'clock', 'color' => '#f59e0b', 'href' => $routeOr('overtime.my'), 'nav' => true],
             ['label' => 'Leave History', 'icon' => 'clipboard-document-list', 'color' => '#8b5cf6', 'href' => '#recent-requests', 'nav' => false],
             ['label' => 'Leave Policy', 'icon' => 'document-text', 'color' => '#6366f1', 'href' => '#policy-explorer', 'nav' => false],
-            ['label' => 'Payslips', 'icon' => 'banknotes', 'color' => '#14b8a6', 'href' => $routeOr('payroll.payslips'), 'nav' => true],
+            ...(app(\App\Services\ModuleFeatureService::class)->payslipsEnabled() ? [['label' => 'Payslips', 'icon' => 'banknotes', 'color' => '#14b8a6', 'href' => $routeOr('payroll.payslips'), 'nav' => true]] : []),
         ];
     @endphp
     <div class="pulse-margin rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">

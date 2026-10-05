@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Payroll;
 
+use App\Livewire\Concerns\RequiresPayrollModule;
 use App\Models\AuditLog;
 use App\Models\Employee;
 use App\Models\Payroll;
@@ -15,6 +16,8 @@ use Livewire\Component;
 
 class Overview extends Component
 {
+    use RequiresPayrollModule;
+
     public string $filterYear = '';
 
     public function render()

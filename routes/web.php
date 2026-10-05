@@ -86,6 +86,7 @@ use App\Livewire\Settings\DepartmentManager;
 use App\Livewire\Settings\EmploymentTypeManager;
 use App\Livewire\Settings\JobTitleManager;
 use App\Livewire\Settings\MenuSettings;
+use App\Livewire\Settings\ModuleSettings;
 use App\Livewire\Settings\NotificationSettings;
 use App\Livewire\Settings\OnboardingTemplateManager;
 use App\Livewire\Settings\OnboardingTemplateTaskManager;
@@ -134,7 +135,7 @@ Route::view('/welcome', 'welcome', [
 // Public by design (banks/landlords verify without an account) but the URL
 // must carry a valid signature, so slips can't be enumerated by id.
 Route::get('/payslips/{payslip}/verify', [PayslipController::class, 'verify'])
-    ->middleware('signed')
+    ->middleware(['signed', 'module:payslips'])
     ->name('payroll.payslips.verify');
 
 // Accepting a login invitation. Public by necessity — the employee has no
@@ -312,14 +313,17 @@ Route::middleware(['auth'])->group(function () {
     // --------------------------------------------------
     // Payroll module
     // --------------------------------------------------
-    Route::prefix('payroll')->name('payroll.')->group(function () {
+    // The whole module is refused while Payroll & Payslips is switched off
+    // (System Settings › Modules) — on top of, never instead of, each route's
+    // own permission.
+    Route::prefix('payroll')->name('payroll.')->middleware('module:payroll')->group(function () {
         // All authenticated users may view their own payslips
-        Route::get('/my-payslips', MyPayslips::class)->name('payslips');
+        Route::get('/my-payslips', MyPayslips::class)->name('payslips')->middleware('module:payslips');
         Route::get('/payslips/{payslip}/download', [PayslipController::class, 'download'])
-            ->name('payslips.download');
+            ->name('payslips.download')->middleware('module:payslips');
         // Combined multi-month print (max 6) — ?ids[]=1&ids[]=2
         Route::get('/payslips/print-combined', [PayslipController::class, 'downloadCombined'])
-            ->name('payslips.print-combined');
+            ->name('payslips.print-combined')->middleware('module:payslips');
 
         // Payroll administration — finance, HR Admin, Super Admin
         Route::middleware('role:run-payroll')->group(function () {
@@ -356,7 +360,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/dashboard/director', ExecutiveDashboard::class)->name('dashboard.director')
         ->middleware('can:view_executive_dashboard');
     Route::get('/dashboard/finance', FinanceDashboard::class)->name('dashboard.finance')
-        ->middleware('role:run-payroll,approve-finance');
+        ->middleware(['role:run-payroll,approve-finance', 'module:payroll']);
     Route::get('/dashboard/hr-admin', HrAdminDashboard::class)->name('dashboard.hr-admin')
         ->middleware('can:view_hr_dashboard');
     Route::get('/dashboard/manager', ManagerDashboard::class)->name('dashboard.manager')
@@ -465,10 +469,10 @@ Route::middleware(['auth'])->group(function () {
     Route::prefix('reports')->name('reports.')->group(function () {
         Route::get('/payroll-summary.pdf', [ReportController::class, 'payrollSummaryPdf'])
             ->name('payroll-summary')
-            ->middleware('role:run-payroll');
+            ->middleware(['role:run-payroll', 'module:payroll']);
 
         // Payroll reports (12 types) — Phase 6
-        Route::middleware('role:run-payroll')->group(function () {
+        Route::middleware(['role:run-payroll', 'module:payroll'])->group(function () {
             Route::get('/payroll-register.csv', [ReportController::class, 'payrollRegisterCsv'])->name('payroll-register');
             Route::get('/salary-register.csv', [ReportController::class, 'salaryRegisterCsv'])->name('salary-register');
             Route::get('/bank-transfer.csv', [ReportController::class, 'bankTransferReportCsv'])->name('bank-transfer');
@@ -561,8 +565,9 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/roles', RoleManager::class)->name('roles');
         Route::get('/employment-types', EmploymentTypeManager::class)->name('employment-types');
         Route::get('/work-modes', WorkModeManager::class)->name('work-modes');
-        Route::get('/salary-cycles', SalaryCycleManager::class)->name('salary-cycles');
-        Route::get('/payroll-approval-policy', ApprovalPolicySettings::class)->name('payroll-approval-policy');
+        Route::get('/salary-cycles', SalaryCycleManager::class)->name('salary-cycles')->middleware('module:payroll');
+        Route::get('/payroll-approval-policy', ApprovalPolicySettings::class)->name('payroll-approval-policy')->middleware('module:payroll');
+        Route::get('/modules', ModuleSettings::class)->name('modules');
         Route::get('/job-titles', JobTitleManager::class)->name('job-titles');
         Route::get('/menu', MenuSettings::class)->name('menu');
         Route::get('/notifications', NotificationSettings::class)->name('notifications');

@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Payroll;
 
+use App\Livewire\Concerns\RequiresPayrollModule;
 use App\Models\Payroll;
 use App\Models\PayrollApprovalStep;
 use App\Services\PayrollService;
@@ -10,6 +11,8 @@ use Livewire\Component;
 
 class FinanceApproval extends Component
 {
+    use RequiresPayrollModule;
+
     public $pendingPayrolls;
 
     public ?int $rejectingId = null;

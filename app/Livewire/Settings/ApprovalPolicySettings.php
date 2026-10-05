@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Settings;
 
+use App\Livewire\Concerns\RequiresPayrollModule;
 use App\Models\PayrollApprovalPolicy;
 use App\Models\User;
 use Illuminate\Validation\Rule;
@@ -15,6 +16,8 @@ use Livewire\Component;
  */
 class ApprovalPolicySettings extends Component
 {
+    use RequiresPayrollModule;
+
     public bool $showModal = false;
 
     public ?int $editingId = null;

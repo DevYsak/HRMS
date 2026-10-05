@@ -3,6 +3,7 @@
 namespace App\Livewire\Payroll;
 
 use App\Http\Controllers\PayslipController;
+use App\Livewire\Concerns\RequiresPayslipsModule;
 use App\Mail\PayslipMail;
 use App\Models\AuditLog;
 use App\Models\Payslip;
@@ -16,6 +17,7 @@ use Livewire\WithPagination;
 
 class MyPayslips extends Component
 {
+    use RequiresPayslipsModule;
     use WithPagination;
 
     public bool $emailingSending = false;

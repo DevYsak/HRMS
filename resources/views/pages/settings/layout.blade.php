@@ -30,7 +30,9 @@
                         <flux:separator class="my-2" />
                         <flux:navlist.item :href="route('settings.employment-types')" :current="request()->routeIs('settings.employment-types')" wire:navigate icon="briefcase">{{ __('Employment Types') }}</flux:navlist.item>
                         <flux:navlist.item :href="route('settings.work-modes')" :current="request()->routeIs('settings.work-modes')" wire:navigate icon="computer-desktop">{{ __('Work Modes') }}</flux:navlist.item>
+                        @if(app(\App\Services\ModuleFeatureService::class)->payrollEnabled())
                         <flux:navlist.item :href="route('settings.salary-cycles')" :current="request()->routeIs('settings.salary-cycles')" wire:navigate icon="arrow-path">{{ __('Salary Cycles') }}</flux:navlist.item>
+                        @endif
                         <flux:navlist.item :href="route('settings.job-titles')" :current="request()->routeIs('settings.job-titles')" wire:navigate icon="identification">{{ __('Job Titles') }}</flux:navlist.item>
                     @endcan
                 </flux:navlist>

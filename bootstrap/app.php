@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\CheckActiveEmployee;
+use App\Http\Middleware\EnsureModuleEnabled;
 use App\Http\Middleware\EnsurePasswordChanged;
 use App\Http\Middleware\EnsureRole;
 use App\Http\Middleware\SetTeamUrlDefaults;
@@ -26,6 +27,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'role' => EnsureRole::class,
             'biometric.api' => VerifyBiometricApiKey::class,
+            'module' => EnsureModuleEnabled::class,
         ]);
 
         // eSSL ADMS device push endpoints — device posts directly, no CSRF token

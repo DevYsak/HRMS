@@ -43,6 +43,9 @@ class PayrollService
 
     public function generateDraft(string $month, int $year, string $cycle, int $processedBy): Payroll
     {
+        // Payroll & Payslips switched off: refused, nothing is touched.
+        app(ModuleFeatureService::class)->assertPayrollEnabled();
+
         try {
             return $this->runGenerateDraft($month, $year, $cycle, $processedBy);
         } catch (\Throwable $e) {
@@ -208,6 +211,9 @@ class PayrollService
      */
     public function submitForFinanceApproval(Payroll $payroll): Payroll
     {
+        // Payroll & Payslips switched off: refused, nothing is touched.
+        app(ModuleFeatureService::class)->assertPayrollEnabled();
+
         if ($payroll->status !== 'draft') {
             throw new \DomainException('Only draft payrolls can be submitted for finance approval.');
         }
@@ -255,6 +261,9 @@ class PayrollService
 
     public function approveFinance(Payroll $payroll, int $approverId): Payroll
     {
+        // Payroll & Payslips switched off: refused, nothing is touched.
+        app(ModuleFeatureService::class)->assertPayrollEnabled();
+
         if ($payroll->status !== 'pending_finance') {
             throw new \DomainException('Only pending payrolls can be approved by finance.');
         }
@@ -279,6 +288,9 @@ class PayrollService
 
     public function rejectFinance(Payroll $payroll, ?string $note = null): Payroll
     {
+        // Payroll & Payslips switched off: refused, nothing is touched.
+        app(ModuleFeatureService::class)->assertPayrollEnabled();
+
         if ($payroll->status !== 'pending_finance') {
             throw new \DomainException('Only pending payrolls can be rejected by finance.');
         }
@@ -299,6 +311,9 @@ class PayrollService
      */
     public function approveStep(PayrollApprovalStep $step, User $approver): Payroll
     {
+        // Payroll & Payslips switched off: refused, nothing is touched.
+        app(ModuleFeatureService::class)->assertPayrollEnabled();
+
         $payroll = $step->payroll;
 
         $this->assertStepActionable($step, $payroll, $approver);
@@ -322,6 +337,9 @@ class PayrollService
     /** Reject at any step — cascades remaining pending steps to skipped and reverts the payroll to draft, same as legacy rejectFinance(). */
     public function rejectStep(PayrollApprovalStep $step, User $approver, ?string $note = null): Payroll
     {
+        // Payroll & Payslips switched off: refused, nothing is touched.
+        app(ModuleFeatureService::class)->assertPayrollEnabled();
+
         $payroll = $step->payroll;
 
         $this->assertStepActionable($step, $payroll, $approver);
@@ -449,6 +467,9 @@ class PayrollService
     /** Lock a finalized payroll so it can no longer be regenerated or edited. */
     public function lock(Payroll $payroll, int $userId): Payroll
     {
+        // Payroll & Payslips switched off: refused, nothing is touched.
+        app(ModuleFeatureService::class)->assertPayrollEnabled();
+
         if ($payroll->status !== 'finalized') {
             throw new \DomainException('Only a finalized payroll can be locked.');
         }
@@ -466,6 +487,9 @@ class PayrollService
     /** Unlock a payroll, allowing it to be regenerated again if needed. */
     public function unlock(Payroll $payroll): Payroll
     {
+        // Payroll & Payslips switched off: refused, nothing is touched.
+        app(ModuleFeatureService::class)->assertPayrollEnabled();
+
         if (! $payroll->isLocked()) {
             throw new \DomainException('This payroll is not locked.');
         }
@@ -573,6 +597,9 @@ class PayrollService
      */
     private function recalculatePayrollTotals(Payroll $payroll): void
     {
+        // Payroll & Payslips switched off: refused, nothing is touched.
+        app(ModuleFeatureService::class)->assertPayrollEnabled();
+
         $payroll->update([
             'total_payout' => (float) $payroll->payslips()->sum('net_salary'),
             'deductions' => (float) $payroll->payslips()->sum('total_deductions'),
@@ -582,6 +609,9 @@ class PayrollService
     /** Re-run the calculation engine for one employee inside an existing draft payroll, leaving every other payslip untouched. */
     public function regenerateSinglePayslip(Payroll $payroll, Employee $employee, int $userId): Payslip
     {
+        // Payroll & Payslips switched off: refused, nothing is touched.
+        app(ModuleFeatureService::class)->assertPayrollEnabled();
+
         if ($payroll->isLocked()) {
             throw new \DomainException('This payroll is locked and can no longer be regenerated.');
         }
@@ -634,6 +664,9 @@ class PayrollService
      */
     public function updatePayslipItems(Payslip $payslip, array $items, ?string $reason = null): Payslip
     {
+        // Payroll & Payslips switched off: refused, nothing is touched.
+        app(ModuleFeatureService::class)->assertPayrollEnabled();
+
         if ($payslip->status !== 'draft') {
             throw new \DomainException('Only draft payslips can be edited.');
         }
@@ -729,6 +762,9 @@ class PayrollService
     /** Delete a draft payslip and recompute the parent payroll's totals. */
     public function deletePayslip(Payslip $payslip): void
     {
+        // Payroll & Payslips switched off: refused, nothing is touched.
+        app(ModuleFeatureService::class)->assertPayrollEnabled();
+
         if ($payslip->status !== 'draft') {
             throw new \DomainException('Only draft payslips can be deleted.');
         }
@@ -748,6 +784,9 @@ class PayrollService
     /** Lock an individual payslip so it survives a payroll-level regenerate untouched. */
     public function lockPayslip(Payslip $payslip, int $userId): Payslip
     {
+        // Payroll & Payslips switched off: refused, nothing is touched.
+        app(ModuleFeatureService::class)->assertPayrollEnabled();
+
         if ($payslip->isLocked()) {
             throw new \DomainException('This payslip is already locked.');
         }
@@ -761,6 +800,9 @@ class PayrollService
     /** Unlock an individual payslip. */
     public function unlockPayslip(Payslip $payslip): Payslip
     {
+        // Payroll & Payslips switched off: refused, nothing is touched.
+        app(ModuleFeatureService::class)->assertPayrollEnabled();
+
         if (! $payslip->isLocked()) {
             throw new \DomainException('This payslip is not locked.');
         }
@@ -774,6 +816,9 @@ class PayrollService
     /** Admin-triggered single payslip email (any employee) — self-service email lives in MyPayslips::emailPayslip(). */
     public function emailPayslip(Payslip $payslip): void
     {
+        // Payroll & Payslips switched off: refused, nothing is touched.
+        app(ModuleFeatureService::class)->assertPayrollEnabled();
+
         $email = $payslip->employee->user?->email;
 
         if (! $email) {
@@ -786,6 +831,9 @@ class PayrollService
 
     public function dispatchFinalizedPayrollNotifications(Payroll $payroll): void
     {
+        // Payroll & Payslips switched off: refused, nothing is touched.
+        app(ModuleFeatureService::class)->assertPayrollEnabled();
+
         $payroll->loadMissing('payslips.employee.user', 'payslips.payroll');
 
         foreach ($payroll->payslips as $payslip) {

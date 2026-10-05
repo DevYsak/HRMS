@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Payroll;
 
+use App\Livewire\Concerns\RequiresPayrollModule;
 use App\Models\Employee;
 use App\Models\SalaryComponent;
 use App\Models\SalaryStructure;
@@ -11,6 +12,8 @@ use Livewire\Component;
 
 class SalaryStructures extends Component
 {
+    use RequiresPayrollModule;
+
     public bool $showModal = false;
 
     public bool $showTrashed = false;

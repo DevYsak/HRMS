@@ -18,6 +18,9 @@
         $isFin = $user->canApproveFinance();
         $isDir = $user->role?->value === 'director';
         $isSA = $user->isSuperAdmin();
+        // Payroll & Payslips module switch (System Settings › Modules).
+        $payrollOn = app(\App\Services\ModuleFeatureService::class)->payrollEnabled();
+        $payslipsOn = app(\App\Services\ModuleFeatureService::class)->payslipsEnabled();
 
         // Premium primary accent — orange across all roles (#F97316).
         $roleColor = '#f97316';
@@ -42,7 +45,7 @@
             ['label' => 'My Attendance', 'route' => route('attendance.my'), 'caption' => 'Daily check-in and attendance'],
             ['label' => 'My Leave', 'route' => route('time-off.my'), 'caption' => 'Leave balance and requests'],
             ['label' => 'My Overtime', 'route' => route('overtime.my'), 'caption' => 'Overtime requests'],
-            ['label' => 'My Payslips', 'route' => route('payroll.payslips'), 'caption' => 'Payroll and salary slips'],
+            ...($payslipsOn ? [['label' => 'My Payslips', 'route' => route('payroll.payslips'), 'caption' => 'Payroll and salary slips']] : []),
             ['label' => 'Expense Claims', 'route' => route('operations.expenses'), 'caption' => 'Operations and reimbursements'],
             ['label' => 'Documents', 'route' => route('documents.index'), 'caption' => 'HR and employee documents'],
             ['label' => 'Notifications', 'route' => $inboxRoute, 'caption' => 'Inbox and recent alerts'],
@@ -70,7 +73,7 @@
         if ($user->canApproveOt()) {
             $searchLinks->push(['label' => 'Manage OT Requests', 'route' => route('overtime.manage'), 'caption' => 'Approve or reject overtime']);
         }
-        if ($user->canRunPayroll()) {
+        if ($user->canRunPayroll() && $payrollOn) {
             $searchLinks->push(['label' => 'Payroll Overview', 'route' => route('payroll.overview'), 'caption' => 'Payroll summary and cycles']);
             $searchLinks->push(['label' => 'Run Payroll', 'route' => route('payroll.process'), 'caption' => 'Process payroll cycles']);
         }
@@ -230,10 +233,12 @@
                                 {{-- reimbursements not shown (requires run-payroll, 403 for employee) --}}
                                 <flux:sidebar.group :heading="$mi['label']" icon="banknotes" :expandable="true"
                                     :expanded="request()->routeIs('payroll.payslips', 'operations.expenses')">
+                                    @if($payslipsOn)
                                     <flux:sidebar.item :href="route('payroll.payslips')" :current="request()->routeIs('payroll.payslips')"
                                         wire:navigate>
                                         My Payslips
                                     </flux:sidebar.item>
+                                    @endif
                                     <flux:sidebar.item :href="route('operations.expenses')"
                                         :current="request()->routeIs('operations.expenses')" wire:navigate>
                                         Expense Claims
@@ -282,8 +287,10 @@
                             wire:navigate>My Overtime</flux:sidebar.item>
                         <flux:sidebar.item :href="route('wfh.my')" :current="request()->routeIs('wfh.my')"
                             wire:navigate>My WFH Requests</flux:sidebar.item>
+                        @if($payslipsOn)
                         <flux:sidebar.item :href="route('payroll.payslips')" :current="request()->routeIs('payroll.payslips')"
                             wire:navigate>My Payslip</flux:sidebar.item>
+                        @endif
                         <flux:sidebar.item :href="route('operations.expenses')"
                             :current="request()->routeIs('operations.expenses')" wire:navigate>Expense Claims
                         </flux:sidebar.item>
@@ -373,6 +380,7 @@
 
                     <flux:sidebar.item icon="squares-2x2" :href="route('dashboard')" :current="request()->routeIs('dashboard')"
                         wire:navigate>Dashboard</flux:sidebar.item>
+                    @if($payrollOn)
                     <flux:sidebar.item icon="banknotes" :href="route('dashboard.finance')"
                         :current="request()->routeIs('dashboard.finance')" wire:navigate>Finance View</flux:sidebar.item>
 
@@ -386,9 +394,12 @@
                         <flux:sidebar.item :href="route('payroll.reimbursements')"
                             :current="request()->routeIs('payroll.reimbursements')" wire:navigate>Reimbursements
                         </flux:sidebar.item>
+                        @if($payslipsOn)
                         <flux:sidebar.item :href="route('payroll.payslips')" :current="request()->routeIs('payroll.payslips')"
                             wire:navigate>My Payslip</flux:sidebar.item>
+                        @endif
                     </flux:sidebar.group>
+                    @endif
 
                     <flux:sidebar.group heading="My Work" icon="user-circle" :expandable="true"
                         :expanded="request()->routeIs('attendance.my', 'time-off.my', 'wfh.my', 'operations.expenses')">
@@ -554,11 +565,14 @@
                         @endcan
                     </flux:sidebar.group>
 
-                    {{-- Payroll --}}
+                    {{-- Payroll (hidden entirely while the module is switched off) --}}
+                    @if($payrollOn)
                     <flux:sidebar.group heading="Payroll" icon="banknotes" :expandable="true"
                         :expanded="request()->routeIs('payroll.*')">
+                        @if($payslipsOn)
                         <flux:sidebar.item :href="route('payroll.payslips')" :current="request()->routeIs('payroll.payslips')"
                             wire:navigate>My Payslip</flux:sidebar.item>
+                        @endif
                         @can('run_payroll')
                             <flux:sidebar.item :href="route('payroll.overview')" :current="request()->routeIs('payroll.overview')"
                                 wire:navigate>Overview</flux:sidebar.item>
@@ -584,6 +598,7 @@
                             </flux:sidebar.item>
                         @endif
                     </flux:sidebar.group>
+                    @endif
 
                     {{-- Performance --}}
                     <flux:sidebar.group heading="Performance" icon="arrow-trending-up" :expandable="true"
@@ -666,7 +681,7 @@
                     @canany(['manage_employees', 'approve_leave', 'approve_overtime', 'run_payroll'])
                         <flux:sidebar.group heading="Reports" icon="document-chart-bar" :expandable="true"
                             :expanded="false">
-                            @can('run_payroll')
+                            @if($payrollOn && auth()->user()->can('run_payroll'))
                                 <flux:sidebar.item :href="route('reports.payroll-summary')">Payroll Summary</flux:sidebar.item>
                                 <flux:sidebar.item :href="route('reports.payroll-register')">Payroll Register</flux:sidebar.item>
                                 <flux:sidebar.item :href="route('reports.salary-register')">Salary Register</flux:sidebar.item>
@@ -680,7 +695,7 @@
                                 <flux:sidebar.item :href="route('reports.payroll-monthly-summary')">Payroll Monthly Summary</flux:sidebar.item>
                                 <flux:sidebar.item :href="route('reports.payroll-yearly-summary')">Payroll Yearly Summary</flux:sidebar.item>
                                 <flux:sidebar.item :href="route('reports.payroll-variance-report')">Payroll Variance Report</flux:sidebar.item>
-                            @endcan
+                            @endif
                             {{-- Company-wide exports: hidden from scoped approvers (server enforces it too). --}}
                             @if(auth()->user()->can('approve_leave') && auth()->user()->isCompanyWideApprover())
                                 <flux:sidebar.item :href="route('reports.attendance-summary')">Attendance Summary</flux:sidebar.item>
@@ -744,11 +759,16 @@
                     </flux:sidebar.item>
                     <flux:sidebar.item :href="route('settings.work-modes')"
                         :current="request()->routeIs('settings.work-modes')" wire:navigate>Work Modes</flux:sidebar.item>
+                    @if($payrollOn)
                     <flux:sidebar.item :href="route('settings.salary-cycles')"
                         :current="request()->routeIs('settings.salary-cycles')" wire:navigate>Salary Cycles
                     </flux:sidebar.item>
                     <flux:sidebar.item :href="route('settings.payroll-approval-policy')"
                         :current="request()->routeIs('settings.payroll-approval-policy')" wire:navigate>Payroll Approval Policy
+                    </flux:sidebar.item>
+                    @endif
+                    <flux:sidebar.item :href="route('settings.modules')"
+                        :current="request()->routeIs('settings.modules')" wire:navigate>Modules
                     </flux:sidebar.item>
                     <flux:sidebar.item :href="route('settings.job-titles')"
                         :current="request()->routeIs('settings.job-titles')" wire:navigate>Job Titles</flux:sidebar.item>

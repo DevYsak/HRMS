@@ -106,7 +106,9 @@ class EmployeeDashboardService
             'manager.employee.jobTitle:id,name',
         ]);
 
-        $canViewPayslips = $user->hasPermission('view_payslips');
+        // Permission AND the Payroll & Payslips module: with payslips switched
+        // off the card, KPI, quick action and activity entry all drop out.
+        $canViewPayslips = $user->hasPermission('view_payslips') && app(ModuleFeatureService::class)->payslipsEnabled();
 
         if (! $employee) {
             return $this->withoutEmployee($user);

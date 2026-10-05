@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Payroll;
 
+use App\Livewire\Concerns\RequiresPayrollModule;
 use App\Models\Employee;
 use App\Models\Reimbursement;
 use App\Services\ReimbursementService;
@@ -13,6 +14,7 @@ use Livewire\WithPagination;
 
 class Reimbursements extends Component
 {
+    use RequiresPayrollModule;
     use WithFileUploads;
     use WithPagination;
 

@@ -70,7 +70,7 @@
 
         // Individual pay is payroll staff's (spec §4: Director "view dept cost",
         // Manager "no access"); the component refuses the actions as well.
-        $canSeePay = auth()->user()->canRunPayroll();
+        $canSeePay = auth()->user()->canRunPayroll() && app(\App\Services\ModuleFeatureService::class)->payrollEnabled();
         if (! $canSeePay) {
             unset($areas['Pay']);
         }

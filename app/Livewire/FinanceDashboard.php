@@ -2,6 +2,7 @@
 
 namespace App\Livewire;
 
+use App\Livewire\Concerns\RequiresPayrollModule;
 use App\Models\Incentive;
 use App\Models\LeaveEncashment;
 use App\Models\OtRequest;
@@ -13,6 +14,8 @@ use Livewire\Component;
 
 class FinanceDashboard extends Component
 {
+    use RequiresPayrollModule;
+
     public string $month = '';
 
     public int $year = 0;

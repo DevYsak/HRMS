@@ -22,6 +22,8 @@
         };
 
         // ── Executive metrics ──
+        // Payroll & Payslips switched off: no payroll figures or actions here.
+        $payrollOn = app(\App\Services\ModuleFeatureService::class)->payrollEnabled();
         $payrollCost = (float) (($cycleAPayroll?->total_payout ?? 0) + ($cycleBPayroll?->total_payout ?? 0));
         $payrollPerEmp = $activeCount > 0 ? $payrollCost / $activeCount : 0;
         $openApprovals = $pendingLeaves + $pendingOt;
@@ -78,8 +80,8 @@
         $kpis = [
             ['label' => 'Total Employees', 'value' => $activeCount, 'icon' => 'users', 'accent' => 'orange', 'delta' => $growthPct, 'dir' => $growthPct >= 0 ? 'up' : 'down', 'compare' => '6-month growth', 'spark' => $spark(max($activeCount, 1))],
             ['label' => 'Company Attendance', 'value' => $attendancePercent.'%', 'icon' => 'check-circle', 'accent' => 'green', 'delta' => 0, 'dir' => 'flat', 'compare' => 'present today', 'spark' => $spark(max($attendancePercent, 1), 0.1)],
-            ['label' => 'Payroll Cost', 'value' => $fmtMoney($payrollCost), 'icon' => 'banknotes', 'accent' => 'blue', 'delta' => 0, 'dir' => 'flat', 'compare' => 'this month', 'spark' => $spark(max($payrollCost / 100000, 1))],
-            ['label' => 'Payroll / FTE', 'value' => $fmtMoney($payrollPerEmp), 'icon' => 'wallet', 'accent' => 'violet', 'delta' => 0, 'dir' => 'flat', 'compare' => 'avg per employee', 'spark' => $spark(max($payrollPerEmp / 1000, 1))],
+            ...($payrollOn ? [['label' => 'Payroll Cost', 'value' => $fmtMoney($payrollCost), 'icon' => 'banknotes', 'accent' => 'blue', 'delta' => 0, 'dir' => 'flat', 'compare' => 'this month', 'spark' => $spark(max($payrollCost / 100000, 1))]] : []),
+            ...($payrollOn ? [['label' => 'Payroll / FTE', 'value' => $fmtMoney($payrollPerEmp), 'icon' => 'wallet', 'accent' => 'violet', 'delta' => 0, 'dir' => 'flat', 'compare' => 'avg per employee', 'spark' => $spark(max($payrollPerEmp / 1000, 1))]] : []),
             ['label' => 'Open Approvals', 'value' => $openApprovals, 'icon' => 'inbox-stack', 'accent' => 'amber', 'delta' => 0, 'dir' => 'flat', 'compare' => $pendingLeaves.' leave · '.$pendingOt.' OT', 'spark' => $spark(max($openApprovals, 1))],
             ['label' => 'Pending Compliance', 'value' => $pendingCompliance, 'icon' => 'shield-check', 'accent' => 'red', 'delta' => 0, 'dir' => 'flat', 'compare' => 'docs + reviews', 'spark' => $spark(max($pendingCompliance, 1))],
             ['label' => 'Satisfaction', 'value' => $satisfaction.'%', 'icon' => 'face-smile', 'accent' => 'green', 'delta' => 0, 'dir' => 'flat', 'compare' => 'engagement index', 'spark' => $spark($satisfaction, 0.08)],
@@ -140,7 +142,7 @@
             ['label' => 'Headcount', 'value' => $activeCount, 'accent' => 'blue', 'series' => $growth],
             ['label' => 'Hiring', 'value' => array_sum($hiring), 'accent' => 'green', 'series' => $hiring],
             ['label' => 'Attrition', 'value' => $attritionRate.'%', 'accent' => 'red', 'series' => $attrition],
-            ['label' => 'Payroll ₹L', 'value' => round($payrollCost / 100000, 1), 'accent' => 'violet', 'series' => $payrollSeries],
+            ...($payrollOn ? [['label' => 'Payroll ₹L', 'value' => round($payrollCost / 100000, 1), 'accent' => 'violet', 'series' => $payrollSeries]] : []),
             ['label' => 'Performance', 'value' => $perfScore, 'accent' => 'amber', 'series' => $spark($perfScore, 0.1)],
         ];
     @endphp
@@ -158,7 +160,9 @@
                 <p class="text-xs text-[#9CA3AF] dark:text-zinc-500">{{ $u->email }}</p>
                 <div class="mt-4 flex flex-wrap items-center gap-2.5">
                     <a href="{{ $r('attendance.reports') }}" wire:navigate class="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-orange-400 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-orange-500/25 transition hover:shadow-lg"><flux:icon.document-chart-bar class="size-4" /> Company Report</a>
+                    @if($payrollOn)
                     <a href="{{ $r('payroll.finance-approve') }}" wire:navigate class="inline-flex items-center gap-2 rounded-xl border border-[#F3E8DD] dark:border-white/10 bg-white dark:bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-[#6B7280] dark:text-zinc-400 transition hover:bg-[#FFF2E8] hover:text-orange-500"><flux:icon.banknotes class="size-4" /> Approve Payroll</a>
+                    @endif
                     <a href="{{ $r('performance.dashboard') }}" wire:navigate class="inline-flex items-center gap-2 rounded-xl border border-[#F3E8DD] dark:border-white/10 bg-white dark:bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-[#6B7280] dark:text-zinc-400 transition hover:bg-[#FFF2E8] hover:text-orange-500"><flux:icon.chart-bar class="size-4" /> View Performance</a>
                 </div>
             </div>
@@ -197,11 +201,13 @@
     </div>
 
     {{-- ══ ANALYTICS — Department / Payroll / Attrition / Hiring ══ --}}
-    <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+    <div class="grid grid-cols-1 gap-6 {{ $payrollOn ? 'lg:grid-cols-2' : 'lg:grid-cols-1' }}">
         <x-dashboard.hr.section-card class="dash-rise" title="Department Performance" subtitle="Attendance health by team" icon="building-office-2" accent="orange">
             @if($deptHealth->isNotEmpty())<x-dashboard.chart :options="$deptBar" />@else<p class="py-16 text-center text-sm text-[#9CA3AF] dark:text-zinc-500">No data.</p>@endif
         </x-dashboard.hr.section-card>
+        @if($payrollOn)
         <x-dashboard.hr.section-card class="dash-rise" title="Payroll Analytics" subtitle="Monthly payout (₹ Lakh)" icon="banknotes" accent="green"><x-dashboard.chart :options="$payrollChart" /></x-dashboard.hr.section-card>
+        @endif
     </div>
     <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <x-dashboard.hr.section-card class="dash-rise" title="Hiring Trend" subtitle="Joiners / month" icon="user-plus" accent="green"><x-dashboard.chart :options="$hiringChart" /></x-dashboard.hr.section-card>
@@ -291,7 +297,7 @@
             <div class="grid grid-cols-2 gap-3">
                 @foreach([
                     ['Generate Report', 'document-chart-bar', 'attendance.reports', 'orange'],
-                    ['Approve Payroll', 'banknotes', 'payroll.finance-approve', 'green'],
+                    $payrollOn ? ['Approve Payroll', 'banknotes', 'payroll.finance-approve', 'green'] : ['Documents', 'document-text', 'documents.index', 'green'],
                     ['View Performance', 'chart-bar', 'performance.dashboard', 'violet'],
                     ['Employee Directory', 'users', 'employees.index', 'blue'],
                     ['All Approvals', 'inbox-stack', 'time-off.employees', 'amber'],

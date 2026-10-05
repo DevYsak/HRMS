@@ -19,6 +19,7 @@ use App\Notifications\KpiAssignedNotification;
 use App\Notifications\LeaveRequestNotification;
 use App\Notifications\OTApprovedNotification;
 use App\Notifications\ReviewCycleStartedNotification;
+use App\Services\ModuleFeatureService;
 use App\Services\PayrollService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
@@ -159,6 +160,14 @@ class PrepareUatEmployeeData extends Command
     {
         $this->report[] = '## Payroll Validation';
         $this->report[] = '';
+
+        // System Settings › Modules: nothing payroll-related runs while off.
+        if (! app(ModuleFeatureService::class)->payrollEnabled()) {
+            $this->report[] = 'Payroll module disabled — skipped.';
+            $this->info('Payroll module disabled — skipped.');
+
+            return;
+        }
 
         $cycle = $employee->salary_cycle;
 

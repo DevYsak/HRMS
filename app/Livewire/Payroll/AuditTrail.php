@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Payroll;
 
+use App\Livewire\Concerns\RequiresPayrollModule;
 use App\Models\AuditLog;
 use App\Models\Payroll;
 use App\Models\Payslip;
@@ -17,6 +18,7 @@ use Livewire\WithPagination;
  */
 class AuditTrail extends Component
 {
+    use RequiresPayrollModule;
     use WithPagination;
 
     public string $search = '';

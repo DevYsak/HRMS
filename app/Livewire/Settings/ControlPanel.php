@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Settings;
 
+use App\Services\ModuleFeatureService;
 use Livewire\Component;
 
 /**
@@ -61,6 +62,7 @@ class ControlPanel extends Component
                     ['label' => 'Notifications & Email', 'description' => 'Control every email', 'icon' => 'envelope', 'route' => 'settings.notifications'],
                     ['label' => 'Audit Log', 'description' => 'Every change, who & when', 'icon' => 'document-chart-bar', 'route' => 'settings.audit-log'],
                     ['label' => 'AI Assistant', 'description' => 'Provider & access', 'icon' => 'cpu-chip', 'route' => 'settings.ai'],
+                    ['label' => 'Modules', 'description' => 'Switch Payroll & Payslips on or off', 'icon' => 'squares-plus', 'route' => 'settings.modules'],
                 ],
             ],
         ];
@@ -68,7 +70,16 @@ class ControlPanel extends Component
 
     public function render()
     {
-        return view('livewire.settings.control-panel', ['groups' => $this->groups()])
+        // A switched-off module's settings are not offered (its pages refuse).
+        $payrollOn = app(ModuleFeatureService::class)->payrollEnabled();
+        $groups = collect($this->groups())->map(function (array $group) use ($payrollOn) {
+            $group['items'] = array_values(array_filter($group['items'],
+                fn (array $item) => $payrollOn || ! in_array($item['route'], ['settings.salary-cycles', 'settings.payroll-approval-policy'], true)));
+
+            return $group;
+        })->all();
+
+        return view('livewire.settings.control-panel', ['groups' => $groups])
             ->layout('layouts.app', ['title' => 'Control Panel']);
     }
 }

@@ -24,6 +24,7 @@ use App\Services\Attendance\ShiftResolver;
 use App\Services\Attendance\WorkingDayResolver;
 use App\Services\AttendanceService;
 use App\Services\EmployeeDashboardService;
+use App\Services\ModuleFeatureService;
 use App\Services\WfhService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -82,7 +83,7 @@ class Dashboard extends Component
 
         $canOpen = match ($landing) {
             'dashboard.manager' => $user->canApproveLeave(),
-            'dashboard.finance' => $user->canRunPayroll() || $user->canApproveFinance(),
+            'dashboard.finance' => ($user->canRunPayroll() || $user->canApproveFinance()) && app(ModuleFeatureService::class)->payrollEnabled(),
             'dashboard.director' => $user->can('view_executive_dashboard'),
             default => false,
         };
@@ -123,6 +124,7 @@ class Dashboard extends Component
             ->get();
 
         // Active Payroll Cycles
+        $payrollEnabled = app(ModuleFeatureService::class)->payrollEnabled();
         $activePayrolls = Payroll::where('status', 'draft')
             ->where('year', $year)
             ->get();
@@ -348,6 +350,7 @@ class Dashboard extends Component
             'pendingOtCount',
             'pendingLeaveRequests',
             'activePayrolls',
+            'payrollEnabled',
             'heatmapData',
             'days',
             'recentAuditLogs',

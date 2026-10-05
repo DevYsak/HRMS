@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Payroll;
 
+use App\Livewire\Concerns\RequiresPayrollModule;
 use App\Models\Employee;
 use App\Models\Incentive;
 use App\Services\IncentiveService;
@@ -11,6 +12,8 @@ use Livewire\Component;
 
 class Incentives extends Component
 {
+    use RequiresPayrollModule;
+
     // Modal
     public bool $showModal = false;
 

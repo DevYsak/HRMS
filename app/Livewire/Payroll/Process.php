@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Payroll;
 
+use App\Livewire\Concerns\RequiresPayrollModule;
 use App\Models\Department;
 use App\Models\EmploymentType;
 use App\Models\JobTitle;
@@ -17,6 +18,7 @@ use Livewire\WithPagination;
 
 class Process extends Component
 {
+    use RequiresPayrollModule;
     use WithPagination;
 
     public string $month;

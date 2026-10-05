@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Http\Middleware\EnsureModuleEnabled;
 use App\Http\Middleware\EnsureRole;
 use App\Models\AttendanceRegularisation;
 use App\Models\DocumentAcknowledgement;
@@ -29,6 +30,7 @@ use App\Observers\PayslipObserver;
 use App\Observers\ReimbursementObserver;
 use App\Observers\UserObserver;
 use App\Services\EmployeeImportService;
+use App\Services\ModuleFeatureService;
 use App\Services\Notifications\NotificationDeliveryGate;
 use Carbon\CarbonImmutable;
 use Illuminate\Auth\Middleware\Authorize;
@@ -53,7 +55,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // Module switches are read once per request, however many menus,
+        // routes and components ask.
+        $this->app->scoped(ModuleFeatureService::class);
     }
 
     /**
@@ -75,7 +79,7 @@ class AppServiceProvider extends ServiceProvider
         // Re-apply the route's role:/can: checks on every Livewire update
         // request too, not only on the initial page load — a user demoted
         // mid-session cannot keep acting through an open tab.
-        Livewire::addPersistentMiddleware([EnsureRole::class, Authorize::class]);
+        Livewire::addPersistentMiddleware([EnsureRole::class, Authorize::class, EnsureModuleEnabled::class]);
         $this->configureNotificationPriority();
         $this->configureNotificationGates();
         $this->configureMailLogging();

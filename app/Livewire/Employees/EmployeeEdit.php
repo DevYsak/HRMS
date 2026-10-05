@@ -27,6 +27,7 @@ use App\Services\Biometric\EngineAttendanceSyncService;
 use App\Services\Leave\LeaveCarryForwardService;
 use App\Services\Leave\LeaveYearResolver;
 use App\Services\LeaveBalanceService;
+use App\Services\ModuleFeatureService;
 use App\Services\PasswordService;
 use App\Services\ProbationEngine;
 use App\Services\Security\RoleDelegationGuard;
@@ -528,6 +529,7 @@ class EmployeeEdit extends Component
         $user = Auth::user();
 
         abort_unless($user->canRunPayroll(), 403);
+        app(ModuleFeatureService::class)->assertPayrollEnabled();
         abort_if((int) $this->employee->user_id === (int) $user->id && ! $user->isSuperAdmin(), 403, 'You cannot change your own salary.');
     }
 

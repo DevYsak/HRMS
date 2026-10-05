@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Payroll;
 
+use App\Livewire\Concerns\RequiresPayrollModule;
 use App\Models\PayrollImportLog;
 use App\Services\PayrollHistoricalImportService;
 use App\Services\SpreadsheetService;
@@ -14,6 +15,7 @@ use Livewire\WithFileUploads;
  */
 class HistoricalImport extends Component
 {
+    use RequiresPayrollModule;
     use WithFileUploads;
 
     public $file;
