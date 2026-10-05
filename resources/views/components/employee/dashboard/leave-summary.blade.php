@@ -5,19 +5,21 @@
     $signed = fn ($n) => ($n > 0 ? '+' : '').$fmt($n);
     $p = $leave['primary'];
 
-    // CSL bucket by bucket: credit + carry forward ± adjustments − expired −
-    // used − encashed = available. Zero rows are noise, except the credit,
-    // carry forward and used, which are the point of the card.
+    // CSL bucket by bucket: accrued this year + carry forward ± adjustments −
+    // expired − used − encashed = approved balance; less pending = available
+    // to request. Zero rows are noise, except accrued, carry forward and used.
     $rows = $p ? array_values(array_filter([
-        ['Current-year CSL credit', $p['credit'], false],
+        ['Accrued this year', $p['credit'], false],
         ['Carry forward', $p['carry_forward'], false],
         ['Add-ons / adjustments', $p['adjustments'], true],
         ['Expired', -$p['expired'], true],
         ['Used', -$p['used'], true],
         ['Encashed', -$p['encashed'], true],
-    ], fn ($r) => in_array($r[0], ['Current-year CSL credit', 'Carry forward', 'Used'], true) || (float) $r[1] != 0.0)) : [];
+        ['Approved balance', $p['available'], false],
+        ['Pending', -$p['pending'], true],
+    ], fn ($r) => in_array($r[0], ['Accrued this year', 'Carry forward', 'Used', 'Approved balance'], true) || (float) $r[1] != 0.0)) : [];
 
-    $overdrawn = $p && $p['available'] < 0;
+    $overdrawn = $p && $p['available_to_request'] < 0;
 @endphp
 
 {{-- LeaveSummary — the employee's current leave-year balance, read through
@@ -35,15 +37,15 @@
                 {{ $p['name'] }} <span class="text-zinc-400">· policy {{ $fmt($leave['policy']['csl_days']) }} days/year + {{ $leave['policy']['mdl_days'] }} MDL</span>
             </p>
             <p class="mt-1 flex items-baseline gap-1.5">
-                <span @class(['text-3xl font-semibold tabular-nums tracking-tight', 'text-rose-600 dark:text-rose-400' => $overdrawn, 'text-zinc-900 dark:text-white' => ! $overdrawn])>{{ $fmt($p['available']) }}</span>
-                <span class="text-sm text-zinc-500 dark:text-zinc-400">{{ abs($p['available']) == 1 ? 'day' : 'days' }} available</span>
+                <span @class(['text-3xl font-semibold tabular-nums tracking-tight', 'text-rose-600 dark:text-rose-400' => $overdrawn, 'text-zinc-900 dark:text-white' => ! $overdrawn])>{{ $fmt($p['available_to_request']) }}</span>
+                <span class="text-sm text-zinc-500 dark:text-zinc-400">{{ abs($p['available_to_request']) == 1 ? 'day' : 'days' }} available to request</span>
                 @if($overdrawn)
                     <span class="ms-1 rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-medium text-rose-700 ring-1 ring-inset ring-rose-600/15 dark:bg-rose-500/10 dark:text-rose-300">Overdrawn</span>
                 @endif
             </p>
             @if($p['pending'] > 0)
                 <p class="mt-1 text-xs text-amber-700 dark:text-amber-400">
-                    {{ $fmt($p['pending']) }} {{ $p['pending'] == 1 ? 'day' : 'days' }} awaiting approval · {{ $fmt($p['available_to_request']) }} available to request
+                    {{ $fmt($p['pending']) }} {{ $p['pending'] == 1 ? 'day' : 'days' }} awaiting approval
                 </p>
             @endif
         </div>
@@ -56,8 +58,8 @@
                 </div>
             @endforeach
             <div class="flex items-center justify-between pt-2.5">
-                <dt class="font-medium text-zinc-900 dark:text-white">Available</dt>
-                <dd @class(['font-semibold tabular-nums', 'text-rose-600 dark:text-rose-400' => $overdrawn, 'text-zinc-900 dark:text-white' => ! $overdrawn])>{{ $fmt($p['available']) }}</dd>
+                <dt class="font-medium text-zinc-900 dark:text-white">Available to request</dt>
+                <dd @class(['font-semibold tabular-nums', 'text-rose-600 dark:text-rose-400' => $overdrawn, 'text-zinc-900 dark:text-white' => ! $overdrawn])>{{ $fmt($p['available_to_request']) }}</dd>
             </div>
         </dl>
 

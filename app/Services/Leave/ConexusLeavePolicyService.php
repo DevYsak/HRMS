@@ -5,6 +5,9 @@ namespace App\Services\Leave;
 use App\Models\DecemberMandatoryDay;
 use App\Models\Employee;
 use App\Models\LeaveBalance;
+use App\Models\LeaveCarryForwardTransaction;
+use App\Models\LeaveEncashment;
+use App\Models\LeaveLedgerEntry;
 use App\Models\LeavePolicy;
 use App\Models\LeavePolicyRule;
 use App\Models\LeaveRequest;
@@ -19,11 +22,12 @@ use Illuminate\Support\Facades\DB;
 /**
  * The Conexus Standard Leave Policy, as data.
  *
- *   CSL  Casual / Sick Leave — 12 days a year (policy metadata), half-day,
- *        unlimited carry forward that never lapses, encashable with approval.
- *        The grant schedule is NOT stated by the policy, so the rule uses
- *        accrual_method "manual": nothing is credited automatically until HR
- *        chooses upfront/monthly/quarterly.
+ *   CSL  Casual / Sick Leave — 12 days a year, earned 1 day per COMPLETED
+ *        calendar month of the July–June year (HR-confirmed; posted by
+ *        ConexusCslAccrualService), half-day, unlimited carry forward that
+ *        never lapses, encashable with approval. The existing "Paid Leave"
+ *        type — the one holding the reconciled history — becomes CSL; no
+ *        second CSL balance is ever created.
  *   MDL  Six fixed December shutdown dates (december_mandatory_days). Never a
  *        balance; recorded on the policy as mandatory_leave_days = 6.
  *   CO   Comp Off — earned only, carries forward, no expiry, not encashable.
@@ -31,7 +35,15 @@ use Illuminate\Support\Facades\DB;
  * The 28-day "Annual Leave" (AL) of the UK Standard policy is not Conexus
  * policy. AL is retired for new use (soft-deleted, like CL/EL before it); its
  * balances and ledger history are kept, and the register reconciliation
- * reverses the 2026/27 entitlement through the ledger.
+ * reverses the 2026/27 entitlement through the ledger. A separate legacy
+ * Casual Leave or Sick Leave type is retired the same way: no new requests,
+ * no provisioning, history untouched.
+ *
+ * The CSL is never created. It is the existing "Paid Leave" type — the one
+ * holding the reconciled balances, carry forward, usage, ledger and
+ * encashment history — renamed and reconfigured IN PLACE, so its id and every
+ * row pointing at it stay exactly as they are. When no such type exists, or
+ * the choice is ambiguous, the plan BLOCKS instead of creating or guessing.
  *
  * plan() reads only. apply() writes in one transaction. Both are idempotent.
  */
@@ -56,6 +68,17 @@ class ConexusLeavePolicyService
 
     /** The type that may already hold the reconciled CSL ledger history. */
     private const PAID_LEAVE_NAME = 'paid leave';
+
+    /**
+     * Production's code for that type. Never matched on its own: the seeder
+     * gives PL to Paternity Leave, so only a type NAMED Paid Leave is taken.
+     */
+    public const PAID_LEAVE_CODE = 'PL';
+
+    /** Separate legacy types the CSL replaces (retired, history kept). */
+    private const LEGACY_SPLIT_CODES = ['CL', 'SL'];
+
+    private const LEGACY_SPLIT_NAMES = ['casual leave', 'sick leave'];
 
     public function cslType(): ?LeaveType
     {
@@ -84,7 +107,7 @@ class ConexusLeavePolicyService
      *
      * @return array{csl: array{action: string, type_id: ?int, detail: string}, blocked: array<int, string>, actions: array<int, string>, warnings: array<int, string>, employees_to_assign: int}
      */
-    public function plan(?LeaveYear $year = null): array
+    public function plan(?LeaveYear $year = null, ?int $cslTypeId = null): array
     {
         $blocked = [];
         $actions = [];
@@ -101,11 +124,39 @@ class ConexusLeavePolicyService
             }
         }
 
-        $csl = $this->resolveCsl();
+        $csl = $this->resolveCsl($cslTypeId);
         if ($csl['action'] === 'blocked') {
             $blocked[] = $csl['detail'];
         } else {
             $actions[] = 'CSL: '.$csl['detail'];
+            $actions[] = 'CSL: no new leave type will be created; no balance is copied or re-created.';
+        }
+
+        $actions[] = 'CSL accrual: 1 day for each completed calendar month (effective its last day), at most 12 a year; '
+            .'a joining month counts only when worked in full; carry forward unlimited, no expiry.';
+
+        if ($csl['action'] === 'rename' && $csl['type_id']
+            && LeaveType::withTrashed()->whereKey($csl['type_id'])->value('code') === self::PAID_LEAVE_CODE) {
+            $warnings[] = 'Code '.self::PAID_LEAVE_CODE.' is freed by the rename. LeaveTypeSeeder uses '.self::PAID_LEAVE_CODE
+                .' for Paternity Leave, so running that seeder later would add Paternity Leave as its own type.';
+        }
+
+        foreach ($this->legacySplitTypes($csl['type_id']) as $split) {
+            $actions[] = "{$split->name}: retire type #{$split->id} for new requests and provisioning (soft delete); its history is kept.";
+            $live = LeaveBalance::where('leave_type_id', $split->id)
+                ->when($year, fn ($q) => $q->where(fn ($w) => $w->where('leave_year_id', $year->id)->orWhere('year', $year->legacyYear())))
+                ->get()
+                ->filter(fn (LeaveBalance $b) => abs(app(LeaveBalanceCalculator::class)->summary($b)['approved_available']) > 0.005)
+                ->count();
+            if ($live > 0) {
+                $warnings[] = "{$split->name}: {$live} balance(s) still hold days".($year ? " in {$year->label}" : '')
+                    .'. They are not CSL and never count toward Available Leave; HR decides whether any should move to CSL.';
+            }
+            $pending = LeaveRequest::where('leave_type_id', $split->id)
+                ->whereIn('status', LeaveBalanceCalculator::RESERVING_STATUSES)->count();
+            if ($pending > 0) {
+                $warnings[] = "{$split->name}: {$pending} request(s) are still awaiting a decision; HR must decide or re-file them as CSL.";
+            }
         }
 
         $compOff = $this->compOffType();
@@ -151,18 +202,21 @@ class ConexusLeavePolicyService
      *
      * @return array{csl: LeaveType, comp_off: ?LeaveType, legacy_annual: ?LeaveType, policy: LeavePolicy, assigned: int}
      */
-    public function apply(?User $actor = null): array
+    public function apply(?User $actor = null, ?int $cslTypeId = null): array
     {
-        $plan = $this->plan();
+        $plan = $this->plan(null, $cslTypeId);
 
         if ($plan['blocked'] !== []) {
             throw new DomainException(implode(' ', $plan['blocked']));
         }
 
-        return DB::transaction(function () use ($actor) {
-            $csl = $this->establishCsl($actor);
+        return DB::transaction(function () use ($actor, $plan) {
+            $csl = $this->establishCsl($plan['csl']['type_id'], $actor);
             $compOff = $this->configureCompOff();
             $annual = $this->retireAnnualLeave($actor);
+            foreach ($this->legacySplitTypes($csl->id) as $split) {
+                $this->retire($split, $actor, 'Replaced by Casual / Sick Leave (CSL) under the Conexus leave policy.');
+            }
             $policy = $this->establishPolicy($csl, $compOff);
 
             $ids = $this->employeesToAssign($policy)->pluck('id');
@@ -174,61 +228,120 @@ class ConexusLeavePolicyService
 
             app(AuditService::class)->event('CONEXUS_LEAVE_POLICY_APPLIED', AuditService::LEAVE, $policy,
                 new: ['csl_type_id' => $csl->id, 'assigned_employees' => $ids->count(), 'actor' => $actor?->email],
-                reason: '12 CSL + 6 MDL + earned Comp Off; 28-day Annual Leave retired.');
+                reason: '12 CSL (1 per completed month) + 6 MDL + earned Comp Off; 28-day Annual Leave retired.');
 
             return ['csl' => $csl, 'comp_off' => $compOff, 'legacy_annual' => $annual, 'policy' => $policy, 'assigned' => $ids->count()];
         });
     }
 
     /**
-     * Which existing type becomes CSL — never two of them.
+     * Which EXISTING type is the CSL. Never creates one: the answer is the
+     * existing "Paid Leave" type (renamed in place, id kept), or a type that
+     * already carries code CSL from an earlier run — otherwise BLOCKED.
      *
-     * @return array{action: string, type_id: ?int, detail: string}
+     * @param  int|null  $explicitId  the type HR names (--csl-type) when the choice is ambiguous
+     * @return array{action: 'keep'|'rename'|'blocked', type_id: ?int, detail: string, holdings: array<string, int>}
      */
-    public function resolveCsl(): array
+    public function resolveCsl(?int $explicitId = null): array
     {
+        $blocked = fn (string $why) => ['action' => 'blocked', 'type_id' => null, 'detail' => $why, 'holdings' => []];
         $byCode = LeaveType::withTrashed()->where('code', self::CSL_CODE)->first();
-        $paid = LeaveType::whereRaw('LOWER(TRIM(name)) = ?', [self::PAID_LEAVE_NAME])->get();
-        $aliases = LeaveType::whereIn(DB::raw('LOWER(TRIM(name))'), self::CSL_ALIASES)
+        $paid = LeaveType::withTrashed()->whereRaw('LOWER(TRIM(name)) = ?', [self::PAID_LEAVE_NAME])->get();
+        $aliases = LeaveType::withTrashed()->whereIn(DB::raw('LOWER(TRIM(name))'), self::CSL_ALIASES)
             ->where(fn ($q) => $q->whereNull('code')->orWhere('code', '!=', self::CSL_CODE))->get();
 
-        $candidates = collect([$byCode])->filter()->merge($paid)->merge($aliases)->unique('id')->values();
+        if ($explicitId !== null) {
+            $type = LeaveType::withTrashed()->find($explicitId);
 
-        if ($candidates->count() > 1) {
-            $withBalances = $candidates->filter(fn (LeaveType $t) => LeaveBalance::where('leave_type_id', $t->id)->exists());
-
-            if ($withBalances->count() > 1) {
-                return ['action' => 'blocked', 'type_id' => null, 'detail' => 'Several types could be CSL and more than one holds balances ('
-                    .$withBalances->map(fn ($t) => "#{$t->id} {$t->name}")->implode(', ').'). Choose one before reconciling.'];
+            if ($type === null) {
+                return $blocked("There is no leave type #{$explicitId}.");
             }
 
-            $chosen = $withBalances->first() ?? $byCode ?? $candidates->first();
+            $isPaidLeave = in_array(strtolower(trim($type->name)), [self::PAID_LEAVE_NAME, ...self::CSL_ALIASES], true);
+            if ($type->code !== self::CSL_CODE && ! $isPaidLeave) {
+                return $blocked("Type #{$type->id} \"{$type->name}\" is not the Paid Leave type. CSL is only ever the existing Paid Leave type; maternity, paternity and other special leave are never merged into it.");
+            }
 
-            return ['action' => 'rename', 'type_id' => $chosen->id, 'detail' => "use type #{$chosen->id} \"{$chosen->name}\" (it holds the balances) as CSL; other candidates hold none."];
+            if ($byCode && $byCode->id !== $type->id) {
+                return $blocked("Code CSL is already used by type #{$byCode->id} \"{$byCode->name}\"; leave_types.code is unique. Resolve that type before reconciling.");
+            }
+
+            return $this->resolved($type);
         }
 
         if ($byCode) {
-            return ['action' => 'keep', 'type_id' => $byCode->id, 'detail' => "type #{$byCode->id} already has code CSL".($byCode->trashed() ? ' (restored from retired)' : '').'.'];
+            $others = $paid->merge($aliases)->reject(fn (LeaveType $t) => $t->id === $byCode->id);
+            $holdingOthers = $others->filter(fn (LeaveType $t) => array_sum($this->holdings($t)) > 0);
+
+            if ($holdingOthers->isNotEmpty()) {
+                return $blocked("Type #{$byCode->id} already has code CSL, but ".$holdingOthers->map(fn ($t) => "#{$t->id} \"{$t->name}\"")->implode(', ')
+                    .' also holds leave data. Only one type may be the CSL; HR must decide which before reconciling.');
+            }
+
+            return $this->resolved($byCode);
         }
 
-        if ($candidate = $candidates->first()) {
-            return ['action' => 'rename', 'type_id' => $candidate->id, 'detail' => "rename type #{$candidate->id} \"{$candidate->name}\" to \"".self::CSL_NAME.'" (CSL), keeping its ledger history.'];
+        $candidates = $paid->isNotEmpty() ? $paid : $aliases;
+
+        if ($candidates->count() > 1) {
+            return $blocked('Several types could be the CSL ('.$candidates->map(fn ($t) => "#{$t->id} \"{$t->name}\"")->implode(', ')
+                .'). Name the one holding the reconciled balances with --csl-type=<id>.');
         }
 
-        return ['action' => 'create', 'type_id' => null, 'detail' => 'create "'.self::CSL_NAME.'" (CSL).'];
+        if ($candidates->isEmpty()) {
+            return $blocked('No existing "Paid Leave" type was found. The CSL must be the existing Paid Leave type that holds the reconciled balances — '
+                .'this command never creates a leave type. If the type has another name, name it with --csl-type=<id>.');
+        }
+
+        return $this->resolved($candidates->first());
     }
 
-    private function establishCsl(?User $actor): LeaveType
+    /**
+     * What a type holds — every row that keeps pointing at its id.
+     *
+     * @return array{balances: int, ledger_entries: int, requests: int, encashments: int, carry_forward_transactions: int}
+     */
+    public function holdings(LeaveType $type): array
     {
-        $resolution = $this->resolveCsl();
+        return [
+            'balances' => LeaveBalance::where('leave_type_id', $type->id)->count(),
+            'ledger_entries' => LeaveLedgerEntry::where('leave_type_id', $type->id)->count(),
+            'requests' => LeaveRequest::where('leave_type_id', $type->id)->count(),
+            'encashments' => LeaveEncashment::where('leave_type_id', $type->id)->count(),
+            'carry_forward_transactions' => LeaveCarryForwardTransaction::where('leave_type_id', $type->id)->count(),
+        ];
+    }
 
-        $type = $resolution['type_id'] ? LeaveType::withTrashed()->findOrFail($resolution['type_id']) : new LeaveType;
+    /** @return array{action: 'keep'|'rename', type_id: int, detail: string, holdings: array<string, int>} */
+    private function resolved(LeaveType $type): array
+    {
+        $holdings = $this->holdings($type);
+        $held = sprintf('%d balance(s), %d ledger entr(ies), %d request(s), %d encashment(s), %d carry-forward record(s) stay linked to id #%d',
+            $holdings['balances'], $holdings['ledger_entries'], $holdings['requests'], $holdings['encashments'], $holdings['carry_forward_transactions'], $type->id);
+
+        if ($type->code === self::CSL_CODE) {
+            return ['action' => 'keep', 'type_id' => $type->id, 'holdings' => $holdings,
+                'detail' => "type #{$type->id} \"{$type->name}\" is already the canonical CSL".($type->trashed() ? ' (restored from retired)' : '')."; {$held}."];
+        }
+
+        return ['action' => 'rename', 'type_id' => $type->id, 'holdings' => $holdings,
+            'detail' => "reuse existing {$type->name} type #{$type->id}".($type->code ? " (code {$type->code})" : '')
+                .' as canonical CSL — renamed in place to "'.self::CSL_NAME."\", code CSL, id unchanged; {$held}."];
+    }
+
+    private function establishCsl(?int $typeId, ?User $actor): LeaveType
+    {
+        if ($typeId === null) {
+            throw new DomainException('No existing type was resolved as CSL; refusing to create one.');
+        }
+
+        $type = LeaveType::withTrashed()->findOrFail($typeId);
 
         if ($type->trashed()) {
             $type->restore();
         }
 
-        $before = $type->exists ? $type->only(['name', 'code', 'allow_encashment', 'carry_forward_mode']) : null;
+        $before = $type->only(['name', 'code', 'allow_encashment', 'carry_forward_mode']);
 
         $type->forceFill([
             'name' => self::CSL_NAME,
@@ -249,15 +362,17 @@ class ConexusLeavePolicyService
             'allow_current_year_encashment' => true,
             'max_encashable_days' => null,
             // The 12 days live on the policy rule only: a type-level figure is
-            // what bulk tools default to, and the policy does not grant up front.
+            // what bulk tools default to, and CSL is never granted up front.
             'annual_allocation_days' => null,
-            'is_monthly_accrual' => false,
-            'accrual_days_per_month' => 0,
+            // Earned 1 day per completed month — by ConexusCslAccrualService,
+            // which the generic start-of-month accrual leaves CSL to.
+            'is_monthly_accrual' => true,
+            'accrual_days_per_month' => ConexusCslAccrualService::MONTHLY_CREDIT,
             'is_system_controlled' => false,
             'color' => $type->color ?: '#F97316',
         ])->save();
 
-        if ($before !== null && $before['code'] !== self::CSL_CODE) {
+        if ($before['code'] !== self::CSL_CODE) {
             app(AuditService::class)->event('LEAVE_TYPE_RENAMED_TO_CSL', AuditService::LEAVE, $type,
                 old: $before, new: ['name' => self::CSL_NAME, 'code' => self::CSL_CODE, 'actor' => $actor?->email]);
         }
@@ -287,21 +402,48 @@ class ConexusLeavePolicyService
             return $type;
         }
 
-        $type->forceFill(['allow_paid_request' => false, 'allow_unpaid_request' => false, 'allow_encashment' => false])->save();
+        return $this->retire($type, $actor, 'Not part of the Conexus leave policy (12 CSL + 6 MDL).');
+    }
+
+    /**
+     * Retire a type for new use: no requests, no encashment, no provisioning
+     * (soft delete). Every balance, request and ledger entry keeps pointing
+     * at it, and history screens load it withTrashed().
+     */
+    private function retire(LeaveType $type, ?User $actor, string $reason): LeaveType
+    {
+        $type->forceFill([
+            'allow_paid_request' => false, 'allow_unpaid_request' => false, 'allow_encashment' => false,
+            'is_monthly_accrual' => false, 'accrual_days_per_month' => 0,
+        ])->save();
         $type->delete();
 
         app(AuditService::class)->event('LEAVE_TYPE_RETIRED', AuditService::LEAVE, $type,
-            new: ['code' => self::LEGACY_ANNUAL_CODE, 'actor' => $actor?->email],
-            reason: 'Not part of the Conexus leave policy (12 CSL + 6 MDL).');
+            new: ['code' => $type->code, 'actor' => $actor?->email], reason: $reason);
 
         return $type;
+    }
+
+    /**
+     * A separate Casual Leave / Sick Leave type still open for use — never the
+     * one chosen as CSL.
+     *
+     * @return Collection<int, LeaveType>
+     */
+    private function legacySplitTypes(?int $cslTypeId): Collection
+    {
+        return LeaveType::query()
+            ->where(fn ($q) => $q->whereIn('code', self::LEGACY_SPLIT_CODES)
+                ->orWhereIn(DB::raw('LOWER(TRIM(name))'), self::LEGACY_SPLIT_NAMES))
+            ->when($cslTypeId, fn ($q, $id) => $q->whereKeyNot($id))
+            ->get();
     }
 
     private function establishPolicy(LeaveType $csl, ?LeaveType $compOff): LeavePolicy
     {
         $policy = LeavePolicy::firstOrNew(['name' => self::POLICY_NAME]);
         $policy->forceFill([
-            'description' => '12 days Casual / Sick Leave a year (no lapse, unlimited carry forward, encashable with approval), '
+            'description' => '12 days Casual / Sick Leave a year, earned 1 day per completed month (no lapse, unlimited carry forward, encashable with approval), '
                 .'6 fixed December shutdown days (MDL), and Comp Off earned by working an MDL day or applicable public holiday.',
             'statutory_weeks' => 0,
             'contractual_additional_weeks' => 0,
@@ -316,14 +458,24 @@ class ConexusLeavePolicyService
 
         LeavePolicy::where('id', '!=', $policy->id)->update(['is_default' => false, 'is_active' => false]);
 
+        $rule = LeavePolicyRule::firstOrNew(['leave_policy_id' => $policy->id, 'leave_type_id' => $csl->id]);
+        // The joining month: HR's rule if one was set once monthly accrual
+        // existed. A new rule — or one written while CSL was still manual,
+        // which only ever carried the column default — gets the confirmed
+        // fallback: a month is earned only when worked in full.
+        $joiningRule = $rule->exists && $rule->accrual_method !== LeavePolicyRule::ACCRUAL_MANUAL && $rule->joining_month_rule
+            ? $rule->joining_month_rule
+            : LeavePolicyRule::JOINING_NONE;
+
         LeavePolicyRule::updateOrCreate(
             ['leave_policy_id' => $policy->id, 'leave_type_id' => $csl->id],
             [
                 'entitlement_method' => LeavePolicyRule::ENTITLEMENT_FIXED,
                 'fixed_days' => self::CSL_ANNUAL_DAYS,
-                // The policy does not say how the 12 days are released.
-                'accrual_method' => LeavePolicyRule::ACCRUAL_MANUAL,
-                'accrual_amount' => null,
+                // 1 day per completed month (ConexusCslAccrualService).
+                'accrual_method' => LeavePolicyRule::ACCRUAL_MONTHLY,
+                'accrual_amount' => ConexusCslAccrualService::MONTHLY_CREDIT,
+                'joining_month_rule' => $joiningRule,
                 'carry_forward_enabled' => true,
                 'carry_forward_max_days' => null,
                 'carry_forward_percent' => null,

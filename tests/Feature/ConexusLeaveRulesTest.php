@@ -47,6 +47,8 @@ beforeEach(function () {
         DecemberMandatoryDay::create(['year' => 2026, 'date' => "2026-12-{$day}", 'description' => 'Company shutdown']);
     }
 
+    // The CSL is production's existing Paid Leave type, renamed in place.
+    conexusPaidLeave();
     app(ConexusLeavePolicyService::class)->apply();
 });
 

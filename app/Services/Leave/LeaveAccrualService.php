@@ -49,7 +49,11 @@ class LeaveAccrualService
         $result = ['credited' => 0, 'skipped' => 0, 'capped' => 0, 'already' => 0];
         $monthStart = Carbon::create($year, $month, 1)->startOfDay();
         $leaveYear = $this->years->forDate($monthStart);
-        $types = LeaveType::whereNull('deleted_at')->get();
+        // CSL is earned per COMPLETED month, effective its last day, by
+        // ConexusCslAccrualService — never in advance at the month's start.
+        $types = LeaveType::whereNull('deleted_at')
+            ->where(fn ($q) => $q->whereNull('code')->orWhere('code', '!=', ConexusLeavePolicyService::CSL_CODE))
+            ->get();
 
         Employee::whereIn('status', LeaveRuleResolver::ELIGIBLE_STATUSES)->with('leavePolicy')
             ->chunkById(200, function ($employees) use ($types, $monthStart, $leaveYear, $year, $month, &$result) {

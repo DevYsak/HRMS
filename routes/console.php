@@ -224,6 +224,15 @@ Schedule::command('hrms:monthly-leave-accrual')
     ->withoutOverlapping()
     ->runInBackground();
 
+// Conexus CSL — 1 day for each completed month, effective its last day. Runs
+// at 00:15 on the 1st: before the 1 July rollover (01:30), so June's day is in
+// the finishing year when it is carried forward. Idempotent; blocked
+// employees are reported, never guessed.
+Schedule::command('leave:conexus-csl-accrual --apply')
+    ->monthlyOn(1, '00:15')
+    ->withoutOverlapping()
+    ->runInBackground();
+
 // Phase 2B — provision any eligible employee missing this leave year's base
 // entitlement (idempotent; mismatches and ambiguous balances are only reported)
 Schedule::command('leave:ensure-balances --apply')

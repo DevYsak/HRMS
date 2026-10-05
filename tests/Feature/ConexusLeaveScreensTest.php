@@ -45,6 +45,8 @@ beforeEach(function () {
     foreach (range(26, 31) as $day) {
         DecemberMandatoryDay::create(['year' => 2026, 'date' => "2026-12-{$day}", 'description' => 'Company shutdown']);
     }
+    // The CSL is production's existing Paid Leave type, renamed in place.
+    conexusPaidLeave();
     app(ConexusLeavePolicyService::class)->apply();
 });
 
@@ -124,8 +126,8 @@ test('My Balances shows the CSL, MDL and Comp Off cards and no Annual Leave', fu
 
     Livewire::actingAs($employee->user)->test(MyLeaveBalances::class)
         ->assertSee('Casual / Sick Leave')
-        ->assertSee('Policy entitlement 12 days a year')
-        ->assertSee('Current-year CSL credit')
+        ->assertSee('Policy: 12 days / year · 1 day per completed month')
+        ->assertSee('Accrued this year')
         ->assertSee('No expiry · never lapses')
         ->assertSee('Mandatory December Leave')
         ->assertSee('6 mandatory company shutdown days')

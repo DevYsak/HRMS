@@ -23,7 +23,9 @@ use Illuminate\Support\Collection;
  * Every balance figure is LeaveBalanceCalculator's, for the leave year asked
  * (1 July – 30 June), unfloored:
  *
- *   Available Leave = CSL approved available + Comp Off approved available
+ *   Available Leave = CSL available to request + Comp Off available to request
+ *   (approved balance less days reserved by pending requests); the approved
+ *   balance is reported beside it as approved_balance.
  *
  * MDL is never part of it — it is six dated shutdown days, shown with their
  * status. Retired types (the 28-day Annual Leave) are never shown. Any other
@@ -42,7 +44,7 @@ class EmployeeLeaveOverviewService
      *     year: LeaveYear, policy: array{name: ?string, csl_days: float, mdl_days: int, grant: string},
      *     csl: ?array<string, mixed>, comp_off: ?array<string, mixed>,
      *     mdl: array{dates: array<int, array<string, mixed>>, expected: int, configured: int, remaining: int},
-     *     available_leave: float, available_to_request: float, pending_requests: int, taken_this_year: float,
+     *     available_leave: float, available_to_request: float, approved_balance: float, pending_requests: int, taken_this_year: float,
      *     next_holiday: ?object, next_mdl: ?Carbon, others: Collection<int, array<string, mixed>>
      * }
      */
@@ -74,13 +76,16 @@ class EmployeeLeaveOverviewService
                 'name' => $policy?->name,
                 'csl_days' => ConexusLeavePolicyService::CSL_ANNUAL_DAYS,
                 'mdl_days' => (int) ($policy?->mandatory_leave_days ?? ConexusLeavePolicyService::MDL_DAYS),
-                'grant' => 'HR credits CSL; no automatic grant schedule is configured.',
+                'grant' => '1 day is earned for each completed month of the leave year (at most 12); unused days carry forward and never lapse.',
             ],
             'csl' => $csl,
             'comp_off' => $compOff,
             'mdl' => $mdl,
-            'available_leave' => round(($csl['summary']['approved_available'] ?? 0) + ($compOff['summary']['approved_available'] ?? 0), 2),
+            // What the employee can still request: pending requests already
+            // hold their days. Never MDL, never a retired or other type.
+            'available_leave' => round(($csl['summary']['available_to_request'] ?? 0) + ($compOff['summary']['available_to_request'] ?? 0), 2),
             'available_to_request' => round(($csl['summary']['available_to_request'] ?? 0) + ($compOff['summary']['available_to_request'] ?? 0), 2),
+            'approved_balance' => round(($csl['summary']['approved_available'] ?? 0) + ($compOff['summary']['approved_available'] ?? 0), 2),
             'pending_requests' => $employee
                 ? LeaveRequest::where('employee_id', $employee->id)->whereIn('status', LeaveBalanceCalculator::RESERVING_STATUSES)->count()
                 : 0,

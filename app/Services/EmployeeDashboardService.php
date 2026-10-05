@@ -779,7 +779,7 @@ class EmployeeDashboardService
                 'tone' => 'neutral', 'href' => route('attendance.my'),
             ],
             [
-                // CSL + Comp Off approved available — never MDL, never the
+                // CSL + Comp Off available to request — never MDL, never the
                 // retired Annual Leave.
                 'label' => 'Available Leave', 'icon' => 'calendar-days',
                 'value' => $primary ? self::formatDays($leave['available_leave']).' '.Str::plural('day', abs($leave['available_leave']) == 1 ? 1 : 2) : 'Not set',

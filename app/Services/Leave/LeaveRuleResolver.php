@@ -78,12 +78,12 @@ class LeaveRuleResolver
         $legacyMethod = $type->code === LeaveProvisioningService::ANNUAL_CODE
             ? LeavePolicyRule::ENTITLEMENT_UK_ENGINE
             : LeavePolicyRule::ENTITLEMENT_FIXED;
-        // CSL's release schedule is not stated by the Conexus policy, so even
-        // without a rule (an employee on another or no policy, a stale model)
-        // it is manual: never granted up front from a type-level figure, and
-        // never withdrawn by a recalculation. A rule may still choose one.
+        // CSL is earned 1 day per completed month (ConexusCslAccrualService),
+        // even without a rule (an employee on another or no policy): never
+        // granted up front from a type-level figure, never withdrawn by a
+        // recalculation.
         $legacyAccrual = match (true) {
-            $type->code === ConexusLeavePolicyService::CSL_CODE => LeavePolicyRule::ACCRUAL_MANUAL,
+            $type->code === ConexusLeavePolicyService::CSL_CODE => LeavePolicyRule::ACCRUAL_MONTHLY,
             $type->is_monthly_accrual && (float) $type->accrual_days_per_month > 0 => LeavePolicyRule::ACCRUAL_MONTHLY,
             default => LeavePolicyRule::ACCRUAL_UPFRONT,
         };

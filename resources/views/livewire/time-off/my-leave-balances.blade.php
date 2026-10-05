@@ -48,7 +48,7 @@
                 <div class="flex items-start justify-between gap-2">
                     <div>
                         <div class="text-xs font-bold uppercase tracking-widest text-zinc-500">{{ $c['type']->name ?? 'Casual / Sick Leave' }}</div>
-                        <div class="mt-0.5 text-[11px] text-zinc-400">Policy entitlement {{ $num($o['policy']['csl_days']) }} days a year</div>
+                        <div class="mt-0.5 text-[11px] text-zinc-400">Policy: {{ $num($o['policy']['csl_days']) }} days / year · 1 day per completed month</div>
                     </div>
                     <flux:badge size="sm" color="emerald">No expiry · never lapses</flux:badge>
                 </div>
@@ -57,23 +57,23 @@
                     @php $s = $c['summary']; $addOns = round($s['add_on'] + $s['adjustment_credit'] - $s['adjustment_debit'] + $s['opening'], 2); @endphp
                     <div class="mt-3 flex items-end gap-6">
                         <div>
-                            <div class="text-3xl font-extrabold tabular-nums {{ $negClass($s['approved_available']) }}">{{ $num($s['approved_available']) }}</div>
-                            <div class="text-[11px] text-zinc-500">Approved available</div>
+                            <div class="text-3xl font-extrabold tabular-nums {{ $negClass($s['available_to_request']) }}">{{ $num($s['available_to_request']) }}</div>
+                            <div class="text-[11px] text-zinc-500">Available to request</div>
                         </div>
                         <div>
-                            <div class="text-lg font-bold tabular-nums {{ (float) $s['available_to_request'] < 0 ? 'text-rose-600' : 'text-zinc-700 dark:text-zinc-200' }}">{{ $num($s['available_to_request']) }}</div>
-                            <div class="text-[11px] text-zinc-500">Available to request</div>
+                            <div class="text-lg font-bold tabular-nums {{ (float) $s['approved_available'] < 0 ? 'text-rose-600' : 'text-zinc-700 dark:text-zinc-200' }}">{{ $num($s['approved_available']) }}</div>
+                            <div class="text-[11px] text-zinc-500">Approved balance</div>
                         </div>
                     </div>
                     <dl class="mt-4 space-y-1 text-xs">
                         @foreach(array_filter([
-                            ['Current-year CSL credit', round($s['base'] + $s['accrued'], 2), true],
+                            ['Accrued this year', round($s['base'] + $s['accrued'], 2), true],
                             ['Carry forward', $s['carry_forward'], true],
                             ['Add-ons / adjustments', $addOns, $addOns != 0],
                             ['Used', -$s['used'], true],
-                            ['Encashed', -$s['encashed'], $s['encashed'] != 0],
+                            ['Pending', -$s['pending'], true],
+                            ['Encashed', -$s['encashed'], true],
                             ['Expired', -$s['expired'], $s['expired'] != 0],
-                            ['Pending approval', -$s['pending'], true],
                         ], fn ($r) => $r[2]) as [$label, $value])
                             <div class="flex justify-between border-b border-dashed border-zinc-100 py-0.5 dark:border-white/5">
                                 <dt class="text-zinc-500">{{ $label }}</dt>
@@ -95,7 +95,7 @@
                         @endif
                     </div>
                 @else
-                    <p class="mt-4 text-sm text-zinc-500">No Casual / Sick Leave balance for {{ $this->year->label }} yet. HR posts CSL credits; contact HR if this looks wrong.</p>
+                    <p class="mt-4 text-sm text-zinc-500">No Casual / Sick Leave balance for {{ $this->year->label }} yet. 1 day is credited after each completed month; contact HR if this looks wrong.</p>
                 @endif
             </div>
 

@@ -28,14 +28,22 @@ use RuntimeException;
  *
  * Per employee, in one transaction, verified before it commits:
  *
- *   Annual Leave  usage that belongs to a leave request moves to CSL (reversed
- *                 in AL, re-posted in CSL with the same request link, so a
- *                 later cancellation returns the day to CSL); every other
- *                 entry is reversed. The AL row ends at zero in every bucket.
+ *   Annual Leave  usage that belongs to a leave request or regularisation
+ *                 moves to CSL (reversed in AL, re-posted in CSL with the same
+ *                 link, so a later cancellation returns the day to CSL); every
+ *                 other entry — entitlement credits and any legacy usage total
+ *                 with no request behind it — is reversed, and the register's
+ *                 used figure stands. The AL row ends at zero in every bucket.
  *   CSL           base = register credit, carry forward = register carry,
  *                 usage = register used; any other bucket is reversed to zero.
  *                 Usage the register proves only as a total is posted as one
  *                 aggregate register movement — no leave dates are invented.
+ *
+ * The register is a snapshot. Its current-year credit (e.g. 2) stands for the
+ * months already earned when it was taken (July and August for 2026/27); the
+ * months after it are earned by ConexusCslAccrualService as ACCRUAL entries.
+ * Those accruals are not the register's to restate: they are left exactly as
+ * they are, and verification expects available = register available + them.
  *
  * Refuses (the employee FAILs, nothing is saved for them) rather than guess:
  * an existing encashment that disagrees with the register (it was paid out),
@@ -67,6 +75,9 @@ class LeaveRegisterReconciliationService
         LeaveLedgerEntry::TYPE_ADJUSTMENT_DEBIT,
         LeaveLedgerEntry::TYPE_EXPIRY,
     ];
+
+    /** Usage tied to a real record, which a later cancellation must find in CSL. */
+    private const TRANSFERABLE_USAGE_SOURCES = ['leave_request', 'leave_regularisation'];
 
     private string $source = 'Conexus HR register reconciliation';
 
@@ -222,11 +233,13 @@ class LeaveRegisterReconciliationService
             'employee_id' => $employee->id,
             'employee_code' => $employee->employee_id,
             'csl_credit' => $s ? round($s['base'], 2) : 0.0,
+            // Months earned after the register snapshot (completed-month accrual).
+            'csl_accrued' => $s ? round($s['accrued'], 2) : 0.0,
             'csl_carry' => $s ? round($s['carry_forward'], 2) : 0.0,
             'csl_used' => $s ? round($s['used'], 2) : 0.0,
             'csl_encashed' => $s ? round($s['encashed'], 2) : 0.0,
             'csl_available' => $s ? round($s['approved_available'], 2) : 0.0,
-            'csl_other' => $s ? round($s['accrued'] + $s['add_on'] + $s['adjustment_credit'] - $s['adjustment_debit'] + $s['opening'] - $s['expired'], 2) : 0.0,
+            'csl_other' => $s ? round($s['add_on'] + $s['adjustment_credit'] - $s['adjustment_debit'] + $s['opening'] - $s['expired'], 2) : 0.0,
             'comp_off' => $compOffAvailable,
             'mdl_days' => DecemberMandatoryDay::forLeaveYear($year)->count(),
             'legacy_annual_active' => $annualActive,
@@ -234,14 +247,17 @@ class LeaveRegisterReconciliationService
         ];
     }
 
-    /** Whether a report row matches its register row exactly. */
+    /**
+     * Whether a report row matches its register row exactly — the register's
+     * figures unchanged, plus only the months accrued since the snapshot.
+     */
     public function matches(array $report, array $row): bool
     {
         return abs($report['csl_credit'] - (float) $row['credit']) <= self::EPSILON
             && abs($report['csl_carry'] - (float) $row['carry']) <= self::EPSILON
             && abs($report['csl_used'] - (float) $row['used']) <= self::EPSILON
             && abs($report['csl_encashed'] - (float) $row['encashed']) <= self::EPSILON
-            && abs($report['csl_available'] - (float) $row['available']) <= self::EPSILON
+            && abs($report['csl_available'] - ((float) $row['available'] + $report['csl_accrued'])) <= self::EPSILON
             && abs($report['csl_other']) <= self::EPSILON
             && abs($report['legacy_annual_active']) <= self::EPSILON
             && $report['ledger_backed'];
@@ -324,7 +340,7 @@ class LeaveRegisterReconciliationService
         foreach ($entries->filter(fn (LeaveLedgerEntry $e) => (float) $e->days < 0) as $entry) {
             $days = abs((float) $entry->days);
 
-            if ($entry->entry_type === LeaveLedgerEntry::TYPE_USAGE && $entry->source_type && $entry->source_type !== self::SOURCE_TYPE) {
+            if ($entry->entry_type === LeaveLedgerEntry::TYPE_USAGE && in_array($entry->source_type, self::TRANSFERABLE_USAGE_SOURCES, true)) {
                 $this->ledger->reverse($entry, $this->source.': Annual Leave usage moved to CSL', $actor);
                 $this->ledger->debit($cslFor(), LeaveLedgerEntry::TYPE_USAGE, $days, Carbon::parse($entry->effective_date),
                     self::SOURCE_TYPE.':transfer:'.$entry->id, [
@@ -359,7 +375,9 @@ class LeaveRegisterReconciliationService
     private function restateCsl(LeaveBalance $balance, LeaveYear $year, array $row, ?User $actor): array
     {
         $log = [];
-        $entries = $this->active($balance, $year);
+        // Months earned after the snapshot are the accrual's, not the register's.
+        $entries = $this->active($balance, $year)
+            ->reject(fn (LeaveLedgerEntry $e) => $e->source_type === ConexusCslAccrualService::SOURCE_TYPE);
         $sum = fn (string $type) => round((float) $entries->where('entry_type', $type)->sum('days'), 2);
 
         $encashed = -$sum(LeaveLedgerEntry::TYPE_ENCASHMENT) + 0.0;
@@ -483,9 +501,9 @@ class LeaveRegisterReconciliationService
 
         if (! $this->matches($report, $row)) {
             throw new RuntimeException(sprintf(
-                'CSL verification failed: credit %s/%s, carry %s/%s, used %s/%s, encashed %s/%s, other %s/0, available %s/%s.',
+                'CSL verification failed: credit %s/%s, carry %s/%s, used %s/%s, encashed %s/%s, other %s/0, available %s/%s (+%s accrued).',
                 $report['csl_credit'], $row['credit'], $report['csl_carry'], $row['carry'], $report['csl_used'], $row['used'],
-                $report['csl_encashed'], $row['encashed'], $report['csl_other'], $report['csl_available'], $row['available'],
+                $report['csl_encashed'], $row['encashed'], $report['csl_other'], $report['csl_available'], $row['available'], $report['csl_accrued'],
             ));
         }
     }

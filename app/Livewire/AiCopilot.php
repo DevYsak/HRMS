@@ -115,7 +115,10 @@ class AiCopilot extends Component
 
         return array_filter([
             'available_leave_csl_plus_comp_off' => $overview['available_leave'] ?? null,
-            'casual_sick_leave' => $overview['csl']['summary']['approved_available'] ?? null,
+            'casual_sick_leave_available_to_request' => $overview['csl']['summary']['available_to_request'] ?? null,
+            'casual_sick_leave_approved_balance' => $overview['csl']['summary']['approved_available'] ?? null,
+            'casual_sick_leave_accrued_this_year' => isset($overview['csl']['summary']) ? round($overview['csl']['summary']['base'] + $overview['csl']['summary']['accrued'], 2) : null,
+            'casual_sick_leave_rule' => $overview['policy']['grant'] ?? null,
             'comp_off' => $overview['comp_off']['summary']['approved_available'] ?? null,
             'mdl_shutdown_dates' => collect($overview['mdl']['dates'] ?? [])->map(fn ($d) => $d['date']->toDateString())->all(),
         ], fn ($value) => $value !== null);
