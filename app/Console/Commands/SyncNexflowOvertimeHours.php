@@ -7,6 +7,7 @@ use App\Models\NexflowOtSyncLog;
 use App\Models\OtRequest;
 use App\Models\ShiftSetting;
 use App\Notifications\NexflowOvertimeDetectedNotification;
+use App\Services\Attendance\WorkingDayResolver;
 use App\Services\NexflowApiService;
 use App\Services\OvertimeService;
 use Illuminate\Console\Command;
@@ -29,8 +30,8 @@ class SyncNexflowOvertimeHours extends Command
 
         $isDryRun = (bool) $this->option('dry-run');
 
-        if ($date->isWeekend()) {
-            $this->info("Skipping {$date->toDateString()} — weekend.");
+        if (app(WorkingDayResolver::class)->isWeeklyOff($date)) {
+            $this->info("Skipping {$date->toDateString()} — weekly off.");
 
             return self::SUCCESS;
         }

@@ -10,6 +10,7 @@ use App\Models\OtRequest;
 use App\Models\OvertimeRecord;
 use App\Models\PerformanceCycle;
 use App\Models\PerformanceReview;
+use App\Services\Attendance\WorkingDayResolver;
 use App\Services\LeaveService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -139,15 +140,17 @@ class ManagerDashboard extends Component
             ->whereIn('employee_id', $teamIds)
             ->get();
 
+        // Saturday / Sunday: nobody is absent or late; a punch is "Worked on Weekly Off".
+        $weeklyOff = app(WorkingDayResolver::class)->isWeeklyOff($today);
         $presentCount = $teamAttendance->whereNotNull('check_in')->count();
-        $lateCount = $teamAttendance->where('is_late', true)->count();
-        $absentCount = $teamIds->count() - $presentCount;
+        $lateCount = $weeklyOff ? 0 : $teamAttendance->where('is_late', true)->count();
+        $absentCount = $weeklyOff ? 0 : $teamIds->count() - $presentCount;
 
         // --- Full team attendance list ---
         $teamAttendanceList = Employee::with(['user', 'department'])
             ->whereIn('id', $teamIds)
             ->get()
-            ->map(function ($emp) use ($teamAttendance) {
+            ->map(function ($emp) use ($teamAttendance, $weeklyOff) {
                 $record = $teamAttendance->firstWhere('employee_id', $emp->id);
 
                 return [
@@ -155,8 +158,8 @@ class ManagerDashboard extends Component
                     'department' => $emp->department?->name,
                     'check_in' => $record?->check_in?->format('H:i'),
                     'check_out' => $record?->check_out?->format('H:i'),
-                    'status' => $record?->status ?? 'absent',
-                    'is_late' => $record?->is_late ?? false,
+                    'status' => $weeklyOff ? ($record?->check_in ? 'weekly_off_worked' : 'weekly_off') : ($record?->status ?? 'absent'),
+                    'is_late' => ! $weeklyOff && ($record?->is_late ?? false),
                 ];
             });
 

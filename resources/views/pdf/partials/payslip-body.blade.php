@@ -25,26 +25,32 @@
     }
 
     // ── Attendance ──────────────────────────────────────────────────────────
+    // Weekly offs (Saturday + Sunday) come from the shared working-day
+    // resolver; work on one is not a scheduled day and never offsets LWP.
+    $workingDayResolver = app(\App\Services\Attendance\WorkingDayResolver::class);
     $totalDays = (int) ($from->diffInDays($to) + 1);
     $weekOff = 0;
     for ($d = $from->copy(); $d->lte($to); $d->addDay()) {
-        if ($d->isSunday() || $d->isSaturday()) $weekOff++;
+        if ($workingDayResolver->isWeeklyOff($d)) $weekOff++;
     }
     $workingDays = $totalDays - $weekOff;
 
     $presentDays = (int) Attendance::where('employee_id', $employee->id)
         ->whereBetween('date', [$from->toDateString(), $to->toDateString()])
-        ->whereNotNull('check_in')->count();
+        ->whereNotNull('check_in')->get(['date'])
+        ->reject(fn ($a) => $workingDayResolver->isWeeklyOff($a->date))->count();
 
     $leaveDays = 0;
     LeaveRequest::where('employee_id', $employee->id)
         ->where('status', 'approved')
         ->where('start_date', '<=', $to->toDateString())
         ->where('end_date', '>=', $from->toDateString())
-        ->get()->each(function ($lr) use ($from, $to, &$leaveDays) {
+        ->get()->each(function ($lr) use ($from, $to, &$leaveDays, $workingDayResolver) {
             $s = Carbon::parse($lr->start_date)->max($from);
             $e = Carbon::parse($lr->end_date)->min($to);
-            if ($s->lte($e)) $leaveDays += (int) ($s->diffInDays($e) + 1);
+            for ($c = $s->copy(); $c->lte($e); $c->addDay()) {
+                if (! $workingDayResolver->isWeeklyOff($c)) $leaveDays++;
+            }
         });
 
     $holidays = (int) PublicHoliday::whereBetween('date', [$from->toDateString(), $to->toDateString()])

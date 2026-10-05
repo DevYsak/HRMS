@@ -34,7 +34,7 @@
         default => now(),
     };
     if ($pEnd->gt(now())) { $pEnd = now(); }
-    $totalWorkingDays = max(1, (int) $pStart->diffInDaysFiltered(fn($d) => ! $d->isSunday(), $pEnd));
+    $totalWorkingDays = max(1, (int) $pStart->diffInDaysFiltered(fn($d) => ! app(\App\Services\Attendance\WorkingDayResolver::class)->isWeeklyOff($d), $pEnd));
 
     $attPct = round(min(100, ($presentCount / $totalWorkingDays) * 100), 1);
     $score  = (int) ($analytics['attendance_score'] ?? 0);
@@ -1602,7 +1602,7 @@
     // 3 · Weekly Attendance — Mon–Sun column, coloured by status
     $weekColors = collect($weekSummary)->map(fn ($wd) => match($wd['status']) {
         'present' => '#10b981', 'late' => '#f59e0b', 'leave' => '#8b5cf6', 'holiday' => '#3b82f6',
-        'weekend' => '#d4d4d8', 'future' => '#e4e4e7', default => '#f43f5e',
+        'weekly_off' => '#d4d4d8', 'weekly_off_worked' => '#a1a1aa', 'future' => '#e4e4e7', default => '#f43f5e',
     })->all();
     $weeklyChart = [
         'chart' => $baseChart('bar', 240),
@@ -2043,12 +2043,14 @@
             @foreach($days as $day)
                 @php
                     [$dayBadge, $dayLabel] = match(true) {
+                        $day['weekly_off'] ?? false => ['bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300', \App\Services\Attendance\WorkingDayResolver::WORKED_WEEKLY_OFF_LABEL],
                         $day['is_late'] => ['bg-amber-50 text-amber-600', 'Late'],
                         $day['status'] === 'on_time' => ['bg-emerald-50 text-emerald-600', 'Present'],
                         default => ['bg-zinc-50 dark:bg-zinc-800/50 text-zinc-500 dark:text-zinc-400', ucfirst($day['status'] ?? '—')],
                     };
                     // Colored left status border on each day row.
                     $dayBorder = match(true) {
+                        $day['weekly_off'] ?? false => 'border-l-zinc-300 dark:border-l-zinc-600',
                         $day['missing'] => 'border-l-amber-400',
                         $day['is_late'] => 'border-l-amber-400',
                         $day['status'] === 'on_time' => 'border-l-emerald-400',

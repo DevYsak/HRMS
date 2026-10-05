@@ -172,7 +172,9 @@
                                     @endif
                                 </td>
                                 <td class="py-3.5 px-6">
-                                    @if($row['status'] === 'absent')
+                                    @if(in_array($row['status'], ['weekly_off', 'weekly_off_worked'], true))
+                                        <span class="px-2 py-0.5 rounded text-[9px] font-bold bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">{{ strtoupper($row['status'] === 'weekly_off' ? \App\Services\Attendance\WorkingDayResolver::WEEKLY_OFF_LABEL : \App\Services\Attendance\WorkingDayResolver::WORKED_WEEKLY_OFF_LABEL) }}</span>
+                                    @elseif($row['status'] === 'absent')
                                         <span class="px-2 py-0.5 rounded text-[9px] font-bold bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400">ABSENT</span>
                                     @elseif($row['is_late'])
                                         <span class="px-2 py-0.5 rounded text-[9px] font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400">LATE</span>

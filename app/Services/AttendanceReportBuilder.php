@@ -5,12 +5,12 @@ namespace App\Services;
 use App\Models\Attendance;
 use App\Models\AttendanceDailySummary;
 use App\Models\AttendanceRegularisation;
-use App\Models\AttendanceSetting;
 use App\Models\Employee;
 use App\Models\LeaveBalance;
 use App\Models\LeaveRequest;
 use App\Models\OvertimeRecord;
 use App\Models\PublicHoliday;
+use App\Services\Attendance\WorkingDayResolver;
 use Carbon\CarbonPeriod;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
@@ -183,7 +183,7 @@ class AttendanceReportBuilder
             $a->check_in?->format('h:i A') ?? '—',
             $a->check_out?->format('h:i A') ?? '—',
             $a->total_hours ? number_format((float) $a->total_hours, 1).'h' : '—',
-            $a->is_late ? 'Late '.(int) ($a->late_minutes ?? 0).'m' : ucfirst($a->status ?? '—'),
+            $a->weeklyOffLabel() ?? ($a->is_late ? 'Late '.(int) ($a->late_minutes ?? 0).'m' : ucfirst($a->status ?? '—')),
             ucfirst($a->work_mode ?? '—'),
         ])->all();
 
@@ -206,14 +206,19 @@ class AttendanceReportBuilder
     protected function monthly(Carbon $from, Carbon $to, array $filters): array
     {
         $rows = $this->attendanceQuery($from, $to, $filters)->get()->groupBy('employee_id');
-        $workDays = max(1, AttendanceSetting::workingDaysBetween($from, $to));
+        $workDays = max(1, app(WorkingDayResolver::class)->weekdaysBetween($from, $to));
 
         $data = [];
         $totPresent = 0;
+        $days = app(WorkingDayResolver::class);
         foreach ($rows as $group) {
             $emp = $group->first()->employee;
-            $present = $group->whereNotNull('check_in')->count();
-            $late = $group->where('is_late', true)->count();
+            // Work on a weekly off is its own column: it is not a scheduled
+            // day, so it never offsets an absence.
+            $scheduled = $group->reject(fn ($a) => $days->isWeeklyOff($a->date));
+            $present = $scheduled->whereNotNull('check_in')->count();
+            $offWorked = $group->whereNotNull('check_in')->count() - $present;
+            $late = $scheduled->where('is_late', true)->count();
             $hours = $group->sum(fn ($a) => (float) $a->total_hours);
             $totPresent += $present;
             $data[] = [
@@ -223,13 +228,14 @@ class AttendanceReportBuilder
                 $present,
                 max(0, $workDays - $present),
                 $late,
+                $offWorked,
                 number_format($hours, 1).'h',
                 min(100, round($present / $workDays * 100)).'%',
             ];
         }
 
         return [
-            'columns' => ['Emp ID', 'Employee', 'Department', 'Present', 'Absent', 'Late', 'Total Hours', 'Attendance %'],
+            'columns' => ['Emp ID', 'Employee', 'Department', 'Present', 'Absent', 'Late', 'Worked on Weekly Off', 'Total Hours', 'Attendance %'],
             'rows' => $data,
             'summary' => [
                 ['label' => 'Employees', 'value' => count($data)],
@@ -355,7 +361,7 @@ class AttendanceReportBuilder
     /** Whether a date is a non-working day, per the configured working week. */
     protected function isWeeklyOff(Carbon $day): bool
     {
-        return AttendanceSetting::isWeeklyOff($day);
+        return app(WorkingDayResolver::class)->isWeeklyOff($day);
     }
 
     /**
@@ -790,7 +796,7 @@ class AttendanceReportBuilder
             $a->check_out?->format('h:i A') ?? '—',
             $a->total_hours ? number_format((float) $a->total_hours, 1).'h' : '—',
             (int) ($a->break_minutes ?? 0).'m',
-            $a->is_late ? 'Late '.(int) ($a->late_minutes ?? 0).'m' : ucfirst($a->status ?? '—'),
+            $a->weeklyOffLabel() ?? ($a->is_late ? 'Late '.(int) ($a->late_minutes ?? 0).'m' : ucfirst($a->status ?? '—')),
             ucfirst($a->work_mode ?? '—'),
         ])->all();
 

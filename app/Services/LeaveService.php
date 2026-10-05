@@ -5,7 +5,6 @@ namespace App\Services;
 use App\Enums\EmployeeStatus;
 use App\Enums\UserRole;
 use App\Exceptions\ApprovalNotPermitted;
-use App\Models\AttendanceSetting;
 use App\Models\DecemberMandatoryDay;
 use App\Models\Employee;
 use App\Models\LeaveBalance;
@@ -22,7 +21,7 @@ use App\Notifications\LeaveMonthlyAccrualNotification;
 use App\Notifications\LeavePaymentStatusChangedNotification;
 use App\Notifications\LeaveRequestNotification;
 use App\Services\Approvals\ApprovalGuard;
-use App\Services\Attendance\HolidayResolver;
+use App\Services\Attendance\WorkingDayResolver;
 use App\Services\Audit\AuditService;
 use App\Services\Leave\LeaveAccrualService;
 use App\Services\Leave\LeaveBalanceCalculator;
@@ -58,11 +57,13 @@ class LeaveService
             return (float) $calendarDays;
         }
 
-        // Without sandwich: count only weekdays
+        // Without sandwich: count only scheduled working days — the weekly off
+        // (Saturday + Sunday for Conexus) never consumes leave. Fri → Mon = 2.
         $total = 0.0;
         $cursor = $start->copy();
+        $days = app(WorkingDayResolver::class);
         while ($cursor->lte($end)) {
-            if (! $cursor->isWeekend()) {
+            if (! $days->isWeeklyOff($cursor)) {
                 $total++;
             }
             $cursor->addDay();
@@ -97,7 +98,9 @@ class LeaveService
         Carbon $end,
         ?int $excludeRequestId = null,
     ): array {
-        if (! $leaveType->is_sandwich_applicable || $start->isWeekend() || $end->isWeekend()) {
+        $days = app(WorkingDayResolver::class);
+
+        if (! $leaveType->is_sandwich_applicable || $days->isWeeklyOff($start) || $days->isWeeklyOff($end)) {
             return [$start->copy(), $end->copy()];
         }
 
@@ -109,7 +112,7 @@ class LeaveService
         // weekend is trapped, so pull the start back to the first weekend day.
         $probe = $start->copy()->subDay();
         $weekendRun = 0;
-        while ($probe->isWeekend()) {
+        while ($days->isWeeklyOff($probe)) {
             $weekendRun++;
             $probe->subDay();
         }
@@ -120,7 +123,7 @@ class LeaveService
         // Forward: mirror image after the end date.
         $probe = $end->copy()->addDay();
         $weekendRun = 0;
-        while ($probe->isWeekend()) {
+        while ($days->isWeeklyOff($probe)) {
             $weekendRun++;
             $probe->addDay();
         }
@@ -244,10 +247,10 @@ class LeaveService
         // Uses the configured week, not Carbon's isWeekend(). Under a
         // Sunday-only week that hardcoded Sat+Sun and refused leave starting on
         // a Saturday the company actually works.
-        if (AttendanceSetting::isWeeklyOff($start)) {
+        if (app(WorkingDayResolver::class)->isWeeklyOff($start)) {
             throw new \DomainException($start->format('l, d M Y').' is a non-working day — please pick a working day as your start date.');
         }
-        if (AttendanceSetting::isWeeklyOff($end)) {
+        if (app(WorkingDayResolver::class)->isWeeklyOff($end)) {
             throw new \DomainException($end->format('l, d M Y').' is a non-working day — please pick a working day as your end date.');
         }
 
@@ -1171,22 +1174,21 @@ class LeaveService
             return 0;
         }
 
-        // Not a working day for anyone: the configured weekly off, or a
-        // Mandatory December Leave shutdown day (spec §3.3 — no leave consumed).
-        if (AttendanceSetting::isWeeklyOff($date) || DecemberMandatoryDay::isMandatory($date)) {
+        // Not a working day for anyone: the weekly off (Saturday + Sunday), or
+        // a Mandatory December Leave shutdown day (spec §3.3 — no leave consumed).
+        $days = app(WorkingDayResolver::class);
+        if (! $days->isCompanyWorkingDay($date)) {
             return 0;
         }
 
         $flagged = 0;
-        $employees = Employee::where('status', 'active')->with(['attendances', 'leaveRequests'])->get();
-        $holidays = app(HolidayResolver::class);
+        $employees = Employee::where('status', 'active')->with(['attendances', 'leaveRequests', 'exitRecord'])->get();
 
         foreach ($employees as $employee) {
-            // Before they joined, and on a public holiday that applies to
-            // them, nobody is absent (spec §3.3: public holidays are
-            // non-working days; no leave is consumed).
-            if (($employee->joining_date && $employee->joining_date->gt($date))
-                || $holidays->isHoliday($employee, $date)) {
+            // Only a scheduled working day can be an absence: never before
+            // joining, after leaving, or on a holiday on their calendar
+            // (spec §3.3: no leave is consumed). Leave is checked below.
+            if ($days->classify($employee, $date, withLeave: false) !== WorkingDayResolver::WORKING_DAY) {
                 continue;
             }
 

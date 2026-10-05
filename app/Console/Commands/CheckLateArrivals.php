@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\Attendance;
 use App\Notifications\LateArrivalNotification;
 use App\Services\Attendance\ShiftResolver;
+use App\Services\Attendance\WorkingDayResolver;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -23,8 +24,16 @@ class CheckLateArrivals extends Command
     public function handle(ShiftResolver $shifts): int
     {
         $today = now()->toDateString();
+        $days = app(WorkingDayResolver::class);
 
-        $records = Attendance::with(['employee.shift'])
+        // Saturday / Sunday (or an MDL date): nobody is late, nobody is told.
+        if (! $days->isCompanyWorkingDay(now())) {
+            $this->info("Skipping {$today} — not a working day.");
+
+            return self::SUCCESS;
+        }
+
+        $records = Attendance::with(['employee.shift', 'employee.exitRecord'])
             ->where('date', $today)
             ->whereNotNull('check_in')
             ->where('is_late', false)
@@ -33,7 +42,8 @@ class CheckLateArrivals extends Command
         $flagged = 0;
 
         foreach ($records as $record) {
-            if (! $record->employee) {
+            // A holiday on the employee's calendar: no shift to be late for.
+            if (! $record->employee || $days->classify($record->employee, now(), withLeave: false) !== WorkingDayResolver::WORKING_DAY) {
                 continue;
             }
 

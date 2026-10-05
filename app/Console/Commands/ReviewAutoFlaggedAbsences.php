@@ -2,12 +2,12 @@
 
 namespace App\Console\Commands;
 
-use App\Models\AttendanceSetting;
 use App\Models\AuditLog;
 use App\Models\DecemberMandatoryDay;
 use App\Models\LeaveRequest;
 use App\Models\Payslip;
 use App\Services\Attendance\HolidayResolver;
+use App\Services\Attendance\WorkingDayResolver;
 use App\Services\PayrollService;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
@@ -57,7 +57,7 @@ class ReviewAutoFlaggedAbsences extends Command
                 $employee?->joining_date && $employee->joining_date->gt($date) => 'before joining',
                 DecemberMandatoryDay::isMandatory($date) => 'MDL shutdown day',
                 $employee && $holidays->isHoliday($employee, $date) => 'public holiday',
-                AttendanceSetting::isWeeklyOff($date) => 'weekly off',
+                app(WorkingDayResolver::class)->isWeeklyOff($date) => 'weekly off',
                 default => null,
             };
 

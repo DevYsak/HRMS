@@ -7,6 +7,7 @@ use App\Models\AuditLog;
 use App\Models\Department;
 use App\Models\Office;
 use App\Models\PublicHoliday;
+use App\Services\Attendance\WorkingDayResolver;
 use Carbon\CarbonPeriod;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -269,7 +270,7 @@ class ManageHolidays extends Component
                 'day' => $d->format('j'),
                 'inMonth' => $d->month === $monthStart->month,
                 'isToday' => $d->isToday(),
-                'isWeekend' => $d->isSunday() || $d->isSaturday(),
+                'isWeekend' => app(WorkingDayResolver::class)->isWeeklyOff($d),
                 'holidays' => ($byDate[$key] ?? collect())->map(fn ($h) => [
                     'id' => $h->id, 'name' => $h->name, 'color' => $h->displayColor(), 'type' => $h->typeLabel(),
                 ])->all(),

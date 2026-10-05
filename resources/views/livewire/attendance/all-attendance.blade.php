@@ -172,7 +172,8 @@
                         @php
                             $name = $log->employee?->user?->name ?? '—';
                             $initials = collect(explode(' ', $name))->map(fn ($n) => $n[0] ?? '')->take(2)->join('');
-                            [$badge, $statusLabel] = match ($log->status) {
+                            $offLabel = $log->weeklyOffLabel();
+                            [$badge, $statusLabel] = $offLabel ? ['bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300', $offLabel] : match ($log->status) {
                                 'on_time' => ['bg-emerald-50 text-emerald-600', 'Present'],
                                 'late' => ['bg-amber-50 text-amber-600', 'Late'],
                                 'absent' => ['bg-rose-50 text-rose-500', 'Absent'],

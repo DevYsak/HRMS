@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\Attendance;
 use App\Notifications\MissingCheckoutNotification;
 use App\Services\Attendance\ShiftResolver;
+use App\Services\Attendance\WorkingDayResolver;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 
@@ -30,8 +31,17 @@ class FlagMissingCheckouts extends Command
     public function handle(ShiftResolver $shifts): int
     {
         $today = now()->toDateString();
+        $days = app(WorkingDayResolver::class);
 
-        $records = Attendance::with(['employee.user', 'employee.manager', 'employee.shift'])
+        // Saturday / Sunday (or an MDL date): no one was required to work, so
+        // there is no check-out to miss and nobody is notified.
+        if (! $days->isCompanyWorkingDay(now())) {
+            $this->info("Skipping {$today} — not a working day.");
+
+            return self::SUCCESS;
+        }
+
+        $records = Attendance::with(['employee.user', 'employee.manager', 'employee.shift', 'employee.exitRecord'])
             ->where('date', $today)
             ->whereNotNull('check_in')
             ->whereNull('check_out')
@@ -43,7 +53,8 @@ class FlagMissingCheckouts extends Command
         foreach ($records as $record) {
             $employee = $record->employee;
 
-            if (! $employee || ! $this->deadlinePassed($shifts, $record)) {
+            if (! $employee || ! $this->deadlinePassed($shifts, $record)
+                || $days->classify($employee, now(), withLeave: false) !== WorkingDayResolver::WORKING_DAY) {
                 continue;
             }
 

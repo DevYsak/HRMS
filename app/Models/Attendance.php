@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\Attendance\WorkingDayResolver;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -94,6 +95,15 @@ class Attendance extends Model
      * Late = check_in later than (shift start + grace). Both values come from
      * the employee's assigned shift — never a hardcoded clock time.
      */
+    /**
+     * "Worked on Weekly Off" for a punch on a weekly off, "Weekly Off" for an
+     * empty one, null on a working day — the one label every screen shows.
+     */
+    public function weeklyOffLabel(): ?string
+    {
+        return $this->date ? app(WorkingDayResolver::class)->weeklyOffLabel($this->date, (bool) $this->check_in) : null;
+    }
+
     public function computeLate(string $shiftStart, int $graceMinutes = 0): array
     {
         [$hour, $minute] = array_pad(explode(':', $shiftStart), 2, '0');

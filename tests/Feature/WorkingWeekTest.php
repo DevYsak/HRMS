@@ -28,13 +28,13 @@ function juneWeek(): array
     return ['from' => '2026-06-01', 'to' => '2026-06-07'];
 }
 
-test('the working week defaults to Sunday only, preserving previous behaviour', function () {
+test('the working week defaults to Saturday and Sunday off (Conexus)', function () {
     setWeeklyOffs(null);
 
-    expect(AttendanceSetting::weeklyOffDays())->toBe([Carbon::SUNDAY])
+    expect(AttendanceSetting::weeklyOffDays())->toEqualCanonicalizing([Carbon::SATURDAY, Carbon::SUNDAY])
         ->and(AttendanceSetting::isWeeklyOff(Carbon::parse('2026-06-07')))->toBeTrue()  // Sunday
-        ->and(AttendanceSetting::isWeeklyOff(Carbon::parse('2026-06-06')))->toBeFalse() // Saturday
-        ->and(AttendanceSetting::workingDaysBetween(Carbon::parse('2026-06-01'), Carbon::parse('2026-06-07')))->toBe(6);
+        ->and(AttendanceSetting::isWeeklyOff(Carbon::parse('2026-06-06')))->toBeTrue()  // Saturday
+        ->and(AttendanceSetting::workingDaysBetween(Carbon::parse('2026-06-01'), Carbon::parse('2026-06-07')))->toBe(5);
 });
 
 test('a five-day week makes Saturday a weekly off', function () {
@@ -49,7 +49,7 @@ test('a five-day week makes Saturday a weekly off', function () {
 test('a configuration marking every day off falls back rather than making everyone absent', function () {
     setWeeklyOffs([0, 1, 2, 3, 4, 5, 6]);
 
-    expect(AttendanceSetting::weeklyOffDays())->toBe([Carbon::SUNDAY]);
+    expect(AttendanceSetting::weeklyOffDays())->toEqualCanonicalizing([Carbon::SATURDAY, Carbon::SUNDAY]);
 });
 
 test('an out-of-range day number is ignored', function () {
@@ -64,7 +64,7 @@ test('the register counts Saturday as absent on a six-day week and as a weekly o
 
     $builder = app(AttendanceReportBuilder::class);
 
-    setWeeklyOffs(null);
+    setWeeklyOffs([Carbon::SUNDAY]); // an explicit six-day week
     $row = $builder->build('register', juneWeek())['rows'][0];
     $totals = array_slice($row, -8); // P, A, L, HD, LV, WO, H, Payable
     expect(array_slice($row, 3, 7)[5])->toBe('A')  // Saturday
@@ -85,7 +85,7 @@ test('payable days rise and LOP falls when Saturday becomes a weekly off', funct
 
     $builder = app(AttendanceReportBuilder::class);
 
-    setWeeklyOffs(null);
+    setWeeklyOffs([Carbon::SUNDAY]); // an explicit six-day week
     $sixDay = $builder->build('payroll_attendance', juneWeek())['rows'][0];
 
     setWeeklyOffs([Carbon::SATURDAY, Carbon::SUNDAY]);

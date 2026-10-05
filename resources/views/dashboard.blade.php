@@ -279,7 +279,7 @@
                         <tr class="text-[11px] font-bold uppercase tracking-wide text-[#9CA3AF] dark:text-zinc-500">
                             <th class="pb-3 pr-4 text-left">Employee</th>
                             @foreach($days as $d)
-                                <th class="px-2 pb-3 text-center {{ $d->isWeekend() ? 'text-[#D8CCBE] dark:text-zinc-600' : '' }}"><div>{{ $d->format('D') }}</div><div class="text-[10px] font-medium {{ $d->isToday() ? 'text-orange-500' : '' }}">{{ $d->format('j') }}</div></th>
+                                <th class="px-2 pb-3 text-center {{ app(\App\Services\Attendance\WorkingDayResolver::class)->isWeeklyOff($d) ? 'text-[#D8CCBE] dark:text-zinc-600' : '' }}"><div>{{ $d->format('D') }}</div><div class="text-[10px] font-medium {{ $d->isToday() ? 'text-orange-500' : '' }}">{{ $d->format('j') }}</div></th>
                             @endforeach
                         </tr>
                     </thead>

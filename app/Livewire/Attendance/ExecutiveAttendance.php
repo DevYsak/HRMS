@@ -4,12 +4,12 @@ namespace App\Livewire\Attendance;
 
 use App\Models\Attendance;
 use App\Models\AttendanceDailyScore;
-use App\Models\AttendanceSetting;
 use App\Models\Department;
 use App\Models\Employee;
 use App\Models\LeaveRequest;
 use App\Models\Office;
 use App\Models\PublicHoliday;
+use App\Services\Attendance\WorkingDayResolver;
 use Carbon\CarbonPeriod;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -83,7 +83,7 @@ class ExecutiveAttendance extends Component
     {
         $days = 0;
         foreach (CarbonPeriod::create($from->copy()->startOfDay(), $to->copy()->startOfDay()) as $d) {
-            if (! AttendanceSetting::isWeeklyOff($d) && ! isset($holidayKeys[$d->toDateString()])) {
+            if (! app(WorkingDayResolver::class)->isWeeklyOff($d) && ! isset($holidayKeys[$d->toDateString()])) {
                 $days++;
             }
         }

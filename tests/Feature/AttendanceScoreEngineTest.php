@@ -4,6 +4,7 @@ use App\Enums\UserRole;
 use App\Models\Attendance;
 use App\Models\AttendanceDailyScore;
 use App\Models\AttendanceRegularisation;
+use App\Models\AttendanceSetting;
 use App\Models\Employee;
 use App\Models\ShiftSetting;
 use App\Models\User;
@@ -31,12 +32,16 @@ function scoreEmployee(): Employee
     ]);
 }
 
-/** A recent closed day that is never a Sunday (weekend bonus would skew math). */
+/** A recent closed day that is never a weekly off (the weekend bonus would skew the math). */
 function scoreDayDate(): CarbonInterface
 {
     $d = today()->subDays(2);
 
-    return $d->isSunday() ? $d->subDay() : $d;
+    while (AttendanceSetting::isWeeklyOff($d)) {
+        $d = $d->subDay();
+    }
+
+    return $d;
 }
 
 test('a clean full day scores 100 with an empty audit trail', function () {

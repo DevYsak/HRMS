@@ -29,6 +29,7 @@ use App\Services\Attendance\PunchTimeline;
 use App\Services\Attendance\ResolvedShift;
 use App\Services\Attendance\ShiftProgress;
 use App\Services\Attendance\ShiftResolver;
+use App\Services\Attendance\WorkingDayResolver;
 use App\Services\Leave\EmployeeLeaveOverviewService;
 use App\Services\Leave\LeaveBalanceCalculator;
 use App\Services\Leave\LeaveManagementService;
@@ -328,7 +329,7 @@ class EmployeeDashboardService
             $worked = 0;
         }
 
-        $isWeeklyOff = AttendanceSetting::isWeeklyOff($today);
+        $isWeeklyOff = app(WorkingDayResolver::class)->isWeeklyOff($today);
 
         // Same precedence as My Attendance: a day nobody was expected to work
         // is never measured against a shift.
@@ -425,7 +426,7 @@ class EmployeeDashboardService
             $record = $monthAttendance->get($key);
             $worked = $record && $record->check_in;
             $holiday = $holidayByDate->get($key);
-            $weeklyOff = AttendanceSetting::isWeeklyOff($d);
+            $weeklyOff = app(WorkingDayResolver::class)->isWeeklyOff($d);
             $shutdown = isset($mdlDates[$key]);
             $isPast = $d->lt($today);
             $elapsed = $d->lte($today);

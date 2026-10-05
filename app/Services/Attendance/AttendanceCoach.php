@@ -468,7 +468,7 @@ class AttendanceCoach
             $cursor->subDay();
         }
         for ($i = 0; $i < 120; $i++) {
-            if ($cursor->isSunday()) {
+            if (app(WorkingDayResolver::class)->isWeeklyOff($cursor)) {
                 $cursor->subDay();
 
                 continue;

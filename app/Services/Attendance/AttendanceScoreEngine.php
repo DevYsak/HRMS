@@ -6,7 +6,6 @@ use App\Models\Attendance;
 use App\Models\AttendanceDailyScore;
 use App\Models\AttendancePunch;
 use App\Models\AttendanceScoreSetting;
-use App\Models\AttendanceSetting;
 use App\Models\Employee;
 use App\Models\LeaveRequest;
 use Carbon\CarbonInterface;
@@ -58,7 +57,7 @@ class AttendanceScoreEngine
         // Whose holiday? This asked "is it a holiday for anyone", so a UK bank
         // holiday excused an India employee's absence and vice versa.
         $isHoliday = $this->holidays->isHoliday($employee, $day);
-        $isOffDay = $onLeave || $isHoliday || AttendanceSetting::isWeeklyOff($day);
+        $isOffDay = $onLeave || $isHoliday || app(WorkingDayResolver::class)->isWeeklyOff($day);
 
         if (! $attendance || ! $attendance->check_in) {
             if ($isOffDay) {
@@ -161,7 +160,7 @@ class AttendanceScoreEngine
         }
 
         // Working a holiday/weekend earns the holiday-work bonus.
-        if ($isHoliday || AttendanceSetting::isWeeklyOff($day)) {
+        if ($isHoliday || app(WorkingDayResolver::class)->isWeeklyOff($day)) {
             $apply('holiday_work', 'Worked a holiday/weekend', +$settings->holiday_work_bonus,
                 ($isHoliday ? 'Public holiday' : 'Weekend').' attendance.');
         }

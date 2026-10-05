@@ -9,6 +9,7 @@ use App\Models\AuditLog;
 use App\Models\LeaveRequest;
 use App\Notifications\RegularisationReviewedNotification;
 use App\Services\Approvals\ApprovalGuard;
+use App\Services\Attendance\WorkingDayResolver;
 use App\Services\AttendanceService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -141,13 +142,18 @@ class TeamAttendance extends Component
             ->whereDate('end_date', '>=', $today)
             ->pluck('employee_id')->flip();
 
-        $board = $teamMembers->map(function ($m) use ($attToday, $onLeave) {
+        // Saturday / Sunday: nobody is absent; a punch is "Worked on Weekly Off".
+        $weeklyOff = app(WorkingDayResolver::class)->isWeeklyOff(Carbon::today());
+
+        $board = $teamMembers->map(function ($m) use ($attToday, $onLeave, $weeklyOff) {
             $att = $attToday->get($m->id);
             $status = match (true) {
+                $weeklyOff && ! $att => 'weekly_off',
+                $weeklyOff && $att && ! $att->check_out => 'weekly_off_worked',
                 isset($onLeave[$m->id]) => 'on_leave',
                 $att && $att->check_out => 'completed',
                 $att && $att->activeBreak => 'on_break',
-                (bool) $att => $att->is_late ? 'late' : 'working',
+                (bool) $att => $att->is_late && ! $weeklyOff ? 'late' : 'working',
                 default => 'absent',
             };
 
@@ -158,11 +164,11 @@ class TeamAttendance extends Component
                 'status' => $status,
                 'since' => $att?->check_in?->format('h:i A'),
             ];
-        })->sortBy(fn ($r) => ['working' => 0, 'late' => 1, 'on_break' => 2, 'completed' => 3, 'on_leave' => 4, 'absent' => 5][$r['status']] ?? 9)->values();
+        })->sortBy(fn ($r) => ['working' => 0, 'weekly_off_worked' => 0, 'late' => 1, 'on_break' => 2, 'completed' => 3, 'on_leave' => 4, 'weekly_off' => 5, 'absent' => 5][$r['status']] ?? 9)->values();
 
-        $active = $board->whereIn('status', ['working', 'late', 'on_break', 'completed']);
+        $active = $board->whereIn('status', ['working', 'late', 'on_break', 'completed', 'weekly_off_worked']);
         $boardStats = [
-            'working' => $board->whereIn('status', ['working', 'late', 'on_break'])->count(),
+            'working' => $board->whereIn('status', ['working', 'late', 'on_break', 'weekly_off_worked'])->count(),
             'office' => $active->where('mode', 'office')->count(),
             'wfh' => $active->whereIn('mode', ['wfh', 'hybrid'])->count(),
             'late' => $board->where('status', 'late')->count(),

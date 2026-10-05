@@ -6,7 +6,6 @@ use App\Models\Attendance;
 use App\Models\AttendanceDailySummary;
 use App\Models\AttendancePunch;
 use App\Models\AttendanceRegularisation;
-use App\Models\AttendanceSetting;
 use App\Models\AuditLog;
 use App\Models\BreakLog;
 use App\Models\Employee;
@@ -15,6 +14,7 @@ use App\Notifications\AttendanceRegularisationNotification;
 use App\Notifications\RegularisationReviewedNotification;
 use App\Services\Approvals\ClaimLockService;
 use App\Services\Attendance\PunchTimeline;
+use App\Services\Attendance\WorkingDayResolver;
 use App\Services\AttendanceService;
 use App\Services\Leave\LeaveYearResolver;
 use Carbon\CarbonPeriod;
@@ -246,7 +246,7 @@ class AllAttendance extends Component
             ->orderByDesc('date')
             ->get();
 
-        $workDays = max(1, AttendanceSetting::workingDaysBetween($monthStart, $today));
+        $workDays = max(1, app(WorkingDayResolver::class)->weekdaysBetween($monthStart, $today));
         $present = $month->whereNotNull('check_in')->count();
         $late = $month->where('is_late', true)->count();
         $onTimePct = $present > 0 ? round(($present - $late) / $present * 100) : 100;
@@ -563,7 +563,7 @@ class AllAttendance extends Component
     }
 
     /**
-     * Working days (excluding Sundays) covered by the active filter — 1 for a
+     * Scheduled working days (weekly offs excluded) covered by the active filter — 1 for a
      * single-day filter, the span for a range, capped at today so future days
      * don't inflate the "expected" denominator.
      */
@@ -572,7 +572,7 @@ class AllAttendance extends Component
         $today = Carbon::today();
 
         if ($this->date) {
-            return AttendanceSetting::isWeeklyOff(Carbon::parse($this->date)) ? 0 : 1;
+            return app(WorkingDayResolver::class)->isWeeklyOff(Carbon::parse($this->date)) ? 0 : 1;
         }
 
         if ($this->dateFrom && $this->dateTo) {
@@ -582,7 +582,7 @@ class AllAttendance extends Component
                 return 0;
             }
 
-            return AttendanceSetting::workingDaysBetween($from, $to);
+            return app(WorkingDayResolver::class)->weekdaysBetween($from, $to);
         }
 
         return 1;
@@ -647,11 +647,15 @@ class AllAttendance extends Component
 
         $filtered = (clone $query)->get(['employee_id', 'date', 'check_in', 'is_late', 'work_mode']);
 
-        // A present "slot" is one employee-day with a check-in.
-        $present = $filtered->whereNotNull('check_in')
-            ->unique(fn ($a) => $a->employee_id.'|'.$a->date->toDateString())
-            ->count();
-        $late = $filtered->where('is_late', true)->count();
+        // A present "slot" is one employee-day with a check-in on a scheduled
+        // working day. Work on a weekly off is counted on its own — it is not
+        // a scheduled day, so it never offsets an absence.
+        $days = app(WorkingDayResolver::class);
+        $slots = $filtered->whereNotNull('check_in')
+            ->unique(fn ($a) => $a->employee_id.'|'.$a->date->toDateString());
+        $weeklyOffWorked = $slots->filter(fn ($a) => $days->isWeeklyOff($a->date))->count();
+        $present = $slots->count() - $weeklyOffWorked;
+        $late = $filtered->where('is_late', true)->reject(fn ($a) => $days->isWeeklyOff($a->date))->count();
         $onTime = max(0, $present - $late);
         $wfh = $filtered->whereIn('work_mode', ['wfh', 'hybrid'])->count();
 
@@ -668,6 +672,7 @@ class AllAttendance extends Component
             'on_time' => $onTime,
             'late' => $late,
             'wfh' => $wfh,
+            'weekly_off_worked' => $weeklyOffWorked,
             'present_pct' => $expectedSlots > 0 ? round(($present / $expectedSlots) * 100, 1) : 0,
             'absent_pct' => $expectedSlots > 0 ? round(($absent / $expectedSlots) * 100, 1) : 0,
             'late_pct' => $present > 0 ? round(($late / $present) * 100, 1) : 0,

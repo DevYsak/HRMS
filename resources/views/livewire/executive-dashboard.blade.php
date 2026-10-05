@@ -51,7 +51,7 @@
             $payrollSeries[] = round((float) \App\Models\Payroll::whereYear('created_at', $m->year)->whereMonth('created_at', $m->month)->sum('total_payout') / 100000, 2);
             $attrition[] = \App\Models\ExitRecord::whereYear('last_working_day', $m->year)->whereMonth('last_working_day', $m->month)->count();
             $present = \App\Models\Attendance::whereYear('date', $m->year)->whereMonth('date', $m->month)->whereNotNull('check_in')->count();
-            $wd = max((int) $m->copy()->startOfMonth()->diffInDaysFiltered(fn ($d) => ! $d->isSunday(), $me), 1);
+            $wd = max((int) $m->copy()->startOfMonth()->diffInDaysFiltered(fn ($d) => ! app(\App\Services\Attendance\WorkingDayResolver::class)->isWeeklyOff($d), $me), 1);
             $attTrend[] = $activeCount > 0 ? min(100, (int) round($present / ($activeCount * $wd) * 100)) : 0;
         }
         $growthPct = ($growth[0] ?? 0) > 0 ? round((end($growth) - $growth[0]) / $growth[0] * 100) : 0;

@@ -8,6 +8,7 @@ use App\Models\LeaveRequest;
 use App\Models\LeaveType;
 use App\Models\PublicHoliday;
 use App\Services\Approvals\ApprovalGuard;
+use App\Services\Attendance\WorkingDayResolver;
 use App\Services\Leave\LeaveYearResolver;
 use App\Services\LeaveService;
 use Illuminate\Support\Carbon;
@@ -397,7 +398,7 @@ class TeamTimeOff extends Component
                 'date' => $cursor->copy(),
                 'inMonth' => $cursor->month === $monthStart->month,
                 'isToday' => $cursor->isToday(),
-                'isWeekend' => $cursor->isWeekend(),
+                'isWeekend' => app(WorkingDayResolver::class)->isWeeklyOff($cursor),
                 'leaves' => $dayLeaves,
                 'holiday' => $holiday ? ['name' => $holiday->name, 'color' => $holiday->displayColor()] : null,
                 'compOffCount' => $dayLeaves->where('isCompOff', true)->count(),

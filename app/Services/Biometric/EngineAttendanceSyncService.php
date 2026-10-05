@@ -7,6 +7,7 @@ use App\Models\AttendanceDailySummary;
 use App\Models\AttendancePunch;
 use App\Models\Employee;
 use App\Services\Attendance\PunchClassifier;
+use App\Services\Attendance\WorkingDayResolver;
 use App\Support\PunchMethodResolver;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
@@ -76,6 +77,14 @@ class EngineAttendanceSyncService
             $lateMinutes = (int) ($row['delay_min'] ?? 0);
             $isLate = ! empty($row['late']);
 
+            // Weekly off / holiday: punches are stored as they are (Worked on
+            // Weekly Off) but never late; no punches is a weekly off, not absent.
+            $dayState = $this->dayState($employeeId, $date);
+            if ($dayState !== WorkingDayResolver::WORKING_DAY) {
+                $isLate = false;
+                $lateMinutes = 0;
+            }
+
             // The engine reports whether the employee is currently inside (its
             // last punch is an IN with no matching OUT). When inside, the last
             // punch is NOT a clock-out, so leave check_out open.
@@ -101,7 +110,7 @@ class EngineAttendanceSyncService
                     'late_minutes' => $lateMinutes,
                     'early_leave_minutes' => 0,
                     'overtime_minutes' => (int) ($row['overtime_min'] ?? 0),
-                    'status' => $this->mapStatus($row),
+                    'status' => $this->mapStatus($row, $dayState),
                     'device_serial' => null,
                     'raw_punch_count' => (int) ($row['punch_count'] ?? 0),
                     'synced_at' => $now,
@@ -265,12 +274,22 @@ class EngineAttendanceSyncService
     }
 
     /** Normalise the engine's status into HRMS's vocabulary. */
-    private function mapStatus(array $row): string
+    private function mapStatus(array $row, string $dayState = WorkingDayResolver::WORKING_DAY): string
     {
         if ((int) ($row['punch_count'] ?? 0) < 1) {
-            return 'absent';
+            return $dayState === WorkingDayResolver::WEEKLY_OFF ? 'weekly_off' : 'absent';
         }
 
-        return ! empty($row['late']) ? 'late' : 'present';
+        return ! empty($row['late']) && $dayState === WorkingDayResolver::WORKING_DAY ? 'late' : 'present';
+    }
+
+    /** The shared working-day decision for one employee and date. */
+    private function dayState(int $employeeId, string $date): string
+    {
+        $employee = Employee::with('exitRecord')->find($employeeId);
+
+        return $employee
+            ? app(WorkingDayResolver::class)->classify($employee, Carbon::parse($date), withLeave: false)
+            : WorkingDayResolver::WORKING_DAY;
     }
 }

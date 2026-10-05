@@ -39,10 +39,14 @@ class AttendanceSetting extends Model
         static::$weeklyOffCache = null;
     }
 
+    /** The Conexus working week: Saturday and Sunday off (HR-confirmed). */
+    public const DEFAULT_WEEKLY_OFF = [Carbon::SATURDAY, Carbon::SUNDAY];
+
     /**
      * Non-working weekdays as Carbon dayOfWeek numbers (0 = Sunday … 6 = Saturday).
-     * Falls back to Sunday-only, which is what the system assumed everywhere
-     * before this became configurable.
+     * The ONE company source of the weekly off — every working-day decision
+     * goes through WorkingDayResolver, which reads it. Falls back to the
+     * Conexus default (Saturday + Sunday) when nothing is configured.
      *
      * @return array<int, int>
      */
@@ -68,7 +72,7 @@ class AttendanceSetting extends Model
         // permanently absent, so fall back rather than honour it.
         return static::$weeklyOffCache = ($days !== [] && count($days) < 7)
             ? $days
-            : [Carbon::SUNDAY];
+            : self::DEFAULT_WEEKLY_OFF;
     }
 
     /** Is this date a non-working day under the configured working week? */

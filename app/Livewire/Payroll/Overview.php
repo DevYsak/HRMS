@@ -8,6 +8,7 @@ use App\Models\Payroll;
 use App\Models\PayrollRunFailure;
 use App\Models\Payslip;
 use App\Models\SalaryCycle;
+use App\Services\Attendance\WorkingDayResolver;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
@@ -94,7 +95,7 @@ class Overview extends Component
             $date = $now->copy()->startOfMonth()->addDays($day - 1);
             $cyclesToday = $upcomingCycles->filter(fn ($c) => (int) $c['pay_day'] === $day || ($day === $now->daysInMonth && (int) $c['pay_day'] > $now->daysInMonth));
 
-            return ['day' => $day, 'is_today' => $date->isToday(), 'is_weekend' => $date->isWeekend(), 'cycles' => $cyclesToday->pluck('name')->all()];
+            return ['day' => $day, 'is_today' => $date->isToday(), 'is_weekend' => app(WorkingDayResolver::class)->isWeeklyOff($date), 'cycles' => $cyclesToday->pluck('name')->all()];
         });
 
         return view('livewire.payroll.overview', [

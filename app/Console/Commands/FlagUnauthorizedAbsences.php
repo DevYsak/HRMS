@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Services\Attendance\WorkingDayResolver;
 use App\Services\LeaveService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
@@ -18,8 +19,10 @@ class FlagUnauthorizedAbsences extends Command
             ? Carbon::parse($this->option('date'))
             : now()->subDay();
 
-        if ($date->isWeekend()) {
-            $this->info("Skipping {$date->toDateString()} — weekend.");
+        // The shared working-day decision: Saturday / Sunday and MDL dates are
+        // never absences (holidays and employment dates are checked per employee).
+        if (! app(WorkingDayResolver::class)->isCompanyWorkingDay($date)) {
+            $this->info("Skipping {$date->toDateString()} — not a working day.");
 
             return self::SUCCESS;
         }

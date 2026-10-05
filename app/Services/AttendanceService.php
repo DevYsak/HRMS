@@ -17,6 +17,7 @@ use App\Services\Attendance\AttendanceScoreEngine;
 use App\Services\Attendance\HolidayResolver;
 use App\Services\Attendance\ResolvedShift;
 use App\Services\Attendance\ShiftResolver;
+use App\Services\Attendance\WorkingDayResolver;
 use App\Services\Leave\LeaveRegularisationService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -50,6 +51,13 @@ class AttendanceService
             $arrivedAt = $now->copy()->startOfMinute();
             $isLate = $arrivedAt->gt($cutoff);
             $lateMinutes = $isLate ? (int) $cutoff->diffInMinutes($arrivedAt) : 0;
+        }
+
+        // A weekly off or holiday has no shift to be late for: the punch is
+        // kept (Worked on Weekly Off), never flagged late.
+        if ($isLate && app(WorkingDayResolver::class)->classify($employee, $now, withLeave: false) !== WorkingDayResolver::WORKING_DAY) {
+            $isLate = false;
+            $lateMinutes = 0;
         }
 
         return Attendance::create([

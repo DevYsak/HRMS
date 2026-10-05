@@ -21,6 +21,7 @@ use App\Models\PromotionRecommendation;
 use App\Models\User;
 use App\Models\WarningLetter;
 use App\Services\Attendance\ShiftResolver;
+use App\Services\Attendance\WorkingDayResolver;
 use App\Services\AttendanceService;
 use App\Services\EmployeeDashboardService;
 use App\Services\WfhService;
@@ -151,11 +152,11 @@ class Dashboard extends Component
                     'days' => $dayStrings->map(function ($dateStr) use ($attByDate, $days) {
                         $d = $days->first(fn ($day) => $day->toDateString() === $dateStr);
                         $att = $attByDate->get($dateStr);
-                        $isWeekend = $d !== null && AttendanceSetting::isWeeklyOff($d);
+                        $isWeekend = $d !== null && app(WorkingDayResolver::class)->isWeeklyOff($d);
 
                         if ($att && $att->check_in) {
-                            // Clocked in even on weekend — show actual status
-                            return $att->is_late ? 'late' : 'present';
+                            // Worked on a weekly off: shown present, never late.
+                            return $att->is_late && ! $isWeekend ? 'late' : 'present';
                         }
 
                         if ($isWeekend) {
@@ -311,7 +312,7 @@ class Dashboard extends Component
         $attendanceTrend = collect();
         for ($i = 5; $i >= 0; $i--) {
             $d = now()->subMonths($i);
-            $workDays = AttendanceSetting::workingDaysBetween($d->copy()->startOfMonth(), $d->copy()->endOfMonth());
+            $workDays = app(WorkingDayResolver::class)->weekdaysBetween($d->copy()->startOfMonth(), $d->copy()->endOfMonth());
             $present = Attendance::whereYear('date', $d->year)
                 ->whereMonth('date', $d->month)
                 ->whereNotNull('check_in')

@@ -40,7 +40,7 @@
             for ($i = 5; $i >= 0; $i--) {
                 $mm = now()->subMonths($i);
                 $present = \App\Models\Attendance::whereYear('date', $mm->year)->whereMonth('date', $mm->month)->whereNotNull('check_in')->count();
-                $wd = max((int) $mm->copy()->startOfMonth()->diffInDaysFiltered(fn ($d) => ! $d->isSunday(), $mm->copy()->endOfMonth()), 1);
+                $wd = max((int) $mm->copy()->startOfMonth()->diffInDaysFiltered(fn ($d) => ! app(\App\Services\Attendance\WorkingDayResolver::class)->isWeeklyOff($d), $mm->copy()->endOfMonth()), 1);
                 $attendanceTrend->push(['month' => $mm->format('M'), 'rate' => $totalActive > 0 ? min(100, (int) round($present / ($totalActive * $wd) * 100)) : 0]);
             }
         }
@@ -111,7 +111,7 @@
 
         // Department attendance (this month)
         $monthStart = $today->copy()->startOfMonth();
-        $workdaysMtd = max((int) $monthStart->copy()->diffInDaysFiltered(fn ($d) => ! $d->isSunday(), $today->copy()), 1);
+        $workdaysMtd = max((int) $monthStart->copy()->diffInDaysFiltered(fn ($d) => ! app(\App\Services\Attendance\WorkingDayResolver::class)->isWeeklyOff($d), $today->copy()), 1);
         $presentByDept = \App\Models\Attendance::whereBetween('attendances.date', [$monthStart->toDateString(), $today->toDateString()])->whereNotNull('check_in')
             ->join('employees', 'employees.id', '=', 'attendances.employee_id')->selectRaw('employees.department_id as did, COUNT(*) as c')->groupBy('employees.department_id')->pluck('c', 'did');
         $deptAttendance = \App\Models\Department::withCount(['employees as hc' => fn ($q) => $q->where('status', 'active')])->get()

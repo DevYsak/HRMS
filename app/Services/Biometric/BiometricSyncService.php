@@ -7,6 +7,7 @@ use App\Models\AuditLog;
 use App\Models\BiometricDevice;
 use App\Models\BiometricLog;
 use App\Models\Employee;
+use App\Services\Attendance\WorkingDayResolver;
 use App\Services\AttendanceService;
 use App\Support\PunchMethodResolver;
 use Illuminate\Support\Carbon;
@@ -468,6 +469,13 @@ class BiometricSyncService
             $arrivedAt = $punchedAt->copy()->startOfMinute();
             $isLate = $arrivedAt->gt($cutoff);
             $lateMinutes = $isLate ? (int) $cutoff->diffInMinutes($arrivedAt) : 0;
+        }
+
+        // A weekly off or holiday has no shift to be late for: the punch is
+        // kept (Worked on Weekly Off), never flagged late.
+        if ($isLate && app(WorkingDayResolver::class)->classify($employee, $punchedAt, withLeave: false) !== WorkingDayResolver::WORKING_DAY) {
+            $isLate = false;
+            $lateMinutes = 0;
         }
 
         return Attendance::create([

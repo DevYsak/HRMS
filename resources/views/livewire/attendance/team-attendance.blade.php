@@ -93,6 +93,8 @@
                                 'on_break'  => ['bg-amber-400', 'text-amber-600 dark:text-amber-400', 'On Break'],
                                 'completed' => ['bg-zinc-400', 'text-zinc-500', 'Completed'],
                                 'on_leave'  => ['bg-indigo-500', 'text-indigo-600 dark:text-indigo-400', 'On Leave'],
+                                'weekly_off' => ['bg-zinc-300', 'text-zinc-500', \App\Services\Attendance\WorkingDayResolver::WEEKLY_OFF_LABEL],
+                                'weekly_off_worked' => ['bg-zinc-500', 'text-zinc-600 dark:text-zinc-300', \App\Services\Attendance\WorkingDayResolver::WORKED_WEEKLY_OFF_LABEL],
                                 default     => ['bg-rose-400', 'text-rose-500', 'Absent'],
                             };
                             $rowMode = $row['mode'] ? \App\Enums\AttendanceMode::tryFromValue($row['mode']) : null;
@@ -224,8 +226,9 @@
                                 {{ $log->check_out ? $log->check_out->format('H:i') : '--:--' }}
                             </td>
                             <td class="pulse-td">
-                                <span class="badge-{{ $log->status === 'on_time' ? $log->status : ($log->status === 'late' ? 'rejected' : 'manager') }}">
-                                    {{ strtoupper($log->status) }}
+                                @php $logOff = $log->weeklyOffLabel(); @endphp
+                                <span class="badge-{{ $logOff ? 'manager' : ($log->status === 'on_time' ? $log->status : ($log->status === 'late' ? 'rejected' : 'manager')) }}">
+                                    {{ strtoupper($logOff ?? $log->status) }}
                                 </span>
                             </td>
                             <td class="pulse-td pr-6 text-right! font-bold text-zinc-900 dark:text-white">

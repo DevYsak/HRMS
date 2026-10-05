@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Attendance;
+use App\Models\AttendanceSetting;
 use App\Models\Employee;
 use App\Models\LeaveBalance;
 use App\Models\LeaveRequest;
@@ -57,6 +58,10 @@ test('the register produces one column per day plus the trailing totals', functi
 
 test('the register classifies each day with the code HR uses', function () {
     $employee = reportEmployee();
+    // The fixture week works Saturday (a six-day week), stated explicitly —
+    // the Conexus default is Saturday + Sunday off.
+    AttendanceSetting::query()->delete();
+    AttendanceSetting::create(['shift_start' => '09:00', 'shift_end' => '18:00', 'weekly_off_days' => [0]]);
     $leaveType = LeaveType::firstOrCreate(['code' => 'CL'], ['name' => 'Casual Leave', 'category' => 'annual']);
 
     markAttendance($employee, '2026-06-01');                                        // Mon — present
@@ -83,6 +88,10 @@ test('the register classifies each day with the code HR uses', function () {
 
 test('the payroll attendance report separates payable days from loss of pay', function () {
     $employee = reportEmployee();
+    // The fixture week works Saturday (a six-day week), stated explicitly —
+    // the Conexus default is Saturday + Sunday off.
+    AttendanceSetting::query()->delete();
+    AttendanceSetting::create(['shift_start' => '09:00', 'shift_end' => '18:00', 'weekly_off_days' => [0]]);
     $leaveType = LeaveType::firstOrCreate(['code' => 'CL'], ['name' => 'Casual Leave', 'category' => 'annual']);
 
     markAttendance($employee, '2026-06-01');

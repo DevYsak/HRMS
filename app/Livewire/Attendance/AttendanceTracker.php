@@ -28,6 +28,7 @@ use App\Services\Attendance\PunchClassifier;
 use App\Services\Attendance\PunchTimeline as PunchTimelineEngine;
 use App\Services\Attendance\ShiftProgress;
 use App\Services\Attendance\ShiftResolver;
+use App\Services\Attendance\WorkingDayResolver;
 use App\Services\AttendanceService;
 use App\Services\Leave\LeaveYearResolver;
 use App\Services\Notifications\NotificationRecipients;
@@ -339,13 +340,13 @@ class AttendanceTracker extends Component
 
             if (isset($attendanceMap[$dateKey])) {
                 $att = $attendanceMap[$dateKey];
-                $status = ($att->status === 'late' || $att->is_late) ? 'late' : 'present';
+                $status = app(WorkingDayResolver::class)->isWeeklyOff($d) ? 'weekly_off_worked' : (($att->status === 'late' || $att->is_late) ? 'late' : 'present');
             } elseif (isset($leaveMap[$dateKey])) {
                 $status = 'leave';
             } elseif (isset($holidayMap[$dateKey])) {
                 $status = 'holiday';
-            } elseif ($d->isWeekend()) {
-                $status = 'weekend';
+            } elseif (app(WorkingDayResolver::class)->isWeeklyOff($d)) {
+                $status = 'weekly_off';
             } elseif ($d->isFuture()) {
                 $status = 'future';
             }
@@ -555,7 +556,7 @@ class AttendanceTracker extends Component
             $cursor->subDay(); // today not punched yet — start from yesterday
         }
         for ($i = 0; $i < 150; $i++) {
-            if ($cursor->isSunday()) {
+            if (app(WorkingDayResolver::class)->isWeeklyOff($cursor)) {
                 $cursor->subDay();
 
                 continue;
@@ -630,7 +631,7 @@ class AttendanceTracker extends Component
 
             if ($att) {
                 $mode = $att->work_mode ?? 'office';
-                $status = ($att->status === 'late' || $att->is_late) ? 'late' : 'present';
+                $status = app(WorkingDayResolver::class)->isWeeklyOff($d) ? 'weekly_off_worked' : (($att->status === 'late' || $att->is_late) ? 'late' : 'present');
                 if ($att->check_in && $att->check_out) {
                     $mins = $att->check_in->diffInMinutes($att->check_out) - (int) ($att->break_minutes ?? 0);
                     $hours = round(max(0, $mins) / 60, 1);
@@ -639,8 +640,8 @@ class AttendanceTracker extends Component
                 $status = 'leave';
             } elseif ($holidayDays->has($key)) {
                 $status = 'holiday';
-            } elseif ($d->isWeekend()) {
-                $status = 'weekend';
+            } elseif (app(WorkingDayResolver::class)->isWeeklyOff($d)) {
+                $status = 'weekly_off';
             } elseif ($d->isFuture()) {
                 $status = 'future';
             }
@@ -707,7 +708,7 @@ class AttendanceTracker extends Component
             return ShiftProgress::nonWorking($this->todayLeaveLabel($employee, $today));
         }
 
-        if (AttendanceSetting::isWeeklyOff($today)) {
+        if (app(WorkingDayResolver::class)->isWeeklyOff($today)) {
             return ShiftProgress::nonWorking('Weekly off');
         }
 
@@ -868,6 +869,8 @@ class AttendanceTracker extends Component
                 'is_today' => $item->date->isToday(),
                 'status' => $item->status,
                 'is_late' => (bool) $item->is_late,
+                // Worked on a weekly off: shown as such, never as late or missing.
+                'weekly_off' => app(WorkingDayResolver::class)->isWeeklyOff($item->date),
                 'mode' => $item->work_mode,
                 'worked' => $workedMin > 0 ? intdiv($workedMin, 60).'h '.($workedMin % 60).'m' : null,
                 'break' => (int) ($item->break_minutes ?? 0),
@@ -987,7 +990,7 @@ class AttendanceTracker extends Component
                     'action' => false,
                 ];
             }
-        } elseif ($shiftOver && ! $today->isWeekend() && $this->workMode !== 'wfh') {
+        } elseif ($shiftOver && ! app(WorkingDayResolver::class)->isWeeklyOff($today) && $this->workMode !== 'wfh') {
             $alerts[] = [
                 'type' => 'missing_checkin',
                 'label' => 'Missing Check-In',
@@ -1012,7 +1015,7 @@ class AttendanceTracker extends Component
 
         // Biometric device offline (no sync in 30+ minutes on a working day).
         $sync = $this->biometricDevice?->last_synced_at;
-        if ($sync && Carbon::parse($sync)->lt(now()->subMinutes(30)) && ! $today->isWeekend()) {
+        if ($sync && Carbon::parse($sync)->lt(now()->subMinutes(30)) && ! app(WorkingDayResolver::class)->isWeeklyOff($today)) {
             $alerts[] = [
                 'type' => 'device_offline',
                 'label' => 'Device Sync Delayed',
@@ -1233,7 +1236,7 @@ class AttendanceTracker extends Component
             $absentPeriod = CarbonPeriod::create($start, min($end, $cutoff));
             foreach ($absentPeriod as $d) {
                 $dateKey = $d->toDateString();
-                if ($d->dayOfWeek !== Carbon::SUNDAY && $d->dayOfWeek !== Carbon::SATURDAY
+                if (! app(WorkingDayResolver::class)->isWeeklyOff($d)
                     && ! isset($attendanceDates[$dateKey])
                     && ! isset($leaveMap[$dateKey])
                     && ! isset($holidayDates[$dateKey])) {
@@ -1330,7 +1333,7 @@ class AttendanceTracker extends Component
             while (isset($lateSet[$cursor->toDateString()])) {
                 $consecutiveLate++;
                 $cursor->subDay();
-                while ($cursor->isSunday()) {
+                while (app(WorkingDayResolver::class)->isWeeklyOff($cursor)) {
                     $cursor->subDay();
                 }
             }
@@ -1492,9 +1495,9 @@ class AttendanceTracker extends Component
         }
 
         // Prediction: attendance % if every remaining working day is attended.
-        $fullWorkDays = max(1, (int) $start->diffInDaysFiltered(fn ($d) => ! $d->isSunday(), $end->copy()->endOfDay()));
+        $fullWorkDays = max(1, (int) $start->diffInDaysFiltered(fn ($d) => ! app(WorkingDayResolver::class)->isWeeklyOff($d), $end->copy()->endOfDay()));
         $remainingDays = Carbon::tomorrow()->lte($end)
-            ? (int) Carbon::tomorrow()->diffInDaysFiltered(fn ($d) => ! $d->isSunday(), $end->copy()->endOfDay())
+            ? (int) Carbon::tomorrow()->diffInDaysFiltered(fn ($d) => ! app(WorkingDayResolver::class)->isWeeklyOff($d), $end->copy()->endOfDay())
             : 0;
         $predictedPct = min(100, (int) round(($present + $remainingDays) / $fullWorkDays * 100));
 

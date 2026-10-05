@@ -4,9 +4,9 @@ namespace App\Console\Commands;
 
 use App\Models\Attendance;
 use App\Models\AttendanceMonthlySummary;
-use App\Models\AttendanceSetting;
 use App\Models\Employee;
 use App\Models\LeaveRequest;
+use App\Services\Attendance\WorkingDayResolver;
 use Carbon\CarbonInterface;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
@@ -46,10 +46,19 @@ class GenerateAttendanceSummary extends Command
                     ->whereBetween('date', [$monthStart->toDateString(), $monthEnd->toDateString()])
                     ->get();
 
+                $weeklyOffs = $this->weeklyOffDates($monthStart, $monthEnd);
+                $offWorked = $records->whereNotNull('check_in')
+                    ->filter(fn ($r) => in_array(Carbon::parse($r->date)->toDateString(), $weeklyOffs, true))->count();
+
                 AttendanceMonthlySummary::updateOrCreate(
                     ['employee_id' => $employee->id, 'month' => $label],
                     [
                         'days_recorded' => $records->count(),
+                        // Mon–Fri working days for this employee (weekly offs,
+                        // holidays, MDL and days outside employment excluded).
+                        'scheduled_days' => app(WorkingDayResolver::class)->scheduledDaysBetween($employee, $monthStart, $monthEnd),
+                        'weekly_off_days' => count($weeklyOffs),
+                        'weekly_off_worked_days' => $offWorked,
                         'present_days' => $records->whereNotNull('check_in')->count(),
                         'late_days' => $records->where('is_late', true)->count(),
                         'excess_break_days' => $records->where('excess_break_flag', true)->count(),
@@ -74,6 +83,19 @@ class GenerateAttendanceSummary extends Command
         return self::SUCCESS;
     }
 
+    /** @return array<int, string> the month's weekly-off dates */
+    private function weeklyOffDates(CarbonInterface $monthStart, CarbonInterface $monthEnd): array
+    {
+        $dates = [];
+        for ($cursor = Carbon::parse($monthStart); $cursor->lte($monthEnd); $cursor = $cursor->copy()->addDay()) {
+            if (app(WorkingDayResolver::class)->isWeeklyOff($cursor)) {
+                $dates[] = $cursor->toDateString();
+            }
+        }
+
+        return $dates;
+    }
+
     /** Approved leave days that fall inside the month (weekly offs excluded, half days as 0.5). */
     private function leaveDays(Employee $employee, CarbonInterface $monthStart, CarbonInterface $monthEnd): float
     {
@@ -96,7 +118,7 @@ class GenerateAttendanceSummary extends Command
             $last = Carbon::parse($request->end_date)->min($monthEnd);
 
             for (; $cursor->lte($last); $cursor = $cursor->copy()->addDay()) {
-                if (! AttendanceSetting::isWeeklyOff($cursor)) {
+                if (! app(WorkingDayResolver::class)->isWeeklyOff($cursor)) {
                     $days += 1;
                 }
             }

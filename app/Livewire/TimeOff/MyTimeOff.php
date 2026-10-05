@@ -13,6 +13,7 @@ use App\Models\PublicHoliday;
 use App\Models\WfhRequest;
 use App\Notifications\LeaveEncashmentNotification;
 use App\Services\Attendance\HolidayResolver;
+use App\Services\Attendance\WorkingDayResolver;
 use App\Services\HolidayWorkService;
 use App\Services\Leave\EmployeeLeaveOverviewService;
 use App\Services\Leave\LeaveBalanceCalculator;
@@ -733,7 +734,7 @@ class MyTimeOff extends Component
                 'date' => $cursor->copy(),
                 'isCurrentMonth' => $cursor->month === $monthStart->month,
                 'isToday' => $cursor->isToday(),
-                'isWeekend' => $cursor->isWeekend(),
+                'isWeekend' => app(WorkingDayResolver::class)->isWeeklyOff($cursor),
                 'holiday' => $holidays->get($cursor->toDateString()),
                 'approved' => $dayRequests->firstWhere('status', 'approved'),
                 'pending' => $dayRequests->first(fn ($r) => in_array($r->status, ['pending', 'pending_hr'], true)),
@@ -789,7 +790,7 @@ class MyTimeOff extends Component
                 }
                 try {
                     $d = Carbon::parse($edge);
-                    if ($d->isWeekend()) {
+                    if (app(WorkingDayResolver::class)->isWeeklyOff($d)) {
                         $rangeWeekendDays->push($d->format('l, d M'));
                     }
                 } catch (\Throwable) {
@@ -842,7 +843,7 @@ class MyTimeOff extends Component
                     $weekend = 0;
                     $cursor = $ps->copy();
                     while ($cursor->lte($pe)) {
-                        if ($cursor->isWeekend()) {
+                        if (app(WorkingDayResolver::class)->isWeeklyOff($cursor)) {
                             $weekend++;
                         }
                         $cursor->addDay();
@@ -851,7 +852,7 @@ class MyTimeOff extends Component
                         ->whereBetween('date', [$ps->toDateString(), $pe->toDateString()])
                         ->forEmployee($employee)->get()
                         ->filter->appliesToEmployee($employee)
-                        ->filter(fn ($h) => ! $h->date->isWeekend())
+                        ->filter(fn ($h) => ! app(WorkingDayResolver::class)->isWeeklyOff($h->date))
                         ->count();
                     $leaveDays = max(0, $total - $weekend - $holCount);
                     $plannerResult = [

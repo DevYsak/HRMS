@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * and upserted, so re-running the job for a month replaces its figures.
  */
 #[Fillable([
-    'employee_id', 'month', 'days_recorded', 'present_days', 'late_days',
+    'employee_id', 'month', 'days_recorded', 'scheduled_days', 'weekly_off_days', 'weekly_off_worked_days', 'present_days', 'late_days',
     'excess_break_days', 'missing_checkouts', 'total_hours', 'total_break_minutes',
     'leave_days', 'generated_at',
 ])]

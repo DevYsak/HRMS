@@ -4,9 +4,9 @@ namespace App\Livewire\Profile\Concerns;
 
 use App\Models\Attendance;
 use App\Models\AttendanceDailyScore;
-use App\Models\AttendanceSetting;
 use App\Models\Employee;
 use App\Models\LeaveBalance;
+use App\Services\Attendance\WorkingDayResolver;
 use App\Services\Leave\LeaveYearResolver;
 use App\Services\Profile\ProfileCompletionService;
 
@@ -34,7 +34,7 @@ trait ShowsProfileSummary
             ->whereNotNull('check_in')
             ->count();
 
-        $workingDays = max(1, AttendanceSetting::workingDaysBetween($from, now()));
+        $workingDays = max(1, app(WorkingDayResolver::class)->weekdaysBetween($from, now()));
 
         // The leave year runs 1 July to 30 June, so the calendar year and the
         // leave year's integer disagree from January to June. Reading

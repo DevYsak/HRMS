@@ -12,6 +12,7 @@ use App\Models\LeaveRequest;
 use App\Models\LeaveType;
 use App\Models\User;
 use App\Services\Attendance\AttendanceScoreEngine;
+use App\Services\Attendance\WorkingDayResolver;
 use Carbon\CarbonInterface;
 use Carbon\CarbonPeriod;
 use Illuminate\Support\Carbon;
@@ -352,7 +353,7 @@ class LeaveRegularisationService
         $days = 0;
 
         foreach (CarbonPeriod::create($from, $to) as $day) {
-            if (! $day->isWeekend()) {
+            if (! app(WorkingDayResolver::class)->isWeeklyOff($day)) {
                 $days++;
             }
         }

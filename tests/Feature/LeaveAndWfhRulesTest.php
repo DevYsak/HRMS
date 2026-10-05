@@ -50,12 +50,15 @@ test('leave can start on a Saturday when the company works Saturdays', function 
         'year' => 2026, 'allocated_days' => 10, 'used_days' => 0,
     ]);
 
-    // 2026-06-06 is a Saturday.
+    // 2026-07-04 is a Saturday, in the 2026/27 leave year the balance is for.
+    // (A Saturday used to cost 0 days even on a six-day week — Carbon's
+    // isWeekend() in the day count — which hid the balance year.)
     $request = app(LeaveService::class)
-        ->submitRequest($employee, $type, '2026-06-06', '2026-06-06', 'Working-Saturday leave');
+        ->submitRequest($employee, $type, '2026-07-04', '2026-07-04', 'Working-Saturday leave');
 
     expect($request)->not->toBeNull()
-        ->and($request->start_date->toDateString())->toBe('2026-06-06');
+        ->and($request->start_date->toDateString())->toBe('2026-07-04')
+        ->and((float) $request->days)->toBe(1.0);
 });
 
 test('leave still cannot start on a configured weekly off', function () {
@@ -88,14 +91,15 @@ test('a company that rests on Friday blocks Friday leave and allows Sunday', fun
 
     $service = app(LeaveService::class);
 
-    // 2026-06-05 is a Friday.
-    expect(fn () => $service->submitRequest($employee, $type, '2026-06-05', '2026-06-05', 'Friday leave'))
+    // 2026-07-03 is a Friday.
+    expect(fn () => $service->submitRequest($employee, $type, '2026-07-03', '2026-07-03', 'Friday leave'))
         ->toThrow(DomainException::class);
 
-    // 2026-06-07 is a Sunday — a working day here.
-    $request = $service->submitRequest($employee, $type, '2026-06-07', '2026-06-07', 'Sunday leave');
+    // 2026-07-05 is a Sunday — a working day here, so it costs a day.
+    $request = $service->submitRequest($employee, $type, '2026-07-05', '2026-07-05', 'Sunday leave');
 
-    expect($request->start_date->toDateString())->toBe('2026-06-07');
+    expect($request->start_date->toDateString())->toBe('2026-07-05')
+        ->and((float) $request->days)->toBe(1.0);
 });
 
 // ── Leave type dropdown ────────────────────────────────────────────────────
