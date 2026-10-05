@@ -130,6 +130,7 @@ class ConexusCslAccrualService
             'status' => self::PASS,
             'reason' => null,
             'joining_rule' => $this->rules->settings($employee, $csl)['joining_month_rule'],
+            'register_reconciled' => false,
             'expected_months' => [],
             'base' => 0.0,
             'base_months' => [],
@@ -154,7 +155,13 @@ class ConexusCslAccrualService
             return $block("Legacy Annual Leave still holds {$plan['legacy_annual']} day(s) in {$year->label} — not yet reconciled. Run leave:conexus-reconcile first; no CSL month is credited before it.");
         }
 
-        [$eligible, $problem] = $this->eligibleMonths($employee, $year, $plan['joining_rule']);
+        // An employee the HR register has already reconciled: the register's
+        // current-year credit is HR's own statement of the months earned, so
+        // a missing or late joining_date on file must not block (or shift)
+        // those months. Everyone else keeps the normal joining-date rule.
+        $plan['register_reconciled'] = $this->isRegisterReconciled($employee, $csl, $year);
+
+        [$eligible, $problem] = $this->eligibleMonths($employee, $year, $plan['joining_rule'], ignoreJoiningDate: $plan['register_reconciled']);
         if ($problem !== null) {
             return $block($problem);
         }
@@ -425,13 +432,16 @@ class ConexusCslAccrualService
      *
      * @return array{0: array<int, string>, 1: ?string}
      */
-    public function eligibleMonths(Employee $employee, LeaveYear $year, string $joiningRule): array
+    public function eligibleMonths(Employee $employee, LeaveYear $year, string $joiningRule, bool $ignoreJoiningDate = false): array
     {
-        if (! $employee->joining_date) {
+        if (! $ignoreJoiningDate && ! $employee->joining_date) {
             return [[], 'No joining date — the months earned cannot be known. HR must record it.'];
         }
 
-        $joined = Carbon::parse($employee->joining_date)->startOfDay();
+        // Ignored: employed from the start of the year (the leaving date still applies).
+        $joined = $ignoreJoiningDate
+            ? Carbon::parse($year->starts_on)->startOfDay()->subDay()
+            : Carbon::parse($employee->joining_date)->startOfDay();
         $lastDay = $employee->exitRecord?->last_working_day ? Carbon::parse($employee->exitRecord->last_working_day)->startOfDay() : null;
 
         if ($lastDay === null && in_array($this->status($employee), self::LEFT, true)) {
@@ -488,6 +498,19 @@ class ConexusCslAccrualService
     }
 
     // ── Internals ───────────────────────────────────────────────────────────
+
+    /** Whether the year's current-year CSL credit was posted by the HR register reconciliation. */
+    private function isRegisterReconciled(Employee $employee, LeaveType $csl, LeaveYear $year): bool
+    {
+        return LeaveLedgerEntry::where('employee_id', $employee->id)
+            ->where('leave_type_id', $csl->id)
+            ->where('leave_year_id', $year->id)
+            ->where('entry_type', LeaveLedgerEntry::TYPE_BASE)
+            ->where('source_type', LeaveRegisterReconciliationService::SOURCE_TYPE)
+            ->whereNull('reverses_entry_id')
+            ->whereDoesntHave('reversedBy')
+            ->exists();
+    }
 
     /** @return Collection<int, LeaveBalance> */
     private function rowsFor(Employee $employee, LeaveType $type, LeaveYear $year): Collection
