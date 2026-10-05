@@ -78,7 +78,11 @@ class ReconcileConexusLeave extends Command
             $year->starts_on->toDateString(), $year->ends_on->toDateString()));
 
         $cslTypeId = $this->option('csl-type') !== null ? (int) $this->option('csl-type') : null;
-        $plan = $policy->plan($year, $cslTypeId);
+        $found = collect($register['employees'])->map(fn (array $row) => $reconciler->findEmployee($row))->filter();
+        // --skip-unlisted: only the register staff are moved onto the policy;
+        // everyone else keeps their leave_policy_id.
+        $assignOnly = $this->option('skip-unlisted') ? $found->pluck('id')->unique()->values()->all() : null;
+        $plan = $policy->plan($year, $cslTypeId, $assignOnly);
         $this->newLine();
         $this->info('Policy');
         foreach ($plan['actions'] as $action) {
@@ -97,7 +101,6 @@ class ReconcileConexusLeave extends Command
 
         // Evidence that the type being renamed is the one holding the
         // reconciled data: how many register staff already have a balance on it.
-        $found = collect($register['employees'])->map(fn (array $row) => $reconciler->findEmployee($row))->filter();
         $holding = LeaveBalance::where('leave_type_id', $plan['csl']['type_id'])->whereIn('employee_id', $found->pluck('id'))->distinct()->count('employee_id');
         $this->line(sprintf('  • CSL type #%d: %d of the %d register staff found here already hold a balance on it.',
             $plan['csl']['type_id'], $holding, $found->count()));
@@ -107,7 +110,7 @@ class ReconcileConexusLeave extends Command
         }
 
         try {
-            $applied = $policy->apply($actor, $cslTypeId);
+            $applied = $policy->apply($actor, $cslTypeId, $assignOnly);
             $csl = $applied['csl'];
             $annual = $applied['legacy_annual'];
             $compOff = $applied['comp_off'];
