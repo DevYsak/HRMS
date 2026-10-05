@@ -107,7 +107,7 @@ class ConexusLeavePolicyService
      *
      * @return array{csl: array{action: string, type_id: ?int, detail: string}, blocked: array<int, string>, actions: array<int, string>, warnings: array<int, string>, employees_to_assign: int}
      */
-    public function plan(?LeaveYear $year = null, ?int $cslTypeId = null): array
+    public function plan(?LeaveYear $year = null, ?int $cslTypeId = null, ?array $onlyEmployeeIds = null): array
     {
         $blocked = [];
         $actions = [];
@@ -184,7 +184,7 @@ class ConexusLeavePolicyService
             $actions[] = "Policy: deactivate \"{$other->name}\" (#{$other->id}) — kept for history.";
         }
 
-        $toAssign = $this->employeesToAssign($policy)->count();
+        $toAssign = $this->employeesToAssign($policy, $onlyEmployeeIds)->count();
         $actions[] = "Employees: assign {$toAssign} employee(s) to the Conexus policy (no recalculation is triggered).";
 
         return [
@@ -202,15 +202,15 @@ class ConexusLeavePolicyService
      *
      * @return array{csl: LeaveType, comp_off: ?LeaveType, legacy_annual: ?LeaveType, policy: LeavePolicy, assigned: int}
      */
-    public function apply(?User $actor = null, ?int $cslTypeId = null): array
+    public function apply(?User $actor = null, ?int $cslTypeId = null, ?array $onlyEmployeeIds = null): array
     {
-        $plan = $this->plan(null, $cslTypeId);
+        $plan = $this->plan(null, $cslTypeId, $onlyEmployeeIds);
 
         if ($plan['blocked'] !== []) {
             throw new DomainException(implode(' ', $plan['blocked']));
         }
 
-        return DB::transaction(function () use ($actor, $plan) {
+        return DB::transaction(function () use ($actor, $plan, $onlyEmployeeIds) {
             $csl = $this->establishCsl($plan['csl']['type_id'], $actor);
             $compOff = $this->configureCompOff();
             $annual = $this->retireAnnualLeave($actor);
@@ -219,7 +219,7 @@ class ConexusLeavePolicyService
             }
             $policy = $this->establishPolicy($csl, $compOff);
 
-            $ids = $this->employeesToAssign($policy)->pluck('id');
+            $ids = $this->employeesToAssign($policy, $onlyEmployeeIds)->pluck('id');
             // A query-builder update on purpose: the observer's policy-change
             // recalculation would reverse and re-post bases for every type,
             // which is exactly what the register reconciliation does
@@ -509,9 +509,18 @@ class ConexusLeavePolicyService
     }
 
     /** @return Collection<int, Employee> */
-    private function employeesToAssign(?LeavePolicy $policy): Collection
+    /**
+     * Employees to move onto the Conexus policy — everyone, or only the ids
+     * given (the register staff, under --skip-unlisted): anyone else keeps
+     * their leave_policy_id untouched.
+     *
+     * @param  array<int, int>|null  $onlyEmployeeIds
+     * @return Collection<int, Employee>
+     */
+    private function employeesToAssign(?LeavePolicy $policy, ?array $onlyEmployeeIds = null): Collection
     {
         return Employee::query()
+            ->when($onlyEmployeeIds !== null, fn ($q) => $q->whereKey($onlyEmployeeIds))
             ->when($policy, fn ($q) => $q->where(fn ($w) => $w->whereNull('leave_policy_id')->orWhere('leave_policy_id', '!=', $policy->id)))
             ->get(['id']);
     }

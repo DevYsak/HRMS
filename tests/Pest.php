@@ -3,6 +3,7 @@
 use App\Enums\UserRole;
 use App\Models\AttendanceSetting;
 use App\Models\Employee;
+use App\Models\LeaveType;
 use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Database\Seeders\StatutoryRuleSeeder;
@@ -77,4 +78,18 @@ function lineManager(): User
     Employee::where('user_id', '!=', $manager->id)->update(['manager_id' => $manager->id]);
 
     return $manager;
+}
+
+/**
+ * Production's authoritative leave type: "Paid Leave" (code PL) holds the
+ * reconciled CSL balances. leave:conexus-reconcile renames it in place to
+ * Casual / Sick Leave (CSL) and never creates a type, so every Conexus test
+ * starts from it.
+ */
+function conexusPaidLeave(): LeaveType
+{
+    return LeaveType::create([
+        'name' => 'Paid Leave', 'code' => 'PL', 'category' => 'annual', 'is_paid' => true,
+        'allow_paid_request' => true, 'color' => '#F97316',
+    ]);
 }
