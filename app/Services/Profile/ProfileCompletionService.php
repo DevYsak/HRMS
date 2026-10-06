@@ -2,52 +2,88 @@
 
 namespace App\Services\Profile;
 
+use App\Models\Document;
 use App\Models\Employee;
+use App\Models\ProfileChangeRequest;
+use App\Models\ProfileFieldSetting;
 
 /**
  * Scores how complete a profile is, and — more usefully — says which field to
  * fill in next, so the completion ring can deep-link straight to the gap
  * rather than leaving someone to hunt for it.
  *
- * Only fields the employee can actually act on count toward the score. Holding
- * someone at 80% because HR hasn't set their office is not a nudge, it's noise.
+ * Only what HR has marked Required (Profile Fields settings) and the employee
+ * can act on counts: self-service fields that are not HR-only, and KYC
+ * documents HR asks for. A field with a change request waiting for HR counts
+ * as submitted, not missing — the employee has done their part. Optional
+ * fields are listed separately and never lower the score.
  */
 class ProfileCompletionService
 {
     /**
-     * @return array{percent:int, completed:int, total:int, missing:array<int, array{field:string, label:string, tier:string}>}
+     * @return array{percent:int, completed:int, total:int, missing:array<int, array{field:string, label:string, tier:string}>, submitted:array<int, array{field:string, label:string}>, optional_missing:array<int, array{field:string, label:string, tier:string}>}
      */
     public function for(Employee $employee): array
     {
         $employee->loadMissing(['user', 'payrollSettings']);
 
-        $keys = array_merge(
-            ProfileFieldRegistry::keysByTier(ProfileFieldRegistry::TIER_EDITABLE),
-            ProfileFieldRegistry::keysByTier(ProfileFieldRegistry::TIER_APPROVAL),
-        );
-
+        $pending = ProfileChangeRequest::where('employee_id', $employee->id)->pending()->pluck('field')->flip();
         $missing = [];
+        $submitted = [];
+        $optionalMissing = [];
+        $required = 0;
 
-        foreach ($keys as $key) {
+        foreach (ProfileFieldRegistry::selfServiceKeys() as $key) {
+            $requirement = ProfileFieldRegistry::requirement($key);
+
+            if ($requirement === ProfileFieldSetting::HR_ONLY) {
+                continue;
+            }
+
             $value = ProfileFieldRegistry::valueFor($employee, $key);
+            $isEmpty = $value === null || $value === '';
+            $entry = ['field' => $key, 'label' => ProfileFieldRegistry::label($key), 'tier' => ProfileFieldRegistry::tier($key)];
 
-            if ($value === null || $value === '') {
-                $missing[] = [
-                    'field' => $key,
-                    'label' => ProfileFieldRegistry::label($key),
-                    'tier' => ProfileFieldRegistry::tier($key),
-                ];
+            if ($requirement === ProfileFieldSetting::OPTIONAL) {
+                if ($isEmpty) {
+                    $optionalMissing[] = $entry;
+                }
+
+                continue;
+            }
+
+            $required++;
+
+            if ($isEmpty && $pending->has($key)) {
+                $submitted[] = ['field' => $key, 'label' => $entry['label']];
+            } elseif ($isEmpty) {
+                $missing[] = $entry;
             }
         }
 
-        $total = count($keys);
-        $completed = $total - count($missing);
+        $uploadedKyc = Document::where('employee_id', $employee->id)->where('category', 'kyc')->pluck('kyc_type')->flip();
+
+        foreach (ProfileFieldRegistry::KYC_TYPES as $type => $label) {
+            if (ProfileFieldRegistry::requirement("kyc:{$type}") !== ProfileFieldSetting::REQUIRED) {
+                continue;
+            }
+
+            $required++;
+
+            if (! $uploadedKyc->has($type)) {
+                $missing[] = ['field' => "kyc:{$type}", 'label' => $label, 'tier' => 'kyc'];
+            }
+        }
+
+        $completed = $required - count($missing);
 
         return [
-            'percent' => $total > 0 ? (int) round($completed / $total * 100) : 100,
+            'percent' => $required > 0 ? (int) round($completed / $required * 100) : 100,
             'completed' => $completed,
-            'total' => $total,
+            'total' => $required,
             'missing' => $missing,
+            'submitted' => $submitted,
+            'optional_missing' => $optionalMissing,
         ];
     }
 

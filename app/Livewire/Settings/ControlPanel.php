@@ -49,6 +49,7 @@ class ControlPanel extends Component
                     ['label' => 'Import Employees', 'description' => 'Bulk create / update', 'icon' => 'arrow-up-tray', 'route' => 'employees.import', 'permission' => 'manage_employees'],
                     ['label' => 'Import / Export', 'description' => 'Download HR data, bulk-load holidays', 'icon' => 'arrows-up-down', 'route' => 'settings.import-export', 'permission' => ['data_export', 'data_import']],
                     ['label' => 'Onboarding Templates', 'description' => 'New-hire checklists', 'icon' => 'clipboard-document-check', 'route' => 'settings.onboarding-templates'],
+                    ['label' => 'Profile Fields', 'description' => 'Required / optional / HR-only, KYC', 'icon' => 'identification', 'route' => 'settings.profile-fields'],
                 ],
             ],
             [

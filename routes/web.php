@@ -86,6 +86,7 @@ use App\Livewire\Settings\DataManagement;
 use App\Livewire\Settings\DepartmentManager;
 use App\Livewire\Settings\EmploymentTypeManager;
 use App\Livewire\Settings\ImportExportCentre;
+use App\Livewire\Settings\ProfileFieldSettings;
 use App\Livewire\Settings\JobTitleManager;
 use App\Livewire\Settings\MenuSettings;
 use App\Livewire\Settings\ModuleSettings;
@@ -573,6 +574,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/payroll-approval-policy', ApprovalPolicySettings::class)->name('payroll-approval-policy')->middleware('module:payroll');
         Route::get('/modules', ModuleSettings::class)->name('modules');
         Route::get('/job-titles', JobTitleManager::class)->name('job-titles');
+        Route::get('/profile-fields', ProfileFieldSettings::class)->name('profile-fields');
         Route::get('/menu', MenuSettings::class)->name('menu');
         Route::get('/notifications', NotificationSettings::class)->name('notifications');
         Route::get('/onboarding-templates', OnboardingTemplateManager::class)->name('onboarding-templates');

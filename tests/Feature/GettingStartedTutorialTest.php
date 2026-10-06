@@ -120,7 +120,7 @@ test('the profile prompt and the sidebar both open My Profile', function () {
     $menuItem = collect(app(EmployeeMenu::class)->visible())->firstWhere('key', 'profile');
 
     if ($profileAlert !== null) {
-        expect($profileAlert['url'])->toBe(route('profile.me'));
+        expect($profileAlert['url'])->toStartWith(route('profile.me'));
     }
     expect($menuItem['route'])->toBe('profile.me');
 });

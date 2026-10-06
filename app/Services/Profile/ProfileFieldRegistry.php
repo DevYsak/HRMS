@@ -9,6 +9,7 @@ use App\Models\Employee;
 use App\Models\EmploymentType;
 use App\Models\JobTitle;
 use App\Models\Office;
+use App\Models\ProfileFieldSetting;
 use App\Models\ShiftSetting;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
@@ -420,6 +421,61 @@ class ProfileFieldRegistry
     public static function rulesFor(string $key): array
     {
         return self::FIELDS[$key]['rules'] ?? ['nullable'];
+    }
+
+    /**
+     * KYC documents an employee can be asked for. Whether each is required is
+     * HR's choice (profile_field_settings, key "kyc:<type>"); by default none
+     * is, so nothing appears missing until HR says so.
+     */
+    public const KYC_TYPES = [
+        'identity_proof' => 'Identity proof (passport / national ID)',
+        'address_proof' => 'Address proof',
+        'bank_proof' => 'Bank proof (cancelled cheque / statement)',
+        'tax_id' => 'Tax ID (PAN / NI number)',
+    ];
+
+    /**
+     * Country-specific fields optional by default: a UK employee has no PAN,
+     * Aadhaar or IFSC and must still be able to reach 100%. HR can make them
+     * Required in Profile Fields.
+     */
+    private const DEFAULT_OPTIONAL = ['pan_number', 'aadhar_number', 'ifsc_code'];
+
+    /**
+     * Required / Optional / HR-only for a self-service field or KYC type
+     * ("kyc:<type>"), HR's setting first, else the default. Locked fields are
+     * always HR-only — their tier is not configurable.
+     */
+    public static function requirement(string $key): string
+    {
+        if (! str_starts_with($key, 'kyc:') && self::isLocked($key)) {
+            return ProfileFieldSetting::HR_ONLY;
+        }
+
+        $set = ProfileFieldSetting::map()[$key] ?? null;
+
+        if (in_array($set, ProfileFieldSetting::REQUIREMENTS, true)) {
+            return $set;
+        }
+
+        if (str_starts_with($key, 'kyc:')) {
+            return ProfileFieldSetting::OPTIONAL;
+        }
+
+        return in_array($key, self::DEFAULT_OPTIONAL, true) ? ProfileFieldSetting::OPTIONAL : ProfileFieldSetting::REQUIRED;
+    }
+
+    /** HR has taken a self-service field back: hidden from and refused to the employee. */
+    public static function isHrOnly(string $key): bool
+    {
+        return self::requirement($key) === ProfileFieldSetting::HR_ONLY;
+    }
+
+    /** @return array<int, string> the self-service field keys (editable + approval tiers) */
+    public static function selfServiceKeys(): array
+    {
+        return array_merge(self::keysByTier(self::TIER_EDITABLE), self::keysByTier(self::TIER_APPROVAL));
     }
 
     /** @return array<int, string> */

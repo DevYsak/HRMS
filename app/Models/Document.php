@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 #[Fillable([
     'title', 'description', 'file_path', 'file_name', 'mime_type', 'file_size',
-    'version', 'parent_id', 'category', 'visibility',
+    'version', 'parent_id', 'category', 'kyc_type', 'visibility',
     'department_id', 'employee_id', 'requires_acknowledgement',
     'expires_at', 'expiry_notified_for', 'uploaded_by', 'documentable_type', 'documentable_id',
 ])]

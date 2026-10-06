@@ -30,6 +30,8 @@ class ProfileChangeService
      */
     public function updateEditable(Employee $employee, string $field, mixed $value, User $actor): void
     {
+        $this->refuseHrOnly($field);
+
         if (! ProfileFieldRegistry::isEditable($field)) {
             throw new \DomainException(
                 ProfileFieldRegistry::label($field).' cannot be changed directly.'
@@ -68,6 +70,8 @@ class ProfileChangeService
         ?string $reason = null,
         ?string $attachmentPath = null,
     ): ProfileChangeRequest {
+        $this->refuseHrOnly($field);
+
         if (! ProfileFieldRegistry::needsApproval($field)) {
             throw new \DomainException(
                 ProfileFieldRegistry::isLocked($field)
@@ -197,6 +201,20 @@ class ProfileChangeService
      * approval-tier fields are both writable here — that is the point of the
      * HR surface — but every change is still audited.
      */
+    /**
+     * A field HR has made HR-only (Profile Fields settings) is no longer
+     * self-service: the employee can neither change it nor request it.
+     *
+     * @throws \DomainException
+     */
+    private function refuseHrOnly(string $field): void
+    {
+        // Locked fields keep their own, more specific refusal.
+        if (ProfileFieldRegistry::has($field) && ! ProfileFieldRegistry::isLocked($field) && ProfileFieldRegistry::isHrOnly($field)) {
+            throw new \DomainException(ProfileFieldRegistry::label($field).' is managed by HR. Contact HR to change it.');
+        }
+    }
+
     public function updateAsHr(Employee $employee, string $field, mixed $value, User $actor): void
     {
         if (! ProfileFieldRegistry::has($field)) {

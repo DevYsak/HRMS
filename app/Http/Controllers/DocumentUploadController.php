@@ -79,7 +79,8 @@ class DocumentUploadController extends Controller
 
         $file = $request->file('personal_file');
         $originalName = $file->getClientOriginalName();
-        $path = $file->storeAs('documents/personal', time().'_'.$originalName, 'local');
+        // A random stored name: client file names are never used as paths.
+        $path = $file->store('documents/personal', 'local');
 
         Document::create([
             'title' => $data['personal_title'],

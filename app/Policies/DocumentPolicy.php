@@ -37,6 +37,16 @@ class DocumentPolicy
 
     public function view(User $user, Document $document): bool
     {
+        // KYC proofs are the most sensitive documents held: the owner, and
+        // whoever holds View KYC Documents for that employee — managing
+        // documents in general is not enough.
+        if ($document->category === 'kyc') {
+            $own = $user->employee?->id !== null && (int) $document->employee_id === (int) $user->employee->id;
+
+            return $own || ($user->hasPermission('view_kyc_documents')
+                && $document->employee !== null && $user->coversEmployee($document->employee));
+        }
+
         if ($user->canManageDocuments()) {
             return true;
         }

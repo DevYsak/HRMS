@@ -69,6 +69,47 @@
                 <x-profile.field-group group="financial" :employee="$employee" :pending="$pending" icon="banknotes"
                                        title="Bank &amp; statutory" />
 
+                {{-- KYC documents: private, visible only to you and HR (View KYC Documents). --}}
+                <div id="kyc-documents" class="scroll-mt-20">
+                    <x-employee.section-card title="KYC documents" icon="identification">
+                        <p class="mb-3 text-xs text-zinc-500">Proof documents are stored privately: only you and HR can open them.</p>
+                        <div class="divide-y divide-zinc-100 dark:divide-white/5">
+                            @foreach($kyc as $item)
+                                <div class="flex flex-wrap items-center justify-between gap-2 py-2" wire:key="kyc-{{ $item['type'] }}">
+                                    <div class="min-w-0">
+                                        <div class="flex items-center gap-1.5 text-sm font-medium text-zinc-800 dark:text-zinc-100">
+                                            {{ $item['label'] }}
+                                            @if($item['requirement'] === \App\Models\ProfileFieldSetting::REQUIRED && ! $item['document'])
+                                                <span class="rounded bg-rose-50 px-1 text-[9px] font-bold uppercase text-rose-600 dark:bg-rose-500/10 dark:text-rose-300">Required</span>
+                                            @endif
+                                        </div>
+                                        @if($item['document'])
+                                            <a href="{{ $item['url'] }}" target="_blank" class="text-xs font-semibold text-orange-600 hover:underline">{{ $item['document']->file_name }}</a>
+                                            <span class="text-[11px] text-zinc-400">· {{ $item['document']->created_at->format('d M Y') }}</span>
+                                        @else
+                                            <span class="text-xs italic text-zinc-400">Not uploaded</span>
+                                        @endif
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+                        @if($canUploadKyc)
+                            <form wire:submit="uploadKyc" class="mt-3 flex flex-wrap items-end gap-2 border-t border-zinc-100 pt-3 dark:border-white/5">
+                                <select wire:model="kycType" aria-label="Document type" class="rounded-lg border border-zinc-200 bg-white py-1.5 pl-2 pr-7 text-xs dark:border-zinc-700 dark:bg-zinc-900">
+                                    <option value="">Choose a document…</option>
+                                    @foreach($kyc as $item)
+                                        <option value="{{ $item['type'] }}">{{ $item['label'] }}</option>
+                                    @endforeach
+                                </select>
+                                <input type="file" wire:model="kycFile" accept=".pdf,.jpg,.jpeg,.png" class="min-w-0 flex-1 text-xs">
+                                <flux:button type="submit" size="sm" variant="primary" wire:loading.attr="disabled" wire:target="kycFile,uploadKyc">Upload</flux:button>
+                            </form>
+                            @error('kycType')<p class="mt-1 text-xs text-rose-600">{{ $message }}</p>@enderror
+                            @error('kycFile')<p class="mt-1 text-xs text-rose-600">{{ $message }}</p>@enderror
+                        @endif
+                    </x-employee.section-card>
+                </div>
+
             @elseif($activeTab === 'employment')
                 <x-profile.field-group group="employment" :employee="$employee" :pending="$pending" icon="briefcase" />
 
@@ -129,11 +170,17 @@
             @if($completion['missing'])
                 <x-employee.section-card title="Finish your profile" icon="sparkles">
                     <p class="mb-3 text-xs text-zinc-500">
-                        {{ count($completion['missing']) }} {{ Str::plural('field', count($completion['missing'])) }} still to fill in.
+                        {{ $completion['percent'] }}% complete · {{ count($completion['missing']) }} required {{ Str::plural('item', count($completion['missing'])) }} still to fill in.
                     </p>
                     <div class="space-y-1.5">
                         @foreach(array_slice($completion['missing'], 0, 6) as $gap)
-                            @if((Registry::get($gap['field'])['type'] ?? null) === 'image')
+                            @if(str_starts_with($gap['field'], 'kyc:'))
+                                <button type="button" wire:click="$set('activeTab', 'personal')" x-on:click="$nextTick(() => setTimeout(() => document.getElementById('kyc-documents')?.scrollIntoView({ behavior: 'smooth' }), 150))"
+                                        class="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left text-sm transition hover:bg-zinc-50 dark:hover:bg-white/5">
+                                    <span class="text-zinc-700 dark:text-zinc-200">{{ $gap['label'] }}</span>
+                                    <flux:icon.arrow-up-tray class="size-3.5 text-zinc-300" />
+                                </button>
+                            @elseif((Registry::get($gap['field'])['type'] ?? null) === 'image')
                                 {{-- Media needs a real file picker, not a modal --}}
                                 <label class="flex w-full cursor-pointer items-center justify-between rounded-lg px-2 py-1.5 text-left text-sm transition hover:bg-zinc-50 dark:hover:bg-white/5">
                                     <span class="text-zinc-700 dark:text-zinc-200">{{ $gap['label'] }}</span>
@@ -150,6 +197,9 @@
                             @endif
                         @endforeach
                     </div>
+                    @if(! empty($completion['submitted']))
+                        <p class="mt-3 text-[11px] text-zinc-400">Sent to HR, awaiting approval: {{ collect($completion['submitted'])->pluck('label')->implode(', ') }}.</p>
+                    @endif
                 </x-employee.section-card>
             @endif
 

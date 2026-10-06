@@ -701,7 +701,8 @@ class EmployeeDashboardService
                 'title' => 'Complete your profile',
                 'status' => $missing.' '.Str::plural('field', $missing).' to fill in',
                 'progress' => (int) $profile['percent'],
-                'url' => route('profile.me'),
+                // Straight to the tab holding the fields to fill in.
+                'url' => route('profile.me', ['tab' => 'personal']),
             ]);
         }
 

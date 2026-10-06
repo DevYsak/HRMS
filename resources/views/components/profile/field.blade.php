@@ -23,9 +23,14 @@
 
     // On the HR surface every registered field is writable except those a
     // dedicated workflow owns; on the employee's own page the tier decides.
+    // A field HR has made HR-only is managed by HR, whatever its tier.
+    $hrOnly = ! $asHr && $tier !== Registry::TIER_LOCKED && Registry::isHrOnly($field);
+    $requirement = $tier !== Registry::TIER_LOCKED ? Registry::requirement($field) : null;
+
     $mode = match (true) {
         ! $canEdit                         => 'read',
         $asHr && Registry::isHrEditable($field) => 'edit',
+        $hrOnly                            => 'locked',
         $tier === Registry::TIER_EDITABLE  => 'edit',
         $tier === Registry::TIER_APPROVAL  => 'request',
         default                            => 'locked',
@@ -46,6 +51,10 @@
 
             @if($mode === 'locked')
                 <flux:icon.lock-closed class="size-3 shrink-0 text-zinc-300 dark:text-zinc-600" />
+            @elseif($requirement === \App\Models\ProfileFieldSetting::REQUIRED && $isEmpty)
+                <span class="rounded bg-rose-50 px-1 text-[9px] font-bold uppercase text-rose-600 dark:bg-rose-500/10 dark:text-rose-300">Required</span>
+            @elseif($requirement === \App\Models\ProfileFieldSetting::OPTIONAL)
+                <span class="rounded bg-zinc-100 px-1 text-[9px] font-bold uppercase text-zinc-400 dark:bg-white/5">Optional</span>
             @endif
         </div>
 
@@ -70,7 +79,7 @@
         </div>
 
         @if($mode === 'locked')
-            <p class="mt-1 text-[11px] leading-snug text-zinc-400">{{ Registry::lockReason($field) }}</p>
+            <p class="mt-1 text-[11px] leading-snug text-zinc-400">{{ $hrOnly ? 'Managed by HR. Contact HR to change it.' : Registry::lockReason($field) }}</p>
         @endif
     </div>
 

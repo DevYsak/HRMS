@@ -100,6 +100,7 @@ class RolesAndPermissionsSeeder extends Seeder
             ['key' => 'manage_documents', 'label' => 'Manage Documents', 'description' => 'Organise and maintain document records'],
             ['key' => 'view_documents', 'label' => 'View Documents', 'description' => 'View uploaded HR documents'],
             ['key' => 'acknowledge_documents', 'label' => 'Acknowledge Documents', 'description' => 'Acknowledge receipt of issued documents'],
+            ['key' => 'view_kyc_documents', 'label' => 'View KYC Documents', 'description' => "Open employees' identity, address and bank proofs"],
         ],
         'Reports' => [
             ['key' => 'view_reports', 'label' => 'View Reports', 'description' => 'Access system reports'],
@@ -152,7 +153,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'view_leave_regularisation', 'create_leave_regularisation', 'approve_leave_regularisation', 'manage_leave_regularisation',
             'view_payroll', 'run_payroll', 'view_payslips', 'manage_salary_components', 'view_finance_profile', 'lock_payroll', 'unlock_payroll', 'delete_payslip',
             'view_performance', 'review_performance', 'manage_kpi_templates', 'manage_review_cycles', 'manage_scorecards', 'manage_promotions', 'manage_pip', 'manage_warning_letters',
-            'upload_documents', 'manage_documents', 'view_documents', 'acknowledge_documents',
+            'upload_documents', 'manage_documents', 'view_documents', 'acknowledge_documents', 'view_kyc_documents',
             'view_reports', 'export_reports',
             'manage_roles', 'manage_settings', 'manage_company_settings',
             'manage_ai_settings', 'data_purge', 'impersonate', 'force_delete_employee', 'data_export', 'data_import', 'view_audit_log',
