@@ -231,14 +231,23 @@
 
     </div>
 
-    {{-- Add / Edit Modal --}}
+    {{-- Add / Edit Modal.
+         Closing is instant and client-side (open = false), then the server
+         resets state through closeModal(): a slow, expired or failed request
+         can no longer leave the modal stuck open. x-trap.noscroll locks the
+         page scroll while open and always restores it on close. z-[60] keeps
+         it above the floating AI button. --}}
     @if($showModal)
-        <div class="fixed inset-0 z-50 flex items-center justify-center p-4" x-data
-            x-on:keydown.escape.window="$wire.set('showModal', false)">
-            <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="$wire.set('showModal', false)"></div>
+        <div wire:key="leave-type-modal-{{ $modalVersion }}"
+            x-data="{ open: true, close() { if (! this.open) return; this.open = false; $wire.closeModal(); } }"
+            x-show="open" x-trap.noscroll="open"
+            x-on:keydown.escape.window="if (! $event.target.closest('select')) close()"
+            class="fixed inset-0 z-[60] flex items-center justify-center p-4"
+            role="dialog" aria-modal="true" aria-labelledby="leave-type-modal-title">
+            <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="close()"></div>
             <div
-                class="relative w-full max-w-lg bg-white dark:bg-zinc-800 rounded-2xl shadow-xl ring ring-black/5 dark:ring-zinc-700 p-6 max-h-[90vh] overflow-y-auto">
-                <button type="button" @click="$wire.set('showModal', false)"
+                class="relative w-full max-w-lg bg-white dark:bg-zinc-800 rounded-2xl shadow-xl ring ring-black/5 dark:ring-zinc-700 p-6 max-h-[90vh] overflow-y-auto overscroll-contain">
+                <button type="button" @click="close()" aria-label="Close"
                     class="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors">
                     <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -246,9 +255,25 @@
                 </button>
 
                 <div class="space-y-5">
-                    <flux:heading size="lg">{{ $editingId ? 'Edit' : 'Add' }} Leave Type</flux:heading>
+                    <flux:heading size="lg" id="leave-type-modal-title">{{ $editingId ? 'Edit' : 'Add' }} Leave Type</flux:heading>
 
-                    <form wire:submit="save" class="space-y-5">
+                    {{-- Every error, including fields hidden behind a toggle, so
+                         a failed Save never looks like a dead button. --}}
+                    @if($errors->any())
+                        <div class="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300" role="alert">
+                            <p class="font-bold">Please fix the following:</p>
+                            <ul class="mt-1 list-disc space-y-0.5 pl-4">
+                                @foreach($errors->all() as $message)
+                                    <li>{{ $message }}</li>
+                                @endforeach
+                            </ul>
+                        </div>
+                    @endif
+
+                    {{-- novalidate: the browser's own min/step checks silently
+                         blocked Save inside the scrolling modal; the server
+                         validates and the summary above explains. --}}
+                    <form wire:submit="save" class="space-y-5" novalidate>
 
                         {{-- ── Basic Info ────────────────────────────────── --}}
                         <div class="rounded-xl border border-zinc-200 dark:border-zinc-700 p-4 space-y-4">
@@ -451,7 +476,7 @@
                         </div>
 
                         <div class="flex justify-end gap-3 pt-2">
-                            <button type="button" @click="$wire.set('showModal', false)"
+                            <button type="button" @click="close()"
                                 class="px-4 py-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-600 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors">Cancel</button>
                             <flux:button type="submit" variant="primary">Save Leave Type</flux:button>
                         </div>

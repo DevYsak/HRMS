@@ -37,26 +37,26 @@ class TimeOffSettings extends Component
     /** none | hr_approval | automatic. Default matches company policy. */
     public string $carry_forward_mode = 'hr_approval';
 
-    public int $carry_forward_limit = 0;
+    public int|float|string|null $carry_forward_limit = 0;
 
     public bool $allow_encashment = false;
 
-    public ?int $max_encashable_days = null;
+    public int|float|string|null $max_encashable_days = null;
 
-    public float $encashment_rate_multiplier = 1.00;
+    public int|float|string|null $encashment_rate_multiplier = 1.00;
 
     public bool $allow_current_year_encashment = false;
 
     public bool $is_sandwich_applicable = false;
 
-    public int $sandwich_min_days = 0;
+    public int|float|string|null $sandwich_min_days = 0;
 
     public bool $allow_half_day = true;
 
     // ── Accrual ──────────────────────────────────────────────────────────────
     public bool $is_monthly_accrual = false;
 
-    public float $accrual_days_per_month = 0;
+    public int|float|string|null $accrual_days_per_month = 0;
 
     // ── Restrictions ─────────────────────────────────────────────────────────
     public string $gender_restriction = 'none';
@@ -65,12 +65,12 @@ class TimeOffSettings extends Component
 
     public bool $notice_period_restricted = false;
 
-    public ?int $max_consecutive_days = null;
+    public int|float|string|null $max_consecutive_days = null;
 
     public bool $attachment_required = false;
 
     // ── Allocation & control ──────────────────────────────────────────────────
-    public ?float $annual_allocation_days = null;
+    public int|float|string|null $annual_allocation_days = null;
 
     public bool $is_system_controlled = false;
 
@@ -79,10 +79,17 @@ class TimeOffSettings extends Component
 
     public bool $showModal = false;
 
+    /** Bumped on every open so the modal is a fresh element, never a hidden leftover. */
+    public int $modalVersion = 0;
+
     public function openModal($id = null): void
     {
         abort_unless(Auth::user()->canManageSettings(), 403);
 
+        // A fresh form every time: errors from a previous attempt must not
+        // reappear (or block Save) on the next open.
+        $this->resetValidation();
+        $this->modalVersion++;
         $this->editingId = $id;
 
         if ($id) {
@@ -141,6 +148,17 @@ class TimeOffSettings extends Component
         $this->showModal = true;
     }
 
+    /**
+     * Close and reset. The view hides the modal client-side first, so a slow
+     * or failed request can never leave it stuck open.
+     */
+    public function closeModal(): void
+    {
+        $this->showModal = false;
+        $this->editingId = null;
+        $this->resetValidation();
+    }
+
     public function save(): void
     {
         abort_unless(Auth::user()->canManageSettings(), 403);
@@ -188,26 +206,26 @@ class TimeOffSettings extends Component
             'hr_remark_required' => $this->hr_remark_required,
             'allow_carry_forward' => $this->allow_carry_forward,
             'carry_forward_mode' => $this->carry_forward_mode,
-            'carry_forward_limit' => $this->carry_forward_limit,
+            'carry_forward_limit' => (int) $this->carry_forward_limit,
             'allow_encashment' => $this->allow_encashment,
-            'max_encashable_days' => $this->max_encashable_days ?: null,
-            'encashment_rate_multiplier' => $this->encashment_rate_multiplier,
+            'max_encashable_days' => $this->max_encashable_days ? (int) $this->max_encashable_days : null,
+            'encashment_rate_multiplier' => (float) $this->encashment_rate_multiplier,
             'allow_current_year_encashment' => $this->allow_current_year_encashment,
             'is_sandwich_applicable' => $this->is_sandwich_applicable,
-            'sandwich_min_days' => $this->is_sandwich_applicable ? $this->sandwich_min_days : 0,
+            'sandwich_min_days' => $this->is_sandwich_applicable ? (int) $this->sandwich_min_days : 0,
             'allow_half_day' => $this->allow_half_day,
             'is_monthly_accrual' => $this->is_monthly_accrual,
-            'accrual_days_per_month' => $this->accrual_days_per_month,
+            'accrual_days_per_month' => (float) $this->accrual_days_per_month,
             'gender_restriction' => $this->gender_restriction,
             'probation_restricted' => $this->probation_restricted,
             'notice_period_restricted' => $this->notice_period_restricted,
-            'max_consecutive_days' => $this->max_consecutive_days ?: null,
+            'max_consecutive_days' => $this->max_consecutive_days ? (int) $this->max_consecutive_days : null,
             'attachment_required' => $this->attachment_required,
-            'annual_allocation_days' => $this->annual_allocation_days ?: null,
+            'annual_allocation_days' => $this->annual_allocation_days ? (float) $this->annual_allocation_days : null,
             'is_system_controlled' => $this->is_system_controlled,
         ], $this->editingId);
 
-        $this->showModal = false;
+        $this->closeModal();
         \Flux::toast('Leave type saved successfully.');
     }
 
