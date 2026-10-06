@@ -23,6 +23,7 @@ class EmployeeMenu
         ['key' => 'profile', 'label' => 'My Profile', 'icon' => 'user-circle', 'type' => 'item', 'route' => 'profile.me', 'active' => 'profile.me'],
         ['key' => 'attendance', 'label' => 'Attendance', 'icon' => 'clock', 'type' => 'item', 'route' => 'attendance.my', 'active' => 'attendance.my'],
         ['key' => 'leave', 'label' => 'Leave', 'icon' => 'calendar-days', 'type' => 'item', 'route' => 'time-off.my', 'active' => 'time-off.my', 'badge' => 'leave'],
+        ['key' => 'holidays', 'label' => 'Holidays', 'icon' => 'sun', 'type' => 'item', 'route' => 'holidays.calendar', 'active' => 'holidays.calendar'],
         ['key' => 'wfh', 'label' => 'Work From Home', 'icon' => 'home-modern', 'type' => 'item', 'route' => 'wfh.my', 'active' => 'wfh.my'],
         ['key' => 'overtime', 'label' => 'Overtime', 'icon' => 'bolt', 'type' => 'item', 'route' => 'overtime.my', 'active' => 'overtime.my', 'badge' => 'overtime'],
         ['key' => 'performance', 'label' => 'Performance', 'icon' => 'arrow-trending-up', 'type' => 'group'],

@@ -750,13 +750,9 @@ class MyTimeOff extends Component
         $gridStart = $monthStart->copy()->startOfWeek(Carbon::MONDAY);
         $gridEnd = $monthEnd->copy()->endOfWeek(Carbon::SUNDAY);
 
-        $holidays = PublicHoliday::query()
-            ->active()
-            ->whereBetween('date', [$gridStart->toDateString(), $gridEnd->toDateString()])
-            ->when($employee, fn ($q) => $q->forEmployee($employee))
-            ->get()
-            ->when($employee, fn ($c) => $c->filter->appliesToEmployee($employee))
-            ->keyBy(fn ($h) => $h->date->toDateString());
+        // The employee's own calendar (UK / IN) and scope — the same rule the
+        // leave submit uses. It listed other countries' holidays before.
+        $holidays = app(HolidayResolver::class)->keyedForEmployee($employee, $gridStart, $gridEnd);
 
         $calendarRequests = $employee
             ? $employee->leaveRequests()
@@ -893,10 +889,7 @@ class MyTimeOff extends Component
                         }
                         $cursor->addDay();
                     }
-                    $holCount = PublicHoliday::query()->active()
-                        ->whereBetween('date', [$ps->toDateString(), $pe->toDateString()])
-                        ->forEmployee($employee)->get()
-                        ->filter->appliesToEmployee($employee)
+                    $holCount = app(HolidayResolver::class)->keyedForEmployee($employee, $ps, $pe)
                         ->filter(fn ($h) => ! app(WorkingDayResolver::class)->isWeeklyOff($h->date))
                         ->count();
                     $leaveDays = max(0, $total - $weekend - $holCount);

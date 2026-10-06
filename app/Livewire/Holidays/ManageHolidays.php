@@ -3,14 +3,18 @@
 namespace App\Livewire\Holidays;
 
 use App\Enums\HolidayType;
+use App\Models\DecemberMandatoryDay;
 use App\Models\Department;
+use App\Models\HolidayWorkRequest;
 use App\Models\Office;
 use App\Models\PublicHoliday;
+use App\Services\Attendance\HolidayResolver;
 use App\Services\Attendance\WorkingDayResolver;
+use App\Services\SpreadsheetService;
 use Carbon\CarbonPeriod;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Response;
+use Illuminate\Support\Facades\DB;
 use Livewire\Component;
 
 /**
@@ -32,6 +36,14 @@ class ManageHolidays extends Component
     public string $filterStatus = 'active'; // active | archived | all
 
     public ?int $filterOffice = null;
+
+    /** Holiday calendar (country) filter: '' = every calendar. */
+    public string $filterCountry = '';
+
+    /** New MDL (Mandatory December Leave) shutdown date being added. */
+    public string $mdlDate = '';
+
+    public string $mdlDescription = 'Company shutdown';
 
     public string $calendarMonth; // Y-m-01
 
@@ -63,7 +75,10 @@ class ManageHolidays extends Component
             'category' => '',
             'color' => '',
             'description' => '',
-            'country' => 'IN',
+            // The company's holiday calendar — the one everyone follows unless
+            // an office or employee is opted into another.
+            'country' => $this->companyCalendar(),
+            'substitute_for_id' => null,
             'is_paid' => true,
             'is_optional' => false,
             'is_recurring' => false,
@@ -96,6 +111,7 @@ class ManageHolidays extends Component
             'color' => (string) $h->color,
             'description' => (string) $h->description,
             'country' => $h->country,
+            'substitute_for_id' => $h->substitute_for_id,
             'is_paid' => (bool) $h->is_paid,
             'is_optional' => (bool) $h->is_optional,
             'is_recurring' => (bool) $h->is_recurring,
@@ -113,11 +129,12 @@ class ManageHolidays extends Component
         $data = $this->validate([
             'form.name' => 'required|string|max:120',
             'form.date' => 'required|date',
-            'form.holiday_type' => 'required|in:national,state,festival,company,optional,branch',
+            'form.holiday_type' => 'required|in:'.collect(HolidayType::cases())->map->value->implode(','),
+            'form.substitute_for_id' => 'nullable|required_if:form.holiday_type,substitute|exists:public_holidays,id',
             'form.category' => 'nullable|string|max:60',
             'form.color' => 'nullable|string|max:20',
             'form.description' => 'nullable|string|max:1000',
-            'form.country' => 'required|string|max:5',
+            'form.country' => 'required|string|max:5|in:'.implode(',', $this->calendars()),
             'form.office_id' => 'nullable|exists:offices,id',
             'form.department_id' => 'nullable|exists:departments,id',
         ])['form'];
@@ -130,6 +147,7 @@ class ManageHolidays extends Component
             'color' => $data['color'] ?: null,
             'description' => $data['description'] ?: null,
             'country' => strtoupper($data['country']),
+            'substitute_for_id' => $data['holiday_type'] === HolidayType::Substitute->value ? ($this->form['substitute_for_id'] ?: null) : null,
             'is_paid' => (bool) $this->form['is_paid'],
             'is_optional' => (bool) $this->form['is_optional'] || $data['holiday_type'] === 'optional',
             'is_recurring' => (bool) $this->form['is_recurring'],
@@ -171,12 +189,85 @@ class ManageHolidays extends Component
         \Flux::toast($h->is_active ? 'Holiday restored.' : 'Holiday archived.', variant: $h->is_active ? 'success' : 'warning');
     }
 
+    /**
+     * Only a future holiday is deleted. A past one already shaped attendance,
+     * leave and pay, so it is archived instead, and one with holiday-work
+     * requests against it is never deleted.
+     */
     public function delete(int $id): void
     {
         abort_unless(Auth::user()->canManageSettings(), 403);
         $h = PublicHoliday::findOrFail($id);
+
+        if (! $h->date->isFuture()) {
+            \Flux::toast('Past holidays are kept for history — archive it instead.', variant: 'warning');
+
+            return;
+        }
+
+        if (HolidayWorkRequest::where('holiday_id', $h->id)->exists()) {
+            \Flux::toast('Holiday-work requests refer to this holiday — archive it instead.', variant: 'warning');
+
+            return;
+        }
+
         $h->delete();
         \Flux::toast('Holiday deleted.', variant: 'danger');
+    }
+
+    /** Add a Mandatory December Leave (company shutdown) date. */
+    public function addMdl(): void
+    {
+        abort_unless(Auth::user()->canManageSettings(), 403);
+
+        $this->validate([
+            'mdlDate' => ['required', 'date', 'after_or_equal:today', function (string $attribute, mixed $value, \Closure $fail) {
+                if (Carbon::parse($value)->month !== 12) {
+                    $fail('MDL dates fall in December.');
+                } elseif (DecemberMandatoryDay::whereDate('date', $value)->exists()) {
+                    $fail('That date is already an MDL date.');
+                }
+            }],
+            'mdlDescription' => ['nullable', 'string', 'max:120'],
+        ], [], ['mdlDate' => 'MDL date']);
+
+        DecemberMandatoryDay::create([
+            'year' => Carbon::parse($this->mdlDate)->year,
+            'date' => $this->mdlDate,
+            'description' => $this->mdlDescription ?: 'Company shutdown',
+        ]);
+
+        $this->reset('mdlDate');
+        \Flux::toast('MDL date added.', variant: 'success');
+    }
+
+    /** Remove a future MDL date (a past one already decided leave and pay). */
+    public function deleteMdl(int $id): void
+    {
+        abort_unless(Auth::user()->canManageSettings(), 403);
+        $day = DecemberMandatoryDay::findOrFail($id);
+
+        if (! Carbon::parse($day->date)->isFuture()) {
+            \Flux::toast('Past MDL dates are kept for history.', variant: 'warning');
+
+            return;
+        }
+
+        $day->delete();
+        \Flux::toast('MDL date removed.', variant: 'warning');
+    }
+
+    /** @return array<int, string> the holiday calendars in use (UK, IN, …) */
+    protected function calendars(): array
+    {
+        return collect(['UK', 'IN', $this->companyCalendar()])
+            ->merge(PublicHoliday::query()->distinct()->pluck('country'))
+            ->filter()->map(fn ($c) => strtoupper((string) $c))->unique()->values()->all();
+    }
+
+    protected function companyCalendar(): string
+    {
+        return DB::table('companies')->value('holiday_calendar') ?: HolidayResolver::FALLBACK_CALENDAR;
     }
 
     public function showDetail(int $id): void
@@ -200,19 +291,20 @@ class ManageHolidays extends Component
         ];
     }
 
+    /** Export through the spreadsheet writer, which quotes and escapes every cell. */
     public function exportCsv()
     {
         abort_unless(Auth::user()->canManageSettings(), 403);
-        $rows = $this->baseQuery()->orderBy('date')->get();
-        $csv = "Name,Date,Type,Category,Country,Paid,Optional,Recurring,Scope,Status\n";
-        foreach ($rows as $h) {
-            $scope = $h->office?->name ?? ($h->department?->name ?? 'Company-wide');
-            $csv .= '"'.$h->name.'","'.$h->date->toDateString().'","'.$h->typeLabel().'","'.($h->category ?? '')
-                .'","'.$h->country.'","'.($h->is_paid ? 'Yes' : 'No').'","'.($h->is_optional ? 'Yes' : 'No')
-                .'","'.($h->is_recurring ? 'Yes' : 'No').'","'.$scope.'","'.($h->is_active ? 'Active' : 'Archived')."\"\n";
-        }
+        $rows = $this->baseQuery()->orderBy('date')->get()->map(fn (PublicHoliday $h) => [
+            $h->name, $h->date->toDateString(), $h->typeLabel(), $h->category, $h->country,
+            $h->is_paid ? 'Yes' : 'No', $h->is_optional ? 'Yes' : 'No', $h->is_recurring ? 'Yes' : 'No',
+            $h->office?->name ?? ($h->department?->name ?? 'Company-wide'), $h->is_active ? 'Active' : 'Archived',
+        ])->all();
 
-        return Response::streamDownload(fn () => print ($csv), 'holidays-'.$this->year.'.csv', ['Content-Type' => 'text/csv']);
+        return app(SpreadsheetService::class)->download(
+            ['Name', 'Date', 'Type', 'Category', 'Country', 'Paid', 'Optional', 'Recurring', 'Scope', 'Status'],
+            $rows, 'holidays-'.$this->year.'.csv',
+        );
     }
 
     // ── Navigation ────────────────────────────────────────────────────────────
@@ -242,6 +334,7 @@ class ManageHolidays extends Component
             ->when($this->filterStatus === 'archived', fn ($q) => $q->where('is_active', false))
             ->when($this->filterType !== '', fn ($q) => $q->where('holiday_type', $this->filterType))
             ->when($this->filterOffice, fn ($q) => $q->where('office_id', $this->filterOffice))
+            ->when($this->filterCountry !== '', fn ($q) => $q->where('country', $this->filterCountry))
             ->whereYear('date', $this->year);
     }
 
@@ -278,6 +371,11 @@ class ManageHolidays extends Component
             'types' => HolidayType::options(),
             'offices' => Office::orderBy('name')->get(['id', 'name']),
             'departments' => Department::orderBy('name')->get(['id', 'name']),
+            'calendars' => $this->calendars(),
+            'substituteOptions' => PublicHoliday::whereYear('date', $this->year)
+                ->where('holiday_type', '!=', HolidayType::Substitute->value)
+                ->orderBy('date')->get(['id', 'name', 'date', 'country']),
+            'mdlDays' => DecemberMandatoryDay::whereYear('date', $this->year)->orderBy('date')->get(),
             'stats' => [
                 'total' => $holidays->count(),
                 'paid' => $holidays->where('is_paid', true)->count(),

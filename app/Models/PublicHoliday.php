@@ -20,7 +20,7 @@ use Illuminate\Support\Carbon;
  * attendance/leave/report consumer keep working unchanged.
  */
 #[Fillable([
-    'date', 'name', 'country', 'jurisdiction', 'holiday_type', 'category', 'color', 'description', 'source',
+    'date', 'name', 'country', 'jurisdiction', 'holiday_type', 'substitute_for_id', 'category', 'color', 'description', 'source',
     'is_paid', 'is_optional', 'is_recurring', 'is_active',
     'office_id', 'department_id', 'applicable_employee_ids', 'created_by',
 ])]
@@ -60,6 +60,12 @@ class PublicHoliday extends Model
     public function department(): BelongsTo
     {
         return $this->belongsTo(Department::class);
+    }
+
+    /** The holiday a substitute holiday replaces. */
+    public function substituteFor(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'substitute_for_id');
     }
 
     public function creator(): BelongsTo

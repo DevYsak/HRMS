@@ -15,6 +15,9 @@
             <button wire:click="setYear({{ $year + 1 }})" class="flex size-7 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-orange-50 hover:text-orange-500"><flux:icon.chevron-right class="size-4" /></button>
         </div>
         <a href="{{ route('settings.holiday-pay') }}" class="inline-flex items-center gap-1.5 rounded-xl border border-orange-100 bg-white dark:bg-zinc-900 px-3 py-2 text-xs font-bold text-zinc-600 dark:text-zinc-300 shadow-sm transition hover:bg-orange-50"><flux:icon.banknotes class="size-4 text-orange-500" /> Pay Policy</a>
+        @if(auth()->user()->hasPermission('data_import') && Route::has('settings.import-export'))
+            <a href="{{ route('settings.import-export') }}" wire:navigate class="inline-flex items-center gap-1.5 rounded-xl border border-orange-100 bg-white dark:bg-zinc-900 px-3 py-2 text-xs font-bold text-zinc-600 dark:text-zinc-300 shadow-sm transition hover:bg-orange-50"><flux:icon.arrow-up-tray class="size-4 text-orange-500" /> Import</a>
+        @endif
         <button wire:click="exportCsv" class="inline-flex items-center gap-1.5 rounded-xl border border-orange-100 bg-white dark:bg-zinc-900 px-3 py-2 text-xs font-bold text-zinc-600 dark:text-zinc-300 shadow-sm transition hover:bg-orange-50"><flux:icon.arrow-down-tray class="size-4 text-orange-500" /> Export</button>
         <button wire:click="openCreate" class="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 px-4 py-2 text-xs font-bold text-white shadow-lg shadow-orange-300/40 transition hover:shadow-xl"><flux:icon.plus class="size-4" /> Add Holiday</button>
     </div>
@@ -40,6 +43,8 @@
     <div class="ml-auto flex flex-wrap items-center gap-2">
         <x-clean-select model="filterType" :live="true"
             :options="array_merge([['value' => '', 'label' => 'All types']], collect($types)->map(fn ($t) => ['value' => $t['value'], 'label' => $t['label']])->all())" />
+        <x-clean-select model="filterCountry" :live="true"
+            :options="array_merge([['value' => '', 'label' => 'All calendars']], collect($calendars)->map(fn ($c) => ['value' => $c, 'label' => $c.' calendar'])->all())" />
         <x-clean-select model="filterOffice" :live="true"
             :options="array_merge([['value' => '', 'label' => 'All branches']], collect($offices)->map(fn ($o) => ['value' => $o->id, 'label' => $o->name])->all())" />
         <x-clean-select model="filterStatus" :live="true"
@@ -121,7 +126,9 @@
                                     <button wire:click="openEdit({{ $h->id }})" class="rounded-lg p-1.5 text-zinc-400 transition hover:bg-orange-50 hover:text-orange-500" title="Edit"><flux:icon.pencil-square class="size-4" /></button>
                                     <button wire:click="duplicate({{ $h->id }})" class="rounded-lg p-1.5 text-zinc-400 transition hover:bg-orange-50 hover:text-orange-500" title="Duplicate to next year"><flux:icon.document-duplicate class="size-4" /></button>
                                     <button wire:click="toggleArchive({{ $h->id }})" class="rounded-lg p-1.5 text-zinc-400 transition hover:bg-amber-50 hover:text-amber-500" title="{{ $h->is_active ? 'Archive' : 'Restore' }}"><flux:icon :icon="$h->is_active ? 'archive-box' : 'archive-box-arrow-down'" class="size-4" /></button>
-                                    <button wire:click="delete({{ $h->id }})" wire:confirm="Delete this holiday permanently?" class="rounded-lg p-1.5 text-zinc-400 transition hover:bg-rose-50 hover:text-rose-500" title="Delete"><flux:icon.trash class="size-4" /></button>
+                                    @if($h->date->isFuture())
+                                        <button wire:click="delete({{ $h->id }})" wire:confirm="Delete this future holiday permanently?" class="rounded-lg p-1.5 text-zinc-400 transition hover:bg-rose-50 hover:text-rose-500" title="Delete"><flux:icon.trash class="size-4" /></button>
+                                    @endif
                                 </div>
                             </td>
                         </tr>
@@ -159,6 +166,32 @@
     </div>
 @endif
 
+{{-- ═══════════════ MDL SHUTDOWN DATES ═══════════════ --}}
+<div class="mt-4 rounded-[18px] border border-orange-100/70 bg-white p-4 shadow-sm dark:bg-zinc-900">
+    <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <h3 class="flex items-center gap-2 text-sm font-black text-zinc-900 dark:text-white"><flux:icon.building-office class="size-4 text-rose-500" /> Mandatory December Leave (MDL) · {{ $year }}</h3>
+        <p class="text-[11px] text-zinc-400">Company shutdown days: never use anyone's leave balance.</p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+        @forelse($mdlDays as $m)
+            <span wire:key="mdl-{{ $m->id }}" class="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">
+                {{ \Illuminate\Support\Carbon::parse($m->date)->format('D d M') }}
+                @if(\Illuminate\Support\Carbon::parse($m->date)->isFuture())
+                    <button wire:click="deleteMdl({{ $m->id }})" wire:confirm="Remove this MDL date?" class="text-rose-400 hover:text-rose-600" title="Remove"><flux:icon.x-mark class="size-3.5" /></button>
+                @endif
+            </span>
+        @empty
+            <span class="text-xs italic text-zinc-400">No MDL dates for {{ $year }}.</span>
+        @endforelse
+    </div>
+    <form wire:submit="addMdl" class="mt-3 flex flex-wrap items-end gap-2">
+        <flux:input type="date" wire:model="mdlDate" label="Add MDL date" class="max-w-[11rem]" />
+        <flux:input wire:model="mdlDescription" label="Description" class="max-w-[16rem]" />
+        <flux:button type="submit" size="sm">Add</flux:button>
+    </form>
+    @error('mdlDate')<p class="mt-1 text-xs text-rose-500">{{ $message }}</p>@enderror
+</div>
+
 {{-- ═══════════════ CREATE / EDIT MODAL ═══════════════ --}}
 @if($showForm)
     <div class="fixed inset-0 z-50 flex items-center justify-center p-4" x-data x-on:keydown.escape.window="$wire.set('showForm', false)">
@@ -173,9 +206,20 @@
                     <div class="col-span-2"><flux:input wire:model="form.name" label="Holiday Name" placeholder="e.g. Diwali" /></div>
                     <flux:input wire:model="form.date" type="date" label="Date" />
                     <div>
-                        <x-clean-select model="form.holiday_type" label="Type" :live="false"
+                        <x-clean-select model="form.holiday_type" label="Type" :live="true"
                             :options="collect($types)->map(fn ($t) => ['value' => $t['value'], 'label' => $t['label']])->all()" />
                     </div>
+                    <div>
+                        <x-clean-select model="form.country" label="Holiday calendar" :live="false"
+                            :options="collect($calendars)->map(fn ($c) => ['value' => $c, 'label' => $c])->all()" />
+                    </div>
+                    @if(($form['holiday_type'] ?? '') === 'substitute')
+                        <div class="col-span-2">
+                            <x-clean-select model="form.substitute_for_id" label="Substitute for" :live="false"
+                                :options="array_merge([['value' => '', 'label' => 'Choose the holiday it replaces']], $substituteOptions->map(fn ($h) => ['value' => $h->id, 'label' => $h->name.' — '.$h->date->format('d M Y').' ('.$h->country.')'])->all())" />
+                            @error('form.substitute_for_id')<p class="text-xs text-rose-500">{{ $message }}</p>@enderror
+                        </div>
+                    @endif
                     <flux:input wire:model="form.category" label="Category" placeholder="Optional" />
                     <div>
                         <flux:label>Color</flux:label>

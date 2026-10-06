@@ -16,6 +16,9 @@ enum HolidayType: string
     case Optional = 'optional';
     case Branch = 'branch';
 
+    /** Replaces a holiday that fell on a weekly off (e.g. a moved bank holiday). */
+    case Substitute = 'substitute';
+
     public function label(): string
     {
         return match ($this) {
@@ -25,6 +28,7 @@ enum HolidayType: string
             self::Company => 'Company Holiday',
             self::Optional => 'Optional Holiday',
             self::Branch => 'Branch Holiday',
+            self::Substitute => 'Substitute Holiday',
         };
     }
 
@@ -38,6 +42,7 @@ enum HolidayType: string
             self::Company => '#F97316',    // orange
             self::Optional => '#0EA5E9',   // sky
             self::Branch => '#14B8A6',     // teal
+            self::Substitute => '#6366F1', // indigo
         };
     }
 

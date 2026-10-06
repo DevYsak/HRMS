@@ -22,10 +22,10 @@ function menuAdmin(): User
 test('the employee menu is fully visible by default (fail-open)', function () {
     $items = app(EmployeeMenu::class)->visible();
 
-    // 13: My Onboarding joined the catalog (employees previously had no route
-    // to their own onboarding tasks), then Help & Guide.
-    expect($items)->toHaveCount(13);
-    expect(collect($items)->pluck('key'))->toContain('dashboard', 'attendance', 'onboarding', 'inbox', 'help');
+    // 14: My Onboarding joined the catalog (employees previously had no route
+    // to their own onboarding tasks), then Help & Guide, then Holidays.
+    expect($items)->toHaveCount(14);
+    expect(collect($items)->pluck('key'))->toContain('dashboard', 'attendance', 'onboarding', 'inbox', 'help', 'holidays');
 });
 
 test('disabling an item hides it from the visible menu', function () {

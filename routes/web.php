@@ -36,6 +36,7 @@ use App\Livewire\ExecutiveDashboard;
 use App\Livewire\FinanceDashboard;
 use App\Livewire\Help\EmployeeGuide;
 use App\Livewire\Help\GettingStarted;
+use App\Livewire\Holidays\HolidayCalendar;
 use App\Livewire\HrAdminDashboard;
 use App\Livewire\ManagerDashboard;
 use App\Livewire\NotificationsPage;
@@ -86,13 +87,13 @@ use App\Livewire\Settings\DataManagement;
 use App\Livewire\Settings\DepartmentManager;
 use App\Livewire\Settings\EmploymentTypeManager;
 use App\Livewire\Settings\ImportExportCentre;
-use App\Livewire\Settings\ProfileFieldSettings;
 use App\Livewire\Settings\JobTitleManager;
 use App\Livewire\Settings\MenuSettings;
 use App\Livewire\Settings\ModuleSettings;
 use App\Livewire\Settings\NotificationSettings;
 use App\Livewire\Settings\OnboardingTemplateManager;
 use App\Livewire\Settings\OnboardingTemplateTaskManager;
+use App\Livewire\Settings\ProfileFieldSettings;
 use App\Livewire\Settings\RoleManager;
 use App\Livewire\Settings\SalaryCycleManager;
 use App\Livewire\Settings\WorkModeManager;
@@ -186,6 +187,9 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/help/employee-guide', EmployeeGuide::class)->name('help.employee-guide');
     // New-employee tutorial: first sign-in, password, profile and leave.
     Route::get('/help/getting-started', GettingStarted::class)->name('help.getting-started');
+
+    // Holiday calendar — every employee, their own calendar only.
+    Route::get('/holidays', HolidayCalendar::class)->name('holidays.calendar');
 
     // --------------------------------------------------
     // Employees module
