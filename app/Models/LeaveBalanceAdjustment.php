@@ -26,6 +26,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'reason',
     'remarks',
     'internal_note',
+    // Optional supporting document (private disk), set when created.
+    'document_path',
     'adjusted_by',
     'adjusted_at',
 ])]

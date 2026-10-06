@@ -8,12 +8,14 @@ use App\Models\EmployeeLeaveOverride;
 use App\Models\LeaveBalance;
 use App\Models\LeaveCarryForwardTransaction;
 use App\Models\LeaveEncashment;
+use App\Models\LeaveLedgerEntry;
 use App\Models\LeaveRequest;
 use App\Models\LeaveType;
 use App\Models\LeaveYear;
 use App\Models\User;
 use App\Notifications\LeaveBalanceChangedNotification;
 use App\Services\Leave\EmployeeLeaveOverrideService;
+use App\Services\Leave\LeaveAdminActionService;
 use App\Services\Leave\LeaveBalanceCalculator;
 use App\Services\Leave\LeaveCarryForwardService;
 use App\Services\Leave\LeaveManagementService;
@@ -21,6 +23,7 @@ use App\Services\Leave\LeaveStatementService;
 use App\Services\Leave\LeaveYearResolver;
 use App\Services\LeaveBalanceService;
 use App\Services\LeaveService;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -39,6 +42,12 @@ use Throwable;
  * employee override and apply-on-behalf, each behind its own permission,
  * each needing a reason, each audited and posted through the ledger by the
  * service it calls. History and the month-wise statement read the ledger.
+ *
+ * HR corrections (LeaveAdminActionService): record leave as already
+ * approved, correct or cancel approved leave, and reverse a single HR
+ * ledger movement. High-impact changes need an explicit confirmation, an
+ * optional supporting document is stored privately, and nothing is ever
+ * deleted — every change is a new, audited entry.
  */
 class EmployeeLeaveDetail extends Component
 {
@@ -119,6 +128,21 @@ class EmployeeLeaveDetail extends Component
 
     /** @var TemporaryUploadedFile|null */
     public $attachment = null;
+
+    /** Apply on behalf: record the leave as already approved (record_approved_leave). */
+    public bool $recordApproved = false;
+
+    /** The leave request a Correct / Cancel action works on. */
+    public ?int $targetRequestId = null;
+
+    /** The ledger entry a Reverse action works on. */
+    public ?int $targetEntryId = null;
+
+    /** Explicit confirmation, required for high-impact changes. */
+    public bool $confirmed = false;
+
+    /** Actions that need the confirmation box ticked before they run. */
+    public const HIGH_IMPACT = ['deduct', 'correct', 'cancel_leave', 'correct_leave', 'reverse_entry'];
 
     public function mount(Employee $employee, LeaveYearResolver $years): void
     {
@@ -253,7 +277,7 @@ class EmployeeLeaveDetail extends Component
         $this->authorize($this->permissionFor($action));
 
         $this->resetErrorBag();
-        $this->reset(['days', 'targetBalance', 'reason', 'internalNote', 'expiresOn', 'startDate', 'endDate', 'isHalfDay', 'attachment']);
+        $this->reset(['days', 'targetBalance', 'reason', 'internalNote', 'expiresOn', 'startDate', 'endDate', 'isHalfDay', 'attachment', 'recordApproved', 'confirmed', 'targetRequestId', 'targetEntryId']);
         $this->action = $action;
 
         // No type passed and no balance to take one from: refuse with a
@@ -280,6 +304,47 @@ class EmployeeLeaveDetail extends Component
         }
     }
 
+    /** Correct or cancel one of this employee's leave requests. */
+    public function openRequestAction(string $action, int $requestId): void
+    {
+        abort_unless(in_array($action, ['cancel_leave', 'correct_leave'], true), 404);
+        $this->authorize($this->permissionFor($action));
+
+        $request = LeaveRequest::where('employee_id', $this->employee->id)->findOrFail($requestId);
+
+        $this->resetErrorBag();
+        $this->reset(['days', 'targetBalance', 'reason', 'internalNote', 'expiresOn', 'attachment', 'recordApproved', 'confirmed', 'targetEntryId']);
+        $this->action = $action;
+        $this->targetRequestId = $request->id;
+        $this->formTypeId = $request->leave_type_id;
+        $this->startDate = $request->start_date->toDateString();
+        $this->endDate = $request->end_date->toDateString();
+        $this->isHalfDay = (bool) $request->is_half_day;
+        $this->notifyEmployee = true;
+    }
+
+    /** Reverse one HR ledger movement (credit, debit or add-on lot). */
+    public function openReverseEntry(int $entryId): void
+    {
+        $this->authorize($this->permissionFor('reverse_entry'));
+
+        $entry = LeaveLedgerEntry::where('employee_id', $this->employee->id)->findOrFail($entryId);
+
+        $this->resetErrorBag();
+        $this->reset(['days', 'targetBalance', 'reason', 'internalNote', 'expiresOn', 'attachment', 'recordApproved', 'confirmed', 'targetRequestId']);
+        $this->action = 'reverse_entry';
+        $this->targetEntryId = $entry->id;
+        $this->formTypeId = $entry->leave_type_id;
+    }
+
+    /** Ledger entries that have already been reversed (their Reverse button is hidden). */
+    #[Computed]
+    public function reversedEntryIds(): array
+    {
+        return LeaveLedgerEntry::where('employee_id', $this->employee->id)
+            ->whereNotNull('reverses_entry_id')->pluck('reverses_entry_id')->map(fn ($id) => (int) $id)->all();
+    }
+
     public function closeAction(): void
     {
         $this->action = null;
@@ -303,6 +368,11 @@ class EmployeeLeaveDetail extends Component
             return;
         }
 
+        // High-impact changes: confirmed explicitly, checked here, not only in the view.
+        if (in_array($this->action, self::HIGH_IMPACT, true)) {
+            $this->validate(['confirmed' => ['accepted']], ['confirmed.accepted' => 'Tick the box to confirm this change.']);
+        }
+
         try {
             match ($this->action) {
                 'add' => $this->doAdd($hr),
@@ -311,10 +381,13 @@ class EmployeeLeaveDetail extends Component
                 'override' => $this->doOverride($hr),
                 'apply' => $this->doApply($hr),
                 'carry_forward' => $this->doCarryForward($hr),
+                'cancel_leave' => $this->doCancelLeave($hr),
+                'correct_leave' => $this->doCorrectLeave($hr),
+                'reverse_entry' => $this->doReverseEntry($hr),
             };
         } catch (ValidationException $e) {
             throw $e;
-        } catch (\DomainException|\InvalidArgumentException|\RuntimeException $e) {
+        } catch (\DomainException|\InvalidArgumentException|\RuntimeException|AuthorizationException $e) {
             $this->addError('form', $e->getMessage());
 
             return;
@@ -326,7 +399,7 @@ class EmployeeLeaveDetail extends Component
         }
 
         $this->action = null;
-        unset($this->balances, $this->history, $this->statement, $this->overrides, $this->requests, $this->carryHistory, $this->carryAudit, $this->carryInfo);
+        unset($this->balances, $this->history, $this->statement, $this->overrides, $this->requests, $this->carryHistory, $this->carryAudit, $this->carryInfo, $this->reversedEntryIds);
     }
 
     public function startReverseCarryForward(int $transactionId): void
@@ -409,6 +482,7 @@ class EmployeeLeaveDetail extends Component
             'expiresOn' => ['nullable', 'date', 'after_or_equal:effectiveDate'],
             'reason' => ['required', 'string', 'min:3', 'max:500'],
             'internalNote' => ['nullable', 'string', 'max:1000'],
+            'attachment' => self::DOCUMENT_RULES,
         ]);
 
         // A plain correction lands in the adjustment bucket; every other kind
@@ -422,6 +496,7 @@ class EmployeeLeaveDetail extends Component
             $this->employee, $type, 'credit', (float) $this->days, $this->reason, '', $hr, $this->year->legacyYear(),
             $category, $this->addOnType, Carbon::parse($this->effectiveDate),
             $this->expiresOn ? Carbon::parse($this->expiresOn) : null, $this->internalNote ?: null,
+            $this->storedDocument(),
         );
 
         $this->notify($type, 'add', (float) $this->days);
@@ -433,14 +508,18 @@ class EmployeeLeaveDetail extends Component
         $this->validate([
             'formTypeId' => ['required', 'exists:leave_types,id'],
             'days' => ['required', 'numeric', 'min:0.5', 'max:365'],
+            'effectiveDate' => ['required', 'date'],
             'reason' => ['required', 'string', 'min:3', 'max:500'],
             'internalNote' => ['nullable', 'string', 'max:1000'],
+            'attachment' => self::DOCUMENT_RULES,
         ]);
 
         $type = LeaveType::findOrFail($this->formTypeId);
         app(LeaveBalanceService::class)->adjust(
             $this->employee, $type, 'debit', (float) $this->days, $this->reason, '', $hr, $this->year->legacyYear(),
+            effectiveDate: Carbon::parse($this->effectiveDate),
             internalNote: $this->internalNote ?: null,
+            documentPath: $this->storedDocument(),
         );
 
         $this->notify($type, 'deduct', (float) $this->days);
@@ -452,13 +531,16 @@ class EmployeeLeaveDetail extends Component
         $this->validate([
             'formTypeId' => ['required', 'exists:leave_types,id'],
             'targetBalance' => ['required', 'numeric', 'min:0', 'max:365'],
+            'effectiveDate' => ['required', 'date'],
             'reason' => ['required', 'string', 'min:3', 'max:500'],
             'internalNote' => ['nullable', 'string', 'max:1000'],
+            'attachment' => self::DOCUMENT_RULES,
         ]);
 
         $type = LeaveType::findOrFail($this->formTypeId);
         app(LeaveBalanceService::class)->setCorrectBalance(
             $this->employee, $type, (float) $this->targetBalance, $this->reason, '', $hr, $this->year->legacyYear(), $this->internalNote ?: null,
+            Carbon::parse($this->effectiveDate), $this->storedDocument(),
         );
 
         $this->notify($type, 'correct', 0);
@@ -509,6 +591,19 @@ class EmployeeLeaveDetail extends Component
         }
 
         $type = LeaveType::findOrFail($this->formTypeId);
+
+        if ($this->recordApproved) {
+            app(LeaveAdminActionService::class)->recordApproved(
+                $hr, $this->employee, $type, $this->startDate, $this->isHalfDay ? $this->startDate : $this->endDate, $this->reason,
+                $this->isHalfDay, $this->isHalfDay ? $this->halfDayPeriod : null, $this->paymentStatus,
+                $this->internalNote ?: null, $this->notifyEmployee, $attachments,
+            );
+
+            session()->flash('success', "{$type->name} recorded as approved for {$this->employee->user?->name}; the balance was updated.");
+
+            return;
+        }
+
         app(LeaveService::class)->applyOnBehalf(
             $hr, $this->employee, $type, $this->startDate, $this->isHalfDay ? $this->startDate : $this->endDate, $this->reason,
             $this->isHalfDay, $this->isHalfDay ? $this->halfDayPeriod : null, $this->paymentStatus,
@@ -516,6 +611,59 @@ class EmployeeLeaveDetail extends Component
         );
 
         session()->flash('success', "{$type->name} applied on behalf of {$this->employee->user?->name}; it now follows the approval chain.");
+    }
+
+    private function doCancelLeave(User $hr): void
+    {
+        $this->validate([
+            'reason' => ['required', 'string', 'min:3', 'max:500'],
+            'attachment' => self::DOCUMENT_RULES,
+        ]);
+
+        $request = LeaveRequest::where('employee_id', $this->employee->id)->findOrFail($this->targetRequestId);
+        app(LeaveAdminActionService::class)->cancelApproved($request, $hr, $this->reason, $this->storedDocument());
+
+        session()->flash('success', 'Leave cancelled; any paid days were returned to the balance. The history keeps both entries.');
+    }
+
+    private function doCorrectLeave(User $hr): void
+    {
+        $this->validate([
+            'formTypeId' => ['required', 'exists:leave_types,id'],
+            'startDate' => ['required', 'date'],
+            'endDate' => ['required', 'date', 'after_or_equal:startDate'],
+            'reason' => ['required', 'string', 'min:3', 'max:500'],
+        ]);
+
+        $request = LeaveRequest::where('employee_id', $this->employee->id)->findOrFail($this->targetRequestId);
+        app(LeaveAdminActionService::class)->correctApproved($request, $hr, [
+            'leave_type_id' => (int) $this->formTypeId,
+            'start_date' => $this->startDate,
+            'end_date' => $this->isHalfDay ? $this->startDate : $this->endDate,
+            'is_half_day' => $this->isHalfDay,
+        ], $this->reason);
+
+        session()->flash('success', 'Approved leave corrected; the old days were returned and the new days deducted.');
+    }
+
+    private function doReverseEntry(User $hr): void
+    {
+        $this->validate(['reason' => ['required', 'string', 'min:3', 'max:500']]);
+
+        $entry = LeaveLedgerEntry::where('employee_id', $this->employee->id)->findOrFail($this->targetEntryId);
+        app(LeaveAdminActionService::class)->reverseEntry($entry, $hr, $this->reason);
+
+        session()->flash('success', 'Ledger entry reversed. The original entry and the reversal both stay in the history.');
+    }
+
+    /** Supporting documents: optional, private, PDF or image up to 5 MB. */
+    private const DOCUMENT_RULES = ['nullable', 'file', 'max:5120', 'mimes:pdf,jpg,jpeg,png'];
+
+    private function storedDocument(): ?string
+    {
+        return $this->attachment
+            ? app(LeaveAdminActionService::class)->storeDocument($this->attachment, $this->employee)
+            : null;
     }
 
     private function notify(LeaveType $type, string $kind, float $days): void
@@ -545,6 +693,8 @@ class EmployeeLeaveDetail extends Component
             'override' => 'override_leave_policy',
             'apply' => 'apply_leave_on_behalf',
             'carry_forward' => 'manage_leave_carry_forward',
+            'cancel_leave', 'correct_leave' => 'manage_approved_leave',
+            'reverse_entry' => 'correct_leave_balance',
             default => abort(404),
         };
     }
@@ -556,6 +706,9 @@ class EmployeeLeaveDetail extends Component
             'leaveTypes' => LeaveType::whereNull('deleted_at')->orderBy('name')->get(),
             'addOnTypes' => LeaveBalanceService::ADD_ON_TYPES,
             'entryTypes' => LeaveStatementService::LABELS,
+            'reversibleTypes' => LeaveAdminActionService::REVERSIBLE_TYPES,
+            'targetRequest' => $this->targetRequestId ? LeaveRequest::with('leaveType')->find($this->targetRequestId) : null,
+            'targetEntry' => $this->targetEntryId ? LeaveLedgerEntry::with('leaveType')->find($this->targetEntryId) : null,
         ]);
     }
 }

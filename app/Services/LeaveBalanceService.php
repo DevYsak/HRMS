@@ -193,6 +193,7 @@ class LeaveBalanceService
         ?CarbonInterface $effectiveDate = null,
         ?CarbonInterface $expiresOn = null,
         ?string $internalNote = null,
+        ?string $documentPath = null,
     ): LeaveBalanceAdjustment {
         if (! \in_array($action, ['credit', 'debit'], true)) {
             throw new \InvalidArgumentException("Action must be 'credit' or 'debit'.");
@@ -231,7 +232,7 @@ class LeaveBalanceService
         // March would otherwise land in a year that has not begun.
         $year ??= app(LeaveYearResolver::class)->legacyYearFor();
 
-        return DB::transaction(function () use ($employee, $leaveType, $action, $days, $reason, $remarks, $adjuster, $year, $category, $addOnType, $effectiveDate, $expiresOn, $internalNote) {
+        return DB::transaction(function () use ($employee, $leaveType, $action, $days, $reason, $remarks, $adjuster, $year, $category, $addOnType, $effectiveDate, $expiresOn, $internalNote, $documentPath) {
             $leaveYear = app(LeaveYearResolver::class)->forDate(Carbon::create($year, 12, 31));
             $effectiveDate ??= Carbon::today()->between($leaveYear->starts_on, $leaveYear->ends_on)
                 ? Carbon::today()
@@ -300,6 +301,7 @@ class LeaveBalanceService
                 'reason' => $reason,
                 'remarks' => $remarks ?: null,
                 'internal_note' => $internalNote ?: null,
+                'document_path' => $documentPath ?: null,
                 'adjusted_by' => $adjuster->id,
                 'adjusted_at' => now(),
             ]);
@@ -387,6 +389,8 @@ class LeaveBalanceService
         User $adjuster,
         ?int $year = null,
         ?string $internalNote = null,
+        ?CarbonInterface $effectiveDate = null,
+        ?string $documentPath = null,
     ): LeaveBalanceAdjustment {
         if ($correctAvailable < 0) {
             throw new \DomainException('A corrected balance cannot be negative.');
@@ -409,7 +413,9 @@ class LeaveBalanceService
         return $this->adjust(
             $employee, $leaveType, $delta > 0 ? 'credit' : 'debit', abs($delta),
             $reason, $remarks, $adjuster, $year, self::CATEGORY_CORRECTION,
+            effectiveDate: $effectiveDate,
             internalNote: $internalNote,
+            documentPath: $documentPath,
         );
     }
 

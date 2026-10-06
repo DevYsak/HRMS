@@ -460,7 +460,8 @@ class AllTimeOff extends Component
 
     public function openNewModal(): void
     {
-        abort_unless(Auth::user()->canApproveLeave(), 403);
+        // Filing leave for someone else is "apply on behalf", its own permission.
+        abort_unless(Auth::user()->canApproveLeave() && Auth::user()->hasPermission('apply_leave_on_behalf'), 403);
 
         $this->newForm = ['employee_id' => '', 'leave_type_id' => '', 'start_date' => '', 'end_date' => '', 'reason' => '', 'is_half_day' => false];
         $this->resetErrorBag();
@@ -477,7 +478,7 @@ class AllTimeOff extends Component
 
     public function submitNewRequest(): void
     {
-        abort_unless(Auth::user()->canApproveLeave(), 403);
+        abort_unless(Auth::user()->canApproveLeave() && Auth::user()->hasPermission('apply_leave_on_behalf'), 403);
 
         $this->validate([
             'newForm.employee_id' => 'required|exists:employees,id',
@@ -491,8 +492,11 @@ class AllTimeOff extends Component
         abort_unless(Auth::user()->coversEmployee($employee), 403);
         $leaveType = LeaveType::findOrFail($this->newForm['leave_type_id']);
 
+        // Through applyOnBehalf: it records who filed it (applied_by) and
+        // audits LEAVE_APPLIED_ON_BEHALF; the bare submitRequest did neither.
         try {
-            app(LeaveService::class)->submitRequest(
+            app(LeaveService::class)->applyOnBehalf(
+                Auth::user(),
                 $employee,
                 $leaveType,
                 $this->newForm['start_date'],

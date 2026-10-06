@@ -21,11 +21,13 @@
                     <flux:icon.arrow-up-tray class="size-4 shrink-0" />
                     <span>Export</span>
                 </button>
+                @can('apply_leave_on_behalf')
                 <button type="button" wire:click="openNewModal"
                     class="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-black text-orange-700 shadow-lg shadow-black/20 transition-all hover:bg-violet-50">
                     <flux:icon.plus class="size-4 shrink-0" />
                     <span>New Leave Request</span>
                 </button>
+                @endcan
             </div>
         </div>
     </div>

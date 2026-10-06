@@ -123,6 +123,11 @@
                         <div class="text-right">
                             <div class="font-bold {{ $h['days'] < 0 ? 'text-rose-600' : 'text-emerald-600' }}">{{ $signed($h['days']) }}</div>
                             <div class="text-[11px] text-[#98A2B3]">bal. {{ $fmt($h['running']) }}</div>
+                            @can('correct_leave_balance')
+                                @if(in_array($h['entry_type'], $reversibleTypes, true) && ! $h['reversal'] && ! in_array($h['id'], $this->reversedEntryIds, true))
+                                    <button type="button" wire:click="openReverseEntry({{ $h['id'] }})" class="mt-1 text-[11px] font-semibold text-rose-600 hover:underline">Reverse</button>
+                                @endif
+                            @endcan
                         </div>
                     </li>
                 @empty
@@ -206,7 +211,7 @@
         <div class="overflow-x-auto rounded-2xl border border-[#EAECF0] bg-white shadow-sm dark:border-white/10 dark:bg-zinc-900">
             <table class="min-w-full text-xs">
                 <thead class="bg-[#F9FAFB] text-left text-[10px] font-bold uppercase tracking-wider text-[#667085] dark:bg-white/5">
-                    <tr><th class="px-3 py-2">Type</th><th class="px-3 py-2">Dates</th><th class="px-3 py-2 text-right">Days</th><th class="px-3 py-2">Status</th><th class="px-3 py-2">Applied by</th><th class="px-3 py-2">HR note</th></tr>
+                    <tr><th class="px-3 py-2">Type</th><th class="px-3 py-2">Dates</th><th class="px-3 py-2 text-right">Days</th><th class="px-3 py-2">Status</th><th class="px-3 py-2">Applied by</th><th class="px-3 py-2">HR note</th><th class="px-3 py-2 text-right">HR actions</th></tr>
                 </thead>
                 <tbody class="divide-y divide-[#EAECF0] dark:divide-white/5">
                     @forelse($this->requests as $r)
@@ -217,9 +222,19 @@
                             <td class="px-3 py-2"><flux:badge size="sm">{{ str_replace('_', ' ', $r->status) }}</flux:badge></td>
                             <td class="px-3 py-2">{{ $r->applied_by_user_id ? 'HR (on behalf)' : 'Employee' }}</td>
                             <td class="px-3 py-2 text-[#667085]">{{ $r->hr_internal_note ?? '—' }}</td>
+                            <td class="whitespace-nowrap px-3 py-2 text-right">
+                                @can('manage_approved_leave')
+                                    @if($r->status === 'approved')
+                                        <flux:button size="xs" wire:click="openRequestAction('correct_leave', {{ $r->id }})">Correct</flux:button>
+                                    @endif
+                                    @if(in_array($r->status, ['pending', 'pending_hr', 'approved'], true))
+                                        <flux:button size="xs" variant="danger" wire:click="openRequestAction('cancel_leave', {{ $r->id }})">Cancel</flux:button>
+                                    @endif
+                                @endcan
+                            </td>
                         </tr>
                     @empty
-                        <tr><td colspan="6" class="px-3 py-8 text-center text-sm text-[#98A2B3]">No requests in {{ $this->year->label }}.</td></tr>
+                        <tr><td colspan="7" class="px-3 py-8 text-center text-sm text-[#98A2B3]">No requests in {{ $this->year->label }}.</td></tr>
                     @endforelse
                 </tbody>
             </table>
@@ -287,15 +302,17 @@
         <x-leave.overlay max="max-w-lg">
             <form wire:submit="submitAction" class="space-y-4">
                 <flux:heading size="lg">
-                    {{ ['add' => 'Add Leave', 'deduct' => 'Deduct Leave', 'correct' => 'Correct Balance', 'override' => 'Employee Override', 'apply' => 'Apply Leave on Behalf', 'carry_forward' => 'Carry Forward'][$action] }}
+                    {{ ['add' => 'Add Leave', 'deduct' => 'Deduct Leave', 'correct' => 'Correct Balance', 'override' => 'Employee Override', 'apply' => 'Apply Leave on Behalf', 'carry_forward' => 'Carry Forward', 'cancel_leave' => 'Cancel Leave', 'correct_leave' => 'Correct Approved Leave', 'reverse_entry' => 'Reverse Ledger Entry'][$action] }}
                     <span class="font-normal text-[#98A2B3]">· {{ $employee->user?->name }} · {{ $this->year->label }}</span>
                 </flux:heading>
 
                 @error('form')<div class="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{{ $message }}</div>@enderror
 
-                <flux:select wire:model.live="formTypeId" label="Leave type">
-                    @foreach($leaveTypes as $t)<flux:select.option value="{{ $t->id }}">{{ $t->name }}</flux:select.option>@endforeach
-                </flux:select>
+                @if(! in_array($action, ['cancel_leave', 'reverse_entry'], true))
+                    <flux:select wire:model.live="formTypeId" label="Leave type">
+                        @foreach($leaveTypes as $t)<flux:select.option value="{{ $t->id }}">{{ $t->name }}</flux:select.option>@endforeach
+                    </flux:select>
+                @endif
 
                 @if($action === 'add')
                     <flux:select wire:model="addOnType" label="Kind">
@@ -307,9 +324,33 @@
                         <flux:input type="date" wire:model="expiresOn" label="Expires on (optional)" />
                     </div>
                 @elseif($action === 'deduct')
-                    <flux:input type="number" step="0.5" min="0.5" wire:model.live.debounce.300ms="days" label="Days to deduct" />
+                    <div class="grid grid-cols-2 gap-3">
+                        <flux:input type="number" step="0.5" min="0.5" wire:model.live.debounce.300ms="days" label="Days to deduct" />
+                        <flux:input type="date" wire:model="effectiveDate" label="Effective date" />
+                    </div>
                 @elseif($action === 'correct')
-                    <flux:input type="number" step="0.5" min="0" wire:model.live.debounce.300ms="targetBalance" label="Correct available balance" />
+                    <div class="grid grid-cols-2 gap-3">
+                        <flux:input type="number" step="0.5" min="0" wire:model.live.debounce.300ms="targetBalance" label="Correct available balance" />
+                        <flux:input type="date" wire:model="effectiveDate" label="Effective date" />
+                    </div>
+                @elseif($action === 'cancel_leave' && $targetRequest)
+                    <div class="rounded-lg bg-[#F9FAFB] p-3 text-sm dark:bg-white/5">
+                        <div class="font-semibold">{{ $targetRequest->leaveType?->name }} · {{ $targetRequest->start_date->format('d M Y') }}@if(! $targetRequest->end_date->eq($targetRequest->start_date)) – {{ $targetRequest->end_date->format('d M Y') }}@endif · {{ $fmt($targetRequest->days) }} day(s)</div>
+                        <div class="text-xs text-[#667085]">Status: {{ str_replace('_', ' ', $targetRequest->status) }}. Cancelling returns any paid days to the balance they came from; the request and this cancellation both stay in the history.</div>
+                    </div>
+                @elseif($action === 'correct_leave' && $targetRequest)
+                    <div class="text-xs text-[#667085]">Currently {{ $targetRequest->start_date->format('d M Y') }}@if(! $targetRequest->end_date->eq($targetRequest->start_date)) – {{ $targetRequest->end_date->format('d M Y') }}@endif ({{ $fmt($targetRequest->days) }} day(s)). The old days are returned and the corrected days deducted, under the same leave rules.</div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <flux:input type="date" wire:model="startDate" label="From" />
+                        <flux:input type="date" wire:model="endDate" label="To" :disabled="$isHalfDay" />
+                    </div>
+                    <flux:checkbox wire:model.live="isHalfDay" label="Half day" />
+                @elseif($action === 'reverse_entry' && $targetEntry)
+                    <div class="rounded-lg bg-[#F9FAFB] p-3 text-sm dark:bg-white/5">
+                        <div class="font-semibold">{{ $entryTypes[$targetEntry->entry_type] ?? str_replace('_', ' ', $targetEntry->entry_type) }} · {{ $targetEntry->leaveType?->name }} · {{ $signed((float) $targetEntry->days) }} day(s)</div>
+                        <div class="text-xs text-[#667085]">{{ $targetEntry->effective_date?->format('d M Y') }}@if($targetEntry->reason) · {{ $targetEntry->reason }}@endif</div>
+                        <div class="mt-1 text-xs text-[#667085]">A reversing entry is added; nothing is deleted. A credit already used becomes a visible shortfall.</div>
+                    </div>
                 @elseif($action === 'override')
                     <flux:select wire:model="overrideMode" label="Override">
                         <flux:select.option value="add">Add to the policy entitlement (e.g. +5)</flux:select.option>
@@ -365,6 +406,14 @@
                         </flux:select>
                     </div>
                     <flux:input type="file" wire:model="attachment" label="Attachment (optional, PDF/JPG/PNG ≤ 5 MB)" />
+                    @can('record_approved_leave')
+                        <flux:checkbox wire:model="recordApproved" label="Record as already approved (the leave rules and balance check still apply)" />
+                    @endcan
+                @endif
+
+                @if(in_array($action, ['add', 'deduct', 'correct', 'cancel_leave'], true))
+                    <flux:input type="file" wire:model="attachment" label="Supporting document (optional, PDF/JPG/PNG ≤ 5 MB, kept private)" />
+                    @error('attachment')<p class="text-xs text-rose-600">{{ $message }}</p>@enderror
                 @endif
 
                 @if(in_array($action, ['add', 'deduct', 'correct'], true) && $this->currentAvailable !== null)
@@ -386,9 +435,18 @@
                     <flux:checkbox wire:model="notifyEmployee" label="Notify the employee" />
                 @endif
 
+                @if(in_array($action, \App\Livewire\TimeOff\EmployeeLeaveDetail::HIGH_IMPACT, true))
+                    <div class="rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-500/30 dark:bg-amber-500/10">
+                        <flux:checkbox wire:model="confirmed" label="I confirm this change to {{ $employee->user?->name }}'s leave. It is recorded in the audit log with my name and reason." />
+                        @error('confirmed')<p class="mt-1 text-xs text-rose-600">{{ $message }}</p>@enderror
+                    </div>
+                @endif
+
                 <div class="flex justify-end gap-2">
-                    <flux:button type="button" wire:click="closeAction">Cancel</flux:button>
-                    <flux:button type="submit" variant="primary" wire:loading.attr="disabled">Save</flux:button>
+                    <flux:button type="button" wire:click="closeAction">Close</flux:button>
+                    <flux:button type="submit" :variant="in_array($action, ['cancel_leave', 'reverse_entry'], true) ? 'danger' : 'primary'" wire:loading.attr="disabled">
+                        {{ ['cancel_leave' => 'Cancel leave', 'correct_leave' => 'Save correction', 'reverse_entry' => 'Reverse entry'][$action] ?? 'Save' }}
+                    </flux:button>
                 </div>
             </form>
         </x-leave.overlay>

@@ -158,9 +158,13 @@ test('Deduct Leave and Correct Balance post adjustments; correcting never overwr
     $hr = lmpHr();
 
     Livewire::actingAs($hr)->test(EmployeeLeaveDetail::class, ['employee' => $employee])
+        // High-impact: refused until HR ticks the confirmation.
         ->call('openAction', 'deduct', $type->id)->set('days', '1')->set('reason', 'Unrecorded absence on 2 Sep')
+        ->call('submitAction')->assertHasErrors('confirmed')
+        ->set('confirmed', true)
         ->call('submitAction')->assertHasNoErrors()
         ->call('openAction', 'correct', $type->id)->set('targetBalance', '8')->set('reason', 'Agreed position after audit')
+        ->set('confirmed', true)
         ->call('submitAction')->assertHasNoErrors();
 
     $balance = lmpBalance($employee, $type);

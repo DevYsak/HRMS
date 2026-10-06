@@ -674,11 +674,14 @@ class LeaveService
             $leaveRequest->update($updateData);
             $this->auditDecision($leaveRequest, $oldStatus, $decision, [], $comment, User::find($hrReviewerId));
 
+            // Posted through the ledger, in the leave year of the leave itself.
+            // A direct increment('used_days') is refused on a ledger-backed
+            // balance and skipped the usage entry entirely.
             if ($decision === 'approved' && $effectiveStatus === 'paid') {
-                $balance = $this->getBalance($employee->id, $leaveRequest->leave_type_id);
-                if ($balance) {
-                    $balance->increment('used_days', $newDays);
-                }
+                app(LeaveMovementService::class)->recordUsage(
+                    $leaveRequest, $newDays, (int) $leaveRequest->leave_type_id,
+                    Carbon::parse($leaveRequest->start_date), enforceBalance: false, actor: User::find($hrReviewerId),
+                );
             }
 
             $fresh = $leaveRequest->fresh(['employee.user', 'leaveType', 'reviewer', 'hrReviewer']);
@@ -1262,7 +1265,7 @@ class LeaveService
      * Cancel a leave request — employee-initiated, allowed while pending or pending_hr.
      * If already approved and paid, the used_days balance is restored.
      */
-    public function cancelRequest(LeaveRequest $leaveRequest): void
+    public function cancelRequest(LeaveRequest $leaveRequest, ?string $reason = null, ?User $actor = null, array $meta = []): void
     {
         if (! in_array($leaveRequest->status, ['pending', 'pending_hr', 'approved'])) {
             throw new \DomainException('Only pending or approved leave requests can be cancelled.');
@@ -1278,14 +1281,14 @@ class LeaveService
                 (int) $leaveRequest->leave_type_id,
                 (float) $leaveRequest->days,
                 Carbon::parse($leaveRequest->start_date),
-                'Leave cancelled',
-                auth()->user(),
+                $reason ? 'Leave cancelled: '.$reason : 'Leave cancelled',
+                $actor ?? auth()->user(),
             );
         }
 
         $oldStatus = $leaveRequest->status;
         $leaveRequest->update(['status' => 'cancelled']);
-        $this->auditDecision($leaveRequest, $oldStatus, 'cancelled', [], null, auth()->user());
+        $this->auditDecision($leaveRequest, $oldStatus, 'cancelled', [], $reason, $actor ?? auth()->user(), $meta);
     }
 
     /**
@@ -1296,8 +1299,9 @@ class LeaveService
      * field-level record.
      *
      * @param  array<string, mixed>  $before  figures captured before the update, when they could change
+     * @param  array<string, mixed>  $meta  extra context, e.g. a supporting document
      */
-    private function auditDecision(LeaveRequest $leaveRequest, ?string $oldStatus, string $newStatus, array $before, ?string $comment, ?User $actor): void
+    private function auditDecision(LeaveRequest $leaveRequest, ?string $oldStatus, string $newStatus, array $before, ?string $comment, ?User $actor, array $meta = []): void
     {
         $decided = in_array($oldStatus, ['approved', 'rejected', 'cancelled'], true);
 
@@ -1319,7 +1323,7 @@ class LeaveService
             AuditService::LEAVE,
             $leaveRequest,
             old: ['status' => $oldStatus] + $before,
-            new: ['status' => $newStatus] + $after,
+            new: ['status' => $newStatus] + $after + $meta,
             reason: $comment,
             subjectEmployeeId: $leaveRequest->employee_id,
             actor: $actor,
