@@ -4,14 +4,16 @@ namespace App\Services;
 
 use App\Models\Employee;
 use App\Models\User;
+use App\Services\Audit\AuditService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * DANGER: permanently deletes operational data. Super-Admin only, guarded by
- * type-to-confirm in the UI. Config tables (leave types, shifts, roles, salary
+ * DANGER: permanently deletes operational data. Needs the Data Management
+ * (Purge) permission, guarded by type-to-confirm in the UI and recorded in
+ * the audit trail. Config tables (leave types, shifts, roles, salary
  * structures, performance templates/cycles, companies) are never touched — only
  * transactional records. Every purge runs in a transaction with FK checks off
  * and is written to the log.
@@ -105,6 +107,8 @@ class DataPurgeService
         });
 
         Log::warning("[DataPurge] {$actor->email} cleared domain '{$domain}' — {$deleted} rows deleted.");
+        app(AuditService::class)->event('DATA_PURGED', AuditService::DATA_MANAGEMENT, $actor,
+            new: ['domain' => $domain, 'label' => self::DOMAINS[$domain]['label'], 'rows_deleted' => $deleted]);
 
         return $deleted;
     }
@@ -112,7 +116,8 @@ class DataPurgeService
     /**
      * Permanently delete one employee and everything linked to them: every table
      * carrying their employee_id, their notifications, then the employee and the
-     * user account. Refuses to delete Super Admins or the actor's own account.
+     * user account. Refuses to delete Super Admins, the actor's own account,
+     * or anyone outside the actor's reach.
      *
      * @throws \DomainException
      */
@@ -126,9 +131,17 @@ class DataPurgeService
         if ($user && $user->isSuperAdmin()) {
             throw new \DomainException('Super Admin accounts cannot be deleted here.');
         }
+        if (! $actor->coversEmployee($employee)) {
+            throw new \DomainException('This employee is outside your scope.');
+        }
 
         $employeeId = $employee->id;
         $userId = $employee->user_id;
+
+        // Recorded before the rows go, or there is nothing left to describe.
+        app(AuditService::class)->event('EMPLOYEE_PURGED', AuditService::DATA_MANAGEMENT, $employee,
+            old: ['employee_code' => $employee->employee_code, 'name' => $user?->name, 'email' => $user?->email],
+            subjectEmployeeId: $employeeId);
 
         DB::transaction(function () use ($employeeId, $userId) {
             Schema::disableForeignKeyConstraints();
@@ -168,8 +181,9 @@ class DataPurgeService
     }
 
     /**
-     * Employees that may be bulk-deleted — everyone except Super Admins and the
-     * actor's own account. (Employees without a user account are deletable.)
+     * Employees that may be bulk-deleted — everyone inside the actor's reach
+     * except Super Admins and the actor's own account. (Employees without a
+     * user account are deletable.)
      *
      * @return Collection<int, Employee>
      */
@@ -178,7 +192,7 @@ class DataPurgeService
         return Employee::with('user')->get()->reject(function (Employee $e) use ($actor) {
             $u = $e->user;
 
-            return $u && ($u->isSuperAdmin() || $u->id === $actor->id);
+            return ($u && ($u->isSuperAdmin() || $u->id === $actor->id)) || ! $actor->coversEmployee($e);
         })->values();
     }
 

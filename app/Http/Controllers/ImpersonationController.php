@@ -10,9 +10,10 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 /**
- * Lets a Super Admin "View as" another user to test their experience, then
- * return to their own account. The impersonator id is kept in the session and a
- * banner is shown throughout while active.
+ * "Login as" another user to support or test their experience, then return
+ * to your own account. Needs the Login as Employee permission (HR Admin by
+ * default); see User::canImpersonate() for who may be viewed. The
+ * impersonator id is kept in the session and a banner is shown throughout.
  */
 class ImpersonationController extends Controller
 {
@@ -22,9 +23,9 @@ class ImpersonationController extends Controller
     {
         $current = $request->user();
 
-        // Only a real Super Admin (not one already impersonating) may start.
+        // Only a real permission holder (not one already impersonating) may start.
         abort_unless(
-            $current && $current->isSuperAdmin() && ! $request->session()->has(self::SESSION_KEY),
+            $current && $current->hasPermission('impersonate') && ! $request->session()->has(self::SESSION_KEY),
             403,
         );
 
@@ -32,7 +33,9 @@ class ImpersonationController extends Controller
             return back();
         }
 
-        // Recorded while still signed in as the Super Admin, so the actor is the real person.
+        abort_unless($current->canImpersonate($user), 403);
+
+        // Recorded while still signed in as the real actor.
         app(AuditService::class)->event('IMPERSONATION_STARTED', AuditService::SECURITY, $user,
             new: ['impersonated_user_id' => $user->id, 'impersonated_user' => $user->name],
             subjectEmployeeId: $user->employee?->id);

@@ -2,7 +2,7 @@
 
     <div>
         <flux:heading size="xl">Data Management</flux:heading>
-        <flux:subheading>Permanently clear operational data or remove a single employee. Super Admin only.</flux:subheading>
+        <flux:subheading>Permanently clear operational data or remove a single employee. Needs the Data Management (Purge) permission.</flux:subheading>
     </div>
 
     {{-- Danger banner --}}
@@ -45,7 +45,7 @@
         {{-- Bulk: delete all --}}
         <div class="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-rose-50 px-4 py-3 dark:bg-rose-950/20">
             <div class="text-sm text-rose-700 dark:text-rose-300">
-                <b>{{ number_format($deletableCount) }}</b> employee(s) can be deleted (excludes Super Admins &amp; you).
+                <b>{{ number_format($deletableCount) }}</b> employee(s) in your scope can be deleted (excludes Super Admins &amp; you).
             </div>
             <flux:button
                 wire:click="deleteAllEmployees"

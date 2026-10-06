@@ -434,7 +434,7 @@
                         <flux:sidebar.item icon="squares-2x2" :href="route('dashboard')"
                             :current="request()->routeIs('dashboard') && !request()->routeIs('dashboard.*')" wire:navigate>Dashboard
                         </flux:sidebar.item>
-                        @if($isSA)
+                        @if($user->hasPermission('view_executive_dashboard') && ! $user->isDepartmentScoped())
                             <flux:sidebar.item icon="chart-bar-square" :href="route('dashboard.executive')"
                                 :current="request()->routeIs('dashboard.executive')" wire:navigate>Executive View</flux:sidebar.item>
                         @endif
@@ -778,7 +778,7 @@
                         :current="request()->routeIs('settings.menu')" wire:navigate>Sidebar Menu</flux:sidebar.item>
                     <flux:sidebar.item :href="route('settings.audit-log')"
                         :current="request()->routeIs('settings.audit-log')" wire:navigate>Audit Log</flux:sidebar.item>
-                    @if(auth()->user()->isSuperAdmin())
+                    @if(auth()->user()->hasPermission('data_purge'))
                         <flux:sidebar.item :href="route('settings.data-management')"
                             :current="request()->routeIs('settings.data-management')" wire:navigate>Data Management</flux:sidebar.item>
                     @endif

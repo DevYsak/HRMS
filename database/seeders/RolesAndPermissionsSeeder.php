@@ -29,6 +29,7 @@ class RolesAndPermissionsSeeder extends Seeder
             ['key' => 'create_employee', 'label' => 'Create Employee', 'description' => 'Add new employee profiles'],
             ['key' => 'edit_employee', 'label' => 'Edit Employee', 'description' => 'Update existing employee profiles'],
             ['key' => 'delete_employee', 'label' => 'Delete Employee', 'description' => 'Remove employee records'],
+            ['key' => 'force_delete_employee', 'label' => 'Permanently Delete Employees', 'description' => 'Erase an archived employee and all their records for good'],
             ['key' => 'view_employee', 'label' => 'View Employee', 'description' => 'View individual employee profiles'],
             ['key' => 'view_directory', 'label' => 'View Directory', 'description' => 'Browse the company employee directory'],
             ['key' => 'view_org_chart', 'label' => 'View Org Chart', 'description' => 'View the organisational hierarchy'],
@@ -111,6 +112,9 @@ class RolesAndPermissionsSeeder extends Seeder
             ['key' => 'manage_roles', 'label' => 'Manage Roles', 'description' => 'Create, edit and assign roles & permissions'],
             ['key' => 'manage_settings', 'label' => 'Manage Settings', 'description' => 'Configure company-wide system settings'],
             ['key' => 'manage_company_settings', 'label' => 'Manage Company Settings', 'description' => 'Configure company profile, branding and policies'],
+            ['key' => 'manage_ai_settings', 'label' => 'Manage AI Assistant', 'description' => 'Configure the AI provider, API key and which roles may use the assistant'],
+            ['key' => 'data_purge', 'label' => 'Data Management (Purge)', 'description' => 'Permanently clear operational data and delete employees from Data Management'],
+            ['key' => 'impersonate', 'label' => 'Login as Employee', 'description' => 'View the system as another user to support or test their access'],
         ],
     ];
 
@@ -146,6 +150,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'upload_documents', 'manage_documents', 'view_documents', 'acknowledge_documents',
             'view_reports', 'export_reports',
             'manage_roles', 'manage_settings', 'manage_company_settings',
+            'manage_ai_settings', 'data_purge', 'impersonate', 'force_delete_employee',
             'edit_own_profile', 'request_profile_change', 'approve_profile_changes',
         ],
         'director' => [

@@ -43,6 +43,8 @@ class RoleDelegationGuard
         'manage_role_permissions',
         'data_purge',
         'impersonate',
+        'force_delete_employee',
+        'manage_ai_settings',
         'audit.view_all',
         'settings.roles',
         'settings.permissions',

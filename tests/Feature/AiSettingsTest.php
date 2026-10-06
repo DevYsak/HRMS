@@ -12,8 +12,14 @@ test('super admin can open the AI settings page', function () {
     $this->get('/settings/ai')->assertOk()->assertSee('AI Assistant');
 });
 
-test('non super admin cannot open the AI settings page', function () {
+test('HR Admin opens the AI settings page through the Manage AI Assistant permission', function () {
     $this->actingAs(User::factory()->create(['role' => UserRole::HrAdmin]));
+
+    $this->get('/settings/ai')->assertOk()->assertSee('AI Assistant');
+});
+
+test('a role without the AI permission cannot open the AI settings page', function () {
+    $this->actingAs(User::factory()->create(['role' => UserRole::Manager]));
 
     $this->get('/settings/ai')->assertForbidden();
 });

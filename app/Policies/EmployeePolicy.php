@@ -71,13 +71,27 @@ class EmployeePolicy
      * Erasing a deleted employee for good, along with their leave, attendance,
      * payslips and audit trail.
      *
-     * Spec §3.1: records are archived, never deleted. Purging is kept only for
-     * the Super Admin (e.g. removing test data) and still needs the dedicated
-     * delete_employee permission.
+     * Spec §3.1: records are archived, never deleted. Purging needs the
+     * dedicated Permanently Delete Employees permission (HR Admin by default)
+     * on top of delete_employee, stays inside the actor's reach, and never
+     * erases the actor or — for anyone but a Super Admin — a Super Admin.
      */
     public function forceDelete(User $user, Employee $employee): bool
     {
-        return $this->isSuperAdmin($user) && $user->hasPermission('delete_employee');
+        if (! $user->hasPermission('force_delete_employee') || ! $user->hasPermission('delete_employee')) {
+            return false;
+        }
+
+        if ($this->isSuperAdmin($user)) {
+            return true;
+        }
+
+        // The account is soft-deleted alongside the record, so look past that.
+        $target = $employee->user()->withTrashed()->first();
+
+        return $user->coversEmployee($employee)
+            && $target?->id !== $user->id
+            && ! ($target !== null && $this->isSuperAdmin($target));
     }
 
     /**

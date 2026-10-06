@@ -166,7 +166,7 @@ Route::middleware(['auth'])->group(function () {
     // Dashboard
     Route::get('/', Dashboard::class)->name('dashboard');
 
-    // "View as" impersonation — Super Admin tests another user's experience.
+    // "Login as" impersonation — permission 'impersonate' (HR Admin by default).
     // (stop is declared first so it isn't captured by the {user} binding)
     Route::get('/impersonate/stop', [ImpersonationController::class, 'stop'])->name('impersonate.stop');
     Route::post('/impersonate/{user}', [ImpersonationController::class, 'start'])->name('impersonate.start');
@@ -222,7 +222,8 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/team', TeamTimeOff::class)->name('team');
             Route::get('/employees', AllTimeOff::class)->name('employees');
         });
-        Route::get('/encashments', FinanceEncashments::class)->name('encashments')->middleware('role:approve-finance');
+        // HR clears the first stage, Finance the second.
+        Route::get('/encashments', FinanceEncashments::class)->name('encashments')->middleware('role:approve-finance,manage-leave-encashment');
         Route::get('/bulk-assign', BulkLeaveAssignment::class)->name('bulk-assign')->middleware('role:manage-settings');
         Route::get('/leave-policies', LeaveAllocationPolicies::class)->name('leave-policies')->middleware('role:manage-settings');
         // Bulk migration of years that were never kept in this system. Import

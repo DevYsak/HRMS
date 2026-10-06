@@ -174,7 +174,7 @@
                             </td>
                             <td class="pulse-td pr-6 text-right!">
                                 <div class="flex items-center justify-end gap-2">
-                                    @if(auth()->user()->isSuperAdmin() && $emp->user_id)
+                                    @if($emp->user && ! $emp->user->trashed() && auth()->user()->canImpersonate($emp->user))
                                         {{-- POST (CSRF-protected): a crafted link must not start an impersonation. --}}
                                         <form method="POST" action="{{ route('impersonate.start', $emp->user_id) }}" class="inline">
                                             @csrf
@@ -230,6 +230,19 @@
                                         />
                                     </flux:tooltip>
 
+                                    @if(! $showDeleted && $emp->status === \App\Enums\EmployeeStatus::Probation)
+                                        <flux:tooltip content="Probation confirmation">
+                                            <flux:button
+                                                href="{{ route('employees.probation', $emp->id) }}"
+                                                wire:navigate
+                                                variant="ghost"
+                                                size="sm"
+                                                icon="check-badge"
+                                                class="text-zinc-400 hover:text-sky-600 dark:hover:text-sky-400"
+                                            />
+                                        </flux:tooltip>
+                                    @endif
+
                                     <flux:tooltip content="Edit full record">
                                         <flux:button
                                             href="{{ route('employees.edit', $emp->id) }}"
@@ -253,7 +266,7 @@
                                         </flux:tooltip>
 
                                         {{-- Irreversible, and it takes their history with it, so the
-                                             confirmation spells out exactly what is lost. Super Admin only. --}}
+                                             confirmation spells out exactly what is lost. Needs Permanently Delete Employees. --}}
                                         @can('forceDelete', $emp)
                                         <flux:tooltip content="Delete permanently — cannot be undone">
                                             <flux:button

@@ -161,6 +161,28 @@ class User extends Authenticatable
     }
 
     /**
+     * Whether this user may "Login as" the target: the Login as Employee
+     * permission, never themselves, and — for anyone but a Super Admin —
+     * never a Super Admin and only people inside their own reach.
+     */
+    public function canImpersonate(User $target): bool
+    {
+        if ($target->id === $this->id || ! $this->hasPermission('impersonate')) {
+            return false;
+        }
+
+        if ($this->isSuperAdmin() || $this->assignedRole?->slug === 'super_admin') {
+            return true;
+        }
+
+        if ($target->isSuperAdmin() || $target->assignedRole?->slug === 'super_admin') {
+            return false;
+        }
+
+        return $target->employee !== null && $this->coversEmployee($target->employee);
+    }
+
+    /**
      * Whether this user decides attendance / leave regularisations — HR, by
      * the "Approve Regularisations (HR)" permission (Super Admin always).
      * An approval applies the correction in one step.

@@ -19,7 +19,9 @@ use App\Models\Payroll;
 use App\Models\Payslip;
 use App\Models\PerformanceCycle;
 use App\Models\PerformanceTemplate;
+use App\Models\Permission;
 use App\Models\ProfileChangeRequest;
+use App\Models\Role;
 use App\Models\SalaryComponent;
 use App\Models\User;
 use App\Services\EmployeeImportService;
@@ -254,13 +256,24 @@ test('a Director offboarding someone is not offered the payroll-only settlement 
         ->assertSee('entered by payroll');
 });
 
-test('only the Super Admin is offered the permanent-delete button', function () {
+test('only holders of Permanently Delete Employees are offered the permanent-delete button', function () {
     $deleted = r2User(UserRole::Employee);
     $deleted->employee->delete();
 
-    Livewire::actingAs(r2User(UserRole::HrAdmin))->test(EmployeeIndex::class)
+    // Employee management without the purge permission: no button.
+    $clerk = Role::create(['name' => 'Records Clerk', 'slug' => 'records-clerk', 'is_system' => false, 'is_active' => true]);
+    $clerk->permissions()->sync(Permission::whereIn('key', ['manage_employees', 'delete_employee', 'view_employee'])->pluck('id'));
+    $clerk->flushPermissionCache();
+    $clerkUser = User::factory()->create(['role' => UserRole::Employee, 'role_id' => $clerk->id]);
+
+    Livewire::actingAs($clerkUser)->test(EmployeeIndex::class)
         ->set('showDeleted', true)
         ->assertDontSee('Delete permanently');
+
+    // HR Admin holds it by default.
+    Livewire::actingAs(r2User(UserRole::HrAdmin))->test(EmployeeIndex::class)
+        ->set('showDeleted', true)
+        ->assertSee('Delete permanently');
 
     Livewire::actingAs(User::factory()->create(['role' => UserRole::SuperAdmin]))->test(EmployeeIndex::class)
         ->set('showDeleted', true)

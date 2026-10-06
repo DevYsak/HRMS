@@ -7,9 +7,10 @@ use App\Services\DataPurgeService;
 use Livewire\Component;
 
 /**
- * Super-Admin-only data cleanup: bulk-clear operational data by domain, and
- * permanently delete a single employee everywhere. Every action is guarded by a
- * type-to-confirm prompt in the view and audited in the log.
+ * Data cleanup: bulk-clear operational data by domain, and permanently delete
+ * a single employee everywhere. Needs the Data Management (Purge) permission
+ * (HR Admin by default). Every action is guarded by a type-to-confirm prompt
+ * in the view and recorded in the audit trail.
  */
 class DataManagement extends Component
 {
@@ -20,12 +21,12 @@ class DataManagement extends Component
 
     public function mount(): void
     {
-        abort_unless(auth()->user()?->isSuperAdmin(), 403);
+        abort_unless(auth()->user()?->hasPermission('data_purge'), 403);
     }
 
     public function deleteSelected(DataPurgeService $service): void
     {
-        abort_unless(auth()->user()?->isSuperAdmin(), 403);
+        abort_unless(auth()->user()?->hasPermission('data_purge'), 403);
 
         $result = $service->bulkDeleteEmployees($this->selected, auth()->user());
         $this->selected = [];
@@ -35,7 +36,7 @@ class DataManagement extends Component
 
     public function deleteAllEmployees(DataPurgeService $service): void
     {
-        abort_unless(auth()->user()?->isSuperAdmin(), 403);
+        abort_unless(auth()->user()?->hasPermission('data_purge'), 403);
 
         $ids = $service->deletableEmployees(auth()->user())->pluck('id');
         $result = $service->bulkDeleteEmployees($ids, auth()->user());
@@ -46,7 +47,7 @@ class DataManagement extends Component
 
     public function purge(string $domain, DataPurgeService $service): void
     {
-        abort_unless(auth()->user()?->isSuperAdmin(), 403);
+        abort_unless(auth()->user()?->hasPermission('data_purge'), 403);
 
         try {
             $count = $service->purge($domain, auth()->user());
@@ -58,7 +59,7 @@ class DataManagement extends Component
 
     public function deleteEmployee(int $employeeId, DataPurgeService $service): void
     {
-        abort_unless(auth()->user()?->isSuperAdmin(), 403);
+        abort_unless(auth()->user()?->hasPermission('data_purge'), 403);
 
         $employee = Employee::with('user')->findOrFail($employeeId);
 
@@ -73,8 +74,10 @@ class DataManagement extends Component
 
     public function render()
     {
+        $reach = auth()->user()->accessibleEmployeeIds();
         $employees = $this->employeeSearch !== ''
             ? Employee::with('user')
+                ->when($reach !== null, fn ($q) => $q->whereIn('id', $reach))
                 ->whereHas('user', function ($q): void {
                     $q->where('name', 'like', '%'.$this->employeeSearch.'%')
                         ->orWhere('email', 'like', '%'.$this->employeeSearch.'%');

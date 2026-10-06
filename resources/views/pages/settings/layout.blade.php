@@ -17,7 +17,7 @@
                     @can('manage_roles')
                         <flux:navlist.item :href="route('settings.roles')" :current="request()->routeIs('settings.roles')" wire:navigate icon="shield-check">{{ __('Roles & Permissions') }}</flux:navlist.item>
                     @endcan
-                    @if(auth()->user()?->isSuperAdmin())
+                    @if(auth()->user()?->hasPermission('manage_ai_settings'))
                         <flux:navlist.item :href="route('settings.ai')" :current="request()->routeIs('settings.ai')" wire:navigate icon="sparkles">{{ __('AI Assistant') }}</flux:navlist.item>
                     @endif
                     <flux:navlist.item :href="route('profile.edit')" :current="request()->routeIs('profile.edit')" wire:navigate icon="user">{{ __('Profile') }}</flux:navlist.item>

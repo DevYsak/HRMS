@@ -21,6 +21,7 @@ class EnsureRole
      *   approve-finance  | manage-settings | manage-documents
      *   view-finance-profile | review-performance
      *   lock-payroll | unlock-payroll | delete-payslip
+     *   manage-leave-encashment
      *
      * @param  Closure(Request): (Response)  $next
      */
@@ -59,6 +60,7 @@ class EnsureRole
             'lock-payroll' => $user->canLockPayroll(),
             'unlock-payroll' => $user->canUnlockPayroll(),
             'delete-payslip' => $user->canDeletePayslip(),
+            'manage-leave-encashment' => $user->hasPermission('manage_leave_encashment'),
             default => false,
         };
     }

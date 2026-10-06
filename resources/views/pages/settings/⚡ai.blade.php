@@ -24,7 +24,7 @@ new #[Title('AI Assistant')] class extends Component {
 
     public function mount(): void
     {
-        abort_unless(Auth::user()?->isSuperAdmin(), 403);
+        abort_unless(Auth::user()?->hasPermission('manage_ai_settings'), 403);
 
         $s = AiSetting::current();
         $this->provider = $s->provider;
@@ -47,7 +47,7 @@ new #[Title('AI Assistant')] class extends Component {
 
     public function save(): void
     {
-        abort_unless(Auth::user()?->isSuperAdmin(), 403);
+        abort_unless(Auth::user()?->hasPermission('manage_ai_settings'), 403);
 
         $this->validate([
             'provider' => ['required', 'in:openai,gemini,custom'],
@@ -82,7 +82,7 @@ new #[Title('AI Assistant')] class extends Component {
     /** Save first, then send a tiny prompt to verify the key/provider works. */
     public function test(): void
     {
-        abort_unless(Auth::user()?->isSuperAdmin(), 403);
+        abort_unless(Auth::user()?->hasPermission('manage_ai_settings'), 403);
 
         $this->save();
         $this->testResult = null;

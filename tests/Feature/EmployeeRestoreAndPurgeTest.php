@@ -26,7 +26,7 @@ function erpAdmin(): User
     return User::factory()->create(['role' => UserRole::HrAdmin]);
 }
 
-/** Purging is the Super Admin's alone (spec §3.1: archived, never deleted). */
+/** Purging needs the Permanently Delete Employees permission (Super Admin, and HR Admin by default). */
 function erpSuperAdmin(): User
 {
     return User::factory()->create(['role' => UserRole::SuperAdmin]);
@@ -176,14 +176,14 @@ test('a live employee cannot be permanently deleted in one step', function () {
 
 // ── Authorisation ──────────────────────────────────────────────────────────
 
-test('HR Admin cannot permanently delete — records are archived, never deleted', function () {
+test('HR Admin permanently deletes an archived employee through the permission', function () {
     $deleted = erpDeleted();
 
     Livewire::actingAs(erpAdmin())->test(EmployeeIndex::class)
         ->call('forceDeleteEmployee', $deleted->id)
-        ->assertForbidden();
+        ->assertHasNoErrors();
 
-    expect(Employee::withTrashed()->find($deleted->id))->not->toBeNull();
+    expect(Employee::withTrashed()->find($deleted->id))->toBeNull();
 });
 
 test('a manager cannot permanently delete anyone', function () {

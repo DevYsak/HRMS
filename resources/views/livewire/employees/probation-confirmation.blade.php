@@ -76,7 +76,7 @@
         </flux:callout>
     @else
         {{-- Stage 1 Action --}}
-        @if(! $employee->probation_confirmed_at && in_array(auth()->user()->role, ['manager', 'director', 'super_admin']))
+        @if(! $employee->probation_confirmed_at && in_array(auth()->user()->role?->value, ['manager', 'director', 'super_admin'], true))
             <flux:card class="space-y-4">
                 <flux:heading size="lg">Stage 1 — Manager Confirmation</flux:heading>
                 <flux:field>
@@ -91,7 +91,7 @@
         @endif
 
         {{-- Stage 2 Action --}}
-        @if($employee->probation_confirmed_at && ! $employee->probation_hr_approved_at && in_array(auth()->user()->role, ['hr_admin', 'super_admin']))
+        @if($employee->probation_confirmed_at && ! $employee->probation_hr_approved_at && in_array(auth()->user()->role?->value, ['hr_admin', 'super_admin'], true))
             <flux:card class="space-y-4">
                 <flux:heading size="lg">Stage 2 — HR Co-Approval</flux:heading>
                 <flux:field>

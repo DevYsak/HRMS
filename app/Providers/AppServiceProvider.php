@@ -88,8 +88,10 @@ class AppServiceProvider extends ServiceProvider
             URL::forceScheme('https');
         }
 
+        // Permission-driven, so any role granted Manage Settings in Roles &
+        // Permissions sees the full settings menu (Super Admin always).
         Gate::define('manageFullSettings', function (User $user) {
-            return $user->isSuperAdmin() || $user->isHrAdmin();
+            return $user->hasPermission('manage_settings');
         });
 
         Gate::define('manage-settings', function (User $user) {

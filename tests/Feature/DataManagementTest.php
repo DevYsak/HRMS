@@ -89,9 +89,12 @@ test('deletableEmployees excludes super admins and the actor', function () {
     expect($ids->all())->not->toContain($sa->id);
 });
 
-test('super admin can open data management; others cannot', function () {
+test('super admin and HR (Data Management permission) can open data management; others cannot', function () {
     Livewire::actingAs(purgeAdmin())->test(DataManagement::class)->assertSee('Data Management');
 
     $hr = User::factory()->create(['role' => UserRole::HrAdmin]);
-    Livewire::actingAs($hr)->test(DataManagement::class)->assertForbidden();
+    Livewire::actingAs($hr)->test(DataManagement::class)->assertSee('Data Management');
+
+    $manager = User::factory()->create(['role' => UserRole::Manager]);
+    Livewire::actingAs($manager)->test(DataManagement::class)->assertForbidden();
 });

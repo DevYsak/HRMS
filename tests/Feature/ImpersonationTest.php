@@ -19,7 +19,7 @@ test('a super admin can view as another user and return to their account', funct
     expect(session()->has('impersonator_id'))->toBeFalse();
 });
 
-test('a non-super-admin cannot impersonate', function () {
+test('HR cannot impersonate an account with no employee record (outside any reach)', function () {
     $hr = User::factory()->create(['role' => UserRole::HrAdmin, 'email_verified_at' => now()]);
     $employee = User::factory()->create(['role' => UserRole::Employee, 'email_verified_at' => now()]);
 
