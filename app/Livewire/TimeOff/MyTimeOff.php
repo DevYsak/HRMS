@@ -12,10 +12,12 @@ use App\Models\LeaveType;
 use App\Models\PublicHoliday;
 use App\Models\WfhRequest;
 use App\Notifications\LeaveEncashmentNotification;
+use App\Services\AiAssistant;
 use App\Services\Attendance\HolidayResolver;
 use App\Services\Attendance\WorkingDayResolver;
 use App\Services\HolidayWorkService;
 use App\Services\Leave\EmployeeLeaveOverviewService;
+use App\Services\Leave\LeaveAssistantService;
 use App\Services\Leave\LeaveBalanceCalculator;
 use App\Services\Leave\LeaveYearResolver;
 use App\Services\LeaveService;
@@ -266,6 +268,7 @@ class MyTimeOff extends Component
     public function closeRequestModal(): void
     {
         $this->showRequestModal = false;
+        $this->assistantAiText = null;
         $this->resetErrorBag();
         $this->resetValidation();
     }
@@ -573,6 +576,50 @@ class MyTimeOff extends Component
         }
     }
 
+    /** The AI's plain-words summary of the assistant's facts, when asked. */
+    public ?string $assistantAiText = null;
+
+    /** Switch the form to the leave type the assistant suggests. */
+    public function useSuggestedType(int $leaveTypeId): void
+    {
+        $this->leave_type_id = $leaveTypeId;
+        $this->updatedLeaveTypeId((string) $leaveTypeId);
+        $this->assistantAiText = null;
+    }
+
+    /**
+     * Ask the AI to restate the assistant's facts in plain words. It is given
+     * only those facts and told to add nothing: every number still comes
+     * from the leave services, and the submit is still validated by them.
+     */
+    public function explainWithAi(): void
+    {
+        $employee = Auth::user()->employee;
+        $ai = app(AiAssistant::class);
+
+        if (! $employee || ! $ai->enabledForUser(Auth::user())) {
+            return;
+        }
+
+        $assistant = app(LeaveAssistantService::class)->explain(
+            $employee, app(EmployeeLeaveOverviewService::class)->for($employee),
+            $this->leave_type_id ? LeaveType::find($this->leave_type_id) : null,
+            $this->start_date ?: null, $this->end_date ?: null, $this->is_half_day, $this->requested_leave_status ?: 'paid',
+        );
+
+        try {
+            $this->assistantAiText = $ai->ask(
+                'You explain an employee\'s leave request in 2-4 short, friendly sentences. Use ONLY the facts and messages in the JSON you are given. '
+                .'Never invent a policy, rule, number or date, never round or recalculate a figure, and never promise approval. If something is not in the JSON, do not mention it.',
+                json_encode(['facts' => $assistant['facts'], 'messages' => collect($assistant['messages'])->pluck('text')->all()], JSON_UNESCAPED_UNICODE),
+            );
+        } catch (\Throwable $e) {
+            report($e);
+            $this->assistantAiText = null;
+            \Flux::toast('The AI explanation is unavailable right now; the details above are complete.', variant: 'warning');
+        }
+    }
+
     public function render()
     {
         $employee = Auth::user()->employee;
@@ -767,13 +814,11 @@ class MyTimeOff extends Component
                 $rs = Carbon::parse($this->start_date);
                 $re = Carbon::parse($this->end_date);
                 if ($rs->lte($re)) {
-                    $rangeHolidays = PublicHoliday::query()
-                        ->active()
-                        ->whereBetween('date', [$rs->toDateString(), $re->toDateString()])
-                        ->forEmployee($employee)
-                        ->orderBy('date')
-                        ->get()
-                        ->filter->appliesToEmployee($employee)
+                    // The employee's own calendar, exactly as the submit checks it.
+                    $resolver = app(HolidayResolver::class);
+                    $rangeHolidays = $resolver->holidaysInRange($rs, $re)
+                        ->filter(fn (PublicHoliday $h) => $resolver->appliesTo($h, $employee))
+                        ->sortBy('date')
                         ->values();
                 }
             } catch (\Throwable) {
@@ -899,7 +944,17 @@ class MyTimeOff extends Component
 
         $approvedThisYearDays = $overview['taken_this_year'];
 
+        // ── Leave Assistant: live explanation of the request being built ──
+        $assistant = ($this->showRequestModal && $employee)
+            ? app(LeaveAssistantService::class)->explain(
+                $employee, $overview, $selectedType, $this->start_date ?: null, $this->end_date ?: null,
+                $this->is_half_day, $this->requested_leave_status ?: 'paid',
+            )
+            : null;
+
         return view('livewire.time-off.my-time-off', [
+            'assistant' => $assistant,
+            'assistantAiAvailable' => $assistant !== null && app(AiAssistant::class)->enabledForUser(Auth::user()),
             'balances' => $balances,
             'overview' => $overview,
             'approvedThisYearDays' => $approvedThisYearDays,

@@ -1399,6 +1399,53 @@
                             <p class="mt-2 text-[10px] text-zinc-400">Attachments are automatically deleted 30 days after the leave is approved.</p>
                         </div>
 
+                        {{-- Leave Assistant: explains the request from live data only.
+                             Nothing here decides anything — the submit is validated
+                             by the leave rules on the server. --}}
+                        @if($assistant)
+                            @php
+                                $tone = [
+                                    'info' => ['information-circle', 'text-zinc-600 dark:text-zinc-300', 'text-zinc-400'],
+                                    'success' => ['check-circle', 'text-emerald-700 dark:text-emerald-300', 'text-emerald-500'],
+                                    'warning' => ['exclamation-triangle', 'text-amber-700 dark:text-amber-300', 'text-amber-500'],
+                                    'error' => ['x-circle', 'text-rose-700 dark:text-rose-300', 'text-rose-500'],
+                                ];
+                            @endphp
+                            <div class="rounded-xl border border-brand-100 bg-brand-50/50 p-3.5 dark:border-brand-900/40 dark:bg-brand-950/10" data-testid="leave-assistant">
+                                <div class="mb-2 flex items-center justify-between gap-2">
+                                    <p class="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-brand-700 dark:text-brand-300">
+                                        <flux:icon.sparkles class="size-4" /> Leave Assistant
+                                    </p>
+                                    @if($assistantAiAvailable)
+                                        <button type="button" wire:click="explainWithAi" wire:loading.attr="disabled" wire:target="explainWithAi"
+                                            class="text-[11px] font-semibold text-brand-700 hover:underline dark:text-brand-300">
+                                            <span wire:loading.remove wire:target="explainWithAi">Explain in plain words</span>
+                                            <span wire:loading wire:target="explainWithAi">Thinking…</span>
+                                        </button>
+                                    @endif
+                                </div>
+                                <ul class="space-y-1.5">
+                                    @foreach($assistant['messages'] as $message)
+                                        @php [$icon, $text, $iconColor] = $tone[$message['tone']] ?? $tone['info']; @endphp
+                                        <li class="flex items-start gap-2 text-xs {{ $text }}">
+                                            <flux:icon :name="$icon" class="mt-px size-4 shrink-0 {{ $iconColor }}" />
+                                            <span>{{ $message['text'] }}</span>
+                                        </li>
+                                    @endforeach
+                                </ul>
+                                @if($assistant['suggestion'] && (int) $assistant['suggestion']['type_id'] !== (int) $leave_type_id)
+                                    <button type="button" wire:click="useSuggestedType({{ $assistant['suggestion']['type_id'] }})"
+                                        class="mt-2 inline-flex items-center gap-1 rounded-lg bg-white px-2.5 py-1 text-[11px] font-bold text-brand-700 shadow-sm ring-1 ring-brand-200 hover:bg-brand-50 dark:bg-zinc-900 dark:text-brand-300 dark:ring-brand-800">
+                                        Use {{ $assistant['suggestion']['name'] }}
+                                    </button>
+                                @endif
+                                @if($assistantAiText)
+                                    <p class="mt-2 rounded-lg bg-white/70 p-2 text-xs text-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-200">{{ $assistantAiText }}</p>
+                                @endif
+                                <p class="mt-2 text-[10px] text-zinc-400">Figures come from your live balance and the leave rules. Final checks happen when you submit.</p>
+                            </div>
+                        @endif
+
                         {{-- Validation summary — surfaces EVERY blocked-submit reason
                              (missing reason, bad dates, insufficient balance, …) right
                              next to the button the user just clicked. --}}

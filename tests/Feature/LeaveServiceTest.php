@@ -8,6 +8,7 @@ use App\Models\LeaveType;
 use App\Models\Office;
 use App\Models\PublicHoliday;
 use App\Models\User;
+use App\Services\Attendance\HolidayResolver;
 use App\Services\LeaveService;
 use Illuminate\Support\Carbon;
 
@@ -470,8 +471,10 @@ it('persists the bridged dates and day-count through submitRequest', function ()
 it('blocks a leave request that overlaps a company holiday', function () {
     $employee = leaveEmployee();
     $type = paidLeaveType();
+    // On the employee's own holiday calendar: a holiday on another calendar
+    // (e.g. an Indian holiday for a UK employee) does not block their leave.
     PublicHoliday::factory()->create([
-        'name' => 'Independence Day', 'date' => '2026-08-19', 'country' => 'IN', 'is_active' => true,
+        'name' => 'Independence Day', 'date' => '2026-08-19', 'country' => app(HolidayResolver::class)->resolveCountry($employee), 'is_active' => true,
         'office_id' => null, 'department_id' => null,
     ]);
 

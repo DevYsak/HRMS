@@ -21,6 +21,7 @@ use App\Notifications\LeaveMonthlyAccrualNotification;
 use App\Notifications\LeavePaymentStatusChangedNotification;
 use App\Notifications\LeaveRequestNotification;
 use App\Services\Approvals\ApprovalGuard;
+use App\Services\Attendance\HolidayResolver;
 use App\Services\Attendance\WorkingDayResolver;
 use App\Services\Audit\AuditService;
 use App\Services\Leave\LeaveAccrualService;
@@ -158,19 +159,19 @@ class LeaveService
     }
 
     /**
-     * The first active company holiday within [start, end] that applies to
-     * the given employee (respecting branch/department/employee scope), or
-     * null. Used to block leave that overlaps a holiday.
+     * The first active holiday within [start, end] that applies to the given
+     * employee — on their own holiday calendar (UK / IN) and within any
+     * branch / department / employee scope — or null. Used to block leave
+     * that overlaps a holiday. It ignored the calendar, so UK staff were
+     * blocked over Indian holidays and India staff over UK bank holidays.
      */
     public function holidayWithinRange(Employee $employee, Carbon $start, Carbon $end): ?PublicHoliday
     {
-        return PublicHoliday::query()
-            ->active()
-            ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
-            ->forEmployee($employee)
-            ->orderBy('date')
-            ->get()
-            ->first(fn (PublicHoliday $h) => $h->appliesToEmployee($employee));
+        $resolver = app(HolidayResolver::class);
+
+        return $resolver->holidaysInRange($start, $end)
+            ->sortBy('date')
+            ->first(fn (PublicHoliday $h) => $resolver->appliesTo($h, $employee));
     }
 
     /**
