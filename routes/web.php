@@ -11,6 +11,7 @@ use App\Http\Controllers\PayslipController;
 use App\Http\Controllers\ReportController;
 use App\Livewire\AiAssistantPage;
 use App\Livewire\Attendance\AllAttendance;
+use App\Livewire\Attendance\AttendanceExceptions;
 use App\Livewire\Attendance\AttendanceReports;
 use App\Livewire\Attendance\AttendanceSettings;
 use App\Livewire\Attendance\AttendanceTracker;
@@ -83,6 +84,7 @@ use App\Livewire\Profile\EmployeeProfile;
 use App\Livewire\Profile\MyProfile;
 use App\Livewire\Settings\ApprovalPolicySettings;
 use App\Livewire\Settings\ControlPanel;
+use App\Livewire\Settings\CoordinatorAssignments;
 use App\Livewire\Settings\DataManagement;
 use App\Livewire\Settings\DepartmentManager;
 use App\Livewire\Settings\EmploymentTypeManager;
@@ -192,6 +194,9 @@ Route::middleware(['auth'])->group(function () {
     // Holiday calendar — every employee, their own calendar only.
     Route::get('/holidays', HolidayCalendar::class)->name('holidays.calendar');
 
+    // Coordinator assignments — assign_coordinators, checked in the component.
+    Route::get('/settings/coordinators', CoordinatorAssignments::class)->name('settings.coordinators');
+
     // Personal notification preferences (optional events only).
     Route::get('/settings/my-notifications', MyNotificationPreferences::class)->name('settings.my-notifications');
 
@@ -276,6 +281,8 @@ Route::middleware(['auth'])->group(function () {
     // --------------------------------------------------
     Route::prefix('attendance')->name('attendance.')->group(function () {
         Route::get('/my', AttendanceTracker::class)->name('my');
+        // Coordinators and HR — monitor_attendance_exceptions, checked in the component.
+        Route::get('/exceptions', AttendanceExceptions::class)->name('exceptions');
         Route::middleware('role:approve-leave')->group(function () {
             Route::get('/team', TeamAttendance::class)->name('team');
             Route::get('/employees', AllAttendance::class)->name('employees');

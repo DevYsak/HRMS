@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 
-#[Fillable(['shift_start', 'shift_end', 'weekly_off_days', 'late_grace_period', 'late_warning_threshold', 'auto_checkout_buffer_minutes', 'ot_auto_close_time', 'ot_rate_per_hour', 'requires_location', 'requires_qr', 'requires_photo'])]
+#[Fillable(['shift_start', 'shift_end', 'weekly_off_days', 'late_grace_period', 'late_warning_threshold', 'auto_checkout_buffer_minutes', 'ot_auto_close_time', 'ot_rate_per_hour', 'requires_location', 'requires_qr', 'requires_photo', 'coordinator_reminder_hours', 'coordinator_late_minutes'])]
 class AttendanceSetting extends Model
 {
     protected $casts = [

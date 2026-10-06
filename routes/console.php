@@ -28,6 +28,15 @@ Schedule::command('hrms:release-stale-claims')
 // Flag today's missing check-outs → 21:00 IST (IT shift ends 19:30 + 1 hr buffer; spec §7)
 // and 23:05 IST (UK Sales shift ends 22:00 + 1 hr). Each run flags only days
 // whose own shift deadline has passed; an already-flagged day is skipped.
+// Coordinator attendance alerts — every 30 minutes through the working day.
+// Deduplicated: an exception is reported once, and repeated only when the
+// reminder interval (Settings → Coordinators) rolls over unresolved.
+Schedule::command('hrms:coordinator-attendance-alerts')
+    ->everyThirtyMinutes()
+    ->between('09:30', '21:30')
+    ->withoutOverlapping()
+    ->runInBackground();
+
 Schedule::command('hrms:flag-missing-checkouts')
     ->dailyAt('21:00')
     ->withoutOverlapping()

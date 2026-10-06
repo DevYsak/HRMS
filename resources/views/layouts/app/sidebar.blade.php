@@ -12,7 +12,8 @@
     @php
         $user = auth()->user();
         $employee = $user->employee;
-        $isEmp = $user->role?->value === 'employee';
+        // A Coordinator is an employee with a monitoring page, not a manager.
+        $isEmp = in_array($user->role?->value, ['employee', 'coordinator'], true);
         $isMgr = $user->isManager();
         $isHr = $user->isHrAdmin() || $user->isSuperAdmin();
         $isFin = $user->canApproveFinance();
@@ -516,6 +517,9 @@
                         @can('approve_leave')
                             <flux:sidebar.item :href="route('attendance.employees')" :current="request()->routeIs('attendance.employees')" wire:navigate>All Attendance</flux:sidebar.item>
                             <flux:sidebar.item :href="route('attendance.command-center')" :current="request()->routeIs('attendance.command-center')" :badge="$pendingApprovals ?: null" badge-color="amber" wire:navigate>Command Center</flux:sidebar.item>
+                            @if($user->hasPermission('monitor_attendance_exceptions'))
+                                <flux:sidebar.item :href="route('attendance.exceptions')" :current="request()->routeIs('attendance.exceptions')" wire:navigate>Exceptions</flux:sidebar.item>
+                            @endif
                             <flux:sidebar.item :href="route('attendance.reports')" :current="request()->routeIs('attendance.reports')" wire:navigate>Attendance Reports</flux:sidebar.item>
                             <flux:sidebar.item :href="route('attendance.executive')" :current="request()->routeIs('attendance.executive')" wire:navigate>Executive View</flux:sidebar.item>
                             @can('manage_biometric')

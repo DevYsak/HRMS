@@ -60,6 +60,7 @@ class ControlPanel extends Component
                     ['label' => 'Leave Policies', 'description' => 'Conditional default allocations', 'icon' => 'adjustments-horizontal', 'route' => 'time-off.leave-policies'],
                     ['label' => 'Bulk Leave', 'description' => 'Assign balances in bulk', 'icon' => 'user-group', 'route' => 'time-off.bulk-assign'],
                     ['label' => 'Attendance Settings', 'description' => 'Shifts, grace, biometric', 'icon' => 'clock', 'route' => 'attendance.settings'],
+                    ['label' => 'Coordinators', 'description' => 'Who monitors whose attendance', 'icon' => 'eye', 'route' => 'settings.coordinators', 'permission' => 'assign_coordinators'],
                     ['label' => 'Holidays', 'description' => 'Holiday calendars & lists', 'icon' => 'sun', 'route' => 'settings.holidays'],
                     ['label' => 'Holiday Pay', 'description' => 'Pay for work on holidays', 'icon' => 'banknotes', 'route' => 'settings.holiday-pay'],
                 ],

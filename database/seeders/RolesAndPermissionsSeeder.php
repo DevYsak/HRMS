@@ -41,6 +41,9 @@ class RolesAndPermissionsSeeder extends Seeder
             ['key' => 'manage_attendance', 'label' => 'Manage Attendance', 'description' => 'Edit and correct attendance records'],
             ['key' => 'approve_regularisation', 'label' => 'Approve Regularisation', 'description' => 'Approve attendance regularisation requests'],
             ['key' => 'hr_approve_regularisation', 'label' => 'Approve Regularisations (HR)', 'description' => 'Approve or reject attendance and leave regularisation requests; an approval applies the correction'],
+            ['key' => 'monitor_attendance_exceptions', 'label' => 'Monitor Attendance Exceptions', 'description' => 'See absent, late, missing check-out and regularisation status for assigned employees'],
+            ['key' => 'remind_employees', 'label' => 'Remind / Escalate Attendance', 'description' => 'Remind an employee about an attendance exception, or escalate it to their manager or HR'],
+            ['key' => 'assign_coordinators', 'label' => 'Assign Coordinators', 'description' => 'Choose which employees and departments each coordinator monitors'],
             ['key' => 'manage_shifts', 'label' => 'Manage Shifts', 'description' => 'Configure shifts and work schedules'],
             ['key' => 'manage_biometric', 'label' => 'Manage Biometric', 'description' => 'Configure biometric devices and sync settings'],
             ['key' => 'approve_overtime', 'label' => 'Approve Overtime', 'description' => 'Review and approve overtime pre-approval requests'],
@@ -132,6 +135,7 @@ class RolesAndPermissionsSeeder extends Seeder
         'manager' => ['name' => 'Manager', 'description' => 'Manages a team — approvals and performance reviews.'],
         'finance' => ['name' => 'Finance', 'description' => 'Runs payroll and signs off on financial approvals.'],
         'employee' => ['name' => 'Employee', 'description' => 'Standard employee self-service access.'],
+        'coordinator' => ['name' => 'Coordinator', 'description' => 'Monitors attendance exceptions for assigned employees; reminds and escalates.'],
     ];
 
     /**
@@ -145,7 +149,7 @@ class RolesAndPermissionsSeeder extends Seeder
         'hr_admin' => [
             'view_dashboard', 'view_executive_dashboard', 'view_hr_dashboard',
             'manage_employees', 'create_employee', 'edit_employee', 'delete_employee', 'view_employee', 'view_directory', 'view_org_chart', 'manage_onboarding', 'manage_offboarding',
-            'view_attendance', 'manage_attendance', 'approve_regularisation', 'hr_approve_regularisation', 'manage_shifts', 'manage_biometric', 'approve_overtime', 'approve_wfh',
+            'view_attendance', 'manage_attendance', 'approve_regularisation', 'hr_approve_regularisation', 'monitor_attendance_exceptions', 'remind_employees', 'assign_coordinators', 'manage_shifts', 'manage_biometric', 'approve_overtime', 'approve_wfh',
             'view_leave', 'apply_leave', 'approve_leave', 'manage_leave_types', 'manage_leave_policies', 'manage_leave_balances', 'manage_leave_encashment',
             'view_leave_carry_forward', 'manage_leave_carry_forward',
             'view_leave_management', 'add_leave_balance', 'deduct_leave_balance', 'correct_leave_balance', 'apply_leave_on_behalf', 'record_approved_leave', 'manage_approved_leave',
@@ -198,6 +202,18 @@ class RolesAndPermissionsSeeder extends Seeder
             'view_performance',
             'view_documents', 'acknowledge_documents',
             'edit_own_profile', 'request_profile_change',
+        ],
+        // Employee self-service plus attendance monitoring — no approvals,
+        // payroll or settings.
+        'coordinator' => [
+            'view_dashboard',
+            'view_directory', 'view_org_chart',
+            'view_leave', 'apply_leave',
+            'view_payslips',
+            'view_performance',
+            'view_documents', 'acknowledge_documents',
+            'edit_own_profile', 'request_profile_change',
+            'view_attendance', 'monitor_attendance_exceptions', 'remind_employees',
         ],
     ];
 

@@ -43,7 +43,7 @@ test('super admin bypasses all dynamic permission checks regardless of role perm
 });
 
 test('granting a custom role a permission makes Gate::allows resolve true for it', function () {
-    $role = Role::create(['name' => 'Coordinator', 'slug' => 'coordinator', 'is_system' => false, 'is_active' => true]);
+    $role = Role::create(['name' => 'Scheduler', 'slug' => 'scheduler', 'is_system' => false, 'is_active' => true]);
     $user = User::factory()->create(['role_id' => $role->id]);
 
     expect($user->fresh()->hasPermission('manage_kpi_templates'))->toBeFalse();

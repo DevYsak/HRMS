@@ -33,6 +33,8 @@ class EmployeeMenu
         ['key' => 'documents', 'label' => 'Documents', 'icon' => 'document-text', 'type' => 'item', 'route' => 'documents.index', 'active' => 'documents.*', 'badge' => 'documents'],
         ['key' => 'inbox', 'label' => 'Inbox', 'icon' => 'inbox', 'type' => 'item', 'route' => 'notifications.index', 'active' => 'notifications.*', 'badge' => 'inbox'],
         ['key' => 'help', 'label' => 'Help & Guide', 'icon' => 'lifebuoy', 'type' => 'item', 'route' => 'help.employee-guide', 'active' => 'help.*'],
+        // Coordinators only (a permission, so the plain employee menu is unchanged).
+        ['key' => 'exceptions', 'label' => 'Attendance Exceptions', 'icon' => 'exclamation-triangle', 'type' => 'item', 'route' => 'attendance.exceptions', 'active' => 'attendance.exceptions', 'permission' => 'monitor_attendance_exceptions'],
     ];
 
     /**
@@ -42,7 +44,10 @@ class EmployeeMenu
      */
     public function visible(): array
     {
-        return array_values(array_filter($this->merged(), fn ($item) => $item['enabled']));
+        $user = auth()->user();
+
+        return array_values(array_filter($this->merged(), fn ($item) => $item['enabled']
+            && (! isset($item['permission']) || ($user !== null && $user->hasPermission($item['permission'])))));
     }
 
     /**

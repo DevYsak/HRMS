@@ -11,6 +11,9 @@ enum UserRole: string
     case Finance = 'finance';
     case Employee = 'employee';
 
+    /** Monitors attendance exceptions for assigned employees; no approval powers. */
+    case Coordinator = 'coordinator';
+
     public function label(): string
     {
         return match ($this) {
@@ -20,6 +23,7 @@ enum UserRole: string
             self::Manager => 'Manager',
             self::Finance => 'Finance',
             self::Employee => 'Employee',
+            self::Coordinator => 'Coordinator',
         };
     }
 

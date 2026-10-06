@@ -49,7 +49,7 @@ test('a custom role can be created with selected permissions', function () {
 });
 
 test('editing a role updates its permissions and is reflected in hasPermission', function () {
-    $role = Role::create(['name' => 'Coordinator', 'slug' => 'coordinator', 'is_system' => false, 'is_active' => true]);
+    $role = Role::create(['name' => 'Scheduler', 'slug' => 'scheduler', 'is_system' => false, 'is_active' => true]);
     $user = User::factory()->create(['role_id' => $role->id]);
 
     $viewDashboard = Permission::where('key', 'view_dashboard')->firstOrFail();
@@ -83,7 +83,7 @@ test('cloning a role duplicates its permission set as a new custom role', functi
 });
 
 test('deleting a role is blocked while users are assigned', function () {
-    $role = Role::create(['name' => 'Coordinator', 'slug' => 'coordinator', 'is_system' => false, 'is_active' => true]);
+    $role = Role::create(['name' => 'Scheduler', 'slug' => 'scheduler', 'is_system' => false, 'is_active' => true]);
     User::factory()->create(['role_id' => $role->id]);
 
     Livewire::actingAs($this->admin)
@@ -95,7 +95,7 @@ test('deleting a role is blocked while users are assigned', function () {
 });
 
 test('a role with no users assigned can be deleted', function () {
-    $role = Role::create(['name' => 'Coordinator', 'slug' => 'coordinator', 'is_system' => false, 'is_active' => true]);
+    $role = Role::create(['name' => 'Scheduler', 'slug' => 'scheduler', 'is_system' => false, 'is_active' => true]);
 
     Livewire::actingAs($this->admin)
         ->test(RoleManager::class)
