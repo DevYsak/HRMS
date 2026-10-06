@@ -136,16 +136,13 @@ class AttendanceService
     }
 
     /**
-     * Advance a regularisation through the approval chain
-     * (Manager Review → HR Review → Admin Approval → Approved).
+     * Approve a regularisation request.
+     * Routed directly to HR (HR Review → Approved): a holder of "Approve
+     * Regularisations (HR)" approves and the correction is applied in the
+     * same step. Managers no longer approve. Raw biometric logs are never
+     * modified, and every action lands in the approval_trail audit.
      *
-     * Each reviewer clears every stage their role covers: a manager clears
-     * manager_review, HR clears through hr_review, a super admin finalises.
-     * Attendance is only touched at FINAL approval — raw biometric logs are
-     * never modified, and every action lands in the approval_trail audit.
-     *
-     * Returns the updated Attendance at final approval, null when the request
-     * merely advanced a stage (or the reviewer can't act at the current stage).
+     * Returns the updated Attendance once applied.
      */
     public function approveRegularisation(AttendanceRegularisation $regularisation, int $reviewerId, ?string $comment = null): ?Attendance
     {
@@ -156,18 +153,11 @@ class AttendanceService
         app(ApprovalGuard::class)->assertCanDecide($reviewerId, $regularisation->employee);
 
         $reviewer = User::find($reviewerId);
-        $level = $this->approvalLevel($reviewer);
-        $currentStage = $regularisation->stage ?: 'manager_review';
-        $current = AttendanceRegularisation::STAGES[$currentStage] ?? 1;
-
-        // Can't act at a stage above the reviewer's role.
-        if ($level < $current) {
-            return null;
-        }
+        $this->assertDecidesRegularisations($reviewer);
 
         $trail = $regularisation->approval_trail ?? [];
         $trail[] = [
-            'stage' => $currentStage,
+            'stage' => 'hr_review',
             'action' => 'approved',
             'by' => $reviewerId,
             'name' => $reviewer?->name,
@@ -175,15 +165,22 @@ class AttendanceService
             'at' => now()->toDateTimeString(),
         ];
 
-        // Not the final authority yet → advance to the next stage and stop.
-        if ($level < 3) {
-            $nextStage = array_search($level + 1, AttendanceRegularisation::STAGES, true);
-            $regularisation->update(['stage' => $nextStage, 'approval_trail' => $trail]);
+        // HR's approval is final: the correction is applied now.
+        return $this->applyRegularisation($regularisation, $reviewerId, $comment, $trail, 'hr_direct');
+    }
 
-            return null;
+    /**
+     * Regularisations are routed directly to HR: only a holder of
+     * "Approve Regularisations (HR)" decides them (Super Admin always).
+     * Managers see their team's requests but no longer approve them.
+     *
+     * @throws \DomainException
+     */
+    private function assertDecidesRegularisations(?User $reviewer): void
+    {
+        if (! $reviewer?->canApproveRegularisations()) {
+            throw new \DomainException('Regularisation requests are approved by HR.');
         }
-
-        return $this->applyRegularisation($regularisation, $reviewerId, $comment, $trail, 'admin_chain');
     }
 
     /**
@@ -452,10 +449,11 @@ class AttendanceService
         }
 
         app(ApprovalGuard::class)->assertCanDecide($reviewerId, $regularisation->employee);
+        $this->assertDecidesRegularisations(User::find($reviewerId));
 
         $trail = $regularisation->approval_trail ?? [];
         $trail[] = [
-            'stage' => $regularisation->stage ?: 'manager_review',
+            'stage' => $regularisation->stage ?: 'hr_review',
             'action' => 'rejected',
             'by' => $reviewerId,
             'name' => User::find($reviewerId)?->name,
@@ -472,26 +470,6 @@ class AttendanceService
         ]);
 
         return $regularisation->fresh();
-    }
-
-    /**
-     * Workflow authority: super admin finalises (3), HR clears through
-     * hr_review (2), managers clear manager_review (1).
-     *
-     * The staged chain is deliberate — each level sees the request before it
-     * takes effect. HR's need to correct a day immediately is served by
-     * fastTrackRegularisation() instead, which is an explicit, separately
-     * authorised, separately audited action rather than a quiet change to what
-     * "approve" means for everyone.
-     */
-    protected function approvalLevel(?User $user): int
-    {
-        return match (true) {
-            $user === null => 1,
-            $user->isSuperAdmin() || $user->assignedRole?->slug === 'super_admin' => 3,
-            $user->isHrAdmin() => 2,
-            default => 1,
-        };
     }
 
     /**

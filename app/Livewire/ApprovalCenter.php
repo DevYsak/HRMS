@@ -101,7 +101,7 @@ class ApprovalCenter extends Component
                     break;
 
                 case 'regularisation':
-                    abort_unless($user->canApproveLeave(), 403);
+                    abort_unless($user->canApproveRegularisations(), 403);
                     $req = AttendanceRegularisation::with('claimer')->findOrFail($id);
                     app(ApprovalGuard::class)->assertCanDecide($user, $req->employee);
                     if (! $this->guardClaim($req)) {
@@ -220,7 +220,8 @@ class ApprovalCenter extends Component
             }
         }
 
-        if ($canLeave) {
+        // Regularisations are listed to the HR approvers who decide them.
+        if ($user->canApproveRegularisations()) {
             foreach (AttendanceRegularisation::where('status', 'pending')
                 ->tap($inReach)
                 ->with('employee.user', 'employee.department')

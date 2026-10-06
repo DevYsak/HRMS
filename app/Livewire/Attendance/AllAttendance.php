@@ -401,7 +401,8 @@ class AllAttendance extends Component
     /** One-click approve from the drawer; rejection goes via the review modal (comment required). */
     public function quickApproveRegularisation(int $id): void
     {
-        abort_unless(Auth::user()->canApproveLeave(), 403);
+        // Regularisations are decided by HR ("Approve Regularisations (HR)").
+        abort_unless(Auth::user()->canApproveRegularisations(), 403);
 
         $request = AttendanceRegularisation::with('employee.user')->findOrFail($id);
         abort_unless($request->employee && Auth::user()->coversEmployee($request->employee), 403);
@@ -422,12 +423,8 @@ class AllAttendance extends Component
 
         if ($attendance) {
             AuditLog::record($attendance, 'regularised', $attendance->toArray(), null);
-            \Flux::toast('Regularisation approved — hours & attendance updated.');
-        } else {
-            \Flux::toast($request->status === 'pending'
-                ? 'Approved at your stage — now awaiting '.$request->stageLabel().'.'
-                : 'Regularisation updated.');
         }
+        \Flux::toast('Regularisation approved — hours & attendance updated.');
         $request->employee->user?->notify(new RegularisationReviewedNotification($request));
 
         if ($this->drawerEmployeeId) {
@@ -437,7 +434,7 @@ class AllAttendance extends Component
 
     public function openReviewModal(int $id): void
     {
-        abort_unless(Auth::user()->canApproveLeave(), 403);
+        abort_unless(Auth::user()->canApproveRegularisations(), 403);
 
         $this->activeRequest = AttendanceRegularisation::with('employee.user', 'attendance', 'reviewer', 'claimer')->findOrFail($id);
         abort_unless($this->activeRequest->employee && Auth::user()->coversEmployee($this->activeRequest->employee), 403);

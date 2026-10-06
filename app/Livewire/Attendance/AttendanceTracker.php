@@ -1931,7 +1931,8 @@ class AttendanceTracker extends Component
             'reason' => $this->regReason,
             'attachment_path' => $this->regAttachment?->store('regularisation-attachments', 'public'),
             'status' => 'pending',
-            'stage' => 'manager_review',
+            // Routed directly to HR, whose approval applies it.
+            'stage' => 'hr_review',
         ];
 
         if ($isHalfDay) {
@@ -1967,8 +1968,8 @@ class AttendanceTracker extends Component
 
         $regularisation = AttendanceRegularisation::create($payload);
 
-        // Notify the manager AND HR/Admin so either can approve. Notifications
-        // are best-effort: the request is already saved, so a mail-transport
+        // Notify HR — regularisations are routed directly to HR, whose approval
+        // applies them. Notifications are best-effort: the request is already saved, so a mail-transport
         // failure (e.g. SMTP timeout) must not 500 the employee's submit. The
         // in-app database channel is written before mail, so the inbox still
         // updates even when the email send throws.
@@ -1978,17 +1979,11 @@ class AttendanceTracker extends Component
                 Carbon::parse($this->regDate)->format('d M Y'),
                 'pending',
             );
-            // Route to HR whose department/shift scope covers this employee
-            // (company-wide HR + super admins always included), plus the manager.
-            $hr = app(NotificationRecipients::class)->hrCovering($employee);
-            $manager = $employee->manager;
-
-            // Tagged per recipient so HR and the manager can be configured
-            // and templated separately for the same request.
-            $hr->reject(fn ($u) => $manager && $u->id === $manager->id)
+            // Everyone holding "Approve Regularisations (HR)" whose scope
+            // covers this employee (Super Admins included).
+            app(NotificationRecipients::class)->regularisationApprovers($employee)
                 ->unique('id')
                 ->each(fn ($u) => $u->notify($notification->forRole('hr_admin')));
-            $manager?->notify($notification->forRole('manager'));
 
             // Notify the employee themselves so the request appears in their inbox
             Auth::user()->notify(new RegularisationReviewedNotification($regularisation));
@@ -1998,7 +1993,7 @@ class AttendanceTracker extends Component
 
         $this->reset(['regDate', 'regCheckIn', 'regCheckOut', 'regReason', 'regFixIn', 'regFixOut', 'regAttachment', 'regType', 'regHalfDayPeriod']);
         $this->modal('regularisation-modal')->close();
-        \Flux::toast('Regularisation request sent to your manager & HR for approval.');
+        \Flux::toast('Regularisation request sent to HR for approval.');
     }
 
     /**

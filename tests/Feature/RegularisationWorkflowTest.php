@@ -8,9 +8,10 @@ use App\Models\User;
 use App\Services\AttendanceService;
 
 /**
- * Multi-stage regularisation approval:
- * Pending → Manager Review → HR Review → Admin Approval → Approved/Rejected.
- * Attendance is only written at FINAL approval; every action is audited.
+ * Regularisation approval, routed directly to HR:
+ * Pending (HR Review) → Approved/Rejected.
+ * HR's approval writes attendance in the same step; managers no longer
+ * decide. Every action is audited.
  */
 function makeRegularisation(Employee $employee): AttendanceRegularisation
 {
@@ -25,11 +26,11 @@ function makeRegularisation(Employee $employee): AttendanceRegularisation
         'check_out_method' => 'id_card',
         'reason' => 'Forgot to punch out at the gate.',
         'status' => 'pending',
-        'stage' => 'manager_review',
+        'stage' => 'hr_review',
     ]);
 }
 
-test('a half-day regularisation marks the day half_day on final approval', function () {
+test('a half-day regularisation marks the day half_day on HR approval', function () {
     $employee = Employee::factory()->create();
     $date = today()->subDay()->toDateString();
 
@@ -40,13 +41,9 @@ test('a half-day regularisation marks the day half_day on final approval', funct
         'half_day_period' => 'first',
         'reason' => 'Left after lunch for a medical appointment.',
         'status' => 'pending',
-        'stage' => 'manager_review',
+        'stage' => 'hr_review',
     ]);
-    $service = app(AttendanceService::class);
-
-    $service->approveRegularisation($reg, lineManager()->id);
-    $service->approveRegularisation($reg->refresh(), User::factory()->create(['role' => UserRole::HrAdmin])->id);
-    $attendance = $service->approveRegularisation($reg->refresh(), User::factory()->create(['role' => UserRole::SuperAdmin])->id);
+    $attendance = app(AttendanceService::class)->approveRegularisation($reg, User::factory()->create(['role' => UserRole::HrAdmin])->id);
 
     expect($attendance)->not->toBeNull()
         ->and($attendance->status)->toBe('half_day')
@@ -55,39 +52,28 @@ test('a half-day regularisation marks the day half_day on final approval', funct
         ->and($reg->fresh()->half_day_period)->toBe('first');
 });
 
-test('the request climbs manager → HR → admin, and only final approval writes attendance', function () {
+test('the request goes straight to HR, and HR approval writes attendance', function () {
     $employee = Employee::factory()->create();
     $reg = makeRegularisation($employee);
     $service = app(AttendanceService::class);
 
-    // 1 · Manager clears manager_review only — no attendance yet.
+    // 1 · A manager cannot act on it — no attendance, no trail.
     $manager = lineManager();
-    expect($service->approveRegularisation($reg, $manager->id))->toBeNull();
+    expect(fn () => $service->approveRegularisation($reg, $manager->id))->toThrow(DomainException::class);
     $reg->refresh();
     expect($reg->stage)->toBe('hr_review')
         ->and($reg->status)->toBe('pending')
-        ->and($reg->approval_trail)->toHaveCount(1)
+        ->and($reg->approval_trail)->toBeEmpty()
         ->and(AttendancePunch::where('employee_id', $employee->id)->count())->toBe(0);
 
-    // 2 · HR clears hr_review — still pending.
+    // 2 · HR approves: attendance written, punches carry direction + source.
     $hr = User::factory()->create(['role' => UserRole::HrAdmin]);
-    expect($service->approveRegularisation($reg, $hr->id))->toBeNull();
-    $reg->refresh();
-    expect($reg->stage)->toBe('admin_approval')->and($reg->status)->toBe('pending');
-
-    // 3 · A manager CANNOT act at admin stage — nothing changes.
-    expect($service->approveRegularisation($reg, $manager->id))->toBeNull();
-    $reg->refresh();
-    expect($reg->stage)->toBe('admin_approval')->and($reg->approval_trail)->toHaveCount(2);
-
-    // 4 · Admin finalises: attendance written, punches carry direction + source.
-    $admin = User::factory()->create(['role' => UserRole::SuperAdmin]);
-    $attendance = $service->approveRegularisation($reg, $admin->id, 'Verified with the gate log.');
+    $attendance = $service->approveRegularisation($reg, $hr->id, 'Verified with the gate log.');
     $reg->refresh();
 
     expect($attendance)->not->toBeNull()
         ->and($reg->status)->toBe('approved')
-        ->and($reg->approval_trail)->toHaveCount(3)
+        ->and($reg->approval_trail)->toHaveCount(1)
         ->and($attendance->check_in->format('H:i'))->toBe('09:00')
         ->and($attendance->check_out->format('H:i'))->toBe('18:00')
         ->and($attendance->is_regularized)->toBeTrue();       // day flagged as regularized
@@ -99,7 +85,7 @@ test('the request climbs manager → HR → admin, and only final approval write
         ->and($punches->pluck('source')->unique()->all())->toBe(['regularisation']);
 });
 
-test('a super admin finalises in one step from manager review', function () {
+test('a super admin also approves in one step', function () {
     $employee = Employee::factory()->create();
     $reg = makeRegularisation($employee);
     $admin = User::factory()->create(['role' => UserRole::SuperAdmin]);
@@ -111,21 +97,16 @@ test('a super admin finalises in one step from manager review', function () {
         ->and($reg->status)->toBe('approved');
 });
 
-test('a rejection at any stage ends the workflow with an audit entry', function () {
+test('an HR rejection ends the workflow with an audit entry', function () {
     $employee = Employee::factory()->create();
     $reg = makeRegularisation($employee);
-    $service = app(AttendanceService::class);
-
-    $manager = lineManager();
-    $service->approveRegularisation($reg, $manager->id);   // → hr_review
-    $reg->refresh();
 
     $hr = User::factory()->create(['role' => UserRole::HrAdmin]);
-    $service->rejectRegularisation($reg, $hr->id, 'Gate log shows no exit.');
+    app(AttendanceService::class)->rejectRegularisation($reg, $hr->id, 'Gate log shows no exit.');
     $reg->refresh();
 
     expect($reg->status)->toBe('rejected')
-        ->and($reg->approval_trail)->toHaveCount(2)
+        ->and($reg->approval_trail)->toHaveCount(1)
         ->and(collect($reg->approval_trail)->last()['action'])->toBe('rejected')
         ->and(AttendancePunch::where('employee_id', $employee->id)->count())->toBe(0);
 });

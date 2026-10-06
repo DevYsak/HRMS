@@ -182,10 +182,9 @@ test('the drawer lists every synced punch, including near-adjacent ones', functi
         ->assertSet('drawer.punches_partial', false);    // 3 local == 3 engine
 });
 
-test('quick approve walks the stage chain; the super admin finalises and updates attendance', function () {
+test('HR quick approve applies the regularisation and updates attendance', function () {
     Notification::fake();
     $hr = User::factory()->create(['role' => UserRole::HrAdmin]);
-    $admin = User::factory()->create(['role' => UserRole::SuperAdmin]);
     $employee = Employee::factory()->create(['status' => 'active']);
     $date = today()->subDays(2)->toDateString();
     $att = Attendance::create([
@@ -196,22 +195,13 @@ test('quick approve walks the stage chain; the super admin finalises and updates
     $reg = AttendanceRegularisation::create([
         'employee_id' => $employee->id, 'attendance_id' => $att->id, 'work_date' => $date,
         'requested_check_in' => "$date 09:00:00", 'requested_check_out' => "$date 18:00:00",
-        'reason' => 'Forgot to punch out', 'status' => 'pending', 'stage' => 'manager_review',
+        'reason' => 'Forgot to punch out', 'status' => 'pending', 'stage' => 'hr_review',
     ]);
 
-    // HR quick-approve clears manager + HR review but does NOT touch attendance.
+    // Routed directly to HR: one quick approve applies it and clears pending.
     Livewire::actingAs($hr)->test(AllAttendance::class)
         ->call('openEmployeeDrawer', $employee->id)
         ->assertSet('drawer.pending', fn ($p) => count($p) === 1)
-        ->call('quickApproveRegularisation', $reg->id)
-        ->assertSet('drawer.pending', fn ($p) => count($p) === 1 && $p[0]['stage'] === 'Admin Approval');
-
-    expect($reg->fresh()->status)->toBe('pending');
-    expect($att->fresh()->check_out)->toBeNull();
-
-    // The super admin's approval finalises: attendance updated, pending cleared.
-    Livewire::actingAs($admin)->test(AllAttendance::class)
-        ->call('openEmployeeDrawer', $employee->id)
         ->call('quickApproveRegularisation', $reg->id)
         ->assertSet('drawer.pending', []);
 

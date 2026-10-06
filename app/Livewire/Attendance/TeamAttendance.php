@@ -56,7 +56,8 @@ class TeamAttendance extends Component
 
     public function openReviewModal(int $id)
     {
-        abort_unless(Auth::user()->canApproveLeave(), 403);
+        // Regularisations are decided by HR; managers see their team's requests.
+        abort_unless(Auth::user()->canApproveRegularisations(), 403);
 
         $this->activeRequest = AttendanceRegularisation::with('employee.user', 'attendance')->findOrFail($id);
         app(ApprovalGuard::class)->assertCanDecide(Auth::user(), $this->activeRequest->employee);
@@ -79,12 +80,8 @@ class TeamAttendance extends Component
 
         if ($attendance) {
             AuditLog::record($attendance, 'regularised', $attendance->toArray(), null);
-            \Flux::toast('Regularisation request approved.');
-        } else {
-            \Flux::toast($this->activeRequest->status === 'pending'
-                ? 'Approved at your stage — now awaiting '.$this->activeRequest->stageLabel().'.'
-                : 'Regularisation updated.');
         }
+        \Flux::toast('Regularisation request approved.');
 
         $this->activeRequest->employee->user->notify(new RegularisationReviewedNotification($this->activeRequest));
 

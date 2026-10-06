@@ -82,7 +82,11 @@
                         <span class="font-mono font-bold text-amber-700">{{ \Carbon\Carbon::parse($req->requested_check_in)->format('H:i') }} → {{ \Carbon\Carbon::parse($req->requested_check_out)->format('H:i') }}</span>
                         <span class="hidden truncate italic text-zinc-400 md:inline">“{{ \Illuminate\Support\Str::limit($req->reason, 60) }}”</span>
                     </div>
+                    @if(auth()->user()->canApproveRegularisations())
                     <button wire:click="openReviewModal({{ $req->id }})" class="inline-flex shrink-0 items-center gap-1 rounded-lg bg-amber-500 px-3 py-1 text-[11px] font-bold text-white transition hover:bg-amber-600"><flux:icon.eye class="size-3" /> Review</button>
+                    @else
+                    <span class="inline-flex shrink-0 items-center rounded-lg bg-zinc-100 px-2.5 py-1 text-[10px] font-bold uppercase text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">Awaiting HR</span>
+                    @endif
                 </div>
             @endforeach
         </div>
@@ -413,9 +417,13 @@ EMPLOYEE 360 DRAWER (480px, right)
                                         </div>
                                     @else
                                         <div class="mt-1.5 flex gap-1.5">
+                                            @if(! auth()->user()->canApproveRegularisations())
+                                            <span class="inline-flex shrink-0 items-center rounded-lg bg-zinc-100 px-2.5 py-1 text-[10px] font-bold uppercase text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">Awaiting HR</span>
+                                            @else
                                             <button wire:click="quickApproveRegularisation({{ $pr['id'] }})" class="inline-flex items-center gap-1 rounded-lg bg-emerald-500 px-2.5 py-1 text-[10px] font-bold text-white transition hover:bg-emerald-600"><flux:icon.check class="size-3" /> Approve</button>
                                             <button wire:click="openReviewModal({{ $pr['id'] }})" class="inline-flex items-center gap-1 rounded-lg bg-rose-500 px-2.5 py-1 text-[10px] font-bold text-white transition hover:bg-rose-600"><flux:icon.x-mark class="size-3" /> Reject</button>
                                             <button wire:click="openReviewModal({{ $pr['id'] }})" class="inline-flex items-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1 text-[10px] font-bold text-zinc-600 dark:text-zinc-300 transition hover:bg-zinc-50 dark:bg-zinc-800/50"><flux:icon.pencil-square class="size-3" /> Edit</button>
+                                            @endif
                                         </div>
                                     @endif
                                 </div>

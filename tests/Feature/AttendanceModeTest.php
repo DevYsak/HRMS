@@ -499,9 +499,9 @@ test('regularising only the check-out keeps the recorded check-in', function () 
     expect(Illuminate\Support\Carbon::parse($reg->requested_check_in)->format('H:i'))->toBe('09:17'); // untouched
     expect(Illuminate\Support\Carbon::parse($reg->requested_check_out)->format('H:i'))->toBe('18:30');
 
-    // Manager AND HR are both notified.
-    Notification::assertSentTo($managerUser, AttendanceRegularisationNotification::class);
+    // Routed directly to HR: HR is notified, the manager no longer decides.
     Notification::assertSentTo($hr, AttendanceRegularisationNotification::class);
+    Notification::assertNotSentTo($managerUser, AttendanceRegularisationNotification::class);
 });
 
 test('journey events carry the duration from the previous punch', function () {

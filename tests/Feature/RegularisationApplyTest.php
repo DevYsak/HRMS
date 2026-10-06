@@ -31,6 +31,10 @@ use Livewire\Livewire;
  *        (manage_attendance, which managers do not hold), and separately
  *        audited via applied_via = 'hr_fast_path'.
  *
+ *   Oct 2026  Regularisations are routed directly to HR: an HR approval
+ *        applies the correction (applied_via = 'hr_direct') and managers no
+ *        longer approve. The fast-path is unchanged.
+ *
  * These tests therefore call fastTrackRegularisation() where they previously
  * called approveRegularisation() as HR. What is being asserted — the corrected
  * hours, the break arithmetic, the original-value snapshot — is unchanged;
@@ -88,31 +92,31 @@ test('HR fast-tracking applies the correction instead of parking it', function (
         ->and(Attendance::where('employee_id', $employee->id)->where('date', $date)->exists())->toBeTrue();
 });
 
-test('an HR approval alone does NOT apply the correction', function () {
-    // The other half of the rule change, asserted directly: the chain is real.
+test('an HR approval applies the correction directly', function () {
+    // Routed directly to HR: the approval is final.
     $employee = regApplyEmployee();
     $hr = User::factory()->create(['role' => UserRole::HrAdmin]);
     $date = now()->subDay()->toDateString();
 
     $request = regApplyRequest($employee, $date, '09:00', '18:00');
 
-    expect(app(AttendanceService::class)->approveRegularisation($request, $hr->id))->toBeNull()
-        ->and($request->fresh()->stage)->toBe('admin_approval')
-        ->and($request->fresh()->status)->toBe('pending')
-        ->and(Attendance::where('employee_id', $employee->id)->where('date', $date)->exists())->toBeFalse();
+    expect(app(AttendanceService::class)->approveRegularisation($request, $hr->id))->not->toBeNull()
+        ->and($request->fresh()->status)->toBe('approved')
+        ->and($request->fresh()->applied_via)->toBe('hr_direct')
+        ->and(Attendance::where('employee_id', $employee->id)->where('date', $date)->exists())->toBeTrue();
 });
 
-test('a manager approval still advances rather than finalising', function () {
+test('a manager approval is refused and the request stays with HR', function () {
     $employee = regApplyEmployee();
     $manager = lineManager();
     $date = now()->subDay()->toDateString();
 
     $request = regApplyRequest($employee, $date, '09:00', '18:00');
 
-    $result = app(AttendanceService::class)->approveRegularisation($request, $manager->id);
+    expect(fn () => app(AttendanceService::class)->approveRegularisation($request, $manager->id))
+        ->toThrow(DomainException::class, 'approved by HR');
 
-    expect($result)->toBeNull()
-        ->and($request->fresh()->status)->toBe('pending')
+    expect($request->fresh()->status)->toBe('pending')
         ->and($request->fresh()->stage)->toBe('hr_review');
 });
 

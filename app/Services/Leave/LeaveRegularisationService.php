@@ -11,8 +11,10 @@ use App\Models\LeaveBalanceAdjustment;
 use App\Models\LeaveRequest;
 use App\Models\LeaveType;
 use App\Models\User;
+use App\Notifications\AttendanceRegularisationNotification;
 use App\Services\Attendance\AttendanceScoreEngine;
 use App\Services\Attendance\WorkingDayResolver;
+use App\Services\Notifications\NotificationRecipients;
 use Carbon\CarbonInterface;
 use Carbon\CarbonPeriod;
 use Illuminate\Support\Carbon;
@@ -61,7 +63,7 @@ class LeaveRegularisationService
 
         $this->assertValid($employee, $type, $from, $to, $days, $documentPath);
 
-        return DB::transaction(function () use ($employee, $type, $from, $to, $reason, $requestedBy, $days, $remarks, $documentPath) {
+        $regularisation = DB::transaction(function () use ($employee, $type, $from, $to, $reason, $requestedBy, $days, $remarks, $documentPath) {
             return AttendanceRegularisation::create([
                 'employee_id' => $employee->id,
                 // The existing attendance row for that day, when there is one.
@@ -78,10 +80,25 @@ class LeaveRegularisationService
                 'remarks' => $remarks,
                 'attachment_path' => $documentPath,
                 'status' => 'pending',
-                'stage' => 'manager_review',
+                // Routed directly to HR, whose approval applies it.
+                'stage' => 'hr_review',
                 'applied_by' => $requestedBy->id,
             ]);
         });
+
+        // Routed directly to HR: tell the HR approvers covering this employee.
+        // Best-effort — the request is saved whatever the mail transport does.
+        try {
+            $notification = new AttendanceRegularisationNotification(
+                $employee->user?->name ?? 'An employee', $from->format('d M Y'), 'pending',
+            );
+            app(NotificationRecipients::class)->regularisationApprovers($employee)
+                ->each(fn (User $u) => $u->notify($notification->forRole('hr_admin')));
+        } catch (\Throwable $e) {
+            report($e);
+        }
+
+        return $regularisation;
     }
 
     /**

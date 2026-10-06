@@ -54,6 +54,22 @@ class NotificationRecipients
     }
 
     /**
+     * Who decides this employee's regularisations: everyone holding the
+     * "Approve Regularisations (HR)" permission whose scope covers them —
+     * never the employee themselves.
+     *
+     * @return Collection<int, User>
+     */
+    public function regularisationApprovers(Employee $employee): Collection
+    {
+        return User::query()->whereNull('deleted_at')->get()
+            ->filter(fn (User $u) => $u->id !== $employee->user_id
+                && $u->canApproveRegularisations()
+                && $u->coversEmployee($employee))
+            ->values();
+    }
+
+    /**
      * Finance approvers: the finance role plus super admins.
      *
      * DELIBERATE BROADCAST — a payment awaiting finance sign-off is a team

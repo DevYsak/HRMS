@@ -126,8 +126,8 @@ test('a leave regularisation is raised on the existing regularisation table', fu
         ->and($reg->category)->toBe('leave')
         ->and($reg->leave_type_id)->toBe($type->id)
         ->and($reg->status)->toBe('pending')
-        // The existing chain, entered at its existing first stage.
-        ->and($reg->stage)->toBe('manager_review')
+        // Routed directly to HR.
+        ->and($reg->stage)->toBe('hr_review')
         ->and($reg->duration)->toBe(1.0);
 });
 
@@ -152,70 +152,63 @@ test('an attendance regularisation is untouched by the new category', function (
         ->and($reg->fresh()->isLeave())->toBeFalse();
 });
 
-// ── 2. The existing approval chain ─────────────────────────────────────────
+// ── 2. The approval: routed directly to HR ─────────────────────────────────
 
-test('a manager approval advances the stage rather than applying it', function () {
+test('a manager approval is refused and nothing is applied', function () {
     $employee = lrEmployee();
     $type = lrType();
     lrBalance($employee, $type, allocated: 10);
     $reg = lrSubmit($employee, $type);
 
-    app(AttendanceService::class)->approveRegularisation($reg, lrManager()->id);
+    expect(fn () => app(AttendanceService::class)->approveRegularisation($reg, lrManager()->id))
+        ->toThrow(DomainException::class, 'approved by HR');
 
     $balance = LeaveBalance::where('employee_id', $employee->id)->where('leave_type_id', $type->id)->first();
 
     expect($reg->fresh()->stage)->toBe('hr_review')
         ->and($reg->fresh()->status)->toBe('pending')
-        // Nothing has happened to the balance yet.
+        // Nothing has happened to the balance.
         ->and((float) $balance->used_days)->toBe(0.0);
 });
 
-test('HR approval advances to admin approval, still without applying', function () {
+test('HR approval applies it in one step', function () {
     $employee = lrEmployee();
     $type = lrType();
     lrBalance($employee, $type, allocated: 10);
     $reg = lrSubmit($employee, $type);
 
-    $service = app(AttendanceService::class);
-    $service->approveRegularisation($reg, lrManager()->id);
-    $service->approveRegularisation($reg->fresh(), lrHr()->id);
+    app(AttendanceService::class)->approveRegularisation($reg, lrHr()->id);
 
-    expect($reg->fresh()->stage)->toBe('admin_approval')
-        ->and($reg->fresh()->status)->toBe('pending')
-        ->and((float) LeaveBalance::where('employee_id', $employee->id)->where('leave_type_id', $type->id)->value('used_days'))->toBe(0.0);
+    expect($reg->fresh()->status)->toBe('approved')
+        ->and($reg->fresh()->applied_via)->toBe('hr_direct')
+        ->and((float) LeaveBalance::where('employee_id', $employee->id)->where('leave_type_id', $type->id)->value('used_days'))->toBe(1.0);
 });
 
-test('final approval applies it', function () {
+test('a super admin approval applies it too', function () {
     $employee = lrEmployee();
     $type = lrType();
     lrBalance($employee, $type, allocated: 10);
     $reg = lrSubmit($employee, $type);
 
-    $service = app(AttendanceService::class);
-    $service->approveRegularisation($reg, lrManager()->id);
-    $service->approveRegularisation($reg->fresh(), lrHr()->id);
-    $service->approveRegularisation($reg->fresh(), lrAdmin()->id);
+    app(AttendanceService::class)->approveRegularisation($reg, lrAdmin()->id);
 
     expect($reg->fresh()->status)->toBe('approved');
 });
 
-test('the approval trail records every stage', function () {
+test('the approval trail records the HR decision', function () {
     $employee = lrEmployee();
     $type = lrType();
     lrBalance($employee, $type, allocated: 10);
     $reg = lrSubmit($employee, $type);
 
-    $service = app(AttendanceService::class);
-    $service->approveRegularisation($reg, lrManager()->id, 'Confirmed with the team');
-    $service->approveRegularisation($reg->fresh(), lrHr()->id);
-    $service->approveRegularisation($reg->fresh(), lrAdmin()->id);
+    app(AttendanceService::class)->approveRegularisation($reg, lrHr()->id, 'Confirmed with the team');
 
     $trail = $reg->fresh()->approval_trail;
 
-    expect($trail)->toHaveCount(3)
-        ->and($trail[0]['stage'])->toBe('manager_review')
+    expect($trail)->toHaveCount(1)
+        ->and($trail[0]['stage'])->toBe('hr_review')
         ->and($trail[0]['comment'])->toBe('Confirmed with the team')
-        ->and($trail[1]['stage'])->toBe('hr_review');
+        ->and($trail[0]['action'])->toBe('approved');
 });
 
 // ── 3. What final approval does ────────────────────────────────────────────

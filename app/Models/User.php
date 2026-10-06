@@ -160,6 +160,16 @@ class User extends Authenticatable
         return $this->hasPermission('manage_employees');
     }
 
+    /**
+     * Whether this user decides attendance / leave regularisations — HR, by
+     * the "Approve Regularisations (HR)" permission (Super Admin always).
+     * An approval applies the correction in one step.
+     */
+    public function canApproveRegularisations(): bool
+    {
+        return $this->hasPermission('hr_approve_regularisation');
+    }
+
     public function canApproveLeave(): bool
     {
         return $this->hasPermission('approve_leave');

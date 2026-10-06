@@ -13,16 +13,14 @@ use Illuminate\Support\Facades\Notification;
 use Livewire\Livewire;
 
 /**
- * The staged chain and HR's fast-path.
+ * Regularisations are routed directly to HR (Oct 2026):
  *
  *   OLD  Manager → HR → Admin → Apply
- *   NEW  Manager → HR → Admin → Apply        (unchanged, still the default)
- *        Manager → HR → Apply                (fast-path, explicitly authorised)
+ *   NEW  HR approves → Apply                 (one step; managers no longer decide)
+ *        HR marks attendance → Apply         (the fast-path, unchanged)
  *
- * The chain is intact: HR approving still only clears hr_review. Applying
- * immediately is a separate, separately authorised action, so "approve" never
- * quietly changed meaning for anyone. Both routes end in the same applied state
- * through the same application routine — what differs is only the audit.
+ * Both routes end in the same applied state through the same application
+ * routine — what differs is only the audit (applied_via, trail action).
  */
 /** Shared by every employee in a test — shift codes are unique now. */
 function fpShift(): ShiftSetting
@@ -59,35 +57,36 @@ function fpRequest(Employee $employee, string $in = '09:00', string $out = '18:0
     ]);
 }
 
-// ── The staged chain, unchanged ──────────────────────────────────────────────
+// ── Routed directly to HR ───────────────────────────────────────────────────
 
-test('1 — an employee submission starts at manager review', function () {
+test('1 — an employee submission starts at HR review', function () {
     $reg = fpRequest(fpEmployee());
 
     expect($reg->status)->toBe('pending')
-        ->and($reg->stage ?: 'manager_review')->toBe('manager_review');
+        ->and($reg->fresh()->stage)->toBe('hr_review');
 });
 
-test('2 — a manager rejection ends the workflow and writes no attendance', function () {
+test('2 — a manager can no longer reject; the request stays with HR', function () {
     $employee = fpEmployee();
     $reg = fpRequest($employee);
     $manager = lineManager();
 
-    app(AttendanceService::class)->rejectRegularisation($reg, $manager->id, 'Punch looks correct');
+    expect(fn () => app(AttendanceService::class)->rejectRegularisation($reg, $manager->id, 'Punch looks correct'))
+        ->toThrow(DomainException::class, 'approved by HR');
 
     $reg->refresh();
-    expect($reg->status)->toBe('rejected')
-        ->and($reg->approval_trail)->toHaveCount(1)
-        ->and($reg->approval_trail[0]['action'])->toBe('rejected')
+    expect($reg->status)->toBe('pending')
+        ->and($reg->approval_trail)->toBeEmpty()
         ->and(Attendance::where('employee_id', $employee->id)->count())->toBe(0);
 });
 
-test('3 — a manager approval advances to HR without touching attendance', function () {
+test('3 — a manager can no longer approve; nothing is applied', function () {
     $employee = fpEmployee();
     $reg = fpRequest($employee);
     $manager = lineManager();
 
-    expect(app(AttendanceService::class)->approveRegularisation($reg, $manager->id))->toBeNull();
+    expect(fn () => app(AttendanceService::class)->approveRegularisation($reg, $manager->id))
+        ->toThrow(DomainException::class, 'approved by HR');
 
     $reg->refresh();
     expect($reg->stage)->toBe('hr_review')
@@ -95,20 +94,20 @@ test('3 — a manager approval advances to HR without touching attendance', func
         ->and(Attendance::where('employee_id', $employee->id)->count())->toBe(0);
 });
 
-test('4 and 7 — HR approving advances to admin, still applying nothing', function () {
+test('4 and 7 — an HR approval applies the correction in one step', function () {
     $employee = fpEmployee();
     $reg = fpRequest($employee);
-    $service = app(AttendanceService::class);
+    $hr = User::factory()->create(['role' => UserRole::HrAdmin]);
 
-    $service->approveRegularisation($reg, lineManager()->id);
-    $result = $service->approveRegularisation($reg->refresh(), User::factory()->create(['role' => UserRole::HrAdmin])->id);
+    $attendance = app(AttendanceService::class)->approveRegularisation($reg, $hr->id, 'Gate log confirms');
 
-    expect($result)->toBeNull();
     $reg->refresh();
-    expect($reg->stage)->toBe('admin_approval')
-        ->and($reg->status)->toBe('pending')
-        ->and($reg->applied_at)->toBeNull()
-        ->and(Attendance::where('employee_id', $employee->id)->count())->toBe(0);
+    expect($attendance)->not->toBeNull()
+        ->and($reg->status)->toBe('approved')
+        ->and($reg->applied_via)->toBe('hr_direct')
+        ->and($reg->applied_by)->toBe($hr->id)
+        ->and($reg->approval_trail)->toHaveCount(1)
+        ->and($attendance->check_in->format('H:i'))->toBe('09:00');
 });
 
 test('5 — an HR rejection ends the workflow', function () {
@@ -116,27 +115,23 @@ test('5 — an HR rejection ends the workflow', function () {
     $reg = fpRequest($employee);
     $service = app(AttendanceService::class);
 
-    $service->approveRegularisation($reg, lineManager()->id);
-    $service->rejectRegularisation($reg->refresh(), User::factory()->create(['role' => UserRole::HrAdmin])->id, 'No evidence');
+    $service->rejectRegularisation($reg, User::factory()->create(['role' => UserRole::HrAdmin])->id, 'No evidence');
 
     expect($reg->refresh()->status)->toBe('rejected')
         ->and(Attendance::where('employee_id', $employee->id)->count())->toBe(0);
 });
 
-test('8 — the super admin finalises through the full chain', function () {
+test('8 — the super admin can also approve, in the same single step', function () {
     $employee = fpEmployee();
     $reg = fpRequest($employee);
-    $service = app(AttendanceService::class);
 
-    $service->approveRegularisation($reg, lineManager()->id);
-    $service->approveRegularisation($reg->refresh(), User::factory()->create(['role' => UserRole::HrAdmin])->id);
-    $attendance = $service->approveRegularisation($reg->refresh(), User::factory()->create(['role' => UserRole::SuperAdmin])->id);
+    $attendance = app(AttendanceService::class)->approveRegularisation($reg, User::factory()->create(['role' => UserRole::SuperAdmin])->id);
 
     $reg->refresh();
     expect($attendance)->not->toBeNull()
         ->and($reg->status)->toBe('approved')
-        ->and($reg->applied_via)->toBe('admin_chain')
-        ->and($reg->approval_trail)->toHaveCount(3);
+        ->and($reg->applied_via)->toBe('hr_direct')
+        ->and($reg->approval_trail)->toHaveCount(1);
 });
 
 // ── The fast-path ────────────────────────────────────────────────────────────
@@ -145,8 +140,6 @@ test('6 — HR fast-path applies the correction immediately', function () {
     $employee = fpEmployee();
     $reg = fpRequest($employee);
     $hr = User::factory()->create(['role' => UserRole::HrAdmin, 'name' => 'HR Officer']);
-
-    app(AttendanceService::class)->approveRegularisation($reg, lineManager()->id);
 
     $attendance = app(AttendanceService::class)
         ->fastTrackRegularisation($reg->refresh(), $hr->id, 'Gate log confirms 09:00');
@@ -241,11 +234,9 @@ test('10 and 11 — both routes preserve the original values and write the same 
         return [$employee, fpRequest($employee)];
     };
 
-    // Route A — full chain.
+    // Route A — HR approves the employee's request.
     [$empA, $regA] = $mk();
-    $service->approveRegularisation($regA, lineManager()->id);
-    $service->approveRegularisation($regA->refresh(), User::factory()->create(['role' => UserRole::HrAdmin])->id);
-    $attA = $service->approveRegularisation($regA->refresh(), User::factory()->create(['role' => UserRole::SuperAdmin])->id);
+    $attA = $service->approveRegularisation($regA, User::factory()->create(['role' => UserRole::HrAdmin])->id);
 
     // Route B — fast-path.
     [$empB, $regB] = $mk();
@@ -269,23 +260,21 @@ test('10 and 11 — both routes preserve the original values and write the same 
             ->and($reg->reason)->toBe('Device did not read my card');
     }
 
-    expect($regA->applied_via)->toBe('admin_chain')
+    expect($regA->applied_via)->toBe('hr_direct')
         ->and($regB->applied_via)->toBe('hr_fast_path');
 });
 
-test('the trail records every decision on the long route and the shortcut on the short one', function () {
+test('the trail records the HR approval and the fast-path shortcut', function () {
     $service = app(AttendanceService::class);
 
     $regLong = fpRequest(fpEmployee());
-    $service->approveRegularisation($regLong, lineManager()->id);
-    $service->approveRegularisation($regLong->refresh(), User::factory()->create(['role' => UserRole::HrAdmin])->id);
-    $service->approveRegularisation($regLong->refresh(), User::factory()->create(['role' => UserRole::SuperAdmin])->id);
+    $service->approveRegularisation($regLong, User::factory()->create(['role' => UserRole::HrAdmin])->id);
 
     $regShort = fpRequest(fpEmployee());
     $service->fastTrackRegularisation($regShort, User::factory()->create(['role' => UserRole::HrAdmin])->id);
 
     expect(collect($regLong->refresh()->approval_trail)->pluck('action')->all())
-        ->toBe(['approved', 'approved', 'approved'])
+        ->toBe(['approved'])
         ->and(collect($regShort->refresh()->approval_trail)->pluck('action')->all())
         ->toBe(['fast_tracked']);
 });

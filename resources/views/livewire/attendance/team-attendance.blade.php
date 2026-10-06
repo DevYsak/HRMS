@@ -184,7 +184,11 @@
                                     {{ $req->reason }}
                                 </td>
                                 <td class="pulse-td pr-6 text-right!">
-                                    <flux:button wire:click="openReviewModal({{ $req->id }})" size="xs" variant="primary">Review</flux:button>
+                                    @if(auth()->user()->canApproveRegularisations())
+                                        <flux:button wire:click="openReviewModal({{ $req->id }})" size="xs" variant="primary">Review</flux:button>
+                                    @else
+                                        <span class="inline-flex shrink-0 items-center rounded-lg bg-zinc-100 px-2.5 py-1 text-[10px] font-bold uppercase text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">Awaiting HR</span>
+                                    @endif
                                 </td>
                             </tr>
                         @endforeach

@@ -73,7 +73,8 @@ test('a request decided by someone else while the modal was open is not silently
         'requested_check_in' => '10:30', 'requested_check_out' => '19:30', 'reason' => 'Forgot to punch', 'status' => 'pending',
     ]);
 
-    $component = Livewire::actingAs($manager)->test(AllAttendance::class)->call('openReviewModal', $reg->id);
+    $hr = followUser(UserRole::HrAdmin);
+    $component = Livewire::actingAs($hr)->test(AllAttendance::class)->call('openReviewModal', $reg->id);
 
     // Meanwhile another approver finalises it.
     $reg->update(['status' => 'approved']);

@@ -167,9 +167,13 @@
             @if(count($items) > 0)
                 <div class="divide-y divide-orange-50 dark:divide-zinc-800/60" wire:loading.class="opacity-50" wire:target="tab,search,statusFilter,bulkApprove,bulkReject">
                     @foreach($items as $item)
-                        @php $isPending = ($item['status'] ?? 'pending') === 'pending'; @endphp
+                        @php
+                            $isPending = ($item['status'] ?? 'pending') === 'pending';
+                            // Regularisations are decided by HR only ("Approve Regularisations (HR)").
+                            $canDecideTab = $tab !== 'regularisation' || auth()->user()->canApproveRegularisations();
+                        @endphp
                         <div class="flex flex-wrap items-center gap-3 px-5 py-3 transition hover:bg-orange-50/40 dark:hover:bg-zinc-800/30">
-                            @if($isPending)
+                            @if($isPending && $canDecideTab)
                                 <input type="checkbox" wire:model.live="selected" value="{{ $item['id'] }}"
                                     class="size-4 rounded border-zinc-300 text-orange-500 focus:ring-orange-400">
                             @else
@@ -187,7 +191,9 @@
                                 @if($item['reason'])<p class="mt-0.5 truncate text-[10px] italic text-zinc-400">“{{ $item['reason'] }}”</p>@endif
                             </div>
                             <div class="flex shrink-0 gap-1.5">
-                                @if($isPending)
+                                @if($isPending && ! $canDecideTab)
+                                    <span class="inline-flex items-center rounded-lg bg-zinc-100 px-2.5 py-1 text-[10px] font-bold uppercase text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">Awaiting HR</span>
+                                @elseif($isPending)
                                     <button wire:click="approveOne('{{ $tab }}', {{ $item['id'] }})" class="inline-flex items-center gap-1 rounded-lg bg-emerald-500 px-2.5 py-1 text-[10px] font-bold text-white transition hover:bg-emerald-600"><flux:icon.check class="size-3" /> Approve</button>
                                     <button wire:click="rejectOne('{{ $tab }}', {{ $item['id'] }})" class="inline-flex items-center gap-1 rounded-lg bg-rose-500 px-2.5 py-1 text-[10px] font-bold text-white transition hover:bg-rose-600"><flux:icon.x-mark class="size-3" /> Reject</button>
                                 @else

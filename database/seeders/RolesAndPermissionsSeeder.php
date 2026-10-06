@@ -39,6 +39,7 @@ class RolesAndPermissionsSeeder extends Seeder
             ['key' => 'view_attendance', 'label' => 'View Attendance', 'description' => 'View attendance records'],
             ['key' => 'manage_attendance', 'label' => 'Manage Attendance', 'description' => 'Edit and correct attendance records'],
             ['key' => 'approve_regularisation', 'label' => 'Approve Regularisation', 'description' => 'Approve attendance regularisation requests'],
+            ['key' => 'hr_approve_regularisation', 'label' => 'Approve Regularisations (HR)', 'description' => 'Approve or reject attendance and leave regularisation requests; an approval applies the correction'],
             ['key' => 'manage_shifts', 'label' => 'Manage Shifts', 'description' => 'Configure shifts and work schedules'],
             ['key' => 'manage_biometric', 'label' => 'Manage Biometric', 'description' => 'Configure biometric devices and sync settings'],
             ['key' => 'approve_overtime', 'label' => 'Approve Overtime', 'description' => 'Review and approve overtime pre-approval requests'],
@@ -134,7 +135,7 @@ class RolesAndPermissionsSeeder extends Seeder
         'hr_admin' => [
             'view_dashboard', 'view_executive_dashboard', 'view_hr_dashboard',
             'manage_employees', 'create_employee', 'edit_employee', 'delete_employee', 'view_employee', 'view_directory', 'view_org_chart', 'manage_onboarding', 'manage_offboarding',
-            'view_attendance', 'manage_attendance', 'approve_regularisation', 'manage_shifts', 'manage_biometric', 'approve_overtime', 'approve_wfh',
+            'view_attendance', 'manage_attendance', 'approve_regularisation', 'hr_approve_regularisation', 'manage_shifts', 'manage_biometric', 'approve_overtime', 'approve_wfh',
             'view_leave', 'apply_leave', 'approve_leave', 'manage_leave_types', 'manage_leave_policies', 'manage_leave_balances', 'manage_leave_encashment',
             'view_leave_carry_forward', 'manage_leave_carry_forward',
             'view_leave_management', 'add_leave_balance', 'deduct_leave_balance', 'correct_leave_balance', 'apply_leave_on_behalf',
