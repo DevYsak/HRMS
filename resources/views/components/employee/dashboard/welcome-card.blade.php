@@ -3,16 +3,16 @@
 {{-- EmployeeWelcomeCard — identity and context on the left; the `aside` slot
      (today's status) sits on the right on desktop and below on mobile. --}}
 <section {{ $attributes->class('relative overflow-hidden rounded-2xl border border-zinc-200/70 bg-white shadow-[0_1px_2px_0_rgb(16_24_40/0.04)] dark:border-white/[0.06] dark:bg-ink-900') }}>
-    <div aria-hidden="true" class="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-orange-50/90 to-transparent dark:from-orange-500/[0.07]"></div>
+    <div aria-hidden="true" class="pointer-events-none absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-orange-50/90 to-transparent dark:from-orange-500/[0.07]"></div>
 
-    <div class="relative grid gap-5 p-5 md:p-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,23rem)] lg:items-center lg:gap-8">
+    <div class="relative grid gap-4 p-4 md:p-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] lg:items-center lg:gap-6">
         <div class="flex min-w-0 items-start gap-4">
             @if($profile['photo_url'])
                 <img src="{{ $profile['photo_url'] }}" alt="{{ $profile['name'] }}"
-                     class="size-14 shrink-0 rounded-xl object-cover ring-1 ring-zinc-200 md:size-16 dark:ring-white/10">
+                     class="size-12 shrink-0 rounded-xl object-cover ring-1 ring-zinc-200 md:size-14 dark:ring-white/10">
             @else
                 <div aria-hidden="true"
-                     class="flex size-14 shrink-0 items-center justify-center rounded-xl bg-orange-100 text-lg font-semibold text-orange-700 ring-1 ring-orange-200/70 md:size-16 dark:bg-orange-500/15 dark:text-orange-300 dark:ring-orange-500/20">
+                     class="flex size-12 shrink-0 items-center justify-center rounded-xl bg-orange-100 text-base font-semibold text-orange-700 ring-1 ring-orange-200/70 md:size-14 dark:bg-orange-500/15 dark:text-orange-300 dark:ring-orange-500/20">
                     {{ $profile['initials'] }}
                 </div>
             @endif
@@ -30,7 +30,7 @@
                 @endif
                 <p class="truncate text-xs text-zinc-500 dark:text-zinc-400">{{ $profile['email'] }}</p>
 
-                <div class="mt-4 flex flex-wrap gap-2">
+                <div class="mt-3 flex flex-wrap gap-2">
                     @if($profile['shift_label'])
                         <span class="inline-flex max-w-full items-center gap-1.5 rounded-full border border-zinc-200 bg-white/80 px-2.5 py-1 text-xs text-zinc-600 dark:border-white/10 dark:bg-white/5 dark:text-zinc-300">
                             <flux:icon.clock class="size-3.5 shrink-0 text-zinc-400" />

@@ -37,7 +37,7 @@
         @endforeach
     </ol>
 
-    <div class="mt-auto pt-5">
+    <div class="pt-4">
         <div class="rounded-lg bg-zinc-50 p-3 dark:bg-white/[0.03]">
             @if($progress['measurable'])
                 <div class="grid grid-cols-3 gap-2 text-center">

@@ -44,7 +44,7 @@
         </div>
 
         @if($payroll['download_url'])
-            <div class="mt-auto pt-5">
+            <div class="pt-4">
                 <a href="{{ $payroll['download_url'] }}" target="_blank" rel="noopener"
                    class="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500 dark:border-white/10 dark:bg-white/5 dark:text-zinc-200 dark:hover:bg-white/10">
                     <flux:icon.arrow-down-tray class="size-4" /> Download payslip

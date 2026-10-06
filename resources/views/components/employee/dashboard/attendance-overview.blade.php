@@ -82,7 +82,7 @@
     </div>
 
     @if($attendance['avg_check_in'] || $attendance['avg_worked'])
-        <dl class="mt-auto grid grid-cols-3 gap-2 pt-5">
+        <dl class="grid grid-cols-3 gap-2 pt-4">
             @foreach([
                 ['Avg. clock-in', $attendance['avg_check_in']],
                 ['Avg. worked', $attendance['avg_worked']],

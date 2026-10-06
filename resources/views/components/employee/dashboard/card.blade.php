@@ -5,7 +5,7 @@
      the link with something else. --}}
 <section {{ $attributes->class('flex min-w-0 flex-col rounded-2xl border border-zinc-200/70 bg-white shadow-[0_1px_2px_0_rgb(16_24_40/0.04)] dark:border-white/[0.06] dark:bg-ink-900') }}>
     @if($title)
-        <header class="flex items-center justify-between gap-3 px-5 pb-3 pt-4">
+        <header class="flex items-center justify-between gap-3 px-4 pb-2.5 pt-3.5">
             <div class="flex min-w-0 items-center gap-2">
                 @if($icon)
                     <flux:icon :name="$icon" class="size-4 shrink-0 text-zinc-400 dark:text-zinc-500" />
@@ -27,7 +27,9 @@
         </header>
     @endif
 
-    <div @class(['flex flex-1 flex-col px-5 pb-5', 'pt-5' => ! $title])>
+    {{-- No flex-1: a card is only as tall as its content (stretched bodies left
+         large empty areas in shorter cards). --}}
+    <div @class(['flex flex-col px-4 pb-4', 'pt-4' => ! $title])>
         {{ $slot }}
     </div>
 </section>

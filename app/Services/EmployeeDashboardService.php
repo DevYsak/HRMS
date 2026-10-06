@@ -774,18 +774,11 @@ class EmployeeDashboardService
     {
         $primary = $leave['primary'];
 
+        // The compact row: Attendance, Available Leave, Late Arrivals, OT,
+        // Pending Requests and (with payroll on) the payslip. Today's status
+        // and performance have their own cards; the next holiday sits in the
+        // welcome strip — a switched-off module leaves no tile behind.
         $kpis = [
-            [
-                'label' => 'Today', 'icon' => 'check-badge', 'value' => $today['label'],
-                'sub' => $today['detail'] ?? ($today['check_in'] ? 'In at '.$today['check_in'] : 'No punch yet'),
-                'tone' => match ($today['state']) {
-                    'present', 'wfh' => 'success',
-                    'late', 'half_day' => 'warning',
-                    'absent' => 'danger',
-                    default => 'neutral',
-                },
-                'href' => route('attendance.my'),
-            ],
             [
                 'label' => 'Attendance', 'icon' => 'chart-pie', 'value' => $attendance['percent'].'%',
                 'sub' => $attendance['present_days'].' of '.$attendance['working_days'].' working days',
@@ -801,41 +794,30 @@ class EmployeeDashboardService
                 'href' => route('time-off.my'),
             ],
             [
-                'label' => 'Late arrivals', 'icon' => 'exclamation-triangle', 'value' => (string) $attendance['counts']['late'],
+                'label' => 'Late Arrivals', 'icon' => 'exclamation-triangle', 'value' => (string) $attendance['counts']['late'],
                 'sub' => 'This month', 'tone' => $attendance['counts']['late'] > 0 ? 'warning' : 'neutral',
                 'href' => route('attendance.my'),
             ],
             [
-                'label' => 'Overtime', 'icon' => 'bolt', 'value' => self::formatDays($otHours).'h',
+                'label' => 'OT', 'icon' => 'bolt', 'value' => self::formatDays($otHours).'h',
                 'sub' => 'Approved this month', 'tone' => 'neutral',
                 'href' => route('overtime.my'),
             ],
             [
-                'label' => 'Performance', 'icon' => 'star',
-                'value' => $performance['score'] !== null ? self::formatDays($performance['score']) : 'Not rated',
-                'sub' => $performance['grade'] ? 'Grade '.$performance['grade'] : ($performance['cycle']['name'] ?? 'No active cycle'),
-                'tone' => 'neutral', 'href' => route('performance.dashboard'),
-            ],
-            [
-                'label' => 'Pending', 'icon' => 'inbox-stack', 'value' => (string) $pendingRequests,
-                'sub' => $pendingRequests === 1 ? 'Request awaiting approval' : 'Requests awaiting approval',
-                'tone' => 'neutral', 'href' => route('time-off.my'),
+                'label' => 'Pending Requests', 'icon' => 'inbox-stack', 'value' => (string) $pendingRequests,
+                'sub' => $pendingRequests === 1 ? 'Awaiting approval' : 'Awaiting approval',
+                'tone' => $pendingRequests > 0 ? 'warning' : 'neutral', 'href' => route('time-off.my'),
             ],
         ];
 
-        $kpis[] = $canViewPayslips
-            ? [
-                'label' => 'Salary', 'icon' => 'banknotes',
+        if ($canViewPayslips) {
+            $kpis[] = [
+                'label' => 'Payslip', 'icon' => 'banknotes',
                 'value' => $payslip ? trim(Str::substr((string) $payslip->payroll?->month, 0, 3).' '.$payslip->payroll?->year) : 'No payslip',
-                'sub' => $payslip ? ($payslip->status === 'paid' ? 'Payslip paid' : 'Payroll processing') : 'Not generated yet',
+                'sub' => $payslip ? ($payslip->status === 'paid' ? 'Paid' : 'Payroll processing') : 'Not generated yet',
                 'tone' => 'neutral', 'href' => route('payroll.payslips'),
-            ]
-            : [
-                'label' => 'Next holiday', 'icon' => 'sun',
-                'value' => $nextHoliday ? Carbon::parse($nextHoliday->date)->format('j M') : 'None',
-                'sub' => $nextHoliday?->name ?? 'No upcoming holiday',
-                'tone' => 'neutral', 'href' => route('time-off.my'),
             ];
+        }
 
         return $kpis;
     }
