@@ -68,7 +68,7 @@ class SpreadsheetService
                     if ($key === '') {
                         continue;
                     }
-                    $assoc[$key] = (string) ($cells[$i] ?? '');
+                    $assoc[$key] = $this->cellToString($cells[$i] ?? '');
                 }
                 $out[] = $assoc;
             }
@@ -78,5 +78,27 @@ class SpreadsheetService
         $reader->close();
 
         return $out;
+    }
+
+    /**
+     * A cell as text. Date-formatted xlsx cells arrive as DateTime objects,
+     * which a plain string cast cannot handle: a date becomes Y-m-d, a
+     * time-only cell (Excel's 1899 epoch) H:i, anything else Y-m-d H:i.
+     */
+    private function cellToString(mixed $cell): string
+    {
+        if ($cell instanceof \DateTimeInterface) {
+            if ((int) $cell->format('Y') < 1901) {
+                return $cell->format('H:i');
+            }
+
+            return $cell->format('H:i:s') === '00:00:00' ? $cell->format('Y-m-d') : $cell->format('Y-m-d H:i');
+        }
+
+        if ($cell instanceof \DateInterval) {
+            return $cell->format('%H:%I');
+        }
+
+        return (string) $cell;
     }
 }

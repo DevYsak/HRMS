@@ -84,6 +84,7 @@ use App\Livewire\Settings\ControlPanel;
 use App\Livewire\Settings\DataManagement;
 use App\Livewire\Settings\DepartmentManager;
 use App\Livewire\Settings\EmploymentTypeManager;
+use App\Livewire\Settings\ImportExportCentre;
 use App\Livewire\Settings\JobTitleManager;
 use App\Livewire\Settings\MenuSettings;
 use App\Livewire\Settings\ModuleSettings;
@@ -575,6 +576,10 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/onboarding-templates', OnboardingTemplateManager::class)->name('onboarding-templates');
         Route::get('/onboarding-templates/{template}/tasks', OnboardingTemplateTaskManager::class)->name('onboarding-template-tasks');
     });
+
+    // Import / Export centre — its own permissions (data_export / data_import),
+    // checked in the component, so it is outside the manage-settings group.
+    Route::get('/settings/import-export', ImportExportCentre::class)->name('settings.import-export');
 
 });
 

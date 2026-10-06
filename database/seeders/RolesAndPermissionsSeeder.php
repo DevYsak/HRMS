@@ -115,6 +115,8 @@ class RolesAndPermissionsSeeder extends Seeder
             ['key' => 'manage_ai_settings', 'label' => 'Manage AI Assistant', 'description' => 'Configure the AI provider, API key and which roles may use the assistant'],
             ['key' => 'data_purge', 'label' => 'Data Management (Purge)', 'description' => 'Permanently clear operational data and delete employees from Data Management'],
             ['key' => 'impersonate', 'label' => 'Login as Employee', 'description' => 'View the system as another user to support or test their access'],
+            ['key' => 'data_export', 'label' => 'Export Data', 'description' => 'Download employees, leave, attendance and holiday data from the Import / Export centre'],
+            ['key' => 'data_import', 'label' => 'Import Data', 'description' => 'Bulk-load data such as holidays from a spreadsheet, after a validated preview'],
         ],
     ];
 
@@ -150,7 +152,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'upload_documents', 'manage_documents', 'view_documents', 'acknowledge_documents',
             'view_reports', 'export_reports',
             'manage_roles', 'manage_settings', 'manage_company_settings',
-            'manage_ai_settings', 'data_purge', 'impersonate', 'force_delete_employee',
+            'manage_ai_settings', 'data_purge', 'impersonate', 'force_delete_employee', 'data_export', 'data_import',
             'edit_own_profile', 'request_profile_change', 'approve_profile_changes',
         ],
         'director' => [

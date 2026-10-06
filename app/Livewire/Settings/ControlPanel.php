@@ -10,9 +10,9 @@ use Livewire\Component;
  * settings / admin area. Cards point at existing routes; each destination still
  * enforces its own middleware, and missing routes are hidden automatically.
  *
- * Dynamic: a card naming a 'permission' is shown only to holders of it (Roles
- * & Permissions in the Role Manager decides who that is), so HR sees exactly
- * the controls their role grants — no card leads to a 403.
+ * Dynamic: a card naming a 'permission' (or a list, any of which will do) is
+ * shown only to holders of it — Roles & Permissions decides who that is — so
+ * HR sees exactly the controls their role grants and no card leads to a 403.
  */
 class ControlPanel extends Component
 {
@@ -22,7 +22,7 @@ class ControlPanel extends Component
     }
 
     /**
-     * @return array<int, array{title:string, icon:string, items:array<int, array{label:string, description:string, icon:string, route:string, permission?:string}>}>
+     * @return array<int, array{title:string, icon:string, items:array<int, array{label:string, description:string, icon:string, route:string, permission?:string|array<int, string>}>}>
      */
     private function groups(): array
     {
@@ -47,6 +47,7 @@ class ControlPanel extends Component
                     ['label' => 'Roles & Permissions', 'description' => 'Who can do what', 'icon' => 'shield-check', 'route' => 'settings.roles', 'permission' => 'manage_roles'],
                     ['label' => 'Sidebar Menu', 'description' => 'Employee menu visibility & order', 'icon' => 'bars-3', 'route' => 'settings.menu'],
                     ['label' => 'Import Employees', 'description' => 'Bulk create / update', 'icon' => 'arrow-up-tray', 'route' => 'employees.import', 'permission' => 'manage_employees'],
+                    ['label' => 'Import / Export', 'description' => 'Download HR data, bulk-load holidays', 'icon' => 'arrows-up-down', 'route' => 'settings.import-export', 'permission' => ['data_export', 'data_import']],
                     ['label' => 'Onboarding Templates', 'description' => 'New-hire checklists', 'icon' => 'clipboard-document-check', 'route' => 'settings.onboarding-templates'],
                 ],
             ],
@@ -84,7 +85,7 @@ class ControlPanel extends Component
         $groups = collect($this->groups())->map(function (array $group) use ($payrollOn, $user) {
             $group['items'] = array_values(array_filter($group['items'],
                 fn (array $item) => ($payrollOn || ! in_array($item['route'], ['settings.salary-cycles', 'settings.payroll-approval-policy'], true))
-                    && (! isset($item['permission']) || $user->hasPermission($item['permission']))));
+                    && (! isset($item['permission']) || collect((array) $item['permission'])->contains(fn (string $key) => $user->hasPermission($key)))));
 
             return $group;
         })->all();
