@@ -876,7 +876,7 @@
     {{-- TOP HEADER — compact, sticky, glassy, role-aware accent --}}
     <flux:header
         style="--color-accent: {{ $roleColor }}; --color-accent-content: {{ $roleColor }};"
-        class="sticky top-0 border-b border-zinc-200/70 bg-white/80 backdrop-blur-xl dark:border-zinc-800/70 dark:bg-zinc-950/70 {{ session('impersonator_id') ? 'max-sm:flex-wrap max-sm:pb-2' : '' }}">
+        class="sticky top-0 z-30 border-b border-zinc-200/70 bg-white/80 backdrop-blur-xl dark:border-zinc-800/70 dark:bg-zinc-950/70 {{ session('impersonator_id') ? 'max-sm:flex-wrap max-sm:pb-2' : '' }}">
         <flux:sidebar.toggle class="lg:hidden" icon="bars-2" inset="left" />
 
         {{-- Search --}}

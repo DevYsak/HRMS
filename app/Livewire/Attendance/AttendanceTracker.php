@@ -15,6 +15,7 @@ use App\Models\BreakLog;
 use App\Models\Employee;
 use App\Models\LeaveBalance;
 use App\Models\LeaveRequest;
+use App\Models\OtRequest;
 use App\Models\ShiftSetting;
 use App\Models\Task;
 use App\Models\WfhReport;
@@ -40,6 +41,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Livewire\Attributes\Computed;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 
@@ -341,13 +343,15 @@ class AttendanceTracker extends Component
             if (isset($attendanceMap[$dateKey])) {
                 $att = $attendanceMap[$dateKey];
                 $status = app(WorkingDayResolver::class)->isWeeklyOff($d) ? 'weekly_off_worked' : (($att->status === 'late' || $att->is_late) ? 'late' : 'present');
-            } elseif (isset($leaveMap[$dateKey])) {
-                $status = 'leave';
+                // Same order as WorkingDayResolver: a holiday or weekly off inside
+                // a leave span is not a leave day, and today is not absent yet.
             } elseif (isset($holidayMap[$dateKey])) {
                 $status = 'holiday';
             } elseif (app(WorkingDayResolver::class)->isWeeklyOff($d)) {
                 $status = 'weekly_off';
-            } elseif ($d->isFuture()) {
+            } elseif (isset($leaveMap[$dateKey])) {
+                $status = 'leave';
+            } elseif ($d->copy()->startOfDay()->gte(Carbon::today())) {
                 $status = 'future';
             }
 
@@ -636,13 +640,13 @@ class AttendanceTracker extends Component
                     $mins = $att->check_in->diffInMinutes($att->check_out) - (int) ($att->break_minutes ?? 0);
                     $hours = round(max(0, $mins) / 60, 1);
                 }
-            } elseif (isset($leaveDays[$key])) {
-                $status = 'leave';
             } elseif ($holidayDays->has($key)) {
                 $status = 'holiday';
             } elseif (app(WorkingDayResolver::class)->isWeeklyOff($d)) {
                 $status = 'weekly_off';
-            } elseif ($d->isFuture()) {
+            } elseif (isset($leaveDays[$key])) {
+                $status = 'leave';
+            } elseif ($d->copy()->startOfDay()->gte(Carbon::today())) {
                 $status = 'future';
             }
 
@@ -1028,6 +1032,184 @@ class AttendanceTracker extends Component
         return $alerts;
     }
 
+    // ── Month-by-month history ──────────────────────────────────────────
+
+    /** The month the history table shows, as Y-m. */
+    public string $historyMonth = '';
+
+    public function historyPreviousMonth(): void
+    {
+        $this->historyMonth = $this->clampHistory($this->historyCursor()->subMonthNoOverflow())->format('Y-m');
+    }
+
+    public function historyNextMonth(): void
+    {
+        $next = $this->historyCursor()->addMonthNoOverflow();
+
+        if ($next->lte(Carbon::today()->startOfMonth())) {
+            $this->historyMonth = $next->format('Y-m');
+        }
+    }
+
+    /** Month picker (1–12) — keeps the chosen year. */
+    public function setHistoryMonth(int $month): void
+    {
+        $month = max(1, min(12, $month));
+        $this->historyMonth = $this->clampHistory($this->historyCursor()->setDate($this->historyCursor()->year, $month, 1))->format('Y-m');
+    }
+
+    /** Year picker — keeps the chosen month (never a future month). */
+    public function setHistoryYear(int $year): void
+    {
+        $this->historyMonth = $this->clampHistory($this->historyCursor()->setDate($year, $this->historyCursor()->month, 1))->format('Y-m');
+    }
+
+    private function historyCursor(): Carbon
+    {
+        try {
+            return Carbon::createFromFormat('!Y-m', $this->historyMonth ?: now()->format('Y-m'))->startOfMonth();
+        } catch (\Throwable) {
+            return Carbon::today()->startOfMonth();
+        }
+    }
+
+    private function clampHistory(Carbon $month): Carbon
+    {
+        $first = Auth::user()->employee?->joining_date
+            ? Carbon::parse(Auth::user()->employee->joining_date)->startOfMonth()
+            : Carbon::today()->subYears(5)->startOfMonth();
+
+        return $month->copy()->max($first)->min(Carbon::today()->startOfMonth());
+    }
+
+    /**
+     * Every day of the chosen month with one status, from the same
+     * classification as the stats (holiday > MDL > weekly off > leave >
+     * working day, within employment), overlaid with attendance: Present,
+     * Late, WFH, Half day, Worked on Weekly Off, Absent, Leave, Holiday, MDL,
+     * Weekly off — plus breaks, worked hours, approved OT, regularisation and
+     * missing check-out. Weekends are never absences.
+     *
+     * @return array{month: string, label: string, rows: array<int, array<string, mixed>>, totals: array<string, mixed>, years: array<int, int>}
+     */
+    #[Computed]
+    public function monthHistory(): array
+    {
+        $employee = Auth::user()->employee;
+        $month = $this->historyCursor();
+        $from = $month->copy()->startOfMonth();
+        $to = $month->copy()->endOfMonth()->startOfDay();
+        $empty = ['month' => $month->format('Y-m'), 'label' => $month->format('F Y'), 'rows' => [], 'totals' => [], 'years' => [(int) now()->year]];
+
+        if (! $employee) {
+            return $empty;
+        }
+
+        $resolver = app(WorkingDayResolver::class);
+        $states = $resolver->classifyRange($employee, $from, $to);
+        $attendance = Attendance::where('employee_id', $employee->id)
+            ->whereBetween('date', [$from->toDateString(), $to->toDateString()])
+            ->get()->keyBy(fn ($a) => $a->date->toDateString());
+        $metrics = $this->engineDayMetrics($employee, $from, $to->copy()->min(Carbon::today()));
+        $ot = OtRequest::where('employee_id', $employee->id)->where('status', 'approved')
+            ->whereBetween('work_date', [$from->toDateString(), $to->toDateString()])
+            ->get(['work_date', 'requested_hours'])
+            ->groupBy(fn ($o) => $o->work_date->toDateString())
+            ->map(fn ($g) => round((float) $g->sum('requested_hours'), 1));
+        $regularisations = AttendanceRegularisation::where('employee_id', $employee->id)
+            ->whereBetween('work_date', [$from->toDateString(), $to->toDateString()])
+            ->latest('id')->get()
+            ->unique(fn ($r) => Carbon::parse($r->work_date)->toDateString())
+            ->keyBy(fn ($r) => Carbon::parse($r->work_date)->toDateString());
+        $holidayNames = app(HolidayResolver::class)->keyedForEmployee($employee, $from, $to);
+
+        $today = Carbon::today();
+        $rows = [];
+        $totals = array_fill_keys(['present', 'late', 'wfh', 'half_day', 'absent', 'leave', 'holiday', 'mdl', 'weekly_off', 'worked_off', 'missing_checkout', 'regularised', 'worked_minutes', 'break_minutes', 'ot_hours'], 0);
+
+        foreach ($states as $key => $day) {
+            $date = Carbon::parse($key);
+            $a = $attendance->get($key);
+            $m = $metrics[$key] ?? null;
+            $nonWorking = in_array($day['state'], [WorkingDayResolver::WEEKLY_OFF, WorkingDayResolver::PUBLIC_HOLIDAY, WorkingDayResolver::MDL_SHUTDOWN], true);
+
+            $worked = 0;
+            $break = 0;
+            if ($a && $a->check_in) {
+                $worked = $m !== null ? (int) $m['worked'] : (int) (($a->check_out) ? max(0, $a->check_in->diffInMinutes($a->check_out) - (int) ($a->break_minutes ?? 0)) : 0);
+                $break = $m !== null ? (int) $m['break'] : (int) ($a->break_minutes ?? 0);
+            }
+
+            [$status, $tone] = match (true) {
+                in_array($day['state'], [WorkingDayResolver::EMPLOYMENT_NOT_STARTED, WorkingDayResolver::EMPLOYMENT_ENDED], true) => ['Not employed', 'muted'],
+                $a !== null && $a->check_in !== null && $nonWorking => [WorkingDayResolver::WORKED_WEEKLY_OFF_LABEL, 'violet'],
+                $a !== null && $a->check_in !== null && $a->status === 'half_day' => ['Half day', 'amber'],
+                $a !== null && $a->check_in !== null && ($a->work_mode === 'wfh' || $a->status === 'remote') => ['WFH', 'sky'],
+                $a !== null && $a->check_in !== null && ($a->is_late || $a->status === 'late') => ['Late', 'amber'],
+                $a !== null && $a->check_in !== null => ['Present', 'green'],
+                $day['state'] === WorkingDayResolver::PUBLIC_HOLIDAY => ['Holiday', 'rose'],
+                $day['state'] === WorkingDayResolver::MDL_SHUTDOWN => ['MDL shutdown', 'rose'],
+                $day['state'] === WorkingDayResolver::WEEKLY_OFF => [WorkingDayResolver::WEEKLY_OFF_LABEL, 'muted'],
+                $day['state'] === WorkingDayResolver::APPROVED_LEAVE => [$day['leave_days'] < 1 ? 'Leave (½ day)' : 'Leave', 'blue'],
+                $date->gt($today) => ['Upcoming', 'muted'],
+                $date->eq($today) => ['Today', 'muted'],
+                default => ['Absent', 'red'],
+            };
+
+            $missing = ($a !== null && $a->check_in && ! $a->check_out && $date->lt($today)) || (bool) ($a?->missing_checkout);
+            $reg = $regularisations->get($key);
+            $otHours = (float) ($ot[$key] ?? 0);
+
+            $rows[] = [
+                'date' => $key,
+                'day' => $date->format('D d'),
+                'status' => $status,
+                'tone' => $tone,
+                'holiday' => $holidayNames->get($key)?->name,
+                'check_in' => $a?->check_in?->format('H:i'),
+                'check_out' => $a?->check_out?->format('H:i'),
+                'worked_minutes' => $worked,
+                'break_minutes' => $break,
+                'ot_hours' => $otHours,
+                'mode' => $a?->work_mode,
+                'late_minutes' => (int) ($a?->late_minutes ?? 0),
+                'missing_checkout' => $missing,
+                'regularisation' => $reg?->status,
+                'regularised' => (bool) ($a?->is_regularized),
+            ];
+
+            $totals['worked_minutes'] += $worked;
+            $totals['break_minutes'] += $break;
+            $totals['ot_hours'] += $otHours;
+            $totals['missing_checkout'] += $missing ? 1 : 0;
+            $totals['regularised'] += ($a?->is_regularized) ? 1 : 0;
+            match ($status) {
+                'Present' => $totals['present']++,
+                'Late' => [$totals['present']++, $totals['late']++],
+                'WFH' => $totals['wfh']++,
+                'Half day' => $totals['half_day']++,
+                'Absent' => $totals['absent']++,
+                'Holiday' => $totals['holiday']++,
+                'MDL shutdown' => $totals['mdl']++,
+                WorkingDayResolver::WEEKLY_OFF_LABEL => $totals['weekly_off']++,
+                WorkingDayResolver::WORKED_WEEKLY_OFF_LABEL => $totals['worked_off']++,
+                default => null,
+            };
+            $totals['leave'] += $day['leave_days'];
+        }
+
+        $totals['ot_hours'] = round($totals['ot_hours'], 1);
+        $firstYear = $employee->joining_date ? (int) Carbon::parse($employee->joining_date)->year : (int) now()->subYears(5)->year;
+
+        return [
+            'month' => $month->format('Y-m'),
+            'label' => $month->format('F Y'),
+            'rows' => $rows,
+            'totals' => $totals,
+            'years' => range((int) now()->year, max($firstYear, (int) now()->year - 10)),
+        ];
+    }
+
     public function previousMonth()
     {
         $this->calendarMonth->subMonth();
@@ -1108,27 +1290,159 @@ class AttendanceTracker extends Component
         $this->syncHistoryToRange(Carbon::parse($this->rangeFrom), Carbon::parse($this->rangeTo));
     }
 
+    /** Longest custom range a single view may span. */
+    public const MAX_CUSTOM_DAYS = 366;
+
     /**
      * The [start, end] window the current stats period resolves to — the ONE
-     * range every filtered section (stats, charts, history, insights) uses.
+     * range every filtered section (charts, history, insights) uses. Whole
+     * calendar periods: this week (Sun–Sat), this / last month, this quarter,
+     * the last three months, this year. Month arithmetic never overflows
+     * (last month on 31 March is February, not March).
      *
      * @return array{0: Carbon, 1: Carbon}
      */
     protected function periodRange(): array
     {
+        $today = Carbon::today();
+
         return match ($this->statsPeriod) {
-            'today' => [Carbon::today(), Carbon::today()],
-            'this_week' => [Carbon::now()->startOfWeek(Carbon::SUNDAY), Carbon::now()->endOfWeek(Carbon::SATURDAY)],
-            'last_month' => [Carbon::now()->subMonth()->startOfMonth(), Carbon::now()->subMonth()->endOfMonth()],
-            'quarter' => [Carbon::now()->firstOfQuarter(), Carbon::now()->endOfMonth()],
-            '3_months' => [Carbon::now()->subMonths(2)->startOfMonth(), Carbon::now()->endOfMonth()],
-            'year' => [Carbon::now()->startOfYear(), Carbon::now()->endOfMonth()],
-            'custom' => [
-                Carbon::parse($this->rangeFrom ?? now()->startOfMonth()),
-                Carbon::parse($this->rangeTo ?? now()),
-            ],
-            default => [Carbon::now()->startOfMonth(), Carbon::now()->endOfMonth()],
+            'today' => [$today->copy(), $today->copy()],
+            'this_week' => [$today->copy()->startOfWeek(Carbon::SUNDAY), $today->copy()->endOfWeek(Carbon::SATURDAY)->startOfDay()],
+            'last_month' => [$today->copy()->subMonthNoOverflow()->startOfMonth(), $today->copy()->subMonthNoOverflow()->endOfMonth()->startOfDay()],
+            'quarter' => [$today->copy()->firstOfQuarter(), $today->copy()->lastOfQuarter()],
+            '3_months' => [$today->copy()->subMonthsNoOverflow(2)->startOfMonth(), $today->copy()->endOfMonth()->startOfDay()],
+            'year' => [$today->copy()->startOfYear(), $today->copy()->endOfYear()->startOfDay()],
+            'custom' => $this->customRange(),
+            default => [$today->copy()->startOfMonth(), $today->copy()->endOfMonth()->startOfDay()],
         };
+    }
+
+    /**
+     * The window the figures are counted over: the period, ending today at
+     * the latest — future days can be neither present nor absent. A period
+     * entirely in the future collapses to its first day.
+     *
+     * @return array{0: Carbon, 1: Carbon}
+     */
+    protected function statsRange(): array
+    {
+        [$start, $end] = $this->periodRange();
+        $end = $end->copy()->min(Carbon::today());
+
+        return [$start, $end->lt($start) ? $start->copy() : $end];
+    }
+
+    /**
+     * A custom From–To, in order, at most MAX_CUSTOM_DAYS long.
+     *
+     * @return array{0: Carbon, 1: Carbon}
+     */
+    protected function customRange(): array
+    {
+        try {
+            $from = Carbon::parse($this->rangeFrom ?? now()->startOfMonth())->startOfDay();
+            $to = Carbon::parse($this->rangeTo ?? now())->startOfDay();
+        } catch (\Throwable) {
+            return [Carbon::today()->startOfMonth(), Carbon::today()];
+        }
+
+        if ($to->lt($from)) {
+            [$from, $to] = [$to, $from];
+        }
+
+        if ($from->diffInDays($to) >= self::MAX_CUSTOM_DAYS) {
+            $from = $to->copy()->subDays(self::MAX_CUSTOM_DAYS - 1);
+        }
+
+        return [$from, $to];
+    }
+
+    /**
+     * The window compared against: the same elapsed length immediately
+     * before (previous period), the same days a month earlier, or the same
+     * days a year earlier — always as long as the current window.
+     *
+     * @return array{0: Carbon, 1: Carbon}
+     */
+    protected function comparisonRange(Carbon $start, Carbon $end): array
+    {
+        $length = (int) $start->diffInDays($end) + 1;
+
+        return match ($this->compareMode) {
+            'last_month' => [$start->copy()->subMonthNoOverflow(), $end->copy()->subMonthNoOverflow()],
+            'last_year' => [$start->copy()->subYearNoOverflow(), $end->copy()->subYearNoOverflow()],
+            default => [$start->copy()->subDays($length), $start->copy()->subDay()],
+        };
+    }
+
+    /**
+     * Present / late / worked minutes / absent / leave for one window, the
+     * same way for the current and the comparison window.
+     *
+     * Present = a check-in on a scheduled working day (the mode filter
+     * narrows it). Absent = a past scheduled working day (not a holiday,
+     * MDL date, weekly off, leave, or outside employment) with no attendance
+     * of ANY mode — a mode filter never turns another mode's day into an
+     * absence, and weekends are never absences.
+     *
+     * @return array{present: int, late: int, minutes: int, absent: int, leave_days: float, weekly_off_worked: int, half_days: int, scheduled: int, has_rows: bool}
+     */
+    protected function windowSummary($employee, Carbon $start, Carbon $end): array
+    {
+        $resolver = app(WorkingDayResolver::class);
+        $states = $resolver->classifyRange($employee, $start, $end);
+
+        $rows = Attendance::where('employee_id', $employee->id)
+            ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
+            ->get();
+        $anyMode = $rows->keyBy(fn ($a) => $a->date->toDateString());
+        $filtered = $this->analyticsMode !== '' ? $rows->where('work_mode', $this->analyticsMode) : $rows;
+
+        $metrics = $this->engineDayMetrics($employee, $start, $end->copy()->min(Carbon::today()));
+        $minutesFor = function (Attendance $a) use ($metrics): int {
+            $m = $metrics[$a->date->toDateString()] ?? null;
+            if ($m !== null) {
+                return (int) $m['worked'];
+            }
+
+            return ($a->check_in && $a->check_out)
+                ? (int) max(0, $a->check_in->diffInMinutes($a->check_out) - (int) ($a->break_minutes ?? 0))
+                : 0;
+        };
+
+        $scheduledState = fn (?array $day) => $day !== null && in_array($day['state'], [WorkingDayResolver::WORKING_DAY, WorkingDayResolver::APPROVED_LEAVE], true);
+        $onScheduled = $filtered->filter(fn ($a) => $a->check_in && $scheduledState($states[$a->date->toDateString()] ?? null));
+
+        $cutoff = Carbon::today()->subDay();
+        $absent = 0;
+        $leaveDays = 0.0;
+        $scheduled = 0;
+        foreach ($states as $key => $day) {
+            $leaveDays += $day['leave_days'];
+            if ($day['state'] === WorkingDayResolver::WORKING_DAY) {
+                $isPast = Carbon::parse($key)->lte($cutoff);
+                // Today counts once attended; until then it is still open.
+                if ($isPast || $anyMode->has($key)) {
+                    $scheduled++;
+                }
+                if ($isPast && ! $anyMode->has($key)) {
+                    $absent++;
+                }
+            }
+        }
+
+        return [
+            'present' => $onScheduled->count(),
+            'late' => $onScheduled->filter(fn ($a) => $a->is_late || $a->status === 'late')->count(),
+            'minutes' => (int) $filtered->sum($minutesFor),
+            'absent' => $absent,
+            'leave_days' => round($leaveDays, 1),
+            'weekly_off_worked' => $filtered->filter(fn ($a) => $a->check_in && ! $scheduledState($states[$a->date->toDateString()] ?? null))->count(),
+            'half_days' => $onScheduled->where('status', 'half_day')->count(),
+            'scheduled' => $scheduled,
+            'has_rows' => $rows->isNotEmpty(),
+        ];
     }
 
     /** Memoised engine day-metrics per range so stats + timeline share one computation. */
@@ -1198,7 +1512,9 @@ class AttendanceTracker extends Component
             return;
         }
 
-        [$start, $end] = $this->periodRange();
+        // Counted up to today; the whole period is kept for the prediction.
+        [$start, $end] = $this->statsRange();
+        $periodEnd = $this->periodRange()[1];
 
         $this->tasksCompletedPeriod = Task::where('employee_id', $employee->id)
             ->completed()
@@ -1210,40 +1526,12 @@ class AttendanceTracker extends Component
             ->when($this->analyticsMode !== '', fn ($q) => $q->where('work_mode', $this->analyticsMode))
             ->get();
 
-        $leaves = LeaveRequest::where('employee_id', $employee->id)
-            ->where('status', 'approved')
-            ->where('start_date', '<=', $end->toDateString())
-            ->where('end_date', '>=', $start->toDateString())
-            ->get();
-
-        $holidayDates = app(HolidayResolver::class)->keyedForEmployee($employee, $start, $end);
-
-        // Build lookup maps
         $attendanceDates = $attendances->keyBy(fn ($a) => $a->date->toDateString());
 
-        $leaveMap = [];
-        foreach ($leaves as $l) {
-            $lPeriod = CarbonPeriod::create($l->start_date, $l->end_date);
-            foreach ($lPeriod as $d) {
-                $leaveMap[$d->toDateString()] = true;
-            }
-        }
-
-        // Count absent: past weekdays with no attendance, leave, or holiday
-        $absentCount = 0;
-        $cutoff = Carbon::today()->subDay(); // exclude today (may still clock in)
-        if ($start <= $cutoff) {
-            $absentPeriod = CarbonPeriod::create($start, min($end, $cutoff));
-            foreach ($absentPeriod as $d) {
-                $dateKey = $d->toDateString();
-                if (! app(WorkingDayResolver::class)->isWeeklyOff($d)
-                    && ! isset($attendanceDates[$dateKey])
-                    && ! isset($leaveMap[$dateKey])
-                    && ! isset($holidayDates[$dateKey])) {
-                    $absentCount++;
-                }
-            }
-        }
+        // One classification per day (holiday > MDL > weekly off > leave >
+        // working day, within employment) — shared with the comparison.
+        $window = $this->windowSummary($employee, $start, $end);
+        $absentCount = $window['absent'];
 
         // EVERY day's minutes come from the PunchTimeline engine (validated
         // sessions) — never raw check_in→check_out math when punch data exists.
@@ -1260,14 +1548,30 @@ class AttendanceTracker extends Component
 
             return 0;
         };
-        $totalMinutes = $attendances->sum($minutesForDay);
+        $totalMinutes = (int) $attendances->sum($minutesForDay);
+
+        // Approved overtime for the period (OT is never inferred from long days).
+        $approvedOt = OtRequest::where('employee_id', $employee->id)
+            ->where('status', 'approved')
+            ->whereBetween('work_date', [$start->toDateString(), $end->toDateString()])
+            ->get(['work_date', 'requested_hours']);
 
         $this->stats = [
-            'present' => $attendances->where('status', 'on_time')->count() + $attendances->where('status', 'late')->count(),
-            'late' => $attendances->where('is_late', true)->count(),
-            'hours' => floor($totalMinutes / 60).'h '.($totalMinutes % 60).'m',
-            'leaves' => $leaves->count(),
+            'present' => $window['present'],
+            'late' => $window['late'],
+            'hours' => intdiv($totalMinutes, 60).'h '.($totalMinutes % 60).'m',
+            // Leave DAYS in the window (half days count 0.5), not requests.
+            'leaves' => $window['leave_days'],
             'absent' => $absentCount,
+            'weekly_off_worked' => $window['weekly_off_worked'],
+            'half_days' => $window['half_days'],
+            // Scheduled working days elapsed (holidays, MDL, weekly offs and
+            // approved leave excluded): the attendance % denominator.
+            'scheduled' => $window['scheduled'],
+            'ot_hours' => round((float) $approvedOt->sum('requested_hours'), 1),
+            'ot_days' => $approvedOt->pluck('work_date')->unique()->count(),
+            'from' => $start->toDateString(),
+            'to' => $end->toDateString(),
         ];
 
         // ── Phase 6: Attendance analytics ────────────────────────────────
@@ -1466,10 +1770,9 @@ class AttendanceTracker extends Component
             $insights[] = ['good' => true, 'text' => 'Best attendance day: '.$bestDay];
         }
 
-        $stdH = (float) ($this->shift->standard_hours ?? 9);
-        $totalOtMin = (int) round(collect($daily)->sum(fn ($d) => max(0, (float) $d['hours'] - $stdH)) * 60);
+        $totalOtMin = (int) round($this->stats['ot_hours'] * 60);
         if ($totalOtMin > 0) {
-            $insights[] = ['good' => true, 'text' => 'Total overtime '.intdiv($totalOtMin, 60).'h '.($totalOtMin % 60).'m this period'];
+            $insights[] = ['good' => true, 'text' => 'Approved overtime '.intdiv($totalOtMin, 60).'h '.($totalOtMin % 60).'m this period'];
         }
 
         $this->insights = $insights;
@@ -1495,29 +1798,21 @@ class AttendanceTracker extends Component
         }
 
         // Prediction: attendance % if every remaining working day is attended.
-        $fullWorkDays = max(1, (int) $start->diffInDaysFiltered(fn ($d) => ! app(WorkingDayResolver::class)->isWeeklyOff($d), $end->copy()->endOfDay()));
-        $remainingDays = Carbon::tomorrow()->lte($end)
-            ? (int) Carbon::tomorrow()->diffInDaysFiltered(fn ($d) => ! app(WorkingDayResolver::class)->isWeeklyOff($d), $end->copy()->endOfDay())
+        $resolver = app(WorkingDayResolver::class);
+        $remainingDays = Carbon::tomorrow()->lte($periodEnd)
+            ? $resolver->scheduledDaysBetween($employee, Carbon::tomorrow(), $periodEnd)
             : 0;
+        $fullWorkDays = max(1, $window['scheduled'] + $remainingDays);
         $predictedPct = min(100, (int) round(($present + $remainingDays) / $fullWorkDays * 100));
 
         // Trend vs the selected comparison window (GA4-style): previous period
         // of the same length, the previous month, or the same period last year.
-        $periodDays = max(1, (int) $start->diffInDays($end) + 1);
-        [$prevStart, $prevEnd] = match ($this->compareMode) {
-            'last_month' => [$start->copy()->subMonthNoOverflow(), $end->copy()->subMonthNoOverflow()],
-            'last_year' => [$start->copy()->subYear(), $end->copy()->subYear()],
-            default => [$start->copy()->subDays($periodDays), $start->copy()->subDay()],
-        };
-        $prev = Attendance::where('employee_id', $employee->id)
-            ->whereBetween('date', [$prevStart->toDateString(), $prevEnd->toDateString()])
-            ->when($this->analyticsMode !== '', fn ($q) => $q->where('work_mode', $this->analyticsMode))
-            ->get(['check_in', 'check_out', 'break_minutes', 'is_late']);
-        $prevPresent = $prev->whereNotNull('check_in')->count();
-        $prevLate = $prev->where('is_late', true)->count();
-        $prevMinutes = (int) $prev->sum(fn ($a) => $a->check_in && $a->check_out
-            ? max(0, $a->check_in->diffInMinutes($a->check_out) - ($a->break_minutes ?? 0))
-            : 0);
+        [$prevStart, $prevEnd] = $this->comparisonRange($start, $end);
+        $previous = $this->windowSummary($employee, $prevStart, $prevEnd);
+        $prev = collect($previous['has_rows'] ? [1] : []);
+        $prevPresent = $previous['present'];
+        $prevLate = $previous['late'];
+        $prevMinutes = $previous['minutes'];
         $prevOnTimePct = $prevPresent > 0 ? (int) round(max(0, $prevPresent - $prevLate) / $prevPresent * 100) : null;
 
         // Real deltas for the KPI band — null delta means "no basis to compare"
@@ -1528,6 +1823,8 @@ class AttendanceTracker extends Component
                 'last_year' => 'vs last year',
                 default => 'vs previous period',
             },
+            'from' => $prevStart->toDateString(),
+            'to' => $prevEnd->toDateString(),
             'has_data' => $prev->isNotEmpty(),
             'present' => $prev->isNotEmpty() ? $present - $prevPresent : null,
             'late' => $prev->isNotEmpty() ? $late - $prevLate : null,

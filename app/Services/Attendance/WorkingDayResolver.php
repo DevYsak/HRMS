@@ -104,6 +104,60 @@ class WorkingDayResolver
         return self::WORKING_DAY;
     }
 
+    /**
+     * classify() for every day of a range at once — the same states in the
+     * same order, with the holidays, MDL dates and approved leave looked up
+     * once for the whole range instead of once per day. For approved leave,
+     * leave_days is 0.5 on a half day and 1 otherwise; it is 0 for every
+     * other state.
+     *
+     * @return array<string, array{state: string, leave_days: float}> keyed by Y-m-d
+     */
+    public function classifyRange(Employee $employee, CarbonInterface $from, CarbonInterface $to): array
+    {
+        $start = Carbon::parse($from)->startOfDay();
+        $end = Carbon::parse($to)->startOfDay();
+
+        if ($end->lt($start)) {
+            return [];
+        }
+
+        $holidays = $this->holidays->keyedForEmployee($employee, $start, $end);
+        $mdl = DecemberMandatoryDay::whereBetween('date', [$start->toDateString(), $end->toDateString()])
+            ->pluck('date')->map(fn ($d) => Carbon::parse($d)->toDateString())->flip();
+        $leaves = LeaveRequest::where('employee_id', $employee->id)
+            ->where('status', 'approved')
+            ->whereDate('start_date', '<=', $end->toDateString())
+            ->whereDate('end_date', '>=', $start->toDateString())
+            ->get(['start_date', 'end_date', 'is_half_day']);
+
+        $joining = $employee->joining_date ? Carbon::parse($employee->joining_date)->startOfDay() : null;
+        $lastDay = $employee->exitRecord?->last_working_day ? Carbon::parse($employee->exitRecord->last_working_day)->startOfDay() : null;
+
+        $days = [];
+        for ($day = $start->copy(); $day->lte($end); $day = $day->copy()->addDay()) {
+            $key = $day->toDateString();
+            $leave = null;
+
+            $state = match (true) {
+                $joining !== null && $joining->gt($day) => self::EMPLOYMENT_NOT_STARTED,
+                $lastDay !== null && $lastDay->lt($day) => self::EMPLOYMENT_ENDED,
+                $holidays->has($key) => self::PUBLIC_HOLIDAY,
+                $mdl->has($key) => self::MDL_SHUTDOWN,
+                $this->isWeeklyOff($day) => self::WEEKLY_OFF,
+                ($leave = $leaves->first(fn ($l) => $day->betweenIncluded(Carbon::parse($l->start_date)->startOfDay(), Carbon::parse($l->end_date)->startOfDay()))) !== null => self::APPROVED_LEAVE,
+                default => self::WORKING_DAY,
+            };
+
+            $days[$key] = [
+                'state' => $state,
+                'leave_days' => $state === self::APPROVED_LEAVE ? ($leave?->is_half_day ? 0.5 : 1.0) : 0.0,
+            ];
+        }
+
+        return $days;
+    }
+
     /** Whether the employee is expected at work (leave counts as not expected). */
     public function isWorkingDay(Employee $employee, CarbonInterface $date): bool
     {

@@ -101,7 +101,11 @@ class AttendanceReports extends Component
             'departments' => Department::orderBy('name')->get(['id', 'name']),
             'offices' => Office::orderBy('name')->get(['id', 'name']),
             'shifts' => ShiftSetting::orderBy('name')->get(['id', 'name']),
-            'employees' => Employee::whereHas('user')->with('user')->orderBy('id')->get(),
+            // Only people inside the viewer's reach: a scoped manager or HR
+            // user must not see every employee's name in the picker.
+            'employees' => Employee::whereHas('user')->with('user')
+                ->when(($reach = Auth::user()->accessibleEmployeeIds()) !== null, fn ($q) => $q->whereIn('id', $reach))
+                ->orderBy('id')->get(),
         ])->layout('layouts.app', ['title' => 'Attendance Reports']);
     }
 }

@@ -1,6 +1,7 @@
 <?php
 
 use App\Livewire\Attendance\AttendanceTracker;
+use App\Models\AttendanceSetting;
 use App\Models\Employee;
 use App\Models\LeaveRequest;
 use App\Models\User;
@@ -24,7 +25,12 @@ test('an approved comp-off leave day is shown as leave (not absent) on My Attend
 
     // Credit a comp-off day, then take it as an approved leave earlier this month.
     $balance = app(LeaveService::class)->creditCompOff($employee, Carbon::parse(now()->startOfMonth()->toDateString()), 1.0);
+    // A working day: leave never falls on a weekly off (the calendar shows
+    // a weekly off as Weekly Off even inside a leave span).
     $leaveDay = now()->startOfMonth()->addDays(3);
+    while (AttendanceSetting::isWeeklyOff($leaveDay)) {
+        $leaveDay = $leaveDay->addDay(); // immutable dates: reassign
+    }
 
     LeaveRequest::create([
         'employee_id' => $employee->id,

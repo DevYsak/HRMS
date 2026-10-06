@@ -10,6 +10,7 @@ use App\Models\AttendanceRegularisation;
 use App\Models\AttendanceSetting;
 use App\Models\BiometricDevice;
 use App\Models\Employee;
+use App\Models\OtRequest;
 use App\Models\ShiftSetting;
 use App\Models\User;
 use App\Notifications\AttendanceRegularisationNotification;
@@ -523,7 +524,7 @@ test('journey events carry the duration from the previous punch', function () {
             && $j[3]['gap_min'] === 263);
 });
 
-test('insights include longest break, best day and total overtime', function () {
+test('insights include longest break, best day and approved overtime', function () {
     $employee = Employee::factory()->create();
     $d = now()->startOfMonth()->addDays(2); // a Wednesday-or-whatever weekday
     Attendance::create([
@@ -531,11 +532,16 @@ test('insights include longest break, best day and total overtime', function () 
         'check_in' => $d->copy()->setTime(9, 0), 'check_out' => $d->copy()->setTime(19, 30),
         'status' => 'on_time', 'work_mode' => 'office', 'total_hours' => 10.5, 'break_minutes' => 42,
     ]);
+    // Overtime is what was approved, never inferred from a long day.
+    OtRequest::create([
+        'employee_id' => $employee->id, 'work_date' => $d->toDateString(), 'start_time' => '18:00', 'end_time' => '19:30',
+        'requested_hours' => 1.5, 'reason' => 'Release', 'status' => 'approved',
+    ]);
 
     Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
         ->assertSet('insights', fn ($i) => collect($i)->contains(fn ($x) => str_contains($x['text'], 'Longest break 42 mins'))
             && collect($i)->contains(fn ($x) => str_contains($x['text'], 'Best attendance day: '.$d->format('l')))
-            && collect($i)->contains(fn ($x) => str_contains($x['text'], 'Total overtime')));
+            && collect($i)->contains(fn ($x) => str_contains($x['text'], 'Approved overtime 1h 30m')));
 });
 
 test('the analytics grid renders all enterprise panels', function () {
@@ -560,12 +566,16 @@ test('the analytics grid renders all enterprise panels', function () {
 });
 
 test('the analytics mode filter narrows the period stats', function () {
-    $employee = Employee::factory()->create();
-    foreach ([['office', 1], ['wfh', 2]] as [$mode, $day]) {
+    $employee = Employee::factory()->create(['joining_date' => now()->subYear()->toDateString()]);
+    // Two working days of this month: present counts scheduled working days
+    // (weekend work is "Worked on Weekly Off", not present).
+    $days = collect(range(0, 27))->map(fn ($i) => now()->startOfMonth()->addDays($i))
+        ->reject(fn ($d) => AttendanceSetting::isWeeklyOff($d))->take(2)->values();
+    foreach ([['office', $days[0]], ['wfh', $days[1]]] as [$mode, $date]) {
         Attendance::create([
-            'employee_id' => $employee->id, 'date' => now()->startOfMonth()->addDays($day),
-            'check_in' => now()->startOfMonth()->addDays($day)->setTime(9, 0),
-            'check_out' => now()->startOfMonth()->addDays($day)->setTime(18, 0),
+            'employee_id' => $employee->id, 'date' => $date->toDateString(),
+            'check_in' => $date->copy()->setTime(9, 0),
+            'check_out' => $date->copy()->setTime(18, 0),
             'status' => 'on_time', 'work_mode' => $mode, 'total_hours' => 9,
         ]);
     }

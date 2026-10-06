@@ -121,8 +121,9 @@
     </div>
 @endif
 
-{{-- ═══════════════ ATTENDANCE LOG ═══════════════ --}}
-<div class="overflow-hidden rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 shadow-sm">
+{{-- ═══════════════ ATTENDANCE LOG ═══════════════
+     No overflow-hidden here: it clipped the filter dropdowns in the header. --}}
+<div class="rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 shadow-sm">
     <div class="flex flex-wrap items-center justify-between gap-3 border-b border-orange-100/70 px-5 py-3.5">
         <h3 class="flex items-center gap-2 text-sm font-black text-zinc-900 dark:text-white"><flux:icon.clock class="size-4 text-orange-500" /> Attendance Log
             <span class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">· {{ $attendances->total() }} records</span>
@@ -133,6 +134,16 @@
                 <input type="text" wire:model.live.debounce.300ms="search" placeholder="Search employee…"
                     class="w-48 rounded-lg border border-orange-100 bg-white dark:bg-zinc-900 py-1.5 pl-8 pr-2.5 text-xs font-semibold text-zinc-600 dark:text-zinc-300 placeholder:text-zinc-400 focus:border-orange-400 focus:ring-0">
             </div>
+            @if($filterDepartments->isNotEmpty())
+                <x-clean-select model="filterDepartment" :live="true"
+                    :options="array_merge([['value' => '', 'label' => 'All departments']], $filterDepartments->map(fn ($d) => ['value' => (string) $d->id, 'label' => $d->name])->all())" />
+            @endif
+            @if($filterTeams->isNotEmpty())
+                <x-clean-select model="filterTeam" :live="true"
+                    :options="array_merge([['value' => '', 'label' => 'All teams']], $filterTeams->map(fn ($t) => ['value' => (string) $t->id, 'label' => $t->name])->all())" />
+            @endif
+            <x-clean-select model="filterEmployee" :live="true"
+                :options="array_merge([['value' => '', 'label' => 'All employees']], $filterEmployees->map(fn ($e) => ['value' => (string) $e->id, 'label' => $e->user?->name ?? $e->employee_id])->all())" />
             <x-clean-select model="status" :live="true"
                 :options="[
                     ['value' => '', 'label' => 'All status'],

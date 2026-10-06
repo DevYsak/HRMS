@@ -7,6 +7,9 @@ use App\Models\AttendanceDailySummary;
 use App\Models\AttendancePunch;
 use App\Models\AttendanceRegularisation;
 use App\Models\BreakLog;
+use App\Models\Department;
+use App\Models\DepartmentTeam;
+use App\Models\DepartmentTeamMember;
 use App\Models\Employee;
 use App\Models\LeaveBalance;
 use App\Notifications\AttendanceRegularisationNotification;
@@ -38,6 +41,53 @@ class AllAttendance extends Component
     public string $dateFrom = '';
 
     public string $dateTo = '';
+
+    /** Department / team / employee filters, always inside the viewer's reach. */
+    public string $filterDepartment = '';
+
+    public string $filterTeam = '';
+
+    public string $filterEmployee = '';
+
+    public function updatedFilterDepartment(): void
+    {
+        $this->filterTeam = '';
+        $this->filterEmployee = '';
+        $this->resetPage();
+    }
+
+    public function updatedFilterTeam(): void
+    {
+        $this->filterEmployee = '';
+        $this->resetPage();
+    }
+
+    public function updatedFilterEmployee(): void
+    {
+        $this->resetPage();
+    }
+
+    /**
+     * The employee ids the department / team / employee filters allow, or
+     * null when none is set. Always intersected with the viewer's reach.
+     *
+     * @return array<int, int>|null
+     */
+    protected function filteredEmployeeIds(): ?array
+    {
+        if ($this->filterDepartment === '' && $this->filterTeam === '' && $this->filterEmployee === '') {
+            return null;
+        }
+
+        $reach = Auth::user()->accessibleEmployeeIds();
+
+        return Employee::query()
+            ->when($reach !== null, fn ($q) => $q->whereIn('id', $reach))
+            ->when($this->filterDepartment !== '', fn ($q) => $q->where('department_id', (int) $this->filterDepartment))
+            ->when($this->filterTeam !== '', fn ($q) => $q->whereIn('id', DepartmentTeamMember::where('department_team_id', (int) $this->filterTeam)->where('is_active', true)->pluck('employee_id')))
+            ->when($this->filterEmployee !== '', fn ($q) => $q->where('id', (int) $this->filterEmployee))
+            ->pluck('id')->all();
+    }
 
     public function mount(): void
     {
@@ -595,6 +645,10 @@ class AllAttendance extends Component
             $query->where('status', $this->status);
         }
 
+        if (($ids = $this->filteredEmployeeIds()) !== null) {
+            $query->whereIn('employee_id', $ids);
+        }
+
         if ($this->date) {
             $query->where('date', $this->date);
         } elseif ($this->dateFrom || $this->dateTo) {
@@ -633,8 +687,10 @@ class AllAttendance extends Component
         // KPI stats recompute from the SAME filtered dataset the table shows —
         // not a fixed "today" snapshot. Change the date/range/status/search and
         // every card recomputes (present, absent, late, on-time, WFH).
+        $narrowed = $this->filteredEmployeeIds();
         $totalActive = Employee::where('status', 'active')
             ->when($scopeIds !== null, fn ($q) => $q->whereIn('id', $scopeIds))
+            ->when($narrowed !== null, fn ($q) => $q->whereIn('id', $narrowed))
             ->count();
 
         $filtered = (clone $query)->get(['employee_id', 'date', 'check_in', 'is_late', 'work_mode']);
@@ -696,6 +752,20 @@ class AllAttendance extends Component
             'allEmployees' => Employee::with('user')->whereHas('user')
                 ->when($scopeIds !== null, fn ($q) => $q->whereIn('id', $scopeIds))
                 ->orderBy('id')->get(),
+            // Filter options, only from the viewer's own reach.
+            'filterDepartments' => Department::whereIn('id', Employee::query()
+                ->when($scopeIds !== null, fn ($q) => $q->whereIn('id', $scopeIds))->whereNotNull('department_id')->distinct()->pluck('department_id'))
+                ->orderBy('name')->get(['id', 'name']),
+            'filterTeams' => DepartmentTeam::query()
+                ->when($this->filterDepartment !== '', fn ($q) => $q->where('department_id', (int) $this->filterDepartment))
+                ->whereIn('department_id', Employee::query()->when($scopeIds !== null, fn ($q) => $q->whereIn('id', $scopeIds))->whereNotNull('department_id')->distinct()->pluck('department_id'))
+                ->orderBy('name')->get(['id', 'name']),
+            'filterEmployees' => Employee::with('user')->whereHas('user')
+                ->whereNotIn('status', ['inactive', 'archived'])
+                ->when($scopeIds !== null, fn ($q) => $q->whereIn('id', $scopeIds))
+                ->when($this->filterDepartment !== '', fn ($q) => $q->where('department_id', (int) $this->filterDepartment))
+                ->when($this->filterTeam !== '', fn ($q) => $q->whereIn('id', DepartmentTeamMember::where('department_team_id', (int) $this->filterTeam)->where('is_active', true)->pluck('employee_id')))
+                ->get()->sortBy(fn ($e) => $e->user?->name)->values(),
             'stats' => $stats,
             'trend' => $trend,
             'weekLabel' => $weekLabel,

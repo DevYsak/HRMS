@@ -13,28 +13,13 @@
 
     $presentCount = (int) ($stats['present'] ?? 0);
     $lateCount    = (int) ($stats['late'] ?? 0);
-    $leaveCount   = (int) ($stats['leaves'] ?? 0);
+    $leaveCount   = (float) ($stats['leaves'] ?? 0);
     $onTimeCount  = max(0, $presentCount - $lateCount);
 
-    // Mirrors AttendanceTracker::computeStats() so the "of N days" denominator
-    // matches the period the stats were actually computed for.
-    $pStart = match($statsPeriod) {
-        'today'      => now()->startOfDay(),
-        'this_week'  => now()->startOfWeek(\Carbon\Carbon::SUNDAY),
-        'last_month' => now()->subMonth()->startOfMonth(),
-        'quarter'    => now()->firstOfQuarter(),
-        '3_months'   => now()->subMonths(2)->startOfMonth(),
-        'year'       => now()->startOfYear(),
-        'custom'     => \Carbon\Carbon::parse($rangeFrom ?? now()->startOfMonth()),
-        default      => now()->startOfMonth(),
-    };
-    $pEnd = match(true) {
-        $statsPeriod === 'last_month' => now()->subMonth()->endOfMonth(),
-        $statsPeriod === 'custom' && $rangeTo => \Carbon\Carbon::parse($rangeTo),
-        default => now(),
-    };
-    if ($pEnd->gt(now())) { $pEnd = now(); }
-    $totalWorkingDays = max(1, (int) $pStart->diffInDaysFiltered(fn($d) => ! app(\App\Services\Attendance\WorkingDayResolver::class)->isWeeklyOff($d), $pEnd));
+    // The "of N days" denominator comes from AttendanceTracker::computeStats:
+    // scheduled working days elapsed in the period (weekly offs, holidays,
+    // MDL dates, approved leave and days outside employment excluded).
+    $totalWorkingDays = max(1, (int) ($stats['scheduled'] ?? 0));
 
     $attPct = round(min(100, ($presentCount / $totalWorkingDays) * 100), 1);
     $score  = (int) ($analytics['attendance_score'] ?? 0);
@@ -42,8 +27,9 @@
     $avgBreak = (int) ($analytics['avg_break'] ?? 0);
 
     $stdHours = (float) ($shift->standard_hours ?? 9);
-    $otHours  = round(collect($chartDaily)->sum(fn($d) => max(0, (float) $d['hours'] - $stdHours)), 1);
-    $otDays   = collect($chartDaily)->filter(fn($d) => (float) $d['hours'] > $stdHours)->count();
+    // Approved overtime only — a long day is not overtime until it is approved.
+    $otHours  = (float) ($stats['ot_hours'] ?? 0);
+    $otDays   = (int) ($stats['ot_days'] ?? 0);
     $otMinTotal = (int) round($otHours * 60);
     $avgWorkMin = $presentCount > 0 ? (int) round(collect($chartDaily)->sum('hours') * 60 / max(1, $presentCount)) : 0;
 
@@ -101,14 +87,14 @@
 .pa-cmd h1{margin:0;font-size:21px;font-weight:680;letter-spacing:-.02em;color:var(--pa-ink)}
 .pa-cmd p{margin:2px 0 0;color:var(--pa-muted);font-size:13px}
 /* Segmented control — 44px, 14px radius, orange active tab */
-.pa-seg{display:inline-flex;align-items:center;background:var(--pa-surface-2);border:1px solid var(--pa-border);border-radius:14px;padding:4px;height:40px;gap:2px}
+.pa-seg{display:inline-flex;align-items:center;background:var(--pa-surface-2);border:1px solid var(--pa-border);border-radius:14px;padding:4px;height:40px;gap:2px;max-width:100%;overflow-x:auto;scrollbar-width:none}.pa-seg::-webkit-scrollbar{display:none}
 .pa-seg button{border:0;background:transparent;color:var(--pa-muted);font-size:13px;font-weight:600;height:32px;padding:0 14px;border-radius:9px;transition:all .18s var(--pa-ease);white-space:nowrap}
 .pa-seg button:hover{color:var(--pa-ink);background:var(--pa-surface)}
 .pa-seg button.on{background:var(--pa-accent);color:#fff;box-shadow:0 2px 8px var(--pa-ring);font-weight:680}
 .pa-seg button.on:hover{background:var(--pa-accent);color:#fff}
 .pa-range{display:inline-flex;align-items:center;gap:6px;height:40px;padding:0 12px;border:1px solid var(--pa-border-2);border-radius:12px;background:var(--pa-surface);color:var(--pa-muted);transition:all .16s var(--pa-ease)}
 .pa-range.on{border-color:var(--pa-accent);box-shadow:0 0 0 3px var(--pa-ring);color:var(--pa-accent-ink)}
-.pa-range input{border:0;background:transparent;color:var(--pa-ink);font-size:12px;font-family:inherit;outline:0;width:116px;font-variant-numeric:tabular-nums}
+.pa-range input{border:0;background:transparent;color:var(--pa-ink);font-size:12px;font-family:inherit;outline:0;width:auto;min-width:0;max-width:132px;font-variant-numeric:tabular-nums}
 .pa-range .lbl{font-size:9.5px;font-weight:640;text-transform:uppercase;letter-spacing:.05em}
 .pa-pill{display:inline-flex;align-items:center;gap:7px;height:40px;padding:0 15px;border-radius:12px;border:1px solid var(--pa-border-2);
   background:var(--pa-surface);color:var(--pa-ink);font-size:13px;font-weight:600;transition:all .16s var(--pa-ease)}
@@ -161,7 +147,7 @@
 
 /* Command/filter bar — position:relative + z-index so open dropdowns
    (clean-select is absolute z-50) sit ABOVE the positioned hero that follows. */
-.pa-cmd{position:relative;z-index:40;row-gap:10px}
+.pa-cmd{position:relative;z-index:20;row-gap:10px}
 .pa-cmd-title{display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:620;color:var(--pa-ink)}
 .pa-cmd-title svg{color:var(--pa-faint)}
 .pa-cmd-right{margin-left:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
@@ -307,14 +293,14 @@
     .pa-htrend.down{color:var(--pa-danger)}
     .pa-livedot{width:7px;height:7px;border-radius:50%;background:var(--pa-present);display:inline-block;animation:pabeat 1.6s var(--pa-ease) infinite;margin-left:auto}
     .pa-actbar{display:flex;flex-wrap:wrap;gap:12px;align-items:stretch;margin-top:16px}
-    .pa-actbtns{display:flex;gap:10px;flex-wrap:wrap;flex:2;min-width:280px}
+    .pa-actbtns{display:flex;gap:10px;flex-wrap:wrap;flex:2;min-width:min(280px,100%)}
     .pa-actbtns .pa-h-cta{flex:1;min-width:150px}
     /* Clock In — the prominent primary action */
     .pa-actbtns .pa-h-cta.primary{flex:1.5;padding:13px 16px}
     .pa-actbtns .pa-h-cta.primary .t{font-size:14.5px}
     .pa-actbtns .pa-h-cta.primary .ic{width:38px;height:38px}
     /* Smart Status — richer insight card */
-    .pa-actsmart{margin:0;flex:1.6;min-width:250px;display:flex;flex-direction:column;justify-content:center;background:linear-gradient(135deg,var(--pa-accent-soft),var(--pa-surface) 75%);border:1px solid var(--pa-border);border-radius:18px;padding:13px 18px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.04)}
+    .pa-actsmart{margin:0;flex:1.6;min-width:min(250px,100%);display:flex;flex-direction:column;justify-content:center;background:linear-gradient(135deg,var(--pa-accent-soft),var(--pa-surface) 75%);border:1px solid var(--pa-border);border-radius:18px;padding:13px 18px;box-shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.04)}
     .pa-actsmart .h{font-size:12.5px;font-weight:700}
     .pa-actsmart p{font-size:13px;font-weight:500;line-height:1.45;margin-top:6px}
   </style>
@@ -2017,14 +2003,93 @@
     </div>
 @endif
 
+{{-- ═══════════════ MONTHLY HISTORY ═══════════════
+     Every day of a month with one status from the same classification as
+     the figures above. Previous / Next month, month and year pickers. --}}
+@php $mh = $this->monthHistory; $toneClass = [
+    'green' => 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300',
+    'amber' => 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300',
+    'sky' => 'bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-300',
+    'violet' => 'bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-300',
+    'blue' => 'bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300',
+    'rose' => 'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300',
+    'red' => 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300',
+    'muted' => 'bg-zinc-100 text-zinc-500 dark:bg-white/5 dark:text-zinc-400',
+]; $hm = fn (int $m) => $m > 0 ? intdiv($m, 60).'h '.str_pad((string) ($m % 60), 2, '0', STR_PAD_LEFT).'m' : '—'; @endphp
+<div id="monthly-history" class="mb-6 rounded-[18px] border border-zinc-200/70 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200/70 px-4 py-3 dark:border-zinc-800 sm:px-5">
+        <h3 class="flex items-center gap-2 text-sm font-black text-zinc-900 dark:text-white"><flux:icon.calendar-days class="size-4 text-orange-500" /> Monthly history · {{ $mh['label'] }}</h3>
+        <div class="flex flex-wrap items-center gap-2">
+            <button type="button" wire:click="historyPreviousMonth" class="rounded-lg border border-zinc-200 p-1.5 text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-white/5" aria-label="Previous month"><flux:icon.chevron-left class="size-4" /></button>
+            <select wire:change="setHistoryMonth($event.target.value)" aria-label="Month" class="rounded-lg border border-zinc-200 bg-white py-1 pl-2 pr-7 text-xs font-semibold text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200">
+                @foreach(range(1, 12) as $m)
+                    <option value="{{ $m }}" @selected((int) substr($mh['month'], 5, 2) === $m)>{{ \Carbon\Carbon::create(null, $m, 1)->format('F') }}</option>
+                @endforeach
+            </select>
+            <select wire:change="setHistoryYear($event.target.value)" aria-label="Year" class="rounded-lg border border-zinc-200 bg-white py-1 pl-2 pr-7 text-xs font-semibold text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200">
+                @foreach($mh['years'] as $y)
+                    <option value="{{ $y }}" @selected((int) substr($mh['month'], 0, 4) === $y)>{{ $y }}</option>
+                @endforeach
+            </select>
+            <button type="button" wire:click="historyNextMonth" @disabled($mh['month'] >= now()->format('Y-m')) class="rounded-lg border border-zinc-200 p-1.5 text-zinc-500 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-700 dark:hover:bg-white/5" aria-label="Next month"><flux:icon.chevron-right class="size-4" /></button>
+        </div>
+    </div>
+
+    @if($mh['totals'])
+        <div class="grid grid-cols-3 gap-2 border-b border-zinc-100 px-4 py-3 text-center sm:grid-cols-6 lg:grid-cols-12 dark:border-zinc-800 sm:px-5">
+            @foreach([
+                ['Present', $mh['totals']['present']], ['Late', $mh['totals']['late']], ['WFH', $mh['totals']['wfh']],
+                ['Half day', $mh['totals']['half_day']], ['Absent', $mh['totals']['absent']], ['Leave', rtrim(rtrim(number_format($mh['totals']['leave'], 1), '0'), '.')],
+                ['Holiday', $mh['totals']['holiday'] + $mh['totals']['mdl']], ['Weekly off', $mh['totals']['weekly_off']], ['Worked off', $mh['totals']['worked_off']],
+                ['Worked', $hm($mh['totals']['worked_minutes'])], ['Breaks', $hm($mh['totals']['break_minutes'])], ['OT', $mh['totals']['ot_hours'] > 0 ? $mh['totals']['ot_hours'].'h' : '—'],
+            ] as [$label, $value])
+                <div class="rounded-lg bg-zinc-50 px-1 py-1.5 dark:bg-white/5">
+                    <div class="text-[10px] font-bold uppercase tracking-wide text-zinc-400">{{ $label }}</div>
+                    <div class="text-sm font-black tabular-nums text-zinc-900 dark:text-white">{{ $value }}</div>
+                </div>
+            @endforeach
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full min-w-[720px] text-xs">
+                <thead class="bg-zinc-50/70 text-left text-[10px] font-bold uppercase tracking-wider text-zinc-400 dark:bg-white/5">
+                    <tr><th class="px-4 py-2">Day</th><th class="px-3 py-2">Status</th><th class="px-3 py-2">In</th><th class="px-3 py-2">Out</th><th class="px-3 py-2">Worked</th><th class="px-3 py-2">Breaks</th><th class="px-3 py-2">OT</th><th class="px-3 py-2">Notes</th></tr>
+                </thead>
+                <tbody class="divide-y divide-zinc-100 dark:divide-white/5">
+                    @foreach($mh['rows'] as $r)
+                        <tr wire:key="mh-{{ $r['date'] }}" @class(['bg-orange-50/40 dark:bg-orange-500/5' => $r['date'] === now()->toDateString()])>
+                            <td class="whitespace-nowrap px-4 py-1.5 font-semibold text-zinc-700 dark:text-zinc-200">{{ $r['day'] }}</td>
+                            <td class="px-3 py-1.5"><span class="inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold {{ $toneClass[$r['tone']] ?? $toneClass['muted'] }}">{{ $r['status'] }}</span>@if($r['holiday'])<span class="ml-1 text-[10px] text-zinc-400">{{ $r['holiday'] }}</span>@endif</td>
+                            <td class="px-3 py-1.5 tabular-nums">{{ $r['check_in'] ?? '—' }}</td>
+                            <td class="px-3 py-1.5 tabular-nums">{{ $r['check_out'] ?? '—' }}</td>
+                            <td class="px-3 py-1.5 tabular-nums">{{ $hm($r['worked_minutes']) }}</td>
+                            <td class="px-3 py-1.5 tabular-nums">{{ $r['break_minutes'] > 0 ? $r['break_minutes'].'m' : '—' }}</td>
+                            <td class="px-3 py-1.5 tabular-nums">{{ $r['ot_hours'] > 0 ? $r['ot_hours'].'h' : '—' }}</td>
+                            <td class="px-3 py-1.5">
+                                <div class="flex flex-wrap gap-1">
+                                    @if($r['late_minutes'] > 0)<span class="rounded bg-amber-50 px-1.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">{{ $r['late_minutes'] }}m late</span>@endif
+                                    @if($r['missing_checkout'])<span class="rounded bg-red-50 px-1.5 text-[10px] font-semibold text-red-700 dark:bg-red-500/10 dark:text-red-300">Missing check-out</span>@endif
+                                    @if($r['regularisation'])<span class="rounded bg-blue-50 px-1.5 text-[10px] font-semibold text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">Regularisation {{ $r['regularisation'] }}</span>@elseif($r['regularised'])<span class="rounded bg-blue-50 px-1.5 text-[10px] font-semibold text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">Regularised</span>@endif
+                                    @if($r['mode'] && ! in_array($r['mode'], ['office', 'wfh'], true))<span class="rounded bg-zinc-100 px-1.5 text-[10px] font-semibold text-zinc-600 dark:bg-white/5 dark:text-zinc-300">{{ \Illuminate\Support\Str::headline($r['mode']) }}</span>@endif
+                                </div>
+                            </td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    @else
+        <p class="px-5 py-8 text-center text-sm text-zinc-400">No attendance history for this month.</p>
+    @endif
+</div>
+
 {{-- ═══════════════ PUNCH IN / OUT TIMELINE ═══════════════ --}}
-<div id="attendance-log" class="overflow-hidden rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm scroll-mt-6"
+<div id="attendance-log" class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm scroll-mt-6"
      x-data="{ o: JSON.parse(localStorage.getItem('pa-sec-log') ?? 'true') }" x-init="$watch('o', v => localStorage.setItem('pa-sec-log', JSON.stringify(v)))">
     <div class="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200/70 dark:border-zinc-800 px-5 py-3">
         <button type="button" @click="o = !o" class="flex flex-1 items-center gap-2 text-left">
             <h3 class="flex items-center gap-2 text-sm font-black text-zinc-900 dark:text-white"><flux:icon.clock class="size-4 text-orange-500" /> Punch In / Out Timeline
                 <span class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
-                    · {{ $statsPeriod === 'custom' && $rangeFrom && $rangeTo ? \Carbon\Carbon::parse($rangeFrom)->format('d M').' – '.\Carbon\Carbon::parse($rangeTo)->format('d M Y') : $calendarMonth->format('M Y') }}
+                    · {{ ! empty($stats['from']) ? \Carbon\Carbon::parse($stats['from'])->format('d M').' – '.\Carbon\Carbon::parse($stats['to'])->format('d M Y') : $calendarMonth->format('M Y') }}
                 </span>
             </h3>
             <flux:icon.chevron-down class="size-4 text-zinc-400 transition-transform" ::class="o ? '' : '-rotate-90'" />
