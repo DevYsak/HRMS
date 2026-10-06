@@ -30,6 +30,7 @@ use App\Services\Attendance\ResolvedShift;
 use App\Services\Attendance\ShiftProgress;
 use App\Services\Attendance\ShiftResolver;
 use App\Services\Attendance\WorkingDayResolver;
+use App\Services\Help\GettingStarted;
 use App\Services\Leave\EmployeeLeaveOverviewService;
 use App\Services\Leave\LeaveBalanceCalculator;
 use App\Services\Leave\LeaveManagementService;
@@ -212,7 +213,7 @@ class EmployeeDashboardService
             'employee' => $employee,
             'profile' => $profile,
             'today' => $todayCard,
-            'alerts' => $this->alerts($monthAttendance, $today, $profileCompletion, $onboardingTasks, (int) ($openLeave['more_info_requested'] ?? 0), $documents['pending_acknowledgement'], $performance['pending_self_reviews']),
+            'alerts' => $this->alerts($monthAttendance, $today, $profileCompletion, $onboardingTasks, (int) ($openLeave['more_info_requested'] ?? 0), $documents['pending_acknowledgement'], $performance['pending_self_reviews'], app(GettingStarted::class)->isNewJoiner($user)),
             'kpis' => $this->kpis($todayCard, $attendance, $leave, $otHours, $performance, $pendingRequests, $canViewPayslips, $latestPayslip, $upcomingHolidays->first()),
             'attendance' => $attendance,
             'leave' => $leave,
@@ -678,9 +679,20 @@ class EmployeeDashboardService
      * @param  Collection<int, PerformanceReview>  $pendingSelfReviews
      * @return Collection<int, array<string, mixed>>
      */
-    private function alerts(Collection $monthAttendance, Carbon $today, array $profile, Collection $tasks, int $moreInfoRequests, int $pendingAcknowledgement, Collection $pendingSelfReviews): Collection
+    private function alerts(Collection $monthAttendance, Carbon $today, array $profile, Collection $tasks, int $moreInfoRequests, int $pendingAcknowledgement, Collection $pendingSelfReviews, bool $newJoiner = false): Collection
     {
         $alerts = collect();
+
+        // First weeks: point new joiners at the getting-started tutorial.
+        if ($newJoiner && Route::has('help.getting-started')) {
+            $alerts->push([
+                'icon' => 'academic-cap',
+                'title' => 'New here? Start the tutorial',
+                'status' => 'Sign-in, profile and leave in a few steps',
+                'progress' => null,
+                'url' => route('help.getting-started'),
+            ]);
+        }
 
         if (($profile['percent'] ?? 100) < 100) {
             $missing = count($profile['missing'] ?? []);
@@ -689,7 +701,7 @@ class EmployeeDashboardService
                 'title' => 'Complete your profile',
                 'status' => $missing.' '.Str::plural('field', $missing).' to fill in',
                 'progress' => (int) $profile['percent'],
-                'url' => route('profile.edit'),
+                'url' => route('profile.me'),
             ]);
         }
 

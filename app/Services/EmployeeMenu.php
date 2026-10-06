@@ -20,7 +20,7 @@ class EmployeeMenu
      */
     private const CATALOG = [
         ['key' => 'dashboard', 'label' => 'Dashboard', 'icon' => 'home', 'type' => 'item', 'route' => 'dashboard', 'active' => 'dashboard'],
-        ['key' => 'profile', 'label' => 'My Profile', 'icon' => 'user-circle', 'type' => 'item', 'route' => 'profile.edit', 'active' => 'profile.edit'],
+        ['key' => 'profile', 'label' => 'My Profile', 'icon' => 'user-circle', 'type' => 'item', 'route' => 'profile.me', 'active' => 'profile.me'],
         ['key' => 'attendance', 'label' => 'Attendance', 'icon' => 'clock', 'type' => 'item', 'route' => 'attendance.my', 'active' => 'attendance.my'],
         ['key' => 'leave', 'label' => 'Leave', 'icon' => 'calendar-days', 'type' => 'item', 'route' => 'time-off.my', 'active' => 'time-off.my', 'badge' => 'leave'],
         ['key' => 'wfh', 'label' => 'Work From Home', 'icon' => 'home-modern', 'type' => 'item', 'route' => 'wfh.my', 'active' => 'wfh.my'],

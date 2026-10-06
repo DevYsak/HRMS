@@ -170,7 +170,7 @@ test('the temporary password cannot be chosen as the new one', function () {
     expect($user->fresh()->requiresPasswordChange())->toBeTrue();
 });
 
-test('a valid password is hashed, clears the flag, stamps the change and reaches the dashboard', function () {
+test('a valid password is hashed, clears the flag, stamps the change and opens the getting-started tutorial', function () {
     $user = flpEmployee();
 
     $this->actingAs($user);
@@ -178,7 +178,7 @@ test('a valid password is hashed, clears the flag, stamps the change and reaches
 
     $this->post(route('password.first-change.update'), flpSetPassword())
         ->assertSessionHasNoErrors()
-        ->assertRedirect(route('dashboard'));
+        ->assertRedirect(route('help.getting-started'));
 
     $fresh = $user->fresh();
 

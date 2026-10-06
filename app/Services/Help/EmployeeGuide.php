@@ -133,7 +133,7 @@ class EmployeeGuide
             ['type' => 'Leave', 'route' => 'time-off.my', 'where' => 'Leave → Pending & Upcoming tab, or Leave Applications', 'statuses' => 'Pending, Pending HR, More Info Needed, Approved, Rejected, Cancelled'],
             ['type' => 'Leave encashment', 'route' => 'time-off.my', 'where' => 'Leave → Encashment History tab', 'statuses' => 'Pending, Pending Finance, Approved, Rejected, Processed'],
             ['type' => 'Work on a holiday', 'route' => 'time-off.my', 'where' => 'Leave → Holiday Work card', 'statuses' => 'Pending, Approved, Rejected'],
-            ['type' => 'Attendance correction', 'route' => 'attendance.my', 'where' => 'Attendance → click the day in the timeline', 'statuses' => 'Pending (Manager → HR → Admin), Approved, Rejected'],
+            ['type' => 'Attendance correction', 'route' => 'attendance.my', 'where' => 'Attendance → click the day in the timeline', 'statuses' => 'Pending (with HR), Approved, Rejected'],
             ['type' => 'Work from home', 'route' => 'wfh.my', 'where' => 'Work From Home → WFH Request History', 'statuses' => 'Pending, Approved, Rejected, Cancelled'],
             ['type' => 'Overtime', 'route' => 'overtime.my', 'where' => 'Overtime → OT Request History', 'statuses' => 'Pending, Approved, Rejected, Cancelled'],
             ['type' => 'Expense claim', 'route' => 'operations.expenses', 'where' => 'Payroll → Expense Claims', 'statuses' => 'Pending, Approved, Rejected'],
@@ -154,7 +154,7 @@ class EmployeeGuide
             ['q' => 'Why is my available leave lower than my entitlement?', 'a' => 'Used, pending, expired and encashed leave all reduce what you can request. Pending requests are held back until they are decided. Open the leave type\'s card under My Balances to see each part, or its Transaction History for every movement.'],
             ['q' => 'Where can I check a pending leave request?', 'a' => 'Open Leave and choose the Pending & Upcoming tab. The Current Stage column shows who has it now. Leave Applications further down also lists every request with its reviewer.'],
             ['q' => 'Will my carried-forward leave expire?', 'a' => 'It can, depending on your policy. An amber alert at the top of My Time Off shows any days about to expire and the date; the Transaction History shows the expiry date on each carry-forward credit.'],
-            ['q' => 'My attendance is wrong. What should I do?', 'a' => 'Open Attendance, click Regularize (or the fix link on the flagged day), choose the punch to correct, enter the right time and a reason, and submit. It goes to your manager, then HR, then an administrator.'],
+            ['q' => 'My attendance is wrong. What should I do?', 'a' => 'Open Attendance, click Regularize (or the fix link on the flagged day), choose the punch to correct, enter the right time and a reason, and submit. It goes straight to HR for approval.'],
             ['q' => 'I forgot to clock out. Will I lose the day?', 'a' => 'The day is flagged as a missing check-out. Raise a regularisation request for the OUT punch; once approved, your hours are recalculated.'],
             ['q' => 'Where can I download my payslip?', 'a' => 'Payroll → My Payslips. Click Download PDF for the current month, or the download icon next to any month in Payslip History.'],
             ['q' => 'How do I change my profile details?', 'a' => 'Open My Profile from your name at the top right. Phone, emergency contact and photo save immediately. Name, date of birth, address, bank details, PAN and Aadhaar are sent to HR for approval. Department, manager, job title and work email can only be changed by HR.'],
@@ -179,7 +179,8 @@ class EmployeeGuide
                 'summary' => 'Sign in with your work email and the password from your invitation. You land on your dashboard: a one-page summary of your day, your leave, your pay and anything waiting for you.',
                 'shots' => ['dashboard-top', 'dashboard-widgets'],
                 'steps' => [
-                    'Open Pulse and sign in with your work email and password.',
+                    'Open Pulse and sign in with your work email and the temporary password from your welcome email.',
+                    'The first time, you are asked to set your own password. Then the getting-started tutorial opens.',
                     'Your dashboard opens. The banner shows today\'s shift and a Clock In button.',
                     'The cards below show today\'s status, attendance this month, leave left, late marks, overtime, pending requests and your latest salary.',
                     'Scroll down for your leave summary, latest payslip, quick actions, announcements and your reporting manager.',
@@ -196,9 +197,10 @@ class EmployeeGuide
                     ['type' => 'tip', 'text' => 'Press Ctrl + K (⌘ K on Mac), or click the search bar at the top, to jump to any page you have access to.'],
                 ],
                 'links' => [
+                    ['route' => 'help.getting-started', 'label' => 'Start the new-employee tutorial'],
                     ['route' => 'dashboard', 'label' => 'Open Dashboard'],
                 ],
-                'keywords' => 'login sign in password dashboard home cards quick actions announcements search',
+                'keywords' => 'login sign in password first login set password tutorial new employee dashboard home cards quick actions announcements search',
             ],
             [
                 'id' => 'navigation',
@@ -252,7 +254,7 @@ class EmployeeGuide
                 'next' => [
                     'HR reviews the request. Your current value stays in place until it is approved.',
                     'If approved, the new value replaces the old one. If rejected, the old value stays and the reviewer\'s comment is shown on the Requests tab.',
-                    'You get a notification either way.',
+                    'Check the Requests tab for the decision and any comment from HR.',
                 ],
                 'tips' => [
                     ['type' => 'warning', 'text' => 'Your work email is also your login. To change it, contact HR or IT.'],
@@ -298,7 +300,7 @@ class EmployeeGuide
                 'category' => 'Attendance',
                 'title' => 'Correcting your attendance (regularisation)',
                 'icon' => 'pencil-square',
-                'summary' => 'If a punch is missing or wrong, ask for a correction. The raw device record is never changed; the correction applies only after final approval.',
+                'summary' => 'If a punch is missing or wrong, ask for a correction. It goes straight to HR. The raw device record is never changed; the correction applies once HR approves it.',
                 'shots' => ['attendance-regularise'],
                 'steps' => [
                     'On My Attendance, click Regularize, or the fix link next to a flagged day.',
@@ -313,9 +315,9 @@ class EmployeeGuide
                     'Ask for a day to be marked as a half day.',
                 ],
                 'next' => [
-                    'The request goes to your manager, then HR, then an administrator.',
-                    'Once approved, your hours for that day are recalculated.',
-                    'You can follow each approval step on the day\'s detail in My Attendance, and you are notified of the outcome.',
+                    'The request goes straight to HR for approval.',
+                    'Once HR approves it, your hours for that day are recalculated.',
+                    'You can follow it on the day\'s detail in My Attendance, and you are notified of the outcome.',
                 ],
                 'statuses' => ['Pending', 'Approved', 'Rejected'],
                 'tips' => [],

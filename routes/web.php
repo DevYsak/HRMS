@@ -35,6 +35,7 @@ use App\Livewire\Employees\TeamManagement;
 use App\Livewire\ExecutiveDashboard;
 use App\Livewire\FinanceDashboard;
 use App\Livewire\Help\EmployeeGuide;
+use App\Livewire\Help\GettingStarted;
 use App\Livewire\HrAdminDashboard;
 use App\Livewire\ManagerDashboard;
 use App\Livewire\NotificationsPage;
@@ -182,6 +183,8 @@ Route::middleware(['auth'])->group(function () {
     // Employee Guide — how-to for every employee feature. Open to any signed-in
     // user; it only links to pages, each of which keeps its own guards.
     Route::get('/help/employee-guide', EmployeeGuide::class)->name('help.employee-guide');
+    // New-employee tutorial: first sign-in, password, profile and leave.
+    Route::get('/help/getting-started', GettingStarted::class)->name('help.getting-started');
 
     // --------------------------------------------------
     // Employees module

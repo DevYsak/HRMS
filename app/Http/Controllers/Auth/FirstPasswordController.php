@@ -70,7 +70,10 @@ class FirstPasswordController extends Controller
             module: AuditService::AUTHENTICATION,
         );
 
-        return redirect()->route('dashboard')->with('status', __('Your password has been set.'));
+        // A new employee continues with the getting-started tutorial; an
+        // account with no employee record goes straight to the dashboard.
+        return redirect()->route($user->employee ? 'help.getting-started' : 'dashboard')
+            ->with('status', __('Your password has been set.'));
     }
 
     /**
