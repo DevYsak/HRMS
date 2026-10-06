@@ -75,6 +75,10 @@ function elpHire(int $daysPerWeek = 5, array $overrides = []): Employee
         'leave_policy_id' => null,
         'working_pattern' => 'regular',
         'working_days_per_week' => $daysPerWeek,
+        // Fixed, before any leave year in play: the factory's random joining
+        // date sometimes fell inside the current year and pro-rated the
+        // entitlement (e.g. 25.32 instead of 28), failing intermittently.
+        'joining_date' => '2024-02-01',
     ], $overrides));
 }
 
