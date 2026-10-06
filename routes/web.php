@@ -90,6 +90,7 @@ use App\Livewire\Settings\ImportExportCentre;
 use App\Livewire\Settings\JobTitleManager;
 use App\Livewire\Settings\MenuSettings;
 use App\Livewire\Settings\ModuleSettings;
+use App\Livewire\Settings\MyNotificationPreferences;
 use App\Livewire\Settings\NotificationSettings;
 use App\Livewire\Settings\OnboardingTemplateManager;
 use App\Livewire\Settings\OnboardingTemplateTaskManager;
@@ -190,6 +191,9 @@ Route::middleware(['auth'])->group(function () {
 
     // Holiday calendar — every employee, their own calendar only.
     Route::get('/holidays', HolidayCalendar::class)->name('holidays.calendar');
+
+    // Personal notification preferences (optional events only).
+    Route::get('/settings/my-notifications', MyNotificationPreferences::class)->name('settings.my-notifications');
 
     // --------------------------------------------------
     // Employees module

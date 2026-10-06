@@ -4,13 +4,16 @@ namespace App\Livewire\Settings;
 
 use App\Mail\CustomBroadcastMail;
 use App\Models\AuditLog;
+use App\Models\Department;
 use App\Models\EmailLog;
 use App\Models\MailSetting;
 use App\Models\NotificationRoleSetting;
 use App\Models\NotificationSetting;
+use App\Models\Role;
 use App\Models\User;
 use App\Services\AiAssistant;
 use App\Services\Notifications\NotificationCatalog;
+use App\Services\Notifications\NotificationRecipientPolicy;
 use App\Services\Notifications\TemplateVariableRenderer;
 use Illuminate\Contracts\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Artisan;
@@ -70,6 +73,78 @@ class NotificationSettings extends Component
     public array $selectedRecipients = [];
 
     public bool $selectAllRecipients = false;
+
+    // ── Recipients (per event) ──────────────────────────────────────────
+    public bool $showRecipientsModal = false;
+
+    public ?int $recipientsId = null;
+
+    /** @var array<int, string> RBAC role slugs */
+    public array $rcIncludeRoles = [];
+
+    /** @var array<int, string> */
+    public array $rcExcludeRoles = [];
+
+    /** @var array<int, string> */
+    public array $rcUserIds = [];
+
+    /** @var array<int, string> */
+    public array $rcDepartmentIds = [];
+
+    public bool $rcApplyToAll = false;
+
+    public bool $rcMandatory = false;
+
+    public function openRecipients(int $id): void
+    {
+        $this->authorize('manage-settings');
+
+        $setting = NotificationSetting::findOrFail($id);
+        $this->recipientsId = $setting->id;
+        $this->rcIncludeRoles = array_values($setting->include_roles ?? []);
+        $this->rcExcludeRoles = array_values($setting->exclude_roles ?? []);
+        $this->rcUserIds = array_map('strval', $setting->include_user_ids ?? []);
+        $this->rcDepartmentIds = array_map('strval', $setting->department_ids ?? []);
+        $this->rcApplyToAll = (bool) $setting->apply_to_all;
+        $this->rcMandatory = (bool) $setting->is_mandatory;
+        $this->resetErrorBag();
+        $this->showRecipientsModal = true;
+    }
+
+    /**
+     * Save who receives the event. Audited by the configuration observer
+     * (only the fields that changed).
+     */
+    public function saveRecipients(): void
+    {
+        $this->authorize('manage-settings');
+
+        $roles = Role::pluck('slug')->all();
+        $this->validate([
+            'rcIncludeRoles.*' => ['string', 'in:'.implode(',', $roles)],
+            'rcExcludeRoles.*' => ['string', 'in:'.implode(',', $roles)],
+            'rcUserIds.*' => ['integer', 'exists:users,id'],
+            'rcDepartmentIds.*' => ['integer', 'exists:departments,id'],
+        ]);
+
+        if (array_intersect($this->rcIncludeRoles, $this->rcExcludeRoles) !== []) {
+            $this->addError('rcExcludeRoles', 'A role cannot be both included and excluded.');
+
+            return;
+        }
+
+        NotificationSetting::findOrFail($this->recipientsId)->update([
+            'include_roles' => array_values($this->rcIncludeRoles) ?: null,
+            'exclude_roles' => array_values($this->rcExcludeRoles) ?: null,
+            'include_user_ids' => array_map('intval', $this->rcUserIds) ?: null,
+            'department_ids' => array_map('intval', $this->rcDepartmentIds) ?: null,
+            'apply_to_all' => $this->rcApplyToAll,
+            'is_mandatory' => $this->rcMandatory,
+        ]);
+
+        $this->showRecipientsModal = false;
+        \Flux::toast('Recipients saved.', variant: 'success');
+    }
 
     public function mount(): void
     {
@@ -539,7 +614,12 @@ class NotificationSettings extends Component
 
         $catalog = app(NotificationCatalog::class);
 
-        return view('livewire.settings.notification-settings', compact('settings', 'queue', 'smtp', 'logs', 'recipientList', 'aiEnabled', 'catalog'))
+        $rbacRoles = Role::where('is_active', true)->orderBy('name')->get(['slug', 'name']);
+        $departmentList = Department::orderBy('name')->get(['id', 'name']);
+        $recipientAware = NotificationRecipientPolicy::RECIPIENT_AWARE;
+        $editingSetting = $this->recipientsId ? NotificationSetting::find($this->recipientsId) : null;
+
+        return view('livewire.settings.notification-settings', compact('settings', 'queue', 'smtp', 'logs', 'recipientList', 'aiEnabled', 'catalog', 'rbacRoles', 'departmentList', 'recipientAware', 'editingSetting'))
             ->layout('layouts.app', ['title' => 'Notifications & Email']);
     }
 

@@ -225,7 +225,7 @@ class AppServiceProvider extends ServiceProvider
             $gate = app(NotificationDeliveryGate::class);
 
             if ($event->channel === 'mail') {
-                $decision = $gate->mail($key, $role);
+                $decision = $gate->mail($key, $role, notifiable: $event->notifiable);
 
                 if (! $decision->allowed) {
                     $this->logSkippedMail($key, $event->notifiable, $decision->reason);
@@ -236,7 +236,7 @@ class AppServiceProvider extends ServiceProvider
                 return null;
             }
 
-            if ($event->channel === 'database' && ! $gate->database($key, $role)->allowed) {
+            if ($event->channel === 'database' && ! $gate->database($key, $role, $event->notifiable)->allowed) {
                 return false;
             }
 

@@ -30,6 +30,13 @@ class NotificationSetting extends Model
         'custom_body',
         'is_system',
         'sort_order',
+        // Recipient control (NotificationRecipientPolicy). RBAC role slugs.
+        'include_roles',
+        'exclude_roles',
+        'include_user_ids',
+        'department_ids',
+        'apply_to_all',
+        'is_mandatory',
     ];
 
     protected function casts(): array
@@ -39,6 +46,12 @@ class NotificationSetting extends Model
             'database_enabled' => 'boolean',
             'is_automatic' => 'boolean',
             'is_system' => 'boolean',
+            'include_roles' => 'array',
+            'exclude_roles' => 'array',
+            'include_user_ids' => 'array',
+            'department_ids' => 'array',
+            'apply_to_all' => 'boolean',
+            'is_mandatory' => 'boolean',
             'sort_order' => 'integer',
         ];
     }

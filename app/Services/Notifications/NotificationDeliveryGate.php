@@ -4,6 +4,7 @@ namespace App\Services\Notifications;
 
 use App\Models\NotificationRoleSetting;
 use App\Models\NotificationSetting;
+use App\Models\User;
 
 /**
  * The single decision point for whether one channel of one notification
@@ -21,6 +22,12 @@ use App\Models\NotificationSetting;
  * no row at all — fail open. An event nobody has ever configured, or a role
  * nobody has ever configured within an otherwise-configured event, behaves
  * exactly as it did before either settings layer existed.
+ *
+ * When the recipient is known (the notification path passes it), two more
+ * checks come first (NotificationRecipientPolicy): a recipient whose RBAC
+ * role is excluded from the event never receives it, and a recipient who
+ * muted an optional event does not receive that channel — a mandatory event
+ * cannot be muted.
  */
 class NotificationDeliveryGate
 {
@@ -31,8 +38,12 @@ class NotificationDeliveryGate
      * exist/log internally, but must NOT automatically send email." A manual
      * send still respects mail_enabled and the global pause.
      */
-    public function mail(string $eventKey, ?string $role, bool $manual = false): DeliveryDecision
+    public function mail(string $eventKey, ?string $role, bool $manual = false, ?object $notifiable = null): DeliveryDecision
     {
+        if ($decision = $this->recipientDecision($eventKey, $notifiable, 'mail')) {
+            return $decision;
+        }
+
         $resolved = $this->resolve($eventKey, $role);
 
         if ($resolved === null) {
@@ -50,8 +61,12 @@ class NotificationDeliveryGate
         return DeliveryDecision::allow();
     }
 
-    public function database(string $eventKey, ?string $role): DeliveryDecision
+    public function database(string $eventKey, ?string $role, ?object $notifiable = null): DeliveryDecision
     {
+        if ($decision = $this->recipientDecision($eventKey, $notifiable, 'database')) {
+            return $decision;
+        }
+
         $resolved = $this->resolve($eventKey, $role);
 
         if ($resolved === null) {
@@ -63,6 +78,26 @@ class NotificationDeliveryGate
         }
 
         return DeliveryDecision::allow();
+    }
+
+    /** An excluded role or a personal mute, for a known recipient; null = carry on. */
+    private function recipientDecision(string $eventKey, ?object $notifiable, string $channel): ?DeliveryDecision
+    {
+        if (! $notifiable instanceof User) {
+            return null;
+        }
+
+        $policy = app(NotificationRecipientPolicy::class);
+
+        if ($policy->excludes($eventKey, $notifiable)) {
+            return DeliveryDecision::skip('recipient_role_excluded');
+        }
+
+        if ($policy->mutedBy($notifiable, $eventKey, $channel)) {
+            return DeliveryDecision::skip('muted_by_recipient');
+        }
+
+        return null;
     }
 
     /**

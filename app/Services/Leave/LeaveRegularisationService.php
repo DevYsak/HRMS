@@ -14,6 +14,7 @@ use App\Models\User;
 use App\Notifications\AttendanceRegularisationNotification;
 use App\Services\Attendance\AttendanceScoreEngine;
 use App\Services\Attendance\WorkingDayResolver;
+use App\Services\Notifications\NotificationDispatcher;
 use App\Services\Notifications\NotificationRecipients;
 use Carbon\CarbonInterface;
 use Carbon\CarbonPeriod;
@@ -92,8 +93,13 @@ class LeaveRegularisationService
             $notification = new AttendanceRegularisationNotification(
                 $employee->user?->name ?? 'An employee', $from->format('d M Y'), 'pending',
             );
-            app(NotificationRecipients::class)->regularisationApprovers($employee)
-                ->each(fn (User $u) => $u->notify($notification->forRole('hr_admin')));
+            app(NotificationDispatcher::class)->sendToRecipients(
+                AttendanceRegularisationNotification::class,
+                app(NotificationRecipients::class)->regularisationApprovers($employee),
+                fn () => $notification->forRole('hr_admin'),
+                'regularisation:'.$regularisation->id,
+                $employee,
+            );
         } catch (\Throwable $e) {
             report($e);
         }

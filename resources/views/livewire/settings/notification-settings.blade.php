@@ -149,7 +149,13 @@
                             @php($roles = $catalog->rolesFor($s->key))
                             <tr class="transition hover:bg-zinc-50/60 dark:hover:bg-zinc-800/30">
                                 <td class="px-5 py-3">
-                                    <div class="font-semibold text-zinc-900 dark:text-white">{{ $s->label }}</div>
+                                    <div class="flex flex-wrap items-center gap-1.5 font-semibold text-zinc-900 dark:text-white">
+                                        {{ $s->label }}
+                                        @if($s->is_mandatory)<span class="rounded bg-rose-50 px-1.5 text-[9px] font-bold uppercase text-rose-600 dark:bg-rose-500/10 dark:text-rose-300">Mandatory</span>@endif
+                                        @if($s->apply_to_all)<span class="rounded bg-orange-50 px-1.5 text-[9px] font-bold uppercase text-orange-600 dark:bg-orange-500/10">All staff</span>@endif
+                                        @if(! empty($s->include_roles))<span class="rounded bg-emerald-50 px-1.5 text-[9px] font-bold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">+ {{ implode(', ', $s->include_roles) }}</span>@endif
+                                        @if(! empty($s->exclude_roles))<span class="rounded bg-zinc-100 px-1.5 text-[9px] font-bold text-zinc-500 dark:bg-white/5">− {{ implode(', ', $s->exclude_roles) }}</span>@endif
+                                    </div>
                                     @if($roles !== [])
                                         <div class="mt-0.5 text-[11px] text-zinc-400">Default — applies to any role below with no override</div>
                                     @elseif($s->custom_subject)
@@ -173,7 +179,8 @@
                                         </button>
                                     </td>
                                 @endforeach
-                                <td class="px-5 py-3 text-right">
+                                <td class="whitespace-nowrap px-5 py-3 text-right">
+                                    <flux:button wire:click="openRecipients({{ $s->id }})" size="xs" variant="ghost" icon="user-group">Recipients</flux:button>
                                     <flux:button wire:click="openEdit({{ $s->id }})" size="xs" variant="ghost" icon="pencil-square">Edit</flux:button>
                                 </td>
                             </tr>
@@ -348,6 +355,71 @@
     </flux:modal>
 
     {{-- Edit template modal --}}
+    {{-- Recipients for one event --}}
+    <flux:modal wire:model.self="showRecipientsModal" class="w-full max-w-2xl">
+        <form wire:submit="saveRecipients" class="space-y-4">
+            <div>
+                <flux:heading size="lg">Recipients · {{ $editingSetting?->label }}</flux:heading>
+                <flux:text class="mt-1 text-xs">Excluded roles, Mandatory and people's own mutes apply to every event.
+                    @if($editingSetting && ! in_array($editingSetting->key, $recipientAware, true))
+                        This event always goes to the people its process names; included roles and users are not added to it.
+                    @else
+                        Included roles and users are added to the people this event normally goes to.
+                    @endif
+                </flux:text>
+            </div>
+
+            <div class="flex flex-wrap gap-4 rounded-xl bg-zinc-50 p-3 dark:bg-white/5">
+                <flux:checkbox wire:model="rcApplyToAll" label="Apply to all staff" />
+                <flux:checkbox wire:model="rcMandatory" label="Mandatory (people cannot mute it)" />
+            </div>
+
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                    <p class="mb-1.5 text-xs font-bold uppercase tracking-wider text-emerald-700">Enable for selected roles</p>
+                    <div class="space-y-1">
+                        @foreach($rbacRoles as $role)
+                            <flux:checkbox wire:model="rcIncludeRoles" value="{{ $role->slug }}" label="{{ $role->name }}" />
+                        @endforeach
+                    </div>
+                </div>
+                <div>
+                    <p class="mb-1.5 text-xs font-bold uppercase tracking-wider text-zinc-500">Exclude selected roles</p>
+                    <div class="space-y-1">
+                        @foreach($rbacRoles as $role)
+                            <flux:checkbox wire:model="rcExcludeRoles" value="{{ $role->slug }}" label="{{ $role->name }}" />
+                        @endforeach
+                    </div>
+                    @error('rcExcludeRoles')<p class="mt-1 text-xs text-rose-600">{{ $message }}</p>@enderror
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                    <label class="mb-1 block text-xs font-bold uppercase tracking-wider text-zinc-500">Specific people (optional)</label>
+                    <select wire:model="rcUserIds" multiple size="6" class="w-full rounded-xl border border-zinc-200 bg-white text-xs dark:border-zinc-700 dark:bg-zinc-900">
+                        @foreach($recipientList as $person)
+                            <option value="{{ $person->id }}">{{ $person->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div>
+                    <label class="mb-1 block text-xs font-bold uppercase tracking-wider text-zinc-500">Only these departments (optional)</label>
+                    <select wire:model="rcDepartmentIds" multiple size="6" class="w-full rounded-xl border border-zinc-200 bg-white text-xs dark:border-zinc-700 dark:bg-zinc-900">
+                        @foreach($departmentList as $department)
+                            <option value="{{ $department->id }}">{{ $department->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-2">
+                <flux:button wire:click="$set('showRecipientsModal', false)" variant="ghost">Cancel</flux:button>
+                <flux:button type="submit" variant="primary">Save recipients</flux:button>
+            </div>
+        </form>
+    </flux:modal>
+
     <flux:modal wire:model.self="showEditModal" class="w-full max-w-lg">
         <div class="space-y-4">
             <div>

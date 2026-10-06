@@ -32,6 +32,7 @@ use App\Services\Attendance\ShiftResolver;
 use App\Services\Attendance\WorkingDayResolver;
 use App\Services\AttendanceService;
 use App\Services\Leave\LeaveYearResolver;
+use App\Services\Notifications\NotificationDispatcher;
 use App\Services\Notifications\NotificationRecipients;
 use App\Services\WfhService;
 use App\Support\UserAgent;
@@ -2278,9 +2279,15 @@ class AttendanceTracker extends Component
             );
             // Everyone holding "Approve Regularisations (HR)" whose scope
             // covers this employee (Super Admins included).
-            app(NotificationRecipients::class)->regularisationApprovers($employee)
-                ->unique('id')
-                ->each(fn ($u) => $u->notify($notification->forRole('hr_admin')));
+            // Plus anyone the Notifications & Email page adds; minus excluded
+            // roles; each person once.
+            app(NotificationDispatcher::class)->sendToRecipients(
+                AttendanceRegularisationNotification::class,
+                app(NotificationRecipients::class)->regularisationApprovers($employee),
+                fn () => $notification->forRole('hr_admin'),
+                'regularisation:'.$regularisation->id,
+                $employee,
+            );
 
             // Notify the employee themselves so the request appears in their inbox
             Auth::user()->notify(new RegularisationReviewedNotification($regularisation));

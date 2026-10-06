@@ -3,9 +3,11 @@
 namespace App\Console\Commands;
 
 use App\Models\Attendance;
+use App\Models\User;
 use App\Notifications\MissingCheckoutNotification;
 use App\Services\Attendance\ShiftResolver;
 use App\Services\Attendance\WorkingDayResolver;
+use App\Services\Notifications\NotificationDispatcher;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 
@@ -61,12 +63,17 @@ class FlagMissingCheckouts extends Command
             try {
                 $record->update(['missing_checkout' => true]);
 
+                // The employee and their manager, plus whoever the
+                // Notifications & Email page adds (e.g. a Coordinator or HR),
+                // minus excluded roles — each once for this day.
                 $notification = new MissingCheckoutNotification($record);
-                $employee->user?->notify($notification->forRole('employee'));
-
-                if ($employee->manager_id) {
-                    $employee->manager?->notify($notification->forRole('manager'));
-                }
+                app(NotificationDispatcher::class)->sendToRecipients(
+                    MissingCheckoutNotification::class,
+                    collect([$employee->user, $employee->manager_id ? $employee->manager : null])->filter(),
+                    fn (User $u) => $notification->forRole($u->id === $employee->user_id ? 'employee' : 'manager'),
+                    'missing_checkout:'.$record->id,
+                    $employee,
+                );
 
                 $flagged++;
             } catch (\Throwable $e) {
