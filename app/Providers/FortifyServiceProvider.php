@@ -7,10 +7,16 @@ use App\Actions\Fortify\ResetUserPassword;
 use App\Http\Responses\LoginResponse;
 use App\Http\Responses\RegisterResponse;
 use App\Http\Responses\TwoFactorLoginResponse;
+use App\Models\Employee;
 use App\Models\User;
+use App\Services\Audit\AuditService;
 use App\Services\EmployeeInvitationService;
 use App\Services\PasswordService;
+use Illuminate\Auth\Events\Failed;
+use Illuminate\Auth\Events\Lockout;
 use Illuminate\Auth\Events\Login;
+use Illuminate\Auth\Events\Logout;
+use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Event;
@@ -43,6 +49,59 @@ class FortifyServiceProvider extends ServiceProvider
         $this->configureViews();
         $this->configureRateLimiting();
         $this->recordLogins();
+        $this->auditAuthentication();
+    }
+
+    /**
+     * Sign-in, sign-out, failed attempts, lockouts and password resets in the
+     * audit trail. Web guard only, so API/biometric guards add no noise. The
+     * Login event fires before the guard holds the user, so the actor is
+     * passed explicitly.
+     */
+    private function auditAuthentication(): void
+    {
+        $audit = fn () => app(AuditService::class);
+        $employeeOf = fn (?User $user): ?int => $user ? Employee::where('user_id', $user->id)->value('id') : null;
+
+        Event::listen(Login::class, function (Login $event) use ($audit, $employeeOf): void {
+            if ($event->guard === 'web' && $event->user instanceof User) {
+                $audit()->event('LOGIN', AuditService::AUTHENTICATION, $event->user,
+                    new: ['remember' => $event->remember], subjectEmployeeId: $employeeOf($event->user), actor: $event->user);
+            }
+        });
+
+        Event::listen(Logout::class, function (Logout $event) use ($audit, $employeeOf): void {
+            if ($event->guard === 'web' && $event->user instanceof User) {
+                $audit()->event('LOGOUT', AuditService::AUTHENTICATION, $event->user,
+                    subjectEmployeeId: $employeeOf($event->user), actor: $event->user);
+            }
+        });
+
+        Event::listen(Failed::class, function (Failed $event) use ($audit, $employeeOf): void {
+            if ($event->guard !== 'web') {
+                return;
+            }
+
+            $user = $event->user instanceof User ? $event->user : null;
+            $audit()->event('LOGIN_FAILED', AuditService::SECURITY, $user ?? new User,
+                new: ['email' => Str::limit((string) ($event->credentials['email'] ?? ''), 120, '')],
+                subjectEmployeeId: $employeeOf($user), module: AuditService::AUTHENTICATION);
+        });
+
+        Event::listen(Lockout::class, function (Lockout $event) use ($audit, $employeeOf): void {
+            $email = (string) $event->request->input(Fortify::username(), '');
+            $user = $email !== '' ? User::where('email', $email)->first() : null;
+            $audit()->event('LOGIN_LOCKOUT', AuditService::SECURITY, $user ?? new User,
+                new: ['email' => Str::limit($email, 120, '')],
+                subjectEmployeeId: $employeeOf($user), module: AuditService::AUTHENTICATION);
+        });
+
+        Event::listen(PasswordReset::class, function (PasswordReset $event) use ($audit, $employeeOf): void {
+            if ($event->user instanceof User) {
+                $audit()->event('PASSWORD_RESET_BY_LINK', AuditService::SECURITY, $event->user,
+                    subjectEmployeeId: $employeeOf($event->user), module: AuditService::AUTHENTICATION, actor: $event->user);
+            }
+        });
     }
 
     /**

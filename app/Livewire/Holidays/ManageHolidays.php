@@ -3,7 +3,6 @@
 namespace App\Livewire\Holidays;
 
 use App\Enums\HolidayType;
-use App\Models\AuditLog;
 use App\Models\Department;
 use App\Models\Office;
 use App\Models\PublicHoliday;
@@ -142,11 +141,9 @@ class ManageHolidays extends Component
             $holiday = PublicHoliday::findOrFail($this->editingId);
             $before = $holiday->toArray();
             $holiday->update($payload);
-            AuditLog::record($holiday, 'updated', $before, $holiday->fresh()->toArray());
             \Flux::toast('Holiday updated.', variant: 'success');
         } else {
             $holiday = PublicHoliday::create($payload + ['is_active' => true, 'created_by' => Auth::id()]);
-            AuditLog::record($holiday, 'created', null, $holiday->toArray());
             \Flux::toast('Holiday created.', variant: 'success');
         }
 
@@ -163,7 +160,6 @@ class ManageHolidays extends Component
         $copy->date = $h->date->copy()->addYear();  // next year by default
         $copy->created_by = Auth::id();
         $copy->save();
-        AuditLog::record($copy, 'created', $copy->toArray(), null);
         \Flux::toast('Holiday duplicated to '.$copy->date->format('d M Y').'.', variant: 'success');
     }
 
@@ -172,7 +168,6 @@ class ManageHolidays extends Component
         abort_unless(Auth::user()->canManageSettings(), 403);
         $h = PublicHoliday::findOrFail($id);
         $h->update(['is_active' => ! $h->is_active]);
-        AuditLog::record($h, $h->is_active ? 'restored' : 'archived', $h->toArray(), null);
         \Flux::toast($h->is_active ? 'Holiday restored.' : 'Holiday archived.', variant: $h->is_active ? 'success' : 'warning');
     }
 
@@ -180,7 +175,6 @@ class ManageHolidays extends Component
     {
         abort_unless(Auth::user()->canManageSettings(), 403);
         $h = PublicHoliday::findOrFail($id);
-        AuditLog::record($h, 'deleted', null, $h->toArray());
         $h->delete();
         \Flux::toast('Holiday deleted.', variant: 'danger');
     }

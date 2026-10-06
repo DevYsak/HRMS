@@ -3,6 +3,7 @@
 namespace App\Services\Audit;
 
 use App\Models\AuditLog;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -87,7 +88,14 @@ class AuditService
         ?int $subjectEmployeeId = null,
         ?string $module = null,
         ?string $action = null,
+        ?User $actor = null,
     ): AuditLog {
+        $context = ['module' => $module ?? $category, 'category' => $category, 'event' => $event];
+
+        if ($actor !== null) {
+            $context['actor'] = $actor;
+        }
+
         return AuditLog::record(
             $entity,
             $action ?? strtolower($event),
@@ -95,7 +103,7 @@ class AuditService
             $new,
             $reason,
             $subjectEmployeeId,
-            ['module' => $module ?? $category, 'category' => $category, 'event' => $event],
+            $context,
         );
     }
 }

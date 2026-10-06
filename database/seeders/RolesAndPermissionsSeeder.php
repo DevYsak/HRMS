@@ -117,6 +117,7 @@ class RolesAndPermissionsSeeder extends Seeder
             ['key' => 'impersonate', 'label' => 'Login as Employee', 'description' => 'View the system as another user to support or test their access'],
             ['key' => 'data_export', 'label' => 'Export Data', 'description' => 'Download employees, leave, attendance and holiday data from the Import / Export centre'],
             ['key' => 'data_import', 'label' => 'Import Data', 'description' => 'Bulk-load data such as holidays from a spreadsheet, after a validated preview'],
+            ['key' => 'view_audit_log', 'label' => 'View Activity Log', 'description' => 'Read the central activity log / audit trail and export it'],
         ],
     ];
 
@@ -152,7 +153,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'upload_documents', 'manage_documents', 'view_documents', 'acknowledge_documents',
             'view_reports', 'export_reports',
             'manage_roles', 'manage_settings', 'manage_company_settings',
-            'manage_ai_settings', 'data_purge', 'impersonate', 'force_delete_employee', 'data_export', 'data_import',
+            'manage_ai_settings', 'data_purge', 'impersonate', 'force_delete_employee', 'data_export', 'data_import', 'view_audit_log',
             'edit_own_profile', 'request_profile_change', 'approve_profile_changes',
         ],
         'director' => [

@@ -64,13 +64,17 @@ class AuditLog extends Model
     /**
      * Record an audit entry for any model action.
      *
+     * The actor is the signed-in user, unless $context['actor'] names one —
+     * needed when nobody is signed in yet (the Login event fires before the
+     * guard holds the user).
+     *
      * @param  string  $action  created|updated|deleted, or a domain verb
      * @param  array<string, mixed>|null  $oldValues
      * @param  array<string, mixed>|null  $newValues
      * @param  string|null  $reason  free-text context (e.g. why a payroll was rejected)
      * @param  int|null  $subjectEmployeeId  the employee this event is ABOUT, when different
      *                                       from the mutated model itself (e.g. a Payslip's owner)
-     * @param  array{module?: string|null, category?: string|null, event?: string|null}  $context
+     * @param  array{module?: string|null, category?: string|null, event?: string|null, actor?: User|null}  $context
      */
     public static function record(
         Model $model,
@@ -82,7 +86,7 @@ class AuditLog extends Model
         array $context = [],
     ): self {
         $request = app(Request::class);
-        $user = auth()->user();
+        $user = array_key_exists('actor', $context) ? $context['actor'] : auth()->user();
 
         return static::create([
             'user_id' => $user?->id,

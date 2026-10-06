@@ -5,7 +5,6 @@ namespace App\Livewire\Attendance;
 use App\Models\Attendance;
 use App\Models\AttendanceDailyScore;
 use App\Models\AttendanceRegularisation;
-use App\Models\AuditLog;
 use App\Models\LeaveRequest;
 use App\Notifications\RegularisationReviewedNotification;
 use App\Services\Approvals\ApprovalGuard;
@@ -78,9 +77,6 @@ class TeamAttendance extends Component
         );
         $this->activeRequest->refresh();
 
-        if ($attendance) {
-            AuditLog::record($attendance, 'regularised', $attendance->toArray(), null);
-        }
         \Flux::toast('Regularisation request approved.');
 
         $this->activeRequest->employee->user->notify(new RegularisationReviewedNotification($this->activeRequest));

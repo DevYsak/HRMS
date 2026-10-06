@@ -18,6 +18,7 @@ use App\Services\Attendance\HolidayResolver;
 use App\Services\Attendance\ResolvedShift;
 use App\Services\Attendance\ShiftResolver;
 use App\Services\Attendance\WorkingDayResolver;
+use App\Services\Audit\AuditService;
 use App\Services\Leave\LeaveRegularisationService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -248,6 +249,43 @@ class AttendanceService
         array $trail,
         string $via,
     ): ?Attendance {
+        $before = Attendance::where('employee_id', $regularisation->employee_id)
+            ->whereDate('date', $regularisation->work_date)->first();
+        $snapshot = fn (?Attendance $a): ?array => $a ? [
+            'check_in' => $a->check_in?->format('Y-m-d H:i'),
+            'check_out' => $a->check_out?->format('Y-m-d H:i'),
+            'status' => $a->status,
+            'total_hours' => $a->total_hours !== null ? (float) $a->total_hours : null,
+            'is_regularized' => (bool) $a->is_regularized,
+        ] : null;
+
+        $attendance = $this->applyRegularisationInTransaction($regularisation, $reviewerId, $comment, $trail, $via);
+
+        // One categorised event with the day before and after — the decision
+        // the manual-correction screens used to log with the after-state
+        // stored as "old".
+        app(AuditService::class)->event(
+            $via === 'hr_fast_path' ? 'ATTENDANCE_MANUALLY_CORRECTED' : 'ATTENDANCE_REGULARISATION_APPROVED',
+            AuditService::ATTENDANCE,
+            $regularisation,
+            old: ['attendance' => $snapshot($before)],
+            new: ['attendance' => $snapshot($attendance), 'applied_via' => $via, 'category' => $regularisation->category],
+            reason: $comment,
+            subjectEmployeeId: $regularisation->employee_id,
+            actor: User::find($reviewerId),
+        );
+
+        return $attendance;
+    }
+
+    /** @param  array<int, array<string, mixed>>  $trail */
+    private function applyRegularisationInTransaction(
+        AttendanceRegularisation $regularisation,
+        int $reviewerId,
+        ?string $comment,
+        array $trail,
+        string $via,
+    ): ?Attendance {
         return DB::transaction(function () use ($regularisation, $reviewerId, $comment, $trail, $via) {
             $regularisation->update([
                 'status' => 'approved',
@@ -461,6 +499,8 @@ class AttendanceService
             'at' => now()->toDateTimeString(),
         ];
 
+        $oldStatus = $regularisation->status;
+
         $regularisation->update([
             'status' => 'rejected',
             'reviewer_id' => $reviewerId,
@@ -468,6 +508,17 @@ class AttendanceService
             'approval_trail' => $trail,
             'reviewed_at' => now(),
         ]);
+
+        app(AuditService::class)->event(
+            $override ? 'ATTENDANCE_REGULARISATION_OVERRIDDEN' : 'ATTENDANCE_REGULARISATION_REJECTED',
+            AuditService::ATTENDANCE,
+            $regularisation,
+            old: ['status' => $oldStatus],
+            new: ['status' => 'rejected', 'work_date' => Carbon::parse($regularisation->work_date)->toDateString()],
+            reason: $comment,
+            subjectEmployeeId: $regularisation->employee_id,
+            actor: User::find($reviewerId),
+        );
 
         return $regularisation->fresh();
     }

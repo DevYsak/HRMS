@@ -12,8 +12,9 @@ class UserObserver
 {
     public function updated(User $user): void
     {
-        // Skip pure login tracking (last_login_at, remember_token), focus on profile changes.
-        $ignored = ['remember_token', 'updated_at'];
+        // Skip pure login tracking (last_login_at, remember_token), focus on
+        // profile changes. Sign-ins are recorded as LOGIN events instead.
+        $ignored = ['remember_token', 'updated_at', 'last_login_at'];
         $dirty = array_diff_key($user->getDirty(), array_flip($ignored));
 
         if (empty($dirty)) {
@@ -48,6 +49,8 @@ class UserObserver
             );
         }
 
+        $this->recordSecurityChanges($user, $employeeId);
+
         // Name is stored on the biometric device — mark the employee for re-sync.
         if ($user->wasChanged('name')) {
             $employee = $user->employee;
@@ -55,6 +58,31 @@ class UserObserver
             if ($employee?->employee_code && $employee->sync_status !== 'pending') {
                 Employee::withoutEvents(fn () => $employee->update(['sync_status' => 'pending']));
             }
+        }
+    }
+
+    /**
+     * Password and two-factor changes as their own security events. A forced
+     * first change and an admin reset are recorded where they happen (they
+     * also flip must_change_password), so only a self-service change lands
+     * here.
+     */
+    private function recordSecurityChanges(User $user, ?int $employeeId): void
+    {
+        $audit = app(AuditService::class);
+
+        if ($user->wasChanged('password') && ! $user->wasChanged('must_change_password')) {
+            $audit->event('PASSWORD_CHANGED', AuditService::SECURITY, $user,
+                new: ['changed_at' => now()->toDateTimeString()],
+                subjectEmployeeId: $employeeId, module: AuditService::AUTHENTICATION);
+        }
+
+        if ($user->wasChanged('two_factor_confirmed_at')) {
+            $enabled = $user->two_factor_confirmed_at !== null;
+            $audit->event($enabled ? 'TWO_FACTOR_ENABLED' : 'TWO_FACTOR_DISABLED', AuditService::SECURITY, $user,
+                old: ['two_factor' => $enabled ? 'off' : 'on'],
+                new: ['two_factor' => $enabled ? 'on' : 'off'],
+                subjectEmployeeId: $employeeId, module: AuditService::AUTHENTICATION);
         }
     }
 

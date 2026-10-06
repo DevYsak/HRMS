@@ -530,6 +530,10 @@ class LeaveService
                 $this->checkOverlapAndDeductBalance($leaveRequest, $employee, $data, $newDays);
             }
 
+            $this->auditDecision($leaveRequest, $oldStatus, $resolvedStatus, [
+                'leave_type_id' => $oldTypeId, 'start_date' => $oldStart->toDateString(), 'days' => $oldDays,
+            ], $comment, $reviewer);
+
             $fresh = $leaveRequest->fresh(['employee.user', 'leaveType', 'reviewer']);
             $fresh->employee->user->notify((new LeaveRequestNotification($fresh))->forRole('employee'));
 
@@ -666,7 +670,9 @@ class LeaveService
                 $updateData['hr_remark'] = $hrRemark;
             }
 
+            $oldStatus = $leaveRequest->status;
             $leaveRequest->update($updateData);
+            $this->auditDecision($leaveRequest, $oldStatus, $decision, [], $comment, User::find($hrReviewerId));
 
             if ($decision === 'approved' && $effectiveStatus === 'paid') {
                 $balance = $this->getBalance($employee->id, $leaveRequest->leave_type_id);
@@ -1277,7 +1283,47 @@ class LeaveService
             );
         }
 
+        $oldStatus = $leaveRequest->status;
         $leaveRequest->update(['status' => 'cancelled']);
+        $this->auditDecision($leaveRequest, $oldStatus, 'cancelled', [], null, auth()->user());
+    }
+
+    /**
+     * One categorised audit event per leave decision (approve, reject,
+     * forward to HR, cancel, or a change to an already-decided request), with
+     * the status and figures before and after and the reviewer's comment as
+     * the reason. The generic LeaveRequest observer row stays as the raw
+     * field-level record.
+     *
+     * @param  array<string, mixed>  $before  figures captured before the update, when they could change
+     */
+    private function auditDecision(LeaveRequest $leaveRequest, ?string $oldStatus, string $newStatus, array $before, ?string $comment, ?User $actor): void
+    {
+        $decided = in_array($oldStatus, ['approved', 'rejected', 'cancelled'], true);
+
+        $event = match (true) {
+            $decided && $newStatus !== 'cancelled' => 'LEAVE_DECISION_CHANGED',
+            $newStatus === 'approved' => 'LEAVE_APPROVED',
+            $newStatus === 'rejected' => 'LEAVE_REJECTED',
+            $newStatus === 'pending_hr' => 'LEAVE_FORWARDED_TO_HR',
+            $newStatus === 'cancelled' => 'LEAVE_CANCELLED',
+            default => 'LEAVE_STATUS_CHANGED',
+        };
+
+        $after = $leaveRequest->only(['leave_type_id', 'start_date', 'end_date', 'days']);
+        $after['start_date'] = Carbon::parse($after['start_date'])->toDateString();
+        $after['end_date'] = Carbon::parse($after['end_date'])->toDateString();
+
+        app(AuditService::class)->event(
+            $event,
+            AuditService::LEAVE,
+            $leaveRequest,
+            old: ['status' => $oldStatus] + $before,
+            new: ['status' => $newStatus] + $after,
+            reason: $comment,
+            subjectEmployeeId: $leaveRequest->employee_id,
+            actor: $actor,
+        );
     }
 
     /**

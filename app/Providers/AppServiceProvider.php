@@ -5,20 +5,36 @@ namespace App\Providers;
 use App\Http\Middleware\EnsureModuleEnabled;
 use App\Http\Middleware\EnsureRole;
 use App\Models\AttendanceRegularisation;
+use App\Models\AttendanceSetting;
+use App\Models\Company;
+use App\Models\DecemberMandatoryDay;
 use App\Models\DocumentAcknowledgement;
 use App\Models\EmailLog;
 use App\Models\Employee;
 use App\Models\EmployeeSalary;
+use App\Models\HolidayPaySetting;
 use App\Models\Incentive;
+use App\Models\LeavePolicy;
 use App\Models\LeaveRequest;
+use App\Models\LeaveType;
 use App\Models\MailSetting;
+use App\Models\MenuSetting;
+use App\Models\NotificationRoleSetting;
+use App\Models\NotificationSetting;
 use App\Models\OtRequest;
 use App\Models\Payroll;
+use App\Models\PayrollApprovalPolicy;
 use App\Models\Payslip;
 use App\Models\Permission;
+use App\Models\PublicHoliday;
 use App\Models\Reimbursement;
+use App\Models\SalaryComponent;
+use App\Models\SalaryCycle;
+use App\Models\SalaryStructure;
+use App\Models\ShiftSetting;
 use App\Models\User;
 use App\Observers\AttendanceRegularisationObserver;
+use App\Observers\ConfigurationAuditObserver;
 use App\Observers\DocumentAcknowledgementObserver;
 use App\Observers\EmployeeObserver;
 use App\Observers\EmployeeSalaryObserver;
@@ -147,6 +163,30 @@ class AppServiceProvider extends ServiceProvider
         Reimbursement::observe(ReimbursementObserver::class);
         AttendanceRegularisation::observe(AttendanceRegularisationObserver::class);
         DocumentAcknowledgement::observe(DocumentAcknowledgementObserver::class);
+
+        // Configuration changes (notifications, payroll settings, holidays,
+        // MDL dates, attendance / leave / company settings) are audited
+        // wherever they are made from.
+        foreach ([
+            NotificationSetting::class,
+            NotificationRoleSetting::class,
+            MailSetting::class,
+            PayrollApprovalPolicy::class,
+            SalaryCycle::class,
+            SalaryComponent::class,
+            SalaryStructure::class,
+            MenuSetting::class,
+            PublicHoliday::class,
+            DecemberMandatoryDay::class,
+            HolidayPaySetting::class,
+            AttendanceSetting::class,
+            ShiftSetting::class,
+            LeavePolicy::class,
+            LeaveType::class,
+            Company::class,
+        ] as $model) {
+            $model::observe(ConfigurationAuditObserver::class);
+        }
     }
 
     /**

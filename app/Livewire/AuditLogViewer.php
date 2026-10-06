@@ -8,13 +8,21 @@ use App\Models\LeaveType;
 use App\Models\User;
 use App\Services\Leave\LeaveAuditCategoriser;
 use App\Services\SpreadsheetService;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 use Livewire\Component;
 use Livewire\WithPagination;
 
 /**
- * Filterable, paginated viewer over the audit trail (who / when / IP / browser /
- * old → new values). Closes the Phase 2 · Feature 11 gap — previously the log
- * was only visible as a small dashboard widget.
+ * Activity Log / Audit Trail: the central, read-only view over every
+ * recorded administrative and security event — who (and their role, and any
+ * impersonator), what, which module, which employee, before → after, why,
+ * from where, and the request it belonged to.
+ *
+ * Read-only by design: entries cannot be edited or deleted (the model
+ * refuses), and this screen offers no way to try. Open to holders of View
+ * Activity Log or Manage Settings.
  */
 class AuditLogViewer extends Component
 {
@@ -29,6 +37,13 @@ class AuditLogViewer extends Component
     public string $from = '';
 
     public string $to = '';
+
+    /** Filters over the categorised columns (role, module, event). */
+    public string $role = '';
+
+    public string $module = '';
+
+    public string $event = '';
 
     /**
      * Leave-specific filters. A generic action/model pair cannot answer "show
@@ -47,52 +62,21 @@ class AuditLogViewer extends Component
 
     public function mount(): void
     {
-        $this->authorize('manage-settings');
+        abort_unless(self::canView(), 403);
     }
 
-    public function updatedSearch(): void
+    public static function canView(): bool
     {
-        $this->resetPage();
+        $user = Auth::user();
+
+        return $user !== null && ($user->hasPermission('view_audit_log') || $user->canManageSettings());
     }
 
-    public function updatedCategory(): void
+    public function updated(string $property): void
     {
-        $this->resetPage();
-    }
-
-    public function updatedEmployeeId(): void
-    {
-        $this->resetPage();
-    }
-
-    public function updatedLeaveTypeId(): void
-    {
-        $this->resetPage();
-    }
-
-    public function updatedPerformedBy(): void
-    {
-        $this->resetPage();
-    }
-
-    public function updatedAction(): void
-    {
-        $this->resetPage();
-    }
-
-    public function updatedModel(): void
-    {
-        $this->resetPage();
-    }
-
-    public function updatedFrom(): void
-    {
-        $this->resetPage();
-    }
-
-    public function updatedTo(): void
-    {
-        $this->resetPage();
+        if ($property !== 'expandedId') {
+            $this->resetPage();
+        }
     }
 
     public function toggle(int $id): void
@@ -102,17 +86,22 @@ class AuditLogViewer extends Component
 
     public function clearFilters(): void
     {
-        $this->reset(['category', 'employeeId', 'leaveTypeId', 'performedBy']);
+        $this->reset(['category', 'employeeId', 'leaveTypeId', 'performedBy', 'role', 'module', 'event']);
         $this->reset('search', 'action', 'model', 'from', 'to');
         $this->resetPage();
     }
 
-    private function baseQuery()
+    private function baseQuery(): Builder
     {
         return AuditLog::query()
-            ->with('user')
+            ->with(['user', 'impersonator', 'subjectEmployee.user'])
             ->when($this->action !== '', fn ($q) => $q->where('action', $this->action))
             ->when($this->model !== '', fn ($q) => $q->where('auditable_type', $this->model))
+            ->when($this->role !== '', fn ($q) => $q->where('role', $this->role))
+            // Older rows (before the categorised columns) carry no module, so
+            // the module filter also matches the category.
+            ->when($this->module !== '', fn ($q) => $q->where(fn ($m) => $m->where('module', $this->module)->orWhere('category', $this->module)))
+            ->when($this->event !== '', fn ($q) => $q->where('event', $this->event))
             ->when($this->from !== '', fn ($q) => $q->whereDate('created_at', '>=', $this->from))
             ->when($this->to !== '', fn ($q) => $q->whereDate('created_at', '<=', $this->to))
             ->when($this->search !== '', fn ($q) => $q->whereHas('user', function ($u): void {
@@ -130,42 +119,120 @@ class AuditLogViewer extends Component
 
     public function export(SpreadsheetService $sheets)
     {
-        $this->authorize('manage-settings');
+        abort_unless(self::canView(), 403);
 
         $rows = $this->baseQuery()->limit(5000)->get()->map(fn (AuditLog $log) => [
             $log->created_at?->format('Y-m-d H:i:s'),
             $log->user?->name ?? 'System',
-            $log->action,
-            class_basename($log->auditable_type),
-            $log->auditable_id,
+            $log->role,
+            $log->impersonator?->name,
+            $log->event ?? $log->action,
+            $log->module ?? $log->category,
+            class_basename($log->auditable_type).' #'.$log->auditable_id,
+            $log->subjectEmployee?->user?->name,
+            self::changedFields($log),
+            $log->reason,
             $log->ip_address,
+            self::device($log->user_agent),
+            $log->request_id,
         ])->all();
 
         return $sheets->download(
-            ['Time', 'User', 'Action', 'Model', 'Record', 'IP'],
+            ['Time', 'Actor', 'Role', 'Impersonated by', 'Event', 'Module', 'Record', 'Employee', 'Changes', 'Reason', 'IP', 'Device', 'Reference'],
             $rows,
-            'audit-log-'.now()->format('Ymd_His').'.csv',
+            'activity-log-'.now()->format('Ymd_His').'.csv',
         );
+    }
+
+    /**
+     * The fields shown in the before → after table: only what changed when
+     * both sides were recorded (generic observers store the whole original
+     * row), otherwise every recorded field. Timestamps are never shown.
+     *
+     * @return array<int, string>
+     */
+    public static function diffKeys(AuditLog $log): array
+    {
+        $old = (array) ($log->old_values ?? []);
+        $new = (array) ($log->new_values ?? []);
+
+        $keys = ($old !== [] && $new !== [])
+            ? array_keys(array_filter($new, fn ($value, $key) => ($old[$key] ?? null) != $value, ARRAY_FILTER_USE_BOTH))
+            : array_keys($old + $new);
+
+        return array_values(array_diff($keys, ['updated_at', 'created_at']));
+    }
+
+    /** A one-line "field: old → new" summary, for the export. */
+    private static function changedFields(AuditLog $log): string
+    {
+        $render = fn ($v) => is_scalar($v) || $v === null ? (string) ($v ?? '—') : json_encode($v);
+
+        return collect(self::diffKeys($log))->take(12)->map(fn (string $key) => $key.': '
+            .$render(($log->old_values ?? [])[$key] ?? null).' → '.$render(($log->new_values ?? [])[$key] ?? null))
+            ->implode('; ');
+    }
+
+    /** "Chrome on Windows"-style label from a user agent, or null. */
+    public static function device(?string $userAgent): ?string
+    {
+        if (! $userAgent) {
+            return null;
+        }
+
+        $browser = match (true) {
+            Str::contains($userAgent, 'Edg/') => 'Edge',
+            Str::contains($userAgent, 'OPR/') => 'Opera',
+            Str::contains($userAgent, 'Chrome/') => 'Chrome',
+            Str::contains($userAgent, 'Firefox/') => 'Firefox',
+            Str::contains($userAgent, 'Safari/') => 'Safari',
+            Str::contains($userAgent, ['Symfony', 'curl', 'Guzzle']) => 'Script',
+            default => 'Browser',
+        };
+
+        $os = match (true) {
+            Str::contains($userAgent, ['iPhone', 'iPad']) => 'iOS',
+            Str::contains($userAgent, 'Android') => 'Android',
+            Str::contains($userAgent, 'Windows') => 'Windows',
+            Str::contains($userAgent, 'Mac OS') => 'macOS',
+            Str::contains($userAgent, 'Linux') => 'Linux',
+            default => null,
+        };
+
+        return $os ? "{$browser} on {$os}" : $browser;
+    }
+
+    /** "LEAVE_APPROVED" → "Leave approved"; falls back to the raw action. */
+    public static function eventLabel(AuditLog $log): string
+    {
+        return $log->event
+            ? Str::ucfirst(Str::lower(str_replace('_', ' ', $log->event)))
+            : Str::ucfirst(str_replace(['.', '_'], ' ', (string) $log->action));
     }
 
     public function render()
     {
         $logs = $this->baseQuery()->paginate(25);
 
-        $modelTypes = AuditLog::query()->select('auditable_type')->distinct()
-            ->orderBy('auditable_type')->pluck('auditable_type');
-        $actions = AuditLog::query()->select('action')->distinct()
-            ->orderBy('action')->pluck('action');
+        $distinct = fn (string $column) => AuditLog::query()->whereNotNull($column)->distinct()->orderBy($column)->pluck($column);
 
-        $categoriser = app(LeaveAuditCategoriser::class);
-        $categories = LeaveAuditCategoriser::CATEGORIES;
-        $employees = Employee::with('user')->orderBy('id')->get();
-        $leaveTypes = LeaveType::orderBy('name')->get();
-        $actors = User::orderBy('name')->get(['id', 'name']);
-
-        return view('livewire.audit-log-viewer', compact(
-            'logs', 'modelTypes', 'actions', 'categoriser', 'categories', 'employees', 'leaveTypes', 'actors'
-        ))
-            ->layout('layouts.app', ['title' => 'Audit Log']);
+        return view('livewire.audit-log-viewer', [
+            'logs' => $logs,
+            'modelTypes' => $distinct('auditable_type'),
+            'actions' => $distinct('action'),
+            'roles' => $distinct('role'),
+            'modules' => $distinct('module')->merge($distinct('category'))->unique()->sort()->values(),
+            'events' => $distinct('event'),
+            'categoriser' => app(LeaveAuditCategoriser::class),
+            'categories' => LeaveAuditCategoriser::CATEGORIES,
+            // Only people who appear in the log — not every account — keeps
+            // the pickers short and the page fast as the company grows.
+            'employees' => Employee::with('user')
+                ->whereIn('id', AuditLog::query()->whereNotNull('subject_employee_id')->distinct()->pluck('subject_employee_id'))
+                ->get()->sortBy(fn (Employee $e) => $e->user?->name ?? $e->employee_id)->values(),
+            'leaveTypes' => LeaveType::orderBy('name')->get(),
+            'actors' => User::whereIn('id', AuditLog::query()->whereNotNull('user_id')->distinct()->pluck('user_id'))
+                ->orderBy('name')->get(['id', 'name']),
+        ])->layout('layouts.app', ['title' => 'Activity Log']);
     }
 }

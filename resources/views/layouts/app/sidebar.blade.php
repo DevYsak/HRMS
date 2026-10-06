@@ -777,7 +777,7 @@
                     <flux:sidebar.item :href="route('settings.menu')"
                         :current="request()->routeIs('settings.menu')" wire:navigate>Sidebar Menu</flux:sidebar.item>
                     <flux:sidebar.item :href="route('settings.audit-log')"
-                        :current="request()->routeIs('settings.audit-log')" wire:navigate>Audit Log</flux:sidebar.item>
+                        :current="request()->routeIs('settings.audit-log')" wire:navigate>Activity Log</flux:sidebar.item>
                     @if(auth()->user()->hasPermission('data_export') || auth()->user()->hasPermission('data_import'))
                         <flux:sidebar.item :href="route('settings.import-export')"
                             :current="request()->routeIs('settings.import-export')" wire:navigate>Import / Export</flux:sidebar.item>

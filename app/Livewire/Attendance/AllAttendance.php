@@ -6,7 +6,6 @@ use App\Models\Attendance;
 use App\Models\AttendanceDailySummary;
 use App\Models\AttendancePunch;
 use App\Models\AttendanceRegularisation;
-use App\Models\AuditLog;
 use App\Models\BreakLog;
 use App\Models\Employee;
 use App\Models\LeaveBalance;
@@ -421,9 +420,6 @@ class AllAttendance extends Component
         app(ClaimLockService::class)->release($request);
         $request->refresh();
 
-        if ($attendance) {
-            AuditLog::record($attendance, 'regularised', $attendance->toArray(), null);
-        }
         \Flux::toast('Regularisation approved — hours & attendance updated.');
         $request->employee->user?->notify(new RegularisationReviewedNotification($request));
 
@@ -483,7 +479,6 @@ class AllAttendance extends Component
         $this->activeRequest->refresh();
 
         if ($attendance) {
-            AuditLog::record($attendance, 'regularised', $attendance->toArray(), null);
             \Flux::toast('Regularisation request approved.');
         } else {
             \Flux::toast($this->activeRequest->status === 'pending'

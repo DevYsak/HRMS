@@ -566,7 +566,6 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/control-panel', ControlPanel::class)->name('control-panel');
         Route::get('/data-management', DataManagement::class)->name('data-management');
         Route::get('/departments', DepartmentManager::class)->name('departments');
-        Route::get('/audit-log', AuditLogViewer::class)->name('audit-log');
         Route::get('/roles', RoleManager::class)->name('roles');
         Route::get('/employment-types', EmploymentTypeManager::class)->name('employment-types');
         Route::get('/work-modes', WorkModeManager::class)->name('work-modes');
@@ -583,6 +582,10 @@ Route::middleware(['auth'])->group(function () {
     // Import / Export centre — its own permissions (data_export / data_import),
     // checked in the component, so it is outside the manage-settings group.
     Route::get('/settings/import-export', ImportExportCentre::class)->name('settings.import-export');
+
+    // Activity Log / Audit Trail — View Activity Log or Manage Settings,
+    // checked in the component, so it is outside the manage-settings group.
+    Route::get('/settings/audit-log', AuditLogViewer::class)->name('settings.audit-log');
 
 });
 

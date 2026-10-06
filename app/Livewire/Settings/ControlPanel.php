@@ -68,7 +68,7 @@ class ControlPanel extends Component
                 'icon' => 'megaphone',
                 'items' => [
                     ['label' => 'Notifications & Email', 'description' => 'Control every email', 'icon' => 'envelope', 'route' => 'settings.notifications'],
-                    ['label' => 'Audit Log', 'description' => 'Every change, who & when', 'icon' => 'document-chart-bar', 'route' => 'settings.audit-log'],
+                    ['label' => 'Activity Log', 'description' => 'Audit trail: every change, who & when', 'icon' => 'document-chart-bar', 'route' => 'settings.audit-log', 'permission' => ['view_audit_log', 'manage_settings']],
                     ['label' => 'AI Assistant', 'description' => 'Provider & access', 'icon' => 'cpu-chip', 'route' => 'settings.ai', 'permission' => 'manage_ai_settings'],
                     ['label' => 'Modules', 'description' => 'Switch Payroll & Payslips on or off', 'icon' => 'squares-plus', 'route' => 'settings.modules'],
                     ['label' => 'Data Management', 'description' => 'Clear test data, purge employees', 'icon' => 'trash', 'route' => 'settings.data-management', 'permission' => 'data_purge'],

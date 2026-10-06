@@ -5,7 +5,6 @@ namespace App\Livewire\Attendance;
 use App\Livewire\Concerns\HandlesClaimLock;
 use App\Models\Attendance;
 use App\Models\AttendanceRegularisation;
-use App\Models\AuditLog;
 use App\Models\Employee;
 use App\Models\HolidayWorkRequest;
 use App\Models\LeaveRequest;
@@ -190,10 +189,8 @@ class CommandCenter extends Component
         $this->assertNotClaimedByOther($request);
 
         if ($decision === 'approved') {
-            $attendance = app(AttendanceService::class)->approveRegularisation($request, Auth::id(), $comment);
-            if ($attendance) {
-                AuditLog::record($attendance, 'regularised', $attendance->toArray(), null);
-            }
+            // AttendanceService records the decision, with the day before and after.
+            app(AttendanceService::class)->approveRegularisation($request, Auth::id(), $comment);
         } else {
             app(AttendanceService::class)->rejectRegularisation($request, Auth::id(), $comment ?? '');
         }

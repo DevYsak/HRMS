@@ -22,7 +22,7 @@ test('admin can open the control panel and see setting links', function () {
         ->assertOk()
         ->assertSee('Control Panel')
         ->assertSee('Roles & Permissions')
-        ->assertSee('Audit Log')
+        ->assertSee('Activity Log')
         ->assertSee('Leave Policies');
 });
 
