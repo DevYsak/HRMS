@@ -60,7 +60,7 @@ test('two clean punch pairs form two sessions with correct working and break tim
     $pj = Livewire::test(AttendanceTracker::class)->get('punchJourney');
 
     expect($pj['session_count'])->toBe(2)
-        ->and($pj['working_minutes'])->toBe(540) // 2h30m + 6h30m
+        ->and($pj['working_minutes'])->toBe(555) // Pulse v3.1: 09:00 → 18:15, break not deducted
         ->and($pj['break_minutes'])->toBe(15)     // 11:30 -> 11:45
         ->and($pj['live'])->toBeFalse()
         ->and($pj['missing_out'])->toBeFalse()
@@ -80,8 +80,8 @@ test('a trailing unmatched IN today is a live session, not a break', function ()
         ->and($pj['missing_out'])->toBeFalse()
         ->and($pj['session_count'])->toBe(2)
         ->and($pj['live_start_label'])->toBe('01:30 PM')
-        // working = 4h (09-13) + live 5h (13:30 -> 18:30) = 540
-        ->and($pj['working_minutes'])->toBe(540)
+        // Pulse v3.1: first IN 09:00 → now 18:30 = 570 (the 30m away is not deducted)
+        ->and($pj['working_minutes'])->toBe(570)
         ->and($pj['live_start_ms'])->not->toBeNull();
 });
 
@@ -154,7 +154,7 @@ test('engine-directed punches pair by real IN/OUT, not alternation', function ()
         ->and($pj['conflict_count'])->toBe(1)       // the 13:30:33 flip-flop echo
         ->and($pj['duplicate_count'])->toBe(1)      // the 13:30:35 re-read
         ->and($pj['break_minutes'])->toBe(15)       // computed from real gaps, not the engine
-        ->and($pj['working_minutes'])->toBe(358)    // sum of the four validated sessions
+        ->and($pj['working_minutes'])->toBe(374)    // Pulse v3.1: 10:19:28 → 16:34:25, breaks not deducted
         ->and($pj['live'])->toBeFalse()
         ->and($pj['needs_regularization'])->toBeFalse()
         ->and(collect($pj['nodes'])->pluck('dir')->all())
@@ -260,7 +260,7 @@ test('direction is taken from the verification method — Face = IN, Card = OUT'
         ->and($pj['duplicate_count'])->toBe(1)           // the 10:29:00 face re-read
         ->and($pj['session_count'])->toBe(2)             // 10:28→13:50 and 13:54→15:02
         ->and($pj['needs_regularization'])->toBeFalse()  // no more phantom Missing OUT
-        ->and($pj['working_minutes'])->toBe(201 + 68);   // 3h21m + 1h08m
+        ->and($pj['working_minutes'])->toBe(273);        // Pulse v3.1: 10:28:59 → 15:02:43
 });
 
 test('an accidental re-punch straight after checkout cannot open a new session', function () {

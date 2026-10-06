@@ -82,11 +82,11 @@ class AttendanceScoreEngine
             ->get();
         $metrics = $punches->isNotEmpty() ? $this->timeline->process($punches, $day) : null;
 
-        $workedMin = $metrics['working_minutes']
-            ?? (($attendance->check_out)
-                ? max(0, (int) $attendance->check_in->diffInMinutes($attendance->check_out) - (int) ($attendance->break_minutes ?? 0))
-                : 0);
-        $breakMin = $metrics['break_minutes'] ?? (int) ($attendance->break_minutes ?? 0);
+        // Pulse v3.1 — the canonical figures (first in → final out, breaks
+        // informational, regularised days on their corrected times).
+        $calcDay = app(AttendanceCalculator::class)->forDay($employee, $day, $attendance, $punches);
+        $workedMin = $calcDay->workedMinutes;
+        $breakMin = $calcDay->breakMinutes;
 
         $lines = [];
         $score = 100.0;
@@ -152,11 +152,11 @@ class AttendanceScoreEngine
                 $this->hm($workedMin).' worked vs the '.$this->hm($standardMin).' standard day.');
         }
 
-        // Overtime — beyond the shift's OT threshold earns a bonus.
-        $otThresholdMin = $shift ? (int) round($shift->otThresholdHours * 60) : 0;
-        if ($otThresholdMin > 0 && $workedMin > $otThresholdMin) {
+        // Overtime — Pulse v3.1: only APPROVED overtime counts (an approved OT
+        // request for the day); a long day without one earns nothing extra.
+        if ($calcDay->approvedOtMinutes > 0) {
             $apply('overtime', 'Overtime worked', +$settings->overtime_bonus,
-                $this->hm($workedMin - $otThresholdMin).' beyond the '.$this->hm($otThresholdMin).' threshold.');
+                $this->hm($calcDay->approvedOtMinutes).' of approved overtime.');
         }
 
         // Working a holiday/weekend earns the holiday-work bonus.
@@ -209,10 +209,7 @@ class AttendanceScoreEngine
             ->whereDate('date', $day->toDateString())
             ->first();
 
-        $workedMin = $metrics['working_minutes']
-            ?? (($attendance?->check_in && $attendance?->check_out)
-                ? max(0, (int) $attendance->check_in->diffInMinutes($attendance->check_out) - (int) ($attendance->break_minutes ?? 0))
-                : 0);
+        $workedMin = app(AttendanceCalculator::class)->forDay($employee, $day, $attendance, $punches)->workedMinutes;
 
         return [
             'date' => $day->format('l, d M Y'),

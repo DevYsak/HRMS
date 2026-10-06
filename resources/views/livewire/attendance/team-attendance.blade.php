@@ -236,7 +236,7 @@
                                 </span>
                             </td>
                             <td class="pulse-td pr-6 text-right! font-bold text-zinc-900 dark:text-white">
-                                {{ (float)$log->total_hours }}
+                                {{ app(\App\Services\Attendance\AttendanceCalculator::class)->workedHours($log) }}
                             </td>
                         </tr>
                     @empty

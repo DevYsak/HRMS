@@ -10,6 +10,7 @@ use App\Models\OtRequest;
 use App\Models\OtWindow;
 use App\Models\OvertimeRecord;
 use App\Services\Approvals\ApprovalGuard;
+use App\Services\Attendance\AttendanceCalculator;
 use App\Services\Attendance\ShiftResolver;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Collection;
@@ -87,7 +88,8 @@ class OvertimeService
         }
 
         $threshold = $this->getThresholdForEmployee($employee);
-        $netHours = (float) $attendance->total_hours;
+        // Pulse v3.1: worked = final out − first in (breaks not deducted).
+        $netHours = app(AttendanceCalculator::class)->workedHours($attendance);
         $otHours = round(max(0, $netHours - $threshold), 2);
 
         if ($otHours <= 0) {
@@ -178,7 +180,7 @@ class OvertimeService
     public function calculateOtHours(OtRequest $request): float
     {
         if ($request->attendance_id && $request->attendance) {
-            $totalWorked = (float) $request->attendance->total_hours;
+            $totalWorked = app(AttendanceCalculator::class)->workedHours($request->attendance);
             $threshold = $request->employee
                 ? $this->getThresholdForEmployee($request->employee)
                 : self::STANDARD_HOURS;
@@ -472,7 +474,7 @@ class OvertimeService
             'ot_request_id' => $request->id,
             'attendance_id' => $request->attendance_id,
             'work_date' => $request->work_date,
-            'total_hours_worked' => $request->attendance?->total_hours ?? $otHours + $threshold,
+            'total_hours_worked' => $request->attendance ? app(AttendanceCalculator::class)->workedHours($request->attendance) : $otHours + $threshold,
             'standard_hours' => $threshold,
             'ot_hours' => $otHours,
             'rate_per_hour' => $rate = $this->otRatePerHour(),

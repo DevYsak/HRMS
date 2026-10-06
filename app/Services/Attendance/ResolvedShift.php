@@ -55,11 +55,13 @@ readonly class ResolvedShift
     }
 
     /**
-     * The instant the auto punch-out engine may close a still-open day
-     * (shift end + configured buffer). The OUT is stamped at {@see $end}, not here.
+     * The instant the auto punch-out engine may close a still-open day: shift
+     * end + the configured buffer, but never before shift end + 1 hour —
+     * Pulse v3.1 counts a checkout as missing only after that. The OUT is
+     * stamped at {@see $end}, not here.
      */
     public function autoCheckoutTriggerAt(): Carbon
     {
-        return $this->end->copy()->addMinutes($this->autoCheckoutBufferMinutes);
+        return $this->end->copy()->addMinutes(max($this->autoCheckoutBufferMinutes, AttendanceCalculator::MISSING_CHECKOUT_AFTER_MINUTES));
     }
 }

@@ -34,13 +34,18 @@ test('auto punch-out closes an open day AT shift-end once past the buffer', func
         'work_mode' => 'office',
     ]);
 
-    // Now = 18:40 → past 18:00 end + 30 min buffer.
+    // Pulse v3.1: a checkout is missing only after shift end + 1 hour, so at
+    // 18:40 (end + 40m) the day is still open…
     Carbon::setTestNow(today()->setTime(18, 40));
+    $this->artisan('hrms:auto-punch-out')->assertSuccessful();
+    expect($attendance->fresh()->check_out)->toBeNull();
 
+    // …and at 19:05 (past 18:00 + 60m) it closes.
+    Carbon::setTestNow(today()->setTime(19, 5));
     $this->artisan('hrms:auto-punch-out')->assertSuccessful();
 
     $attendance->refresh();
-    expect($attendance->check_out->format('H:i'))->toBe('18:00')   // stamped at shift-end, not 18:40
+    expect($attendance->check_out->format('H:i'))->toBe('18:00')   // stamped at shift-end, not 19:05
         ->and($attendance->is_auto_checkout)->toBeTrue()
         ->and($attendance->auto_checkout_reason)->toBe('missing_punchout')
         ->and($attendance->missing_checkout)->toBeTrue();

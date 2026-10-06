@@ -228,8 +228,8 @@ class AttendanceCoach
      */
     protected function breakAnalysis(Employee $employee, Collection $attendances): array
     {
-        $shift = app(ShiftResolver::class)->resolve($employee, now());
-        $allowance = $shift?->breakMinutes ?: 60;
+        // Pulse v3.1: a break is excess only above 60 minutes (informational).
+        $allowance = AttendanceCalculator::EXCESS_BREAK_MINUTES;
         $withBreak = $attendances->filter(fn ($a) => (int) ($a->break_minutes ?? 0) > 0);
         $avg = $withBreak->isNotEmpty() ? (int) round($withBreak->avg('break_minutes')) : 0;
         $excess = $attendances->filter(fn ($a) => (int) ($a->break_minutes ?? 0) > $allowance)->count();
@@ -425,11 +425,13 @@ class AttendanceCoach
 
     protected function overtimePrediction(Collection $attendances): float
     {
-        $otDays = $attendances->filter(fn ($a) => (float) ($a->total_hours ?? 0) > 9);
+        $calc = app(AttendanceCalculator::class);
+        $standard = AttendanceCalculator::DEFAULT_STANDARD_MINUTES / 60;
+        $otDays = $attendances->filter(fn ($a) => $calc->workedHours($a) > $standard);
         if ($otDays->isEmpty()) {
             return 0.0;
         }
-        $avgOt = $otDays->avg(fn ($a) => max(0, (float) $a->total_hours - 9));
+        $avgOt = $otDays->avg(fn ($a) => max(0, $calc->workedHours($a) - $standard));
 
         return round($avgOt * $otDays->count(), 1);
     }

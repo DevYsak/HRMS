@@ -191,9 +191,9 @@ test('enrichment never changes the worked or break minutes the timeline computed
 
     expect($after['working_minutes'])->toBe($before['working_minutes'])
         ->and($after['break_minutes'])->toBe($before['break_minutes'])
-        // 09:00-13:00 plus 13:45-18:00 worked, 45m away.
+        // 09:00 → 18:00 worked (Pulse v3.1), 45m away shown but not deducted.
         ->and($after['break_minutes'])->toBe(45)
-        ->and($after['working_minutes'])->toBe(495);
+        ->and($after['working_minutes'])->toBe(540);
 });
 
 test('an empty day classifies to an empty journey', function () {

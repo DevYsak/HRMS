@@ -16,6 +16,7 @@ use App\Models\PerformanceReview;
 use App\Models\PipRecord;
 use App\Models\PromotionRecommendation;
 use App\Models\WarningLetter;
+use App\Services\Attendance\AttendanceCalculator;
 use App\Services\AttendanceReportBuilder;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
@@ -145,7 +146,7 @@ class ReportController extends Controller
                     $row->date->toDateString(),
                     $row->check_in?->format('H:i') ?? '',
                     $row->check_out?->format('H:i') ?? '',
-                    $row->total_hours ?? '',
+                    app(AttendanceCalculator::class)->workedHours($row),
                     $row->break_minutes ?? 0,
                     $row->is_late ? 'Yes' : 'No',
                     $row->late_minutes ?? 0,

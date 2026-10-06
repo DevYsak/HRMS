@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\Attendance\AttendanceCalculator;
 use App\Services\Attendance\WorkingDayResolver;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -66,16 +67,13 @@ class Attendance extends Model
         return $this->hasOne(BreakLog::class)->whereNull('break_end');
     }
 
-    /** Net hours worked after deducting break time. */
+    /**
+     * Hours worked: final clock-out − first clock-in (Pulse v3.1). Breaks are
+     * informational and are NOT deducted. Kept under its old name for callers.
+     */
     public function netHours(): float
     {
-        if (! $this->check_out) {
-            return 0.0;
-        }
-
-        $gross = $this->check_in->floatDiffInHours($this->check_out);
-
-        return max(0, round($gross - ($this->break_minutes / 60), 2));
+        return app(AttendanceCalculator::class)->workedHours($this);
     }
 
     /**

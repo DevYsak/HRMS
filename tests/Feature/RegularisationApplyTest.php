@@ -150,13 +150,13 @@ test('a night shift correction records the hours actually worked', function () {
     $request = regApplyRequest($employee, $date, '22:00', '06:00');
     $attendance = app(AttendanceService::class)->fastTrackRegularisation($request, $hr->id);
 
-    // 8h gross, 60m shift break -> 7h net.
-    expect((float) $attendance->total_hours)->toBe(7.0);
+    // Pulse v3.1: 22:00 → 06:00 = 8h worked; no break is deducted.
+    expect((float) $attendance->total_hours)->toBe(8.0);
 });
 
-test('a regularised absent day still has the shift break deducted', function () {
-    // A fully-absent day carries no break logs, so the pre-correction row said
-    // zero break and the whole span was booked as worked.
+test('a regularised absent day books first in to final out, with no invented break', function () {
+    // Pulse v3.1: worked = corrected final out − corrected first in. Breaks are
+    // informational, so a day with no recorded break gets none invented.
     $employee = regApplyEmployee(regApplyShift('09:00:00', '18:00:00', 60));
     $hr = User::factory()->create(['role' => UserRole::HrAdmin]);
     $date = now()->subDay()->toDateString();
@@ -166,11 +166,11 @@ test('a regularised absent day still has the shift break deducted', function () 
     $request = regApplyRequest($employee, $date, '09:00', '18:00');
     $attendance = app(AttendanceService::class)->fastTrackRegularisation($request, $hr->id);
 
-    expect((int) $attendance->break_minutes)->toBe(60)
-        ->and((float) $attendance->total_hours)->toBe(8.0);
+    expect((int) $attendance->break_minutes)->toBe(0)
+        ->and((float) $attendance->total_hours)->toBe(9.0);
 });
 
-test('real logged breaks beat the shift default', function () {
+test('real logged breaks are recorded but never deducted from the corrected hours', function () {
     $employee = regApplyEmployee(regApplyShift('09:00:00', '18:00:00', 60));
     $hr = User::factory()->create(['role' => UserRole::HrAdmin]);
     $date = now()->subDay()->toDateString();
@@ -198,7 +198,7 @@ test('real logged breaks beat the shift default', function () {
     $corrected = app(AttendanceService::class)->fastTrackRegularisation($request, $hr->id);
 
     expect((int) $corrected->break_minutes)->toBe(30)
-        ->and((float) $corrected->total_hours)->toBe(8.5);
+        ->and((float) $corrected->total_hours)->toBe(9.0);
 });
 
 test('the break never exceeds the corrected span', function () {

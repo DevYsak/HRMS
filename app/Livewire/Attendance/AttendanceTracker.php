@@ -22,6 +22,7 @@ use App\Models\WfhReport;
 use App\Notifications\AttendanceRegularisationNotification;
 use App\Notifications\RegularisationReviewedNotification;
 use App\Services\AiAssistant;
+use App\Services\Attendance\AttendanceCalculator;
 use App\Services\Attendance\AttendanceCoach;
 use App\Services\Attendance\AttendanceScoreEngine;
 use App\Services\Attendance\HolidayResolver;
@@ -142,6 +143,15 @@ class AttendanceTracker extends Component
      * @var array<string, mixed>
      */
     public array $shiftProgress = [];
+
+    /**
+     * Today's canonical figures from AttendanceCalculator (worked = final out −
+     * first in, breaks informational, approved-only OT). Every "today" widget —
+     * Worked Today, Session Summary, Shift Progress, the breakdown — reads this.
+     *
+     * @var array<string, mixed>
+     */
+    public array $todayCalc = [];
 
     /** Smart Attendance Alerts — missing check-in/out/break, past & present. */
     public array $attendanceAlerts = [];
@@ -390,6 +400,9 @@ class AttendanceTracker extends Component
         $this->weekSummary = $this->buildWeekSummary($employee);
         $this->punchJourney = $this->buildPunchJourney($employee);
         $this->attendanceJourney = $this->buildAttendanceJourney($employee);
+        $this->todayCalc = app(AttendanceCalculator::class)
+            ->forDay($employee, Carbon::today(), $this->todayAttendance)
+            ->toArray();
         $this->shiftProgress = $this->buildShiftProgress($employee)->toArray();
         $this->loadStreakAndBenchmark($employee);
 
@@ -638,7 +651,7 @@ class AttendanceTracker extends Component
                 $mode = $att->work_mode ?? 'office';
                 $status = app(WorkingDayResolver::class)->isWeeklyOff($d) ? 'weekly_off_worked' : (($att->status === 'late' || $att->is_late) ? 'late' : 'present');
                 if ($att->check_in && $att->check_out) {
-                    $mins = $att->check_in->diffInMinutes($att->check_out) - (int) ($att->break_minutes ?? 0);
+                    $mins = $this->rowWorkedMinutes($att);
                     $hours = round(max(0, $mins) / 60, 1);
                 }
             } elseif ($holidayDays->has($key)) {
@@ -723,8 +736,8 @@ class AttendanceTracker extends Component
             return ShiftProgress::unassigned();
         }
 
-        // The engine's figure, including any live session — never recomputed here.
-        $worked = (int) ($this->punchJourney['working_minutes'] ?? 0);
+        // The canonical figure (first in → final out / now), never recomputed here.
+        $worked = (int) ($this->todayCalc['worked_minutes'] ?? $this->punchJourney['working_minutes'] ?? 0);
 
         return ShiftProgress::of(
             $shift,
@@ -864,7 +877,7 @@ class AttendanceTracker extends Component
             // data exists; check_in→check_out math only as the web-punch fallback.
             $m = $dayMetrics[$key] ?? null;
             $workedMin = $m['worked'] ?? (($item->check_in && $item->check_out)
-                ? max(0, (int) $item->check_in->diffInMinutes($item->check_out) - (int) ($item->break_minutes ?? 0))
+                ? $this->rowWorkedMinutes($item)
                 : 0);
 
             return [
@@ -920,6 +933,11 @@ class AttendanceTracker extends Component
             ? Carbon::parse($this->shift->end_time)->setDate($today->year, $today->month, $today->day)
             : $today->copy()->setTime(20, 0);
         $shiftOver = now()->gt($shiftEnd);
+        // Pulse v3.1: a check-out is missing only after shift end + 1 hour
+        // (end of day when no shift is assigned).
+        $checkoutOverdue = ($this->shift && $this->shift->end_time)
+            ? now()->gt($shiftEnd->copy()->addMinutes(AttendanceCalculator::MISSING_CHECKOUT_AFTER_MINUTES))
+            : false;
 
         // ── Today ──
         if ($this->todayAttendance) {
@@ -927,7 +945,7 @@ class AttendanceTracker extends Component
             // (single place per issue) — only alert here when the journey has no
             // punch data to surface it itself.
             $journeyOwnsToday = ($this->punchJourney['raw_count'] ?? 0) > 0;
-            if (! $journeyOwnsToday && $this->todayAttendance->check_in && ! $this->todayAttendance->check_out && $shiftOver) {
+            if (! $journeyOwnsToday && $this->todayAttendance->check_in && ! $this->todayAttendance->check_out && $checkoutOverdue) {
                 $alerts[] = [
                     'type' => 'missing_checkout',
                     'label' => 'Missing Check-Out',
@@ -983,14 +1001,17 @@ class AttendanceTracker extends Component
             $workedMin = $journeyOwnsToday
                 ? (int) ($this->punchJourney['working_minutes'] ?? 0)
                 : ($this->todayAttendance->check_out
-                    ? max(0, (int) $this->todayAttendance->check_in->diffInMinutes($this->todayAttendance->check_out) - (int) ($this->todayAttendance->break_minutes ?? 0))
+                    ? $this->rowWorkedMinutes($this->todayAttendance)
                     : 0);
             if ($workedMin > $stdMin + 30) {
                 $otMin = $workedMin - $stdMin;
+                // Pulse v3.1: time beyond the standard day is overtime only with
+                // an approved OT request; otherwise it is shown, never paid as OT.
+                $approvedOt = (Auth::user()->employee && app(AttendanceCalculator::class)->hasApprovedOt(Auth::user()->employee, $today));
                 $alerts[] = [
                     'type' => 'overtime',
-                    'label' => 'Overtime Worked',
-                    'detail' => 'Today · '.intdiv($otMin, 60).'h '.($otMin % 60).'m beyond your standard day',
+                    'label' => $approvedOt ? 'Overtime Worked' : 'Worked Beyond Shift',
+                    'detail' => 'Today · '.intdiv($otMin, 60).'h '.($otMin % 60).'m beyond your standard day'.($approvedOt ? '' : ' (no approved OT request — not counted as overtime)'),
                     'date' => $today->toDateString(),
                     'action' => false,
                 ];
@@ -1137,7 +1158,7 @@ class AttendanceTracker extends Component
             $worked = 0;
             $break = 0;
             if ($a && $a->check_in) {
-                $worked = $m !== null ? (int) $m['worked'] : (int) (($a->check_out) ? max(0, $a->check_in->diffInMinutes($a->check_out) - (int) ($a->break_minutes ?? 0)) : 0);
+                $worked = $m !== null ? (int) $m['worked'] : $this->rowWorkedMinutes($a);
                 $break = $m !== null ? (int) $m['break'] : (int) ($a->break_minutes ?? 0);
             }
 
@@ -1408,7 +1429,7 @@ class AttendanceTracker extends Component
             }
 
             return ($a->check_in && $a->check_out)
-                ? (int) max(0, $a->check_in->diffInMinutes($a->check_out) - (int) ($a->break_minutes ?? 0))
+                ? $this->rowWorkedMinutes($a)
                 : 0;
         };
 
@@ -1459,6 +1480,15 @@ class AttendanceTracker extends Component
      *
      * @return array<string, array{worked: int, break: int, sessions: array<int, array<string, mixed>>, ignored: array<int, array<string, mixed>>, ignored_count: int, duplicate_count: int, first_in_min: ?int, last_out_min: ?int, missing_out: bool}>
      */
+    /**
+     * Worked minutes of an attendance row: final clock-out − first clock-in
+     * (Pulse v3.1, breaks never deducted). 0 while the day is still open.
+     */
+    protected function rowWorkedMinutes(?Attendance $attendance): int
+    {
+        return $attendance ? app(AttendanceCalculator::class)->spanMinutes($attendance->check_in, $attendance->check_out) : 0;
+    }
+
     protected function engineDayMetrics($employee, Carbon $start, Carbon $end): array
     {
         $cacheKey = $start->toDateString().'|'.$end->toDateString();
@@ -1487,8 +1517,22 @@ class AttendanceTracker extends Component
             return $t->hour * 60 + $t->minute;
         };
 
+        // A regularised day is what HR approved: its corrected first-in /
+        // final-out (the attendance row) win over raw device punches, so the
+        // caller's row fallback handles it (Pulse v3.1 rule 13).
+        $regularised = Attendance::where('employee_id', $employee->id)
+            ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
+            ->where('is_regularized', true)
+            ->where(fn ($q) => $q->whereNotNull('original_check_in')->orWhereNotNull('original_check_out'))
+            ->pluck('date')
+            ->map(fn ($d) => Carbon::parse($d)->toDateString())
+            ->flip();
+
         $metrics = [];
         foreach ($punchesByDay as $day => $dayPunches) {
+            if ($regularised->has($day)) {
+                continue;
+            }
             $r = $engine->process($dayPunches, Carbon::parse($day), $summaries->get($day));
             $metrics[$day] = [
                 'worked' => (int) $r['working_minutes'],
@@ -1544,7 +1588,7 @@ class AttendanceTracker extends Component
                 return $m['worked'];
             }
             if ($a->check_in && $a->check_out) {
-                return max(0, $a->check_in->diffInMinutes($a->check_out) - ($a->break_minutes ?? 0));
+                return $this->rowWorkedMinutes($a);
             }
 
             return 0;
@@ -1593,8 +1637,9 @@ class AttendanceTracker extends Component
             }
         }
 
-        // Break allowance comes from the shift (break_duration), not a literal.
-        $breakAllowance = (int) ($this->shift->break_duration ?? 60);
+        // Pulse v3.1: a break is excess only above 60 minutes (informational —
+        // breaks never reduce worked hours).
+        $breakAllowance = AttendanceCalculator::EXCESS_BREAK_MINUTES;
         $excessBreaks = $attendances->where('break_minutes', '>', $breakAllowance)->count();
         $withBreaks = $attendances->where('break_minutes', '>', 0);
         $avgBreak = $withBreaks->count() > 0 ? (int) round($withBreaks->avg('break_minutes')) : 0;
@@ -1688,7 +1733,7 @@ class AttendanceTracker extends Component
                     $outMin = $m['last_out_min'];
                 } elseif ($att && $att->check_in) {
                     if ($att->check_out) {
-                        $mins = $att->check_in->diffInMinutes($att->check_out) - ($att->break_minutes ?? 0);
+                        $mins = $this->rowWorkedMinutes($att);
                         $hours = round(max(0, $mins) / 60, 1);
                         $outMin = $att->check_out->hour * 60 + $att->check_out->minute;
                     }
@@ -2057,7 +2102,7 @@ class AttendanceTracker extends Component
                     $r->check_in?->format('H:i'),
                     $r->check_out?->format('H:i'),
                     (int) ($r->break_minutes ?? 0),
-                    $r->total_hours,
+                    app(AttendanceCalculator::class)->workedHours($r),
                     $r->status,
                     $r->work_mode,
                     $r->check_in_method,
@@ -2087,7 +2132,7 @@ class AttendanceTracker extends Component
             'is_late' => (bool) $att->is_late,
             'late_minutes' => (int) ($att->late_minutes ?? 0),
             'break_minutes' => (int) ($att->break_minutes ?? 0),
-            'total_hours' => $att->total_hours,
+            'total_hours' => app(AttendanceCalculator::class)->workedHours($att),
             'is_regularized' => (bool) $att->is_regularized,
             'is_auto_checkout' => (bool) $att->is_auto_checkout,
             'auto_checkout_reason' => $att->auto_checkout_reason,

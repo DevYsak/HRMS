@@ -199,7 +199,7 @@
                             $inMethod = PunchMethod::tryFrom((string) $log->check_in_method);
                             $outMethod = PunchMethod::tryFrom((string) $log->check_out_method);
                             $methods = collect([$inMethod, $outMethod])->filter()->unique();
-                            $hrs = (float) $log->total_hours;
+                            $hrs = app(\App\Services\Attendance\AttendanceCalculator::class)->workedHours($log);
                         @endphp
                         <tr wire:click="openEmployeeDrawer({{ $log->employee_id }})" class="cursor-pointer text-xs transition {{ $log->is_regularized ? 'bg-blue-50/60 hover:bg-blue-50 dark:bg-blue-950/20' : 'hover:bg-orange-50/40' }}">
                             <td class="px-5 py-2.5">

@@ -15,6 +15,7 @@ use App\Models\LeaveBalance;
 use App\Notifications\AttendanceRegularisationNotification;
 use App\Notifications\RegularisationReviewedNotification;
 use App\Services\Approvals\ClaimLockService;
+use App\Services\Attendance\AttendanceCalculator;
 use App\Services\Attendance\PunchTimeline;
 use App\Services\Attendance\WorkingDayResolver;
 use App\Services\AttendanceService;
@@ -142,7 +143,7 @@ class AllAttendance extends Component
                 '"'.($log->date?->format('d M Y') ?? '').'"',
                 '"'.($log->check_in?->format('H:i') ?? '').'"',
                 '"'.($log->check_out?->format('H:i') ?? '').'"',
-                '"'.($log->total_hours ?? '').'"',
+                '"'.app(AttendanceCalculator::class)->workedHours($log).'"',
                 '"'.($log->status ?? '').'"',
                 '"'.($log->employee?->office?->name ?? '').'"',
             ])."\n";
@@ -352,6 +353,17 @@ class AllAttendance extends Component
             $punchCount = 0;
         }
 
+        // Pulse v3.1 — worked = first in → final out (breaks not deducted,
+        // regularised days use their corrected times); overtime = approved only.
+        $calcDay = ($todayAtt || $rawPunches->isNotEmpty())
+            ? app(AttendanceCalculator::class)->forDay($employee, $today, $todayAtt, $rawPunches)
+            : null;
+        if ($calcDay) {
+            $workedMin = $calcDay->workedMinutes;
+            $breakMin = $calcDay->breakMinutes;
+        }
+        $approvedOtMin = $calcDay?->approvedOtMinutes ?? 0;
+
         $this->drawer = [
             'name' => $employee->user?->name ?? '—',
             'photo' => $employee->photo,
@@ -377,8 +389,8 @@ class AllAttendance extends Component
                 'out' => $todayOut,
                 'worked' => intdiv($workedMin, 60).'h '.($workedMin % 60).'m',
                 'break' => $breakMin,
-                'overtime' => ($otMin = max(0, $workedMin - $stdMin)) > 0
-                    ? intdiv($otMin, 60).'h '.($otMin % 60).'m'
+                'overtime' => $approvedOtMin > 0
+                    ? intdiv($approvedOtMin, 60).'h '.($approvedOtMin % 60).'m'
                     : '0m',
                 'mode' => $todayAtt?->work_mode ?? 'office',
                 'is_late' => (bool) ($todayAtt?->is_late ?? ($engineSynced && $summary->late_minutes > 0)),
@@ -411,7 +423,7 @@ class AllAttendance extends Component
                 'date' => $a->date->format('d M'),
                 'in' => $a->check_in?->format('H:i'),
                 'out' => $a->check_out?->format('H:i'),
-                'hours' => $a->total_hours,
+                'hours' => app(AttendanceCalculator::class)->workedHours($a),
                 'status' => $a->status,
             ])->values()->all(),
             // Week-by-week rollup (this month) for the drawer's Weekly tab.
@@ -423,7 +435,7 @@ class AllAttendance extends Component
                     return [
                         'label' => $ws->format('d M').' – '.$ws->copy()->addDays(6)->format('d M'),
                         'present' => $rows->whereNotNull('check_in')->count(),
-                        'hours' => round($rows->sum(fn ($a) => (float) $a->total_hours), 1),
+                        'hours' => round($rows->sum(fn ($a) => app(AttendanceCalculator::class)->workedHours($a)), 1),
                         'late' => $rows->where('is_late', true)->count(),
                     ];
                 })->sortKeysDesc()->values()->take(6)->all(),

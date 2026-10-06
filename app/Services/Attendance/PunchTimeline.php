@@ -27,8 +27,10 @@ use Illuminate\Support\Collection;
  *  - Missing punches: a same-direction pair beyond the merge window
  *    (IN→IN = missing OUT, OUT→OUT = missing IN) or a trailing IN on a past
  *    day. Never auto-fixed — flagged for regularization.
- *  - Totals: working hours / break / session figures come ONLY from validated
- *    sessions; a synced engine summary overrides the headline totals.
+ *  - Totals (Pulse v3.1): working minutes = final OUT − first IN (or now while
+ *    live). Breaks are NEVER deducted — the gaps between sessions are reported
+ *    as break minutes for information only. {@see AttendanceCalculator} reads
+ *    first_in_at / last_out_at from here; the session list is for display.
  */
 class PunchTimeline
 {
@@ -286,6 +288,14 @@ class PunchTimeline
      */
     protected function effectiveDirection(AttendancePunch $p): ?string
     {
+        // Punches the system wrote itself (an approved regularisation, the auto
+        // punch-out, a web clock) carry the direction they were written with.
+        // The method map is for device reads only: a regularised IN recorded
+        // with method "id_card" must not be read as a Card OUT.
+        if (in_array($p->source, ['regularisation', 'system_auto', 'web'], true) && in_array($p->direction, ['in', 'out'], true)) {
+            return $p->direction;
+        }
+
         $map = config('biometric.method_direction', []);
         $method = (string) $p->method;
         if ($method !== '' && isset($map[$method]) && in_array($map[$method], ['in', 'out'], true)) {
@@ -458,7 +468,24 @@ class PunchTimeline
             }
         }
 
-        $workingMinutes += $liveElapsed;
+        // Pulse v3.1 — worked = final OUT − first IN (now − first IN while
+        // live). The session sum would silently deduct every gap between
+        // punches as if it were unpaid; it is kept per session for display only.
+        $firstInPunch = null;
+        foreach ($kept as $i => $p) {
+            if ($directions[$i] !== 'out') {
+                $firstInPunch = $p;
+                break;
+            }
+        }
+        $firstInAt = $firstInPunch ? Carbon::parse($firstInPunch->punched_at) : null;
+        $latestOut = $lastOutIndex !== null ? $kept->get($lastOutIndex) : null;
+        $latestOutAt = ($latestOut && $firstInAt && $latestOut->punched_at->greaterThan($firstInAt)) ? Carbon::parse($latestOut->punched_at) : null;
+        $lastOutAt = ($trailingIn) ? null : $latestOutAt;
+        $spanEnd = $live ? Carbon::now() : ($lastOutAt ?? $latestOutAt);
+        $workingMinutes = ($firstInAt && $spanEnd && $spanEnd->greaterThan($firstInAt))
+            ? (int) floor($firstInAt->diffInSeconds($spanEnd, true) / 60)
+            : 0;
 
         // Per-session break-after (the gap until the next session opens) and
         // productivity (worked ÷ worked+break for that block). Both come straight
@@ -478,10 +505,8 @@ class PunchTimeline
             $sessions[$si]['productivity'] = $mins > 0 ? (int) round($mins / max(1, $mins + $breakAfter) * 100) : 0;
         }
 
-        // Working / break come only from these validated sessions. The engine's
-        // synced summary is NOT trusted for totals — on this device it mis-pairs
-        // (Face punches tagged OUT), reporting e.g. 21m worked / 191m break for a
-        // day these sessions correctly total to 4h+.
+        // The engine's synced summary is NOT trusted for totals — on this device
+        // it mis-pairs (Face punches tagged OUT).
         $lastOut = $lastOutIndex !== null ? $kept->get($lastOutIndex) : null;
 
         return [
@@ -490,6 +515,10 @@ class PunchTimeline
             'raw_events' => $rawEvents,
             'first_in' => $kept->first()->punched_at->format('h:i A'),
             'last_out' => (! $trailingIn && $lastOut) ? $lastOut->punched_at->format('h:i A') : null,
+            // Canonical instants for AttendanceCalculator: the first IN and the
+            // final OUT (null while still clocked in / when the OUT is missing).
+            'first_in_at' => $firstInAt,
+            'last_out_at' => $lastOutAt,
             'raw_count' => $rawCount,
             'kept_count' => $n,
             'duplicate_count' => $duplicateCount,
@@ -612,13 +641,15 @@ class PunchTimeline
      * Working-hours breakdown for the dashboard, derived only from validated
      * session totals so the UI never re-derives (or mis-derives) it.
      *
-     * - net    = worked (session minutes are already net of the between-session gaps)
-     * - idle   = break time beyond the shift's paid allowance (the "over limit" figure)
-     * - overtime / remaining = worked measured against the expected day
+     * - net    = worked (Pulse v3.1: first IN → final OUT; breaks are not deducted)
+     * - idle   = break time beyond the allowance — informational only
+     * - overtime = APPROVED overtime only (pass $approvedOtMinutes); time beyond
+     *   the standard day without an approved request is `beyond_shift`
+     * - remaining = worked measured against the expected day
      *
-     * @return array{expected:int, worked:int, break:int, idle:int, overtime:int, net:int, remaining:int, worked_pct:int, break_pct:int, idle_pct:int}
+     * @return array{expected:int, worked:int, break:int, idle:int, overtime:int, beyond_shift:int, net:int, remaining:int, worked_pct:int, break_pct:int, idle_pct:int}
      */
-    public function hoursBreakdown(int $workedMinutes, int $breakMinutes, int $expectedMinutes, int $breakAllowanceMinutes = 0): array
+    public function hoursBreakdown(int $workedMinutes, int $breakMinutes, int $expectedMinutes, int $breakAllowanceMinutes = 0, int $approvedOtMinutes = 0): array
     {
         $idle = max(0, $breakMinutes - max(0, $breakAllowanceMinutes));
         $denominator = max(1, $expectedMinutes);
@@ -628,7 +659,8 @@ class PunchTimeline
             'worked' => $workedMinutes,
             'break' => $breakMinutes,
             'idle' => $idle,
-            'overtime' => max(0, $workedMinutes - $expectedMinutes),
+            'overtime' => max(0, $approvedOtMinutes),
+            'beyond_shift' => max(0, $workedMinutes - $expectedMinutes),
             'net' => $workedMinutes,
             'remaining' => max(0, $expectedMinutes - $workedMinutes),
             'worked_pct' => (int) round(min(100, $workedMinutes / $denominator * 100)),
@@ -642,6 +674,7 @@ class PunchTimeline
     {
         return [
             'nodes' => [], 'sessions' => [], 'raw_events' => [], 'first_in' => null, 'last_out' => null,
+            'first_in_at' => null, 'last_out_at' => null,
             'raw_count' => 0, 'kept_count' => 0, 'duplicate_count' => 0, 'conflict_count' => 0,
             'working_minutes' => 0, 'break_minutes' => 0, 'session_count' => 0,
             'live' => false, 'live_start_ms' => null, 'live_start_label' => null,

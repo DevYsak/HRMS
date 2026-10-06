@@ -6,6 +6,7 @@ use App\Models\AttendanceDailyScore;
 use App\Models\AttendanceRegularisation;
 use App\Models\AttendanceSetting;
 use App\Models\Employee;
+use App\Models\OtRequest;
 use App\Models\ShiftSetting;
 use App\Models\User;
 use App\Services\Attendance\AttendanceScoreEngine;
@@ -68,12 +69,13 @@ test('late arrival, excess break and short hours each deduct with an audit line'
     $employee = scoreEmployee();
     $day = scoreDayDate();
 
-    // In 09:45 (35m past 09:10 cutoff), out 18:00, 90m break → 6h45m worked.
+    // In 09:45 (35m past 09:10 cutoff), out 16:30 → 6h45m worked (Pulse v3.1:
+    // first in → final out; the 90m break is not deducted, but is excess).
     Attendance::create([
         'employee_id' => $employee->id,
         'date' => $day,
         'check_in' => $day->copy()->setTime(9, 45),
-        'check_out' => $day->copy()->setTime(18, 0),
+        'check_out' => $day->copy()->setTime(16, 30),
         'break_minutes' => 90,
         'status' => 'late',
         'is_late' => true,
@@ -84,11 +86,13 @@ test('late arrival, excess break and short hours each deduct with an audit line'
     $score = app(AttendanceScoreEngine::class)->scoreDay($employee, $day);
     $factors = collect($score->breakdown)->pluck('points', 'factor');
 
-    // late: -(3 + 1×⌊35/30⌋) = -4 · break: -2 · short hours: -5 → 89.
+    // late: -(3 + 1×⌊35/30⌋) = -4 · break: -2 · short hours: -5 · early exit
+    // (16:30 before the 18:00 end): -3 → 86.
     expect($factors['late_arrival'])->toEqual(-4)
         ->and($factors['break_violation'])->toEqual(-2)
         ->and($factors['short_hours'])->toEqual(-5)
-        ->and($score->score)->toEqual(89);
+        ->and($factors['early_exit'])->toEqual(-3)
+        ->and($score->score)->toEqual(86);
 });
 
 test('an absent working day scores 0 and an unworked Sunday is not scored', function () {
@@ -103,12 +107,13 @@ test('an absent working day scores 0 and an unworked Sunday is not scored', func
     expect(app(AttendanceScoreEngine::class)->scoreDay($employee, $sunday))->toBeNull();
 });
 
-test('overtime beyond the shift threshold earns the configured bonus, capped at 100', function () {
+test('approved overtime beyond the shift threshold earns the configured bonus, capped at 100', function () {
     $employee = scoreEmployee();
     $day = scoreDayDate();
 
-    // 09:00 → 19:30 with 60m break = 9.5h worked > 9h threshold.
-    Attendance::create([
+    // 09:00 → 19:30 = 10.5h worked > 9h threshold (Pulse v3.1: the 60m break
+    // is not deducted).
+    $attendance = Attendance::create([
         'employee_id' => $employee->id,
         'date' => $day,
         'check_in' => $day->copy()->setTime(9, 0),
@@ -116,6 +121,15 @@ test('overtime beyond the shift threshold earns the configured bonus, capped at 
         'break_minutes' => 60,
         'status' => 'on_time',
         'work_mode' => 'office',
+    ]);
+
+    // Without an approved OT request a long day is not overtime.
+    $unapproved = app(AttendanceScoreEngine::class)->scoreDay($employee, $day);
+    expect(collect($unapproved->breakdown)->pluck('factor'))->not->toContain('overtime');
+
+    OtRequest::create([
+        'employee_id' => $employee->id, 'attendance_id' => $attendance->id, 'work_date' => $day->toDateString(),
+        'start_time' => '18:00', 'end_time' => '19:30', 'requested_hours' => 1.5, 'reason' => 'Release', 'status' => 'approved',
     ]);
 
     $score = app(AttendanceScoreEngine::class)->scoreDay($employee, $day);

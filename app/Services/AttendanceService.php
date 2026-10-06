@@ -13,6 +13,7 @@ use App\Models\PublicHoliday;
 use App\Models\ShiftSetting;
 use App\Models\User;
 use App\Services\Approvals\ApprovalGuard;
+use App\Services\Attendance\AttendanceCalculator;
 use App\Services\Attendance\AttendanceScoreEngine;
 use App\Services\Attendance\HolidayResolver;
 use App\Services\Attendance\ResolvedShift;
@@ -80,8 +81,8 @@ class AttendanceService
     public function checkOut(Attendance $attendance, array $payload = []): Attendance
     {
         $now = Carbon::now();
-        $grossMinutes = (int) $attendance->check_in->diffInMinutes($now);
-        $totalHours = round(max(0, $grossMinutes - (int) ($attendance->break_minutes ?? 0)) / 60, 2);
+        // Pulse v3.1: final clock-out − first clock-in; breaks are not deducted.
+        $totalHours = app(AttendanceCalculator::class)->storedHours($attendance->check_in, $now);
 
         $attendance->update([
             'check_out' => $now,
@@ -376,9 +377,9 @@ class AttendanceService
                 ? $this->shifts->resolve($regularisation->employee, $workDate)
                 : null;
 
-            $grossMinutes = (int) $checkIn->diffInMinutes($checkOut);
+            // Pulse v3.1: worked = corrected final out − corrected first in.
+            // The break figure is kept for information and is not deducted.
             $breakMinutes = $this->breakMinutesForCorrection($attendance, $checkIn, $checkOut, $shift);
-            $netMinutes = max(0, $grossMinutes - $breakMinutes);
 
             // Preserve the ORIGINAL punch immutably the first time this day is
             // corrected — the raw punch is never lost, only snapshotted. Later
@@ -407,7 +408,7 @@ class AttendanceService
 
             $attendance->update($original + $punchFields + [
                 'break_minutes' => $breakMinutes,
-                'total_hours' => round($netMinutes / 60, 2),
+                'total_hours' => app(AttendanceCalculator::class)->storedHours($checkIn, $checkOut),
                 'status' => $isLate ? 'late' : 'on_time',
                 'is_late' => $isLate,
                 'late_minutes' => $lateMinutes,
@@ -524,15 +525,14 @@ class AttendanceService
     }
 
     /**
-     * Unpaid break to deduct from a corrected day.
+     * Break minutes to record on a corrected day — informational only, never
+     * deducted from worked hours (Pulse v3.1).
      *
-     * Prefers what actually happened — break logs overlapping the corrected
-     * window — and falls back to the shift's standard break when there are
-     * none. That fallback is what makes a regularised absent day honest: such a
-     * day has no break logs at all, so without it a 09:00–18:00 correction
-     * books nine straight hours with no lunch deducted.
+     * What actually happened: break logs inside the corrected window, else the
+     * figure the day already carried. Nothing is invented — a corrected day
+     * with no recorded breaks has none.
      *
-     * Never exceeds the worked span, so the net can't go negative.
+     * Never exceeds the corrected span.
      */
     private function breakMinutesForCorrection(
         Attendance $attendance,
@@ -552,9 +552,8 @@ class AttendanceService
             return min($logged, $grossMinutes);
         }
 
-        // No logs: keep whatever the day already carried, else the shift's own
-        // unpaid break. Both are clamped to the corrected span.
-        $fallback = (int) ($attendance->break_minutes ?: $shift?->breakMinutes ?: 0);
+        // No logs: keep whatever the day already carried, clamped to the span.
+        $fallback = (int) ($attendance->break_minutes ?: 0);
 
         return max(0, min($fallback, $grossMinutes));
     }

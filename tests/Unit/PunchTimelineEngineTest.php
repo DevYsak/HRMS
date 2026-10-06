@@ -72,8 +72,8 @@ test('a genuine two-session day pairs correctly and counts the break', function 
 
     expect($result['session_count'])->toBe(2)
         ->and($result['break_minutes'])->toBe(45)
-        // 4h + 4h15m = 495m worked.
-        ->and($result['working_minutes'])->toBe(495)
+        // Pulse v3.1: 09:00 → 18:00 = 540m worked; the 45m break is not deducted.
+        ->and($result['working_minutes'])->toBe(540)
         ->and($result['needs_regularization'])->toBeFalse();
 });
 
@@ -106,7 +106,10 @@ test('hoursBreakdown reports overtime and zero idle within allowance', function 
     // Worked 10h (600m) > expected 9h; break 45m ≤ 60m allowance.
     $b = $engine->hoursBreakdown(600, 45, 540, 60);
 
-    expect($b['overtime'])->toBe(60);          // 600 − 540
+    // Pulse v3.1: beyond the standard day is overtime only when approved.
+    expect($b['beyond_shift'])->toBe(60);      // 600 − 540
+    expect($b['overtime'])->toBe(0);           // no approved OT passed
+    expect($engine->hoursBreakdown(600, 45, 540, 60, approvedOtMinutes: 60)['overtime'])->toBe(60);
     expect($b['remaining'])->toBe(0);
     expect($b['idle'])->toBe(0);               // break within allowance
     expect($b['worked_pct'])->toBe(100);       // capped at 100

@@ -979,7 +979,7 @@
                                                 <td class="pulse-td pl-6 font-medium text-zinc-900 dark:text-white">{{ \Illuminate\Support\Carbon::parse($rec->date)->format('d M Y') }}</td>
                                                 <td class="pulse-td">{{ $rec->check_in?->format('H:i') ?? '—' }}</td>
                                                 <td class="pulse-td">{{ $rec->check_out?->format('H:i') ?? '—' }}</td>
-                                                <td class="pulse-td">{{ $rec->total_hours ? (float) $rec->total_hours : '—' }}</td>
+                                                <td class="pulse-td">{{ $rec->check_out ? app(\App\Services\Attendance\AttendanceCalculator::class)->workedHours($rec) : '—' }}</td>
                                                 <td class="pulse-td">
                                                     @if($rec->is_late)<span class="badge-late">LATE</span>@else<span class="badge-on_time">ON TIME</span>@endif
                                                 </td>

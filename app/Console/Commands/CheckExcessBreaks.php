@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\Attendance;
 use App\Notifications\ExcessBreakNotification;
+use App\Services\Attendance\AttendanceCalculator;
 use Illuminate\Console\Command;
 
 /**
@@ -29,14 +30,16 @@ class CheckExcessBreaks extends Command
         $flagged = 0;
 
         foreach ($records as $record) {
-            $totalBreakMins = $record->breakLogs->whereNotNull('break_end')->sum('duration_minutes');
-
-            if ($totalBreakMins === 0) {
-                $totalBreakMins = (int) ($record->break_minutes ?? 0);
+            if (! $record->employee) {
+                continue;
             }
 
-            // Allowance from the employee's shift (break_duration), not a literal.
-            $allowance = (int) ($record->employee?->shift?->break_duration ?? 60);
+            // Pulse v3.1: total break for the day from the canonical calculation
+            // (device punch gaps, else logged breaks); excess only above 60
+            // minutes. Informational — worked hours are never reduced.
+            $totalBreakMins = (int) $record->breakLogs->whereNotNull('break_end')->sum('duration_minutes')
+                ?: app(AttendanceCalculator::class)->forAttendance($record)->breakMinutes;
+            $allowance = AttendanceCalculator::EXCESS_BREAK_MINUTES;
 
             if ($totalBreakMins > $allowance) {
                 $excess = $totalBreakMins - $allowance;

@@ -6,6 +6,7 @@ use App\Models\Attendance;
 use App\Models\AttendancePunch;
 use App\Models\OtRequest;
 use App\Notifications\MissingCheckoutNotification;
+use App\Services\Attendance\AttendanceCalculator;
 use App\Services\Attendance\AttendanceScoreEngine;
 use App\Services\Attendance\ShiftResolver;
 use Illuminate\Console\Command;
@@ -103,13 +104,11 @@ class AutoPunchOut extends Command
     /** Stamp the system OUT on the attendance row and mirror it into the punch journey. */
     protected function closeDay(Attendance $attendance, Carbon $closeAt, string $reason): void
     {
-        $grossMinutes = (int) $attendance->check_in->diffInMinutes($closeAt);
-        $netMinutes = max(0, $grossMinutes - (int) ($attendance->break_minutes ?? 0));
-
         $attendance->update([
             'check_out' => $closeAt,
             'check_out_method' => 'auto',
-            'total_hours' => round($netMinutes / 60, 2),
+            // Pulse v3.1: final out − first in; breaks are not deducted.
+            'total_hours' => app(AttendanceCalculator::class)->storedHours($attendance->check_in, $closeAt),
             'is_auto_checkout' => true,
             'auto_checkout_reason' => $reason,
             'missing_checkout' => true,   // still flagged so the employee regularizes it

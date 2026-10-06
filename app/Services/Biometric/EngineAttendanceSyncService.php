@@ -6,7 +6,9 @@ use App\Models\Attendance;
 use App\Models\AttendanceDailySummary;
 use App\Models\AttendancePunch;
 use App\Models\Employee;
+use App\Services\Attendance\AttendanceCalculator;
 use App\Services\Attendance\PunchClassifier;
+use App\Services\Attendance\ShiftResolver;
 use App\Services\Attendance\WorkingDayResolver;
 use App\Support\PunchMethodResolver;
 use Illuminate\Support\Carbon;
@@ -72,7 +74,6 @@ class EngineAttendanceSyncService
             $lastPunch = $this->punchDateTime($date, $row['last_punch'] ?? null);
             $firstMethod = PunchMethodResolver::value($row['first_punch_method'] ?? $row['first_punch_verify'] ?? null);
             $lastMethod = PunchMethodResolver::value($row['last_punch_method'] ?? $row['last_punch_verify'] ?? null);
-            $workingHours = round(((int) ($row['working_min'] ?? 0)) / 60, 2);
             $breakMinutes = (int) ($row['break_min'] ?? 0);
             $lateMinutes = (int) ($row['delay_min'] ?? 0);
             $isLate = ! empty($row['late']);
@@ -91,6 +92,23 @@ class EngineAttendanceSyncService
             $inside = ! empty($row['inside']);
             $checkOut = $inside ? null : $lastPunch;
 
+            // Pulse v3.1: worked = final clock-out − first clock-in. The
+            // engine's working_min deducts its break pairing, which HRMS policy
+            // does not; break_min is kept for information only.
+            $workingHours = app(AttendanceCalculator::class)->storedHours(
+                $firstPunch ? Carbon::parse($firstPunch) : null,
+                $checkOut ? Carbon::parse($checkOut) : null,
+            );
+
+            // Late is judged against the employee's HRMS shift (start + grace),
+            // not the engine's own shift table.
+            if ($firstPunch !== null && $dayState === WorkingDayResolver::WORKING_DAY
+                && ($shiftEmployee = Employee::with('shift')->find($employeeId))
+                && ($shift = app(ShiftResolver::class)->resolve($shiftEmployee, Carbon::parse($date)))) {
+                $isLate = $shift->isLate(Carbon::parse($firstPunch));
+                $lateMinutes = $shift->lateMinutes(Carbon::parse($firstPunch));
+            }
+
             // The engine pairs real device IN/OUT direction, so its break_min /
             // working_min are authoritative. Only fall back to deriving them from
             // HRMS's punch stream when the engine sent no totals at all.
@@ -106,7 +124,11 @@ class EngineAttendanceSyncService
                     'first_punch_method' => $firstMethod,
                     'last_punch_method' => $lastMethod,
                     'break_minutes' => $breakMinutes,
-                    'working_hours' => $workingHours,
+                    // First punch → last punch so far (still running while inside).
+                    'working_hours' => app(AttendanceCalculator::class)->storedHours(
+                        $firstPunch ? Carbon::parse($firstPunch) : null,
+                        $lastPunch ? Carbon::parse($lastPunch) : null,
+                    ),
                     'late_minutes' => $lateMinutes,
                     'early_leave_minutes' => 0,
                     'overtime_minutes' => (int) ($row['overtime_min'] ?? 0),
@@ -257,11 +279,12 @@ class EngineAttendanceSyncService
             return;
         }
 
+        // Breaks are informational (Pulse v3.1) — worked stays first-in → last-out.
         $breakMinutes = app(PunchClassifier::class)->breakMinutes($punches);
-        $grossMinutes = $lastPunch !== null
-            ? (int) Carbon::parse($firstPunch)->diffInMinutes(Carbon::parse($lastPunch))
-            : 0;
-        $workingHours = round(max(0, $grossMinutes - $breakMinutes) / 60, 2);
+        $workingHours = app(AttendanceCalculator::class)->storedHours(
+            Carbon::parse($firstPunch),
+            $lastPunch !== null ? Carbon::parse($lastPunch) : null,
+        );
 
         // Not over corrected punches (see Attendance::hasCorrectedPunches()).
         Attendance::where('employee_id', $employeeId)->whereDate('date', $date)

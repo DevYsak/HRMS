@@ -10,6 +10,7 @@ use App\Models\LeaveBalance;
 use App\Models\LeaveRequest;
 use App\Models\OvertimeRecord;
 use App\Models\PublicHoliday;
+use App\Services\Attendance\AttendanceCalculator;
 use App\Services\Attendance\WorkingDayResolver;
 use Carbon\CarbonPeriod;
 use Illuminate\Database\Eloquent\Builder;
@@ -182,7 +183,7 @@ class AttendanceReportBuilder
             $a->date->format('d M Y'),
             $a->check_in?->format('h:i A') ?? '—',
             $a->check_out?->format('h:i A') ?? '—',
-            $a->total_hours ? number_format((float) $a->total_hours, 1).'h' : '—',
+            ($h = $this->worked($a)) > 0 ? number_format($h, 1).'h' : '—',
             $a->weeklyOffLabel() ?? ($a->is_late ? 'Late '.(int) ($a->late_minutes ?? 0).'m' : ucfirst($a->status ?? '—')),
             ucfirst($a->work_mode ?? '—'),
         ])->all();
@@ -219,7 +220,7 @@ class AttendanceReportBuilder
             $present = $scheduled->whereNotNull('check_in')->count();
             $offWorked = $group->whereNotNull('check_in')->count() - $present;
             $late = $scheduled->where('is_late', true)->count();
-            $hours = $group->sum(fn ($a) => (float) $a->total_hours);
+            $hours = $group->sum(fn ($a) => $this->worked($a));
             $totPresent += $present;
             $data[] = [
                 $emp?->employee_id ?? '—',
@@ -605,16 +606,18 @@ class AttendanceReportBuilder
             ->whereNotNull('check_in')->get()
             ->groupBy('employee_id')
             ->map(fn ($g) => $g->keyBy(fn ($a) => $a->date->toDateString()));
-        $holidays = PublicHoliday::whereBetween('date', [$from->toDateString(), $to->toDateString()])
-            ->pluck('date')->map(fn ($d) => Carbon::parse($d)->toDateString())->flip();
-
         $data = [];
         $cutoff = min($to, Carbon::yesterday()->endOfDay());
+        $days = app(WorkingDayResolver::class);
         foreach ($employees as $emp) {
             $present = $att->get($emp->id) ?? collect();
+            // Pulse v3.1: weekly offs, the employee's own public holidays, MDL
+            // shutdown, approved leave and days outside employment are never
+            // absent — the same classification every screen uses.
+            $states = $days->classifyRange($emp, $from->copy()->startOfDay(), Carbon::parse($cutoff));
             foreach (CarbonPeriod::create($from->copy()->startOfDay(), $cutoff) as $day) {
                 $key = $day->toDateString();
-                if ($this->isWeeklyOff($day) || isset($holidays[$key]) || isset($present[$key])) {
+                if (isset($present[$key]) || ($states[$key]['state'] ?? WorkingDayResolver::WORKING_DAY) !== WorkingDayResolver::WORKING_DAY) {
                     continue;
                 }
                 $data[] = [
@@ -727,7 +730,7 @@ class AttendanceReportBuilder
         $data = [];
         foreach ($rows as $group) {
             $emp = $group->first()->employee;
-            $hours = $group->sum(fn ($a) => (float) $a->total_hours);
+            $hours = $group->sum(fn ($a) => $this->worked($a));
             $days = $group->whereNotNull('check_out')->count();
             $breakMin = (int) $group->sum('break_minutes');
             $data[] = [
@@ -746,7 +749,7 @@ class AttendanceReportBuilder
             'rows' => $data,
             'summary' => [
                 ['label' => 'Employees', 'value' => count($data)],
-                ['label' => 'Total Hours', 'value' => number_format($rows->flatten(1)->sum(fn ($a) => (float) $a->total_hours), 1).'h'],
+                ['label' => 'Total Hours', 'value' => number_format($rows->flatten(1)->sum(fn ($a) => $this->worked($a)), 1).'h'],
             ],
         ];
     }
@@ -768,7 +771,7 @@ class AttendanceReportBuilder
                 $group->pluck('employee_id')->unique()->count(),
                 $present,
                 $late,
-                number_format($group->sum(fn ($a) => (float) $a->total_hours), 1).'h',
+                number_format($group->sum(fn ($a) => $this->worked($a)), 1).'h',
                 $pct.'%',
             ];
             $trendLabels[] = $dept;
@@ -794,7 +797,7 @@ class AttendanceReportBuilder
             $a->date->format('D'),
             $a->check_in?->format('h:i A') ?? '—',
             $a->check_out?->format('h:i A') ?? '—',
-            $a->total_hours ? number_format((float) $a->total_hours, 1).'h' : '—',
+            ($h = $this->worked($a)) > 0 ? number_format($h, 1).'h' : '—',
             (int) ($a->break_minutes ?? 0).'m',
             $a->weeklyOffLabel() ?? ($a->is_late ? 'Late '.(int) ($a->late_minutes ?? 0).'m' : ucfirst($a->status ?? '—')),
             ucfirst($a->work_mode ?? '—'),
@@ -811,7 +814,7 @@ class AttendanceReportBuilder
             'summary' => [
                 ['label' => 'Present Days', 'value' => $rows->whereNotNull('check_in')->count()],
                 ['label' => 'Late Days', 'value' => $rows->where('is_late', true)->count()],
-                ['label' => 'Total Hours', 'value' => number_format($rows->sum(fn ($a) => (float) $a->total_hours), 1).'h'],
+                ['label' => 'Total Hours', 'value' => number_format($rows->sum(fn ($a) => $this->worked($a)), 1).'h'],
             ],
             'trend' => $this->dailyTrend($from, $to, $filters),
         ];
@@ -903,5 +906,11 @@ class AttendanceReportBuilder
         }
 
         return ['labels' => $labels, 'data' => $data];
+    }
+
+    /** Worked hours of a row — the canonical first-in → final-out (no break deduction). */
+    private function worked(Attendance $attendance): float
+    {
+        return app(AttendanceCalculator::class)->workedHours($attendance);
     }
 }

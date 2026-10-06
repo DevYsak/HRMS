@@ -46,7 +46,8 @@ test('period working hours come from engine sessions, not the mis-paired attenda
         'total_hours' => 2.0,
     ]);
 
-    // …but the raw punches prove a full 9-to-6 day with a 60m lunch (8h net).
+    // …but the raw punches prove a full 9-to-6 day (Pulse v3.1: 9h worked —
+    // the 60m lunch is informational, not deducted).
     foreach ([['09:00:00', 'face'], ['13:00:00', 'id_card'], ['14:00:00', 'face'], ['18:00:00', 'id_card']] as [$t, $m]) {
         AttendancePunch::create([
             'employee_id' => $employee->id,
@@ -58,13 +59,13 @@ test('period working hours come from engine sessions, not the mis-paired attenda
     }
 
     Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
-        // 8h 0m from validated sessions — NOT the row's 2h.
-        ->assertSet('stats.hours', '8h 0m')
+        // 9h 0m first in → final out — NOT the row's 2h.
+        ->assertSet('stats.hours', '9h 0m')
         ->assertSet('chartDaily', function ($daily) use ($day) {
             $entry = collect($daily)->firstWhere('label', $day->format('d M'));
 
             return $entry !== null
-                && $entry['hours'] === 8.0
+                && $entry['hours'] === 9.0
                 && $entry['break'] === 60
                 && $entry['in_min'] === 9 * 60;   // arrival series data
         });

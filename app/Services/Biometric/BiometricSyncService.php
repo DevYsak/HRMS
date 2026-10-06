@@ -7,6 +7,7 @@ use App\Models\AuditLog;
 use App\Models\BiometricDevice;
 use App\Models\BiometricLog;
 use App\Models\Employee;
+use App\Services\Attendance\AttendanceCalculator;
 use App\Services\Attendance\WorkingDayResolver;
 use App\Services\AttendanceService;
 use App\Support\PunchMethodResolver;
@@ -518,7 +519,7 @@ class BiometricSyncService
             return $attendance;
         }
 
-        $totalHours = round($attendance->check_in->diffInMinutes($punchedAt) / 60, 2);
+        $totalHours = app(AttendanceCalculator::class)->storedHours($attendance->check_in, $punchedAt);
 
         $attendance->update([
             'check_out' => $punchedAt,

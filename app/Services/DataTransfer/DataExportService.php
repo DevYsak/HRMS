@@ -8,6 +8,7 @@ use App\Models\LeaveBalance;
 use App\Models\LeaveRequest;
 use App\Models\PublicHoliday;
 use App\Models\User;
+use App\Services\Attendance\AttendanceCalculator;
 use App\Services\Audit\AuditService;
 use App\Services\SpreadsheetService;
 use Illuminate\Database\Eloquent\Builder;
@@ -208,7 +209,7 @@ class DataExportService
                 $a->date?->toDateString(),
                 $a->check_in?->format('H:i'),
                 $a->check_out?->format('H:i'),
-                $a->total_hours !== null ? (float) $a->total_hours : null,
+                $a->check_out ? app(AttendanceCalculator::class)->workedHours($a) : null,
                 ucfirst(str_replace('_', ' ', (string) $a->status)),
                 is_object($a->work_mode) ? $a->work_mode->value : $a->work_mode,
                 (int) $a->late_minutes,

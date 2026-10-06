@@ -6,8 +6,10 @@ use App\Models\Attendance;
 use App\Models\AttendanceDailyScore;
 use App\Models\AttendanceRegularisation;
 use App\Models\LeaveRequest;
+use App\Models\OtRequest;
 use App\Notifications\RegularisationReviewedNotification;
 use App\Services\Approvals\ApprovalGuard;
+use App\Services\Attendance\AttendanceCalculator;
 use App\Services\Attendance\WorkingDayResolver;
 use App\Services\AttendanceService;
 use Illuminate\Support\Carbon;
@@ -185,8 +187,16 @@ class TeamAttendance extends Component
             ->whereBetween('date', [$rangeStart->toDateString(), $rangeEnd->toDateString()])
             ->get(['employee_id', 'date', 'check_in', 'check_out', 'is_late', 'break_minutes', 'total_hours']);
         $present = $rangeAtt->whereNotNull('check_in');
-        $workedMin = $rangeAtt->sum(fn ($a) => $a->check_in && $a->check_out
-            ? max(0, $a->check_in->diffInMinutes($a->check_out) - (int) ($a->break_minutes ?? 0)) : 0);
+        // Pulse v3.1: first in → final out; breaks are not deducted.
+        $calc = app(AttendanceCalculator::class);
+        $workedMin = $rangeAtt->sum(fn ($a) => $calc->spanMinutes($a->check_in, $a->check_out));
+
+        // Overtime only where an approved OT request exists for that day.
+        $approvedOtDays = OtRequest::whereIn('employee_id', $teamIds)->where('status', 'approved')
+            ->whereBetween('work_date', [$rangeStart->toDateString(), $rangeEnd->toDateString()])
+            ->get(['employee_id', 'work_date'])
+            ->map(fn ($r) => $r->employee_id.'|'.Carbon::parse($r->work_date)->toDateString())
+            ->flip();
 
         // Engine attendance score for the team over the range + per-member scores.
         $scoreRows = AttendanceDailyScore::whereIn('employee_id', $teamIds)
@@ -197,7 +207,9 @@ class TeamAttendance extends Component
         $periodStats = [
             'present' => $present->count(),
             'late' => $present->where('is_late', true)->count(),
-            'overtime_hours' => round($rangeAtt->sum(fn ($a) => max(0, (float) ($a->total_hours ?? 0) - 9)), 1),
+            'overtime_hours' => round($rangeAtt->sum(fn ($a) => $approvedOtDays->has($a->employee_id.'|'.$a->date->toDateString())
+                ? max(0, $calc->spanMinutes($a->check_in, $a->check_out) - AttendanceCalculator::DEFAULT_STANDARD_MINUTES) / 60
+                : 0), 1),
             'worked_hours' => round($workedMin / 60),
             'avg_score' => $scoreRows->isNotEmpty() ? (int) round($scoreRows->avg('score')) : 0,
         ];

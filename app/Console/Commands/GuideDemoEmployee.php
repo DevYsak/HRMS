@@ -20,6 +20,7 @@ use App\Models\ReviewGoal;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\WfhRequest;
+use App\Services\Attendance\AttendanceCalculator;
 use App\Services\Leave\LeaveMovementService;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Attributes\Description;
@@ -203,7 +204,8 @@ class GuideDemoEmployee extends Command
                     'is_late' => $isLate,
                     'late_minutes' => $isLate ? 55 : 0,
                     'missing_checkout' => $missingCheckout,
-                    'total_hours' => $checkOut ? round(($checkOut->diffInMinutes($checkIn, true) - 45) / 60, 2) : 0,
+                    // Pulse v3.1: final out − first in; the 45m break is not deducted.
+                    'total_hours' => app(AttendanceCalculator::class)->storedHours($checkIn, $checkOut),
                 ]));
             }
 

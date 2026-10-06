@@ -24,6 +24,7 @@ use App\Models\PublicHoliday;
 use App\Models\ReviewGoal;
 use App\Models\User;
 use App\Models\WfhRequest;
+use App\Services\Attendance\AttendanceCalculator;
 use App\Services\Attendance\HolidayResolver;
 use App\Services\Attendance\PunchTimeline;
 use App\Services\Attendance\ResolvedShift;
@@ -321,16 +322,11 @@ class EmployeeDashboardService
             AttendanceDailySummary::where('employee_id', $employee->id)->whereDate('date', $today->toDateString())->first(),
         );
 
-        if (($journey['kept_count'] ?? 0) > 0) {
-            $worked = (int) $journey['working_minutes'];
-        } elseif ($clockedIn) {
-            $end = $attendance->check_out ?? $now;
-            $breakMinutes = (int) $breaks->whereNotNull('break_end')->sum('duration_minutes')
-                + ($activeBreak && ! $clockedOut ? (int) $activeBreak->break_start->diffInMinutes($now) : 0);
-            $worked = max(0, (int) $attendance->check_in->diffInMinutes($end) - $breakMinutes);
-        } else {
-            $worked = 0;
-        }
+        // Pulse v3.1 — the canonical calculation (first in → final out / now,
+        // breaks not deducted, regularised days use their corrected times).
+        $worked = app(AttendanceCalculator::class)
+            ->forDay($employee, $today, $attendance, now: $now)
+            ->workedMinutes;
 
         $isWeeklyOff = app(WorkingDayResolver::class)->isWeeklyOff($today);
 
@@ -487,7 +483,7 @@ class EmployeeDashboardService
             ? (int) round($worked->avg(fn (Attendance $a) => $a->check_in->hour * 60 + $a->check_in->minute))
             : null;
         $avgWorkedMinutes = $closed->isNotEmpty()
-            ? (int) round($closed->avg(fn (Attendance $a) => max(0, (int) $a->check_in->diffInMinutes($a->check_out) - (int) $a->break_minutes)))
+            ? (int) round($closed->avg(fn (Attendance $a) => app(AttendanceCalculator::class)->spanMinutes($a->check_in, $a->check_out)))
             : null;
 
         return [

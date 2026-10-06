@@ -129,7 +129,8 @@ test('the drawer exposes a weekly history rollup for a particular employee', fun
 test('the drawer computes worked/break from validated sessions, not the wrong engine summary', function () {
     // EMP005 scenario: the engine's summary mis-pairs this device (Face tagged
     // OUT), reporting 21m worked / 191m break. The validated Face=IN / Card=OUT
-    // sessions are the truth: 10:27→13:24 and 13:44→13:57 = 3h10m, 20m break.
+    // punches are the truth: first IN 10:27 → final OUT 13:57 = 3h30m worked
+    // (Pulse v3.1 — the 20m break is shown, never deducted).
     $hr = User::factory()->create(['role' => UserRole::HrAdmin]);
     $empUser = User::factory()->create(['name' => 'SESSION PERSON']);
     $employee = Employee::factory()->create(['user_id' => $empUser->id, 'status' => 'active']);
@@ -151,7 +152,7 @@ test('the drawer computes worked/break from validated sessions, not the wrong en
 
     Livewire::actingAs($hr)->test(AllAttendance::class)
         ->call('openEmployeeDrawer', $employee->id)
-        ->assertSet('drawer.today.worked', '3h 10m')     // sessions, not the summary's 0h 21m
+        ->assertSet('drawer.today.worked', '3h 30m')     // first in → final out, not the summary's 0h 21m
         ->assertSet('drawer.today.break', 20)            // real gap, not 191
         ->assertSet('drawer.today.out', '01:57 PM')      // last Card OUT
         ->assertSet('drawer.status', 'Completed');

@@ -40,7 +40,8 @@ test('it pulls engine attendance and upserts a daily summary', function () {
 
     $row = AttendanceDailySummary::where('employee_id', $yogesh->id)->first();
     expect($row->employee_code)->toBe(17);
-    expect($row->working_hours)->toBe('4.55');          // 273 min / 60
+    // Pulse v3.1: 10:31 → 17:40 = 7h09m. The engine's 273m deducted its breaks.
+    expect($row->working_hours)->toBe('7.15');
     expect($row->break_minutes)->toBe(157);
     expect($row->late_minutes)->toBe(1);
     expect($row->status)->toBe('late');                 // late flag → 'late'
@@ -53,7 +54,7 @@ test('it pulls engine attendance and upserts a daily summary', function () {
     expect($att)->not->toBeNull();
     expect($att->check_in->format('H:i:s'))->toBe('10:31:00');
     expect($att->check_out->format('H:i:s'))->toBe('17:40:00');
-    expect((float) $att->total_hours)->toBe(4.55);
+    expect((float) $att->total_hours)->toBe(7.15);   // Pulse v3.1: 10:31 → 17:40
     expect($att->break_minutes)->toBe(157);
     expect($att->status)->toBe('late');
     expect($att->is_late)->toBeTrue();
@@ -77,7 +78,8 @@ test('re-running the sync overwrites the same day (idempotent)', function () {
     $this->artisan('attendance:sync-engine', ['--date' => '2026-06-29'])->assertSuccessful();
 
     expect(AttendanceDailySummary::where('employee_id', $yogesh->id)->count())->toBe(1);
-    expect(AttendanceDailySummary::where('employee_id', $yogesh->id)->first()->working_hours)->toBe('9.00');
+    // Second snapshot wins: 10:31 → 19:40 = 9h09m.
+    expect(AttendanceDailySummary::where('employee_id', $yogesh->id)->first()->working_hours)->toBe('9.15');
 });
 
 test('it fails cleanly when the engine is unreachable', function () {
@@ -128,7 +130,7 @@ test('an unsupported verify mode is stored as null rather than a bad chip', func
     expect($att->check_out_method)->toBeNull();
 });
 
-test('the engine break_min and working_min are trusted, never re-derived from HRMS punches', function () {
+test('the engine break_min is trusted for the (informational) break; worked is first to last punch', function () {
     $emp = Employee::factory()->create(['employee_code' => 77, 'manager_id' => null]);
 
     // The real engine pairs device IN/OUT direction, so it correctly reports an
@@ -148,7 +150,7 @@ test('the engine break_min and working_min are trusted, never re-derived from HR
 
     $att = Attendance::where('employee_id', $emp->id)->first();
     expect($att->break_minutes)->toBe(18)               // engine, not a re-derived phantom
-        ->and((float) $att->total_hours)->toBe(5.98);   // 359 min / 60
+        ->and((float) $att->total_hours)->toBe(6.23);   // Pulse v3.1: 10:19:28 → 16:34:25, break not deducted
 
     expect(AttendanceDailySummary::where('employee_id', $emp->id)->first()->break_minutes)->toBe(18);
 });
@@ -171,7 +173,7 @@ test('a still-inside employee keeps check_out open (last punch is a live IN)', f
     // The summary still records the last punch for reference.
     $summary = AttendanceDailySummary::where('employee_id', $emp->id)->first();
     expect($summary->last_punch->format('H:i:s'))->toBe('16:36:20')
-        ->and($summary->working_hours)->toBe('5.98')
+        ->and($summary->working_hours)->toBe('6.27')   // first → last punch so far (10:19:28 → 16:36:20)
         ->and($summary->break_minutes)->toBe(18);
 });
 
@@ -191,9 +193,9 @@ test('when the engine sends no totals, break/working fall back to the punch stre
     $this->artisan('attendance:sync-engine', ['--date' => '2026-06-29'])->assertSuccessful();
 
     $att = Attendance::where('employee_id', $emp->id)->first();
-    // gross 09:00→18:00 = 540m, minus a derived 30m break = 510m → 8.50h.
+    // Pulse v3.1: 09:00 → 18:00 = 9h; the derived 30m break is recorded, not deducted.
     expect($att->break_minutes)->toBe(30)
-        ->and((float) $att->total_hours)->toBe(8.5);
+        ->and((float) $att->total_hours)->toBe(9.0);
 });
 
 test('a backfill syncs every date in the --from/--to range', function () {

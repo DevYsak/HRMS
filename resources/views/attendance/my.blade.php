@@ -37,15 +37,9 @@
     $heroMode = AttendanceMode::tryFromValue($todayAttendance->work_mode ?? $workMode);
     $isIn   = $todayAttendance && ! $todayAttendance->check_out;
     $isDone = $todayAttendance && $todayAttendance->check_out;
-    // Working minutes come ONLY from validated sessions (PunchTimeline engine)
-    // when punch data exists; the attendance row is just the web-punch fallback.
-    $workedMin = 0;
-    if (($punchJourney['raw_count'] ?? 0) > 0) {
-        $workedMin = (int) $punchJourney['working_minutes'];
-    } elseif ($todayAttendance && $todayAttendance->check_in) {
-        $endT = $todayAttendance->check_out ?? now();
-        $workedMin = max(0, (int) $todayAttendance->check_in->diffInMinutes($endT) - (int) ($todayAttendance->break_minutes ?? 0));
-    }
+    // Pulse v3.1 — worked = final clock-out − first clock-in (now while live),
+    // breaks never deducted. One figure from AttendanceCalculator for every widget.
+    $workedMin = (int) ($todayCalc['worked_minutes'] ?? 0);
     $targetMin = (int) round($stdHours * 60);
     $progress  = $targetMin > 0 ? min(100, (int) round($workedMin / $targetMin * 100)) : 0;
     $workedLabel = intdiv($workedMin, 60).'h '.str_pad((string) ($workedMin % 60), 2, '0', STR_PAD_LEFT).'m';
@@ -59,9 +53,8 @@
     $outM = PunchMethod::tryFrom((string) ($todayAttendance->check_out_method ?? $sum?->last_punch_method));
     $punchMethods = collect([$inM, $outM])->filter()->unique();
     $punchSource = $punchMethods->isNotEmpty() ? $punchMethods->map->label()->implode(' + ') : '—';
-    $breakMin = ($punchJourney['raw_count'] ?? 0) > 0
-        ? (int) $punchJourney['break_minutes']
-        : (int) ($todayAttendance->break_minutes ?? $sum?->break_minutes ?? 0);
+    // Informational only — never deducted from worked time.
+    $breakMin = (int) ($todayCalc['break_minutes'] ?? 0);
     $totalPunches = (int) ($sum?->raw_punch_count ?? ($punchJourney['raw_count'] ?? 0));
     $deviceName = $biometricDevice?->name ?? $sum?->device_serial ?? '—';
     $lastSync = $biometricDevice?->last_synced_at ?? $sum?->synced_at;
@@ -972,7 +965,7 @@
     <div class="pa-acard">
       <div class="pa-atile hero">
         <div class="lbl"><flux:icon.clock class="size-3.5" /> Working today</div>
-        <div class="val">{{ $hasPunch ? $fmt($pj['working_minutes']) : '—' }}
+        <div class="val">{{ $hasPunch ? $fmt($workedMin) : '—' }}
           @if($pj['live'])<span class="pa-livebadge"><span class="dot"></span>Live</span>@endif
         </div>
       </div>
@@ -1083,21 +1076,24 @@
   </div>{{-- /pa-jcard2 --}}
 
   @php
-    // Working-hours breakdown (moved into the 3-column row). Engine-computed.
-    $breakAllowance = (int) ($shift->break_duration ?? 0);
-    $hb = app(\App\Services\Attendance\PunchTimeline::class)->hoursBreakdown($workedMin, $breakMin, $targetMin, $breakAllowance);
+    // Working-hours breakdown. Pulse v3.1: worked = first in → final out
+    // (breaks inside it, not deducted); break over 60m is shown as excess;
+    // overtime = APPROVED overtime only.
+    $breakAllowance = \App\Services\Attendance\AttendanceCalculator::EXCESS_BREAK_MINUTES;
+    $hb = app(\App\Services\Attendance\PunchTimeline::class)->hoursBreakdown($workedMin, $breakMin, $targetMin, $breakAllowance, (int) ($todayCalc['approved_ot_minutes'] ?? 0));
     $hbTiles = [
         ['Expected', $hb['expected'], 'calendar-days', '#6B7280'],
         ['Worked', $hb['worked'], 'clock', '#0F9D6E'],
         ['Break', $hb['break'], 'pause', '#F59E0B'],
-        ['Idle', $hb['idle'], 'exclamation-triangle', '#D64545'],
-        ['Overtime', $hb['overtime'], 'bolt', '#8B5CF6'],
+        ['Excess Break', $hb['idle'], 'exclamation-triangle', '#D64545'],
+        ['Approved OT', $hb['overtime'], 'bolt', '#8B5CF6'],
         ['Net Hours', $hb['net'], 'check-badge', '#2F6FEB'],
         ['Remaining', $hb['remaining'], 'arrow-path', '#6B7280'],
     ];
-    $hbSpan = max(1, $hb['worked'] + $hb['break']);
-    $legitBreak = max(0, $hb['break'] - $hb['idle']);
-    $segWorked = round($hb['worked'] / $hbSpan * 100, 1);
+    // The worked span already contains the breaks (they are not deducted).
+    $hbSpan = max(1, $hb['worked']);
+    $legitBreak = max(0, min($hb['break'], $hb['worked']) - $hb['idle']);
+    $segWorked = round(max(0, $hb['worked'] - min($hb['break'], $hb['worked'])) / $hbSpan * 100, 1);
     $segBreak = round($legitBreak / $hbSpan * 100, 1);
     $segIdle = round($hb['idle'] / $hbSpan * 100, 1);
 
@@ -1207,7 +1203,7 @@
             @endforeach
           </div>
         </div>
-        <div class="pa-stot"><span class="tl">Total working hours</span><span class="tv">{{ $fmt($pj['working_minutes']) }}</span></div>
+        <div class="pa-stot"><span class="tl">Total working hours</span><span class="tv">{{ $fmt($workedMin) }}</span></div>
         <div class="pa-stot" style="border-top:1px solid var(--pa-border);padding-top:11px;margin-top:11px"><span class="tl">Total break</span><span class="tv" style="font-size:16px;color:var(--pa-muted)">{{ $fmt($pj['break_minutes']) }}</span></div>
         @if($pj['missing_out'])
           <div class="pa-swarn"><flux:icon.exclamation-triangle class="size-4" /> Missing OUT punch — this day needs regularization.</div>
@@ -1266,7 +1262,7 @@
         <div class="pa-hb-key">
           <span><i style="background:#0F9D6E"></i> Worked {{ $fmt($hb['worked']) }} ({{ (int) round($segWorked) }}%)</span>
           <span><i style="background:#F59E0B"></i> Break {{ $fmt($legitBreak) }} ({{ (int) round($segBreak) }}%)</span>
-          @if($hb['idle'] > 0)<span><i style="background:#D64545"></i> Idle {{ $fmt($hb['idle']) }} ({{ (int) round($segIdle) }}%)</span>@endif
+          @if($hb['idle'] > 0)<span><i style="background:#D64545"></i> Excess break {{ $fmt($hb['idle']) }} ({{ (int) round($segIdle) }}%)</span>@endif
         </div>
       </div>
     @endif
