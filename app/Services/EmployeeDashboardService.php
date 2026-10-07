@@ -4,8 +4,6 @@ namespace App\Services;
 
 use App\Enums\AttendanceMode;
 use App\Models\Attendance;
-use App\Models\AttendanceDailySummary;
-use App\Models\AttendancePunch;
 use App\Models\AttendanceRegularisation;
 use App\Models\AttendanceSetting;
 use App\Models\BreakLog;
@@ -25,6 +23,7 @@ use App\Models\ReviewGoal;
 use App\Models\User;
 use App\Models\WfhRequest;
 use App\Services\Attendance\AttendanceCalculator;
+use App\Services\Attendance\AttendanceStatusResolver;
 use App\Services\Attendance\HolidayResolver;
 use App\Services\Attendance\PunchTimeline;
 use App\Services\Attendance\ResolvedShift;
@@ -307,26 +306,23 @@ class EmployeeDashboardService
         Carbon $now,
         Carbon $today,
     ): array {
-        $clockedIn = (bool) $attendance?->check_in;
-        $clockedOut = (bool) $attendance?->check_out;
+        // One shared status (PunchTimeline + calculator): working only inside
+        // the shift window, missing checkout after shift end + 1h, completed
+        // on a valid final OUT. A night shift still open from yesterday counts.
+        $status = app(AttendanceStatusResolver::class)->current($employee, $attendance, $now);
+        if ($status['work_date'] !== $today->toDateString()) {
+            $attendance = Attendance::with('breakLogs')->where('employee_id', $employee->id)->whereDate('date', $status['work_date'])->first();
+        }
+        $clockedIn = $status['state'] !== AttendanceStatusResolver::NOT_IN;
+        $clockedOut = $status['state'] === AttendanceStatusResolver::COMPLETED;
+        $missingCheckout = $status['state'] === AttendanceStatusResolver::MISSING_CHECKOUT;
         $breaks = $attendance?->breakLogs?->sortBy('break_start')->values() ?? collect();
         /** @var BreakLog|null $activeBreak */
         $activeBreak = $breaks->first(fn (BreakLog $b) => $b->break_end === null);
 
-        // PunchTimeline is the canonical processor for device punches. Web
-        // punches write no punch rows, so — like My Attendance — those days
-        // fall back to the attendance row, net of breaks.
-        $journey = $this->punchTimeline->process(
-            AttendancePunch::where('employee_id', $employee->id)->whereDate('punch_date', $today->toDateString())->orderBy('punched_at')->get(),
-            $today,
-            AttendanceDailySummary::where('employee_id', $employee->id)->whereDate('date', $today->toDateString())->first(),
-        );
-
         // Pulse v3.1 — the canonical calculation (first in → final out / now,
         // breaks not deducted, regularised days use their corrected times).
-        $worked = app(AttendanceCalculator::class)
-            ->forDay($employee, $today, $attendance, now: $now)
-            ->workedMinutes;
+        $worked = $status['worked_minutes'];
 
         $isWeeklyOff = app(WorkingDayResolver::class)->isWeeklyOff($today);
 
@@ -349,9 +345,10 @@ class EmployeeDashboardService
         $shiftEnded = $shift !== null && $now->gt($shift->end);
 
         [$state, $label, $detail] = match (true) {
-            $clockedIn && $attendance->work_mode === AttendanceMode::Wfh->value => ['wfh', 'Working from home', null],
-            $clockedIn && $attendance->status === 'half_day' => ['half_day', 'Half day', null],
-            $clockedIn && $attendance->is_late => ['late', 'Present', 'Late by '.self::lateLabel((int) $attendance->late_minutes)],
+            $missingCheckout => ['missing_checkout', 'Missing checkout', 'No clock-out was recorded — regularise this day'],
+            $clockedIn && $attendance?->work_mode === AttendanceMode::Wfh->value => ['wfh', 'Working from home', null],
+            $clockedIn && $attendance?->status === 'half_day' => ['half_day', 'Half day', null],
+            $clockedIn && $attendance?->is_late => ['late', 'Present', 'Late by '.self::lateLabel((int) $attendance->late_minutes)],
             $clockedIn => ['present', 'Present', null],
             $leaveToday !== null => ['leave', 'On leave', ($leaveToday->leaveType?->name ?? 'Approved leave').($leaveToday->is_half_day ? ' · half day' : '')],
             $holidayToday !== null => ['holiday', 'Holiday', $holidayToday->name],
@@ -366,11 +363,11 @@ class EmployeeDashboardService
 
         if ($clockedIn && $detail === null) {
             $detail = $clockedOut
-                ? 'Clocked out at '.$attendance->check_out->format('g:i A')
-                : 'Clocked in at '.$attendance->check_in->format('g:i A');
+                ? 'Clocked out at '.$status['last_out']?->format('g:i A')
+                : 'Clocked in at '.$status['first_in']?->format('g:i A');
         }
 
-        $working = $clockedIn && ! $clockedOut;
+        $working = $status['live'];
 
         return [
             'state' => $state,
@@ -378,16 +375,17 @@ class EmployeeDashboardService
             'detail' => $detail,
             'clocked_in' => $clockedIn,
             'clocked_out' => $clockedOut,
+            'missing_checkout' => $missingCheckout,
             'working' => $working,
-            'on_break' => $working && $activeBreak !== null,
+            'on_break' => $status['on_break'],
             'break_since' => $activeBreak?->break_start?->format('g:i A'),
             'is_working_day' => $nonWorkingLabel === null,
             'worked_minutes' => $worked,
             // Seconds-epoch the live counter counts up from; null when the
             // clock should stand still (not started, on a break, or done).
             'live_base' => $working && ! $activeBreak ? $now->timestamp - ($worked * 60) : null,
-            'check_in' => $attendance?->check_in?->format('g:i A') ?? $journey['first_in'] ?? null,
-            'check_out' => $attendance?->check_out?->format('g:i A') ?? $journey['last_out'] ?? null,
+            'check_in' => $status['first_in']?->format('g:i A'),
+            'check_out' => $status['last_out']?->format('g:i A'),
             'break_start' => $breaks->first()?->break_start?->format('g:i A'),
             'break_end' => $activeBreak ? null : $breaks->last()?->break_end?->format('g:i A'),
             'break_count' => $breaks->count(),

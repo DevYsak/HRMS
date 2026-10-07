@@ -405,6 +405,11 @@ class AttendanceTracker extends Component
         $this->todayCalc = app(AttendanceCalculator::class)
             ->forDay($employee, Carbon::today(), $this->todayAttendance)
             ->toArray();
+        // LIVE / missing checkout come from the shared calculation, not from
+        // "the last raw punch is an IN": past the cutoff (shift end + 1h) the
+        // journey stops showing as live.
+        $this->punchJourney['live'] = (bool) ($this->punchJourney['live'] ?? false) && (bool) $this->todayCalc['live'];
+        $this->punchJourney['missing_out'] = (bool) $this->todayCalc['missing_checkout'] || (bool) ($this->punchJourney['missing_out'] ?? false);
         $this->shiftProgress = $this->buildShiftProgress($employee)->toArray();
         $this->loadStreakAndBenchmark($employee);
 

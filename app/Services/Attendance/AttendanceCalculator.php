@@ -101,16 +101,17 @@ class AttendanceCalculator
         $dayType = $this->workingDays->classify($employee, $day);
         $shift = $this->shifts->resolve($employee, $day);
 
-        [$firstIn, $lastOut, $breakMinutes, $source] = $this->timing($employee, $day, $attendance, $punches, $now);
+        [$firstIn, $lastOut, $breakMinutes, $source] = $this->timing($employee, $day, $attendance, $punches, $now, $shift);
 
-        $isToday = $day->isSameDay($now);
-        $live = $firstIn !== null && $lastOut === null && $isToday;
         $missingCheckout = $firstIn !== null && $lastOut === null && $now->greaterThan($this->missingCheckoutDeadline($day, $shift));
+        // Still inside: open session, started, and not past the cutoff
+        // (shift end + 1h — which for a night shift is the next morning).
+        $live = $firstIn !== null && $lastOut === null && ! $missingCheckout && $now->greaterThanOrEqualTo($firstIn);
         // Open and still inside the shift window: counting to now. Once the
         // checkout is missing nothing more is counted — never a phantom day.
         $worked = $lastOut !== null
             ? $this->spanMinutes($firstIn, $lastOut)
-            : ($live && ! $missingCheckout ? $this->spanMinutes($firstIn, $now) : 0);
+            : ($live ? $this->spanMinutes($firstIn, $now) : 0);
 
         $working = $dayType === WorkingDayResolver::WORKING_DAY;
         $isLate = $working && $shift && $firstIn ? $shift->isLate(Carbon::parse($firstIn)) : false;
@@ -127,7 +128,7 @@ class AttendanceCalculator
             dayType: $dayType,
             firstIn: $firstIn,
             lastOut: $lastOut,
-            live: $live && ! $missingCheckout,
+            live: $live,
             workedMinutes: $worked,
             breakMinutes: $breakMinutes,
             excessBreak: $breakMinutes > self::EXCESS_BREAK_MINUTES,
@@ -166,7 +167,7 @@ class AttendanceCalculator
      *
      * @return array{0: ?Carbon, 1: ?Carbon, 2: int, 3: string}
      */
-    private function timing(Employee $employee, Carbon $day, ?Attendance $attendance, ?Collection $punches, Carbon $now): array
+    private function timing(Employee $employee, Carbon $day, ?Attendance $attendance, ?Collection $punches, Carbon $now, ?ResolvedShift $shift = null): array
     {
         // A regularised day is what HR approved — raw device punches recorded
         // later for the same date never change it.
@@ -185,7 +186,7 @@ class AttendanceCalculator
             ->get();
 
         if ($punches->isNotEmpty()) {
-            $t = $this->timeline->process($punches, $day);
+            $t = $this->timeline->process($punches, $day, null, $shift);
 
             if ($t['first_in_at'] !== null) {
                 $firstIn = $t['first_in_at'];

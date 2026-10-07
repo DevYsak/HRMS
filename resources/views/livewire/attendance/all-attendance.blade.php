@@ -260,8 +260,9 @@
                                         <div class="text-[9px] font-semibold text-zinc-400 line-through" title="Original punch (preserved)">{{ $log->original_check_out->format('h:i A') }}</div>
                                     @endif
                                     @if($log->is_auto_checkout)<div class="text-[9px] font-bold uppercase text-orange-500" title="System auto punch-out — please regularize">Auto OUT</div>@endif
-                                @elseif($log->check_in && $log->date->isToday())<span class="inline-flex items-center gap-1 font-bold text-emerald-600"><span class="size-1.5 animate-pulse rounded-full bg-emerald-500"></span> LIVE</span>
-                                @elseif($log->check_in)<span class="font-bold text-amber-500">missing</span>
+                                @elseif($log->check_in && ($rowStatus[$log->id]['live'] ?? false))<span class="inline-flex items-center gap-1 font-bold text-emerald-600" data-attendance-state="{{ $rowStatus[$log->id]['state'] }}"><span class="size-1.5 animate-pulse rounded-full bg-emerald-500"></span> {{ ($rowStatus[$log->id]['on_break'] ?? false) ? 'ON BREAK' : 'LIVE' }}</span>
+                                @elseif($log->check_in && ($rowStatus[$log->id]['last_out'] ?? null))<span class="font-bold text-zinc-800 dark:text-zinc-100" data-attendance-state="completed">{{ $rowStatus[$log->id]['last_out']->format('h:i A') }}</span>
+                                @elseif($log->check_in)<span class="font-bold text-amber-500" data-attendance-state="missing_checkout">missing</span>
                                 @else<span class="text-zinc-300">—</span>@endif
                             </td>
                             <td class="py-2.5 text-zinc-500 dark:text-zinc-400">{{ (int) ($log->break_minutes ?? 0) }}m</td>
@@ -330,6 +331,7 @@ EMPLOYEE 360 DRAWER (480px, right)
                             'Working' => ['bg-emerald-100 text-emerald-700', 'bg-emerald-500 animate-pulse'],
                             'On Break' => ['bg-orange-100 text-orange-700', 'bg-orange-500 animate-pulse'],
                             'Completed' => ['bg-rose-100 text-rose-600', 'bg-rose-500'],
+                            'Missing Checkout' => ['bg-amber-100 text-amber-700', 'bg-amber-500'],
                             default => ['bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400', 'bg-zinc-400'],
                         };
                     @endphp
@@ -362,7 +364,7 @@ EMPLOYEE 360 DRAWER (480px, right)
                     @if($drawer['today'])
                         <div class="grid grid-cols-3 gap-2 text-center">
                             @foreach([
-                                ['In', $drawer['today']['in'] ?? '—'], ['Out', $drawer['today']['out'] ?? 'live'],
+                                ['In', $drawer['today']['in'] ?? '—'], ['Out', $drawer['today']['out'] ?? ($drawer['today']['out_note'] ?? '—')],
                                 ['Worked', $drawer['today']['worked']], ['Break', $drawer['today']['break'].'m'],
                                 ['Overtime', $drawer['today']['overtime']], ['Mode', strtoupper($drawer['today']['mode'] ?? '—')],
                             ] as [$k, $v])

@@ -10,6 +10,7 @@ use App\Models\Employee;
 use App\Models\LeaveRequest;
 use App\Models\OnboardingTask;
 use App\Models\Payroll;
+use App\Services\Attendance\AttendanceStatusResolver;
 use Illuminate\Support\Carbon;
 use Livewire\Component;
 
@@ -28,7 +29,12 @@ class HrAdminDashboard extends Component
         $newThisMonth = Employee::whereMonth('joining_date', $month)->whereYear('joining_date', $year)->count();
 
         // --- Attendance Exceptions ---
-        $missingCheckout = Attendance::where('date', $today)->whereNull('check_out')->whereNotNull('check_in')->count();
+        // Missing only once the shift window is over (shift end + 1h) — someone
+        // still at work is not a missing checkout. The shared status decides.
+        $resolver = app(AttendanceStatusResolver::class);
+        $missingCheckout = Attendance::with('employee')->where('date', $today)->whereNull('check_out')->whereNotNull('check_in')->get()
+            ->filter(fn (Attendance $a) => $a->employee && $resolver->forAttendance($a)['state'] === AttendanceStatusResolver::MISSING_CHECKOUT)
+            ->count();
         $lateToday = Attendance::where('date', $today)->where('is_late', true)->count();
         $pendingReg = AttendanceRegularisation::where('status', 'pending')->count();
 

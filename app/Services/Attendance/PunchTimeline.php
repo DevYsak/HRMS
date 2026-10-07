@@ -59,7 +59,7 @@ class PunchTimeline
      * @param  Collection<int, AttendancePunch>  $raw
      * @return array<string, mixed>
      */
-    public function process(Collection $raw, Carbon $day, ?AttendanceDailySummary $summary = null): array
+    public function process(Collection $raw, Carbon $day, ?AttendanceDailySummary $summary = null, ?ResolvedShift $shift = null): array
     {
         if ($raw->isEmpty()) {
             return $this->emptyResult();
@@ -70,7 +70,11 @@ class PunchTimeline
         // Rule 7 — a punch stamped on another calendar day is never part of
         // this day (an OUT carried past midnight is how 20h/24h phantom
         // sessions appear). It stays in the raw audit list, flagged.
-        [$sameDay, $otherDay] = $ordered->partition(fn (AttendancePunch $p) => $p->punched_at->isSameDay($day));
+        // A night shift legitimately runs past midnight: its punches up to the
+        // missing-checkout cutoff (shift end + 1h) still belong to the work day.
+        $windowEnd = $shift?->crossesMidnight() ? $shift->end->copy()->addMinutes(AttendanceCalculator::MISSING_CHECKOUT_AFTER_MINUTES) : null;
+        [$sameDay, $otherDay] = $ordered->partition(fn (AttendancePunch $p) => $p->punched_at->isSameDay($day)
+            || ($windowEnd !== null && $p->punched_at->greaterThan($day) && $p->punched_at->lessThanOrEqualTo($windowEnd)));
         [$kept, $flags, $duplicateCount, $conflictCount] = $this->mergeNoise($sameDay->values());
         foreach ($otherDay as $p) {
             $flags[spl_object_id($p)] = ['ignored', 'Ignored — stamped '.$p->punched_at->format('d M h:i A').', another day'];

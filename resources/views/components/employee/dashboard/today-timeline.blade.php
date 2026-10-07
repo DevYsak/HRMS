@@ -6,7 +6,7 @@
         ['label' => 'Clock In', 'time' => $today['check_in'], 'icon' => 'arrow-right-end-on-rectangle', 'pending' => 'Not yet'],
         ['label' => 'Break Start', 'time' => $today['break_start'], 'icon' => 'pause', 'pending' => 'No break yet'],
         ['label' => 'Break End', 'time' => $today['break_end'], 'icon' => 'play', 'pending' => $today['on_break'] ? 'On break now' : 'No break yet'],
-        ['label' => 'Clock Out', 'time' => $today['check_out'], 'icon' => 'arrow-left-start-on-rectangle', 'pending' => $today['working'] ? 'Still working' : 'Not yet'],
+        ['label' => 'Clock Out', 'time' => $today['check_out'], 'icon' => 'arrow-left-start-on-rectangle', 'pending' => $today['working'] ? 'Still working' : ($today['missing_checkout'] ? 'Missing checkout' : 'Not yet')],
     ];
 @endphp
 

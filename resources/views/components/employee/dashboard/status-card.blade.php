@@ -5,7 +5,7 @@
 
     $badge = match ($today['state']) {
         'present', 'wfh' => 'bg-emerald-50 text-emerald-700 ring-emerald-600/15 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-400/20',
-        'late', 'half_day' => 'bg-amber-50 text-amber-700 ring-amber-600/15 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-400/20',
+        'late', 'half_day', 'missing_checkout' => 'bg-amber-50 text-amber-700 ring-amber-600/15 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-400/20',
         'absent' => 'bg-rose-50 text-rose-700 ring-rose-600/15 dark:bg-rose-500/10 dark:text-rose-300 dark:ring-rose-400/20',
         'holiday', 'leave' => 'bg-orange-50 text-orange-700 ring-orange-600/15 dark:bg-orange-500/10 dark:text-orange-300 dark:ring-orange-400/20',
         'mdl' => 'bg-indigo-50 text-indigo-700 ring-indigo-600/15 dark:bg-indigo-500/10 dark:text-indigo-300 dark:ring-indigo-400/20',
@@ -13,7 +13,7 @@
     };
     $dot = match ($today['state']) {
         'present', 'wfh' => 'bg-emerald-500',
-        'late', 'half_day' => 'bg-amber-500',
+        'late', 'half_day', 'missing_checkout' => 'bg-amber-500',
         'absent' => 'bg-rose-500',
         'holiday', 'leave' => 'bg-orange-500',
         'mdl' => 'bg-indigo-400',
@@ -120,7 +120,7 @@
                 <flux:icon.arrow-right-end-on-rectangle class="size-4" />
                 <span x-text="punching ? 'Clocking in…' : 'Clock In'">Clock In</span>
             </button>
-        @elseif($today['working'])
+        @elseif($today['working'] || $today['missing_checkout'])
             @if($today['on_break'])
                 <button type="button" wire:click="endBreak" wire:loading.attr="disabled" wire:target="endBreak" class="{{ $primaryBtn }}">
                     <flux:icon.play class="size-4" /> End break

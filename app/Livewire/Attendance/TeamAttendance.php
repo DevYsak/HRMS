@@ -5,11 +5,11 @@ namespace App\Livewire\Attendance;
 use App\Models\Attendance;
 use App\Models\AttendanceDailyScore;
 use App\Models\AttendanceRegularisation;
-use App\Models\LeaveRequest;
 use App\Models\OtRequest;
 use App\Notifications\RegularisationReviewedNotification;
 use App\Services\Approvals\ApprovalGuard;
 use App\Services\Attendance\AttendanceCalculator;
+use App\Services\Attendance\AttendanceStatusResolver;
 use App\Services\Attendance\WorkingDayResolver;
 use App\Services\AttendanceService;
 use Illuminate\Support\Carbon;
@@ -118,38 +118,43 @@ class TeamAttendance extends Component
         $teamMembers = $manager ? $manager->subordinates()->with('user')->get() : collect();
         $teamIds = $teamMembers->pluck('id')->toArray();
 
-        $currentlyIn = Attendance::whereIn('employee_id', $teamIds)
-            ->where('date', Carbon::today())
-            ->whereNotNull('check_in')
-            ->whereNull('check_out')
-            ->with('employee.user')
-            ->get();
+        // One shared status per member (PunchTimeline + calculator): working,
+        // on break, completed, missing checkout or not in — never inferred
+        // from a missing check_out column.
+        $statuses = app(AttendanceStatusResolver::class)->currentForMany($teamMembers);
+
+        // "Present Now": only people still inside their valid attendance window.
+        $currentlyIn = $teamMembers
+            ->filter(fn ($m) => $statuses[$m->id]['live'])
+            ->map(fn ($m) => ['name' => $m->user?->name ?? '—', 'since' => $statuses[$m->id]['first_in']?->format('H:i')])
+            ->values();
 
         // ── Live board: today's status for every team member ──
         $today = Carbon::today()->toDateString();
         $attToday = Attendance::whereIn('employee_id', $teamIds)
             ->where('date', $today)
-            ->with('activeBreak')
             ->get()->keyBy('employee_id');
-        $onLeave = LeaveRequest::whereIn('employee_id', $teamIds)
-            ->where('status', 'approved')
-            ->whereDate('start_date', '<=', $today)
-            ->whereDate('end_date', '>=', $today)
-            ->pluck('employee_id')->flip();
 
-        // Saturday / Sunday: nobody is absent; a punch is "Worked on Weekly Off".
+        // A punch on a weekly off is "Worked on Weekly Off".
         $weeklyOff = app(WorkingDayResolver::class)->isWeeklyOff(Carbon::today());
 
-        $board = $teamMembers->map(function ($m) use ($attToday, $onLeave, $weeklyOff) {
+        $board = $teamMembers->map(function ($m) use ($attToday, $statuses, $weeklyOff) {
             $att = $attToday->get($m->id);
-            $status = match (true) {
-                $weeklyOff && ! $att => 'weekly_off',
-                $weeklyOff && $att && ! $att->check_out => 'weekly_off_worked',
-                isset($onLeave[$m->id]) => 'on_leave',
-                $att && $att->check_out => 'completed',
-                $att && $att->activeBreak => 'on_break',
-                (bool) $att => $att->is_late && ! $weeklyOff ? 'late' : 'working',
-                default => 'absent',
+            $s = $statuses[$m->id];
+            $status = match ($s['state']) {
+                AttendanceStatusResolver::WORKING => $weeklyOff ? 'weekly_off_worked' : ($att?->is_late ? 'late' : 'working'),
+                AttendanceStatusResolver::ON_BREAK => 'on_break',
+                AttendanceStatusResolver::COMPLETED => 'completed',
+                AttendanceStatusResolver::MISSING_CHECKOUT => 'missing_checkout',
+                default => match ($s['reason']) {
+                    'weekly_off' => 'weekly_off',
+                    'leave' => 'on_leave',
+                    'holiday', 'mdl' => 'holiday',
+                    'absent' => 'absent',
+                    // Nobody in yet: "not in yet" until their shift has started,
+                    // absent from then on.
+                    default => ($s['day']->shift === null || now()->greaterThanOrEqualTo($s['day']->shift->start)) ? 'absent' : 'not_in',
+                },
             };
 
             return [
@@ -157,9 +162,9 @@ class TeamAttendance extends Component
                 'photo' => $m->photo,
                 'mode' => $att?->work_mode,
                 'status' => $status,
-                'since' => $att?->check_in?->format('h:i A'),
+                'since' => $s['first_in']?->format('h:i A'),
             ];
-        })->sortBy(fn ($r) => ['working' => 0, 'weekly_off_worked' => 0, 'late' => 1, 'on_break' => 2, 'completed' => 3, 'on_leave' => 4, 'weekly_off' => 5, 'absent' => 5][$r['status']] ?? 9)->values();
+        })->sortBy(fn ($r) => ['working' => 0, 'weekly_off_worked' => 0, 'late' => 1, 'on_break' => 2, 'missing_checkout' => 2, 'completed' => 3, 'on_leave' => 4, 'holiday' => 5, 'weekly_off' => 5, 'not_in' => 5, 'absent' => 5][$r['status']] ?? 9)->values();
 
         $active = $board->whereIn('status', ['working', 'late', 'on_break', 'completed', 'weekly_off_worked']);
         $boardStats = [
@@ -168,6 +173,7 @@ class TeamAttendance extends Component
             'wfh' => $active->whereIn('mode', ['wfh', 'hybrid'])->count(),
             'late' => $board->where('status', 'late')->count(),
             'absent' => $board->where('status', 'absent')->count(),
+            'missing_checkout' => $board->where('status', 'missing_checkout')->count(),
             'on_leave' => $board->where('status', 'on_leave')->count(),
         ];
 

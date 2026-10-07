@@ -94,6 +94,9 @@
                                 'late'      => ['bg-amber-500 animate-pulse', 'text-amber-600 dark:text-amber-400', 'Late'],
                                 'on_break'  => ['bg-amber-400', 'text-amber-600 dark:text-amber-400', 'On Break'],
                                 'completed' => ['bg-zinc-400', 'text-zinc-500', 'Completed'],
+                                'missing_checkout' => ['bg-amber-500', 'text-amber-600 dark:text-amber-400', 'Missing Checkout'],
+                                'holiday'   => ['bg-zinc-300', 'text-zinc-500', 'Holiday'],
+                                'not_in'    => ['bg-zinc-300', 'text-zinc-500', 'Not in yet'],
                                 'on_leave'  => ['bg-indigo-500', 'text-indigo-600 dark:text-indigo-400', 'On Leave'],
                                 'weekly_off' => ['bg-zinc-300', 'text-zinc-500', \App\Services\Attendance\WorkingDayResolver::WEEKLY_OFF_LABEL],
                                 'weekly_off_worked' => ['bg-zinc-500', 'text-zinc-600 dark:text-zinc-300', \App\Services\Attendance\WorkingDayResolver::WORKED_WEEKLY_OFF_LABEL],
@@ -137,11 +140,11 @@
                 <div class="pulse-card flex items-center justify-between group">
                     <div class="flex items-center gap-3">
                         <div class="size-10 rounded-full bg-brand-600 flex items-center justify-center font-bold text-white text-sm">
-                            {{ strtoupper(substr($item->employee->user->name, 0, 1)) }}
+                            {{ strtoupper(substr($item['name'], 0, 1)) }}
                         </div>
                         <div>
-                            <div class="font-bold text-zinc-900 dark:text-white">{{ $item->employee->user->name }}</div>
-                            <div class="text-xs text-zinc-500">In at {{ $item->check_in->format('H:i') }}</div>
+                            <div class="font-bold text-zinc-900 dark:text-white">{{ $item['name'] }}</div>
+                            <div class="text-xs text-zinc-500">In at {{ $item['since'] }}</div>
                         </div>
                     </div>
                     <div class="size-2 rounded-full bg-green-500 animate-pulse"></div>

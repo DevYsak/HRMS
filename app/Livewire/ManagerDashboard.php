@@ -10,6 +10,7 @@ use App\Models\OtRequest;
 use App\Models\OvertimeRecord;
 use App\Models\PerformanceCycle;
 use App\Models\PerformanceReview;
+use App\Services\Attendance\AttendanceStatusResolver;
 use App\Services\Attendance\WorkingDayResolver;
 use App\Services\LeaveService;
 use Illuminate\Support\Carbon;
@@ -147,19 +148,28 @@ class ManagerDashboard extends Component
         $absentCount = $weeklyOff ? 0 : $teamIds->count() - $presentCount;
 
         // --- Full team attendance list ---
-        $teamAttendanceList = Employee::with(['user', 'department'])
+        $teamEmployees = Employee::with(['user', 'department', 'shift'])
             ->whereIn('id', $teamIds)
-            ->get()
-            ->map(function ($emp) use ($teamAttendance, $weeklyOff) {
+            ->get();
+        // The shared status (PunchTimeline + calculator) — LIVE only inside the
+        // shift window, Missing Checkout after shift end + 1h, Completed on a
+        // valid Card OUT. Never inferred from check_out being empty.
+        $statuses = app(AttendanceStatusResolver::class)->currentForMany($teamEmployees, $teamAttendance->keyBy('employee_id'));
+
+        $teamAttendanceList = $teamEmployees
+            ->map(function ($emp) use ($teamAttendance, $weeklyOff, $statuses) {
                 $record = $teamAttendance->firstWhere('employee_id', $emp->id);
+                $s = $statuses[$emp->id];
+                $in = $s['state'] !== AttendanceStatusResolver::NOT_IN;
 
                 return [
                     'name' => $emp->user->name,
                     'department' => $emp->department?->name,
-                    'check_in' => $record?->check_in?->format('H:i'),
-                    'check_out' => $record?->check_out?->format('H:i'),
-                    'status' => $weeklyOff ? ($record?->check_in ? 'weekly_off_worked' : 'weekly_off') : ($record?->status ?? 'absent'),
-                    'is_late' => ! $weeklyOff && ($record?->is_late ?? false),
+                    'check_in' => $s['first_in']?->format('H:i'),
+                    'check_out' => $s['last_out']?->format('H:i'),
+                    'state' => $s['state'],
+                    'status' => $weeklyOff ? ($in ? 'weekly_off_worked' : 'weekly_off') : ($in ? ($record?->status ?? 'present') : ($s['reason'] === 'absent' ? 'absent' : 'not_in')),
+                    'is_late' => ! $weeklyOff && $in && $s['day']->isLate,
                 ];
             });
 

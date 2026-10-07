@@ -17,6 +17,7 @@ use App\Notifications\AttendanceRegularisationNotification;
 use App\Notifications\RegularisationReviewedNotification;
 use App\Services\Approvals\ClaimLockService;
 use App\Services\Attendance\AttendanceCalculator;
+use App\Services\Attendance\AttendanceStatusResolver;
 use App\Services\Attendance\PunchTimeline;
 use App\Services\Attendance\WorkingDayResolver;
 use App\Services\AttendanceService;
@@ -365,6 +366,10 @@ class AllAttendance extends Component
         }
         $approvedOtMin = $calcDay?->approvedOtMinutes ?? 0;
 
+        // One status for the badge: the shared resolver, never "no check-out
+        // means working" and never a stray/duplicate/wrong-day punch deciding.
+        $dayStatus = $calcDay ? app(AttendanceStatusResolver::class)->describe($calcDay, $todayAtt) : null;
+
         $this->drawer = [
             'name' => $employee->user?->name ?? '—',
             'photo' => $employee->photo,
@@ -380,11 +385,18 @@ class AllAttendance extends Component
             'leave_balance' => LeaveBalance::where('employee_id', $employee->id)
                 ->where('year', app(LeaveYearResolver::class)->legacyYearFor())->get()
                 ->sum(fn ($b) => $b->available() + (float) ($b->comp_off_credits ?? 0)),
-            'status' => $onBreak
-                ? 'On Break'
-                : ($stillInside
-                    ? 'Working'
-                    : ($todayOut ? 'Completed' : (($punchCount > 0 || $todayAtt) ? 'Working' : 'Not In'))),
+            'status' => match ($dayStatus['state'] ?? AttendanceStatusResolver::NOT_IN) {
+                AttendanceStatusResolver::WORKING => 'Working',
+                AttendanceStatusResolver::ON_BREAK => 'On Break',
+                AttendanceStatusResolver::COMPLETED => 'Completed',
+                AttendanceStatusResolver::MISSING_CHECKOUT => 'Missing Checkout',
+                default => 'Not In',
+            },
+            'out_note' => match (true) {
+                ($dayStatus['live'] ?? false) => 'live',
+                ($dayStatus['state'] ?? null) === AttendanceStatusResolver::MISSING_CHECKOUT => 'missing',
+                default => '—',
+            },
             'today' => ($todayAtt || $engineSynced || $rawPunches->isNotEmpty()) ? [
                 'in' => $todayIn,
                 'out' => $todayOut,
@@ -782,7 +794,9 @@ class AllAttendance extends Component
             : 'All dates';
 
         return view('livewire.attendance.all-attendance', [
-            'attendances' => $query->latest('date')->paginate(15),
+            'attendances' => $attendances = $query->latest('date')->paginate(15),
+            // Live / completed / missing-checkout for every row, from the shared resolver.
+            'rowStatus' => collect($attendances->items())->mapWithKeys(fn (Attendance $a) => [$a->id => app(AttendanceStatusResolver::class)->forAttendance($a)])->all(),
             'pendingRegularisations' => $pendingRegularisations,
             // Recently decided requests HR may still correct or delete.
             'decidedRegularisations' => Auth::user()->canApproveRegularisations()
