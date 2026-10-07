@@ -9,14 +9,16 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * A request to work on a company holiday. On approval, HolidayWorkService
- * materialises a holiday-worked attendance plus the chosen pay (overtime or
- * comp-off). Mirrors AttendanceRegularisation's review lifecycle.
+ * A request to work on a company holiday. Approval only authorises the work;
+ * HolidayWorkService settles the chosen pay (overtime or comp-off) from the
+ * day's GENUINE attendance — never from expected or scheduled hours. Mirrors
+ * AttendanceRegularisation's review lifecycle.
  */
 #[Fillable([
     'employee_id', 'holiday_id', 'work_date', 'reason', 'work_location',
     'expected_hours', 'project', 'manager_id', 'comments', 'attachment_path',
     'pay_type', 'status', 'reviewer_id', 'reviewer_comment', 'reviewed_at', 'attendance_id',
+    'settled_at', 'actual_hours',
 ])]
 class HolidayWorkRequest extends Model
 {
@@ -29,6 +31,8 @@ class HolidayWorkRequest extends Model
             'work_date' => 'date',
             'expected_hours' => 'decimal:2',
             'reviewed_at' => 'datetime',
+            'settled_at' => 'datetime',
+            'actual_hours' => 'decimal:2',
         ];
     }
 

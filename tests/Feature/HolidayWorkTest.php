@@ -4,6 +4,7 @@ use App\Enums\UserRole;
 use App\Livewire\Attendance\CommandCenter;
 use App\Livewire\Holidays\HolidayPaySettings;
 use App\Models\Attendance;
+use App\Models\AttendancePunch;
 use App\Models\Employee;
 use App\Models\HolidayPaySetting;
 use App\Models\LeaveBalance;
@@ -11,9 +12,24 @@ use App\Models\OtRequest;
 use App\Models\OvertimeRecord;
 use App\Models\PublicHoliday;
 use App\Models\User;
+use App\Services\Attendance\AttendanceDayRebuilder;
 use App\Services\HolidayWorkService;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Notification;
 use Livewire\Livewire;
+
+/** Genuine holiday attendance: a Face IN and a final ID Card OUT, rebuilt through the canonical pipeline. */
+function hwWorked(Employee $employee, string $date, string $in, string $out): ?Attendance
+{
+    foreach ([[$in, 'face', 'in'], [$out, 'id_card', 'out']] as [$time, $method, $direction]) {
+        AttendancePunch::factory()->create([
+            'employee_id' => $employee->id, 'punched_at' => "$date $time", 'punch_date' => $date,
+            'method' => $method, 'direction' => $direction, 'source' => 'biometric',
+        ]);
+    }
+
+    return app(AttendanceDayRebuilder::class)->rebuild($employee->fresh(), Carbon::parse($date))['attendance'];
+}
 
 function hwHoliday(string $date, array $attrs = []): PublicHoliday
 {
@@ -56,7 +72,7 @@ test('duplicate holiday-work requests for the same date are blocked', function (
         ->toThrow(DomainException::class, 'already have a holiday-work request');
 });
 
-test('approving overtime pay creates a holiday-worked attendance and an OT record', function () {
+test('approving overtime pay authorises the work; the OT record follows the genuine punches', function () {
     Notification::fake();
     $employee = Employee::factory()->create(['holiday_calendar' => 'IN']);
     $reviewer = User::factory()->create(['role' => UserRole::HrAdmin]);
@@ -65,23 +81,30 @@ test('approving overtime pay creates a holiday-worked attendance and an OT recor
         'work_date' => '2026-08-15', 'reason' => 'Prod deploy', 'expected_hours' => 8, 'pay_type' => 'overtime',
     ]);
 
-    $attendance = app(HolidayWorkService::class)->approve($req, $reviewer->id);
+    // Approval alone invents nothing: no attendance, no punch times, no hours, no pay.
+    expect(app(HolidayWorkService::class)->approve($req, $reviewer->id))->toBeNull();
+    expect($req->fresh()->status)->toBe('approved')
+        ->and(Attendance::count())->toBe(0)
+        ->and(AttendancePunch::count())->toBe(0)
+        ->and(OtRequest::count())->toBe(0);
 
-    expect($attendance->status)->toBe('holiday_worked');
-    expect((float) $attendance->total_hours)->toBe(8.0);
-    expect($req->fresh()->status)->toBe('approved');
-    expect($req->fresh()->attendance_id)->toBe($attendance->id);
+    // The employee really works 09:30 → 15:00: the actual 5.5h is what is paid
+    // — not the 8 "expected" hours — and every worked hour is overtime.
+    $attendance = hwWorked($employee, '2026-08-15', '09:30:00', '15:00:00');
 
-    // The full holiday day materialised as an approved OT record for payroll —
-    // all 8 worked hours count as OT (a holiday has no "standard shift" to net
-    // out against), not just hours beyond a normal 9h day.
+    expect($attendance->status)->toBe('holiday_worked')
+        ->and($attendance->check_in->format('H:i'))->toBe('09:30')
+        ->and($attendance->check_out->format('H:i'))->toBe('15:00')
+        ->and($req->fresh()->attendance_id)->toBe($attendance->id)
+        ->and($req->fresh()->settled_at)->not->toBeNull()
+        ->and((float) $req->fresh()->actual_hours)->toBe(5.5);
+
     $ot = OtRequest::where('attendance_id', $attendance->id)->where('source', 'holiday')->first();
-    expect($ot)->not->toBeNull();
-    expect($ot->status)->toBe('approved');
+    expect($ot)->not->toBeNull()->and($ot->status)->toBe('approved');
     $record = OvertimeRecord::where('ot_request_id', $ot->id)->first();
-    expect($record)->not->toBeNull();
-    expect((float) $record->ot_hours)->toBe(8.0);
-    expect((float) $record->ot_amount)->toBeGreaterThan(0);
+    expect($record)->not->toBeNull()
+        ->and((float) $record->ot_hours)->toBe(5.5)
+        ->and((float) $record->ot_amount)->toBeGreaterThan(0);
 });
 
 test('approving comp-off pay credits a comp-off leave balance instead of OT', function () {
@@ -93,14 +116,16 @@ test('approving comp-off pay credits a comp-off leave balance instead of OT', fu
         'work_date' => '2026-08-15', 'reason' => 'On-call', 'pay_type' => 'comp_off',
     ]);
 
-    $attendance = app(HolidayWorkService::class)->approve($req, $reviewer->id);
+    app(HolidayWorkService::class)->approve($req, $reviewer->id);
+    $compOff = fn () => LeaveBalance::whereHas('leaveType', fn ($q) => $q->where('category', 'comp_off'))->where('employee_id', $employee->id)->first();
+    expect($compOff())->toBeNull();   // nothing earned before genuine attendance
 
-    expect($attendance->status)->toBe('holiday_worked');
-    expect(OtRequest::where('attendance_id', $attendance->id)->exists())->toBeFalse();
-    $balance = LeaveBalance::whereHas('leaveType', fn ($q) => $q->where('category', 'comp_off'))
-        ->where('employee_id', $employee->id)->first();
-    expect($balance)->not->toBeNull();
-    expect((float) $balance->allocated_days)->toBeGreaterThan(0);
+    $attendance = hwWorked($employee, '2026-08-15', '10:00:00', '16:00:00');
+
+    expect($attendance->status)->toBe('holiday_worked')
+        ->and(OtRequest::where('attendance_id', $attendance->id)->exists())->toBeFalse()
+        ->and($compOff())->not->toBeNull()
+        ->and((float) $compOff()->allocated_days)->toBeGreaterThan(0);
 });
 
 test('the command center lists and approves holiday-work requests', function () {
@@ -117,7 +142,7 @@ test('the command center lists and approves holiday-work requests', function () 
         ->call('approveOne', 'holiday', $req->id);
 
     expect($req->fresh()->status)->toBe('approved');
-    expect(Attendance::where('employee_id', $employee->id)->where('status', 'holiday_worked')->exists())->toBeTrue();
+    expect(Attendance::where('employee_id', $employee->id)->exists())->toBeFalse();   // authorised, nothing invented
 });
 
 // ─── Phase 4: Holiday Pay policy ────────────────────────────────────────────────
@@ -143,7 +168,8 @@ test('double pay applies the configured multiplier to the OT rate', function () 
     $req = app(HolidayWorkService::class)->submit($employee, [
         'work_date' => '2026-08-15', 'reason' => 'Prod', 'expected_hours' => 4, 'pay_type' => 'double_pay',
     ]);
-    $attendance = app(HolidayWorkService::class)->approve($req, $reviewer->id);
+    app(HolidayWorkService::class)->approve($req, $reviewer->id);
+    $attendance = hwWorked($employee, '2026-08-15', '10:00:00', '14:00:00');   // a real 4h
 
     $ot = OtRequest::where('attendance_id', $attendance->id)->firstOrFail();
     $record = OvertimeRecord::where('ot_request_id', $ot->id)->firstOrFail();
@@ -163,6 +189,7 @@ test('comp off credits the configured day count from the policy', function () {
         'work_date' => '2026-08-15', 'reason' => 'Support', 'pay_type' => 'comp_off',
     ]);
     app(HolidayWorkService::class)->approve($req, $reviewer->id);
+    hwWorked($employee, '2026-08-15', '10:00:00', '16:00:00');
 
     $balance = LeaveBalance::whereHas('leaveType', fn ($q) => $q->where('category', 'comp_off'))
         ->where('employee_id', $employee->id)->firstOrFail();
@@ -178,7 +205,8 @@ test('half day pay type credits the configured half-day comp-off amount', functi
     $req = app(HolidayWorkService::class)->submit($employee, [
         'work_date' => '2026-08-15', 'reason' => 'Half day cover', 'pay_type' => 'half_day',
     ]);
-    $attendance = app(HolidayWorkService::class)->approve($req, $reviewer->id);
+    app(HolidayWorkService::class)->approve($req, $reviewer->id);
+    $attendance = hwWorked($employee, '2026-08-15', '10:00:00', '14:00:00');
 
     expect($attendance->status)->toBe('holiday_worked');
     expect(OtRequest::where('attendance_id', $attendance->id)->exists())->toBeFalse();

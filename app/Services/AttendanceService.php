@@ -101,6 +101,7 @@ class AttendanceService
         // A real OUT settles any approved overtime that was waiting for it.
         if ($attendance->employee) {
             app(OvertimeService::class)->settleApprovedForDay($attendance->employee, $attendance->date);
+            app(HolidayWorkService::class)->settleForDay($attendance->employee, $attendance->date);
         }
 
         return $attendance->fresh();
@@ -266,6 +267,11 @@ class AttendanceService
         ] : null;
 
         $attendance = $this->applyRegularisationInTransaction($regularisation, $reviewerId, $comment, $trail, $via);
+
+        // A corrected day with a real OUT settles waiting holiday work / overtime.
+        if ($attendance?->check_out && $regularisation->employee && ! $regularisation->isLeave()) {
+            app(HolidayWorkService::class)->settleForDay($regularisation->employee, Carbon::parse($regularisation->work_date));
+        }
 
         // One categorised event with the day before and after — the decision
         // the manual-correction screens used to log with the after-state

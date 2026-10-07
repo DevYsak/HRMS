@@ -6,10 +6,12 @@ use App\Models\Attendance;
 use App\Models\AttendanceDailySummary;
 use App\Models\AttendancePunch;
 use App\Models\AttendanceRegularisation;
+use App\Models\BiometricLog;
 use App\Models\Employee;
 use App\Models\Payroll;
 use App\Models\Payslip;
 use App\Services\Audit\AuditService;
+use App\Services\HolidayWorkService;
 use App\Services\OvertimeService;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
@@ -68,7 +70,7 @@ class AttendanceDayRebuilder
      *
      * @return array<string, mixed>
      */
-    public function examine(Employee $employee, CarbonInterface $day, bool $allowCreate = false, ?CarbonInterface $now = null): array
+    public function examine(Employee $employee, CarbonInterface $day, bool $allowCreate = false, ?CarbonInterface $now = null, bool $allowClear = false): array
     {
         $day = Carbon::parse($day->toDateString())->startOfDay();
 
@@ -107,18 +109,46 @@ class AttendanceDayRebuilder
             'raw_count' => $punches->count(),
             'changes' => [],
             'create' => false,
+            'clear' => false,
+            'synthetic' => null,
+            'unsupported' => false,
             'skip' => null,
         ];
 
-        $row['skip'] = match (true) {
-            $attendance === null && ! $allowCreate => 'no attendance row',
+        // A row with nothing real behind it: no genuine punch, no web / device
+        // evidence. On a holiday or weekly off that is a synthetic row (the old
+        // holiday-work approval stamped shift times); elsewhere it is only
+        // reported — it may be a manual or imported day.
+        $row['unsupported'] = $attendance !== null && ! $this->hasSupport($attendance, $punches, $summary);
+        $row['synthetic'] = $row['unsupported'] ? $this->syntheticKind($employee, $day, $attendance) : null;
+
+        $protected = match (true) {
             $attendance !== null && ($attendance->is_regularized || $flags['regularised']) => 'regularised — corrected times kept',
             $this->hasApprovedCorrection($employee, $day) => 'HR-corrected — approved correction kept',
-            $processed['first_in_at'] === null || $in === null => 'no valid Face IN',
-            $flags['impossible_duration'] => 'impossible duration — check manually',
             $this->inSettledPayroll($employee, $day) => 'inside approved payroll',
             default => null,
         };
+
+        $row['skip'] = match (true) {
+            $attendance === null && ! $allowCreate => 'no attendance row',
+            $protected !== null => $protected,
+            $row['synthetic'] !== null && ! $allowClear => 'synthetic '.$row['synthetic'].' row — left for the rebuild command',
+            $row['synthetic'] !== null => null,
+            $processed['first_in_at'] === null || $in === null => 'no valid Face IN',
+            $flags['impossible_duration'] => 'impossible duration — check manually',
+            default => null,
+        };
+
+        if ($row['skip'] === null && $row['synthetic'] !== null) {
+            // Rebuilt only from genuine punches: there are none, so the made-up
+            // attendance goes (audited), never the raw logs.
+            $row['clear'] = true;
+            $row['changes'] = ['clear' => true];
+            $row['new_in'] = $row['new_out'] = $row['new_worked'] = null;
+            $row['new_break'] = 0;
+
+            return $row;
+        }
 
         if ($row['skip'] !== null) {
             return $row;
@@ -170,6 +200,10 @@ class AttendanceDayRebuilder
         $attendance = $row['attendance'];
         $before = $attendance?->only(['check_in', 'check_out', 'total_hours', 'break_minutes', 'status', 'is_late', 'missing_checkout']);
 
+        if ($row['clear']) {
+            return $this->clearSynthetic($employee, $row, $before, $reason);
+        }
+
         if ($row['create']) {
             $attendance = Attendance::create($row['target']);
         } elseif ($row['changes'] !== []) {
@@ -181,6 +215,7 @@ class AttendanceDayRebuilder
         // A real final OUT turns waiting approved overtime into payable overtime.
         if (($row['create'] || $row['changes'] !== []) && $row['new_out'] !== null) {
             app(OvertimeService::class)->settleApprovedForDay($employee, $row['day']);
+            app(HolidayWorkService::class)->settleForDay($employee, $row['day']);
         }
 
         if ($audit && ($row['create'] || $row['changes'] !== [])) {
@@ -204,6 +239,64 @@ class AttendanceDayRebuilder
         $row['attendance'] = $this->apply($employee, $row, $summaryMode);
 
         return $row;
+    }
+
+    /**
+     * Remove an attendance row nothing real supports, and the made-up summary
+     * figures with it. Raw punches and logs are never touched. Overtime that
+     * was derived from the invented hours is recalculated (to zero) unless it
+     * has been paid.
+     *
+     * @param  array<string, mixed>  $row
+     * @param  array<string, mixed>|null  $before
+     */
+    private function clearSynthetic(Employee $employee, array $row, ?array $before, ?string $reason): ?Attendance
+    {
+        /** @var Attendance $attendance */
+        $attendance = $row['attendance'];
+
+        app(AuditService::class)->event('ATTENDANCE_SYNTHETIC_ROW_CLEARED', AuditService::ATTENDANCE, $attendance,
+            old: $before === null ? null : $this->scalar($before) + ['kind' => $row['synthetic']],
+            new: null,
+            reason: $reason ?? 'No genuine punches support this '.$row['synthetic'].' attendance row.',
+            subjectEmployeeId: $employee->id, actor: null);
+
+        $row['summary']?->update(['first_punch' => null, 'last_punch' => null, 'first_punch_method' => null, 'last_punch_method' => null,
+            'working_hours' => 0, 'break_minutes' => 0, 'raw_punch_count' => 0]);
+
+        $attendance->delete();
+        app(OvertimeService::class)->settleApprovedForDay($employee, $row['day']);
+
+        return null;
+    }
+
+    /** Anything real behind the row: a genuine punch, a web punch trace, breaks, device logs or an engine count. */
+    private function hasSupport(Attendance $attendance, $punches, ?AttendanceDailySummary $summary): bool
+    {
+        if ($punches->contains(fn (AttendancePunch $p) => ! in_array($p->source, ['system_auto', 'regularisation'], true))) {
+            return true;
+        }
+
+        if ($attendance->check_in_method || $attendance->check_out_method || $attendance->check_in_ip || $attendance->check_in_user_agent
+            || $attendance->check_in_photo || $attendance->check_in_lat !== null || $attendance->check_out_ip || $attendance->is_regularized
+            || $attendance->status === 'leave') {
+            return true;
+        }
+
+        return $attendance->breakLogs()->exists()
+            || BiometricLog::where('attendance_id', $attendance->id)->exists()
+            || ($summary !== null && (int) $summary->raw_punch_count > 0);
+    }
+
+    /** holiday | weekly_off | mdl for a day nobody was scheduled to work; null on a working day. */
+    private function syntheticKind(Employee $employee, CarbonInterface $day, Attendance $attendance): ?string
+    {
+        return match (app(WorkingDayResolver::class)->classify($employee, Carbon::parse($day->toDateString()), withLeave: false)) {
+            WorkingDayResolver::PUBLIC_HOLIDAY => 'holiday',
+            WorkingDayResolver::WEEKLY_OFF => 'weekly-off',
+            WorkingDayResolver::MDL_SHUTDOWN => 'MDL shutdown',
+            default => null,
+        };
     }
 
     /**

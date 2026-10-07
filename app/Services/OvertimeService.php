@@ -180,6 +180,15 @@ class OvertimeService
      */
     public function calculateOtHours(OtRequest $request): float
     {
+        // A holiday has no standard shift to net out against: the whole ACTUAL
+        // duration is overtime, and only with a real final OUT — never the
+        // expected or scheduled hours.
+        if ($request->source === 'holiday' && $request->employee) {
+            $day = app(AttendanceCalculator::class)->forDay($request->employee, $request->work_date, $request->attendance);
+
+            return ($day->firstIn === null || $day->lastOut === null) ? 0.0 : round($day->workedMinutes / 60, 2);
+        }
+
         // Actual overtime needs an approved request AND a real final OUT AND
         // time beyond the standard hours. When the day has attendance, the
         // canonical calculation decides: an open day (Missing Checkout) has no

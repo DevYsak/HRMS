@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Models\Attendance;
 use App\Models\AttendancePunch;
 use App\Models\Employee;
 use App\Services\Attendance\AttendanceDayRebuilder;
@@ -58,15 +59,38 @@ class RebuildPunchTimelines extends Command
             ->orderBy('employee_id')->orderBy('day')
             ->get();
 
-        foreach ($days->groupBy('employee_id') as $employeeId => $employeeDays) {
+        // Employee-days to look at: every day with punches, plus attendance
+        // rows with NO punches at all and no web / device trace — the shape of
+        // the synthetic holiday-work rows the old approval wrote.
+        $targets = [];
+        foreach ($days as $d) {
+            $targets[$d->employee_id.'|'.$d->day] = [(int) $d->employee_id, $d->day];
+        }
+        $bare = Attendance::query()
+            ->whereNotNull('check_in')
+            ->whereNull('check_in_method')->whereNull('check_in_ip')->whereNull('check_in_user_agent')
+            ->where('is_regularized', false)->where('status', '!=', 'leave')
+            ->when($from, fn ($q) => $q->whereDate('date', '>=', $from))
+            ->when($to, fn ($q) => $q->whereDate('date', '<=', $to))
+            ->when($employeeIds !== null, fn ($q) => $q->whereIn('employee_id', $employeeIds))
+            ->whereNotExists(fn ($q) => $q->selectRaw('1')->from('attendance_punches')
+                ->whereColumn('attendance_punches.employee_id', 'attendances.employee_id')
+                ->whereColumn('attendance_punches.punch_date', 'attendances.date'))
+            ->get(['employee_id', 'date']);
+        foreach ($bare as $a) {
+            $targets[$a->employee_id.'|'.$a->date->toDateString()] ??= [(int) $a->employee_id, $a->date->toDateString()];
+        }
+        ksort($targets);
+
+        foreach (collect($targets)->groupBy(fn ($t) => $t[0]) as $employeeId => $employeeDays) {
             $employee = Employee::with('user')->find($employeeId);
             if (! $employee) {
                 continue;
             }
 
-            foreach ($employeeDays as $d) {
+            foreach ($employeeDays as [, $day]) {
                 $counts['checked']++;
-                $row = $rebuilder->examine($employee, Carbon::parse($d->day));
+                $row = $rebuilder->examine($employee, Carbon::parse($day), allowClear: true);
 
                 if ($row['skip'] !== null) {
                     $counts['skipped']++;
@@ -121,8 +145,27 @@ class RebuildPunchTimelines extends Command
             $hours($row['old_worked']), $hours($row['new_worked']),
             $row['old_break'] === null ? '—' : $row['old_break'].'m', $row['new_break'].'m',
             (string) $row['duplicates'], (string) $row['ignored'], (string) $row['directions'],
-            $row['skip'] !== null ? 'SKIP: '.$row['skip'] : ($apply ? 'updated: ' : 'yes: ').implode(', ', array_keys($row['changes'])),
+            $this->verdict($row, $apply),
         ];
+    }
+
+    /**
+     * The last column: what happens to the day, naming synthetic rows and rows
+     * with no supporting genuine punches.
+     *
+     * @param  array<string, mixed>  $row
+     */
+    private function verdict(array $row, bool $apply): string
+    {
+        if ($row['clear']) {
+            return ($apply ? 'REMOVED' : 'REMOVE').': synthetic '.$row['synthetic'].' row — no genuine punches';
+        }
+
+        if ($row['skip'] !== null) {
+            return 'SKIP: '.$row['skip'].($row['unsupported'] ? ' [attendance row has no supporting genuine punches]' : '');
+        }
+
+        return ($apply ? 'updated: ' : 'yes: ').implode(', ', array_keys($row['changes']));
     }
 
     /** @return array{0: string|null|false, 1: string|null} */

@@ -7,6 +7,7 @@ use App\Livewire\ManagerDashboard;
 use App\Models\Attendance;
 use App\Models\AttendanceDailySummary;
 use App\Models\AttendanceMonthlySummary;
+use App\Models\AttendancePunch;
 use App\Models\AttendanceSetting;
 use App\Models\DecemberMandatoryDay;
 use App\Models\Employee;
@@ -124,6 +125,8 @@ test('a real session on a weekly off follows the missing-checkout rule; an empty
     $this->travelTo(Carbon::parse('2026-10-03 23:10'));
     $employee = woUser()->employee;
     $row = Attendance::create(['employee_id' => $employee->id, 'date' => '2026-10-03', 'check_in' => '2026-10-03 11:00:00', 'status' => 'on_time']);
+    // The session is genuine: a real Face punch stands behind the row.
+    AttendancePunch::create(['employee_id' => $employee->id, 'punched_at' => '2026-10-03 11:00:00', 'punch_date' => '2026-10-03', 'method' => 'face', 'direction' => 'in', 'source' => 'biometric']);
 
     $this->artisan('hrms:flag-missing-checkouts')->assertSuccessful();
 
