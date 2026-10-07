@@ -125,7 +125,7 @@ test('a reminder goes to each person at most once per reason', function () {
 });
 
 test('the missing check-out job adds configured roles and never repeats', function () {
-    $this->travelTo(Carbon::parse('2026-10-14 23:30:00'));
+    $this->travelTo(Carbon::parse('2026-10-15 00:30:00'));   // the day is over: no shift end to wait for
     $hr = nrcUser(UserRole::HrAdmin);
     $employee = nrcUser(UserRole::Employee)->employee;
     NotificationSetting::updateOrCreate(['key' => MissingCheckoutNotification::class], [

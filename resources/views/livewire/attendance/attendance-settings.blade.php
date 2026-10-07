@@ -70,11 +70,8 @@
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                     <flux:input wire:model="policy.auto_checkout_buffer_minutes" type="number" min="0" max="240" suffix="min"
-                        label="Auto punch-out buffer"
-                        description="Wait past shift-end before auto-closing an open day (OUT stamped at shift-end)." />
-                    <flux:input wire:model="policy.ot_auto_close_time" type="time"
-                        label="OT auto-close time"
-                        description="When an approved-OT day is still open, close it at this time." />
+                        label="Missing-checkout buffer"
+                        description="A day is Missing Checkout at shift end + 1 hour. The system never creates a check-out; the employee regularises." />
                 </div>
                 <div class="space-y-3 pt-2">
                     <flux:switch wire:model="settings.requires_location" label="Require Geolocation"

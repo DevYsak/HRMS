@@ -10,6 +10,7 @@ use App\Models\Employee;
 use App\Models\Payroll;
 use App\Models\Payslip;
 use App\Services\Audit\AuditService;
+use App\Services\OvertimeService;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -176,6 +177,11 @@ class AttendanceDayRebuilder
         }
 
         $this->writeSummary($employee, $row, $summaryMode);
+
+        // A real final OUT turns waiting approved overtime into payable overtime.
+        if (($row['create'] || $row['changes'] !== []) && $row['new_out'] !== null) {
+            app(OvertimeService::class)->settleApprovedForDay($employee, $row['day']);
+        }
 
         if ($audit && ($row['create'] || $row['changes'] !== [])) {
             app(AuditService::class)->event('ATTENDANCE_TIMELINE_REBUILT', AuditService::ATTENDANCE, $attendance,

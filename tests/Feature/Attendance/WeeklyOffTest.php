@@ -18,7 +18,6 @@ use App\Models\PublicHoliday;
 use App\Models\ShiftSetting;
 use App\Models\User;
 use App\Notifications\LateArrivalNotification;
-use App\Notifications\MissingCheckoutNotification;
 use App\Services\Attendance\HolidayResolver;
 use App\Services\Attendance\WorkingDayResolver;
 use App\Services\AttendanceReportBuilder;
@@ -121,15 +120,20 @@ test('no unauthorized absence and no LWP is created for a weekend', function () 
 
 // ── 7–8. Notifications ─────────────────────────────────────────────────────
 
-test('no missing-checkout alert on a weekly off', function () {
+test('a real session on a weekly off follows the missing-checkout rule; an empty weekly off is left alone', function () {
     $this->travelTo(Carbon::parse('2026-10-03 23:10'));
     $employee = woUser()->employee;
     $row = Attendance::create(['employee_id' => $employee->id, 'date' => '2026-10-03', 'check_in' => '2026-10-03 11:00:00', 'status' => 'on_time']);
 
     $this->artisan('hrms:flag-missing-checkouts')->assertSuccessful();
 
-    expect($row->fresh()->missing_checkout)->toBeFalse();
-    Notification::assertNotSentTo($employee->user, MissingCheckoutNotification::class);
+    // A genuine session needs its OUT like any other day…
+    expect($row->fresh()->missing_checkout)->toBeTrue()
+        ->and($row->fresh()->check_out)->toBeNull();
+
+    // …but a weekly off with no attendance is never touched or created.
+    $other = woUser()->employee;
+    expect(Attendance::where('employee_id', $other->id)->count())->toBe(0);
 });
 
 test('no late flag and no late alert on a weekly off', function () {

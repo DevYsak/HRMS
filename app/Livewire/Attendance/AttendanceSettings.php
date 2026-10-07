@@ -60,7 +60,6 @@ class AttendanceSettings extends Component
         'policy.late_grace_period' => 'required|integer|min:0|max:120',
         'policy.late_warning_threshold' => 'required|integer|min:1|max:31',
         'policy.auto_checkout_buffer_minutes' => 'required|integer|min:0|max:240',
-        'policy.ot_auto_close_time' => 'required',
     ];
 
     public function mount(): void
@@ -72,7 +71,6 @@ class AttendanceSettings extends Component
             'late_grace_period' => (int) ($this->settings->late_grace_period ?? 15),
             'late_warning_threshold' => (int) ($this->settings->late_warning_threshold ?? 3),
             'auto_checkout_buffer_minutes' => (int) ($this->settings->auto_checkout_buffer_minutes ?? 30),
-            'ot_auto_close_time' => substr((string) ($this->settings->ot_auto_close_time ?? '23:59:00'), 0, 5),
         ];
 
         $this->weeklyOffDays = AttendanceSetting::weeklyOffDays();
@@ -106,7 +104,6 @@ class AttendanceSettings extends Component
             'late_grace_period' => $this->policy['late_grace_period'],
             'late_warning_threshold' => $this->policy['late_warning_threshold'],
             'auto_checkout_buffer_minutes' => $this->policy['auto_checkout_buffer_minutes'],
-            'ot_auto_close_time' => $this->policy['ot_auto_close_time'].':00',
         ])->save();
 
         \Flux::toast('Attendance settings updated.');

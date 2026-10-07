@@ -98,6 +98,11 @@ class AttendanceService
 
         $this->creditCompOffIfEligible($attendance->fresh(['employee.shift', 'employee.office']), $now);
 
+        // A real OUT settles any approved overtime that was waiting for it.
+        if ($attendance->employee) {
+            app(OvertimeService::class)->settleApprovedForDay($attendance->employee, $attendance->date);
+        }
+
         return $attendance->fresh();
     }
 

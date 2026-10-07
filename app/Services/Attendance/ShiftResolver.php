@@ -58,10 +58,6 @@ class ShiftResolver
         }
 
         $buffer = (int) ($settings->auto_checkout_buffer_minutes ?? 30);
-        $otCloseAt = $this->anchor($settings->ot_auto_close_time ?? '23:59:00', $day);
-        if ($otCloseAt->lessThanOrEqualTo($start)) {
-            $otCloseAt->addDay();
-        }
 
         return new ResolvedShift(
             name: $name,
@@ -72,7 +68,6 @@ class ShiftResolver
             otThresholdHours: $threshold,
             breakMinutes: $break,
             autoCheckoutBufferMinutes: $buffer,
-            otAutoCloseAt: $otCloseAt,
         );
     }
 

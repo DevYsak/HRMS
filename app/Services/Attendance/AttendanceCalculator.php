@@ -192,9 +192,10 @@ class AttendanceCalculator
                 $firstIn = $t['first_in_at'];
                 $lastOut = $t['last_out_at'];
 
-                // An open trailing IN on a past day that the row closed (auto
-                // punch-out, a web checkout) keeps the row's checkout.
-                if ($lastOut === null && $attendance?->check_out && ! $day->isSameDay($now)
+                // An open trailing IN on a past day that the row closed by a web
+                // checkout keeps that checkout. A system "auto checkout" (the
+                // retired auto punch-out) is not a real OUT and never counts.
+                if ($lastOut === null && $attendance?->check_out && ! $attendance->is_auto_checkout && ! $day->isSameDay($now)
                     && Carbon::parse($attendance->check_out)->greaterThan($firstIn)) {
                     $lastOut = Carbon::parse($attendance->check_out);
                 }
@@ -211,7 +212,7 @@ class AttendanceCalculator
 
             return [
                 Carbon::parse($attendance->check_in),
-                $attendance->check_out ? Carbon::parse($attendance->check_out) : null,
+                $attendance->check_out && ! $attendance->is_auto_checkout ? Carbon::parse($attendance->check_out) : null,
                 $breaks,
                 'attendance',
             ];

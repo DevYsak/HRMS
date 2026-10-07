@@ -23,7 +23,6 @@ readonly class ResolvedShift
         public float $otThresholdHours,
         public int $breakMinutes,
         public int $autoCheckoutBufferMinutes,
-        public Carbon $otAutoCloseAt,
     ) {}
 
     /** The instant after which an arrival is counted late (start + grace). */
@@ -58,16 +57,5 @@ readonly class ResolvedShift
     public function expectedMinutes(): int
     {
         return (int) round($this->standardHours * 60);
-    }
-
-    /**
-     * The instant the auto punch-out engine may close a still-open day: shift
-     * end + the configured buffer, but never before shift end + 1 hour —
-     * Pulse v3.1 counts a checkout as missing only after that. The OUT is
-     * stamped at {@see $end}, not here.
-     */
-    public function autoCheckoutTriggerAt(): Carbon
-    {
-        return $this->end->copy()->addMinutes(max($this->autoCheckoutBufferMinutes, AttendanceCalculator::MISSING_CHECKOUT_AFTER_MINUTES));
     }
 }

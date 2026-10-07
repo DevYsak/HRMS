@@ -73,11 +73,16 @@ class PunchTimeline
         // A night shift legitimately runs past midnight: its punches up to the
         // missing-checkout cutoff (shift end + 1h) still belong to the work day.
         $windowEnd = $shift?->crossesMidnight() ? $shift->end->copy()->addMinutes(AttendanceCalculator::MISSING_CHECKOUT_AFTER_MINUTES) : null;
-        [$sameDay, $otherDay] = $ordered->partition(fn (AttendancePunch $p) => $p->punched_at->isSameDay($day)
-            || ($windowEnd !== null && $p->punched_at->greaterThan($day) && $p->punched_at->lessThanOrEqualTo($windowEnd)));
+        // A system-generated checkout (the retired auto punch-out) is not a
+        // real punch: it never closes a day.
+        [$sameDay, $otherDay] = $ordered->partition(fn (AttendancePunch $p) => $p->source !== 'system_auto'
+            && ($p->punched_at->isSameDay($day)
+                || ($windowEnd !== null && $p->punched_at->greaterThan($day) && $p->punched_at->lessThanOrEqualTo($windowEnd))));
         [$kept, $flags, $duplicateCount, $conflictCount] = $this->mergeNoise($sameDay->values());
         foreach ($otherDay as $p) {
-            $flags[spl_object_id($p)] = ['ignored', 'Ignored — stamped '.$p->punched_at->format('d M h:i A').', another day'];
+            $flags[spl_object_id($p)] = ['ignored', $p->source === 'system_auto'
+                ? 'Ignored — system-generated checkout, not a real punch'
+                : 'Ignored — stamped '.$p->punched_at->format('d M h:i A').', another day'];
         }
 
         $hasDirection = $kept->contains(fn (AttendancePunch $p) => $this->effectiveDirection($p) !== null);
@@ -145,6 +150,7 @@ class PunchTimeline
         // A punch stamped on another calendar day than its punch_date never
         // joins the day (no cross-midnight gaps), as in process().
         $ordered = $punches->sortBy('punched_at')
+            ->filter(fn (AttendancePunch $p) => $p->source !== 'system_auto')
             ->filter(fn (AttendancePunch $p) => $p->punch_date === null || $p->punched_at->isSameDay($p->punch_date))
             ->values();
         [$kept] = $this->mergeNoise($ordered);

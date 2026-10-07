@@ -47,17 +47,12 @@ Schedule::command('hrms:flag-missing-checkouts')
     ->withoutOverlapping()
     ->runInBackground();
 
-// Auto punch-out engine (spec Rules 5 & 6): close open days at shift-end once
-// past the buffer; hold approved-OT days until the OT close time. Frequent +
-// idempotent → every 10 min from mid-afternoon, plus a 23:59 sweep for OT days.
+// Missing-checkout sweep: marks open days Missing Checkout once the employee's
+// shift end + 1 hour has passed. It NEVER creates a check-out. Idempotent, and
+// all day (not just the afternoon) so night shifts are caught at their own
+// morning cutoff.
 Schedule::command('hrms:auto-punch-out')
     ->everyTenMinutes()
-    ->between('15:00', '23:50')
-    ->withoutOverlapping()
-    ->runInBackground();
-
-Schedule::command('hrms:auto-punch-out')
-    ->dailyAt('23:59')
     ->withoutOverlapping()
     ->runInBackground();
 
@@ -79,8 +74,7 @@ Schedule::command('hrms:check-excess-breaks')
     ->withoutOverlapping()
     ->runInBackground();
 
-// Rule 11: score yesterday for every active employee → 00:20 IST (after the
-// 23:59 auto punch-out sweep has closed any open days)
+// Rule 11: score yesterday for every active employee → 00:20 IST
 Schedule::command('hrms:compute-attendance-scores')
     ->dailyAt('00:20')
     ->withoutOverlapping()

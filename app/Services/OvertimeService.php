@@ -13,6 +13,7 @@ use App\Services\Approvals\ApprovalGuard;
 use App\Services\Attendance\AttendanceCalculator;
 use App\Services\Attendance\ShiftResolver;
 use Carbon\Carbon;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -179,17 +180,65 @@ class OvertimeService
      */
     public function calculateOtHours(OtRequest $request): float
     {
-        if ($request->attendance_id && $request->attendance) {
-            $totalWorked = app(AttendanceCalculator::class)->workedHours($request->attendance);
-            $threshold = $request->employee
-                ? $this->getThresholdForEmployee($request->employee)
-                : self::STANDARD_HOURS;
-            $ot = max(0, $totalWorked - $threshold);
+        // Actual overtime needs an approved request AND a real final OUT AND
+        // time beyond the standard hours. When the day has attendance, the
+        // canonical calculation decides: an open day (Missing Checkout) has no
+        // OUT, so nothing is payable — it stays unresolved until a real OUT or
+        // an approved regularisation arrives. The requested window only
+        // stands for days with no attendance evidence at all (imports).
+        if ($request->employee) {
+            $day = app(AttendanceCalculator::class)->forDay($request->employee, $request->work_date, $request->attendance);
 
-            return round($ot, 2);
+            if ($day->firstIn !== null) {
+                if ($day->lastOut === null) {
+                    return 0.0;
+                }
+
+                return round(max(0, $day->workedMinutes / 60 - $this->getThresholdForEmployee($request->employee)), 2);
+            }
+        }
+
+        if ($request->attendance_id && $request->attendance) {
+            return round(max(0, app(AttendanceCalculator::class)->workedHours($request->attendance) - ($request->employee ? $this->getThresholdForEmployee($request->employee) : self::STANDARD_HOURS)), 2);
         }
 
         return round($request->requested_hours, 2);
+    }
+
+    /**
+     * Bring the overtime of an employee's day in line with what is now known
+     * about it: after a real OUT arrives (a sync, a clock-out, a regularisation)
+     * an approved request that was waiting becomes payable overtime, and one
+     * already recorded is recalculated — unless it has been paid.
+     */
+    public function settleApprovedForDay(Employee $employee, CarbonInterface $date): void
+    {
+        $requests = OtRequest::with(['attendance', 'employee', 'overtimeRecord'])
+            ->where('employee_id', $employee->id)
+            ->whereDate('work_date', $date->toDateString())
+            ->where('status', 'approved')
+            ->get();
+
+        foreach ($requests as $request) {
+            $record = $request->overtimeRecord;
+
+            if ($record === null) {
+                $this->createOvertimeRecordFromApprovedRequest($request);
+
+                continue;
+            }
+
+            if ($record->is_paid || $record->payslip_id) {
+                continue;
+            }
+
+            $hours = $this->calculateOtHours($request);
+            $record->update([
+                'ot_hours' => $hours,
+                'ot_amount' => round($hours * (float) $record->rate_per_hour, 2),
+                'total_hours_worked' => $request->attendance ? app(AttendanceCalculator::class)->workedHours($request->attendance) : $record->total_hours_worked,
+            ]);
+        }
     }
 
     /**

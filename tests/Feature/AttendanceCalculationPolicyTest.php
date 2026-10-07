@@ -259,7 +259,7 @@ test('a checkout is missing only after shift end + 1 hour', function () {
         ->and($after->status)->toBe(AttendanceDay::STATUS_MISSING_CHECKOUT);
 });
 
-test('auto punch-out waits until shift end + 1 hour before closing the day', function () {
+test('the missing-checkout sweep waits until shift end + 1 hour — and never creates a check-out', function () {
     $e = acpEmployee();
     acpRow($e, '2026-09-16', '10:30', null);
 
@@ -271,8 +271,8 @@ test('auto punch-out waits until shift end + 1 hour before closing the day', fun
     $this->artisan('hrms:auto-punch-out')->assertSuccessful();
     $closed = Attendance::where('employee_id', $e->id)->first();
 
-    expect($closed->check_out?->format('H:i'))->toBe('19:30')
-        ->and((float) $closed->total_hours)->toBe(9.0)
+    expect($closed->check_out)->toBeNull()                 // nothing is invented
+        ->and((float) $closed->total_hours)->toBe(0.0)     // no shift credited
         ->and($closed->missing_checkout)->toBeTrue();
 });
 
