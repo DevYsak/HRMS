@@ -205,7 +205,7 @@ class RegularisationManager
 
         $attendance = $latestOther
             ? $this->rebuildFromRegularisation($attendance, $latestOther)
-            : $this->rebuildFromGenuine($attendance);
+            : $this->rebuildFromGenuine($attendance, $regularisation);
 
         if ($regularisation->employee) {
             app(AttendanceScoreEngine::class)->scoreDay($regularisation->employee, $date);
@@ -500,7 +500,7 @@ class RegularisationManager
      * the first correction come back; with nothing genuine at all, the row the
      * correction created is removed (the day returns to absent).
      */
-    private function rebuildFromGenuine(Attendance $attendance): ?Attendance
+    private function rebuildFromGenuine(Attendance $attendance, ?AttendanceRegularisation $reverted = null): ?Attendance
     {
         $day = Carbon::parse($attendance->date->toDateString());
         $genuine = AttendancePunch::where('employee_id', $attendance->employee_id)
@@ -525,7 +525,9 @@ class RegularisationManager
             ];
         }
 
-        if ($in === null && $attendance->original_check_in !== null) {
+        // A row the correction itself created snapshots the corrected times
+        // as its "original" — those are not genuine and are not restored.
+        if ($in === null && $attendance->original_check_in !== null && ! $this->isOwnSnapshot($attendance, $reverted)) {
             $in = Carbon::parse($attendance->original_check_in);
             $out = $attendance->original_check_out ? Carbon::parse($attendance->original_check_out) : null;
         }
@@ -552,6 +554,18 @@ class RegularisationManager
         ]);
 
         return $attendance->fresh();
+    }
+
+    /** Whether the row's "original" times are just the reverted request's own times. */
+    private function isOwnSnapshot(Attendance $attendance, ?AttendanceRegularisation $reverted): bool
+    {
+        $instants = $reverted ? $this->punchInstants($reverted) : [];
+        if ($instants === []) {
+            return false;
+        }
+
+        return Carbon::parse($attendance->original_check_in)->equalTo($instants[0])
+            && ($attendance->original_check_out === null || Carbon::parse($attendance->original_check_out)->equalTo($instants[1]));
     }
 
     /**

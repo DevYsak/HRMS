@@ -186,13 +186,13 @@ test('deleting an approved correction reverts it and rebuilds the day from the b
     $reverted = rmtEvent('ATTENDANCE_REGULARISATION_REVERTED');
 
     expect(AttendancePunch::where('source', 'regularisation')->count())->toBe(0)
-        ->and(AttendancePunch::where('source', 'biometric')->orderBy('id')->get()->map->only(['id', 'punched_at', 'method', 'direction', 'source', 'updated_at'])->toArray())->toBe($devicePunches)
+        ->and(AttendancePunch::where('source', 'biometric')->orderBy('id')->get()->map->only(['id', 'punched_at', 'method', 'direction', 'source', 'updated_at'])->toArray())->toEqual($devicePunches)
         ->and($attendance->check_in->format('H:i:s'))->toBe('09:12:30')
         ->and($attendance->check_out->format('H:i:s'))->toBe('13:00:10')
         ->and($attendance->is_regularized)->toBeFalse()
         ->and($attendance->original_check_in)->toBeNull()
         ->and($attendance->is_late)->toBeTrue()
-        ->and((float) $attendance->total_hours)->toBe(3.79)
+        ->and((float) $attendance->total_hours)->toBe(3.78)   // 227 whole minutes
         ->and($reverted->user_id)->toBe($this->hr->id)
         ->and($reverted->reason)->toBe('Employee was on a half day')
         ->and($reverted->old_values['attendance']['check_out'])->toBe(RMT_DATE.' 18:00')

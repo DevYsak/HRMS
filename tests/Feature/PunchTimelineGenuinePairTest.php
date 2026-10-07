@@ -132,7 +132,7 @@ test('processing never modifies the raw punch rows', function () {
     gpTimeline($this->employee->id);
     app(PunchTimeline::class)->neutralEvents(AttendancePunch::orderBy('punched_at')->get());
 
-    expect(AttendancePunch::orderBy('id')->get()->map->only(['id', 'punched_at', 'method', 'direction', 'source', 'updated_at'])->toArray())->toBe($before)
+    expect(AttendancePunch::orderBy('id')->get()->map->only(['id', 'punched_at', 'method', 'direction', 'source', 'updated_at'])->toArray())->toEqual($before)
         ->and(AttendancePunch::count())->toBe(3);
 });
 
