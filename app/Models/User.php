@@ -7,6 +7,7 @@ use App\Enums\ThemePreference;
 use App\Enums\UserRole;
 use App\Http\Middleware\EnsurePasswordChanged;
 use App\Services\Approvals\ApprovalGuard;
+use Carbon\Carbon;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -162,12 +163,13 @@ class User extends Authenticatable
 
     /**
      * Whether this user may "Login as" the target: the Login as Employee
-     * permission, never themselves, and — for anyone but a Super Admin —
-     * never a Super Admin and only people inside their own reach.
+     * permission, never themselves, never an account that is locked out of
+     * signing in, and — for anyone but a Super Admin — never a Super Admin
+     * and only people inside their own reach.
      */
     public function canImpersonate(User $target): bool
     {
-        if ($target->id === $this->id || ! $this->hasPermission('impersonate')) {
+        if ($target->id === $this->id || ! $this->hasPermission('impersonate') || $target->isLockedOut()) {
             return false;
         }
 
@@ -180,6 +182,28 @@ class User extends Authenticatable
         }
 
         return $target->employee !== null && $this->coversEmployee($target->employee);
+    }
+
+    /**
+     * Whether CheckActiveEmployee would sign this account straight out: an
+     * inactive employee, or one past their last working day. Viewing as such
+     * an account would end the impersonator's own session instead.
+     */
+    public function isLockedOut(): bool
+    {
+        $employee = $this->employee;
+
+        if ($employee === null) {
+            return false;
+        }
+
+        if ($employee->status?->value === 'inactive') {
+            return true;
+        }
+
+        $lastWorkingDay = $employee->exitRecord?->last_working_day;
+
+        return $lastWorkingDay !== null && now()->greaterThan(Carbon::parse($lastWorkingDay)->endOfDay());
     }
 
     /**

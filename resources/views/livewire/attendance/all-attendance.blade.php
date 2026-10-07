@@ -3,6 +3,8 @@
 
 <flux:main class="min-h-screen bg-[#FFF8F3] dark:bg-white/5 p-4 md:p-6">
 
+<x-attendance.biometric-notice class="mb-3" />
+
 {{-- ═══════════════ HEADER ═══════════════ --}}
 <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
     <div>
@@ -83,7 +85,10 @@
                         <span class="hidden truncate italic text-zinc-400 md:inline">“{{ \Illuminate\Support\Str::limit($req->reason, 60) }}”</span>
                     </div>
                     @if(auth()->user()->canApproveRegularisations())
-                    <button wire:click="openReviewModal({{ $req->id }})" class="inline-flex shrink-0 items-center gap-1 rounded-lg bg-amber-500 px-3 py-1 text-[11px] font-bold text-white transition hover:bg-amber-600"><flux:icon.eye class="size-3" /> Review</button>
+                    <div class="flex shrink-0 items-center gap-1.5">
+                        <button wire:click="openReviewModal({{ $req->id }})" class="inline-flex shrink-0 items-center gap-1 rounded-lg bg-amber-500 px-3 py-1 text-[11px] font-bold text-white transition hover:bg-amber-600"><flux:icon.eye class="size-3" /> Review</button>
+                        @include('livewire.attendance.partials.regularisation-actions', ['reg' => $req])
+                    </div>
                     @else
                     <span class="inline-flex shrink-0 items-center rounded-lg bg-zinc-100 px-2.5 py-1 text-[10px] font-bold uppercase text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">Awaiting HR</span>
                     @endif
@@ -91,6 +96,31 @@
             @endforeach
         </div>
     </div>
+@endif
+
+{{-- ═══════════════ DECIDED REGULARISATIONS (HR may correct / delete) ═══════════════ --}}
+@if($decidedRegularisations->isNotEmpty())
+    <details class="group mb-4 rounded-[18px] border border-zinc-200/70 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900" data-decided-regularisations>
+        <summary class="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
+            <span class="flex items-center gap-2 text-sm font-black text-zinc-900 dark:text-white"><flux:icon.clipboard-document-check class="size-4 text-orange-500" /> Decided regularisations <span class="text-xs font-semibold text-zinc-400">· last 45 days</span></span>
+            <flux:icon.chevron-down class="size-4 text-zinc-400 transition group-open:rotate-180" />
+        </summary>
+        <div class="space-y-1.5 border-t border-zinc-100 px-4 py-3 dark:border-zinc-800">
+            @foreach($decidedRegularisations as $done)
+                <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-zinc-50/70 px-3 py-2 text-xs dark:bg-zinc-800/40">
+                    <div class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5">
+                        <span class="font-black text-zinc-900 dark:text-white">{{ $done->employee?->user?->name ?? '—' }}</span>
+                        <span class="text-zinc-500 dark:text-zinc-400">{{ \Carbon\Carbon::parse($done->work_date)->format('d M Y') }}</span>
+                        @if($done->requested_check_in && $done->requested_check_out)
+                            <span class="font-mono font-bold text-zinc-600 dark:text-zinc-300">{{ \Carbon\Carbon::parse($done->requested_check_in)->format('H:i') }} → {{ \Carbon\Carbon::parse($done->requested_check_out)->format('H:i') }}</span>
+                        @endif
+                        <span class="rounded-full px-2 py-0.5 text-[9px] font-bold uppercase {{ $done->status === 'approved' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-600' }}">{{ $done->status }}</span>
+                    </div>
+                    @include('livewire.attendance.partials.regularisation-actions', ['reg' => $done])
+                </div>
+            @endforeach
+        </div>
+    </details>
 @endif
 
 {{-- ═══════════════ PRESENCE TREND ═══════════════ --}}
@@ -238,7 +268,7 @@
                             <td class="py-2.5"><span class="font-black tabular-nums {{ $hrs >= 8 ? 'text-emerald-600' : ($hrs > 0 ? 'text-zinc-800 dark:text-zinc-100' : 'text-zinc-300') }}">{{ $hrs > 0 ? number_format($hrs, 1).'h' : '—' }}</span></td>
                             <td class="py-2.5">
                                 @forelse($methods as $m)
-                                    <span class="mr-1 inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px] font-bold {{ $m->chipClass() }}"><flux:icon :icon="$m->icon()" class="size-2.5" /> {{ $m->label() }}</span>
+                                    <span class="mr-1 inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px] font-bold {{ $m->chipClass() }}"><flux:icon :icon="$m->icon()" class="size-2.5" /> {{ $m->labelWithGuidance() }}</span>
                                 @empty<span class="text-zinc-300">—</span>@endforelse
                             </td>
                             <td class="py-2.5"><span class="rounded-full px-2 py-0.5 text-[9px] font-bold {{ $badge }}">{{ $statusLabel }}</span></td>
@@ -368,7 +398,7 @@ EMPLOYEE 360 DRAWER (480px, right)
                                     <flux:icon :icon="$p['icon']" class="size-3.5 {{ $isMiss ? 'text-amber-500' : 'text-orange-400' }}" />
                                     <span class="font-black tabular-nums text-zinc-800 dark:text-zinc-100">{{ $p['time'] }}</span>
                                     <span class="rounded-full px-1.5 py-0.5 text-[9px] font-bold {{ $isMiss ? 'bg-amber-100 text-amber-700' : (($p['dir'] ?? '') === 'IN' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700') }}">{{ $isMiss ? 'MISSING '.$p['dir'] : $p['dir'] }}</span>
-                                    <span class="text-[10px] text-zinc-400">{{ $p['method'] ?? '' }}</span>
+                                    <span class="text-[10px] text-zinc-400">{{ $p['method'] ?? '' }}@if(! empty($p['guidance'])) · {{ $p['guidance'] }}@endif</span>
                                 </div>
                             @endforeach
                         </div>
@@ -398,7 +428,7 @@ EMPLOYEE 360 DRAWER (480px, right)
                                     <div class="flex items-center gap-2 rounded px-2 py-1 text-[10px] {{ $rp['flag'] === 'kept' ? 'bg-zinc-50/60 dark:bg-zinc-800/30' : 'bg-zinc-50/30 dark:bg-zinc-800/10 opacity-60' }}" @if($rp['note']) title="{{ $rp['note'] }}" @endif>
                                         <span class="font-mono font-bold tabular-nums text-zinc-700 dark:text-zinc-200">{{ $rp['time'] }}</span>
                                         @if($rp['direction'])<span class="uppercase text-zinc-400">{{ $rp['direction'] }}</span>@endif
-                                        <span class="text-zinc-400">{{ $rp['method'] }}</span>
+                                        <span class="text-zinc-400">{{ $rp['method'] }}@if(! empty($rp['guidance'])) · {{ $rp['guidance'] }}@endif</span>
                                         <span class="ml-auto rounded-full px-1.5 py-0.5 text-[8px] font-bold uppercase {{ $rp['flag'] === 'kept' ? 'bg-emerald-100 text-emerald-700' : ($rp['flag'] === 'retry' ? 'bg-violet-100 text-violet-700' : 'bg-zinc-200 text-zinc-500 dark:bg-zinc-700 dark:text-zinc-300') }}">{{ $rp['flag'] }}</span>
                                     </div>
                                 @endforeach
@@ -433,7 +463,8 @@ EMPLOYEE 360 DRAWER (480px, right)
                                             @else
                                             <button wire:click="quickApproveRegularisation({{ $pr['id'] }})" class="inline-flex items-center gap-1 rounded-lg bg-emerald-500 px-2.5 py-1 text-[10px] font-bold text-white transition hover:bg-emerald-600"><flux:icon.check class="size-3" /> Approve</button>
                                             <button wire:click="openReviewModal({{ $pr['id'] }})" class="inline-flex items-center gap-1 rounded-lg bg-rose-500 px-2.5 py-1 text-[10px] font-bold text-white transition hover:bg-rose-600"><flux:icon.x-mark class="size-3" /> Reject</button>
-                                            <button wire:click="openReviewModal({{ $pr['id'] }})" class="inline-flex items-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1 text-[10px] font-bold text-zinc-600 dark:text-zinc-300 transition hover:bg-zinc-50 dark:bg-zinc-800/50"><flux:icon.pencil-square class="size-3" /> Edit</button>
+                                            <button wire:click="openRegularisationEdit({{ $pr['id'] }})" class="inline-flex items-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1 text-[10px] font-bold text-zinc-600 dark:text-zinc-300 transition hover:bg-zinc-50 dark:bg-zinc-800/50"><flux:icon.pencil-square class="size-3" /> Edit</button>
+                                            <button wire:click="openRegularisationDelete({{ $pr['id'] }})" class="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-white px-2.5 py-1 text-[10px] font-bold text-rose-600 transition hover:bg-rose-50 dark:border-rose-500/30 dark:bg-zinc-900"><flux:icon.trash class="size-3" /> Delete</button>
                                             @endif
                                         </div>
                                     @endif
@@ -561,7 +592,8 @@ REVIEW REGULARISATION MODAL
                                 <div class="mt-2 space-y-1">
                                     @foreach($activeRequest->approval_trail as $step)
                                         <div class="flex items-center gap-1.5 text-[10px] text-zinc-500 dark:text-zinc-400">
-                                            <flux:icon :icon="($step['action'] ?? '') === 'approved' ? 'check-circle' : 'x-circle'" class="size-3 {{ ($step['action'] ?? '') === 'approved' ? 'text-emerald-500' : 'text-rose-500' }}" />
+                                            @php [$stepIcon, $stepTone] = match ($step['action'] ?? '') { 'approved' => ['check-circle', 'text-emerald-500'], 'edited', 'corrected' => ['pencil-square', 'text-sky-500'], default => ['x-circle', 'text-rose-500'] }; @endphp
+                                            <flux:icon :icon="$stepIcon" class="size-3 {{ $stepTone }}" />
                                             <b>{{ $step['name'] ?? 'Reviewer' }}</b> {{ $step['action'] ?? '' }} at {{ str_replace('_', ' ', $step['stage'] ?? '') }} · {{ \Carbon\Carbon::parse($step['at'])->format('d M h:i A') }}
                                         </div>
                                     @endforeach
@@ -585,6 +617,8 @@ REVIEW REGULARISATION MODAL
         </div>
     </div>
 @endif
+
+@include('livewire.attendance.partials.regularisation-manage-modal')
 
 {{-- ══════════════════════════════════════════
 HR MARK ATTENDANCE MODAL

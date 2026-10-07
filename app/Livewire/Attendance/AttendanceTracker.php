@@ -4,6 +4,7 @@ namespace App\Livewire\Attendance;
 
 use App\Enums\AttendanceMode;
 use App\Enums\PunchMethod;
+use App\Livewire\Concerns\ManagesRegularisations;
 use App\Models\Attendance;
 use App\Models\AttendanceDailyScore;
 use App\Models\AttendanceDailySummary;
@@ -49,6 +50,7 @@ use Livewire\WithFileUploads;
 
 class AttendanceTracker extends Component
 {
+    use ManagesRegularisations;
     use WithFileUploads;
 
     public $todayAttendance;
@@ -909,6 +911,7 @@ class AttendanceTracker extends Component
                 'ignored_events' => collect($m['ignored'] ?? [])->map(fn ($n) => [
                     'time' => $n['time'],
                     'method' => $n['method_label'],
+                    'guidance' => $n['guidance'] ?? null,
                     'reason' => $n['reason'] ?? 'Ignored by Attendance Engine',
                 ])->all(),
                 'noise_count' => (int) ($m['duplicate_count'] ?? 0),
@@ -2143,6 +2146,7 @@ class AttendanceTracker extends Component
             'in' => [
                 'time' => $att->check_in?->format('h:i A'),
                 'method' => $inMethod?->label(),
+                'guidance' => $inMethod?->guidance('in'),
                 'method_icon' => $inMethod?->icon(),
                 'photo' => $att->check_in_photo,
                 'lat' => $att->check_in_lat,
@@ -2153,6 +2157,7 @@ class AttendanceTracker extends Component
             'out' => [
                 'time' => $att->check_out?->format('h:i A'),
                 'method' => $outMethod?->label(),
+                'guidance' => $outMethod?->guidance('out'),
                 'method_icon' => $outMethod?->icon(),
                 'photo' => $att->check_out_photo,
                 'lat' => $att->check_out_lat,
@@ -2168,6 +2173,9 @@ class AttendanceTracker extends Component
                 ->map(fn (AttendancePunch $p) => [
                     'time' => $p->punched_at->format('h:i A'),
                     'method' => $p->methodEnum()?->label(),
+                    // System-written punches carry an authoritative direction;
+                    // a device read shows its method's default guidance.
+                    'guidance' => $p->methodEnum()?->guidance(in_array($p->source, ['regularisation', 'system_auto', 'web'], true) ? $p->direction : null),
                     'method_icon' => $p->methodEnum()?->icon(),
                     'source' => $p->source,
                     'device' => $p->device_serial,
@@ -2217,6 +2225,26 @@ class AttendanceTracker extends Component
         $this->decision = app(AttendanceScoreEngine::class)->explainDay($employee, Carbon::parse($date));
 
         $this->modal('score-decision')->show();
+    }
+
+    /**
+     * The employee's own recent regularisations, newest first — pending ones
+     * can still be edited or deleted here.
+     *
+     * @return Collection<int, AttendanceRegularisation>
+     */
+    #[Computed]
+    public function myRegularisations(): Collection
+    {
+        $employee = Auth::user()->employee;
+        if (! $employee) {
+            return collect();
+        }
+
+        return AttendanceRegularisation::with('employee.user')
+            ->where('employee_id', $employee->id)
+            ->where('work_date', '>=', now()->subDays(90)->toDateString())
+            ->latest('id')->limit(8)->get();
     }
 
     public function openRegularisation($date)

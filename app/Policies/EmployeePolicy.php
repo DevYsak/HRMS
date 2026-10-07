@@ -72,7 +72,7 @@ class EmployeePolicy
      * payslips and audit trail.
      *
      * Spec §3.1: records are archived, never deleted. Purging needs the
-     * dedicated Permanently Delete Employees permission (HR Admin by default)
+     * dedicated Permanently Delete Employees permission (Super Admin only by default)
      * on top of delete_employee, stays inside the actor's reach, and never
      * erases the actor or — for anyone but a Super Admin — a Super Admin.
      */

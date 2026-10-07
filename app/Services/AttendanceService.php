@@ -279,6 +279,27 @@ class AttendanceService
         return $attendance;
     }
 
+    /**
+     * Apply an approved regularisation again after HR corrected its times —
+     * through the one application routine, so the corrected day, punches, OT
+     * and score are produced exactly as on first approval. The caller has
+     * already reverted the previous correction and records the audit.
+     */
+    public function reapplyCorrectedRegularisation(AttendanceRegularisation $regularisation, User $actor, string $reason): ?Attendance
+    {
+        $trail = $regularisation->approval_trail ?? [];
+        $trail[] = [
+            'stage' => 'hr_review',
+            'action' => 'corrected',
+            'by' => $actor->id,
+            'name' => $actor->name,
+            'comment' => $reason,
+            'at' => now()->toDateTimeString(),
+        ];
+
+        return $this->applyRegularisationInTransaction($regularisation, $actor->id, $reason, $trail, 'hr_correction');
+    }
+
     /** @param  array<int, array<string, mixed>>  $trail */
     private function applyRegularisationInTransaction(
         AttendanceRegularisation $regularisation,
@@ -458,6 +479,13 @@ class AttendanceService
         $date = Carbon::parse($regularisation->work_date)->toDateString();
 
         foreach ([[$checkIn, $regularisation->check_in_method, 'in'], [$checkOut, $regularisation->check_out_method, 'out']] as [$time, $method, $direction]) {
+            // A device punch already at that exact second is the raw log —
+            // it is never rewritten (or later removed) as a correction.
+            $existing = AttendancePunch::where('employee_id', $regularisation->employee_id)->where('punched_at', $time)->first();
+            if ($existing && $existing->source !== 'regularisation') {
+                continue;
+            }
+
             AttendancePunch::updateOrCreate(
                 ['employee_id' => $regularisation->employee_id, 'punched_at' => $time],
                 [

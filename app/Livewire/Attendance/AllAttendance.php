@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Attendance;
 
+use App\Livewire\Concerns\ManagesRegularisations;
 use App\Models\Attendance;
 use App\Models\AttendanceDailySummary;
 use App\Models\AttendancePunch;
@@ -31,6 +32,7 @@ use Livewire\WithPagination;
 
 class AllAttendance extends Component
 {
+    use ManagesRegularisations;
     use WithPagination;
 
     public $search = '';
@@ -405,6 +407,7 @@ class AllAttendance extends Component
                 'dir' => $n['dir'],
                 'type' => $n['type'],
                 'method' => $n['method_label'],
+                'guidance' => $n['guidance'] ?? null,
                 'icon' => $n['method_icon'] ?? 'clock',
             ])->all(),
             'sessions' => $processed['sessions'],
@@ -451,6 +454,14 @@ class AllAttendance extends Component
                 ])->all(),
         ];
         $this->drawerEmployeeId = $employeeId;
+    }
+
+    /** Refresh the open drawer after a regularisation was edited or deleted. */
+    protected function afterRegularisationManaged(): void
+    {
+        if ($this->drawerEmployeeId) {
+            $this->openEmployeeDrawer($this->drawerEmployeeId);
+        }
     }
 
     public function closeDrawer(): void
@@ -761,6 +772,14 @@ class AllAttendance extends Component
         return view('livewire.attendance.all-attendance', [
             'attendances' => $query->latest('date')->paginate(15),
             'pendingRegularisations' => $pendingRegularisations,
+            // Recently decided requests HR may still correct or delete.
+            'decidedRegularisations' => Auth::user()->canApproveRegularisations()
+                ? $scoped(AttendanceRegularisation::whereIn('status', ['approved', 'rejected'])
+                    ->with(['employee.user'])
+                    ->whereHas('employee.user')
+                    ->where('work_date', '>=', now()->subDays(45)->toDateString()))
+                    ->latest('reviewed_at')->latest('id')->limit(15)->get()
+                : collect(),
             'allEmployees' => Employee::with('user')->whereHas('user')
                 ->when($scopeIds !== null, fn ($q) => $q->whereIn('id', $scopeIds))
                 ->orderBy('id')->get(),

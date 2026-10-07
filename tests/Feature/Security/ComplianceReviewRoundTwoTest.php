@@ -270,10 +270,10 @@ test('only holders of Permanently Delete Employees are offered the permanent-del
         ->set('showDeleted', true)
         ->assertDontSee('Delete permanently');
 
-    // HR Admin holds it by default.
+    // HR Admin does not hold it by default: it stays with the Super Admin.
     Livewire::actingAs(r2User(UserRole::HrAdmin))->test(EmployeeIndex::class)
         ->set('showDeleted', true)
-        ->assertSee('Delete permanently');
+        ->assertDontSee('Delete permanently');
 
     Livewire::actingAs(User::factory()->create(['role' => UserRole::SuperAdmin]))->test(EmployeeIndex::class)
         ->set('showDeleted', true)

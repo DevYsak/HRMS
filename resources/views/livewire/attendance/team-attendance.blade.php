@@ -1,4 +1,6 @@
 <flux:main class="bg-zinc-50 p-6 space-y-6 dark:bg-zinc-950">
+    <x-attendance.biometric-notice />
+
     <div class="pulse-page-header">
         <div>
             <h1 class="pulse-page-title">Team Attendance</h1>

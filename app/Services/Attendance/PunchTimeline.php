@@ -22,6 +22,9 @@ use Illuminate\Support\Collection;
  *    double verify (device conflict), or an accidental re-punch straight after
  *    checkout. It is merged into the kept punch and excluded from every
  *    calculation, so it can never open a phantom session.
+ *  - Genuine pairs: the exception to the window. Same-method device reads the
+ *    device itself tagged IN then OUT (Face IN 11:33:20 + Face OUT 11:33:21)
+ *    are two real actions and both are kept, with those directions.
  *  - Direction: the engine's real IN/OUT tag when present; otherwise inferred
  *    by alternation across the kept punches.
  *  - Missing punches: a same-direction pair beyond the merge window
@@ -42,6 +45,14 @@ class PunchTimeline
     public const MERGE_WINDOW_SECONDS = 60;
 
     /**
+     * Directions fixed for the punches of a genuine IN/OUT pair, keyed by
+     * spl_object_id — in memory for one call only; raw rows are never written.
+     *
+     * @var array<int, string>
+     */
+    protected array $pairDirections = [];
+
+    /**
      * Process one day's raw punches into the canonical timeline payload.
      *
      * @param  Collection<int, AttendancePunch>  $raw
@@ -49,6 +60,8 @@ class PunchTimeline
      */
     public function process(Collection $raw, Carbon $day, ?AttendanceDailySummary $summary = null): array
     {
+        $this->pairDirections = [];
+
         if ($raw->isEmpty()) {
             return $this->emptyResult();
         }
@@ -85,6 +98,8 @@ class PunchTimeline
      */
     public function neutralEvents(Collection $punches): array
     {
+        $this->pairDirections = [];
+
         if ($punches->isEmpty()) {
             return [];
         }
@@ -122,7 +137,9 @@ class PunchTimeline
                 'time' => $p->punched_at->format('h:i A'),
                 'title' => $isIn ? ($i === 0 ? 'Clocked in' : 'Punch in') : ($isLastOut ? 'Clocked out' : 'Punch out'),
                 'type' => $isIn ? 'in' : 'out',
+                'direction' => $isIn ? 'in' : 'out',
                 'method' => $p->methodEnum()?->value,
+                'guidance' => $p->methodEnum()?->guidance($isIn ? 'in' : 'out'),
                 'source' => $p->source,
                 'location' => $p->location,
                 'device' => $p->device_serial,
@@ -159,6 +176,20 @@ class PunchTimeline
         foreach ($ordered as $p) {
             $prev = $kept->last();
             $withinWindow = $prev && (int) $prev->punched_at->diffInSeconds($p->punched_at) <= self::MERGE_WINDOW_SECONDS;
+
+            // A genuine pair: the device recorded an explicit IN and then an
+            // explicit OUT with the same biometric method (e.g. Face IN
+            // 11:33:20 + Face OUT 11:33:21). Two real actions, however close —
+            // merging them would leave a lone IN and show the employee as
+            // still working.
+            if ($withinWindow && $this->isGenuinePair($prev, $p)) {
+                $this->pairDirections[spl_object_id($prev)] = 'in';
+                $this->pairDirections[spl_object_id($p)] = 'out';
+                $kept->push($p);
+                $flag[spl_object_id($p)] = ['kept', 'Genuine IN/OUT pair — the device recorded an explicit OUT'];
+
+                continue;
+            }
 
             if ($withinWindow) {
                 $prevDir = $this->effectiveDirection($prev);
@@ -271,6 +302,28 @@ class PunchTimeline
         return $stray;
     }
 
+    /**
+     * Whether two punches inside the merge window are a genuine IN then OUT:
+     * both device reads with the same known biometric method, the device's
+     * own tags explicitly IN then OUT, and the first able to open a session
+     * (a Card can never start attendance, Rule 1). Repeats of one direction
+     * stay duplicates, and an IN echoing straight after an OUT stays noise,
+     * so neither can open a phantom live session.
+     */
+    protected function isGenuinePair(AttendancePunch $first, AttendancePunch $second): bool
+    {
+        $systemSources = ['regularisation', 'system_auto', 'web'];
+
+        return $first->direction === 'in'
+            && $second->direction === 'out'
+            && $first->methodEnum() !== null
+            && (string) $first->method === (string) $second->method
+            && ! in_array($first->source, $systemSources, true)
+            && ! in_array($second->source, $systemSources, true)
+            && ! $this->isOutOnlyMethod($first)
+            && ($this->pairDirections[spl_object_id($first)] ?? null) !== 'out';
+    }
+
     /** Whether a punch's method is configured as an out-only edge (e.g. Card). */
     protected function isOutOnlyMethod(AttendancePunch $p): bool
     {
@@ -288,6 +341,10 @@ class PunchTimeline
      */
     protected function effectiveDirection(AttendancePunch $p): ?string
     {
+        if (isset($this->pairDirections[spl_object_id($p)])) {
+            return $this->pairDirections[spl_object_id($p)];
+        }
+
         // Punches the system wrote itself (an approved regularisation, the auto
         // punch-out, a web clock) carry the direction they were written with.
         // The method map is for device reads only: a regularised IN recorded
@@ -550,6 +607,7 @@ class PunchTimeline
             'type' => 'ignored',
             'method' => $method?->value,
             'method_label' => $method?->label() ?? ucfirst((string) $p->method),
+            'guidance' => $method?->guidance(),
             'method_icon' => $method?->icon() ?? 'no-symbol',
             'device' => $p->device_serial,
             'location' => $p->location,
@@ -574,6 +632,7 @@ class PunchTimeline
             'type' => $type,
             'method' => $method?->value,
             'method_label' => $method?->label(),
+            'guidance' => $method?->guidance($isIn ? 'in' : 'out'),
             'method_icon' => $method?->icon() ?? 'finger-print',
             'device' => $p->device_serial,
             'location' => $p->location,
@@ -589,7 +648,7 @@ class PunchTimeline
     {
         return [
             'time' => '—', 'time_short' => '—', 'ts_ms' => null, 'dir' => $dir,
-            'type' => 'missing', 'method' => null, 'method_label' => null,
+            'type' => 'missing', 'method' => null, 'method_label' => null, 'guidance' => null,
             'method_icon' => 'exclamation-triangle', 'device' => null,
             'location' => null, 'verify' => null, 'source' => null, 'lat' => null, 'lng' => null,
         ];
@@ -618,6 +677,7 @@ class PunchTimeline
             // shows a misleading "OUT" the audit view would then keep.
             'direction' => $this->effectiveDirection($p),
             'method' => $p->methodEnum()?->label() ?? ucfirst((string) $p->method) ?: null,
+            'guidance' => $p->methodEnum()?->guidance($this->effectiveDirection($p)),
             'method_icon' => $p->methodEnum()?->icon() ?? 'clock',
             'device' => $p->device_serial,
             'source' => $p->source,

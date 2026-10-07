@@ -13,10 +13,10 @@ use App\Services\Security\RoleDelegationGuard;
 use Livewire\Livewire;
 
 /**
- * HR controls that used to be hard-wired to the Super Admin are permissions
- * held by the HR Admin role (manage_ai_settings, data_purge,
- * force_delete_employee, impersonate), and the admin menus follow whatever
- * Roles & Permissions grants.
+ * HR controls that used to be hard-wired to the Super Admin are permissions:
+ * the HR Admin role holds manage_ai_settings and impersonate, while the
+ * destructive data_purge and force_delete_employee stay with the Super Admin.
+ * The admin menus follow whatever Roles & Permissions grants.
  */
 function hrcHr(): User
 {
@@ -47,12 +47,17 @@ function hrcCustomRole(array $keys): User
     return $user->fresh();
 }
 
-test('HR Admin holds the four controls by default; a manager holds none', function () {
+test('HR Admin holds the support controls by default; a manager holds none', function () {
     $hr = hrcHr();
     $manager = hrcStaff(UserRole::Manager);
 
-    foreach (['manage_ai_settings', 'data_purge', 'force_delete_employee', 'impersonate'] as $key) {
+    foreach (['manage_ai_settings', 'impersonate'] as $key) {
         expect($hr->hasPermission($key))->toBeTrue("HR should hold {$key}")
+            ->and($manager->hasPermission($key))->toBeFalse("a manager should not hold {$key}");
+    }
+
+    foreach (['data_purge', 'force_delete_employee'] as $key) {
+        expect($hr->hasPermission($key))->toBeFalse("HR should not hold {$key}")
             ->and($manager->hasPermission($key))->toBeFalse("a manager should not hold {$key}");
     }
 });
@@ -94,29 +99,34 @@ test('a manager cannot log in as anyone', function () {
 
 // ── Data Management ────────────────────────────────────────────────────────
 
-test('an HR purge of one employee is recorded in the audit trail', function () {
-    $hr = hrcHr();
+test('a purge of one employee is recorded in the audit trail', function () {
+    $admin = hrcStaff(UserRole::SuperAdmin);
     $target = hrcStaff();
     $employeeId = $target->employee->id;
 
-    Livewire::actingAs($hr)->test(DataManagement::class)->call('deleteEmployee', $employeeId);
+    Livewire::actingAs($admin)->test(DataManagement::class)->call('deleteEmployee', $employeeId);
 
     expect(Employee::withTrashed()->find($employeeId))->toBeNull()
-        ->and(AuditLog::where('event', 'EMPLOYEE_PURGED')->where('user_id', $hr->id)->exists())->toBeTrue();
+        ->and(AuditLog::where('event', 'EMPLOYEE_PURGED')->where('user_id', $admin->id)->exists())->toBeTrue();
 });
 
 test('a bulk domain purge is recorded in the audit trail', function () {
-    $hr = hrcHr();
-
-    Livewire::actingAs($hr)->test(DataManagement::class)->call('purge', 'notifications');
-
-    expect(AuditLog::where('event', 'DATA_PURGED')->where('user_id', $hr->id)->exists())->toBeTrue();
-});
-
-test('HR cannot purge a Super Admin through Data Management', function () {
     $admin = hrcStaff(UserRole::SuperAdmin);
 
-    Livewire::actingAs(hrcHr())->test(DataManagement::class)->call('deleteEmployee', $admin->employee->id);
+    Livewire::actingAs($admin)->test(DataManagement::class)->call('purge', 'notifications');
+
+    expect(AuditLog::where('event', 'DATA_PURGED')->where('user_id', $admin->id)->exists())->toBeTrue();
+});
+
+test('HR cannot open Data Management', function () {
+    Livewire::actingAs(hrcHr())->test(DataManagement::class)->assertForbidden();
+});
+
+test('a role granted Data Management still cannot purge a Super Admin', function () {
+    $admin = hrcStaff(UserRole::SuperAdmin);
+
+    Livewire::actingAs(hrcCustomRole(['manage_settings', 'data_purge']))->test(DataManagement::class)
+        ->call('deleteEmployee', $admin->employee->id);
 
     expect(Employee::find($admin->employee->id))->not->toBeNull();
 });
@@ -127,10 +137,10 @@ test('a role with Manage Settings but not Data Management cannot open it', funct
 
 // ── Dynamic menus ──────────────────────────────────────────────────────────
 
-test('the Control Panel shows HR the AI Assistant and Data Management cards', function () {
+test('the Control Panel shows HR the AI Assistant card but not Data Management', function () {
     Livewire::actingAs(hrcHr())->test(ControlPanel::class)
         ->assertSee('AI Assistant')
-        ->assertSee('Data Management')
+        ->assertDontSee('Data Management')
         ->assertSee('Holidays')
         ->assertSee('Roles &amp; Permissions', escape: false);
 });

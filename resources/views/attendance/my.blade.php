@@ -151,6 +151,8 @@
 </style>
 
 <div class="pa">
+  <x-attendance.biometric-notice class="mb-3" />
+
   {{-- Analytics header — global period, comparison & mode filters (GA4-style) --}}
   <div class="pa-cmd">
     <div class="pa-cmd-title"><flux:icon.clock class="size-4" /><span>My Attendance</span></div>
@@ -1036,7 +1038,7 @@
                 @if($isMissing)
                   <div class="tr">No matching punch — needs regularization.</div>
                 @else
-                  @if($node['method_label'])<div class="tr"><span class="k">Authentication</span><flux:icon :icon="$node['method_icon']" class="size-3" /> {{ $node['method_label'] }}</div>@endif
+                  @if($node['method_label'])<div class="tr"><span class="k">Authentication</span><flux:icon :icon="$node['method_icon']" class="size-3" /> {{ $node['method_label'] }}@if(! empty($node['guidance'])) · {{ $node['guidance'] }}@endif</div>@endif
                   @if($node['device'])<div class="tr"><span class="k">Machine</span>{{ $node['device'] }}</div>@endif
                   @if($node['location'])<div class="tr"><span class="k">Gate</span>{{ $node['location'] }}</div>@endif
                   @if($node['verify'])<div class="tr"><span class="k">Verify</span>{{ $node['verify'] }}</div>@endif
@@ -1468,7 +1470,7 @@
         <div class="val">
           @if($todaySummary?->first_punch_method || $todaySummary?->last_punch_method)
             @foreach(array_unique(array_filter([$todaySummary->first_punch_method, $todaySummary->last_punch_method])) as $m)
-              <span class="pa-bio-chip">{{ \App\Enums\PunchMethod::tryFrom($m)?->label() ?? \Illuminate\Support\Str::headline($m) }}</span>
+              <span class="pa-bio-chip">{{ \App\Enums\PunchMethod::tryFrom($m)?->labelWithGuidance() ?? \Illuminate\Support\Str::headline($m) }}</span>
             @endforeach
           @else
             <span class="muted">No punches today</span>
@@ -2078,6 +2080,42 @@
     @endif
 </div>
 
+{{-- ═══════════════ MY REGULARISATIONS (edit / delete while pending) ═══════════════ --}}
+@if($this->myRegularisations->isNotEmpty())
+<div class="mb-6 rounded-[18px] border border-zinc-200/70 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900" data-my-regularisations>
+    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-100 px-5 py-3 dark:border-zinc-800">
+        <h3 class="flex items-center gap-2 text-sm font-black text-zinc-900 dark:text-white"><flux:icon.pencil-square class="size-4 text-orange-500" /> My regularisations</h3>
+        <span class="text-[11px] text-zinc-400">Pending requests can be edited or deleted. Decided ones are locked — ask HR.</span>
+    </div>
+    <div class="divide-y divide-zinc-100 dark:divide-zinc-800">
+        @foreach($this->myRegularisations as $myReg)
+            @php
+                $myRegChip = match ($myReg->status) {
+                    'approved' => 'bg-emerald-100 text-emerald-700',
+                    'rejected' => 'bg-rose-100 text-rose-600',
+                    'cancelled' => 'bg-zinc-100 text-zinc-500',
+                    default => 'bg-amber-100 text-amber-700',
+                };
+            @endphp
+            <div class="flex flex-wrap items-center justify-between gap-2 px-5 py-2.5 text-xs">
+                <div class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5">
+                    <span class="font-black text-zinc-900 dark:text-white">{{ \Illuminate\Support\Carbon::parse($myReg->work_date)->format('d M Y') }}</span>
+                    <span class="font-mono font-bold text-zinc-600 dark:text-zinc-300">
+                        @if($myReg->isLeave()) Leave
+                        @elseif($myReg->regularisation_type === 'half_day') Half day · {{ ucfirst((string) $myReg->half_day_period) }}
+                        @else {{ $myReg->requested_check_in ? \Illuminate\Support\Carbon::parse($myReg->requested_check_in)->format('H:i') : '—' }} → {{ $myReg->requested_check_out ? \Illuminate\Support\Carbon::parse($myReg->requested_check_out)->format('H:i') : '—' }}
+                        @endif
+                    </span>
+                    <span class="max-w-[16rem] truncate italic text-zinc-400">“{{ $myReg->reason }}”</span>
+                    <span class="rounded-full px-2 py-0.5 text-[9px] font-bold uppercase {{ $myRegChip }}">{{ $myReg->status }}</span>
+                </div>
+                @include('livewire.attendance.partials.regularisation-actions', ['reg' => $myReg])
+            </div>
+        @endforeach
+    </div>
+</div>
+@endif
+
 {{-- ═══════════════ PUNCH IN / OUT TIMELINE ═══════════════ --}}
 <div id="attendance-log" class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm scroll-mt-6"
      x-data="{ o: JSON.parse(localStorage.getItem('pa-sec-log') ?? 'true') }" x-init="$watch('o', v => localStorage.setItem('pa-sec-log', JSON.stringify(v)))">
@@ -2205,7 +2243,7 @@
                                         <div class="flex items-center gap-2 rounded-lg bg-zinc-50 px-3 py-1.5 text-[11px] text-zinc-400 dark:bg-zinc-800/50">
                                             <flux:icon.no-symbol class="size-3.5 shrink-0" />
                                             <span class="font-mono font-bold line-through">{{ $ie['time'] }}</span>
-                                            <span class="font-bold">{{ $ie['method'] }}</span>
+                                            <span class="font-bold">{{ $ie['method'] }}@if(! empty($ie['guidance'])) · {{ $ie['guidance'] }}@endif</span>
                                             <span class="truncate">— {{ $ie['reason'] }}</span>
                                         </div>
                                     @endforeach
@@ -2243,7 +2281,7 @@
                                             <div class="flex flex-wrap items-center gap-x-3 gap-y-0.5">
                                                 <span class="text-sm font-black tabular-nums text-zinc-900 dark:text-white">{{ $ev['time'] }}</span>
                                                 @if($evMethod)
-                                                    <span class="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold {{ $evMethod->chipClass() }}"><flux:icon :icon="$evMethod->icon()" class="size-3.5" /> {{ $evMethod->label() }}</span>
+                                                    <span class="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold {{ $evMethod->chipClass() }}"><flux:icon :icon="$evMethod->icon()" class="size-3.5" /> {{ $evMethod->label() }}@if(! empty($ev['guidance'])) · {{ $ev['guidance'] }}@endif</span>
                                                 @else
                                                     <span class="text-[10px] font-bold text-zinc-500 dark:text-zinc-400">{{ $srcLabel }}</span>
                                                 @endif
@@ -2427,7 +2465,7 @@
                         @endif
                         <div class="space-y-1.5 text-[11px]">
                             @if($p['method'])
-                                <div class="flex items-center gap-1.5 text-zinc-600 dark:text-zinc-300"><flux:icon :icon="$p['method_icon']" class="size-3.5 text-zinc-400" /> {{ $p['method'] }}</div>
+                                <div class="flex items-center gap-1.5 text-zinc-600 dark:text-zinc-300"><flux:icon :icon="$p['method_icon']" class="size-3.5 text-zinc-400" /> {{ $p['method'] }}@if(! empty($p['guidance'])) · {{ $p['guidance'] }}@endif</div>
                             @endif
                             <div class="flex items-center gap-1.5 text-zinc-600 dark:text-zinc-300"><flux:icon.computer-desktop class="size-3.5 text-zinc-400" /> {{ $p['device'] }}</div>
                             @if($p['ip'])
@@ -2449,7 +2487,7 @@
                         @foreach($detail['punches'] as $i => $pp)
                             <div class="flex items-center gap-2 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 px-3 py-1.5 text-xs dark:bg-zinc-800/40">
                                 <span class="w-16 shrink-0 font-black tabular-nums text-zinc-900 dark:text-white">{{ $pp['time'] }}</span>
-                                @if($pp['method'])<span class="inline-flex items-center gap-1 text-zinc-600 dark:text-zinc-300"><flux:icon :icon="$pp['method_icon']" class="size-3.5 text-zinc-400" /> {{ $pp['method'] }}</span>@endif
+                                @if($pp['method'])<span class="inline-flex items-center gap-1 text-zinc-600 dark:text-zinc-300"><flux:icon :icon="$pp['method_icon']" class="size-3.5 text-zinc-400" /> {{ $pp['method'] }}@if(! empty($pp['guidance'])) · {{ $pp['guidance'] }}@endif</span>@endif
                                 <span class="ml-auto flex items-center gap-2 text-[10px] text-zinc-400">
                                     @if($pp['location'])<span>{{ $pp['location'] }}</span>@endif
                                     @if($pp['device'])<span>{{ $pp['device'] }}</span>@endif
@@ -2523,6 +2561,8 @@
 {{-- ═══════════════════════════════════════════════
      REGULARISATION MODAL
 ═══════════════════════════════════════════════ --}}
+@include('livewire.attendance.partials.regularisation-manage-modal')
+
 <flux:modal name="regularisation-modal" class="max-w-lg">
     <div class="space-y-5">
         <div class="flex items-start gap-3">

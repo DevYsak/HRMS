@@ -26,6 +26,34 @@ enum PunchMethod: string
         };
     }
 
+    /**
+     * The plain-language edge a punch records — "Biometric IN" or "Biometric
+     * OUT". Display guidance only: a direction the punch was actually resolved
+     * to (the device's own explicit tag, a regularised OUT) always wins over
+     * the method's default (Face = IN, ID Card = OUT on this deployment).
+     */
+    public function guidance(?string $direction = null): ?string
+    {
+        $direction = strtolower((string) $direction);
+        if (! in_array($direction, ['in', 'out'], true)) {
+            $direction = config('biometric.method_direction.'.$this->value);
+        }
+
+        return match ($direction) {
+            'in' => 'Biometric IN',
+            'out' => 'Biometric OUT',
+            default => null,
+        };
+    }
+
+    /** "Face · Biometric IN" — the method with its guidance, when it has one. */
+    public function labelWithGuidance(?string $direction = null): string
+    {
+        $guidance = $this->guidance($direction);
+
+        return $guidance ? $this->label().' · '.$guidance : $this->label();
+    }
+
     public function icon(): string
     {
         return match ($this) {

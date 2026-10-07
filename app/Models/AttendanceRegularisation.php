@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 #[Fillable([
     'employee_id',
@@ -39,9 +40,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'applied_by',
     'applied_at',
     'applied_via',
+    'deleted_by',
 ])]
 class AttendanceRegularisation extends Model
 {
+    use SoftDeletes;
+
     /** Ordered approval chain: every stage must be cleared to reach approval. */
     public const STAGES = ['manager_review' => 1, 'hr_review' => 2, 'admin_approval' => 3];
 
@@ -71,6 +75,11 @@ class AttendanceRegularisation extends Model
     public function leaveType(): BelongsTo
     {
         return $this->belongsTo(LeaveType::class);
+    }
+
+    public function deletedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'deleted_by');
     }
 
     public function cancelledBy(): BelongsTo

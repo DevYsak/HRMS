@@ -160,7 +160,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'upload_documents', 'manage_documents', 'view_documents', 'acknowledge_documents', 'view_kyc_documents',
             'view_reports', 'export_reports',
             'manage_roles', 'manage_settings', 'manage_company_settings',
-            'manage_ai_settings', 'data_purge', 'impersonate', 'force_delete_employee', 'data_export', 'data_import', 'view_audit_log',
+            'manage_ai_settings', 'impersonate', 'data_export', 'data_import', 'view_audit_log',
             'edit_own_profile', 'request_profile_change', 'approve_profile_changes',
         ],
         'director' => [
