@@ -2,13 +2,12 @@
 
 namespace App\Services\Biometric;
 
-use App\Models\Attendance;
+use App\Models\AttendancePunch;
 use App\Models\AuditLog;
 use App\Models\BiometricDevice;
 use App\Models\BiometricLog;
 use App\Models\Employee;
-use App\Services\Attendance\AttendanceCalculator;
-use App\Services\Attendance\WorkingDayResolver;
+use App\Services\Attendance\AttendanceDayRebuilder;
 use App\Services\AttendanceService;
 use App\Support\PunchMethodResolver;
 use Illuminate\Support\Carbon;
@@ -371,8 +370,25 @@ class BiometricSyncService
         return $this->applyUnprocessedLogs($device);
     }
 
+    /**
+     * Turn unprocessed device logs into attendance — through the canonical
+     * timeline, never by reading the raw IN/OUT or first/last punch.
+     *
+     * Each log is first kept as a raw attendance punch exactly as received
+     * (device state stored as the raw direction, for audit only). Then every
+     * affected employee-day is rebuilt ONCE by {@see AttendanceDayRebuilder}
+     * — Face = IN, ID Card = OUT, latest of a 60-second burst, stray cards
+     * ignored, night shifts attached to their own work date — and the same
+     * numbers go to the attendance row and the daily summary. Regularised,
+     * HR-corrected and payroll-settled days are left alone. Running it again
+     * changes nothing: logs are already processed, punches are keyed on
+     * (employee, time) and the rebuild is deterministic.
+     *
+     * @return int Number of logs successfully applied.
+     */
     private function applyUnprocessedLogs(BiometricDevice $device): int
     {
+        $rebuilder = app(AttendanceDayRebuilder::class);
         $applied = 0;
 
         $logs = BiometricLog::with('employee.shift')
@@ -383,19 +399,43 @@ class BiometricSyncService
             ->orderBy('punched_at')
             ->cursor();  // memory-efficient for large result sets
 
+        /** @var array<string, array{employee: Employee, day: Carbon, logs: array<int, BiometricLog>}> $days */
+        $days = [];
+
         foreach ($logs as $log) {
             try {
-                DB::transaction(function () use ($log, &$applied) {
-                    $this->applyLog($log);
-                    $applied++;
+                $employee = $log->employee;
+                $punchedAt = Carbon::parse($log->punched_at);
+                $workDate = $rebuilder->workDateFor($employee, $punchedAt);
+
+                $this->storeRawPunch($log, $employee, $punchedAt, $workDate, $device);
+
+                $key = $employee->id.'|'.$workDate->toDateString();
+                $days[$key] ??= ['employee' => $employee, 'day' => $workDate, 'logs' => []];
+                $days[$key]['logs'][] = $log;
+            } catch (Throwable $e) {
+                $this->markFailed($log, $e);
+            }
+        }
+
+        foreach ($days as $entry) {
+            try {
+                DB::transaction(function () use ($entry, $rebuilder, &$applied) {
+                    $row = $rebuilder->rebuild($entry['employee'], $entry['day']);
+
+                    foreach ($entry['logs'] as $log) {
+                        $log->update([
+                            'is_processed' => true,
+                            'attendance_id' => $row['attendance']?->id,
+                            'process_error' => null,
+                        ]);
+                        $applied++;
+                    }
                 });
             } catch (Throwable $e) {
-                Log::warning("BiometricLog#{$log->id} apply failed: {$e->getMessage()}");
-
-                $log->update([
-                    'is_processed' => false,
-                    'process_error' => substr($e->getMessage(), 0, 500),
-                ]);
+                foreach ($entry['logs'] as $log) {
+                    $this->markFailed($log, $e);
+                }
             }
         }
 
@@ -403,29 +443,36 @@ class BiometricSyncService
     }
 
     /**
-     * Apply a single biometric log entry to the attendance table.
+     * Keep the device read as a raw attendance punch — as received, never
+     * rewritten. Keyed on (employee, time), so a retry adds nothing, and a
+     * punch another path already stored (the engine sync) is left as it is.
      */
-    private function applyLog(BiometricLog $log): void
+    private function storeRawPunch(BiometricLog $log, Employee $employee, Carbon $punchedAt, Carbon $workDate, BiometricDevice $device): void
     {
-        $employee = $log->employee;
-        $punchedAt = Carbon::parse($log->punched_at);
-        $date = $punchedAt->toDateString();
-        $method = $this->resolvePunchMethod($log->verify_type);
+        AttendancePunch::firstOrCreate(
+            ['employee_id' => $employee->id, 'punched_at' => $punchedAt],
+            [
+                'employee_code' => $employee->employee_code,
+                'punch_date' => $workDate->toDateString(),
+                'method' => $this->resolvePunchMethod($log->verify_type),
+                // The device's own state byte, for audit only — the timeline
+                // decides the effective direction from the method.
+                'direction' => $log->punch_type === 'check_out' ? 'out' : 'in',
+                'verify_raw' => $log->verify_type !== null ? (string) $log->verify_type : null,
+                'source' => 'biometric',
+                'device_serial' => $device->name,
+            ],
+        );
+    }
 
-        if ($log->punch_type === 'check_in') {
-            $attendance = $this->resolveCheckIn($employee, $punchedAt, $date, $method);
-        } else {
-            // check_out
-            $attendance = $this->resolveCheckOut($employee, $punchedAt, $date, $method);
-        }
+    private function markFailed(BiometricLog $log, Throwable $e): void
+    {
+        Log::warning("BiometricLog#{$log->id} apply failed: {$e->getMessage()}");
 
-        if ($attendance) {
-            $log->update([
-                'is_processed' => true,
-                'attendance_id' => $attendance->id,
-                'process_error' => null,
-            ]);
-        }
+        $log->update([
+            'is_processed' => false,
+            'process_error' => substr($e->getMessage(), 0, 500),
+        ]);
     }
 
     /**
@@ -436,98 +483,6 @@ class BiometricSyncService
     private function resolvePunchMethod(int|string|null $verifyType): ?string
     {
         return PunchMethodResolver::value($verifyType);
-    }
-
-    /**
-     * Resolve check-in: create an attendance record if one doesn't exist for the day.
-     * If one already exists (e.g. from manual entry), skip and mark processed.
-     */
-    private function resolveCheckIn(Employee $employee, Carbon $punchedAt, string $date, ?string $method = null): ?Attendance
-    {
-        $existing = Attendance::where('employee_id', $employee->id)
-            ->where('date', $date)
-            ->first();
-
-        if ($existing) {
-            // Already clocked in (possibly via web); preserve existing record but
-            // backfill the punch method if the device now tells us how.
-            if ($method && ! $existing->check_in_method) {
-                $existing->update(['check_in_method' => $method]);
-            }
-
-            return $existing;
-        }
-
-        $shift = $employee->shift;
-
-        $isLate = false;
-        $lateMinutes = 0;
-
-        if ($shift) {
-            $shiftStart = Carbon::parse($shift->start_time)->setDateFrom($punchedAt);
-            $cutoff = $shiftStart->copy()->addMinutes((int) $shift->grace_minutes);
-            // Minute precision (spec §3.2: 10:35 is on time, 10:36 is late).
-            $arrivedAt = $punchedAt->copy()->startOfMinute();
-            $isLate = $arrivedAt->gt($cutoff);
-            $lateMinutes = $isLate ? (int) $cutoff->diffInMinutes($arrivedAt) : 0;
-        }
-
-        // A weekly off or holiday has no shift to be late for: the punch is
-        // kept (Worked on Weekly Off), never flagged late.
-        if ($isLate && app(WorkingDayResolver::class)->classify($employee, $punchedAt, withLeave: false) !== WorkingDayResolver::WORKING_DAY) {
-            $isLate = false;
-            $lateMinutes = 0;
-        }
-
-        return Attendance::create([
-            'employee_id' => $employee->id,
-            'date' => $date,
-            'check_in' => $punchedAt,
-            'check_in_method' => $method,
-            'status' => $isLate ? 'late' : 'on_time',
-            'is_late' => $isLate,
-            'late_minutes' => $lateMinutes,
-            'work_mode' => 'office',
-        ]);
-    }
-
-    /**
-     * Resolve check-out: update the existing attendance record for the day.
-     * If no check-in record exists (e.g. device only captured exit), create a minimal record.
-     */
-    private function resolveCheckOut(Employee $employee, Carbon $punchedAt, string $date, ?string $method = null): ?Attendance
-    {
-        $attendance = Attendance::where('employee_id', $employee->id)
-            ->where('date', $date)
-            ->first();
-
-        if (! $attendance) {
-            // Orphan check-out — no check-in on file. Create a stub so the day isn't lost.
-            $attendance = Attendance::create([
-                'employee_id' => $employee->id,
-                'date' => $date,
-                'check_in' => $punchedAt,  // use checkout time as proxy check-in
-                'check_in_method' => $method,
-                'status' => 'on_time',
-                'work_mode' => 'office',
-            ]);
-        }
-
-        // Never overwrite a checkout with an earlier time (re-runs / device clock drift),
-        // and never an approved regularisation — the correction is the record.
-        if ($attendance->hasCorrectedPunches() || ($attendance->check_out && $attendance->check_out->gte($punchedAt))) {
-            return $attendance;
-        }
-
-        $totalHours = app(AttendanceCalculator::class)->storedHours($attendance->check_in, $punchedAt);
-
-        $attendance->update([
-            'check_out' => $punchedAt,
-            'check_out_method' => $method,
-            'total_hours' => $totalHours,
-        ]);
-
-        return $attendance->fresh();
     }
 
     // ──────────────────────────────────────────────────────────────────────

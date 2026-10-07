@@ -7,6 +7,7 @@ use App\Models\AttendanceDailySummary;
 use App\Models\AttendancePunch;
 use App\Models\Employee;
 use App\Services\Attendance\AttendanceCalculator;
+use App\Services\Attendance\AttendanceDayRebuilder;
 use App\Services\Attendance\PunchTimeline;
 use App\Services\Attendance\ShiftResolver;
 use App\Services\Attendance\WorkingDayResolver;
@@ -157,7 +158,11 @@ class EngineAttendanceSyncService
             // the raw device punches back.
             $existing = Attendance::where('employee_id', $employeeId)->where('date', $date)->first();
 
-            if ($rowIn !== null && $existing?->is_regularized && ! $existing->hasCorrectedPunches()) {
+            // A day in a settled payroll, or one HR corrected, is never rewritten.
+            $locked = ($lockEmployee = Employee::find($employeeId)) !== null
+                && app(AttendanceDayRebuilder::class)->isLocked($lockEmployee, Carbon::parse($date));
+
+            if ($rowIn !== null && ! $locked && $existing?->is_regularized && ! $existing->hasCorrectedPunches()) {
                 // A half-day (status-only) regularisation: record the real
                 // punches, keep the approved status and late flags.
                 $existing->update([
@@ -168,7 +173,7 @@ class EngineAttendanceSyncService
                     'total_hours' => $workingHours,
                     'break_minutes' => $breakMinutes,
                 ]);
-            } elseif ($rowIn !== null && ! $existing?->is_regularized) {
+            } elseif ($rowIn !== null && ! $locked && ! $existing?->is_regularized) {
                 Attendance::updateOrCreate(
                     ['employee_id' => $employeeId, 'date' => $date],
                     [
@@ -274,7 +279,9 @@ class EngineAttendanceSyncService
             return null;
         }
 
-        $t = app(PunchTimeline::class)->process($punches, Carbon::parse($date));
+        $employee = Employee::find($employeeId);
+        $shift = $employee ? app(ShiftResolver::class)->resolve($employee, $date) : null;
+        $t = app(PunchTimeline::class)->process($punches, Carbon::parse($date), null, $shift);
         $method = fn (?Carbon $at) => $at ? $punches->first(fn (AttendancePunch $p) => $p->punched_at->equalTo($at))?->method : null;
 
         return [

@@ -2,21 +2,13 @@
 
 namespace App\Console\Commands;
 
-use App\Models\Attendance;
-use App\Models\AttendanceDailySummary;
 use App\Models\AttendancePunch;
 use App\Models\Employee;
-use App\Models\Payroll;
-use App\Models\Payslip;
-use App\Services\Attendance\AttendanceCalculator;
-use App\Services\Attendance\AttendanceScoreEngine;
-use App\Services\Attendance\PunchTimeline;
-use App\Services\Audit\AuditService;
+use App\Services\Attendance\AttendanceDayRebuilder;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Collection;
 
 /**
  * Re-process every employee's punches through the canonical PunchTimeline
@@ -39,13 +31,7 @@ use Illuminate\Support\Collection;
 #[Description('Rebuild processed attendance from the raw punches with the canonical timeline — preview unless --apply')]
 class RebuildPunchTimelines extends Command
 {
-    /** Payroll statuses whose attendance must no longer change (submitted to finance, or final). */
-    private const SETTLED_PAYROLL = ['pending_finance', 'finalized'];
-
-    /** @var array<string, bool> employee|date → inside settled payroll */
-    private array $settledCache = [];
-
-    public function handle(PunchTimeline $timeline, AttendanceCalculator $calculator): int
+    public function handle(AttendanceDayRebuilder $rebuilder): int
     {
         [$from, $to] = $this->range();
         if ($from === false) {
@@ -80,7 +66,7 @@ class RebuildPunchTimelines extends Command
 
             foreach ($employeeDays as $d) {
                 $counts['checked']++;
-                $row = $this->examine($employee, Carbon::parse($d->day), $timeline, $calculator);
+                $row = $rebuilder->examine($employee, Carbon::parse($d->day));
 
                 if ($row['skip'] !== null) {
                     $counts['skipped']++;
@@ -91,7 +77,7 @@ class RebuildPunchTimelines extends Command
                 } else {
                     $counts['change']++;
                     if ($apply) {
-                        $this->write($employee, $row);
+                        $rebuilder->apply($employee, $row, 'update', audit: true, reason: 'attendance:rebuild-punch-timelines --apply', score: true);
                         $counts['applied']++;
                     }
                 }
@@ -119,163 +105,6 @@ class RebuildPunchTimelines extends Command
     }
 
     /**
-     * What the canonical timeline says about one employee-day, against what
-     * the attendance row holds now.
-     *
-     * @return array<string, mixed>
-     */
-    private function examine(Employee $employee, Carbon $day, PunchTimeline $timeline, AttendanceCalculator $calculator): array
-    {
-        $punches = AttendancePunch::where('employee_id', $employee->id)
-            ->whereDate('punch_date', $day->toDateString())
-            ->orderBy('punched_at')
-            ->get();
-        $attendance = Attendance::where('employee_id', $employee->id)->whereDate('date', $day->toDateString())->first();
-        $summary = AttendanceDailySummary::where('employee_id', $employee->id)->whereDate('date', $day->toDateString())->first();
-
-        // Flags from the timeline; the figures from the calculator itself, so
-        // the rebuilt row matches every screen exactly.
-        $processed = $timeline->process($punches, $day);
-        $flags = $processed['flags'];
-        $calc = $calculator->forDay($employee, $day, $attendance, $punches);
-        $in = $calc->firstIn ? Carbon::parse($calc->firstIn) : null;
-        $out = $calc->lastOut ? Carbon::parse($calc->lastOut) : null;
-
-        $worked = $out !== null ? $calculator->storedHours($in, $out) : null;
-        $break = $calc->breakMinutes;
-
-        $row = [
-            'day' => $day,
-            'punches' => $punches,
-            'attendance' => $attendance,
-            'summary' => $summary,
-            'old_in' => $attendance?->check_in,
-            'old_out' => $attendance?->check_out,
-            'old_worked' => $attendance?->check_out ? (float) $attendance->total_hours : null,
-            'old_break' => $attendance ? (int) ($attendance->break_minutes ?? 0) : null,
-            'new_in' => $in,
-            'new_out' => $out,
-            'new_worked' => $worked,
-            'new_break' => $break,
-            'duplicates' => $flags['duplicate'] + $flags['retry'],
-            'ignored' => $flags['stray'] + $flags['other_day'],
-            'directions' => $flags['direction_corrected'],
-            'changes' => [],
-            'skip' => null,
-        ];
-
-        $row['skip'] = match (true) {
-            $attendance === null => 'no attendance row',
-            $attendance->is_regularized || $flags['regularised'] => 'regularised — corrected times kept',
-            $processed['first_in_at'] === null || $in === null => 'no valid Face IN',
-            $flags['impossible_duration'] => 'impossible duration — check manually',
-            $this->inSettledPayroll($employee, $day) => 'inside approved payroll',
-            default => null,
-        };
-
-        if ($row['skip'] !== null) {
-            return $row;
-        }
-
-        $isLate = $calc->isLate;
-        $target = [
-            'check_in' => $in,
-            'check_out' => $out,
-            'total_hours' => $worked ?? 0.0,   // still open: nothing worked yet
-            'break_minutes' => $break,
-            'is_late' => $isLate,
-            'late_minutes' => $calc->lateMinutes,
-            'missing_checkout' => $out === null && ! $day->isToday(),
-        ];
-        if (in_array($attendance->status, ['on_time', 'late'], true)) {
-            $target['status'] = $isLate ? 'late' : 'on_time';
-        }
-
-        $row['changes'] = $this->diff($attendance, $target);
-        $row['target'] = $target + $this->methods($punches, $in, $out);
-
-        return $row;
-    }
-
-    /**
-     * Columns whose value would change.
-     *
-     * @param  array<string, mixed>  $target
-     * @return array<string, mixed>
-     */
-    private function diff(Attendance $attendance, array $target): array
-    {
-        $changes = [];
-        foreach ($target as $column => $value) {
-            $current = $attendance->{$column};
-            $same = match (true) {
-                $value instanceof Carbon || $current instanceof \DateTimeInterface => ($value ? Carbon::parse($value)->format('Y-m-d H:i:s') : null) === ($current ? Carbon::parse($current)->format('Y-m-d H:i:s') : null),
-                $column === 'total_hours' => ($value === null && $current === null) || ($value !== null && $current !== null && abs((float) $value - (float) $current) < 0.01),
-                is_bool($value) => $value === (bool) $current,
-                default => (string) $value === (string) $current,
-            };
-            if (! $same) {
-                $changes[$column] = $value;
-            }
-        }
-
-        return $changes;
-    }
-
-    /**
-     * The verify method of the punches the day now starts and ends on.
-     *
-     * @param  Collection<int, AttendancePunch>  $punches
-     * @return array<string, ?string>
-     */
-    private function methods(Collection $punches, ?Carbon $in, ?Carbon $out): array
-    {
-        $at = fn (?Carbon $t) => $t ? $punches->first(fn (AttendancePunch $p) => $p->punched_at->equalTo($t))?->method : null;
-
-        return array_filter(['check_in_method' => $at($in), 'check_out_method' => $at($out)]);
-    }
-
-    /** @param  array<string, mixed>  $row */
-    private function write(Employee $employee, array $row): void
-    {
-        /** @var Attendance $attendance */
-        $attendance = $row['attendance'];
-        $before = $attendance->only(['check_in', 'check_out', 'total_hours', 'break_minutes', 'status', 'is_late', 'missing_checkout']);
-
-        $attendance->update($row['target']);
-
-        $row['summary']?->update([
-            'first_punch' => $row['new_in'],
-            'last_punch' => $row['new_out'],
-            'first_punch_method' => $row['target']['check_in_method'] ?? $row['summary']->first_punch_method,
-            'last_punch_method' => $row['target']['check_out_method'] ?? $row['summary']->last_punch_method,
-            'break_minutes' => $row['new_break'],
-            'working_hours' => $row['new_worked'] ?? 0,
-        ]);
-
-        app(AuditService::class)->event('ATTENDANCE_TIMELINE_REBUILT', AuditService::ATTENDANCE, $attendance,
-            old: $this->scalar($before),
-            new: $this->scalar($attendance->fresh()->only(array_keys($before))),
-            reason: 'attendance:rebuild-punch-timelines --apply',
-            subjectEmployeeId: $employee->id,
-            actor: null,
-        );
-
-        if (! $row['day']->isToday()) {
-            app(AttendanceScoreEngine::class)->scoreDay($employee, $row['day']->toDateString());
-        }
-    }
-
-    /**
-     * @param  array<string, mixed>  $values
-     * @return array<string, mixed>
-     */
-    private function scalar(array $values): array
-    {
-        return array_map(fn ($v) => $v instanceof \DateTimeInterface ? Carbon::parse($v)->format('Y-m-d H:i:s') : $v, $values);
-    }
-
-    /**
      * @param  array<string, mixed>  $row
      * @return array<int, string>
      */
@@ -294,37 +123,6 @@ class RebuildPunchTimelines extends Command
             (string) $row['duplicates'], (string) $row['ignored'], (string) $row['directions'],
             $row['skip'] !== null ? 'SKIP: '.$row['skip'] : ($apply ? 'updated: ' : 'yes: ').implode(', ', array_keys($row['changes'])),
         ];
-    }
-
-    /**
-     * Whether the day falls in a payroll that is with finance, finalised or
-     * locked and holds a payslip for the employee.
-     */
-    private function inSettledPayroll(Employee $employee, Carbon $day): bool
-    {
-        $key = $employee->id.'|'.$day->toDateString();
-        if (isset($this->settledCache[$key])) {
-            return $this->settledCache[$key];
-        }
-
-        $payrollIds = Payslip::where('employee_id', $employee->id)->pluck('payroll_id');
-        $settled = Payroll::whereIn('id', $payrollIds)
-            ->where(fn ($q) => $q->whereIn('status', self::SETTLED_PAYROLL)->orWhereNotNull('locked_at'))
-            ->get()
-            ->contains(function (Payroll $payroll) use ($day) {
-                try {
-                    $month = Carbon::parse('1 '.$payroll->month.' '.$payroll->year);
-                } catch (\Throwable) {
-                    return true;   // unreadable period: protect it
-                }
-                [$start, $end] = $payroll->cycle === 'cycle_b'
-                    ? [$month->copy()->subMonth()->setDay(21)->startOfDay(), $month->copy()->setDay(20)->endOfDay()]
-                    : [$month->copy()->startOfMonth(), $month->copy()->endOfMonth()];
-
-                return $day->betweenIncluded($start, $end);
-            });
-
-        return $this->settledCache[$key] = $settled;
     }
 
     /** @return array{0: string|null|false, 1: string|null} */

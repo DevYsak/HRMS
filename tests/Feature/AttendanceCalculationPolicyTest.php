@@ -2,6 +2,8 @@
 
 use App\Models\Attendance;
 use App\Models\AttendancePunch;
+use App\Models\BiometricDevice;
+use App\Models\BiometricLog;
 use App\Models\Employee;
 use App\Models\OtRequest;
 use App\Models\PublicHoliday;
@@ -299,10 +301,11 @@ test('later biometric sync does not overwrite a regularised day', function () {
         'original_check_in' => Carbon::parse('2026-09-14 10:30'), 'original_check_out' => null,
     ]);
 
-    // The device sync's checkout path (a later 21:45 card tap).
-    $sync = app(BiometricSyncService::class);
-    $resolve = new ReflectionMethod($sync, 'resolveCheckOut');
-    $resolve->invoke($sync, $e->fresh(), Carbon::parse('2026-09-14 21:45'), '2026-09-14', 'id_card');
+    // The device sync (a later 21:45 card tap), through the real apply path.
+    $device = BiometricDevice::create(['name' => 'AIFACE', 'ip_address' => '10.0.0.1', 'port' => 4370, 'timeout_seconds' => 5]);
+    BiometricLog::create(['device_id' => $device->id, 'device_user_id' => (string) $e->id, 'employee_id' => $e->id,
+        'punched_at' => '2026-09-14 21:45:00', 'punch_type' => 'check_out', 'verify_type' => 4, 'is_processed' => false]);
+    app(BiometricSyncService::class)->applyPendingLogs($device);
 
     $fresh = $row->fresh();
     expect($fresh->check_out->format('H:i'))->toBe('19:30')
