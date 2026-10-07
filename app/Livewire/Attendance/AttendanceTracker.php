@@ -1000,12 +1000,8 @@ class AttendanceTracker extends Component
             }
 
             // Overtime worked today — from validated sessions, never raw events.
-            $stdMin = (int) round((float) ($this->shift->standard_hours ?? 9) * 60);
-            $workedMin = $journeyOwnsToday
-                ? (int) ($this->punchJourney['working_minutes'] ?? 0)
-                : ($this->todayAttendance->check_out
-                    ? $this->rowWorkedMinutes($this->todayAttendance)
-                    : 0);
+            $stdMin = (int) ($this->todayCalc['expected_minutes'] ?? round((float) ($this->shift->standard_hours ?? 9) * 60));
+            $workedMin = (int) ($this->todayCalc['worked_minutes'] ?? 0);
             if ($workedMin > $stdMin + 30) {
                 $otMin = $workedMin - $stdMin;
                 // Pulse v3.1: time beyond the standard day is overtime only with
@@ -2327,6 +2323,15 @@ class AttendanceTracker extends Component
 
             if (! $requestedIn || ! $requestedOut) {
                 \Flux::toast('Both times are needed — tick the missing punch and fill it in.', variant: 'warning');
+
+                return;
+            }
+
+            // An OUT at or before the IN is only the next morning on a night
+            // shift; anywhere else it would become a 20h/24h phantom session.
+            if (substr($requestedOut, 0, 5) <= substr($requestedIn, 0, 5)
+                && ! app(ShiftResolver::class)->resolve($employee, $this->regDate)?->crossesMidnight()) {
+                $this->addError('regCheckOut', 'The check-out must be after the check-in.');
 
                 return;
             }

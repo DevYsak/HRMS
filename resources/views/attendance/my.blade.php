@@ -302,7 +302,7 @@
   @php
       // Live hero ticker counts VALIDATED working time (engine sessions), not
       // raw elapsed-since-check-in: closed-session minutes + the running
-      // session. Web-punch fallback: elapsed since check-in minus breaks.
+      // session. Web-punch fallback: elapsed since check-in (breaks not deducted).
       $heroLiveStartMs = null;
       $heroBaseMin = $workedMin;
       if (($punchJourney['raw_count'] ?? 0) > 0) {
@@ -312,7 +312,7 @@
           }
       } elseif ($isIn && $todayAttendance?->check_in) {
           $heroLiveStartMs = $todayAttendance->check_in->getTimestampMs();
-          $heroBaseMin = -$breakMin;
+          $heroBaseMin = 0;   // Pulse v3.1: breaks are never deducted
       }
   @endphp
   {{-- Greeting --}}

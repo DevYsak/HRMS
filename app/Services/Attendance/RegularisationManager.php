@@ -412,10 +412,37 @@ class RegularisationManager
         $in = Carbon::parse($date.' '.Carbon::parse($regularisation->requested_check_in)->format('H:i:s'));
         $out = Carbon::parse($date.' '.Carbon::parse($regularisation->requested_check_out)->format('H:i:s'));
         if ($out->lessThanOrEqualTo($in)) {
+            $nightShift = $regularisation->employee && $this->shifts->resolve($regularisation->employee, $date)?->crossesMidnight();
+            if (! $nightShift) {
+                return [];   // never carried into the next day (no phantom 20h/24h span)
+            }
             $out = $out->copy()->addDay();
         }
 
         return [$in, $out];
+    }
+
+    /**
+     * Instants an older approval may have written for an OUT at or before
+     * the IN (it used to move such an OUT to the next day). Only used to find
+     * and remove that request's own punches.
+     *
+     * @return array<int, Carbon>
+     */
+    private function legacyInstants(AttendanceRegularisation $regularisation): array
+    {
+        if (! $this->writesPunches($regularisation) || ! $regularisation->requested_check_in || ! $regularisation->requested_check_out) {
+            return [];
+        }
+
+        $date = Carbon::parse($regularisation->work_date)->toDateString();
+        $out = Carbon::parse($date.' '.Carbon::parse($regularisation->requested_check_out)->format('H:i:s'));
+
+        return [
+            Carbon::parse($date.' '.Carbon::parse($regularisation->requested_check_in)->format('H:i:s')),
+            $out,
+            $out->copy()->addDay(),
+        ];
     }
 
     /**
@@ -430,7 +457,7 @@ class RegularisationManager
         $keep = $others->flatMap(fn (AttendanceRegularisation $r) => $this->punchInstants($r))
             ->map(fn (Carbon $t) => $t->format('Y-m-d H:i:s'))->all();
 
-        $times = collect($this->punchInstants($regularisation))
+        $times = collect($this->punchInstants($regularisation) ?: $this->legacyInstants($regularisation))
             ->map(fn (Carbon $t) => $t->format('Y-m-d H:i:s'))
             ->reject(fn (string $t) => in_array($t, $keep, true))
             ->values()->all();

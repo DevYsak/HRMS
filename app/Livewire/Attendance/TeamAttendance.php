@@ -208,7 +208,7 @@ class TeamAttendance extends Component
             'present' => $present->count(),
             'late' => $present->where('is_late', true)->count(),
             'overtime_hours' => round($rangeAtt->sum(fn ($a) => $approvedOtDays->has($a->employee_id.'|'.$a->date->toDateString())
-                ? max(0, $calc->spanMinutes($a->check_in, $a->check_out) - AttendanceCalculator::DEFAULT_STANDARD_MINUTES) / 60
+                ? $calc->forAttendance($a, hasApprovedOt: true)->approvedOtMinutes / 60
                 : 0), 1),
             'worked_hours' => round($workedMin / 60),
             'avg_score' => $scoreRows->isNotEmpty() ? (int) round($scoreRows->avg('score')) : 0,

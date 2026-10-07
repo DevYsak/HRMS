@@ -87,7 +87,7 @@ test('a trailing unmatched IN today is a live session, not a break', function ()
 
 test('duplicate punches inside the debounce window are collapsed and counted', function () {
     punchAt($this->employee->id, '09:00:00'); // in
-    punchAt($this->employee->id, '09:00:05'); // duplicate read (< 4 min)
+    punchAt($this->employee->id, '09:00:05'); // duplicate read — the latest is kept
     punchAt($this->employee->id, '17:00');     // out
 
     $pj = Livewire::test(AttendanceTracker::class)->get('punchJourney');
@@ -96,7 +96,7 @@ test('duplicate punches inside the debounce window are collapsed and counted', f
         ->and($pj['kept_count'])->toBe(2)
         ->and($pj['duplicate_count'])->toBe(1)
         ->and($pj['session_count'])->toBe(1)
-        ->and($pj['working_minutes'])->toBe(480);
+        ->and($pj['working_minutes'])->toBe(479);   // 09:00:05 → 17:00:00
 });
 
 test('a past day with an unmatched IN is flagged as a missing punch', function () {

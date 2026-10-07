@@ -338,7 +338,9 @@ class AllAttendance extends Component
             $punchCount = max((int) $processed['raw_count'], $engineSynced ? (int) $summary->raw_punch_count : 0);
         } elseif ($engineSynced) {
             $stillInside = ((int) $summary->raw_punch_count) % 2 === 1;
-            $workedMin = (int) round((float) $summary->working_hours * 60);
+            // No punch stream: worked comes from the calculator below, never
+            // from an engine figure computed some other way.
+            $workedMin = 0;
             $breakMin = (int) $summary->break_minutes;
             $todayIn = $summary->first_punch?->format('h:i A');
             $todayOut = $stillInside ? null : $summary->last_punch?->format('h:i A');
@@ -346,10 +348,7 @@ class AllAttendance extends Component
         } else {
             $stillInside = false;
             $breakMin = (int) ($todayAtt->break_minutes ?? 0);
-            $workedMin = 0;
-            if ($todayAtt?->check_in) {
-                $workedMin = max(0, (int) $todayAtt->check_in->diffInMinutes($todayAtt->check_out ?? now()) - $breakMin);
-            }
+            $workedMin = 0;   // from the calculator below (breaks never deducted)
             $todayIn = $todayAtt?->check_in?->format('h:i A');
             $todayOut = $todayAtt?->check_out?->format('h:i A');
             $punchCount = 0;
@@ -489,7 +488,14 @@ class AllAttendance extends Component
             return;
         }
 
-        $attendance = app(AttendanceService::class)->approveRegularisation($request, Auth::id());
+        try {
+            app(AttendanceService::class)->approveRegularisation($request, Auth::id());
+        } catch (\DomainException $e) {
+            app(ClaimLockService::class)->release($request);
+            \Flux::toast($e->getMessage(), variant: 'danger');
+
+            return;
+        }
         app(ClaimLockService::class)->release($request);
         $request->refresh();
 
@@ -544,11 +550,17 @@ class AllAttendance extends Component
             return;
         }
 
-        $attendance = app(AttendanceService::class)->approveRegularisation(
-            $this->activeRequest,
-            Auth::id(),
-            $this->reviewComment ?: null,
-        );
+        try {
+            $attendance = app(AttendanceService::class)->approveRegularisation(
+                $this->activeRequest,
+                Auth::id(),
+                $this->reviewComment ?: null,
+            );
+        } catch (\DomainException $e) {
+            $this->addError('reviewComment', $e->getMessage());
+
+            return;
+        }
         $this->activeRequest->refresh();
 
         if ($attendance) {

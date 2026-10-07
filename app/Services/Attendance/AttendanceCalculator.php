@@ -105,9 +105,12 @@ class AttendanceCalculator
 
         $isToday = $day->isSameDay($now);
         $live = $firstIn !== null && $lastOut === null && $isToday;
+        $missingCheckout = $firstIn !== null && $lastOut === null && $now->greaterThan($this->missingCheckoutDeadline($day, $shift));
+        // Open and still inside the shift window: counting to now. Once the
+        // checkout is missing nothing more is counted — never a phantom day.
         $worked = $lastOut !== null
             ? $this->spanMinutes($firstIn, $lastOut)
-            : ($live ? $this->spanMinutes($firstIn, $now) : 0);
+            : ($live && ! $missingCheckout ? $this->spanMinutes($firstIn, $now) : 0);
 
         $working = $dayType === WorkingDayResolver::WORKING_DAY;
         $isLate = $working && $shift && $firstIn ? $shift->isLate(Carbon::parse($firstIn)) : false;
@@ -118,8 +121,6 @@ class AttendanceCalculator
         $beyond = max(0, $worked - $expected);
         $hasApprovedOt ??= $firstIn !== null && $this->hasApprovedOt($employee, $day);
         $approvedOt = $hasApprovedOt ? max(0, $worked - ($otThreshold ?: $expected)) : 0;
-
-        $missingCheckout = $firstIn !== null && $lastOut === null && $now->greaterThan($this->missingCheckoutDeadline($day, $shift));
 
         return new AttendanceDay(
             date: $day,

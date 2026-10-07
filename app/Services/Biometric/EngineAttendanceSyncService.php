@@ -7,7 +7,7 @@ use App\Models\AttendanceDailySummary;
 use App\Models\AttendancePunch;
 use App\Models\Employee;
 use App\Services\Attendance\AttendanceCalculator;
-use App\Services\Attendance\PunchClassifier;
+use App\Services\Attendance\PunchTimeline;
 use App\Services\Attendance\ShiftResolver;
 use App\Services\Attendance\WorkingDayResolver;
 use App\Support\PunchMethodResolver;
@@ -20,10 +20,11 @@ use Illuminate\Support\Facades\Http;
  *
  * Shared by the scheduled command (attendance:sync-engine) and the on-demand
  * "Quick Scan" button on the Biometric Summary page. Rows are matched by
- * employee_code. The engine pairs real device IN/OUT direction, so its
- * working_min / break_min / inside figures are stored as-is; HRMS only
- * re-derives them from the raw punch stream when the engine sends no totals
- * (its own naive time-based dedup would otherwise corrupt the engine's math).
+ * employee_code. Whenever the day's punches are in HRMS, the attendance row
+ * is built from the canonical PunchTimeline (Face = IN, ID Card = OUT, latest
+ * of a 60-second burst, stray cards ignored) — the same numbers every screen
+ * shows. The engine's own first/last punch and totals are only the fallback
+ * for a day it sent no punch stream for, and stay on the raw daily summary.
  */
 class EngineAttendanceSyncService
 {
@@ -92,27 +93,40 @@ class EngineAttendanceSyncService
             $inside = ! empty($row['inside']);
             $checkOut = $inside ? null : $lastPunch;
 
-            // Pulse v3.1: worked = final clock-out − first clock-in. The
-            // engine's working_min deducts its break pairing, which HRMS policy
-            // does not; break_min is kept for information only.
+            // Every individual punch first (Attendance Journey) — the raw
+            // stream the canonical timeline is built from.
+            $this->syncPunches($employeeId, $code, $date, $row['punches'] ?? [], $row['events'] ?? [], $row['device_serial'] ?? null);
+
+            // Rule 10 — with the punches in HRMS, the timeline decides first
+            // IN, final OUT and break. A day of stray card taps only has no
+            // valid IN and gets no attendance row (no phantom hours).
+            $rowIn = $firstPunch;
+            $rowOut = $checkOut;
+            $rowInMethod = $firstMethod;
+            $rowOutMethod = $lastMethod;
+            if ($processed = $this->processedDay($employeeId, $date)) {
+                $rowIn = $processed['in'];
+                $rowOut = $processed['out'];
+                $rowInMethod = $processed['in_method'] ?? $firstMethod;
+                $rowOutMethod = $processed['out_method'];
+                $breakMinutes = $processed['break'];
+            }
+
+            // Pulse v3.1: worked = final clock-out − first clock-in; breaks are
+            // information only and never deducted.
             $workingHours = app(AttendanceCalculator::class)->storedHours(
-                $firstPunch ? Carbon::parse($firstPunch) : null,
-                $checkOut ? Carbon::parse($checkOut) : null,
+                $rowIn ? Carbon::parse($rowIn) : null,
+                $rowOut ? Carbon::parse($rowOut) : null,
             );
 
             // Late is judged against the employee's HRMS shift (start + grace),
             // not the engine's own shift table.
-            if ($firstPunch !== null && $dayState === WorkingDayResolver::WORKING_DAY
+            if ($rowIn !== null && $dayState === WorkingDayResolver::WORKING_DAY
                 && ($shiftEmployee = Employee::with('shift')->find($employeeId))
                 && ($shift = app(ShiftResolver::class)->resolve($shiftEmployee, Carbon::parse($date)))) {
-                $isLate = $shift->isLate(Carbon::parse($firstPunch));
-                $lateMinutes = $shift->lateMinutes(Carbon::parse($firstPunch));
+                $isLate = $shift->isLate(Carbon::parse($rowIn));
+                $lateMinutes = $shift->lateMinutes(Carbon::parse($rowIn));
             }
-
-            // The engine pairs real device IN/OUT direction, so its break_min /
-            // working_min are authoritative. Only fall back to deriving them from
-            // HRMS's punch stream when the engine sent no totals at all.
-            $engineProvidedTotals = array_key_exists('working_min', $row) || array_key_exists('break_min', $row);
 
             // Rich biometric figures — backs the read-only Biometric Summary page.
             AttendanceDailySummary::updateOrCreate(
@@ -124,11 +138,8 @@ class EngineAttendanceSyncService
                     'first_punch_method' => $firstMethod,
                     'last_punch_method' => $lastMethod,
                     'break_minutes' => $breakMinutes,
-                    // First punch → last punch so far (still running while inside).
-                    'working_hours' => app(AttendanceCalculator::class)->storedHours(
-                        $firstPunch ? Carbon::parse($firstPunch) : null,
-                        $lastPunch ? Carbon::parse($lastPunch) : null,
-                    ),
+                    // The same worked figure as the attendance row.
+                    'working_hours' => $workingHours,
                     'late_minutes' => $lateMinutes,
                     'early_leave_minutes' => 0,
                     'overtime_minutes' => (int) ($row['overtime_min'] ?? 0),
@@ -146,25 +157,25 @@ class EngineAttendanceSyncService
             // the raw device punches back.
             $existing = Attendance::where('employee_id', $employeeId)->where('date', $date)->first();
 
-            if ($firstPunch !== null && $existing?->is_regularized && ! $existing->hasCorrectedPunches()) {
+            if ($rowIn !== null && $existing?->is_regularized && ! $existing->hasCorrectedPunches()) {
                 // A half-day (status-only) regularisation: record the real
                 // punches, keep the approved status and late flags.
                 $existing->update([
-                    'check_in' => $firstPunch,
-                    'check_out' => $checkOut,
-                    'check_in_method' => $firstMethod,
-                    'check_out_method' => $lastMethod,
+                    'check_in' => $rowIn,
+                    'check_out' => $rowOut,
+                    'check_in_method' => $rowInMethod,
+                    'check_out_method' => $rowOutMethod,
                     'total_hours' => $workingHours,
                     'break_minutes' => $breakMinutes,
                 ]);
-            } elseif ($firstPunch !== null && ! $existing?->is_regularized) {
+            } elseif ($rowIn !== null && ! $existing?->is_regularized) {
                 Attendance::updateOrCreate(
                     ['employee_id' => $employeeId, 'date' => $date],
                     [
-                        'check_in' => $firstPunch,
-                        'check_out' => $checkOut,
-                        'check_in_method' => $firstMethod,
-                        'check_out_method' => $lastMethod,
+                        'check_in' => $rowIn,
+                        'check_out' => $rowOut,
+                        'check_in_method' => $rowInMethod,
+                        'check_out_method' => $rowOutMethod,
                         'total_hours' => $workingHours,
                         'break_minutes' => $breakMinutes,
                         'status' => $isLate ? 'late' : 'on_time',
@@ -173,19 +184,6 @@ class EngineAttendanceSyncService
                         'work_mode' => 'office',
                     ]
                 );
-            }
-
-            // Every individual punch (Attendance Journey) — when the engine sends
-            // them, tagged with the engine's real IN/OUT direction (from events).
-            $this->syncPunches($employeeId, $code, $date, $row['punches'] ?? [], $row['events'] ?? [], $row['device_serial'] ?? null);
-
-            // Only derive break/working from HRMS's own punch stream when the
-            // engine sent no totals. The engine pairs real device direction, so
-            // when it provides break_min/working_min they are authoritative —
-            // re-deriving here (naive time-based dedup + alternation) corrupts
-            // them, e.g. an 18m break becoming 114m.
-            if (! $engineProvidedTotals) {
-                $this->reconcileFromPunches($employeeId, $date, $firstPunch, $lastPunch);
             }
 
             $synced++;
@@ -259,41 +257,33 @@ class EngineAttendanceSyncService
     }
 
     /**
-     * Recompute break minutes and working hours from the day's actual punch
-     * stream (via the shared PunchClassifier) and overwrite the engine-supplied
-     * figures. Only runs when there are enough punches for breaks to matter
-     * (in + at least one break pair); otherwise the engine values stand.
+     * The day as the canonical timeline reads the punches HRMS holds — first
+     * valid IN, final valid OUT (null while open), break from valid OUT → next
+     * IN — or null when there is no punch stream for the day.
+     *
+     * @return array{in: ?string, out: ?string, in_method: ?string, out_method: ?string, break: int}|null
      */
-    private function reconcileFromPunches(int $employeeId, string $date, ?string $firstPunch, ?string $lastPunch): void
+    private function processedDay(int $employeeId, string $date): ?array
     {
-        if ($firstPunch === null) {
-            return;
-        }
-
         $punches = AttendancePunch::where('employee_id', $employeeId)
             ->whereDate('punch_date', $date)
             ->orderBy('punched_at')
             ->get();
 
-        if ($punches->count() < 3) {
-            return;
+        if ($punches->isEmpty()) {
+            return null;
         }
 
-        // Breaks are informational (Pulse v3.1) — worked stays first-in → last-out.
-        $breakMinutes = app(PunchClassifier::class)->breakMinutes($punches);
-        $workingHours = app(AttendanceCalculator::class)->storedHours(
-            Carbon::parse($firstPunch),
-            $lastPunch !== null ? Carbon::parse($lastPunch) : null,
-        );
+        $t = app(PunchTimeline::class)->process($punches, Carbon::parse($date));
+        $method = fn (?Carbon $at) => $at ? $punches->first(fn (AttendancePunch $p) => $p->punched_at->equalTo($at))?->method : null;
 
-        // Not over corrected punches (see Attendance::hasCorrectedPunches()).
-        Attendance::where('employee_id', $employeeId)->whereDate('date', $date)
-            ->where(fn ($q) => $q->where('is_regularized', false)
-                ->orWhere(fn ($statusOnly) => $statusOnly->whereNull('original_check_in')->whereNull('original_check_out')))
-            ->update(['break_minutes' => $breakMinutes, 'total_hours' => $workingHours]);
-
-        AttendanceDailySummary::where('employee_id', $employeeId)->whereDate('date', $date)
-            ->update(['break_minutes' => $breakMinutes, 'working_hours' => $workingHours]);
+        return [
+            'in' => $t['first_in_at']?->format('Y-m-d H:i:s'),
+            'out' => $t['last_out_at']?->format('Y-m-d H:i:s'),
+            'in_method' => $method($t['first_in_at']),
+            'out_method' => $method($t['last_out_at']),
+            'break' => (int) $t['break_minutes'],
+        ];
     }
 
     /** Normalise the engine's status into HRMS's vocabulary. */

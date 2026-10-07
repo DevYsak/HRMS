@@ -372,11 +372,15 @@ class AttendanceService
             $checkIn = Carbon::parse($workDate.' '.Carbon::parse($regularisation->requested_check_in)->format('H:i:s'));
             $checkOut = Carbon::parse($workDate.' '.Carbon::parse($regularisation->requested_check_out)->format('H:i:s'));
 
-            // A night shift clocks out on the following calendar day. Both
-            // times are TIME columns anchored to the work date, so without this
-            // a 22:00 → 06:00 correction spans minus sixteen hours and the
-            // clamp below books the whole shift as zero hours worked.
+            // Only a night shift clocks out on the following calendar day.
+            // Anywhere else an OUT at or before the IN is a mistake — carrying
+            // it into the next day is how 20h/24h phantom sessions were made.
             if ($checkOut->lessThanOrEqualTo($checkIn)) {
+                $nightShift = $regularisation->employee
+                    && $this->shifts->resolve($regularisation->employee, $workDate)?->crossesMidnight();
+                if (! $nightShift) {
+                    throw new \DomainException('The corrected check-out must be after the check-in.');
+                }
                 $checkOut->addDay();
             }
 

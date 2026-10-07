@@ -130,29 +130,36 @@ test('an unsupported verify mode is stored as null rather than a bad chip', func
     expect($att->check_out_method)->toBeNull();
 });
 
-test('the engine break_min is trusted for the (informational) break; worked is first to last punch', function () {
+test('with the punch stream in HRMS, the canonical timeline decides the row — not the engine pairing', function () {
     $emp = Employee::factory()->create(['employee_code' => 77, 'manager_id' => null]);
 
-    // The real engine pairs device IN/OUT direction, so it correctly reports an
-    // 18-minute break over this noisy stream (duplicate reads at 13:30). HRMS's
-    // own time-based dedup would mis-pair this to a large phantom break — so it
-    // must NOT re-derive; the engine's figures stand.
-    $punchTimes = ['10:19:28', '12:56:29', '12:58:41', '13:19:11', '13:30:30', '13:30:33', '13:30:35', '15:02:45', '15:04:53', '16:34:25'];
+    // A noisy Face IN / Card OUT stream with a triple Face burst at 13:30. The
+    // engine reports its own 18-minute break; the timeline (latest of the burst,
+    // breaks from valid OUT → next IN) makes it 2 + 11 + 2 = 15 minutes, and
+    // that is what every screen shows.
+    $stream = [
+        ['10:19:28', 'face'], ['12:56:29', 'card'], ['12:58:41', 'face'], ['13:19:11', 'card'],
+        ['13:30:30', 'face'], ['13:30:33', 'face'], ['13:30:35', 'face'],
+        ['15:02:45', 'card'], ['15:04:53', 'face'], ['16:34:25', 'card'],
+    ];
 
     Http::fake(fn () => Http::response(['table' => [[
         'emp_id' => '77', 'first_punch' => '10:19:28', 'last_punch' => '16:34:25',
         'working_min' => 359, 'break_min' => 18, 'overtime_min' => 0, 'late' => false, 'delay_min' => 0,
-        'inside' => false, 'punch_count' => count($punchTimes), 'status' => 'Completed Shift',
-        'punches' => array_map(fn ($t) => ['time' => $t, 'verify' => 'face'], $punchTimes),
+        'inside' => false, 'punch_count' => count($stream), 'status' => 'Completed Shift',
+        'punches' => array_map(fn ($p) => ['time' => $p[0], 'verify' => $p[1]], $stream),
     ]]], 200));
 
     $this->artisan('attendance:sync-engine', ['--date' => '2026-06-29'])->assertSuccessful();
 
     $att = Attendance::where('employee_id', $emp->id)->first();
-    expect($att->break_minutes)->toBe(18)               // engine, not a re-derived phantom
+    expect($att->break_minutes)->toBe(15)               // the timeline's break, not the engine's 18
+        ->and($att->check_out->format('H:i:s'))->toBe('16:34:25')
         ->and((float) $att->total_hours)->toBe(6.23);   // Pulse v3.1: 10:19:28 → 16:34:25, break not deducted
 
-    expect(AttendanceDailySummary::where('employee_id', $emp->id)->first()->break_minutes)->toBe(18);
+    $summary = AttendanceDailySummary::where('employee_id', $emp->id)->first();
+    expect($summary->break_minutes)->toBe(15)
+        ->and((float) $summary->working_hours)->toBe(6.23);
 });
 
 test('a still-inside employee keeps check_out open (last punch is a live IN)', function () {
@@ -173,21 +180,21 @@ test('a still-inside employee keeps check_out open (last punch is a live IN)', f
     // The summary still records the last punch for reference.
     $summary = AttendanceDailySummary::where('employee_id', $emp->id)->first();
     expect($summary->last_punch->format('H:i:s'))->toBe('16:36:20')
-        ->and($summary->working_hours)->toBe('6.27')   // first → last punch so far (10:19:28 → 16:36:20)
-        ->and($summary->break_minutes)->toBe(18);
+        ->and($summary->working_hours)->toBe('0.00')   // the row's figure: nothing counted until the OUT
+        ->and($summary->break_minutes)->toBe(18);      // no punch stream sent: the engine's figure stands
 });
 
-test('when the engine sends no totals, break/working fall back to the punch stream', function () {
+test('when the engine sends no totals, break/working come from the punch stream', function () {
     $emp = Employee::factory()->create(['employee_code' => 78, 'manager_id' => null]);
 
     // Legacy/degraded engine row: no working_min or break_min keys at all, but a
-    // clean two-session punch stream (one 30-minute break). HRMS derives it.
-    $punchTimes = ['09:00:00', '12:00:00', '12:30:00', '18:00:00'];
+    // clean two-session Face IN / Card OUT stream (one 30-minute break).
+    $punchTimes = ['09:00:00' => 'face', '12:00:00' => 'card', '12:30:00' => 'face', '18:00:00' => 'card'];
 
     Http::fake(fn () => Http::response(['table' => [[
         'emp_id' => '78', 'first_punch' => '09:00:00', 'last_punch' => '18:00:00',
         'late' => false, 'delay_min' => 0, 'punch_count' => count($punchTimes), 'status' => 'Completed Shift',
-        'punches' => array_map(fn ($t) => ['time' => $t, 'verify' => 'face'], $punchTimes),
+        'punches' => array_map(fn ($t, $verify) => ['time' => $t, 'verify' => $verify], array_keys($punchTimes), $punchTimes),
     ]]], 200));
 
     $this->artisan('attendance:sync-engine', ['--date' => '2026-06-29'])->assertSuccessful();

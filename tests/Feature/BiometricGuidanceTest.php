@@ -32,19 +32,19 @@ test('a resolved direction wins over the method default', function () {
         ->and(PunchMethod::Face->guidance('sideways'))->toBe('Biometric IN');
 });
 
-test('a genuine face OUT is labelled Biometric OUT on the timeline, not IN', function () {
+test('a face punch the device tagged OUT is still guided as Biometric IN', function () {
     $employee = Employee::factory()->create();
-    foreach ([['11:33:20', 'in'], ['11:33:21', 'out']] as [$time, $direction]) {
+    foreach ([['11:30:00', 'in'], ['13:00:00', 'out'], ['18:00:00', 'out']] as [$time, $direction]) {
         AttendancePunch::factory()->create([
             'employee_id' => $employee->id, 'punched_at' => '2026-10-14 '.$time, 'punch_date' => '2026-10-14',
-            'method' => 'face', 'direction' => $direction, 'source' => 'biometric',
+            'method' => $time === '18:00:00' ? 'id_card' : 'face', 'direction' => $direction, 'source' => 'biometric',
         ]);
     }
 
     $timeline = app(PunchTimeline::class)->process(AttendancePunch::orderBy('punched_at')->get(), Carbon::parse('2026-10-14'));
 
-    expect(collect($timeline['nodes'])->pluck('guidance')->all())->toBe(['Biometric IN', 'Biometric OUT'])
-        ->and(collect($timeline['raw_events'])->pluck('guidance')->all())->toBe(['Biometric IN', 'Biometric OUT']);
+    expect(collect($timeline['raw_events'])->pluck('guidance')->all())->toBe(['Biometric IN', 'Biometric IN', 'Biometric OUT'])
+        ->and(collect($timeline['raw_events'])->pluck('direction_corrected')->all())->toBe([false, true, false]);
 });
 
 test('the punch guide scrolls across My Attendance and All Attendance', function () {

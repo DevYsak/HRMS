@@ -37,8 +37,8 @@ class CheckExcessBreaks extends Command
             // Pulse v3.1: total break for the day from the canonical calculation
             // (device punch gaps, else logged breaks); excess only above 60
             // minutes. Informational — worked hours are never reduced.
-            $totalBreakMins = (int) $record->breakLogs->whereNotNull('break_end')->sum('duration_minutes')
-                ?: app(AttendanceCalculator::class)->forAttendance($record)->breakMinutes;
+            $totalBreakMins = app(AttendanceCalculator::class)->forAttendance($record)->breakMinutes
+                ?: (int) $record->breakLogs->whereNotNull('break_end')->sum('duration_minutes');
             $allowance = AttendanceCalculator::EXCESS_BREAK_MINUTES;
 
             if ($totalBreakMins > $allowance) {

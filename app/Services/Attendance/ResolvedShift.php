@@ -48,6 +48,12 @@ readonly class ResolvedShift
         return $this->isLate($checkIn) ? (int) $this->lateCutoff()->diffInMinutes($checkIn->copy()->startOfMinute()) : 0;
     }
 
+    /** A night shift: it ends on the calendar day after it starts. */
+    public function crossesMidnight(): bool
+    {
+        return ! $this->end->isSameDay($this->start);
+    }
+
     /** Expected working minutes for a full shift day (standard hours). */
     public function expectedMinutes(): int
     {

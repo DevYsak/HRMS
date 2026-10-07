@@ -22,11 +22,17 @@ use Illuminate\Support\Collection;
  *    double verify (device conflict), or an accidental re-punch straight after
  *    checkout. It is merged into the kept punch and excluded from every
  *    calculation, so it can never open a phantom session.
- *  - Genuine pairs: the exception to the window. Same-method device reads the
- *    device itself tagged IN then OUT (Face IN 11:33:20 + Face OUT 11:33:21)
- *    are two real actions and both are kept, with those directions.
- *  - Direction: the engine's real IN/OUT tag when present; otherwise inferred
- *    by alternation across the kept punches.
+ *  - Direction is decided by the method: Face = IN, ID Card = OUT
+ *    (config biometric.method_direction). A device IN/OUT tag that disagrees
+ *    is overridden and the punch is flagged "direction corrected"; the raw
+ *    row keeps what the device sent. Punches with no mapped method fall back
+ *    to the device tag, then to alternation.
+ *  - Duplicates: punches of the SAME effective direction within the window
+ *    are one action read several times — the LATEST is kept, the earlier
+ *    ones are flagged duplicate. Opposite actions (Face IN, Card OUT) are
+ *    never merged.
+ *  - A punch dated on another calendar day never joins this day — no OUT is
+ *    carried across midnight, so there are no 20h/24h phantom sessions.
  *  - Missing punches: a same-direction pair beyond the merge window
  *    (IN→IN = missing OUT, OUT→OUT = missing IN) or a trailing IN on a past
  *    day. Never auto-fixed — flagged for regularization.
@@ -44,13 +50,8 @@ class PunchTimeline
      */
     public const MERGE_WINDOW_SECONDS = 60;
 
-    /**
-     * Directions fixed for the punches of a genuine IN/OUT pair, keyed by
-     * spl_object_id — in memory for one call only; raw rows are never written.
-     *
-     * @var array<int, string>
-     */
-    protected array $pairDirections = [];
+    /** A worked span longer than this is flagged as impossible for one day. */
+    public const IMPOSSIBLE_MINUTES = 16 * 60;
 
     /**
      * Process one day's raw punches into the canonical timeline payload.
@@ -60,14 +61,20 @@ class PunchTimeline
      */
     public function process(Collection $raw, Carbon $day, ?AttendanceDailySummary $summary = null): array
     {
-        $this->pairDirections = [];
-
         if ($raw->isEmpty()) {
             return $this->emptyResult();
         }
 
         $ordered = $raw->sortBy('punched_at')->values();
-        [$kept, $flags, $duplicateCount, $conflictCount] = $this->mergeNoise($ordered);
+
+        // Rule 7 — a punch stamped on another calendar day is never part of
+        // this day (an OUT carried past midnight is how 20h/24h phantom
+        // sessions appear). It stays in the raw audit list, flagged.
+        [$sameDay, $otherDay] = $ordered->partition(fn (AttendancePunch $p) => $p->punched_at->isSameDay($day));
+        [$kept, $flags, $duplicateCount, $conflictCount] = $this->mergeNoise($sameDay->values());
+        foreach ($otherDay as $p) {
+            $flags[spl_object_id($p)] = ['ignored', 'Ignored — stamped '.$p->punched_at->format('d M h:i A').', another day'];
+        }
 
         $hasDirection = $kept->contains(fn (AttendancePunch $p) => $this->effectiveDirection($p) !== null);
         $directions = $this->resolveDirections($kept, $hasDirection);
@@ -86,7 +93,36 @@ class PunchTimeline
             return $this->annotate($p, $f, $note);
         })->all();
 
-        return $this->assemble($kept, $directions, $stray, $ordered->count(), $rawEvents, $duplicateCount, $conflictCount, $day, $summary);
+        $result = $this->assemble($kept, $directions, $stray, $ordered->count(), $rawEvents, $duplicateCount, $conflictCount, $day, $summary);
+
+        $result['flags'] = $this->flagsFor($result, $ordered, $otherDay->count());
+
+        return $result;
+    }
+
+    /**
+     * Problems on the day, by kind — for HR exception views and the rebuild
+     * command's preview.
+     *
+     * @param  array<string, mixed>  $result
+     * @param  Collection<int, AttendancePunch>  $ordered
+     * @return array{duplicate: int, retry: int, stray: int, missing_out: bool, missing_checkout: bool, regularised: bool, impossible_duration: bool, other_day: int, direction_corrected: int}
+     */
+    protected function flagsFor(array $result, Collection $ordered, int $otherDay): array
+    {
+        $missingOuts = collect($result['nodes'])->filter(fn (array $n) => $n['type'] === 'missing' && $n['dir'] === 'OUT')->count();
+
+        return [
+            'duplicate' => (int) $result['duplicate_count'],
+            'retry' => (int) $result['conflict_count'],
+            'stray' => (int) $result['ignored_count'],
+            'missing_out' => $missingOuts - ($result['missing_out'] ? 1 : 0) > 0,   // repeated IN mid-day
+            'missing_checkout' => (bool) $result['missing_out'],
+            'regularised' => $ordered->contains(fn (AttendancePunch $p) => $p->source === 'regularisation'),
+            'impossible_duration' => (int) $result['working_minutes'] > self::IMPOSSIBLE_MINUTES,
+            'other_day' => $otherDay,
+            'direction_corrected' => $ordered->filter(fn (AttendancePunch $p) => $this->directionCorrected($p))->count(),
+        ];
     }
 
     /**
@@ -98,13 +134,15 @@ class PunchTimeline
      */
     public function neutralEvents(Collection $punches): array
     {
-        $this->pairDirections = [];
-
         if ($punches->isEmpty()) {
             return [];
         }
 
-        $ordered = $punches->sortBy('punched_at')->values();
+        // A punch stamped on another calendar day than its punch_date never
+        // joins the day (no cross-midnight gaps), as in process().
+        $ordered = $punches->sortBy('punched_at')
+            ->filter(fn (AttendancePunch $p) => $p->punch_date === null || $p->punched_at->isSameDay($p->punch_date))
+            ->values();
         [$kept] = $this->mergeNoise($ordered);
         $hasDirection = $kept->contains(fn (AttendancePunch $p) => $this->effectiveDirection($p) !== null);
         $directions = $this->resolveDirections($kept, $hasDirection);
@@ -156,7 +194,7 @@ class PunchTimeline
      * the HR/admin audit view. Two punches within the merge window are the same
      * physical action recorded twice — KEEP EXACTLY ONE, never both, never none:
      *
-     *  - Same direction (or same method) → a duplicate read; keep the first.
+     *  - Same effective direction → a duplicate read / retry; keep the LATEST.
      *  - Opposite direction → a reader flip-flop (one tap logged as both an IN
      *    and an OUT edge, e.g. 10:28:59 IN + 10:29:00 OUT). Keep the single edge
      *    whose direction keeps the day alternating with the punch before the
@@ -176,20 +214,6 @@ class PunchTimeline
         foreach ($ordered as $p) {
             $prev = $kept->last();
             $withinWindow = $prev && (int) $prev->punched_at->diffInSeconds($p->punched_at) <= self::MERGE_WINDOW_SECONDS;
-
-            // A genuine pair: the device recorded an explicit IN and then an
-            // explicit OUT with the same biometric method (e.g. Face IN
-            // 11:33:20 + Face OUT 11:33:21). Two real actions, however close —
-            // merging them would leave a lone IN and show the employee as
-            // still working.
-            if ($withinWindow && $this->isGenuinePair($prev, $p)) {
-                $this->pairDirections[spl_object_id($prev)] = 'in';
-                $this->pairDirections[spl_object_id($p)] = 'out';
-                $kept->push($p);
-                $flag[spl_object_id($p)] = ['kept', 'Genuine IN/OUT pair — the device recorded an explicit OUT'];
-
-                continue;
-            }
 
             if ($withinWindow) {
                 $prevDir = $this->effectiveDirection($prev);
@@ -222,37 +246,24 @@ class PunchTimeline
                     continue;
                 }
 
-                // Same direction within the window → a duplicate read (or a
-                // Face+Card re-verify of the same edge when the method differs).
+                // Same effective direction within the window → one action
+                // read several times (a retry). Business rule: keep the
+                // LATEST punch of the burst; every earlier one is flagged.
+                // Comparing against the last KEPT punch chains a burst, so
+                // Face 10:30:01 / 10:30:22 / 10:30:48 keeps 10:30:48 only.
                 if (! $opposite) {
                     if ($sameMethod) {
-                        // Rule 2 — one reader firing several times in a burst.
-                        //
-                        // Which edge is real depends on the direction. Somebody
-                        // arriving is at the door on the FIRST read; somebody
-                        // leaving is gone after the LAST. Keeping the latest
-                        // read unconditionally shortened every duplicated
-                        // arrival — a 09:00:00 / 09:00:05 pair started the day
-                        // at 09:00:05, and the employee silently lost that time
-                        // from their worked hours.
                         $duplicates++;
-                        $burstDir = $curDir ?? $prevDir;
-                        $keepLater = $burstDir === 'out';
-
-                        if ($keepLater) {
-                            $kept->pop();
-                            $flag[spl_object_id($prev)] = ['duplicate', 'Duplicate read — superseded by the '.$p->punched_at->format('h:i:s A').' punch'];
-                            $kept->push($p);
-                            $flag[spl_object_id($p)] = ['kept', null];
-                        } else {
-                            $flag[spl_object_id($p)] = ['duplicate', 'Duplicate read — merged into the '.$prev->punched_at->format('h:i:s A').' punch'];
-                        }
+                        $label = 'Duplicate read';
                     } else {
-                        // A Face+Card / Face+Fingerprint re-verify of one edge —
-                        // keep the first, merge the second in.
                         $conflicts++;
-                        $flag[spl_object_id($p)] = ['retry', 'Authentication retry — merged into the '.$prev->punched_at->format('h:i:s A').' punch'];
+                        $label = 'Authentication retry';
                     }
+
+                    $kept->pop();
+                    $flag[spl_object_id($prev)] = [$sameMethod ? 'duplicate' : 'retry', $label.' — superseded by the later '.$p->punched_at->format('h:i:s A').' punch'];
+                    $kept->push($p);
+                    $flag[spl_object_id($p)] = ['kept', null];
 
                     continue;
                 }
@@ -302,26 +313,12 @@ class PunchTimeline
         return $stray;
     }
 
-    /**
-     * Whether two punches inside the merge window are a genuine IN then OUT:
-     * both device reads with the same known biometric method, the device's
-     * own tags explicitly IN then OUT, and the first able to open a session
-     * (a Card can never start attendance, Rule 1). Repeats of one direction
-     * stay duplicates, and an IN echoing straight after an OUT stays noise,
-     * so neither can open a phantom live session.
-     */
-    protected function isGenuinePair(AttendancePunch $first, AttendancePunch $second): bool
+    /** The device sent an explicit IN/OUT that the method rule overrode. */
+    public function directionCorrected(AttendancePunch $p): bool
     {
-        $systemSources = ['regularisation', 'system_auto', 'web'];
+        $effective = $this->effectiveDirection($p);
 
-        return $first->direction === 'in'
-            && $second->direction === 'out'
-            && $first->methodEnum() !== null
-            && (string) $first->method === (string) $second->method
-            && ! in_array($first->source, $systemSources, true)
-            && ! in_array($second->source, $systemSources, true)
-            && ! $this->isOutOnlyMethod($first)
-            && ($this->pairDirections[spl_object_id($first)] ?? null) !== 'out';
+        return in_array($p->direction, ['in', 'out'], true) && $effective !== null && $effective !== $p->direction;
     }
 
     /** Whether a punch's method is configured as an out-only edge (e.g. Card). */
@@ -341,10 +338,6 @@ class PunchTimeline
      */
     protected function effectiveDirection(AttendancePunch $p): ?string
     {
-        if (isset($this->pairDirections[spl_object_id($p)])) {
-            return $this->pairDirections[spl_object_id($p)];
-        }
-
         // Punches the system wrote itself (an approved regularisation, the auto
         // punch-out, a web clock) carry the direction they were written with.
         // The method map is for device reads only: a regularised IN recorded
@@ -539,7 +532,7 @@ class PunchTimeline
         $latestOut = $lastOutIndex !== null ? $kept->get($lastOutIndex) : null;
         $latestOutAt = ($latestOut && $firstInAt && $latestOut->punched_at->greaterThan($firstInAt)) ? Carbon::parse($latestOut->punched_at) : null;
         $lastOutAt = ($trailingIn) ? null : $latestOutAt;
-        $spanEnd = $live ? Carbon::now() : ($lastOutAt ?? $latestOutAt);
+        $spanEnd = $live ? Carbon::now() : $lastOutAt;
         $workingMinutes = ($firstInAt && $spanEnd && $spanEnd->greaterThan($firstInAt))
             ? (int) floor($firstInAt->diffInSeconds($spanEnd, true) / 60)
             : 0;
@@ -671,6 +664,11 @@ class PunchTimeline
     /** An annotated raw device event for the HR/admin audit view. */
     protected function annotate(AttendancePunch $p, string $flag, ?string $note): array
     {
+        $corrected = $this->directionCorrected($p);
+        if ($corrected && $note === null) {
+            $note = 'Direction corrected — the device recorded '.strtoupper((string) $p->direction).'; '.($p->methodEnum()?->label() ?? 'this method').' = '.strtoupper((string) $this->effectiveDirection($p));
+        }
+
         return [
             'time' => $p->punched_at->format('h:i:s A'),
             // The resolved direction (method-derived), so a Face punch never
@@ -682,8 +680,10 @@ class PunchTimeline
             'device' => $p->device_serial,
             'source' => $p->source,
             'verify' => $p->verify_raw,
-            'flag' => $flag,                       // kept | duplicate | retry
+            'flag' => $flag,                       // kept | duplicate | retry | ignored
             'note' => $note,
+            'raw_direction' => in_array($p->direction, ['in', 'out'], true) ? $p->direction : null,
+            'direction_corrected' => $corrected,
         ];
     }
 
@@ -740,6 +740,7 @@ class PunchTimeline
             'live' => false, 'live_start_ms' => null, 'live_start_label' => null,
             'live_elapsed_minutes' => 0, 'missing_out' => false, 'needs_regularization' => false,
             'ignored' => [], 'ignored_count' => 0,
+            'flags' => ['duplicate' => 0, 'retry' => 0, 'stray' => 0, 'missing_out' => false, 'missing_checkout' => false, 'regularised' => false, 'impossible_duration' => false, 'other_day' => 0, 'direction_corrected' => 0],
         ];
     }
 }
