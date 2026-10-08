@@ -34,7 +34,7 @@ class EmployeePolicy
 
     public function create(User $user): bool
     {
-        return $user->canManageEmployees();
+        return $user->canManageEmployees() && $user->hasPermission('create_employee');
     }
 
     public function update(User $user, Employee $employee): bool
@@ -47,6 +47,7 @@ class EmployeePolicy
     public function delete(User $user, Employee $employee): bool
     {
         return $user->canManageEmployees()
+            && $user->hasPermission('delete_employee')
             && $user->coversEmployee($employee)
             && $employee->user_id !== $user->id
             && ! $this->isProtectedFrom($user, $employee);

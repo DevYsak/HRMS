@@ -47,6 +47,8 @@ class OnboardingChecklist extends Component
 
     public function mount(int $employee, string $phase = 'onboarding'): void
     {
+        abort_unless(Auth::user()->hasPermission($phase === 'offboarding' ? 'manage_offboarding' : 'manage_onboarding'), 403);
+
         // Inside the user's reach (a department-scoped HR user manages only
         // their departments' checklists).
         $this->authorize('update', Employee::findOrFail($employee));

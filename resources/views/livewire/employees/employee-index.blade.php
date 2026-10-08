@@ -31,11 +31,11 @@
                 icon="{{ $showDeleted ? 'arrow-uturn-left' : 'archive-box' }}">
                 {{ $showDeleted ? 'Back to active' : 'Deleted' }}
             </flux:button>
-            @unless($showDeleted)
+            @if(! $showDeleted && auth()->user()->can('create', \App\Models\Employee::class))
                 <flux:button href="{{ route('employees.create') }}" wire:navigate variant="primary" icon="plus">
                     Add Employee
                 </flux:button>
-            @endunless
+            @endif
         </div>
     </div>
 
@@ -254,7 +254,9 @@
                                         />
                                     </flux:tooltip>
                                     
-                                    @if($showDeleted)
+                                    @if(! auth()->user()->can('delete', $emp))
+                                        {{-- Deleting and restoring need Delete Employee (D1: not a Director default). --}}
+                                    @elseif($showDeleted)
                                         <flux:tooltip content="Restore with leave, attendance and payroll history">
                                             <flux:button
                                                 wire:click="restoreEmployee({{ $emp->id }})"

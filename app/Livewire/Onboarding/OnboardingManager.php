@@ -30,7 +30,7 @@ class OnboardingManager extends Component
 
     public function render()
     {
-        abort_unless(Auth::user()->canManageEmployees(), 403);
+        abort_unless(Auth::user()->hasPermission('manage_onboarding'), 403);
 
         $employees = Employee::with(['user', 'department', 'onboardingTasks'])
             ->when($this->filter === 'active', fn ($q) => $q->where('status', 'active')

@@ -46,7 +46,7 @@ class OffboardingManager extends Component
 
     public function selectEmployee($id)
     {
-        abort_unless(Auth::user()->canManageEmployees(), 403);
+        abort_unless(Auth::user()->hasPermission('manage_offboarding'), 403);
         $employee = Employee::with('exitRecord', 'assets')->findOrFail($id);
         $this->authorizeOffboarding($employee);
         $this->selectedEmployeeId = $employee->id;
@@ -79,7 +79,7 @@ class OffboardingManager extends Component
 
     public function processOffboarding(OnboardingService $onboardingService)
     {
-        abort_unless(Auth::user()->canManageEmployees(), 403);
+        abort_unless(Auth::user()->hasPermission('manage_offboarding'), 403);
 
         $this->validate([
             'lastWorkingDay' => 'required|date',
@@ -131,7 +131,7 @@ class OffboardingManager extends Component
 
     public function returnAsset($assetId, AssetAssignmentService $assetService)
     {
-        abort_unless(Auth::user()->canManageEmployees(), 403);
+        abort_unless(Auth::user()->hasPermission('manage_offboarding'), 403);
 
         // Only an asset held by the employee being offboarded.
         $asset = Asset::where('employee_id', $this->selectedEmployeeId)->findOrFail($assetId);
@@ -153,7 +153,7 @@ class OffboardingManager extends Component
 
     public function render()
     {
-        abort_unless(Auth::user()->canManageEmployees(), 403);
+        abort_unless(Auth::user()->hasPermission('manage_offboarding'), 403);
 
         // Inside the actor's reach, and never themselves (they cannot offboard themselves).
         $reach = Auth::user()->accessibleEmployeeIds();

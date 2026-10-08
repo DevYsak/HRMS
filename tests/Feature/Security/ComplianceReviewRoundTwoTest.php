@@ -248,11 +248,17 @@ test('a bulk carry forward skips the HR user\'s own balance', function () {
         ->and(implode(' ', $result['errors']))->toContain('skipped');
 });
 
-test('a Director offboarding someone is not offered the payroll-only settlement fields', function () {
-    $director = r2User(UserRole::Director);
+test('someone offboarding without payroll rights is not offered the payroll-only settlement fields', function () {
+    // D1: a Director no longer offboards by default; a people-ops role does.
+    $peopleOps = Role::create(['name' => 'People Ops', 'slug' => 'people-ops', 'is_system' => false, 'is_active' => true]);
+    $peopleOps->permissions()->sync(Permission::whereIn('key', ['manage_employees', 'manage_offboarding', 'view_employee'])->pluck('id'));
+    $peopleOps->flushPermissionCache();
+    $offboarder = User::factory()->create(['role' => UserRole::Employee, 'role_id' => $peopleOps->id]);
     $employee = r2User(UserRole::Employee);
 
-    Livewire::actingAs($director)->test(OffboardingManager::class)
+    Livewire::actingAs(r2User(UserRole::Director))->test(OffboardingManager::class)->assertForbidden();
+
+    Livewire::actingAs($offboarder)->test(OffboardingManager::class)
         ->call('selectEmployee', $employee->employee->id)
         ->assertDontSee('Final Settlement Amount')
         ->assertSee('entered by payroll');

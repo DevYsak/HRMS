@@ -3,6 +3,7 @@
 namespace App\Services\Navigation;
 
 use App\Models\AttendanceRegularisation;
+use App\Models\Employee;
 use App\Models\HolidayWorkRequest;
 use App\Models\LeaveRequest;
 use App\Models\OtRequest;
@@ -245,10 +246,13 @@ class Sidebar
                 'items' => [
                     ['label' => 'Manage Employees', 'route' => 'employees.index', 'active' => ['employees.index', 'employees.edit', 'employees.profile', 'employees.create'],
                         'when' => fn (User $u) => $u->canManageEmployees()],
-                    ['label' => 'Import Employees', 'route' => 'employees.import'],
+                    ['label' => 'Import Employees', 'route' => 'employees.import',
+                        'when' => fn (User $u) => $u->can('create', Employee::class)],
                     ['label' => 'Teams', 'route' => 'employees.teams'],
-                    ['label' => 'Onboarding', 'route' => 'employees.onboarding-manager', 'active' => ['employees.onboarding-manager', 'employees.onboarding']],
-                    ['label' => 'Offboarding', 'route' => 'employees.offboarding-manager', 'active' => ['employees.offboarding-manager', 'employees.offboarding']],
+                    ['label' => 'Onboarding', 'route' => 'employees.onboarding-manager', 'active' => ['employees.onboarding-manager', 'employees.onboarding'],
+                        'when' => fn (User $u) => $u->hasPermission('manage_onboarding')],
+                    ['label' => 'Offboarding', 'route' => 'employees.offboarding-manager', 'active' => ['employees.offboarding-manager', 'employees.offboarding'],
+                        'when' => fn (User $u) => $u->hasPermission('manage_offboarding')],
                     ['label' => 'Assets', 'route' => 'operations.assets'],
                     ['label' => 'Directory', 'route' => 'employees.directory', ...$self],
                     ['label' => 'Org Chart', 'route' => 'employees.org-chart', ...$self],

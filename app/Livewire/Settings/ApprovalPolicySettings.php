@@ -4,6 +4,7 @@ namespace App\Livewire\Settings;
 
 use App\Livewire\Concerns\RequiresPayrollModule;
 use App\Models\PayrollApprovalPolicy;
+use App\Models\Role;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -20,6 +21,8 @@ class ApprovalPolicySettings extends Component
     use RequiresPayrollModule;
 
     private const FINANCE_REQUIRED = 'The approval chain must keep an active Finance step — payroll cannot be finalised without Finance sign-off.';
+
+    private const APPROVER_CANNOT_APPROVE = 'This approver cannot open Finance Approval. Grant Finance Approval or Run Payroll in Roles & Permissions first.';
 
     public bool $showModal = false;
 
@@ -76,6 +79,12 @@ class ApprovalPolicySettings extends Component
             $data['specific_user_id'] = null;
         }
 
+        if (($data['is_active'] ?? true) && ! $this->approverCanOpenApprovals($data['approver_type'], $data['specific_user_id'])) {
+            $this->addError('approver_type', self::APPROVER_CANNOT_APPROVE);
+
+            return;
+        }
+
         $editing = $this->editingId;
         $kept = $this->keepingFinanceSignOff(function () use ($data, $editing) {
             if ($editing) {
@@ -113,8 +122,15 @@ class ApprovalPolicySettings extends Component
     {
         $this->authorize('manage-settings');
 
-        $kept = $this->keepingFinanceSignOff(function () use ($id) {
-            $policy = PayrollApprovalPolicy::findOrFail($id);
+        $policy = PayrollApprovalPolicy::findOrFail($id);
+
+        if (! $policy->is_active && ! $this->approverCanOpenApprovals($policy->approver_type, $policy->specific_user_id)) {
+            \Flux::toast(self::APPROVER_CANNOT_APPROVE, variant: 'danger');
+
+            return;
+        }
+
+        $kept = $this->keepingFinanceSignOff(function () use ($policy) {
             $policy->update(['is_active' => ! $policy->is_active]);
         });
 
@@ -155,6 +171,28 @@ class ApprovalPolicySettings extends Component
         }
 
         return true;
+    }
+
+    /**
+     * Whether the step's approver can open Finance Approval (run-payroll or
+     * approve-finance) — otherwise a run would wait on someone who cannot act.
+     * A Director needs Finance Approval granted in Roles & Permissions (D1).
+     */
+    private function approverCanOpenApprovals(string $approverType, ?int $specificUserId): bool
+    {
+        if ($approverType === 'super_admin') {
+            return true;
+        }
+
+        if ($approverType === 'specific_user') {
+            $user = User::find($specificUserId);
+
+            return $user !== null && ($user->canRunPayroll() || $user->canApproveFinance());
+        }
+
+        $role = Role::where('slug', $approverType)->first();
+
+        return $role === null || $role->hasPermission('run_payroll') || $role->hasPermission('approve_finance');
     }
 
     private function swapWithNeighbor(int $id, int $direction): void

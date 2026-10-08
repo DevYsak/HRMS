@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Enums\UserRole;
 use App\Models\User;
 use Closure;
 use Illuminate\Http\Request;
@@ -21,7 +22,7 @@ class EnsureRole
      *   approve-finance  | manage-settings | manage-documents
      *   view-finance-profile | review-performance
      *   lock-payroll | unlock-payroll | delete-payslip
-     *   manage-leave-encashment
+     *   manage-leave-encashment | decide-leave-encashment
      *
      * @param  Closure(Request): (Response)  $next
      */
@@ -61,6 +62,8 @@ class EnsureRole
             'unlock-payroll' => $user->canUnlockPayroll(),
             'delete-payslip' => $user->canDeletePayslip(),
             'manage-leave-encashment' => $user->hasPermission('manage_leave_encashment'),
+            // D3: a Director or the HR Admin gives the final encashment approval.
+            'decide-leave-encashment' => $user->isSuperAdmin() || $user->isHrAdmin() || $user->role === UserRole::Director,
             default => false,
         };
     }

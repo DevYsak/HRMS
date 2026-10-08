@@ -16,7 +16,9 @@ use App\Models\Employee;
 use App\Models\ExitRecord;
 use App\Models\LeaveRequest;
 use App\Models\LeaveType;
+use App\Models\Permission;
 use App\Models\ProfileChangeRequest;
+use App\Models\Role;
 use App\Models\User;
 use App\Models\WfhRequest;
 use App\Services\EmployeeDashboardService;
@@ -159,11 +161,15 @@ test('HR cannot offboard themselves', function () {
         ->assertForbidden();
 });
 
-test('the final settlement amount is set by payroll staff, not by a Director', function () {
-    $director = scopeUser(UserRole::Director);
+test('the final settlement amount is set by payroll staff, not by whoever offboards', function () {
+    // D1: a Director no longer offboards by default; a people-ops role does.
+    $peopleOps = Role::create(['name' => 'People Ops', 'slug' => 'people-ops', 'is_system' => false, 'is_active' => true]);
+    $peopleOps->permissions()->sync(Permission::whereIn('key', ['manage_employees', 'manage_offboarding', 'view_employee'])->pluck('id'));
+    $peopleOps->flushPermissionCache();
+    $offboarder = User::factory()->create(['role' => UserRole::Employee, 'role_id' => $peopleOps->id]);
     $employee = scopeUser(UserRole::Employee);
 
-    Livewire::actingAs($director)->test(OffboardingManager::class)
+    Livewire::actingAs($offboarder)->test(OffboardingManager::class)
         ->call('selectEmployee', $employee->employee->id)
         ->set('lastWorkingDay', now()->addDays(20)->toDateString())
         ->set('finalSettlementAmount', 999999)

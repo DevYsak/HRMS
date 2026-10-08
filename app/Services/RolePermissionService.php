@@ -35,7 +35,7 @@ class RolePermissionService
     /** Default permissions per role (mirrors current hardcoded enum logic). */
     public static array $defaults = [
         'hr_admin' => ['manage-employees', 'approve-leave', 'approve-ot', 'approve-wfh', 'run-payroll', 'manage-settings', 'manage-documents', 'view-reports', 'view-finance-profile', 'review-performance'],
-        'director' => ['manage-employees', 'approve-leave', 'approve-ot', 'approve-wfh', 'approve-finance', 'view-reports', 'review-performance'],
+        'director' => ['manage-employees', 'approve-leave', 'approve-ot', 'approve-wfh', 'view-reports', 'review-performance'],
         'manager' => ['approve-leave', 'approve-ot', 'approve-wfh', 'review-performance'],
         'finance' => ['run-payroll', 'approve-finance', 'view-reports', 'view-finance-profile', 'review-performance'],
         'employee' => [],

@@ -81,7 +81,16 @@ test('a specific_user approver requires an existing user, validated on save', fu
         ->call('save')
         ->assertHasErrors(['specific_user_id']);
 
-    $ceo = User::factory()->create();
+    // Someone who cannot open Finance Approval would stall the run.
+    Livewire::actingAs($hrAdmin)->test(ApprovalPolicySettings::class)
+        ->call('openCreate')
+        ->set('label', 'CEO Sign-off')
+        ->set('approver_type', 'specific_user')
+        ->set('specific_user_id', User::factory()->create(['role' => 'employee'])->id)
+        ->call('save')
+        ->assertHasErrors(['approver_type']);
+
+    $ceo = User::factory()->create(['role' => 'finance']);
 
     Livewire::actingAs($hrAdmin)->test(ApprovalPolicySettings::class)
         ->call('openCreate')

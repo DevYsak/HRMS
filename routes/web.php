@@ -240,8 +240,9 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/team', TeamTimeOff::class)->name('team');
             Route::get('/employees', AllTimeOff::class)->name('employees');
         });
-        // HR clears the first stage, Finance the second.
-        Route::get('/encashments', FinanceEncashments::class)->name('encashments')->middleware('role:approve-finance,manage-leave-encashment');
+        // A Director or HR gives the final approval (D3); Finance still sees
+        // what is approved and any legacy second-stage request.
+        Route::get('/encashments', FinanceEncashments::class)->name('encashments')->middleware('role:approve-finance,manage-leave-encashment,decide-leave-encashment');
         Route::get('/bulk-assign', BulkLeaveAssignment::class)->name('bulk-assign')->middleware('role:manage-settings');
         Route::get('/leave-policies', LeaveAllocationPolicies::class)->name('leave-policies')->middleware('role:manage-settings');
         // Bulk migration of years that were never kept in this system. Import

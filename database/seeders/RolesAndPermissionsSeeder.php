@@ -185,12 +185,15 @@ class RolesAndPermissionsSeeder extends Seeder
             'manage_ai_settings', 'impersonate', 'data_export', 'data_import', 'view_audit_log',
             'edit_own_profile', 'request_profile_change', 'approve_profile_changes',
         ],
+        // D1 (8 Oct 2026): their own / headed department (PermissionScopes);
+        // no creating, deleting or offboarding employees and no payroll
+        // sign-off unless granted in Roles & Permissions.
         'director' => [
             'view_dashboard', 'view_executive_dashboard',
-            'manage_employees', 'create_employee', 'edit_employee', 'delete_employee', 'view_employee', 'view_directory', 'view_org_chart', 'manage_onboarding', 'manage_offboarding',
+            'manage_employees', 'edit_employee', 'view_employee', 'view_directory', 'view_org_chart', 'manage_onboarding',
             'view_attendance', 'manage_attendance', 'approve_regularisation', 'approve_overtime', 'approve_wfh',
             'view_leave', 'apply_leave', 'approve_leave',
-            'view_payroll', 'approve_payroll', 'view_payslips', 'approve_finance',
+            'view_payroll', 'view_payslips',
             'view_performance', 'review_performance', 'manage_kpi_templates', 'manage_review_cycles', 'manage_scorecards', 'manage_promotions', 'manage_pip', 'manage_warning_letters',
             'view_documents', 'acknowledge_documents',
             'view_reports', 'export_reports',
