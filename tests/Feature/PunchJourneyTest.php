@@ -339,8 +339,10 @@ test('the enterprise timeline renders the attendance card and session summary', 
     punchAt($this->employee->id, '18:18'); // out
 
     Livewire::test(AttendanceTracker::class)
-        ->assertSee('Attendance journey')
-        ->assertSee('Working today')
-        ->assertSee('Session summary')
-        ->assertSee('Total working hours');
+        // One Today card: timeline, totals and the raw-punch drawer with sessions.
+        ->assertSee('Today')
+        ->assertSee('Worked')
+        ->assertSee('Sessions:')
+        ->assertSee('View raw punches')
+        ->assertDontSee('Session summary');
 });

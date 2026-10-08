@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\Attendance;
+use App\Models\AttendancePunch;
 use App\Models\Company;
 use App\Models\Department;
 use App\Models\Employee;
@@ -11,6 +12,7 @@ use App\Models\LeaveYear;
 use App\Models\Role;
 use App\Models\ShiftSetting;
 use App\Models\User;
+use App\Services\Attendance\AttendanceDayRebuilder;
 use App\Services\Leave\ConexusLeavePolicyService;
 use App\Services\Leave\LeaveRegisterReconciliationService;
 use Database\Seeders\CompanySeeder;
@@ -181,7 +183,52 @@ class E2eSeedRoles extends Command
             'check_in' => $yesterday->copy()->setTime(10, 25), 'status' => 'on_time', 'total_hours' => 0,
         ]);
 
+        $this->seedPunchHistory($users['manager']->employee);
+
         return $users;
+    }
+
+    /**
+     * Two weeks of biometric punches for the manager (Face = IN, ID card =
+     * OUT, a lunch break), one late day with no check-out, and a live session
+     * today — each day built by the canonical AttendanceDayRebuilder, so My
+     * Attendance shows a realistic Today, history and trend.
+     */
+    private function seedPunchHistory(Employee $employee): void
+    {
+        $rebuilder = app(AttendanceDayRebuilder::class);
+        $punch = function (Carbon $day, string $time, string $method) use ($employee): void {
+            $at = $day->copy()->setTimeFromTimeString($time);
+            AttendancePunch::create([
+                'employee_id' => $employee->id, 'punched_at' => $at, 'punch_date' => $at->toDateString(),
+                'method' => $method, 'source' => 'biometric', 'device_serial' => 'E2E-GATE-1', 'location' => 'Main gate',
+            ]);
+        };
+
+        $day = Carbon::today()->subDays(14);
+        $working = 0;
+        while ($day->lt(Carbon::today())) {
+            if (! $day->isWeekend()) {
+                $working++;
+                $late = $working % 5 === 3;
+                $punch($day, $late ? '10:52' : sprintf('10:%02d', 18 + $working % 9), 'face');
+                $punch($day, '13:31', 'id_card');
+                $punch($day, '14:04', 'face');
+                // The fourth working day's check-out never happened.
+                if ($working !== 4) {
+                    $punch($day, sprintf('19:%02d', 30 + $working % 12), 'id_card');
+                }
+                $rebuilder->rebuild($employee, $day);
+            }
+            $day = $day->copy()->addDay();
+        }
+
+        // Today: in, out for a break, back in — still working.
+        $today = Carbon::today();
+        $punch($today, '10:25', 'face');
+        $punch($today, '11:15', 'id_card');
+        $punch($today, '11:51', 'face');
+        $rebuilder->rebuild($employee, $today);
     }
 
     /** @param array<string, User> $users */
@@ -213,6 +260,9 @@ class E2eSeedRoles extends Command
 
         foreach ($users as $user) {
             $employee = Employee::withTrashed()->where('user_id', $user->id)->first();
+            if ($employee) {
+                AttendancePunch::where('employee_id', $employee->id)->delete();
+            }
             $employee?->forceDelete();
             DB::table('notifications')->where('notifiable_type', User::class)->where('notifiable_id', $user->id)->delete();
             $user->forceDelete();

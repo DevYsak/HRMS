@@ -222,7 +222,7 @@ test('a non-working day does not make the employee look behind', function () {
 
 // ── Wiring: the page uses the resolved shift and the engine's worked time ─────
 
-test('the page shows Shift Progress against the employee resolved shift', function () {
+test('the page shows the employee resolved shift window in the Today card', function () {
     $employee = spEmployee(spItShift());
     $date = Carbon::today()->toDateString();
 
@@ -236,7 +236,8 @@ test('the page shows Shift Progress against the employee resolved shift', functi
 
     Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
         ->assertOk()
-        ->assertSee('Shift Progress')
+        ->assertSee('Shift')
+        ->assertSee('10:30 AM – 7:30 PM')
         ->assertSet('shiftProgress', fn ($p) => $p['expected_minutes'] === 540
             && $p['worked_minutes'] === 240
             && $p['percent'] === 44
@@ -249,7 +250,6 @@ test('the page shows the unassigned empty state, never a nine hour default', fun
 
     Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
         ->assertOk()
-        ->assertSee('Shift Progress')
         ->assertSee('Shift not assigned')
         ->assertSet('shiftProgress', fn ($p) => $p['measurable'] === false
             && $p['expected_minutes'] === null

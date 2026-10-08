@@ -1066,6 +1066,7 @@ class AttendanceTracker extends Component
     public function historyPreviousMonth(): void
     {
         $this->historyMonth = $this->clampHistory($this->historyCursor()->subMonthNoOverflow())->format('Y-m');
+        $this->alignStatsToHistoryMonth();
     }
 
     public function historyNextMonth(): void
@@ -1075,6 +1076,7 @@ class AttendanceTracker extends Component
         if ($next->lte(Carbon::today()->startOfMonth())) {
             $this->historyMonth = $next->format('Y-m');
         }
+        $this->alignStatsToHistoryMonth();
     }
 
     /** Month picker (1–12) — keeps the chosen year. */
@@ -1082,12 +1084,68 @@ class AttendanceTracker extends Component
     {
         $month = max(1, min(12, $month));
         $this->historyMonth = $this->clampHistory($this->historyCursor()->setDate($this->historyCursor()->year, $month, 1))->format('Y-m');
+        $this->alignStatsToHistoryMonth();
     }
 
     /** Year picker — keeps the chosen month (never a future month). */
     public function setHistoryYear(int $year): void
     {
         $this->historyMonth = $this->clampHistory($this->historyCursor()->setDate($year, $this->historyCursor()->month, 1))->format('Y-m');
+        $this->alignStatsToHistoryMonth();
+    }
+
+    /**
+     * The page has one month selector: the figures (computeStats — the same
+     * canonical window, unchanged) follow the month the history shows. The
+     * current month uses the standard "this month" period.
+     */
+    private function alignStatsToHistoryMonth(): void
+    {
+        $month = $this->historyCursor();
+
+        if ($month->isSameMonth(Carbon::today())) {
+            $this->statsPeriod = 'this_month';
+            $this->rangeFrom = null;
+            $this->rangeTo = null;
+        } else {
+            $this->statsPeriod = 'custom';
+            $this->rangeFrom = $month->copy()->startOfMonth()->toDateString();
+            $this->rangeTo = $month->copy()->endOfMonth()->toDateString();
+        }
+
+        $this->computeStats();
+    }
+
+    /**
+     * The selected month's days by calendar week (Mon–Sun) — present, late
+     * and absent counts taken straight from monthHistory's statuses (its order
+     * decides, e.g. a WFH day is WFH), for the punctuality trend. Counts only;
+     * nothing is recalculated.
+     *
+     * @return array<int, array{label: string, present: int, late: int, absent: int}>
+     */
+    #[Computed]
+    public function monthPunctuality(): array
+    {
+        $weeks = [];
+
+        foreach ($this->monthHistory['rows'] as $row) {
+            $date = Carbon::parse($row['date']);
+            if ($date->gt(Carbon::today())) {
+                break;   // weeks still to come have nothing to show
+            }
+            $key = $date->copy()->startOfWeek(Carbon::MONDAY)->toDateString();
+            $weeks[$key] ??= ['label' => $date->copy()->startOfWeek(Carbon::MONDAY)->max($date->copy()->startOfMonth())->format('d M'), 'present' => 0, 'late' => 0, 'absent' => 0];
+
+            match ($row['status']) {
+                'Present', 'WFH', 'Half day', WorkingDayResolver::WORKED_WEEKLY_OFF_LABEL => $weeks[$key]['present']++,
+                'Late' => $weeks[$key]['late']++,
+                'Absent' => $weeks[$key]['absent']++,
+                default => null,
+            };
+        }
+
+        return array_values($weeks);
     }
 
     private function historyCursor(): Carbon

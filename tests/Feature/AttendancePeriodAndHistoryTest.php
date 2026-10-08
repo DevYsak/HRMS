@@ -236,5 +236,5 @@ test('history navigation moves month by month and never into the future', functi
         ->call('setHistoryMonth', 3)->assertSet('historyMonth', '2026-03')
         ->call('setHistoryYear', 2025)->assertSet('historyMonth', '2025-03')
         ->call('setHistoryYear', 2027)->assertSet('historyMonth', '2026-10')
-        ->assertSee('Monthly history');
+        ->assertSee('Attendance History');
 });

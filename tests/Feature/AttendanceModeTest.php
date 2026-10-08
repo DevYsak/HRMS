@@ -135,7 +135,7 @@ test('clocking in from the tracker records the selected mode', function () {
     expect(Attendance::where('employee_id', $employee->id)->value('work_mode'))->toBe('client_visit');
 });
 
-test('the tracker shows the multi-mode breakdown and legend', function () {
+test('a hybrid day is listed in the attendance history', function () {
     $employee = Employee::factory()->create();
     $d = now()->startOfMonth()->addDays(3);
     Attendance::create([
@@ -150,17 +150,17 @@ test('the tracker shows the multi-mode breakdown and legend', function () {
 
     Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
         ->assertOk()
-        ->assertSee('Punch In / Out Timeline')
-        ->assertSee('Hybrid');            // the mode appears (timeline chip / filter)
+        ->assertSee('Attendance History')
+        ->assertSee($d->lte(today()) ? $d->format('D d M') : 'Attendance History');
 });
 
-test('the tracker supports a weekly filter and renders the analytics charts', function () {
+test('the tracker supports a weekly filter and renders the two trends', function () {
     $employee = Employee::factory()->create();
 
     Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
-        ->assertSee('Working Hours Trend')
-        ->assertSee('Attendance Score Trend')
-        ->assertSee('Weekly Attendance')
+        ->assertSee('Working Hours')
+        ->assertSee('Punctuality')
+        ->assertDontSee('Attendance Score Trend')
         ->set('statsPeriod', 'this_week')
         ->assertOk()
         ->assertSet('statsPeriod', 'this_week');
@@ -277,8 +277,7 @@ test('the punch summary and biometric status show the biometric daily figures', 
 
     Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
         ->assertOk()
-        ->assertSee('Biometric Status')
-        ->assertSee('Punch Source')
+        ->assertSee('View raw punches')     // the device now lives in the Today card's drawer
         ->assertSee('ESSL MB20')
         ->assertSee('Face')        // rendered as separate source chips now
         ->assertSee('ID Card');
@@ -301,10 +300,8 @@ test('the attendance journey classifies every punch in sequence', function () {
 
     Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
         ->assertOk()
-        // Casing only. PunchJourneyTest — the newer suite written for this very
-        // section — pins the lowercase heading, so that is the current contract
-        // and this assertion was the stale one.
-        ->assertSee('Attendance journey')
+        // The Today timeline reads Face = IN and ID card = OUT, in punch order.
+        ->assertSeeInOrder(['09:00 AM', 'Face • IN', '01:00 PM', 'ID Card • OUT', '01:40 PM', 'Face • IN', '06:00 PM', 'ID Card • OUT'])
         ->assertSet('attendanceJourney', fn ($j) => count($j) === 4
             && $j[0]['type'] === 'in' && $j[1]['type'] === 'break'
             && $j[2]['type'] === 'resume' && $j[3]['type'] === 'out'
@@ -336,7 +333,7 @@ test('smart alerts flag a past missing check-out with a regularize action', func
 
     Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
         ->assertSee('Missing Check-Out')
-        ->assertSee('Shift Progress')
+        ->assertSee('Attendance Needs Attention')
         ->assertSet('attendanceAlerts', fn ($a) => collect($a)->contains(fn ($x) => $x['type'] === 'missing_checkout'));
 
     $this->travelBack();
@@ -422,7 +419,7 @@ test('attendance insights are generated from real period data', function () {
     ]);
 
     Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
-        ->assertSee('Attendance Insights')
+        ->assertDontSee('AI Attendance Insights')   // computed, but no longer a page section
         ->assertSet('insights', fn ($i) => count($i) >= 3
             && collect($i)->contains(fn ($x) => str_contains($x['text'], 'Average check-in'))
             && collect($i)->contains(fn ($x) => str_contains($x['text'], 'Break compliance')));
@@ -544,7 +541,7 @@ test('insights include longest break, best day and approved overtime', function 
             && collect($i)->contains(fn ($x) => str_contains($x['text'], 'Approved overtime 1h 30m')));
 });
 
-test('the analytics grid renders all enterprise panels', function () {
+test('the advanced analytics grid is not on the everyday attendance page', function () {
     $employee = Employee::factory()->create();
     Attendance::create([
         'employee_id' => $employee->id, 'date' => now()->startOfMonth()->addDays(1),
@@ -555,14 +552,15 @@ test('the analytics grid renders all enterprise panels', function () {
 
     Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
         ->assertOk()
-        ->assertSee('Attendance Analytics')
-        ->assertSee('Monthly Attendance')
-        ->assertSee('Late Arrival Trend')
-        ->assertSee('Break Analysis')
-        ->assertSee('Office vs WFH vs Hybrid')
-        ->assertSee('Overtime Trend')
-        ->assertSee('Productivity Score')
-        ->assertSee('Attendance Heatmap');
+        ->assertSee('Working Hours')
+        ->assertSee('Punctuality')
+        ->assertDontSee('Attendance Analytics')
+        ->assertDontSee('Late Arrival Trend')
+        ->assertDontSee('Break Analysis')
+        ->assertDontSee('Office vs WFH vs Hybrid')
+        ->assertDontSee('Overtime Trend')
+        ->assertDontSee('Productivity Score')
+        ->assertDontSee('Attendance Heatmap');
 });
 
 test('the analytics mode filter narrows the period stats', function () {
@@ -600,8 +598,7 @@ test('AI insight stats compute averages, streak, prediction and suggestions', fu
     }
 
     Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
-        ->assertSee('AI Attendance Insights')
-        ->assertSee('Suggestions')
+        ->assertDontSee('AI Attendance Insights')   // no predicted scores on the page
         ->assertSet('insightStats', function ($s) {
             return $s['avg_in'] === '09:30 AM'
                 && $s['avg_out'] === '06:30 PM'
@@ -626,9 +623,8 @@ test('biometric status shows sync history, serial and health tiers', function ()
 
     Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
         ->assertOk()
-        ->assertSee('Sync History')
+        ->assertSee('View raw punches')
         ->assertSee('MB20-SER-77')
-        ->assertSee('Device Health')
         ->assertSee('Online')
         ->assertSet('syncHistory', fn ($h) => count($h) === 2 && $h[0]['punches'] === 6);
 });

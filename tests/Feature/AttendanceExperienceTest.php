@@ -18,7 +18,7 @@ test('a user without an employee record can open My Attendance without erroring'
         ->assertSet('punchJourney', fn ($pj) => array_key_exists('live', $pj) && $pj['live'] === false);
 });
 
-test('my attendance page shows the Phase 6 analytics panels', function () {
+test('my attendance page shows the minimal workspace sections and none of the removed panels', function () {
     $user = User::factory()->create();
     $employee = Employee::factory()->create(['user_id' => $user->id]);
     $this->actingAs($user);
@@ -49,15 +49,13 @@ test('my attendance page shows the Phase 6 analytics panels', function () {
         'break_minutes' => 90,
     ]);
 
+    // Header → 4 KPI cards → Today → This Month → History → 2 trends → Quick Actions.
     Livewire::test(AttendanceTracker::class)
-        ->assertSee('Attendance health')
-        ->assertSee('Attendance Score')
-        ->assertSee('Working Hours Trend')
-        ->assertSee('Attendance Score Trend')
-        // Redesigned hero + signature AI Coach panel + relocated quick actions.
-        ->assertSee('AI Attendance Coach')
-        ->assertSee('Quick actions')
-        // Redesign additions — prove the new sections actually render.
-        ->assertSee('Working Hours Breakdown')
-        ->assertSee('Logout Trend');
+        ->assertSeeInOrder(['Attendance Rate', 'Worked Today', 'First In', 'Today', 'This Month', 'Attendance History', 'Working Hours', 'Punctuality', 'Quick Actions'])
+        // Merged or removed (Oct 2026 redesign): no repeated scores, coach or analytics grid.
+        ->assertDontSee('Attendance health')
+        ->assertDontSee('Attendance Score')
+        ->assertDontSee('AI Attendance Coach')
+        ->assertDontSee('Working Hours Breakdown')
+        ->assertDontSee('Logout Trend');
 });
