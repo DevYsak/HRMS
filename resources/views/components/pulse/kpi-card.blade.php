@@ -8,6 +8,7 @@
     'accent' => 'brand',    // brand | emerald | amber | rose | blue | indigo
     'sparkline' => [],      // array<int|float> — optional mini trend
     'compare' => null,      // e.g. 'vs last month'
+    'href' => null,         // optional: the whole card links here (wire:navigate)
 ])
 
 @php
@@ -52,7 +53,8 @@
     }
 @endphp
 
-<div {{ $attributes->class('group rounded-2xl border border-zinc-100 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md dark:border-white/5 dark:bg-ink-900') }}>
+@php $tag = $href ? 'a' : 'div'; @endphp
+<{{ $tag }} @if($href) href="{{ $href }}" wire:navigate @endif {{ $attributes->class('group block rounded-2xl border border-zinc-100 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md dark:border-white/5 dark:bg-ink-900') }}>
     <div class="mb-3 flex items-center justify-between">
         @if($icon)
             <div class="flex size-9 items-center justify-center rounded-xl {{ $iconBg }}">
@@ -83,4 +85,4 @@
     @elseif($sub)
         <div class="mt-2 text-[11px] font-medium text-zinc-400 dark:text-zinc-500">{{ $sub }}</div>
     @endif
-</div>
+</{{ $tag }}>

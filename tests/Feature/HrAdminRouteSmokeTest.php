@@ -11,10 +11,12 @@ test('hr-admin dashboard page renders premium HR content', function () {
     Employee::factory()->create(['user_id' => $user->id, 'status' => 'active']);
     $this->actingAs($user);
 
+    // Redesigned HR overview (8 Oct 2026): today's attendance, decisions
+    // waiting and HR alerts — the same view "/" shows HR.
     Livewire::test(HrAdminDashboard::class)
         ->assertOk()
-        ->assertSee('Attendance Overview')
-        ->assertSee('Employee Lifecycle')
-        ->assertSee('Pending Approvals')
-        ->assertSee('Regularisations');
+        ->assertSee('Present today')
+        ->assertSee('Open onboarding tasks')
+        ->assertSee('Waiting for a decision')
+        ->assertSee('Attendance regularisations');
 });

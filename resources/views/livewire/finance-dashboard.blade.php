@@ -1,220 +1,116 @@
-<flux:main class="min-h-screen bg-[#FAFAFA] font-['DM_Sans'] dark:bg-[#0B1220]">
+@php
+    $money = fn ($n) => '₹'.number_format((float) $n, 0);
+    $cycleLabel = fn (?string $c) => match ($c) { 'cycle_a' => 'Cycle A', 'cycle_b' => 'Cycle B', default => ucfirst((string) $c) };
+    $statusColor = fn (?string $s) => match ($s) { 'finalized' => 'green', 'pending_finance' => 'amber', default => 'zinc' };
+    $statusLabel = fn (?string $s) => match ($s) { 'finalized' => 'Finalised', 'pending_finance' => 'Awaiting finance', 'draft' => 'Draft', default => ucfirst(str_replace('_', ' ', (string) $s)) };
+@endphp
 
-    @php
-        $hour = now()->hour;
-        $greeting = $hour < 12 ? 'Good Morning' : ($hour < 17 ? 'Good Afternoon' : 'Good Evening');
-        $firstName = \Illuminate\Support\Str::of(auth()->user()->name)->explode(' ')->first();
-        $timeContext = $hour < 12 ? 'Morning finance brief — payroll window open.' : ($hour < 17 ? 'Afternoon — review and verify payroll.' : 'End of day — financial wrap-up.');
-    @endphp
-    {{-- Premium Header --}}
-    <div class="p-4 pb-0 md:p-6 md:pb-0">
-        <x-pulse.dashboard-header :title="$greeting.', '.$firstName" :subtitle="$timeContext">
+<flux:main>
+    <div class="mx-auto w-full max-w-[1400px] space-y-5">
+        <x-pulse.dashboard-header title="Finance" :subtitle="'Payroll queue, payables and compensation · '.$period->format('F Y')">
             <x-slot:actions>
-                <flux:input wire:model.live="month" type="month" size="sm" class="rounded-xl" />
-                <a href="{{ route('payroll.finance-approve') }}" wire:navigate
-                   class="inline-flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-brand-600">
-                    <flux:icon.check-circle class="size-4" /> Finance Approval
-                </a>
+                <flux:input wire:model.live="month" type="month" size="sm" aria-label="Month" />
             </x-slot:actions>
         </x-pulse.dashboard-header>
-    </div>
 
-    <div class="p-4 md:p-6 space-y-5">
-    {{-- Legacy header placeholder for downstream code compat --}}
-    <div>
-    </div>
+        {{-- What is waiting on Finance --}}
+        <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            <x-pulse.kpi-card label="Payroll runs awaiting finance" :value="$awaitingFinance->count()" icon="banknotes" accent="amber"
+                :href="$canApproveFinance ? route('payroll.finance-approve') : null" sub="Sign-off queue" />
+            <x-pulse.kpi-card label="OT payable (unpaid)" :value="$money($otPayable['amount'])" icon="clock" accent="blue"
+                :sub="$otPayable['hours'].' h · '.$otPayable['people'].' people'" />
+            <x-pulse.kpi-card label="Incentives pending" :value="$incentives['pending']" icon="sparkles" accent="indigo"
+                :href="$canRunPayroll ? route('payroll.incentives') : null" :sub="$money($incentives['approved_amount']).' approved this month'" />
+            <x-pulse.kpi-card label="Reimbursements pending" :value="$reimbursements['pending']" icon="receipt-percent" accent="emerald"
+                :href="$canRunPayroll ? route('payroll.reimbursements') : null" :sub="$money($reimbursements['approved_amount']).' approved this month'" />
+        </div>
 
-    {{-- Payroll/compensation widgets temporarily hidden (functionality untouched). --}}
-    @php $showPayroll = false; @endphp
-    @if($showPayroll)
-    {{-- KPI Bar --}}
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div class="pulse-card p-5 text-center">
-            <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Cycle A Payout</div>
-            <div class="text-2xl font-black text-green-600 mt-2">₹{{ $cycleARun ? number_format($cycleARun->total_payout, 0) : '—' }}</div>
-            <div class="text-[10px] mt-1 {{ $cycleARun?->status === 'finalized' ? 'text-green-500' : 'text-amber-500' }}">{{ $cycleARun ? strtoupper($cycleARun->status) : 'NOT RUN' }}</div>
-        </div>
-        <div class="pulse-card p-5 text-center">
-            <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Cycle B Payout</div>
-            <div class="text-2xl font-black text-blue-600 mt-2">₹{{ $cycleBRun ? number_format($cycleBRun->total_payout, 0) : '—' }}</div>
-            <div class="text-[10px] mt-1 {{ $cycleBRun?->status === 'finalized' ? 'text-green-500' : 'text-amber-500' }}">{{ $cycleBRun ? strtoupper($cycleBRun->status) : 'NOT RUN' }}</div>
-        </div>
-        <div class="pulse-card p-5 text-center">
-            <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Approved Incentives</div>
-            <div class="text-2xl font-black text-purple-600 mt-2">₹{{ number_format($approvedIncentivesTotal, 0) }}</div>
-            <div class="text-[10px] text-amber-500 mt-1">{{ $pendingIncentives }} pending approval</div>
-        </div>
-        <div class="pulse-card p-5 text-center">
-            <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Reimbursements</div>
-            <div class="text-2xl font-black text-orange-500 mt-2">₹{{ number_format($approvedReimbursementsTotal, 0) }}</div>
-            <div class="text-[10px] text-amber-500 mt-1">{{ $pendingReimbursements }} pending · {{ $pendingEncashments }} encashments</div>
-        </div>
-    </div>
-
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {{-- Cycle A Sign-off --}}
-        <div class="pulse-card p-6">
-            <div class="flex items-center justify-between mb-4">
-                <h3 class="text-sm font-bold text-zinc-900 dark:text-white flex items-center gap-2">
-                    <flux:icon.banknotes class="size-4 text-green-500" /> Cycle A — {{ now()->format('F Y') }}
-                </h3>
-                @if($cycleARun && $cycleARun->status === 'pending_finance')
-                    <flux:button :href="route('payroll.finance-approve')" wire:navigate variant="primary" size="sm" icon="check">Sign Off</flux:button>
-                @elseif($cycleARun?->status === 'finalized')
-                    <span class="text-xs font-bold px-2 py-1 rounded-full bg-green-100 text-green-700">FINALIZED</span>
+        <div class="grid grid-cols-1 gap-5 xl:grid-cols-3">
+            <x-pulse.card class="xl:col-span-2" :title="'Payroll — '.$period->format('F Y')" icon="banknotes" flush>
+                @if($runs->isEmpty())
+                    <div class="px-5 pb-5 text-sm text-zinc-500">No payroll has been run for {{ $period->format('F Y') }} yet.</div>
+                @else
+                    <table class="w-full text-sm">
+                        <thead class="border-y border-zinc-100 bg-zinc-50 text-left text-xs text-zinc-500 dark:border-white/5 dark:bg-white/5">
+                            <tr>
+                                <th class="px-5 py-2 font-medium">Cycle</th>
+                                <th class="px-5 py-2 font-medium">Status</th>
+                                <th class="px-5 py-2 text-right font-medium">Payslips</th>
+                                <th class="px-5 py-2 text-right font-medium">Payout</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-zinc-100 dark:divide-white/5">
+                            @foreach($runs as $run)
+                                <tr>
+                                    <td class="px-5 py-2.5 font-medium text-zinc-900 dark:text-white">{{ $cycleLabel($run->cycle) }}</td>
+                                    <td class="px-5 py-2.5"><flux:badge size="sm" :color="$statusColor($run->status)">{{ $statusLabel($run->status) }}</flux:badge></td>
+                                    <td class="px-5 py-2.5 text-right tabular-nums">{{ $run->payslips_count }}</td>
+                                    <td class="px-5 py-2.5 text-right font-semibold tabular-nums">{{ $money($run->total_payout) }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
                 @endif
-            </div>
-            @if($cycleARun)
-                <div class="space-y-2">
-                    <div class="flex justify-between text-sm"><span class="text-zinc-500">Total Payout</span><span class="font-bold text-zinc-900 dark:text-white">₹{{ number_format($cycleARun->total_payout, 0) }}</span></div>
-                    <div class="flex justify-between text-sm"><span class="text-zinc-500">Employees</span><span class="font-bold text-zinc-900 dark:text-white">{{ $cycleARun->payslips->count() }}</span></div>
-                    <div class="flex justify-between text-sm"><span class="text-zinc-500">Processed</span><span class="font-bold text-zinc-900 dark:text-white">{{ $cycleARun->processed_at?->format('d M H:i') ?? '—' }}</span></div>
-                </div>
-            @else
-                <p class="text-sm text-zinc-400 py-4 text-center">Cycle A payroll not yet generated for this month.</p>
-                <flux:button :href="route('payroll.process')" wire:navigate variant="ghost" size="sm" class="w-full">Go to Payroll Run →</flux:button>
-            @endif
+            </x-pulse.card>
+
+            <x-pulse.card title="Net pay (finalised)" icon="chart-bar">
+                <dl class="space-y-3 text-sm">
+                    <div class="flex items-center justify-between"><dt class="text-zinc-500">{{ $period->format('F') }}</dt><dd class="font-semibold tabular-nums">{{ $money($netThisMonth) }}</dd></div>
+                    <div class="flex items-center justify-between"><dt class="text-zinc-500">Previous month</dt><dd class="font-semibold tabular-nums">{{ $money($netLastMonth) }}</dd></div>
+                    <div class="flex items-center justify-between border-t border-zinc-100 pt-3 dark:border-white/5"><dt class="text-zinc-500">{{ $period->year }} to date</dt><dd class="font-bold tabular-nums">{{ $money($netYearToDate) }}</dd></div>
+                </dl>
+            </x-pulse.card>
         </div>
 
-        {{-- Cycle B Sign-off --}}
-        <div class="pulse-card p-6">
-            <div class="flex items-center justify-between mb-4">
-                <h3 class="text-sm font-bold text-zinc-900 dark:text-white flex items-center gap-2">
-                    <flux:icon.banknotes class="size-4 text-blue-500" /> Cycle B — {{ now()->format('F Y') }}
-                </h3>
-                @if($cycleBRun && $cycleBRun->status === 'pending_finance')
-                    <flux:button :href="route('payroll.finance-approve')" wire:navigate variant="primary" size="sm" icon="check">Sign Off</flux:button>
-                @elseif($cycleBRun?->status === 'finalized')
-                    <span class="text-xs font-bold px-2 py-1 rounded-full bg-green-100 text-green-700">FINALIZED</span>
+        <div class="grid grid-cols-1 gap-5 xl:grid-cols-3">
+            <x-pulse.card title="Awaiting finance sign-off" icon="check-badge" flush>
+                @forelse($awaitingFinance as $run)
+                    <div class="flex items-center justify-between gap-3 border-t border-zinc-100 px-5 py-2.5 text-sm first:border-t-0 dark:border-white/5">
+                        <span>{{ $run->month }} {{ $run->year }} · {{ $cycleLabel($run->cycle) }}</span>
+                        <span class="font-semibold tabular-nums">{{ $money($run->total_payout) }}</span>
+                    </div>
+                @empty
+                    <div class="px-5 pb-5 text-sm text-zinc-500">Nothing is waiting for finance approval.</div>
+                @endforelse
+                @if($canApproveFinance && $awaitingFinance->isNotEmpty())
+                    <div class="px-5 py-3"><flux:button size="sm" :href="route('payroll.finance-approve')" wire:navigate>Review sign-offs</flux:button></div>
                 @endif
-            </div>
-            @if($cycleBRun)
-                <div class="space-y-2">
-                    <div class="flex justify-between text-sm"><span class="text-zinc-500">Total Payout</span><span class="font-bold text-zinc-900 dark:text-white">₹{{ number_format($cycleBRun->total_payout, 0) }}</span></div>
-                    <div class="flex justify-between text-sm"><span class="text-zinc-500">Employees</span><span class="font-bold text-zinc-900 dark:text-white">{{ $cycleBRun->payslips->count() }}</span></div>
-                    <div class="flex justify-between text-sm"><span class="text-zinc-500">Processed</span><span class="font-bold text-zinc-900 dark:text-white">{{ $cycleBRun->processed_at?->format('d M H:i') ?? '—' }}</span></div>
+            </x-pulse.card>
+
+            <x-pulse.card title="Largest unpaid overtime" icon="clock" flush>
+                @forelse($otPayable['top'] as $row)
+                    <div class="flex items-center justify-between gap-3 border-t border-zinc-100 px-5 py-2.5 text-sm first:border-t-0 dark:border-white/5">
+                        <span class="truncate">{{ $row->employee?->user?->name ?? '—' }}</span>
+                        <span class="shrink-0 tabular-nums text-zinc-500">{{ round((float) $row->hours, 2) }} h · <span class="font-semibold text-zinc-900 dark:text-white">{{ $money($row->amount) }}</span></span>
+                    </div>
+                @empty
+                    <div class="px-5 pb-5 text-sm text-zinc-500">No approved overtime is waiting to be paid.</div>
+                @endforelse
+            </x-pulse.card>
+
+            <x-pulse.card title="Compensation decisions" icon="arrow-trending-up">
+                <div class="space-y-3 text-sm">
+                    <div class="flex items-center justify-between">
+                        <span class="text-zinc-500">Leave encashments at finance</span>
+                        @if($encashmentsAwaitingFinance > 0)
+                            <a href="{{ route('time-off.encashments') }}" wire:navigate class="font-semibold text-brand-600 hover:underline">{{ $encashmentsAwaitingFinance }}</a>
+                        @else
+                            <span class="font-semibold">0</span>
+                        @endif
+                    </div>
+                    @forelse($incrementCycles as $cycle)
+                        <div class="flex items-center justify-between">
+                            <span class="text-zinc-500">Increments FY {{ $cycle->financial_year }} ({{ $cycle->proposals_count }})</span>
+                            <span class="font-semibold tabular-nums">{{ $money($cycle->proposed_total) }}</span>
+                        </div>
+                    @empty
+                        <div class="text-zinc-500">No increment cycle is waiting for finance approval.</div>
+                    @endforelse
+                    @if($heldIncrements > 0)
+                        <div class="text-xs text-amber-600">{{ $heldIncrements }} increment {{ \Illuminate\Support\Str::plural('proposal', $heldIncrements) }} held for a second approver.</div>
+                    @endif
                 </div>
-            @else
-                <p class="text-sm text-zinc-400 py-4 text-center">Cycle B payroll not yet generated for this month.</p>
-                <flux:button :href="route('payroll.process')" wire:navigate variant="ghost" size="sm" class="w-full">Go to Payroll Run →</flux:button>
-            @endif
+            </x-pulse.card>
         </div>
     </div>
-
-    {{-- OT + Adjustments Row --}}
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div class="pulse-card p-5 text-center">
-            <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">OT Payout (Month)</div>
-            <div class="text-3xl font-black text-amber-500 mt-2">₹{{ number_format($monthlyOtAmount, 0) }}</div>
-            <div class="text-xs text-zinc-400 mt-1">@ ₹100/hr · Approved OT</div>
-        </div>
-        <div class="pulse-card p-5 text-center">
-            <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Pending Incentives</div>
-            <div class="text-3xl font-black text-purple-500 mt-2">{{ $pendingIncentives }}</div>
-            <div class="text-xs text-zinc-400 mt-1">Awaiting Finance approval</div>
-            <flux:button :href="route('payroll.incentives')" wire:navigate size="sm" variant="ghost" class="mt-2">Review →</flux:button>
-        </div>
-        <div class="pulse-card p-5 text-center">
-            <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Pending Encashments</div>
-            <div class="text-3xl font-black text-orange-500 mt-2">{{ $pendingEncashments }}</div>
-            <div class="text-xs text-zinc-400 mt-1">Leave encashment requests</div>
-            <flux:button :href="route('payroll.reimbursements')" wire:navigate size="sm" variant="ghost" class="mt-2">Review →</flux:button>
-        </div>
-    </div>
-
-    {{-- Payslip Breakdown per Cycle --}}
-    @foreach([['label' => 'Cycle A', 'run' => $cycleARun], ['label' => 'Cycle B', 'run' => $cycleBRun]] as $cycleData)
-        @if($cycleData['run'])
-        <div class="pulse-card">
-            <div class="flex items-center justify-between p-6 border-b border-zinc-100 dark:border-zinc-800">
-                <h3 class="text-sm font-bold text-zinc-900 dark:text-white">{{ $cycleData['label'] }} — Payslip Breakdown</h3>
-                <span class="text-xs text-zinc-400">{{ $cycleData['run']->payslips->count() }} employees</span>
-            </div>
-            <div class="overflow-x-auto">
-                <table class="w-full text-sm">
-                    <thead>
-                        <tr class="border-b border-zinc-100 dark:border-zinc-800">
-                            <th class="pb-3 pl-6 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-zinc-400">Employee</th>
-                            <th class="pb-3 pr-4 text-right text-xs font-semibold uppercase tracking-wide text-zinc-400">Gross</th>
-                            <th class="pb-3 pr-4 text-right text-xs font-semibold uppercase tracking-wide text-zinc-400">Deductions</th>
-                            <th class="pb-3 pr-6 text-right text-xs font-semibold uppercase tracking-wide text-zinc-400">Net</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-zinc-50 dark:divide-zinc-800">
-                        @foreach($cycleData['run']->payslips as $slip)
-                        <tr class="hover:bg-zinc-50 dark:hover:bg-zinc-800/30">
-                            <td class="py-3 pl-6 pr-4">
-                                <div class="font-medium text-zinc-900 dark:text-white">{{ $slip->employee->user->name ?? '—' }}</div>
-                                <div class="text-xs text-zinc-400">{{ $slip->employee->department?->name ?? '' }}</div>
-                            </td>
-                            <td class="py-3 pr-4 text-right text-zinc-600 dark:text-zinc-300">₹{{ number_format($slip->gross_salary, 0) }}</td>
-                            <td class="py-3 pr-4 text-right text-red-500">−₹{{ number_format($slip->total_deductions, 0) }}</td>
-                            <td class="py-3 pr-6 text-right font-bold text-zinc-900 dark:text-white">₹{{ number_format($slip->net_salary, 0) }}</td>
-                        </tr>
-                        @endforeach
-                    </tbody>
-                    <tfoot>
-                        <tr class="border-t-2 border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900/50">
-                            <td class="py-3 pl-6 pr-4 font-bold text-zinc-900 dark:text-white">Total</td>
-                            <td class="py-3 pr-4 text-right font-bold text-zinc-900 dark:text-white">₹{{ number_format($cycleData['run']->payslips->sum('gross_salary'), 0) }}</td>
-                            <td class="py-3 pr-4 text-right font-bold text-red-500">−₹{{ number_format($cycleData['run']->payslips->sum('total_deductions'), 0) }}</td>
-                            <td class="py-3 pr-6 text-right font-black text-brand-600">₹{{ number_format($cycleData['run']->total_payout, 0) }}</td>
-                        </tr>
-                    </tfoot>
-                </table>
-            </div>
-        </div>
-        @endif
-    @endforeach
-
-    {{-- OT Summary Breakdown --}}
-    @if($otSummary->isNotEmpty())
-    <div class="pulse-card">
-        <div class="flex items-center justify-between p-6 border-b border-zinc-100 dark:border-zinc-800">
-            <h3 class="text-sm font-bold text-zinc-900 dark:text-white">Approved Overtime Summary</h3>
-            <span class="text-xs text-zinc-400">Rate: ₹100/hr</span>
-        </div>
-        <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-                <thead>
-                    <tr class="border-b border-zinc-100 dark:border-zinc-800">
-                        <th class="pb-3 pl-6 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-zinc-400">Employee</th>
-                        <th class="pb-3 pr-4 text-right text-xs font-semibold uppercase tracking-wide text-zinc-400">OT Hours</th>
-                        <th class="pb-3 pr-6 text-right text-xs font-semibold uppercase tracking-wide text-zinc-400">OT Payout</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-zinc-50 dark:divide-zinc-800">
-                    @foreach($otSummary as $ot)
-                    <tr class="hover:bg-zinc-50 dark:hover:bg-zinc-800/30">
-                        <td class="py-3 pl-6 pr-4">
-                            <div class="font-medium text-zinc-900 dark:text-white">{{ $ot->employee->user->name ?? '—' }}</div>
-                            <div class="text-xs text-zinc-400">{{ $ot->employee->department?->name ?? '' }}</div>
-                        </td>
-                        <td class="py-3 pr-4 text-right text-zinc-600 dark:text-zinc-300">{{ number_format($ot->total_hours, 1) }}h</td>
-                        <td class="py-3 pr-6 text-right font-bold text-zinc-900 dark:text-white">₹{{ number_format($ot->total_amount, 0) }}</td>
-                    </tr>
-                    @endforeach
-                </tbody>
-                <tfoot>
-                    <tr class="border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30">
-                        <td class="py-3 pl-6 pr-4 font-bold text-zinc-900 dark:text-white">Total</td>
-                        <td class="py-3 pr-4 text-right font-bold text-zinc-900 dark:text-white">{{ number_format($otSummary->sum('total_hours'), 1) }}h</td>
-                        <td class="py-3 pr-6 text-right font-black text-amber-600">₹{{ number_format($otSummary->sum('total_amount'), 0) }}</td>
-                    </tr>
-                </tfoot>
-            </table>
-        </div>
-    </div>
-    @endif
-
-    @else
-        <div class="pulse-card text-center py-16">
-            <flux:icon.banknotes class="mx-auto size-10 text-zinc-300 dark:text-zinc-600" />
-            <p class="mt-3 text-sm font-semibold text-zinc-500 dark:text-zinc-400">Payroll &amp; compensation widgets are temporarily hidden.</p>
-            <p class="mt-1 text-xs text-zinc-400">Payroll functionality remains available in the Payroll module.</p>
-        </div>
-    @endif
-
-    </div>{{-- end p-4 md:p-6 --}}
-
 </flux:main>

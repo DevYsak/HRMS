@@ -31,10 +31,12 @@ test('hr dashboard shows pending approvals and hides payroll widgets', function 
     Employee::factory()->create(['user_id' => $user->id, 'status' => 'active']);
     $this->actingAs($user);
 
+    // Redesigned HR overview (8 Oct 2026): approvals live in "Waiting for a
+    // decision"; payroll figures are not on the HR view.
     Livewire::test(Dashboard::class)
         ->assertOk()
-        ->assertSee('Pending Approvals')
-        ->assertSee('Regularisations')
+        ->assertSee('Waiting for a decision')
+        ->assertSee('Attendance regularisations')
         ->assertDontSee('Draft cycles open')
         ->assertDontSee('Payroll Completion');
 });
@@ -98,12 +100,14 @@ test('kpi dashboard shows performer segments', function () {
         ->assertSee('Heatmap');
 });
 
-test('finance dashboard hides payroll cost widgets', function () {
+test('finance dashboard shows the payroll queue (no longer hidden)', function () {
+    // The widgets were hidden until the payroll module switch existed; the
+    // Finance dashboard now shows them, behind that switch (8 Oct 2026).
     $this->actingAs(User::factory()->create(['role' => UserRole::Finance]));
 
     Livewire::test(FinanceDashboard::class)
         ->assertOk()
-        ->assertSee('temporarily hidden')
-        ->assertDontSee('Cycle A Payout')
-        ->assertDontSee('Total Payout');
+        ->assertSee('Awaiting finance sign-off')
+        ->assertSee('OT payable')
+        ->assertDontSee('temporarily hidden');
 });

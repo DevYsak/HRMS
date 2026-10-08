@@ -3,31 +3,18 @@
 namespace App\Livewire;
 
 use App\Enums\AttendanceMode;
-use App\Enums\EmployeeStatus;
 use App\Models\Attendance;
-use App\Models\AttendanceRegularisation;
 use App\Models\AttendanceSetting;
-use App\Models\AuditLog;
 use App\Models\Department;
-use App\Models\Document;
 use App\Models\Employee;
-use App\Models\LeaveEncashment;
-use App\Models\LeaveRequest;
-use App\Models\OtRequest;
-use App\Models\Payroll;
-use App\Models\PipRecord;
-use App\Models\PromotionRecommendation;
-use App\Models\WarningLetter;
 use App\Services\Attendance\ShiftResolver;
-use App\Services\Attendance\WorkingDayResolver;
 use App\Services\AttendanceService;
+use App\Services\Dashboards\OrganisationOverview;
 use App\Services\EmployeeDashboardService;
-use App\Services\ModuleFeatureService;
 use App\Services\Navigation\DashboardLanding;
 use App\Services\WfhService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Str;
 use Livewire\Component;
 
 class Dashboard extends Component
@@ -63,284 +50,15 @@ class Dashboard extends Component
         };
     }
 
+    /**
+     * The HR / Super Admin overview at "/": every figure from
+     * OrganisationOverview over the viewer's reach (a department-scoped HR
+     * user sees their departments), each shown once.
+     */
     private function renderHrAdmin()
     {
-        $today = Carbon::today();
-        $month = $today->month;
-        $year = $today->year;
-
-        $totalActive = Employee::where('status', EmployeeStatus::Active)->count();
-
-        $onboarding = Employee::where('status', EmployeeStatus::Onboarding)->count();
-        $probation = Employee::where('status', EmployeeStatus::Probation)->count();
-        $newEmployeesCount = Employee::whereMonth('joining_date', $month)->whereYear('joining_date', $year)->count();
-        $resignedCount = Employee::where('status', EmployeeStatus::Resigned)->count();
-
-        // Today's Attendance KPI
-        $presentToday = Attendance::where('date', $today)->whereNotNull('check_in')->count();
-        $attendancePercent = $totalActive > 0 ? round(($presentToday / $totalActive) * 100) : 0;
-
-        // Employees on Leave Today
-        $onLeaveTodayCount = LeaveRequest::where('status', 'approved')
-            ->whereDate('start_date', '<=', $today)
-            ->whereDate('end_date', '>=', $today)
-            ->count();
-
-        // Pending Approvals
-        $pendingLeavesCount = LeaveRequest::whereIn('status', ['pending', 'pending_hr'])->count();
-        $pendingOtCount = OtRequest::where('status', 'pending')->count();
-        $pendingLeaveRequests = LeaveRequest::with(['employee.user', 'leaveType'])
-            ->where('status', 'pending')
-            ->latest()
-            ->take(3)
-            ->get();
-
-        // Active Payroll Cycles
-        $payrollEnabled = app(ModuleFeatureService::class)->payrollEnabled();
-        $activePayrolls = Payroll::where('status', 'draft')
-            ->where('year', $year)
-            ->get();
-
-        // Attendance Heatmap — current week Mon–Sun
-        $monday = Carbon::now()->startOfWeek(Carbon::MONDAY);
-        $days = collect(range(0, 6))->map(fn ($i) => $monday->copy()->addDays($i));
-
-        $dayStrings = $days->map(fn ($d) => $d->toDateString());
-
-        $heatmapData = Employee::whereIn('status', [EmployeeStatus::Active, EmployeeStatus::Probation])
-            ->with(['user', 'attendances' => function ($q) use ($days) {
-                $q->whereBetween('date', [$days->first()->toDateString(), $days->last()->toDateString()])
-                    ->select(['id', 'employee_id', 'date', 'check_in', 'is_late']);
-            }])
-            ->select(['id', 'user_id'])
-            ->limit(50)
-            ->get()
-            ->map(function ($emp) use ($days, $dayStrings) {
-                $attByDate = $emp->attendances->keyBy(
-                    fn ($a) => Carbon::parse($a->date)->toDateString()
-                );
-
-                return [
-                    'name' => $emp->user?->name ?? 'Unknown',
-                    'initials' => collect(explode(' ', $emp->user?->name ?? 'U'))->map(fn ($n) => $n[0] ?? '')->take(2)->join(''),
-                    'days' => $dayStrings->map(function ($dateStr) use ($attByDate, $days) {
-                        $d = $days->first(fn ($day) => $day->toDateString() === $dateStr);
-                        $att = $attByDate->get($dateStr);
-                        $isWeekend = $d !== null && app(WorkingDayResolver::class)->isWeeklyOff($d);
-
-                        if ($att && $att->check_in) {
-                            // Worked on a weekly off: shown present, never late.
-                            return $att->is_late && ! $isWeekend ? 'late' : 'present';
-                        }
-
-                        if ($isWeekend) {
-                            return 'off'; // Sat/Sun with no attendance = off day
-                        }
-
-                        if (! $d || $d->isFuture()) {
-                            return 'future';
-                        }
-
-                        return $d->isToday() ? 'today' : 'absent';
-                    }),
-                ];
-            });
-
-        // Recent Activity Feed (Formatted)
-        $recentAuditLogs = AuditLog::with('user')
-            ->latest('id')
-            ->take(10)
-            ->get()
-            ->map(function ($log) {
-                $modelName = strtolower(Str::afterLast($log->auditable_type, '\\'));
-                $log->display_action = match ($log->action) {
-                    'created' => "created new {$modelName} record",
-                    'updated' => "updated {$modelName} details",
-                    'deleted' => "removed a {$modelName} record",
-                    default => $log->action
-                };
-
-                return $log;
-            });
-
-        // Critical Alerts
-        $expiringDocuments = Document::whereNotNull('expires_at')
-            ->where('expires_at', '<=', $today->copy()->addDays(30))
-            ->where('expires_at', '>=', $today)
-            ->get();
-
-        $upcomingProbations = Employee::where('status', EmployeeStatus::Probation)
-            ->whereNotNull('probation_end_date')
-            ->where('probation_end_date', '<=', $today->copy()->addDays(30))
-            ->with('user')
-            ->get();
-
-        // Workforce Composition (Department-wise distribution)
-        $workforceComposition = Department::withCount(['employees' => function ($q) {
-            $q->where('status', EmployeeStatus::Active);
-        }])->get()->map(fn ($dept) => [
-            'name' => $dept->name,
-            'count' => $dept->employees_count,
-            'color' => match (strtolower($dept->name)) {
-                'engineering' => '#3b82f6', // blue
-                'operations' => '#8b5cf6',  // purple
-                'sales' => '#10b981',       // green
-                'hr & admin' => '#f59e0b',  // amber
-                'finance' => '#ef4444',     // red
-                default => '#6366f1'        // indigo
-            },
-        ])->filter(fn ($d) => $d['count'] > 0)->values();
-
-        // ── Workforce risk / people-ops counters ───────────────────────────
-        $activeWarnings = WarningLetter::whereIn('status', ['issued', 'acknowledged', 'under_review'])->count();
-        $onPipCount = PipRecord::whereIn('status', ['active', 'under_review', 'extended'])->count();
-        $pendingPromotions = PromotionRecommendation::whereIn('status', [
-            'pending_hr', 'pending_dept_head', 'pending_super_admin',
-        ])->count();
-
-        // ── Pending approvals breakdown (leave / OT / regularisation / encashment) ──
-        $pendingRegularisations = AttendanceRegularisation::where('status', 'pending')->count();
-        $pendingEncashments = LeaveEncashment::where('status', 'pending')->count();
-        $pendingApprovals = collect([
-            ['label' => 'Leave', 'count' => $pendingLeavesCount, 'href' => route('time-off.employees')],
-            ['label' => 'Overtime', 'count' => $pendingOtCount, 'href' => route('overtime.manage')],
-            ['label' => 'Regularisations', 'count' => $pendingRegularisations, 'href' => route('attendance.employees')],
-            ['label' => 'Encashments', 'count' => $pendingEncashments, 'href' => route('time-off.employees')],
-        ]);
-
-        $complianceAlerts = collect([
-            [
-                'label' => 'Pending leave approvals awaiting action',
-                'status' => $pendingLeavesCount > 0 ? 'Action required' : 'Clear',
-                'tone' => $pendingLeavesCount > 0 ? 'rose' : 'emerald',
-                'count' => $pendingLeavesCount,
-                'href' => route('time-off.employees'),
-            ],
-            [
-                'label' => 'Documents expiring in the next 30 days',
-                'status' => $expiringDocuments->isNotEmpty() ? 'Due soon' : 'Current',
-                'tone' => $expiringDocuments->isNotEmpty() ? 'amber' : 'emerald',
-                'count' => $expiringDocuments->count(),
-                'href' => route('documents.index'),
-            ],
-            [
-                'label' => 'Probation reviews approaching deadline',
-                'status' => $upcomingProbations->isNotEmpty() ? 'Upcoming' : 'On track',
-                'tone' => $upcomingProbations->isNotEmpty() ? 'blue' : 'emerald',
-                'count' => $upcomingProbations->count(),
-                'href' => route('employees.index'),
-            ],
-            [
-                'label' => 'Active warning letters',
-                'status' => $activeWarnings > 0 ? 'Open' : 'None',
-                'tone' => $activeWarnings > 0 ? 'amber' : 'emerald',
-                'count' => $activeWarnings,
-                'href' => route('employees.index'),
-            ],
-            [
-                'label' => 'Employees on a PIP',
-                'status' => $onPipCount > 0 ? 'Monitoring' : 'None',
-                'tone' => $onPipCount > 0 ? 'rose' : 'emerald',
-                'count' => $onPipCount,
-                'href' => route('employees.index'),
-            ],
-            [
-                'label' => 'Promotions awaiting review',
-                'status' => $pendingPromotions > 0 ? 'In pipeline' : 'Clear',
-                'tone' => $pendingPromotions > 0 ? 'blue' : 'emerald',
-                'count' => $pendingPromotions,
-                'href' => route('employees.index'),
-            ],
-        ]);
-
-        $actionRequiredCount = $pendingLeavesCount + $pendingOtCount + $expiringDocuments->count();
-
-        // ── Upcoming Birthdays (next 30 days) ──────────────────────────────
-        $upcomingBirthdays = Employee::with(['user', 'department'])
-            ->where('status', EmployeeStatus::Active)
-            ->whereNotNull('date_of_birth')
-            ->get()
-            ->map(function ($emp) {
-                $dob = Carbon::parse($emp->date_of_birth);
-                $next = now()->copy()->setDay($dob->day)->setMonth($dob->month);
-                if ($next->lt(now()->startOfDay())) {
-                    $next->addYear();
-                }
-
-                return [
-                    'emp' => $emp,
-                    'name' => $emp->user?->name ?? '—',
-                    'dept' => $emp->department?->name ?? '',
-                    'dob_fmt' => $dob->format('d M'),
-                    'age' => $dob->age,
-                    'days' => (int) now()->startOfDay()->diffInDays($next),
-                    'is_today' => $next->isToday(),
-                ];
-            })
-            ->filter(fn ($b) => $b['days'] <= 30)
-            ->sortBy('days')
-            ->take(6)
-            ->values();
-
-        // ── Monthly Attendance Trend (last 6 months) ───────────────────────
-        $attendanceTrend = collect();
-        for ($i = 5; $i >= 0; $i--) {
-            $d = now()->subMonths($i);
-            $workDays = app(WorkingDayResolver::class)->weekdaysBetween($d->copy()->startOfMonth(), $d->copy()->endOfMonth());
-            $present = Attendance::whereYear('date', $d->year)
-                ->whereMonth('date', $d->month)
-                ->whereNotNull('check_in')
-                ->count();
-            $rate = ($totalActive > 0 && $workDays > 0)
-                ? min(100, round(($present / ($totalActive * $workDays)) * 100))
-                : 0;
-            $attendanceTrend->push([
-                'month' => $d->format('M'),
-                'present' => $present,
-                'rate' => $rate,
-            ]);
-        }
-
-        // ── Today's Live Check-ins ─────────────────────────────────────────
-        $liveCheckins = Attendance::with('employee.user')
-            ->where('date', $today)
-            ->whereNotNull('check_in')
-            ->orderByDesc('check_in')
-            ->take(6)
-            ->get();
-
-        return view('dashboard', compact(
-            'totalActive',
-            'onboarding',
-            'probation',
-            'newEmployeesCount',
-            'resignedCount',
-            'attendancePercent',
-            'presentToday',
-            'onLeaveTodayCount',
-            'pendingLeavesCount',
-            'pendingOtCount',
-            'pendingLeaveRequests',
-            'activePayrolls',
-            'payrollEnabled',
-            'heatmapData',
-            'days',
-            'recentAuditLogs',
-            'expiringDocuments',
-            'upcomingProbations',
-            'workforceComposition',
-            'complianceAlerts',
-            'actionRequiredCount',
-            'upcomingBirthdays',
-            'attendanceTrend',
-            'liveCheckins',
-            'activeWarnings',
-            'onPipCount',
-            'pendingPromotions',
-            'pendingApprovals',
-            'pendingRegularisations',
-            'pendingEncashments',
-        ) + ['dashboardView' => app(DashboardLanding::class)->view(Auth::user())])->layout('layouts.app', ['title' => 'Admin Dashboard']);
+        return view('dashboard', OrganisationOverview::viewData(Auth::user()))
+            ->layout('layouts.app', ['title' => 'Dashboard']);
     }
 
     /**
