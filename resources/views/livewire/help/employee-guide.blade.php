@@ -2,10 +2,10 @@
     use App\Services\Profile\ProfileFieldRegistry as Registry;
 
     $categories = collect($sections)->groupBy('category');
-    $extraNav = [
+    $extraNav = $isEmployeeJourney ? [
         ['id' => 'can-cannot', 'title' => 'What you can and cannot do'],
         ['id' => 'faq', 'title' => 'FAQ'],
-    ];
+    ] : [];
     $statusTone = fn (string $status): string => match (true) {
         str_contains($status, 'Approved'), $status === 'Locked' => 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/20',
         str_contains($status, 'Rejected') => 'bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-500/10 dark:text-rose-300 dark:ring-rose-500/20',
@@ -87,11 +87,8 @@
                     <span class="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11px] font-bold uppercase tracking-widest text-orange-200">
                         <flux:icon.lifebuoy class="size-3.5" /> Help Centre
                     </span>
-                    <h1 class="mt-3 text-3xl font-black tracking-tight sm:text-4xl">Employee Guide</h1>
-                    <p class="mt-2 text-sm text-zinc-300 sm:text-base">
-                        Everything you can do in Pulse, step by step: from your first login to leave, attendance, payslips and reviews.
-                        Every picture is a real screen from an employee account.
-                    </p>
+                    <h1 class="mt-3 text-3xl font-black tracking-tight sm:text-4xl">{{ $current['title'] }}</h1>
+                    <p class="mt-2 text-sm text-zinc-300 sm:text-base">{{ $current['intro'] }}</p>
                 </div>
                 <div class="w-full lg:max-w-sm">
                     <label for="guide-search" class="sr-only">Search the guide</label>
@@ -114,6 +111,24 @@
             </div>
         </header>
 
+        {{-- Journeys: one per role this reader actually has; each lists only pages they can open. --}}
+        @if(count($journeys) > 1)
+            <nav aria-label="Guide for" class="flex flex-wrap items-center gap-2">
+                <span class="text-xs font-semibold text-zinc-500 dark:text-zinc-400">Guide for</span>
+                @foreach($journeys as $j)
+                    <button type="button" wire:click="$set('journey', '{{ $j['id'] }}')"
+                            @class([
+                                'rounded-full px-3.5 py-1.5 text-xs font-bold transition',
+                                'bg-orange-500 text-white shadow-sm' => $j['id'] === $current['id'],
+                                'border border-zinc-200 bg-white text-zinc-600 hover:border-orange-300 hover:text-orange-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300' => $j['id'] !== $current['id'],
+                            ])
+                            @if($j['id'] === $current['id']) aria-current="true" @endif>
+                        {{ $j['label'] }}
+                    </button>
+                @endforeach
+            </nav>
+        @endif
+
         {{-- Category chips --}}
         <nav aria-label="Guide categories" class="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
             @foreach($categories as $category => $items)
@@ -122,8 +137,10 @@
                     {{ $category }}
                 </a>
             @endforeach
-            <a href="#can-cannot" class="shrink-0 rounded-full border border-zinc-200 bg-white px-3.5 py-1.5 text-xs font-semibold text-zinc-600 transition hover:border-orange-300 hover:text-orange-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300">Can / Cannot</a>
-            <a href="#faq" class="shrink-0 rounded-full border border-zinc-200 bg-white px-3.5 py-1.5 text-xs font-semibold text-zinc-600 transition hover:border-orange-300 hover:text-orange-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300">FAQ</a>
+            @if($isEmployeeJourney)
+                <a href="#can-cannot" class="shrink-0 rounded-full border border-zinc-200 bg-white px-3.5 py-1.5 text-xs font-semibold text-zinc-600 transition hover:border-orange-300 hover:text-orange-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300">Can / Cannot</a>
+                <a href="#faq" class="shrink-0 rounded-full border border-zinc-200 bg-white px-3.5 py-1.5 text-xs font-semibold text-zinc-600 transition hover:border-orange-300 hover:text-orange-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300">FAQ</a>
+            @endif
         </nav>
 
         <div class="grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
@@ -146,6 +163,7 @@
                             @endforeach
                         </ul>
                     @endforeach
+                    @if($extraNav)
                     <p class="mb-1 mt-3 text-[11px] font-bold uppercase tracking-wider text-zinc-500">Reference</p>
                     <ul class="space-y-0.5">
                         @foreach($extraNav as $item)
@@ -159,6 +177,7 @@
                             </li>
                         @endforeach
                     </ul>
+                    @endif
                 </div>
             </aside>
 
@@ -171,7 +190,7 @@
                     <p class="mt-1 text-xs text-zinc-500">Try a simpler word such as leave, payslip, attendance or profile.</p>
                 </div>
 
-                @if(empty($shots))
+                @if($isEmployeeJourney && empty($shots))
                     <div class="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200">
                         Screenshots for this guide have not been generated yet. The written steps below are complete.
                     </div>
@@ -369,6 +388,7 @@
                     </section>
                 @endforeach
 
+                @if($isEmployeeJourney)
                 {{-- Can / cannot --}}
                 <section id="can-cannot" data-guide-section
                          data-search="can cannot permissions access allowed what can i do summary table admin settings roles payroll administration other employees records assets"
@@ -420,6 +440,7 @@
                         @endforeach
                     </div>
                 </section>
+                @endif
 
                 @if($capturedAt)
                     <p class="text-center text-[11px] text-zinc-400">Screenshots captured {{ \Illuminate\Support\Carbon::parse($capturedAt)->format('d M Y') }} from a demo employee account. Names and figures are fictional.</p>

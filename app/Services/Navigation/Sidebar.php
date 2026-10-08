@@ -78,6 +78,32 @@ class Sidebar
     }
 
     /**
+     * Where a page sits in this user's sidebar, in the words on screen —
+     * "Approvals → Team Leave", or just "Inbox" for a top-level item. Null
+     * when the page is not in their menu (so help never points at a menu item
+     * the reader does not have).
+     */
+    public function menuPath(User $user, string $route): ?string
+    {
+        $groups = $this->build($user);
+
+        foreach ($groups as $group) {
+            foreach ($group['items'] as $item) {
+                if ($item['route'] !== $route) {
+                    continue;
+                }
+
+                // Groups with one item (and the heading-less group) render flat.
+                return $group['heading'] === null || count($group['items']) === 1
+                    ? $item['label']
+                    : $group['heading'].' → '.$item['label'];
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Every visible page link, flattened (feeds the search palette; report
      * downloads are left out).
      *
