@@ -195,12 +195,21 @@ class MyTimeOff extends Component
             'reason' => 'required|min:5',
             'employee_remarks' => 'nullable|string|max:1000',
             'attachment' => 'nullable|file|max:5120|mimes:pdf,jpg,jpeg,png,webp',
-            'encash_leave_type_id' => $this->showEncashModal
-                ? 'required|exists:leave_types,id'
-                : 'nullable',
-            'encash_days' => $this->showEncashModal
-                ? 'required|numeric|min:0.5'
-                : 'nullable',
+        ];
+    }
+
+    /**
+     * The encashment form's own rules. Kept out of rules() so a leave
+     * application is never blocked by an encashment field (they used to switch
+     * to required whenever the encash flag was left on).
+     *
+     * @return array<string, string>
+     */
+    private function encashmentRules(): array
+    {
+        return [
+            'encash_leave_type_id' => 'required|exists:leave_types,id',
+            'encash_days' => 'required|numeric|min:0.5',
         ];
     }
 
@@ -481,7 +490,18 @@ class MyTimeOff extends Component
     public function openEncashModal(): void
     {
         $this->reset(['encash_leave_type_id', 'encash_days']);
+        $this->resetErrorBag(['encash_leave_type_id', 'encash_days']);
         $this->showEncashModal = true;
+        $this->modal('encashment-modal')->show();
+    }
+
+    /** However the encashment modal is dismissed, nothing of it lingers. */
+    public function closeEncashModal(): void
+    {
+        $this->modal('encashment-modal')->close();
+        $this->reset(['encash_leave_type_id', 'encash_days']);
+        $this->resetErrorBag(['encash_leave_type_id', 'encash_days']);
+        $this->showEncashModal = false;
     }
 
     /** "Encash" on the CSL card (MyLeaveBalances): open the form for that type. */
@@ -494,7 +514,10 @@ class MyTimeOff extends Component
 
     public function submitEncashment(): void
     {
-        $this->validateOnly('encash_leave_type_id,encash_days');
+        $this->validate($this->encashmentRules(), [], [
+            'encash_leave_type_id' => 'leave type',
+            'encash_days' => 'days to encash',
+        ]);
 
         $employee = Auth::user()->employee;
 
@@ -548,7 +571,7 @@ class MyTimeOff extends Component
             ->reject(fn ($u) => $u->id === Auth::id())
             ->each(fn ($u) => $u->notify((new LeaveEncashmentNotification($encashment, 'submitted'))->forRole('director')));
 
-        $this->showEncashModal = false;
+        $this->closeEncashModal();
         \Flux::toast('Encashment request submitted. Pending HR approval.');
     }
 

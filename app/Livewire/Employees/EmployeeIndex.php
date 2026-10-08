@@ -237,7 +237,9 @@ class EmployeeIndex extends Component
     {
         $user = auth()->user();
 
-        $employees = Employee::with(['user' => fn ($q) => $q->withTrashed(), 'office', 'department', 'jobTitle', 'manager', 'shift', 'latestInvitation'])
+        // user.assignedRole + exitRecord: each row's invite / "Login as" checks
+        // read them (they were lazy-loaded per row).
+        $employees = Employee::with(['user' => fn ($q) => $q->withTrashed()->with('assignedRole'), 'office', 'department', 'jobTitle', 'manager', 'shift', 'latestInvitation', 'exitRecord'])
             ->when($this->showDeleted, fn ($q) => $q->onlyTrashed())
             ->when(! $user->canManageEmployees(), function ($query) use ($user) {
                 // manager_id holds the manager's USER id (employees.manager_id → users.id).
@@ -258,6 +260,9 @@ class EmployeeIndex extends Component
             ->when($this->incomplete, fn ($q) => $q->incompleteHrProfile())
             ->orderByDesc('id')
             ->paginate(15);
+
+        // The row is the user's employee record — don't query it again per row.
+        $employees->getCollection()->each(fn (Employee $e) => $e->user?->setRelation('employee', $e));
 
         return view('livewire.employees.employee-index', [
             'employees' => $employees,

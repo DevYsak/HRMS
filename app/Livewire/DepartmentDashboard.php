@@ -2,55 +2,56 @@
 
 namespace App\Livewire;
 
-use App\Models\Attendance;
 use App\Models\Department;
-use App\Models\Employee;
-use Illuminate\Support\Carbon;
+use App\Services\Security\ScopeResolver;
 use Illuminate\Support\Facades\Auth;
-use Livewire\Component;
 
-class DepartmentDashboard extends Component
+/**
+ * Department Head dashboard: the Manager dashboard (attendance today, leave
+ * and OT approvals, team OT, who is on leave, reviews, KPIs) over the
+ * departments the user heads or is scoped to, instead of a reporting line.
+ *
+ * Reach is the data scope of view_attendance (ScopeResolver) — for the
+ * Department Head role that is their own and headed departments; HR can
+ * narrow it per user. Approvals stay inside the approve_leave reach, which
+ * the services enforce.
+ */
+class DepartmentDashboard extends ManagerDashboard
 {
-    public $department;
-
-    public $totalEmployees = 0;
-
-    public $presentToday = 0;
-
-    public $lateToday = 0;
-
-    public $absentToday = 0;
-
-    public function mount()
+    public function mount(): void
     {
         $user = Auth::user();
-        // Get the department where the user is the head
-        $this->department = Department::where('head_id', $user->id)->first();
 
-        if ($this->department) {
-            $this->loadStats();
-        }
+        abort_unless($user->isDepartmentHead() || $user->assignedRole?->slug === 'department_head', 403);
     }
 
-    public function loadStats()
+    protected function reach(): ?array
     {
-        $employeeIds = Employee::where('department_id', $this->department->id)->pluck('id');
-        $this->totalEmployees = count($employeeIds);
+        $user = Auth::user();
 
-        $today = Carbon::today();
-
-        $attendances = Attendance::whereIn('employee_id', $employeeIds)
-            ->where('date', $today)
-            ->get();
-
-        $this->presentToday = $attendances->count();
-        $this->lateToday = $attendances->where('is_late', true)->count();
-        $this->absentToday = $this->totalEmployees - $this->presentToday;
+        return $user->hasPermission('view_attendance')
+            ? app(ScopeResolver::class)->employeeIds($user, 'view_attendance', includeSelf: false)
+            : $user->accessibleEmployeeIds();
     }
 
-    public function render()
+    protected function scopeHeading(): ?string
     {
-        return view('livewire.department-dashboard')
-            ->layout('layouts.app', ['title' => 'Department Dashboard']);
+        $user = Auth::user();
+        $departmentIds = $user->hasPermission('view_attendance')
+            ? app(ScopeResolver::class)->departmentIds($user, 'view_attendance')
+            : null;
+
+        $names = Department::query()
+            ->where(fn ($q) => $q->where('head_id', $user->id)
+                ->when($departmentIds, fn ($q, $ids) => $q->orWhereIn('id', $ids)))
+            ->orderBy('name')
+            ->pluck('name');
+
+        return $names->isEmpty() ? null : $names->implode(' · ');
+    }
+
+    protected function pageTitle(): string
+    {
+        return 'Department Dashboard';
     }
 }

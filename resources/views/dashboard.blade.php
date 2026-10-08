@@ -1,5 +1,5 @@
 @php $authUser = auth()->user(); @endphp
-@if($authUser->isHrAdmin() && ! $authUser->isSuperAdmin())
+@if(($dashboardView ?? null) === \App\Services\Navigation\DashboardLanding::HR)
     {{-- HR Admin gets the dedicated HR operations content (same route / layout / sidebar). --}}
     @include('dashboard.hr')
 @else

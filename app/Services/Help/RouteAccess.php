@@ -4,13 +4,14 @@ namespace App\Services\Help;
 
 use App\Http\Middleware\EnsureRole;
 use App\Models\User;
+use App\Services\ModuleFeatureService;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Route;
 
 /**
  * Predicts whether a user would get past a named route's own authorization
- * middleware (`can:` and `role:`), so help content only links to pages the
- * reader can actually open.
+ * middleware (`can:`, `role:` and `module:`), so help content and the sidebar
+ * only link to pages the reader can actually open.
  *
  * This is a display decision, never a security one: the route's middleware and
  * the component's own checks still run when the link is followed. When a guard
@@ -48,8 +49,24 @@ class RouteAccess
                     return false;
                 }
             }
+
+            if (str_starts_with($middleware, 'module:') && ! $this->moduleEnabled(substr($middleware, 7))) {
+                return false;
+            }
         }
 
         return true;
+    }
+
+    /** Same switches EnsureModuleEnabled enforces; an unknown module is closed. */
+    private function moduleEnabled(string $module): bool
+    {
+        $features = app(ModuleFeatureService::class);
+
+        return match ($module) {
+            'payroll' => $features->payrollEnabled(),
+            'payslips' => $features->payslipsEnabled(),
+            default => false,
+        };
     }
 }

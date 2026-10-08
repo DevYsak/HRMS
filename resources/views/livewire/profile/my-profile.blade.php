@@ -223,7 +223,8 @@
     </div>
 
     {{-- Edit modal (editable tier) --}}
-    <flux:modal name="edit-field" class="max-w-md">
+    {{-- @close: X, Esc and backdrop clear the field and its errors too. --}}
+    <flux:modal name="edit-field" class="max-w-md" @close="closeFieldModal">
         @if($editingField)
             <div class="space-y-5">
                 <div>
@@ -242,7 +243,7 @@
     </flux:modal>
 
     {{-- Request modal (approval tier) --}}
-    <flux:modal name="request-field" class="max-w-md">
+    <flux:modal name="request-field" class="max-w-md" @close="closeRequestModal">
         @if($editingField)
             <div class="space-y-5">
                 <div>
@@ -256,7 +257,7 @@
                                placeholder="e.g. moved house in June" />
 
                 <div class="flex justify-end gap-2">
-                    <flux:button x-on:click="$flux.modal('request-field').close()" variant="ghost">Cancel</flux:button>
+                    <flux:button wire:click="closeRequestModal" variant="ghost">Cancel</flux:button>
                     <flux:button wire:click="submitRequest" variant="primary">Send to HR</flux:button>
                 </div>
             </div>

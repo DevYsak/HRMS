@@ -29,7 +29,7 @@
                 </div>
                 <div class="flex shrink-0 flex-wrap items-center gap-2.5">
                     @if($encashableTypes->isNotEmpty())
-                        <button @click="$flux.modal('encashment-modal').show()"
+                        <button wire:click="openEncashModal"
                             class="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-orange-200 bg-white px-4 py-2.5 text-sm font-bold text-orange-700 shadow-sm transition-all hover:bg-orange-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-orange-300 dark:hover:bg-zinc-700">
                             <flux:icon.banknotes class="size-4 shrink-0" />
                             <span>Encash Leave</span>
@@ -1478,7 +1478,7 @@
     @endif
 
     {{-- ─── ENCASHMENT MODAL ─── --}}
-    <flux:modal name="encashment-modal" class="max-w-lg">
+    <flux:modal name="encashment-modal" class="max-w-lg" @close="closeEncashModal">
         <div class="space-y-6">
             <div class="flex items-start gap-3">
                 <div class="shrink-0 rounded-xl bg-amber-50 p-2.5 dark:bg-amber-900/20">
@@ -1502,7 +1502,6 @@
                         </option>
                     @endforeach
                 </flux:select>
-                @error('encash_leave_type_id') <p class="text-xs text-red-500">{{ $message }}</p> @enderror
 
                 @php $selectedEncashType = $encashableTypes->firstWhere('id', (int) $encash_leave_type_id); @endphp
 
@@ -1544,7 +1543,6 @@
 
                 <flux:input wire:model="encash_days" label="Days to Encash" type="number" step="0.5" min="0.5"
                     suffix="Days" required />
-                @error('encash_days') <p class="text-xs text-red-500">{{ $message }}</p> @enderror
 
                 <div
                     class="flex gap-3 rounded-xl border border-amber-100 bg-amber-50 p-3 dark:border-amber-800/30 dark:bg-amber-900/10">
@@ -1557,7 +1555,7 @@
             </div>
 
             <div class="flex justify-end gap-2">
-                <button type="button" x-on:click="$flux.modal('encashment-modal').close()"
+                <button type="button" wire:click="closeEncashModal"
                     class="px-4 py-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-800 dark:border-zinc-600 rounded-xl hover:bg-zinc-50 dark:bg-zinc-800/50 dark:hover:bg-zinc-700 transition-colors">
                     Cancel
                 </button>

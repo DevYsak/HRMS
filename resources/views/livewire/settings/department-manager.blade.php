@@ -20,6 +20,7 @@
                 <tr>
                     <th class="px-4 py-3 text-left font-semibold text-zinc-600 dark:text-zinc-400">Name</th>
                     <th class="px-4 py-3 text-left font-semibold text-zinc-600 dark:text-zinc-400">Code</th>
+                    <th class="px-4 py-3 text-left font-semibold text-zinc-600 dark:text-zinc-400">Head</th>
                     <th class="px-4 py-3 text-left font-semibold text-zinc-600 dark:text-zinc-400">Employees</th>
                     <th class="px-4 py-3 text-left font-semibold text-zinc-600 dark:text-zinc-400">Default OT Source</th>
                     <th class="px-4 py-3 text-right font-semibold text-zinc-600 dark:text-zinc-400">Actions</th>
@@ -35,7 +36,8 @@
                             @endif
                         </td>
                         <td class="px-4 py-3 text-zinc-600 dark:text-zinc-300 font-mono text-xs">{{ $dept->code ?: '—' }}</td>
-                        <td class="px-4 py-3 text-zinc-600 dark:text-zinc-300">{{ $dept->employees()->count() }}</td>
+                        <td class="px-4 py-3 text-zinc-600 dark:text-zinc-300">{{ $dept->head?->name ?? '—' }}</td>
+                        <td class="px-4 py-3 text-zinc-600 dark:text-zinc-300">{{ $dept->employees_count }}</td>
                         <td class="px-4 py-3">
                             @php
                                 $sourceColors = ['biometric' => 'zinc', 'manual' => 'blue', 'nexflow' => 'purple', 'hybrid' => 'amber'];
@@ -52,7 +54,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="5" class="px-4 py-8 text-center text-zinc-400">No departments found.</td>
+                        <td colspan="6" class="px-4 py-8 text-center text-zinc-400">No departments found.</td>
                     </tr>
                 @endforelse
             </tbody>
@@ -80,6 +82,18 @@
                 <flux:label>Description</flux:label>
                 <flux:textarea wire:model="description" rows="2" placeholder="Optional description" />
                 <flux:error name="description" />
+            </flux:field>
+
+            <flux:field>
+                <flux:label>Department Head</flux:label>
+                <flux:select wire:model="head_id">
+                    <flux:select.option value="">No head</flux:select.option>
+                    @foreach($headCandidates as $candidate)
+                        <flux:select.option value="{{ $candidate->id }}">{{ $candidate->name }}</flux:select.option>
+                    @endforeach
+                </flux:select>
+                <flux:description>The head's department-scoped permissions (e.g. the Department Head role) cover everyone in this department.</flux:description>
+                <flux:error name="head_id" />
             </flux:field>
 
             <flux:field>

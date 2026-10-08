@@ -207,7 +207,8 @@
     </div>
 
     {{-- HR edit modal --}}
-    <flux:modal name="hr-edit-field" class="max-w-md">
+    {{-- @close: X, Esc and backdrop clear the field and its errors too. --}}
+    <flux:modal name="hr-edit-field" class="max-w-md" @close="closeFieldModal">
         @if($editingField)
             <div class="space-y-5">
                 <div>

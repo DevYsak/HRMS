@@ -6,6 +6,7 @@ use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Once;
 
 #[Fillable(['shift_start', 'shift_end', 'weekly_off_days', 'late_grace_period', 'late_warning_threshold', 'auto_checkout_buffer_minutes', 'ot_auto_close_time', 'ot_rate_per_hour', 'requires_location', 'requires_qr', 'requires_photo', 'coordinator_reminder_hours', 'coordinator_late_minutes'])]
 class AttendanceSetting extends Model
@@ -29,7 +30,8 @@ class AttendanceSetting extends Model
 
     protected static function booted(): void
     {
-        // Any change to the settings row invalidates the memo.
+        // Any change to the settings row invalidates the memos (this one and
+        // ShiftResolver::settings()).
         static::saved(fn () => static::flushWeeklyOffCache());
         static::deleted(fn () => static::flushWeeklyOffCache());
     }
@@ -37,6 +39,7 @@ class AttendanceSetting extends Model
     public static function flushWeeklyOffCache(): void
     {
         static::$weeklyOffCache = null;
+        Once::flush();
     }
 
     /** The Conexus working week: Saturday and Sunday off (HR-confirmed). */

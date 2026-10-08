@@ -22,7 +22,9 @@ class Role extends Model
 
     public function permissions(): BelongsToMany
     {
-        return $this->belongsToMany(Permission::class, 'role_permission');
+        return $this->belongsToMany(Permission::class, 'role_permission')
+            ->withPivot('scope', 'department_ids')
+            ->withTimestamps();
     }
 
     public function users(): HasMany
@@ -47,9 +49,28 @@ class Role extends Model
         );
     }
 
+    /**
+     * The scope each granted permission carries on this role. A permission
+     * with no explicit scope maps to null (the role default applies).
+     *
+     * @return array<string, array{scope: ?string, department_ids: array<int, int>}>
+     */
+    public function permissionScopes(): array
+    {
+        return Cache::remember(
+            "role_{$this->id}_permission_scopes",
+            300,
+            fn () => $this->permissions()->get()->mapWithKeys(fn (Permission $p) => [$p->key => [
+                'scope' => $p->pivot->scope,
+                'department_ids' => array_map('intval', json_decode((string) $p->pivot->department_ids, true) ?: []),
+            ]])->all(),
+        );
+    }
+
     public function flushPermissionCache(): void
     {
         Cache::forget("role_{$this->id}_permission_keys");
+        Cache::forget("role_{$this->id}_permission_scopes");
     }
 
     /**

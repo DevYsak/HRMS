@@ -13,10 +13,12 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 
@@ -85,10 +87,13 @@ class User extends Authenticatable
         return app(ApprovalGuard::class)->isCompanyWide($this);
     }
 
-    /** Does this user's scope or reporting line cover the given employee? */
-    public function coversEmployee(Employee $employee): bool
+    /**
+     * Does this user's scope or reporting line cover the given employee?
+     * With a permission, that permission's configured data scope applies.
+     */
+    public function coversEmployee(Employee $employee, ?string $permission = null): bool
     {
-        return app(ApprovalGuard::class)->covers($this, $employee);
+        return app(ApprovalGuard::class)->covers($this, $employee, $permission);
     }
 
     /**
@@ -97,9 +102,9 @@ class User extends Authenticatable
      *
      * @return array<int>|null
      */
-    public function accessibleEmployeeIds(): ?array
+    public function accessibleEmployeeIds(?string $permission = null): ?array
     {
-        return app(ApprovalGuard::class)->accessibleEmployeeIds($this);
+        return app(ApprovalGuard::class)->accessibleEmployeeIds($this, $permission);
     }
 
     /**
@@ -153,7 +158,93 @@ class User extends Authenticatable
             return true;
         }
 
-        return $this->assignedRole?->hasPermission($key) ?? false;
+        if ($override = $this->permissionOverride($key)) {
+            return $override['effect'] === UserPermissionOverride::GRANT;
+        }
+
+        return $this->effectiveRole()?->hasPermission($key) ?? false;
+    }
+
+    /**
+     * The role whose permissions apply. A deactivated custom role grants
+     * nothing beyond Employee self-service, so its members keep their own
+     * leave, payslips and profile but lose everything the role added.
+     */
+    public function effectiveRole(): ?Role
+    {
+        $role = $this->assignedRole;
+
+        if ($role === null || $role->is_active) {
+            return $role;
+        }
+
+        return Role::where('slug', UserRole::Employee->value)->first();
+    }
+
+    /**
+     * Every permission key the user holds: the role's, plus per-user grants,
+     * minus per-user revocations.
+     *
+     * @return array<int, string>
+     */
+    public function effectivePermissionKeys(): array
+    {
+        if ($this->isSuperAdmin() || $this->assignedRole?->slug === 'super_admin') {
+            return Permission::pluck('key')->all();
+        }
+
+        $keys = $this->effectiveRole()?->permissionKeys() ?? [];
+
+        foreach ($this->permissionOverrideMap() as $key => $override) {
+            $keys = $override['effect'] === UserPermissionOverride::GRANT
+                ? [...$keys, $key]
+                : array_diff($keys, [$key]);
+        }
+
+        return array_values(array_unique($keys));
+    }
+
+    public function permissionOverrides(): HasMany
+    {
+        return $this->hasMany(UserPermissionOverride::class);
+    }
+
+    /**
+     * This user's override for one permission, if any.
+     *
+     * @return array{effect: string, scope: ?string, department_ids: array<int, int>}|null
+     */
+    public function permissionOverride(string $key): ?array
+    {
+        return $this->permissionOverrideMap()[$key] ?? null;
+    }
+
+    /**
+     * Per-user overrides keyed by permission key (cached; flushed whenever
+     * an override is saved or deleted).
+     *
+     * @return array<string, array{effect: string, scope: ?string, department_ids: array<int, int>}>
+     */
+    public function permissionOverrideMap(): array
+    {
+        if ($this->id === null) {
+            return [];
+        }
+
+        return Cache::remember(
+            UserPermissionOverride::cacheKey($this->id),
+            300,
+            fn () => UserPermissionOverride::query()
+                ->join('permissions', 'permissions.id', '=', 'user_permission_overrides.permission_id')
+                ->where('user_permission_overrides.user_id', $this->id)
+                ->get(['permissions.key', 'user_permission_overrides.effect', 'user_permission_overrides.scope', 'user_permission_overrides.department_ids'])
+                ->mapWithKeys(fn (UserPermissionOverride $o) => [$o->key => [
+                    'effect' => $o->effect,
+                    'scope' => $o->scope?->value,
+                    'department_ids' => array_map('intval', $o->department_ids ?? []),
+                ]])
+                ->all(),
+        );
     }
 
     public function canManageEmployees(): bool

@@ -86,7 +86,7 @@ class KpiTemplates extends Component
 
     public function newTemplate(): void
     {
-        abort_unless(Auth::user()->canManageSettings(), 403);
+        abort_unless(Auth::user()->hasPermission('manage_kpi_templates'), 403);
 
         $this->showForm = true;
         $this->selectedTemplateId = null;
@@ -193,7 +193,7 @@ class KpiTemplates extends Component
 
     public function save(PerformanceTemplateService $service): void
     {
-        abort_unless(Auth::user()->canManageSettings(), 403);
+        abort_unless(Auth::user()->hasPermission('manage_kpi_templates'), 403);
 
         Log::info('KPI template save() entered — server-side categories snapshot.', [
             'user_id' => Auth::id(),
@@ -297,14 +297,14 @@ class KpiTemplates extends Component
 
     public function confirmDelete(int $id): void
     {
-        abort_unless(Auth::user()->canManageSettings(), 403);
+        abort_unless(Auth::user()->hasPermission('manage_kpi_templates'), 403);
         $this->deletingId = $id;
         $this->showDeleteConfirm = true;
     }
 
     public function deleteTemplate(): void
     {
-        abort_unless(Auth::user()->canManageSettings(), 403);
+        abort_unless(Auth::user()->hasPermission('manage_kpi_templates'), 403);
 
         $template = PerformanceTemplate::findOrFail($this->deletingId);
 
@@ -330,7 +330,7 @@ class KpiTemplates extends Component
 
     public function openLaunchCycle(int $templateId): void
     {
-        abort_unless(Auth::user()->canManageSettings(), 403);
+        abort_unless(Auth::user()->hasPermission('manage_kpi_templates'), 403);
 
         $template = PerformanceTemplate::findOrFail($templateId);
 
@@ -346,7 +346,7 @@ class KpiTemplates extends Component
 
     public function launchCycle(ReviewWorkflowService $workflowService): void
     {
-        abort_unless(Auth::user()->canManageSettings(), 403);
+        abort_unless(Auth::user()->hasPermission('manage_kpi_templates'), 403);
 
         $this->validate([
             'cycleName' => 'required|string|max:255',
@@ -396,7 +396,7 @@ class KpiTemplates extends Component
 
     public function render()
     {
-        abort_unless(Auth::user()->canManageSettings(), 403);
+        abort_unless(Auth::user()->hasPermission('manage_kpi_templates'), 403);
 
         $templates = PerformanceTemplate::withCount(['categories', 'components', 'cycles'])
             ->latest()

@@ -53,9 +53,77 @@ class WorkingDayResolver
 
     public const WORKED_WEEKLY_OFF_LABEL = 'Worked on Weekly Off';
 
+    /**
+     * MDL shutdown dates per year (Y-m-d => true), loaded once for this
+     * resolver's lifetime (one calculation) instead of a query per day.
+     *
+     * @var array<int, array<string, true>>
+     */
+    private array $mandatoryDays = [];
+
+    /**
+     * Approved leave already looked up for one date and a known set of
+     * employees (primeApprovedLeave), so a team's statuses need one query
+     * rather than one per person.
+     *
+     * @var array{date: string, ids: array<int, true>, known: array<int, true>}|null
+     */
+    private ?array $primedLeave = null;
+
     public function __construct(private readonly HolidayResolver $holidays) {}
 
+    /**
+     * Look up approved leave on one date for many employees at once; classify()
+     * then answers for them from memory.
+     *
+     * @param  array<int, int>  $employeeIds
+     */
+    public function primeApprovedLeave(array $employeeIds, CarbonInterface $date): self
+    {
+        $day = Carbon::parse($date)->toDateString();
+
+        $this->primedLeave = [
+            'date' => $day,
+            'ids' => LeaveRequest::whereIn('employee_id', $employeeIds)
+                ->where('status', 'approved')
+                ->where('start_date', '<=', $day)
+                ->where('end_date', '>=', $day)
+                ->distinct()->pluck('employee_id')
+                ->mapWithKeys(fn ($id) => [(int) $id => true])->all(),
+            'known' => array_fill_keys(array_map('intval', $employeeIds), true),
+        ];
+
+        return $this;
+    }
+
+    /** Whether the date is a December mandatory-leave (MDL) shutdown day. */
+    public function isMandatoryDay(CarbonInterface $date): bool
+    {
+        $year = (int) $date->year;
+
+        $this->mandatoryDays[$year] ??= DecemberMandatoryDay::where('year', $year)->pluck('date')
+            ->mapWithKeys(fn ($d) => [Carbon::parse($d)->toDateString() => true])
+            ->all();
+
+        return isset($this->mandatoryDays[$year][Carbon::parse($date)->toDateString()]);
+    }
+
     /** The configured weekly off — company-wide (Saturday + Sunday by default). */
+    private function onApprovedLeave(Employee $employee, Carbon $day): bool
+    {
+        $primed = $this->primedLeave;
+
+        if ($primed !== null && $primed['date'] === $day->toDateString() && isset($primed['known'][(int) $employee->id])) {
+            return isset($primed['ids'][(int) $employee->id]);
+        }
+
+        return LeaveRequest::where('employee_id', $employee->id)
+            ->where('status', 'approved')
+            ->whereDate('start_date', '<=', $day->toDateString())
+            ->whereDate('end_date', '>=', $day->toDateString())
+            ->exists();
+    }
+
     public function isWeeklyOff(CarbonInterface $date): bool
     {
         return AttendanceSetting::isWeeklyOff($date);
@@ -85,7 +153,7 @@ class WorkingDayResolver
             return self::PUBLIC_HOLIDAY;
         }
 
-        if (DecemberMandatoryDay::isMandatory($day)) {
+        if ($this->isMandatoryDay($day)) {
             return self::MDL_SHUTDOWN;
         }
 
@@ -93,11 +161,7 @@ class WorkingDayResolver
             return self::WEEKLY_OFF;
         }
 
-        if ($withLeave && LeaveRequest::where('employee_id', $employee->id)
-            ->where('status', 'approved')
-            ->whereDate('start_date', '<=', $day->toDateString())
-            ->whereDate('end_date', '>=', $day->toDateString())
-            ->exists()) {
+        if ($withLeave && $this->onApprovedLeave($employee, $day)) {
             return self::APPROVED_LEAVE;
         }
 
@@ -171,7 +235,7 @@ class WorkingDayResolver
      */
     public function isCompanyWorkingDay(CarbonInterface $date): bool
     {
-        return ! $this->isWeeklyOff($date) && ! DecemberMandatoryDay::isMandatory($date);
+        return ! $this->isWeeklyOff($date) && ! $this->isMandatoryDay($date);
     }
 
     /** Scheduled working days in an inclusive range, excluding weekly offs only. */

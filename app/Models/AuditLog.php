@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Http\Middleware\AssignRequestId;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Http\Request;
@@ -156,7 +157,9 @@ class AuditLog extends Model
     private static function requestId(Request $request): string
     {
         if (! $request->attributes->has('audit_request_id')) {
-            $request->attributes->set('audit_request_id', (string) ($request->header('X-Request-Id') ?: Str::uuid()));
+            // The id AssignRequestId put on the logs and the response, so an
+            // audit row and its log lines share one id.
+            $request->attributes->set('audit_request_id', AssignRequestId::current() ?? (string) ($request->header('X-Request-Id') ?: Str::uuid()));
         }
 
         return Str::limit((string) $request->attributes->get('audit_request_id'), 64, '');

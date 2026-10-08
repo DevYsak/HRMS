@@ -115,13 +115,7 @@ class ManagerDashboard extends Component
         $month = $today->month;
         $year = $today->year;
 
-        // My team = my reach, the same population approvals use: the
-        // reporting line (direct reports via employees.manager_id = users.id,
-        // teams led, departments headed) plus any department/shift scope — so
-        // a Department Head scoped to UK Sales sees exactly that team. The old
-        // query compared manager_id with an EMPLOYEE id and could show
-        // another user's team.
-        $reach = Auth::user()->accessibleEmployeeIds();
+        $reach = $this->reach();
         $reachIds = collect($reach ?? Employee::whereNotIn('status', ['inactive', 'archived'])->pluck('id')->all())
             ->reject(fn ($id) => (int) $id === (int) Auth::user()->employee?->id)
             ->values();
@@ -136,7 +130,7 @@ class ManagerDashboard extends Component
             ->pluck('id');
 
         // --- Team Attendance Today ---
-        $teamAttendance = Attendance::with('employee.user')
+        $teamAttendance = Attendance::with(['employee.user', 'activeBreak'])
             ->where('date', $today)
             ->whereIn('employee_id', $teamIds)
             ->get();
@@ -148,7 +142,7 @@ class ManagerDashboard extends Component
         $absentCount = $weeklyOff ? 0 : $teamIds->count() - $presentCount;
 
         // --- Full team attendance list ---
-        $teamEmployees = Employee::with(['user', 'department', 'shift'])
+        $teamEmployees = Employee::with(['user', 'department', 'shift', 'office', 'exitRecord'])
             ->whereIn('id', $teamIds)
             ->get();
         // The shared status (PunchTimeline + calculator) — LIVE only inside the
@@ -250,6 +244,30 @@ class ManagerDashboard extends Component
             'teamOtHours',
             'teamOtAmount',
             'onLeaveThisWeek',
-        ))->layout('layouts.app', ['title' => 'Manager Dashboard']);
+        ) + ['scopeHeading' => $this->scopeHeading()])->layout('layouts.app', ['title' => $this->pageTitle()]);
+    }
+
+    /**
+     * Whose figures this dashboard shows: the same population leave approval
+     * uses — the reporting line (direct reports via employees.manager_id =
+     * users.id, teams led, departments headed) or the data scope configured
+     * for approve_leave. NULL = everyone.
+     *
+     * @return array<int, int>|null
+     */
+    protected function reach(): ?array
+    {
+        return Auth::user()->accessibleEmployeeIds('approve_leave');
+    }
+
+    /** Optional line naming whose figures these are (e.g. the departments). */
+    protected function scopeHeading(): ?string
+    {
+        return null;
+    }
+
+    protected function pageTitle(): string
+    {
+        return 'Manager Dashboard';
     }
 }

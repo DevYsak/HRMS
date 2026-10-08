@@ -3,6 +3,8 @@
 namespace App\Livewire\Settings;
 
 use App\Models\Department;
+use App\Models\User;
+use App\Services\Audit\AuditService;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
 
@@ -20,6 +22,9 @@ class DepartmentManager extends Component
     public string $description = '';
 
     public string $default_ot_source = 'biometric';
+
+    /** users.id of the department head ('' = none). Heads reach the department through department-scoped permissions. */
+    public string $head_id = '';
 
     public function mount(): void
     {
@@ -40,6 +45,7 @@ class DepartmentManager extends Component
         $this->code = $dept->code ?? '';
         $this->description = $dept->description ?? '';
         $this->default_ot_source = $dept->default_ot_source ?? 'biometric';
+        $this->head_id = $dept->head_id ? (string) $dept->head_id : '';
         $this->showModal = true;
     }
 
@@ -58,14 +64,25 @@ class DepartmentManager extends Component
             'code' => ['nullable', 'string', 'max:20'],
             'description' => ['nullable', 'string', 'max:500'],
             'default_ot_source' => ['required', 'in:biometric,manual,nexflow,hybrid'],
+            'head_id' => ['nullable', Rule::exists('users', 'id')->whereNull('deleted_at')],
         ]);
+        $data['head_id'] = $data['head_id'] ? (int) $data['head_id'] : null;
 
-        if ($this->editingId) {
-            Department::findOrFail($this->editingId)->update($data);
+        $dept = $this->editingId ? Department::findOrFail($this->editingId) : null;
+        $previousHead = $dept?->head_id;
+
+        if ($dept) {
+            $dept->update($data);
             \Flux::toast('Department updated.', variant: 'success');
         } else {
-            Department::create($data);
+            $dept = Department::create($data);
             \Flux::toast('Department created.', variant: 'success');
+        }
+
+        // The head reaches the whole department, so a change is a permission change.
+        if ($previousHead !== $dept->head_id) {
+            app(AuditService::class)->event('DEPARTMENT_HEAD_CHANGED', AuditService::PERMISSIONS, $dept,
+                old: ['head_id' => $previousHead], new: ['head_id' => $dept->head_id], module: AuditService::SETTINGS);
         }
 
         $this->closeModal();
@@ -90,13 +107,17 @@ class DepartmentManager extends Component
     public function render()
     {
         return view('livewire.settings.department-manager', [
-            'departments' => Department::orderBy('name')->get(),
+            'departments' => Department::with('head:id,name')->withCount('employees')->orderBy('name')->get(),
+            'headCandidates' => User::query()
+                ->whereHas('employee', fn ($q) => $q->where('status', 'active'))
+                ->orderBy('name')
+                ->get(['id', 'name']),
         ])->layout('layouts.app', ['title' => 'Departments']);
     }
 
     private function resetForm(): void
     {
-        $this->reset(['editingId', 'name', 'code', 'description']);
+        $this->reset(['editingId', 'name', 'code', 'description', 'head_id']);
         $this->default_ot_source = 'biometric';
     }
 }

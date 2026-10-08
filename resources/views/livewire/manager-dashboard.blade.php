@@ -5,27 +5,18 @@
         $greeting = $hour < 12 ? 'Good Morning' : ($hour < 17 ? 'Good Afternoon' : 'Good Evening');
         $firstName = \Illuminate\Support\Str::of(auth()->user()->name)->explode(' ')->first();
         $timeContext = $hour < 12 ? 'Your team is ready — time to lead.' : ($hour < 17 ? 'Afternoon check-in — team overview below.' : 'End of day — review pending approvals.');
+        // Department dashboard: name whose figures these are.
+        if ($scopeHeading ?? null) {
+            $timeContext = $scopeHeading.' — attendance, leave, overtime and reviews';
+        }
+        $canApproveOt = auth()->user()->canApproveOt();
     @endphp
     {{-- ── HEADER ── --}}
     <div class="p-4 pb-0 md:p-6 md:pb-0">
-        <x-pulse.dashboard-header :title="$greeting.', '.$firstName" :subtitle="$timeContext">
-            <x-slot:actions>
-                <a href="{{ route('time-off.team') }}" wire:navigate
-                   class="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50 dark:border-white/10 dark:bg-white/5 dark:text-zinc-200 dark:hover:bg-white/10">
-                    <flux:icon.calendar-days class="size-4" /> Leave Approvals
-                    @if($pendingLeaves->count())
-                        <span class="rounded-full bg-amber-500 px-1.5 py-0.5 text-[9px] font-black text-white">{{ $pendingLeaves->count() }}</span>
-                    @endif
-                </a>
-                <a href="{{ route('overtime.manage') }}" wire:navigate
-                   class="inline-flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-brand-600">
-                    <flux:icon.clock class="size-4" /> OT Approvals
-                    @if($pendingOt->count())
-                        <span class="rounded-full bg-white/25 px-1.5 py-0.5 text-[9px] font-black text-white">{{ $pendingOt->count() }}</span>
-                    @endif
-                </a>
-            </x-slot:actions>
-        </x-pulse.dashboard-header>
+        {{-- No header buttons: the Leave and OT approval cards below carry the
+             same links and counts. --}}
+        <x-pulse.dashboard-header :title="$greeting.', '.$firstName" :subtitle="$timeContext" />
+
     </div>
 
     <div class="p-4 md:p-6 space-y-5">
@@ -214,13 +205,13 @@
                             <div class="p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/40 rounded-xl">
                                 <div class="font-semibold text-xs text-zinc-900 dark:text-white">{{ $leave->employee->user->name }}</div>
                                 <div class="text-[10px] text-zinc-500 mt-0.5">
-                                    {{ $leave->leaveType?->name }} Â·
+                                    {{ $leave->leaveType?->name }} ·
                                     {{ \Carbon\Carbon::parse($leave->start_date)->format('d M') }}
                                     @if($leave->start_date != $leave->end_date)
                                         – {{ \Carbon\Carbon::parse($leave->end_date)->format('d M') }}
                                     @endif
                                     @if($leave->reason)
-                                        Â· <span class="italic">{{ \Illuminate\Support\Str::limit($leave->reason, 30) }}</span>
+                                        · <span class="italic">{{ \Illuminate\Support\Str::limit($leave->reason, 30) }}</span>
                                     @endif
                                 </div>
                                 <div class="flex gap-1.5 mt-2">
@@ -262,19 +253,21 @@
                             <div class="p-3 bg-purple-50 dark:bg-purple-950/20 border border-purple-100 dark:border-purple-900/40 rounded-xl">
                                 <div class="font-semibold text-xs text-zinc-900 dark:text-white">{{ $ot->employee->user->name }}</div>
                                 <div class="text-[10px] text-zinc-500 mt-0.5">
-                                    {{ \Carbon\Carbon::parse($ot->work_date)->format('d M, D') }} Â· {{ $ot->requested_hours }}h estimated
+                                    {{ \Carbon\Carbon::parse($ot->work_date)->format('d M, D') }} · {{ $ot->requested_hours }}h estimated
                                 </div>
                             </div>
                         @empty
                             <div class="py-6 text-center text-zinc-400 text-xs">All clear — no pending OT</div>
                         @endforelse
                     </div>
-                    <div class="px-4 pb-4">
-                        <a href="{{ route('overtime.manage') }}" wire:navigate
-                           class="block w-full py-2 text-center text-xs font-bold text-brand-600 hover:text-brand-700 bg-brand-50 dark:bg-brand-950/30 hover:bg-brand-100 rounded-xl transition-colors">
-                            Manage All OT →
-                        </a>
-                    </div>
+                    @if($canApproveOt)
+                        <div class="px-4 pb-4">
+                            <a href="{{ route('overtime.manage') }}" wire:navigate
+                               class="block w-full py-2 text-center text-xs font-bold text-brand-600 hover:text-brand-700 bg-brand-50 dark:bg-brand-950/30 hover:bg-brand-100 rounded-xl transition-colors">
+                                Manage All OT →
+                            </a>
+                        </div>
+                    @endif
                 </div>
 
             </div>

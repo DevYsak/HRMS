@@ -59,7 +59,9 @@ use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\URL;
+use Illuminate\Support\Once;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
 use Livewire\Livewire;
@@ -116,8 +118,18 @@ class AppServiceProvider extends ServiceProvider
 
         // Dynamic, database-driven authorization: any ability matching a
         // `permissions.key` row resolves through the user's assigned role.
+        // once() memos (settings rows, the default shift, permission keys)
+        // last for one request; a queue worker is long-lived, so it starts
+        // every job fresh rather than reading settings from hours ago.
+        Queue::before(fn () => Once::flush());
+
+        // The set of permission keys is read once per request (it was an
+        // exists() query on every single check — 20–40 per page). Creating or
+        // deleting a permission flushes it (Permission model).
         Gate::before(function (User $user, string $ability) {
-            if (Permission::query()->where('key', $ability)->exists()) {
+            $keys = once(fn (): array => Permission::query()->pluck('key')->flip()->all());
+
+            if (isset($keys[$ability])) {
                 return $user->hasPermission($ability);
             }
 

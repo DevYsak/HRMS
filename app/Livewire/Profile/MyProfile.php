@@ -163,6 +163,9 @@ class MyProfile extends Component
             return;
         }
 
+        // Every field edits through the one `editingValue` input, so an error
+        // left from the previous field (e.g. Aadhaar) would show under this one.
+        $this->resetErrorBag();
         $this->editingField = $field;
         $this->editingValue = Registry::valueFor($this->employee, $field);
         $this->modal('edit-field')->show();
@@ -202,6 +205,7 @@ class MyProfile extends Component
             return;
         }
 
+        $this->resetErrorBag();
         $this->editingField = $field;
         $this->editingValue = Registry::valueFor($this->employee, $field);
         $this->requestReason = '';
@@ -230,10 +234,17 @@ class MyProfile extends Component
             return;
         }
 
-        $this->modal('request-field')->close();
+        $this->closeRequestModal();
         \Flux::toast('Sent to HR for review.', variant: 'success');
+    }
+
+    /** Close the request modal however it was dismissed (Cancel, X, Esc, backdrop). */
+    public function closeRequestModal(): void
+    {
+        $this->modal('request-field')->close();
         $this->editingField = null;
         $this->requestReason = '';
+        $this->resetErrorBag();
     }
 
     public function withdrawRequest(int $requestId, ProfileChangeService $service): void

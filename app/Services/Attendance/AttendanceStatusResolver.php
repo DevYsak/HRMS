@@ -5,6 +5,7 @@ namespace App\Services\Attendance;
 use App\Models\Attendance;
 use App\Models\AttendancePunch;
 use App\Models\Employee;
+use App\Models\OtRequest;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -57,9 +58,9 @@ class AttendanceStatusResolver
      * @param  Collection<int, AttendancePunch>|null  $punches  null = load them
      * @return array{state: string, label: string, live: bool, on_break: bool, reason: ?string, day: AttendanceDay, first_in: ?Carbon, last_out: ?Carbon, worked_minutes: int, work_date: string}
      */
-    public function resolve(Employee $employee, CarbonInterface|string $date, ?Attendance $attendance = null, ?Collection $punches = null, ?CarbonInterface $now = null): array
+    public function resolve(Employee $employee, CarbonInterface|string $date, ?Attendance $attendance = null, ?Collection $punches = null, ?CarbonInterface $now = null, ?bool $hasApprovedOt = null): array
     {
-        $day = $this->calculator->forDay($employee, $date, $attendance, $punches, $now);
+        $day = $this->calculator->forDay($employee, $date, $attendance, $punches, $now, $hasApprovedOt);
 
         return $this->describe($day, $attendance);
     }
@@ -102,19 +103,29 @@ class AttendanceStatusResolver
         $today = $now->copy()->startOfDay();
         $ids = $employees->pluck('id')->all();
 
-        $attendanceByEmployee ??= Attendance::whereIn('employee_id', $ids)->whereDate('date', $today->toDateString())->with('activeBreak')->get()->keyBy('employee_id');
+        $attendanceByEmployee ??= Attendance::whereIn('employee_id', $ids)->where('date', $today->toDateString())->with('activeBreak')->get()->keyBy('employee_id');
         $punches = AttendancePunch::whereIn('employee_id', $ids)
-            ->whereDate('punch_date', $today->toDateString())
+            ->where('punch_date', $today->toDateString())
             ->orderBy('punched_at')->get()->groupBy('employee_id');
+
+        // Approved leave and approved OT for the whole team in two queries;
+        // the calculator below answers each person from these.
+        $batch = new self(app(AttendanceCalculator::class, [
+            'workingDays' => app(WorkingDayResolver::class)->primeApprovedLeave($ids, $today),
+        ]));
+        $approvedOt = OtRequest::whereIn('employee_id', $ids)->where('status', 'approved')
+            ->where('work_date', $today->toDateString())
+            ->distinct()->pluck('employee_id')->mapWithKeys(fn ($id) => [(int) $id => true]);
 
         $out = [];
         foreach ($employees as $employee) {
             $carried = $this->overnightCarry($employee, $today, $now);
-            $out[$employee->id] = $carried ?? $this->resolve(
+            $out[$employee->id] = $carried ?? $batch->resolve(
                 $employee, $today,
                 $attendanceByEmployee->get($employee->id),
                 $punches->get($employee->id, collect()),
                 $now,
+                $approvedOt->has((int) $employee->id),
             );
         }
 
@@ -136,7 +147,7 @@ class AttendanceStatusResolver
             return null;
         }
 
-        $attendance = Attendance::where('employee_id', $employee->id)->whereDate('date', $yesterday->toDateString())->with('activeBreak')->first();
+        $attendance = Attendance::where('employee_id', $employee->id)->where('date', $yesterday->toDateString())->with('activeBreak')->first();
         $status = $this->resolve($employee, $yesterday, $attendance, null, $now);
 
         return $status['state'] === self::NOT_IN ? null : $status;

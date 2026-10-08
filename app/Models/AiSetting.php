@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Once;
 
 /**
  * Single-row, database-driven configuration for the AI assistant features.
@@ -56,16 +57,25 @@ class AiSetting extends Model
         ];
     }
 
+    protected static function booted(): void
+    {
+        // current() is memoised per request; a change must be seen at once.
+        static::saved(fn () => Once::flush());
+        static::deleted(fn () => Once::flush());
+    }
+
     /**
-     * The single configuration row, created with sensible defaults on first use.
+     * The single configuration row, created with sensible defaults on first
+     * use. Memoised per request — the sidebar, the copilot and the assistant
+     * page each read it several times per page.
      */
     public static function current(): self
     {
-        return static::query()->first() ?? static::query()->create([
+        return once(fn (): self => static::query()->first() ?? static::query()->create([
             'provider' => 'openai',
             'enabled' => false,
             'allowed_roles' => ['super_admin', 'hr_admin', 'director', 'manager', 'finance', 'employee'],
-        ]);
+        ]));
     }
 
     /**

@@ -115,7 +115,7 @@ class TeamAttendance extends Component
         abort_unless(Auth::user()->canApproveLeave(), 403);
 
         $manager = Auth::user()->employee;
-        $teamMembers = $manager ? $manager->subordinates()->with('user')->get() : collect();
+        $teamMembers = $manager ? $manager->subordinates()->with(['user', 'shift', 'office', 'exitRecord'])->get() : collect();
         $teamIds = $teamMembers->pluck('id')->toArray();
 
         // One shared status per member (PunchTimeline + calculator): working,

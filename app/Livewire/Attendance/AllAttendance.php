@@ -718,7 +718,9 @@ class AllAttendance extends Component
 
         // Exclude offboarded (inactive/archived) employees from the live roster —
         // their biometric card is released on exit and they should not surface here.
-        $query = Attendance::query()->with('employee.user')
+        // office / exitRecord / shift / activeBreak are read by the status of
+        // every row; loading them here keeps the page at a fixed query count.
+        $query = Attendance::query()->with('employee.user', 'employee.office', 'employee.exitRecord', 'employee.shift', 'activeBreak')
             ->whereHas('employee.user')
             ->whereHas('employee', fn ($q) => $q->whereNotIn('status', ['inactive', 'archived']));
         $scoped($query);
@@ -793,10 +795,13 @@ class AllAttendance extends Component
             ? Carbon::parse($this->dateFrom)->format('d M').' – '.Carbon::parse($this->dateTo)->format('d M Y')
             : 'All dates';
 
+        $statusResolver = app(AttendanceStatusResolver::class);
+
         return view('livewire.attendance.all-attendance', [
             'attendances' => $attendances = $query->latest('date')->paginate(15),
             // Live / completed / missing-checkout for every row, from the shared resolver.
-            'rowStatus' => collect($attendances->items())->mapWithKeys(fn (Attendance $a) => [$a->id => app(AttendanceStatusResolver::class)->forAttendance($a)])->all(),
+            // One resolver for the page, so its holiday / MDL / calendar lookups are shared by every row.
+            'rowStatus' => collect($attendances->items())->mapWithKeys(fn (Attendance $a) => [$a->id => $statusResolver->forAttendance($a)])->all(),
             'pendingRegularisations' => $pendingRegularisations,
             // Recently decided requests HR may still correct or delete.
             'decidedRegularisations' => Auth::user()->canApproveRegularisations()

@@ -36,7 +36,7 @@ class ShiftResolver
         $day = $date instanceof Carbon ? $date->copy() : Carbon::parse($date);
 
         $shift = $employee->shift ?? self::companyDefault();
-        $settings = AttendanceSetting::query()->first();
+        $settings = self::settings();
 
         // No assigned shift and no nominated default: refuse to guess.
         if (! $shift) {
@@ -80,6 +80,16 @@ class ShiftResolver
     public static function companyDefault(): ?ShiftSetting
     {
         return once(fn (): ?ShiftSetting => ShiftSetting::query()->where('is_default', true)->first());
+    }
+
+    /**
+     * The attendance settings row, memoised per request like companyDefault()
+     * (it was read once per employee per day — 50+ identical queries on a
+     * team dashboard). Saving the settings flushes it (AttendanceSetting).
+     */
+    public static function settings(): ?AttendanceSetting
+    {
+        return once(fn (): ?AttendanceSetting => AttendanceSetting::query()->first());
     }
 
     /**

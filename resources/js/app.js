@@ -1,5 +1,6 @@
 import ApexCharts from 'apexcharts';
 import gsap from 'gsap';
+import './request-errors';
 
 window.ApexCharts = ApexCharts;
 window.gsap = gsap;

@@ -37,6 +37,14 @@ use Illuminate\Support\Facades\DB;
 class HolidayResolver
 {
     /**
+     * Active holidays per "calendar|year", grouped by date — loaded on first
+     * use by forEmployeeOn(). Lives as long as this resolver (one calculation).
+     *
+     * @var array<string, Collection<string, Collection<int, PublicHoliday>>>
+     */
+    private array $yearHolidays = [];
+
+    /**
      * Last-resort calendar, used only when there is no company record at all.
      * Every real environment answers from `companies.holiday_calendar`.
      */
@@ -91,9 +99,18 @@ class HolidayResolver
      */
     public function forEmployeeOn(?Employee $employee, CarbonInterface $date): ?PublicHoliday
     {
-        return $this->query($employee)
-            ->whereDate('date', Carbon::instance($date)->toDateString())
+        $day = Carbon::instance($date);
+        $key = $this->resolveCountry($employee).'|'.$day->year;
+
+        // One query per calendar per year for this resolver's lifetime (one
+        // calculation), not one per employee per day. A resolver is built per
+        // request, so a newly added holiday is seen on the next one.
+        $this->yearHolidays[$key] ??= $this->query($employee)
+            ->whereBetween('date', ["{$day->year}-01-01", "{$day->year}-12-31"])
             ->get()
+            ->groupBy(fn (PublicHoliday $holiday) => $holiday->date->toDateString());
+
+        return $this->yearHolidays[$key]->get($day->toDateString(), collect())
             ->first(fn (PublicHoliday $holiday) => $this->appliesTo($holiday, $employee));
     }
 

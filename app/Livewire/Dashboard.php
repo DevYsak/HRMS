@@ -4,7 +4,6 @@ namespace App\Livewire;
 
 use App\Enums\AttendanceMode;
 use App\Enums\EmployeeStatus;
-use App\Enums\UserRole;
 use App\Models\Attendance;
 use App\Models\AttendanceRegularisation;
 use App\Models\AttendanceSetting;
@@ -18,13 +17,13 @@ use App\Models\OtRequest;
 use App\Models\Payroll;
 use App\Models\PipRecord;
 use App\Models\PromotionRecommendation;
-use App\Models\User;
 use App\Models\WarningLetter;
 use App\Services\Attendance\ShiftResolver;
 use App\Services\Attendance\WorkingDayResolver;
 use App\Services\AttendanceService;
 use App\Services\EmployeeDashboardService;
 use App\Services\ModuleFeatureService;
+use App\Services\Navigation\DashboardLanding;
 use App\Services\WfhService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -43,52 +42,25 @@ class Dashboard extends Component
      */
     public function mount(): void
     {
-        $landing = $this->roleLanding(Auth::user());
+        $landing = app(DashboardLanding::class)->route(Auth::user());
 
         if ($landing !== null) {
             $this->redirectRoute($landing, navigate: true);
         }
     }
 
+    /**
+     * "/" renders the company overview (Super Admin), the HR overview, or
+     * employee self-service — decided by permissions (DashboardLanding), so a
+     * customised role without a dashboard page of its own stays on
+     * self-service rather than being sent to a 403.
+     */
     public function render()
     {
-        $role = Auth::user()->role;
-
-        // Super Admin / HR Admin → HR overview
-        if ($role === UserRole::SuperAdmin || $role === UserRole::HrAdmin) {
-            return $this->renderHrAdmin();
-        }
-
-        // Default: Employee self-service — also for a Manager, Finance user or
-        // Director whose role cannot open their own dashboard page.
-        return $this->renderEmployee();
-    }
-
-    /**
-     * The page a role lands on instead of "/", or null to stay here.
-     *
-     * Director / Department Head (spec §5.2): a Director scoped to a
-     * department or shift gets that team's dashboard; an unscoped Director
-     * keeps the executive view. A customised role without the permission its
-     * page requires stays on self-service rather than being sent to a 403.
-     */
-    private function roleLanding(User $user): ?string
-    {
-        $landing = match ($user->role) {
-            UserRole::Manager => 'dashboard.manager',
-            UserRole::Finance => 'dashboard.finance',
-            UserRole::Director => $user->isDepartmentScoped() ? 'dashboard.manager' : 'dashboard.director',
-            default => null,
+        return match (app(DashboardLanding::class)->view(Auth::user())) {
+            DashboardLanding::COMPANY, DashboardLanding::HR => $this->renderHrAdmin(),
+            default => $this->renderEmployee(),
         };
-
-        $canOpen = match ($landing) {
-            'dashboard.manager' => $user->canApproveLeave(),
-            'dashboard.finance' => ($user->canRunPayroll() || $user->canApproveFinance()) && app(ModuleFeatureService::class)->payrollEnabled(),
-            'dashboard.director' => $user->can('view_executive_dashboard'),
-            default => false,
-        };
-
-        return $canOpen ? $landing : null;
     }
 
     private function renderHrAdmin()
@@ -368,7 +340,7 @@ class Dashboard extends Component
             'pendingApprovals',
             'pendingRegularisations',
             'pendingEncashments',
-        ))->layout('layouts.app', ['title' => 'Admin Dashboard']);
+        ) + ['dashboardView' => app(DashboardLanding::class)->view(Auth::user())])->layout('layouts.app', ['title' => 'Admin Dashboard']);
     }
 
     /**

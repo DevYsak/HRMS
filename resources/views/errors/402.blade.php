@@ -1,5 +1,5 @@
-@extends('errors::minimal')
+@extends('errors.app')
 
-@section('title', __('Payment Required'))
 @section('code', '402')
-@section('message', __('Payment Required'))
+@section('title', __('Payment required'))
+@section('message', __('This feature isn\'t available on your current plan.'))

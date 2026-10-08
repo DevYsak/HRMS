@@ -54,7 +54,7 @@ class KpiDashboard extends Component
 
     public function render()
     {
-        abort_unless(Auth::user()->canManageSettings() || Auth::user()->isManager(), 403);
+        abort_unless(Auth::user()->hasPermission('manage_scorecards'), 403);
 
         $cycles = PerformanceCycle::whereIn('status', ['active', 'completed', 'locked'])
             ->latest('start_date')

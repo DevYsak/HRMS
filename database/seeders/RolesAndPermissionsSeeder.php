@@ -6,6 +6,7 @@ use App\Models\Permission;
 use App\Models\Role;
 use App\Models\RolePermission;
 use App\Models\User;
+use App\Services\Security\PermissionScopes;
 use Illuminate\Database\Seeder;
 
 class RolesAndPermissionsSeeder extends Seeder
@@ -136,6 +137,27 @@ class RolesAndPermissionsSeeder extends Seeder
         'finance' => ['name' => 'Finance', 'description' => 'Runs payroll and signs off on financial approvals.'],
         'employee' => ['name' => 'Employee', 'description' => 'Standard employee self-service access.'],
         'coordinator' => ['name' => 'Coordinator', 'description' => 'Monitors attendance exceptions for assigned employees; reminds and escalates.'],
+        'department_head' => ['name' => 'Department Head', 'description' => 'Runs a department: attendance, leave approvals, performance, notifications and reports for the departments they head.'],
+    ];
+
+    /**
+     * Department Head: a manager's approvals plus department reports and
+     * notifications. Scope defaults to their own / headed department(s)
+     * (PermissionScopes::ROLE_DEFAULTS).
+     *
+     * @var array<int, string>
+     */
+    public const DEPARTMENT_HEAD_PERMISSIONS = [
+        'view_dashboard',
+        'view_employee', 'view_directory', 'view_org_chart',
+        'view_attendance', 'export_attendance', 'approve_regularisation', 'approve_overtime', 'view_overtime', 'approve_wfh',
+        'view_leave', 'apply_leave', 'approve_leave',
+        'view_payslips',
+        'view_performance', 'review_performance', 'manage_promotions', 'manage_pip',
+        'view_documents', 'acknowledge_documents',
+        'view_reports', 'export_reports',
+        'manage_notifications',
+        'edit_own_profile', 'request_profile_change',
     ];
 
     /**
@@ -215,6 +237,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'edit_own_profile', 'request_profile_change',
             'view_attendance', 'monitor_attendance_exceptions', 'remind_employees',
         ],
+        'department_head' => self::DEPARTMENT_HEAD_PERMISSIONS,
     ];
 
     /** Maps legacy kebab-case role_permissions override keys to new snake_case permission keys. */
@@ -247,12 +270,17 @@ class RolesAndPermissionsSeeder extends Seeder
     {
         $permissions = [];
 
-        foreach (self::CATALOGUE as $module => $defs) {
-            foreach ($defs as $def) {
-                $permissions[$def['key']] = Permission::updateOrCreate(
-                    ['key' => $def['key']],
-                    ['label' => $def['label'], 'module' => $module, 'description' => $def['description']],
-                );
+        foreach ([self::CATALOGUE, PermissionScopes::NEW_PERMISSIONS] as $catalogue) {
+            foreach ($catalogue as $module => $defs) {
+                foreach ($defs as $def) {
+                    $permissions[$def['key']] = Permission::updateOrCreate(
+                        ['key' => $def['key']],
+                        [
+                            'label' => $def['label'], 'module' => $module, 'description' => $def['description'],
+                            'is_scoped' => PermissionScopes::isScoped($def['key']),
+                        ],
+                    );
+                }
             }
         }
 
@@ -281,6 +309,7 @@ class RolesAndPermissionsSeeder extends Seeder
     private function seedDefaultRolePermissions(array $roles, array $permissions): void
     {
         foreach (self::ROLE_DEFAULTS as $slug => $keys) {
+            $keys = array_merge($keys, PermissionScopes::NEW_ROLE_GRANTS[$slug] ?? []);
             $role = $roles[$slug];
             $ids = collect($keys)->map(fn ($key) => $permissions[$key]->id)->all();
             $role->permissions()->syncWithoutDetaching($ids);

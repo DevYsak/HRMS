@@ -386,7 +386,10 @@ Route::middleware(['auth'])->group(function () {
         ->middleware('can:view_hr_dashboard');
     Route::get('/dashboard/manager', ManagerDashboard::class)->name('dashboard.manager')
         ->middleware('role:approve-leave');
-    Route::get('/dashboard/department', DepartmentDashboard::class)->name('dashboard.department');
+    // Same quick approve / reject actions as the Manager dashboard, so the same
+    // gate; the component additionally requires heading a department.
+    Route::get('/dashboard/department', DepartmentDashboard::class)->name('dashboard.department')
+        ->middleware('role:approve-leave');
 
     // --------------------------------------------------
     // Performance module

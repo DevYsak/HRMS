@@ -196,6 +196,9 @@ class EmployeeProfile extends Component
             return;
         }
 
+        // Every field edits through the one `editingValue` input, so an error
+        // left from the previous field would show under this one.
+        $this->resetErrorBag();
         $this->editingField = $field;
         $this->editingValue = Registry::valueFor($this->employee, $field);
         $this->modal('hr-edit-field')->show();
@@ -225,8 +228,7 @@ class EmployeeProfile extends Component
         $label = Registry::label($this->editingField);
         $this->employee->refresh()->load(['user', 'department', 'jobTitle', 'manager', 'shift', 'office', 'employmentType', 'payrollSettings']);
 
-        $this->modal('hr-edit-field')->close();
-        $this->editingField = null;
+        $this->closeFieldModal();
         \Flux::toast($label.' updated.', variant: 'success');
     }
 

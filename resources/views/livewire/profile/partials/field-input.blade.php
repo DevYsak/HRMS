@@ -10,6 +10,8 @@
     $options = Registry::optionsFor($field);
 @endphp
 
+{{-- Each input has a label, so Flux renders the `editingValue` error under it
+     itself — no separate @error here (it showed the message twice). --}}
 @switch($type)
     @case('textarea')
         <flux:textarea wire:model="editingValue" :label="$label" rows="3" />
@@ -49,7 +51,3 @@
     @default
         <flux:input wire:model="editingValue" type="text" :label="$label" />
 @endswitch
-
-@error('editingValue')
-    <p class="-mt-3 text-xs font-semibold text-rose-600">{{ $message }}</p>
-@enderror

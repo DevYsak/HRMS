@@ -79,7 +79,9 @@ class RoleDelegationGuard
             return Permission::pluck('key')->all();
         }
 
-        $own = $actor->assignedRole?->permissionKeys() ?? [];
+        // What the actor actually holds: a revoked key or a deactivated role
+        // is nothing they can hand on.
+        $own = $actor->effectivePermissionKeys();
 
         $operational = Role::whereIn('slug', self::DEFAULT_DELEGABLE_ROLES)->get()
             ->flatMap(fn (Role $role) => $role->permissionKeys())

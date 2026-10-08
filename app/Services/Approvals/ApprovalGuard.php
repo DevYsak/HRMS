@@ -9,7 +9,9 @@ use App\Models\DepartmentTeam;
 use App\Models\DepartmentTeamMember;
 use App\Models\Employee;
 use App\Models\User;
+use App\Models\UserPermissionOverride;
 use App\Services\Audit\AuditService;
+use App\Services\Security\ScopeResolver;
 
 /**
  * The single source of truth for "may this user see / decide this
@@ -28,9 +30,21 @@ use App\Services\Audit\AuditService;
  *
  * An empty scope therefore never means company-wide for a plain approver.
  * Deciding additionally forbids acting on your own record.
+ *
+ * Passing the permission being exercised (e.g. 'approve_leave') applies that
+ * permission's configured data scope (ScopeResolver) for anyone who holds it.
+ * Someone routed a request without holding the permission (a team lead on an
+ * employee role) keeps the reporting-line reach above; someone whose
+ * permission was revoked for them personally reaches no one.
  */
 class ApprovalGuard
 {
+    private const SCOPED = 'scoped';
+
+    private const REVOKED = 'revoked';
+
+    private const LEGACY = 'legacy';
+
     /** Whether the user reaches every employee (no filter needed). */
     public function isCompanyWide(User $user): bool
     {
@@ -57,8 +71,18 @@ class ApprovalGuard
     }
 
     /** Does the user's scope or reporting line cover this employee? */
-    public function covers(User $user, Employee $employee): bool
+    public function covers(User $user, Employee $employee, ?string $permission = null): bool
     {
+        $reach = $this->reachFor($user, $permission);
+
+        if ($reach === self::SCOPED) {
+            return $this->scopes()->covers($user, $permission, $employee);
+        }
+
+        if ($reach === self::REVOKED) {
+            return false;
+        }
+
         if ($this->isCompanyWide($user)) {
             return true;
         }
@@ -75,8 +99,18 @@ class ApprovalGuard
      *
      * @return array<int, int>|null
      */
-    public function accessibleEmployeeIds(User $user): ?array
+    public function accessibleEmployeeIds(User $user, ?string $permission = null): ?array
     {
+        $reach = $this->reachFor($user, $permission);
+
+        if ($reach === self::SCOPED) {
+            return $this->scopes()->employeeIds($user, $permission, includeSelf: false);
+        }
+
+        if ($reach === self::REVOKED) {
+            return [];
+        }
+
         if ($this->isCompanyWide($user)) {
             return null;
         }
@@ -108,13 +142,13 @@ class ApprovalGuard
      *
      * @throws ApprovalNotPermitted
      */
-    public function assertCanView(User $user, ?Employee $employee): void
+    public function assertCanView(User $user, ?Employee $employee, ?string $permission = null): void
     {
         if ($employee === null) {
             throw ApprovalNotPermitted::outOfScope();
         }
 
-        if ($this->isSelf($user, $employee) || $this->covers($user, $employee)) {
+        if ($this->isSelf($user, $employee) || $this->covers($user, $employee, $permission)) {
             return;
         }
 
@@ -127,7 +161,7 @@ class ApprovalGuard
      *
      * @throws ApprovalNotPermitted
      */
-    public function assertCanDecide(User|int|null $user, ?Employee $employee): void
+    public function assertCanDecide(User|int|null $user, ?Employee $employee, ?string $permission = null): void
     {
         $user = $user instanceof User ? $user : ($user ? User::find($user) : null);
 
@@ -139,7 +173,7 @@ class ApprovalGuard
             throw $this->denied(ApprovalNotPermitted::selfApproval(), $user, $employee, 'decide');
         }
 
-        if (! $this->covers($user, $employee)) {
+        if (! $this->covers($user, $employee, $permission)) {
             throw $this->denied(ApprovalNotPermitted::outOfScope(), $user, $employee, 'decide');
         }
     }
@@ -224,6 +258,27 @@ class ApprovalGuard
         ), report: false);
 
         return $exception;
+    }
+
+    /** Which reach applies for this permission: its configured scope, none, or the legacy rules. */
+    private function reachFor(User $user, ?string $permission): string
+    {
+        if ($permission === null) {
+            return self::LEGACY;
+        }
+
+        if ($user->hasPermission($permission)) {
+            return self::SCOPED;
+        }
+
+        return ($user->permissionOverride($permission)['effect'] ?? null) === UserPermissionOverride::REVOKE
+            ? self::REVOKED
+            : self::LEGACY;
+    }
+
+    private function scopes(): ScopeResolver
+    {
+        return app(ScopeResolver::class);
     }
 
     private function isSuperAdmin(User $user): bool
