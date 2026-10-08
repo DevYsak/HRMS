@@ -37,39 +37,29 @@
         style="--role-accent: {{ $roleColor }}; --color-accent: {{ $roleColor }}; --color-accent-content: {{ $roleColor }}; --color-accent-foreground: #ffffff;"
         class="pulse-sidebar border-e border-[#F3E8DD] bg-[#FFF8F1]">
 
-        {{-- Brand — the logo itself, with no box or company name beside it.
-             flux:sidebar.brand is not used here: it caps its anchor at h-10 and
-             wraps the logo slot in an overflow-hidden h-6 box, which crops a
-             full-width mark. The collapsed variant below is Flux's own, so the
-             logo still shrinks with the rail. --}}
-        {{-- Sized by width, not height: the wordmark is ~6.3:1, so a 48px-tall
-             logo would be ~300px wide and overflow the rail. Filling the
-             available width is both the largest it can legibly be and what
-             "full width, space on the right" asks for. --}}
-        {{-- No fixed height: the anchor hugs the logo, so the gap above the nav
-             is the padding below and nothing else. --}}
-        <div class="flex shrink-0 items-center">
+        {{-- Brand row, ChatGPT-style. Open: the wordmark on the left and the
+             fold button on the right. Folded: one 40px square holding the
+             square icon; hovering (or focusing) it swaps the icon for the
+             unfold button. Each theme shows its own artwork (Settings →
+             General). flux:sidebar.brand is not used: it crops a wide mark.
+             The role chip that used to sit under the logo is gone — the role
+             is on the account card at the bottom and in the header. --}}
+        <div data-pulse-sidebar-brand-row
+            class="flex h-12 shrink-0 items-center justify-between gap-2 ps-2 in-data-flux-sidebar-collapsed-desktop:justify-center in-data-flux-sidebar-collapsed-desktop:ps-0">
             <a href="{{ route('dashboard') }}" wire:navigate data-flux-sidebar-brand
-                class="flex min-w-0 flex-1 shrink-0 items-center pb-1.5 pl-3 pr-6 pt-3 in-data-flux-sidebar-collapsed-desktop:px-1.5">
-                {{-- The rail is cream in light mode but navy in dark mode
-                     (`.dark .pulse-sidebar` in app.css), so the black mark is
-                     repainted white there — otherwise it vanished on the navy. --}}
-                <x-brand-logo size="w-full h-auto" /></a>
+                class="flex min-w-0 items-center rounded-lg focus-visible:outline-2 focus-visible:outline-orange-500 in-data-flux-sidebar-collapsed-desktop:hidden">
+                <x-brand-logo size="h-12 w-auto max-w-[190px]" /></a>
 
-            {{-- Anyone can fold the rail to icons on desktop. Flux remembers the
-                 state per browser, so the control is always offered — a rail
-                 collapsed by one user must never trap the next. On mobile the
-                 sidebar is a drawer already. --}}
-            <flux:sidebar.collapse class="-ms-4 me-1 mt-1.5 max-lg:hidden" />
-        </div>
-
-        {{-- Role chip — colored by the current user's role --}}
-        <div class="overflow-hidden whitespace-nowrap px-3 pb-1.5 in-data-flux-sidebar-collapsed-desktop:hidden">
-            <span class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider"
-                style="color: {{ $roleColor }}; background-color: color-mix(in srgb, {{ $roleColor }} 14%, transparent);">
-                <span class="size-1.5 rounded-full" style="background-color: {{ $roleColor }}"></span>
-                {{ $roleLabel }}
-            </span>
+            {{-- Anyone can fold the rail on desktop; Flux remembers the state
+                 per browser, so the control is always offered. On mobile the
+                 sidebar is a drawer and this row only shows the wordmark. --}}
+            <div class="group/rail relative flex size-10 shrink-0 items-center justify-center max-lg:hidden">
+                <span class="pointer-events-none hidden size-7 items-center justify-center transition-opacity duration-150 in-data-flux-sidebar-collapsed-desktop:flex in-data-flux-sidebar-collapsed-desktop:group-hover/rail:opacity-0 in-data-flux-sidebar-collapsed-desktop:group-has-[:focus-visible]/rail:opacity-0">
+                    <x-brand-logo variant="mark" size="size-7" />
+                </span>
+                <flux:sidebar.collapse
+                    class="in-data-flux-sidebar-collapsed-desktop:inset-0 in-data-flux-sidebar-collapsed-desktop:h-10 in-data-flux-sidebar-collapsed-desktop:w-10 in-data-flux-sidebar-collapsed-desktop:group-hover/rail:opacity-100! in-data-flux-sidebar-collapsed-desktop:group-has-[:focus-visible]/rail:opacity-100!" />
+            </div>
         </div>
 
         <flux:sidebar.nav class="px-2">
@@ -263,7 +253,7 @@
              plain "AI Assistant" item (shown only when AI is enabled for them),
              so the promo just crowded out the HR tasks. --}}
         @if(Route::has('ai.assistant') && ! $pureEmployee && app(\App\Services\AiAssistant::class)->enabledForUser($user))
-            <div class="px-3 pb-1 pt-1">
+            <div class="px-3 pb-1 pt-1 in-data-flux-sidebar-collapsed-desktop:hidden">
                 <div class="overflow-hidden rounded-2xl bg-gradient-to-br from-orange-500 to-orange-400 p-4 text-white shadow-lg shadow-orange-500/20">
                     <div class="flex items-center gap-2 text-[13px] font-bold">
                         <flux:icon.sparkles class="size-4" /> Meet Pulse AI
@@ -278,12 +268,12 @@
         @endif
 
         {{-- User profile. Employees see their job title rather than the role
-             name (the role chip under the logo already says "Employee"). --}}
+             name (the header beside their name already says "Employee"). --}}
         @php
             $miniProfileSub = $pureEmployee ? ($employee?->jobTitle?->name ?? $roleLabel) : $roleLabel;
             $miniProfilePhoto = $employee?->photo ? \Illuminate\Support\Facades\Storage::url($employee->photo) : null;
         @endphp
-        <div class="mt-1 border-t border-[#F3E8DD] px-3 pb-3 pt-3 in-data-flux-sidebar-collapsed-desktop:px-0">
+        <div data-pulse-sidebar-account class="mt-1 border-t border-[#F3E8DD] px-3 pb-3 pt-3 in-data-flux-sidebar-collapsed-desktop:px-0">
             <flux:dropdown position="top" align="start" class="w-full">
                 <button type="button" aria-label="{{ auth()->user()->name }} — account menu"
                     class="flex w-full items-center gap-3 rounded-2xl border border-[#F3E8DD] bg-white p-2.5 text-left shadow-sm transition hover:bg-[#FFF2E8] focus-visible:outline-2 focus-visible:outline-orange-500 in-data-flux-sidebar-collapsed-desktop:justify-center in-data-flux-sidebar-collapsed-desktop:border-0 in-data-flux-sidebar-collapsed-desktop:bg-transparent in-data-flux-sidebar-collapsed-desktop:p-0 in-data-flux-sidebar-collapsed-desktop:shadow-none">
