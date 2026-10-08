@@ -9,6 +9,7 @@ use App\Models\Department;
 use App\Models\Employee;
 use App\Models\LeaveRequest;
 use App\Models\LeaveType;
+use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\WfhRequest;
@@ -41,6 +42,14 @@ function fluxMainParent(string $html): ?string
 
 beforeEach(fn () => Notification::fake());
 
+/** D1: company-wide reach is a deliberate grant on the Director role. */
+function grantDirectorCompanyWide(): void
+{
+    $role = Role::where('slug', 'director')->firstOrFail();
+    $role->permissions()->updateExistingPivot(Permission::where('key', 'manage_employees')->value('id'), ['scope' => 'all']);
+    $role->flushPermissionCache();
+}
+
 test('each role is forwarded from "/" to its own page, which sits directly in the app shell', function (UserRole $role, string $route) {
     $user = landingUser($role);
 
@@ -51,7 +60,8 @@ test('each role is forwarded from "/" to its own page, which sits directly in th
 })->with([
     'manager' => [UserRole::Manager, 'dashboard.manager'],
     'finance' => [UserRole::Finance, 'dashboard.finance'],
-    'director' => [UserRole::Director, 'dashboard.director'],
+    // D1 (8 Oct 2026): a Director is department-scoped by default.
+    'director' => [UserRole::Director, 'dashboard.department'],
 ]);
 
 test('an employee stays on "/" and gets self-service inside the app shell', function () {
@@ -69,16 +79,20 @@ test('a role that cannot open its own dashboard page stays on self-service inste
         ->assertSee('Attendance Overview');
 });
 
-test('a scoped Director lands on the team view and cannot open the company-wide dashboard', function () {
+test('a scoped Director lands on the department view and cannot open the company-wide dashboard', function () {
     $uk = Department::factory()->create(['name' => 'UK Sales']);
     $director = landingUser(UserRole::Director, ['scope_departments' => [$uk->id]], ['department_id' => $uk->id]);
 
-    $this->actingAs($director)->get(route('dashboard'))->assertRedirect(route('dashboard.manager'));
+    $this->actingAs($director)->get(route('dashboard'))->assertRedirect(route('dashboard.department'));
     $this->actingAs($director)->get(route('dashboard.director'))->assertForbidden();
     $this->actingAs($director)->get(route('dashboard.executive'))->assertForbidden();
     $this->actingAs($director)->get(route('dashboard.manager'))->assertOk();
 
-    // An unscoped Director keeps the executive view.
+    // D1: an unscoped Director is still department-level by default; only a
+    // Director granted company-wide reach gets the executive view.
+    $this->actingAs(landingUser(UserRole::Director))->get(route('dashboard.director'))->assertForbidden();
+
+    grantDirectorCompanyWide();
     $this->actingAs(landingUser(UserRole::Director))->get(route('dashboard.director'))
         ->assertOk()->assertSee('Executive Summary');
 });

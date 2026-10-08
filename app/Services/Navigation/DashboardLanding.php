@@ -2,8 +2,10 @@
 
 namespace App\Services\Navigation;
 
+use App\Enums\DataScope;
 use App\Models\User;
 use App\Services\Help\RouteAccess;
+use App\Services\Security\ScopeResolver;
 
 /**
  * Which dashboard a user's "Dashboard" opens, decided from what they hold —
@@ -37,8 +39,8 @@ class DashboardLanding
         // People work before money: a department-scoped Director (who also
         // signs off finance) lands on their team, as before.
         $candidates = [
-            'dashboard.director' => $user->hasPermission('view_executive_dashboard') && ! $user->isDepartmentScoped(),
-            'dashboard.department' => $user->isDepartmentHead() || $user->assignedRole?->slug === 'department_head',
+            'dashboard.director' => $user->hasPermission('view_executive_dashboard') && $user->isCompanyWideApprover(),
+            'dashboard.department' => self::isDepartmentLevel($user),
             'dashboard.manager' => $user->canApproveLeave(),
             'dashboard.finance' => $user->canRunPayroll() || $user->canApproveFinance(),
         ];
@@ -50,6 +52,21 @@ class DashboardLanding
         }
 
         return null;
+    }
+
+    /**
+     * Whether the user works at department level: heads a department, or
+     * their attendance reach is a department / chosen departments (a
+     * Department Head, or a Director under D1). Decided by scope, not role.
+     */
+    public static function isDepartmentLevel(User $user): bool
+    {
+        if ($user->isDepartmentHead()) {
+            return true;
+        }
+
+        return $user->hasPermission('view_attendance')
+            && in_array(app(ScopeResolver::class)->scopeFor($user, 'view_attendance'), [DataScope::Department, DataScope::SelectedDepartments], true);
     }
 
     /** What "/" itself renders for the user when it does not forward. */

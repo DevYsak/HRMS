@@ -2,6 +2,7 @@
 
 namespace App\Services\Approvals;
 
+use App\Enums\DataScope;
 use App\Enums\UserRole;
 use App\Exceptions\ApprovalNotPermitted;
 use App\Models\Department;
@@ -18,9 +19,12 @@ use App\Services\Security\ScopeResolver;
  * employee's records?" (Phase 1 safety). Fails closed:
  *
  *   - Super Admin                              → every employee.
- *   - Employee-management authority (HR Admin,
- *     Director — `manage_employees`) with no
- *     department/shift scope                   → every employee.
+ *   - Employee-management authority
+ *     (`manage_employees`)                      → the data scope of that
+ *                                                permission: every employee for
+ *                                                HR by default, own / headed
+ *                                                department(s) for a Director
+ *                                                (D1), configurable per role/user.
  *   - Anyone with a department/shift scope     → employees inside that scope,
  *                                                plus their own reporting line.
  *   - Everyone else (managers, custom approver
@@ -52,27 +56,22 @@ class ApprovalGuard
             return true;
         }
 
-        return $this->hasNoScope($user) && $this->hasEmployeeManagementAuthority($user);
-    }
-
-    /**
-     * HR Admin / Director-level authority: the `manage_employees` permission,
-     * or — for an account whose DB role was never linked — the legacy
-     * HR Admin / Director role it still carries.
-     */
-    private function hasEmployeeManagementAuthority(User $user): bool
-    {
+        // Employee management reaches as far as its data scope: company-wide
+        // only when that scope is "All departments" (HR by default; a Director
+        // only when granted — D1).
         if ($user->hasPermission('manage_employees')) {
-            return true;
+            return $this->scopes()->scopeFor($user, 'manage_employees') === DataScope::All;
         }
 
-        return $user->role_id === null
-            && in_array($user->role?->value, [UserRole::HrAdmin->value, UserRole::Director->value], true);
+        // An account whose DB role was never linked keeps its legacy HR Admin
+        // reach (a legacy Director is department-scoped like any other, D1).
+        return $this->hasNoScope($user) && $user->role_id === null && $user->role?->value === UserRole::HrAdmin->value;
     }
 
     /** Does the user's scope or reporting line cover this employee? */
     public function covers(User $user, Employee $employee, ?string $permission = null): bool
     {
+        $permission ??= $this->defaultPermission($user);
         $reach = $this->reachFor($user, $permission);
 
         if ($reach === self::SCOPED) {
@@ -101,6 +100,7 @@ class ApprovalGuard
      */
     public function accessibleEmployeeIds(User $user, ?string $permission = null): ?array
     {
+        $permission ??= $this->defaultPermission($user);
         $reach = $this->reachFor($user, $permission);
 
         if ($reach === self::SCOPED) {
@@ -258,6 +258,16 @@ class ApprovalGuard
         ), report: false);
 
         return $exception;
+    }
+
+    /**
+     * With no permission named, an employee-management holder's reach is that
+     * permission's scope (so a department-scoped Director is never treated as
+     * company-wide); everyone else keeps the reporting-line rules.
+     */
+    private function defaultPermission(User $user): ?string
+    {
+        return ! $this->isSuperAdmin($user) && $user->hasPermission('manage_employees') ? 'manage_employees' : null;
     }
 
     /** Which reach applies for this permission: its configured scope, none, or the legacy rules. */

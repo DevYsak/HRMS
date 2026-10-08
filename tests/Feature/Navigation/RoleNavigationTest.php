@@ -73,12 +73,15 @@ test('staff roles get the workspace menu', function (string $slug) {
     expect(app(Sidebar::class)->isSelfServiceOnly(navUser($slug)))->toBeFalse();
 })->with(['super_admin', 'hr_admin', 'director', 'department_head', 'manager', 'finance']);
 
-test('a Director gets the Director workspace, not the Finance menu', function () {
+test('a Director gets the department workspace, not the Finance menu', function () {
     $labels = navLabels(navUser('director'));
 
+    // D1: department-scoped by default — no company-wide executive view or
+    // company-wide reports; Finance-specific pages stay out of the menu.
     expect($labels)->toContain('Manage Employees')
         ->and($labels)->toContain('Team Leave')
-        ->and($labels)->toContain('Finance Approval')
+        ->and($labels)->not->toContain('Executive View')
+        ->and($labels)->not->toContain('Attendance Summary')
         ->and($labels)->not->toContain('Run Payroll')
         ->and($labels)->not->toContain('Incentives')
         ->and($labels)->not->toContain('Reimbursements');
@@ -146,7 +149,8 @@ test('"Dashboard" lands each role on its own page', function (string $slug, ?str
 })->with([
     'super admin' => ['super_admin', null, DashboardLanding::COMPANY],
     'hr admin' => ['hr_admin', null, DashboardLanding::HR],
-    'director' => ['director', 'dashboard.director', DashboardLanding::SELF_SERVICE],
+    // D1: a Director lands on their department, not the company-wide executive view.
+    'director' => ['director', 'dashboard.department', DashboardLanding::SELF_SERVICE],
     'department head' => ['department_head', 'dashboard.department', DashboardLanding::SELF_SERVICE],
     'manager' => ['manager', 'dashboard.manager', DashboardLanding::SELF_SERVICE],
     'employee' => ['employee', null, DashboardLanding::SELF_SERVICE],

@@ -3,6 +3,7 @@
 use App\Enums\UserRole;
 use App\Exceptions\ApprovalNotPermitted;
 use App\Livewire\Dashboard;
+use App\Livewire\DepartmentDashboard;
 use App\Livewire\Employees\EmployeeEdit;
 use App\Livewire\ManagerDashboard;
 use App\Livewire\Onboarding\OffboardingManager;
@@ -74,7 +75,8 @@ test('a scoped Director lands on a department team dashboard, not the company vi
     scopeUser(UserRole::Employee, ['department_id' => $uk->id]);
 
     Livewire::actingAs($director)->test(Dashboard::class)
-        ->assertRedirect(route('dashboard.manager'));
+        ->assertRedirect(route('dashboard.department'));
+    Livewire::actingAs($director)->test(DepartmentDashboard::class)->assertOk();
     Livewire::actingAs($director)->test(ManagerDashboard::class)->assertOk();
 });
 

@@ -2,9 +2,13 @@
 
 namespace App\Livewire\Settings;
 
+use App\Enums\DataScope;
+use App\Models\Department;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Services\Audit\AuditService;
+use App\Services\Security\PermissionAdministration;
+use App\Services\Security\PermissionScopes;
 use App\Services\Security\RoleDelegationGuard;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
@@ -28,6 +32,17 @@ class RoleManager extends Component
     public array $selectedPermissions = [];
 
     public string $permissionSearch = '';
+
+    /**
+     * Data scope per granted permission: permissionId => ['scope' => '' (inherit
+     * the role default) | DataScope value, 'departments' => [ids]].
+     *
+     * @var array<int|string, array{scope?: string, departments?: array<int, int|string>}>
+     */
+    public array $scopes = [];
+
+    /** Roles & Permissions tab: roles | overrides. */
+    public string $tab = 'roles';
 
     // ── View Users modal state ────────────────────────────────────────────────
     public bool $showUsersModal = false;
@@ -84,7 +99,15 @@ class RoleManager extends Component
         $this->name = $role->name;
         $this->description = (string) $role->description;
         $this->selectedPermissions = $role->permissions->pluck('id')->all();
+        $this->scopes = $role->permissions
+            ->filter(fn (Permission $p) => $p->pivot->scope !== null)
+            ->mapWithKeys(fn (Permission $p) => [$p->id => [
+                'scope' => $p->pivot->scope,
+                'departments' => array_map('strval', json_decode((string) $p->pivot->department_ids, true) ?: []),
+            ]])
+            ->all();
         $this->permissionSearch = '';
+        $this->resetErrorBag();
         $this->showModal = true;
     }
 
@@ -147,13 +170,24 @@ class RoleManager extends Component
         $data = $this->validate([
             'name' => ['required', 'string', 'max:100', Rule::unique('roles', 'name')->ignore($this->editingId)],
             'description' => ['nullable', 'string', 'max:255'],
-        ]);
+            'scopes.*.scope' => ['nullable', Rule::in(DataScope::values())],
+            'scopes.*.departments' => ['array'],
+            'scopes.*.departments.*' => ['integer', Rule::exists('departments', 'id')],
+        ], [], ['scopes.*.scope' => 'data scope', 'scopes.*.departments.*' => 'department']);
+        unset($data['scopes']);
+
+        $pivot = $this->scopePivot();
+
+        if ($pivot === null) {
+            return;
+        }
 
         $data['slug'] = $this->editingId
             ? Role::findOrFail($this->editingId)->slug
             : $this->uniqueSlug(Str::slug($data['name']));
 
         $oldPermissionKeys = $existing?->permissions->pluck('key')->sort()->values()->all() ?? [];
+        $oldScopes = $existing ? $this->scopeSnapshot($existing) : [];
         $oldDetails = $existing?->only(['name', 'description']);
 
         if ($existing) {
@@ -163,9 +197,10 @@ class RoleManager extends Component
             $role = Role::create([...$data, 'is_system' => false, 'is_active' => true]);
         }
 
-        $role->permissions()->sync($this->selectedPermissions);
+        $role->permissions()->sync($pivot);
         $role->flushPermissionCache();
 
+        $newScopes = $this->scopeSnapshot($role->fresh());
         $newPermissionKeys = $role->permissions()->pluck('key')->sort()->values()->all();
         $audit = app(AuditService::class);
         $audit->event($existing ? 'ROLE_UPDATED' : 'ROLE_CREATED', AuditService::ROLES, $role,
@@ -180,6 +215,11 @@ class RoleManager extends Component
                     'revoked' => array_values(array_diff($oldPermissionKeys, $newPermissionKeys)),
                 ],
                 module: AuditService::SETTINGS);
+        }
+
+        if ($oldScopes !== $newScopes) {
+            $audit->event('ROLE_PERMISSION_SCOPES_CHANGED', AuditService::PERMISSIONS, $role,
+                old: ['scopes' => $oldScopes], new: ['scopes' => $newScopes], module: AuditService::SETTINGS);
         }
 
         \Flux::toast($this->editingId ? 'Role updated.' : 'Role created.', variant: 'success');
@@ -209,7 +249,11 @@ class RoleManager extends Component
             'is_active' => true,
         ]);
 
-        $clone->permissions()->sync($source->permissions->pluck('id')->all());
+        // A clone keeps each grant's data scope.
+        $clone->permissions()->sync($source->permissions->mapWithKeys(fn (Permission $p) => [$p->id => [
+            'scope' => $p->pivot->scope,
+            'department_ids' => $p->pivot->department_ids,
+        ]])->all());
         $clone->flushPermissionCache();
 
         app(AuditService::class)->event('ROLE_CLONED', AuditService::ROLES, $clone,
@@ -324,6 +368,12 @@ class RoleManager extends Component
             ))
             ->groupBy('module');
 
+        $editingRole = $this->editingId ? Role::find($this->editingId) : null;
+        $selectedKeys = $permissions->whereIn('id', $this->selectedPermissions)->pluck('key')->all();
+        $inheritedScopes = $permissions->where('is_scoped', true)
+            ->mapWithKeys(fn (Permission $p) => [$p->id => PermissionScopes::defaultFor($editingRole?->slug, $p->key, $selectedKeys)->label()])
+            ->all();
+
         $viewingRole = $this->viewingRoleId
             ? Role::with('users')->find($this->viewingRoleId)
             : null;
@@ -333,6 +383,9 @@ class RoleManager extends Component
             'groupedPermissions' => $groupedPermissions,
             'totalPermissionsCount' => $permissions->count(),
             'viewingRole' => $viewingRole,
+            'inheritedScopes' => $inheritedScopes,
+            'scopeOptions' => collect(DataScope::cases())->reject(fn (DataScope $s) => $s === DataScope::None),
+            'departments' => Department::orderBy('name')->get(['id', 'name']),
         ])->layout('layouts.app', ['title' => 'Roles & Permissions']);
     }
 
@@ -340,7 +393,66 @@ class RoleManager extends Component
 
     private function resetForm(): void
     {
-        $this->reset(['editingId', 'name', 'description', 'selectedPermissions', 'permissionSearch']);
+        $this->reset(['editingId', 'name', 'description', 'selectedPermissions', 'permissionSearch', 'scopes']);
+        $this->resetErrorBag();
+    }
+
+    /**
+     * The sync payload — permission id => pivot (scope, department_ids) — for
+     * the selected permissions, or null after recording a field error. A
+     * scope is kept only on a permission that reaches employee data; a
+     * department list only with "Selected departments".
+     *
+     * @return array<int, array{scope: ?string, department_ids: ?string}>|null
+     */
+    private function scopePivot(): ?array
+    {
+        $admin = app(PermissionAdministration::class);
+        $permissions = Permission::whereIn('id', $this->selectedPermissions)->get()->keyBy('id');
+        $pivot = [];
+        $failed = false;
+
+        foreach ($this->selectedPermissions as $id) {
+            $permission = $permissions->get($id);
+            $chosen = (string) ($this->scopes[$id]['scope'] ?? '');
+            $scope = $chosen !== '' && $permission?->is_scoped ? DataScope::from($chosen) : null;
+            $departments = $scope === DataScope::SelectedDepartments
+                ? array_values(array_unique(array_map('intval', $this->scopes[$id]['departments'] ?? [])))
+                : [];
+
+            if ($permission && ($refusal = $admin->refusalForScope(Auth::user(), $permission, $scope, $departments))) {
+                $this->addError($scope === DataScope::SelectedDepartments && $departments === [] ? "scopes.{$id}.departments" : "scopes.{$id}.scope", $refusal);
+                $failed = true;
+
+                continue;
+            }
+
+            $pivot[$id] = [
+                'scope' => $scope?->value,
+                'department_ids' => $departments === [] ? null : json_encode($departments),
+            ];
+        }
+
+        if ($failed) {
+            \Flux::toast('Some data scopes need attention — see the highlighted permissions.', variant: 'danger');
+
+            return null;
+        }
+
+        return $pivot;
+    }
+
+    /** @return array<string, array{scope: ?string, department_ids: array<int, int>}> */
+    private function scopeSnapshot(Role $role): array
+    {
+        return $role->permissions()->get()
+            ->filter(fn (Permission $p) => $p->pivot->scope !== null)
+            ->mapWithKeys(fn (Permission $p) => [$p->key => [
+                'scope' => $p->pivot->scope,
+                'department_ids' => array_map('intval', json_decode((string) $p->pivot->department_ids, true) ?: []),
+            ]])
+            ->sortKeys()
+            ->all();
     }
 
     private function uniqueSlug(string $base): string

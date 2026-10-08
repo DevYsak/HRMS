@@ -120,7 +120,9 @@ test('role defaults resolve to the pre-scope reach', function (string $slug, str
     'super admin: anything' => ['super_admin', 'approve_leave', DataScope::All],
     'hr admin: leave approval' => ['hr_admin', 'approve_leave', DataScope::All],
     'hr admin: attendance' => ['hr_admin', 'view_attendance', DataScope::All],
-    'director: employees' => ['director', 'view_employee', DataScope::All],
+    // D1 (8 Oct 2026): a Director is department-scoped unless granted more.
+    'director: employees' => ['director', 'view_employee', DataScope::Department],
+    'director: leave approval' => ['director', 'approve_leave', DataScope::Department],
     'finance: payroll' => ['finance', 'view_payroll', DataScope::All],
     'finance: attendance summary' => ['finance', 'view_attendance', DataScope::All],
     'finance: leave summary' => ['finance', 'view_leave_management', DataScope::All],

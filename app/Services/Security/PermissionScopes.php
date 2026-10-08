@@ -8,11 +8,10 @@ use App\Enums\DataScope;
  * Which permissions reach employee data (and so carry a scope), and the
  * scope each built-in role gets when an admin has not set one.
  *
- * The defaults reproduce the reach the application had before scopes were
- * configurable, so existing roles behave the same on the day this ships:
- * HR / Director company-wide, Finance company-wide for payroll and
- * attendance / leave summaries, managers their reporting line,
- * department heads their department(s), employees their own records.
+ * Defaults: HR company-wide; Directors and department heads their own /
+ * headed department(s) (D1, 8 Oct 2026 — company-wide only when granted);
+ * Finance company-wide for payroll and attendance / leave summaries;
+ * managers their reporting line; employees their own records.
  */
 final class PermissionScopes
 {
@@ -75,7 +74,10 @@ final class PermissionScopes
     public const ROLE_DEFAULTS = [
         'super_admin' => DataScope::All,
         'hr_admin' => DataScope::All,
-        'director' => DataScope::All,
+        // D1 (8 Oct 2026): a Director is the spec's Department Head — their
+        // own / headed department(s) by default, never every department.
+        // Company-wide reach is granted explicitly in Roles & Permissions.
+        'director' => DataScope::Department,
         // Finance reaches its own reporting line for people work (reviews,
         // PIPs) like any manager; payroll and summaries are company-wide below.
         'finance' => DataScope::Team,

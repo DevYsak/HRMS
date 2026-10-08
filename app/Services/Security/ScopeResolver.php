@@ -46,14 +46,14 @@ class ScopeResolver
         $override = $user->permissionOverride($permission);
 
         if ($override !== null && $override['scope'] !== null) {
-            return new ResolvedScope(DataScope::from($override['scope']), $override['department_ids'], source: 'user_override');
+            return new ResolvedScope(self::parse($override['scope']), $override['department_ids'], source: 'user_override');
         }
 
         $role = $user->effectiveRole();
         $grant = $role?->permissionScopes()[$permission] ?? null;
 
         $resolved = $grant !== null && $grant['scope'] !== null
-            ? new ResolvedScope(DataScope::from($grant['scope']), $grant['department_ids'], source: 'role')
+            ? new ResolvedScope(self::parse($grant['scope']), $grant['department_ids'], source: 'role')
             : new ResolvedScope(PermissionScopes::defaultFor($role?->slug, $permission, $role?->permissionKeys() ?? []));
 
         if ($user->isDepartmentScoped() && $resolved->scope->rank() >= DataScope::Department->rank()) {
@@ -209,5 +209,11 @@ class ScopeResolver
     private function isSuperAdmin(User $user): bool
     {
         return $user->isSuperAdmin() || $user->assignedRole?->slug === 'super_admin';
+    }
+
+    /** A stored scope value; anything unrecognised fails closed to no access. */
+    private static function parse(string $value): DataScope
+    {
+        return DataScope::tryFrom($value) ?? DataScope::None;
     }
 }

@@ -27,7 +27,9 @@ class ExecutiveDashboard extends Component
      */
     public function mount(): void
     {
-        abort_if(Auth::user()->isDepartmentScoped() && ! Auth::user()->isSuperAdmin(), 403);
+        // Company-wide figures only for company-wide reach (a Director is
+        // department-scoped by default — D1 — until granted "All departments").
+        abort_unless(Auth::user()->isCompanyWideApprover(), 403);
     }
 
     public function render()

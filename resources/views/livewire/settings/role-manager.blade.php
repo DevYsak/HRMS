@@ -7,11 +7,21 @@
                 <flux:breadcrumbs.item>Roles & Permissions</flux:breadcrumbs.item>
             </flux:breadcrumbs>
             <h1 class="pulse-page-title">Roles & Permissions</h1>
-            <p class="pulse-page-subtitle">Create roles and control exactly which modules each role can access.</p>
+            <p class="pulse-page-subtitle">What each role can do, and whose records it reaches — set per permission, with per-person exceptions.</p>
         </div>
-        <flux:button wire:click="openCreate" variant="primary" icon="plus">Create Role</flux:button>
+        @if($tab === 'roles')
+            <flux:button wire:click="openCreate" variant="primary" icon="plus">Create Role</flux:button>
+        @endif
     </div>
 
+    <flux:radio.group wire:model.live="tab" variant="segmented" size="sm" class="w-fit" aria-label="Roles or user overrides">
+        <flux:radio value="roles" icon="shield-check" label="Roles" />
+        <flux:radio value="overrides" icon="user" label="User overrides" />
+    </flux:radio.group>
+
+    @if($tab === 'overrides')
+        <livewire:settings.user-permission-overrides />
+    @else
     <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         @forelse($roles as $role)
             <div class="pulse-card flex flex-col gap-3 p-5">
@@ -58,6 +68,7 @@
             <div class="pulse-card col-span-full p-10 text-center text-zinc-400">No roles defined yet.</div>
         @endforelse
     </div>
+    @endif
 
     {{-- Edit / Create Role modal --}}
     <flux:modal wire:model="showModal" class="md:max-w-3xl">
@@ -99,12 +110,35 @@
                                 </div>
                                 <div class="space-y-1.5 p-3">
                                     @foreach($permissions as $permission)
-                                        <flux:checkbox
-                                            :checked="in_array($permission->id, $selectedPermissions, true)"
-                                            wire:click="togglePermission({{ $permission->id }})"
-                                            label="{{ $permission->label }}"
-                                            description="{{ $permission->key }}"
-                                        />
+                                        @php $isOn = in_array($permission->id, $selectedPermissions, true); @endphp
+                                        <div wire:key="perm-{{ $permission->id }}" class="space-y-1.5">
+                                            <flux:checkbox
+                                                :checked="$isOn"
+                                                wire:click="togglePermission({{ $permission->id }})"
+                                                label="{{ $permission->label }}"
+                                                description="{{ $permission->key }}"
+                                            />
+                                            {{-- Data scope: only for a granted permission that reaches employee data. --}}
+                                            @if($isOn && $permission->is_scoped)
+                                                <div class="ms-7 space-y-1.5">
+                                                    <flux:select size="sm" wire:model.live="scopes.{{ $permission->id }}.scope" aria-label="Data scope for {{ $permission->label }}">
+                                                        <flux:select.option value="">Inherit — {{ $inheritedScopes[$permission->id] ?? 'role default' }}</flux:select.option>
+                                                        @foreach($scopeOptions as $option)
+                                                            <flux:select.option value="{{ $option->value }}">{{ $option->label() }}</flux:select.option>
+                                                        @endforeach
+                                                    </flux:select>
+                                                    <flux:error name="scopes.{{ $permission->id }}.scope" />
+                                                    @if(($scopes[$permission->id]['scope'] ?? '') === \App\Enums\DataScope::SelectedDepartments->value)
+                                                        <div class="grid max-h-32 grid-cols-1 gap-1 overflow-y-auto rounded-lg border border-zinc-100 p-2 dark:border-zinc-800">
+                                                            @foreach($departments as $department)
+                                                                <flux:checkbox wire:model="scopes.{{ $permission->id }}.departments" value="{{ $department->id }}" label="{{ $department->name }}" />
+                                                            @endforeach
+                                                        </div>
+                                                        <flux:error name="scopes.{{ $permission->id }}.departments" />
+                                                    @endif
+                                                </div>
+                                            @endif
+                                        </div>
                                     @endforeach
                                 </div>
                             </div>
