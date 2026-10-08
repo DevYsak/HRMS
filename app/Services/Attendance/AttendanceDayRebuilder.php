@@ -180,6 +180,14 @@ class AttendanceDayRebuilder
             $target['status'] = $calc->isLate ? 'late' : 'on_time';
         }
 
+        // A genuine final OUT supersedes the nightly auto checkout: the day is
+        // re-evaluated from the real OUT and the system flag comes off.
+        if ($attendance?->isSystemAutoCheckout() && $calc->source !== AttendanceCalculator::SOURCE_AUTO_CHECKOUT) {
+            $target['is_auto_checkout'] = false;
+            $target['auto_checkout_reason'] = null;
+            $row['auto_checkout_superseded'] = true;
+        }
+
         $methods = $this->methods($punches, $in, $out);
 
         if ($attendance === null) {
@@ -226,9 +234,18 @@ class AttendanceDayRebuilder
         $this->writeSummary($employee, $row, $summaryMode);
 
         // A real final OUT turns waiting approved overtime into payable overtime.
-        if (($row['create'] || $row['changes'] !== []) && $row['new_out'] !== null) {
+        // The auto checkout (scheduled shift end) is not one: it never settles OT.
+        if (($row['create'] || $row['changes'] !== []) && $row['new_out'] !== null
+            && $row['calc']->source !== AttendanceCalculator::SOURCE_AUTO_CHECKOUT) {
             app(OvertimeService::class)->settleApprovedForDay($employee, $row['day']);
             app(HolidayWorkService::class)->settleForDay($employee, $row['day']);
+        }
+
+        if (($row['auto_checkout_superseded'] ?? false) && $row['changes'] !== []) {
+            app(AuditService::class)->event('ATTENDANCE_AUTO_CHECKOUT_SUPERSEDED', AuditService::ATTENDANCE, $attendance,
+                old: $before === null ? null : $this->scalar($before),
+                new: $this->scalar($attendance->fresh()->only(['check_in', 'check_out', 'total_hours', 'break_minutes', 'status', 'is_late', 'missing_checkout'])),
+                reason: 'A genuine final OUT was recorded; it replaces the system auto checkout.', subjectEmployeeId: $employee->id, actor: null);
         }
 
         if ($audit && ($row['create'] || $row['changes'] !== [])) {

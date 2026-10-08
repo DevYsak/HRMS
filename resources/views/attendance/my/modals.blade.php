@@ -27,13 +27,18 @@
                         <dt class="text-zinc-400">Grace</dt><dd class="text-right font-bold text-zinc-800 dark:text-zinc-100">{{ $decision['shift']['grace'] }}</dd>
                     @endif
                     <dt class="text-zinc-400">First IN</dt><dd class="text-right font-bold text-zinc-800 dark:text-zinc-100">{{ $decision['first_in'] ?? '—' }}</dd>
-                    <dt class="text-zinc-400">Last OUT</dt><dd class="text-right font-bold text-zinc-800 dark:text-zinc-100">{{ $decision['last_out'] ?? '—' }}{{ $decision['auto_punch_out'] ? ' (auto)' : '' }}</dd>
+                    <dt class="text-zinc-400">Last OUT</dt><dd class="text-right font-bold text-zinc-800 dark:text-zinc-100">{{ $decision['last_out'] ?? '—' }}{{ ! empty($decision['auto_checkout_note']) ? ' · Auto Checkout' : ($decision['auto_punch_out'] ? ' (auto)' : '') }}</dd>
                     <dt class="text-zinc-400">Worked</dt><dd class="text-right font-bold text-zinc-800 dark:text-zinc-100">{{ $decision['worked'] }}</dd>
                     <dt class="text-zinc-400">Break</dt><dd class="text-right font-bold text-zinc-800 dark:text-zinc-100">{{ $decision['break'] }}</dd>
                     @if($decision['late'])<dt class="text-zinc-400">Late</dt><dd class="text-right font-bold text-amber-600">{{ $decision['late'] }}</dd>@endif
                     @if($decision['sessions'])<dt class="text-zinc-400">Sessions</dt><dd class="text-right font-bold text-zinc-800 dark:text-zinc-100">{{ $decision['sessions'] }}</dd>@endif
                     @if($decision['duplicates'] > 0)<dt class="text-zinc-400">Duplicates merged</dt><dd class="text-right font-bold text-zinc-800 dark:text-zinc-100">{{ $decision['duplicates'] }}</dd>@endif
                 </dl>
+                @if(! empty($decision['auto_checkout_note']))
+                    <p class="mt-3 flex gap-2 rounded-lg bg-indigo-50 p-2.5 text-xs text-indigo-800 dark:bg-indigo-500/10 dark:text-indigo-200" data-auto-checkout-note>
+                        <flux:icon.information-circle class="size-4 shrink-0" /> {{ $decision['auto_checkout_note'] }}
+                    </p>
+                @endif
                 @foreach($decision['ignored'] as $ig)
                     <div class="mt-1.5 flex items-center gap-1.5 text-[11px] text-zinc-400"><flux:icon.no-symbol class="size-3" /> {{ $ig }}</div>
                 @endforeach

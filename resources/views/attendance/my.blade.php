@@ -31,7 +31,9 @@
     $isLate = (bool) ($todayCalc['is_late'] ?? $todayAttendance?->is_late ?? false);
     $lateMinutes = (int) ($todayCalc['late_minutes'] ?? 0);
     $isLive = (bool) ($pj['live'] ?? false) || ($todayAttendance && ! $todayAttendance->check_out && (int) ($pj['raw_count'] ?? 0) === 0);
-    $missingOut = ! $isLive && ((bool) ($todayCalc['missing_checkout'] ?? false) || (bool) ($pj['missing_out'] ?? false));
+    // Closed by the nightly auto checkout at the shift end (not a real OUT).
+    $autoClosed = ($todayCalc['source'] ?? null) === \App\Services\Attendance\AttendanceCalculator::SOURCE_AUTO_CHECKOUT;
+    $missingOut = ! $isLive && ! $autoClosed && ((bool) ($todayCalc['missing_checkout'] ?? false) || (bool) ($pj['missing_out'] ?? false));
     $isIn = $todayAttendance && ! $todayAttendance->check_out;
     $heroMode = AttendanceMode::tryFromValue($todayAttendance->work_mode ?? $workMode);
     // Alerts that need action ("worked beyond shift" is information, not an issue).

@@ -11,6 +11,7 @@
     $otMinutes = (int) ($todayCalc['approved_ot_minutes'] ?? 0);
     $statusChip = match (true) {
         $isLive => ['Working', 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400'],
+        $autoClosed => ['Auto Checkout', 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300'],
         $missingOut => ['Missing checkout', 'bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400'],
         (bool) $lastOut => ['Completed', 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400'],
         default => [match ($todayRow['status'] ?? null) { null, 'Today' => 'Not clocked in', default => $todayRow['status'] }, 'bg-zinc-100 text-zinc-600 dark:bg-white/5 dark:text-zinc-300'],
@@ -65,6 +66,15 @@
             'dot' => match (true) { $isMissing => 'bg-red-500', $isReg => 'bg-violet-500', $node['dir'] === 'IN' => 'bg-emerald-500', default => 'bg-red-400' },
             'live' => $node['type'] === 'live' && $isLive,
             'regularised' => $isReg,
+        ];
+    }
+
+    // The system closed the day at the shift end: shown as its own OUT row.
+    if ($autoClosed && $lastOut) {
+        $rows[] = [
+            'time' => $lastOut, 'type' => 'OUT', 'source' => 'System', 'status' => 'Auto Checkout',
+            'status_class' => 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300',
+            'dot' => 'bg-indigo-500', 'live' => false, 'regularised' => false,
         ];
     }
 

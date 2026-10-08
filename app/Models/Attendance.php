@@ -26,6 +26,17 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 ])]
 class Attendance extends Model
 {
+    /**
+     * auto_checkout_reason of the nightly auto checkout (hrms:auto-checkout):
+     * no final OUT was recorded, so the system closed the day at the assigned
+     * shift end. Rows the retired auto punch-out closed carry other reasons
+     * and still never count as an OUT.
+     */
+    public const AUTO_CHECKOUT_REASON = 'no_final_checkout';
+
+    /** Shown wherever the day is explained ("Why?"). */
+    public const AUTO_CHECKOUT_EXPLANATION = 'No final checkout was recorded. The system closed the day at your scheduled shift end.';
+
     protected function casts(): array
     {
         return [
@@ -86,6 +97,14 @@ class Attendance extends Model
     {
         return (bool) $this->is_regularized
             && ($this->original_check_in !== null || $this->original_check_out !== null);
+    }
+
+    /** The day was closed by the nightly auto checkout (not by a real OUT). */
+    public function isSystemAutoCheckout(): bool
+    {
+        return (bool) $this->is_auto_checkout
+            && $this->auto_checkout_reason === self::AUTO_CHECKOUT_REASON
+            && $this->check_out !== null;
     }
 
     /**

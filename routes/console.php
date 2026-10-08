@@ -56,6 +56,17 @@ Schedule::command('hrms:auto-punch-out')
     ->withoutOverlapping()
     ->runInBackground();
 
+// Nightly auto checkout: after 11:00 PM IST, an open day (valid IN, no final
+// OUT) is closed at the employee's assigned shift end as a system auto
+// checkout — no punch is written, no overtime is produced, and a later
+// genuine OUT replaces it. Twice, so a late sync is still caught; idempotent.
+Schedule::command('hrms:auto-checkout')
+    ->cron('15,45 23 * * *')
+    ->timezone('Asia/Kolkata')
+    ->withoutOverlapping()
+    ->onOneServer()
+    ->runInBackground();
+
 // Confirm late flags for IT shift (10:30 start + 5 min grace) → 10:45 IST
 Schedule::command('hrms:check-late-arrivals')
     ->dailyAt('10:45')

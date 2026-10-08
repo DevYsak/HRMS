@@ -42,6 +42,9 @@ class AttendanceCalculator
     /** Standard day when the employee has no resolvable shift (Pulse v3.1: 9h). */
     public const DEFAULT_STANDARD_MINUTES = 540;
 
+    /** AttendanceDay::$source when the final OUT is the nightly auto checkout (shift end). */
+    public const SOURCE_AUTO_CHECKOUT = 'auto_checkout';
+
     public function __construct(
         private readonly ShiftResolver $shifts,
         private readonly WorkingDayResolver $workingDays,
@@ -122,9 +125,12 @@ class AttendanceCalculator
 
         $expected = $shift?->expectedMinutes() ?: self::DEFAULT_STANDARD_MINUTES;
         $otThreshold = $shift ? (int) round($shift->otThresholdHours * 60) : self::DEFAULT_STANDARD_MINUTES;
-        $beyond = max(0, $worked - $expected);
+        // An auto checkout is the scheduled end, not a real OUT: it never
+        // produces time beyond the shift or payable overtime.
+        $autoCheckout = $source === self::SOURCE_AUTO_CHECKOUT;
+        $beyond = $autoCheckout ? 0 : max(0, $worked - $expected);
         $hasApprovedOt ??= $firstIn !== null && $this->hasApprovedOt($employee, $day);
-        $approvedOt = $hasApprovedOt ? max(0, $worked - ($otThreshold ?: $expected)) : 0;
+        $approvedOt = $hasApprovedOt && ! $autoCheckout ? max(0, $worked - ($otThreshold ?: $expected)) : 0;
 
         return new AttendanceDay(
             date: $day,
@@ -205,6 +211,14 @@ class AttendanceCalculator
                     $lastOut = Carbon::parse($attendance->check_out);
                 }
 
+                // No real final OUT, and the nightly auto checkout closed the
+                // day at the assigned shift end: that is the day's final OUT.
+                // A genuine OUT in the timeline always wins over it.
+                if ($lastOut === null && $attendance?->isSystemAutoCheckout() && ! $corrected
+                    && Carbon::parse($attendance->check_out)->greaterThan($firstIn)) {
+                    return [$firstIn, Carbon::parse($attendance->check_out), (int) $t['break_minutes'], self::SOURCE_AUTO_CHECKOUT];
+                }
+
                 return [$firstIn, $lastOut, (int) $t['break_minutes'], $correctionPunches ? 'regularised' : 'punches'];
             }
         }
@@ -217,6 +231,10 @@ class AttendanceCalculator
             $breaks = (int) ($attendance->break_minutes ?? 0);
             if ($breaks === 0 && $attendance->relationLoaded('breakLogs')) {
                 $breaks = (int) $attendance->breakLogs->sum('duration_minutes');
+            }
+
+            if ($attendance->isSystemAutoCheckout() && Carbon::parse($attendance->check_out)->greaterThan(Carbon::parse($attendance->check_in))) {
+                return [Carbon::parse($attendance->check_in), Carbon::parse($attendance->check_out), $breaks, self::SOURCE_AUTO_CHECKOUT];
             }
 
             return [

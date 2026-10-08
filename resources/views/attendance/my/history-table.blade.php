@@ -18,6 +18,7 @@
                 $hasPunch = $r['check_in'] !== null;
                 $isToday = $r['date'] === $todayKey;
                 $exceptions = array_filter([
+                    ($r['auto_checkout'] ?? false) ? 'Auto Checkout' : null,
                     $r['missing_checkout'] && ! ($isToday && $isLive) ? 'Missing OUT' : null,
                     $r['regularised'] ? 'Regularised' : null,
                     $r['regularisation'] && ! $r['regularised'] ? 'Regularisation '.$r['regularisation'] : null,
@@ -41,7 +42,8 @@
                             'mr-1 whitespace-nowrap rounded px-1.5 py-0.5 text-[11px] font-semibold',
                             'bg-orange-50 text-orange-700 dark:bg-orange-500/10 dark:text-orange-400' => str_starts_with($ex, 'Missing') || str_starts_with($ex, 'Late'),
                             'bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-300' => str_starts_with($ex, 'Regularis'),
-                            'bg-zinc-100 text-zinc-600 dark:bg-white/5 dark:text-zinc-300' => ! str_starts_with($ex, 'Missing') && ! str_starts_with($ex, 'Late') && ! str_starts_with($ex, 'Regularis'),
+                            'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300' => $ex === 'Auto Checkout',
+                            'bg-zinc-100 text-zinc-600 dark:bg-white/5 dark:text-zinc-300' => ! str_starts_with($ex, 'Missing') && ! str_starts_with($ex, 'Late') && ! str_starts_with($ex, 'Regularis') && $ex !== 'Auto Checkout',
                         ])>{{ $ex }}</span>
                     @empty
                         <span class="text-zinc-300 dark:text-zinc-600">—</span>

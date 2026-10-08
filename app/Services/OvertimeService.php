@@ -182,7 +182,8 @@ class OvertimeService
         if ($request->source === 'holiday' && $request->employee) {
             $day = app(AttendanceCalculator::class)->forDay($request->employee, $request->work_date, $request->attendance);
 
-            return ($day->firstIn === null || $day->lastOut === null) ? 0.0 : round($day->workedMinutes / 60, 2);
+            return ($day->firstIn === null || $day->lastOut === null || $day->source === AttendanceCalculator::SOURCE_AUTO_CHECKOUT)
+                ? 0.0 : round($day->workedMinutes / 60, 2);
         }
 
         // Actual overtime needs an approved request AND a real final OUT AND
@@ -195,7 +196,9 @@ class OvertimeService
             $day = app(AttendanceCalculator::class)->forDay($request->employee, $request->work_date, $request->attendance);
 
             if ($day->firstIn !== null) {
-                if ($day->lastOut === null) {
+                // No real final OUT — open, or closed by the system auto
+                // checkout at shift end — means no payable overtime.
+                if ($day->lastOut === null || $day->source === AttendanceCalculator::SOURCE_AUTO_CHECKOUT) {
                     return 0.0;
                 }
 

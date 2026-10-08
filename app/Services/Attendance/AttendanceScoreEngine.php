@@ -228,6 +228,8 @@ class AttendanceScoreEngine
             'break' => $this->hm((int) ($metrics['break_minutes'] ?? $attendance?->break_minutes ?? 0)),
             'worked' => $this->hm((int) $workedMin),
             'auto_punch_out' => (bool) ($attendance?->is_auto_checkout),
+            // Why the day ends at the shift end: the nightly auto checkout.
+            'auto_checkout_note' => $attendance?->isSystemAutoCheckout() ? Attendance::AUTO_CHECKOUT_EXPLANATION : null,
             'regularized' => (bool) ($attendance?->is_regularized),
             'status' => $attendance?->status ?? 'absent',
             'score' => $scoreRow?->score,

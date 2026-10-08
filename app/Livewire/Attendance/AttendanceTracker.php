@@ -1260,6 +1260,8 @@ class AttendanceTracker extends Component
                 'missing_checkout' => $missing,
                 'regularisation' => $reg?->status,
                 'regularised' => (bool) ($a?->is_regularized),
+                // Closed by the nightly auto checkout at shift end (not a real OUT).
+                'auto_checkout' => (bool) $a?->isSystemAutoCheckout(),
             ];
 
             $totals['worked_minutes'] += $worked;
@@ -1590,9 +1592,21 @@ class AttendanceTracker extends Component
             ->map(fn ($d) => Carbon::parse($d)->toDateString())
             ->flip();
 
+        // An auto-checked-out day's final OUT is the stored shift end, which
+        // the punch timeline does not hold: like a regularised day, the row
+        // (first-in → final-out, AttendanceCalculator) is the figure.
+        $autoClosed = Attendance::where('employee_id', $employee->id)
+            ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
+            ->where('is_auto_checkout', true)
+            ->where('auto_checkout_reason', Attendance::AUTO_CHECKOUT_REASON)
+            ->whereNotNull('check_out')
+            ->pluck('date')
+            ->map(fn ($d) => Carbon::parse($d)->toDateString())
+            ->flip();
+
         $metrics = [];
         foreach ($punchesByDay as $day => $dayPunches) {
-            if ($regularised->has($day)) {
+            if ($regularised->has($day) || $autoClosed->has($day)) {
                 continue;
             }
             $r = $engine->process($dayPunches, Carbon::parse($day), $summaries->get($day));

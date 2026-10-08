@@ -75,7 +75,11 @@
                 @elseif($lastOut)
                     <div class="{{ $label }}">Last Out</div>
                     <div class="{{ $metric }}">{{ $lastOut }}</div>
-                    <span class="{{ $pill }} bg-zinc-100 text-zinc-600 dark:bg-white/5 dark:text-zinc-300">Completed</span>
+                    @if($autoClosed)
+                        <span class="{{ $pill }} bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300" title="{{ \App\Models\Attendance::AUTO_CHECKOUT_EXPLANATION }}">Auto Checkout</span>
+                    @else
+                        <span class="{{ $pill }} bg-zinc-100 text-zinc-600 dark:bg-white/5 dark:text-zinc-300">Completed</span>
+                    @endif
                 @else
                     <div class="{{ $label }}">Current Status</div>
                     <div class="mt-0.5 text-[22px] font-bold leading-tight text-zinc-900 dark:text-white">
