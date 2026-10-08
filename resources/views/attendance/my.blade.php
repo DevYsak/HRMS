@@ -868,7 +868,9 @@
 /* Balanced 3-column row: equal-height columns, 24px gutters, cards that fill */
 .pa-jgrid-3{grid-template-columns:35fr 40fr 25fr;gap:24px;align-items:stretch;margin-top:16px}
 @media(max-width:1180px){.pa-jgrid-3{grid-template-columns:1fr 1fr}}
-@media(max-width:820px){.pa-jgrid-3{grid-template-columns:1fr}}
+@media(max-width:820px){.pa-jgrid-3{grid-template-columns:minmax(0,1fr)}}
+/* Columns may shrink below their content's width, so a wide tile row never pushes the page sideways. */
+.pa-jgrid-3>*{min-width:0}
 /* Breakdown fills the middle column; tiles 2-up. The grid takes flex:1 so its
    rows stretch to absorb the column's extra height (set by the tallest sibling,
    usually Session Summary) — no dead gap between the tiles and the bar. */
@@ -876,6 +878,7 @@
    space goes to the radial breakdown chart below instead of oversized tiles. */
 .pa-hb-col{display:flex;flex-direction:column}
 .pa-hb-col .pa-hb-grid{grid-template-columns:repeat(4,1fr) !important;gap:9px}
+@media(max-width:520px){.pa-hb-col .pa-hb-grid{grid-template-columns:repeat(2,minmax(0,1fr)) !important}}
 .pa-hb-col .pa-hb-tile{padding:10px 10px;gap:8px}
 .pa-hb-col .pa-hb-ic{width:27px;height:27px}
 .pa-hb-col .pa-hb-v{font-size:12.5px}
@@ -1794,7 +1797,7 @@
     </div>
     <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm transition hover:shadow-md lg:col-span-3">
         <div class="mb-1 text-sm font-black text-zinc-900 dark:text-white">Productivity Score</div>
-        <x-dashboard.chart :options="$productivityChart" id="productivity-chart" wire:key="prod-{{ $ck }}" class="grid place-items-center" />
+        <x-dashboard.chart :options="$productivityChart" id="productivity-chart" wire:key="prod-{{ $ck }}" class="w-full min-w-0" />
         <div class="text-center text-[10px] text-zinc-400">worked vs expected ({{ $totalWorkingDays }} working days × {{ $stdHours }}h)</div>
     </div>
     <div class="rounded-[18px] border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm transition hover:shadow-md lg:col-span-4">

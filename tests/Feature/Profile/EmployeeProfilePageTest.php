@@ -185,7 +185,10 @@ test('HR rejecting a request leaves the employee record untouched', function () 
 test('a role without approve_profile_changes cannot decide a request', function () {
     $employee = hrProfileEmployee();
     // Director can manage employees but is not granted approve_profile_changes.
+    // D1: a Director is department-scoped, so they head this employee's
+    // department — the refusal must come from the missing permission.
     $director = User::factory()->create(['role' => 'director']);
+    Department::whereKey($employee->department_id)->update(['head_id' => $director->id]);
 
     $request = app(ProfileChangeService::class)
         ->requestChange($employee, 'address', 'New Address', $employee->user);

@@ -5,7 +5,8 @@
     "scripts": {
         "build": "vite build",
         "dev": "vite",
-        "guide:screenshots": "playwright test --config=playwright.config.js"
+        "guide:screenshots": "playwright test --config=playwright.config.js",
+        "e2e": "playwright test --config=playwright.e2e.config.js"
     },
     "dependencies": {
         "@tailwindcss/vite": "^4.1.11",

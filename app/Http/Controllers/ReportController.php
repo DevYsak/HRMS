@@ -526,7 +526,7 @@ class ReportController extends Controller
                     $r->employmentType?->name ?? '',
                     $r->joining_date?->toDateString() ?? '',
                     $r->probation_end_date?->toDateString() ?? '',
-                    ucfirst(str_replace('_', ' ', $r->status ?? '')),
+                    $r->status?->label() ?? '',
                 ]);
             }
             fclose($handle);

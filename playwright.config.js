@@ -7,6 +7,8 @@ import { defineConfig } from '@playwright/test';
  */
 export default defineConfig({
     testDir: './tests/Playwright',
+    // The role-journey suite has its own config (playwright.e2e.config.js).
+    testIgnore: ['e2e/**'],
     timeout: 10 * 60 * 1000,
     workers: 1,
     reporter: 'list',
