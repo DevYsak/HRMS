@@ -16,6 +16,7 @@ use App\Services\Leave\EnsureEmployeeLeaveBalancesService;
 use App\Services\Leave\LeaveManagementService;
 use App\Services\Leave\LeaveYearResolver;
 use App\Services\LeaveBalanceService;
+use App\Services\Security\ScopeResolver;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -115,7 +116,7 @@ class LeaveManagement extends Component
     #[Computed]
     public function cards(): array
     {
-        return app(LeaveManagementService::class)->cards($this->year);
+        return app(LeaveManagementService::class)->cards($this->year, $this->reach());
     }
 
     /** @return Collection<int, array<string, mixed>> */
@@ -137,7 +138,19 @@ class LeaveManagement extends Component
             'status' => $this->status ?: null,
             'policy_id' => $this->policyId,
             'flag' => $this->flag,
+            'employee_ids' => $this->reach(),
         ]);
+    }
+
+    /**
+     * Whose balances this page shows: the data scope of view_leave_management
+     * (HR and Finance company-wide by default; scoped HR their departments).
+     *
+     * @return array<int, int>|null
+     */
+    private function reach(): ?array
+    {
+        return app(ScopeResolver::class)->employeeIds(Auth::user(), 'view_leave_management');
     }
 
     public function toggleSelectPage(): void
@@ -311,8 +324,13 @@ class LeaveManagement extends Component
     private function bulkEmployees(): Collection
     {
         $ids = $this->selected !== [] ? $this->selected : $this->rows->pluck('employee_id')->all();
+        // Selected ids come from the browser: keep only people the actor may
+        // add balance for (the reach of add_leave_balance).
+        $reach = app(ScopeResolver::class)->employeeIds(Auth::user(), 'add_leave_balance');
 
-        return Employee::with('user')->whereIn('id', $ids)->orderBy('id')->get();
+        return Employee::with('user')->whereIn('id', $ids)
+            ->when($reach !== null, fn ($q) => $q->whereIn('id', $reach))
+            ->orderBy('id')->get();
     }
 
     public function render()

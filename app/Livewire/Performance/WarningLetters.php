@@ -7,6 +7,7 @@ use App\Models\Employee;
 use App\Models\WarningLetter;
 use App\Services\Approvals\ApprovalGuard;
 use App\Services\Performance\WarningService;
+use App\Services\Security\ScopeResolver;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Component;
@@ -59,6 +60,21 @@ class WarningLetters extends Component
 
     public $doc_file = null;
 
+    /** Issuing and managing letters: employee management plus the warning-letter permission. */
+    private function canManageWarnings(): bool
+    {
+        $user = Auth::user();
+
+        return $user->canManageEmployees() && $user->hasPermission('manage_warning_letters');
+    }
+
+    /** Actions on the open letter stay inside the viewer's reach. */
+    private function assertWarningInReach(): void
+    {
+        $employee = $this->activeWarning?->employee;
+        abort_unless($employee !== null && app(ScopeResolver::class)->covers(Auth::user(), 'manage_warning_letters', $employee), 403);
+    }
+
     public function mount()
     {
         $this->issue_date = now()->format('Y-m-d');
@@ -66,7 +82,7 @@ class WarningLetters extends Component
 
     public function openIssueModal()
     {
-        abort_unless(Auth::user()->canManageEmployees(), 403);
+        abort_unless($this->canManageWarnings(), 403);
         $this->reset(['employee_id', 'warning_type', 'reason', 'description', 'next_review_date']);
         $this->issue_date = now()->format('Y-m-d');
         $this->showIssueModal = true;
@@ -74,7 +90,7 @@ class WarningLetters extends Component
 
     public function issueWarning(WarningService $warningService)
     {
-        abort_unless(Auth::user()->canManageEmployees(), 403);
+        abort_unless($this->canManageWarnings(), 403);
 
         $this->validate([
             'employee_id' => 'required|exists:employees,id',
@@ -86,6 +102,8 @@ class WarningLetters extends Component
         ]);
 
         $employee = Employee::findOrFail($this->employee_id);
+        // Disciplinary action only inside the issuer's reach, never on oneself.
+        app(ApprovalGuard::class)->assertCanDecide(Auth::user(), $employee, 'manage_warning_letters');
 
         try {
             $warningService->issue($employee, [
@@ -108,7 +126,13 @@ class WarningLetters extends Component
     public function viewWarning(int $id)
     {
         $user = Auth::user();
-        abort_unless($user->canManageEmployees() || $user->employee?->id === WarningLetter::findOrFail($id)->issued_by, 403);
+        $warning = WarningLetter::with('employee')->findOrFail($id);
+        abort_unless(
+            ($this->canManageWarnings() && $warning->employee && app(ScopeResolver::class)->covers($user, 'manage_warning_letters', $warning->employee))
+                // warning_letters.issued_by holds the issuing USER's id.
+                || (int) $warning->issued_by === (int) $user->id,
+            403,
+        );
 
         $this->activeWarning = WarningLetter::with(['employee.user', 'issuedBy', 'closedBy', 'acknowledgements', 'documents'])->findOrFail($id);
         $this->showCloseForm = false;
@@ -118,7 +142,7 @@ class WarningLetters extends Component
 
     public function openDocUploadModal(): void
     {
-        abort_unless(Auth::user()->canManageEmployees(), 403);
+        abort_unless($this->canManageWarnings(), 403);
         $this->reset(['doc_title', 'doc_description', 'doc_file']);
         $this->resetErrorBag();
         $this->showDocUploadModal = true;
@@ -126,7 +150,8 @@ class WarningLetters extends Component
 
     public function uploadDocument(): void
     {
-        abort_unless(Auth::user()->canManageEmployees(), 403);
+        abort_unless($this->canManageWarnings(), 403);
+        $this->assertWarningInReach();
 
         $this->validate([
             'doc_title' => 'required|string|max:255',
@@ -157,7 +182,8 @@ class WarningLetters extends Component
 
     public function deleteDocument(int $documentId): void
     {
-        abort_unless(Auth::user()->canManageEmployees(), 403);
+        abort_unless($this->canManageWarnings(), 403);
+        $this->assertWarningInReach();
 
         $document = Document::where('documentable_type', WarningLetter::class)
             ->where('documentable_id', $this->activeWarning->id)
@@ -172,7 +198,8 @@ class WarningLetters extends Component
 
     public function generatePdf(WarningService $warningService)
     {
-        abort_unless(Auth::user()->canManageEmployees(), 403);
+        abort_unless($this->canManageWarnings(), 403);
+        $this->assertWarningInReach();
 
         $warningService->generatePdf($this->activeWarning, Auth::user());
 
@@ -189,7 +216,7 @@ class WarningLetters extends Component
 
         // Disciplinary action is decided about someone else, inside your reach
         // (the service stays callable by the automated late-warning job).
-        app(ApprovalGuard::class)->assertCanDecide(Auth::user(), $this->activeWarning->employee);
+        app(ApprovalGuard::class)->assertCanDecide(Auth::user(), $this->activeWarning->employee, 'manage_warning_letters');
 
         try {
             $warningService->escalate($this->activeWarning, Auth::user(), [
@@ -209,6 +236,9 @@ class WarningLetters extends Component
 
     public function closeWarning(WarningService $warningService)
     {
+        abort_unless($this->canManageWarnings(), 403);
+        $this->assertWarningInReach();
+
         $this->validate([
             'close_comment' => 'required|string',
         ]);
@@ -229,7 +259,9 @@ class WarningLetters extends Component
     public function render()
     {
         $user = Auth::user();
-        abort_unless($user->canManageEmployees() || $user->canReviewPerformance(), 403);
+        abort_unless($this->canManageWarnings() || $user->canReviewPerformance(), 403);
+
+        $reach = $this->canManageWarnings() ? app(ScopeResolver::class)->employeeIds($user, 'manage_warning_letters') : [];
 
         $query = WarningLetter::with(['employee.user', 'employee.jobTitle', 'issuedBy'])
             ->when($this->search, function ($q) {
@@ -238,13 +270,18 @@ class WarningLetters extends Component
             ->when($this->status, fn ($q) => $q->where('status', $this->status))
             ->when($this->type, fn ($q) => $q->where('warning_type', $this->type));
 
-        if (! $user->canManageEmployees() && $user->employee) {
-            $query->where('issued_by', $user->employee->id);
+        // Letters about people in the viewer's reach, or ones they issued
+        // (warning_letters.issued_by holds the issuing user's id).
+        if ($reach !== null) {
+            $query->where(fn ($q) => $q->whereIn('employee_id', $reach)->orWhere('issued_by', $user->id));
         }
 
         return view('livewire.performance.warning-letters', [
             'warnings' => $query->latest()->paginate(15),
-            'employees' => Employee::with('user')->where('status', 'active')->get(),
+            'employees' => Employee::with('user')->where('status', 'active')
+                ->when($reach !== null, fn ($q) => $q->whereIn('id', $reach))
+                ->whereKeyNot($user->employee?->id ?? 0)
+                ->get(),
         ])->layout('layouts.app', ['title' => 'Warning Letters']);
     }
 }

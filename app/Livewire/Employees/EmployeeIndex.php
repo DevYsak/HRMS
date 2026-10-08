@@ -233,18 +233,32 @@ class EmployeeIndex extends Component
         };
     }
 
+    /**
+     * Employee ids the viewer reaches here, or null for everyone.
+     *
+     * @return array<int, int>|null
+     */
+    private function reach(): ?array
+    {
+        $user = auth()->user();
+
+        return $user->accessibleEmployeeIds($user->canManageEmployees() ? 'manage_employees' : 'view_employee');
+    }
+
     public function render()
     {
         $user = auth()->user();
+        $reach = $this->reach();
 
         // user.assignedRole + exitRecord: each row's invite / "Login as" checks
         // read them (they were lazy-loaded per row).
         $employees = Employee::with(['user' => fn ($q) => $q->withTrashed()->with('assignedRole'), 'office', 'department', 'jobTitle', 'manager', 'shift', 'latestInvitation', 'exitRecord'])
             ->when($this->showDeleted, fn ($q) => $q->onlyTrashed())
-            ->when(! $user->canManageEmployees(), function ($query) use ($user) {
-                // manager_id holds the manager's USER id (employees.manager_id → users.id).
-                $query->where('manager_id', $user->id);
-            })
+            // Whose records the list shows comes from the data scope (HR: the
+            // reach of manage_employees; managers / department heads: of
+            // view_employee; anyone else: their own reporting line) — so a
+            // department-scoped HR user sees their departments, not everyone.
+            ->when($reach !== null, fn ($q) => $q->whereIn('id', $reach))
             ->when($this->search, function ($query) {
                 $s = '%'.$this->search.'%';
                 $query->where(function ($q) use ($s) {
@@ -266,7 +280,9 @@ class EmployeeIndex extends Component
 
         return view('livewire.employees.employee-index', [
             'employees' => $employees,
-            'incompleteCount' => $user->canManageEmployees() ? Employee::incompleteHrProfile()->count() : 0,
+            'incompleteCount' => $user->canManageEmployees()
+                ? Employee::incompleteHrProfile()->when($reach !== null, fn ($q) => $q->whereIn('id', $reach))->count()
+                : 0,
             'offices' => Office::all(),
             'departments' => Department::orderBy('name')->get(),
             'jobTitles' => JobTitle::all(),

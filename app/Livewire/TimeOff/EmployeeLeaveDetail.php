@@ -14,6 +14,7 @@ use App\Models\LeaveType;
 use App\Models\LeaveYear;
 use App\Models\User;
 use App\Notifications\LeaveBalanceChangedNotification;
+use App\Services\Approvals\ApprovalGuard;
 use App\Services\Leave\EmployeeLeaveOverrideService;
 use App\Services\Leave\LeaveAdminActionService;
 use App\Services\Leave\LeaveBalanceCalculator;
@@ -23,6 +24,7 @@ use App\Services\Leave\LeaveStatementService;
 use App\Services\Leave\LeaveYearResolver;
 use App\Services\LeaveBalanceService;
 use App\Services\LeaveService;
+use App\Services\Security\ScopeResolver;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -147,6 +149,9 @@ class EmployeeLeaveDetail extends Component
     public function mount(Employee $employee, LeaveYearResolver $years): void
     {
         $this->authorize('view_leave_management');
+        // Inside the viewer's reach for leave management (their own record is
+        // always viewable; changing it is refused per action).
+        app(ApprovalGuard::class)->assertCanView(Auth::user(), $employee, 'view_leave_management');
 
         $this->employee = $employee->load(['user', 'department', 'leavePolicy', 'manager']);
         $this->leaveYearId ??= $years->current()->id;
@@ -274,7 +279,7 @@ class EmployeeLeaveDetail extends Component
 
     public function openAction(string $action, ?int $leaveTypeId = null): void
     {
-        $this->authorize($this->permissionFor($action));
+        $this->authorizeLeaveAction($this->permissionFor($action));
 
         $this->resetErrorBag();
         $this->reset(['days', 'targetBalance', 'reason', 'internalNote', 'expiresOn', 'startDate', 'endDate', 'isHalfDay', 'attachment', 'recordApproved', 'confirmed', 'targetRequestId', 'targetEntryId']);
@@ -308,7 +313,7 @@ class EmployeeLeaveDetail extends Component
     public function openRequestAction(string $action, int $requestId): void
     {
         abort_unless(in_array($action, ['cancel_leave', 'correct_leave'], true), 404);
-        $this->authorize($this->permissionFor($action));
+        $this->authorizeLeaveAction($this->permissionFor($action));
 
         $request = LeaveRequest::where('employee_id', $this->employee->id)->findOrFail($requestId);
 
@@ -326,7 +331,7 @@ class EmployeeLeaveDetail extends Component
     /** Reverse one HR ledger movement (credit, debit or add-on lot). */
     public function openReverseEntry(int $entryId): void
     {
-        $this->authorize($this->permissionFor('reverse_entry'));
+        $this->authorizeLeaveAction($this->permissionFor('reverse_entry'));
 
         $entry = LeaveLedgerEntry::where('employee_id', $this->employee->id)->findOrFail($entryId);
 
@@ -356,7 +361,7 @@ class EmployeeLeaveDetail extends Component
             return;
         }
 
-        $this->authorize($this->permissionFor($this->action));
+        $this->authorizeLeaveAction($this->permissionFor($this->action));
 
         /** @var User $hr */
         $hr = Auth::user();
@@ -404,7 +409,7 @@ class EmployeeLeaveDetail extends Component
 
     public function startReverseCarryForward(int $transactionId): void
     {
-        $this->authorize('manage_leave_carry_forward');
+        $this->authorizeLeaveAction('manage_leave_carry_forward');
 
         $this->reverseTxId = $transactionId;
         $this->reverseReason = '';
@@ -419,7 +424,7 @@ class EmployeeLeaveDetail extends Component
 
     public function reverseCarryForward(): void
     {
-        $this->authorize('manage_leave_carry_forward');
+        $this->authorizeLeaveAction('manage_leave_carry_forward');
         $this->refuseOwnRecord();
         $this->validate(['reverseReason' => ['required', 'string', 'min:3', 'max:500']]);
 
@@ -457,7 +462,7 @@ class EmployeeLeaveDetail extends Component
 
     public function revokeOverride(int $overrideId, string $why = 'Revoked by HR'): void
     {
-        $this->authorize('override_leave_policy');
+        $this->authorizeLeaveAction('override_leave_policy');
         $this->refuseOwnRecord();
 
         $override = EmployeeLeaveOverride::where('employee_id', $this->employee->id)->findOrFail($overrideId);
@@ -682,6 +687,16 @@ class EmployeeLeaveDetail extends Component
     {
         return LeaveBalance::where('employee_id', $this->employee->id)->where('leave_type_id', $leaveTypeId)
             ->where('year', $this->year->legacyYear())->first();
+    }
+
+    /**
+     * The permission, and that this employee is inside its data scope (a
+     * Department Head with add_leave_balance reaches their departments only).
+     */
+    private function authorizeLeaveAction(string $permission): void
+    {
+        $this->authorize($permission);
+        abort_unless(app(ScopeResolver::class)->covers(Auth::user(), $permission, $this->employee), 403, 'This employee is outside your reach for this action.');
     }
 
     private function permissionFor(string $action): string

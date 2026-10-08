@@ -3,7 +3,6 @@
 namespace App\Livewire;
 
 use App\Enums\EmployeeStatus;
-use App\Enums\UserRole;
 use App\Models\Document;
 use App\Models\Employee;
 use App\Models\LeaveEscalation;
@@ -133,11 +132,31 @@ class NotificationsPage extends Component
      */
     protected function canViewReminders(User $user): bool
     {
-        return $user->isSuperAdmin()
-            || $user->isHrAdmin()
-            || $user->isManager()
-            || $user->role === UserRole::Director
-            || Employee::where('manager_id', $user->id)->exists();
+        // Anyone who reaches people beyond themselves — decided by data scope
+        // (manage_employees / view_employee reach), not by role name.
+        foreach ($this->reminderReach($user) as $ids) {
+            if ($ids === null || $ids !== []) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Whose records each reminder list may show: document expiries follow
+     * manage_documents (else view_employee), probations manage_employees (else
+     * the reporting line), escalations approve_leave. Null = everyone.
+     *
+     * @return array{documents: ?array<int, int>, probations: ?array<int, int>, escalations: ?array<int, int>}
+     */
+    private function reminderReach(User $user): array
+    {
+        return [
+            'documents' => $user->accessibleEmployeeIds($user->hasPermission('manage_documents') ? 'manage_documents' : 'view_employee'),
+            'probations' => $user->accessibleEmployeeIds('manage_employees'),
+            'escalations' => $user->accessibleEmployeeIds('approve_leave'),
+        ];
     }
 
     /**
@@ -148,13 +167,13 @@ class NotificationsPage extends Component
      */
     protected function reminderData(User $user): array
     {
-        $canSeeAll = $user->isSuperAdmin() || $user->isHrAdmin();
-        $teamEmployeeIds = Employee::where('manager_id', $user->id)->pluck('id');
+        $reach = $this->reminderReach($user);
+        $within = fn ($query, ?array $ids, string $column = 'employee_id') => $ids === null ? $query : $query->whereIn($column, $ids);
 
         $documents = Document::with('employee.user')
             ->whereNotNull('expires_at')
             ->whereDate('expires_at', '<=', now()->addDays(60))
-            ->when(! $canSeeAll, fn ($q) => $q->whereIn('employee_id', $teamEmployeeIds))
+            ->tap(fn ($q) => $within($q, $reach['documents']))
             ->orderBy('expires_at')
             ->limit(25)
             ->get();
@@ -163,14 +182,18 @@ class NotificationsPage extends Component
             ->where('status', EmployeeStatus::Probation->value)
             ->whereNotNull('probation_end_date')
             ->whereDate('probation_end_date', '<=', now()->addDays(30))
-            ->when(! $canSeeAll, fn ($q) => $q->whereIn('id', $teamEmployeeIds))
+            ->tap(fn ($q) => $within($q, $reach['probations'], 'id'))
             ->orderBy('probation_end_date')
             ->limit(25)
             ->get();
 
         $escalations = LeaveEscalation::with(['leaveRequest.employee.user', 'leaveRequest.leaveType'])
             ->where('resolved', false)
-            ->when(! $canSeeAll, fn ($q) => $q->where('escalated_to', $user->id))
+            // Company-wide approvers see every open escalation; anyone else
+            // those addressed to them or about people they approve for.
+            ->when($reach['escalations'] !== null, fn ($q) => $q->where(fn ($w) => $w
+                ->where('escalated_to', $user->id)
+                ->orWhereHas('leaveRequest', fn ($r) => $r->whereIn('employee_id', $reach['escalations']))))
             ->latest('escalated_at')
             ->limit(25)
             ->get();

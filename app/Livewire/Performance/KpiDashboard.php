@@ -7,6 +7,7 @@ use App\Models\EmployeeScorecard;
 use App\Models\PerformanceCycle;
 use App\Models\PerformanceReviewScore;
 use App\Models\ReviewGoal;
+use App\Services\Security\ScopeResolver;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
@@ -41,8 +42,12 @@ class KpiDashboard extends Component
             return collect();
         }
 
+        // Scorecards of people inside the viewer's manage_scorecards scope.
+        $reach = app(ScopeResolver::class)->employeeIds(Auth::user(), 'manage_scorecards');
+
         return EmployeeScorecard::with(['employee.user', 'employee.department'])
             ->where('performance_cycle_id', $this->selectedCycleId)
+            ->when($reach !== null, fn ($q) => $q->whereIn('employee_id', $reach))
             ->when($this->selectedDepartmentId, fn ($q) => $q->whereHas('employee', fn ($q2) => $q2->where('department_id', $this->selectedDepartmentId)))
             ->when($this->gradeFilter, fn ($q) => $q->where('grade', $this->gradeFilter))
             ->when($this->search, function ($q) {

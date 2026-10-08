@@ -2,14 +2,9 @@
 
 namespace App\Livewire;
 
-use App\Enums\UserRole;
-use App\Models\Document;
 use App\Models\Employee;
-use App\Models\LeaveRequest;
-use App\Models\OtRequest;
-use App\Models\PipRecord;
 use App\Models\User;
-use App\Models\WarningLetter;
+use App\Services\Ai\AiContextBuilder;
 use App\Services\AiAssistant;
 use App\Services\Leave\EmployeeLeaveOverviewService;
 use Illuminate\Support\Facades\Auth;
@@ -65,24 +60,8 @@ class AiCopilot extends Component
     {
         $context = ['role' => $user->role->value, 'today' => now()->toDateString()];
 
-        if ($user->isSuperAdmin() || $user->isHrAdmin()) {
-            $context['company'] = [
-                'active_headcount' => Employee::where('status', 'active')->count(),
-                'on_probation' => Employee::where('status', 'probation')->count(),
-                'pending_leave_requests' => LeaveRequest::where('status', 'pending')->count(),
-                'pending_ot_requests' => OtRequest::where('status', 'pending')->count(),
-                'documents_expiring_30d' => Document::query()->expiringSoon(30)->count(),
-                'employees_on_pip' => PipRecord::whereIn('status', ['active', 'under_review', 'extended'])->count(),
-                'active_warnings' => WarningLetter::whereIn('status', ['issued', 'acknowledged', 'under_review'])->count(),
-            ];
-        } elseif ($user->isManager() || $user->role === UserRole::Director) {
-            $teamIds = Employee::where('manager_id', $user->id)->pluck('id');
-            $context['team'] = [
-                'team_size' => $teamIds->count(),
-                'pending_leave_requests' => LeaveRequest::whereIn('employee_id', $teamIds)->where('status', 'pending')->count(),
-                'pending_ot_requests' => OtRequest::whereIn('employee_id', $teamIds)->where('status', 'pending')->count(),
-            ];
-        }
+        // Organisation figures only for permissions held, over their data scope.
+        $context += app(AiContextBuilder::class)->organisation($user);
 
         // Everyone may see their own data.
         $employee = $user->employee;

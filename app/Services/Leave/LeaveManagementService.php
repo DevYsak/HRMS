@@ -28,12 +28,17 @@ class LeaveManagementService
         private readonly LeaveYearResolver $years,
     ) {}
 
-    /** @return array<string, int> */
-    public function cards(LeaveYear $year): array
+    /**
+     * @param  array<int, int>|null  $employeeIds  the viewer's reach; null = everyone
+     * @return array<string, int>
+     */
+    public function cards(LeaveYear $year, ?array $employeeIds = null): array
     {
         $today = Carbon::today()->toDateString();
-        $eligible = Employee::whereIn('status', LeaveRuleResolver::ELIGIBLE_STATUSES);
-        $inYear = fn () => LeaveBalance::where(fn ($q) => $q->where('leave_year_id', $year->id)->orWhere('year', $year->legacyYear()));
+        $in = fn ($query, string $column = 'employee_id') => $employeeIds === null ? $query : $query->whereIn($column, $employeeIds);
+        $eligible = $in(Employee::whereIn('status', LeaveRuleResolver::ELIGIBLE_STATUSES), 'id');
+        $inYear = fn () => $in(LeaveBalance::where(fn ($q) => $q->where('leave_year_id', $year->id)->orWhere('year', $year->legacyYear())));
+        $requests = fn () => $in(LeaveRequest::query());
 
         $withBalance = $inYear()->distinct()->pluck('employee_id');
         $previous = LeaveYear::where('ends_on', '<', $year->starts_on)->orderByDesc('ends_on')->first();
@@ -41,20 +46,22 @@ class LeaveManagementService
         return [
             'total_employees' => (clone $eligible)->count(),
             'missing_balances' => (clone $eligible)->whereNotIn('id', $withBalance)->count(),
-            'pending_manager' => LeaveRequest::where('status', 'pending')->count(),
-            'pending_hr' => LeaveRequest::where('status', 'pending_hr')->count(),
-            'needs_info' => LeaveRequest::where('status', 'more_info_requested')->count(),
-            'escalated' => LeaveEscalation::where('resolved', false)->count(),
-            'encashment_pending' => LeaveEncashment::whereIn('status', ['pending', 'pending_finance'])->count(),
-            'on_leave_today' => LeaveRequest::where('status', 'approved')->whereDate('start_date', '<=', $today)->whereDate('end_date', '>=', $today)->count(),
-            'upcoming_leave' => LeaveRequest::where('status', 'approved')->whereDate('start_date', '>', $today)
+            'pending_manager' => $requests()->where('status', 'pending')->count(),
+            'pending_hr' => $requests()->where('status', 'pending_hr')->count(),
+            'needs_info' => $requests()->where('status', 'more_info_requested')->count(),
+            'escalated' => LeaveEscalation::where('resolved', false)
+                ->when($employeeIds !== null, fn ($q) => $q->whereHas('leaveRequest', fn ($r) => $r->whereIn('employee_id', $employeeIds)))->count(),
+            'encashment_pending' => $in(LeaveEncashment::whereIn('status', ['pending', 'pending_finance']))->count(),
+            'on_leave_today' => $requests()->where('status', 'approved')->whereDate('start_date', '<=', $today)->whereDate('end_date', '>=', $today)->count(),
+            'upcoming_leave' => $requests()->where('status', 'approved')->whereDate('start_date', '>', $today)
                 ->whereDate('start_date', '<=', Carbon::today()->addDays(30)->toDateString())->count(),
             'negative_balances' => $inYear()->whereHas('leaveType')->whereRaw('allocated_days - used_days - COALESCE(encashed_days, 0) < -0.005')->count(),
             'incomplete_profiles' => (clone $eligible)->incompleteHrProfile()->count(),
             'carry_forward_pending' => $previous
-                ? LeaveRolloverRecord::where('from_leave_year_id', $previous->id)->where('status', LeaveRolloverRecord::NEEDS_HR_REVIEW)->count()
+                ? $in(LeaveRolloverRecord::where('from_leave_year_id', $previous->id)->where('status', LeaveRolloverRecord::NEEDS_HR_REVIEW))->count()
                 : 0,
-            'expiring_leave' => $this->expiry->upcoming(30)->count(),
+            'expiring_leave' => $this->expiry->upcoming(30)
+                ->when($employeeIds !== null, fn ($c) => $c->whereIn('employee_id', $employeeIds))->count(),
             'no_policy' => (clone $eligible)->whereNull('leave_policy_id')->count(),
             'reconciliation_issues' => $inYear()->where(fn ($q) => $q->whereNull('ledger_migrated_at')->orWhere('ledger_status', LeaveBalance::LEDGER_NEEDS_HR_REVIEW))->count(),
         ];
@@ -63,7 +70,7 @@ class LeaveManagementService
     /**
      * One row per employee for one leave type and year.
      *
-     * @param  array{search?: ?string, department_id?: ?int, manager_id?: ?int, office_id?: ?int, employment_type_id?: ?int, status?: ?string, policy_id?: ?int, flag?: ?string}  $filters
+     * @param  array{search?: ?string, department_id?: ?int, manager_id?: ?int, office_id?: ?int, employment_type_id?: ?int, status?: ?string, policy_id?: ?int, flag?: ?string, employee_ids?: ?array<int, int>}  $filters  employee_ids = the viewer's reach (null = everyone)
      * @return Collection<int, array<string, mixed>>
      */
     public function rows(LeaveYear $year, LeaveType $type, array $filters = []): Collection
@@ -72,6 +79,7 @@ class LeaveManagementService
         $search = trim((string) ($filters['search'] ?? ''));
 
         $employees = Employee::with(['user', 'department', 'manager', 'leavePolicy'])
+            ->when(($filters['employee_ids'] ?? null) !== null, fn ($q) => $q->whereIn('id', $filters['employee_ids']))
             ->when(($filters['status'] ?? null) === null, fn ($q) => $q->whereIn('status', LeaveRuleResolver::ELIGIBLE_STATUSES))
             ->when($filters['status'] ?? null, fn ($q, $v) => $q->where('status', $v))
             ->when($filters['department_id'] ?? null, fn ($q, $v) => $q->where('department_id', $v))

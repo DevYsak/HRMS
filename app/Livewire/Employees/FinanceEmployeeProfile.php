@@ -3,6 +3,7 @@
 namespace App\Livewire\Employees;
 
 use App\Models\Employee;
+use App\Services\Approvals\ApprovalGuard;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
 use Livewire\Component;
@@ -17,12 +18,16 @@ class FinanceEmployeeProfile extends Component
     public function mount(Employee $employee): void
     {
         abort_unless(Auth::user()->canViewFinanceProfile(), 403);
+        // Salary and bank details only for employees inside the viewer's
+        // view_finance_profile scope.
+        app(ApprovalGuard::class)->assertCanView(Auth::user(), $employee, 'view_finance_profile');
         $this->employee = $employee;
     }
 
     public function render(): View
     {
         abort_unless(Auth::user()->canViewFinanceProfile(), 403);
+        app(ApprovalGuard::class)->assertCanView(Auth::user(), $this->employee, 'view_finance_profile');
 
         $salaries = $this->employee->salaries()
             ->with('salaryComponent')
