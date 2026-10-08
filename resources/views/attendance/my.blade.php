@@ -36,6 +36,13 @@
     $heroMode = AttendanceMode::tryFromValue($todayAttendance->work_mode ?? $workMode);
     // Alerts that need action ("worked beyond shift" is information, not an issue).
     $issues = collect($attendanceAlerts)->reject(fn (array $a) => ($a['type'] ?? '') === 'overtime');
+    // Today's missing punch comes from the engine's timeline (the alert list
+    // leaves today to the timeline); it feeds Attention and the Today footer.
+    $todayKeyAtt = today()->toDateString();
+    $todayMissingDir = collect($pj['nodes'] ?? [])->firstWhere('type', 'missing')['dir'] ?? ($missingOut ? 'OUT' : null);
+    $todayMissing = ($todayMissingDir !== null || ! empty($pj['needs_regularization']))
+        && ! $issues->contains(fn (array $a) => ($a['date'] ?? null) === $todayKeyAtt && str_starts_with((string) ($a['type'] ?? ''), 'missing'));
+    $issueCount = $issues->count() + (int) $todayMissing;
     $todayRow = $isCurrentMonth ? collect($mh['rows'] ?? [])->firstWhere('date', today()->toDateString()) : null;
 
     // Live "Worked today": closed engine sessions + the running one (web punch: since check-in).
@@ -62,7 +69,7 @@
     $attendanceRate = $scheduled > 0 ? (int) round(min(100, $present / $scheduled * 100)) : null;
 @endphp
 
-<div class="mx-auto max-w-[1360px] space-y-5" data-attendance-page>
+<div class="mx-auto max-w-[1360px] space-y-6" data-attendance-page>
 
     {{-- Header --}}
     <header class="flex flex-wrap items-end justify-between gap-4">

@@ -3,6 +3,7 @@
 use App\Livewire\Attendance\AttendanceTracker;
 use App\Models\Attendance;
 use App\Models\AttendancePunch;
+use App\Models\AttendanceRegularisation;
 use App\Models\Employee;
 use App\Models\ShiftSetting;
 use App\Services\Attendance\AttendanceDayRebuilder;
@@ -154,4 +155,68 @@ test('the weekly punctuality counts come from the month history statuses', funct
     expect($weeks)->toHaveCount(2)
         ->and($weeks[0])->toMatchArray(['present' => 1, 'late' => 1, 'absent' => 1])
         ->and($weeks[1])->toMatchArray(['present' => 1, 'late' => 0, 'absent' => 1]);
+});
+
+test('today shows the latest six punches and the rest in the punches drawer', function () {
+    $this->travelTo(Carbon::today()->setTime(20, 0));
+    $employee = myAttEmployee();
+    foreach (['09:00' => 'face', '10:00' => 'id_card', '10:15' => 'face', '12:00' => 'id_card', '12:30' => 'face', '15:00' => 'id_card', '15:10' => 'face', '18:00' => 'id_card'] as $t => $m) {
+        myAttPunch($employee, Carbon::today(), $t, $m);
+    }
+    app(AttendanceDayRebuilder::class)->rebuild($employee, Carbon::today());
+
+    Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
+        ->assertSee('2 earlier punches not shown')
+        ->assertSee('View all 8 punches')
+        ->assertSee('View raw punches')
+        ->assertSeeHtml('data-raw-punches')
+        ->assertSee("Today's punches", false)
+        ->assertSee('Raw punches');
+});
+
+test('a missing punch today is raised under Attention with a regularisation action', function () {
+    $this->travelTo(Carbon::today()->setTime(14, 0));
+    $employee = myAttEmployee();
+    myAttPunch($employee, Carbon::today(), '09:00', 'face');
+    myAttPunch($employee, Carbon::today(), '13:00', 'face');   // two INs: the OUT between them is missing
+    app(AttendanceDayRebuilder::class)->rebuild($employee, Carbon::today());
+
+    Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
+        ->assertSee('Attendance Needs Attention')
+        ->assertSeeHtml('data-alert="missing_today"')
+        ->assertSee('Missing Check-Out')
+        ->assertDontSee('No attendance issues today');
+});
+
+test('the history shows the latest eight days and the month in a drawer', function () {
+    $this->travelTo(Carbon::parse('2026-07-20 10:00:00'));
+    $employee = myAttEmployee();
+
+    Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
+        ->assertSee('Latest 8 of 20 days')
+        ->assertSee('View full history')
+        ->assertSeeHtml('data-history-full')
+        ->assertSeeHtml('data-history-row="2026-07-01"');   // in the drawer
+});
+
+test('attention shows five items and folds the rest behind show more', function () {
+    $this->travelTo(Carbon::parse('2026-07-20 10:00:00'));
+    $employee = myAttEmployee();
+    foreach (range(6, 12) as $d) {
+        $date = sprintf('2026-07-%02d', $d);
+        AttendanceRegularisation::create([
+            'employee_id' => $employee->id, 'work_date' => $date,
+            'requested_check_in' => "{$date} 09:00:00", 'requested_check_out' => "{$date} 18:00:00",
+            'reason' => 'Forgot to punch out', 'status' => 'pending', 'stage' => 'hr_review',
+        ]);
+    }
+
+    $html = Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
+        ->assertSee('Attendance Needs Attention')
+        ->html();
+
+    // My Requests caps at the latest 8; 7 pending → 5 shown, 2 folded.
+    expect(substr_count($html, 'data-attention-reg'))->toBe(7)
+        ->and(substr_count($html, 'x-show="more" x-cloak'))->toBe(2)
+        ->and($html)->toContain('Show 2 more');
 });

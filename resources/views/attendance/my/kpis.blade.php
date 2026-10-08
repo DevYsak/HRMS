@@ -1,6 +1,6 @@
 {{-- Four primary cards: Attendance Rate (selected month), Worked Today, First In, Last Out / status. --}}
 @php
-    $card = 'rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900';
+    $card = 'rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900';
     $label = 'text-xs font-medium text-zinc-500 dark:text-zinc-400';
     $metric = 'mt-1 text-[28px] font-bold leading-none tracking-tight text-zinc-900 dark:text-white';
     $help = 'mt-2 text-xs text-zinc-500 dark:text-zinc-400';
