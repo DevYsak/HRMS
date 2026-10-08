@@ -50,6 +50,13 @@ test('today shows canonical worked time with the break informational, never dedu
         ->assertSee('1h 00m')                     // the break, shown for information
         ->assertSee('Completed')
         ->assertSeeInOrder(['09:00 AM', 'Face • IN', '01:00 PM', 'ID Card • OUT', '02:00 PM', 'Face • IN', '06:00 PM', 'ID Card • OUT'])
+        // The Today table: type, source and the classified status of each punch.
+        ->assertSeeInOrder(['Time', 'Punch Type', 'Source', 'Status',
+            '09:00 AM', 'IN', 'Face', 'Present',
+            '01:00 PM', 'OUT', 'ID Card', 'Break Out',
+            '02:00 PM', 'IN', 'Face', 'Break In',
+            '06:00 PM', 'OUT', 'ID Card', 'Present'])
+        ->assertSee("Today's Summary", false)
         ->assertSee('9:00 AM – 6:00 PM')
         ->assertSee('No attendance issues today')
         ->assertDontSee('Attendance Needs Attention');
@@ -63,7 +70,7 @@ test('an open session reads as currently working, in the KPI and the history', f
     Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
         ->assertSee('Currently working')
         ->assertSee('Started 09:10 AM')
-        ->assertSee('Working');
+        ->assertSeeInOrder(['09:10 AM', 'IN', 'Face', 'Working']);
 });
 
 test('a past missing check-out is listed under Attention and in the history', function () {
@@ -157,17 +164,18 @@ test('the weekly punctuality counts come from the month history statuses', funct
         ->and($weeks[1])->toMatchArray(['present' => 1, 'late' => 0, 'absent' => 1]);
 });
 
-test('today shows the latest six punches and the rest in the punches drawer', function () {
-    $this->travelTo(Carbon::today()->setTime(20, 0));
+test('today lists up to fifteen punches and the rest in the punches drawer', function () {
+    $this->travelTo(Carbon::today()->setTime(23, 0));
     $employee = myAttEmployee();
-    foreach (['09:00' => 'face', '10:00' => 'id_card', '10:15' => 'face', '12:00' => 'id_card', '12:30' => 'face', '15:00' => 'id_card', '15:10' => 'face', '18:00' => 'id_card'] as $t => $m) {
-        myAttPunch($employee, Carbon::today(), $t, $m);
+    // 18 punches, Face IN / ID card OUT alternating from 08:00, every 30 minutes.
+    foreach (range(0, 17) as $i) {
+        myAttPunch($employee, Carbon::today(), Carbon::today()->setTime(8, 0)->addMinutes(30 * $i)->format('H:i'), $i % 2 === 0 ? 'face' : 'id_card');
     }
     app(AttendanceDayRebuilder::class)->rebuild($employee, Carbon::today());
 
     Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
-        ->assertSee('2 earlier punches not shown')
-        ->assertSee('View all 8 punches')
+        ->assertSee('3 earlier punches not shown')
+        ->assertSee('View all 18 punches')
         ->assertSee('View raw punches')
         ->assertSeeHtml('data-raw-punches')
         ->assertSee("Today's punches", false)

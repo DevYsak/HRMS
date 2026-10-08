@@ -79,7 +79,7 @@
         </div>
         <div class="flex items-center gap-1 rounded-xl border border-zinc-200 bg-white p-1 shadow-sm dark:border-zinc-800 dark:bg-zinc-900" data-month-selector>
             <button type="button" wire:click="historyPreviousMonth" class="rounded-lg p-2 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-white/5" aria-label="Previous month"><flux:icon.chevron-left class="size-4" /></button>
-            <span class="min-w-[8.5rem] text-center text-sm font-semibold text-zinc-800 dark:text-zinc-100" wire:loading.class="opacity-50" wire:target="historyPreviousMonth,historyNextMonth">{{ $mh['label'] ?? now()->format('F Y') }}</span>
+            <span class="inline-flex min-w-[9.5rem] items-center justify-center gap-2 text-sm font-semibold text-zinc-800 dark:text-zinc-100" wire:loading.class="opacity-50" wire:target="historyPreviousMonth,historyNextMonth"><flux:icon.calendar class="size-4 text-orange-500" /> {{ $mh['label'] ?? now()->format('F Y') }}</span>
             <button type="button" wire:click="historyNextMonth" @disabled($isCurrentMonth) class="rounded-lg p-2 text-zinc-500 hover:bg-zinc-100 disabled:opacity-30 dark:hover:bg-white/5" aria-label="Next month"><flux:icon.chevron-right class="size-4" /></button>
         </div>
     </header>

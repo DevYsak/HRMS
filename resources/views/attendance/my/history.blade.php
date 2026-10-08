@@ -16,7 +16,7 @@
         'blue' => 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300',
         'sky' => 'bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-300',
         'violet' => 'bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-300',
-        'rose' => 'bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-300',
+        'rose' => 'bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-300',
         'muted' => 'bg-zinc-100 text-zinc-500 dark:bg-white/5 dark:text-zinc-400',
     ];
     $todayKey = today()->toDateString();
@@ -25,7 +25,7 @@
 
 <section class="rounded-2xl border border-zinc-200/80 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900" aria-labelledby="history-title" data-history>
     <div class="flex flex-wrap items-baseline justify-between gap-2 px-5 pb-3 pt-5">
-        <h2 id="history-title" class="text-[17px] font-semibold text-zinc-900 dark:text-white">Attendance History</h2>
+        <h2 id="history-title" class="flex items-center gap-3 text-[17px] font-semibold text-zinc-900 dark:text-white"><flux:icon.calendar-days class="size-6 text-orange-500" /> Attendance History</h2>
         <span class="text-xs text-zinc-500 dark:text-zinc-400">{{ $mh['label'] }} · click a day for its punches</span>
     </div>
 

@@ -6,7 +6,7 @@
 @endphp
 
 <section class="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900" aria-labelledby="actions-title" data-quick-actions>
-    <h2 id="actions-title" class="mb-3 text-[17px] font-semibold text-zinc-900 dark:text-white">Quick Actions</h2>
+    <h2 id="actions-title" class="mb-4 flex items-center gap-3 text-[17px] font-semibold text-zinc-900 dark:text-white"><flux:icon.bolt class="size-6 text-orange-500" /> Quick Actions</h2>
     <div class="flex flex-wrap gap-2">
         <button type="button" wire:click="openRegularisation('{{ today()->toDateString() }}')" class="{{ $btn }}"><flux:icon.pencil-square class="size-4 text-orange-500" /> Request Regularisation</button>
         @if($routeAccess->allows($user, 'wfh.my'))

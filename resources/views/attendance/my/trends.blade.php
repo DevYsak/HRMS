@@ -14,7 +14,7 @@
         'grid' => ['borderColor' => '#F1F1F3', 'strokeDashArray' => 4],
         'xaxis' => array_merge($axis, ['categories' => $worked->pluck('label')->all()]),
         'yaxis' => ['min' => 0, 'decimalsInFloat' => 0, 'labels' => ['style' => ['colors' => '#9CA3AF', 'fontSize' => '10px']]],
-        'annotations' => ['yaxis' => [['y' => $stdHours, 'borderColor' => '#a1a1aa', 'strokeDashArray' => 4, 'label' => ['text' => 'Shift '.rtrim(rtrim(number_format($stdHours, 1), '0'), '.').'h', 'style' => ['color' => '#71717a', 'background' => 'transparent']]]]],
+        'annotations' => ['yaxis' => [['y' => $stdHours, 'borderColor' => '#a1a1aa', 'strokeDashArray' => 4, 'label' => ['text' => 'Shift: '.rtrim(rtrim(number_format($stdHours, 1), '0'), '.').'h', 'style' => ['color' => '#71717a', 'background' => 'transparent']]]]],
         'tooltip' => ['theme' => 'light'],
         'series' => [['name' => 'Hours worked', 'data' => $worked->pluck('hours')->all()]],
     ];
@@ -40,17 +40,18 @@
 
 <section class="grid gap-4 lg:grid-cols-2" aria-label="Trends" data-trends>
     <div class="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        <h2 class="text-[17px] font-semibold text-zinc-900 dark:text-white">Working Hours</h2>
-        <p class="text-xs text-zinc-500 dark:text-zinc-400">Last {{ $worked->count() }} worked {{ \Illuminate\Support\Str::plural('day', $worked->count()) }} · {{ $mh['label'] }}</p>
+        <h2 class="flex items-center gap-3 text-[17px] font-semibold text-zinc-900 dark:text-white"><flux:icon.chart-bar class="size-6 text-orange-500" /> Working Hours</h2>
+        <p class="mt-1 pl-9 text-xs text-zinc-500 dark:text-zinc-400">Last {{ $worked->count() }} worked {{ \Illuminate\Support\Str::plural('day', $worked->count()) }} · {{ $mh['label'] }}</p>
         @if($worked->isNotEmpty())
+            <p class="mt-3 text-[11px] font-medium text-zinc-500 dark:text-zinc-400">Hours</p>
             <x-dashboard.chart :options="$hoursChart" id="hours-trend" wire:key="hours-trend-{{ $mh['month'] }}" class="mt-2 w-full min-w-0" />
         @else
             <p class="flex h-[180px] items-center justify-center text-xs text-zinc-400">No worked days yet.</p>
         @endif
     </div>
     <div class="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        <h2 class="text-[17px] font-semibold text-zinc-900 dark:text-white">Punctuality</h2>
-        <p class="text-xs text-zinc-500 dark:text-zinc-400">Present, late and absent days by week · {{ $mh['label'] }}</p>
+        <h2 class="flex items-center gap-3 text-[17px] font-semibold text-zinc-900 dark:text-white"><flux:icon.arrow-trending-up class="size-6 text-orange-500" /> Punctuality</h2>
+        <p class="mt-1 pl-9 text-xs text-zinc-500 dark:text-zinc-400">Present, late and absent days by week · {{ $mh['label'] }}</p>
         @if($hasPunctuality)
             <x-dashboard.chart :options="$punctualityChart" id="punctuality-trend" wire:key="punctuality-trend-{{ $mh['month'] }}" class="mt-2 w-full min-w-0" />
         @else

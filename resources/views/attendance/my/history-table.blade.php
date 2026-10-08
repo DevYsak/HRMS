@@ -9,7 +9,7 @@
             <th class="px-3 py-2 text-right font-medium">Worked</th>
             <th class="px-3 py-2 text-right font-medium">Break</th>
             <th class="px-3 py-2 font-medium">Exception</th>
-            <th class="px-3 py-2"><span class="sr-only">Why</span></th>
+            <th class="px-5 py-2 text-right font-medium">Actions</th>
         </tr>
     </thead>
     <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
@@ -39,7 +39,7 @@
                     @forelse($exceptions as $ex)
                         <span @class([
                             'mr-1 whitespace-nowrap rounded px-1.5 py-0.5 text-[11px] font-semibold',
-                            'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400' => str_starts_with($ex, 'Missing') || str_starts_with($ex, 'Late'),
+                            'bg-orange-50 text-orange-700 dark:bg-orange-500/10 dark:text-orange-400' => str_starts_with($ex, 'Missing') || str_starts_with($ex, 'Late'),
                             'bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-300' => str_starts_with($ex, 'Regularis'),
                             'bg-zinc-100 text-zinc-600 dark:bg-white/5 dark:text-zinc-300' => ! str_starts_with($ex, 'Missing') && ! str_starts_with($ex, 'Late') && ! str_starts_with($ex, 'Regularis'),
                         ])>{{ $ex }}</span>
@@ -47,9 +47,11 @@
                         <span class="text-zinc-300 dark:text-zinc-600">—</span>
                     @endforelse
                 </td>
-                <td class="px-3 py-2.5 text-right">
+                <td class="px-5 py-2.5 text-right">
                     @if($hasPunch || $r['status'] === 'Absent')
-                        <button type="button" wire:click.stop="showScoreDecision('{{ $r['date'] }}')" class="text-[11px] font-semibold text-zinc-400 hover:text-orange-600" title="How this day's status was decided">Why?</button>
+                        <button type="button" wire:click.stop="showScoreDecision('{{ $r['date'] }}')" class="text-xs font-semibold text-orange-600 underline underline-offset-2 hover:text-orange-700" title="How this day's status was decided">Why?</button>
+                    @else
+                        <span class="text-zinc-300 dark:text-zinc-600">—</span>
                     @endif
                 </td>
             </tr>
