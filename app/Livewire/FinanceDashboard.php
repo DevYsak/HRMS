@@ -68,9 +68,10 @@ class FinanceDashboard extends Component
             ->orderBy('cycle')
             ->get();
 
-        $awaitingFinance = Payroll::where('status', 'pending_finance')
-            ->orderBy('year')->orderBy('created_at')
-            ->get(['id', 'month', 'year', 'cycle', 'total_payout', 'processed_at']);
+        // The oldest five; the count is the true total (sign-off is a queue).
+        $awaitingQuery = Payroll::where('status', 'pending_finance')->orderBy('year')->orderBy('created_at');
+        $awaitingFinanceCount = (clone $awaitingQuery)->count();
+        $awaitingFinance = $awaitingQuery->limit(5)->get(['id', 'month', 'year', 'cycle', 'total_payout', 'processed_at']);
 
         $netFor = fn (Carbon $m) => (float) Payslip::whereHas('payroll', fn ($q) => $q->where('month', $m->format('F'))->where('year', $m->year)->where('status', 'finalized'))->sum('net_salary');
 
@@ -82,6 +83,7 @@ class FinanceDashboard extends Component
             'period' => $period,
             'runs' => $runs,
             'awaitingFinance' => $awaitingFinance,
+            'awaitingFinanceCount' => $awaitingFinanceCount,
             'canApproveFinance' => $user->canApproveFinance(),
             'canRunPayroll' => $user->canRunPayroll(),
             'netThisMonth' => $netFor($period),

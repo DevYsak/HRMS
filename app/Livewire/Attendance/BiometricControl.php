@@ -166,7 +166,7 @@ class BiometricControl extends Component
         $logs = AttendanceDailySummary::with('employee.user')
             ->whereNotNull('synced_at')
             ->orderByDesc('synced_at')
-            ->limit(12)
+            ->limit(10)   // recent syncs only; Export CSV has the rest
             ->get()
             ->map(fn ($s) => [
                 'employee' => $s->employee?->user?->name ?? ('PIN '.$s->employee_code),

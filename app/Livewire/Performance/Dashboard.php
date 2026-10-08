@@ -154,7 +154,7 @@ class Dashboard extends Component
         // ── Performance Timeline ─────────────────────────────────────────
         $timelines = $employee->performanceTimelines()
             ->where('is_visible_to_employee', true)
-            ->limit(10)
+            ->limit(6)   // the latest events only
             ->get();
 
         // ── Warning Letters ──────────────────────────────────────────────

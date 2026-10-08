@@ -42,7 +42,8 @@
          (name + dates only). --}}
     <div class="mt-4">
         <p class="text-[11px] font-medium uppercase tracking-wide text-zinc-400">On leave this week</p>
-        @forelse($team['on_leave_this_week'] ?? [] as $away)
+        @php $awayAll = collect($team['on_leave_this_week'] ?? []); @endphp
+        @forelse($awayAll->take(5) as $away)
             <div class="mt-1.5 flex items-center justify-between gap-2 text-sm">
                 <span class="truncate text-zinc-700 dark:text-zinc-200">{{ $away['name'] }}</span>
                 <span class="shrink-0 text-xs text-zinc-500 dark:text-zinc-400">{{ $away['dates'] }}</span>
@@ -50,6 +51,9 @@
         @empty
             <p class="mt-1.5 text-sm text-zinc-500 dark:text-zinc-400">Everyone's in this week.</p>
         @endforelse
+        @if($awayAll->count() > 5)
+            <p class="mt-1.5 text-xs text-zinc-500 dark:text-zinc-400">+{{ $awayAll->count() - 5 }} more on leave this week</p>
+        @endif
     </div>
 
     @if($team['org_chart_url'])

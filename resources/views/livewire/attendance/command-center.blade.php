@@ -221,21 +221,23 @@
             </div>
             @if(count($feed) > 0)
                 <div class="relative space-y-3">
-                    @foreach($feed as $f)
-                        @php $ok = $f['status'] === 'approved'; @endphp
-                        <div class="relative flex items-start gap-3">
-                            @unless($loop->last)<span class="absolute left-[9px] top-6 h-full w-px bg-orange-100 dark:bg-zinc-800"></span>@endunless
-                            <span class="mt-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded-full {{ $ok ? 'bg-emerald-500' : 'bg-rose-500' }} text-white"><flux:icon :icon="$ok ? 'check' : 'x-mark'" class="size-3" /></span>
-                            <div class="min-w-0 flex-1 text-xs">
-                                <span class="font-black text-zinc-900 dark:text-white">{{ $f['employee'] }}</span>
-                                <span class="text-zinc-500 dark:text-zinc-400">— {{ $f['type'] }} {{ $f['status'] }}</span>
-                                <div class="text-[10px] text-zinc-400">
-                                    @if($f['reviewer'])by {{ $f['reviewer'] }} · @endif{{ $f['at'] ? \Carbon\Carbon::parse($f['at'])->diffForHumans() : '' }}
-                                </div>
-                            </div>
-                        </div>
+                    @foreach(array_slice($feed, 0, 6) as $f)
+                        @include('livewire.attendance.partials.command-feed-item', ['isLast' => $loop->last])
                     @endforeach
                 </div>
+                @if(count($feed) > 6)
+                    <button type="button" @click="$flux.modal('command-feed-all').show()" class="mt-4 text-xs font-semibold text-orange-600 hover:text-orange-700">View all {{ count($feed) }} decisions</button>
+                    <flux:modal name="command-feed-all" flyout class="w-full md:w-[28rem]">
+                        <div class="space-y-4">
+                            <flux:heading size="lg">Recent activity</flux:heading>
+                            <div class="relative space-y-3">
+                                @foreach($feed as $f)
+                                    @include('livewire.attendance.partials.command-feed-item', ['isLast' => $loop->last])
+                                @endforeach
+                            </div>
+                        </div>
+                    </flux:modal>
+                @endif
             @else
                 <p class="py-6 text-center text-xs text-zinc-400">No decisions yet.</p>
             @endif
@@ -263,25 +265,26 @@
         </div>
         @if(count($incoming) > 0)
             <div class="grid grid-cols-1 gap-px bg-orange-50 dark:bg-zinc-800/60 sm:grid-cols-2">
-                @foreach($incoming as $row)
-                    @php [$rIcon, $rColor] = $typeStyles[$row['type']] ?? ['inbox', '#71717a']; @endphp
-                    <button type="button" wire:click="$set('tab', '{{ $row['tab'] }}')"
-                        class="group flex items-center gap-3 bg-white px-5 py-3 text-left transition hover:bg-orange-50/50 dark:bg-zinc-900 dark:hover:bg-zinc-800/40">
-                        <span class="inline-flex size-9 shrink-0 items-center justify-center rounded-xl" style="background: {{ $rColor }}1a; color: {{ $rColor }};"><flux:icon :icon="$rIcon" class="size-4.5" /></span>
-                        <div class="min-w-0 flex-1">
-                            <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                                <span class="text-xs font-black text-zinc-900 dark:text-white">{{ $row['employee'] }}</span>
-                                <span class="rounded-full px-1.5 py-0.5 text-[9px] font-bold" style="background: {{ $rColor }}1a; color: {{ $rColor }};">{{ $row['type'] }}</span>
-                            </div>
-                            <p class="mt-0.5 truncate text-[11px] text-zinc-500 dark:text-zinc-400">{{ $row['detail'] }}</p>
-                        </div>
-                        <div class="shrink-0 text-right">
-                            <p class="text-[10px] font-semibold text-zinc-400">{{ $row['at'] ? \Carbon\Carbon::parse($row['at'])->diffForHumans(short: true) : '' }}</p>
-                            <span class="text-[10px] font-bold text-zinc-300 transition group-hover:text-orange-500">Review →</span>
-                        </div>
-                    </button>
+                @foreach(array_slice($incoming, 0, 4) as $row)
+                    @include('livewire.attendance.partials.command-incoming-row')
                 @endforeach
             </div>
+            @if(count($incoming) > 4)
+                <div class="flex items-center justify-between border-t border-orange-100/70 px-5 py-3 text-xs dark:border-zinc-800">
+                    <span class="text-zinc-500">Latest 4 of {{ count($incoming) }}</span>
+                    <button type="button" @click="$flux.modal('command-incoming-all').show()" class="font-semibold text-orange-600 hover:text-orange-700">View all {{ count($incoming) }} new requests</button>
+                </div>
+                <flux:modal name="command-incoming-all" flyout class="w-full md:w-[32rem]">
+                    <div class="space-y-4">
+                        <flux:heading size="lg">Recent new requests</flux:heading>
+                        <div class="grid grid-cols-1 gap-px overflow-hidden rounded-xl bg-orange-50 dark:bg-zinc-800/60" @click="$flux.modal('command-incoming-all').close()">
+                            @foreach($incoming as $row)
+                                @include('livewire.attendance.partials.command-incoming-row')
+                            @endforeach
+                        </div>
+                    </div>
+                </flux:modal>
+            @endif
         @else
             <div class="py-10 text-center text-sm text-zinc-400"><flux:icon.inbox class="mx-auto mb-2 size-8 text-zinc-200 dark:text-zinc-700" /> No new requests waiting.</div>
         @endif

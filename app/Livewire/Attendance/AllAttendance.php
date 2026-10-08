@@ -36,6 +36,9 @@ class AllAttendance extends Component
     use ManagesRegularisations;
     use WithPagination;
 
+    /** Pending regularisations listed in the preview's "View all" drawer. */
+    public const PENDING_LIST_LIMIT = 50;
+
     public $search = '';
 
     public $status = '';
@@ -727,11 +730,15 @@ class AllAttendance extends Component
 
         $this->applyFilters($query);
 
-        $pendingRegularisations = $scoped(
+        // The banner previews a few; its drawer lists the oldest PENDING_LIST_LIMIT
+        // (the Command Center queue holds the rest). The count is the true total.
+        $pendingQuery = $scoped(
             AttendanceRegularisation::where('status', 'pending')
                 ->with(['employee.user', 'attendance'])
                 ->whereHas('employee.user')
-        )->get();
+        );
+        $pendingRegularisationCount = (clone $pendingQuery)->count();
+        $pendingRegularisations = $pendingQuery->orderBy('work_date')->orderBy('id')->limit(self::PENDING_LIST_LIMIT)->get();
 
         // KPI stats recompute from the SAME filtered dataset the table shows —
         // not a fixed "today" snapshot. Change the date/range/status/search and
@@ -803,6 +810,7 @@ class AllAttendance extends Component
             // One resolver for the page, so its holiday / MDL / calendar lookups are shared by every row.
             'rowStatus' => collect($attendances->items())->mapWithKeys(fn (Attendance $a) => [$a->id => $statusResolver->forAttendance($a)])->all(),
             'pendingRegularisations' => $pendingRegularisations,
+            'pendingRegularisationCount' => $pendingRegularisationCount,
             // Recently decided requests HR may still correct or delete.
             'decidedRegularisations' => Auth::user()->canApproveRegularisations()
                 ? $scoped(AttendanceRegularisation::whereIn('status', ['approved', 'rejected'])

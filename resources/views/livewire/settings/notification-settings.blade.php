@@ -244,26 +244,37 @@
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-zinc-100 dark:divide-white/5">
-                    @foreach($logs as $log)
-                        <tr>
-                            <td class="px-5 py-2.5 text-zinc-700 dark:text-zinc-300">{{ $log->to_email }}</td>
-                            <td class="px-3 py-2.5 text-zinc-500">{{ \Illuminate\Support\Str::limit($log->subject, 48) }}</td>
-                            <td class="px-3 py-2.5 text-center">
-                                <span @class([
-                                    'inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold',
-                                    'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' => $log->status === 'sent',
-                                    'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' => $log->status === 'sending',
-                                    'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400' => $log->status === 'failed',
-                                    'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400' => $log->status === 'skipped',
-                                ])
-                                    title="{{ $log->skip_reason }}"
-                                >{{ ucfirst($log->status) }}{{ $log->skip_reason ? ' — '.\Illuminate\Support\Str::headline($log->skip_reason) : '' }}</span>
-                            </td>
-                            <td class="px-5 py-2.5 text-right text-[11px] text-zinc-400">{{ $log->created_at?->diffForHumans() }}</td>
-                        </tr>
+                    @foreach($logs->take(7) as $log)
+                        @include('livewire.settings.partials.email-log-row')
                     @endforeach
                 </tbody>
             </table>
+            @if($logs->count() > 7)
+                <div class="flex items-center justify-between border-t border-zinc-100 px-5 py-3 text-xs dark:border-white/5">
+                    <span class="text-zinc-500">Latest 7 of {{ $logs->count() }}</span>
+                    <button type="button" @click="$flux.modal('email-logs-all').show()" class="font-semibold text-orange-600 hover:text-orange-700">View all {{ $logs->count() }} recent emails</button>
+                </div>
+                <flux:modal name="email-logs-all" flyout class="w-full md:w-[44rem]">
+                    <div class="space-y-4">
+                        <flux:heading size="lg">Recent emails</flux:heading>
+                        <table class="w-full text-sm">
+                        <thead>
+                            <tr class="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                                <th class="px-5 py-2 text-left">To</th>
+                                <th class="px-3 py-2 text-left">Subject</th>
+                                <th class="px-3 py-2 text-center">Status</th>
+                                <th class="px-5 py-2 text-right">When</th>
+                            </tr>
+                        </thead>
+                            <tbody class="divide-y divide-zinc-100 dark:divide-white/5">
+                                @foreach($logs as $log)
+                                    @include('livewire.settings.partials.email-log-row')
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                </flux:modal>
+            @endif
         @endif
     </div>
 

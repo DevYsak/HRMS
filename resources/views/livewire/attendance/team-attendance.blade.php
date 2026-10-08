@@ -174,33 +174,48 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach($pendingRegularisations as $req)
-                            <tr>
-                                <td class="pulse-td pl-6 font-medium text-zinc-900 dark:text-white">
-                                    {{ $req->employee->user->name }}
-                                </td>
-                                <td class="pulse-td">
-                                    {{ \Carbon\Carbon::parse($req->work_date)->format('M d, Y') }}
-                                </td>
-                                <td class="pulse-td">
-                                    {{ \Carbon\Carbon::parse($req->requested_check_in)->format('H:i') }} - {{ \Carbon\Carbon::parse($req->requested_check_out)->format('H:i') }}
-                                </td>
-                                <td class="pulse-td text-zinc-500 truncate max-w-xs" title="{{ $req->reason }}">
-                                    {{ $req->reason }}
-                                </td>
-                                <td class="pulse-td pr-6 text-right!">
-                                    @if(auth()->user()->canApproveRegularisations())
-                                        <flux:button wire:click="openReviewModal({{ $req->id }})" size="xs" variant="primary">Review</flux:button>
-                                    @else
-                                        <span class="inline-flex shrink-0 items-center rounded-lg bg-zinc-100 px-2.5 py-1 text-[10px] font-bold uppercase text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">Awaiting HR</span>
-                                    @endif
-                                </td>
-                            </tr>
+                        @foreach($pendingRegularisations->take(5) as $req)
+                            @include('livewire.attendance.partials.team-pending-regularisation-row')
                         @endforeach
                     </tbody>
                 </table>
             </div>
+            @if($pendingRegularisationCount > 5)
+                <div class="mt-4 flex items-center justify-between text-xs">
+                    <span class="text-zinc-500">Showing the oldest 5 of {{ $pendingRegularisationCount }}</span>
+                    <button type="button" @click="$flux.modal('team-pending-regularisations').show()" class="font-semibold text-orange-600 hover:text-orange-700">View all {{ $pendingRegularisationCount }} requests</button>
+                </div>
+            @endif
         </div>
+
+        @if($pendingRegularisationCount > 5)
+            <flux:modal name="team-pending-regularisations" flyout class="w-full md:w-[46rem]" data-team-pending-all>
+                <div class="space-y-4">
+                    <div>
+                        <flux:heading size="lg">Pending regularisation requests</flux:heading>
+                        <flux:subheading>{{ $pendingRegularisationCount }} waiting · oldest first{{ $pendingRegularisationCount > $pendingRegularisations->count() ? ' · showing '.$pendingRegularisations->count() : '' }}</flux:subheading>
+                    </div>
+                    <div class="pulse-table-wrap">
+                        <table class="pulse-table">
+                            <thead>
+                                <tr>
+                                    <th class="pulse-th pl-6">Employee</th>
+                                    <th class="pulse-th">Date</th>
+                                    <th class="pulse-th">Requested Time</th>
+                                    <th class="pulse-th">Reason</th>
+                                    <th class="pulse-th pr-6 text-right!">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach($pendingRegularisations as $req)
+                                    @include('livewire.attendance.partials.team-pending-regularisation-row')
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </flux:modal>
+        @endif
     @endif
 
     {{-- Activity Feed --}}

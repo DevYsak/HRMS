@@ -87,7 +87,7 @@ class Overview extends Component
         $recentActivity = AuditLog::with('user')
             ->whereIn('auditable_type', [Payroll::class, Payslip::class])
             ->latest('id')
-            ->take(8)
+            ->take(6)   // a preview; "View all" opens the Payroll Audit Trail
             ->get();
 
         // Simple month-grid calendar marking each active cycle's pay day —

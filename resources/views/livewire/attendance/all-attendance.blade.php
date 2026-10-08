@@ -71,31 +71,45 @@
         <div class="mb-3 flex items-center gap-3">
             <span class="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white shadow-lg shadow-amber-200"><flux:icon.exclamation-triangle class="size-5" /></span>
             <div>
-                <div class="text-sm font-black text-amber-900">{{ $pendingRegularisations->count() }} pending regularisation {{ \Illuminate\Support\Str::plural('request', $pendingRegularisations->count()) }}</div>
+                <div class="text-sm font-black text-amber-900">{{ $pendingRegularisationCount }} pending regularisation {{ \Illuminate\Support\Str::plural('request', $pendingRegularisationCount) }}</div>
                 <div class="text-xs text-amber-700">Approving auto-updates the employee's hours, overtime, score and payroll attendance.</div>
             </div>
         </div>
         <div class="space-y-2">
-            @foreach($pendingRegularisations as $req)
-                <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200/70 bg-white/80 dark:bg-zinc-900/80 px-3 py-2">
-                    <div class="flex min-w-0 items-center gap-3 text-xs">
-                        <span class="font-black text-zinc-900 dark:text-white">{{ $req->employee?->user?->name ?? '—' }}</span>
-                        <span class="text-zinc-500 dark:text-zinc-400">{{ \Carbon\Carbon::parse($req->work_date)->format('d M Y') }}</span>
-                        <span class="font-mono font-bold text-amber-700">{{ \Carbon\Carbon::parse($req->requested_check_in)->format('H:i') }} → {{ \Carbon\Carbon::parse($req->requested_check_out)->format('H:i') }}</span>
-                        <span class="hidden truncate italic text-zinc-400 md:inline">“{{ \Illuminate\Support\Str::limit($req->reason, 60) }}”</span>
-                    </div>
-                    @if(auth()->user()->canApproveRegularisations())
-                    <div class="flex shrink-0 items-center gap-1.5">
-                        <button wire:click="openReviewModal({{ $req->id }})" class="inline-flex shrink-0 items-center gap-1 rounded-lg bg-amber-500 px-3 py-1 text-[11px] font-bold text-white transition hover:bg-amber-600"><flux:icon.eye class="size-3" /> Review</button>
-                        @include('livewire.attendance.partials.regularisation-actions', ['reg' => $req])
-                    </div>
-                    @else
-                    <span class="inline-flex shrink-0 items-center rounded-lg bg-zinc-100 px-2.5 py-1 text-[10px] font-bold uppercase text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">Awaiting HR</span>
-                    @endif
-                </div>
+            @foreach($pendingRegularisations->take(5) as $req)
+                @include('livewire.attendance.partials.pending-regularisation-row')
             @endforeach
         </div>
+        @if($pendingRegularisationCount > 5)
+            <div class="mt-3 flex items-center justify-between text-xs">
+                <span class="text-amber-800">Showing the oldest 5 of {{ $pendingRegularisationCount }}</span>
+                <button type="button" @click="$flux.modal('pending-regularisations').show()" class="font-bold text-amber-800 underline-offset-2 hover:underline">View all {{ $pendingRegularisationCount }} requests</button>
+            </div>
+        @endif
     </div>
+
+    @if($pendingRegularisationCount > 5)
+        <flux:modal name="pending-regularisations" flyout class="w-full md:w-[42rem]" data-pending-regularisations-all>
+            <div class="space-y-4">
+                <div>
+                    <flux:heading size="lg">Pending regularisations</flux:heading>
+                    <flux:subheading>{{ $pendingRegularisationCount }} waiting · oldest first</flux:subheading>
+                </div>
+                <div class="space-y-2">
+                    @foreach($pendingRegularisations as $req)
+                        @include('livewire.attendance.partials.pending-regularisation-row')
+                    @endforeach
+                </div>
+                @if($pendingRegularisationCount > $pendingRegularisations->count())
+                    <p class="text-xs text-zinc-500">Showing the oldest {{ $pendingRegularisations->count() }}.
+                        @if(\Route::has('attendance.command-center') && app(\App\Services\Help\RouteAccess::class)->allows(auth()->user(), 'attendance.command-center'))
+                            <a href="{{ route('attendance.command-center') }}" wire:navigate class="font-semibold text-orange-600 hover:underline">Open the full queue</a>
+                        @endif
+                    </p>
+                @endif
+            </div>
+        </flux:modal>
+    @endif
 @endif
 
 {{-- ═══════════════ DECIDED REGULARISATIONS (HR may correct / delete) ═══════════════ --}}

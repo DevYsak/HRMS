@@ -15,7 +15,7 @@
 
         {{-- What is waiting on Finance --}}
         <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <x-pulse.kpi-card label="Payroll runs awaiting finance" :value="$awaitingFinance->count()" icon="banknotes" accent="amber"
+            <x-pulse.kpi-card label="Payroll runs awaiting finance" :value="$awaitingFinanceCount" icon="banknotes" accent="amber"
                 :href="$canApproveFinance ? route('payroll.finance-approve') : null" sub="Sign-off queue" />
             <x-pulse.kpi-card label="OT payable (unpaid)" :value="$money($otPayable['amount'])" icon="clock" accent="blue"
                 :sub="$otPayable['hours'].' h · '.$otPayable['people'].' people'" />
@@ -72,8 +72,11 @@
                 @empty
                     <div class="px-5 pb-5 text-sm text-zinc-500">Nothing is waiting for finance approval.</div>
                 @endforelse
-                @if($canApproveFinance && $awaitingFinance->isNotEmpty())
-                    <div class="px-5 py-3"><flux:button size="sm" :href="route('payroll.finance-approve')" wire:navigate>Review sign-offs</flux:button></div>
+                @if($awaitingFinanceCount > $awaitingFinance->count())
+                    <div class="border-t border-zinc-100 px-5 py-2.5 text-xs text-zinc-500 dark:border-white/5">Oldest {{ $awaitingFinance->count() }} of {{ $awaitingFinanceCount }}</div>
+                @endif
+                @if($canApproveFinance && $awaitingFinanceCount > 0)
+                    <div class="px-5 py-3"><flux:button size="sm" :href="route('payroll.finance-approve')" wire:navigate>{{ $awaitingFinanceCount > $awaitingFinance->count() ? 'Review all '.$awaitingFinanceCount.' sign-offs' : 'Review sign-offs' }}</flux:button></div>
                 @endif
             </x-pulse.card>
 

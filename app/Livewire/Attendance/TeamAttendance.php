@@ -22,6 +22,9 @@ class TeamAttendance extends Component
 {
     use WithPagination;
 
+    /** Pending regularisations listed in the preview's "View all" drawer. */
+    public const PENDING_LIST_LIMIT = 50;
+
     public $showReviewModal = false;
 
     public $activeRequest = null;
@@ -182,10 +185,13 @@ class TeamAttendance extends Component
             ->latest('date')
             ->paginate(10);
 
-        $pendingRegularisations = AttendanceRegularisation::whereIn('employee_id', $teamIds)
+        // A preview of the oldest pending requests; the drawer shows up to
+        // PENDING_LIST_LIMIT and the count is the true total.
+        $pendingQuery = AttendanceRegularisation::whereIn('employee_id', $teamIds)
             ->where('status', 'pending')
-            ->with(['employee.user', 'attendance'])
-            ->get();
+            ->with(['employee.user', 'attendance']);
+        $pendingRegularisationCount = (clone $pendingQuery)->count();
+        $pendingRegularisations = $pendingQuery->orderBy('work_date')->orderBy('id')->limit(self::PENDING_LIST_LIMIT)->get();
 
         // ── Period analytics strip: recomputes from the filter (Rule 12) ──────
         [$rangeStart, $rangeEnd] = $this->periodRange();
@@ -230,6 +236,7 @@ class TeamAttendance extends Component
             'currentlyIn' => $currentlyIn,
             'recentLogs' => $recentLogs,
             'pendingRegularisations' => $pendingRegularisations,
+            'pendingRegularisationCount' => $pendingRegularisationCount,
             'board' => $board,
             'boardStats' => $boardStats,
             'periodStats' => $periodStats,
