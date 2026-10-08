@@ -152,17 +152,22 @@ class EngineAttendanceSyncService
             );
 
             // Core attendance row so the standard pages + reports + payroll reflect it.
-            // Never over an approved regularisation: the correction (with its
-            // original-value snapshot) is the record of truth for that day, and
-            // the 10-minute sync / nightly re-sync would otherwise silently put
-            // the raw device punches back.
+            // Never written over an approved regularisation directly: a
+            // correction recorded as punches is rebuilt through the canonical
+            // timeline (its boundary kept, later genuine punches added), and
+            // one that exists only as row times is left alone.
             $existing = Attendance::where('employee_id', $employeeId)->where('date', $date)->first();
 
             // A day in a settled payroll, or one HR corrected, is never rewritten.
             $locked = ($lockEmployee = Employee::find($employeeId)) !== null
                 && app(AttendanceDayRebuilder::class)->isLocked($lockEmployee, Carbon::parse($date));
 
-            if ($rowIn !== null && ! $locked && $existing?->is_regularized && ! $existing->hasCorrectedPunches()) {
+            if (! $locked && $existing?->hasCorrectedPunches()) {
+                // A corrected day: the correction's punches stand in for the
+                // boundary they fixed, and the genuine punches synced since
+                // (a later Face IN / Card OUT) join the same timeline.
+                app(AttendanceDayRebuilder::class)->rebuild($lockEmployee, Carbon::parse($date), allowCreate: false);
+            } elseif ($rowIn !== null && ! $locked && $existing?->is_regularized && ! $existing->hasCorrectedPunches()) {
                 // A half-day (status-only) regularisation: record the real
                 // punches, keep the approved status and late flags.
                 $existing->update([

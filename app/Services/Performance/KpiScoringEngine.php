@@ -85,11 +85,12 @@ class KpiScoringEngine
                     }
                 } else {
                     // HR override first, then the multi-reviewer composite
-                    // (Phase D), then the legacy manager/self fallbacks.
+                    // (Phase D), then the legacy manager score. The
+                    // self-assessment is never the fallback (D9): it stays
+                    // on record for comparison but does not rate the KPI.
                     $effective = $score->hr_score
                         ?? $this->participantComposite($review, $component->id)
                         ?? $score->manager_score
-                        ?? $score->self_score
                         ?? 0.0;
                     $weighted = round($effective * $component->weight_percent / 100, 4);
                     $score->update(['final_score' => $effective, 'weighted_score' => $weighted]);

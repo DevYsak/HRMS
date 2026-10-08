@@ -110,6 +110,9 @@ test('a configured approval step notifies its approver with the step name, not t
     $maker = User::factory()->create(['role' => 'super_admin']);
     $hrApprover = User::factory()->create(['role' => 'hr_admin']);
     PayrollApprovalPolicy::create(['level' => 1, 'label' => 'HR Review', 'approver_type' => 'hr_admin', 'is_active' => true]);
+    // A chain must keep Finance sign-off; only step 1 is notified here.
+    User::factory()->create(['role' => 'finance']);
+    PayrollApprovalPolicy::create(['level' => 2, 'label' => 'Finance Sign-off', 'approver_type' => 'finance', 'is_active' => true]);
 
     $payroll = Payroll::create(['month' => 'August', 'year' => 2027, 'cycle' => 'cycle_a', 'status' => 'draft', 'processed_by' => $maker->id]);
     app(PayrollService::class)->submitForFinanceApproval($payroll);

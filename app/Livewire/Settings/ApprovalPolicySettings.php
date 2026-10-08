@@ -5,6 +5,7 @@ namespace App\Livewire\Settings;
 use App\Livewire\Concerns\RequiresPayrollModule;
 use App\Models\PayrollApprovalPolicy;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
 
@@ -17,6 +18,8 @@ use Livewire\Component;
 class ApprovalPolicySettings extends Component
 {
     use RequiresPayrollModule;
+
+    private const FINANCE_REQUIRED = 'The approval chain must keep an active Finance step — payroll cannot be finalised without Finance sign-off.';
 
     public bool $showModal = false;
 
@@ -73,15 +76,24 @@ class ApprovalPolicySettings extends Component
             $data['specific_user_id'] = null;
         }
 
-        if ($this->editingId) {
-            PayrollApprovalPolicy::findOrFail($this->editingId)->update($data);
-            \Flux::toast('Approval step updated.', variant: 'success');
-        } else {
-            PayrollApprovalPolicy::create($data + ['level' => (PayrollApprovalPolicy::max('level') ?? 0) + 1]);
-            \Flux::toast('Approval step added.', variant: 'success');
+        $editing = $this->editingId;
+        $kept = $this->keepingFinanceSignOff(function () use ($data, $editing) {
+            if ($editing) {
+                PayrollApprovalPolicy::findOrFail($editing)->update($data);
+            } else {
+                PayrollApprovalPolicy::create($data + ['level' => (PayrollApprovalPolicy::max('level') ?? 0) + 1]);
+            }
+
+            PayrollApprovalPolicy::renumber();
+        });
+
+        if (! $kept) {
+            $this->addError('approver_type', self::FINANCE_REQUIRED);
+
+            return;
         }
 
-        PayrollApprovalPolicy::renumber();
+        \Flux::toast($editing ? 'Approval step updated.' : 'Approval step added.', variant: 'success');
         $this->closeModal();
     }
 
@@ -89,17 +101,26 @@ class ApprovalPolicySettings extends Component
     {
         $this->authorize('manage-settings');
 
-        PayrollApprovalPolicy::findOrFail($id)->delete();
-        PayrollApprovalPolicy::renumber();
-        \Flux::toast('Approval step removed.', variant: 'warning');
+        $kept = $this->keepingFinanceSignOff(function () use ($id) {
+            PayrollApprovalPolicy::findOrFail($id)->delete();
+            PayrollApprovalPolicy::renumber();
+        });
+
+        \Flux::toast($kept ? 'Approval step removed.' : self::FINANCE_REQUIRED, variant: $kept ? 'warning' : 'danger');
     }
 
     public function toggleActive(int $id): void
     {
         $this->authorize('manage-settings');
 
-        $policy = PayrollApprovalPolicy::findOrFail($id);
-        $policy->update(['is_active' => ! $policy->is_active]);
+        $kept = $this->keepingFinanceSignOff(function () use ($id) {
+            $policy = PayrollApprovalPolicy::findOrFail($id);
+            $policy->update(['is_active' => ! $policy->is_active]);
+        });
+
+        if (! $kept) {
+            \Flux::toast(self::FINANCE_REQUIRED, variant: 'danger');
+        }
     }
 
     public function moveUp(int $id): void
@@ -112,6 +133,28 @@ class ApprovalPolicySettings extends Component
     {
         $this->authorize('manage-settings');
         $this->swapWithNeighbor($id, 1);
+    }
+
+    /**
+     * Apply a change to the chain only if it still ends in Finance's sign-off
+     * (spec §3.5, §4.1): HR configures the chain but cannot route payroll
+     * around Finance. The change is rolled back otherwise.
+     */
+    private function keepingFinanceSignOff(callable $change): bool
+    {
+        try {
+            DB::transaction(function () use ($change) {
+                $change();
+
+                if (! PayrollApprovalPolicy::chainHasFinanceSignOff()) {
+                    throw new \DomainException(self::FINANCE_REQUIRED);
+                }
+            });
+        } catch (\DomainException) {
+            return false;
+        }
+
+        return true;
     }
 
     private function swapWithNeighbor(int $id, int $direction): void

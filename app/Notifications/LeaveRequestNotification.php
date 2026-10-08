@@ -72,7 +72,7 @@ class LeaveRequestNotification extends Notification implements ShouldQueue
                 'icon' => 'question-mark-circle',
                 'color' => 'amber',
             ],
-            default => [
+            'rejected' => [
                 'type' => 'leave_request',
                 'title' => 'Leave Rejected',
                 'body' => "Your {$type} request for {$days} day(s) was rejected.",
@@ -80,6 +80,37 @@ class LeaveRequestNotification extends Notification implements ShouldQueue
                 'url' => $myUrl,
                 'icon' => 'x-circle',
                 'color' => 'red',
+            ],
+            // Requests created before D2 can still sit with HR.
+            'pending_hr' => $this->role === 'employee'
+                ? [
+                    'type' => 'leave_request',
+                    'title' => 'Leave Awaiting HR',
+                    'body' => "Your {$type} request for {$days} day(s) is with HR for a final decision.",
+                    'action' => 'View',
+                    'url' => $myUrl,
+                    'icon' => 'clock',
+                    'color' => 'amber',
+                ]
+                : [
+                    'type' => 'leave_request',
+                    'title' => 'Leave Awaiting HR Decision',
+                    'body' => "{$employee}'s {$type} request for {$days} day(s) is waiting for your decision.",
+                    'action' => 'Review',
+                    'url' => $teamUrl,
+                    'icon' => 'calendar',
+                    'color' => 'amber',
+                ],
+            // Never fall through to a rejection: an unknown state says only
+            // that the request changed.
+            default => [
+                'type' => 'leave_request',
+                'title' => 'Leave Request Updated',
+                'body' => "Your {$type} request for {$days} day(s) was updated.",
+                'action' => 'View',
+                'url' => $myUrl,
+                'icon' => 'calendar',
+                'color' => 'blue',
             ],
         };
     }

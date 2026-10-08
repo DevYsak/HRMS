@@ -186,7 +186,9 @@ test('emailing a payslip with no employee email on file is refused', function ()
     $service = app(PayrollService::class);
     $payroll = $service->generateDraft('July', 2026, 'cycle_a', $admin->id);
     $slip = Payslip::where('payroll_id', $payroll->id)->first()->load('employee.user');
+    // Only a finance-approved payslip is ever emailed; this is about the address.
+    $slip->update(['status' => 'paid']);
 
-    expect(fn () => $service->emailPayslip($slip))
+    expect(fn () => $service->emailPayslip($slip->fresh('employee.user')))
         ->toThrow(DomainException::class, 'no email address');
 });

@@ -25,7 +25,7 @@ class SyncNexflowOtDetails extends Command
         );
 
         $this->info(sprintf(
-            'Nexflow OT sync: %d approved imported, %d rejected recorded, %d already synced across %d employees.',
+            'Nexflow OT sync: %d filed for manager approval, %d rejected recorded, %d already synced across %d employees.',
             $result['imported'],
             $result['rejected'],
             $result['skipped'],

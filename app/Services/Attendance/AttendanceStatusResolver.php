@@ -18,7 +18,8 @@ use Illuminate\Support\Collection;
  * {@see AttendanceCalculator}, so it inherits the PunchTimeline rules: Face =
  * IN, ID Card = OUT, the latest of a 60-second burst, stray / duplicate /
  * wrong-day punches never deciding anything, regularised days following their
- * corrected times, and the employee's real shift boundaries (a night shift
+ * whole timeline (the correction's boundary plus later genuine punches), and
+ * the employee's real shift boundaries (a night shift
  * may cross midnight).
  *
  * States

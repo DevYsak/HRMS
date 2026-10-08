@@ -292,7 +292,7 @@ class ManageOtRequests extends Component
         );
 
         \Flux::toast(
-            "Nexflow sync — {$result['imported']} imported, {$result['updated']} status change(s), {$result['rejected']} rejected recorded"
+            "Nexflow sync — {$result['imported']} filed for manager approval, {$result['updated']} status change(s), {$result['rejected']} rejected recorded"
             .($result['skipped'] ? ", {$result['skipped']} skipped." : '.')
         );
 

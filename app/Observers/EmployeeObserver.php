@@ -5,16 +5,19 @@ namespace App\Observers;
 use App\Enums\EmployeeStatus;
 use App\Models\AuditLog;
 use App\Models\Employee;
-use App\Models\SalaryCycle;
 use App\Services\Leave\EnsureEmployeeLeaveBalancesService;
 use App\Services\Leave\LeaveProvisioningService;
 use App\Services\Leave\LeaveRuleResolver;
 use App\Services\OnboardingService;
+use App\Services\Payroll\SalaryCycleTransitionService;
 
 class EmployeeObserver
 {
     /** Set while provisioning assigns a policy itself, so it is not provisioned twice. */
     public static bool $provisioningInProgress = false;
+
+    /** Set while a due salary-cycle move is applied, so it is not deferred again. */
+    public static bool $applyingCycleTransition = false;
 
     /**
      * Keep the payroll run key (salary_cycle: cycle_a / cycle_b) in step with
@@ -28,11 +31,13 @@ class EmployeeObserver
             return;
         }
 
-        $key = match (SalaryCycle::whereKey($employee->salary_cycle_id)->value('slug')) {
-            'cycle-a' => 'cycle_a',
-            'cycle-b' => 'cycle_b',
-            default => null,
-        };
+        // An already-paid employee does not change cycle mid-stream: the move
+        // waits for the next payroll month (SalaryCycleTransitionService).
+        if (! self::$applyingCycleTransition && $employee->exists && app(SalaryCycleTransitionService::class)->defer($employee)) {
+            return;
+        }
+
+        $key = SalaryCycleTransitionService::keyFor((int) $employee->salary_cycle_id);
 
         if ($key !== null) {
             $employee->salary_cycle = $key;

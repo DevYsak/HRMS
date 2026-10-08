@@ -2,7 +2,7 @@
     <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
             <h1 class="pulse-page-title">OT Windows</h1>
-            <p class="pulse-page-subtitle">Employees can request overtime only for dates inside an open window.</p>
+            <p class="pulse-page-subtitle">Planning only: windows mark periods where overtime is expected. Employees can request overtime on any date; the manager decides.</p>
         </div>
         <flux:button href="{{ route('overtime.manage') }}" wire:navigate variant="ghost" icon="arrow-left">Manage OT Requests</flux:button>
     </div>
@@ -15,7 +15,7 @@
         @if($openToday)
             Open today: <strong>{{ $openToday->title }}</strong> ({{ $openToday->starts_at->format('j M') }} – {{ $openToday->ends_at->format('j M Y') }}).
         @else
-            No OT window is open today — overtime requests for today are refused until one is opened.
+            No OT window is open today. Overtime requests are still accepted and go to the manager as usual.
         @endif
     </div>
 

@@ -62,7 +62,7 @@ class FinanceEncashments extends Component
                     // HR/manager first-stage approval
                     abort_unless($user->canApproveLeave(), 403);
                     $service->approveEncashment($user, $encashment, $this->reviewComment ?? '');
-                    \Flux::toast('Encashment forwarded to finance for final approval.');
+                    \Flux::toast('Encashment approved. Finance pays it in the next open payroll run.');
                 } elseif ($encashment->isPendingFinance()) {
                     // Finance final approval
                     abort_unless($user->canApproveFinance(), 403);

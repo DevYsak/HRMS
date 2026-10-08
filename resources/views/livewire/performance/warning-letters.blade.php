@@ -259,7 +259,9 @@
                         <div class="border-t border-zinc-200 dark:border-zinc-700 pt-6 mt-6">
                             @if(!$showEscalateForm && !$showCloseForm)
                                 <div class="flex gap-3">
-                                    @if($activeWarning->nextWarningType())
+                                    @if($activeWarning->status === 'draft')
+                                        <flux:button wire:click="issueDraft" wire:confirm="Issue this warning letter to the employee? They will be notified." variant="primary">Issue Warning</flux:button>
+                                    @elseif($activeWarning->nextWarningType())
                                         <flux:button wire:click="$set('showEscalateForm', true)" variant="danger">Escalate Warning</flux:button>
                                     @endif
                                     <flux:button wire:click="$set('showCloseForm', true)" variant="ghost">Close Warning</flux:button>

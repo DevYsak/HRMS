@@ -117,13 +117,20 @@ class EmployeeCreate extends Component
 
     public bool $professional_tax_enabled = false;
 
-    public bool $ot_eligible = false;
+    // Deliberate defaults (8 Oct 2026): a new hire is eligible for OT,
+    // incentives and reimbursements, and an assigned HRA component pays.
+    // HR changes them here or later on the employee's Payroll tab.
+    public bool $ot_eligible = true;
 
     public $ot_rate_per_hour = null;
 
-    public bool $incentive_eligible = false;
+    public bool $incentive_eligible = true;
 
-    public bool $reimbursement_eligible = false;
+    public bool $reimbursement_eligible = true;
+
+    public bool $hra_enabled = true;
+
+    public string $hra_percentage = '';
 
     public string $bank_name = '';
 
@@ -238,9 +245,13 @@ class EmployeeCreate extends Component
             'esi_number' => ['nullable', 'required_if:esi_enabled,true', 'string', 'max:30'],
             'professional_tax_enabled' => ['boolean'],
             'ot_eligible' => ['boolean'],
-            'ot_rate_per_hour' => ['nullable', 'required_if:ot_eligible,true', 'numeric', 'min:0'],
+            // OT is paid at the company rate (Attendance settings, ₹100/hr);
+            // a per-employee figure is optional and informational.
+            'ot_rate_per_hour' => ['nullable', 'numeric', 'min:0'],
             'incentive_eligible' => ['boolean'],
             'reimbursement_eligible' => ['boolean'],
+            'hra_enabled' => ['boolean'],
+            'hra_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'bank_name' => ['nullable', 'string', 'max:100'],
             'account_number' => ['nullable', 'string', 'max:50'],
             'ifsc_code' => ['nullable', 'string', 'regex:/^[A-Z]{4}0[A-Z0-9]{6}$/'],
@@ -317,6 +328,8 @@ class EmployeeCreate extends Component
             'ot_rate_per_hour' => $this->ot_rate_per_hour ?: null,
             'incentive_eligible' => $this->incentive_eligible,
             'reimbursement_eligible' => $this->reimbursement_eligible,
+            'hra_enabled' => $this->hra_enabled,
+            'hra_percentage' => $this->hra_enabled && $this->hra_percentage !== '' ? (float) $this->hra_percentage : null,
             'bank_name' => $this->bank_name ?: null,
             'account_number' => $this->account_number ?: null,
             'ifsc_code' => $this->ifsc_code ?: null,

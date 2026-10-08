@@ -466,8 +466,8 @@ class LeaveService
     }
 
     /**
-     * First-stage review (manager / dept head).
-     * Managers route to pending_hr; HR Admins and Super Admins approve directly.
+     * Review a leave request. The reporting approver (manager, department
+     * head) or HR decides, and the decision is final (D2).
      */
     public function reviewRequest(
         LeaveRequest $leaveRequest,
@@ -511,8 +511,17 @@ class LeaveService
             }
 
             $reviewer = User::find($reviewerId);
-            $isHrReviewer = $reviewer && \in_array($reviewer->role?->value ?? $reviewer->role, ['hr_admin', 'super_admin'], true);
-            $resolvedStatus = ($status === 'approved' && ! $isHrReviewer) ? 'pending_hr' : $status;
+            // D2 (8 Oct 2026): the reporting approver's decision is final —
+            // there is no routine second HR approval. HR keeps override,
+            // correction and escalation. Requests already parked in
+            // pending_hr are still finished through hrApproval().
+            $resolvedStatus = $status;
+
+            // An approval must take at least one working day (an edited range
+            // can land entirely on non-working days); nothing to approve or debit.
+            if ($resolvedStatus === 'approved' && $newDays <= 0) {
+                throw new \DomainException('These dates contain no working days — there is no leave to approve.');
+            }
 
             $leaveRequest->update([
                 'status' => $resolvedStatus,
@@ -621,7 +630,8 @@ class LeaveService
     }
 
     /**
-     * HR second-stage approval — called after manager sets status to pending_hr.
+     * HR decision on a request still parked in pending_hr. New approvals no
+     * longer go there (D2); this finishes the ones that already did.
      */
     public function hrApproveRequest(
         LeaveRequest $leaveRequest,
@@ -1042,8 +1052,10 @@ class LeaveService
     }
 
     /**
-     * HR / manager first-stage approval: pending → pending_finance.
-     * Balance is NOT touched until finance gives final approval.
+     * The final decision on an encashment (D3, 8 Oct 2026): a Director or the
+     * HR Admin approves and that is final — pending → approved, CSL debited
+     * now. There is no Finance approval stage; Finance processes and verifies
+     * the amount when payroll pays it.
      */
     public function approveEncashment(User $reviewer, LeaveEncashment $encashment, string $comment = ''): void
     {
@@ -1059,21 +1071,22 @@ class LeaveService
 
         app(ApprovalGuard::class)->assertNotSelf($reviewer, $encashment->employee);
 
-        $encashment->update([
-            'status' => 'pending_finance',
-            'reviewer_id' => $reviewer->id,
-            'reviewer_comment' => $comment,
-            'reviewed_at' => now(),
-        ]);
+        DB::transaction(function () use ($reviewer, $encashment, $comment) {
+            $encashment->update([
+                'status' => 'approved',
+                'reviewer_id' => $reviewer->id,
+                'reviewer_comment' => $comment,
+                'reviewed_at' => now(),
+                // Payroll pays approved encashments by payout month; one approved
+                // after its month's run is carried into the next open run (D8).
+                'payout_month' => max((string) $encashment->payout_month, now()->format('Y-m')),
+            ]);
 
-        // Finance as a team: an encashment awaiting sign-off is theirs
-        // collectively, not one named approver's.
+            $this->debitEncashedDays($encashment, $reviewer, 'Leave encashment approved');
+        });
+
         $encashment->load(['employee.user', 'leaveType']);
-        app(NotificationRecipients::class)->financeApprovers()
-            ->each(fn (User $u) => $u->notify((new LeaveEncashmentNotification($encashment, 'pending_finance'))->forRole('finance')));
-
-        // Notify employee
-        $encashment->employee->user->notify((new LeaveEncashmentNotification($encashment, 'pending_finance_employee'))->forRole('employee'));
+        $encashment->employee->user->notify((new LeaveEncashmentNotification($encashment, 'approved'))->forRole('employee'));
     }
 
     /**
@@ -1119,8 +1132,8 @@ class LeaveService
     }
 
     /**
-     * Finance final approval: pending_finance → approved.
-     * Commits the encashed_days to the balance here (not on submission).
+     * Finish an encashment still parked in pending_finance from before D3:
+     * pending_finance → approved, CSL debited. New approvals never go there.
      */
     public function financeApproveEncashment(User $reviewer, LeaveEncashment $encashment, string $comment = ''): void
     {
@@ -1142,31 +1155,7 @@ class LeaveService
                 'payout_month' => max((string) $encashment->payout_month, now()->format('Y-m')),
             ]);
 
-            // Commit balance deduction only on final approval — against the
-            // balance the days were requested from: the leave year the request
-            // was made in (carried-forward days live in that year's row even
-            // though source_leave_year names the year they originated in), so
-            // a finance sign-off after 1 July still debits the right row.
-            $year = app(LeaveYearResolver::class)->legacyYearFor($encashment->created_at ?? now());
-            $balance = LeaveBalance::where('employee_id', $encashment->employee_id)
-                ->where('leave_type_id', $encashment->leave_type_id)
-                ->where('year', $year)
-                ->first();
-
-            if ($balance) {
-                $movements = app(LeaveMovementService::class);
-                if ($movements->ledgerReady($balance)) {
-                    $ledger = app(LeaveLedgerService::class);
-                    $ledger->debit($balance, LeaveLedgerEntry::TYPE_ENCASHMENT, (float) $encashment->requested_days,
-                        Carbon::today(), "encashment:{$encashment->id}", [
-                            'source_type' => 'leave_encashment', 'source_id' => $encashment->id,
-                            'reason' => 'Leave encashment approved by finance', 'actor' => $reviewer,
-                        ]);
-                    $ledger->rebuild($balance);
-                } else {
-                    $balance->increment('encashed_days', $encashment->requested_days);
-                }
-            }
+            $this->debitEncashedDays($encashment, $reviewer, 'Leave encashment approved by finance');
         });
 
         $encashment->load(['employee.user', 'leaveType']);
@@ -1174,7 +1163,42 @@ class LeaveService
     }
 
     /**
-     * Auto-flag absences with no approved leave as Unauthorized Leave.
+     * Debit approved encashment days from the balance they were requested
+     * from: the leave year the request was made in (carried-forward days live
+     * in that year's row even though source_leave_year names the year they
+     * originated in), so an approval after 1 July still debits the right row.
+     * Idempotent through the ledger key.
+     */
+    private function debitEncashedDays(LeaveEncashment $encashment, User $actor, string $reason): void
+    {
+        $year = app(LeaveYearResolver::class)->legacyYearFor($encashment->created_at ?? now());
+        $balance = LeaveBalance::where('employee_id', $encashment->employee_id)
+            ->where('leave_type_id', $encashment->leave_type_id)
+            ->where('year', $year)
+            ->first();
+
+        if (! $balance) {
+            return;
+        }
+
+        if (app(LeaveMovementService::class)->ledgerReady($balance)) {
+            $ledger = app(LeaveLedgerService::class);
+            $ledger->debit($balance, LeaveLedgerEntry::TYPE_ENCASHMENT, (float) $encashment->requested_days,
+                Carbon::today(), "encashment:{$encashment->id}", [
+                    'source_type' => 'leave_encashment', 'source_id' => $encashment->id,
+                    'reason' => $reason, 'actor' => $actor,
+                ]);
+            $ledger->rebuild($balance);
+        } else {
+            $balance->increment('encashed_days', $encashment->requested_days);
+        }
+    }
+
+    /**
+     * Flag absences with no approved leave as Unauthorized Leave — for HR to
+     * decide. D10 (8 Oct 2026): the flag is a PENDING request; nothing is
+     * treated as unpaid until a person approves it (approve = loss of pay,
+     * reject = not an absence). Only an approved row reaches LWP.
      */
     public function autoFlagUnauthorizedAbsences(Carbon $date): int
     {
@@ -1249,9 +1273,7 @@ class LeaveService
                 'days' => 1,
                 'reason' => 'Auto-flagged: absent without approved leave or regularisation.',
                 'requested_leave_status' => 'unpaid',
-                'approved_leave_status' => 'unpaid',
-                'status' => 'approved',
-                'approved_at' => now(),
+                'status' => 'pending',
             ]);
 
             $flagged++;
@@ -1270,6 +1292,13 @@ class LeaveService
     {
         if (! in_array($leaveRequest->status, ['pending', 'pending_hr', 'approved'])) {
             throw new \DomainException('Only pending or approved leave requests can be cancelled.');
+        }
+
+        // An absence flag is HR's to resolve (D10); the employee answers it
+        // with a regularisation or a leave request, never by withdrawing it.
+        $isOwnAction = $actor === null || (int) $actor->id === (int) $leaveRequest->employee?->user_id;
+        if ($isOwnAction && $leaveRequest->leaveType?->category === 'unauthorized') {
+            throw new \DomainException('An absence flag is resolved by HR — submit a regularisation or a leave request for that day instead.');
         }
 
         $employee = $leaveRequest->employee;

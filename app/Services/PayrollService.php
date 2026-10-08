@@ -24,6 +24,7 @@ use App\Notifications\PayrollApprovalNotification;
 use App\Notifications\PayslipGeneratedNotification;
 use App\Notifications\SalaryStructureAssignedNotification;
 use App\Services\Notifications\NotificationRecipients;
+use App\Services\Payroll\SalaryCycleTransitionService;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -93,6 +94,10 @@ class PayrollService
                 ]);
             }
 
+            // Salary-cycle moves due by this payroll month take effect now,
+            // before either cycle's run picks its people.
+            app(SalaryCycleTransitionService::class)->activateDue($monthLabel);
+
             // Everyone employed in the cycle (spec §3.5 step 26: drafts for all
             // employees in the cycle) — probation, confirmed, on leave and
             // serving notice are paid too. Someone who has left is not, nor a
@@ -106,6 +111,10 @@ class PayrollService
                         ->where(fn ($joined) => $joined->whereNull('joining_date')->orWhereDate('joining_date', '<=', $cycleEnd)))
                     ->orWhere(fn ($joiner) => $joiner->where('status', 'onboarding')
                         ->whereNotNull('joining_date')->whereDate('joining_date', '<=', $cycleEnd)))
+                // One payslip per employee per payroll month: never someone the
+                // other cycle's run for this month has already paid.
+                ->whereDoesntHave('payslips', fn ($q) => $q->whereHas('payroll', fn ($run) => $run
+                    ->where('month', $month)->where('year', $year)->where('cycle', '!=', $cycle)))
                 ->with('payrollSettings')
                 ->get();
             $activeEmployeeIds = $employees->pluck('id');
@@ -221,6 +230,12 @@ class PayrollService
         $activeSteps = PayrollApprovalPolicy::activeSteps();
         foreach ($activeSteps as $step) {
             $this->assertStepResolvable($step);
+        }
+
+        // A configured chain must still end in Finance's sign-off (spec §3.5,
+        // §4.1). Settings refuse such a chain; this catches one already stored.
+        if ($activeSteps->isNotEmpty() && ! PayrollApprovalPolicy::chainHasFinanceSignOff($activeSteps)) {
+            throw new \DomainException('The payroll approval chain has no Finance step — add one in Settings → Payroll Approval before submitting.');
         }
 
         return DB::transaction(function () use ($payroll, $activeSteps) {
@@ -430,6 +445,14 @@ class PayrollService
                 $this->overtimeService->markAsPaid($records, $payslip->id);
             }
         }
+
+        // D8: when each approved item this run pays was actually settled.
+        // Stamped once — a later re-stamp would rewrite payment history.
+        $settledAt = now();
+        foreach ([Incentive::class, Reimbursement::class, LeaveEncashment::class] as $model) {
+            $model::where('payroll_id', $payroll->id)->whereNull('settled_at')->update(['settled_at' => $settledAt]);
+        }
+        OvertimeRecord::whereIn('payslip_id', $payroll->payslips->pluck('id'))->whereNull('settled_at')->update(['settled_at' => $settledAt]);
 
         $payroll->processedBy?->notify((new PayrollApprovalNotification($payroll, 'finance_approved'))->forRole('employee'));
 
@@ -671,6 +694,10 @@ class PayrollService
             throw new \DomainException('Only draft payslips can be edited.');
         }
 
+        // Once the run is with Finance (or finalised) its figures are what is
+        // being signed off: no silent change after submission.
+        $this->assertRunStillDraft($payslip->payroll);
+
         if ($payslip->isLocked() || $payslip->payroll->isLocked()) {
             throw new \DomainException('This payslip is locked and can no longer be edited.');
         }
@@ -748,6 +775,14 @@ class PayrollService
             ->update(['status' => 'approved', 'payroll_id' => null]);
     }
 
+    /** Payslips may only change while their run is a draft — never once it is with Finance or finalised. */
+    private function assertRunStillDraft(Payroll $payroll): void
+    {
+        if ($payroll->status !== 'draft') {
+            throw new \DomainException('This payroll has been submitted for Finance approval — its payslips can no longer be changed. Ask Finance to send it back to draft.');
+        }
+    }
+
     /**
      * Nobody sets their own pay (segregation of duties) — except the Super
      * Admin, who has no one above them to do it.
@@ -768,6 +803,8 @@ class PayrollService
         if ($payslip->status !== 'draft') {
             throw new \DomainException('Only draft payslips can be deleted.');
         }
+
+        $this->assertRunStillDraft($payslip->payroll);
 
         if ($payslip->isLocked() || $payslip->payroll->isLocked()) {
             throw new \DomainException('This payslip is locked and cannot be deleted.');
@@ -818,6 +855,11 @@ class PayrollService
     {
         // Payroll & Payslips switched off: refused, nothing is touched.
         app(ModuleFeatureService::class)->assertPayrollEnabled();
+
+        // Only figures Finance has signed off ever leave the system.
+        if ($payslip->status !== 'paid') {
+            throw new \DomainException('Only a finance-approved payslip can be emailed.');
+        }
 
         $email = $payslip->employee->user?->email;
 

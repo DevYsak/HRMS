@@ -12,6 +12,7 @@ use App\Models\NotificationSetting;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\AiAssistant;
+use App\Services\Audit\AuditService;
 use App\Services\Notifications\NotificationCatalog;
 use App\Services\Notifications\NotificationRecipientPolicy;
 use App\Services\Notifications\TemplateVariableRenderer;
@@ -294,6 +295,7 @@ class NotificationSettings extends Component
 
         $sent = 0;
         $failed = 0;
+        $failedIds = [];
 
         foreach ($users as $recipient) {
             try {
@@ -302,8 +304,23 @@ class NotificationSettings extends Component
                 $sent++;
             } catch (\Throwable) {
                 $failed++;
+                $failedIds[] = $recipient->id;
             }
         }
+
+        // An approved override (R14): always a person's explicit action, so
+        // record who sent it, to whom, when, and how it went.
+        app(AuditService::class)->event('EMAIL_BROADCAST_SENT', AuditService::SETTINGS, Auth::user(),
+            new: [
+                'subject' => $this->composeSubject,
+                'recipient_user_ids' => $users->pluck('id')->all(),
+                'recipient_count' => $users->count(),
+                'sent' => $sent,
+                'failed' => $failed,
+                'failed_user_ids' => $failedIds,
+                'sent_at' => now()->toDateTimeString(),
+            ],
+            module: 'notifications');
 
         $this->showComposeModal = false;
         $this->reset([

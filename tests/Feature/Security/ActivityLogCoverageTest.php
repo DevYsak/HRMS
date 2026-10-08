@@ -73,12 +73,13 @@ test('a leave rejection is a categorised event with the reason', function () {
         ->and($entry->subject_employee_id)->toBe($request->employee_id);
 });
 
-test('a manager approval forwarded to HR, and a cancellation, are recorded', function () {
+test('a manager approval (final, D2) and a cancellation are recorded', function () {
     $manager = User::factory()->create(['role' => UserRole::Manager]);
     $request = alcLeave(alcEmployee($manager));
 
     app(LeaveService::class)->reviewRequest($request, $request->only(['leave_type_id', 'start_date', 'end_date', 'reason']) + ['is_half_day' => false], 'approved', $manager->id);
-    expect(alcEvent('LEAVE_FORWARDED_TO_HR'))->not->toBeNull();
+    expect(alcEvent('LEAVE_APPROVED')?->user_id)->toBe($manager->id)
+        ->and(alcEvent('LEAVE_FORWARDED_TO_HR'))->toBeNull();
 
     app(LeaveService::class)->cancelRequest($request->fresh());
     expect(alcEvent('LEAVE_CANCELLED')?->new_values['status'])->toBe('cancelled');

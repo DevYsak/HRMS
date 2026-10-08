@@ -58,21 +58,22 @@ test('the client fetches ot-details with a Bearer token and parses the payload',
         && $req->hasHeader('Authorization', 'Bearer shhh'));
 });
 
-test('importing an approved record creates an approved OT request and overtime record', function () {
+test('a Nexflow-approved record arrives as a pending request for the manager, never payable on its own (D4)', function () {
     $employee = Employee::factory()->create();
-    $record = nexflowOtPayload()['ot_records'][0]; // the approved one
+    $record = nexflowOtPayload()['ot_records'][0]; // approved in Nexflow
 
     $outcome = app(OvertimeService::class)->importNexflowOtRecord($employee, $record);
 
-    expect($outcome['status'])->toBe('imported')
-        ->and($outcome['record'])->toBeInstanceOf(OvertimeRecord::class);
+    expect($outcome['status'])->toBe('awaiting_manager')
+        ->and($outcome['record'])->toBeNull();
 
     $req = OtRequest::where('employee_id', $employee->id)->first();
     expect($req->source)->toBe('nexflow')
-        ->and($req->status)->toBe('approved')
+        ->and($req->status)->toBe('pending')
+        ->and($req->reviewer_id)->toBeNull()
         ->and($req->nexflow_ref)->toBe('otdetails:17')
         ->and((float) $req->requested_hours)->toBe(2.0)
-        ->and((float) $outcome['record']->ot_hours)->toBe(2.0);
+        ->and(OvertimeRecord::where('ot_request_id', $req->id)->exists())->toBeFalse();
 });
 
 test('a pending record is not payable and no records are re-imported for the same day', function () {
@@ -82,8 +83,8 @@ test('a pending record is not payable and no records are re-imported for the sam
     // Pending (L2 not cleared) → not payable.
     expect($ot->importNexflowOtRecord($employee, nexflowOtPayload()['ot_records'][1])['status'])->toBe('not_payable');
 
-    // First approved import succeeds, re-seeing the same record is a no-op (unchanged).
-    expect($ot->importNexflowOtRecord($employee, nexflowOtPayload()['ot_records'][0])['status'])->toBe('imported')
+    // First approved record is filed for the manager; re-seeing it is a no-op (unchanged).
+    expect($ot->importNexflowOtRecord($employee, nexflowOtPayload()['ot_records'][0])['status'])->toBe('awaiting_manager')
         ->and($ot->importNexflowOtRecord($employee, nexflowOtPayload()['ot_records'][0])['status'])->toBe('unchanged')
         ->and(OtRequest::where('employee_id', $employee->id)->count())->toBe(1);
 });

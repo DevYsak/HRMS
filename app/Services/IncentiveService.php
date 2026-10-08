@@ -8,6 +8,7 @@ use App\Models\Incentive;
 use App\Models\Payroll;
 use App\Notifications\IncentiveNotification;
 use App\Services\Approvals\ApprovalGuard;
+use App\Services\Payroll\PayableArrears;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -80,12 +81,19 @@ class IncentiveService
         }
     }
 
+    /**
+     * Approved items for this run: its own month and any earlier month whose
+     * run had already closed when they were approved (D8 — carried forward,
+     * never dropped). Approved and not yet in any run — or already in THIS
+     * run, so a draft re-run keeps what its previous pass included. The
+     * payroll_id link pays each item exactly once.
+     *
+     * @return array{total: float, rows: Collection, item: ?array, items: array<int, array{name: string, amount: float, type: string}>}
+     */
     public function includeApprovedForEmployeeMonth(Employee $employee, string $monthLabel, Payroll $payroll): array
     {
-        // Approved and not yet in any run — or already in THIS run, so a draft
-        // re-run keeps what its previous pass included instead of dropping it.
         $rows = Incentive::where('employee_id', $employee->id)
-            ->where('month', $monthLabel)
+            ->where('month', '<=', $monthLabel)
             ->where(fn ($q) => $q->where(fn ($open) => $open->where('status', 'approved')->whereNull('payroll_id'))
                 ->orWhere(fn ($mine) => $mine->where('status', 'included')->where('payroll_id', $payroll->id)))
             ->get();
@@ -99,10 +107,13 @@ class IncentiveService
             ]);
         }
 
+        $items = PayableArrears::lines('Incentives', $rows, $monthLabel);
+
         return [
             'total' => $total,
             'rows' => $rows,
-            'item' => $total > 0 ? ['name' => 'Incentives', 'amount' => $total, 'type' => 'earning'] : null,
+            'item' => $items[0] ?? null,
+            'items' => $items,
         ];
     }
 
@@ -121,9 +132,9 @@ class IncentiveService
      */
     public function releaseIncludedForEmployeesAndMonth(Payroll $payroll, Collection $employeeIds, string $monthLabel): void
     {
+        // Every item this run took for them, carried arrears included.
         Incentive::where('payroll_id', $payroll->id)
             ->whereNotIn('employee_id', $employeeIds->all())
-            ->where('month', $monthLabel)
             ->where('status', 'included')
             ->update([
                 'status' => 'approved',

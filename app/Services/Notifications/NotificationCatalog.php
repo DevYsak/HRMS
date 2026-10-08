@@ -10,6 +10,7 @@ use App\Models\NotificationRoleSetting;
 use App\Models\NotificationSetting;
 use App\Notifications\ExcessBreakNotification;
 use App\Notifications\MissingCheckoutNotification;
+use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Notifications\Notification;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
@@ -25,6 +26,26 @@ use Illuminate\Support\Str;
  */
 class NotificationCatalog
 {
+    /**
+     * The only events that email by default (D5, 8 Oct 2026; spec §2.2):
+     * payslip issued, account created / login issued, and password reset.
+     * Everything else is in-app by default; HR may still switch email on for
+     * an event in Settings → Notifications & Email.
+     *
+     * @var array<int, class-string>
+     */
+    public const CRITICAL_MAIL = [
+        PayslipMail::class,
+        WelcomeEmployeeMail::class,
+        EmployeeInvitationMail::class,
+        ResetPassword::class,
+    ];
+
+    public static function isCriticalMail(string $key): bool
+    {
+        return in_array($key, self::CRITICAL_MAIL, true);
+    }
+
     /**
      * Mailables that are sent directly (not through the notification system) but
      * should still be admin-controllable. Keyed by FQCN.
@@ -301,7 +322,8 @@ class NotificationCatalog
                     'label' => $entry['label'],
                     'group' => $entry['group'],
                     'description' => $entry['description'],
-                    'mail_enabled' => true,
+                    // D5: in-app by default; email only for critical events.
+                    'mail_enabled' => self::isCriticalMail($entry['key']),
                     'database_enabled' => true,
                     'is_automatic' => true,
                     'is_system' => true,

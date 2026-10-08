@@ -54,7 +54,12 @@ function scopeLeave(Employee $employee, string $status = 'pending'): LeaveReques
         'name' => 'Casual Leave', 'code' => 'CL'.random_int(1000, 9999), 'category' => 'annual',
         'is_paid' => true, 'color' => '#10b981', 'allow_paid_request' => true, 'allow_unpaid_request' => false,
     ]);
+    // A weekday, so an approval has a working day to take (the date used to
+    // land on a weekend depending on when the suite ran).
     $day = now()->addDays(10);
+    while ($day->isWeekend()) {
+        $day = $day->addDay();
+    }
 
     return LeaveRequest::create([
         'employee_id' => $employee->id, 'leave_type_id' => $type->id,
@@ -142,11 +147,13 @@ test('a manager cannot decide leave for an employee outside their reporting line
 test('a manager can still decide leave for their own report', function () {
     $manager = User::factory()->create(['role' => UserRole::Manager]);
     $request = scopeLeave(scopeEmployee(['manager_id' => $manager->id]));
+    // Unpaid: this is about reach, not balance (a final approval now debits).
+    $request->update(['requested_leave_status' => 'unpaid']);
 
     app(LeaveService::class)->reviewRequest($request, scopeReviewForm($request), 'approved', $manager->id);
 
-    // A manager's approval routes to HR.
-    expect($request->fresh()->status)->toBe('pending_hr');
+    // D2: the reporting approver's decision is final.
+    expect($request->fresh()->status)->toBe('approved');
 });
 
 test('nobody approves their own leave — not even an HR admin', function () {

@@ -554,8 +554,16 @@
                                     :options="$managers->map(fn ($mgr) => ['value' => $mgr->id, 'label' => $mgr->name.' ('.ucfirst($mgr->role->value).')'])->all()" />
                                 <x-clean-select model="shift_id" label="Shift" :live="false" placeholder="No Shift Assigned"
                                     :options="$shifts->map(fn ($shift) => ['value' => $shift->id, 'label' => $shift->name.' — '.\Illuminate\Support\Carbon::parse($shift->start_time)->format('g:i A').' to '.\Illuminate\Support\Carbon::parse($shift->end_time)->format('g:i A').' (Grace: '.$shift->grace_minutes.'m)'])->all()" />
-                                <x-clean-select model="salary_cycle_id" label="Salary Cycle" :live="false" placeholder="Select Salary Cycle…"
-                                    :options="$salaryCycles->map(fn ($cycle) => ['value' => $cycle->id, 'label' => $cycle->name])->all()" />
+                                <div>
+                                    <x-clean-select model="salary_cycle_id" label="Salary Cycle" :live="false" placeholder="Select Salary Cycle…"
+                                        :options="$salaryCycles->map(fn ($cycle) => ['value' => $cycle->id, 'label' => $cycle->name])->all()" />
+                                    @if($employee->pending_salary_cycle_id)
+                                        <p class="mt-1.5 text-xs font-medium text-amber-700 dark:text-amber-300" data-test="pending-cycle">
+                                            Moves to {{ $employee->pendingSalaryCycle?->name ?? 'the new cycle' }} from the
+                                            {{ \Illuminate\Support\Carbon::parse($employee->salary_cycle_effective_month.'-01')->format('F Y') }} payroll — already paid through {{ $employee->salary_cycle_paid_through?->format('d M Y') }}.
+                                        </p>
+                                    @endif
+                                </div>
                                 <div>
                                     <x-clean-select model="ot_tracking_source" label="OT Tracking Source" :live="true"
                                         :options="[['value' => 'biometric', 'label' => 'Biometric (standard attendance)'], ['value' => 'manual', 'label' => 'Manual (HR-entered)'], ['value' => 'nexflow', 'label' => 'Nexflow (IT/Dev/QA teams)'], ['value' => 'hybrid', 'label' => 'Hybrid (both sources)']]" />
@@ -1284,6 +1292,37 @@
                                         No deductions assigned.
                                     </div>
                                 @endforelse
+                            </div>
+
+                            {{-- Pay eligibility & HRA --}}
+                            <div class="space-y-4 rounded-2xl border border-[#EAECF0] bg-white p-5 dark:border-zinc-800 dark:bg-zinc-800/50">
+                                <div>
+                                    <h4 class="text-sm font-bold text-zinc-900 dark:text-white">Pay eligibility &amp; HRA</h4>
+                                    <p class="mt-0.5 text-xs text-[#667085]">Switched off, approved items for this employee are not paid by payroll — they wait until it is switched back on.</p>
+                                </div>
+
+                                @if($this->hraAssignedButOff())
+                                    <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-medium text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+                                        An HRA component is assigned but HRA is switched off, so it pays ₹0. Switch HRA on to pay it.
+                                    </div>
+                                @endif
+
+                                <div class="grid gap-3 sm:grid-cols-2">
+                                    <flux:switch wire:model="payOtEligible" label="Overtime eligible" />
+                                    <flux:switch wire:model="payIncentiveEligible" label="Incentive eligible" />
+                                    <flux:switch wire:model="payReimbursementEligible" label="Reimbursement eligible" />
+                                    <flux:switch wire:model.live="payHraEnabled" label="Pay HRA" />
+                                </div>
+
+                                @if($payHraEnabled)
+                                    <flux:input wire:model="payHraPercentage" type="number" step="0.01" min="0" max="100"
+                                        label="HRA as % of Basic (optional)"
+                                        description="Leave blank to pay the HRA component as assigned." />
+                                @endif
+
+                                <div class="flex justify-end">
+                                    <flux:button wire:click="savePayrollSettings" variant="primary" size="sm">Save pay settings</flux:button>
+                                </div>
                             </div>
 
                             <div class="flex justify-end border-t border-[#EAECF0] pt-4 dark:border-zinc-800">

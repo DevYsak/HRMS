@@ -119,6 +119,33 @@ test('no unauthorized absence and no LWP is created for a weekend', function () 
     expect(LeaveRequest::where('employee_id', $employee->id)->count())->toBe(1);
 });
 
+test('a detected absence is a pending flag for HR: no loss of pay until a person approves it (D10)', function () {
+    $employee = woUser()->employee;
+    $hr = User::factory()->create(['role' => UserRole::HrAdmin]);
+
+    $this->artisan('hrms:flag-unauthorized-absences', ['--date' => '2026-10-02'])->assertSuccessful();
+    $flag = LeaveRequest::where('employee_id', $employee->id)->firstOrFail();
+
+    $lwp = fn () => app(LwpService::class)->calculate($employee, Carbon::parse('2026-10-01'), Carbon::parse('2026-10-04'), 30000)['days'];
+
+    expect($flag->status)->toBe('pending')
+        ->and($flag->approved_at)->toBeNull()
+        ->and($lwp())->toEqual(0.0);
+
+    // The employee answers it with a regularisation or leave — never by withdrawing it.
+    expect(fn () => app(LeaveService::class)->cancelRequest($flag))
+        ->toThrow(DomainException::class, 'resolved by HR');
+
+    // HR confirms the absence: only now is it unpaid.
+    app(LeaveService::class)->reviewRequest($flag, [
+        'leave_type_id' => $flag->leave_type_id, 'start_date' => '2026-10-02', 'end_date' => '2026-10-02',
+        'reason' => $flag->reason, 'is_half_day' => false,
+    ], 'approved', $hr->id, 'No contact, confirmed absent');
+
+    expect($flag->fresh()->status)->toBe('approved')
+        ->and($lwp())->toEqual(1.0);
+});
+
 // ── 7–8. Notifications ─────────────────────────────────────────────────────
 
 test('a real session on a weekly off follows the missing-checkout rule; an empty weekly off is left alone', function () {

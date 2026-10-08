@@ -32,8 +32,10 @@ class CustomBroadcastMail extends Mailable
 
     public function headers(): Headers
     {
-        // Lets the mail gate/logger trace this message in the email log.
-        return new Headers(text: ['X-Notification-Key' => 'custom.broadcast']);
+        // Lets the mail gate/logger trace this message in the email log. A
+        // broadcast is only ever sent by a person pressing Send, so it is a
+        // manual send: not held back by the in-app-by-default rule (D5).
+        return new Headers(text: ['X-Notification-Key' => 'custom.broadcast', 'X-Notification-Manual' => '1']);
     }
 
     public function content(): Content

@@ -31,8 +31,8 @@ class RegularisationManager
 {
     public function __construct(
         private readonly ShiftResolver $shifts,
-        private readonly PunchTimeline $timeline,
         private readonly AttendanceCalculator $calculator,
+        private readonly AttendanceDayRebuilder $rebuilder,
     ) {}
 
     public function isOwner(User $actor, AttendanceRegularisation $regularisation): bool
@@ -501,7 +501,12 @@ class RegularisationManager
         }
     }
 
-    /** The day as another approved correction of it still states. */
+    /**
+     * The day as another approved correction of it still states: its punches
+     * stay in the timeline, so the whole day is rebuilt around them — later
+     * genuine punches included. A correction approved before corrections were
+     * written as punches falls back to its own requested times.
+     */
     private function rebuildFromRegularisation(Attendance $attendance, AttendanceRegularisation $other): ?Attendance
     {
         if ($other->regularisation_type === 'half_day') {
@@ -509,6 +514,14 @@ class RegularisationManager
             $attendance?->update(['status' => 'half_day', 'is_regularized' => true]);
 
             return $attendance?->fresh();
+        }
+
+        $employee = $attendance->employee;
+        if ($employee !== null) {
+            $row = $this->rebuilder->rebuildCorrectedDay($employee, Carbon::parse($attendance->date->toDateString()));
+            if ($row['skip'] === null) {
+                return $row['attendance'];
+            }
         }
 
         [$in, $out] = $this->punchInstants($other) + [null, null];
@@ -522,41 +535,37 @@ class RegularisationManager
     }
 
     /**
-     * The day as the genuine biometric punches show it — never a punch a
-     * regularisation wrote. With no genuine punch, the times recorded before
-     * the first correction come back; with nothing genuine at all, the row the
+     * The day as the genuine punches show it, once the reverted correction's
+     * own punches are gone — rebuilt through the same canonical path as every
+     * sync. With no valid IN left, the times recorded before the first
+     * correction come back; with nothing genuine at all, the row the
      * correction created is removed (the day returns to absent).
      */
     private function rebuildFromGenuine(Attendance $attendance, ?AttendanceRegularisation $reverted = null): ?Attendance
     {
-        $day = Carbon::parse($attendance->date->toDateString());
-        $genuine = AttendancePunch::where('employee_id', $attendance->employee_id)
-            ->whereDate('punch_date', $day->toDateString())
-            ->where(fn ($q) => $q->whereNull('source')->orWhere('source', '!=', 'regularisation'))
-            ->orderBy('punched_at')
-            ->get();
+        $original = [$attendance->original_check_in, $attendance->original_check_out];
+        $ownSnapshot = $this->isOwnSnapshot($attendance, $reverted);
+
+        // No longer a corrected day: the rebuild reads it as the punches show it.
+        $attendance->update(['original_check_in' => null, 'original_check_out' => null, 'is_regularized' => false]);
+
+        $employee = $attendance->employee;
+        if ($employee !== null) {
+            $row = $this->rebuilder->rebuildCorrectedDay($employee, Carbon::parse($attendance->date->toDateString()));
+
+            if ($row['skip'] === null && $row['attendance'] !== null) {
+                return $this->withPunchStatus($row['attendance']);
+            }
+        }
 
         $in = null;
         $out = null;
-        $breakMinutes = null;
-        $methods = [];
-
-        if ($genuine->isNotEmpty()) {
-            $timeline = $this->timeline->process($genuine, $day);
-            $in = $timeline['first_in_at'];
-            $out = $timeline['last_out_at'];
-            $breakMinutes = (int) $timeline['break_minutes'];
-            $methods = [
-                'check_in_method' => $in ? $genuine->first(fn (AttendancePunch $p) => $p->punched_at->equalTo($in))?->method : null,
-                'check_out_method' => $out ? $genuine->first(fn (AttendancePunch $p) => $p->punched_at->equalTo($out))?->method : null,
-            ];
-        }
 
         // A row the correction itself created snapshots the corrected times
         // as its "original" — those are not genuine and are not restored.
-        if ($in === null && $attendance->original_check_in !== null && ! $this->isOwnSnapshot($attendance, $reverted)) {
-            $in = Carbon::parse($attendance->original_check_in);
-            $out = $attendance->original_check_out ? Carbon::parse($attendance->original_check_out) : null;
+        if ($original[0] !== null && ! $ownSnapshot) {
+            $in = Carbon::parse($original[0]);
+            $out = $original[1] ? Carbon::parse($original[1]) : null;
         }
 
         if ($in === null) {
@@ -573,12 +582,21 @@ class RegularisationManager
             $out = $attendance->check_out ? Carbon::parse($attendance->check_out) : null;
         }
 
-        $attendance->update($this->timesAndStatus($attendance, $in, $out) + $methods + [
-            'break_minutes' => $breakMinutes ?? (int) ($attendance->break_minutes ?? 0),
-            'original_check_in' => null,
-            'original_check_out' => null,
-            'is_regularized' => false,
-        ]);
+        $attendance->update($this->timesAndStatus($attendance, $in, $out));
+
+        return $attendance->fresh();
+    }
+
+    /**
+     * A rebuilt day keeps any status the correction did not set (remote,
+     * holiday worked); one that only said what the correction made it
+     * (half-day, absent) follows the punches again.
+     */
+    private function withPunchStatus(Attendance $attendance): Attendance
+    {
+        if ($attendance->check_in !== null && in_array($attendance->status, ['half_day', 'absent', null], true)) {
+            $attendance->update(['status' => $attendance->is_late ? 'late' : 'on_time']);
+        }
 
         return $attendance->fresh();
     }

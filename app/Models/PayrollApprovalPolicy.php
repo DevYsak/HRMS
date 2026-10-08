@@ -38,6 +38,34 @@ class PayrollApprovalPolicy extends Model
         return self::where('is_active', true)->orderBy('level')->get();
     }
 
+    /**
+     * Whether this step is Finance signing off: the Finance role, or a named
+     * person who holds the Finance role.
+     */
+    public function isFinanceStep(): bool
+    {
+        if ($this->approver_type === 'finance') {
+            return true;
+        }
+
+        return $this->approver_type === 'specific_user'
+            && $this->specificUser?->role?->value === 'finance';
+    }
+
+    /**
+     * A configured chain must include Finance's sign-off (spec §3.5, §4.1).
+     * An empty chain is the legacy single-hop path, which only a Finance
+     * approver can finalise.
+     *
+     * @param  \Illuminate\Support\Collection<int, self>|null  $steps  default: the active chain
+     */
+    public static function chainHasFinanceSignOff(?\Illuminate\Support\Collection $steps = null): bool
+    {
+        $steps ??= self::activeSteps();
+
+        return $steps->isEmpty() || $steps->contains(fn (self $step) => $step->isFinanceStep());
+    }
+
     /** Re-sequence every row 1..N by current level order — keeps levels contiguous after a reorder/delete. */
     public static function renumber(): void
     {

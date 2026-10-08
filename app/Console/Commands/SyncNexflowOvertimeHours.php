@@ -44,7 +44,6 @@ class SyncNexflowOvertimeHours extends Command
 
         $created = 0;
         $skipped = 0;
-        $autoApproved = 0;
 
         foreach ($employees as $employee) {
             if (! $employee->user?->email) {
@@ -145,15 +144,11 @@ class SyncNexflowOvertimeHours extends Command
                 'nexflow_ref' => $nexflowRef,
             ]);
 
-            // Auto-approve for pure nexflow employees
+            // D4 (8 Oct 2026): Nexflow-detected hours are a request, not
+            // approved overtime — the manager decides in Pulse, as for any OT.
             $action = 'created';
-            if ($employee->ot_tracking_source === 'nexflow') {
-                $otService->autoApprove($otRequest);
-                $action = 'auto_approved';
-                $autoApproved++;
-            } else {
-                $created++;
-            }
+            $created++;
+            $otService->notifyApprovers($otRequest);
 
             NexflowOtSyncLog::create([
                 'employee_id' => $employee->id,
@@ -171,7 +166,7 @@ class SyncNexflowOvertimeHours extends Command
             }
         }
 
-        $this->info("Nexflow OT sync for {$date->toDateString()}: {$created} created, {$autoApproved} auto-approved, {$skipped} skipped.");
+        $this->info("Nexflow OT sync for {$date->toDateString()}: {$created} pending manager approval, {$skipped} skipped.");
 
         return self::SUCCESS;
     }

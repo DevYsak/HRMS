@@ -14,6 +14,7 @@ use App\Models\ShiftSetting;
 use App\Models\User;
 use App\Services\Approvals\ApprovalGuard;
 use App\Services\Attendance\AttendanceCalculator;
+use App\Services\Attendance\AttendanceDayRebuilder;
 use App\Services\Attendance\AttendanceScoreEngine;
 use App\Services\Attendance\HolidayResolver;
 use App\Services\Attendance\ResolvedShift;
@@ -460,6 +461,13 @@ class AttendanceService
             // is built purely from biometric punches and the correction is
             // invisible to the employee even though the admin summary shows it.
             $this->writeRegularisedPunches($regularisation, $checkIn, $checkOut);
+
+            // The day is then its whole timeline, through the one rebuild every
+            // sync uses: the correction replaces the boundary it fixed, and the
+            // genuine punches around it (a later Face IN / Card OUT) still count.
+            if ($regularisation->employee) {
+                app(AttendanceDayRebuilder::class)->rebuildCorrectedDay($regularisation->employee, Carbon::parse($workDate));
+            }
 
             // If the corrected day now exceeds the OT threshold, file the OT
             // request and auto-approve it under the same reviewer so overtime

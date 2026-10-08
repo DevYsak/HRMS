@@ -12,6 +12,8 @@ use App\Models\LeaveEncashment;
 use App\Models\OvertimeRecord;
 use App\Models\Payroll;
 use App\Models\SalaryComponent;
+use App\Services\Payroll\PayableArrears;
+use App\Services\Payroll\SalaryCycleTransitionService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -153,20 +155,30 @@ class SalaryCalculationService
         $otRecords = new Collection;
 
         if ($settings->ot_eligible) {
+            // This cycle's overtime, plus any approved or settled after an
+            // earlier cycle's run had closed (D8 — carried, never dropped).
+            // Unpaid and unlinked only, so each record is paid exactly once.
             $otRecords = OvertimeRecord::where('employee_id', $employee->id)
                 ->unpaid()
                 ->whereNull('payslip_id')
-                ->whereBetween('work_date', [$cycleStart->toDateString(), $cycleEnd->toDateString()])
+                ->whereDate('work_date', '<=', $cycleEnd->toDateString())
                 ->whereHas('otRequest', fn ($q) => $q->where('status', 'approved'))
                 ->get();
 
             $otAmount = (float) $otRecords->sum('ot_amount');
 
-            if ($otAmount > 0) {
-                $otHours = round((float) $otRecords->sum('ot_hours'), 2);
+            [$currentOt, $carriedOt] = $otRecords->partition(fn (OvertimeRecord $r) => $r->work_date->gte($cycleStart->copy()->startOfDay()));
+
+            foreach ([[$currentOt, null], [$carriedOt, 'arrears']] as [$records, $kind]) {
+                $amount = round((float) $records->sum('ot_amount'), 2);
+                if ($amount <= 0) {
+                    continue;
+                }
+                $hours = round((float) $records->sum('ot_hours'), 2);
+                $periods = $records->map(fn (OvertimeRecord $r) => PayableArrears::periodOf($r->work_date))->unique()->sort()->implode(', ');
                 $earningItems[] = [
-                    'name' => "OT ({$otHours}h)",
-                    'amount' => $otAmount,
+                    'name' => $kind === null ? "OT ({$hours}h)" : "OT — arrears ({$hours}h, {$periods})",
+                    'amount' => $amount,
                     'type' => 'earning',
                 ];
             }
@@ -180,9 +192,7 @@ class SalaryCalculationService
                 ->includeApprovedForEmployeeMonth($employee, $monthLabel, $payroll);
             $incentiveAmount = (float) $incentiveInclusion['total'];
 
-            if ($incentiveAmount > 0) {
-                $earningItems[] = $incentiveInclusion['item'];
-            }
+            array_push($earningItems, ...$incentiveInclusion['items']);
         }
 
         // ── Step 7: Reimbursements ────────────────────────────────────────────
@@ -193,9 +203,7 @@ class SalaryCalculationService
                 ->includeApprovedForEmployeeMonth($employee, $monthLabel, $payroll);
             $reimbursementAmount = (float) $reimbursementInclusion['total'];
 
-            if ($reimbursementAmount > 0) {
-                $earningItems[] = $reimbursementInclusion['item'];
-            }
+            array_push($earningItems, ...$reimbursementInclusion['items']);
         }
 
         // ── Step 8: Exit settlement ───────────────────────────────────────────
@@ -220,35 +228,41 @@ class SalaryCalculationService
         $encashmentAmount = 0.0;
         // Approved and unpaid — or already processed by this run (a draft
         // re-run). A processed row without a payroll_id was paid earlier.
+        // Payout months up to this run's: one approved after its month's run
+        // had closed is carried here (D8), never dropped.
         $encashments = LeaveEncashment::with('leaveType')
             ->where('employee_id', $employee->id)
-            ->where('payout_month', $monthLabel)
+            ->where('payout_month', '<=', $monthLabel)
             ->where(fn ($q) => $q->where(fn ($open) => $open->where('status', 'approved')->whereNull('payroll_id'))
                 ->orWhere(fn ($mine) => $mine->where('status', 'processed')->where('payroll_id', $payroll->id)))
             ->get();
 
         if ($encashments->isNotEmpty()) {
             $baseGrossForEncashment = $earningsSum > 0 ? $earningsSum : 0;
-            $encashmentAmount = $encashments->sum(function ($encashment) use ($baseGrossForEncashment) {
+            $priced = $encashments->map(function ($encashment) use ($baseGrossForEncashment) {
                 $dailyRate = $baseGrossForEncashment > 0 ? $baseGrossForEncashment / 26 : 0;
                 $multiplier = (float) ($encashment->leaveType?->encashment_rate_multiplier ?? 1.00);
 
-                return round($encashment->requested_days * $dailyRate * $multiplier, 2);
+                return (object) [
+                    'amount' => round($encashment->requested_days * $dailyRate * $multiplier, 2),
+                    'payout_month' => (string) $encashment->payout_month,
+                ];
             });
+            $encashmentAmount = (float) $priced->sum('amount');
 
             if ($encashmentAmount > 0) {
-                $earningItems[] = [
-                    'name' => 'Leave Encashment ('.$encashments->sum('requested_days').'d)',
-                    'amount' => $encashmentAmount,
-                    'type' => 'earning',
-                ];
+                $label = 'Leave Encashment ('.$encashments->sum('requested_days').'d)';
+                array_push($earningItems, ...PayableArrears::lines($label, $priced, $monthLabel, 'payout_month'));
                 $encashments->each(fn ($e) => $e->update(['status' => 'processed', 'payroll_id' => $payroll->id]));
             }
         }
 
         // ── Step 10: LWP deduction ────────────────────────────────────────────
         $lwpDeduction = 0.0;
-        $lwp = $this->lwpService->calculate($employee, $cycleStart, $cycleEnd, $earningsSum);
+        // In the first month after a salary-cycle move, absences count from
+        // the day after the old cycle's last paid day — none twice, none missed.
+        $absenceStart = SalaryCycleTransitionService::absenceWindowStart($employee, Carbon::parse($cycleStart), $monthLabel);
+        $lwp = $this->lwpService->calculate($employee, $absenceStart, $cycleEnd, $earningsSum);
 
         if ($lwp['deduction'] > 0) {
             $lwpDeduction = (float) $lwp['deduction'];

@@ -33,6 +33,11 @@ use Illuminate\Support\Collection;
  *    never merged.
  *  - A punch dated on another calendar day never joins this day — no OUT is
  *    carried across midnight, so there are no 20h/24h phantom sessions.
+ *  - Corrections: an approved regularisation writes its corrected IN / OUT as
+ *    punches. Where one sits next to a device punch of the same direction, the
+ *    correction replaces that boundary (the device punch is flagged
+ *    superseded, never deleted); every other device punch of the day — later
+ *    Face IN / Card OUT pairs included — is processed as usual.
  *  - Missing punches: a same-direction pair beyond the merge window
  *    (IN→IN = missing OUT, OUT→OUT = missing IN) or a trailing IN on a past
  *    day. Never auto-fixed — flagged for regularization.
@@ -88,6 +93,14 @@ class PunchTimeline
         $hasDirection = $kept->contains(fn (AttendancePunch $p) => $this->effectiveDirection($p) !== null);
         $directions = $this->resolveDirections($kept, $hasDirection);
 
+        // An approved correction replaces the device boundary it corrected;
+        // every other device punch of the day stays in the timeline.
+        $superseded = $this->supersededByCorrection($kept, $directions);
+        foreach ($superseded as $i => $note) {
+            $flags[spl_object_id($kept[$i])] = ['superseded', $note];
+        }
+        [$kept, $directions] = $this->withoutSuperseded($kept, $directions, $superseded);
+
         // Rule 1 — Face starts attendance. A Card/ID tap with no active session
         // (a stray tap before the first Face IN, or after the day already
         // closed) is ignored, not turned into a phantom missing-IN session.
@@ -115,7 +128,7 @@ class PunchTimeline
      *
      * @param  array<string, mixed>  $result
      * @param  Collection<int, AttendancePunch>  $ordered
-     * @return array{duplicate: int, retry: int, stray: int, missing_out: bool, missing_checkout: bool, regularised: bool, impossible_duration: bool, other_day: int, direction_corrected: int}
+     * @return array{duplicate: int, retry: int, stray: int, missing_out: bool, missing_checkout: bool, regularised: bool, impossible_duration: bool, other_day: int, direction_corrected: int, superseded: int}
      */
     protected function flagsFor(array $result, Collection $ordered, int $otherDay): array
     {
@@ -131,6 +144,7 @@ class PunchTimeline
             'impossible_duration' => (int) $result['working_minutes'] > self::IMPOSSIBLE_MINUTES,
             'other_day' => $otherDay,
             'direction_corrected' => $ordered->filter(fn (AttendancePunch $p) => $this->directionCorrected($p))->count(),
+            'superseded' => collect($result['raw_events'])->where('flag', 'superseded')->count(),
         ];
     }
 
@@ -156,6 +170,7 @@ class PunchTimeline
         [$kept] = $this->mergeNoise($ordered);
         $hasDirection = $kept->contains(fn (AttendancePunch $p) => $this->effectiveDirection($p) !== null);
         $directions = $this->resolveDirections($kept, $hasDirection);
+        [$kept, $directions] = $this->withoutSuperseded($kept, $directions, $this->supersededByCorrection($kept, $directions));
 
         // Drop stray card taps (Rule 1) so the history timeline shows only the
         // punches the engine actually acted on.
@@ -231,11 +246,21 @@ class PunchTimeline
                 $opposite = $prevDir !== null && $curDir !== null && $prevDir !== $curDir;
                 $sameMethod = (string) $prev->method === (string) $p->method;
 
+                // A device read of the boundary an approved correction already
+                // states is that boundary read again: the correction stands.
+                if (! $opposite && $this->isCorrection($prev) && ! $this->isCorrection($p)) {
+                    $duplicates++;
+                    $flag[spl_object_id($p)] = ['duplicate', 'Covered by the approved correction at '.$prev->punched_at->format('h:i:s A')];
+
+                    continue;
+                }
+
                 // A flip-flop is ONE reader firing both edges of a single tap —
-                // so it must be the SAME method. A Face IN next to a Card OUT is
-                // two distinct real actions (Card OUT is compulsory here), even
-                // seconds apart: keep both.
-                if ($opposite && $sameMethod) {
+                // so it must be the SAME method on a real device read. A Face IN
+                // next to a Card OUT is two distinct real actions (Card OUT is
+                // compulsory here), even seconds apart: keep both. A punch the
+                // system wrote is never one edge of a device tap.
+                if ($opposite && $sameMethod && ! $this->isSystemPunch($prev) && ! $this->isSystemPunch($p)) {
                     $conflicts++;
                     // Which single edge keeps the sequence alternating?
                     $before = $kept->count() >= 2 ? $kept->get($kept->count() - 2) : null;
@@ -262,7 +287,10 @@ class PunchTimeline
                 // Comparing against the last KEPT punch chains a burst, so
                 // Face 10:30:01 / 10:30:22 / 10:30:48 keeps 10:30:48 only.
                 if (! $opposite) {
-                    if ($sameMethod) {
+                    if ($this->isCorrection($p) && ! $this->isCorrection($prev)) {
+                        $duplicates++;
+                        $label = 'Replaced by the approved correction';
+                    } elseif ($sameMethod) {
                         $duplicates++;
                         $label = 'Duplicate read';
                     } else {
@@ -321,6 +349,79 @@ class PunchTimeline
         }
 
         return $stray;
+    }
+
+    /**
+     * Device punches an approved correction replaced. A regularisation writes
+     * its corrected IN and OUT into the day as punches; where one lands next to
+     * a device punch of the same direction (Correction IN 10:30 then Face IN
+     * 10:45, or Card OUT 19:25 then Correction OUT 19:30), the two are rival
+     * versions of one boundary and the approved one stands. Every other device
+     * punch — a later Face IN / Card OUT pair, a break — stays in the timeline.
+     *
+     * @param  Collection<int, AttendancePunch>  $kept
+     * @param  array<int, string>  $directions
+     * @return array<int, string> kept-punch index => audit note
+     */
+    protected function supersededByCorrection(Collection $kept, array $directions): array
+    {
+        if (! $kept->contains(fn (AttendancePunch $p) => $this->isCorrection($p))) {
+            return [];
+        }
+
+        $superseded = [];
+        $chain = [];   // indices still standing, in order
+
+        foreach ($kept as $i => $p) {
+            $last = $chain === [] ? null : $chain[array_key_last($chain)];
+
+            if ($last !== null && $directions[$last] === $directions[$i]) {
+                $lastIsCorrection = $this->isCorrection($kept[$last]);
+
+                if ($this->isCorrection($p) && ! $lastIsCorrection) {
+                    $superseded[$last] = 'Superseded — the approved correction sets this '.strtoupper($directions[$i]).' at '.$p->punched_at->format('h:i A');
+                    array_pop($chain);
+                } elseif ($lastIsCorrection && ! $this->isCorrection($p)) {
+                    $superseded[$i] = 'Superseded — the approved correction set this '.strtoupper($directions[$i]).' at '.$kept[$last]->punched_at->format('h:i A');
+
+                    continue;
+                }
+            }
+
+            $chain[] = $i;
+        }
+
+        return $superseded;
+    }
+
+    /**
+     * @param  Collection<int, AttendancePunch>  $kept
+     * @param  array<int, string>  $directions
+     * @param  array<int, string>  $superseded
+     * @return array{0: Collection<int, AttendancePunch>, 1: array<int, string>}
+     */
+    protected function withoutSuperseded(Collection $kept, array $directions, array $superseded): array
+    {
+        if ($superseded === []) {
+            return [$kept, $directions];
+        }
+
+        return [
+            $kept->reject(fn (AttendancePunch $p, int $i) => isset($superseded[$i]))->values(),
+            array_values(array_filter($directions, fn ($d, $i) => ! isset($superseded[$i]), ARRAY_FILTER_USE_BOTH)),
+        ];
+    }
+
+    /** A punch an approved regularisation wrote. */
+    protected function isCorrection(AttendancePunch $p): bool
+    {
+        return $p->source === 'regularisation';
+    }
+
+    /** A punch the system wrote (correction, retired auto punch-out, web clock) rather than a device read. */
+    protected function isSystemPunch(AttendancePunch $p): bool
+    {
+        return in_array($p->source, ['regularisation', 'system_auto', 'web'], true);
     }
 
     /** The device sent an explicit IN/OUT that the method rule overrode. */
@@ -750,7 +851,7 @@ class PunchTimeline
             'live' => false, 'live_start_ms' => null, 'live_start_label' => null,
             'live_elapsed_minutes' => 0, 'missing_out' => false, 'needs_regularization' => false,
             'ignored' => [], 'ignored_count' => 0,
-            'flags' => ['duplicate' => 0, 'retry' => 0, 'stray' => 0, 'missing_out' => false, 'missing_checkout' => false, 'regularised' => false, 'impossible_duration' => false, 'other_day' => 0, 'direction_corrected' => 0],
+            'flags' => ['duplicate' => 0, 'retry' => 0, 'stray' => 0, 'missing_out' => false, 'missing_checkout' => false, 'regularised' => false, 'impossible_duration' => false, 'other_day' => 0, 'direction_corrected' => 0, 'superseded' => 0],
         ];
     }
 }

@@ -59,6 +59,38 @@ class WarningService
     }
 
     /**
+     * Issue a drafted letter: it becomes a disciplinary action now, under the
+     * issuing HR user, with the timeline entry and the employee's notice the
+     * draft held back.
+     */
+    public function issueDraft(WarningLetter $warning, User $issuer): WarningLetter
+    {
+        if ($warning->status !== 'draft') {
+            throw new \DomainException('Only a draft warning can be issued.');
+        }
+
+        return DB::transaction(function () use ($warning, $issuer) {
+            $warning->update(['status' => 'issued', 'issued_by' => $issuer->id, 'issue_date' => now()->toDateString()]);
+
+            $escalation = $warning->previous_warning_id !== null;
+            $this->timeline->record(
+                $warning->employee,
+                $escalation ? 'warning_escalated' : 'warning_issued',
+                $warning->warningTypeLabel().($escalation ? ' (escalation) Issued' : ' Issued'),
+                $warning->reason,
+                $warning,
+                $issuer,
+            );
+
+            $warning->employee->user->notify($escalation
+                ? new WarningEscalatedNotification($warning)
+                : new WarningIssuedNotification($warning));
+
+            return $warning->fresh();
+        });
+    }
+
+    /**
      * Employee acknowledges a warning.
      */
     public function acknowledge(WarningLetter $warning, User $employee, ?string $acknowledgementText = null): WarningAcknowledgement
@@ -99,7 +131,7 @@ class WarningService
     /**
      * Escalate a warning to the next level in the chain.
      */
-    public function escalate(WarningLetter $warning, User $issuer, array $newData = []): WarningLetter
+    public function escalate(WarningLetter $warning, User $issuer, array $newData = [], bool $asDraft = false): WarningLetter
     {
         $nextType = $warning->nextWarningType();
 
@@ -119,7 +151,14 @@ class WarningService
                 'department_id' => $warning->department_id,
             ], $newData),
             $issuer,
+            $asDraft,
         );
+
+        // A drafted escalation is a proposal for HR, not a disciplinary
+        // action yet: no timeline entry and no notice until it is issued.
+        if ($asDraft) {
+            return $escalated;
+        }
 
         $this->timeline->record(
             $escalated->employee,

@@ -73,13 +73,13 @@ test('submitting with an active policy snapshots ordered steps and notifies only
 test('resubmitting after rejection wipes stale steps rather than duplicating them', function () {
     Notification::fake();
     $maker = User::factory()->create(['role' => 'hr_admin']);
-    $hrApprover = User::factory()->create(['role' => 'hr_admin']);
-    policyStep('HR Review', 'hr_admin', 1);
+    $financeApprover = User::factory()->create(['role' => 'finance']);
+    policyStep('Finance Sign-off', 'finance', 1);
 
     $service = app(PayrollService::class);
     $payroll = $service->submitForFinanceApproval(draftPayrollFor('March', $maker));
     $firstStep = PayrollApprovalStep::where('payroll_id', $payroll->id)->first();
-    $service->rejectStep($firstStep, $hrApprover, 'Fix the OT totals.');
+    $service->rejectStep($firstStep, $financeApprover, 'Fix the OT totals.');
 
     expect($payroll->fresh()->status)->toBe('draft');
 
@@ -91,15 +91,16 @@ test('resubmitting after rejection wipes stale steps rather than duplicating the
 
 test('editing the policy after submission does not change an in-flight payroll\'s snapshotted steps', function () {
     $maker = User::factory()->create(['role' => 'hr_admin']);
-    $policy = policyStep('HR Review', 'hr_admin', 1);
+    User::factory()->create(['role' => 'finance']);
+    $policy = policyStep('Finance Sign-off', 'finance', 1);
 
     $payroll = app(PayrollService::class)->submitForFinanceApproval(draftPayrollFor('April', $maker));
 
     $policy->update(['label' => 'Renamed Step', 'approver_type' => 'director']);
 
     $step = PayrollApprovalStep::where('payroll_id', $payroll->id)->first();
-    expect($step->label)->toBe('HR Review')
-        ->and($step->approver_type)->toBe('hr_admin');
+    expect($step->label)->toBe('Finance Sign-off')
+        ->and($step->approver_type)->toBe('finance');
 });
 
 test('a step must be approved in order — an earlier pending step blocks a later one', function () {
@@ -117,16 +118,16 @@ test('a step must be approved in order — an earlier pending step blocks a late
 
 test('approving the final step finalizes the payroll exactly like legacy approveFinance', function () {
     $maker = User::factory()->create(['role' => 'hr_admin']);
-    $hrApprover = User::factory()->create(['role' => 'hr_admin']);
-    policyStep('HR Review', 'hr_admin', 1);
+    $financeApprover = User::factory()->create(['role' => 'finance']);
+    policyStep('Finance Sign-off', 'finance', 1);
 
     $payroll = app(PayrollService::class)->submitForFinanceApproval(draftPayrollFor('June', $maker));
     $step = PayrollApprovalStep::where('payroll_id', $payroll->id)->first();
 
-    $payroll = app(PayrollService::class)->approveStep($step, $hrApprover);
+    $payroll = app(PayrollService::class)->approveStep($step, $financeApprover);
 
     expect($payroll->status)->toBe('finalized')
-        ->and($payroll->finance_approved_by)->toBe($hrApprover->id)
+        ->and($payroll->finance_approved_by)->toBe($financeApprover->id)
         ->and($step->fresh()->status)->toBe('approved');
 });
 
@@ -170,8 +171,9 @@ test('the same approver cannot act on two different steps of one chain', functio
     // so simulate it with a super_admin approving step 1 (always eligible) then
     // trying to also take a role-matched step 2.
     $superAdmin = User::factory()->create(['role' => 'super_admin']);
+    User::factory()->create(['role' => 'finance']);
     policyStep('HR Review', 'hr_admin', 1);
-    policyStep('Super Admin Sign-off', 'super_admin', 2);
+    policyStep('Finance Sign-off', 'finance', 2);
 
     $payroll = app(PayrollService::class)->submitForFinanceApproval(draftPayrollFor('September', $maker));
     $steps = PayrollApprovalStep::where('payroll_id', $payroll->id)->orderBy('level')->get();
@@ -184,7 +186,8 @@ test('the same approver cannot act on two different steps of one chain', functio
 
 test('a specific_user step can only be actioned by that exact user', function () {
     $maker = User::factory()->create(['role' => 'hr_admin']);
-    $chosen = User::factory()->create(['role' => 'employee', 'name' => 'Chosen Approver']);
+    // A named Finance user is a Finance step (the chain must keep Finance sign-off).
+    $chosen = User::factory()->create(['role' => 'finance', 'name' => 'Chosen Approver']);
     $otherHrAdmin = User::factory()->create(['role' => 'hr_admin']);
     policyStep('CEO Sign-off', 'specific_user', 1, $chosen->id);
 
@@ -233,7 +236,7 @@ test('submitting fails loudly when a role-type step has zero eligible users', fu
 test('legacy approveFinance and rejectFinance refuse a payroll with configured steps', function () {
     $maker = User::factory()->create(['role' => 'hr_admin']);
     $finance = User::factory()->create(['role' => 'finance']);
-    policyStep('HR Review', 'hr_admin', 1);
+    policyStep('Finance Sign-off', 'finance', 1);
 
     $payroll = app(PayrollService::class)->submitForFinanceApproval(draftPayrollFor('February', $maker));
 
@@ -245,13 +248,13 @@ test('legacy approveFinance and rejectFinance refuse a payroll with configured s
 
 test('approving a step audits the transition', function () {
     $maker = User::factory()->create(['role' => 'hr_admin']);
-    $hrApprover = User::factory()->create(['role' => 'hr_admin']);
-    policyStep('HR Review', 'hr_admin', 1);
+    $financeApprover = User::factory()->create(['role' => 'finance']);
+    policyStep('Finance Sign-off', 'finance', 1);
 
     $payroll = app(PayrollService::class)->submitForFinanceApproval(draftPayrollFor('March', $maker));
     $step = PayrollApprovalStep::where('payroll_id', $payroll->id)->first();
 
-    app(PayrollService::class)->approveStep($step, $hrApprover);
+    app(PayrollService::class)->approveStep($step, $financeApprover);
 
     expect(AuditLog::where('auditable_type', PayrollApprovalStep::class)->where('auditable_id', $step->id)->where('action', 'approved')->exists())->toBeTrue();
 });

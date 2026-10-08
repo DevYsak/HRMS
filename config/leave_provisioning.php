@@ -23,4 +23,20 @@ return [
 
     'default_working_days' => ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Monthly Casual / Sick Leave accrual
+    |--------------------------------------------------------------------------
+    |
+    | OFF by default (D7, 8 Oct 2026). When off, CSL is never credited
+    | automatically: balances come from the HR register reconciliation and HR
+    | adjustments. Switched on, `leave:conexus-csl-accrual` credits 1 day per
+    | completed month — idempotent (one ledger key per employee and month),
+    | audited on the ledger, and never re-crediting months the reconciled
+    | register base already stands for. Preview runs are always allowed.
+    |
+    */
+
+    'csl_monthly_accrual_enabled' => (bool) env('LEAVE_CSL_MONTHLY_ACCRUAL_ENABLED', false),
+
 ];

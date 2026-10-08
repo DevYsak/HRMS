@@ -25,8 +25,11 @@ use Illuminate\Support\Collection;
  *  5. Weekly offs, public holidays, MDL shutdown days and approved leave are
  *     never absent.
  *  6. A checkout is "missing" only once shift end + 1 hour has passed.
- *  7. A regularised day uses its corrected first-in / final-out; raw device
- *     punches recorded for that day do not change it.
+ *  7. A regularised day is its whole timeline: the correction's IN / OUT
+ *     punches replace the boundary they corrected, and every genuine device
+ *     punch around them (later Face IN / Card OUT pairs) still counts. Only a
+ *     correction approved before corrections were written as punches uses
+ *     the row's corrected times.
  */
 class AttendanceCalculator
 {
@@ -169,22 +172,22 @@ class AttendanceCalculator
      */
     private function timing(Employee $employee, Carbon $day, ?Attendance $attendance, ?Collection $punches, Carbon $now, ?ResolvedShift $shift = null): array
     {
-        // A regularised day is what HR approved — raw device punches recorded
-        // later for the same date never change it.
-        if ($attendance?->hasCorrectedPunches()) {
-            return [
-                $attendance->check_in ? Carbon::parse($attendance->check_in) : null,
-                $attendance->check_out ? Carbon::parse($attendance->check_out) : null,
-                (int) ($attendance->break_minutes ?? 0),
-                'regularised',
-            ];
-        }
-
         $punches ??= AttendancePunch::where('employee_id', $employee->id)
             ->whereDate('punch_date', $day->toDateString())
             ->orderBy('punched_at')
             ->get();
 
+        $corrected = (bool) $attendance?->hasCorrectedPunches();
+        $correctionPunches = $punches->contains(fn (AttendancePunch $p) => $p->source === 'regularisation');
+
+        // A correction approved before corrections were written as punches
+        // exists only as the row's times: those are the record for the day.
+        if ($corrected && ! $correctionPunches) {
+            return $this->rowTiming($attendance, 'regularised');
+        }
+
+        // Otherwise the day is its whole timeline — the correction's own IN /
+        // OUT punches together with every genuine device punch around them.
         if ($punches->isNotEmpty()) {
             $t = $this->timeline->process($punches, $day, null, $shift);
 
@@ -194,14 +197,20 @@ class AttendanceCalculator
 
                 // An open trailing IN on a past day that the row closed by a web
                 // checkout keeps that checkout. A system "auto checkout" (the
-                // retired auto punch-out) is not a real OUT and never counts.
-                if ($lastOut === null && $attendance?->check_out && ! $attendance->is_auto_checkout && ! $day->isSameDay($now)
+                // retired auto punch-out) is not a real OUT and never counts,
+                // and neither does a corrected row's check-out: the correction's
+                // OUT is already in the timeline, so an IN after it is open.
+                if ($lastOut === null && $attendance?->check_out && ! $attendance->is_auto_checkout && ! $corrected && ! $day->isSameDay($now)
                     && Carbon::parse($attendance->check_out)->greaterThan($firstIn)) {
                     $lastOut = Carbon::parse($attendance->check_out);
                 }
 
-                return [$firstIn, $lastOut, (int) $t['break_minutes'], 'punches'];
+                return [$firstIn, $lastOut, (int) $t['break_minutes'], $correctionPunches ? 'regularised' : 'punches'];
             }
+        }
+
+        if ($corrected) {
+            return $this->rowTiming($attendance, 'regularised');
         }
 
         if ($attendance?->check_in) {
@@ -219,6 +228,21 @@ class AttendanceCalculator
         }
 
         return [null, null, 0, 'none'];
+    }
+
+    /**
+     * A corrected row's own first-in / final-out.
+     *
+     * @return array{0: ?Carbon, 1: ?Carbon, 2: int, 3: string}
+     */
+    private function rowTiming(Attendance $attendance, string $source): array
+    {
+        return [
+            $attendance->check_in ? Carbon::parse($attendance->check_in) : null,
+            $attendance->check_out ? Carbon::parse($attendance->check_out) : null,
+            (int) ($attendance->break_minutes ?? 0),
+            $source,
+        ];
     }
 
     private function status(string $dayType, Carbon $day, Carbon $now, ?ResolvedShift $shift, ?Carbon $firstIn, ?Carbon $lastOut, bool $isLate, bool $missingCheckout): string

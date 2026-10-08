@@ -9,6 +9,7 @@ use App\Models\Attendance;
 use App\Models\AttendanceRegularisation;
 use App\Models\Department;
 use App\Models\Employee;
+use App\Models\EmployeePayrollSettings;
 use App\Models\EmployeeSalary;
 use App\Models\EmploymentType;
 use App\Models\JobTitle;
@@ -22,6 +23,7 @@ use App\Models\ShiftSetting;
 use App\Models\User;
 use App\Models\WorkMode;
 use App\Services\Approvals\ApprovalGuard;
+use App\Services\Audit\AuditService;
 use App\Services\Biometric\BiometricCodeService;
 use App\Services\Biometric\EngineAttendanceSyncService;
 use App\Services\Leave\LeaveCarryForwardService;
@@ -29,6 +31,7 @@ use App\Services\Leave\LeaveYearResolver;
 use App\Services\LeaveBalanceService;
 use App\Services\ModuleFeatureService;
 use App\Services\PasswordService;
+use App\Services\Payroll\SalaryCycleTransitionService;
 use App\Services\ProbationEngine;
 use App\Services\Security\RoleDelegationGuard;
 use Illuminate\Support\Carbon;
@@ -178,6 +181,15 @@ class EmployeeEdit extends Component
         $this->employment_type_id = (string) ($this->employee->employment_type_id ?? '');
         $this->work_mode_id = (string) ($this->employee->work_mode_id ?? '');
         $this->salary_cycle_id = (string) ($this->employee->salary_cycle_id ?? '');
+
+        // Pay eligibility & HRA: the stored row, or the engine's defaults
+        // when none exists (what payroll would apply today).
+        $settings = $this->employee->payrollSettings ?? EmployeePayrollSettings::defaults($this->employee->id);
+        $this->payOtEligible = (bool) $settings->ot_eligible;
+        $this->payIncentiveEligible = (bool) $settings->incentive_eligible;
+        $this->payReimbursementEligible = (bool) $settings->reimbursement_eligible;
+        $this->payHraEnabled = (bool) $settings->hra_enabled;
+        $this->payHraPercentage = $settings->hra_percentage !== null ? (string) (float) $settings->hra_percentage : '';
         // Nullable since the HR data migration — an imported employee may not
         // have a joining date yet, and the edit screen is where HR fills it in.
         $this->joining_date = $this->employee->joining_date?->format('Y-m-d') ?? '';
@@ -306,7 +318,19 @@ class EmployeeEdit extends Component
             'notice_period_end_date' => $this->notice_period_end_date ?: null,
         ]);
 
-        \Flux::toast(text: 'Employee updated successfully.', variant: 'success');
+        // Saved with the cycle they are in now while a move is pending: HR
+        // has kept them where they are, so the move is withdrawn.
+        $saved = $this->employee->fresh();
+        if ($saved->pending_salary_cycle_id && (int) $this->salary_cycle_id === (int) $saved->salary_cycle_id) {
+            app(SalaryCycleTransitionService::class)->cancelPending($saved);
+        }
+
+        $fresh = $this->employee->fresh();
+        $message = $fresh->pending_salary_cycle_id
+            ? 'Employee updated. The salary-cycle change takes effect from the '.Carbon::parse($fresh->salary_cycle_effective_month.'-01')->format('F Y').' payroll.'
+            : 'Employee updated successfully.';
+
+        \Flux::toast(text: $message, variant: 'success');
         $this->js("setTimeout(() => { window.location = '".route('employees.index')."'; }, 1500)");
     }
 
@@ -328,6 +352,17 @@ class EmployeeEdit extends Component
     public string $salaryComponentId = '';
 
     public string $salaryAmount = '';
+
+    // ── Pay eligibility & HRA (payroll users only) ──────────────────────────
+    public bool $payOtEligible = true;
+
+    public bool $payIncentiveEligible = true;
+
+    public bool $payReimbursementEligible = true;
+
+    public bool $payHraEnabled = false;
+
+    public string $payHraPercentage = '';
 
     // ── Header actions ────────────────────────────────────────────────────────
 
@@ -594,6 +629,60 @@ class EmployeeEdit extends Component
         EmployeeSalary::where('employee_id', $this->employee->id)->findOrFail($id)->delete();
         $this->employee->load('salaries.component');
         \Flux::toast('Salary component removed.', variant: 'success');
+    }
+
+    /**
+     * Whether approved OT, incentives and reimbursements reach this employee's
+     * payslip, and whether an assigned HRA component pays. Payroll users only,
+     * never their own pay; every change is audited.
+     */
+    public function savePayrollSettings(): void
+    {
+        $this->authorize('update', $this->employee);
+        $this->authorizeSalaryChange();
+
+        $validated = $this->validate([
+            'payOtEligible' => ['boolean'],
+            'payIncentiveEligible' => ['boolean'],
+            'payReimbursementEligible' => ['boolean'],
+            'payHraEnabled' => ['boolean'],
+            'payHraPercentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
+        ]);
+
+        $settings = $this->employee->payrollSettings
+            ?? EmployeePayrollSettings::create(array_merge(
+                EmployeePayrollSettings::defaults($this->employee->id)->toArray(),
+                ['employee_id' => $this->employee->id],
+            ));
+
+        $fields = ['ot_eligible', 'incentive_eligible', 'reimbursement_eligible', 'hra_enabled', 'hra_percentage'];
+        $before = $settings->only($fields);
+
+        $settings->update([
+            'ot_eligible' => $validated['payOtEligible'],
+            'incentive_eligible' => $validated['payIncentiveEligible'],
+            'reimbursement_eligible' => $validated['payReimbursementEligible'],
+            'hra_enabled' => $validated['payHraEnabled'],
+            'hra_percentage' => $validated['payHraEnabled'] && $validated['payHraPercentage'] !== '' && $validated['payHraPercentage'] !== null
+                ? (float) $validated['payHraPercentage']
+                : null,
+        ]);
+
+        $after = $settings->fresh()->only($fields);
+        if ($after != $before) {
+            app(AuditService::class)->event('EMPLOYEE_PAY_SETTINGS_CHANGED', AuditService::PAYROLL, $settings,
+                old: $before, new: $after, subjectEmployeeId: $this->employee->id, module: AuditService::EMPLOYEE);
+        }
+
+        $this->employee->load('payrollSettings');
+        \Flux::toast('Pay eligibility and HRA saved.', variant: 'success');
+    }
+
+    /** An HRA component is assigned but switched off — it would pay ₹0. */
+    public function hraAssignedButOff(): bool
+    {
+        return ! $this->payHraEnabled
+            && $this->employee->salaries->contains(fn ($row) => $row->component?->code === 'HRA');
     }
 
     // ── Probation ─────────────────────────────────────────────────────────────

@@ -157,7 +157,7 @@ test('a Director approving a cycle holds only their own raise, and another appro
 
 // ── Encashment queue ───────────────────────────────────────────────────────
 
-test('HR decides the first encashment stage from the Approval Center; Finance then sees it', function () {
+test('HR decides an encashment from the Approval Center and that decision is final (D3)', function () {
     $hr = r2User(UserRole::HrAdmin);
     $finance = r2User(UserRole::Finance);
     $employee = r2User(UserRole::Employee);
@@ -171,9 +171,11 @@ test('HR decides the first encashment stage from the Approval Center; Finance th
         ->assertSee($employee->name)
         ->call('approve', 'encashment', $encashment->id);
 
-    expect($encashment->fresh()->status)->toBe('pending_finance');
+    // D3: Director/HR approval is final — no Finance approval stage. Finance
+    // processes the approved amount in payroll, not in an approval queue.
+    expect($encashment->fresh()->status)->toBe('approved');
 
-    Livewire::actingAs($finance)->test(ApprovalCenter::class)->assertSee($employee->name);
+    Livewire::actingAs($finance)->test(ApprovalCenter::class)->assertDontSee($employee->name);
 });
 
 // ── Employee import ────────────────────────────────────────────────────────

@@ -16,13 +16,7 @@ test('finance and director cannot access the approval policy settings screen', f
 test('hr admin can create, reorder, disable and delete policy steps', function () {
     $hrAdmin = User::factory()->create(['role' => 'hr_admin']);
 
-    Livewire::actingAs($hrAdmin)->test(ApprovalPolicySettings::class)
-        ->call('openCreate')
-        ->set('label', 'HR Review')
-        ->set('approver_type', 'hr_admin')
-        ->call('save')
-        ->assertHasNoErrors();
-
+    // Finance first: a chain must always keep Finance sign-off.
     Livewire::actingAs($hrAdmin)->test(ApprovalPolicySettings::class)
         ->call('openCreate')
         ->set('label', 'Finance Sign-off')
@@ -30,33 +24,40 @@ test('hr admin can create, reorder, disable and delete policy steps', function (
         ->call('save')
         ->assertHasNoErrors();
 
+    Livewire::actingAs($hrAdmin)->test(ApprovalPolicySettings::class)
+        ->call('openCreate')
+        ->set('label', 'HR Review')
+        ->set('approver_type', 'hr_admin')
+        ->call('save')
+        ->assertHasNoErrors();
+
     $steps = PayrollApprovalPolicy::orderBy('level')->get();
     expect($steps)->toHaveCount(2)
-        ->and($steps[0]->label)->toBe('HR Review')
+        ->and($steps[0]->label)->toBe('Finance Sign-off')
         ->and($steps[0]->level)->toBe(1)
         ->and($steps[1]->level)->toBe(2);
 
-    $financeStep = $steps[1];
+    $hrStep = $steps[1];
     Livewire::actingAs($hrAdmin)->test(ApprovalPolicySettings::class)
-        ->call('moveUp', $financeStep->id);
+        ->call('moveUp', $hrStep->id);
 
-    expect(PayrollApprovalPolicy::find($financeStep->id)->level)->toBe(1)
+    expect(PayrollApprovalPolicy::find($hrStep->id)->level)->toBe(1)
         ->and(PayrollApprovalPolicy::find($steps[0]->id)->level)->toBe(2);
 
     Livewire::actingAs($hrAdmin)->test(ApprovalPolicySettings::class)
-        ->call('toggleActive', $financeStep->id);
-    expect(PayrollApprovalPolicy::find($financeStep->id)->is_active)->toBeFalse();
+        ->call('toggleActive', $hrStep->id);
+    expect(PayrollApprovalPolicy::find($hrStep->id)->is_active)->toBeFalse();
 
     Livewire::actingAs($hrAdmin)->test(ApprovalPolicySettings::class)
-        ->call('delete', $financeStep->id);
-    expect(PayrollApprovalPolicy::find($financeStep->id))->toBeNull();
+        ->call('delete', $hrStep->id);
+    expect(PayrollApprovalPolicy::find($hrStep->id))->toBeNull();
 });
 
 test('deleting or reordering steps renumbers levels contiguously with no duplicates', function () {
     $hrAdmin = User::factory()->create(['role' => 'hr_admin']);
     $a = PayrollApprovalPolicy::create(['level' => 1, 'label' => 'A', 'approver_type' => 'hr_admin', 'is_active' => true]);
-    $b = PayrollApprovalPolicy::create(['level' => 2, 'label' => 'B', 'approver_type' => 'finance', 'is_active' => true]);
-    $c = PayrollApprovalPolicy::create(['level' => 3, 'label' => 'C', 'approver_type' => 'director', 'is_active' => true]);
+    $b = PayrollApprovalPolicy::create(['level' => 2, 'label' => 'B', 'approver_type' => 'director', 'is_active' => true]);
+    $c = PayrollApprovalPolicy::create(['level' => 3, 'label' => 'C', 'approver_type' => 'finance', 'is_active' => true]);
 
     Livewire::actingAs($hrAdmin)->test(ApprovalPolicySettings::class)
         ->call('delete', $b->id);
@@ -70,6 +71,7 @@ test('deleting or reordering steps renumbers levels contiguously with no duplica
 
 test('a specific_user approver requires an existing user, validated on save', function () {
     $hrAdmin = User::factory()->create(['role' => 'hr_admin']);
+    PayrollApprovalPolicy::create(['level' => 1, 'label' => 'Finance Sign-off', 'approver_type' => 'finance', 'is_active' => true]);
 
     Livewire::actingAs($hrAdmin)->test(ApprovalPolicySettings::class)
         ->call('openCreate')

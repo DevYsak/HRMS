@@ -2,12 +2,15 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Attendance;
+use App\Http\Middleware\AuthenticateAdmsDevice;
 use App\Models\BiometricDevice;
 use App\Models\Employee;
 use App\Services\Biometric\BiometricSyncService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -20,9 +23,18 @@ use Illuminate\Support\Facades\Log;
  *     Server IP   : 192.168.0.128   (this machine)
  *     Server Port : 80
  *     Path        : /iclock
+ *
+ * Every endpoint sits behind AuthenticateAdmsDevice: the serial number alone
+ * never identifies a device (registered + active + allowed address + token
+ * when issued). Configure a device with `php artisan biometric:adms-device`.
  */
-class AdmsController extends Controller
+class AdmsController extends Controller implements HasMiddleware
 {
+    public static function middleware(): array
+    {
+        return [new Middleware(AuthenticateAdmsDevice::class)];
+    }
+
     // ──────────────────────────────────────────────────────────────────────
     // GET /iclock/cdata?SN=TBDD253900118&options=all&...
     //
@@ -31,13 +43,7 @@ class AdmsController extends Controller
     // ──────────────────────────────────────────────────────────────────────
     public function options(Request $request): Response
     {
-        $device = $this->resolveDevice($request);
-
-        if (! $device) {
-            Log::warning('ADMS check-in from unknown SN: '.$request->query('SN'));
-
-            return $this->text("GET OPTION FROM: {$request->query('SN')}\r\nEncrypt=None\r\n");
-        }
+        $device = $this->device($request);
 
         $device->update([
             'last_ping_at' => now(),
@@ -75,11 +81,7 @@ class AdmsController extends Controller
     // ──────────────────────────────────────────────────────────────────────
     public function upload(Request $request): Response
     {
-        $device = $this->resolveDevice($request);
-
-        if (! $device) {
-            return $this->text('OK: 0');
-        }
+        $device = $this->device($request);
 
         $table = strtoupper($request->query('table', ''));
 
@@ -89,7 +91,9 @@ class AdmsController extends Controller
         }
 
         $rawData = $request->input('data', '');
-        $records = $this->parseAttlog($rawData);
+        $parsed = $this->parseAttlog($rawData);
+        $records = $this->withinWindow($parsed);
+        $refused = count($parsed) - count($records);
         $inserted = $this->storeRecords($device, $records);
 
         // Update stamp to the latest punch time so the device doesn't re-send old records.
@@ -105,9 +109,16 @@ class AdmsController extends Controller
         // Apply any newly inserted logs to the attendances table immediately.
         app(BiometricSyncService::class)->applyPendingLogs($device);
 
-        Log::info("ADMS: {$device->name} pushed ".count($records)." records, {$inserted} new.");
+        Log::info('ADMS upload', [
+            'device_id' => $device->id,
+            'records' => count($parsed),
+            'inserted' => $inserted,
+            'refused_out_of_window' => $refused,
+        ]);
 
-        return $this->text('OK: '.count($records));
+        // Acknowledge everything received so the device does not resend the
+        // refused rows forever; they are counted above, never written.
+        return $this->text('OK: '.count($parsed));
     }
 
     // ──────────────────────────────────────────────────────────────────────
@@ -117,7 +128,7 @@ class AdmsController extends Controller
     // ──────────────────────────────────────────────────────────────────────
     public function getRequest(Request $request): Response
     {
-        $this->resolveDevice($request)?->update([
+        $this->device($request)->update([
             'last_ping_at' => now(),
             'last_ping_status' => 'online',
         ]);
@@ -139,15 +150,35 @@ class AdmsController extends Controller
     // Helpers
     // ──────────────────────────────────────────────────────────────────────
 
-    private function resolveDevice(Request $request): ?BiometricDevice
+    /** The device AuthenticateAdmsDevice verified for this request. */
+    private function device(Request $request): BiometricDevice
     {
-        $sn = $request->query('SN') ?: $request->input('SN');
+        return $request->attributes->get(AuthenticateAdmsDevice::DEVICE_ATTRIBUTE);
+    }
 
-        if (! $sn) {
-            return null;
-        }
+    /**
+     * Drop punches that cannot be genuine live data: stamped in the future
+     * beyond the tolerance, older than the maximum age, or unparseable. A
+     * replayed upload of already-stored punches is harmless anyway — the
+     * unique (device, user, time) index ignores them.
+     *
+     * @param  array<int, array{device_user_id:string, punched_at:string, state:int, verify:int}>  $records
+     * @return array<int, array{device_user_id:string, punched_at:string, state:int, verify:int}>
+     */
+    private function withinWindow(array $records): array
+    {
+        $latest = now()->addMinutes(max(0, (int) config('biometric.adms.future_tolerance_minutes', 10)));
+        $earliest = now()->subDays(max(1, (int) config('biometric.adms.max_record_age_days', 45)));
 
-        return BiometricDevice::where('serial_number', $sn)->first();
+        return array_values(array_filter($records, function (array $record) use ($latest, $earliest) {
+            try {
+                $at = Carbon::parse($record['punched_at']);
+            } catch (\Throwable) {
+                return false;
+            }
+
+            return $at->betweenIncluded($earliest, $latest);
+        }));
     }
 
     /**

@@ -31,6 +31,24 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | ADMS Push Endpoint (/iclock)
+    |--------------------------------------------------------------------------
+    | Devices push punches here. A request is accepted only from a registered,
+    | active device, from an address the device is allowed to push from
+    | (biometric_devices.adms_allowed_ips, else its ip_address), and with its
+    | token when one is issued (`php artisan biometric:adms-device`).
+    |
+    | Punches stamped further in the future than the tolerance, or older than
+    | the maximum age, are refused rather than written to attendance.
+    */
+    'adms' => [
+        'max_record_age_days' => (int) env('BIOMETRIC_ADMS_MAX_RECORD_AGE_DAYS', 45),
+        'future_tolerance_minutes' => (int) env('BIOMETRIC_ADMS_FUTURE_TOLERANCE_MINUTES', 10),
+        'requests_per_minute' => (int) env('BIOMETRIC_ADMS_REQUESTS_PER_MINUTE', 120),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Sync Settings
     |--------------------------------------------------------------------------
     */

@@ -13,9 +13,16 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Fillable(['department_id', 'reviewer_role', 'weight_percent'])]
 class ReviewWeightage extends Model
 {
-    /** @var array<string, float> */
+    /**
+     * D9 (8 Oct 2026): the self-assessment carries 0% by default — it is
+     * shown for comparison, and the rating comes from authorised reviewers.
+     * A self weight only applies when configured explicitly (a company or
+     * department review_weightages row).
+     *
+     * @var array<string, float>
+     */
     public const DEFAULTS = [
-        'self' => 20.0,
+        'self' => 0.0,
         'team_lead' => 50.0,
         'department_head' => 30.0,
     ];

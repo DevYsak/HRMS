@@ -103,25 +103,28 @@ test('an approved OT request cannot be edited after the fact', function () {
     expect((float) $request->fresh()->requested_hours)->toBe(2.0);
 });
 
-test('HR opens an OT window and employees can then request overtime inside it', function () {
-    $hr = attUser(UserRole::HrAdmin);
+test('an OT request is accepted without any OT window (D6: windows are planning only)', function () {
     $employee = attUser(UserRole::Employee);
     $date = now()->addDay()->toDateString();
 
-    expect(fn () => app(OvertimeService::class)->submitRequest($employee->employee, [
-        'work_date' => $date, 'start_time' => '19:30', 'end_time' => '21:30', 'reason' => 'Client release',
-    ]))->toThrow(DomainException::class);
-
-    Livewire::actingAs($hr)->test(OtWindows::class)
-        ->set('title', 'Release week')->set('startsAt', now()->toDateString())->set('endsAt', now()->addDays(7)->toDateString())
-        ->call('open')
-        ->assertHasNoErrors();
+    expect(OtWindow::count())->toBe(0);
 
     $request = app(OvertimeService::class)->submitRequest($employee->employee, [
         'work_date' => $date, 'start_time' => '19:30', 'end_time' => '21:30', 'reason' => 'Client release',
     ]);
 
     expect($request->status)->toBe('pending')->and((float) $request->requested_hours)->toBe(2.0);
+});
+
+test('HR can still open an OT window for planning', function () {
+    $hr = attUser(UserRole::HrAdmin);
+
+    Livewire::actingAs($hr)->test(OtWindows::class)
+        ->set('title', 'Release week')->set('startsAt', now()->toDateString())->set('endsAt', now()->addDays(7)->toDateString())
+        ->call('open')
+        ->assertHasNoErrors();
+
+    expect(OtWindow::count())->toBe(1);
 });
 
 test('a manager cannot open OT windows', function () {

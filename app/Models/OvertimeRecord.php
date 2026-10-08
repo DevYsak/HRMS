@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -18,19 +19,21 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'rate_per_hour',
     'ot_amount',
     'is_paid',
+    'settled_at',
 ])]
 class OvertimeRecord extends Model
 {
     protected function casts(): array
     {
         return [
-            'work_date'          => 'date',
+            'work_date' => 'date',
+            'settled_at' => 'datetime',
             'total_hours_worked' => 'decimal:2',
-            'standard_hours'     => 'decimal:2',
-            'ot_hours'           => 'decimal:2',
-            'rate_per_hour'      => 'decimal:2',
-            'ot_amount'          => 'decimal:2',
-            'is_paid'            => 'boolean',
+            'standard_hours' => 'decimal:2',
+            'ot_hours' => 'decimal:2',
+            'rate_per_hour' => 'decimal:2',
+            'ot_amount' => 'decimal:2',
+            'is_paid' => 'boolean',
         ];
     }
 
@@ -54,8 +57,8 @@ class OvertimeRecord extends Model
         return $this->belongsTo(Payslip::class);
     }
 
-    /** @return \Illuminate\Database\Eloquent\Builder<static> */
-    public function scopeUnpaid(\Illuminate\Database\Eloquent\Builder $query): \Illuminate\Database\Eloquent\Builder
+    /** @return Builder<static> */
+    public function scopeUnpaid(Builder $query): Builder
     {
         return $query->where('is_paid', false);
     }

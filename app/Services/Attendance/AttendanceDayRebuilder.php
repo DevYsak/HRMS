@@ -27,9 +27,12 @@ use Illuminate\Support\Collection;
  * {@see AttendanceCalculator} (Face = IN, ID Card = OUT, latest of a 60-second
  * burst, stray cards ignored, shift-window aware for night shifts).
  *
- * Raw punches are never modified. A day is left untouched, and the reason
- * returned, when it is regularised, HR-corrected, inside a settled payroll or
- * has no valid Face IN — never guessed.
+ * Raw punches are never modified. A regularised day is rebuilt like any other:
+ * the correction's IN / OUT punches stand in for the boundary they corrected
+ * and later genuine punches still count. A day is left untouched, and the
+ * reason returned, when it is a leave / half-day regularisation, a correction
+ * that exists only as row times, inside a settled payroll or has no valid
+ * Face IN — never guessed.
  */
 class AttendanceDayRebuilder
 {
@@ -70,7 +73,7 @@ class AttendanceDayRebuilder
      *
      * @return array<string, mixed>
      */
-    public function examine(Employee $employee, CarbonInterface $day, bool $allowCreate = false, ?CarbonInterface $now = null, bool $allowClear = false): array
+    public function examine(Employee $employee, CarbonInterface $day, bool $allowCreate = false, ?CarbonInterface $now = null, bool $allowClear = false, bool $hrDecision = false): array
     {
         $day = Carbon::parse($day->toDateString())->startOfDay();
 
@@ -102,7 +105,7 @@ class AttendanceDayRebuilder
             'new_in' => $in,
             'new_out' => $out,
             'new_worked' => $worked,
-            'new_break' => $calc->breakMinutes,
+            'new_break' => $this->breakMinutes($calc->breakMinutes, $attendance),
             'duplicates' => $flags['duplicate'] + $flags['retry'],
             'ignored' => $flags['stray'] + $flags['other_day'],
             'directions' => $flags['direction_corrected'],
@@ -122,10 +125,20 @@ class AttendanceDayRebuilder
         $row['unsupported'] = $attendance !== null && ! $this->hasSupport($attendance, $punches, $summary);
         $row['synthetic'] = $row['unsupported'] ? $this->syntheticKind($employee, $day, $attendance) : null;
 
+        // A correction written as punches is part of the timeline, so the day
+        // is rebuilt around it like any other. Left alone: a leave or half-day
+        // regularisation (it sets the day's status, not its punches) and a
+        // correction approved before corrections were written as punches —
+        // its row times are the only record of what HR approved. An HR
+        // decision (approve / correct / revert) is the change itself, so the
+        // approved-correction and settled-payroll guards — there to stop an
+        // automatic sync — do not hold it back.
+        $correctionPunches = $flags['regularised'];
         $protected = match (true) {
-            $attendance !== null && ($attendance->is_regularized || $flags['regularised']) => 'regularised — corrected times kept',
-            $this->hasApprovedCorrection($employee, $day) => 'HR-corrected — approved correction kept',
-            $this->inSettledPayroll($employee, $day) => 'inside approved payroll',
+            $attendance !== null && $attendance->is_regularized && in_array($attendance->status, ['leave', 'half_day'], true) => 'regularised '.str_replace('_', '-', $attendance->status).' — status kept',
+            $attendance !== null && $attendance->is_regularized && ! $correctionPunches => 'regularised — corrected times kept',
+            ! $hrDecision && ! $correctionPunches && $this->hasApprovedCorrection($employee, $day) => 'HR-corrected — approved correction kept',
+            ! $hrDecision && $this->inSettledPayroll($employee, $day) => 'inside approved payroll',
             default => null,
         };
 
@@ -158,7 +171,7 @@ class AttendanceDayRebuilder
             'check_in' => $in,
             'check_out' => $out,
             'total_hours' => $worked ?? 0.0,   // still open: nothing counted until the OUT
-            'break_minutes' => $calc->breakMinutes,
+            'break_minutes' => $row['new_break'],
             'is_late' => $calc->isLate,
             'late_minutes' => $calc->lateMinutes,
             'missing_checkout' => $calc->missingCheckout,
@@ -242,6 +255,23 @@ class AttendanceDayRebuilder
     }
 
     /**
+     * Rebuild a day after HR approved, corrected or reverted a regularisation:
+     * the whole work-date timeline — genuine punches and correction punches —
+     * through the same examine/apply as every sync. HR's decision is explicit,
+     * so neither the approved-correction guard nor a settled payroll holds it
+     * back (approval never checked payroll either).
+     *
+     * @return array<string, mixed> the examined row, with `attendance` refreshed
+     */
+    public function rebuildCorrectedDay(Employee $employee, CarbonInterface $day): array
+    {
+        $row = $this->examine($employee, $day, allowCreate: false, hrDecision: true);
+        $row['attendance'] = $this->apply($employee, $row, 'update');
+
+        return $row;
+    }
+
+    /**
      * Remove an attendance row nothing real supports, and the made-up summary
      * figures with it. Raw punches and logs are never touched. Overtime that
      * was derived from the invented hours is recalculated (to zero) unless it
@@ -268,6 +298,23 @@ class AttendanceDayRebuilder
         app(OvertimeService::class)->settleApprovedForDay($employee, $row['day']);
 
         return null;
+    }
+
+    /**
+     * Break time for the day: the gaps between punches, or the breaks the
+     * employee logged on the web (break_logs), whichever is larger. Logged
+     * breaks are real data the punch stream cannot see, so a rebuild must not
+     * erase them. Informational only — never deducted.
+     */
+    private function breakMinutes(int $fromPunches, ?Attendance $attendance): int
+    {
+        if ($attendance === null) {
+            return $fromPunches;
+        }
+
+        $logged = (int) $attendance->breakLogs()->whereNotNull('break_end')->sum('duration_minutes');
+
+        return max($fromPunches, $logged);
     }
 
     /** Anything real behind the row: a genuine punch, a web punch trace, breaks, device logs or an engine count. */
@@ -330,10 +377,24 @@ class AttendanceDayRebuilder
         return $this->settledCache[$key] = $settled;
     }
 
-    /** Settled payroll or an approved HR correction: the stored day must not be rewritten. */
+    /**
+     * Settled payroll, or an approved HR correction that exists only as row
+     * times: the stored day must not be rewritten. A correction written as
+     * punches is rebuilt with the rest of the timeline instead.
+     */
     public function isLocked(Employee $employee, CarbonInterface $day): bool
     {
-        return $this->hasApprovedCorrection($employee, $day) || $this->inSettledPayroll($employee, $day);
+        return ($this->hasApprovedCorrection($employee, $day) && ! $this->hasCorrectionPunches($employee, $day))
+            || $this->inSettledPayroll($employee, $day);
+    }
+
+    /** Whether an approved correction's IN / OUT punches are in the day's timeline. */
+    private function hasCorrectionPunches(Employee $employee, CarbonInterface $day): bool
+    {
+        return AttendancePunch::where('employee_id', $employee->id)
+            ->whereDate('punch_date', $day->toDateString())
+            ->where('source', 'regularisation')
+            ->exists();
     }
 
     /** An approved (non-leave) regularisation HR decided for the day — the correction is the record. */

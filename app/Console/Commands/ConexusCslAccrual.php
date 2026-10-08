@@ -60,6 +60,14 @@ class ConexusCslAccrual extends Command
             return self::FAILURE;
         }
 
+        // D7: monthly CSL credit is off unless explicitly enabled. A preview
+        // still runs so HR can see what enabling it would do.
+        if ($apply && ! config('leave_provisioning.csl_monthly_accrual_enabled')) {
+            $this->warn('Monthly CSL accrual is switched off (LEAVE_CSL_MONTHLY_ACCRUAL_ENABLED). Nothing was credited. Run without --apply to preview.');
+
+            return self::SUCCESS;
+        }
+
         $this->info(($apply ? 'APPLYING' : 'PREVIEW (nothing will be saved)')." — CSL accrual as of {$asOf->toDateString()}");
 
         if (! $apply) {

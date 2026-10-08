@@ -70,6 +70,20 @@ function nrdSentCount(string $key, string $toEmail): int
     return EmailLog::where('notification_key', $key)->where('to_email', $toEmail)->where('status', 'sent')->count();
 }
 
+/**
+ * D5: synced events start with email off unless critical. These tests are
+ * about per-role behaviour, so they switch email on for the event first —
+ * exactly what HR would do in Settings → Notifications & Email.
+ */
+function nrdEmailOn(string $key): NotificationSetting
+{
+    $setting = NotificationSetting::where('key', $key)->firstOrFail();
+    $setting->update(['mail_enabled' => true]);
+    $setting->roleSettings->each(fn (NotificationRoleSetting $row) => $row->update(['mail_enabled' => true]));
+
+    return $setting->fresh();
+}
+
 function nrdRole(NotificationSetting $setting, string $role): NotificationRoleSetting
 {
     // A model-instance update, not a bulk query-builder update: the latter
@@ -140,7 +154,7 @@ test('the real command dispatches each recipient under their own role', function
         'check_in' => now()->subHours(4), 'break_minutes' => 90,
     ]);
 
-    $setting = NotificationSetting::where('key', ExcessBreakNotification::class)->firstOrFail();
+    $setting = nrdEmailOn(ExcessBreakNotification::class);
     nrdRole($setting, 'employee')->update(['mail_enabled' => false]);
 
     $this->artisan(CheckExcessBreaks::class)->assertSuccessful();
@@ -154,10 +168,14 @@ test('an event with role rows still falls back cleanly for a role nobody configu
     // hypothetical role with no row must fall back to the event default,
     // not error.
     app(NotificationCatalog::class)->sync();
+    $gate = app(NotificationDeliveryGate::class);
 
-    $decision = app(NotificationDeliveryGate::class)->mail(ExcessBreakNotification::class, 'director');
+    // Event email off (the D5 default) → the unconfigured role follows it.
+    expect($gate->mail(ExcessBreakNotification::class, 'director')->allowed)->toBeFalse();
 
-    expect($decision->allowed)->toBeTrue();
+    // HR switches the event on → the unconfigured role follows that too.
+    nrdEmailOn(ExcessBreakNotification::class);
+    expect($gate->mail(ExcessBreakNotification::class, 'director')->allowed)->toBeTrue();
 });
 
 // ── Templates: no cross-role leakage ────────────────────────────────────────
@@ -256,6 +274,7 @@ test('MessageSending is a second, final check — it blocks even if something ch
 
 test('an employee with no manager does not error — only the employee is notified', function () {
     app(NotificationCatalog::class)->sync();
+    nrdEmailOn(ExcessBreakNotification::class);
     $attendance = nrdExcessBreakAttendance(manager: null);
     $notification = new ExcessBreakNotification($attendance, 90);
     $employee = $attendance->employee;
@@ -480,7 +499,7 @@ test('every role-tagged event resolves its own gate decision independently', fun
         }
 
         // Turn one role's email off; every other role for that event stays on.
-        $setting = NotificationSetting::where('key', $entry['key'])->firstOrFail();
+        $setting = nrdEmailOn($entry['key']);
         $first = $roles[0];
         nrdRole($setting, $first)->update(['mail_enabled' => false]);
 

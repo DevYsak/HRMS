@@ -44,11 +44,11 @@ test('the batch sync imports approved OT and records rejected OT across employee
     expect($result['imported'])->toBe(1)
         ->and($result['rejected'])->toBe(1);
 
-    // Approved → approved OT + payroll record.
+    // Approved in Nexflow → a pending request for the Pulse manager (D4); no pay yet.
     $approved = OtRequest::where('employee_id', $approvedEmp->id)->first();
-    expect($approved->status)->toBe('approved')
+    expect($approved->status)->toBe('pending')
         ->and($approved->source)->toBe('nexflow')
-        ->and(OvertimeRecord::where('ot_request_id', $approved->id)->exists())->toBeTrue();
+        ->and(OvertimeRecord::where('ot_request_id', $approved->id)->exists())->toBeFalse();
 
     // Rejected → rejected OT, visible, no payroll record.
     $rejected = OtRequest::where('employee_id', $rejectedEmp->id)->first();
@@ -74,7 +74,7 @@ test('the sync is idempotent — a second run imports nothing new', function () 
         ->and(OtRequest::count())->toBe(1);   // unchanged — no duplicate
 });
 
-test('a status change in Nexflow is reconciled, voids the pay, and is recorded in history', function () {
+test('Nexflow changes reach a request only while it is pending in Pulse, and are recorded in history', function () {
     configureNexbridgeSync();
     Employee::factory()->create(['status' => 'active', 'user_id' => User::factory()->create(['email' => 'flip@x.com'])->id]);
     $svc = app(OvertimeService::class);
@@ -88,26 +88,25 @@ test('a status change in Nexflow is reconciled, voids the pay, and is recorded i
         '*' => Http::response(['ot_records' => []], 200),
     ]);
 
-    // 1) approved → imported + payroll record.
+    // 1) approved in Nexflow → pending in Pulse, no pay.
     $svc->syncNexflowOtDetails('2026-06-01', '2026-06-30');
     $ot = OtRequest::where('source', 'nexflow')->first();
-    expect($ot->status)->toBe('approved')
-        ->and(OvertimeRecord::where('ot_request_id', $ot->id)->exists())->toBeTrue();
+    expect($ot->status)->toBe('pending')
+        ->and(OvertimeRecord::where('ot_request_id', $ot->id)->exists())->toBeFalse();
 
-    // 2) rejected → HRMS status updates and the unpaid pay is voided.
+    // 2) rejected in Nexflow while still pending here → withdrawn (it can only stop pay).
     $result = $svc->syncNexflowOtDetails('2026-06-01', '2026-06-30');
     expect($result['updated'])->toBe(1)
         ->and($ot->fresh()->status)->toBe('rejected')
-        ->and(OvertimeRecord::where('ot_request_id', $ot->id)->exists())->toBeFalse()   // pay voided
         ->and(OtRequest::count())->toBe(1);                                              // no duplicate
 
     // The status change is recorded in history (audit log).
     expect(AuditLog::where('action', 'nexflow_ot_status_changed')->where('auditable_id', $ot->id)->exists())->toBeTrue();
 
-    // 3) re-approved → pay is re-materialised.
+    // 3) re-approved in Nexflow → the rejection stands; Nexflow never approves pay.
     $svc->syncNexflowOtDetails('2026-06-01', '2026-06-30');
-    expect($ot->fresh()->status)->toBe('approved')
-        ->and(OvertimeRecord::where('ot_request_id', $ot->id)->exists())->toBeTrue();
+    expect($ot->fresh()->status)->toBe('rejected')
+        ->and(OvertimeRecord::where('ot_request_id', $ot->id)->exists())->toBeFalse();
 });
 
 test('the OT view shows the Nexflow status-change history timeline', function () {
@@ -131,10 +130,10 @@ test('the OT view shows the Nexflow status-change history timeline', function ()
         ->call('openView', $ot->id)
         ->assertSet('viewHistory', fn ($h) => count($h) === 2)   // synced + one change
         ->assertSee('Nexflow status history')
-        ->assertSee('Approved → Rejected');
+        ->assertSee('Pending → Rejected');
 });
 
-test('the Sync from Nexflow button on Manage OT pulls approved OT', function () {
+test('the Sync from Nexflow button on Manage OT files approved OT for manager approval', function () {
     configureNexbridgeSync();
     $admin = User::factory()->create(['role' => UserRole::SuperAdmin]);
     Employee::factory()->create(['status' => 'active', 'user_id' => User::factory()->create(['email' => 'approved@x.com'])->id]);
@@ -146,5 +145,6 @@ test('the Sync from Nexflow button on Manage OT pulls approved OT', function () 
     Livewire::actingAs($admin)->test(ManageOtRequests::class)
         ->call('syncFromNexflow');
 
-    expect(OtRequest::where('source', 'nexflow')->where('status', 'approved')->count())->toBe(1);
+    expect(OtRequest::where('source', 'nexflow')->where('status', 'pending')->count())->toBe(1)
+        ->and(OtRequest::where('source', 'nexflow')->where('status', 'approved')->count())->toBe(0);
 });

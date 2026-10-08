@@ -30,7 +30,8 @@ test('employee create form succeeds when payroll information is left blank', fun
         ->and($settings->salary_structure_id)->toBeNull()
         ->and($settings->pf_enabled)->toBeFalse()
         ->and($settings->esi_enabled)->toBeFalse()
-        ->and($settings->ot_eligible)->toBeFalse()
+        // Deliberate default (8 Oct 2026): a new hire is eligible for OT.
+        ->and($settings->ot_eligible)->toBeTrue()
         ->and($settings->bank_name)->toBeNull();
 });
 
@@ -112,7 +113,9 @@ test('esi number is required when esi applicable is enabled', function () {
         ->assertHasErrors(['esi_number' => 'required_if']);
 });
 
-test('ot rate per hour is required when ot eligible is enabled', function () {
+test('ot rate per hour is optional — OT is paid at the company rate', function () {
+    Mail::fake();
+    Notification::fake();
     $hrAdmin = User::factory()->create(['role' => UserRole::HrAdmin]);
 
     Livewire::actingAs($hrAdmin)
@@ -121,7 +124,7 @@ test('ot rate per hour is required when ot eligible is enabled', function () {
         ->set('email', 'jane.ot@conexus-ns.com')
         ->set('ot_eligible', true)
         ->call('save')
-        ->assertHasErrors(['ot_rate_per_hour' => 'required_if']);
+        ->assertHasNoErrors(['ot_rate_per_hour']);
 });
 
 test('ifsc, pan and aadhar numbers are validated against their formats', function () {

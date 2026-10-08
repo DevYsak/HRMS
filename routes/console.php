@@ -80,8 +80,9 @@ Schedule::command('hrms:compute-attendance-scores')
     ->withoutOverlapping()
     ->runInBackground();
 
-// Rule 10: issue/escalate warning letters once monthly late marks reach the
-// configured threshold → 14:30 IST daily (after both shifts' late checks ran)
+// Rule 10: DRAFT warning letters (or the next escalation) once monthly late
+// marks reach the configured threshold → 14:30 IST daily. D10: drafts only —
+// HR issues them from Warning Letters.
 Schedule::command('hrms:issue-late-warnings')
     ->dailyAt('14:30')
     ->withoutOverlapping()
@@ -150,7 +151,8 @@ Schedule::command('hrms:generate-attendance-summary')
 // states the amount on the Year Rollover / Carry Forward screens, recorded
 // against the person who made it.
 
-// Flag previous day absences without approved leave as Unauthorized Leave → 09:30 IST (after grace window)
+// Flag previous day absences without approved leave as PENDING Unauthorized
+// Leave for HR to decide → 09:30 IST. D10: never approved unpaid leave by itself.
 Schedule::command('hrms:flag-unauthorized-absences')
     ->dailyAt('09:30')
     ->withoutOverlapping()
@@ -201,7 +203,8 @@ Schedule::job(new QueueHeartbeat)
     ->everyMinute()
     ->withoutOverlapping();
 
-// Data retention: delete leave attachments 30 days after approval → 01:00 daily
+// Data retention: REPORT leave attachments past 30 days after approval → 01:00 daily.
+// D10: report only — permanent deletion is run by a person with --delete.
 Schedule::command('leave:purge-attachments')
     ->dailyAt('01:00')
     ->withoutOverlapping()
@@ -230,9 +233,11 @@ Schedule::command('hrms:monthly-leave-accrual')
 // Conexus CSL — 1 day for each completed month, effective its last day. Runs
 // at 00:15 on the 1st: before the 1 July rollover (01:30), so June's day is in
 // the finishing year when it is carried forward. Idempotent; blocked
-// employees are reported, never guessed.
+// employees are reported, never guessed. D7: scheduled only when explicitly
+// enabled (leave_provisioning.csl_monthly_accrual_enabled, off by default).
 Schedule::command('leave:conexus-csl-accrual --apply')
     ->monthlyOn(1, '00:15')
+    ->when(fn () => (bool) config('leave_provisioning.csl_monthly_accrual_enabled'))
     ->withoutOverlapping()
     ->runInBackground();
 

@@ -251,17 +251,16 @@ test('a Director or the HR Admin approves encashment; a manager cannot', functio
     $director = User::factory()->create(['role' => UserRole::Director]);
     app(LeaveService::class)->approveEncashment($director, $encashment->fresh(), 'OK');
 
-    expect($encashment->fresh()->status)->toBe('pending_finance');
+    // D3: the Director's approval is final — no Finance approval stage.
+    expect($encashment->fresh()->status)->toBe('approved');
 });
 
 test('approved encashment posts to the ledger, reduces CSL and lands in a payroll month that is still open', function () {
     $employee = crEmployee();
     $encashment = app(LeaveService::class)->requestEncashment($employee, crCsl(), 2, '2026-09');
     $hr = User::factory()->create(['role' => UserRole::HrAdmin]);
-    $finance = User::factory()->create(['role' => UserRole::Finance]);
 
     app(LeaveService::class)->approveEncashment($hr, $encashment, '');
-    app(LeaveService::class)->financeApproveEncashment($finance, $encashment->fresh(), '');
 
     $summary = crSummary($employee);
     expect($summary['encashed'])->toBe(2.0)

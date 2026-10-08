@@ -7,16 +7,20 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Storage;
 
 /**
- * Data-retention: 30 days after a leave request is approved, delete its
- * uploaded documents (the request's own attachment plus any conversation
- * attachments) from disk and clear the stored paths. Medical certificates
- * and similar sensitive files shouldn't linger indefinitely.
+ * Data-retention for leave evidence: medical certificates and similar files
+ * on leave requests approved more than N days ago.
+ *
+ * D10 (8 Oct 2026): permanent deletion of leave / medical evidence is a human
+ * decision. By default — and on the schedule — this only REPORTS what is
+ * eligible. A person deletes with --delete, after reviewing the list.
  */
 class PurgeApprovedLeaveAttachments extends Command
 {
-    protected $signature = 'leave:purge-attachments {--days=30 : Delete attachments this many days after approval}';
+    protected $signature = 'leave:purge-attachments
+        {--days=30 : Eligible this many days after approval}
+        {--delete : Permanently delete the eligible files (otherwise report only)}';
 
-    protected $description = 'Delete leave attachments 30 days after the leave was approved';
+    protected $description = 'Report (or, with --delete, permanently remove) leave attachments approved more than N days ago';
 
     public function handle(): int
     {
@@ -24,6 +28,7 @@ class PurgeApprovedLeaveAttachments extends Command
         $cutoff = now()->subDays($days);
         $disk = Storage::disk('public');
         $files = 0;
+        $delete = (bool) $this->option('delete');
 
         LeaveRequest::query()
             ->where('status', 'approved')
@@ -35,8 +40,15 @@ class PurgeApprovedLeaveAttachments extends Command
                     ->orWhereHas('messages', fn ($m) => $m->whereNotNull('attachment_path'));
             })
             ->with(['attachments', 'messages'])
-            ->chunkById(200, function ($requests) use ($disk, &$files) {
+            ->chunkById(200, function ($requests) use ($disk, &$files, $delete) {
                 foreach ($requests as $request) {
+                    if (! $delete) {
+                        $files += ($request->attachment_path ? 1 : 0) + $request->attachments->count()
+                            + $request->messages->whereNotNull('attachment_path')->count();
+
+                        continue;
+                    }
+
                     if ($request->attachment_path && $disk->exists($request->attachment_path)) {
                         $disk->delete($request->attachment_path);
                         $files++;
@@ -61,7 +73,9 @@ class PurgeApprovedLeaveAttachments extends Command
                 }
             });
 
-        $this->info("Purged {$files} leave attachment file(s) approved more than {$days} days ago.");
+        $this->info($delete
+            ? "Purged {$files} leave attachment file(s) approved more than {$days} days ago."
+            : "{$files} leave attachment file(s) approved more than {$days} days ago are eligible for removal. Nothing was deleted — a person runs this with --delete after review.");
 
         return self::SUCCESS;
     }

@@ -111,10 +111,10 @@ class NexflowOtPanel extends Component
             return;
         }
 
-        $outcome = $ot->importNexflowOtRecord($employee, $record);
+        $outcome = $this->importAndApprove($ot, $employee, $record);
 
         match ($outcome['status']) {
-            'imported' => \Flux::toast('Overtime imported to payroll.'),
+            'imported' => \Flux::toast('Overtime approved and imported to payroll.'),
             'skipped' => \Flux::toast('Skipped — an overtime record already exists for that day.', variant: 'warning'),
             default => \Flux::toast('Only fully approved (L1 + L2) overtime is payable.', variant: 'warning'),
         };
@@ -136,12 +136,33 @@ class NexflowOtPanel extends Component
         $imported = 0;
         $skipped = 0;
         foreach ($this->data['ot_records'] ?? [] as $record) {
-            $outcome = $ot->importNexflowOtRecord($employee, $record);
+            $outcome = $this->importAndApprove($ot, $employee, $record);
             $outcome['status'] === 'imported' ? $imported++ : ($outcome['status'] === 'skipped' ? $skipped++ : null);
         }
 
         \Flux::toast("Imported {$imported} approved overtime record(s)".($skipped ? ", skipped {$skipped} already logged." : '.'));
         $this->fetch();
+    }
+
+    /**
+     * The manager importing a Nexflow record here IS the Pulse decision (D4):
+     * the record arrives pending and is approved under this manager's name,
+     * with the same scope and not-self checks as any OT approval.
+     *
+     * @param  array<string, mixed>  $record
+     * @return array{status: string, record: mixed}
+     */
+    protected function importAndApprove(OvertimeService $ot, Employee $employee, array $record): array
+    {
+        $outcome = $ot->importNexflowOtRecord($employee, $record);
+
+        if ($outcome['status'] !== 'awaiting_manager') {
+            return $outcome;
+        }
+
+        $overtime = $ot->approve($outcome['request'], (int) Auth::id(), 'Approved in Pulse from the Nexflow record (L1 + L2 approved in Nexflow).');
+
+        return ['status' => 'imported', 'record' => $overtime];
     }
 
     protected function selectedEmployee(): ?Employee

@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Fillable([
     'employee_id', 'leave_type_id', 'requested_days',
     'status', 'reviewer_id', 'reviewer_comment', 'reviewed_at', 'payout_month', 'payroll_id',
-    'source_leave_year',
+    'source_leave_year', 'settled_at',
     'finance_reviewer_id', 'finance_reviewer_comment', 'finance_reviewed_at',
 ])]
 class LeaveEncashment extends Model
@@ -19,6 +19,7 @@ class LeaveEncashment extends Model
         'reviewed_at' => 'datetime',
         'finance_reviewed_at' => 'datetime',
         'claimed_at' => 'datetime',
+        'settled_at' => 'datetime',
     ];
 
     public function employee(): BelongsTo

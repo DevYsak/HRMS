@@ -4,10 +4,12 @@ use App\Enums\UserRole;
 use App\Livewire\Settings\NotificationSettings;
 use App\Mail\CustomBroadcastMail;
 use App\Models\AiSetting;
+use App\Models\AuditLog;
 use App\Models\EmailLog;
 use App\Models\Employee;
 use App\Models\MailSetting;
 use App\Models\User;
+use App\Services\Notifications\NotificationDeliveryGate;
 use Illuminate\Support\Facades\Mail;
 use Livewire\Livewire;
 use OpenAI\Laravel\Facades\OpenAI;
@@ -166,4 +168,45 @@ test('draft with ai fills the subject and body from the assistant', function () 
         ->call('draftWithAi')
         ->assertSet('composeSubject', 'Office Closed Friday')
         ->assertSet('composeBody', 'Dear team, the office will be closed on Friday.');
+});
+
+test('a broadcast is audited with its sender, recipients, time and result', function () {
+    Mail::fake();
+    $hr = User::factory()->create(['role' => UserRole::HrAdmin]);
+    $a = broadcastRecipient('a@example.com');
+    $b = broadcastRecipient('b@example.com');
+
+    Livewire::actingAs($hr)
+        ->test(NotificationSettings::class)
+        ->set('composeSubject', 'Office closed Friday')
+        ->set('composeBody', 'The office is closed on Friday.')
+        ->set('selectedRecipients', [(string) $a->id, (string) $b->id])
+        ->call('sendBroadcast');
+
+    $audit = AuditLog::where('event', 'EMAIL_BROADCAST_SENT')->latest('id')->first();
+
+    expect($audit)->not->toBeNull()
+        ->and($audit->user_id)->toBe($hr->id)
+        ->and($audit->new_values['recipient_user_ids'])->toEqualCanonicalizing([$a->id, $b->id])
+        ->and($audit->new_values['sent'])->toBe(2)
+        ->and($audit->new_values['failed'])->toBe(0)
+        ->and($audit->new_values['sent_at'])->not->toBeNull();
+});
+
+test('a broadcast is a manual send, so the in-app-by-default rule never holds it back (D5)', function () {
+    $headers = (new CustomBroadcastMail('Subject', 'Body'))->headers()->text;
+
+    expect($headers['X-Notification-Manual'] ?? null)->toBe('1')
+        ->and(app(NotificationDeliveryGate::class)->mail('custom.broadcast', null, manual: true)->allowed)->toBeTrue();
+});
+
+test('only a settings manager can send a broadcast', function () {
+    Mail::fake();
+    $employee = broadcastRecipient('e@example.com');
+
+    Livewire::actingAs($employee)
+        ->test(NotificationSettings::class)
+        ->assertForbidden();
+
+    Mail::assertNothingSent();
 });

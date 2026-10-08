@@ -20,6 +20,7 @@ use App\Services\Leave\LeaveLedgerService;
 use App\Services\Leave\LeaveMovementService;
 use App\Services\Leave\LeaveRegisterReconciliationService;
 use App\Services\LeaveService;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Notification;
@@ -35,6 +36,8 @@ use Livewire\Livewire;
  */
 beforeEach(function () {
     Notification::fake();
+    // D7: the monthly credit is off by default; these tests describe it switched on.
+    config(['leave_provisioning.csl_monthly_accrual_enabled' => true]);
     $this->travelTo(Carbon::parse('2026-10-05 10:00:00'));
     LeaveYear::firstOrCreate(['starts_on' => '2026-07-01', 'ends_on' => '2027-06-30'], ['label' => '2026/27']);
     foreach (range(26, 31) as $day) {
@@ -150,6 +153,24 @@ test('re-running posts nothing: a month is credited once', function () {
     expect(LeaveLedgerEntry::count())->toBe($entries)
         ->and($again['missing_months'])->toBe([])
         ->and(caAccruals($employee))->toHaveCount(3);
+});
+
+test('the monthly credit is off by default: --apply credits nothing and the schedule skips it (D7)', function () {
+    config(['leave_provisioning.csl_monthly_accrual_enabled' => false]);
+    $employee = caEmployee();
+    $before = LeaveLedgerEntry::count();
+
+    $this->artisan('leave:conexus-csl-accrual', ['--apply' => true])
+        ->expectsOutputToContain('switched off')
+        ->assertExitCode(0);
+
+    $event = collect(app(Schedule::class)->events())
+        ->first(fn ($e) => str_contains((string) $e->command, 'leave:conexus-csl-accrual'));
+
+    expect(LeaveLedgerEntry::count())->toBe($before)
+        ->and(caAccruals($employee))->toHaveCount(0)
+        ->and($event)->not->toBeNull()
+        ->and($event->filtersPass(app()))->toBeFalse();
 });
 
 // ── The register snapshot ───────────────────────────────────────────────────

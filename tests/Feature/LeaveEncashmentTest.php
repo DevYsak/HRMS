@@ -103,10 +103,10 @@ test('current-year encashment allowed when enabled on leave type', function () {
     expect($encashment->source_leave_year)->toBe(now()->year);
 });
 
-test('approveEncashment transitions to pending_finance', function () {
+test('approveEncashment by HR is final (D3): approved and the balance is committed', function () {
     $employee = encashEmployee();
     $type = encashableType();
-    makeBalance($employee, $type, ['carried_forward_days' => 10]);
+    $balance = makeBalance($employee, $type, ['carried_forward_days' => 10, 'encashed_days' => 0]);
 
     $hrUser = User::factory()->create(['role' => 'hr_admin']);
     $encashment = LeaveEncashment::create([
@@ -120,11 +120,12 @@ test('approveEncashment transitions to pending_finance', function () {
 
     app(LeaveService::class)->approveEncashment($hrUser, $encashment, 'Looks good');
 
-    expect($encashment->fresh()->status)->toBe('pending_finance');
+    expect($encashment->fresh()->status)->toBe('approved');
     expect($encashment->fresh()->reviewer_id)->toBe($hrUser->id);
+    expect((float) $balance->fresh()->encashed_days)->toBe(5.0);
 });
 
-test('financeApproveEncashment transitions to approved and commits balance', function () {
+test('an encashment parked in pending_finance before D3 can still be finished', function () {
     $employee = encashEmployee();
     $type = encashableType();
     $balance = makeBalance($employee, $type, ['carried_forward_days' => 10, 'encashed_days' => 0]);

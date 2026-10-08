@@ -266,10 +266,11 @@ class ParticipantService
     {
         $total = array_sum($weights);
 
+        // Nothing weighted (e.g. only a 0% self-assessment and no reviewer
+        // yet): keep every weight at 0 rather than splitting 100% evenly — a
+        // self-assessment must never become the rating by default (D9).
         if ($total <= 0) {
-            $count = max(1, count($weights));
-
-            return array_map(fn () => round(100 / $count, 2), $weights);
+            return array_map(fn () => 0.0, $weights);
         }
 
         return array_map(fn ($w) => round($w / $total * 100, 2), $weights);

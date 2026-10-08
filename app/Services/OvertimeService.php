@@ -7,11 +7,14 @@ use App\Models\AttendanceSetting;
 use App\Models\AuditLog;
 use App\Models\Employee;
 use App\Models\OtRequest;
-use App\Models\OtWindow;
 use App\Models\OvertimeRecord;
+use App\Models\User;
+use App\Notifications\OtRequestNotification;
 use App\Services\Approvals\ApprovalGuard;
 use App\Services\Attendance\AttendanceCalculator;
 use App\Services\Attendance\ShiftResolver;
+use App\Services\Notifications\NotificationRecipients;
+use App\Services\Teams\ApprovalRoutingService;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Collection;
@@ -35,22 +38,15 @@ class OvertimeService
     }
 
     /**
-     * Create a pre-approval OT request.
-     * REQ-06: Only accepted when an active company OT window covers the work date.
+     * Create a pre-approval OT request for the manager to decide.
+     *
+     * D6 (8 Oct 2026): company OT windows are optional planning only — a
+     * valid request is accepted whether or not a window covers the date.
      *
      * @param  array{work_date: string, start_time: string, end_time: string, reason: string, attendance_id?: int}  $data
      */
     public function submitRequest(Employee $employee, array $data): OtRequest
     {
-        $workDate = Carbon::parse($data['work_date']);
-
-        if (! OtWindow::isOpenFor($workDate)) {
-            throw new \DomainException(
-                'Overtime requests are not accepted at this time. '
-                .'Please wait for a company-approved OT window to be opened by HR or a Director.'
-            );
-        }
-
         $start = Carbon::parse("{$data['work_date']} {$data['start_time']}");
         $end = Carbon::parse("{$data['work_date']} {$data['end_time']}");
         // An end at or before the start runs past midnight.
@@ -293,8 +289,44 @@ class OvertimeService
     }
 
     /**
-     * Auto-approve a pending OT request and create the overtime record.
-     * Used by the Nexflow sync for auto-approve eligible employees.
+     * Tell whoever decides this OT request that it is waiting: the reporting
+     * manager plus the team lead / backup chain for the work date, deduped;
+     * HR only when neither resolves. Shared by employee-submitted and
+     * Nexflow-filed requests (D4: every normal OT is a manager's decision).
+     */
+    public function notifyApprovers(OtRequest $request): void
+    {
+        $employee = $request->employee;
+        if ($employee === null) {
+            return;
+        }
+
+        $recipients = collect();
+        $push = function (?User $u) use ($recipients) {
+            if ($u && ! $recipients->contains(fn (User $r) => $r->id === $u->id)) {
+                $recipients->push($u);
+            }
+        };
+
+        $push($employee->manager);
+        app(ApprovalRoutingService::class)
+            ->getApproverChain($employee, \Illuminate\Support\Carbon::parse($request->work_date))
+            ->each($push);
+
+        if ($recipients->isEmpty()) {
+            $recipients = app(NotificationRecipients::class)->hrQueue();
+        }
+
+        $role = $employee->manager && $recipients->contains('id', $employee->manager->id) ? 'approver' : 'hr_admin';
+        $recipients->each(fn (User $u) => $u->notify(
+            (new OtRequestNotification($request))->forRole($u->id === $employee->manager?->id ? 'manager' : $role)
+        ));
+    }
+
+    /**
+     * Approve a pending OT request with no reviewer and create its overtime
+     * record. No sync calls this any more (D4, 8 Oct 2026: Nexflow OT is a
+     * pending request for the manager, never auto-approved).
      */
     public function autoApprove(OtRequest $request): OvertimeRecord
     {
@@ -342,13 +374,18 @@ class OvertimeService
      */
     public function importNexflowOtRecord(Employee $employee, array $record): array
     {
-        // Map Nexflow's headline status to the HRMS OT status.
+        // Map Nexflow's headline status to the HRMS OT status. D4 (8 Oct
+        // 2026): Nexflow's own L1/L2 approval is not a Pulse manager's
+        // pre-approval — approved-in-Nexflow OT arrives as a PENDING request
+        // for the manager to decide here. A Nexflow rejection is mirrored
+        // (it can only stop pay, never create it).
         $hrmsStatus = match ($record['status'] ?? null) {
-            'approved' => 'approved',
+            'approved' => 'pending',
             'rejected' => 'rejected',
-            'pending' => 'pending',
+            'pending' => null,
             default => null,
         };
+        $nexflowApproved = ($record['status'] ?? null) === 'approved';
 
         $workDate = $record['date'] ?? null;
         $otHours = round((float) ($record['ot_hours'] ?? (($record['ot_minutes'] ?? 0) / 60)), 2);
@@ -360,20 +397,16 @@ class OvertimeService
         $ref = 'otdetails:'.($record['id'] ?? $workDate);
         $existing = OtRequest::where('source', 'nexflow')->where('nexflow_ref', $ref)->first();
 
-        // Already synced — reconcile if Nexflow changed the status since. Its
-        // approvals can be re-decided (approved → rejected → approved), and each
-        // change must flow through to HRMS with a history entry.
+        // Already synced. Once a Pulse manager has decided, that decision is
+        // the record — Nexflow changes no longer touch it. While still pending
+        // here, a Nexflow rejection withdraws it; a re-approval leaves it
+        // pending for the manager.
         if ($existing) {
-            if ($existing->status === $hrmsStatus) {
+            if ($existing->status !== 'pending' || $existing->status === $hrmsStatus) {
                 return ['status' => 'unchanged', 'record' => $existing->overtimeRecord];
             }
 
             return $this->applyNexflowStatusChange($existing, $hrmsStatus);
-        }
-
-        // A brand-new pending record: nothing to record until it's decided.
-        if ($hrmsStatus === 'pending') {
-            return ['status' => 'not_payable', 'record' => null];
         }
 
         // Derive the OT window from the completed sessions (first start → last stop).
@@ -382,8 +415,8 @@ class OvertimeService
         $endTime = $sessions->pluck('stopped_at')->filter()->sort()->last()
             ?: date('H:i', strtotime($startTime) + (int) round($otHours * 3600));
 
-        // Approved — double-count guard: a pending/approved OT already covers this day.
-        if ($hrmsStatus === 'approved'
+        // Double-count guard: a pending/approved OT already covers this day.
+        if ($nexflowApproved
             && OtRequest::where('employee_id', $employee->id)->where('work_date', $workDate)
                 ->whereIn('status', ['pending', 'approved'])->exists()) {
             return ['status' => 'skipped', 'record' => null];
@@ -396,21 +429,21 @@ class OvertimeService
             'end_time' => $endTime,
             'requested_hours' => $otHours,
             'reason' => 'Nexflow OT: '.($record['reason'] ?? 'overtime')
-                .($hrmsStatus === 'approved' ? ' (L1 + L2 approved)' : ' (rejected in Nexflow)'),
+                .($nexflowApproved ? ' (L1 + L2 approved in Nexflow)' : ' (rejected in Nexflow)'),
             'status' => $hrmsStatus,
-            'reviewer_comment' => $hrmsStatus === 'approved'
-                ? 'Imported from Nexflow — both approval levels cleared.'
-                : 'Rejected in Nexflow (L1/L2).',
-            'reviewed_at' => now(),
+            'reviewer_comment' => $nexflowApproved ? null : 'Rejected in Nexflow (L1/L2).',
+            'reviewed_at' => $nexflowApproved ? null : now(),
             'source' => 'nexflow',
             'nexflow_ref' => $ref,
         ]);
 
         // First history entry for this OT.
-        AuditLog::record($otRequest, 'nexflow_ot_synced', null, ['status' => $hrmsStatus, 'ref' => $ref]);
+        AuditLog::record($otRequest, 'nexflow_ot_synced', null, ['status' => $hrmsStatus, 'nexflow_status' => $record['status'] ?? null, 'ref' => $ref]);
 
-        if ($hrmsStatus === 'approved') {
-            return ['status' => 'imported', 'record' => $this->createOvertimeRecordFromApprovedRequest($otRequest)];
+        if ($nexflowApproved) {
+            $this->notifyApprovers($otRequest);
+
+            return ['status' => 'awaiting_manager', 'record' => null, 'request' => $otRequest];
         }
 
         return ['status' => 'recorded_rejected', 'record' => null];
@@ -489,7 +522,7 @@ class OvertimeService
             foreach ($data['ot_records'] ?? [] as $record) {
                 $outcome = $this->importNexflowOtRecord($employee, $record);
                 match ($outcome['status']) {
-                    'imported' => $imported++,
+                    'awaiting_manager' => $imported++,   // filed for the manager to decide (D4)
                     'recorded_rejected' => $rejected++,
                     'updated' => $updated++,     // status changed upstream and reconciled
                     'skipped' => $skipped++,

@@ -6,7 +6,7 @@ use App\Models\LeaveRequest;
 use App\Models\LeaveType;
 use Illuminate\Support\Facades\Storage;
 
-test('purges attachments only for leaves approved more than the retention window ago', function () {
+test('by default it only reports; a person purges with --delete, and only past the window (D10)', function () {
     Storage::fake('public');
 
     $type = LeaveType::create([
@@ -40,7 +40,16 @@ test('purges attachments only for leaves approved more than the retention window
         'approved_at' => now()->subDays(5), 'attachment_path' => 'leave-attachments/recent.pdf',
     ]);
 
-    $this->artisan('leave:purge-attachments')->assertSuccessful();
+    // Scheduled / default run: reports what is eligible, deletes nothing.
+    $this->artisan('leave:purge-attachments')
+        ->expectsOutputToContain('are eligible for removal. Nothing was deleted')
+        ->assertSuccessful();
+
+    expect(Storage::disk('public')->exists('leave-attachments/old.pdf'))->toBeTrue()
+        ->and($old->fresh()->attachment_path)->toBe('leave-attachments/old.pdf');
+
+    // A person, after review.
+    $this->artisan('leave:purge-attachments', ['--delete' => true])->assertSuccessful();
 
     expect(Storage::disk('public')->exists('leave-attachments/old.pdf'))->toBeFalse();
     expect(Storage::disk('public')->exists('leave-attachments/old-msg.pdf'))->toBeFalse();

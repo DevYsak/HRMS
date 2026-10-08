@@ -3,20 +3,22 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
     'employee_id', 'title', 'description', 'amount', 'month',
-    'status', 'requested_by', 'approved_by', 'approval_note', 'approved_at', 'payroll_id',
+    'status', 'requested_by', 'approved_by', 'approval_note', 'approved_at', 'payroll_id', 'settled_at',
 ])]
 class Incentive extends Model
 {
     protected function casts(): array
     {
         return [
-            'amount'      => 'decimal:2',
+            'amount' => 'decimal:2',
             'approved_at' => 'datetime',
+            'settled_at' => 'datetime',
         ];
     }
 
@@ -40,14 +42,14 @@ class Incentive extends Model
         return $this->belongsTo(Payroll::class);
     }
 
-    /** @return \Illuminate\Database\Eloquent\Builder<static> */
-    public function scopePending(\Illuminate\Database\Eloquent\Builder $query): \Illuminate\Database\Eloquent\Builder
+    /** @return Builder<static> */
+    public function scopePending(Builder $query): Builder
     {
         return $query->where('status', 'pending');
     }
 
-    /** @return \Illuminate\Database\Eloquent\Builder<static> */
-    public function scopeApproved(\Illuminate\Database\Eloquent\Builder $query): \Illuminate\Database\Eloquent\Builder
+    /** @return Builder<static> */
+    public function scopeApproved(Builder $query): Builder
     {
         return $query->where('status', 'approved');
     }

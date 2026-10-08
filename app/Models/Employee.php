@@ -28,6 +28,8 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     'employment_type_id', 'work_mode_id', 'salary_cycle_id',
     // Legacy string columns kept for backward compat during migration
     'employment_type', 'salary_cycle',
+    // A salary-cycle move waiting for its effective payroll month
+    'pending_salary_cycle_id', 'salary_cycle_effective_month', 'salary_cycle_paid_through',
     // Shift & OT source
     'shift_id', 'ot_tracking_source',
     // Joining & probation
@@ -155,6 +157,7 @@ class Employee extends Model
             'joining_date' => 'date',
             'date_of_birth' => 'date',
             'probation_end_date' => 'date',
+            'salary_cycle_paid_through' => 'date',
             'probation_reminder_sent_for' => 'date',
             'onboarding_completed_notified_at' => 'datetime',
             'offboarding_completed_notified_at' => 'datetime',
@@ -381,6 +384,12 @@ class Employee extends Model
     public function salaryCycle(): BelongsTo
     {
         return $this->belongsTo(SalaryCycle::class)->withTrashed();
+    }
+
+    /** The cycle this employee moves to at salary_cycle_effective_month. */
+    public function pendingSalaryCycle(): BelongsTo
+    {
+        return $this->belongsTo(SalaryCycle::class, 'pending_salary_cycle_id')->withTrashed();
     }
 
     // ── Lifecycle helpers ─────────────────────────────────────────────────────

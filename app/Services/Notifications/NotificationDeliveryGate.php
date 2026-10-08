@@ -19,9 +19,9 @@ use App\Models\User;
  *
  * Resolution order for both channels: a role-specific override if one is
  * configured for this event, otherwise the event's own settings, otherwise —
- * no row at all — fail open. An event nobody has ever configured, or a role
- * nobody has ever configured within an otherwise-configured event, behaves
- * exactly as it did before either settings layer existed.
+ * no row at all — the default: in-app fails open; email goes out only for a
+ * critical event (payslip, account, password reset) or a send a person
+ * triggered (D5, 8 Oct 2026 — in-app is the default channel).
  *
  * When the recipient is known (the notification path passes it), two more
  * checks come first (NotificationRecipientPolicy): a recipient whose RBAC
@@ -46,8 +46,14 @@ class NotificationDeliveryGate
 
         $resolved = $this->resolve($eventKey, $role);
 
+        // No settings row yet. D5 (8 Oct 2026): email is off by default for
+        // anything non-critical, so only a critical event (payslip, account,
+        // password reset) or a send a person triggered right now goes out.
+        // In-app delivery below still fails open.
         if ($resolved === null) {
-            return DeliveryDecision::allow();
+            return $manual || NotificationCatalog::isCriticalMail($eventKey)
+                ? DeliveryDecision::allow()
+                : DeliveryDecision::skip('email_off_by_default');
         }
 
         if (! $resolved->mail_enabled) {

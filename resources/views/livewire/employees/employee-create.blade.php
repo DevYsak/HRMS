@@ -205,7 +205,16 @@
             <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <flux:switch wire:model.live="ot_eligible" label="OT Eligible" description="Enable Overtime tracking." />
                 @if($ot_eligible)
-                    <flux:input wire:model="ot_rate_per_hour" type="number" step="0.01" label="OT Rate Per Hour" placeholder="e.g. 150.00" />
+                    <flux:input wire:model="ot_rate_per_hour" type="number" step="0.01" label="OT Rate Per Hour (optional)" placeholder="Company rate applies" />
+                @else
+                    <div></div>
+                @endif
+            </div>
+
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <flux:switch wire:model.live="hra_enabled" label="Pay HRA" description="An assigned HRA component pays only when this is on." />
+                @if($hra_enabled)
+                    <flux:input wire:model="hra_percentage" type="number" step="0.01" min="0" max="100" label="HRA as % of Basic (optional)" placeholder="Leave blank to pay the component as assigned" />
                 @else
                     <div></div>
                 @endif

@@ -70,7 +70,7 @@ function teamedEmployee(): array
     return [$employee->fresh(), $leadUser, $head, $dept];
 }
 
-test('activating a cycle creates self, team lead and department head participants with 20/50/30 weights', function () {
+test('activating a cycle creates self, team lead and department head participants; self weighs 0% by default (D9)', function () {
     Notification::fake();
 
     [$actor, , , $cycle] = perfFixture();
@@ -83,11 +83,11 @@ test('activating a cycle creates self, team lead and department head participant
 
     expect($participants)->toHaveCount(3)
         ->and($participants['self']->reviewer_id)->toBe($employee->user_id)
-        ->and($participants['self']->weight_percent)->toBe(20.0)
+        ->and($participants['self']->weight_percent)->toBe(0.0)
         ->and($participants['team_lead']->reviewer_id)->toBe($leadUser->id)
-        ->and($participants['team_lead']->weight_percent)->toBe(50.0)
+        ->and($participants['team_lead']->weight_percent)->toBe(62.5)       // 50 of 80
         ->and($participants['department_head']->reviewer_id)->toBe($head->id)
-        ->and($participants['department_head']->weight_percent)->toBe(30.0);
+        ->and($participants['department_head']->weight_percent)->toBe(37.5); // 30 of 80
 
     Notification::assertSentTo($leadUser, ReviewParticipantAssignedNotification::class);
     Notification::assertSentTo($head, ReviewParticipantAssignedNotification::class);
@@ -117,7 +117,7 @@ test('weights renormalise when a rung is missing and honour department overrides
         ->and($participants['department_head']->weight_percent)->toBe(60.0);
 });
 
-test('the composite score weights every submitted participant', function () {
+test('the composite score weights every authorised reviewer; the self score is on record but does not count', function () {
     Notification::fake();
 
     [$actor, $template, $component, $cycle] = perfFixture();
@@ -134,10 +134,11 @@ test('the composite score weights every submitted participant', function () {
     $service->submit($byRole['team_lead'], [['component_id' => $component->id, 'score' => 60.0, 'comment' => 'solid']]);
     $service->submit($byRole['department_head'], [['component_id' => $component->id, 'score' => 90.0, 'comment' => null]]);
 
-    // 0.2×80 + 0.5×60 + 0.3×90 = 73
+    // Self 0% (D9): 0.625×60 + 0.375×90 = 71.25 — the self 80 changes nothing.
     $workflow->lockReview($review->fresh(), $actor);
 
-    expect($review->fresh()->final_score)->toBe(73.0)
+    expect($review->fresh()->final_score)->toBe(71.25)
+        ->and($byRole['self']->fresh()->scores->first()->score)->toBe(80.0)
         ->and($review->fresh()->status)->toBe('locked');
 });
 
@@ -199,9 +200,9 @@ test('adding an additional reviewer renormalises existing weights to keep 100 to
     $weights = $review->fresh()->participants->pluck('weight_percent', 'reviewer_role');
 
     expect($weights['additional'])->toBe(20.0)
-        ->and($weights['self'])->toBe(16.0)      // 20 × 0.8
-        ->and($weights['team_lead'])->toBe(40.0) // 50 × 0.8
-        ->and($weights['department_head'])->toBe(24.0) // 30 × 0.8
+        ->and($weights['self'])->toBe(0.0)             // 0 × 0.8
+        ->and($weights['team_lead'])->toBe(50.0)       // 62.5 × 0.8
+        ->and($weights['department_head'])->toBe(30.0) // 37.5 × 0.8
         ->and((float) $review->fresh()->participants->sum('weight_percent'))->toBe(100.0);
 });
 
@@ -281,4 +282,34 @@ test('a participant cannot open someone else\'s task', function () {
     expect(fn () => Livewire::actingAs($outsider)->test(ReviewTasks::class)
         ->call('openTask', $participant->id))
         ->toThrow(ModelNotFoundException::class);
+});
+
+test('a self weight applies only when configured explicitly (D9)', function () {
+    Notification::fake();
+
+    [$actor, , $component, $cycle] = perfFixture();
+    ReviewWeightage::create(['department_id' => null, 'reviewer_role' => 'self', 'weight_percent' => 20]);
+    [$employee] = teamedEmployee();
+
+    app(ReviewWorkflowService::class)->activateCycle($cycle->fresh(), $actor);
+    $review = PerformanceReview::where('employee_id', $employee->id)->firstOrFail();
+
+    expect($review->participants->keyBy('reviewer_role')['self']->weight_percent)->toBe(20.0);
+});
+
+test('with no reviewer scores, the self-assessment never becomes the KPI rating (D9)', function () {
+    Notification::fake();
+
+    [$actor, , $component, $cycle] = perfFixture();
+    [$employee] = teamedEmployee();
+    $workflow = app(ReviewWorkflowService::class);
+    $workflow->activateCycle($cycle->fresh(), $actor);
+    $review = PerformanceReview::where('employee_id', $employee->id)->firstOrFail();
+
+    PerformanceReviewScore::where('review_id', $review->id)->update(['self_score' => 95.0]);
+    $review->fresh()->update(['status' => 'hr_reviewed']);
+    $workflow->lockReview($review->fresh(), $actor);
+
+    expect((float) PerformanceReviewScore::where('review_id', $review->id)->value('final_score'))->toBe(0.0)
+        ->and((float) PerformanceReviewScore::where('review_id', $review->id)->value('self_score'))->toBe(95.0);
 });

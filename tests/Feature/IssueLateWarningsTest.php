@@ -6,6 +6,8 @@ use App\Models\AttendanceSetting;
 use App\Models\Employee;
 use App\Models\User;
 use App\Models\WarningLetter;
+use App\Notifications\WarningIssuedNotification;
+use App\Services\Performance\WarningService;
 use Illuminate\Support\Facades\Notification;
 
 function lateWarningEmployee(int $lateDays): Employee
@@ -36,7 +38,7 @@ beforeEach(function () {
     User::factory()->create(['role' => UserRole::SuperAdmin]);
 });
 
-test('reaching the late threshold issues a verbal warning letter once, idempotently', function () {
+test('reaching the late threshold drafts a verbal warning for HR — never issues it (D10)', function () {
     $employee = lateWarningEmployee(3);
 
     $this->artisan('hrms:issue-late-warnings')->assertSuccessful();
@@ -44,18 +46,30 @@ test('reaching the late threshold issues a verbal warning letter once, idempoten
     $letter = WarningLetter::where('employee_id', $employee->id)->first();
     expect($letter)->not->toBeNull()
         ->and($letter->warning_type)->toBe('verbal')
-        ->and($letter->status)->toBe('issued')
+        ->and($letter->status)->toBe('draft')
         ->and($letter->reason)->toContain('3 late arrivals');
 
-    // The performance timeline carries the disciplinary event.
+    // A draft is not a disciplinary action yet: no timeline event, no notice.
+    $this->assertDatabaseMissing('performance_timelines', [
+        'employee_id' => $employee->id,
+        'event_type' => 'warning_issued',
+    ]);
+    Notification::assertNothingSentTo($employee->user);
+
+    // Running again the same month must NOT duplicate the draft.
+    $this->artisan('hrms:issue-late-warnings')->assertSuccessful();
+    expect(WarningLetter::where('employee_id', $employee->id)->count())->toBe(1);
+
+    // HR issuing the draft is what makes it a warning.
+    $hr = User::where('role', UserRole::SuperAdmin)->first();
+    app(WarningService::class)->issueDraft($letter, $hr);
+
+    expect($letter->fresh()->status)->toBe('issued');
     $this->assertDatabaseHas('performance_timelines', [
         'employee_id' => $employee->id,
         'event_type' => 'warning_issued',
     ]);
-
-    // Running again the same month must NOT duplicate the letter.
-    $this->artisan('hrms:issue-late-warnings')->assertSuccessful();
-    expect(WarningLetter::where('employee_id', $employee->id)->count())->toBe(1);
+    Notification::assertSentTo($employee->user, WarningIssuedNotification::class);
 })->skip(fn () => today()->day < 3, 'Needs at least 3 elapsed days in the current month.');
 
 test('below the configured threshold no letter is issued', function () {

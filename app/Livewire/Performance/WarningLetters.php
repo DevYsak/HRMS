@@ -234,6 +234,27 @@ class WarningLetters extends Component
         \Flux::toast('Warning escalated successfully.', variant: 'success');
     }
 
+    /**
+     * Issue a drafted letter — the human decision the automatic late-mark job
+     * never makes itself (D10).
+     */
+    public function issueDraft(WarningService $warningService)
+    {
+        abort_unless(Auth::user()->canManageEmployees(), 403);
+        app(ApprovalGuard::class)->assertCanDecide(Auth::user(), $this->activeWarning->employee);
+
+        try {
+            $warningService->issueDraft($this->activeWarning, Auth::user());
+        } catch (\DomainException $e) {
+            \Flux::toast($e->getMessage(), variant: 'danger');
+
+            return;
+        }
+
+        $this->viewWarning($this->activeWarning->id);
+        \Flux::toast('Warning issued to the employee.', variant: 'success');
+    }
+
     public function closeWarning(WarningService $warningService)
     {
         abort_unless($this->canManageWarnings(), 403);
