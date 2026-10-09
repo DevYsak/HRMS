@@ -24,7 +24,7 @@
                 @endif
                 <span class="text-xs font-medium text-zinc-400 dark:text-zinc-500">{{ now()->format('l, d F Y') }}</span>
             </div>
-            <h1 class="text-2xl font-black tracking-tight text-zinc-900 dark:text-white lg:text-3xl">{{ $title }}</h1>
+            <h1 class="text-[28px] font-bold leading-tight tracking-tight text-zinc-900 dark:text-white lg:text-[32px]">{{ $title }}</h1>
             @if($subtitle)
                 <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{{ $subtitle }}</p>
             @endif

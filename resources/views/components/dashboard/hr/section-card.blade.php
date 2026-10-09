@@ -13,15 +13,15 @@
     ][$accent] ?? 'bg-orange-50 text-orange-500 dark:bg-orange-500/10 dark:text-orange-400';
 @endphp
 
-<div {{ $attributes->class('rounded-2xl border border-[#F3E8DD] bg-white p-6 shadow-sm transition hover:shadow-lg dark:border-white/10 dark:bg-zinc-900') }}>
+<div {{ $attributes->class('rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm dark:border-white/5 dark:bg-ink-900') }}>
     @if($title)
-        <div class="mb-4 flex items-center gap-3">
+        <div class="mb-4 flex items-center gap-2.5">
             @if($icon)
-                <span class="flex size-9 items-center justify-center rounded-lg {{ $chip }}"><flux:icon :name="$icon" class="size-[18px]" /></span>
+                <span class="flex size-8 items-center justify-center rounded-lg {{ $chip }}"><flux:icon :name="$icon" class="size-4" /></span>
             @endif
             <div class="flex-1">
-                <h3 class="text-lg font-bold tracking-tight text-[#111827] dark:text-white">{{ $title }}</h3>
-                @if($subtitle)<p class="text-sm text-[#6B7280] dark:text-zinc-400">{{ $subtitle }}</p>@endif
+                <h3 class="text-base font-semibold tracking-tight text-zinc-900 dark:text-white">{{ $title }}</h3>
+                @if($subtitle)<p class="text-xs font-medium text-zinc-400">{{ $subtitle }}</p>@endif
             </div>
             @isset($actions)<div class="flex items-center gap-2">{{ $actions }}</div>@endisset
         </div>

@@ -14,6 +14,7 @@ use App\Services\Attendance\AttendanceStatusResolver;
 use App\Services\Attendance\WorkingDayResolver;
 use App\Services\LeaveService;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 
@@ -164,6 +165,8 @@ class ManagerDashboard extends Component
                     'state' => $s['state'],
                     'status' => $weeklyOff ? ($in ? 'weekly_off_worked' : 'weekly_off') : ($in ? ($record?->status ?? 'present') : ($s['reason'] === 'absent' ? 'absent' : 'not_in')),
                     'is_late' => ! $weeklyOff && $in && $s['day']->isLate,
+                    'worked_minutes' => (int) $s['worked_minutes'],
+                    'excess_break' => $in && $s['day']->excessBreak,
                 ];
             });
 
@@ -182,6 +185,13 @@ class ManagerDashboard extends Component
             ->latest()
             ->take(10)
             ->get();
+
+        // True totals for the "Needs attention" list: the two lists above are
+        // capped at ten rows, the counts are not.
+        $pendingLeaveCount = LeaveRequest::whereIn('employee_id', $reachIds)->where('status', 'pending')->count();
+        $pendingOtCount = OtRequest::whereIn('employee_id', $reachIds)->where('status', 'pending')->count();
+        $missingCheckoutCount = $teamAttendanceList->where('state', AttendanceStatusResolver::MISSING_CHECKOUT)->count();
+        $trend = $this->attendanceTrend($teamIds, $today);
 
         // --- Team OT this month (spec §5.2: hours and amount) ---
         $teamOt = OvertimeRecord::whereIn('employee_id', $teamIds)
@@ -244,7 +254,62 @@ class ManagerDashboard extends Component
             'teamOtHours',
             'teamOtAmount',
             'onLeaveThisWeek',
+            'pendingLeaveCount',
+            'pendingOtCount',
+            'missingCheckoutCount',
+            'trend',
         ) + ['scopeHeading' => $this->scopeHeading()])->layout('layouts.app', ['title' => $this->pageTitle()]);
+    }
+
+    /**
+     * Present / late / absent for the last seven company working days, today
+     * included. Weekends, public holidays and the December shutdown are
+     * skipped. Absent follows the convention of today's card: people in the
+     * team who did not clock in.
+     *
+     * @param  Collection<int, int>  $teamIds
+     * @return array<int, array{label: string, present: int, late: int, absent: int}>
+     */
+    protected function attendanceTrend($teamIds, Carbon $today): array
+    {
+        if ($teamIds->isEmpty()) {
+            return [];
+        }
+
+        $resolver = app(WorkingDayResolver::class);
+        $days = [];
+        $cursor = $today->copy();
+
+        while (count($days) < 7 && $cursor->gte($today->copy()->subDays(21))) {
+            if ($resolver->isCompanyWorkingDay($cursor)) {
+                $days[] = $cursor->copy();
+            }
+            $cursor->subDay();
+        }
+
+        $days = array_reverse($days);
+
+        if ($days === []) {
+            return [];
+        }
+
+        $rows = Attendance::whereIn('employee_id', $teamIds)
+            ->whereBetween('date', [$days[0]->toDateString(), end($days)->toDateString()])
+            ->whereNotNull('check_in')
+            ->get(['date', 'is_late'])
+            ->groupBy(fn ($row) => Carbon::parse($row->date)->toDateString());
+
+        return array_map(function (Carbon $day) use ($rows, $teamIds): array {
+            $dayRows = $rows->get($day->toDateString(), collect());
+            $present = $dayRows->count();
+
+            return [
+                'label' => $day->format('D j'),
+                'present' => $present,
+                'late' => $dayRows->where('is_late', true)->count(),
+                'absent' => max(0, $teamIds->count() - $present),
+            ];
+        }, $days);
     }
 
     /**

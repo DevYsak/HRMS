@@ -50,7 +50,7 @@
     $gid = 'spark-'.\Illuminate\Support\Str::slug($label).'-'.substr(md5($label.$accent), 0, 5);
 @endphp
 
-<div {{ $attributes->class('group flex h-[150px] flex-col justify-between rounded-2xl border border-[#F1E7DD] bg-white p-5 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-orange-500/5 dark:border-white/10 dark:bg-zinc-900') }}>
+<div {{ $attributes->class('group flex h-[150px] flex-col justify-between rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm dark:border-white/5 dark:bg-ink-900') }}>
     <div class="flex items-start justify-between">
         <div class="flex size-10 items-center justify-center rounded-xl {{ $iconCls }}">
             <flux:icon :name="$icon" class="size-5" />
@@ -64,9 +64,9 @@
 
     <div class="flex items-end justify-between gap-3">
         <div class="min-w-0">
-            <div class="text-[32px] font-extrabold leading-none tracking-tight text-[#1F2937] tabular-nums dark:text-white" x-data="countUp(@js((string) $value))" x-text="display">{{ $value }}</div>
-            <div class="mt-1.5 truncate text-[13px] font-medium text-[#6B7280] dark:text-zinc-400">{{ $label }}</div>
-            @if($compare)<div class="mt-0.5 text-[11px] text-[#9CA3AF] dark:text-zinc-500">{{ $compare }}</div>@endif
+            <div class="text-[28px] font-bold leading-none tracking-tight text-zinc-900 tabular-nums dark:text-white" x-data="countUp(@js((string) $value))" x-text="display">{{ $value }}</div>
+            <div class="mt-1.5 truncate text-[13px] font-medium text-zinc-500 dark:text-zinc-400">{{ $label }}</div>
+            @if($compare)<div class="mt-0.5 text-[11px] text-zinc-400 dark:text-zinc-500">{{ $compare }}</div>@endif
         </div>
         @if($poly)
             <svg viewBox="0 0 100 32" preserveAspectRatio="none" class="h-10 w-20 shrink-0 overflow-visible">

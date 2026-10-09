@@ -68,8 +68,8 @@
         @endif
     </div>
 
-    <div class="text-2xl font-black tracking-tight text-zinc-900 tabular-nums dark:text-white">{{ $value }}</div>
-    <div class="mt-0.5 text-[12px] font-semibold text-zinc-500 dark:text-zinc-400">{{ $label }}</div>
+    <div class="text-[26px] font-bold leading-none tracking-tight text-zinc-900 tabular-nums dark:text-white">{{ $value }}</div>
+    <div class="mt-1 text-[13px] font-medium text-zinc-500 dark:text-zinc-400">{{ $label }}</div>
 
     @if($sparkPoly)
         <svg viewBox="0 0 100 26" preserveAspectRatio="none" class="mt-2.5 h-7 w-full overflow-visible {{ $iconText }}">

@@ -21,7 +21,9 @@ test('executive dashboard shows workforce analytics and hides payroll widgets', 
         ->assertSee('Executive Summary')
         ->assertSee('Attrition')
         ->assertSee('Department Ranking')
-        ->assertSee('Organization Health')
+        ->assertDontSee('Organization Health')
+        ->assertDontSee('Satisfaction')
+        ->assertDontSee('Company Health')
         ->assertSee('Risk Indicators')
         ->assertDontSee('Payroll Status');
 });

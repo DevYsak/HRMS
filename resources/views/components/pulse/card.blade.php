@@ -15,7 +15,7 @@
                     </div>
                 @endif
                 <div>
-                    <h3 class="text-[15px] font-bold tracking-tight text-zinc-900 dark:text-white">{{ $title }}</h3>
+                    <h3 class="text-base font-semibold tracking-tight text-zinc-900 dark:text-white">{{ $title }}</h3>
                     @if($subtitle)
                         <p class="text-xs font-medium text-zinc-400">{{ $subtitle }}</p>
                     @endif

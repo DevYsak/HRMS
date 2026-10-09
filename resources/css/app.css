@@ -81,6 +81,44 @@
 }
 .pulse-sidebar [data-flux-sidebar-item][data-current] svg { color: var(--role-accent, #f97316) !important; opacity: 1; }
 
+/* Brand row and account card stay put while the menu scrolls between them
+   (the sidebar itself is the scroll container; -16px cancels its p-4). */
+.pulse-sidebar { overflow-x: hidden; }
+.pulse-sidebar [data-pulse-sidebar-brand-row] {
+    position: sticky; top: -16px; z-index: 5;
+    margin-top: -16px; padding-top: 16px; padding-bottom: 4px;
+    background: #FFF8F1;
+}
+.pulse-sidebar [data-pulse-sidebar-account] {
+    position: sticky; bottom: -16px; z-index: 5;
+    margin-bottom: -16px; padding-bottom: 16px;
+    background: #FFF8F1;
+}
+
+/* Folded rail (desktop), ChatGPT-style: a 64px column of 40px squares,
+   centred, with no sideways movement and no visible scrollbar. */
+@media (min-width: 1024px) {
+    .pulse-sidebar[data-flux-sidebar-collapsed-desktop] { width: 64px !important; padding-inline: 12px !important; scrollbar-width: none; }
+    .pulse-sidebar[data-flux-sidebar-collapsed-desktop]::-webkit-scrollbar { display: none; }
+}
+.pulse-sidebar[data-flux-sidebar-collapsed-desktop] [data-flux-sidebar-item],
+.pulse-sidebar[data-flux-sidebar-collapsed-desktop] [data-flux-sidebar-group-dropdown] > button {
+    width: 40px !important; height: 40px !important;
+    margin-inline: auto !important; padding: 0 !important;
+    justify-content: center !important;
+    border-radius: 12px !important;
+    transform: none !important;
+}
+.pulse-sidebar[data-flux-sidebar-collapsed-desktop] [data-flux-sidebar-item] svg,
+.pulse-sidebar[data-flux-sidebar-collapsed-desktop] [data-flux-sidebar-group-dropdown] > button svg { transform: none !important; }
+.pulse-sidebar[data-flux-sidebar-collapsed-desktop] [data-flux-sidebar-item][data-current] {
+    background: #FFE9D5 !important;
+    box-shadow: none !important;
+}
+.pulse-sidebar[data-flux-sidebar-collapsed-desktop] [data-flux-sidebar-group-dropdown] > button:hover { background-color: #FFF1E6 !important; }
+/* Group icons on the rail match the single items' orange */
+.pulse-sidebar[data-flux-sidebar-collapsed-desktop] [data-flux-sidebar-group-dropdown] > button svg { color: #FB923C !important; opacity: .88; }
+
 /* Refined thin scrollbar (cream) — Firefox props inherit from here */
 .pulse-sidebar { scrollbar-width: thin; scrollbar-color: #E7D4C2 transparent; }
 .pulse-sidebar ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -481,6 +519,10 @@ select:focus[data-flux-control] {
     box-shadow: inset 3px 0 0 0 #f97316, 0 10px 22px -12px rgba(249, 115, 22, .5) !important;
 }
 .dark .pulse-sidebar [data-flux-sidebar-item][data-current] svg { color: #FB923C !important; }
+.dark .pulse-sidebar [data-pulse-sidebar-brand-row],
+.dark .pulse-sidebar [data-pulse-sidebar-account] { background: #111827; }
+.dark .pulse-sidebar[data-flux-sidebar-collapsed-desktop] [data-flux-sidebar-item][data-current] { background: rgba(249, 115, 22, .16) !important; box-shadow: none !important; }
+.dark .pulse-sidebar[data-flux-sidebar-collapsed-desktop] [data-flux-sidebar-group-dropdown] > button:hover { background-color: #1F2937 !important; }
 .dark .pulse-sidebar ::-webkit-scrollbar-track { background: transparent !important; }
 .dark .pulse-sidebar ::-webkit-scrollbar-thumb { background: #475569 !important; }
 .dark .pulse-sidebar ::-webkit-scrollbar-thumb:hover { background: #64748B !important; }

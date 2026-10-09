@@ -16,6 +16,6 @@
     $classes = $map[$color] ?? $map['zinc'];
 @endphp
 
-<span {{ $attributes->class("inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide $classes") }}>
+<span {{ $attributes->class("inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide $classes") }}>
     {{ $slot }}
 </span>

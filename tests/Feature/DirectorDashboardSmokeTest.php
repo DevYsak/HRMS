@@ -28,7 +28,8 @@ test('director / executive dashboard renders premium content', function () {
         ->assertSee('Executive Summary')
         ->assertSee('Company Growth')
         ->assertSee('Department Ranking')
-        ->assertSee('Organization Health');
+        ->assertDontSee('Organization Health')
+        ->assertDontSee('Satisfaction');
 });
 
 test('director route resolves to the executive dashboard', function () {
