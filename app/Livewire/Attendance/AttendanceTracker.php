@@ -1581,45 +1581,36 @@ class AttendanceTracker extends Component
             return $t->hour * 60 + $t->minute;
         };
 
-        // A regularised day is what HR approved: its corrected first-in /
-        // final-out (the attendance row) win over raw device punches, so the
-        // caller's row fallback handles it (Pulse v3.1 rule 13).
-        $regularised = Attendance::where('employee_id', $employee->id)
+        // Worked, break, first-in, final-out and missing-checkout per day come
+        // from AttendanceCalculator — the same calculation as Worked Today, so a
+        // day reads the same everywhere (live to now, nothing past the
+        // missing-checkout cutoff, the stored shift end for an auto checkout,
+        // HR's corrected times for a regularised day). The timeline supplies
+        // display detail only (sessions, ignored scans, duplicates).
+        $rows = Attendance::where('employee_id', $employee->id)
             ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
-            ->where('is_regularized', true)
-            ->where(fn ($q) => $q->whereNotNull('original_check_in')->orWhereNotNull('original_check_out'))
-            ->pluck('date')
-            ->map(fn ($d) => Carbon::parse($d)->toDateString())
-            ->flip();
+            ->get()
+            ->keyBy(fn ($a) => $a->date->toDateString());
+        $days = collect($punchesByDay->keys())
+            ->merge($rows->filter(fn ($a) => $a->check_in !== null)->keys())
+            ->unique();
 
-        // An auto-checked-out day's final OUT is the stored shift end, which
-        // the punch timeline does not hold: like a regularised day, the row
-        // (first-in → final-out, AttendanceCalculator) is the figure.
-        $autoClosed = Attendance::where('employee_id', $employee->id)
-            ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
-            ->where('is_auto_checkout', true)
-            ->where('auto_checkout_reason', Attendance::AUTO_CHECKOUT_REASON)
-            ->whereNotNull('check_out')
-            ->pluck('date')
-            ->map(fn ($d) => Carbon::parse($d)->toDateString())
-            ->flip();
-
+        $calculator = app(AttendanceCalculator::class);
         $metrics = [];
-        foreach ($punchesByDay as $day => $dayPunches) {
-            if ($regularised->has($day) || $autoClosed->has($day)) {
-                continue;
-            }
-            $r = $engine->process($dayPunches, Carbon::parse($day), $summaries->get($day));
+        foreach ($days as $day) {
+            $dayPunches = $punchesByDay->get($day, collect());
+            $r = $dayPunches->isNotEmpty() ? $engine->process($dayPunches, Carbon::parse($day), $summaries->get($day)) : null;
+            $calc = $calculator->forDay($employee, $day, $rows->get($day), $dayPunches, hasApprovedOt: false);
             $metrics[$day] = [
-                'worked' => (int) $r['working_minutes'],
-                'break' => (int) $r['break_minutes'],
-                'sessions' => $r['sessions'],
-                'ignored' => $r['ignored'],
-                'ignored_count' => (int) $r['ignored_count'],
-                'duplicate_count' => (int) $r['duplicate_count'] + (int) $r['conflict_count'],
-                'first_in_min' => $toMinutes($r['first_in']),
-                'last_out_min' => $toMinutes($r['last_out']),
-                'missing_out' => (bool) $r['missing_out'],
+                'worked' => $calc->workedMinutes,
+                'break' => $calc->breakMinutes,
+                'sessions' => $r['sessions'] ?? [],
+                'ignored' => $r['ignored'] ?? [],
+                'ignored_count' => (int) ($r['ignored_count'] ?? 0),
+                'duplicate_count' => (int) ($r['duplicate_count'] ?? 0) + (int) ($r['conflict_count'] ?? 0),
+                'first_in_min' => $calc->firstIn ? $toMinutes($calc->firstIn->format('H:i')) : null,
+                'last_out_min' => $calc->lastOut ? $toMinutes($calc->lastOut->format('H:i')) : null,
+                'missing_out' => $calc->missingCheckout,
             ];
         }
 

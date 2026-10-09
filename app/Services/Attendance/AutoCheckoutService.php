@@ -9,6 +9,11 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
+ * D10 exception (approved 9 Oct 2026): "Automatic jobs may not make
+ * disciplinary/leave/payroll decisions, except the approved missing-checkout
+ * fallback which may close an open attendance day at scheduled shift end with
+ * a system/audit marker." This service is that fallback.
+ *
  * Nightly auto checkout: a day with a valid IN and no final OUT is closed,
  * after 11:00 PM IST, at the employee's assigned shift end (as ShiftResolver
  * resolves it — the assigned shift, else HR's company default; a night shift

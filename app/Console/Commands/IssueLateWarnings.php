@@ -18,7 +18,8 @@ use Illuminate\Console\Command;
  * threshold (attendance_settings.late_warning_threshold), a warning letter is
  * prepared as a draft — repeat offences draft the next level of the chain
  * (verbal → first written → final → PIP). D10 (8 Oct 2026): a job never
- * issues a disciplinary letter; HR reviews and issues it from Warning
+ * makes a disciplinary decision (the only automatic exception is the
+ * missing-checkout fallback, hrms:auto-checkout) — it never issues a letter; HR reviews and issues it from Warning
  * Letters. Nothing reaches the employee's timeline or inbox until then.
  * Idempotent: at most one attendance-late draft or letter per employee per month.
  */

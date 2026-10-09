@@ -8,6 +8,8 @@ use Illuminate\Support\Carbon;
 
 /**
  * Missing-checkout sweep (the old "auto punch-out", which no longer punches).
+ * The separate nightly fallback hrms:auto-checkout may later close the still
+ * open day at the shift end (the approved D10 exception) — never this sweep.
  *
  * It NEVER creates an OUT. A day with a Face IN and no valid ID Card OUT
  * becomes Missing Checkout once the employee's own shift end + 1 hour has

@@ -11,7 +11,8 @@ use Illuminate\Support\Facades\Storage;
  * on leave requests approved more than N days ago.
  *
  * D10 (8 Oct 2026): permanent deletion of leave / medical evidence is a human
- * decision. By default — and on the schedule — this only REPORTS what is
+ * decision (the only automatic exception to D10 is the missing-checkout
+ * fallback, hrms:auto-checkout). By default — and on the schedule — this only REPORTS what is
  * eligible. A person deletes with --delete, after reviewing the list.
  */
 class PurgeApprovedLeaveAttachments extends Command

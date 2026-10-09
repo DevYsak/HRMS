@@ -610,9 +610,8 @@ class PunchTimeline
                 $liveElapsed = (int) $openIn->punched_at->diffInMinutes(now());
                 $liveStartMs = (int) $openIn->punched_at->getTimestampMs();
                 $liveStartLabel = $openIn->punched_at->format('h:i A');
-                if ($prevOut !== null) {
-                    $breakMinutes += (int) $prevOut->punched_at->diffInMinutes($openIn->punched_at);
-                }
+                // The gap before this open IN was already counted as break when
+                // the IN opened the session (above) — never add it twice.
                 $sessions[] = [
                     'index' => count($sessions) + 1,
                     'in' => $liveStartLabel,

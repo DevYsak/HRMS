@@ -125,6 +125,9 @@ These behaviours are neither in the spec nor recorded as a deliberate decision. 
 | D9 | Should the employee's self-score count in the final rating? | Self score is weighted about 20% (team lead 20 / head 50 / additional 30 defaults). Spec: composite from KPI weights. | PRF-10 |
 | D10 | Keep the automatic jobs that act without a human? | `hrms:issue-late-warnings` auto-issues disciplinary letters; `leave:purge-attachments` deletes leave evidence 30 days after approval; auto-flagged absences are stored as **approved** unpaid leave without HR review. | NTF extensions, DSH-07, DSH-35 |
 
+**D10 decision (8 Oct 2026) and its one exception (9 Oct 2026).** Automatic jobs may not make disciplinary/leave/payroll decisions, except the approved missing-checkout fallback which may close an open attendance day at scheduled shift end with a system/audit marker.
+The fallback is `hrms:auto-checkout` (after 11 PM Asia/Kolkata, today and yesterday only, never a backfill): a day with a valid IN and no valid final OUT is closed at the employee's assigned shift end on the attendance row (`is_auto_checkout`, reason `no_final_checkout`, audit `ATTENDANCE_AUTO_CHECKOUT`). It never writes a punch, never touches a day with a genuine OUT, an HR-corrected / regularised day or settled payroll, never creates payable overtime, and a later genuine OUT or an approved regularisation supersedes it. The Attendance Score auto-checkout penalty stays.
+
 ## 6. Priority fix list
 
 Ordered by impact. "Decision" means it waits on §5.

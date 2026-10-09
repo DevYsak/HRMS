@@ -1,15 +1,19 @@
 <?php
 
+use App\Enums\UserRole;
 use App\Livewire\Attendance\AttendanceTracker;
 use App\Models\Attendance;
 use App\Models\AttendancePunch;
+use App\Models\AttendanceRegularisation;
 use App\Models\AuditLog;
 use App\Models\Employee;
 use App\Models\OtRequest;
 use App\Models\OvertimeRecord;
 use App\Models\ShiftSetting;
+use App\Models\User;
 use App\Services\Attendance\AttendanceCalculator;
 use App\Services\Attendance\AttendanceDayRebuilder;
+use App\Services\AttendanceService;
 use App\Services\OvertimeService;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Carbon;
@@ -247,4 +251,43 @@ test('the scheduler runs the auto checkout after 11 PM IST', function () {
     expect($event)->not->toBeNull()
         ->and($event->expression)->toBe('15,45 23 * * *')
         ->and((string) $event->timezone)->toBe('Asia/Kolkata');
+});
+
+test('an approved regularisation supersedes the auto checkout', function () {
+    $employee = acEmployee(acShift('10:30:00', '19:30:00', 'AC_IT'));
+    $hr = User::factory()->create(['role' => UserRole::HrAdmin]);
+    $this->travelTo(Carbon::parse('2026-07-14 12:00:00'));
+    acPunches($employee, '2026-07-14', ['10:25:00' => 'face']);
+    $this->travelTo(Carbon::parse('2026-07-14 23:20:00'));
+    $this->artisan('hrms:auto-checkout')->assertSuccessful();
+    $row = Attendance::where('employee_id', $employee->id)->first();
+    expect($row->is_auto_checkout)->toBeTrue();
+
+    $this->travelTo(Carbon::parse('2026-07-15 10:00:00'));
+    $request = AttendanceRegularisation::create([
+        'employee_id' => $employee->id, 'attendance_id' => $row->id, 'work_date' => '2026-07-14', 'regularisation_type' => 'punch',
+        'requested_check_in' => '2026-07-14 10:25:00', 'requested_check_out' => '2026-07-14 20:05:00',
+        'reason' => 'Left through the loading gate', 'status' => 'pending', 'stage' => 'hr_review',
+    ]);
+    app(AttendanceService::class)->approveRegularisation($request, $hr->id);
+
+    $row->refresh();
+    $day = app(AttendanceCalculator::class)->forAttendance($row);
+    expect($row->check_out->format('H:i'))->toBe('20:05')
+        ->and($row->is_auto_checkout)->toBeFalse()
+        ->and($row->auto_checkout_reason)->toBeNull()
+        ->and($day->source)->not->toBe(AttendanceCalculator::SOURCE_AUTO_CHECKOUT)
+        ->and($day->lastOut->format('H:i'))->toBe('20:05');
+});
+
+test('older open days are never backfilled', function () {
+    $employee = acEmployee(acShift('10:30:00', '19:30:00', 'AC_IT'));
+    $this->travelTo(Carbon::parse('2026-07-10 12:00:00'));
+    acPunches($employee, '2026-07-10', ['10:25:00' => 'face']);
+
+    $this->travelTo(Carbon::parse('2026-07-14 23:20:00'));
+    $this->artisan('hrms:auto-checkout')->assertSuccessful();
+
+    $row = Attendance::where('employee_id', $employee->id)->whereDate('date', '2026-07-10')->first();
+    expect($row->check_out)->toBeNull()->and($row->is_auto_checkout)->toBeFalse();
 });

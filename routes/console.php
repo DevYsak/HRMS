@@ -56,6 +56,8 @@ Schedule::command('hrms:auto-punch-out')
     ->withoutOverlapping()
     ->runInBackground();
 
+// D10 exception (9 Oct 2026): automatic jobs may not make disciplinary / leave /
+// payroll decisions, except this approved missing-checkout fallback.
 // Nightly auto checkout: after 11:00 PM IST, an open day (valid IN, no final
 // OUT) is closed at the employee's assigned shift end as a system auto
 // checkout — no punch is written, no overtime is produced, and a later

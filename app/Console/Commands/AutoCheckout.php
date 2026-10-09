@@ -7,7 +7,10 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 
 /**
- * Nightly auto checkout (scheduled after 11:00 PM IST).
+ * Nightly auto checkout (scheduled after 11:00 PM IST) — the one approved
+ * exception to D10: automatic jobs may not make disciplinary / leave / payroll
+ * decisions, except this missing-checkout fallback, which may close an open
+ * attendance day at the scheduled shift end with a system / audit marker.
  *
  * Closes open days — a valid IN, no final OUT — at the employee's assigned
  * shift end, marked as a system auto checkout and audited. It never writes a
