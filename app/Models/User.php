@@ -240,7 +240,9 @@ class User extends Authenticatable
                 ->get(['permissions.key', 'user_permission_overrides.effect', 'user_permission_overrides.scope', 'user_permission_overrides.department_ids'])
                 ->mapWithKeys(fn (UserPermissionOverride $o) => [$o->key => [
                     'effect' => $o->effect,
-                    'scope' => $o->scope?->value,
+                    // The stored string, not the enum cast: an unrecognised value must
+                    // reach ScopeResolver and fail closed to no access, not throw here.
+                    'scope' => $o->getRawOriginal('scope'),
                     'department_ids' => array_map('intval', $o->department_ids ?? []),
                 ]])
                 ->all(),

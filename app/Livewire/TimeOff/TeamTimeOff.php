@@ -298,9 +298,14 @@ class TeamTimeOff extends Component
     {
         abort_unless(Auth::user()->canApproveLeave(), 403);
 
-        // The approver's reporting line: direct reports, teams they lead and
-        // departments they head (never their own record).
-        $teamIds = app(ApprovalGuard::class)->reportingLineIds(Auth::user());
+        // Whose requests this page lists: exactly the people the approver may
+        // decide for (the data scope of approve_leave — a Department Head's
+        // department and shift, a manager's reporting line), so the list and
+        // the approve / reject actions can never disagree. A company-wide
+        // approver keeps this page to their own reporting line; the company
+        // list is All Leave.
+        $guard = app(ApprovalGuard::class);
+        $teamIds = $guard->accessibleEmployeeIds(Auth::user(), 'approve_leave') ?? $guard->reportingLineIds(Auth::user());
 
         $pendingRequests = LeaveRequest::with(['employee.user', 'employee.department', 'leaveType'])
             ->whereIn('status', ['pending', 'pending_hr'])
