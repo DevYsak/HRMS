@@ -26,7 +26,9 @@
     <div class="mx-auto w-full max-w-[1400px] space-y-5">
 
         {{-- ── HEADER ── --}}
-        <x-pulse.dashboard-header :title="$title" :subtitle="$subtitle" />
+        <x-pulse.dashboard-header :title="$title" :subtitle="$subtitle">
+            <x-slot:actions><x-attendance.live-button /></x-slot:actions>
+        </x-pulse.dashboard-header>
 
         {{-- ── ROW 1 — TODAY ── --}}
         <x-pulse.grid :cols="4">

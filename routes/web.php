@@ -19,6 +19,7 @@ use App\Livewire\Attendance\BiometricControl;
 use App\Livewire\Attendance\BiometricSummary;
 use App\Livewire\Attendance\CommandCenter;
 use App\Livewire\Attendance\ExecutiveAttendance;
+use App\Livewire\Attendance\LiveAttendance;
 use App\Livewire\Attendance\TeamAttendance;
 use App\Livewire\AuditLogViewer;
 use App\Livewire\Dashboard;
@@ -284,6 +285,8 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/my', AttendanceTracker::class)->name('my');
         // Coordinators and HR — monitor_attendance_exceptions, checked in the component.
         Route::get('/exceptions', AttendanceExceptions::class)->name('exceptions');
+        // Live Attendance — view_live_attendance; its scope decides whose attendance shows.
+        Route::get('/live', LiveAttendance::class)->name('live')->middleware('can:view_live_attendance');
         Route::middleware('role:approve-leave')->group(function () {
             Route::get('/team', TeamAttendance::class)->name('team');
             Route::get('/employees', AllAttendance::class)->name('employees');

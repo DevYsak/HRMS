@@ -5,7 +5,10 @@
             <flux:heading size="xl">Attendance Exceptions</flux:heading>
             <flux:subheading>Absences, late arrivals, missing check-outs and pending regularisations among the {{ $monitoredCount }} {{ \Illuminate\Support\Str::plural('person', $monitoredCount) }} you monitor. Weekly offs, holidays and approved leave are never counted.</flux:subheading>
         </div>
-        <flux:input type="date" wire:model.live="date" max="{{ now()->toDateString() }}" class="max-w-[11rem]" aria-label="Date" />
+        <div class="flex items-center gap-2">
+            <x-attendance.live-button />
+            <flux:input type="date" wire:model.live="date" max="{{ now()->toDateString() }}" class="max-w-[11rem]" aria-label="Date" />
+        </div>
     </div>
 
     @if($monitoredCount === 0)

@@ -7,6 +7,7 @@
             <p class="pulse-page-subtitle">Monitoring real-time presence of your direct reports</p>
         </div>
         <div class="flex items-center gap-2">
+            <x-attendance.live-button />
             <select wire:model.live="period" class="rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 py-1.5 pl-2.5 pr-7 text-xs font-bold text-zinc-600 dark:text-zinc-300 focus:ring-0">
                 <option value="this_week">This Week</option>
                 <option value="this_month">This Month</option>

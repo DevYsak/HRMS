@@ -25,7 +25,7 @@ final class PermissionScopes
         'manage_employees', 'view_employee', 'edit_employee', 'delete_employee',
         'manage_onboarding', 'manage_offboarding', 'approve_profile_changes',
         // Attendance
-        'view_attendance', 'manage_attendance', 'export_attendance',
+        'view_attendance', 'manage_attendance', 'export_attendance', 'view_live_attendance',
         'approve_regularisation', 'hr_approve_regularisation',
         'monitor_attendance_exceptions', 'remind_employees',
         'approve_wfh',
@@ -55,6 +55,7 @@ final class PermissionScopes
     public const NEW_PERMISSIONS = [
         'Attendance' => [
             ['key' => 'export_attendance', 'label' => 'Export Attendance', 'description' => 'Download attendance registers and logs for employees in scope'],
+            ['key' => 'view_live_attendance', 'label' => 'View Live Attendance', 'description' => "Open the Live Attendance panel: today's punches and status for employees in scope"],
         ],
         'Overtime' => [
             ['key' => 'view_overtime', 'label' => 'View Overtime', 'description' => 'See overtime requests and hours for employees in scope'],
@@ -93,6 +94,10 @@ final class PermissionScopes
      * @var array<string, array<string, DataScope>>
      */
     public const ROLE_PERMISSION_DEFAULTS = [
+        // A coordinator watches the attendance of the department(s) they work in.
+        'coordinator' => [
+            'view_live_attendance' => DataScope::Department,
+        ],
         'finance' => [
             'view_payroll' => DataScope::All,
             'view_finance_profile' => DataScope::All,
@@ -108,9 +113,11 @@ final class PermissionScopes
 
     /** Extra default grants per role for the new keys (role slug => keys). */
     public const NEW_ROLE_GRANTS = [
-        'hr_admin' => ['export_attendance', 'view_overtime', 'manage_overtime', 'manage_notifications'],
-        'director' => ['export_attendance', 'view_overtime'],
-        'manager' => ['view_overtime'],
+        'hr_admin' => ['export_attendance', 'view_overtime', 'manage_overtime', 'manage_notifications', 'view_live_attendance'],
+        'director' => ['export_attendance', 'view_overtime', 'view_live_attendance'],
+        'department_head' => ['view_live_attendance'],
+        'manager' => ['view_overtime', 'view_live_attendance'],
+        'coordinator' => ['view_live_attendance'],
         // Finance: payroll in full; attendance / leave / OT summaries only.
         'finance' => ['view_attendance', 'export_attendance', 'view_overtime', 'view_leave_management'],
     ];

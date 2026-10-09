@@ -14,6 +14,7 @@
         </div>
     </div>
     <div class="flex flex-wrap items-center gap-2">
+        <x-attendance.live-button />
         {{-- Week navigator --}}
         <div class="flex items-center gap-1 rounded-xl border border-orange-100 bg-white dark:bg-zinc-900 p-1 shadow-sm">
             <button wire:click="previousWeek" type="button" class="flex size-7 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-orange-50 hover:text-orange-500"><flux:icon.chevron-left class="size-4" /></button>
