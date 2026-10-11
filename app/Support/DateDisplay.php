@@ -49,7 +49,8 @@ class DateDisplay
 
     public const DEFAULT_DATE_FORMAT = 'd M Y';
 
-    public const DEFAULT_TIME_FORMAT = 'H:i';
+    /** New accounts start on the 12-hour clock; saved preferences always win. */
+    public const DEFAULT_TIME_FORMAT = 'h:i A';
 
     public const EMPTY = '—';
 

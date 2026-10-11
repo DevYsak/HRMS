@@ -10,7 +10,7 @@ new #[Title('Preferences')] class extends Component {
 
     public string $timezone = 'Asia/Kolkata';
     public string $date_format = 'd M Y';
-    public string $time_format = 'H:i';
+    public string $time_format = DateDisplay::DEFAULT_TIME_FORMAT;
 
     public function mount(): void
     {
