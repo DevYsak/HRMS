@@ -552,3 +552,42 @@ select:focus[data-flux-control] {
 .dark .bg-blue-50   { background-color: rgba(59, 130, 246, .15) !important; }
 .dark .bg-red-50    { background-color: rgba(239, 68, 68, .15) !important; }
 .dark .bg-violet-50 { background-color: rgba(139, 92, 246, .15) !important; }
+
+/* ==========================================================================
+   Overlays & overflow-safe text (shared primitives)
+   ========================================================================== */
+
+/* Page scroll is locked while any app modal is open: the shared <x-ui.modal>
+   ([data-app-modal]) and the older hand-built overlays, which all share the
+   "fixed inset-0 z-50 > absolute inset-0 backdrop-blur" structure. Pure CSS,
+   so it follows Livewire adding/removing the overlay without any JS state. */
+html:has([data-app-modal]),
+html:has(.fixed.inset-0.z-50 > .absolute.inset-0.backdrop-blur-sm) {
+    overflow: hidden;
+}
+
+/* Older overlays: the panel never grows past the viewport and scrolls inside
+   itself; scrolling never chains through to the page behind. */
+.fixed.inset-0.z-50:has(> .absolute.inset-0.backdrop-blur-sm) {
+    overscroll-behavior: contain;
+}
+.fixed.inset-0.z-50:has(> .absolute.inset-0.backdrop-blur-sm) > .relative {
+    max-height: calc(100dvh - 2rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+/* The floating copilot steps aside while a modal is open (so it never covers
+   the modal's actions) and on the full AI Assistant page (one assistant at a time). */
+html:has([data-app-modal]) [data-ai-copilot],
+html:has([data-ai-assistant-page]) [data-ai-copilot],
+html:has(.fixed.inset-0.z-50 > .absolute.inset-0.backdrop-blur-sm) [data-ai-copilot] {
+    display: none;
+}
+
+/* Long unbroken input (IDs, URLs, pasted text) wraps instead of widening the
+   layout: form fields may shrink inside grids, and messages/textareas wrap. */
+[data-flux-field] { min-width: 0; }
+[data-flux-error],
+[data-flux-description],
+textarea { overflow-wrap: anywhere; }

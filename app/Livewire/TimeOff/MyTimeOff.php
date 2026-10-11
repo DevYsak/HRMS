@@ -198,6 +198,15 @@ class MyTimeOff extends Component
         ];
     }
 
+    /** @return array<string, string> */
+    protected function messages(): array
+    {
+        return [
+            'end_date.after_or_equal' => 'The end date must be on or after the start date.',
+            'start_date.after_or_equal' => 'The start date cannot be in the past.',
+        ];
+    }
+
     /**
      * The encashment form's own rules. Kept out of rules() so a leave
      * application is never blocked by an encashment field (they used to switch

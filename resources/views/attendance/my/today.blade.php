@@ -147,9 +147,9 @@
                 <table class="w-full text-sm" data-punch-table>
                     <thead><tr class="border-b border-zinc-100 text-left text-xs text-zinc-500 dark:border-zinc-800"><th class="py-2 font-medium">Time</th><th class="py-2 font-medium">Punch Type</th><th class="py-2 font-medium">Source</th></tr></thead>
                     <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
-                        <tr><td class="py-2 font-semibold tabular-nums">{{ $todayAttendance->check_in->format('h:i A') }}</td><td class="py-2">IN</td><td class="py-2 text-zinc-500">{{ ucfirst((string) ($todayAttendance->check_in_method ?? 'web')) }}</td></tr>
+                        <tr><td class="py-2 font-semibold tabular-nums">@userTime($todayAttendance->check_in)</td><td class="py-2">IN</td><td class="py-2 text-zinc-500">{{ ucfirst((string) ($todayAttendance->check_in_method ?? 'web')) }}</td></tr>
                         @if($todayAttendance->check_out)
-                            <tr><td class="py-2 font-semibold tabular-nums">{{ $todayAttendance->check_out->format('h:i A') }}</td><td class="py-2">OUT</td><td class="py-2 text-zinc-500">{{ ucfirst((string) ($todayAttendance->check_out_method ?? 'web')) }}</td></tr>
+                            <tr><td class="py-2 font-semibold tabular-nums">@userTime($todayAttendance->check_out)</td><td class="py-2">OUT</td><td class="py-2 text-zinc-500">{{ ucfirst((string) ($todayAttendance->check_out_method ?? 'web')) }}</td></tr>
                         @endif
                     </tbody>
                 </table>

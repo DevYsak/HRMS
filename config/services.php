@@ -22,6 +22,18 @@ return [
         'key' => env('RESEND_API_KEY'),
     ],
 
+    // AI assistant: the Anthropic provider's key when none is saved in
+    // Settings -> AI Assistant. OpenAI-compatible providers use config/openai.php.
+    'anthropic' => [
+        'key' => env('ANTHROPIC_API_KEY'),
+    ],
+
+    // Optional "How to use the AI Assistant" video shown on the assistant page.
+    // Leave unset until a real recording exists — no placeholder URL.
+    'ai_assistant' => [
+        'intro_video_url' => env('AI_ASSISTANT_INTRO_VIDEO_URL'),
+    ],
+
     'ses' => [
         'key' => env('AWS_ACCESS_KEY_ID'),
         'secret' => env('AWS_SECRET_ACCESS_KEY'),

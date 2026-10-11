@@ -29,9 +29,9 @@ class AiSetting extends Model
     ];
 
     /**
-     * Provider presets: the default model and OpenAI-compatible base URL.
+     * Provider presets: the default model, base URL and wire protocol.
      *
-     * @return array<string, array{label: string, model: string, base_url: ?string, key_url: string}>
+     * @return array<string, array{label: string, model: string, base_url: ?string, key_url: string, protocol: string}>
      */
     public static function providers(): array
     {
@@ -41,18 +41,28 @@ class AiSetting extends Model
                 'model' => 'gpt-4o-mini',
                 'base_url' => null, // SDK default: api.openai.com/v1
                 'key_url' => 'https://platform.openai.com/api-keys',
+                'protocol' => 'openai',
             ],
             'gemini' => [
                 'label' => 'Google Gemini',
                 'model' => 'gemini-flash-lite-latest',
                 'base_url' => 'https://generativelanguage.googleapis.com/v1beta/openai',
                 'key_url' => 'https://aistudio.google.com/apikey',
+                'protocol' => 'openai',
+            ],
+            'anthropic' => [
+                'label' => 'Anthropic (Claude)',
+                'model' => 'claude-opus-5-5',
+                'base_url' => null, // https://api.anthropic.com/v1
+                'key_url' => 'https://console.anthropic.com/settings/keys',
+                'protocol' => 'anthropic',
             ],
             'custom' => [
                 'label' => 'Custom (OpenAI-compatible)',
                 'model' => '',
                 'base_url' => '',
                 'key_url' => '',
+                'protocol' => 'openai',
             ],
         ];
     }
@@ -100,6 +110,15 @@ class AiSetting extends Model
         }
 
         return static::providers()[$this->provider]['base_url'] ?? null;
+    }
+
+    /**
+     * The API dialect this provider speaks: 'openai' (OpenAI, Gemini, custom
+     * gateways) or 'anthropic'.
+     */
+    public function protocol(): string
+    {
+        return static::providers()[$this->provider]['protocol'] ?? 'openai';
     }
 
     /**

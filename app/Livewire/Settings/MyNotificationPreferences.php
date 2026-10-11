@@ -44,6 +44,6 @@ class MyNotificationPreferences extends Component
             ->groupBy('group');
 
         return view('livewire.settings.my-notification-preferences', compact('settings', 'preferences'))
-            ->layout('layouts.app', ['title' => 'My notifications']);
+            ->layout('layouts.app', ['title' => __('My notifications')]);
     }
 }

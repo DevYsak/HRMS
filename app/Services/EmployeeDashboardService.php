@@ -283,7 +283,7 @@ class EmployeeDashboardService
             'employee_code' => $employee->employee_code ?? null,
             'greeting' => $hour < 12 ? 'Good morning' : ($hour < 17 ? 'Good afternoon' : 'Good evening'),
             'shift_label' => $shift
-                ? $shift->name.' · '.$shift->start->format('g:i A').' – '.$shift->end->format('g:i A')
+                ? $shift->name.' · '.$shift->start->userTime().' – '.$shift->end->userTime()
                 : null,
             'work_mode' => $mode?->label() ?? $employee->workMode?->name,
             'message' => $quotes[now()->dayOfYear % count($quotes)],
@@ -358,13 +358,13 @@ class EmployeeDashboardService
             $isWeeklyOff => ['weekly_off', 'Weekly off', 'Enjoy your day off'],
             $approvedWfhToday => ['wfh', 'WFH approved', 'You have not clocked in yet'],
             $shiftEnded => ['absent', 'Absent', 'No clock-in recorded today'],
-            default => ['not_started', 'Not clocked in', $shift ? 'Shift starts at '.$shift->start->format('g:i A') : null],
+            default => ['not_started', 'Not clocked in', $shift ? 'Shift starts at '.$shift->start->userTime() : null],
         };
 
         if ($clockedIn && $detail === null) {
             $detail = $clockedOut
-                ? 'Clocked out at '.$status['last_out']?->format('g:i A')
-                : 'Clocked in at '.$status['first_in']?->format('g:i A');
+                ? 'Clocked out at '.$status['last_out']?->userTime()
+                : 'Clocked in at '.$status['first_in']?->userTime();
         }
 
         $working = $status['live'];
@@ -378,16 +378,16 @@ class EmployeeDashboardService
             'missing_checkout' => $missingCheckout,
             'working' => $working,
             'on_break' => $status['on_break'],
-            'break_since' => $activeBreak?->break_start?->format('g:i A'),
+            'break_since' => $activeBreak?->break_start?->userTime(),
             'is_working_day' => $nonWorkingLabel === null,
             'worked_minutes' => $worked,
             // Seconds-epoch the live counter counts up from; null when the
             // clock should stand still (not started, on a break, or done).
             'live_base' => $working && ! $activeBreak ? $now->timestamp - ($worked * 60) : null,
-            'check_in' => $status['first_in']?->format('g:i A'),
-            'check_out' => $status['last_out']?->format('g:i A'),
-            'break_start' => $breaks->first()?->break_start?->format('g:i A'),
-            'break_end' => $activeBreak ? null : $breaks->last()?->break_end?->format('g:i A'),
+            'check_in' => $status['first_in']?->userTime(),
+            'check_out' => $status['last_out']?->userTime(),
+            'break_start' => $breaks->first()?->break_start?->userTime(),
+            'break_end' => $activeBreak ? null : $breaks->last()?->break_end?->userTime(),
             'break_count' => $breaks->count(),
             'progress' => $progress->toArray() + [
                 'worked_label' => $progress->workedLabel(),
@@ -396,8 +396,8 @@ class EmployeeDashboardService
                 'status_label' => $progress->statusLabel(),
                 'overtime_minutes' => $progress->overtimeMinutes(),
             ],
-            'shift_start' => $shift?->start->format('g:i A'),
-            'shift_end' => $shift?->end->format('g:i A'),
+            'shift_start' => $shift?->start->userTime(),
+            'shift_end' => $shift?->end->userTime(),
             // Spec §3.2: the work mode is chosen at clock-in; an approved WFH
             // day starts on "wfh".
             'default_mode' => $approvedWfhToday ? AttendanceMode::Wfh->value : AttendanceMode::Office->value,
@@ -468,7 +468,7 @@ class EmployeeDashboardService
                 'is_today' => $d->isSameDay($today),
                 'planned' => ! $elapsed && $state === 'leave',
                 'title' => $d->format('D, j M').' · '.self::stateLabel($state)
-                    .($worked ? ' · in '.$record->check_in->format('g:i A') : '')
+                    .($worked ? ' · in '.$record->check_in->userTime() : '')
                     .($holiday ? ' · '.$holiday->name : ''),
             ];
         }
@@ -486,14 +486,14 @@ class EmployeeDashboardService
 
         return [
             'month_label' => $today->format('F Y'),
-            'range_label' => $monthStart->format('j M').' – '.$today->format('j M'),
+            'range_label' => $monthStart->userShortDate().' – '.$today->userShortDate(),
             'counts' => $counts,
             'working_days' => $workingDays,
             'present_days' => $counts['present'],
             'percent' => $workingDays > 0 ? min(100, (int) round($counts['present'] / $workingDays * 100)) : 0,
             'days' => $days,
             'has_data' => $monthAttendance->isNotEmpty() || $counts['leave'] > 0,
-            'avg_check_in' => $avgInMinutes !== null ? $today->copy()->startOfDay()->addMinutes($avgInMinutes)->format('g:i A') : null,
+            'avg_check_in' => $avgInMinutes !== null ? $today->copy()->startOfDay()->addMinutes($avgInMinutes)->userTime() : null,
             'avg_worked' => $avgWorkedMinutes !== null ? self::formatMinutes($avgWorkedMinutes) : null,
             'on_time_rate' => $counts['present'] > 0 ? (int) round(($counts['present'] - $counts['late']) / $counts['present'] * 100) : null,
         ];
@@ -970,7 +970,7 @@ class EmployeeDashboardService
             ->each(fn (OtRequest $r) => $items->push([
                 'icon' => 'bolt',
                 'title' => $r->status === 'pending' ? 'Overtime logged' : 'Overtime '.self::statusVerb($r->status),
-                'meta' => self::formatDays((float) $r->requested_hours).'h on '.$r->work_date?->format('j M'),
+                'meta' => self::formatDays((float) $r->requested_hours).'h on '.$r->work_date?->userShortDate(),
                 'tone' => self::statusTone($r->status),
                 'time' => $r->updated_at,
                 'url' => route('overtime.my'),
@@ -1060,7 +1060,7 @@ class EmployeeDashboardService
                 'name' => $leave->employee?->user?->name ?? 'A colleague',
                 'dates' => $leave->start_date->isSameDay($leave->end_date)
                     ? $leave->start_date->format('D j M')
-                    : $leave->start_date->format('j M').' – '.$leave->end_date->format('j M'),
+                    : $leave->start_date->userShortDate().' – '.$leave->end_date->userShortDate(),
             ])
             ->values();
     }
@@ -1143,8 +1143,8 @@ class EmployeeDashboardService
         }
 
         return ! $end || $start->isSameDay($end)
-            ? $start->format('j M')
-            : $start->format('j M').' – '.$end->format('j M');
+            ? $start->userShortDate()
+            : $start->userShortDate().' – '.$end->userShortDate();
     }
 
     private static function statusVerb(string $status): string

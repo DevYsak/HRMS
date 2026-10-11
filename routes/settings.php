@@ -30,8 +30,10 @@ Route::middleware(['auth'])->group(function () {
 
     Route::livewire('settings/teams', 'pages::teams.index')->name('teams.index');
     // Holiday Management (extends the former thin date+name page at the same URL/name).
-    Route::get('settings/holidays', ManageHolidays::class)->name('settings.holidays');
-    Route::get('settings/holiday-pay', HolidayPaySettings::class)->name('settings.holiday-pay');
+    // The components abort without manage_settings too; the route guard lets
+    // RouteAccess (settings nav, help links) see that before rendering a link.
+    Route::get('settings/holidays', ManageHolidays::class)->middleware('role:manage-settings')->name('settings.holidays');
+    Route::get('settings/holiday-pay', HolidayPaySettings::class)->middleware('role:manage-settings')->name('settings.holiday-pay');
     Route::livewire('settings/ai', 'pages::settings.ai')->name('settings.ai');
 
     Route::middleware(EnsureTeamMembership::class)->group(function () {

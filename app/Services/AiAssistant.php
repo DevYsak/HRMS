@@ -4,27 +4,38 @@ namespace App\Services;
 
 use App\Models\AiSetting;
 use App\Models\User;
-use OpenAI\Contracts\ClientContract;
+use App\Services\Ai\Providers\AnthropicProvider;
+use App\Services\Ai\Providers\ChatProvider;
+use App\Services\Ai\Providers\OpenAiCompatibleProvider;
 
 /**
- * Thin wrapper around an OpenAI-compatible chat API.
+ * Entry point to the optional external language model.
  *
- * Configuration is database-driven via {@see AiSetting} (managed by a super
- * admin in Settings → AI Assistant), falling back to the OPENAI_* env values
- * for backwards compatibility. Every caller must check {@see self::enabled()}
- * (or {@see self::enabledForUser()}) first so AI features degrade gracefully
- * (hide entirely) when no key is configured.
+ * Configuration is database-driven via {@see AiSetting} (managed in Settings →
+ * AI Assistant, key encrypted at rest), falling back to environment values
+ * (OPENAI_API_KEY / ANTHROPIC_API_KEY) — never a key in code. The provider is
+ * chosen by the setting: OpenAI, Gemini and custom endpoints speak the
+ * OpenAI-compatible API; Anthropic has its own {@see AnthropicProvider}.
+ *
+ * Every caller must check {@see self::enabled()} (or {@see self::enabledForUser()})
+ * first so AI features degrade gracefully when no key is configured.
  */
 class AiAssistant
 {
     /**
-     * The effective API key — database setting first, then env fallback.
+     * The effective API key — database setting first, then the provider's env fallback.
      */
     public function apiKey(): ?string
     {
-        $key = AiSetting::current()->api_key;
+        $setting = AiSetting::current();
 
-        return filled($key) ? $key : config('openai.api_key');
+        if (filled($setting->api_key)) {
+            return $setting->api_key;
+        }
+
+        return $setting->protocol() === 'anthropic'
+            ? config('services.anthropic.key')
+            : config('openai.api_key');
     }
 
     /**
@@ -52,49 +63,36 @@ class AiAssistant
     }
 
     /**
+     * The provider label shown to users (never the key).
+     */
+    public function providerLabel(): string
+    {
+        $setting = AiSetting::current();
+
+        return AiSetting::providers()[$setting->provider]['label'] ?? ucfirst((string) $setting->provider);
+    }
+
+    /**
      * Send a system + user prompt and return the assistant's plain-text reply.
      */
     public function ask(string $systemPrompt, string $userPrompt): string
     {
-        $response = $this->client()->chat()->create([
-            'model' => $this->model(),
-            'temperature' => 0.3,
-            'messages' => [
-                ['role' => 'system', 'content' => $systemPrompt],
-                ['role' => 'user', 'content' => $userPrompt],
-            ],
-        ]);
-
-        return trim($response->choices[0]->message->content ?? '');
+        return $this->provider()->chat($systemPrompt, $userPrompt);
     }
 
     /**
-     * Resolve an OpenAI-compatible client from the live configuration.
-     *
-     * When a key is set in the database (admin-configured), a client is built
-     * per call so provider/key changes take effect immediately. When no DB key
-     * is set, the package's container-bound client is used so it honours the
-     * env config and remains fakeable via OpenAI::fake() in tests.
+     * Resolve the configured provider from the live setting, so a provider or
+     * key change in Settings takes effect on the next request.
      */
-    protected function client(): ClientContract
+    public function provider(): ChatProvider
     {
         $setting = AiSetting::current();
 
-        if (blank($setting->api_key)) {
-            return app('openai');
+        if ($setting->protocol() === 'anthropic') {
+            return new AnthropicProvider((string) $this->apiKey(), $this->model(), $setting->resolvedBaseUrl());
         }
 
-        $factory = \OpenAI::factory()->withApiKey((string) $setting->api_key);
-
-        $baseUrl = $setting->resolvedBaseUrl() ?: config('openai.base_uri');
-        if (filled($baseUrl)) {
-            $factory = $factory->withBaseUri($baseUrl);
-        }
-
-        if (filled(config('openai.organization'))) {
-            $factory = $factory->withOrganization(config('openai.organization'));
-        }
-
-        return $factory->make();
+        // With no DB key the OpenAI provider uses the env-configured client.
+        return new OpenAiCompatibleProvider($setting->api_key, $this->model(), $setting->resolvedBaseUrl());
     }
 }

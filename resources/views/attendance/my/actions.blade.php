@@ -38,11 +38,11 @@
             @endphp
             <div class="flex flex-wrap items-center justify-between gap-2 border-t border-zinc-100 pt-3 text-sm dark:border-zinc-800">
                 <div class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-                    <span class="font-semibold text-zinc-900 dark:text-white">{{ \Illuminate\Support\Carbon::parse($myReg->work_date)->format('d M Y') }}</span>
+                    <span class="font-semibold text-zinc-900 dark:text-white">@userDate(\Illuminate\Support\Carbon::parse($myReg->work_date))</span>
                     <span class="tabular-nums text-zinc-600 dark:text-zinc-300">
                         @if($myReg->isLeave()) Leave
                         @elseif($myReg->regularisation_type === 'half_day') Half day · {{ ucfirst((string) $myReg->half_day_period) }}
-                        @else {{ $myReg->requested_check_in ? \Illuminate\Support\Carbon::parse($myReg->requested_check_in)->format('H:i') : '—' }} → {{ $myReg->requested_check_out ? \Illuminate\Support\Carbon::parse($myReg->requested_check_out)->format('H:i') : '—' }}
+                        @else @userTime($myReg->requested_check_in) → @userTime($myReg->requested_check_out)
                         @endif
                     </span>
                     <span class="max-w-[16rem] truncate text-xs italic text-zinc-400">“{{ $myReg->reason }}”</span>

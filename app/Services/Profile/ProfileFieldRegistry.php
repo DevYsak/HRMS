@@ -69,7 +69,8 @@ class ProfileFieldRegistry
             'group' => 'identity',
             'source' => self::SOURCE_EMPLOYEE,
             'type' => 'image',
-            'rules' => ['nullable', 'image', 'max:2048'],
+            // jpg / jpeg / png / webp only, at most 2 MB.
+            'rules' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
         ],
         'phone' => [
             'label' => 'Phone',

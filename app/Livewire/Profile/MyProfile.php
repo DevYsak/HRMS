@@ -11,6 +11,7 @@ use App\Services\Audit\AuditService;
 use App\Services\Profile\ProfileChangeService;
 use App\Services\Profile\ProfileFieldRegistry as Registry;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL as SignedUrl;
 use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Url;
@@ -275,17 +276,56 @@ class MyProfile extends Component
 
     // ── Photo ───────────────────────────────────────────────────────────────
 
+    /**
+     * The employee's own photo: saved at once (no HR approval) and audited,
+     * unless HR has made the photo HR-managed. The file is only kept once the
+     * change is accepted, and the replaced photo is removed from storage.
+     */
     public function updatedPhoto(ProfileChangeService $service): void
     {
         abort_unless(Auth::user()->hasPermission('edit_own_profile'), 403);
 
-        $this->validate(['photo' => Registry::rulesFor('photo')]);
+        if (! $this->canEditPhoto()) {
+            $this->reset('photo');
+            $this->addError('photo', 'Your profile photo is managed by HR.');
 
+            return;
+        }
+
+        $this->validate(
+            ['photo' => Registry::rulesFor('photo')],
+            ['photo.mimes' => 'The profile photo must be a JPG, PNG or WebP image.', 'photo.max' => 'The profile photo may not be larger than 2 MB.'],
+            ['photo' => 'profile photo'],
+        );
+
+        $previous = $this->employee->photo;
         $path = $this->photo->store('employee-photos', 'public');
-        $service->updateEditable($this->employee, 'photo', $path, Auth::user());
 
+        try {
+            $service->updateEditable($this->employee, 'photo', $path, Auth::user());
+        } catch (\DomainException $e) {
+            Storage::disk('public')->delete($path);
+            $this->reset('photo');
+            $this->addError('photo', $e->getMessage());
+
+            return;
+        }
+
+        if ($previous && $previous !== $path && str_starts_with($previous, 'employee-photos/')) {
+            Storage::disk('public')->delete($previous);
+        }
+
+        $this->employee->refresh();
         $this->reset('photo');
         \Flux::toast('Photo updated.', variant: 'success');
+    }
+
+    /** Whether the photo is still the employee's to change (HR can take it over). */
+    public function canEditPhoto(): bool
+    {
+        return Auth::user()->hasPermission('edit_own_profile')
+            && Registry::isEditable('photo')
+            && ! Registry::isHrOnly('photo');
     }
 
     // ── Data ────────────────────────────────────────────────────────────────

@@ -1,6 +1,7 @@
 import ApexCharts from 'apexcharts';
 import gsap from 'gsap';
 import './request-errors';
+import './form-focus';
 
 window.ApexCharts = ApexCharts;
 window.gsap = gsap;

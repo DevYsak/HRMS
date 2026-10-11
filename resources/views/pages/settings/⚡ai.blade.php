@@ -50,7 +50,7 @@ new #[Title('AI Assistant')] class extends Component {
         abort_unless(Auth::user()?->hasPermission('manage_ai_settings'), 403);
 
         $this->validate([
-            'provider' => ['required', 'in:openai,gemini,custom'],
+            'provider' => ['required', 'in:'.implode(',', array_keys(AiSetting::providers()))],
             'api_key' => ['nullable', 'string', 'max:255'],
             'model' => ['nullable', 'string', 'max:64'],
             'base_url' => ['nullable', 'url', 'max:255'],

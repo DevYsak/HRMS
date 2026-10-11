@@ -213,7 +213,7 @@
                 <span class="rounded-lg bg-orange-50 p-1.5 dark:bg-orange-900/20"><flux:icon.calendar-days class="size-4 text-orange-600 dark:text-orange-400" /></span>
                 <h3 class="text-xs font-black uppercase tracking-wider text-zinc-600 dark:text-zinc-300">Leave Planner</h3>
             </div>
-            <div class="grid grid-cols-2 gap-3">
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <flux:input wire:model.live="planner_start" type="date" label="Start Date" />
                 <flux:input wire:model.live="planner_end" type="date" label="End Date" />
             </div>
@@ -512,16 +512,16 @@
 
         {{-- Tab Nav --}}
         <div
-            class="flex items-center gap-1 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950/30">
+            class="flex items-center gap-1 overflow-x-auto border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950/30">
             <button @click="tab = 'requests'"
                 :class="tab === 'requests' ? 'bg-white dark:bg-zinc-900 dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm' : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:text-zinc-200 dark:hover:text-zinc-300'"
-                class="flex items-center gap-2 rounded-xl px-5 py-2 text-sm font-bold transition-all">
+                class="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl px-5 py-2 text-sm font-bold transition-all">
                 <flux:icon.document-text class="size-3.5" />
                 Leave Applications
             </button>
             <button @click="tab = 'encashments'"
                 :class="tab === 'encashments' ? 'bg-white dark:bg-zinc-900 dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm' : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:text-zinc-200 dark:hover:text-zinc-300'"
-                class="flex items-center gap-2 rounded-xl px-5 py-2 text-sm font-bold transition-all">
+                class="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl px-5 py-2 text-sm font-bold transition-all">
                 <flux:icon.banknotes class="size-3.5" />
                 Encashment History
             </button>
@@ -618,7 +618,7 @@
                                 </td>
                                 <td class="px-4 py-4">
                                     <div class="flex items-center gap-1.5 text-sm text-zinc-600 dark:text-zinc-300 dark:text-zinc-400">
-                                        <span class="font-semibold">{{ $req->start_date->format('d M') }}</span>
+                                        <span class="font-semibold">@userShortDate($req->start_date)</span>
                                         <flux:icon.arrow-long-right class="inline size-3 opacity-30" />
                                         <span class="font-semibold">{{ $req->end_date->format('d M, Y') }}</span>
                                     </div>
@@ -710,7 +710,7 @@
                                 <td class="py-4 pr-6 text-right">
                                     <div class="flex items-center justify-end gap-3">
                                         <span
-                                            class="text-xs font-medium text-zinc-400">{{ $req->created_at->format('d M Y') }}</span>
+                                            class="text-xs font-medium text-zinc-400">@userDate($req->created_at)</span>
                                         @if($req->status === 'more_info_requested')
                                             <button wire:click="openConversation({{ $req->id }})"
                                                 class="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold text-orange-600 bg-orange-50 hover:bg-orange-100 dark:bg-orange-900/20 dark:text-orange-400 rounded-lg transition-colors">
@@ -903,7 +903,7 @@
                         @foreach($mandatoryDays as $m)
                             <div class="flex items-center justify-between gap-2 text-sm">
                                 <span class="truncate text-zinc-700 dark:text-zinc-200">{{ $m->description }}</span>
-                                <span class="shrink-0 text-xs text-zinc-400">{{ $m->date->format('d M') }}</span>
+                                <span class="shrink-0 text-xs text-zinc-400">@userShortDate($m->date)</span>
                             </div>
                         @endforeach
                     </div>
@@ -974,7 +974,7 @@
                             <span class="inline-flex size-8 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-400"><flux:icon.chat-bubble-left-right class="size-4" /></span>
                             <div>
                                 <flux:heading size="lg">Conversation</flux:heading>
-                                <p class="text-[11px] text-zinc-400">{{ $conversationRequest->leaveType?->name }} · {{ $conversationRequest->start_date->format('d M') }}–{{ $conversationRequest->end_date->format('d M Y') }}</p>
+                                <p class="text-[11px] text-zinc-400">{{ $conversationRequest->leaveType?->name }} · @userShortDate($conversationRequest->start_date)–@userDate($conversationRequest->end_date)</p>
                             </div>
                         </div>
                         <button @click="$wire.closeConversation()" class="text-zinc-400 hover:text-zinc-600 dark:text-zinc-300"><flux:icon.x-mark class="size-5" /></button>
@@ -1166,13 +1166,13 @@
                 @endphp
                 @if($bookableLeave)
                     <button type="button" wire:click="applyOnDate('{{ $day['date']->toDateString() }}')"
-                        class="{{ $cellClasses }} group" title="Apply leave on {{ $day['date']->format('d M Y') }}">
+                        class="{{ $cellClasses }} group" title="Apply leave on @userDate($day['date'])">
                         {{ $day['date']->day }}
                         <span class="pointer-events-none absolute right-1 top-1 hidden text-[9px] font-black text-orange-500 group-hover:block">+</span>
                     </button>
                 @elseif($workableHoliday)
                     <button type="button" wire:click="openHolidayWork('{{ $day['date']->toDateString() }}')"
-                        class="{{ $cellClasses }} group" title="Request to work on {{ $day['holiday']->name }} ({{ $day['date']->format('d M') }})">
+                        class="{{ $cellClasses }} group" title="Request to work on {{ $day['holiday']->name }} (@userShortDate($day['date']))">
                         {{ $day['date']->day }}
                         <span class="mt-0.5 size-1 rounded-full bg-rose-500 group-hover:hidden"></span>
                         <span class="pointer-events-none absolute right-0.5 top-0.5 hidden group-hover:block"><flux:icon.briefcase class="size-2.5 text-rose-500" /></span>
@@ -1192,30 +1192,9 @@
 
     {{-- â"€â"€â"€ REQUEST LEAVE MODAL â"€â"€â"€ --}}
     @if($showRequestModal)
-        <div class="fixed inset-0 z-50 flex items-center justify-center p-4" x-data
-            x-on:keydown.escape.window="$wire.closeRequestModal()">
-            <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="$wire.closeRequestModal()"></div>
-            <div
-                class="relative w-full max-w-lg bg-white dark:bg-zinc-900 dark:bg-zinc-800 rounded-2xl shadow-xl ring ring-black/5 dark:ring-zinc-700 p-6 max-h-[90vh] overflow-y-auto">
-                <button type="button" @click="$wire.closeRequestModal()"
-                    class="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 dark:text-zinc-300 dark:hover:text-zinc-200 transition-colors">
-                    <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                </button>
-
+        <x-pulse.modal title="Request Time Off" subtitle="Submit a new leave application for review." close="$wire.closeRequestModal()" width="sm:max-w-lg">
                 <div class="space-y-6">
-                    <div class="flex items-start gap-3">
-                        <div class="shrink-0 rounded-xl bg-violet-50 p-2.5 dark:bg-violet-900/20">
-                            <flux:icon.calendar-days class="size-5 text-violet-600 dark:text-violet-400" />
-                        </div>
-                        <div>
-                            <flux:heading size="lg">Request Time Off</flux:heading>
-                            <flux:subheading>Submit a new leave application for review.</flux:subheading>
-                        </div>
-                    </div>
-
-                    <form wire:submit="submitRequest" class="space-y-5">
+                    <form id="leave-request-form" wire:submit="submitRequest" class="space-y-5" novalidate>
 
                         {{-- Leave Type --}}
                         <x-clean-select
@@ -1241,10 +1220,8 @@
                         @endif
 
                         {{-- Dates --}}
-                        <div class="grid grid-cols-2 gap-4">
-                            <flux:input wire:model.live="start_date" type="date" label="Start Date" required />
-                            <flux:input wire:model.live="end_date" type="date" label="End Date" required />
-                        </div>
+                        <x-pulse.date-range start="start_date" end="end_date" start-label="Start Date" end-label="End Date"
+                            :required="true" :live="true" :min="now()->toDateString()" />
 
                         {{-- Live day count for the chosen range --}}
                         @if($rangeDays !== null && $rangeWeekendDays->isEmpty() && $rangeHolidays->isEmpty())
@@ -1270,7 +1247,7 @@
                                 <flux:icon.exclamation-triangle class="mt-0.5 size-4 shrink-0 text-orange-500" />
                                 <p class="text-xs text-orange-700 dark:text-orange-300">
                                     <span class="font-bold">Mandatory December Leave:</span>
-                                    @foreach($rangeMdl as $md)<span class="font-semibold">{{ $md->date->format('d M') }}</span>@if(! $loop->last), @endif @endforeach
+                                    @foreach($rangeMdl as $md)<span class="font-semibold">@userShortDate($md->date)</span>@if(! $loop->last), @endif @endforeach
                                     {{ $rangeMdl->count() === 1 ? 'is a' : 'are' }} company shutdown {{ \Illuminate\Support\Str::plural('day', $rangeMdl->count()) }} and not charged to your leave. Please exclude {{ $rangeMdl->count() === 1 ? 'it' : 'them' }}.
                                 </p>
                             </div>
@@ -1284,7 +1261,7 @@
                                     <p class="font-bold text-rose-800 dark:text-rose-300">This date is already a company holiday.</p>
                                     <p class="mt-0.5 text-rose-600 dark:text-rose-400">
                                         Your range includes
-                                        @foreach($rangeHolidays as $rh)<span class="font-semibold">{{ \Carbon\Carbon::parse($rh->date)->format('d M') }} ({{ $rh->name }})</span>@if(! $loop->last), @endif @endforeach.
+                                        @foreach($rangeHolidays as $rh)<span class="font-semibold">@userShortDate(\Carbon\Carbon::parse($rh->date)) ({{ $rh->name }})</span>@if(! $loop->last), @endif @endforeach.
                                         Please exclude {{ $rangeHolidays->count() === 1 ? 'it' : 'them' }} from your leave dates.
                                     </p>
                                 </div>
@@ -1367,23 +1344,28 @@
                         @endif
 
                         {{-- Reason --}}
-                        <flux:textarea wire:model="reason" label="Reason"
-                            placeholder="Please describe why you need time off..." rows="2" required />
+                        <div>
+                            <x-pulse.label for="leave-reason" required>Reason</x-pulse.label>
+                            <flux:textarea id="leave-reason" wire:model="reason" aria-required="true"
+                                placeholder="Please describe why you need time off..." rows="2" />
+                            <flux:error name="reason" />
+                        </div>
 
                         {{-- Employee Remarks --}}
-                        <flux:textarea wire:model="employee_remarks" label="Additional Remarks"
-                            placeholder="Any other notes for the approver (optional)..." rows="2" />
+                        <div>
+                            <x-pulse.label for="leave-remarks" optional>Additional Remarks</x-pulse.label>
+                            <flux:textarea id="leave-remarks" wire:model="employee_remarks" maxlength="1000"
+                                placeholder="Any other notes for the approver..." rows="2" />
+                            <flux:error name="employee_remarks" />
+                        </div>
 
                         {{-- Attachment — one supporting document, previewed before submit --}}
                         <div class="rounded-xl border border-zinc-100 dark:border-zinc-800 bg-zinc-50/60 p-4 dark:border-zinc-800 dark:bg-zinc-900/40">
                             <div class="mb-2 flex items-center justify-between">
-                                <flux:label>
-                                    Attachment
-                                    @if($selectedType?->attachment_required)<span class="text-red-500">*</span>@endif
-                                </flux:label>
+                                <x-pulse.label for="leave-attachment" class="!mb-0" :required="(bool) $selectedType?->attachment_required" :optional="! $selectedType?->attachment_required">Attachment</x-pulse.label>
                                 <span class="text-[10px] font-semibold text-zinc-400">PDF or image — max 5 MB</span>
                             </div>
-                            <input type="file" wire:model="attachment" accept=".pdf,.jpg,.jpeg,.png,.webp"
+                            <input id="leave-attachment" type="file" wire:model="attachment" accept=".pdf,.jpg,.jpeg,.png,.webp" @if($selectedType?->attachment_required) aria-required="true" @endif
                                 class="block w-full text-xs text-zinc-500 dark:text-zinc-400 file:mr-2 file:rounded-lg file:border-0 file:bg-orange-50 file:px-2.5 file:py-1.5 file:text-xs file:font-bold file:text-orange-600 hover:file:bg-orange-100 dark:text-zinc-400">
                             @error('attachment') <flux:error>{{ $message }}</flux:error> @enderror
                             @if($attachment)
@@ -1461,20 +1443,19 @@
                             </div>
                         @endif
 
-                        <div class="flex justify-end gap-3 pt-2">
-                            <button type="button" @click="$wire.closeRequestModal()"
-                                class="px-4 py-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-800 dark:border-zinc-600 rounded-xl hover:bg-zinc-50 dark:bg-zinc-800/50 dark:hover:bg-zinc-700 transition-colors">Cancel</button>
-                            <button type="submit" wire:loading.attr="disabled" wire:target="submitRequest,attachment" @disabled($rangeHolidays->isNotEmpty() || $rangeMdl->isNotEmpty() || $rangeWeekendDays->isNotEmpty())
-                                class="inline-flex items-center gap-2 px-5 py-2 text-sm font-bold text-white bg-brand-600 hover:bg-brand-700 rounded-xl transition-colors disabled:cursor-not-allowed disabled:opacity-60">
-                                <span wire:loading.remove wire:target="submitRequest,attachment">{{ $rangeHolidays->isNotEmpty() ? 'Holiday in range' : ($rangeMdl->isNotEmpty() ? 'MDL date in range' : ($rangeWeekendDays->isNotEmpty() ? 'Weekend selected' : 'Submit Request')) }}</span>
-                                <span wire:loading wire:target="submitRequest,attachment">Submitting...</span>
-                            </button>
-                        </div>
                     </form>
                 </div>
 
-            </div>
-        </div>
+            <x-slot:footer>
+                <button type="button" x-on:click="$wire.closeRequestModal()"
+                    class="rounded-xl border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-700">Cancel</button>
+                <button type="submit" form="leave-request-form" wire:loading.attr="disabled" wire:target="submitRequest,attachment" @disabled($rangeHolidays->isNotEmpty() || $rangeMdl->isNotEmpty() || $rangeWeekendDays->isNotEmpty())
+                    class="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-600 px-5 py-2 text-sm font-bold text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60">
+                    <span wire:loading.remove wire:target="submitRequest,attachment">{{ $rangeHolidays->isNotEmpty() ? 'Holiday in range' : ($rangeMdl->isNotEmpty() ? 'MDL date in range' : ($rangeWeekendDays->isNotEmpty() ? 'Weekend selected' : 'Submit Request')) }}</span>
+                    <span wire:loading wire:target="submitRequest,attachment">Submitting...</span>
+                </button>
+            </x-slot:footer>
+        </x-pulse.modal>
     @endif
 
     {{-- ─── ENCASHMENT MODAL ─── --}}

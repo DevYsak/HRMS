@@ -1,5 +1,6 @@
 <?php
 
+use App\Support\DateDisplay;
 use Flux\Flux;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Title;
@@ -13,18 +14,18 @@ new #[Title('Preferences')] class extends Component {
 
     public function mount(): void
     {
-        $user = Auth::user();
-        $this->timezone = $user->timezone ?? 'Asia/Kolkata';
-        $this->date_format = $user->date_format ?? 'd M Y';
-        $this->time_format = $user->time_format ?? 'H:i';
+        $display = app(DateDisplay::class);
+        $this->timezone = $display->timezone();
+        $this->date_format = $display->dateFormat();
+        $this->time_format = $display->timeFormat();
     }
 
     public function save(): void
     {
         $this->validate([
             'timezone'    => ['required', 'string', 'timezone'],
-            'date_format' => ['required', 'string', 'in:d M Y,d/m/Y,m/d/Y,Y-m-d'],
-            'time_format' => ['required', 'string', 'in:H:i,h:i A'],
+            'date_format' => ['required', 'string', 'in:'.implode(',', array_keys(DateDisplay::DATE_FORMATS))],
+            'time_format' => ['required', 'string', 'in:'.implode(',', array_keys(DateDisplay::TIME_FORMATS))],
         ]);
 
         Auth::user()->update([
@@ -33,7 +34,7 @@ new #[Title('Preferences')] class extends Component {
             'time_format' => $this->time_format,
         ]);
 
-        Flux::toast(variant: 'success', text: 'Preferences saved.');
+        Flux::toast(variant: 'success', text: __('Preferences saved. Dates and times now follow your choice.'));
     }
 }; ?>
 
@@ -51,10 +52,10 @@ new #[Title('Preferences')] class extends Component {
                 </div>
                 <div>
                     <p class="text-sm font-semibold text-zinc-900 dark:text-white">Timezone</p>
-                    <p class="text-xs text-zinc-500">All deadlines, timestamps, and reports use this timezone.</p>
+                    <p class="text-xs text-zinc-500">Record timestamps (submitted, approved, updated) are shown in this timezone. Work dates, leave dates and attendance punch times stay in the office's local time.</p>
                 </div>
             </div>
-            <flux:select wire:model="timezone" label="Select your timezone">
+            <flux:select wire:model.live="timezone" label="Select your timezone">
                 @php
                     $zones = [
                         'Asia/Kolkata'       => 'IST — India Standard Time (UTC+5:30)',
@@ -99,12 +100,10 @@ new #[Title('Preferences')] class extends Component {
 
             <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 @php
-                    $dateFormats = [
-                        'd M Y'  => ['label' => 'DD MMM YYYY', 'example' => now()->format('d M Y')],
-                        'd/m/Y'  => ['label' => 'DD/MM/YYYY', 'example' => now()->format('d/m/Y')],
-                        'm/d/Y'  => ['label' => 'MM/DD/YYYY', 'example' => now()->format('m/d/Y')],
-                        'Y-m-d'  => ['label' => 'YYYY-MM-DD', 'example' => now()->format('Y-m-d')],
-                    ];
+                    $previewNow = now()->setTimezone(in_array($timezone, timezone_identifiers_list(), true) ? $timezone : config('app.timezone'));
+                    $dateFormats = collect(DateDisplay::DATE_FORMATS)
+                        ->map(fn ($label, $format) => ['label' => $label, 'example' => $previewNow->format($format)])
+                        ->all();
                 @endphp
                 @foreach($dateFormats as $fmt => $info)
                     <button type="button" wire:click="$set('date_format', '{{ $fmt }}')"
@@ -143,10 +142,9 @@ new #[Title('Preferences')] class extends Component {
 
             <div class="grid grid-cols-2 gap-3 max-w-xs">
                 @php
-                    $timeFormats = [
-                        'H:i'   => ['label' => '24-hour', 'example' => now()->format('H:i')],
-                        'h:i A' => ['label' => '12-hour', 'example' => now()->format('h:i A')],
-                    ];
+                    $timeFormats = collect(DateDisplay::TIME_FORMATS)
+                        ->map(fn ($label, $format) => ['label' => $label, 'example' => $previewNow->format($format)])
+                        ->all();
                 @endphp
                 @foreach($timeFormats as $fmt => $info)
                     <button type="button" wire:click="$set('time_format', '{{ $fmt }}')"
@@ -167,8 +165,13 @@ new #[Title('Preferences')] class extends Component {
             @error('time_format') <p class="mt-1 text-xs text-red-500">{{ $message }}</p> @enderror
         </div>
 
+        <div class="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-zinc-700 dark:bg-zinc-800/50" data-preferences-preview>
+            <p class="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{{ __('Preview') }}</p>
+            <p class="mt-1 text-sm font-medium text-zinc-900 [overflow-wrap:anywhere] dark:text-white">{{ $previewNow->format($date_format.', '.$time_format) }}</p>
+        </div>
+
         <div class="pt-2">
-            <flux:button type="submit" variant="primary">Save Preferences</flux:button>
+            <flux:button type="submit" variant="primary">{{ __('Save Preferences') }}</flux:button>
         </div>
 
     </form>

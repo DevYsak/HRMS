@@ -138,10 +138,10 @@
         </div>
 
         {{-- ── Two-Column: Pending Requests + Quick Filters ────────────────── --}}
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="grid grid-cols-1 gap-6">
 
-            {{-- Pending Requests (Left 2/3) --}}
-            <div class="lg:col-span-2 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 shadow-sm overflow-hidden">
+            {{-- Pending Requests --}}
+            <div class="min-w-0 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 shadow-sm overflow-hidden">
                 <div class="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
                     <h3 class="text-base font-bold text-zinc-900 dark:text-white">
                         Pending Action
@@ -174,7 +174,7 @@
                                             <div class="bg-zinc-50 dark:bg-zinc-800/50 rounded-lg p-2.5">
                                                 <div class="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide mb-1">Requested Period</div>
                                                 <div class="text-xs font-bold text-zinc-800 dark:text-zinc-200">
-                                                    {{ $req->start_date->format('M d') }} – {{ $req->end_date->format('M d, Y') }}
+                                                    @userShortDate($req->start_date) – @userDate($req->end_date)
                                                 </div>
                                             </div>
                                             <div class="bg-zinc-50 dark:bg-zinc-800/50 rounded-lg p-2.5">
@@ -183,7 +183,7 @@
                                             </div>
                                             <div class="bg-zinc-50 dark:bg-zinc-800/50 rounded-lg p-2.5">
                                                 <div class="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide mb-1">Applied On</div>
-                                                <div class="text-xs font-bold text-zinc-800 dark:text-zinc-200">{{ $req->created_at->format('M d, Y') }}</div>
+                                                <div class="text-xs font-bold text-zinc-800 dark:text-zinc-200">@userDate($req->created_at)</div>
                                             </div>
                                         </div>
 
@@ -225,44 +225,37 @@
                 @endif
             </div>
 
-            {{-- Quick Filters (Right 1/3) --}}
-            <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 shadow-sm p-6">
-                <h3 class="text-base font-bold text-zinc-900 dark:text-white mb-5">Quick Filters</h3>
+            {{-- Quick Filters: a full row on desktop, 2 columns on tablet, 1 on phones --}}
+            <div class="order-first min-w-0 rounded-2xl border border-zinc-100 bg-white p-4 shadow-sm sm:p-6 dark:border-zinc-800 dark:bg-zinc-900" data-team-leave-filters>
+                <h3 class="mb-4 text-base font-bold text-zinc-900 dark:text-white">Quick Filters</h3>
 
-                <div class="space-y-4">
-                    {{-- Date Range --}}
-                    <div class="space-y-2">
-                        <label class="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Date Range</label>
-                        <div class="flex items-center gap-2 p-3 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl">
-                            <flux:icon.calendar class="size-4 text-zinc-400 shrink-0" />
-                            <input
-                                type="date"
-                                wire:model="filterFrom"
-                                class="flex-1 bg-transparent text-xs font-semibold text-zinc-700 dark:text-zinc-300 border-0 outline-none focus:ring-0 p-0"
-                            />
-                            <span class="text-zinc-400 text-xs">–</span>
-                            <input
-                                type="date"
-                                wire:model="filterTo"
-                                class="flex-1 bg-transparent text-xs font-semibold text-zinc-700 dark:text-zinc-300 border-0 outline-none focus:ring-0 p-0"
-                            />
-                        </div>
+                <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] xl:items-end">
+                    {{-- Date Range: two real fields, each free to shrink inside the card --}}
+                    <div class="min-w-0">
+                        <label for="team-filter-from" class="mb-1 block text-sm font-medium text-zinc-800 dark:text-zinc-200">From</label>
+                        <input id="team-filter-from" type="date" wire:model="filterFrom"
+                            class="block w-full min-w-0 rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-700 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-400/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200" />
+                    </div>
+                    <div class="min-w-0">
+                        <label for="team-filter-to" class="mb-1 block text-sm font-medium text-zinc-800 dark:text-zinc-200">To</label>
+                        <input id="team-filter-to" type="date" wire:model="filterTo"
+                            class="block w-full min-w-0 rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-700 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-400/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200" />
                     </div>
 
                     {{-- Leave Type --}}
-                    <div class="space-y-2">
+                    <div class="min-w-0">
                         <x-clean-select model="filterLeaveType" label="Leave Type" :live="false"
                             :options="array_merge([['value' => '', 'label' => 'All Leave Types']], $leaveTypes->map(fn ($lt) => ['value' => $lt->id, 'label' => $lt->name])->all())" />
                     </div>
 
                     {{-- Status --}}
-                    <div class="space-y-2">
+                    <div class="min-w-0">
                         <x-clean-select model="filterStatus" label="Status" :live="false"
                             :options="[['value' => '', 'label' => 'All Status'], ['value' => 'pending', 'label' => 'Pending'], ['value' => 'approved', 'label' => 'Approved'], ['value' => 'rejected', 'label' => 'Rejected']]" />
                     </div>
 
                     {{-- Buttons --}}
-                    <div class="flex gap-2 pt-2">
+                    <div class="flex gap-2 md:col-span-2 xl:col-span-1">
                         <button
                             type="button"
                             wire:click="resetFilters"
@@ -336,7 +329,7 @@
                                 <td class="py-3.5 pr-4 text-zinc-600 dark:text-zinc-300">{{ $item->leaveType->name }}</td>
                                 <td class="py-3.5 pr-4">
                                     <div class="text-zinc-800 dark:text-zinc-200 font-medium text-sm">
-                                        {{ $item->start_date->format('M d') }} – {{ $item->end_date->format('M d, Y') }}
+                                        @userShortDate($item->start_date) – @userDate($item->end_date)
                                     </div>
                                     <div class="text-[11px] text-zinc-400">{{ (float)$item->days }} {{ (float)$item->days == 1 ? 'Day' : 'Days' }}</div>
                                 </td>
@@ -346,8 +339,8 @@
                                     </span>
                                 </td>
                                 <td class="py-3.5 pr-4">
-                                    <div class="text-sm text-zinc-700 dark:text-zinc-300">{{ $item->created_at->format('M d, Y') }}</div>
-                                    <div class="text-[11px] text-zinc-400">{{ $item->created_at->format('h:i A') }}</div>
+                                    <div class="text-sm text-zinc-700 dark:text-zinc-300">@userDate($item->created_at)</div>
+                                    <div class="text-[11px] text-zinc-400">@userTime($item->created_at)</div>
                                 </td>
                                 <td class="py-3.5 pr-6 text-right">
                                     <div class="flex items-center justify-end gap-1">
@@ -407,36 +400,8 @@
 
     {{-- ── Review Modal (div-based — no <dialog> to avoid backdrop issues) ── --}}
     @if($showReviewModal && $selectedRequest)
-        <div
-            class="fixed inset-0 z-50 flex items-center justify-center p-4"
-            x-data
-            x-on:keydown.escape.window="$wire.closeReviewModal()"
-        >
-            {{-- Backdrop --}}
-            <div
-                class="absolute inset-0 bg-black/40 backdrop-blur-sm"
-                wire:click="closeReviewModal"
-            ></div>
-
-            {{-- Panel --}}
-            <div class="relative w-full max-w-lg bg-white dark:bg-zinc-800 rounded-2xl shadow-xl ring ring-black/5 dark:ring-zinc-700 p-6 space-y-5">
-
-                {{-- Close X --}}
-                <button
-                    type="button"
-                    wire:click="closeReviewModal"
-                    class="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors"
-                    aria-label="Close"
-                >
-                    <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                </button>
-
-                <div>
-                    <h2 class="text-lg font-bold text-zinc-900 dark:text-white">Review Leave Request</h2>
-                    <p class="text-sm text-zinc-500 mt-0.5">From {{ $selectedRequest->employee->user->name }}</p>
-                </div>
+        <x-pulse.modal title="Review Leave Request" :subtitle="'From '.$selectedRequest->employee->user->name" close="$wire.closeReviewModal()" width="sm:max-w-2xl" data-leave-review>
+            <div class="space-y-5">
 
                 {{-- Request summary --}}
                 <div class="rounded-xl bg-zinc-50 p-4 space-y-2.5 dark:bg-zinc-900">
@@ -453,9 +418,9 @@
                     <div class="flex justify-between text-sm">
                         <span class="text-zinc-500">Dates</span>
                         <span class="font-semibold text-zinc-900 dark:text-zinc-100">
-                            {{ $selectedRequest->start_date->format('d M Y') }}
+                            @userDate($selectedRequest->start_date)
                             @if(!$selectedRequest->start_date->equalTo($selectedRequest->end_date))
-                                – {{ $selectedRequest->end_date->format('d M Y') }}
+                                – @userDate($selectedRequest->end_date)
                             @endif
                         </span>
                     </div>
@@ -496,7 +461,7 @@
                             <div class="size-2 rounded-full bg-indigo-500 mt-1.5 shrink-0"></div>
                             <div>
                                 <div class="text-xs font-semibold text-zinc-700 dark:text-zinc-300">Submitted</div>
-                                <div class="text-[11px] text-zinc-400">{{ $selectedRequest->created_at->format('d M Y, h:i A') }}</div>
+                                <div class="text-[11px] text-zinc-400">@userDateTime($selectedRequest->created_at)</div>
                             </div>
                         </div>
                         @if($selectedRequest->reviewer)
@@ -516,7 +481,7 @@
                                 <div class="size-2 rounded-full bg-emerald-500 mt-1.5 shrink-0"></div>
                                 <div>
                                     <div class="text-xs font-semibold text-zinc-700 dark:text-zinc-300">HR Approved</div>
-                                    <div class="text-[11px] text-zinc-400">by {{ $selectedRequest->hrReviewer->name }} · {{ $selectedRequest->hr_reviewed_at?->format('d M Y, h:i A') }}</div>
+                                    <div class="text-[11px] text-zinc-400">by {{ $selectedRequest->hrReviewer->name }} · @userDateTime($selectedRequest->hr_reviewed_at)</div>
                                 </div>
                             </div>
                         @endif
@@ -531,15 +496,15 @@
                         @forelse($selectedRequest->messages->sortBy('created_at') as $msg)
                             @php $mine = $msg->user_id === $meId; @endphp
                             <div class="flex {{ $mine ? 'justify-end' : 'justify-start' }}">
-                                <div class="max-w-[85%] rounded-xl px-3 py-2 text-xs {{ $mine ? 'bg-indigo-600 text-white' : 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200' }}">
-                                    <div class="mb-0.5 flex items-center gap-2 text-[9px] font-bold uppercase tracking-wide {{ $mine ? 'text-indigo-100' : 'text-zinc-400' }}">
+                                <div class="min-w-0 max-w-[85%] rounded-xl px-3 py-2 text-xs [overflow-wrap:anywhere] {{ $mine ? 'bg-orange-500 text-white' : 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200' }}">
+                                    <div class="mb-0.5 flex items-center gap-2 text-[9px] font-bold uppercase tracking-wide {{ $mine ? 'text-orange-100' : 'text-zinc-400' }}">
                                         <span>{{ $mine ? 'You' : ($msg->user?->name ?? 'Employee') }}</span>
-                                        <span class="font-medium normal-case">{{ $msg->created_at->format('d M, H:i') }}</span>
+                                        <span class="font-medium normal-case">@userShortDate($msg->created_at), @userTime($msg->created_at)</span>
                                     </div>
                                     @if($msg->body)<p class="whitespace-pre-line leading-snug">{{ $msg->body }}</p>@endif
                                     @if($msg->attachment_path)
                                         <a href="{{ asset('storage/'.$msg->attachment_path) }}" target="_blank"
-                                            class="mt-1 inline-flex items-center gap-1 rounded-lg px-1.5 py-0.5 text-[10px] font-semibold {{ $mine ? 'bg-white/20 text-white hover:bg-white/30' : 'bg-white text-indigo-600 hover:bg-zinc-50 dark:bg-zinc-700 dark:text-indigo-300' }}">
+                                            class="mt-1 inline-flex items-center gap-1 rounded-lg px-1.5 py-0.5 text-[10px] font-semibold {{ $mine ? 'bg-white/20 text-white hover:bg-white/30' : 'bg-white text-orange-700 hover:bg-zinc-50 dark:bg-zinc-700 dark:text-orange-300' }}">
                                             <flux:icon.paper-clip class="size-2.5" /> {{ $msg->attachment_name ?? 'Attachment' }}
                                         </a>
                                     @endif
@@ -550,17 +515,17 @@
                         @endforelse
                     </div>
                     <div class="space-y-2 rounded-xl border border-zinc-100 bg-zinc-50/60 p-2.5 dark:border-zinc-800 dark:bg-zinc-900/40">
-                        <textarea wire:model="panelMessage" rows="2" placeholder="Message the employee…"
+                        <textarea wire:model="panelMessage" rows="2" placeholder="Message the employee…" aria-label="Message the employee"
                             class="w-full resize-none rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-700 placeholder-zinc-400 transition-colors focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-400/30 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"></textarea>
                         @error('panelMessage')<p class="text-xs text-red-500">{{ $message }}</p>@enderror
                         <div class="flex items-center justify-between gap-2">
                             <div class="min-w-0 flex-1">
                                 <input type="file" wire:model="panelMessageAttachment" accept=".pdf,.jpg,.jpeg,.png"
-                                    class="block w-full text-[11px] text-zinc-500 file:mr-2 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-2 file:py-1 file:text-[11px] file:font-bold file:text-indigo-600 hover:file:bg-indigo-100 dark:text-zinc-400">
+                                    class="block w-full text-[11px] text-zinc-500 file:mr-2 file:rounded-lg file:border-0 file:bg-zinc-100 file:px-2 file:py-1 file:text-[11px] file:font-bold file:text-zinc-700 hover:file:bg-zinc-200 dark:text-zinc-400">
                                 @error('panelMessageAttachment')<p class="mt-1 text-xs text-red-500">{{ $message }}</p>@enderror
                             </div>
                             <button type="button" wire:click="postPanelMessage" wire:loading.attr="disabled" wire:target="postPanelMessage,panelMessageAttachment"
-                                class="shrink-0 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-indigo-700 disabled:opacity-60">Send</button>
+                                class="shrink-0 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-bold text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200">Send</button>
                         </div>
                         <p class="text-[10px] text-zinc-400">PDF or image — max 500 KB. Sending on a pending request marks it “More Info Needed”.</p>
                     </div>
@@ -586,32 +551,32 @@
                     @enderror
                 </div>
 
-                <div class="flex gap-3 pt-2 border-t border-zinc-100 dark:border-zinc-800">
-                    <button type="button" wire:click="closeReviewModal"
-                        class="flex-1 px-4 py-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300 bg-white dark:bg-zinc-700 border border-zinc-200 dark:border-zinc-600 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-600 transition-colors">
-                        Cancel
-                    </button>
-                    <button type="button" wire:click="reject"
-                        wire:loading.attr="disabled" wire:target="reject"
-                        class="flex-1 px-4 py-2 text-sm font-semibold text-red-600 bg-red-50 border border-red-200 rounded-xl hover:bg-red-100 transition-colors disabled:opacity-60 dark:bg-red-950/30 dark:border-red-800 dark:text-red-400">
-                        <span wire:loading.remove wire:target="reject">Reject</span>
-                        <span wire:loading wire:target="reject">Rejecting…</span>
-                    </button>
-                    <button type="button" wire:click="requestMoreInfo"
-                        wire:loading.attr="disabled" wire:target="requestMoreInfo"
-                        title="Ask the employee for more information"
-                        class="px-3 py-2 text-sm font-semibold text-orange-600 bg-orange-50 border border-orange-200 rounded-xl hover:bg-orange-100 transition-colors disabled:opacity-60 dark:bg-orange-950/30 dark:border-orange-800 dark:text-orange-400">
-                        <flux:icon.question-mark-circle class="size-4" />
-                    </button>
-                    <button type="button" wire:click="approve"
-                        wire:loading.attr="disabled" wire:target="approve"
-                        class="flex-1 px-4 py-2 text-sm font-bold text-white bg-brand-600 hover:bg-brand-700 rounded-xl transition-colors shadow-sm shadow-brand-200 dark:shadow-none disabled:opacity-60">
-                        <span wire:loading.remove wire:target="approve">Approve</span>
-                        <span wire:loading wire:target="approve">Approving…</span>
-                    </button>
-                </div>
             </div>
-        </div>
+
+            <x-slot:footer>
+                <button type="button" wire:click="closeReviewModal"
+                    class="rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-600">
+                    Cancel
+                </button>
+                <button type="button" wire:click="requestMoreInfo"
+                    wire:loading.attr="disabled" wire:target="requestMoreInfo"
+                    class="inline-flex items-center justify-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-200">
+                    <flux:icon.question-mark-circle class="size-4" /> Ask for info
+                </button>
+                <button type="button" wire:click="reject"
+                    wire:loading.attr="disabled" wire:target="reject"
+                    class="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:opacity-60">
+                    <span wire:loading.remove wire:target="reject">Reject</span>
+                    <span wire:loading wire:target="reject">Rejecting…</span>
+                </button>
+                <button type="button" wire:click="approve"
+                    wire:loading.attr="disabled" wire:target="approve"
+                    class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-bold text-white transition-colors hover:bg-brand-700 disabled:opacity-60">
+                    <span wire:loading.remove wire:target="approve">Approve</span>
+                    <span wire:loading wire:target="approve">Approving…</span>
+                </button>
+            </x-slot:footer>
+        </x-pulse.modal>
     @endif
 
 </flux:main>

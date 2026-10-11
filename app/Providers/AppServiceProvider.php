@@ -48,6 +48,7 @@ use App\Observers\UserObserver;
 use App\Services\EmployeeImportService;
 use App\Services\ModuleFeatureService;
 use App\Services\Notifications\NotificationDeliveryGate;
+use App\Support\DateDisplay;
 use Carbon\CarbonImmutable;
 use Illuminate\Auth\Middleware\Authorize;
 use Illuminate\Database\Eloquent\Model;
@@ -55,6 +56,7 @@ use Illuminate\Mail\Events\MessageSending;
 use Illuminate\Mail\Events\MessageSent;
 use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Notifications\Events\NotificationSending;
+use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
@@ -92,6 +94,7 @@ class AppServiceProvider extends ServiceProvider
         }
 
         $this->configureDefaults();
+        $this->configureDateDisplay();
         $this->registerObservers();
 
         // Re-apply the route's role:/can: checks on every Livewire update
@@ -157,6 +160,23 @@ class AppServiceProvider extends ServiceProvider
                 ->uncompromised()
             : null,
         );
+    }
+
+    /**
+     * The reader's date/time preference, reachable from PHP (`$date->userDate()`)
+     * and Blade (`@userDate($date)`). Carbon macros are global, so they work on
+     * CarbonImmutable model casts and Carbon::parse() alike.
+     */
+    protected function configureDateDisplay(): void
+    {
+        CarbonImmutable::macro('userDate', fn (): string => app(DateDisplay::class)->date($this));
+        CarbonImmutable::macro('userShortDate', fn (): string => app(DateDisplay::class)->shortDate($this));
+        CarbonImmutable::macro('userTime', fn (): string => app(DateDisplay::class)->time($this));
+        CarbonImmutable::macro('userDateTime', fn (): string => app(DateDisplay::class)->dateTime($this));
+
+        foreach (['userDate' => 'date', 'userShortDate' => 'shortDate', 'userTime' => 'time', 'userDateTime' => 'dateTime'] as $directive => $method) {
+            Blade::directive($directive, fn (string $expression): string => '<?php echo e(app(\\'.DateDisplay::class.'::class)->'.$method.'('.$expression.')); ?>');
+        }
     }
 
     /**

@@ -66,7 +66,7 @@
                 <div>
                     <dt class="font-semibold uppercase tracking-wide text-zinc-400">Joined</dt>
                     <dd class="mt-0.5 font-semibold text-zinc-700 dark:text-zinc-200">
-                        {{ $employee->joining_date?->format('d M Y') ?? 'Not set' }}
+                        {{ $employee->joining_date ? $employee->joining_date->userDate() : 'Not set' }}
                     </dd>
                 </div>
                 <div>

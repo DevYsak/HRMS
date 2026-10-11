@@ -228,8 +228,9 @@
 
         {{-- 1 · When --}}
         <div>
-            <div class="mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-zinc-400"><span class="inline-flex size-4 items-center justify-center rounded-full bg-orange-100 text-[9px] text-orange-600">1</span> Which day?</div>
-            <flux:input wire:model="regDate" type="date" />
+            <div class="mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-zinc-400"><span class="inline-flex size-4 items-center justify-center rounded-full bg-orange-100 text-[9px] text-orange-600">1</span> <label for="reg-date">Which day?</label> <span class="text-red-600 normal-case tracking-normal" aria-hidden="true" data-required-marker>*</span><span class="sr-only">(required)</span></div>
+            <flux:input id="reg-date" wire:model="regDate" type="date" aria-required="true" />
+            <flux:error name="regDate" />
         </div>
 
         {{-- 2 · Type of fix --}}
@@ -279,14 +280,14 @@
             <div class="mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-zinc-400"><span class="inline-flex size-4 items-center justify-center rounded-full bg-orange-100 text-[9px] text-orange-600">3</span> Expected time</div>
             <div class="grid grid-cols-2 gap-3">
                 <div class="space-y-2 {{ $regFixIn ? '' : 'pointer-events-none opacity-40' }}">
-                    <flux:input wire:model="regCheckIn" label="IN at" type="time" :disabled="! $regFixIn" />
+                    <flux:input wire:model="regCheckIn" label="IN at" type="time" :disabled="! $regFixIn" :badge="$regFixIn ? 'Required' : null" :aria-required="$regFixIn ? 'true' : null" />
                     <flux:select wire:model="regCheckInMethod" :disabled="! $regFixIn">
                         <flux:select.option value="id_card">via ID Card</flux:select.option>
                         <flux:select.option value="face">via Face</flux:select.option>
                     </flux:select>
                 </div>
                 <div class="space-y-2 {{ $regFixOut ? '' : 'pointer-events-none opacity-40' }}">
-                    <flux:input wire:model="regCheckOut" label="OUT at" type="time" :disabled="! $regFixOut" />
+                    <flux:input wire:model="regCheckOut" label="OUT at" type="time" :disabled="! $regFixOut" :badge="$regFixOut ? 'Required' : null" :aria-required="$regFixOut ? 'true' : null" />
                     <flux:select wire:model="regCheckOutMethod" :disabled="! $regFixOut">
                         <flux:select.option value="id_card">via ID Card</flux:select.option>
                         <flux:select.option value="face">via Face</flux:select.option>
@@ -299,8 +300,8 @@
 
         {{-- 4 · Why --}}
         <div>
-            <div class="mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-zinc-400"><span class="inline-flex size-4 items-center justify-center rounded-full bg-orange-100 text-[9px] text-orange-600">4</span> Reason &amp; proof</div>
-            <flux:textarea wire:model="regReason" placeholder="e.g. Forgot to clock out — left through the loading gate…" rows="2" />
+            <div class="mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-zinc-400"><span class="inline-flex size-4 items-center justify-center rounded-full bg-orange-100 text-[9px] text-orange-600">4</span> <label for="reg-reason">Reason &amp; proof</label> <span class="text-red-600 normal-case tracking-normal" aria-hidden="true" data-required-marker>*</span><span class="sr-only">(required)</span></div>
+            <flux:textarea id="reg-reason" wire:model="regReason" aria-required="true" placeholder="e.g. Forgot to clock out — left through the loading gate…" rows="2" />
             @error('regReason')<p class="mt-1 text-xs text-rose-500">{{ $message }}</p>@enderror
             <div class="mt-2">
                 <input type="file" wire:model="regAttachment" accept=".jpg,.jpeg,.png,.webp,.pdf"
@@ -316,7 +317,7 @@
         <div class="rounded-xl bg-zinc-50 dark:bg-zinc-800/50 px-3 py-2.5">
             <div class="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-zinc-400">What happens next</div>
             <div class="flex items-center gap-1.5 text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
-                Manager <flux:icon.chevron-right class="size-3 text-zinc-300" /> HR <flux:icon.chevron-right class="size-3 text-zinc-300" /> Admin <flux:icon.chevron-right class="size-3 text-zinc-300" /> <span class="text-emerald-600">Approved — hours recalculated</span>
+                HR review <flux:icon.chevron-right class="size-3 text-zinc-300" /> <span class="text-emerald-600">Approved — hours recalculated</span>
             </div>
         </div>
 

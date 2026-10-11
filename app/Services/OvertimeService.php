@@ -17,6 +17,7 @@ use App\Services\Notifications\NotificationRecipients;
 use App\Services\Teams\ApprovalRoutingService;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -247,6 +248,63 @@ class OvertimeService
                 'total_hours_worked' => $request->attendance ? app(AttendanceCalculator::class)->workedHours($request->attendance) : $record->total_hours_worked,
             ]);
         }
+    }
+
+    /**
+     * The employee's OWN OT requests by status, plus the hours actually
+     * approved in a month (the OvertimeRecord's ot_hours — what payroll pays —
+     * not the requested window). One definition for My Overtime, the dashboard
+     * and the AI assistant.
+     *
+     * @return array{pending: int, approved: int, rejected: int, cancelled: int, total: int, approved_hours_month: float, approved_amount_month: float}
+     */
+    public function summaryFor(Employee $employee, ?CarbonInterface $month = null): array
+    {
+        $month ??= now();
+
+        $byStatus = $employee->otRequests()
+            ->selectRaw('status, COUNT(*) as aggregate')
+            ->groupBy('status')
+            ->pluck('aggregate', 'status');
+
+        $records = $employee->overtimeRecords()
+            ->whereNotNull('ot_request_id')
+            ->whereHas('otRequest', fn ($q) => $q->where('status', 'approved'))
+            ->whereBetween('work_date', [$month->copy()->startOfMonth()->toDateString(), $month->copy()->endOfMonth()->toDateString()]);
+
+        return [
+            'pending' => (int) ($byStatus['pending'] ?? 0),
+            'approved' => (int) ($byStatus['approved'] ?? 0),
+            'rejected' => (int) ($byStatus['rejected'] ?? 0),
+            'cancelled' => (int) ($byStatus['cancelled'] ?? 0),
+            'total' => (int) $byStatus->sum(),
+            'approved_hours_month' => round((float) (clone $records)->sum('ot_hours'), 2),
+            'approved_amount_month' => round((float) (clone $records)->sum('ot_amount'), 2),
+        ];
+    }
+
+    /**
+     * OT requests waiting for THIS user's decision: pending, inside the
+     * approve_overtime data scope, never their own. Null when the user cannot
+     * approve OT at all (so "0 waiting" is never claimed for a non-approver).
+     * Same reach as the Approval Center and Manage OT queue.
+     *
+     * @return Builder<OtRequest>|null
+     */
+    public function approvalQueueFor(User $approver): ?Builder
+    {
+        if (! $approver->canApproveOt()) {
+            return null;
+        }
+
+        $scopeIds = $approver->accessibleEmployeeIds('approve_overtime');
+        $ownEmployeeId = $approver->employee?->id;
+
+        return OtRequest::query()
+            ->where('status', 'pending')
+            ->whereHas('employee.user')
+            ->when($scopeIds !== null, fn ($q) => $q->whereIn('employee_id', $scopeIds))
+            ->when($ownEmployeeId, fn ($q) => $q->where('employee_id', '!=', $ownEmployeeId));
     }
 
     /**

@@ -224,7 +224,10 @@ test('Employee Dashboard shows Working, then Missing checkout, then Completed', 
     expect($today())->toMatchArray(['working' => false, 'missing_checkout' => true, 'state' => 'missing_checkout', 'live_base' => null]);
 
     sunPunches($e, [['18:00:00', 'id_card']]);
-    expect($today())->toMatchArray(['working' => false, 'missing_checkout' => false, 'clocked_out' => true, 'check_out' => '6:00 PM']);
+    // Times follow the reader's Settings → Preferences clock (12-hour here).
+    $e->user->update(['time_format' => 'h:i A']);
+    $this->actingAs($e->user->fresh());
+    expect($today())->toMatchArray(['working' => false, 'missing_checkout' => false, 'clocked_out' => true, 'check_out' => '06:00 PM']);
 });
 
 test('Manager Dashboard marks LIVE inside the shift and MISSING CHECKOUT after the cutoff', function () {

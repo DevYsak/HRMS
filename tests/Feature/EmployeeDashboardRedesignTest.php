@@ -321,11 +321,13 @@ test('today shows the worked time from the attendance row while clocked in', fun
         'employee_id' => $employee->id, 'date' => '2026-10-02', 'check_in' => '2026-10-02 09:00:00',
         'status' => 'on_time', 'work_mode' => 'office', 'is_late' => false,
     ]);
+    // Times follow the reader's Settings → Preferences clock (12-hour here).
+    $employee->user->update(['time_format' => 'h:i A']);
 
     Livewire::actingAs($employee->user)->test(Dashboard::class)
         ->assertOk()
         ->assertViewHas('today', fn ($t) => $t['state'] === 'present' && $t['worked_minutes'] === 120
-            && $t['working'] === true && $t['live_base'] !== null && $t['check_in'] === '9:00 AM')
+            && $t['working'] === true && $t['live_base'] !== null && $t['check_in'] === '09:00 AM')
         ->assertSee('Clock Out');
 });
 

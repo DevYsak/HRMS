@@ -3,7 +3,7 @@
 <flux:main class="bg-zinc-50 p-4 space-y-5 sm:p-6 dark:bg-zinc-950">
 
     {{-- Hero --}}
-    <x-profile.hero :employee="$employee" :completion="$completion" :can-edit-photo="true" />
+    <x-profile.hero :employee="$employee" :completion="$completion" :can-edit-photo="$this->canEditPhoto()" />
 
     <div wire:loading wire:target="photo" class="text-xs font-semibold text-orange-500">Uploading photo…</div>
     @error('photo') <p class="text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
@@ -60,8 +60,27 @@
         <div class="space-y-5 lg:col-span-2">
 
             @if($activeTab === 'overview')
+                {{-- Overview: who you are, how to reach you, your job and how complete
+                     your profile is. Bank, statutory IDs and pay stay on Personal. --}}
                 <x-profile.field-group group="identity" :employee="$employee" :pending="$pending" icon="user" />
                 <x-profile.field-group group="contact" :employee="$employee" :pending="$pending" icon="phone" />
+                <x-profile.field-group group="employment" :employee="$employee" :pending="$pending" icon="briefcase" />
+                <x-employee.section-card title="Profile completeness" icon="check-badge" data-profile-completeness>
+                    <div class="flex flex-wrap items-center gap-4">
+                        <div class="min-w-0 flex-1">
+                            <div class="flex items-baseline justify-between gap-2">
+                                <span class="text-sm font-semibold text-zinc-800 dark:text-zinc-100">{{ $completion['percent'] }}% complete</span>
+                                <span class="text-xs text-zinc-500">{{ count($completion['missing']) }} required {{ Str::plural('item', count($completion['missing'])) }} left</span>
+                            </div>
+                            <div class="mt-2 h-2 overflow-hidden rounded-full bg-zinc-100 dark:bg-white/10" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ $completion['percent'] }}" aria-label="Profile completeness">
+                                <div class="h-full rounded-full bg-orange-500" style="width: {{ $completion['percent'] }}%"></div>
+                            </div>
+                        </div>
+                        @if(count($completion['missing']) > 0)
+                            <flux:button size="sm" variant="primary" wire:click="setTab('personal')">Complete profile</flux:button>
+                        @endif
+                    </div>
+                </x-employee.section-card>
 
             @elseif($activeTab === 'personal')
                 <x-profile.field-group group="identity" :employee="$employee" :pending="$pending" icon="user" />
@@ -85,7 +104,7 @@
                                         </div>
                                         @if($item['document'])
                                             <a href="{{ $item['url'] }}" target="_blank" class="text-xs font-semibold text-orange-600 hover:underline">{{ $item['document']->file_name }}</a>
-                                            <span class="text-[11px] text-zinc-400">· {{ $item['document']->created_at->format('d M Y') }}</span>
+                                            <span class="text-[11px] text-zinc-400">· @userDate($item['document']->created_at)</span>
                                         @else
                                             <span class="text-xs italic text-zinc-400">Not uploaded</span>
                                         @endif

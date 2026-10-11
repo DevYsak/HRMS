@@ -27,7 +27,7 @@
 >
     @if($label)
         <label class="mb-1 block text-sm font-medium text-zinc-800 dark:text-zinc-200">
-            {{ $label }}@if($required)<span class="text-brand-500">*</span>@endif
+            {{ $label }}@if($required)<span class="ml-0.5 text-red-600 dark:text-red-400" aria-hidden="true" data-required-marker>*</span><span class="sr-only">({{ __('required') }})</span>@endif
         </label>
     @endif
 

@@ -3,6 +3,7 @@
 namespace App\Livewire\Overtime;
 
 use App\Models\OtRequest;
+use App\Services\Ai\AiDataTools;
 use App\Services\OvertimeService;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
@@ -13,6 +14,9 @@ class MyOtRequests extends Component
     use WithPagination;
 
     public bool $showModal = false;
+
+    /** The request whose details and timeline are open, if any. */
+    public ?int $viewingId = null;
 
     // Form fields
     public string $work_date = '';
@@ -31,6 +35,37 @@ class MyOtRequests extends Component
             'end_time' => 'required|date_format:H:i|after:start_time',
             'reason' => 'required|min:5|max:500',
         ];
+    }
+
+    /** @return array<string, string> */
+    protected function messages(): array
+    {
+        return [
+            'end_time.after' => 'The end time must be after the start time.',
+            'work_date.before_or_equal' => 'Overtime can only be requested for today or an earlier date.',
+        ];
+    }
+
+    /** @return array<string, string> */
+    protected function validationAttributes(): array
+    {
+        return [
+            'work_date' => 'work date',
+            'start_time' => 'start time',
+            'end_time' => 'end time',
+            'reason' => 'reason',
+        ];
+    }
+
+    public function showDetails(int $id): void
+    {
+        // Own requests only — someone else's id simply is not found.
+        $this->viewingId = OtRequest::where('employee_id', Auth::user()->employee?->id)->findOrFail($id)->id;
+    }
+
+    public function closeDetails(): void
+    {
+        $this->viewingId = null;
     }
 
     public function openModal(): void
@@ -98,6 +133,7 @@ class MyOtRequests extends Component
         }
 
         $request->update(['status' => 'cancelled']);
+        $this->viewingId = null;
         \Flux::toast('OT request cancelled.');
         $this->resetPage();
     }
@@ -125,33 +161,39 @@ class MyOtRequests extends Component
 
     public function render()
     {
-        $employee = Auth::user()->employee;
+        $user = Auth::user();
+        $employee = $user->employee;
 
         $query = $employee
-            ? $employee->otRequests()->with('reviewer')
+            ? $employee->otRequests()->with(['reviewer', 'overtimeRecord'])
             : OtRequest::whereNull('id');
 
         if ($this->filterStatus) {
             $query->where('status', $this->filterStatus);
         }
 
-        if ($this->filterMonth) {
+        if ($this->filterMonth && preg_match('/^\d{4}-\d{2}$/', $this->filterMonth)) {
             [$y, $m] = explode('-', $this->filterMonth);
             $query->whereYear('work_date', $y)->whereMonth('work_date', $m);
         }
 
-        $requests = $query->latest('work_date')->paginate(10);
+        $requests = $query->latest('work_date')->latest('id')->paginate(10);
 
-        $summary = $employee ? [
-            'total' => $employee->otRequests()->count(),
-            'approved' => $employee->otRequests()->where('status', 'approved')->count(),
-            'pending' => $employee->otRequests()->where('status', 'pending')->count(),
-            'hours' => (float) $employee->otRequests()->where('status', 'approved')->sum('requested_hours'),
-        ] : ['total' => 0, 'approved' => 0, 'pending' => 0, 'hours' => 0];
+        // One canonical summary (OvertimeService) — the same numbers the
+        // dashboard and the AI assistant report.
+        $summary = $employee
+            ? app(OvertimeService::class)->summaryFor($employee)
+            : ['pending' => 0, 'approved' => 0, 'rejected' => 0, 'cancelled' => 0, 'total' => 0, 'approved_hours_month' => 0.0, 'approved_amount_month' => 0.0];
+
+        $viewing = $this->viewingId && $employee
+            ? $employee->otRequests()->with(['reviewer', 'overtimeRecord'])->find($this->viewingId)
+            : null;
 
         return view('livewire.overtime.my-ot-requests', [
             'requests' => $requests,
             'summary' => $summary,
-        ])->layout('layouts.app', ['title' => 'My OT Requests']);
+            'showPay' => app(AiDataTools::class)->maySeeOwnPay($user),
+            'viewing' => $viewing,
+        ])->layout('layouts.app', ['title' => 'My Overtime']);
     }
 }

@@ -13,10 +13,10 @@
     @endforeach
 
     <div class="flex flex-wrap items-center justify-between gap-3">
-        <div class="flex gap-1 rounded-xl bg-zinc-100 p-1 dark:bg-white/5">
+        <div class="flex max-w-full gap-1 overflow-x-auto rounded-xl bg-zinc-100 p-1 dark:bg-white/5">
             @foreach(['balances' => 'My Balances', 'requests' => 'Pending & Upcoming', 'history' => 'Transaction History', 'statement' => 'Month-wise Statement'] as $key => $label)
                 <button type="button" wire:click="$set('panel', '{{ $key }}')"
-                    class="rounded-lg px-3 py-1.5 text-xs font-semibold {{ $panel === $key ? 'bg-white text-orange-600 shadow-sm dark:bg-zinc-800' : 'text-zinc-600 dark:text-zinc-400' }}">{{ $label }}</button>
+                    class="shrink-0 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold {{ $panel === $key ? 'bg-white text-orange-600 shadow-sm dark:bg-zinc-800' : 'text-zinc-600 dark:text-zinc-400' }}">{{ $label }}</button>
             @endforeach
         </div>
         <div class="flex items-center gap-2 text-xs text-zinc-500">

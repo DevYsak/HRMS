@@ -67,10 +67,10 @@
         @foreach($pendingRegs as $myReg)
             <div class="{{ $row }}" data-attention-reg {!! $overflowAttr(++$attentionIndex) !!}>
                 <div class="text-sm"><span class="font-semibold text-zinc-900 dark:text-white">Regularisation pending</span>
-                    <span class="text-zinc-600 dark:text-zinc-400"> — {{ \Illuminate\Support\Carbon::parse($myReg->work_date)->format('d M') }},
+                    <span class="text-zinc-600 dark:text-zinc-400"> — @userShortDate(\Illuminate\Support\Carbon::parse($myReg->work_date)),
                         @if($myReg->isLeave()) leave
                         @elseif($myReg->regularisation_type === 'half_day') half day ({{ $myReg->half_day_period }})
-                        @else {{ $myReg->requested_check_in ? \Illuminate\Support\Carbon::parse($myReg->requested_check_in)->format('H:i') : '—' }} → {{ $myReg->requested_check_out ? \Illuminate\Support\Carbon::parse($myReg->requested_check_out)->format('H:i') : '—' }}
+                        @else @userTime($myReg->requested_check_in) → @userTime($myReg->requested_check_out)
                         @endif · with HR</span></div>
                 @include('livewire.attendance.partials.regularisation-actions', ['reg' => $myReg])
             </div>
