@@ -54,7 +54,7 @@
 @endphp
 
 @php $tag = $href ? 'a' : 'div'; @endphp
-<{{ $tag }} @if($href) href="{{ $href }}" wire:navigate @endif {{ $attributes->class('group block rounded-2xl border border-zinc-100 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md dark:border-white/5 dark:bg-ink-900') }}>
+<{{ $tag }} @if($href) href="{{ $href }}" wire:navigate @endif {{ $attributes->class('ui-surface group block p-[calc(var(--ui-card-padding,1.25rem)*0.8)] transition-all hover:-translate-y-0.5 hover:shadow-md') }}>
     <div class="mb-3 flex items-center justify-between">
         @if($icon)
             <div class="flex size-9 items-center justify-center rounded-xl {{ $iconBg }}">

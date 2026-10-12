@@ -396,6 +396,7 @@ class Sidebar
                 'items' => [
                     ['label' => 'Control Panel', 'route' => 'settings.control-panel'],
                     ['label' => 'General', 'route' => 'settings.general'],
+                    ['label' => 'Brand & Layout', 'route' => 'settings.ui-theme'],
                     ['label' => 'Roles & Permissions', 'route' => 'settings.roles', 'when' => fn (User $u) => $u->hasPermission('manage_roles')],
                     ['label' => 'Approval Matrix', 'route' => 'settings.approval-matrix'],
                     ['label' => 'Departments', 'route' => 'settings.departments'],

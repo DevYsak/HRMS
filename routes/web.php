@@ -103,6 +103,7 @@ use App\Livewire\Settings\OnboardingTemplateTaskManager;
 use App\Livewire\Settings\ProfileFieldSettings;
 use App\Livewire\Settings\RoleManager;
 use App\Livewire\Settings\SalaryCycleManager;
+use App\Livewire\Settings\UiThemeSettings;
 use App\Livewire\Settings\WorkModeManager;
 use App\Livewire\TimeOff\AllTimeOff;
 use App\Livewire\TimeOff\BulkLeaveAssignment;
@@ -609,6 +610,8 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/job-titles', JobTitleManager::class)->name('job-titles');
         Route::get('/profile-fields', ProfileFieldSettings::class)->name('profile-fields');
         Route::get('/menu', MenuSettings::class)->name('menu');
+        // Brand & Layout — company-wide typography, layout, sidebar, components and colours.
+        Route::get('/ui-theme', UiThemeSettings::class)->name('ui-theme');
         Route::get('/notifications', NotificationSettings::class)->name('notifications');
         Route::get('/onboarding-templates', OnboardingTemplateManager::class)->name('onboarding-templates');
         Route::get('/onboarding-templates/{template}/tasks', OnboardingTemplateTaskManager::class)->name('onboarding-template-tasks');

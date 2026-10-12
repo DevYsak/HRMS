@@ -13,5 +13,5 @@
         };
 @endphp
 
-{{-- Standard dashboard grid: one gap (16px) everywhere. --}}
-<div {{ $attributes->class("grid min-w-0 gap-4 $class") }}>{{ $slot }}</div>
+{{-- Standard dashboard grid: one gap everywhere (16px by default; follows the Section gap setting). --}}
+<div {{ $attributes->class("grid min-w-0 gap-[calc(var(--ui-section-gap,20px)*0.8)] $class") }}>{{ $slot }}</div>

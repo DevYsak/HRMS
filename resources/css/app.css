@@ -28,7 +28,7 @@
 /* Cream professional surface + 290px on desktop */
 .pulse-sidebar { background: #FFF8F1 !important; }
 @media (min-width: 1024px) {
-    .pulse-sidebar[data-flux-sidebar-on-desktop]:not([data-flux-sidebar-collapsed-desktop]) { width: 290px; }
+    .pulse-sidebar[data-flux-sidebar-on-desktop]:not([data-flux-sidebar-collapsed-desktop]) { width: var(--ui-sidebar-width, 290px); }
 }
 
 /* Section / group headings — muted warm grey, compact + airy */
@@ -40,13 +40,13 @@
     font-size: 11px !important;
     letter-spacing: .12em !important;
     text-transform: uppercase !important;
-    margin-top: 6px !important;
+    margin-top: var(--ui-sidebar-section-gap, 6px) !important;
 }
 
 /* Base nav item — rounded, airy, warm label on cream */
 .pulse-sidebar [data-flux-sidebar-item] {
     border-radius: 12px !important;
-    margin-block: 3px !important;
+    margin-block: var(--ui-sidebar-item-gap, 3px) !important;
     font-weight: 500 !important;
     color: #5C5349 !important;
     transition: background-color .18s ease, color .18s ease, box-shadow .18s ease, transform .18s ease !important;
@@ -98,7 +98,7 @@
 /* Folded rail (desktop), ChatGPT-style: a 64px column of 40px squares,
    centred, with no sideways movement and no visible scrollbar. */
 @media (min-width: 1024px) {
-    .pulse-sidebar[data-flux-sidebar-collapsed-desktop] { width: 64px !important; padding-inline: 12px !important; scrollbar-width: none; }
+    .pulse-sidebar[data-flux-sidebar-collapsed-desktop] { width: var(--ui-sidebar-collapsed-width, 64px) !important; padding-inline: 12px !important; scrollbar-width: none; }
     .pulse-sidebar[data-flux-sidebar-collapsed-desktop]::-webkit-scrollbar { display: none; }
 }
 .pulse-sidebar[data-flux-sidebar-collapsed-desktop] [data-flux-sidebar-item],
@@ -224,7 +224,17 @@ select:focus[data-flux-control] {
 
     /* Card — premium rounded surface (matches x-pulse.card) */
     .pulse-card {
-        @apply rounded-2xl border border-zinc-100 bg-white p-6 shadow-sm dark:border-white/5 dark:bg-ink-900;
+        /* Follows Settings → Brand & Layout; defaults are the original rounded-2xl / p-6 / shadow-sm. */
+        border-radius: var(--ui-card-radius, 1rem);
+        border: 1px solid var(--ui-border, var(--color-zinc-100));
+        background-color: var(--ui-surface, #ffffff);
+        padding: calc(var(--ui-card-padding, 1.25rem) * 1.2);
+        box-shadow: var(--ui-card-shadow, 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1));
+    }
+
+    .dark .pulse-card {
+        border-color: var(--ui-border-dark, rgb(255 255 255 / 0.05));
+        background-color: var(--ui-surface-dark, var(--color-ink-900));
     }
 
     /* Stat value */
@@ -284,85 +294,85 @@ select:focus[data-flux-control] {
 
     /* Employee Status Badges */
     .badge-active {
-        @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400;
+        @apply inline-flex items-center rounded-[var(--ui-badge-radius,9999px)] px-2.5 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400;
     }
 
     .badge-onboarding {
-        @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400;
+        @apply inline-flex items-center rounded-[var(--ui-badge-radius,9999px)] px-2.5 py-0.5 text-xs font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400;
     }
 
     .badge-probation {
-        @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400;
+        @apply inline-flex items-center rounded-[var(--ui-badge-radius,9999px)] px-2.5 py-0.5 text-xs font-semibold bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400;
     }
 
     .badge-on-leave {
-        @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400;
+        @apply inline-flex items-center rounded-[var(--ui-badge-radius,9999px)] px-2.5 py-0.5 text-xs font-semibold bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400;
     }
 
     .badge-resigned {
-        @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400;
+        @apply inline-flex items-center rounded-[var(--ui-badge-radius,9999px)] px-2.5 py-0.5 text-xs font-semibold bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400;
     }
 
     .badge-terminated {
-        @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400;
+        @apply inline-flex items-center rounded-[var(--ui-badge-radius,9999px)] px-2.5 py-0.5 text-xs font-semibold bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400;
     }
 
     /* Attendance status badges */
     .badge-on_time {
-        @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400;
+        @apply inline-flex items-center rounded-[var(--ui-badge-radius,9999px)] px-2.5 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400;
     }
 
     .badge-approved {
-        @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400;
+        @apply inline-flex items-center rounded-[var(--ui-badge-radius,9999px)] px-2.5 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400;
     }
 
     .badge-pending {
-        @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400;
+        @apply inline-flex items-center rounded-[var(--ui-badge-radius,9999px)] px-2.5 py-0.5 text-xs font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400;
     }
 
     .badge-rejected {
-        @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400;
+        @apply inline-flex items-center rounded-[var(--ui-badge-radius,9999px)] px-2.5 py-0.5 text-xs font-semibold bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400;
     }
 
     .badge-cancelled {
-        @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400;
+        @apply inline-flex items-center rounded-[var(--ui-badge-radius,9999px)] px-2.5 py-0.5 text-xs font-semibold bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400;
     }
 
     .badge-manager {
-        @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400;
+        @apply inline-flex items-center rounded-[var(--ui-badge-radius,9999px)] px-2.5 py-0.5 text-xs font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400;
     }
 
     .badge-absent {
-        @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400;
+        @apply inline-flex items-center rounded-[var(--ui-badge-radius,9999px)] px-2.5 py-0.5 text-xs font-semibold bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400;
     }
 
     .badge-remote {
-        @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400;
+        @apply inline-flex items-center rounded-[var(--ui-badge-radius,9999px)] px-2.5 py-0.5 text-xs font-semibold bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400;
     }
 
     .badge-late {
-        @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400;
+        @apply inline-flex items-center rounded-[var(--ui-badge-radius,9999px)] px-2.5 py-0.5 text-xs font-semibold bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400;
     }
 
     /* Warning Letter status badges */
     .badge-warning-draft {
-        @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400;
+        @apply inline-flex items-center rounded-[var(--ui-badge-radius,9999px)] px-2.5 py-0.5 text-xs font-semibold bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400;
     }
 
     .badge-warning-issued {
-        @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400;
+        @apply inline-flex items-center rounded-[var(--ui-badge-radius,9999px)] px-2.5 py-0.5 text-xs font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400;
     }
 
     .badge-warning-acknowledged {
-        @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400;
+        @apply inline-flex items-center rounded-[var(--ui-badge-radius,9999px)] px-2.5 py-0.5 text-xs font-semibold bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400;
     }
 
     .badge-warning-under_review {
-        @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-violet-100 text-orange-700 dark:bg-violet-900/40 dark:text-violet-400;
+        @apply inline-flex items-center rounded-[var(--ui-badge-radius,9999px)] px-2.5 py-0.5 text-xs font-semibold bg-violet-100 text-orange-700 dark:bg-violet-900/40 dark:text-violet-400;
     }
 
     .badge-warning-closed {
-        @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400;
+        @apply inline-flex items-center rounded-[var(--ui-badge-radius,9999px)] px-2.5 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400;
     }
 
     /* ===================================================
@@ -591,3 +601,32 @@ html:has(.fixed.inset-0.z-50 > .absolute.inset-0.backdrop-blur-sm) [data-ai-copi
 [data-flux-error],
 [data-flux-description],
 textarea { overflow-wrap: anywhere; }
+
+/* ==========================================================================
+   Company look & feel (Settings → Brand & Layout)
+   Every value reads a --ui-* variable with the current design as fallback;
+   the variables only exist once an admin changes them (UiTheme).
+   ========================================================================== */
+
+/* Sidebar menu text / icons / item height — desktop only; the mobile drawer keeps its size. */
+@media (min-width: 1024px) {
+    .pulse-sidebar [data-flux-sidebar-item] [data-content] { font-size: var(--ui-sidebar-text-size, 0.875rem); }
+    .pulse-sidebar [data-flux-sidebar-item] > svg, .pulse-sidebar [data-flux-sidebar-item] [data-slot="icon"] { width: var(--ui-sidebar-icon-size, 1rem); height: var(--ui-sidebar-icon-size, 1rem); }
+    .pulse-sidebar[data-flux-sidebar-on-desktop]:not([data-flux-sidebar-collapsed-desktop]) [data-flux-sidebar-item] { height: var(--ui-sidebar-item-height, 2rem); }
+}
+
+@layer components {
+    /* Shared card surface (x-pulse.card, kpi-card, .pulse-card): radius, border, colour, shadow. */
+    .ui-surface {
+        border-radius: var(--ui-card-radius, 1rem);
+        border: 1px solid var(--ui-border, var(--color-zinc-100));
+        background-color: var(--ui-surface, #ffffff);
+        box-shadow: var(--ui-card-shadow, 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1));
+    }
+    .dark .ui-surface {
+        border-color: var(--ui-border-dark, rgb(255 255 255 / 0.05));
+        background-color: var(--ui-surface-dark, var(--color-ink-900));
+    }
+    .ui-card-pad { padding: var(--ui-card-padding, 1.25rem); }
+    .ui-badge-shape { border-radius: var(--ui-badge-radius, 9999px); }
+}

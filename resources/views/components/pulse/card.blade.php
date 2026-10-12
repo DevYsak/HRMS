@@ -5,9 +5,10 @@
     'flush' => false,   // remove inner padding (for tables)
 ])
 
-<div {{ $attributes->class('rounded-2xl border border-zinc-100 bg-white shadow-sm dark:border-white/5 dark:bg-ink-900') }}>
+{{-- Surface, radius, shadow and padding follow Settings → Brand & Layout (.ui-surface, --ui-card-padding). --}}
+<div {{ $attributes->class('ui-surface') }}>
     @if($title || isset($actions))
-        <div class="flex items-center justify-between gap-3 px-5 pt-5 {{ $flush ? 'pb-4' : '' }}">
+        <div class="flex items-center justify-between gap-3 px-[var(--ui-card-padding,1.25rem)] pt-[var(--ui-card-padding,1.25rem)] {{ $flush ? 'pb-4' : '' }}">
             <div class="flex items-center gap-2.5">
                 @if($icon)
                     <div class="flex size-8 items-center justify-center rounded-lg bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400">
@@ -27,7 +28,7 @@
         </div>
     @endif
 
-    <div class="{{ $flush ? '' : 'p-5' }} {{ ($title || isset($actions)) && ! $flush ? 'pt-4' : '' }}">
+    <div class="{{ $flush ? '' : 'ui-card-pad' }} {{ ($title || isset($actions)) && ! $flush ? 'pt-4' : '' }}">
         {{ $slot }}
     </div>
 </div>

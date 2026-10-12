@@ -15,6 +15,7 @@
     $settingsGroups = [
         __('Organisation') => [
             ['route' => 'settings.general', 'label' => __('Company'), 'icon' => 'building-office-2', 'active' => 'settings.general', 'when' => $canManageSettings],
+            ['route' => 'settings.ui-theme', 'label' => __('Brand & Layout'), 'icon' => 'swatch', 'active' => 'settings.ui-theme', 'when' => $canManageSettings],
             ['route' => 'settings.roles', 'label' => __('Roles & Permissions'), 'icon' => 'shield-check', 'active' => 'settings.roles', 'when' => $settingsUser?->can('manage_roles') ?? false],
             ['route' => 'settings.ai', 'label' => __('AI Assistant'), 'icon' => 'sparkles', 'active' => 'settings.ai', 'when' => $settingsUser?->hasPermission('manage_ai_settings') ?? false],
             ['route' => 'settings.holidays', 'label' => __('Holidays'), 'icon' => 'calendar-days', 'active' => 'settings.holidays', 'when' => $canManageSettings],

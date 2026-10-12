@@ -37,3 +37,13 @@
 
 @vite(['resources/css/app.css', 'resources/js/app.js'])
 @fluxAppearance
+
+{{-- Company look and feel (Settings → Brand & Layout): only values changed
+     from the default design produce CSS; a bad row falls back silently. --}}
+@php($uiTheme = app(\App\Services\Appearance\UiTheme::class))
+@if($uiFontUrl = rescue(fn () => $uiTheme->fontUrl(), null, false))
+    <link href="{{ $uiFontUrl }}" rel="stylesheet" />
+@endif
+@if(($uiCss = $uiTheme->css()) !== '')
+    <style id="ui-theme">{!! $uiCss !!}</style>
+@endif

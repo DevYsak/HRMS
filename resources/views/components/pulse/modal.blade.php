@@ -7,7 +7,15 @@
     'id' => null,
 ])
 
-@php($modalId = $id ?? 'modal-'.\Illuminate\Support\Str::random(6))
+@php
+    $modalId = $id ?? 'modal-'.\Illuminate\Support\Str::random(6);
+    // Width presets follow Settings → Brand & Layout (defaults = the original sizes).
+    $width = [
+        'small' => 'sm:max-w-[var(--ui-modal-sm,28rem)]', 'sm:max-w-md' => 'sm:max-w-[var(--ui-modal-sm,28rem)]',
+        'medium' => 'sm:max-w-[var(--ui-modal-md,32rem)]', 'sm:max-w-lg' => 'sm:max-w-[var(--ui-modal-md,32rem)]', 'max-w-lg' => 'sm:max-w-[var(--ui-modal-md,32rem)]',
+        'large' => 'sm:max-w-[var(--ui-modal-lg,42rem)]', 'sm:max-w-2xl' => 'sm:max-w-[var(--ui-modal-lg,42rem)]',
+    ][$width] ?? $width;
+@endphp
 
 {{--
     The shared modal. Rendered by Livewire state (wrap it in @if), so it
