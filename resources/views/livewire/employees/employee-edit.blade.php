@@ -146,82 +146,71 @@
                     <flux:button wire:click="openEmailModal" variant="filled" icon="envelope" size="sm">Send email</flux:button>
                 </flux:tooltip>
 
-                <div x-data="{ open: false }" class="relative" @click.outside="open = false">
-                    <flux:tooltip content="More actions">
-                        <flux:button @click="open = !open" variant="filled" size="sm" icon="ellipsis-horizontal" />
-                    </flux:tooltip>
+                {{-- Flux dropdown: the menu opens in the browser's top layer, so the
+                     hero's overflow-hidden (or any card) can never clip it; it flips
+                     above when there is no room below, stays inside the viewport,
+                     scrolls if taller, and closes on outside click / Escape with
+                     arrow-key navigation. --}}
+                <flux:dropdown position="bottom" align="end" data-test="more-actions">
+                    <flux:button variant="filled" size="sm" icon="ellipsis-horizontal" aria-label="More actions" title="More actions" />
 
-                    <div x-show="open" x-cloak
-                        x-transition:enter="transition ease-out duration-150"
-                        x-transition:enter-start="opacity-0 -translate-y-1"
-                        x-transition:enter-end="opacity-100 translate-y-0"
-                        class="absolute right-0 top-full z-50 mt-2 w-72 overflow-hidden rounded-2xl border border-[#EAECF0] bg-white shadow-xl dark:border-white/10 dark:bg-zinc-900">
+                    <flux:menu class="w-72 max-h-[min(32rem,calc(100vh-5rem))] overflow-y-auto" data-test="more-actions-menu">
+                        <flux:menu.heading class="!text-[10px] !font-bold uppercase tracking-widest !text-[#98A2B3]">Account access</flux:menu.heading>
 
-                        <div class="px-4 pb-1 pt-3 text-[10px] font-bold uppercase tracking-widest text-[#98A2B3]">Account access</div>
-
-                        <button type="button" wire:click="resetPassword" wire:loading.attr="disabled" wire:target="resetPassword" @click="open = false"
-                            class="flex w-full items-start gap-3 px-4 py-2.5 text-left transition hover:bg-orange-50/70 dark:hover:bg-white/5">
-                            <flux:icon.lock-closed class="mt-0.5 size-4 shrink-0 text-orange-500" />
-                            <span>
-                                <span class="block text-sm font-semibold text-[#101828] dark:text-zinc-100">
+                        <flux:menu.item icon="lock-closed" icon:variant="outline" class="!items-start [&_[data-flux-menu-item-icon]]:!text-orange-500 [&_[data-flux-menu-item-icon]]:mt-0.5"
+                            wire:click="resetPassword" wire:loading.attr="disabled" wire:target="resetPassword">
+                            <span class="min-w-0">
+                                <span class="block font-semibold">
                                     <span wire:loading.remove wire:target="resetPassword">Send reset link</span>
                                     <span wire:loading wire:target="resetPassword">Sending…</span>
                                 </span>
-                                <span class="block text-xs text-[#667085] dark:text-zinc-400">They choose their own new password</span>
+                                <span class="block text-xs font-normal text-[#667085] dark:text-zinc-400">They choose their own new password</span>
                             </span>
-                        </button>
+                        </flux:menu.item>
 
-                        <button type="button" wire:click="setTemporaryPassword" wire:loading.attr="disabled" wire:target="setTemporaryPassword"
-                            wire:confirm="This will reset their password to a new temporary one and email it to them. Continue?" @click="open = false"
-                            class="flex w-full items-start gap-3 px-4 py-2.5 text-left transition hover:bg-orange-50/70 dark:hover:bg-white/5">
-                            <flux:icon.key class="mt-0.5 size-4 shrink-0 text-orange-500" />
-                            <span>
-                                <span class="block text-sm font-semibold text-[#101828] dark:text-zinc-100">
+                        <flux:menu.item icon="key" icon:variant="outline" class="!items-start [&_[data-flux-menu-item-icon]]:!text-orange-500 [&_[data-flux-menu-item-icon]]:mt-0.5"
+                            wire:click="setTemporaryPassword" wire:loading.attr="disabled" wire:target="setTemporaryPassword"
+                            wire:confirm="This will reset their password to a new temporary one and email it to them. Continue?">
+                            <span class="min-w-0">
+                                <span class="block font-semibold">
                                     <span wire:loading.remove wire:target="setTemporaryPassword">Set temporary password</span>
                                     <span wire:loading wire:target="setTemporaryPassword">Resetting…</span>
                                 </span>
-                                <span class="block text-xs text-[#667085] dark:text-zinc-400">Replaces their password immediately</span>
+                                <span class="block text-xs font-normal text-[#667085] dark:text-zinc-400">Replaces their password immediately</span>
                             </span>
-                        </button>
+                        </flux:menu.item>
 
                         @unless($employee->user?->requiresPasswordChange())
-                            <button type="button" wire:click="forcePasswordReset" wire:loading.attr="disabled" wire:target="forcePasswordReset"
-                                wire:confirm="They will have to set a new password the next time they sign in. Their current password is not changed or shown. Continue?" @click="open = false"
-                                class="flex w-full items-start gap-3 px-4 py-2.5 text-left transition hover:bg-orange-50/70 dark:hover:bg-white/5">
-                                <flux:icon.arrow-path class="mt-0.5 size-4 shrink-0 text-orange-500" />
-                                <span>
-                                    <span class="block text-sm font-semibold text-[#101828] dark:text-zinc-100">Force password reset</span>
-                                    <span class="block text-xs text-[#667085] dark:text-zinc-400">They must choose a new one at next sign-in</span>
+                            <flux:menu.item icon="arrow-path" icon:variant="outline" class="!items-start [&_[data-flux-menu-item-icon]]:!text-orange-500 [&_[data-flux-menu-item-icon]]:mt-0.5"
+                                wire:click="forcePasswordReset" wire:loading.attr="disabled" wire:target="forcePasswordReset"
+                                wire:confirm="They will have to set a new password the next time they sign in. Their current password is not changed or shown. Continue?">
+                                <span class="min-w-0">
+                                    <span class="block font-semibold">Force password reset</span>
+                                    <span class="block text-xs font-normal text-[#667085] dark:text-zinc-400">They must choose a new one at next sign-in</span>
                                 </span>
-                            </button>
+                            </flux:menu.item>
                         @endunless
 
-                        <div class="my-1 border-t border-[#EAECF0] dark:border-white/10"></div>
-                        <div class="px-4 pb-1 pt-2 text-[10px] font-bold uppercase tracking-widest text-[#98A2B3]">Record</div>
+                        <flux:menu.separator />
+                        <flux:menu.heading class="!text-[10px] !font-bold uppercase tracking-widest !text-[#98A2B3]">Record</flux:menu.heading>
 
-                        <button type="button" wire:click="setTab('Activity')" @click="open = false"
-                            class="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-semibold text-[#101828] transition hover:bg-orange-50/70 dark:text-zinc-100 dark:hover:bg-white/5">
-                            <flux:icon.clock class="size-4 shrink-0 text-orange-500" />
+                        <flux:menu.item icon="clock" icon:variant="outline" class="font-semibold [&_[data-flux-menu-item-icon]]:!text-orange-500" wire:click="setTab('Activity')">
                             View activity
-                        </button>
+                        </flux:menu.item>
 
                         @if($employee->status->value !== 'inactive')
-                            <button type="button" wire:click="deactivate"
-                                wire:confirm="Deactivate this employee? Their status will be set to Inactive." @click="open = false"
-                                class="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-semibold text-rose-600 transition hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10">
-                                <flux:icon.no-symbol class="size-4 shrink-0" />
+                            <flux:menu.item icon="no-symbol" icon:variant="outline" variant="danger" class="font-semibold !text-rose-600 dark:!text-rose-400"
+                                wire:click="deactivate" wire:confirm="Deactivate this employee? Their status will be set to Inactive.">
                                 Deactivate employee
-                            </button>
+                            </flux:menu.item>
                         @else
-                            <button type="button" wire:click="reactivate"
-                                wire:confirm="Reactivate this employee? Their status will be set to Active." @click="open = false"
-                                class="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-semibold text-emerald-600 transition hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-500/10">
-                                <flux:icon.check-badge class="size-4 shrink-0" />
+                            <flux:menu.item icon="check-badge" icon:variant="outline" class="font-semibold !text-emerald-600 dark:!text-emerald-400"
+                                wire:click="reactivate" wire:confirm="Reactivate this employee? Their status will be set to Active.">
                                 Reactivate employee
-                            </button>
+                            </flux:menu.item>
                         @endif
-                    </div>
-                </div>
+                    </flux:menu>
+                </flux:dropdown>
             </div>
         </div>
 
@@ -482,25 +471,57 @@
                                 <h3 class="text-base font-bold text-[#101828] dark:text-white">Personal Information</h3>
                                 <p class="mt-0.5 text-sm text-[#667085]">Manage personal and contact details</p>
                             </div>
-                            <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
-                                <flux:input wire:model="phone" label="Phone Number" icon="phone" placeholder="+91 98765 43210" />
-                                <flux:input wire:model="date_of_birth" type="date" label="Date of Birth" />
-                                <x-clean-select model="gender" label="Gender" :live="false" placeholder="Select…"
-                                    :options="[['value' => 'male', 'label' => 'Male'], ['value' => 'female', 'label' => 'Female'], ['value' => 'other', 'label' => 'Other'], ['value' => 'prefer_not_to_say', 'label' => 'Prefer not to say']]" />
-                                <flux:input wire:model="emergency_contact" label="Emergency Contact" icon="phone-arrow-up-right" placeholder="Name & phone" />
+                            {{-- One grid, one cell shape: label → control (all h-10) → its own
+                                 error, so labels share a baseline and rows share a gap. --}}
+                            @php
+                                $personalCell = 'flex min-w-0 flex-col gap-2';
+                                $personalLabel = 'text-sm font-medium text-zinc-800 dark:text-white';
+                            @endphp
+                            <div class="grid grid-cols-1 gap-x-6 gap-y-5 lg:grid-cols-2" data-personal-grid>
+                                <div class="{{ $personalCell }}" data-personal-field="phone">
+                                    <label for="personal-phone" class="{{ $personalLabel }}">Phone Number</label>
+                                    <flux:input id="personal-phone" wire:model="phone" icon="phone" placeholder="+91 98765 43210" />
+                                    <flux:error name="phone" />
+                                </div>
+                                <div class="{{ $personalCell }}" data-personal-field="date_of_birth">
+                                    <label for="personal-dob" class="{{ $personalLabel }}">Date of Birth</label>
+                                    <flux:input id="personal-dob" wire:model="date_of_birth" type="date" />
+                                    <flux:error name="date_of_birth" />
+                                </div>
+                                <div class="{{ $personalCell }}" data-personal-field="gender">
+                                    <label for="personal-gender" class="{{ $personalLabel }}">Gender</label>
+                                    {{-- Native select: same height as the inputs, and its list can never be clipped by the card. --}}
+                                    <flux:select id="personal-gender" wire:model="gender">
+                                        <flux:select.option value="">Select…</flux:select.option>
+                                        <flux:select.option value="male">Male</flux:select.option>
+                                        <flux:select.option value="female">Female</flux:select.option>
+                                        <flux:select.option value="other">Other</flux:select.option>
+                                        <flux:select.option value="prefer_not_to_say">Prefer not to say</flux:select.option>
+                                    </flux:select>
+                                    <flux:error name="gender" />
+                                </div>
+                                <div class="{{ $personalCell }}" data-personal-field="emergency_contact">
+                                    <label for="personal-emergency" class="{{ $personalLabel }}">Emergency Contact</label>
+                                    <flux:input id="personal-emergency" wire:model="emergency_contact" icon="phone-arrow-up-right" placeholder="Name & phone" />
+                                    <flux:error name="emergency_contact" />
+                                </div>
+                                <div class="{{ $personalCell }} lg:col-span-2" data-personal-field="address">
+                                    <label for="personal-address" class="{{ $personalLabel }}">Residential Address</label>
+                                    <flux:textarea id="personal-address" wire:model="address" rows="2" placeholder="Full residential address" />
+                                    <flux:error name="address" />
+                                </div>
+                                <div class="{{ $personalCell }} lg:col-span-2" data-personal-field="photo">
+                                    <label for="personal-photo" class="{{ $personalLabel }}">Profile Photo</label>
+                                    @if($employee->photo)
+                                        <div class="flex items-center gap-3">
+                                            <img src="{{ asset('storage/'.$employee->photo) }}" class="size-12 rounded-full border border-zinc-200 object-cover dark:border-white/10" />
+                                            <span class="text-xs text-[#98A2B3]">Current photo — upload a new one to replace</span>
+                                        </div>
+                                    @endif
+                                    <flux:input id="personal-photo" wire:model="photo" type="file" accept="image/*" />
+                                    <flux:error name="photo" />
+                                </div>
                             </div>
-                            <flux:textarea wire:model="address" label="Residential Address" rows="2" placeholder="Full residential address" />
-                            <flux:field>
-                                <flux:label>Profile Photo</flux:label>
-                                @if($employee->photo)
-                                    <div class="mb-2 flex items-center gap-3">
-                                        <img src="{{ asset('storage/'.$employee->photo) }}" class="size-12 rounded-full border border-zinc-200 object-cover" />
-                                        <span class="text-xs text-[#98A2B3]">Current photo — upload a new one to replace</span>
-                                    </div>
-                                @endif
-                                <flux:input wire:model="photo" type="file" accept="image/*" class="mt-1" />
-                                @error('photo') <flux:error>{{ $message }}</flux:error> @enderror
-                            </flux:field>
                             {{-- Sticky so Save stays reachable on a long panel without
                                  scrolling back, and so "what changed" and "commit it"
                                  sit together. --}}
