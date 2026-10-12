@@ -1,7 +1,8 @@
 @props(['title' => null, 'icon' => null, 'href' => null, 'cta' => null])
 
-{{-- Reusable premium section card with optional title row + action slot. --}}
-<div {{ $attributes->merge(['class' => 'flex h-full flex-col rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm transition duration-300 hover:shadow-md dark:border-white/5 dark:bg-zinc-900']) }}>
+{{-- Reusable premium section card with optional title row + action slot.
+     Height follows the content: never stretched to a sibling column. --}}
+<div {{ $attributes->merge(['class' => 'flex flex-col self-start w-full rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm transition duration-300 hover:shadow-md dark:border-white/5 dark:bg-zinc-900']) }}>
     @if($title)
         <div class="mb-4 flex items-center justify-between gap-3">
             <h3 class="flex items-center gap-2 text-sm font-bold text-zinc-900 dark:text-white">
@@ -20,7 +21,7 @@
         </div>
     @endif
 
-    <div class="flex flex-1 flex-col">
+    <div class="flex flex-col">
         {{ $slot }}
     </div>
 </div>

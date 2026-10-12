@@ -91,7 +91,7 @@
         </div>
     </div>
 
-    <div class="grid grid-cols-1 gap-5 lg:grid-cols-3">
+    <div class="grid grid-cols-1 items-start gap-5 lg:grid-cols-3">
         <div class="space-y-5 lg:col-span-2">
 
             {{-- as-hr unlocks every registered field; the components are otherwise identical --}}
@@ -108,7 +108,7 @@
 
             @elseif($activeTab === 'financial' && $this->canSeeFinancial())
                 <x-profile.field-group group="financial" :employee="$employee" :pending="$pending" :as-hr="$this->canEditHere()"
-                                       icon="banknotes" title="Bank &amp; statutory" />
+                                       icon="banknotes" :title="'Bank & statutory'" />
 
             @elseif($activeTab === 'requests')
                 <x-employee.section-card title="Change requests" icon="arrow-path">

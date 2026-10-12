@@ -56,7 +56,7 @@
     </div>
 
     {{-- Panels --}}
-    <div class="grid grid-cols-1 gap-5 lg:grid-cols-3">
+    <div class="grid grid-cols-1 items-start gap-5 lg:grid-cols-3">
         <div class="space-y-5 lg:col-span-2">
 
             @if($activeTab === 'overview')
@@ -86,7 +86,7 @@
                 <x-profile.field-group group="identity" :employee="$employee" :pending="$pending" icon="user" />
                 <x-profile.field-group group="contact" :employee="$employee" :pending="$pending" icon="phone" />
                 <x-profile.field-group group="financial" :employee="$employee" :pending="$pending" icon="banknotes"
-                                       title="Bank &amp; statutory" />
+                                       :title="'Bank & statutory'" />
 
                 {{-- KYC documents: private, visible only to you and HR (View KYC Documents). --}}
                 <div id="kyc-documents" class="scroll-mt-20">
@@ -114,7 +114,7 @@
                         </div>
                         @if($canUploadKyc)
                             <form wire:submit="uploadKyc" class="mt-3 flex flex-wrap items-end gap-2 border-t border-zinc-100 pt-3 dark:border-white/5">
-                                <select wire:model="kycType" aria-label="Document type" class="rounded-lg border border-zinc-200 bg-white py-1.5 pl-2 pr-7 text-xs dark:border-zinc-700 dark:bg-zinc-900">
+                                <select wire:model="kycType" aria-label="Document type" class="w-full max-w-full rounded-lg border sm:w-auto border-zinc-200 bg-white py-1.5 pl-2 pr-7 text-xs dark:border-zinc-700 dark:bg-zinc-900">
                                     <option value="">Choose a document…</option>
                                     @foreach($kyc as $item)
                                         <option value="{{ $item['type'] }}">{{ $item['label'] }}</option>
@@ -130,7 +130,7 @@
                 </div>
 
             @elseif($activeTab === 'employment')
-                <x-profile.field-group group="employment" :employee="$employee" :pending="$pending" icon="briefcase" />
+                <x-profile.field-group group="employment" :employee="$employee" :pending="$pending" icon="briefcase" :columns="2" />
 
             @elseif($activeTab === 'requests')
                 <x-employee.section-card title="Change requests" icon="arrow-path">
@@ -184,38 +184,51 @@
             @endif
         </div>
 
-        {{-- Context rail --}}
-        <div class="space-y-5">
+        {{-- Context rail: content height, never stretched to the main column --}}
+        <div class="space-y-5 self-start">
             @if($completion['missing'])
-                <x-employee.section-card title="Finish your profile" icon="sparkles">
-                    <p class="mb-3 text-xs text-zinc-500">
-                        {{ $completion['percent'] }}% complete · {{ count($completion['missing']) }} required {{ Str::plural('item', count($completion['missing'])) }} still to fill in.
-                    </p>
-                    <div class="space-y-1.5">
-                        @foreach(array_slice($completion['missing'], 0, 6) as $gap)
-                            @if(str_starts_with($gap['field'], 'kyc:'))
-                                <button type="button" wire:click="$set('activeTab', 'personal')" x-on:click="$nextTick(() => setTimeout(() => document.getElementById('kyc-documents')?.scrollIntoView({ behavior: 'smooth' }), 150))"
-                                        class="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left text-sm transition hover:bg-zinc-50 dark:hover:bg-white/5">
-                                    <span class="text-zinc-700 dark:text-zinc-200">{{ $gap['label'] }}</span>
-                                    <flux:icon.arrow-up-tray class="size-3.5 text-zinc-300" />
-                                </button>
-                            @elseif((Registry::get($gap['field'])['type'] ?? null) === 'image')
-                                {{-- Media needs a real file picker, not a modal --}}
-                                <label class="flex w-full cursor-pointer items-center justify-between rounded-lg px-2 py-1.5 text-left text-sm transition hover:bg-zinc-50 dark:hover:bg-white/5">
-                                    <span class="text-zinc-700 dark:text-zinc-200">{{ $gap['label'] }}</span>
-                                    <flux:icon.camera class="size-3.5 text-zinc-300" />
-                                    <input type="file" wire:model="photo" accept="image/*" class="sr-only">
-                                </label>
-                            @else
-                                <button type="button"
-                                        wire:click="{{ $gap['tier'] === Registry::TIER_EDITABLE ? "editField('{$gap['field']}')" : "requestField('{$gap['field']}')" }}"
-                                        class="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left text-sm transition hover:bg-zinc-50 dark:hover:bg-white/5">
-                                    <span class="text-zinc-700 dark:text-zinc-200">{{ $gap['label'] }}</span>
-                                    <flux:icon.arrow-right class="size-3.5 text-zinc-300" />
-                                </button>
-                            @endif
-                        @endforeach
+                @php $missingCount = count($completion['missing']); @endphp
+                <x-employee.section-card title="Finish your profile" icon="sparkles" data-finish-profile>
+                    <div class="-mt-2 mb-3">
+                        <p class="text-xs text-zinc-500">{{ $completion['percent'] }}% complete · {{ $missingCount }} required {{ Str::plural('item', $missingCount) }} left</p>
+                        <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-zinc-100 dark:bg-white/10" aria-hidden="true">
+                            <div class="h-full rounded-full bg-orange-500" style="width: {{ $completion['percent'] }}%"></div>
+                        </div>
                     </div>
+                    <ul class="-mx-2 divide-y divide-zinc-100 dark:divide-white/5">
+                        @foreach(array_slice($completion['missing'], 0, 6) as $gap)
+                            @php
+                                $isKyc = str_starts_with($gap['field'], 'kyc:');
+                                $isImage = ! $isKyc && (Registry::get($gap['field'])['type'] ?? null) === 'image';
+                                $rowIcon = $isKyc ? 'document-arrow-up' : ($isImage ? 'camera' : 'pencil-square');
+                                $rowClass = 'flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left text-[13px] transition hover:bg-zinc-50 dark:hover:bg-white/5';
+                            @endphp
+                            <li wire:key="gap-{{ $gap['field'] }}">
+                                @if($isKyc)
+                                    <button type="button" wire:click="$set('activeTab', 'personal')" x-on:click="$nextTick(() => setTimeout(() => document.getElementById('kyc-documents')?.scrollIntoView({ behavior: 'smooth' }), 150))" class="{{ $rowClass }}">
+                                @elseif($isImage)
+                                    {{-- Media needs a real file picker, not a modal --}}
+                                    <label class="{{ $rowClass }} cursor-pointer">
+                                        <input type="file" wire:model="photo" accept="image/*" class="sr-only">
+                                @else
+                                    <button type="button"
+                                            wire:click="{{ $gap['tier'] === Registry::TIER_EDITABLE ? "editField('{$gap['field']}')" : "requestField('{$gap['field']}')" }}"
+                                            class="{{ $rowClass }}">
+                                @endif
+                                        <flux:icon :name="$rowIcon" class="size-4 shrink-0 text-orange-500" />
+                                        <span class="min-w-0 flex-1 truncate text-zinc-700 dark:text-zinc-200">{{ $gap['label'] }}</span>
+                                        <flux:icon.chevron-right class="size-3.5 shrink-0 text-zinc-300" />
+                                @if($isImage)
+                                    </label>
+                                @else
+                                    </button>
+                                @endif
+                            </li>
+                        @endforeach
+                    </ul>
+                    @if($missingCount > 6)
+                        <p class="mt-2 text-[11px] text-zinc-400">and {{ $missingCount - 6 }} more on the Personal tab.</p>
+                    @endif
                     @if(! empty($completion['submitted']))
                         <p class="mt-3 text-[11px] text-zinc-400">Sent to HR, awaiting approval: {{ collect($completion['submitted'])->pluck('label')->implode(', ') }}.</p>
                     @endif

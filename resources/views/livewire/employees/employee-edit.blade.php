@@ -7,9 +7,8 @@
      every existing wire binding still works.
 
      Panels below the chrome keep their own markup. --}}
-<flux:main class="nx-record min-h-screen space-y-5 bg-[#F7F8FA] p-4 font-['Inter'] md:p-6 dark:bg-[#0B1220]">
+<flux:main class="nx-record min-h-screen space-y-5 bg-[#F7F8FA] p-4 font-sans md:p-6 dark:bg-[#0B1220]">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
         /* Scoped to this page. Flux inputs default to a compact height that
            reads as cramped beside cards this size, and their focus ring is the
@@ -275,7 +274,7 @@
         </div>
     @endif
 
-    <div class="grid grid-cols-1 gap-5 lg:grid-cols-12">
+    <div class="grid grid-cols-1 items-start gap-5 lg:grid-cols-12">
 
         {{-- ── Left: summary. Ordered above the editor on mobile. ────────── --}}
         <aside class="space-y-5 lg:col-span-4 xl:col-span-3">
@@ -298,7 +297,7 @@
                         @foreach($rows as [$icon, $label, $value])
                             {{-- Every row has a real fallback. A blank line reads as a
                                  rendering fault; "Not set" reads as work still to do. --}}
-                            <div class="flex items-start gap-3 py-2.5">
+                            <div class="flex items-start gap-3 py-2">
                                 <flux:icon :name="$icon" class="mt-0.5 size-4 shrink-0 text-[#98A2B3]" />
                                 <div class="min-w-0 flex-1">
                                     <dt class="text-xs font-medium text-[#98A2B3]">{{ $label }}</dt>
@@ -311,12 +310,11 @@
 
                 <div class="border-t border-[#EAECF0] px-5 py-4 dark:border-white/10">
                     <h3 class="mb-3 text-[10px] font-bold uppercase tracking-widest text-[#98A2B3]">Shortcuts</h3>
-                    <div class="grid grid-cols-4 gap-2">
+                    <div class="grid grid-cols-3 gap-2" data-employee-shortcuts>
                         @foreach([
                             ['user',           'Profile',    'link', route('employees.profile', $employee)],
                             ['calendar-days',  'Attendance', 'link', route('attendance.employees')],
                             ['folder',         'Documents',  'tab',  'Documents'],
-                            ['squares-2x2',    'Activity',   'tab',  'Activity'],
                         ] as [$icon, $label, $kind, $target])
                             <flux:tooltip :content="$label">
                                 @if($kind === 'link')

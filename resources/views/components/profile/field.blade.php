@@ -40,14 +40,25 @@
 @endphp
 
 @unless($isMedia)
+@php
+    // One compact ownership pill per row, aligned right, so a reader can scan who
+    // owns each field without hovering anything.
+    $pill = match ($mode) {
+        'edit' => ['You can edit', 'bg-emerald-50 text-emerald-700 ring-emerald-200/70 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/20'],
+        'request' => ['Needs HR approval', 'bg-amber-50 text-amber-700 ring-amber-200/70 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/20'],
+        'locked' => ['Managed by HR', 'bg-zinc-100 text-zinc-500 ring-zinc-200/70 dark:bg-white/5 dark:text-zinc-400 dark:ring-white/10'],
+        default => null,
+    };
+@endphp
 <div
-    class="group flex items-start justify-between gap-4 border-b border-zinc-100 py-3 last:border-0 dark:border-white/5"
+    class="flex items-start justify-between gap-3 border-b border-zinc-100 py-2.5 last:border-0 dark:border-white/5"
     wire:key="profile-field-{{ $field }}"
+    data-profile-field="{{ $field }}"
 >
     {{-- Label + value --}}
     <div class="min-w-0 flex-1">
         <div class="flex items-center gap-1.5">
-            <span class="text-xs font-semibold uppercase tracking-wide text-zinc-400">{{ $label }}</span>
+            <span class="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">{{ $label }}</span>
 
             @if($mode === 'locked')
                 <flux:icon.lock-closed class="size-3 shrink-0 text-zinc-300 dark:text-zinc-600" />
@@ -58,9 +69,9 @@
             @endif
         </div>
 
-        <div class="mt-0.5 flex flex-wrap items-center gap-2">
+        <div class="mt-1 flex flex-wrap items-center gap-2">
             <span @class([
-                'text-sm',
+                'text-sm leading-snug break-words',
                 'font-medium text-zinc-900 dark:text-white' => ! $isEmpty,
                 'italic text-zinc-400' => $isEmpty,
             ])>
@@ -79,22 +90,18 @@
         </div>
 
         @if($mode === 'locked')
-            <p class="mt-1 text-[11px] leading-snug text-zinc-400">{{ $hrOnly ? 'Managed by HR. Contact HR to change it.' : Registry::lockReason($field) }}</p>
+            <p class="mt-0.5 text-[11px] leading-snug text-zinc-400">{{ $hrOnly ? 'Managed by HR. Contact HR to change it.' : Registry::lockReason($field) }}</p>
         @endif
     </div>
 
-    {{-- Action --}}
-    <div class="shrink-0 pt-0.5">
+    {{-- Ownership + action --}}
+    <div class="flex shrink-0 items-center gap-1.5">
+        @if($pill)
+            <span class="hidden whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset sm:inline-flex {{ $pill[1] }}">{{ $pill[0] }}</span>
+        @endif
+
         @if($mode === 'edit')
-            <flux:button
-                wire:click="editField('{{ $field }}')"
-                size="xs"
-                variant="ghost"
-                icon="pencil"
-                class="opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100"
-            >
-                <span class="sr-only">Edit {{ $label }}</span>
-            </flux:button>
+            <flux:button wire:click="editField('{{ $field }}')" size="xs" variant="ghost" icon="pencil" aria-label="Edit {{ $label }}" />
 
         @elseif($mode === 'request')
             @if($pending)
@@ -102,21 +109,14 @@
                     View request
                 </flux:button>
             @else
-                <flux:button
-                    wire:click="requestField('{{ $field }}')"
-                    size="xs"
-                    variant="ghost"
-                    icon="arrow-up-tray"
-                    class="opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100"
-                >
+                <flux:button wire:click="requestField('{{ $field }}')" size="xs" variant="ghost" icon="arrow-up-tray">
                     Request
                 </flux:button>
             @endif
 
         @elseif($mode === 'locked')
-            <span class="inline-flex items-center gap-1 rounded-md bg-zinc-100 px-1.5 py-0.5 text-[11px] font-semibold text-zinc-500 dark:bg-white/5 dark:text-zinc-400">
-                Managed by HR
-            </span>
+            {{-- Phones: the pill above is hidden, so the label stays visible here. --}}
+            <span class="inline-flex whitespace-nowrap rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-semibold text-zinc-500 sm:hidden dark:bg-white/5 dark:text-zinc-400">Managed by HR</span>
         @endif
     </div>
 </div>

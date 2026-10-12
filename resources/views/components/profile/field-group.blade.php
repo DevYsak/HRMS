@@ -7,6 +7,7 @@
     'title' => null,
     'icon' => null,
     'only' => null,          // optional whitelist of field keys, to split a group across cards
+    'columns' => 1,          // 2: a two-column data grid from xl up (long groups like Employment)
 ])
 
 @php
@@ -26,7 +27,10 @@
         :title="$title ?? (App\Services\Profile\ProfileFieldRegistry::GROUPS[$group] ?? ucfirst($group))"
         :icon="$icon"
     >
-        <div class="-mt-1">
+        <div @class([
+            '-mt-1',
+            'grid grid-cols-1 xl:grid-cols-2 xl:gap-x-8 xl:[&>*:nth-last-child(2):nth-child(odd)]:border-b-0' => (int) $columns === 2,
+        ])>
             @foreach($fields as $key => $meta)
                 <x-profile.field
                     :field="$key"
