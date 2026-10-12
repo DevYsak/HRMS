@@ -246,6 +246,9 @@ trait ShowsTodayActivity
                 'Effective event' => $isIn ? 'IN' : 'OUT',
                 'Source' => $sourceLabel,
             ];
+            if (! $isReg && ! empty($node['device'])) {
+                $details['Device'] = (string) $node['device'];
+            }
             if ($isReg) {
                 $details['Note'] = 'Manually corrected attendance entry';
                 if ($regularisation?->reviewer) {

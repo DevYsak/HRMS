@@ -79,7 +79,7 @@ test('a Face IN only starts the live clock from that IN', function () {
         ->assertSeeHtml('data-live-clock')
         ->assertSeeHtml('data-clock-start="'.Carbon::parse('2026-10-12 09:10:00')->getTimestampMs().'"')
         ->assertSee('Currently working since 09:10 AM')
-        ->assertSee('Since last IN · 09:10 AM')
+        ->assertSeeHtml('title="Running since your last IN"')
         ->assertSee('02:50:00')                    // server-rendered first frame (12:00 − 09:10)
         ->assertSeeHtml('data-activity-event="in"')
         ->assertSeeInOrder(['09:10 AM', 'Face IN', 'IN'])
@@ -212,10 +212,10 @@ test('the timeline scrolls inside its own track so a phone-width page never over
         ->assertSee('Scroll to later activity')
         ->html();
 
-    // The wide list lives in an overflow-x-auto track inside a min-w-0 column.
-    expect($html)->toMatch('/class="relative min-w-0 flex-1"/')
-        ->and($html)->toMatch('/class="overflow-x-auto[^"]*"[^>]*data-activity-track/')
-        ->and($html)->toMatch('/data-activity-track[^>]*>\s*<div class="relative w-max">/')
+    // The wide list lives in its own overflow-x-auto track inside an overflow-hidden card.
+    expect($html)->toMatch('/class="[^"]*relative overflow-hidden"[^>]*data-today-activity/')
+        ->and($html)->toMatch('/class="[^"]*overflow-x-auto[^"]*"[^>]*data-activity-track/')
+        ->and($html)->toMatch('/data-activity-track[^>]*>\s*<div class="relative mx-auto w-max">/')
         ->and(substr_count($html, 'data-activity-event='))->toBe(10);
 });
 
@@ -250,12 +250,14 @@ test('history filters narrow the rows live and clear back to the whole month', f
         ->assertSet('historyFrom', '')
         ->assertSet('historyStatus', '')
         ->assertSet('historyMode', '')
-        ->assertSeeHtml('data-history-row="2026-10-01"')
+        ->assertSeeHtml('data-history-row="2026-10-03"')            // page 1: 12 → 3 Oct
         ->assertSeeHtml('data-history-row="2026-10-08"')
-        // A new month starts unfiltered.
+        // A new month drops the old month's dates but keeps the status.
+        ->set('historyFrom', '2026-10-05')
         ->set('historyStatus', 'absent')
         ->call('historyPreviousMonth')
-        ->assertSet('historyStatus', '');
+        ->assertSet('historyFrom', '')
+        ->assertSet('historyStatus', 'absent');
 });
 
 test('status and worked time match the canonical calculation, and the refresh picks up a new punch', function () {

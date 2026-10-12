@@ -81,10 +81,15 @@ test('a past missing check-out is listed under Attention and in the history', fu
         'check_in' => '2026-07-10 09:00:00', 'check_out' => null, 'status' => 'on_time', 'work_mode' => 'office',
     ]);
 
-    Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
+    $component = Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
         ->assertSee('Attendance Needs Attention')
         ->assertSee('Missing Check-Out')
-        ->assertSee('Request Regularisation')
+        ->assertSee('Request Regularisation');
+
+    // The day is on the second history page (10 per page, newest first), and
+    // the Missing Checkout filter brings it up with its exception.
+    $component->set('filterStatus', 'missing_checkout')->call('applyHistoryFilters')
+        ->assertSeeHtml('data-history-row="2026-07-10"')
         ->assertSee('Missing OUT');
 });
 
@@ -164,7 +169,7 @@ test('the weekly punctuality counts come from the month history statuses', funct
         ->and($weeks[1])->toMatchArray(['present' => 1, 'late' => 0, 'absent' => 1]);
 });
 
-test('today lists up to fifteen punches and the rest in the punches drawer', function () {
+test('every punch of a busy day is on the timeline and in the punches drawer', function () {
     $this->travelTo(Carbon::today()->setTime(23, 0));
     $employee = myAttEmployee();
     // 18 punches, Face IN / ID card OUT alternating from 08:00, every 30 minutes.
@@ -173,13 +178,18 @@ test('today lists up to fifteen punches and the rest in the punches drawer', fun
     }
     app(AttendanceDayRebuilder::class)->rebuild($employee, Carbon::today());
 
-    Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
-        ->assertSee('3 earlier punches not shown')
-        ->assertSee('View all 18 punches')
+    $html = Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
+        ->assertSee('View All Activity')
         ->assertSee('View raw punches')
         ->assertSeeHtml('data-raw-punches')
         ->assertSee("Today's punches", false)
-        ->assertSee('Raw punches');
+        ->assertSee('Raw punches')
+        ->html();
+
+    // All 18 on the scrollable timeline, and all 18 in the drawer's punch table.
+    preg_match('/<table class="w-full text-sm" data-punch-table>.*?<\/table>/s', $html, $table);
+    expect(substr_count($html, 'data-activity-event="'))->toBe(18)
+        ->and(substr_count($table[0], '<tr'))->toBe(19);   // header + 18 punches
 });
 
 test('a missing punch today is raised under Attention with a regularisation action', function () {
@@ -196,15 +206,18 @@ test('a missing punch today is raised under Attention with a regularisation acti
         ->assertDontSee('No attendance issues today');
 });
 
-test('the history shows the latest eight days and the month in a drawer', function () {
+test('the history pages through the month, ten days a page', function () {
     $this->travelTo(Carbon::parse('2026-07-20 10:00:00'));
     $employee = myAttEmployee();
 
     Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
-        ->assertSee('Latest 8 of 20 days')
-        ->assertSee('View full history')
-        ->assertSeeHtml('data-history-full')
-        ->assertSeeHtml('data-history-row="2026-07-01"');   // in the drawer
+        ->assertSee('Showing 1–10 of 20 records')
+        ->assertSeeHtml('data-history-row="2026-07-11"')
+        ->assertDontSeeHtml('data-history-row="2026-07-01"')
+        ->call('setHistoryPage', 2)
+        ->assertSee('Showing 11–20 of 20 records')
+        ->assertSeeHtml('data-history-row="2026-07-01"')
+        ->assertDontSeeHtml('data-history-row="2026-07-11"');
 });
 
 test('attention shows five items and folds the rest behind show more', function () {

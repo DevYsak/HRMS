@@ -4,6 +4,7 @@ namespace App\Livewire\Attendance;
 
 use App\Enums\AttendanceMode;
 use App\Enums\PunchMethod;
+use App\Livewire\Concerns\FiltersAttendanceHistory;
 use App\Livewire\Concerns\ManagesRegularisations;
 use App\Livewire\Concerns\ShowsTodayActivity;
 use App\Models\Attendance;
@@ -47,11 +48,13 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Computed;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 
 class AttendanceTracker extends Component
 {
+    use FiltersAttendanceHistory;
     use ManagesRegularisations;
     use ShowsTodayActivity;
     use WithFileUploads;
@@ -278,6 +281,10 @@ class AttendanceTracker extends Component
         $this->attendanceSettings = AttendanceSetting::first();
         $this->aiEnabled = Auth::user() ? app(AiAssistant::class)->enabledForUser(Auth::user()) : false;
         $this->loadData();
+        $this->initialiseHistoryFilters();
+        if ($this->historyMonth !== '' && ! $this->historyCursor()->isSameMonth(Carbon::today())) {
+            $this->alignStatsToHistoryMonth();
+        }
     }
 
     public function loadData()
@@ -1055,90 +1062,41 @@ class AttendanceTracker extends Component
     // ── Month-by-month history ──────────────────────────────────────────
 
     /** The month the history table shows, as Y-m. */
+    #[Url(as: 'month', except: '')]
     public string $historyMonth = '';
-
-    /** Attendance History filters — inside the selected month (empty = whole month / all). */
-    public string $historyFrom = '';
-
-    public string $historyTo = '';
-
-    public string $historyStatus = '';
-
-    public string $historyMode = '';
-
-    /** Statuses offered by the Attendance History filter. */
-    public const HISTORY_STATUSES = [
-        'present' => 'Present', 'late' => 'Late', 'absent' => 'Absent', 'weekly_off' => 'Weekly Off',
-        'holiday' => 'Holiday', 'leave' => 'Leave', 'regularised' => 'Regularised', 'auto_checkout' => 'Auto Checkout',
-    ];
-
-    public function clearHistoryFilters(): void
-    {
-        $this->reset('historyFrom', 'historyTo', 'historyStatus', 'historyMode');
-    }
-
-    /**
-     * Narrow the month's rows (monthHistory, unchanged) by the history
-     * filters. Matches on the statuses the table already shows — nothing is
-     * recalculated.
-     *
-     * @param  iterable<int, array<string, mixed>>  $rows
-     * @return Collection<int, array<string, mixed>>
-     */
-    protected function filterHistoryRows(iterable $rows): Collection
-    {
-        $from = $this->historyFrom ?: null;
-        $to = $this->historyTo ?: null;
-
-        return collect($rows)
-            ->filter(fn (array $r) => ($from === null || $r['date'] >= $from) && ($to === null || $r['date'] <= $to))
-            ->filter(fn (array $r) => match ($this->historyStatus) {
-                'present' => in_array($r['status'], ['Present', 'WFH', 'Half day', WorkingDayResolver::WORKED_WEEKLY_OFF_LABEL], true),
-                'late' => $r['status'] === 'Late',
-                'absent' => $r['status'] === 'Absent',
-                'weekly_off' => $r['status'] === WorkingDayResolver::WEEKLY_OFF_LABEL,
-                'holiday' => in_array($r['status'], ['Holiday', 'MDL shutdown'], true),
-                'leave' => str_starts_with((string) $r['status'], 'Leave'),
-                'regularised' => (bool) ($r['regularised'] ?? false),
-                'auto_checkout' => (bool) ($r['auto_checkout'] ?? false),
-                default => true,
-            })
-            ->filter(fn (array $r) => $this->historyMode === '' || ($r['mode'] ?? null) === $this->historyMode)
-            ->values();
-    }
 
     public function historyPreviousMonth(): void
     {
-        $this->clearHistoryFilters();
         $this->historyMonth = $this->clampHistory($this->historyCursor()->subMonthNoOverflow())->format('Y-m');
+        $this->resetHistoryRangeForMonth();
         $this->alignStatsToHistoryMonth();
     }
 
     public function historyNextMonth(): void
     {
-        $this->clearHistoryFilters();
         $next = $this->historyCursor()->addMonthNoOverflow();
 
         if ($next->lte(Carbon::today()->startOfMonth())) {
             $this->historyMonth = $next->format('Y-m');
         }
+        $this->resetHistoryRangeForMonth();
         $this->alignStatsToHistoryMonth();
     }
 
     /** Month picker (1–12) — keeps the chosen year. */
     public function setHistoryMonth(int $month): void
     {
-        $this->clearHistoryFilters();
         $month = max(1, min(12, $month));
         $this->historyMonth = $this->clampHistory($this->historyCursor()->setDate($this->historyCursor()->year, $month, 1))->format('Y-m');
+        $this->resetHistoryRangeForMonth();
         $this->alignStatsToHistoryMonth();
     }
 
     /** Year picker — keeps the chosen month (never a future month). */
     public function setHistoryYear(int $year): void
     {
-        $this->clearHistoryFilters();
         $this->historyMonth = $this->clampHistory($this->historyCursor()->setDate($year, $this->historyCursor()->month, 1))->format('Y-m');
+        $this->resetHistoryRangeForMonth();
         $this->alignStatsToHistoryMonth();
     }
 
@@ -2016,6 +1974,8 @@ class AttendanceTracker extends Component
 
         // Real deltas for the KPI band — null delta means "no basis to compare"
         // and the UI hides the trend chip rather than inventing one.
+        $rateNow = $window['scheduled'] > 0 ? $present / $window['scheduled'] * 100 : null;
+        $ratePrev = $previous['scheduled'] > 0 ? $previous['present'] / $previous['scheduled'] * 100 : null;
         $this->comparison = [
             'label' => match ($this->compareMode) {
                 'last_month' => 'vs last month',
@@ -2026,6 +1986,7 @@ class AttendanceTracker extends Component
             'to' => $prevEnd->toDateString(),
             'has_data' => $prev->isNotEmpty(),
             'present' => $prev->isNotEmpty() ? $present - $prevPresent : null,
+            'rate' => $prev->isNotEmpty() && $rateNow !== null && $ratePrev !== null ? (int) round(min(100, $rateNow) - min(100, $ratePrev)) : null,
             'late' => $prev->isNotEmpty() ? $late - $prevLate : null,
             'hours' => $prev->isNotEmpty() ? (int) round(($totalMinutes - $prevMinutes) / 60) : null,
             'on_time_pct' => ($prevOnTimePct !== null && $workingBasis > 0)

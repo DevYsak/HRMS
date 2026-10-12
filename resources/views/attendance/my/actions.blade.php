@@ -2,21 +2,29 @@
 @php
     $routeAccess = app(\App\Services\Help\RouteAccess::class);
     $user = auth()->user();
-    $btn = 'inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3.5 py-2 text-sm font-medium text-zinc-700 transition hover:border-orange-300 hover:text-orange-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200';
+    $row = 'group flex w-full items-center gap-3 rounded-xl border border-zinc-100 bg-white px-3 py-2.5 text-left text-sm font-medium text-zinc-700 transition hover:border-orange-200 hover:bg-orange-50/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/50 dark:border-white/[0.06] dark:bg-white/[0.02] dark:text-slate-200 dark:hover:border-orange-400/30 dark:hover:bg-orange-500/[0.06]';
+    $chev = 'ml-auto size-4 text-zinc-300 transition group-hover:translate-x-0.5 group-hover:text-orange-500 dark:text-slate-600';
+    $tile = 'flex size-8 shrink-0 items-center justify-center rounded-lg';
 @endphp
 
-<section class="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900" aria-labelledby="actions-title" data-quick-actions>
-    <h2 id="actions-title" class="mb-4 flex items-center gap-3 text-[17px] font-semibold text-zinc-900 dark:text-white"><flux:icon.bolt class="size-6 text-orange-500" /> Quick Actions</h2>
-    <div class="flex flex-wrap gap-2">
-        <button type="button" wire:click="openRegularisation('{{ today()->toDateString() }}')" class="{{ $btn }}"><flux:icon.pencil-square class="size-4 text-orange-500" /> Request Regularisation</button>
+<section class="{{ $ui['card'] }} min-w-0 p-5" aria-labelledby="actions-title" data-quick-actions>
+    <div class="flex items-start gap-3">
+        <span class="{{ $ui['tile'] }} bg-orange-100 text-orange-600 dark:bg-orange-500/15 dark:text-orange-300"><flux:icon.bolt class="size-5" /></span>
+        <div>
+            <h2 id="actions-title" class="{{ $ui['title'] }}">Quick Actions</h2>
+            <p class="{{ $ui['sub'] }} mt-0.5">Common attendance actions</p>
+        </div>
+    </div>
+    <div class="mt-4 space-y-2">
+        <button type="button" wire:click="openRegularisation('{{ today()->toDateString() }}')" class="{{ $row }}"><span class="{{ $tile }} bg-orange-50 text-orange-600 dark:bg-orange-500/10 dark:text-orange-300"><flux:icon.pencil-square class="size-4" /></span> Request Regularisation <flux:icon.chevron-right class="{{ $chev }}" /></button>
         @if($routeAccess->allows($user, 'wfh.my'))
-            <a href="{{ route('wfh.my') }}" wire:navigate class="{{ $btn }}"><flux:icon.home class="size-4 text-orange-500" /> Work From Home</a>
+            <a href="{{ route('wfh.my') }}" wire:navigate class="{{ $row }}"><span class="{{ $tile }} bg-sky-50 text-sky-600 dark:bg-sky-500/10 dark:text-sky-300"><flux:icon.home class="size-4" /></span> Work From Home <flux:icon.chevron-right class="{{ $chev }}" /></a>
         @endif
-        <button type="button" @click="$flux.modal('my-requests').show()" class="{{ $btn }}"><flux:icon.inbox-stack class="size-4 text-orange-500" /> View My Requests</button>
+        <button type="button" @click="$flux.modal('my-requests').show()" class="{{ $row }}"><span class="{{ $tile }} bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-300"><flux:icon.inbox-stack class="size-4" /></span> View My Requests <flux:icon.chevron-right class="{{ $chev }}" /></button>
         @if($routeAccess->allows($user, 'help.employee-guide'))
-            <a href="{{ route('help.employee-guide') }}#attendance" wire:navigate class="{{ $btn }}"><flux:icon.book-open class="size-4 text-orange-500" /> Attendance Policy</a>
+            <a href="{{ route('help.employee-guide') }}#attendance" wire:navigate class="{{ $row }}"><span class="{{ $tile }} bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300"><flux:icon.book-open class="size-4" /></span> Attendance Policy <flux:icon.chevron-right class="{{ $chev }}" /></a>
         @endif
-        <button type="button" wire:click="exportLog" class="{{ $btn }}"><flux:icon.arrow-down-tray class="size-4 text-orange-500" /> Download Attendance</button>
+        <button type="button" wire:click="exportHistory" class="{{ $row }}"><span class="{{ $tile }} bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-300"><flux:icon.arrow-down-tray class="size-4" /></span> Download Attendance <flux:icon.chevron-right class="{{ $chev }}" /></button>
     </div>
 </section>
 
@@ -30,10 +38,10 @@
         @forelse($this->myRegularisations as $myReg)
             @php
                 $chip = match ($myReg->status) {
-                    'approved' => 'bg-emerald-50 text-emerald-700',
-                    'rejected' => 'bg-rose-50 text-rose-700',
-                    'cancelled' => 'bg-zinc-100 text-zinc-500',
-                    default => 'bg-amber-50 text-amber-700',
+                    'approved' => 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300',
+                    'rejected' => 'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300',
+                    'cancelled' => 'bg-zinc-100 text-zinc-500 dark:bg-white/5 dark:text-slate-400',
+                    default => 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300',
                 };
             @endphp
             <div class="flex flex-wrap items-center justify-between gap-2 border-t border-zinc-100 pt-3 text-sm dark:border-zinc-800">
