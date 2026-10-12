@@ -5,6 +5,7 @@ namespace App\Livewire\Attendance;
 use App\Enums\AttendanceMode;
 use App\Enums\PunchMethod;
 use App\Livewire\Concerns\ManagesRegularisations;
+use App\Livewire\Concerns\ShowsTodayActivity;
 use App\Models\Attendance;
 use App\Models\AttendanceDailyScore;
 use App\Models\AttendanceDailySummary;
@@ -42,6 +43,7 @@ use Carbon\CarbonPeriod;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Computed;
@@ -51,6 +53,7 @@ use Livewire\WithFileUploads;
 class AttendanceTracker extends Component
 {
     use ManagesRegularisations;
+    use ShowsTodayActivity;
     use WithFileUploads;
 
     public $todayAttendance;
@@ -400,16 +403,7 @@ class AttendanceTracker extends Component
 
         // 9. This-week summary + today's punch/break timeline
         $this->weekSummary = $this->buildWeekSummary($employee);
-        $this->punchJourney = $this->buildPunchJourney($employee);
-        $this->attendanceJourney = $this->buildAttendanceJourney($employee);
-        $this->todayCalc = app(AttendanceCalculator::class)
-            ->forDay($employee, Carbon::today(), $this->todayAttendance)
-            ->toArray();
-        // LIVE / missing checkout come from the shared calculation, not from
-        // "the last raw punch is an IN": past the cutoff (shift end + 1h) the
-        // journey stops showing as live.
-        $this->punchJourney['live'] = (bool) ($this->punchJourney['live'] ?? false) && (bool) $this->todayCalc['live'];
-        $this->punchJourney['missing_out'] = (bool) $this->todayCalc['missing_checkout'] || (bool) ($this->punchJourney['missing_out'] ?? false);
+        $this->loadTodayTimeline($employee);
         $this->shiftProgress = $this->buildShiftProgress($employee)->toArray();
         $this->loadStreakAndBenchmark($employee);
 
@@ -1063,14 +1057,66 @@ class AttendanceTracker extends Component
     /** The month the history table shows, as Y-m. */
     public string $historyMonth = '';
 
+    /** Attendance History filters — inside the selected month (empty = whole month / all). */
+    public string $historyFrom = '';
+
+    public string $historyTo = '';
+
+    public string $historyStatus = '';
+
+    public string $historyMode = '';
+
+    /** Statuses offered by the Attendance History filter. */
+    public const HISTORY_STATUSES = [
+        'present' => 'Present', 'late' => 'Late', 'absent' => 'Absent', 'weekly_off' => 'Weekly Off',
+        'holiday' => 'Holiday', 'leave' => 'Leave', 'regularised' => 'Regularised', 'auto_checkout' => 'Auto Checkout',
+    ];
+
+    public function clearHistoryFilters(): void
+    {
+        $this->reset('historyFrom', 'historyTo', 'historyStatus', 'historyMode');
+    }
+
+    /**
+     * Narrow the month's rows (monthHistory, unchanged) by the history
+     * filters. Matches on the statuses the table already shows — nothing is
+     * recalculated.
+     *
+     * @param  iterable<int, array<string, mixed>>  $rows
+     * @return Collection<int, array<string, mixed>>
+     */
+    protected function filterHistoryRows(iterable $rows): Collection
+    {
+        $from = $this->historyFrom ?: null;
+        $to = $this->historyTo ?: null;
+
+        return collect($rows)
+            ->filter(fn (array $r) => ($from === null || $r['date'] >= $from) && ($to === null || $r['date'] <= $to))
+            ->filter(fn (array $r) => match ($this->historyStatus) {
+                'present' => in_array($r['status'], ['Present', 'WFH', 'Half day', WorkingDayResolver::WORKED_WEEKLY_OFF_LABEL], true),
+                'late' => $r['status'] === 'Late',
+                'absent' => $r['status'] === 'Absent',
+                'weekly_off' => $r['status'] === WorkingDayResolver::WEEKLY_OFF_LABEL,
+                'holiday' => in_array($r['status'], ['Holiday', 'MDL shutdown'], true),
+                'leave' => str_starts_with((string) $r['status'], 'Leave'),
+                'regularised' => (bool) ($r['regularised'] ?? false),
+                'auto_checkout' => (bool) ($r['auto_checkout'] ?? false),
+                default => true,
+            })
+            ->filter(fn (array $r) => $this->historyMode === '' || ($r['mode'] ?? null) === $this->historyMode)
+            ->values();
+    }
+
     public function historyPreviousMonth(): void
     {
+        $this->clearHistoryFilters();
         $this->historyMonth = $this->clampHistory($this->historyCursor()->subMonthNoOverflow())->format('Y-m');
         $this->alignStatsToHistoryMonth();
     }
 
     public function historyNextMonth(): void
     {
+        $this->clearHistoryFilters();
         $next = $this->historyCursor()->addMonthNoOverflow();
 
         if ($next->lte(Carbon::today()->startOfMonth())) {
@@ -1082,6 +1128,7 @@ class AttendanceTracker extends Component
     /** Month picker (1–12) — keeps the chosen year. */
     public function setHistoryMonth(int $month): void
     {
+        $this->clearHistoryFilters();
         $month = max(1, min(12, $month));
         $this->historyMonth = $this->clampHistory($this->historyCursor()->setDate($this->historyCursor()->year, $month, 1))->format('Y-m');
         $this->alignStatsToHistoryMonth();
@@ -1090,6 +1137,7 @@ class AttendanceTracker extends Component
     /** Year picker — keeps the chosen month (never a future month). */
     public function setHistoryYear(int $year): void
     {
+        $this->clearHistoryFilters();
         $this->historyMonth = $this->clampHistory($this->historyCursor()->setDate($year, $this->historyCursor()->month, 1))->format('Y-m');
         $this->alignStatsToHistoryMonth();
     }
@@ -1178,6 +1226,44 @@ class AttendanceTracker extends Component
      */
     #[Computed]
     public function monthHistory(): array
+    {
+        $employee = Auth::user()->employee;
+        $month = $this->historyCursor();
+
+        // The 30-second refresh re-renders the page; the month is rebuilt only
+        // when its data changed (the signature) — or every 5 minutes while the
+        // current month's live day keeps counting.
+        return $employee
+            ? Cache::remember($this->monthHistoryCacheKey($employee, $month), 600, fn () => $this->buildMonthHistory())
+            : $this->buildMonthHistory();
+    }
+
+    /**
+     * A key that changes whenever anything the month view reads changes:
+     * attendance rows, punches, break logs, regularisations, leave and OT for
+     * the month (and the 5-minute window for the current month).
+     */
+    private function monthHistoryCacheKey(Employee $employee, Carbon $month): string
+    {
+        $from = $month->copy()->startOfMonth()->toDateString();
+        $to = $month->copy()->endOfMonth()->toDateString();
+        $stamp = fn ($query) => (string) $query->max('updated_at').'#'.$query->count();
+
+        $signature = implode('|', [
+            $stamp(Attendance::where('employee_id', $employee->id)->whereBetween('date', [$from, $to])),
+            $stamp(AttendancePunch::where('employee_id', $employee->id)->whereBetween('punch_date', [$from, $to])),
+            $stamp(BreakLog::where('employee_id', $employee->id)->whereBetween('break_start', [$from.' 00:00:00', $to.' 23:59:59'])),
+            $stamp(AttendanceRegularisation::withTrashed()->where('employee_id', $employee->id)->whereBetween('work_date', [$from, $to])),
+            $stamp(LeaveRequest::where('employee_id', $employee->id)->where('start_date', '<=', $to)->where('end_date', '>=', $from)),
+            $stamp(OtRequest::where('employee_id', $employee->id)->whereBetween('work_date', [$from, $to])),
+            $month->isSameMonth(Carbon::today()) ? intdiv((int) now()->timestamp, 300) : 'closed',
+        ]);
+
+        return 'my-attendance:month:'.$employee->id.':'.$month->format('Y-m').':'.md5($signature);
+    }
+
+    /** @return array{month: string, label: string, rows: array<int, array<string, mixed>>, totals: array<string, mixed>, years: array<int, int>} */
+    private function buildMonthHistory(): array
     {
         $employee = Auth::user()->employee;
         $month = $this->historyCursor();

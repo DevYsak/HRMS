@@ -68,8 +68,8 @@ test('an open session reads as currently working, in the KPI and the history', f
     myAttPunch($employee, Carbon::today(), '09:10', 'face');
 
     Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
-        ->assertSee('Currently working')
-        ->assertSee('Started 09:10 AM')
+        ->assertSeeInOrder(['Current Status', 'At Work', 'Since 09:10 AM'])
+        ->assertSee('Currently working since 09:10 AM')       // Today Activity clock, screen-reader label
         ->assertSeeInOrder(['09:10 AM', 'IN', 'Face', 'Working']);
 });
 

@@ -1,77 +1,33 @@
 {{--
     My Attendance — the employee's everyday attendance workspace.
 
-    Header → 4 KPI cards → Today (timeline + totals) → Attention (only when
-    something needs action) → This Month → Attendance History → 2 trends →
-    Quick actions. Every figure is read from the component's canonical values
-    (AttendanceCalculator via todayCalc, the PunchTimeline engine via
-    punchJourney, computeStats via stats, monthHistory) — this view arranges
-    them and never recalculates attendance.
+    Header → Punch guide → 4 KPI cards → Today → Today Activity (only when
+    something happened today) → Attention (only when something needs action)
+    → This Month → Attendance History → Working Hours + Punctuality → Quick
+    actions. Today's part refreshes every 30 seconds (refreshToday); the
+    month is cached until its data changes. Every figure is read from the
+    component's canonical values (AttendanceCalculator via todayCalc, the
+    PunchTimeline engine via punchJourney, computeStats via stats,
+    monthHistory) — this view arranges them and never recalculates
+    attendance.
 --}}
 @use('App\Enums\AttendanceMode')
 
 <flux:main class="min-h-screen bg-[#F7F7F8] p-4 md:p-6 dark:bg-zinc-950">
 
 @php
-    $emp = auth()->user()->employee;
-    $pj = $punchJourney;
+    // Today's values come from the component (ShowsTodayActivity::todayContext,
+    // read from AttendanceCalculator / PunchTimeline state) so the 30-second
+    // refresh and a full render show exactly the same numbers.
+    $ctx = $this->todayContext();
+    extract($ctx);
+    $activity = $this->todayActivity($ctx);
+    // This month — computeStats (follows the month selector) and monthHistory.
     $mh = $this->monthHistory;
     $monthTotals = $mh['totals'] ?? [];
-    $isCurrentMonth = ($mh['month'] ?? '') === now()->format('Y-m');
-    $hm = fn (int $minutes): string => intdiv($minutes, 60).'h '.str_pad((string) ($minutes % 60), 2, '0', STR_PAD_LEFT).'m';
-
-    // Today — AttendanceCalculator (worked = final out − first in, breaks never deducted).
-    $workedMin = (int) ($todayCalc['worked_minutes'] ?? 0);
-    $breakMin = (int) ($todayCalc['break_minutes'] ?? 0);
-    $stdHours = (float) ($shift->standard_hours ?? 9);
-    $targetMin = (int) round($stdHours * 60);
-    $breakAllowance = (int) ($shift->break_duration ?? 0);
-    $firstIn = $todayCalc['first_in'] ?? $pj['first_in'] ?? null;
-    $lastOut = $todayCalc['last_out'] ?? $pj['last_out'] ?? null;
-    $isLate = (bool) ($todayCalc['is_late'] ?? $todayAttendance?->is_late ?? false);
-    $lateMinutes = (int) ($todayCalc['late_minutes'] ?? 0);
-    $isLive = (bool) ($pj['live'] ?? false) || ($todayAttendance && ! $todayAttendance->check_out && (int) ($pj['raw_count'] ?? 0) === 0);
-    // Closed by the nightly auto checkout at the shift end (not a real OUT).
-    $autoClosed = ($todayCalc['source'] ?? null) === \App\Services\Attendance\AttendanceCalculator::SOURCE_AUTO_CHECKOUT;
-    $missingOut = ! $isLive && ! $autoClosed && ((bool) ($todayCalc['missing_checkout'] ?? false) || (bool) ($pj['missing_out'] ?? false));
-    $isIn = $todayAttendance && ! $todayAttendance->check_out;
-    $heroMode = AttendanceMode::tryFromValue($todayAttendance->work_mode ?? $workMode);
-    // Alerts that need action ("worked beyond shift" is information, not an issue).
-    $issues = collect($attendanceAlerts)->reject(fn (array $a) => ($a['type'] ?? '') === 'overtime');
-    // Today's missing punch comes from the engine's timeline (the alert list
-    // leaves today to the timeline); it feeds Attention and the Today footer.
-    $todayKeyAtt = today()->toDateString();
-    $todayMissingDir = collect($pj['nodes'] ?? [])->firstWhere('type', 'missing')['dir'] ?? ($missingOut ? 'OUT' : null);
-    $todayMissing = ($todayMissingDir !== null || ! empty($pj['needs_regularization']))
-        && ! $issues->contains(fn (array $a) => ($a['date'] ?? null) === $todayKeyAtt && str_starts_with((string) ($a['type'] ?? ''), 'missing'));
-    $issueCount = $issues->count() + (int) $todayMissing;
-    $todayRow = $isCurrentMonth ? collect($mh['rows'] ?? [])->firstWhere('date', today()->toDateString()) : null;
-
-    // Live "Worked today": closed engine sessions + the running one (web punch: since check-in).
-    $liveStartMs = null;
-    $liveBaseMin = $workedMin;
-    if ((int) ($pj['raw_count'] ?? 0) > 0) {
-        if ($pj['live']) {
-            $liveStartMs = $pj['live_start_ms'];
-            $liveBaseMin = $workedMin - (int) $pj['live_elapsed_minutes'];
-        }
-    } elseif ($isIn && $todayAttendance?->check_in) {
-        $liveStartMs = $todayAttendance->check_in->getTimestampMs();
-        $liveBaseMin = 0;
-    }
-
-    $shiftWindow = (! $this->shiftUnassigned && $shift?->start_time && $shift?->end_time)
-        ? \Carbon\Carbon::parse($shift->start_time)->format('g:i A').' – '.\Carbon\Carbon::parse($shift->end_time)->format('g:i A')
-        : null;
-
-    // This month — computeStats (follows the month selector) and monthHistory.
-    $present = (int) ($stats['present'] ?? 0);
-    $late = (int) ($stats['late'] ?? 0);
-    $scheduled = (int) ($stats['scheduled'] ?? 0);
-    $attendanceRate = $scheduled > 0 ? (int) round(min(100, $present / $scheduled * 100)) : null;
 @endphp
 
-<div class="mx-auto max-w-[1360px] space-y-6" data-attendance-page>
+<div class="mx-auto max-w-[1360px] space-y-6" data-attendance-page @if($emp) wire:poll.30s.visible="refreshToday" @endif>
 
     {{-- Header --}}
     <header class="flex flex-wrap items-end justify-between gap-4">
@@ -95,6 +51,7 @@
     @else
         @include('attendance.my.kpis')
         @include('attendance.my.today')
+        @include('attendance.my.activity')
         @include('attendance.my.attention')
         @include('attendance.my.wfh-report')
         @include('attendance.my.month')

@@ -1,4 +1,4 @@
-{{-- Four primary cards: Attendance Rate (selected month), Worked Today, First In, Last Out / status. --}}
+{{-- Four primary cards: Attendance Rate (selected month), Worked Today, First In, Current Status. --}}
 @php
     $card = 'rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900';
     $tile = 'flex size-12 shrink-0 items-center justify-center rounded-full';
@@ -59,34 +59,28 @@
         </div>
     </div>
 
-    {{-- 4 · Last Out / current status --}}
+    {{-- 4 · Current Status (canonical: todayCalc / punch timeline / day type) --}}
+    @php
+        [$statusText, $statusTone, $statusSub] = match (true) {
+            $isLive && $activeBreak !== null => ['On Break', 'text-amber-600 dark:text-amber-400', 'Since '.$activeBreak->break_start->format('h:i A')],
+            $isLive => ['At Work', 'text-emerald-600 dark:text-emerald-400', 'Since '.($liveStartMs ? \Illuminate\Support\Carbon::createFromTimestampMs($liveStartMs, config('app.timezone'))->format('h:i A') : ($firstIn ?? '—'))],
+            $missingOut => ['Missing Checkout', 'text-red-600 dark:text-red-400', 'Action required — request regularisation'],
+            $autoClosed => ['Auto Checkout', 'text-indigo-600 dark:text-indigo-300', 'Closed at '.$lastOut.' (shift end)'],
+            (bool) $lastOut => ['Checked Out', 'text-zinc-900 dark:text-white', 'At '.$lastOut],
+            default => [
+                match ($todayRow['status'] ?? null) { null, 'Today' => 'Not Clocked In', 'On leave' => 'On Leave', default => $todayRow['status'] },
+                'text-zinc-900 dark:text-white',
+                $todayRow['holiday'] ?? ($shiftWindow ? 'Shift '.$shiftWindow : 'No punch yet today'),
+            ],
+        };
+    @endphp
     <div class="{{ $card }}" data-kpi="status">
         <div class="flex items-center gap-4">
-            <span class="{{ $tile }} bg-orange-50 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400"><flux:icon.arrow-left-start-on-rectangle class="size-6" /></span>
+            <span class="{{ $tile }} bg-orange-50 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400"><flux:icon.signal class="size-6" /></span>
             <div class="min-w-0">
-                @if($isLive)
-                    <div class="{{ $label }}">Current Status</div>
-                    <div class="mt-0.5 text-[22px] font-bold leading-tight text-emerald-600 dark:text-emerald-400">Currently working</div>
-                    <div class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Started {{ $firstIn ?? $todayAttendance?->check_in?->format('h:i A') }}</div>
-                @elseif($missingOut)
-                    <div class="{{ $label }}">Last Out</div>
-                    <div class="mt-0.5 text-[22px] font-bold leading-tight text-red-600 dark:text-red-400">Missing Checkout</div>
-                    <span class="{{ $pill }} bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400">Action required</span>
-                @elseif($lastOut)
-                    <div class="{{ $label }}">Last Out</div>
-                    <div class="{{ $metric }}">{{ $lastOut }}</div>
-                    @if($autoClosed)
-                        <span class="{{ $pill }} bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300" title="{{ \App\Models\Attendance::AUTO_CHECKOUT_EXPLANATION }}">Auto Checkout</span>
-                    @else
-                        <span class="{{ $pill }} bg-zinc-100 text-zinc-600 dark:bg-white/5 dark:text-zinc-300">Completed</span>
-                    @endif
-                @else
-                    <div class="{{ $label }}">Current Status</div>
-                    <div class="mt-0.5 text-[22px] font-bold leading-tight text-zinc-900 dark:text-white">
-                        {{ match ($todayRow['status'] ?? null) { null, 'Today' => 'Not clocked in', default => $todayRow['status'] } }}
-                    </div>
-                    <div class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $todayRow['holiday'] ?? ($shiftWindow ? 'Shift '.$shiftWindow : 'No punch yet today') }}</div>
-                @endif
+                <div class="{{ $label }} flex items-center gap-1.5">Current Status @if($isLive && $activeBreak === null)<span class="size-1.5 rounded-full bg-emerald-500 motion-safe:animate-pulse" aria-hidden="true"></span>@endif</div>
+                <div class="mt-0.5 text-[22px] font-bold leading-tight {{ $statusTone }}" data-current-status>{{ $statusText }}</div>
+                <div class="mt-1 text-xs text-zinc-500 dark:text-zinc-400" @if($autoClosed) title="{{ \App\Models\Attendance::AUTO_CHECKOUT_EXPLANATION }}" @endif>{{ $statusSub }}</div>
             </div>
         </div>
     </div>

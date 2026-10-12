@@ -38,8 +38,8 @@
     $hasPunctuality = $weeks->sum(fn ($w) => $w['present'] + $w['late'] + $w['absent']) > 0;
 @endphp
 
-<section class="grid gap-4 lg:grid-cols-2" aria-label="Trends" data-trends>
-    <div class="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+<section class="grid grid-cols-1 gap-4 lg:grid-cols-2" aria-label="Trends" data-trends>
+    <div class="min-w-0 rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
         <h2 class="flex items-center gap-3 text-[17px] font-semibold text-zinc-900 dark:text-white"><flux:icon.chart-bar class="size-6 text-orange-500" /> Working Hours</h2>
         <p class="mt-1 pl-9 text-xs text-zinc-500 dark:text-zinc-400">Last {{ $worked->count() }} worked {{ \Illuminate\Support\Str::plural('day', $worked->count()) }} · {{ $mh['label'] }}</p>
         @if($worked->isNotEmpty())
@@ -49,7 +49,7 @@
             <p class="flex h-[180px] items-center justify-center text-xs text-zinc-400">No worked days yet.</p>
         @endif
     </div>
-    <div class="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+    <div class="min-w-0 rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
         <h2 class="flex items-center gap-3 text-[17px] font-semibold text-zinc-900 dark:text-white"><flux:icon.arrow-trending-up class="size-6 text-orange-500" /> Punctuality</h2>
         <p class="mt-1 pl-9 text-xs text-zinc-500 dark:text-zinc-400">Present, late and absent days by week · {{ $mh['label'] }}</p>
         @if($hasPunctuality)
