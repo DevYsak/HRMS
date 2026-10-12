@@ -466,6 +466,12 @@ class PunchTimeline
         return in_array($p->direction, ['in', 'out'], true) ? $p->direction : null;
     }
 
+    /** A punch's true IN/OUT direction (see effectiveDirection), for callers outside the timeline. */
+    public function directionOf(AttendancePunch $p): ?string
+    {
+        return $this->effectiveDirection($p);
+    }
+
     /**
      * Real direction per kept punch: method-derived when known, then the
      * engine's tag, otherwise alternation (even = IN, odd = OUT).

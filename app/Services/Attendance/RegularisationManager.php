@@ -323,6 +323,15 @@ class RegularisationManager
             }
         }
 
+        if ($regularisation->corrected_side !== null) {
+            $in = $regularisation->correctsCheckIn() || isset($changes['requested_check_in']);
+            $out = $regularisation->correctsCheckOut() || isset($changes['requested_check_out']);
+            $side = $in && $out ? 'both' : ($in ? 'in' : 'out');
+            if ($side !== $regularisation->corrected_side) {
+                $changes['corrected_side'] = $side;
+            }
+        }
+
         return $changes;
     }
 
@@ -335,6 +344,7 @@ class RegularisationManager
             'type' => $regularisation->isLeave() ? 'leave' : ($regularisation->regularisation_type ?: 'punch'),
             'check_in' => $regularisation->requested_check_in ? Carbon::parse($regularisation->requested_check_in)->format('H:i') : null,
             'check_out' => $regularisation->requested_check_out ? Carbon::parse($regularisation->requested_check_out)->format('H:i') : null,
+            'corrected_side' => $regularisation->corrected_side,
             'half_day_period' => $regularisation->half_day_period,
             'reason' => $regularisation->reason,
         ];
@@ -419,7 +429,12 @@ class RegularisationManager
             $out = $out->copy()->addDay();
         }
 
-        return [$in, $out];
+        // A single-side request wrote only the punch it corrected; the kept
+        // side is a genuine punch and never the request's own.
+        return array_values(array_filter([
+            $regularisation->correctsCheckIn() ? $in : null,
+            $regularisation->correctsCheckOut() ? $out : null,
+        ]));
     }
 
     /**
@@ -438,11 +453,11 @@ class RegularisationManager
         $date = Carbon::parse($regularisation->work_date)->toDateString();
         $out = Carbon::parse($date.' '.Carbon::parse($regularisation->requested_check_out)->format('H:i:s'));
 
-        return [
-            Carbon::parse($date.' '.Carbon::parse($regularisation->requested_check_in)->format('H:i:s')),
-            $out,
-            $out->copy()->addDay(),
-        ];
+        return array_values(array_filter([
+            $regularisation->correctsCheckIn() ? Carbon::parse($date.' '.Carbon::parse($regularisation->requested_check_in)->format('H:i:s')) : null,
+            $regularisation->correctsCheckOut() ? $out : null,
+            $regularisation->correctsCheckOut() ? $out->copy()->addDay() : null,
+        ]));
     }
 
     /**

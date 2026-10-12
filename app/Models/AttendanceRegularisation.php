@@ -27,6 +27,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     'half_day_period',
     'requested_check_in',
     'requested_check_out',
+    'corrected_side',
     'check_in_method',
     'check_out_method',
     'reason',
@@ -64,6 +65,21 @@ class AttendanceRegularisation extends Model
             'approval_trail' => 'array',
             'claimed_at' => 'datetime',
         ];
+    }
+
+    /**
+     * Whether this request changes the check-in. A null corrected_side is a
+     * request made before single-side corrections existed: both sides.
+     */
+    public function correctsCheckIn(): bool
+    {
+        return $this->corrected_side !== 'out';
+    }
+
+    /** Whether this request changes the check-out (null = both, as above). */
+    public function correctsCheckOut(): bool
+    {
+        return $this->corrected_side !== 'in';
     }
 
     /** A leave regularisation converts an absence; the default corrects punches. */

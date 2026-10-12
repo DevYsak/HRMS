@@ -259,6 +259,14 @@ class AttendanceTracker extends Component
 
     public bool $regFixOut = true;
 
+    /**
+     * The day's existing valid punches as HH:MM (null = none), shown in the
+     * form so the employee sees which side is kept and which must be entered.
+     *
+     * @var array{in: ?string, out: ?string}
+     */
+    public array $regExisting = ['in' => null, 'out' => null];
+
     public string $regDate = '';
 
     public string $regCheckIn = '';
@@ -2361,13 +2369,15 @@ class AttendanceTracker extends Component
     public function openRegularisation($date)
     {
         $this->regDate = $date;
-        $attendance = Attendance::where('employee_id', Auth::user()->employee->id)->where('date', $date)->first();
-        $this->regCheckIn = $attendance?->check_in?->format('H:i') ?? '';
-        $this->regCheckOut = $attendance?->check_out?->format('H:i') ?? '';
+        $this->resetErrorBag(['regCheckIn', 'regCheckOut']);
+        $existing = app(AttendanceService::class)->existingPunchesFor(Auth::user()->employee, Carbon::parse($date)->toDateString());
+        $this->regExisting = ['in' => $existing['in']?->format('H:i'), 'out' => $existing['out']?->format('H:i')];
+        $this->regCheckIn = $this->regExisting['in'] ?? '';
+        $this->regCheckOut = $this->regExisting['out'] ?? '';
 
         // Pre-tick what's actually missing so the employee fixes only that.
-        $this->regFixIn = ! $attendance || ! $attendance->check_in;
-        $this->regFixOut = ! $attendance || ! $attendance->check_out;
+        $this->regFixIn = $this->regExisting['in'] === null;
+        $this->regFixOut = $this->regExisting['out'] === null;
         if (! $this->regFixIn && ! $this->regFixOut) {
             $this->regFixOut = true; // correcting an existing (wrong) punch
         }
@@ -2387,13 +2397,13 @@ class AttendanceTracker extends Component
             'regDate' => $isHalfDay ? 'required|date' : 'required|date|before_or_equal:today',
             'regType' => 'required|in:punch,half_day',
             'regHalfDayPeriod' => $isHalfDay ? 'required|in:first,second' : 'nullable',
-            'regCheckIn' => $isHalfDay ? 'nullable' : array_merge([$this->regFixIn ? 'required' : 'nullable'], $time),
-            'regCheckOut' => $isHalfDay ? 'nullable' : array_merge([$this->regFixOut ? 'required' : 'nullable'], $time),
+            // Which times are required depends on the day's existing punches
+            // (checked below), not on the format rule.
+            'regCheckIn' => $isHalfDay ? 'nullable' : array_merge(['nullable'], $time),
+            'regCheckOut' => $isHalfDay ? 'nullable' : array_merge(['nullable'], $time),
             'regReason' => 'required|min:5',
             'regAttachment' => 'nullable|file|max:5120|mimes:jpg,jpeg,png,pdf,webp',
         ], [
-            'regCheckIn.required' => 'Enter the correct check-in time.',
-            'regCheckOut.required' => 'Enter the correct check-out time.',
             'regDate.before_or_equal' => 'You can only correct a day that has already happened.',
             'regCheckIn.regex' => 'Enter the check-in time as HH:MM.',
             'regCheckOut.regex' => 'Enter the check-out time as HH:MM.',
@@ -2427,20 +2437,30 @@ class AttendanceTracker extends Component
                 return;
             }
 
-            // Untouched punches keep their recorded time so approval only
-            // overrides what the employee asked to fix.
-            $requestedIn = $this->regFixIn
-                ? $this->regCheckIn
-                : ($attendance?->check_in?->format('H:i') ?? $this->regCheckIn);
-            $requestedOut = $this->regFixOut
-                ? $this->regCheckOut
-                : ($attendance?->check_out?->format('H:i') ?? $this->regCheckOut);
+            // A side is corrected when it is ticked, or when the day has no
+            // valid punch for it (then it cannot be kept). The other side keeps
+            // the day's existing canonical punch — the same reading approval uses.
+            $existing = app(AttendanceService::class)->existingPunchesFor($employee, Carbon::parse($this->regDate)->toDateString());
+            $correctsIn = $this->regFixIn || $existing['in'] === null;
+            $correctsOut = $this->regFixOut || $existing['out'] === null;
+            $missingIn = $correctsIn && trim($this->regCheckIn) === '';
+            $missingOut = $correctsOut && trim($this->regCheckOut) === '';
 
-            if (! $requestedIn || ! $requestedOut) {
-                \Flux::toast('Both times are needed — tick the missing punch and fill it in.', variant: 'warning');
+            if ($missingIn || $missingOut) {
+                if ($missingIn && $missingOut) {
+                    $this->addError('regCheckIn', 'Please enter both corrected times.');
+                    $this->addError('regCheckOut', 'Please enter both corrected times.');
+                } elseif ($missingIn) {
+                    $this->addError('regCheckIn', 'Please enter the missing check-in time.');
+                } else {
+                    $this->addError('regCheckOut', 'Please enter the missing check-out time.');
+                }
 
                 return;
             }
+
+            $requestedIn = $correctsIn ? substr($this->regCheckIn, 0, 5) : $existing['in']->format('H:i');
+            $requestedOut = $correctsOut ? substr($this->regCheckOut, 0, 5) : $existing['out']->format('H:i');
 
             // An OUT at or before the IN is only the next morning on a night
             // shift; anywhere else it would become a 20h/24h phantom session.
@@ -2453,8 +2473,10 @@ class AttendanceTracker extends Component
 
             $payload['requested_check_in'] = $this->regDate.' '.$requestedIn.':00';
             $payload['requested_check_out'] = $this->regDate.' '.$requestedOut.':00';
-            $payload['check_in_method'] = in_array($this->regCheckInMethod, ['face', 'id_card'], true) ? $this->regCheckInMethod : 'id_card';
-            $payload['check_out_method'] = in_array($this->regCheckOutMethod, ['face', 'id_card'], true) ? $this->regCheckOutMethod : 'id_card';
+            $payload['corrected_side'] = $correctsIn && $correctsOut ? 'both' : ($correctsIn ? 'in' : 'out');
+            // A method only for a corrected side; the kept punch keeps its own.
+            $payload['check_in_method'] = $correctsIn ? (in_array($this->regCheckInMethod, ['face', 'id_card'], true) ? $this->regCheckInMethod : 'id_card') : null;
+            $payload['check_out_method'] = $correctsOut ? (in_array($this->regCheckOutMethod, ['face', 'id_card'], true) ? $this->regCheckOutMethod : 'id_card') : null;
         }
 
         $regularisation = AttendanceRegularisation::create($payload);
@@ -2488,7 +2510,7 @@ class AttendanceTracker extends Component
             report($e); // logged for diagnosis; the regularisation is saved regardless
         }
 
-        $this->reset(['regDate', 'regCheckIn', 'regCheckOut', 'regReason', 'regFixIn', 'regFixOut', 'regAttachment', 'regType', 'regHalfDayPeriod']);
+        $this->reset(['regDate', 'regCheckIn', 'regCheckOut', 'regReason', 'regFixIn', 'regFixOut', 'regAttachment', 'regType', 'regHalfDayPeriod', 'regExisting']);
         $this->modal('regularisation-modal')->close();
         \Flux::toast('Regularisation request sent to HR for approval.');
     }

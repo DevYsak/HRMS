@@ -275,26 +275,33 @@
             </div>
         </div>
 
-        {{-- 3 · Expected time + method --}}
+        {{-- 3 · Expected time + method. A side is required when ticked or when
+             the day has no valid punch for it; otherwise its punch is kept. --}}
+        @php
+            $needIn = $regFixIn || ($regExisting['in'] ?? null) === null;
+            $needOut = $regFixOut || ($regExisting['out'] ?? null) === null;
+        @endphp
         <div>
             <div class="mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-zinc-400"><span class="inline-flex size-4 items-center justify-center rounded-full bg-orange-100 text-[9px] text-orange-600">3</span> Expected time</div>
             <div class="grid grid-cols-2 gap-3">
-                <div class="space-y-2 {{ $regFixIn ? '' : 'pointer-events-none opacity-40' }}">
-                    <flux:input wire:model="regCheckIn" label="IN at" type="time" :disabled="! $regFixIn" :badge="$regFixIn ? 'Required' : null" :aria-required="$regFixIn ? 'true' : null" />
-                    <flux:select wire:model="regCheckInMethod" :disabled="! $regFixIn">
+                <div class="space-y-2 {{ $needIn ? '' : 'pointer-events-none opacity-40' }}" data-reg-side="in">
+                    <flux:input wire:model="regCheckIn" label="IN at" type="time" :disabled="! $needIn" :badge="$needIn ? 'Required' : null" :aria-required="$needIn ? 'true' : null" />
+                    <p class="text-[11px] text-zinc-500 dark:text-zinc-400">{{ ($regExisting['in'] ?? null) ? 'Recorded: '.\Illuminate\Support\Carbon::createFromFormat('H:i', $regExisting['in'])->format('h:i A') : 'No check-in recorded' }}</p>
+                    <flux:select wire:model="regCheckInMethod" :disabled="! $needIn">
                         <flux:select.option value="id_card">via ID Card</flux:select.option>
                         <flux:select.option value="face">via Face</flux:select.option>
                     </flux:select>
                 </div>
-                <div class="space-y-2 {{ $regFixOut ? '' : 'pointer-events-none opacity-40' }}">
-                    <flux:input wire:model="regCheckOut" label="OUT at" type="time" :disabled="! $regFixOut" :badge="$regFixOut ? 'Required' : null" :aria-required="$regFixOut ? 'true' : null" />
-                    <flux:select wire:model="regCheckOutMethod" :disabled="! $regFixOut">
+                <div class="space-y-2 {{ $needOut ? '' : 'pointer-events-none opacity-40' }}" data-reg-side="out">
+                    <flux:input wire:model="regCheckOut" label="OUT at" type="time" :disabled="! $needOut" :badge="$needOut ? 'Required' : null" :aria-required="$needOut ? 'true' : null" />
+                    <p class="text-[11px] text-zinc-500 dark:text-zinc-400">{{ ($regExisting['out'] ?? null) ? 'Recorded: '.\Illuminate\Support\Carbon::createFromFormat('H:i', $regExisting['out'])->format('h:i A') : 'No check-out recorded' }}</p>
+                    <flux:select wire:model="regCheckOutMethod" :disabled="! $needOut">
                         <flux:select.option value="id_card">via ID Card</flux:select.option>
                         <flux:select.option value="face">via Face</flux:select.option>
                     </flux:select>
                 </div>
             </div>
-            <p class="mt-1.5 text-[11px] text-zinc-400">Unticked punches keep their recorded time.</p>
+            <p class="mt-1.5 text-[11px] text-zinc-400">Only the punch you correct changes — the other recorded punch is kept as it is.</p>
         </div>
         @endif
 

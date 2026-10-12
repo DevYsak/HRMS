@@ -17,6 +17,7 @@ use App\Services\Attendance\AttendanceCalculator;
 use App\Services\Attendance\AttendanceDayRebuilder;
 use App\Services\Attendance\AttendanceScoreEngine;
 use App\Services\Attendance\HolidayResolver;
+use App\Services\Attendance\PunchTimeline;
 use App\Services\Attendance\ResolvedShift;
 use App\Services\Attendance\ShiftResolver;
 use App\Services\Attendance\WorkingDayResolver;
@@ -179,6 +180,39 @@ class AttendanceService
     }
 
     /**
+     * The day's existing valid punches, as a regularisation sees them: the
+     * canonical first IN and final OUT (AttendanceCalculator). The nightly
+     * auto checkout is the shift end, not a real OUT, so it does not count.
+     * With no IN at all the timeline cannot pair a genuine OUT yet, so the
+     * latest real OUT punch (Card = OUT) is still the day's existing OUT — a
+     * missing-IN request keeps it.
+     *
+     * @return array{in: ?Carbon, out: ?Carbon}
+     */
+    public function existingPunchesFor(Employee $employee, string $date): array
+    {
+        $attendance = Attendance::where('employee_id', $employee->id)->whereDate('date', $date)->first();
+        $day = app(AttendanceCalculator::class)->forDay($employee, $date, $attendance);
+
+        $in = $day->firstIn ? Carbon::parse($day->firstIn) : null;
+        $out = $day->lastOut && $day->source !== AttendanceCalculator::SOURCE_AUTO_CHECKOUT ? Carbon::parse($day->lastOut) : null;
+
+        if ($in === null && $out === null) {
+            $timeline = app(PunchTimeline::class);
+            $genuineOut = AttendancePunch::where('employee_id', $employee->id)
+                ->whereDate('punch_date', $date)
+                ->where('source', '!=', 'system_auto')
+                ->orderBy('punched_at')
+                ->get()
+                ->filter(fn (AttendancePunch $punch) => $timeline->directionOf($punch) === 'out')
+                ->last();
+            $out = $genuineOut ? Carbon::parse($genuineOut->punched_at) : null;
+        }
+
+        return ['in' => $in, 'out' => $out];
+    }
+
+    /**
      * Regularisations are routed directly to HR: only a holder of
      * "Approve Regularisations (HR)" decides them (Super Admin always).
      * Managers see their team's requests but no longer approve them.
@@ -282,7 +316,8 @@ class AttendanceService
             AuditService::ATTENDANCE,
             $regularisation,
             old: ['attendance' => $snapshot($before)],
-            new: ['attendance' => $snapshot($attendance), 'applied_via' => $via, 'category' => $regularisation->category],
+            new: ['attendance' => $snapshot($attendance), 'applied_via' => $via, 'category' => $regularisation->category,
+                'corrected_side' => $regularisation->isLeave() || $regularisation->regularisation_type === 'half_day' ? null : ($regularisation->corrected_side ?? 'both')],
             reason: $comment,
             subjectEmployeeId: $regularisation->employee_id,
             actor: User::find($reviewerId),
@@ -381,8 +416,23 @@ class AttendanceService
             // date so the corrected punch/attendance lands on the right day (not
             // "today" when the regularisation is loaded fresh from the DB).
             $workDate = Carbon::parse($regularisation->work_date)->toDateString();
-            $checkIn = Carbon::parse($workDate.' '.Carbon::parse($regularisation->requested_check_in)->format('H:i:s'));
-            $checkOut = Carbon::parse($workDate.' '.Carbon::parse($regularisation->requested_check_out)->format('H:i:s'));
+            $at = fn (?string $time) => $time ? Carbon::parse($workDate.' '.Carbon::parse($time)->format('H:i:s')) : null;
+
+            // A single-side request changes only the punch it corrects. The
+            // other side stays the day's existing canonical punch (read now,
+            // before anything is written); the time stored with the request is
+            // only the fallback if that punch has since gone.
+            $correctsIn = $regularisation->correctsCheckIn();
+            $correctsOut = $regularisation->correctsCheckOut();
+            $existing = (! $correctsIn || ! $correctsOut) && $regularisation->employee
+                ? $this->existingPunchesFor($regularisation->employee, $workDate)
+                : ['in' => null, 'out' => null];
+            $checkIn = $correctsIn ? $at($regularisation->requested_check_in) : ($existing['in'] ?? $at($regularisation->requested_check_in));
+            $checkOut = $correctsOut ? $at($regularisation->requested_check_out) : ($existing['out'] ?? $at($regularisation->requested_check_out));
+
+            if ($checkIn === null || $checkOut === null) {
+                throw new \DomainException('This regularisation has no check-'.($checkIn === null ? 'in' : 'out').' time to apply.');
+            }
 
             // Only a night shift clocks out on the following calendar day.
             // Anywhere else an OUT at or before the IN is a mistake — carrying
@@ -434,13 +484,13 @@ class AttendanceService
             $isLate = $shift ? $shift->isLate($checkIn) : (bool) $attendance->is_late;
             $lateMinutes = $shift ? $shift->lateMinutes($checkIn) : (int) ($attendance->late_minutes ?? 0);
 
-            // Times + methods: keep any existing value when the request left a
-            // field null (only the corrected punch is overwritten).
+            // Times + methods: the kept side carries its existing canonical
+            // time; a method is only written for a corrected side.
             $punchFields = array_filter([
                 'check_in' => $checkIn,
                 'check_out' => $checkOut,
-                'check_in_method' => $regularisation->check_in_method,
-                'check_out_method' => $regularisation->check_out_method,
+                'check_in_method' => $correctsIn ? $regularisation->check_in_method : null,
+                'check_out_method' => $correctsOut ? $regularisation->check_out_method : null,
             ], fn ($v) => $v !== null);
 
             $attendance->update($original + $punchFields + [
@@ -460,7 +510,7 @@ class AttendanceService
             // approved fix — not just the summary times. Without this the journey
             // is built purely from biometric punches and the correction is
             // invisible to the employee even though the admin summary shows it.
-            $this->writeRegularisedPunches($regularisation, $checkIn, $checkOut);
+            $this->writeRegularisedPunches($regularisation, $correctsIn ? $checkIn : null, $correctsOut ? $checkOut : null);
 
             // The day is then its whole timeline, through the one rebuild every
             // sync uses: the correction replaces the boundary it fixed, and the
@@ -496,12 +546,18 @@ class AttendanceService
      * Near-duplicate device punches (a few seconds off) are harmless — the
      * PunchClassifier collapses them when the journey is rendered.
      */
-    private function writeRegularisedPunches(AttendanceRegularisation $regularisation, Carbon $checkIn, Carbon $checkOut): void
+    private function writeRegularisedPunches(AttendanceRegularisation $regularisation, ?Carbon $checkIn, ?Carbon $checkOut): void
     {
         $employee = $regularisation->employee;
         $date = Carbon::parse($regularisation->work_date)->toDateString();
 
+        // Only the corrected side(s): a kept genuine punch is never copied
+        // as a regularisation punch.
         foreach ([[$checkIn, $regularisation->check_in_method, 'in'], [$checkOut, $regularisation->check_out_method, 'out']] as [$time, $method, $direction]) {
+            if ($time === null) {
+                continue;
+            }
+
             // A device punch already at that exact second is the raw log —
             // it is never rewritten (or later removed) as a correction.
             $existing = AttendancePunch::where('employee_id', $regularisation->employee_id)->where('punched_at', $time)->first();
