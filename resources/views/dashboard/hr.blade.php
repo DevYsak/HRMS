@@ -20,17 +20,9 @@
             </x-slot:actions>
         </x-pulse.dashboard-header>
 
-        {{-- Today --}}
-        <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <x-pulse.kpi-card label="Working headcount" :value="$people['headcount']" icon="users" :href="$link('employees.index')"
-                :sub="$people['new_this_month'].' joined this month'" />
-            <x-pulse.kpi-card label="Present today" :value="$attendance['present']" icon="check-circle" accent="emerald" :href="$link('attendance.employees')"
-                :sub="$attendance['weekly_off'] ? 'Weekly off' : $attendance['late'].' late'" />
-            <x-pulse.kpi-card label="Missing checkout" :value="$attendance['missing_checkout']" icon="exclamation-triangle" accent="amber" :href="$link('attendance.command-center')"
-                sub="Past shift end + 1 h" />
-            <x-pulse.kpi-card label="Not checked in" :value="$attendance['not_in']" icon="user-minus" accent="rose" :href="$link('attendance.employees')"
-                :sub="$attendance['on_leave'].' on approved leave'" />
-        </div>
+        {{-- People Operations Today: attendance, approvals, reviews, department health and data
+             quality, all from the canonical services over one department selector. --}}
+        <livewire:dashboard.people-operations />
 
         <div class="grid grid-cols-1 gap-5 lg:grid-cols-2">
             <x-pulse.card title="Waiting for a decision" icon="inbox-stack" flush>

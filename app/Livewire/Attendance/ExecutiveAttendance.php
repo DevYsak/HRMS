@@ -10,6 +10,7 @@ use App\Models\LeaveRequest;
 use App\Models\Office;
 use App\Models\PublicHoliday;
 use App\Services\Attendance\WorkingDayResolver;
+use App\Services\Security\PeopleScope;
 use Carbon\CarbonPeriod;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -258,7 +259,7 @@ class ExecutiveAttendance extends Component
             'risk' => $risk,
             'insights' => $insights,
             'rangeLabel' => $rangeStart->format('d M').' – '.$rangeEnd->format('d M Y'),
-            'departmentOptions' => Department::orderBy('name')->pluck('name', 'id')->all(),
+            'departmentOptions' => app(PeopleScope::class)->departmentOptions(Auth::user(), Auth::user()->hasPermission('view_attendance') ? 'view_attendance' : 'approve_leave')->pluck('name', 'id')->all(),
             'officeOptions' => Office::orderBy('name')->pluck('name', 'id')->all(),
         ])->layout('layouts.app', ['title' => 'Executive Attendance']);
     }

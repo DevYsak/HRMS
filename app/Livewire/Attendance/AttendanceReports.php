@@ -7,6 +7,7 @@ use App\Models\Employee;
 use App\Models\Office;
 use App\Models\ShiftSetting;
 use App\Services\AttendanceReportBuilder;
+use App\Services\Security\PeopleScope;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Url;
 use Livewire\Component;
@@ -28,6 +29,7 @@ class AttendanceReports extends Component
     #[Url]
     public string $to = '';
 
+    #[Url(as: 'department')]
     public ?int $departmentId = null;
 
     public ?int $officeId = null;
@@ -43,6 +45,34 @@ class AttendanceReports extends Component
         abort_unless(Auth::user()->canApproveLeave(), 403);
         $this->from = now()->startOfMonth()->toDateString();
         $this->to = now()->toDateString();
+
+        // One department in reach: it is the filter, shown locked.
+        $options = app(PeopleScope::class)->departmentOptions(Auth::user(), self::permission());
+        $this->departmentId = $options->count() === 1
+            ? $options->first()->id
+            : app(PeopleScope::class)->sanitiseDepartment(Auth::user(), self::permission(), $this->departmentId);
+    }
+
+    /**
+     * Whose attendance the reports cover: the view_attendance scope (the same
+     * reach as Team View, the Command Center and Live Attendance), or the
+     * leave-approval reach for an approver without it.
+     */
+    public static function permission(): string
+    {
+        return Auth::user()->hasPermission('view_attendance') ? 'view_attendance' : 'approve_leave';
+    }
+
+    /** @return array<int, int>|null */
+    public static function reach(): ?array
+    {
+        return app(PeopleScope::class)->employeeIds(Auth::user(), self::permission(), includeSelf: true);
+    }
+
+    public function updatedDepartmentId(): void
+    {
+        // A tampered or out-of-reach department is dropped, never trusted.
+        $this->departmentId = app(PeopleScope::class)->sanitiseDepartment(Auth::user(), self::permission(), $this->departmentId);
     }
 
     /** @return array<string,mixed> */
@@ -70,7 +100,7 @@ class AttendanceReports extends Component
         abort_unless(Auth::user()->canApproveLeave(), 403);
 
         // The viewer's reach is applied server-side; never taken from the query string.
-        $reach = Auth::user()->accessibleEmployeeIds();
+        $reach = self::reach();
         $report = $builder->build($this->type, $this->filters() + ($reach !== null ? ['employee_ids' => $reach] : []));
 
         // Preview is capped; the export streams the full set.
@@ -98,13 +128,22 @@ class AttendanceReports extends Component
             'previewRows' => $previewRows,
             'totalRows' => count($report['rows']),
             'trendChart' => $trendChart,
-            'departments' => Department::orderBy('name')->get(['id', 'name']),
-            'offices' => Office::orderBy('name')->get(['id', 'name']),
-            'shifts' => ShiftSetting::orderBy('name')->get(['id', 'name']),
+            // Filters offer only what is inside the reach — never a department,
+            // branch, shift or person the next request would leave out.
+            'departments' => $departments = app(PeopleScope::class)->departmentOptions(Auth::user(), self::permission()),
+            'lockedDepartment' => $departments->count() === 1 ? $departments->first() : null,
+            'scope' => app(PeopleScope::class)->summary(Auth::user(), self::permission(), $this->departmentId ? [$this->departmentId] : null),
+            'offices' => $reach === null
+                ? Office::orderBy('name')->get(['id', 'name'])
+                : Office::whereIn('id', Employee::whereIn('id', $reach)->whereNotNull('office_id')->distinct()->pluck('office_id'))->orderBy('name')->get(['id', 'name']),
+            'shifts' => $reach === null
+                ? ShiftSetting::orderBy('name')->get(['id', 'name'])
+                : ShiftSetting::whereIn('id', Employee::whereIn('id', $reach)->whereNotNull('shift_id')->distinct()->pluck('shift_id'))->orderBy('name')->get(['id', 'name']),
             // Only people inside the viewer's reach: a scoped manager or HR
             // user must not see every employee's name in the picker.
             'employees' => Employee::whereHas('user')->with('user')
-                ->when(($reach = Auth::user()->accessibleEmployeeIds()) !== null, fn ($q) => $q->whereIn('id', $reach))
+                ->when($reach !== null, fn ($q) => $q->whereIn('id', $reach))
+                ->when($this->departmentId, fn ($q) => $q->where('department_id', $this->departmentId))
                 ->orderBy('id')->get(),
         ])->layout('layouts.app', ['title' => 'Attendance Reports']);
     }

@@ -2,12 +2,12 @@
 
 namespace App\Livewire\Performance;
 
-use App\Models\Department;
 use App\Models\Document;
 use App\Models\Employee;
 use App\Models\PromotionRecommendation;
 use App\Services\Approvals\ApprovalGuard;
 use App\Services\Performance\PromotionService;
+use App\Services\Security\PeopleScope;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Component;
@@ -283,7 +283,7 @@ class ManagePromotions extends Component
         return view('livewire.performance.manage-promotions', [
             'recommendations' => $query->latest()->paginate(15),
             'employees' => $employees,
-            'departments' => Department::orderBy('name')->get(),
+            'departments' => app(PeopleScope::class)->departmentOptions(Auth::user(), 'manage_promotions'),
         ])->layout('layouts.app', ['title' => 'Manage Promotions & Rewards']);
     }
 }

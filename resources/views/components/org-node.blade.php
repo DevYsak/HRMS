@@ -55,7 +55,9 @@
                     @endif
 
                     {{-- ── CHILD CARD ── --}}
-                    <div class="relative w-60 cursor-default">
+                    <div class="relative w-60 cursor-pointer" role="button" tabindex="0" data-org-node="{{ $report->id }}"
+                        wire:click="openProfile({{ $report->id }})" x-on:keydown.enter.prevent="$wire.openProfile({{ $report->id }})"
+                        aria-label="Open {{ $report->user?->name }}'s profile">
                         {{-- Hover glow --}}
                         <div class="absolute -inset-1 rounded-2xl opacity-0 blur-lg transition-opacity duration-500 group-hover:opacity-40"
                             style="background: {{ $color['accent'] }}40;"></div>

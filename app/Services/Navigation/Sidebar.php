@@ -2,16 +2,13 @@
 
 namespace App\Services\Navigation;
 
-use App\Models\AttendanceRegularisation;
 use App\Models\Employee;
-use App\Models\HolidayWorkRequest;
-use App\Models\LeaveRequest;
-use App\Models\OtRequest;
 use App\Models\ReviewParticipant;
 use App\Models\User;
-use App\Models\WfhRequest;
 use App\Services\AiAssistant;
+use App\Services\Approvals\ApprovalQueueService;
 use App\Services\Help\RouteAccess;
+use App\Services\Security\PeopleScope;
 use Closure;
 use Illuminate\Support\Facades\Route;
 
@@ -281,7 +278,11 @@ class Sidebar
             [
                 'key' => 'leave', 'heading' => 'Leave', 'icon' => 'calendar-days',
                 'items' => [
-                    ['label' => 'All Leave', 'route' => 'time-off.employees'],
+                    // The company-level leave master. A team- or department-scoped
+                    // approver already has Team Leave under Approvals; showing both
+                    // to them only duplicates the same people.
+                    ['label' => 'All Leave', 'route' => 'time-off.employees',
+                        'when' => fn (User $u) => app(PeopleScope::class)->isCompanyWide($u, 'approve_leave') || $u->hasPermission('view_leave_management')],
                     ['label' => 'Leave Management', 'route' => 'time-off.leave-management',
                         'active' => ['time-off.leave-management*', 'time-off.year-rollover', 'time-off.reconciliation']],
                     ['label' => 'Encashments', 'route' => 'time-off.encashments',
@@ -319,6 +320,7 @@ class Sidebar
                     ['label' => 'Increment Center', 'route' => 'performance.increments'],
                     ['label' => 'KPI Dashboard', 'route' => 'performance.kpi-dashboard',
                         'when' => fn (User $u) => $u->hasPermission('manage_scorecards')],
+                    ['label' => 'KPI Management', 'route' => 'performance.kpi-management'],
                     ['label' => 'KPI Templates', 'route' => 'performance.kpi-templates',
                         'when' => fn (User $u) => $u->hasPermission('manage_kpi_templates')],
                     ['label' => 'Warning Letters', 'route' => 'performance.warnings.manage',
@@ -395,6 +397,7 @@ class Sidebar
                     ['label' => 'Control Panel', 'route' => 'settings.control-panel'],
                     ['label' => 'General', 'route' => 'settings.general'],
                     ['label' => 'Roles & Permissions', 'route' => 'settings.roles', 'when' => fn (User $u) => $u->hasPermission('manage_roles')],
+                    ['label' => 'Approval Matrix', 'route' => 'settings.approval-matrix'],
                     ['label' => 'Departments', 'route' => 'settings.departments'],
                     ['label' => 'Employment Types', 'route' => 'settings.employment-types'],
                     ['label' => 'Work Modes', 'route' => 'settings.work-modes'],
@@ -415,18 +418,12 @@ class Sidebar
     }
 
     /**
-     * The Command Center's own "pending" total for this user — the same
-     * statuses over the same reach — so the badge matches the page (it used
-     * to count the whole company for every approver).
+     * What is waiting for THIS user's decision — ApprovalQueueService, the
+     * same per-type permission, statuses and reach the Command Center and
+     * Team View use — so the badge matches the page.
      */
     private function pendingApprovals(User $user): int
     {
-        $ids = $user->accessibleEmployeeIds();
-
-        return collect([AttendanceRegularisation::class, LeaveRequest::class, WfhRequest::class, OtRequest::class, HolidayWorkRequest::class])
-            ->sum(fn (string $model) => $model::query()
-                ->where('status', 'pending')
-                ->when($ids !== null, fn ($q) => $q->whereIn('employee_id', $ids))
-                ->count());
+        return app(ApprovalQueueService::class)->total($user);
     }
 }

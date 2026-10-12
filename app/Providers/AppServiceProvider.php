@@ -169,13 +169,13 @@ class AppServiceProvider extends ServiceProvider
      */
     protected function configureDateDisplay(): void
     {
-        CarbonImmutable::macro('userDate', fn (): string => app(DateDisplay::class)->date($this));
-        CarbonImmutable::macro('userShortDate', fn (): string => app(DateDisplay::class)->shortDate($this));
-        CarbonImmutable::macro('userTime', fn (): string => app(DateDisplay::class)->time($this));
-        CarbonImmutable::macro('userDateTime', fn (): string => app(DateDisplay::class)->dateTime($this));
+        // Registered once from a static scope (see DateDisplay::registerMacros):
+        // a closure made here would pin this provider — and the app — in
+        // Carbon's process-wide macro registry.
+        DateDisplay::registerMacros();
 
         foreach (['userDate' => 'date', 'userShortDate' => 'shortDate', 'userTime' => 'time', 'userDateTime' => 'dateTime'] as $directive => $method) {
-            Blade::directive($directive, fn (string $expression): string => '<?php echo e(app(\\'.DateDisplay::class.'::class)->'.$method.'('.$expression.')); ?>');
+            Blade::directive($directive, static fn (string $expression): string => '<?php echo e(app(\\'.DateDisplay::class.'::class)->'.$method.'('.$expression.')); ?>');
         }
     }
 

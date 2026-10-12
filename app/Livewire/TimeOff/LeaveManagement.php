@@ -2,7 +2,6 @@
 
 namespace App\Livewire\TimeOff;
 
-use App\Models\Department;
 use App\Models\Employee;
 use App\Models\EmploymentType;
 use App\Models\LeaveBulkRun;
@@ -16,6 +15,7 @@ use App\Services\Leave\EnsureEmployeeLeaveBalancesService;
 use App\Services\Leave\LeaveManagementService;
 use App\Services\Leave\LeaveYearResolver;
 use App\Services\LeaveBalanceService;
+use App\Services\Security\PeopleScope;
 use App\Services\Security\ScopeResolver;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
@@ -343,11 +343,14 @@ class LeaveManagement extends Component
             'paged' => new LengthAwarePaginator($rows->forPage($page, $perPage)->values(), $rows->count(), $perPage, $page),
             'leaveYears' => LeaveYear::orderByDesc('starts_on')->get(),
             'leaveTypes' => LeaveType::whereNull('deleted_at')->orderBy('name')->get(),
-            'departments' => Department::orderBy('name')->get(),
+            // Only departments / managers inside the viewer's reach.
+            'departments' => app(PeopleScope::class)->departmentOptions(Auth::user(), 'view_leave_management'),
             'offices' => Office::orderBy('name')->get(),
             'employmentTypes' => EmploymentType::orderBy('name')->get(),
             'policies' => LeavePolicy::orderBy('name')->get(),
-            'managers' => User::whereIn('id', Employee::whereNotNull('manager_id')->distinct()->pluck('manager_id'))->orderBy('name')->get(),
+            'managers' => User::whereIn('id', Employee::whereNotNull('manager_id')
+                ->when(($reach = $this->reach()) !== null, fn ($q) => $q->whereIn('id', $reach))
+                ->distinct()->pluck('manager_id'))->orderBy('name')->get(),
             'addOnTypes' => LeaveBalanceService::ADD_ON_TYPES,
         ]);
     }

@@ -8,11 +8,13 @@ use App\Models\EmployeeScorecard;
 use App\Models\LeaveRequest;
 use App\Models\OtRequest;
 use App\Models\OvertimeRecord;
-use App\Models\PerformanceCycle;
-use App\Models\PerformanceReview;
+use App\Services\Approvals\ApprovalQueueService;
 use App\Services\Attendance\AttendanceStatusResolver;
+use App\Services\Attendance\TodayStatusService;
 use App\Services\Attendance\WorkingDayResolver;
 use App\Services\LeaveService;
+use App\Services\Performance\PerformanceStatusService;
+use App\Services\Security\PeopleScope;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -138,9 +140,15 @@ class ManagerDashboard extends Component
 
         // Saturday / Sunday: nobody is absent or late; a punch is "Worked on Weekly Off".
         $weeklyOff = app(WorkingDayResolver::class)->isWeeklyOff($today);
-        $presentCount = $teamAttendance->whereNotNull('check_in')->count();
-        $lateCount = $weeklyOff ? 0 : $teamAttendance->where('is_late', true)->count();
-        $absentCount = $weeklyOff ? 0 : $teamIds->count() - $presentCount;
+
+        // Today's counts come from the one summary every screen shares
+        // (TodayStatusService over AttendanceStatusResolver): weekly off,
+        // holiday and approved leave are never counted as absent.
+        $todayStatus = app(TodayStatusService::class)->summary($teamIds);
+        $presentCount = $todayStatus['present'];
+        $lateCount = $todayStatus['late'];
+        // Due today and not checked in: not in yet (shift running) + absent (shift over).
+        $absentCount = $todayStatus['no_checkin'] + $todayStatus['absent'];
 
         // --- Full team attendance list ---
         $teamEmployees = Employee::with(['user', 'department', 'shift', 'office', 'exitRecord'])
@@ -160,8 +168,8 @@ class ManagerDashboard extends Component
                 return [
                     'name' => $emp->user->name,
                     'department' => $emp->department?->name,
-                    'check_in' => $s['first_in']?->format('H:i'),
-                    'check_out' => $s['last_out']?->format('H:i'),
+                    'check_in' => $s['first_in']?->userTime(),
+                    'check_out' => $s['last_out']?->userTime(),
                     'state' => $s['state'],
                     'status' => $weeklyOff ? ($in ? 'weekly_off_worked' : 'weekly_off') : ($in ? ($record?->status ?? 'present') : ($s['reason'] === 'absent' ? 'absent' : 'not_in')),
                     'is_late' => ! $weeklyOff && $in && $s['day']->isLate,
@@ -170,26 +178,21 @@ class ManagerDashboard extends Component
                 ];
             });
 
-        // --- Pending Leave Approvals (team only) ---
-        $pendingLeaves = LeaveRequest::with(['employee.user', 'leaveType'])
-            ->whereIn('employee_id', $reachIds)
-            ->where('status', 'pending')
-            ->latest()
-            ->take(10)
-            ->get();
+        // --- Pending my approval: ApprovalQueueService, the same queue (type
+        // permission, statuses, reach) as the Command Center and the sidebar
+        // badge. Inside this page's people, so the figures stay one scope.
+        $queue = app(ApprovalQueueService::class);
+        $user = Auth::user();
+        $leaveQueue = fn () => ($queue->pendingFor($user, 'leave') ?? LeaveRequest::whereRaw('1 = 0'))->whereIn('employee_id', $reachIds);
+        $otQueue = fn () => ($queue->pendingFor($user, 'overtime') ?? OtRequest::whereRaw('1 = 0'))->whereIn('employee_id', $reachIds);
 
-        // --- Pending OT Approvals (team only) ---
-        $pendingOt = OtRequest::with('employee.user')
-            ->whereIn('employee_id', $reachIds)
-            ->where('status', 'pending')
-            ->latest()
-            ->take(10)
-            ->get();
+        $pendingLeaves = $leaveQueue()->with(['employee.user', 'leaveType'])->latest()->take(10)->get();
+        $pendingOt = $otQueue()->with('employee.user')->latest()->take(10)->get();
 
         // True totals for the "Needs attention" list: the two lists above are
         // capped at ten rows, the counts are not.
-        $pendingLeaveCount = LeaveRequest::whereIn('employee_id', $reachIds)->where('status', 'pending')->count();
-        $pendingOtCount = OtRequest::whereIn('employee_id', $reachIds)->where('status', 'pending')->count();
+        $pendingLeaveCount = $leaveQueue()->count();
+        $pendingOtCount = $otQueue()->count();
         $missingCheckoutCount = $teamAttendanceList->where('state', AttendanceStatusResolver::MISSING_CHECKOUT)->count();
         $trend = $this->attendanceTrend($teamIds, $today);
 
@@ -212,24 +215,17 @@ class ManagerDashboard extends Component
             ->get()
             ->map(fn (LeaveRequest $leave) => [
                 'name' => $leave->employee?->user?->name ?? '—',
-                'from' => $leave->start_date->format('d M'),
-                'to' => $leave->end_date->format('d M'),
+                'from' => $leave->start_date->userShortDate(),
+                'to' => $leave->end_date->userShortDate(),
             ]);
 
-        // --- Performance Reviews (team) ---
-        $reviewsPending = PerformanceReview::whereIn('employee_id', $teamIds)
-            ->whereIn('status', ['draft', 'pending'])
-            ->count();
-
-        $reviewsSubmitted = PerformanceReview::whereIn('employee_id', $teamIds)
-            ->where('status', 'submitted')
-            ->whereYear('submitted_at', $year)
-            ->count();
-
-        // --- Team KPI scores (latest performance cycle) ---
-        $latestCycle = PerformanceCycle::whereIn('status', ['active', 'completed', 'locked'])
-            ->latest('start_date')
-            ->first();
+        // --- Performance Reviews (team): PerformanceStatusService, the same
+        // states and cycle as the HR dashboard, Department Overview and AI.
+        $performance = app(PerformanceStatusService::class);
+        $latestCycle = $performance->currentCycle($today);
+        $reviewSummary = $performance->summary($teamIds, $latestCycle, $today);
+        $reviewsPending = $reviewSummary['pending'];
+        $reviewsSubmitted = $reviewSummary[PerformanceStatusService::COMPLETED];
         $teamKpis = ($latestCycle && $teamIds->isNotEmpty())
             ? EmployeeScorecard::with('employee.user')
                 ->where('performance_cycle_id', $latestCycle->id)
@@ -258,7 +254,17 @@ class ManagerDashboard extends Component
             'pendingOtCount',
             'missingCheckoutCount',
             'trend',
-        ) + ['scopeHeading' => $this->scopeHeading()])->layout('layouts.app', ['title' => $this->pageTitle()]);
+            'todayStatus',
+            'reviewSummary',
+        ) + [
+            'scopeHeading' => $this->scopeHeading(),
+            'scope' => app(PeopleScope::class)->summary(Auth::user(), $this->scopePermission()),
+            'canConfigureKpis' => Auth::user()->hasPermission('manage_kpi_templates'),
+            // One department in reach → a door into its full workspace.
+            'overviewDepartment' => Auth::user()->hasPermission('view_attendance')
+                ? (fn ($options) => $options->count() === 1 ? $options->first() : null)(app(PeopleScope::class)->departmentOptions(Auth::user(), 'view_attendance'))
+                : null,
+        ])->layout('layouts.app', ['title' => $this->pageTitle()]);
     }
 
     /**
@@ -299,15 +305,23 @@ class ManagerDashboard extends Component
             ->get(['date', 'is_late'])
             ->groupBy(fn ($row) => Carbon::parse($row->date)->toDateString());
 
-        return array_map(function (Carbon $day) use ($rows, $teamIds): array {
+        // Approved leave is never absent (same rule as today's cards).
+        $leaves = LeaveRequest::whereIn('employee_id', $teamIds)->where('status', 'approved')
+            ->whereDate('start_date', '<=', end($days)->toDateString())
+            ->whereDate('end_date', '>=', $days[0]->toDateString())
+            ->get(['employee_id', 'start_date', 'end_date']);
+
+        return array_map(function (Carbon $day) use ($rows, $teamIds, $leaves): array {
             $dayRows = $rows->get($day->toDateString(), collect());
             $present = $dayRows->count();
+            $onLeave = $leaves->filter(fn ($l) => $day->between($l->start_date->copy()->startOfDay(), $l->end_date->copy()->endOfDay()))
+                ->pluck('employee_id')->unique()->count();
 
             return [
                 'label' => $day->format('D j'),
                 'present' => $present,
                 'late' => $dayRows->where('is_late', true)->count(),
-                'absent' => max(0, $teamIds->count() - $present),
+                'absent' => max(0, $teamIds->count() - $present - $onLeave),
             ];
         }, $days);
     }
@@ -323,6 +337,12 @@ class ManagerDashboard extends Component
     protected function reach(): ?array
     {
         return Auth::user()->accessibleEmployeeIds('approve_leave');
+    }
+
+    /** The permission whose reach this page shows (the scope badge says so). */
+    protected function scopePermission(): string
+    {
+        return 'approve_leave';
     }
 
     /** Optional line naming whose figures these are (e.g. the departments). */

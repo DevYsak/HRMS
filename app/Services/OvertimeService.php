@@ -131,7 +131,7 @@ class OvertimeService
      */
     public function approve(OtRequest $request, int $reviewerId, ?string $comment = null): OvertimeRecord
     {
-        app(ApprovalGuard::class)->assertCanDecide($reviewerId, $request->employee);
+        app(ApprovalGuard::class)->assertCanDecide($reviewerId, $request->employee, 'approve_overtime');
 
         return DB::transaction(function () use ($request, $reviewerId, $comment) {
             // Row lock: two concurrent approvals must not both materialise a
@@ -158,7 +158,7 @@ class OvertimeService
      */
     public function reject(OtRequest $request, int $reviewerId, string $comment): void
     {
-        app(ApprovalGuard::class)->assertCanDecide($reviewerId, $request->employee);
+        app(ApprovalGuard::class)->assertCanDecide($reviewerId, $request->employee, 'approve_overtime');
 
         if ($request->status !== 'pending') {
             throw new \DomainException('Only pending OT requests can be rejected.');

@@ -3,6 +3,9 @@
 namespace App\Services\Ai;
 
 use App\Models\User;
+use App\Services\Attendance\TodayStatusService;
+use App\Services\Dashboards\PeopleOperationsService;
+use Illuminate\Support\Facades\Route;
 
 /**
  * Answers the questions Pulse can answer exactly — request counts, approval
@@ -22,6 +25,7 @@ class AiIntentRouter
         'leave' => ['keywords' => ['leave', 'time off', 'time-off'], 'singular' => 'leave request', 'plural' => 'leave requests'],
         'wfh' => ['keywords' => ['wfh', 'work from home', 'work-from-home'], 'singular' => 'WFH request', 'plural' => 'WFH requests'],
         'regularisation' => ['keywords' => ['regularis', 'regulariz'], 'singular' => 'regularisation request', 'plural' => 'regularisation requests'],
+        'holiday' => ['keywords' => ['holiday work', 'work on holiday', 'work on a holiday'], 'singular' => 'holiday-work request', 'plural' => 'holiday-work requests'],
     ];
 
     /** Phrases that make the user the APPROVER rather than the requester. */
@@ -49,6 +53,22 @@ class AiIntentRouter
         $types = $this->typesIn($text);
         $asksApprover = (bool) preg_match(self::APPROVER_PATTERN, $text);
         $asksPending = (bool) preg_match(self::PENDING_PATTERN, $text);
+
+        // "Show UK Operations health" — only a department inside the reach.
+        if (preg_match('/\b(health|overview)\b/u', $text) && ($answer = $this->departmentAnswer($user, $text))) {
+            return $answer;
+        }
+
+        // "How many people are absent today?" — the shared today summary.
+        if (preg_match('/\b(present|absent|late|checked in|check-in|no check|on leave|who is in|attendance)\b/u', $text)
+            && preg_match('/\b(today|now|right now)\b/u', $text) && ! preg_match('/\bmy attendance\b/u', $text)) {
+            return $this->attendanceAnswer($user);
+        }
+
+        // "How many reviews are pending?" — PerformanceStatusService.
+        if (preg_match('/\breviews?\b/u', $text) && preg_match('/\b(pending|due|overdue|how many|status|outstanding)\b/u', $text)) {
+            return $this->reviewsAnswer($user);
+        }
 
         if ($asksApprover && ($asksPending || $types !== [] || str_contains($text, 'approv'))) {
             return $this->approvalQueueAnswer($user, $types);
@@ -108,6 +128,72 @@ class AiIntentRouter
             'source' => 'help',
             'intent' => 'navigation',
         ];
+    }
+
+    /** @return array{content: string, links: list<array{label: string, url: string, path: string}>, source: string, intent: string} */
+    private function attendanceAnswer(User $user, ?int $departmentId = null): array
+    {
+        $data = $this->tools->attendanceToday($user, $departmentId);
+        $s = $data['summary'];
+
+        if ($data['own']) {
+            $status = $s['rows'] !== [] ? array_values($s['rows'])[0] : null;
+            $content = $status
+                ? 'Today you are: '.(TodayStatusService::LABELS[$status['bucket']] ?? str_replace('_', ' ', $status['bucket'])).'. You do not have access to team attendance.'
+                : 'Your account is not linked to an employee record, so there is no attendance to show.';
+
+            return ['content' => $content, 'links' => $this->links->pagesFor($user, 'attendance', false), 'source' => 'pulse', 'intent' => 'attendance_today'];
+        }
+
+        $content = $s['day_off']
+            ? "Today is a day off in {$data['scope']}: {$s['weekly_off']} on weekly off, {$s['holiday']} on a holiday — nobody is absent."
+            : "Today in {$data['scope']}: {$s['present']} present ({$s['late']} late, {$s['working_now']} in now), "
+                .($s['no_checkin'] + $s['absent'])." not checked in ({$s['absent']} absent after shift end), {$s['on_leave']} on leave, "
+                ."{$s['missing_checkout']} missing checkout. {$s['expected']} of {$s['total']} were due today.";
+
+        return ['content' => $content, 'links' => $this->links->pagesFor($user, 'attendance'), 'source' => 'pulse', 'intent' => 'attendance_today'];
+    }
+
+    /** @return array{content: string, links: list<array{label: string, url: string, path: string}>, source: string, intent: string} */
+    private function reviewsAnswer(User $user, ?int $departmentId = null): array
+    {
+        $r = $this->tools->reviews($user, $departmentId);
+
+        if ($r === null) {
+            return ['content' => 'You do not review anyone, so no reviews are waiting on you. Your own review is under Performance.', 'links' => [], 'source' => 'pulse', 'intent' => 'reviews'];
+        }
+
+        $cycle = $r['cycle']?->name ?? 'the current cycle';
+        $content = "{$r['pending']} ".($r['pending'] === 1 ? 'review is' : 'reviews are')." pending in {$r['scope']} for {$cycle}: "
+            ."{$r['self_review_pending']} self review, {$r['manager_review_pending']} manager review"
+            .($r['overdue'] ? ", {$r['overdue']} overdue" : '').". {$r['completed']} completed, {$r['not_started']} not started.";
+
+        return ['content' => $content, 'links' => [], 'source' => 'pulse', 'intent' => 'reviews'];
+    }
+
+    /** @return array{content: string, links: list<array{label: string, url: string, path: string}>, source: string, intent: string}|null */
+    private function departmentAnswer(User $user, string $text): ?array
+    {
+        $department = $this->tools->departmentNamed($user, $text);
+
+        if ($department === null) {
+            return str_contains($text, 'department') || str_contains($text, 'operations')
+                ? ['content' => 'That department is not in your scope, so Pulse cannot show its figures to you.', 'links' => [], 'source' => 'pulse', 'intent' => 'department_health']
+                : null;
+        }
+
+        $attendance = $this->attendanceAnswer($user, $department->id)['content'];
+        $reviews = $this->tools->reviews($user, $department->id);
+        $pending = array_sum(app(PeopleOperationsService::class)->approvalCounts($user, $department->id));
+
+        $content = $attendance."\n".$pending.' '.($pending === 1 ? 'request is' : 'requests are').' waiting for your decision there.'
+            .($reviews ? "\n{$reviews['pending']} reviews pending, {$reviews['overdue']} overdue." : '');
+
+        $links = Route::has('departments.show')
+            ? [['label' => 'Open '.$department->name, 'url' => route('departments.show', $department), 'path' => 'Department Overview']]
+            : [];
+
+        return ['content' => $content, 'links' => $links, 'source' => 'pulse', 'intent' => 'department_health'];
     }
 
     /** @return list<string> */
@@ -238,7 +324,7 @@ class AiIntentRouter
      */
     private function answerWith(string $content, User $user, array $types, string $intent, bool $ownOnly): array
     {
-        $topicFor = ['overtime' => 'overtime', 'leave' => 'leave', 'wfh' => 'wfh', 'regularisation' => 'attendance'];
+        $topicFor = ['overtime' => 'overtime', 'leave' => 'leave', 'wfh' => 'wfh', 'regularisation' => 'attendance', 'holiday' => 'leave'];
 
         $links = collect($types)
             ->map(fn (string $type) => $topicFor[$type])

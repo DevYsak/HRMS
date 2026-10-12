@@ -8,9 +8,11 @@ use App\Models\LeaveRequest;
 use App\Models\LeaveType;
 use App\Models\PublicHoliday;
 use App\Services\Approvals\ApprovalGuard;
+use App\Services\Approvals\ApprovalQueueService;
 use App\Services\Attendance\WorkingDayResolver;
 use App\Services\Leave\LeaveYearResolver;
 use App\Services\LeaveService;
+use App\Services\Security\PeopleScope;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
@@ -100,7 +102,7 @@ class TeamTimeOff extends Component
         abort_unless(Auth::user()->canApproveLeave(), 403);
 
         $req = LeaveRequest::with(['employee.user', 'leaveType', 'paymentAuditLogs.changedByUser', 'reviewer', 'hrReviewer', 'attachments', 'messages.user'])->findOrFail($id);
-        app(ApprovalGuard::class)->assertCanView(Auth::user(), $req->employee);
+        app(ApprovalGuard::class)->assertCanView(Auth::user(), $req->employee, 'approve_leave');
 
         $this->selectedRequestId = $id;
         $this->selectedRequest = $req;
@@ -175,7 +177,7 @@ class TeamTimeOff extends Component
         ]);
 
         $leaveRequest = LeaveRequest::findOrFail($this->selectedRequestId);
-        app(ApprovalGuard::class)->assertCanView(Auth::user(), $leaveRequest->employee);
+        app(ApprovalGuard::class)->assertCanView(Auth::user(), $leaveRequest->employee, 'approve_leave');
 
         $path = null;
         $name = null;
@@ -411,7 +413,22 @@ class TeamTimeOff extends Component
             $cursor->addDay();
         }
 
+        // The same check the server runs on Approve / Reject (permission,
+        // open status, not your own, inside approve_leave's reach): a button
+        // is only offered when the action will be accepted.
+        $queue = app(ApprovalQueueService::class);
+        $user = Auth::user();
+        $decidable = $pendingRequests->mapWithKeys(fn (LeaveRequest $r) => [$r->id => $queue->canDecide($user, $r)]);
+        $people = app(PeopleScope::class);
+        $scope = $people->isCompanyWide($user, 'approve_leave')
+            ? ['kind' => 'team', 'label' => 'My reporting line', 'detail' => count($teamIds).' '.(count($teamIds) === 1 ? 'person' : 'people'), 'count' => count($teamIds), 'departments' => [], 'scope' => $people->scope($user, 'approve_leave')]
+            : $people->summary($user, 'approve_leave');
+
         return view('livewire.time-off.team-time-off', [
+            'scope' => $scope,
+            'decidable' => $decidable,
+            'canDecideSelected' => $this->selectedRequest ? $queue->canDecide($user, $this->selectedRequest) : false,
+            'approvalPath' => $this->selectedRequest ? $queue->path($this->selectedRequest) : null,
             'pendingRequests' => $pendingRequests,
             'history' => $history,
             'approvedThisMonth' => $approvedThisMonth,

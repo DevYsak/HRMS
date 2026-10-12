@@ -56,6 +56,34 @@ class DateDisplay
 
     public function __construct(private ?User $user = null) {}
 
+    /**
+     * `$date->userDate()` / `userShortDate()` / `userTime()` / `userDateTime()`.
+     *
+     * Carbon keeps macros in a process-wide static registry, so they are
+     * registered once, from a static scope: a closure created inside a
+     * service provider would capture the provider (and with it the whole
+     * application container) and keep every booted app alive.
+     */
+    public static function registerMacros(): void
+    {
+        if (CarbonImmutable::hasMacro('userDate')) {
+            return;
+        }
+
+        CarbonImmutable::macro('userDate', function (): string {
+            return app(DateDisplay::class)->date($this);
+        });
+        CarbonImmutable::macro('userShortDate', function (): string {
+            return app(DateDisplay::class)->shortDate($this);
+        });
+        CarbonImmutable::macro('userTime', function (): string {
+            return app(DateDisplay::class)->time($this);
+        });
+        CarbonImmutable::macro('userDateTime', function (): string {
+            return app(DateDisplay::class)->dateTime($this);
+        });
+    }
+
     /** A formatter for a specific reader (e.g. a mail recipient) instead of the signed-in user. */
     public static function for(?User $user): self
     {

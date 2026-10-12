@@ -12,15 +12,23 @@
                     <div class="size-1.5 animate-pulse rounded-full bg-orange-200"></div>
                     <span class="text-[11px] font-bold uppercase tracking-[0.18em] text-orange-100">Leave Management</span>
                 </div>
-                <h1 class="text-3xl font-black tracking-tight text-white">Employee Leave Master</h1>
-                <p class="mt-1.5 text-sm font-medium text-violet-200/80">Track and audit all leave requests company-wide.</p>
+                {{-- Titled by the real reach: never "company-wide" for a department-scoped approver. --}}
+                <h1 class="text-3xl font-black tracking-tight text-white" data-leave-title>
+                    {{ $scope['kind'] === 'company' ? 'Employee Leave Master' : 'Employee Leave — '.$scope['label'] }}
+                </h1>
+                <p class="mt-1.5 text-sm font-medium text-orange-100/80">
+                    {{ $scope['kind'] === 'company' ? 'Track and audit leave requests across the company.' : 'Track and audit leave requests for the people you approve.' }}
+                </p>
+                <x-pulse.scope-badge :scope="$scope" dark class="mt-3" />
             </div>
             <div class="flex shrink-0 flex-wrap items-center gap-3">
-                <button type="button"
+                @if($canExport)
+                <button type="button" wire:click="export"
                     class="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-white/25 bg-white/15 px-4 py-2.5 text-sm font-bold text-white backdrop-blur-sm transition-all hover:bg-white/25">
                     <flux:icon.arrow-up-tray class="size-4 shrink-0" />
                     <span>Export</span>
                 </button>
+                @endif
                 @can('apply_leave_on_behalf')
                 <button type="button" wire:click="openNewModal"
                     class="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-black text-orange-700 shadow-lg shadow-black/20 transition-all hover:bg-violet-50">

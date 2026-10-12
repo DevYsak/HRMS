@@ -167,7 +167,7 @@ class RolesAndPermissionsSeeder extends Seeder
      *
      * @var array<string, array<int, string>>
      */
-    private const ROLE_DEFAULTS = [
+    public const ROLE_DEFAULTS = [
         'hr_admin' => [
             'view_dashboard', 'view_executive_dashboard', 'view_hr_dashboard',
             'manage_employees', 'create_employee', 'edit_employee', 'delete_employee', 'view_employee', 'view_directory', 'view_org_chart', 'manage_onboarding', 'manage_offboarding',

@@ -63,7 +63,7 @@ class ManageOtRequests extends Component
     {
         $this->checkOtPermission();
         $this->selectedRequest = OtRequest::with(['employee.user', 'employee.department', 'attendance', 'reviewer'])->findOrFail($id);
-        app(ApprovalGuard::class)->assertCanView(Auth::user(), $this->selectedRequest->employee);
+        app(ApprovalGuard::class)->assertCanView(Auth::user(), $this->selectedRequest->employee, 'approve_overtime');
         $this->viewHistory = $this->historyFor($id);
         $this->showViewModal = true;
         $this->dispatch('modal-show', name: 'view-ot-modal');
@@ -95,7 +95,7 @@ class ManageOtRequests extends Component
     {
         $this->checkOtPermission();
         $req = OtRequest::with(['employee.user', 'employee.department'])->findOrFail($id);
-        app(ApprovalGuard::class)->assertCanDecide(Auth::user(), $req->employee);
+        app(ApprovalGuard::class)->assertCanDecide(Auth::user(), $req->employee, 'approve_overtime');
 
         // A decided request is history: editing an approved one would change
         // what was approved (and may already be paid) without a new decision.
@@ -128,7 +128,7 @@ class ManageOtRequests extends Component
         ]);
 
         $editing = OtRequest::with('employee')->findOrFail($this->reviewingId);
-        app(ApprovalGuard::class)->assertCanDecide(Auth::user(), $editing->employee);
+        app(ApprovalGuard::class)->assertCanDecide(Auth::user(), $editing->employee, 'approve_overtime');
 
         if (! $editing->isPending()) {
             \Flux::toast('Only a pending OT request can be edited.', variant: 'warning');
@@ -171,7 +171,7 @@ class ManageOtRequests extends Component
     {
         $this->checkOtPermission();
         $this->selectedRequest = OtRequest::with(['employee.user', 'employee.department', 'attendance', 'claimer'])->findOrFail($id);
-        app(ApprovalGuard::class)->assertCanDecide(Auth::user(), $this->selectedRequest->employee);
+        app(ApprovalGuard::class)->assertCanDecide(Auth::user(), $this->selectedRequest->employee, 'approve_overtime');
 
         if (! $this->claimForReview($this->selectedRequest)) {
             $this->selectedRequest = null;
@@ -304,7 +304,7 @@ class ManageOtRequests extends Component
         $this->checkOtPermission();
 
         // Fail closed: only the approver's reporting line / HR scope.
-        $scopeIds = Auth::user()->accessibleEmployeeIds();
+        $scopeIds = Auth::user()->accessibleEmployeeIds('approve_overtime');
         $inReach = fn ($q) => $q->when($scopeIds !== null, fn ($q) => $q->whereIn('employee_id', $scopeIds));
 
         $query = OtRequest::with(['employee.user', 'employee.department', 'reviewer'])

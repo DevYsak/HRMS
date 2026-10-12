@@ -45,7 +45,7 @@ class ManageWfhRequests extends Component
     {
         $this->checkWfhPermission();
         $this->selectedRequest = WfhRequest::with(['employee.user', 'employee.department', 'reviewer'])->findOrFail($id);
-        app(ApprovalGuard::class)->assertCanView(Auth::user(), $this->selectedRequest->employee);
+        app(ApprovalGuard::class)->assertCanView(Auth::user(), $this->selectedRequest->employee, 'approve_wfh');
         $this->showViewModal = true;
         $this->dispatch('modal-show', name: 'view-wfh-modal');
     }
@@ -54,7 +54,7 @@ class ManageWfhRequests extends Component
     {
         $this->checkWfhPermission();
         $this->selectedRequest = WfhRequest::with(['employee.user', 'employee.department'])->findOrFail($id);
-        app(ApprovalGuard::class)->assertCanDecide(Auth::user(), $this->selectedRequest->employee);
+        app(ApprovalGuard::class)->assertCanDecide(Auth::user(), $this->selectedRequest->employee, 'approve_wfh');
         $this->reviewingId = $id;
         $this->reviewAction = $action;
         $this->reviewComment = $this->selectedRequest->reviewer_comment ?? '';
@@ -142,7 +142,7 @@ class ManageWfhRequests extends Component
         $this->checkWfhPermission();
 
         // Fail closed: only the approver's reporting line / HR scope.
-        $scopeIds = Auth::user()->accessibleEmployeeIds();
+        $scopeIds = Auth::user()->accessibleEmployeeIds('approve_wfh');
         $inReach = fn ($q) => $q->when($scopeIds !== null, fn ($q) => $q->whereIn('employee_id', $scopeIds));
 
         $query = WfhRequest::with(['employee.user', 'employee.department', 'reviewer'])

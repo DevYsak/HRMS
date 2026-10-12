@@ -35,6 +35,11 @@ class DepartmentDashboard extends ManagerDashboard
             : $user->accessibleEmployeeIds();
     }
 
+    protected function scopePermission(): string
+    {
+        return Auth::user()->hasPermission('view_attendance') ? 'view_attendance' : 'approve_leave';
+    }
+
     protected function scopeHeading(): ?string
     {
         $user = Auth::user();

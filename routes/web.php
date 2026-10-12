@@ -24,6 +24,7 @@ use App\Livewire\Attendance\TeamAttendance;
 use App\Livewire\AuditLogViewer;
 use App\Livewire\Dashboard;
 use App\Livewire\DepartmentDashboard;
+use App\Livewire\Departments\DepartmentOverview;
 use App\Livewire\Documents\DocumentManager;
 use App\Livewire\Employees\Directory;
 use App\Livewire\Employees\EmployeeCreate;
@@ -69,6 +70,7 @@ use App\Livewire\Performance\EmployeeScorecard;
 use App\Livewire\Performance\Goals;
 use App\Livewire\Performance\IncrementCenter;
 use App\Livewire\Performance\KpiDashboard;
+use App\Livewire\Performance\KpiManagement;
 use App\Livewire\Performance\KpiTemplates;
 use App\Livewire\Performance\ManagePips;
 use App\Livewire\Performance\ManagePromotions;
@@ -83,6 +85,7 @@ use App\Livewire\Performance\TeamReviews;
 use App\Livewire\Performance\WarningLetters;
 use App\Livewire\Profile\EmployeeProfile;
 use App\Livewire\Profile\MyProfile;
+use App\Livewire\Settings\ApprovalMatrix;
 use App\Livewire\Settings\ApprovalPolicySettings;
 use App\Livewire\Settings\ControlPanel;
 use App\Livewire\Settings\CoordinatorAssignments;
@@ -394,6 +397,10 @@ Route::middleware(['auth'])->group(function () {
     // gate; the component additionally requires heading a department.
     Route::get('/dashboard/department', DepartmentDashboard::class)->name('dashboard.department')
         ->middleware('role:approve-leave');
+    // One department's workspace — the component allows only a department
+    // inside the viewer's view_attendance reach (HR: every department).
+    Route::get('/departments/{department}', DepartmentOverview::class)->name('departments.show')
+        ->middleware('can:view_attendance');
 
     // --------------------------------------------------
     // Performance module
@@ -430,6 +437,8 @@ Route::middleware(['auth'])->group(function () {
 
         // Managers, Directors, HR, Finance can see team reviews
         Route::get('/team', TeamReviews::class)->name('team')->middleware('role:review-performance');
+        // KPIs of a cycle over the reviewer's scope (configuring stays on KPI Templates).
+        Route::get('/kpi-management', KpiManagement::class)->name('kpi-management')->middleware('role:review-performance');
 
         // HR / admin only — all reviews and cycle management
         Route::middleware('role:manage-employees')->group(function () {
@@ -590,6 +599,8 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/data-management', DataManagement::class)->name('data-management');
         Route::get('/departments', DepartmentManager::class)->name('departments');
         Route::get('/roles', RoleManager::class)->name('roles');
+        // Who approves what — read-only map of the current approval policy.
+        Route::get('/approval-matrix', ApprovalMatrix::class)->name('approval-matrix');
         Route::get('/employment-types', EmploymentTypeManager::class)->name('employment-types');
         Route::get('/work-modes', WorkModeManager::class)->name('work-modes');
         Route::get('/salary-cycles', SalaryCycleManager::class)->name('salary-cycles')->middleware('module:payroll');

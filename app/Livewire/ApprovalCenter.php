@@ -71,7 +71,7 @@ class ApprovalCenter extends Component
                 case 'leave':
                     abort_unless($user->canApproveLeave(), 403);
                     $req = LeaveRequest::with('claimer')->findOrFail($id);
-                    app(ApprovalGuard::class)->assertCanDecide($user, $req->employee);
+                    app(ApprovalGuard::class)->assertCanDecide($user, $req->employee, 'approve_leave');
                     if (! $this->guardClaim($req)) {
                         return;
                     }
@@ -88,7 +88,7 @@ class ApprovalCenter extends Component
                 case 'ot':
                     abort_unless($user->canApproveOt(), 403);
                     $req = OtRequest::with('claimer')->findOrFail($id);
-                    app(ApprovalGuard::class)->assertCanDecide($user, $req->employee);
+                    app(ApprovalGuard::class)->assertCanDecide($user, $req->employee, 'approve_overtime');
                     if (! $this->guardClaim($req)) {
                         return;
                     }
@@ -103,7 +103,7 @@ class ApprovalCenter extends Component
                 case 'regularisation':
                     abort_unless($user->canApproveRegularisations(), 403);
                     $req = AttendanceRegularisation::with('claimer')->findOrFail($id);
-                    app(ApprovalGuard::class)->assertCanDecide($user, $req->employee);
+                    app(ApprovalGuard::class)->assertCanDecide($user, $req->employee, 'hr_approve_regularisation');
                     if (! $this->guardClaim($req)) {
                         return;
                     }

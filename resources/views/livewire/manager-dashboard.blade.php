@@ -27,15 +27,30 @@
 
         {{-- ── HEADER ── --}}
         <x-pulse.dashboard-header :title="$title" :subtitle="$subtitle">
-            <x-slot:actions><x-attendance.live-button /></x-slot:actions>
+            <x-slot:actions>
+                @if($overviewDepartment)
+                    <a href="{{ route('departments.show', $overviewDepartment) }}" wire:navigate data-department-overview-link
+                        class="inline-flex items-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-3.5 py-2 text-sm font-semibold text-zinc-700 shadow-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200">
+                        <flux:icon.building-office-2 class="size-4" /> {{ $overviewDepartment->name }} overview
+                    </a>
+                @endif
+                <x-attendance.live-button />
+            </x-slot:actions>
         </x-pulse.dashboard-header>
+        <x-pulse.scope-badge :scope="$scope" />
 
         {{-- ── ROW 1 — TODAY ── --}}
         <x-pulse.grid :cols="4">
-            <x-pulse.kpi-card label="Present" :value="$presentCount" icon="check-circle" accent="emerald" :sub="'of '.$teamSize.' in the team'" />
+            {{-- Same definitions as the Command Center and HR dashboard (TodayStatusService). --}}
+            <x-pulse.kpi-card label="Present Today" :value="$presentCount" icon="check-circle" accent="emerald" :sub="'of '.$todayStatus['expected'].' due today'" />
             <x-pulse.kpi-card label="Late" :value="$lateCount" icon="clock" accent="amber" sub="late arrivals today" />
-            <x-pulse.kpi-card label="Absent / Missing" :value="$absentCount + $missingCheckoutCount" icon="x-circle" accent="rose"
-                :sub="$absentCount.' no clock-in · '.$missingCheckoutCount.' missing check-out'" />
+            @if($todayStatus['day_off'])
+                <x-pulse.kpi-card :label="$todayStatus['weekly_off'] >= $todayStatus['holiday'] ? 'Weekly Off' : 'Holiday'" :value="$todayStatus['weekly_off'] + $todayStatus['holiday']" icon="moon" accent="zinc"
+                    sub="not due today — not absent" />
+            @else
+                <x-pulse.kpi-card label="No Check-in" :value="$absentCount" icon="x-circle" accent="rose"
+                    :sub="$todayStatus['absent'].' absent (shift over) · '.$todayStatus['on_leave'].' on leave · '.$missingCheckoutCount.' missing check-out'" />
+            @endif
             <x-pulse.kpi-card label="Pending approvals" :value="$pendingApprovals" icon="inbox-stack" accent="brand"
                 :sub="$pendingLeaveCount.' leave'.($canApproveOt ? ' · '.$pendingOtCount.' OT' : '')" :href="$link('time-off.team')" />
         </x-pulse.grid>
@@ -194,13 +209,17 @@
                 <div class="grid grid-cols-2 gap-3">
                     <div class="rounded-xl bg-zinc-50 px-3 py-2.5 dark:bg-white/5">
                         <div class="text-[22px] font-bold leading-none tabular-nums text-zinc-900 dark:text-white">{{ $reviewsSubmitted }}</div>
-                        <div class="mt-1 text-xs text-zinc-500">Completed this year</div>
+                        <div class="mt-1 text-xs text-zinc-500">Completed @if($latestCycle)· {{ $latestCycle->name }}@endif</div>
                     </div>
                     <div class="rounded-xl bg-zinc-50 px-3 py-2.5 dark:bg-white/5">
                         <div class="text-[22px] font-bold leading-none tabular-nums text-zinc-900 dark:text-white">{{ $reviewsPending }}</div>
                         <div class="mt-1 text-xs text-zinc-500">Pending</div>
                     </div>
                 </div>
+                <p class="mt-2 text-[11px] text-zinc-500" data-review-breakdown>
+                    {{ $reviewSummary['self_review_pending'] }} self review · {{ $reviewSummary['manager_review_pending'] }} manager review · {{ $reviewSummary['not_started'] }} not started
+                    @if($reviewSummary['overdue'] > 0)<span class="font-semibold text-rose-600"> · {{ $reviewSummary['overdue'] }} overdue</span>@endif
+                </p>
 
                 <div class="mt-4 flex items-center justify-between gap-2">
                     <h4 class="text-[13px] font-semibold text-zinc-900 dark:text-white">Team KPI Scores @if($latestCycle) <span class="font-normal text-zinc-400">· {{ $latestCycle->name }}</span>@endif</h4>
@@ -221,7 +240,13 @@
                         @endforeach
                     </div>
                 @else
-                    <x-pulse.empty-state class="mt-2" text="No active KPI review data." :href="$link('performance.team')" cta="View Performance" />
+                    @php
+                        $kpiWhere = $scope['kind'] === 'department' ? $scope['label'] : 'your team';
+                        $kpiCta = $canConfigureKpis && $link('performance.kpi-templates') ? ['href' => $link('performance.kpi-templates'), 'label' => 'Configure KPIs'] : ['href' => $link('performance.team'), 'label' => 'View Performance'];
+                    @endphp
+                    <x-pulse.empty-state class="mt-2"
+                        :text="'No active KPI review data.'.($latestCycle ? ' '.$latestCycle->name.' KPIs have not yet been scored for '.$kpiWhere.'.' : ' No review cycle is running yet.')"
+                        :href="$kpiCta['href']" :cta="$kpiCta['label']" />
                 @endif
             </x-pulse.card>
         </x-pulse.grid>

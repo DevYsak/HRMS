@@ -109,7 +109,7 @@ class HolidayWorkService
             throw new \DomainException('Only pending holiday-work requests can be approved.');
         }
 
-        app(ApprovalGuard::class)->assertCanDecide($reviewerId, $request->employee);
+        app(ApprovalGuard::class)->assertCanDecide($reviewerId, $request->employee, 'approve_leave');
 
         $request->update([
             'status' => 'approved',
@@ -231,7 +231,7 @@ class HolidayWorkService
             throw new \DomainException('Only pending holiday-work requests can be rejected.');
         }
 
-        app(ApprovalGuard::class)->assertCanDecide($reviewerId, $request->employee);
+        app(ApprovalGuard::class)->assertCanDecide($reviewerId, $request->employee, 'approve_leave');
 
         $request->update([
             'status' => 'rejected',

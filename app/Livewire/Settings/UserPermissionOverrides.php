@@ -163,6 +163,42 @@ class UserPermissionOverrides extends Component
         \Flux::toast("Override removed — {$override->user->name} now has what their role gives.", variant: 'success');
     }
 
+    /** Why the reset is being done (required, audited). */
+    public string $resetReason = '';
+
+    /**
+     * Remove every override this admin may remove — back to exactly what the
+     * role gives — under the same rules as removing one, as one audited event.
+     */
+    public function resetToRoleDefaults(): void
+    {
+        $this->authorizeManagement();
+        $this->validate(['resetReason' => ['required', 'string', 'min:5', 'max:500']], [], ['resetReason' => 'reason']);
+
+        $target = User::findOrFail($this->userId);
+        $actor = Auth::user();
+        $guard = app(RoleDelegationGuard::class);
+
+        if ($target->is($actor)) {
+            \Flux::toast('You cannot change your own permissions.', variant: 'danger');
+
+            return;
+        }
+
+        $overrides = UserPermissionOverride::with('permission')->where('user_id', $target->id)->get();
+        $removable = $overrides->filter(fn (UserPermissionOverride $o) => $guard->isSuperAdmin($actor) || $guard->beyondCeiling($actor, [$o->permission->key]) === []);
+        $kept = $overrides->count() - $removable->count();
+
+        $old = $removable->map(fn (UserPermissionOverride $o) => $this->describe($o))->values()->all();
+        $removable->each->delete();
+
+        app(AuditService::class)->event('USER_PERMISSION_OVERRIDES_RESET', AuditService::PERMISSIONS, $target,
+            old: ['overrides' => $old], reason: trim($this->resetReason), module: AuditService::SETTINGS);
+
+        $this->resetReason = '';
+        \Flux::toast($removable->count().' override(s) removed — '.$target->name.' now has what their role gives.'.($kept ? " {$kept} outside your reach were kept." : ''), variant: $kept ? 'warning' : 'success');
+    }
+
     public function render()
     {
         $target = $this->userId ? User::with(['assignedRole', 'employee.department'])->find($this->userId) : null;

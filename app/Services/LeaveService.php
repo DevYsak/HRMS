@@ -569,7 +569,7 @@ class LeaveService
             throw new \DomainException('Only a pending leave request can have more information requested.');
         }
 
-        app(ApprovalGuard::class)->assertCanDecide($reviewerId, $leaveRequest->employee);
+        app(ApprovalGuard::class)->assertCanDecide($reviewerId, $leaveRequest->employee, 'approve_leave');
 
         $reviewer = User::findOrFail($reviewerId);
 
@@ -1373,7 +1373,7 @@ class LeaveService
     {
         $reviewer = User::find($reviewerId);
 
-        app(ApprovalGuard::class)->assertCanDecide($reviewer, $leaveRequest->employee);
+        app(ApprovalGuard::class)->assertCanDecide($reviewer, $leaveRequest->employee, 'approve_leave');
 
         $isOpen = in_array($leaveRequest->status, ['pending', 'pending_hr', 'more_info_requested'], true);
 

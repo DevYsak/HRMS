@@ -3,6 +3,7 @@
 namespace App\Livewire\TimeOff;
 
 use App\Livewire\Concerns\HandlesClaimLock;
+use App\Models\AuditLog;
 use App\Models\Employee;
 use App\Models\LeaveBalance;
 use App\Models\LeaveRequest;
@@ -10,11 +11,14 @@ use App\Models\LeaveType;
 use App\Services\Approvals\ApprovalGuard;
 use App\Services\Leave\LeaveYearResolver;
 use App\Services\LeaveService;
+use App\Services\Security\PeopleScope;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 use Livewire\WithPagination;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class AllTimeOff extends Component
 {
@@ -128,7 +132,7 @@ class AllTimeOff extends Component
             'attachments', 'messages.user', 'claimer',
         ])->findOrFail($id);
 
-        app(ApprovalGuard::class)->assertCanView(Auth::user(), $this->viewingRequest->employee);
+        app(ApprovalGuard::class)->assertCanView(Auth::user(), $this->viewingRequest->employee, 'approve_leave');
 
         // Claim-lock: another in-scope reviewer is already handling this request.
         if (! $this->claimForReview($this->viewingRequest)) {
@@ -294,7 +298,7 @@ class AllTimeOff extends Component
         ]);
 
         $request = LeaveRequest::findOrFail($this->viewingId);
-        app(ApprovalGuard::class)->assertCanView(Auth::user(), $request->employee);
+        app(ApprovalGuard::class)->assertCanView(Auth::user(), $request->employee, 'approve_leave');
 
         $path = null;
         $name = null;
@@ -365,7 +369,7 @@ class AllTimeOff extends Component
         abort_unless(Auth::user()->canApproveLeave(), 403);
 
         $request = LeaveRequest::with(['employee', 'reviewer', 'paymentAuditLogs.changedByUser'])->findOrFail($id);
-        app(ApprovalGuard::class)->assertCanView(Auth::user(), $request->employee);
+        app(ApprovalGuard::class)->assertCanView(Auth::user(), $request->employee, 'approve_leave');
 
         $this->editingId = $id;
         $this->form = [
@@ -489,7 +493,7 @@ class AllTimeOff extends Component
         ]);
 
         $employee = Employee::with('user')->findOrFail($this->newForm['employee_id']);
-        abort_unless(Auth::user()->coversEmployee($employee), 403);
+        abort_unless(Auth::user()->coversEmployee($employee, 'approve_leave'), 403);
         $leaveType = LeaveType::findOrFail($this->newForm['leave_type_id']);
 
         // Through applyOnBehalf: it records who filed it (applied_by) and
@@ -516,14 +520,18 @@ class AllTimeOff extends Component
 
     // ── Render ───────────────────────────────────────────────────────────────
 
-    public function render()
+    /**
+     * The list, exactly as filtered on screen, over the approve_leave reach —
+     * shared by the table and the export so neither can show more.
+     *
+     * @return Builder<LeaveRequest>
+     */
+    private function filteredQuery(): Builder
     {
-        abort_unless(Auth::user()->canApproveLeave(), 403);
-
         // null = company-wide; otherwise only the approver's reporting line / scope.
-        $scopeIds = Auth::user()->accessibleEmployeeIds();
+        $scopeIds = Auth::user()->accessibleEmployeeIds('approve_leave');
 
-        $query = LeaveRequest::with(['employee.user', 'employee.department', 'leaveType', 'reviewer'])
+        return LeaveRequest::with(['employee.user', 'employee.department', 'leaveType', 'reviewer'])
             ->withCount('messages')
             ->whereHas('employee.user')
             ->when($scopeIds !== null, fn ($q) => $q->whereIn('employee_id', $scopeIds))
@@ -532,8 +540,40 @@ class AllTimeOff extends Component
             ->when($this->leave_type_id, fn ($q) => $q->where('leave_type_id', $this->leave_type_id))
             ->when($this->dateFrom, fn ($q) => $q->where('start_date', '>=', $this->dateFrom))
             ->when($this->dateTo, fn ($q) => $q->where('start_date', '<=', $this->dateTo));
+    }
 
-        $requests = $query->latest()->paginate($this->perPage);
+    /** CSV of the filtered list — only the people this approver reaches. */
+    public function export(): StreamedResponse
+    {
+        abort_unless(Auth::user()->canApproveLeave() && Auth::user()->hasPermission('export_leave'), 403);
+
+        $rows = $this->filteredQuery()->latest()->get();
+
+        AuditLog::record(Auth::user(), 'leave.exported', null, ['rows' => $rows->count(), 'filters' => array_filter([
+            'status' => $this->status, 'leave_type_id' => $this->leave_type_id, 'from' => $this->dateFrom, 'to' => $this->dateTo, 'search' => $this->search,
+        ])], context: ['module' => 'leave', 'event' => 'leave.exported']);
+
+        return response()->streamDownload(function () use ($rows) {
+            $out = fopen('php://output', 'w');
+            fputcsv($out, ['Employee', 'Employee ID', 'Department', 'Leave type', 'From', 'To', 'Days', 'Status', 'Reviewer', 'Submitted']);
+            foreach ($rows as $r) {
+                fputcsv($out, [
+                    $r->employee?->user?->name, $r->employee?->employee_id, $r->employee?->department?->name, $r->leaveType?->name,
+                    $r->start_date?->toDateString(), $r->end_date?->toDateString(), $r->days, $r->status, $r->reviewer?->name, $r->created_at?->toDateTimeString(),
+                ]);
+            }
+            fclose($out);
+        }, 'leave-requests-'.now()->format('Ymd_His').'.csv', ['Content-Type' => 'text/csv']);
+    }
+
+    public function render()
+    {
+        abort_unless(Auth::user()->canApproveLeave(), 403);
+
+        // null = company-wide; otherwise only the approver's reporting line / scope.
+        $scopeIds = Auth::user()->accessibleEmployeeIds('approve_leave');
+
+        $requests = $this->filteredQuery()->latest()->paginate($this->perPage);
 
         // Attach available balance
         // The leave year runs 1 July to 30 June, so the calendar year and the
@@ -565,6 +605,8 @@ class AllTimeOff extends Component
             ->orderBy('id')->get();
 
         return view('livewire.time-off.all-time-off', [
+            'scope' => app(PeopleScope::class)->summary(Auth::user(), 'approve_leave'),
+            'canExport' => Auth::user()->hasPermission('export_leave'),
             'requests' => $requests,
             'leaveTypes' => LeaveType::orderBy('name')->get(),
             'allEmployees' => $allEmployees,

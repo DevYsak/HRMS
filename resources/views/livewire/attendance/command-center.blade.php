@@ -8,6 +8,7 @@
             <div class="mt-0.5 flex items-center gap-1.5 text-xs text-zinc-400">
                 <span>Dashboard</span><flux:icon.chevron-right class="size-3" /><span>Attendance</span><flux:icon.chevron-right class="size-3" /><span class="font-semibold text-orange-500">Command Center</span>
             </div>
+            <x-pulse.scope-badge :scope="$scope" class="mt-2" />
         </div>
         <div class="flex flex-wrap items-center gap-2">
             <div class="relative">
@@ -25,17 +26,22 @@
         @php
             $mtd = $health['mtd_score'];
             $scoreTone = $mtd === null ? 'text-zinc-400' : ($mtd >= 85 ? 'text-emerald-600' : ($mtd >= 60 ? 'text-amber-600' : 'text-rose-500'));
+            $hints = \App\Services\Attendance\TodayStatusService::HINTS;
+            // A day off for everyone shows as such — never as everyone absent.
+            $thirdCard = $health['day_off']
+                ? [$health['weekly_off'] >= $health['holiday'] ? 'Weekly Off' : 'Holiday', $health['weekly_off'] + $health['holiday'], 'moon', '#64748b', 'not due today', $hints['weekly_off']]
+                : ['Absent', $health['absent_today'], 'x-circle', '#ef4444', $health['no_checkin'].' no check-in yet · '.$health['on_leave'].' on leave', $hints['absent']];
             $healthCards = [
-                ['Present Today', $health['present_today'].'/'.$health['active'], 'check-circle', '#10b981', 'clocked in'],
-                ['Late Today', $health['late_today'], 'exclamation-triangle', '#f59e0b', 'past grace'],
-                ['Absent Today', $health['absent_today'], 'x-circle', '#ef4444', 'no punch yet'],
-                ['MTD Score', ($mtd ?? '—').($mtd !== null ? '/100' : ''), 'shield-check', '#F97316', 'engine average'],
-                ['At Risk', $health['at_risk'], 'shield-exclamation', '#f43f5e', 'score below 60'],
-                ['Excellent', $health['bands']['excellent'], 'trophy', '#8b5cf6', 'score 90+'],
+                ['Present Today', $health['present_today'].'/'.$health['expected'], 'check-circle', '#10b981', 'of those due today', $hints['present']],
+                ['Late', $health['late_today'], 'exclamation-triangle', '#f59e0b', 'past grace', $hints['late']],
+                $thirdCard,
+                ['MTD Score', ($mtd ?? '—').($mtd !== null ? '/100' : ''), 'shield-check', '#F97316', 'engine average', 'Month-to-date attendance score average.'],
+                ['At Risk', $health['at_risk'], 'shield-exclamation', '#f43f5e', 'score below 60', 'Month-to-date score below 60.'],
+                ['Excellent', $health['bands']['excellent'], 'trophy', '#8b5cf6', 'score 90+', 'Month-to-date score of 90 or more.'],
             ];
         @endphp
-        @foreach($healthCards as [$label, $value, $icon, $color, $sub])
-            <div class="rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 p-3.5 shadow-sm">
+        @foreach($healthCards as [$label, $value, $icon, $color, $sub, $hint])
+            <div class="rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 p-3.5 shadow-sm" title="{{ $hint }}" data-health-card="{{ \Illuminate\Support\Str::slug($label) }}">
                 <span class="inline-flex size-8 items-center justify-center rounded-xl" style="background: {{ $color }}1a; color: {{ $color }};"><flux:icon :icon="$icon" class="size-4" /></span>
                 <div class="mt-2 text-xl font-black tabular-nums {{ $label === 'MTD Score' ? $scoreTone : 'text-zinc-900 dark:text-white' }}">{{ $value }}</div>
                 <div class="text-[9px] font-bold uppercase tracking-wide text-zinc-400">{{ $label }}</div>
@@ -105,6 +111,8 @@
             'overtime' => ['Overtime', 'bolt', '#f59e0b'],
             'holiday' => ['Holiday Work', 'briefcase', '#14b8a6'],
         ];
+        // Only the categories this person can see; each card counts its own reach.
+        $tabs = array_intersect_key($tabs, $counts);
     @endphp
     <div>
         <p class="mb-3 text-[11px] font-black uppercase tracking-widest text-zinc-400">Request Categories</p>
@@ -121,6 +129,7 @@
                             <span class="text-[10px] font-bold uppercase text-zinc-400">pending</span>
                         </div>
                         <div class="text-xs font-bold text-zinc-600 dark:text-zinc-300">{{ $label }}</div>
+                        <div class="mt-0.5 truncate text-[10px] text-zinc-400" title="{{ $categoryScope[$key] }}">{{ $categoryScope[$key] }}@if($viewOnly[$key]) · view only @endif</div>
                     </div>
                     <span class="text-[10px] font-bold {{ $active ? 'text-orange-500' : 'text-zinc-400 group-hover:text-orange-500' }}">
                         {{ $active ? 'Reviewing ↓' : 'Review →' }}
@@ -169,9 +178,9 @@
                 <div class="divide-y divide-orange-50 dark:divide-zinc-800/60" wire:loading.class="opacity-50" wire:target="tab,search,statusFilter,bulkApprove,bulkReject">
                     @foreach($items as $item)
                         @php
-                            $isPending = ($item['status'] ?? 'pending') === 'pending';
-                            // Regularisations are decided by HR only ("Approve Regularisations (HR)").
-                            $canDecideTab = $tab !== 'regularisation' || auth()->user()->canApproveRegularisations();
+                            $isPending = in_array($item['status'] ?? 'pending', ['pending', 'pending_hr'], true);
+                            // The same check the server runs (ApprovalQueueService::canDecide).
+                            $canDecideTab = $item['can_decide'];
                         @endphp
                         <div class="flex flex-wrap items-center gap-3 px-5 py-3 transition hover:bg-orange-50/40 dark:hover:bg-zinc-800/30">
                             @if($isPending && $canDecideTab)
@@ -190,10 +199,18 @@
                                     <span class="rounded-full bg-orange-50 px-2 py-0.5 text-[9px] font-bold text-orange-600 dark:bg-orange-900/20 dark:text-orange-400">{{ $item['detail'] }}</span>
                                 </div>
                                 @if($item['reason'])<p class="mt-0.5 truncate text-[10px] italic text-zinc-400">“{{ $item['reason'] }}”</p>@endif
+                                <p class="mt-0.5 text-[10px] text-zinc-500 [overflow-wrap:anywhere]" data-ownership>
+                                    {{ $item['department'] ?? 'No department' }}@if($item['manager']) · Manager: {{ $item['manager'] }}@endif
+                                    · Submitted @userDateTime($item['submitted'])
+                                </p>
+                                @if($isPending)
+                                    <p class="text-[10px] text-zinc-500 [overflow-wrap:anywhere]"><span class="font-semibold text-zinc-700 dark:text-zinc-200">Current approver:</span> {{ $item['approver'] }} · <span class="font-semibold text-zinc-700 dark:text-zinc-200">Next:</span> {{ $item['next'] }}</p>
+                                    @if($item['escalated'])<p class="text-[10px] font-medium text-amber-700 dark:text-amber-300">{{ $item['escalated'] }}</p>@endif
+                                @endif
                             </div>
                             <div class="flex shrink-0 gap-1.5">
                                 @if($isPending && ! $canDecideTab)
-                                    <span class="inline-flex items-center rounded-lg bg-zinc-100 px-2.5 py-1 text-[10px] font-bold uppercase text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">Awaiting HR</span>
+                                    <span class="inline-flex items-center rounded-lg bg-zinc-100 px-2.5 py-1 text-[10px] font-bold uppercase text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">{{ $tab === 'regularisation' ? 'Awaiting HR' : 'View only' }}</span>
                                 @elseif($isPending)
                                     <button wire:click="approveOne('{{ $tab }}', {{ $item['id'] }})" class="inline-flex items-center gap-1 rounded-lg bg-emerald-500 px-2.5 py-1 text-[10px] font-bold text-white transition hover:bg-emerald-600"><flux:icon.check class="size-3" /> Approve</button>
                                     <button wire:click="rejectOne('{{ $tab }}', {{ $item['id'] }})" class="inline-flex items-center gap-1 rounded-lg bg-rose-500 px-2.5 py-1 text-[10px] font-bold text-white transition hover:bg-rose-600"><flux:icon.x-mark class="size-3" /> Reject</button>

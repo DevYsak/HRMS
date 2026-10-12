@@ -7,6 +7,7 @@
         <div class="mt-0.5 flex items-center gap-1.5 text-xs text-zinc-400">
             <span>Dashboard</span><flux:icon.chevron-right class="size-3" /><span>Attendance</span><flux:icon.chevron-right class="size-3" /><span class="font-semibold text-orange-500">Reports</span>
         </div>
+        <x-pulse.scope-badge :scope="$scope" class="mt-2" />
     </div>
     <div class="flex flex-wrap items-center gap-2">
         <a href="{{ route('reports.attendance-report-csv', $this->exportParams) }}"
@@ -38,8 +39,16 @@
             <input type="date" wire:model.live="to" class="w-full rounded-lg border border-orange-100 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-300 focus:border-orange-400 focus:ring-0">
         </div>
         <div>
-            <x-clean-select model="departmentId" label="Department" :live="true"
-                :options="[['value' => '', 'label' => 'All'], ...collect($departments)->map(fn ($d) => ['value' => $d->id, 'label' => $d->name])->all()]" />
+            @if($lockedDepartment)
+                {{-- Only one department in reach: shown, not offered as a choice. --}}
+                <label class="mb-1 block text-sm font-medium text-zinc-800 dark:text-zinc-200">Department</label>
+                <div class="flex items-center gap-1.5 rounded-xl border border-zinc-200 bg-zinc-50 px-3.5 py-2.5 text-sm text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200" data-department-locked>
+                    <flux:icon.lock-closed class="size-3.5 text-zinc-400" /> {{ $lockedDepartment->name }}
+                </div>
+            @else
+                <x-clean-select model="departmentId" label="Department" :live="true"
+                    :options="[['value' => '', 'label' => 'All departments in scope'], ...collect($departments)->map(fn ($d) => ['value' => $d->id, 'label' => $d->name])->all()]" />
+            @endif
         </div>
         <div>
             <x-clean-select model="officeId" label="Branch / Office" :live="true"

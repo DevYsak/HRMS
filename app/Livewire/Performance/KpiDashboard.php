@@ -7,6 +7,7 @@ use App\Models\EmployeeScorecard;
 use App\Models\PerformanceCycle;
 use App\Models\PerformanceReviewScore;
 use App\Models\ReviewGoal;
+use App\Services\Security\PeopleScope;
 use App\Services\Security\ScopeResolver;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -81,6 +82,8 @@ class KpiDashboard extends Component
                 ->join('performance_reviews', 'performance_review_scores.review_id', '=', 'performance_reviews.id')
                 ->join('performance_components', 'performance_review_scores.component_id', '=', 'performance_components.id')
                 ->where('performance_reviews.performance_cycle_id', $this->selectedCycleId)
+                // Only reviews of people inside the manage_scorecards scope.
+                ->when(($scoped = app(ScopeResolver::class)->employeeIds(Auth::user(), 'manage_scorecards')) !== null, fn ($q) => $q->whereIn('performance_reviews.employee_id', $scoped))
                 ->selectRaw('performance_components.name as component_name, performance_components.max_score, AVG(performance_review_scores.final_score) as avg_score')
                 ->groupBy('performance_components.id', 'performance_components.name', 'performance_components.max_score')
                 ->orderByDesc('avg_score')
@@ -94,13 +97,14 @@ class KpiDashboard extends Component
         $atRisk = $scorecards->sortBy('final_score')->take(5)->values();
         $promotionReady = $scorecards->filter(fn ($s) => (float) $s->final_score >= 85)->values();
 
-        $departments = Department::orderBy('name')->get();
+        $departments = app(PeopleScope::class)->departmentOptions(Auth::user(), 'manage_scorecards');
+        $trendReach = app(ScopeResolver::class)->employeeIds(Auth::user(), 'manage_scorecards');
 
         // Cycle trend: last 4 cycles avg score
         $trendCycles = PerformanceCycle::whereIn('status', ['completed', 'locked'])
             ->latest('end_date')
             ->limit(6)
-            ->with('scorecards')
+            ->with(['scorecards' => fn ($q) => $q->when($trendReach !== null, fn ($s) => $s->whereIn('employee_id', $trendReach))])
             ->get()
             ->reverse()
             ->map(fn ($cycle) => [

@@ -52,7 +52,7 @@ class NexflowOtPanel extends Component
     public function selectEmployee(int $id): void
     {
         abort_unless(Auth::user()->canApproveOt(), 403);
-        app(ApprovalGuard::class)->assertCanView(Auth::user(), Employee::findOrFail($id));
+        app(ApprovalGuard::class)->assertCanView(Auth::user(), Employee::findOrFail($id), 'approve_overtime');
 
         $this->employeeId = $id;
         $this->data = null;
@@ -102,7 +102,7 @@ class NexflowOtPanel extends Component
         $employee = $this->selectedEmployee();
         // Importing creates payable OT: the same rule as approving it — inside
         // the importer's reach, and never their own.
-        app(ApprovalGuard::class)->assertCanDecide(Auth::user(), $employee);
+        app(ApprovalGuard::class)->assertCanDecide(Auth::user(), $employee, 'approve_overtime');
         $record = collect($this->data['ot_records'] ?? [])->firstWhere('id', $recordId);
 
         if (! $employee || ! $record) {
@@ -131,7 +131,7 @@ class NexflowOtPanel extends Component
             return;
         }
 
-        app(ApprovalGuard::class)->assertCanDecide(Auth::user(), $employee);
+        app(ApprovalGuard::class)->assertCanDecide(Auth::user(), $employee, 'approve_overtime');
 
         $imported = 0;
         $skipped = 0;
@@ -174,7 +174,7 @@ class NexflowOtPanel extends Component
 
     public function render()
     {
-        $reach = Auth::user()->accessibleEmployeeIds();
+        $reach = Auth::user()->accessibleEmployeeIds('approve_overtime');
 
         $employees = Employee::query()
             ->where('status', 'active')

@@ -67,7 +67,7 @@ class WfhService
             throw new \DomainException('Only pending work-from-home requests can be approved.');
         }
 
-        app(ApprovalGuard::class)->assertCanDecide($reviewerId, $request->employee);
+        app(ApprovalGuard::class)->assertCanDecide($reviewerId, $request->employee, 'approve_wfh');
 
         $request->update([
             'status' => 'approved',
@@ -83,7 +83,7 @@ class WfhService
             throw new \DomainException('Only pending work-from-home requests can be rejected.');
         }
 
-        app(ApprovalGuard::class)->assertCanDecide($reviewerId, $request->employee);
+        app(ApprovalGuard::class)->assertCanDecide($reviewerId, $request->employee, 'approve_wfh');
 
         $request->update([
             'status' => 'rejected',

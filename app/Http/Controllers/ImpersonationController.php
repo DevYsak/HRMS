@@ -62,6 +62,14 @@ class ImpersonationController extends Controller
                     new: ['impersonated_user_id' => $impersonated->id],
                     subjectEmployeeId: $impersonated->employee?->id);
             }
+        } elseif ($originalId) {
+            // The admin account is gone (deleted mid-session): never leave the
+            // browser signed in as the impersonated person with no banner.
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return redirect()->route('login');
         }
 
         return redirect()->route('dashboard');

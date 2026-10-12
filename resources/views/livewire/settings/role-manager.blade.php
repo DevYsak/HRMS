@@ -49,6 +49,11 @@
                         <flux:icon.users class="size-4" />
                         {{ $role->users_count }} users
                     </button>
+                    @if(($overrideCounts[$role->id] ?? 0) > 0)
+                        <button type="button" wire:click="$set('tab', 'overrides')" class="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800 ring-1 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/30" data-override-badge title="Users on this role with personal permission overrides">
+                            Custom Permissions · {{ $overrideCounts[$role->id] }}
+                        </button>
+                    @endif
                 </div>
 
                 <p class="text-xs text-zinc-400">Created {{ $role->created_at->format('M j, Y') }}</p>
@@ -79,9 +84,52 @@
                 <flux:input wire:model="name" label="Role Name" placeholder="e.g. Team Lead" required />
                 <flux:textarea wire:model="description" label="Description" placeholder="What does this role do?" rows="2" />
 
+                {{-- Role summary: what the ticks below add up to, before Save. --}}
+                @if($roleSummary)
+                    <section class="rounded-xl border border-orange-200 bg-orange-50/60 p-4 text-sm dark:border-orange-500/30 dark:bg-orange-500/10" data-role-summary>
+                        <p class="text-[11px] font-bold uppercase tracking-wide text-orange-700 dark:text-orange-300">Role summary</p>
+                        <p class="mt-1 font-semibold text-zinc-900 dark:text-white">{{ $roleSummary['name'] }}</p>
+                        <dl class="mt-2 grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
+                            <div><dt class="text-xs text-zinc-500">Dashboard</dt><dd class="text-zinc-800 dark:text-zinc-100">{{ $roleSummary['dashboard'] }}</dd></div>
+                            <div><dt class="text-xs text-zinc-500">Default scope</dt><dd class="text-zinc-800 dark:text-zinc-100">{{ $roleSummary['default_scope'] }}</dd></div>
+                            <div><dt class="text-xs text-zinc-500">Can approve</dt><dd class="text-zinc-800 dark:text-zinc-100">{{ $roleSummary['approve'] === [] ? 'Nothing' : implode(', ', $roleSummary['approve']) }}</dd></div>
+                            <div><dt class="text-xs text-zinc-500">Can view</dt><dd class="text-zinc-800 dark:text-zinc-100">{{ $roleSummary['view'] === [] ? 'Own records only' : implode(', ', $roleSummary['view']) }}</dd></div>
+                            <div class="sm:col-span-2"><dt class="text-xs text-zinc-500">Cannot access</dt><dd class="text-zinc-800 dark:text-zinc-100">{{ $roleSummary['cannot'] === [] ? '—' : implode(', ', $roleSummary['cannot']) }}</dd></div>
+                            @if($roleSummary['privileged'] !== [])
+                                <div class="sm:col-span-2"><dt class="text-xs text-rose-600">Privileged permissions</dt><dd class="text-rose-700 dark:text-rose-300">{{ implode(', ', $roleSummary['privileged']) }}</dd></div>
+                            @endif
+                        </dl>
+                    </section>
+                @endif
+
+                {{-- Presets: a convenience that only fills the editor, after a preview. --}}
+                <div class="space-y-2">
+                    <p class="text-xs font-semibold text-zinc-600 dark:text-zinc-300">Start from a preset</p>
+                    <div class="flex flex-wrap gap-1.5">
+                        @foreach($presets as $slug => $label)
+                            <button type="button" wire:click="previewPreset('{{ $slug }}')" class="rounded-full border border-zinc-200 px-2.5 py-1 text-xs font-semibold text-zinc-600 hover:border-orange-300 hover:text-orange-700 dark:border-zinc-700 dark:text-zinc-300">{{ $label }}</button>
+                        @endforeach
+                    </div>
+                    @if($presetPreview)
+                        <div class="rounded-xl border border-zinc-200 bg-white p-3 text-xs dark:border-zinc-700 dark:bg-zinc-900" data-preset-preview>
+                            <p class="font-semibold text-zinc-900 dark:text-white">Preview: {{ $presetPreview['label'] }} preset</p>
+                            <p class="mt-1 text-emerald-700 dark:text-emerald-300">Adds ({{ count($presetPreview['add']) }}): {{ implode(', ', $presetPreview['add']) ?: '—' }}</p>
+                            <p class="mt-1 text-rose-700 dark:text-rose-300">Removes ({{ count($presetPreview['remove']) }}): {{ implode(', ', $presetPreview['remove']) ?: '—' }}</p>
+                            @if($presetPreview['blocked'] !== [])
+                                <p class="mt-1 text-amber-700 dark:text-amber-300">Beyond your own access — left out: {{ implode(', ', $presetPreview['blocked']) }}</p>
+                            @endif
+                            <p class="mt-1 text-zinc-500">Data scopes go back to the role default. User overrides are not changed.</p>
+                            <div class="mt-2 flex gap-2">
+                                <flux:button size="sm" variant="primary" wire:click="applyPreset">Load into editor</flux:button>
+                                <flux:button size="sm" variant="ghost" wire:click="cancelPreset">Cancel</flux:button>
+                            </div>
+                        </div>
+                    @endif
+                </div>
+
                 <div class="space-y-3">
                     <div class="flex items-center justify-between gap-3">
-                        <flux:heading size="sm">Module Permissions</flux:heading>
+                        <flux:heading size="sm">Permissions by section</flux:heading>
                         <flux:badge color="blue">{{ count($selectedPermissions) }} / {{ $totalPermissionsCount }} selected</flux:badge>
                     </div>
 

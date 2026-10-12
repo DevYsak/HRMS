@@ -4,6 +4,7 @@ use App\Enums\UserRole;
 use App\Models\AttendanceRegularisation;
 use App\Models\Department;
 use App\Models\Employee;
+use App\Models\OtRequest;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
@@ -187,11 +188,16 @@ test('the Command Center badge counts only requests in the approver\'s reach', f
             'requested_check_in' => "$date 09:00:00", 'requested_check_out' => "$date 18:00:00",
             'reason' => 'Forgot to punch', 'status' => 'pending', 'stage' => 'manager_review',
         ]);
+        // OT the manager decides (approve_overtime) — regularisations are HR's.
+        OtRequest::factory()->create(['employee_id' => $employee->id, 'status' => 'pending']);
     }
 
     $hr = navUser('hr_admin');
     $badge = fn (User $u) => collect(app(Sidebar::class)->groups($u))->flatMap(fn ($g) => $g['items'])->firstWhere('route', 'attendance.command-center')['badge'] ?? null;
 
+    // The badge is "waiting for MY decision" (ApprovalQueueService): only what
+    // the user may decide, only inside their reach — the manager's report's OT,
+    // not the stranger's, and no HR-only regularisations.
     expect($badge($manager))->toBe('1')
-        ->and($badge($hr))->toBe('2');
+        ->and($badge($hr))->toBe('4');
 });

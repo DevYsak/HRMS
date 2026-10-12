@@ -6,10 +6,13 @@ use App\Enums\DataScope;
 use App\Models\Department;
 use App\Models\Permission;
 use App\Models\Role;
+use App\Models\UserPermissionOverride;
 use App\Services\Audit\AuditService;
 use App\Services\Security\PermissionAdministration;
 use App\Services\Security\PermissionScopes;
+use App\Services\Security\PermissionSections;
 use App\Services\Security\RoleDelegationGuard;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -43,6 +46,9 @@ class RoleManager extends Component
 
     /** Roles & Permissions tab: roles | overrides. */
     public string $tab = 'roles';
+
+    /** A preset being previewed in the editor (role slug), before it is applied. */
+    public string $previewingPreset = '';
 
     // ── View Users modal state ────────────────────────────────────────────────
     public bool $showUsersModal = false;
@@ -128,9 +134,12 @@ class RoleManager extends Component
         }
     }
 
+    /** Tick / untick a whole section (Dashboard, People, …) — not saved until Save. */
     public function toggleModule(string $module): void
     {
-        $moduleIds = Permission::query()->where('module', $module)->pluck('id')->all();
+        $moduleIds = Permission::query()->get()
+            ->filter(fn (Permission $p) => PermissionSections::for($p) === $module)
+            ->pluck('id')->all();
 
         $allSelected = empty(array_diff($moduleIds, $this->selectedPermissions));
 
@@ -139,6 +148,40 @@ class RoleManager extends Component
         } else {
             $this->selectedPermissions = array_values(array_unique(array_merge($this->selectedPermissions, $moduleIds)));
         }
+    }
+
+    /** Show what a preset would add and remove — nothing changes yet. */
+    public function previewPreset(string $slug): void
+    {
+        $this->previewingPreset = array_key_exists($slug, PermissionSections::PRESETS) ? $slug : '';
+    }
+
+    public function cancelPreset(): void
+    {
+        $this->previewingPreset = '';
+    }
+
+    /**
+     * Fill the editor with the previewed preset (scopes back to "inherit").
+     * Still only the editor: Save applies it through the delegation ceiling,
+     * scope checks and the audit trail like any edit. User overrides are
+     * never touched.
+     */
+    public function applyPreset(): void
+    {
+        $this->authorizeRoleManagement();
+
+        if ($this->previewingPreset === '') {
+            return;
+        }
+
+        $keys = PermissionSections::presetKeys($this->previewingPreset);
+        $allowed = array_values(array_diff($keys, $this->guard()->beyondCeiling(Auth::user(), $keys)));
+
+        $this->selectedPermissions = Permission::whereIn('key', $allowed)->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $this->scopes = [];
+        $this->previewingPreset = '';
+        \Flux::toast('Preset loaded into the editor — review and Save to apply.');
     }
 
     public function selectAllPermissions(): void
@@ -366,7 +409,8 @@ class RoleManager extends Component
                 fn (Permission $permission) => str_contains(Str::lower($permission->label), Str::lower($this->permissionSearch))
                     || str_contains(Str::lower($permission->key), Str::lower($this->permissionSearch))
             ))
-            ->groupBy('module');
+            ->groupBy(fn (Permission $permission) => PermissionSections::for($permission))
+            ->sortBy(fn ($group, string $section) => array_search($section, PermissionSections::ORDER, true));
 
         $editingRole = $this->editingId ? Role::find($this->editingId) : null;
         $selectedKeys = $permissions->whereIn('id', $this->selectedPermissions)->pluck('key')->all();
@@ -378,8 +422,19 @@ class RoleManager extends Component
             ? Role::with('users')->find($this->viewingRoleId)
             : null;
 
+        // Users with personal overrides, per role (shown as a badge on the card).
+        $overrideCounts = UserPermissionOverride::query()
+            ->join('users', 'users.id', '=', 'user_permission_overrides.user_id')
+            ->selectRaw('users.role_id, COUNT(DISTINCT user_permission_overrides.user_id) as total')
+            ->groupBy('users.role_id')
+            ->pluck('total', 'role_id');
+
         return view('livewire.settings.role-manager', [
             'roles' => $roles,
+            'overrideCounts' => $overrideCounts,
+            'roleSummary' => $this->showModal ? $this->roleSummary($permissions, $editingRole, $inheritedScopes) : null,
+            'presets' => PermissionSections::PRESETS,
+            'presetPreview' => $this->presetPreview($permissions),
             'groupedPermissions' => $groupedPermissions,
             'totalPermissionsCount' => $permissions->count(),
             'viewingRole' => $viewingRole,
@@ -390,6 +445,99 @@ class RoleManager extends Component
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
+
+    /**
+     * What this role will be able to do, in words, from the editor's current
+     * ticks and scopes — read before saving 50+ checkboxes.
+     *
+     * @param  Collection<int, Permission>  $permissions
+     * @param  array<int, string>  $inheritedScopes
+     * @return array<string, mixed>
+     */
+    private function roleSummary($permissions, ?Role $role, array $inheritedScopes): array
+    {
+        $selected = $permissions->whereIn('id', $this->selectedPermissions)->keyBy('key');
+        $has = fn (string $key) => $selected->has($key);
+        $scopeOf = function (string $key) use ($selected, $inheritedScopes): ?string {
+            $permission = $selected->get($key);
+            if (! $permission) {
+                return null;
+            }
+            $chosen = (string) ($this->scopes[$permission->id]['scope'] ?? '');
+
+            return $chosen !== '' ? DataScope::from($chosen)->label() : ($inheritedScopes[$permission->id] ?? 'Default');
+        };
+
+        $dashboard = match (true) {
+            $has('view_hr_dashboard') && $has('manage_employees') => 'HR Operations',
+            $has('view_executive_dashboard') => 'Executive View',
+            $has('approve_leave') => 'Team View',
+            default => 'My dashboard',
+        };
+
+        $approve = array_values(array_filter([
+            $has('approve_leave') ? 'Leave ('.$scopeOf('approve_leave').')' : null,
+            $has('approve_overtime') ? 'OT ('.$scopeOf('approve_overtime').')' : null,
+            $has('hr_approve_regularisation') ? 'Regularisation ('.$scopeOf('hr_approve_regularisation').')' : null,
+            $has('approve_wfh') ? 'WFH ('.$scopeOf('approve_wfh').')' : null,
+            $has('approve_finance') ? 'Finance sign-off' : null,
+        ]));
+
+        $view = array_values(array_filter([
+            $has('view_employee') ? 'Employees ('.$scopeOf('view_employee').')' : null,
+            $has('view_attendance') ? 'Attendance ('.$scopeOf('view_attendance').')' : null,
+            $has('view_performance') || $has('review_performance') ? 'Performance ('.($scopeOf('review_performance') ?? $scopeOf('view_performance')).')' : null,
+            $has('view_reports') ? 'Reports ('.$scopeOf('view_reports').')' : null,
+            $has('view_payroll') ? 'Payroll ('.$scopeOf('view_payroll').')' : null,
+        ]));
+
+        $anyAll = $selected->filter(fn (Permission $p) => $p->is_scoped)->contains(fn (Permission $p) => $scopeOf($p->key) === DataScope::All->label());
+
+        $cannot = array_values(array_filter([
+            ! $has('approve_payroll') ? 'Payroll approval' : null,
+            ! $has('manage_settings') ? 'System settings' : null,
+            ! $has('manage_roles') ? 'Roles & permissions' : null,
+            ! $anyAll ? 'Company-wide data' : null,
+        ]));
+
+        $default = $role ? (PermissionScopes::ROLE_DEFAULTS[$role->slug] ?? PermissionScopes::defaultFor($role->slug, 'view_employee', $selected->keys()->all())) : DataScope::Team;
+
+        return [
+            'name' => $this->name ?: 'New role',
+            'dashboard' => $dashboard,
+            'default_scope' => $default->label(),
+            'approve' => $approve,
+            'view' => $view,
+            'cannot' => $cannot,
+            'privileged' => array_values(array_intersect($selected->keys()->all(), RoleDelegationGuard::PRIVILEGED)),
+        ];
+    }
+
+    /**
+     * What applying the previewed preset would change in the editor.
+     *
+     * @param  Collection<int, Permission>  $permissions
+     * @return array{label: string, add: array<int, string>, remove: array<int, string>, blocked: array<int, string>}|null
+     */
+    private function presetPreview($permissions): ?array
+    {
+        if ($this->previewingPreset === '') {
+            return null;
+        }
+
+        $keys = PermissionSections::presetKeys($this->previewingPreset);
+        $blocked = $this->guard()->beyondCeiling(Auth::user(), $keys);
+        $target = array_diff($keys, $blocked);
+        $current = $permissions->whereIn('id', $this->selectedPermissions)->pluck('key')->all();
+        $label = fn (array $ks) => $permissions->whereIn('key', $ks)->pluck('label')->sort()->values()->all();
+
+        return [
+            'label' => PermissionSections::PRESETS[$this->previewingPreset],
+            'add' => $label(array_diff($target, $current)),
+            'remove' => $label(array_diff($current, $target)),
+            'blocked' => $label($blocked),
+        ];
+    }
 
     private function resetForm(): void
     {

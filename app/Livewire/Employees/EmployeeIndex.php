@@ -10,6 +10,7 @@ use App\Models\JobTitle;
 use App\Models\Office;
 use App\Services\Biometric\BiometricCodeService;
 use App\Services\EmployeeInvitationService;
+use App\Services\Security\PeopleScope;
 use Illuminate\Database\Eloquent\Builder;
 use Livewire\Attributes\Url;
 use Livewire\Component;
@@ -284,7 +285,7 @@ class EmployeeIndex extends Component
                 ? Employee::incompleteHrProfile()->when($reach !== null, fn ($q) => $q->whereIn('id', $reach))->count()
                 : 0,
             'offices' => Office::all(),
-            'departments' => Department::orderBy('name')->get(),
+            'departments' => app(PeopleScope::class)->departmentOptions($user, $user->canManageEmployees() ? 'manage_employees' : 'view_employee'),
             'jobTitles' => JobTitle::all(),
         ])->layout('layouts.app', ['title' => 'Manage Employees']);
     }

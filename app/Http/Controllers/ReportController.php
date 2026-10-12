@@ -18,6 +18,7 @@ use App\Models\PromotionRecommendation;
 use App\Models\WarningLetter;
 use App\Services\Attendance\AttendanceCalculator;
 use App\Services\AttendanceReportBuilder;
+use App\Services\Security\PeopleScope;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -46,13 +47,18 @@ class ReportController extends Controller
 
     private function attendanceReportFilters(Request $request): array
     {
-        // The viewer's reach (reporting line / HR scope) is applied server-side.
-        $reach = $request->user()?->accessibleEmployeeIds();
+        // The viewer's reach is applied server-side — the same permission and
+        // scope as the Attendance Reports page, so the download matches the
+        // preview. A department outside it is ignored, never trusted.
+        $user = $request->user();
+        $permission = $user?->hasPermission('view_attendance') ? 'view_attendance' : 'approve_leave';
+        $people = app(PeopleScope::class);
+        $reach = $user ? $people->employeeIds($user, $permission, includeSelf: true) : [];
 
         return ($reach !== null ? ['employee_ids' => $reach] : []) + [
             'from' => $request->string('from')->toString() ?: null,
             'to' => $request->string('to')->toString() ?: null,
-            'department_id' => $request->integer('department_id') ?: null,
+            'department_id' => $user ? $people->sanitiseDepartment($user, $permission, $request->integer('department_id') ?: null) : null,
             'office_id' => $request->integer('office_id') ?: null,
             'shift_id' => $request->integer('shift_id') ?: null,
             'employee_id' => $request->integer('employee_id') ?: null,

@@ -95,7 +95,29 @@
             {{-- Current overrides + effective permissions --}}
             <div class="space-y-4 xl:col-span-3">
                 <div class="pulse-card p-5">
-                    <flux:heading size="sm" class="mb-3">Overrides for {{ $target->name }}</flux:heading>
+                    <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+                        <flux:heading size="sm">Overrides for {{ $target->name }}</flux:heading>
+                        @if($overrides->isNotEmpty())
+                            <span class="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800 ring-1 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/30" data-custom-permissions>Custom Permissions</span>
+                        @endif
+                    </div>
+                    @if($overrides->isNotEmpty())
+                        {{-- Explain the person's position before any change. --}}
+                        <div class="mb-3 rounded-xl bg-zinc-50 p-3 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300" data-override-explainer>
+                            <p><span class="font-semibold">Role:</span> {{ $target->assignedRole?->name ?? ucfirst(str_replace('_', ' ', (string) $target->role?->value)) }}</p>
+                            <p><span class="font-semibold">Role scope:</span> {{ (\App\Services\Security\PermissionScopes::ROLE_DEFAULTS[$target->assignedRole?->slug ?? ''] ?? null)?->label() ?? 'Per permission' }}</p>
+                            <p><span class="font-semibold">Overrides:</span>
+                                @foreach($overrides as $o){{ $o->isRevoke() ? '−' : '+' }} {{ $o->permission->label }}@if(! $loop->last), @endif @endforeach
+                            </p>
+                        </div>
+                        <div class="mb-3 flex flex-wrap items-end gap-2" data-reset-overrides>
+                            <div class="min-w-0 flex-1">
+                                <flux:input wire:model="resetReason" size="sm" placeholder="Reason for resetting (required)" aria-label="Reason for resetting" />
+                                <flux:error name="resetReason" />
+                            </div>
+                            <flux:button size="sm" variant="danger" wire:click="resetToRoleDefaults" wire:confirm="Remove all of {{ $target->name }}'s overrides? They will have exactly what their role gives.">Reset to Role Defaults</flux:button>
+                        </div>
+                    @endif
                     @forelse($overrides as $override)
                         <div class="flex items-start justify-between gap-3 border-t border-zinc-100 py-2.5 first:border-t-0 dark:border-zinc-800">
                             <div class="min-w-0 text-sm">

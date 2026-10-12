@@ -5,6 +5,7 @@ namespace App\Livewire\Attendance;
 use App\Models\AttendanceDailySummary;
 use App\Models\Department;
 use App\Services\Biometric\EngineAttendanceSyncService;
+use App\Services\Security\PeopleScope;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
@@ -140,7 +141,7 @@ class BiometricSummary extends Component
 
         return view('livewire.attendance.biometric-summary', [
             'summaries' => $query->orderBy('employee_code')->paginate(20),
-            'departments' => Department::orderBy('name')->pluck('name'),
+            'departments' => app(PeopleScope::class)->departmentOptions(Auth::user(), Auth::user()->hasPermission('view_attendance') ? 'view_attendance' : 'approve_leave')->pluck('name'),
             'statuses' => ['present', 'late', 'half_day', 'absent', 'leave', 'holiday', 'weekly_off'],
             'stats' => $stats,
             'lastSynced' => $dayRows->max('synced_at'),

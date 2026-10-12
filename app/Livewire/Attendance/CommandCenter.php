@@ -13,11 +13,14 @@ use App\Models\WfhRequest;
 use App\Notifications\OtRequestNotification;
 use App\Notifications\RegularisationReviewedNotification;
 use App\Notifications\WfhRequestNotification;
+use App\Services\Approvals\ApprovalQueueService;
 use App\Services\Attendance\AttendanceScoreEngine;
+use App\Services\Attendance\TodayStatusService;
 use App\Services\AttendanceService;
 use App\Services\HolidayWorkService;
 use App\Services\LeaveService;
 use App\Services\OvertimeService;
+use App\Services\Security\PeopleScope;
 use App\Services\WfhService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -49,6 +52,49 @@ class CommandCenter extends Component
     public function mount(): void
     {
         abort_unless(Auth::user()->canApproveLeave(), 403);
+
+        // Open on the first category this person can decide (a read-only
+        // category only when there is nothing they decide).
+        $queue = app(ApprovalQueueService::class);
+        $tabs = $this->availableTabs();
+        $decidable = array_values(array_filter($tabs, fn (string $type) => $queue->handles(Auth::user(), $type)));
+        $preferred = $decidable !== [] ? $decidable : $tabs;
+        if (! in_array($this->tab, $preferred, true) && $preferred !== []) {
+            $this->tab = $preferred[0];
+        }
+    }
+
+    /**
+     * Categories this person may see: every type they decide, plus
+     * regularisations read-only for approvers who hold approve_regularisation
+     * (they are decided by HR).
+     *
+     * @return list<string>
+     */
+    public function availableTabs(): array
+    {
+        return array_values(array_filter(array_keys(ApprovalQueueService::TYPES), fn (string $type) => $this->tabPermission($type) !== null));
+    }
+
+    /** The permission whose reach a category is listed under (null = not visible). */
+    protected function tabPermission(string $type): ?string
+    {
+        $user = Auth::user();
+        $queue = app(ApprovalQueueService::class);
+
+        if ($queue->handles($user, $type)) {
+            return $queue->permissionFor($type);
+        }
+
+        return $type === 'regularisation' && $user->hasPermission('approve_regularisation') ? 'approve_regularisation' : null;
+    }
+
+    public function selectDecidable(): void
+    {
+        $queue = app(ApprovalQueueService::class);
+        $this->selected = $this->pendingQuery()->with('employee')->get()
+            ->filter(fn ($r) => $queue->canDecide(Auth::user(), $r))
+            ->pluck('id')->map(fn ($id) => (int) $id)->values()->all();
     }
 
     public function updatedTab(): void
@@ -68,7 +114,8 @@ class CommandCenter extends Component
 
     public function selectAll(): void
     {
-        $this->selected = $this->pendingQuery()->pluck('id')->map(fn ($id) => (int) $id)->all();
+        // Only rows this person can decide — never a selection that bulk-fails.
+        $this->selectDecidable();
     }
 
     public function clearSelection(): void
@@ -201,7 +248,7 @@ class CommandCenter extends Component
     protected function decideLeave(int $id, string $decision, ?string $comment = null): void
     {
         $request = $this->inReach(LeaveRequest::query())->with('employee.user', 'claimer')->findOrFail($id);
-        if ($request->status !== 'pending') {
+        if (! in_array($request->status, ['pending', 'pending_hr'], true)) {
             throw new \DomainException('Already reviewed.');
         }
         $this->assertNotClaimedByOther($request);
@@ -267,8 +314,10 @@ class CommandCenter extends Component
     // ── Data ─────────────────────────────────────────────────────────────────
 
     /**
-     * Restrict a request query to the approver's reach (reporting line / HR
-     * scope). Company-wide approvers are unfiltered. Fails closed.
+     * Restrict a request query to the reach of the permission that decides
+     * its type (approve_leave, approve_overtime, approve_wfh,
+     * hr_approve_regularisation …) — the same reach the service checks on
+     * Approve / Reject. A category the user cannot see returns nothing.
      *
      * @template TQuery of \Illuminate\Database\Eloquent\Builder
      *
@@ -277,21 +326,13 @@ class CommandCenter extends Component
      */
     protected function inReach($query)
     {
-        // Resolved once per request — protected props are not persisted by Livewire.
-        if (! $this->reachResolved) {
-            $this->reachIds = Auth::user()->accessibleEmployeeIds();
-            $this->reachResolved = true;
-        }
+        $type = collect(ApprovalQueueService::TYPES)->search(fn ($config) => $config['model'] === get_class($query->getModel()));
+        $permission = $type ? $this->tabPermission($type) : null;
 
-        $ids = $this->reachIds;
-
-        return $query->when($ids !== null, fn ($q) => $q->whereIn('employee_id', $ids));
+        return $permission
+            ? app(PeopleScope::class)->constrain($query, Auth::user(), $permission)
+            : $query->whereRaw('1 = 0');
     }
-
-    /** @var array<int, int>|null */
-    protected ?array $reachIds = null;
-
-    protected bool $reachResolved = false;
 
     protected function pendingQuery()
     {
@@ -308,7 +349,7 @@ class CommandCenter extends Component
             'approved' => $q->where('status', 'approved'),
             'rejected' => $q->where('status', 'rejected'),
             'all' => $q,
-            default => $q->where('status', 'pending'),
+            default => $q->whereIn('status', ApprovalQueueService::TYPES[$this->tab]['statuses'] ?? ['pending']),
         };
 
         if ($this->search !== '') {
@@ -321,11 +362,22 @@ class CommandCenter extends Component
     /** Normalise a row for the list — carries its status so history rows badge. */
     protected function normalise($item): array
     {
+        $queue = app(ApprovalQueueService::class);
+        $path = $queue->path($item);
+
         $base = [
             'id' => $item->id,
             'status' => $item->status,
             'employee' => $item->employee?->user?->name ?? '—',
             'reason' => $item->reason,
+            // Ownership: whose request, where it sits, who holds it, what happens next.
+            'department' => $item->employee?->department?->name,
+            'manager' => $item->employee?->manager?->name,
+            'submitted' => $item->created_at,
+            'approver' => $path['current'],
+            'next' => $path['next'],
+            'escalated' => $path['escalated'],
+            'can_decide' => $queue->canDecide(Auth::user(), $item),
         ];
 
         return array_merge($base, match ($this->tab) {
@@ -424,21 +476,27 @@ class CommandCenter extends Component
         $today = Carbon::today();
         $monthStart = $today->copy()->startOfMonth();
 
-        $scopeIds = Auth::user()->accessibleEmployeeIds();
-        $activeIds = Employee::where('status', 'active')
-            ->when($scopeIds !== null, fn ($q) => $q->whereIn('id', $scopeIds))
-            ->pluck('id')->all();
-        $todayAtt = Attendance::whereIn('employee_id', $activeIds)->where('date', $today->toDateString())
-            ->get(['check_in', 'is_late']);
-        $presentToday = $todayAtt->whereNotNull('check_in')->count();
+        // Same population and same per-person status as Team View, the HR
+        // dashboard and Live Attendance: the view_attendance reach, read
+        // through AttendanceStatusResolver — a weekly off, holiday or leave is
+        // never "absent".
+        $ids = app(PeopleScope::class)->workingEmployeeIds(Auth::user(), 'view_attendance');
+        $today_ = app(TodayStatusService::class)->summary($ids);
 
-        $band = app(AttendanceScoreEngine::class)->companyHealth($activeIds, $monthStart, $today);
+        $band = app(AttendanceScoreEngine::class)->companyHealth($ids, $monthStart, $today);
 
         return [
-            'active' => count($activeIds),
-            'present_today' => $presentToday,
-            'late_today' => $todayAtt->where('is_late', true)->count(),
-            'absent_today' => max(0, count($activeIds) - $presentToday),
+            'active' => count($ids),
+            'expected' => $today_['expected'],
+            'present_today' => $today_['present'],
+            'late_today' => $today_['late'],
+            'absent_today' => $today_['absent'],
+            'no_checkin' => $today_['no_checkin'],
+            'on_leave' => $today_['on_leave'],
+            'weekly_off' => $today_['weekly_off'],
+            'holiday' => $today_['holiday'],
+            'missing_checkout' => $today_['missing_checkout'],
+            'day_off' => $today_['day_off'],
             'mtd_score' => $band['avg_score'],
             'at_risk' => $band['at_risk'],
             'bands' => $band['bands'],
@@ -449,13 +507,19 @@ class CommandCenter extends Component
     {
         abort_unless(Auth::user()->canApproveLeave(), 403);
 
-        $counts = [
-            'regularisation' => $this->inReach(AttendanceRegularisation::query())->where('status', 'pending')->count(),
-            'leave' => $this->inReach(LeaveRequest::query())->where('status', 'pending')->count(),
-            'wfh' => $this->inReach(WfhRequest::query())->where('status', 'pending')->count(),
-            'overtime' => $this->inReach(OtRequest::query())->where('status', 'pending')->count(),
-            'holiday' => $this->inReach(HolidayWorkRequest::query())->where('status', 'pending')->count(),
-        ];
+        // One definition of "pending" per category (ApprovalQueueService), over
+        // that category's own reach; each card names the scope it counts.
+        $people = app(PeopleScope::class);
+        $queue = app(ApprovalQueueService::class);
+        $counts = [];
+        $categoryScope = [];
+        $viewOnly = [];
+        foreach ($this->availableTabs() as $type) {
+            $counts[$type] = $this->inReach(ApprovalQueueService::TYPES[$type]['model']::query())
+                ->whereIn('status', ApprovalQueueService::TYPES[$type]['statuses'])->count();
+            $categoryScope[$type] = $people->summary(Auth::user(), $this->tabPermission($type))['label'];
+            $viewOnly[$type] = ! $queue->handles(Auth::user(), $type);
+        }
         $decided = [
             'approved' => $this->inReach(AttendanceRegularisation::query())->where('status', 'approved')->count()
                 + $this->inReach(LeaveRequest::query())->where('status', 'approved')->count()
@@ -469,6 +533,9 @@ class CommandCenter extends Component
 
         return view('livewire.attendance.command-center', [
             'counts' => $counts,
+            'categoryScope' => $categoryScope,
+            'viewOnly' => $viewOnly,
+            'scope' => $people->summary(Auth::user(), 'view_attendance'),
             'decided' => $decided,
             'items' => $this->pendingQuery()->limit(50)->get()->map(fn ($i) => $this->normalise($i))->all(),
             'feed' => $this->activityFeed(),

@@ -34,6 +34,7 @@
                 <div>
                     <h1 class="pulse-page-title text-xl">Organizational Chart</h1>
                     <p class="pulse-page-subtitle">Reporting structure &amp; team hierarchy</p>
+                    @if($scope)<x-pulse.scope-badge :scope="$scope" class="mt-1.5" />@endif
                 </div>
             </div>
 
@@ -120,7 +121,9 @@
                         <div class="flex flex-col items-center">
 
                             {{-- ── ROOT NODE (CEO / Director level) ── --}}
-                            <div class="group relative w-72">
+                            <div class="group relative w-72 cursor-pointer" role="button" tabindex="0" data-org-node="{{ $manager->id }}"
+                                wire:click="openProfile({{ $manager->id }})" x-on:keydown.enter.prevent="$wire.openProfile({{ $manager->id }})"
+                                aria-label="Open {{ $manager->user?->name }}'s profile">
                                 <div class="relative overflow-hidden rounded-2xl border-2 border-indigo-200 bg-white dark:border-indigo-500/30 dark:bg-zinc-900 p-5 shadow-xl shadow-indigo-100/60 dark:shadow-black/40 ring-4 ring-indigo-50 dark:ring-indigo-500/10 transition-all duration-300 group-hover:-translate-y-1 group-hover:shadow-2xl group-hover:shadow-indigo-200/70">
                                     {{-- Top gradient bar --}}
                                     <div class="absolute inset-x-0 top-0 h-1 rounded-t-2xl bg-gradient-to-r from-indigo-500 via-violet-500 to-indigo-500"></div>
@@ -159,12 +162,51 @@
                             </div>
 
                             {{-- Recurse into children --}}
-                            <x-org-node :node="$manager" :grouped="$groupedByManager" :visited="[$manager->user_id]" />
+                            {{-- Start with nothing visited: org-node marks each node itself (cycle guard), so passing the root here hid every report. --}}
+                            <x-org-node :node="$manager" :grouped="$groupedByManager" :visited="[]" />
                         </div>
                     @endforeach
                 </div>
             @endif
         </div>
     </div>
+
+    {{-- Profile drawer: each section only when the viewer's permission covers this person. --}}
+    @if($profile)
+        @php $pe = $profile['employee']; @endphp
+        <x-pulse.modal :title="$pe->user?->name" :subtitle="($pe->jobTitle?->name ?? 'No designation').' · '.($pe->department?->name ?? 'No department')" close="$wire.closeProfile()" width="sm:max-w-md" data-org-profile>
+            <dl class="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                <div><dt class="text-xs text-zinc-500">Department</dt><dd class="font-medium text-zinc-900 dark:text-white">{{ $pe->department?->name ?? '—' }}</dd></div>
+                <div><dt class="text-xs text-zinc-500">Designation</dt><dd class="font-medium text-zinc-900 dark:text-white">{{ $pe->jobTitle?->name ?? '—' }}</dd></div>
+                <div><dt class="text-xs text-zinc-500">Manager</dt><dd class="font-medium text-zinc-900 dark:text-white">{{ $pe->manager?->name ?? '—' }}</dd></div>
+                <div><dt class="text-xs text-zinc-500">Direct reports</dt><dd class="font-medium text-zinc-900 dark:text-white">{{ $profile['reports'] }}</dd></div>
+                <div><dt class="text-xs text-zinc-500">Shift</dt><dd class="font-medium text-zinc-900 dark:text-white">{{ $pe->shift?->name ?? 'Company default' }}</dd></div>
+                <div><dt class="text-xs text-zinc-500">Work mode</dt><dd class="font-medium text-zinc-900 dark:text-white">{{ $pe->workMode?->name ?? '—' }}</dd></div>
+                @if($profile['showAttendance'])
+                    <div class="col-span-2"><dt class="text-xs text-zinc-500">Attendance today</dt>
+                        <dd class="font-medium text-zinc-900 dark:text-white" data-org-attendance>
+                            @php $a = $profile['attendance']; @endphp
+                            {{ $a ? ($a['state'] === 'missing_checkout' ? 'Missing checkout' : (\App\Services\Attendance\TodayStatusService::LABELS[$a['bucket']] ?? ucfirst(str_replace('_', ' ', $a['bucket'])))) : '—' }}
+                            @if($a && $a['first_in']) · in @userTime($a['first_in'])@endif
+                        </dd></div>
+                @endif
+                @if($profile['showLeave'])
+                    <div class="col-span-2"><dt class="text-xs text-zinc-500">Leave</dt>
+                        <dd class="font-medium text-zinc-900 dark:text-white">
+                            @if($profile['leave'])
+                                {{ $profile['leave']->leaveType?->name }} · @userShortDate($profile['leave']->start_date) – @userDate($profile['leave']->end_date)
+                            @else
+                                No approved leave ahead
+                            @endif
+                        </dd></div>
+                @endif
+                @if($profile['showPerformance'])
+                    @php $perf = $profile['performance']; $state = $perf['by_employee'][$pe->id] ?? 'not_started'; @endphp
+                    <div class="col-span-2"><dt class="text-xs text-zinc-500">Performance cycle</dt>
+                        <dd class="font-medium text-zinc-900 dark:text-white">{{ $perf['cycle']?->name ?? 'No cycle running' }} · {{ \App\Services\Performance\PerformanceStatusService::LABELS[$state] }}</dd></div>
+                @endif
+            </dl>
+        </x-pulse.modal>
+    @endif
 
 </flux:main>

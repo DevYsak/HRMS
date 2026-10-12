@@ -185,6 +185,16 @@ class AiConversation
             $context['waiting_for_my_approval'] = $queue;
         }
 
+        // Aggregates only (never a per-person row), from the same services as the screens.
+        if ($user->hasPermission('view_attendance')) {
+            $attendance = $this->tools->attendanceToday($user);
+            $context['attendance_today'] = ['scope' => $attendance['scope']] + collect($attendance['summary'])->except('rows')->all();
+        }
+
+        if ($reviews = $this->tools->reviews($user)) {
+            $context['reviews'] = collect($reviews)->except(['by_employee', 'cycle'])->all() + ['cycle' => $reviews['cycle']?->name];
+        }
+
         return $context;
     }
 

@@ -13,7 +13,8 @@
                     <span class="text-[11px] font-bold uppercase tracking-[0.18em] text-orange-100">Leave Management</span>
                 </div>
                 <h1 class="text-3xl font-black tracking-tight text-white">Team Time Off</h1>
-                <p class="mt-1.5 text-sm font-medium text-violet-200/80">Review and manage leave requests for your direct reports.</p>
+                <p class="mt-1.5 text-sm font-medium text-orange-100/80">Review and decide leave for the people you approve.</p>
+                <x-pulse.scope-badge :scope="$scope" dark class="mt-3" />
             </div>
             <div class="flex shrink-0 flex-wrap items-center gap-3">
                 <a href="{{ route('time-off.my') }}" wire:navigate
@@ -200,14 +201,17 @@
                                                 <flux:icon.eye class="size-4" />
                                                 View Details
                                             </button>
+                                            @if($decidable[$req->id] ?? false)
                                             <button
                                                 type="button"
                                                 wire:click="selectRequest({{ $req->id }})"
+                                                data-can-decide
                                                 class="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-bold text-white bg-brand-600 hover:bg-brand-700 rounded-xl transition-colors shadow-sm shadow-brand-200 dark:shadow-none"
                                             >
                                                 <flux:icon.check-circle class="size-4" />
                                                 Review Request
                                             </button>
+                                            @endif
                                         </div>
                                     </div>
                                 </div>
@@ -453,6 +457,25 @@
                     @endif
                 </div>
 
+                {{-- Approval path: who holds the request now and what happens next (current policy) --}}
+                @if($approvalPath)
+                <div data-approval-path>
+                    <h4 class="mb-3 text-xs font-bold uppercase tracking-wide text-zinc-500">Approval Path</h4>
+                    <ol class="space-y-2 border-l border-zinc-200 pl-4 dark:border-zinc-700">
+                        @foreach($approvalPath['steps'] as $step)
+                            <li class="relative">
+                                <span @class(['absolute -left-[21px] top-1.5 size-2.5 rounded-full', 'bg-emerald-500' => $step['state'] === 'done', 'bg-orange-500 ring-4 ring-orange-100 dark:ring-orange-500/20' => $step['state'] === 'current', 'bg-zinc-300 dark:bg-zinc-600' => $step['state'] === 'next'])></span>
+                                <p class="text-xs font-semibold text-zinc-700 dark:text-zinc-200">{{ $step['label'] }} @if($step['state'] === 'current')<span class="ml-1 rounded bg-orange-100 px-1 text-[9px] font-bold uppercase text-orange-700 dark:bg-orange-500/20 dark:text-orange-300">Current</span>@endif</p>
+                                <p class="text-xs text-zinc-500 [overflow-wrap:anywhere]">{{ $step['actor'] }}</p>
+                            </li>
+                        @endforeach
+                    </ol>
+                    @if($approvalPath['escalated'])
+                        <p class="mt-2 text-xs font-medium text-amber-700 dark:text-amber-300">{{ $approvalPath['escalated'] }}</p>
+                    @endif
+                </div>
+                @endif
+
                 {{-- Approval Timeline --}}
                 <div>
                     <h4 class="text-xs font-bold text-zinc-500 uppercase tracking-wide mb-3">Approval Timeline</h4>
@@ -538,6 +561,7 @@
                     </div>
                 @enderror
 
+                @if($canDecideSelected)
                 {{-- Manager comment --}}
                 <div class="space-y-1.5">
                     <flux:textarea
@@ -550,6 +574,11 @@
                         <p class="text-xs text-red-500 mt-1">{{ $message }}</p>
                     @enderror
                 </div>
+                @else
+                <p class="rounded-xl bg-zinc-50 px-3 py-2.5 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300" data-view-only>
+                    {{ $selectedRequest->status === 'approved' || $selectedRequest->status === 'rejected' ? 'This request has been decided — only HR can correct it.' : ($selectedRequest->employee?->user_id === auth()->id() ? 'This is your own request — someone else decides it.' : 'View only — this request is decided by someone else.') }}
+                </p>
+                @endif
 
             </div>
 
@@ -558,6 +587,7 @@
                     class="rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-600">
                     Cancel
                 </button>
+                @if($canDecideSelected)
                 <button type="button" wire:click="requestMoreInfo"
                     wire:loading.attr="disabled" wire:target="requestMoreInfo"
                     class="inline-flex items-center justify-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-200">
@@ -575,6 +605,7 @@
                     <span wire:loading.remove wire:target="approve">Approve</span>
                     <span wire:loading wire:target="approve">Approving…</span>
                 </button>
+                @endif
             </x-slot:footer>
         </x-pulse.modal>
     @endif
