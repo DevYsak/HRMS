@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Carbon;
 
 #[Fillable([
     'employee_id',
@@ -80,6 +81,18 @@ class AttendanceRegularisation extends Model
     public function correctsCheckOut(): bool
     {
         return $this->corrected_side !== 'in';
+    }
+
+    /**
+     * The requested times for display: "09:00 → 18:00", or "09:00 → open (no
+     * OUT yet)" for an in-only correction of a session still running. Never
+     * Carbon::parse(null), which would read as "now".
+     */
+    public function requestedWindowLabel(string $format = 'H:i', string $separator = ' → '): string
+    {
+        $time = fn ($value) => $value ? Carbon::parse($value)->format($format) : null;
+
+        return ($time($this->requested_check_in) ?? '—').$separator.($time($this->requested_check_out) ?? 'open (no OUT yet)');
     }
 
     /** A leave regularisation converts an absence; the default corrects punches. */

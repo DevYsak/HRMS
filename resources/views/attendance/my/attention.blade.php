@@ -69,7 +69,7 @@
                     <div class="text-xs text-zinc-600 dark:text-slate-400">@userShortDate(\Illuminate\Support\Carbon::parse($myReg->work_date)),
                         @if($myReg->isLeave()) leave
                         @elseif($myReg->regularisation_type === 'half_day') half day ({{ $myReg->half_day_period }})
-                        @else @userTime($myReg->requested_check_in) → @userTime($myReg->requested_check_out)
+                        @else @userTime($myReg->requested_check_in) → @if($myReg->requested_check_out) @userTime($myReg->requested_check_out) @else open (no OUT yet) @endif
                         @endif · with HR</div></div>
                 <div class="ml-3.5">@include('livewire.attendance.partials.regularisation-actions', ['reg' => $myReg])</div>
             </div>

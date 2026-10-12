@@ -400,7 +400,7 @@ class CommandCenter extends Component
             default => [
                 'when' => Carbon::parse($item->work_date)->format('d M Y'),
                 'detail' => $item->requested_check_in
-                    ? 'Correct to '.Carbon::parse($item->requested_check_in)->format('H:i').' → '.Carbon::parse($item->requested_check_out)->format('H:i')
+                    ? 'Correct to '.$item->requestedWindowLabel()
                     : 'Half-day ('.$item->half_day_period.')',
             ],
         });

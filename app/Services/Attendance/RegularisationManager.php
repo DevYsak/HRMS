@@ -407,30 +407,47 @@ class RegularisationManager
     }
 
     /**
-     * The instants a punch regularisation wrote, anchored to its work date
-     * (an out at or before the in is the next morning, as on approval).
+     * The request's IN and OUT as instants on its work date (an out at or
+     * before the in is the next morning on a night shift only; anywhere else
+     * neither is returned — never a phantom 20h/24h span). The OUT is null for
+     * an IN-only correction of a session that was still open.
+     *
+     * @return array{0: ?Carbon, 1: ?Carbon}
+     */
+    private function requestedInstants(AttendanceRegularisation $regularisation): array
+    {
+        if (! $this->writesPunches($regularisation) || ! $regularisation->requested_check_in) {
+            return [null, null];
+        }
+
+        $date = Carbon::parse($regularisation->work_date)->toDateString();
+        $in = Carbon::parse($date.' '.Carbon::parse($regularisation->requested_check_in)->format('H:i:s'));
+        if (! $regularisation->requested_check_out) {
+            return [$in, null];
+        }
+
+        $out = Carbon::parse($date.' '.Carbon::parse($regularisation->requested_check_out)->format('H:i:s'));
+        if ($out->lessThanOrEqualTo($in)) {
+            $nightShift = $regularisation->employee && $this->shifts->resolve($regularisation->employee, $date)?->crossesMidnight();
+            if (! $nightShift) {
+                return [null, null];
+            }
+            $out = $out->copy()->addDay();
+        }
+
+        return [$in, $out];
+    }
+
+    /**
+     * The instants of the punches a regularisation itself wrote: only the
+     * side(s) it corrected — a kept side is a genuine punch, never its own.
      *
      * @return array<int, Carbon>
      */
     private function punchInstants(AttendanceRegularisation $regularisation): array
     {
-        if (! $this->writesPunches($regularisation) || ! $regularisation->requested_check_in || ! $regularisation->requested_check_out) {
-            return [];
-        }
+        [$in, $out] = $this->requestedInstants($regularisation);
 
-        $date = Carbon::parse($regularisation->work_date)->toDateString();
-        $in = Carbon::parse($date.' '.Carbon::parse($regularisation->requested_check_in)->format('H:i:s'));
-        $out = Carbon::parse($date.' '.Carbon::parse($regularisation->requested_check_out)->format('H:i:s'));
-        if ($out->lessThanOrEqualTo($in)) {
-            $nightShift = $regularisation->employee && $this->shifts->resolve($regularisation->employee, $date)?->crossesMidnight();
-            if (! $nightShift) {
-                return [];   // never carried into the next day (no phantom 20h/24h span)
-            }
-            $out = $out->copy()->addDay();
-        }
-
-        // A single-side request wrote only the punch it corrected; the kept
-        // side is a genuine punch and never the request's own.
         return array_values(array_filter([
             $regularisation->correctsCheckIn() ? $in : null,
             $regularisation->correctsCheckOut() ? $out : null,
@@ -447,7 +464,7 @@ class RegularisationManager
     private function legacyInstants(AttendanceRegularisation $regularisation): array
     {
         if (! $this->writesPunches($regularisation) || ! $regularisation->requested_check_in || ! $regularisation->requested_check_out) {
-            return [];
+            return [];   // an IN-only request has no older-style OUT to look for
         }
 
         $date = Carbon::parse($regularisation->work_date)->toDateString();
@@ -539,7 +556,7 @@ class RegularisationManager
             }
         }
 
-        [$in, $out] = $this->punchInstants($other) + [null, null];
+        [$in, $out] = $this->requestedInstants($other);
         if ($in === null) {
             return $this->rebuildFromGenuine($attendance);
         }

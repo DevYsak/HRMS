@@ -3,7 +3,7 @@
     <div class="flex min-w-0 items-center gap-3 text-xs">
         <span class="font-black text-zinc-900 dark:text-white">{{ $req->employee?->user?->name ?? '—' }}</span>
         <span class="text-zinc-500 dark:text-zinc-400">{{ \Carbon\Carbon::parse($req->work_date)->format('d M Y') }}</span>
-        <span class="font-mono font-bold text-amber-700">{{ \Carbon\Carbon::parse($req->requested_check_in)->format('H:i') }} → {{ \Carbon\Carbon::parse($req->requested_check_out)->format('H:i') }}</span>
+        <span class="font-mono font-bold text-amber-700">{{ $req->requestedWindowLabel() }}</span>
         <span class="hidden truncate italic text-zinc-400 md:inline">“{{ \Illuminate\Support\Str::limit($req->reason, 60) }}”</span>
     </div>
     @if(auth()->user()->canApproveRegularisations())

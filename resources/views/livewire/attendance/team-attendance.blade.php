@@ -302,7 +302,7 @@
                     </div>
                     <div class="flex justify-between">
                         <span class="text-zinc-500">Requested Time</span>
-                        <span class="font-bold text-brand-600">{{ \Carbon\Carbon::parse($activeRequest->requested_check_in)->format('H:i') }} - {{ \Carbon\Carbon::parse($activeRequest->requested_check_out)->format('H:i') }}</span>
+                        <span class="font-bold text-brand-600">{{ $activeRequest->requestedWindowLabel('H:i', ' - ') }}</span>
                     </div>
                     <div>
                         <span class="text-zinc-500 block mb-1">Reason provided</span>

@@ -126,8 +126,8 @@
                     <div class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5">
                         <span class="font-black text-zinc-900 dark:text-white">{{ $done->employee?->user?->name ?? '—' }}</span>
                         <span class="text-zinc-500 dark:text-zinc-400">{{ \Carbon\Carbon::parse($done->work_date)->format('d M Y') }}</span>
-                        @if($done->requested_check_in && $done->requested_check_out)
-                            <span class="font-mono font-bold text-zinc-600 dark:text-zinc-300">{{ \Carbon\Carbon::parse($done->requested_check_in)->format('H:i') }} → {{ \Carbon\Carbon::parse($done->requested_check_out)->format('H:i') }}</span>
+                        @if($done->requested_check_in)
+                            <span class="font-mono font-bold text-zinc-600 dark:text-zinc-300">{{ $done->requestedWindowLabel() }}</span>
                         @endif
                         <span class="rounded-full px-2 py-0.5 text-[9px] font-bold uppercase {{ $done->status === 'approved' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-600' }}">{{ $done->status }}</span>
                     </div>
@@ -578,7 +578,7 @@ REVIEW REGULARISATION MODAL
                         <div class="flex items-center justify-between"><span class="text-zinc-500 dark:text-zinc-400">Employee</span><span class="font-bold text-zinc-900 dark:text-white">{{ $activeRequest->employee?->user?->name ?? '—' }}</span></div>
                         <div class="flex items-center justify-between"><span class="text-zinc-500 dark:text-zinc-400">Date</span><span class="font-bold text-zinc-900 dark:text-white">{{ \Carbon\Carbon::parse($activeRequest->work_date ?? $activeRequest->date)->format('d M Y') }}</span></div>
                         <div class="flex items-center justify-between"><span class="text-zinc-500 dark:text-zinc-400">Requested Time</span>
-                            <span class="font-mono font-bold text-orange-600">{{ \Carbon\Carbon::parse($activeRequest->requested_check_in)->format('H:i') }} → {{ \Carbon\Carbon::parse($activeRequest->requested_check_out)->format('H:i') }}</span>
+                            <span class="font-mono font-bold text-orange-600">{{ $activeRequest->requestedWindowLabel() }}</span>
                         </div>
                         @if($activeRequest->attendance)
                             <div class="flex items-center justify-between"><span class="text-zinc-500 dark:text-zinc-400">Recorded Time</span>

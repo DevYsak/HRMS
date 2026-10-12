@@ -50,7 +50,7 @@
                     <span class="tabular-nums text-zinc-600 dark:text-zinc-300">
                         @if($myReg->isLeave()) Leave
                         @elseif($myReg->regularisation_type === 'half_day') Half day · {{ ucfirst((string) $myReg->half_day_period) }}
-                        @else @userTime($myReg->requested_check_in) → @userTime($myReg->requested_check_out)
+                        @else @userTime($myReg->requested_check_in) → @if($myReg->requested_check_out) @userTime($myReg->requested_check_out) @else open (no OUT yet) @endif
                         @endif
                     </span>
                     <span class="max-w-[16rem] truncate text-xs italic text-zinc-400">“{{ $myReg->reason }}”</span>

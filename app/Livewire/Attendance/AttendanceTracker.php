@@ -267,6 +267,9 @@ class AttendanceTracker extends Component
      */
     public array $regExisting = ['in' => null, 'out' => null];
 
+    /** Today's session is still open (no real OUT, before the cutoff): no OUT is needed for an IN-only correction. */
+    public bool $regOpenSession = false;
+
     public string $regDate = '';
 
     public string $regCheckIn = '';
@@ -2370,16 +2373,25 @@ class AttendanceTracker extends Component
     {
         $this->regDate = $date;
         $this->resetErrorBag(['regCheckIn', 'regCheckOut']);
-        $existing = app(AttendanceService::class)->existingPunchesFor(Auth::user()->employee, Carbon::parse($date)->toDateString());
+        $service = app(AttendanceService::class);
+        $day = Carbon::parse($date)->toDateString();
+        $existing = $service->existingPunchesFor(Auth::user()->employee, $day);
         $this->regExisting = ['in' => $existing['in']?->format('H:i'), 'out' => $existing['out']?->format('H:i')];
+        $this->regOpenSession = $service->sessionOpenToday(Auth::user()->employee, $day, $existing);
         $this->regCheckIn = $this->regExisting['in'] ?? '';
         $this->regCheckOut = $this->regExisting['out'] ?? '';
 
         // Pre-tick what's actually missing so the employee fixes only that.
+        // A session still open today has no OUT yet — that is not missing.
         $this->regFixIn = $this->regExisting['in'] === null;
-        $this->regFixOut = $this->regExisting['out'] === null;
+        $this->regFixOut = $this->regExisting['out'] === null && ! $this->regOpenSession;
         if (! $this->regFixIn && ! $this->regFixOut) {
-            $this->regFixOut = true; // correcting an existing (wrong) punch
+            // Correcting an existing (wrong) punch: the IN while still working, else the OUT.
+            if ($this->regOpenSession) {
+                $this->regFixIn = true;
+            } else {
+                $this->regFixOut = true;
+            }
         }
 
         $this->modal('regularisation-modal')->show();
@@ -2440,9 +2452,13 @@ class AttendanceTracker extends Component
             // A side is corrected when it is ticked, or when the day has no
             // valid punch for it (then it cannot be kept). The other side keeps
             // the day's existing canonical punch — the same reading approval uses.
-            $existing = app(AttendanceService::class)->existingPunchesFor($employee, Carbon::parse($this->regDate)->toDateString());
+            $service = app(AttendanceService::class);
+            $day = Carbon::parse($this->regDate)->toDateString();
+            $existing = $service->existingPunchesFor($employee, $day);
+            // Today's session still running: no OUT exists yet and none is needed.
+            $openSession = $service->sessionOpenToday($employee, $day, $existing);
             $correctsIn = $this->regFixIn || $existing['in'] === null;
-            $correctsOut = $this->regFixOut || $existing['out'] === null;
+            $correctsOut = $this->regFixOut || ($existing['out'] === null && ! $openSession);
             $missingIn = $correctsIn && trim($this->regCheckIn) === '';
             $missingOut = $correctsOut && trim($this->regCheckOut) === '';
 
@@ -2460,11 +2476,11 @@ class AttendanceTracker extends Component
             }
 
             $requestedIn = $correctsIn ? substr($this->regCheckIn, 0, 5) : $existing['in']->format('H:i');
-            $requestedOut = $correctsOut ? substr($this->regCheckOut, 0, 5) : $existing['out']->format('H:i');
+            $requestedOut = $correctsOut ? substr($this->regCheckOut, 0, 5) : $existing['out']?->format('H:i');
 
             // An OUT at or before the IN is only the next morning on a night
             // shift; anywhere else it would become a 20h/24h phantom session.
-            if (substr($requestedOut, 0, 5) <= substr($requestedIn, 0, 5)
+            if ($requestedOut !== null && substr($requestedOut, 0, 5) <= substr($requestedIn, 0, 5)
                 && ! app(ShiftResolver::class)->resolve($employee, $this->regDate)?->crossesMidnight()) {
                 $this->addError('regCheckOut', 'The check-out must be after the check-in.');
 
@@ -2472,7 +2488,8 @@ class AttendanceTracker extends Component
             }
 
             $payload['requested_check_in'] = $this->regDate.' '.$requestedIn.':00';
-            $payload['requested_check_out'] = $this->regDate.' '.$requestedOut.':00';
+            // Null for an IN-only correction of a session still open.
+            $payload['requested_check_out'] = $requestedOut !== null ? $this->regDate.' '.$requestedOut.':00' : null;
             $payload['corrected_side'] = $correctsIn && $correctsOut ? 'both' : ($correctsIn ? 'in' : 'out');
             // A method only for a corrected side; the kept punch keeps its own.
             $payload['check_in_method'] = $correctsIn ? (in_array($this->regCheckInMethod, ['face', 'id_card'], true) ? $this->regCheckInMethod : 'id_card') : null;
@@ -2510,7 +2527,7 @@ class AttendanceTracker extends Component
             report($e); // logged for diagnosis; the regularisation is saved regardless
         }
 
-        $this->reset(['regDate', 'regCheckIn', 'regCheckOut', 'regReason', 'regFixIn', 'regFixOut', 'regAttachment', 'regType', 'regHalfDayPeriod', 'regExisting']);
+        $this->reset(['regDate', 'regCheckIn', 'regCheckOut', 'regReason', 'regFixIn', 'regFixOut', 'regAttachment', 'regType', 'regHalfDayPeriod', 'regExisting', 'regOpenSession']);
         $this->modal('regularisation-modal')->close();
         \Flux::toast('Regularisation request sent to HR for approval.');
     }

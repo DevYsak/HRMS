@@ -7,7 +7,7 @@
         {{ \Carbon\Carbon::parse($req->work_date)->format('M d, Y') }}
     </td>
     <td class="pulse-td">
-        {{ \Carbon\Carbon::parse($req->requested_check_in)->format('H:i') }} - {{ \Carbon\Carbon::parse($req->requested_check_out)->format('H:i') }}
+        {{ $req->requestedWindowLabel('H:i', ' - ') }}
     </td>
     <td class="pulse-td text-zinc-500 truncate max-w-xs" title="{{ $req->reason }}">
         {{ $req->reason }}

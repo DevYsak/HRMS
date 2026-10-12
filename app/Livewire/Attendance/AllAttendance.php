@@ -461,7 +461,7 @@ class AllAttendance extends Component
                 ->map(fn ($r) => [
                     'id' => $r->id,
                     'date' => Carbon::parse($r->work_date)->format('d M Y'),
-                    'window' => Carbon::parse($r->requested_check_in)->format('H:i').' → '.Carbon::parse($r->requested_check_out)->format('H:i'),
+                    'window' => $r->requestedWindowLabel(),
                     'reason' => $r->reason,
                     'stage' => $r->stageLabel(),
                     'handled_by' => app(ClaimLockService::class)->heldByOther($r, Auth::id()) ? $r->claimer?->name : null,

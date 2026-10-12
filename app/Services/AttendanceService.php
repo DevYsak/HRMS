@@ -213,6 +213,26 @@ class AttendanceService
     }
 
     /**
+     * Whether today's session is still legitimately open, so an IN-only
+     * correction needs no OUT: the day is today, there is no real OUT yet,
+     * and the canonical missing-checkout cutoff (shift end + grace, the same
+     * one AttendanceCalculator uses) has not passed.
+     *
+     * @param  array{in: ?Carbon, out: ?Carbon}  $existing  from existingPunchesFor()
+     */
+    public function sessionOpenToday(Employee $employee, string $date, array $existing): bool
+    {
+        $day = Carbon::parse($date)->startOfDay();
+        if (! $day->isToday() || $existing['out'] !== null) {
+            return false;
+        }
+
+        $calculator = app(AttendanceCalculator::class);
+
+        return now()->lessThanOrEqualTo($calculator->missingCheckoutDeadline($day, $this->shifts->resolve($employee, $day->toDateString())));
+    }
+
+    /**
      * Regularisations are routed directly to HR: only a holder of
      * "Approve Regularisations (HR)" decides them (Super Admin always).
      * Managers see their team's requests but no longer approve them.
@@ -430,6 +450,12 @@ class AttendanceService
             $checkIn = $correctsIn ? $at($regularisation->requested_check_in) : ($existing['in'] ?? $at($regularisation->requested_check_in));
             $checkOut = $correctsOut ? $at($regularisation->requested_check_out) : ($existing['out'] ?? $at($regularisation->requested_check_out));
 
+            // An IN-only correction of a session still running: there is no
+            // OUT to apply, and none is invented.
+            if ($checkIn !== null && $checkOut === null && $correctsIn && ! $correctsOut) {
+                return $this->applyOpenSessionIn($regularisation, $workDate, $checkIn);
+            }
+
             if ($checkIn === null || $checkOut === null) {
                 throw new \DomainException('This regularisation has no check-'.($checkIn === null ? 'in' : 'out').' time to apply.');
             }
@@ -536,6 +562,52 @@ class AttendanceService
 
             return $attendance->fresh();
         });
+    }
+
+    /**
+     * Apply an IN-only correction to a session with no OUT yet. Only the
+     * corrected IN is written; the day stays open (no check-out, no hours
+     * closed, no auto checkout) and is rebuilt and rescored through the
+     * canonical services, so a later real Card OUT completes it normally.
+     * No overtime is filed from it — there is no finished day to measure.
+     */
+    private function applyOpenSessionIn(AttendanceRegularisation $regularisation, string $workDate, Carbon $checkIn): Attendance
+    {
+        $attendance = $regularisation->attendance
+            ?? Attendance::firstOrCreate(
+                ['employee_id' => $regularisation->employee_id, 'date' => $regularisation->work_date],
+                ['check_in' => $checkIn, 'status' => 'on_time', 'work_mode' => 'office'],
+            );
+
+        if (! $regularisation->attendance_id) {
+            $regularisation->update(['attendance_id' => $attendance->id]);
+        }
+
+        $original = $attendance->original_check_in === null && $attendance->original_check_out === null
+            ? ['original_check_in' => $attendance->check_in, 'original_check_out' => $attendance->check_out]
+            : [];
+
+        $shift = $regularisation->employee ? $this->shifts->resolve($regularisation->employee, $workDate) : null;
+        $isLate = $shift ? $shift->isLate($checkIn) : (bool) $attendance->is_late;
+
+        $attendance->update($original + array_filter([
+            'check_in' => $checkIn,
+            'check_in_method' => $regularisation->check_in_method,
+        ], fn ($v) => $v !== null) + [
+            'status' => $isLate ? 'late' : 'on_time',
+            'is_late' => $isLate,
+            'late_minutes' => $shift ? $shift->lateMinutes($checkIn) : (int) ($attendance->late_minutes ?? 0),
+            'is_regularized' => true,
+        ]);
+
+        $this->writeRegularisedPunches($regularisation, $checkIn, null);
+
+        if ($regularisation->employee) {
+            app(AttendanceDayRebuilder::class)->rebuildCorrectedDay($regularisation->employee, Carbon::parse($workDate));
+            app(AttendanceScoreEngine::class)->scoreDay($regularisation->employee, $workDate);
+        }
+
+        return $attendance->fresh();
     }
 
     /**

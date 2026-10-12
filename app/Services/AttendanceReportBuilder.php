@@ -866,7 +866,7 @@ class AttendanceReportBuilder
         $data = $rows->map(fn ($r) => [
             $r->employee?->user?->name ?? '—',
             Carbon::parse($r->work_date)->format('d M Y'),
-            Carbon::parse($r->requested_check_in)->format('h:i A').' → '.Carbon::parse($r->requested_check_out)->format('h:i A'),
+            $r->requestedWindowLabel('h:i A'),
             Str::limit($r->reason, 40),
             ucfirst($r->status),
             $r->reviewer?->name ?? '—',

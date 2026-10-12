@@ -279,7 +279,8 @@
              the day has no valid punch for it; otherwise its punch is kept. --}}
         @php
             $needIn = $regFixIn || ($regExisting['in'] ?? null) === null;
-            $needOut = $regFixOut || ($regExisting['out'] ?? null) === null;
+            // Today's session still open: there is no OUT yet, and none is needed.
+            $needOut = $regFixOut || (($regExisting['out'] ?? null) === null && ! $regOpenSession);
         @endphp
         <div>
             <div class="mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-zinc-400"><span class="inline-flex size-4 items-center justify-center rounded-full bg-orange-100 text-[9px] text-orange-600">3</span> Expected time</div>
@@ -294,7 +295,7 @@
                 </div>
                 <div class="space-y-2 {{ $needOut ? '' : 'pointer-events-none opacity-40' }}" data-reg-side="out">
                     <flux:input wire:model="regCheckOut" label="OUT at" type="time" :disabled="! $needOut" :badge="$needOut ? 'Required' : null" :aria-required="$needOut ? 'true' : null" />
-                    <p class="text-[11px] text-zinc-500 dark:text-zinc-400">{{ ($regExisting['out'] ?? null) ? 'Recorded: '.\Illuminate\Support\Carbon::createFromFormat('H:i', $regExisting['out'])->format('h:i A') : 'No check-out recorded' }}</p>
+                    <p class="text-[11px] text-zinc-500 dark:text-zinc-400">{{ ($regExisting['out'] ?? null) ? 'Recorded: '.\Illuminate\Support\Carbon::createFromFormat('H:i', $regExisting['out'])->format('h:i A') : ($regOpenSession ? 'Still working — no check-out needed yet' : 'No check-out recorded') }}</p>
                     <flux:select wire:model="regCheckOutMethod" :disabled="! $needOut">
                         <flux:select.option value="id_card">via ID Card</flux:select.option>
                         <flux:select.option value="face">via Face</flux:select.option>
