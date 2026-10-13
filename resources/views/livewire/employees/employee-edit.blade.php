@@ -142,6 +142,12 @@
                     View profile
                 </flux:button>
 
+                @if(app(\App\Services\People\Employee360Access::class)->allows(auth()->user(), $employee))
+                    <flux:button :href="route('employees.360', $employee)" wire:navigate variant="filled" icon="chart-pie" size="sm" data-employee-360-link="{{ $employee->id }}">
+                        View Employee 360°
+                    </flux:button>
+                @endif
+
                 <flux:tooltip content="Email this employee">
                     <flux:button wire:click="openEmailModal" variant="filled" icon="envelope" size="sm">Send email</flux:button>
                 </flux:tooltip>

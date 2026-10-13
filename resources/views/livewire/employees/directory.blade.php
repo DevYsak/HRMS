@@ -34,6 +34,11 @@
                 <p class="text-xs text-zinc-500 dark:text-zinc-400 mb-4">{{ $emp->department?->name ?? 'No Department' }}</p>
 
                 <div class="w-full pt-4 mt-auto border-t border-zinc-100 dark:border-zinc-800/60 flex items-center justify-center gap-4">
+                    @if($can360($emp->id))
+                        <a href="{{ route('employees.360', $emp->id) }}" wire:navigate class="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-orange-600 hover:bg-orange-50 dark:text-orange-400 dark:hover:bg-orange-500/10" data-employee-360-link="{{ $emp->id }}">
+                            <flux:icon.chart-pie class="size-4" /> View Employee 360°
+                        </a>
+                    @endif
                     <a href="mailto:{{ $emp->user->email }}" class="p-2 rounded-full text-zinc-400 hover:text-brand-600 hover:bg-brand-50 transition-colors dark:hover:bg-brand-900/20" title="{{ $emp->user->email }}">
                         <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
                     </a>

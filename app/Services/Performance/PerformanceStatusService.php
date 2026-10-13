@@ -174,7 +174,8 @@ class PerformanceStatusService
      *
      * @param  Collection<int, PerformanceReview>  $reviews
      */
-    private function primaryReview(Collection $reviews): ?PerformanceReview
+    /** The review that represents the employee in a cycle: locked, else the self review, else any. */
+    public function primaryReview(Collection $reviews): ?PerformanceReview
     {
         return $reviews->firstWhere('status', 'locked')
             ?? $reviews->firstWhere('type', 'self')

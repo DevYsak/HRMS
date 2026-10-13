@@ -10,6 +10,7 @@ use App\Models\JobTitle;
 use App\Models\Office;
 use App\Services\Biometric\BiometricCodeService;
 use App\Services\EmployeeInvitationService;
+use App\Services\People\Employee360Access;
 use App\Services\Security\PeopleScope;
 use Illuminate\Database\Eloquent\Builder;
 use Livewire\Attributes\Url;
@@ -287,6 +288,7 @@ class EmployeeIndex extends Component
             'offices' => Office::all(),
             'departments' => app(PeopleScope::class)->departmentOptions($user, $user->canManageEmployees() ? 'manage_employees' : 'view_employee'),
             'jobTitles' => JobTitle::all(),
+            'can360' => app(Employee360Access::class)->checker($user),
         ])->layout('layouts.app', ['title' => 'Manage Employees']);
     }
 }

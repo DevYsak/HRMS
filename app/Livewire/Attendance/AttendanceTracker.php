@@ -28,6 +28,7 @@ use App\Services\AiAssistant;
 use App\Services\Attendance\AttendanceCalculator;
 use App\Services\Attendance\AttendanceCoach;
 use App\Services\Attendance\AttendanceScoreEngine;
+use App\Services\Attendance\AttendanceWindowService;
 use App\Services\Attendance\HolidayResolver;
 use App\Services\Attendance\PunchClassifier;
 use App\Services\Attendance\PunchTimeline as PunchTimelineEngine;
@@ -1531,59 +1532,10 @@ class AttendanceTracker extends Component
      */
     protected function windowSummary($employee, Carbon $start, Carbon $end): array
     {
-        $resolver = app(WorkingDayResolver::class);
-        $states = $resolver->classifyRange($employee, $start, $end);
-
-        $rows = Attendance::where('employee_id', $employee->id)
-            ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
-            ->get();
-        $anyMode = $rows->keyBy(fn ($a) => $a->date->toDateString());
-        $filtered = $this->analyticsMode !== '' ? $rows->where('work_mode', $this->analyticsMode) : $rows;
-
-        $metrics = $this->engineDayMetrics($employee, $start, $end->copy()->min(Carbon::today()));
-        $minutesFor = function (Attendance $a) use ($metrics): int {
-            $m = $metrics[$a->date->toDateString()] ?? null;
-            if ($m !== null) {
-                return (int) $m['worked'];
-            }
-
-            return ($a->check_in && $a->check_out)
-                ? $this->rowWorkedMinutes($a)
-                : 0;
-        };
-
-        $scheduledState = fn (?array $day) => $day !== null && in_array($day['state'], [WorkingDayResolver::WORKING_DAY, WorkingDayResolver::APPROVED_LEAVE], true);
-        $onScheduled = $filtered->filter(fn ($a) => $a->check_in && $scheduledState($states[$a->date->toDateString()] ?? null));
-
-        $cutoff = Carbon::today()->subDay();
-        $absent = 0;
-        $leaveDays = 0.0;
-        $scheduled = 0;
-        foreach ($states as $key => $day) {
-            $leaveDays += $day['leave_days'];
-            if ($day['state'] === WorkingDayResolver::WORKING_DAY) {
-                $isPast = Carbon::parse($key)->lte($cutoff);
-                // Today counts once attended; until then it is still open.
-                if ($isPast || $anyMode->has($key)) {
-                    $scheduled++;
-                }
-                if ($isPast && ! $anyMode->has($key)) {
-                    $absent++;
-                }
-            }
-        }
-
-        return [
-            'present' => $onScheduled->count(),
-            'late' => $onScheduled->filter(fn ($a) => $a->is_late || $a->status === 'late')->count(),
-            'minutes' => (int) $filtered->sum($minutesFor),
-            'absent' => $absent,
-            'leave_days' => round($leaveDays, 1),
-            'weekly_off_worked' => $filtered->filter(fn ($a) => $a->check_in && ! $scheduledState($states[$a->date->toDateString()] ?? null))->count(),
-            'half_days' => $onScheduled->where('status', 'half_day')->count(),
-            'scheduled' => $scheduled,
-            'has_rows' => $rows->isNotEmpty(),
-        ];
+        return app(AttendanceWindowService::class)->summary(
+            $employee, $start, $end, $this->analyticsMode,
+            $this->engineDayMetrics($employee, $start, $end->copy()->min(Carbon::today())),
+        );
     }
 
     /** Memoised engine day-metrics per range so stats + timeline share one computation. */
@@ -1605,71 +1557,14 @@ class AttendanceTracker extends Component
      */
     protected function rowWorkedMinutes(?Attendance $attendance): int
     {
-        return $attendance ? app(AttendanceCalculator::class)->spanMinutes($attendance->check_in, $attendance->check_out) : 0;
+        return app(AttendanceWindowService::class)->rowWorkedMinutes($attendance);
     }
 
     protected function engineDayMetrics($employee, Carbon $start, Carbon $end): array
     {
         $cacheKey = $start->toDateString().'|'.$end->toDateString();
-        if (isset($this->dayMetricsCache[$cacheKey])) {
-            return $this->dayMetricsCache[$cacheKey];
-        }
 
-        $punchesByDay = AttendancePunch::where('employee_id', $employee->id)
-            ->whereBetween('punch_date', [$start->toDateString(), $end->toDateString()])
-            ->orderBy('punched_at')
-            ->get()
-            ->groupBy(fn ($p) => $p->punch_date->toDateString());
-
-        $summaries = AttendanceDailySummary::where('employee_id', $employee->id)
-            ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
-            ->get()
-            ->keyBy(fn ($s) => $s->date->toDateString());
-
-        $engine = app(PunchTimelineEngine::class);
-        $toMinutes = function (?string $formatted): ?int {
-            if (! $formatted) {
-                return null;
-            }
-            $t = Carbon::parse($formatted);
-
-            return $t->hour * 60 + $t->minute;
-        };
-
-        // Worked, break, first-in, final-out and missing-checkout per day come
-        // from AttendanceCalculator — the same calculation as Worked Today, so a
-        // day reads the same everywhere (live to now, nothing past the
-        // missing-checkout cutoff, the stored shift end for an auto checkout,
-        // HR's corrected times for a regularised day). The timeline supplies
-        // display detail only (sessions, ignored scans, duplicates).
-        $rows = Attendance::where('employee_id', $employee->id)
-            ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
-            ->get()
-            ->keyBy(fn ($a) => $a->date->toDateString());
-        $days = collect($punchesByDay->keys())
-            ->merge($rows->filter(fn ($a) => $a->check_in !== null)->keys())
-            ->unique();
-
-        $calculator = app(AttendanceCalculator::class);
-        $metrics = [];
-        foreach ($days as $day) {
-            $dayPunches = $punchesByDay->get($day, collect());
-            $r = $dayPunches->isNotEmpty() ? $engine->process($dayPunches, Carbon::parse($day), $summaries->get($day)) : null;
-            $calc = $calculator->forDay($employee, $day, $rows->get($day), $dayPunches, hasApprovedOt: false);
-            $metrics[$day] = [
-                'worked' => $calc->workedMinutes,
-                'break' => $calc->breakMinutes,
-                'sessions' => $r['sessions'] ?? [],
-                'ignored' => $r['ignored'] ?? [],
-                'ignored_count' => (int) ($r['ignored_count'] ?? 0),
-                'duplicate_count' => (int) ($r['duplicate_count'] ?? 0) + (int) ($r['conflict_count'] ?? 0),
-                'first_in_min' => $calc->firstIn ? $toMinutes($calc->firstIn->format('H:i')) : null,
-                'last_out_min' => $calc->lastOut ? $toMinutes($calc->lastOut->format('H:i')) : null,
-                'missing_out' => $calc->missingCheckout,
-            ];
-        }
-
-        return $this->dayMetricsCache[$cacheKey] = $metrics;
+        return $this->dayMetricsCache[$cacheKey] ??= app(AttendanceWindowService::class)->dayMetrics($employee, $start, $end);
     }
 
     protected function computeStats(): void

@@ -219,6 +219,21 @@
                                         @endif
                                     @endif
 
+                                    @if(! $showDeleted && $can360($emp->id))
+                                        <flux:tooltip content="View Employee 360°">
+                                            <flux:button
+                                                href="{{ route('employees.360', $emp->id) }}"
+                                                wire:navigate
+                                                variant="ghost"
+                                                size="sm"
+                                                icon="chart-pie"
+                                                class="text-zinc-400 hover:text-orange-600 dark:hover:text-orange-400"
+                                                aria-label="View Employee 360°"
+                                                data-employee-360-link="{{ $emp->id }}"
+                                            />
+                                        </flux:tooltip>
+                                    @endif
+
                                     <flux:tooltip content="Open profile">
                                         <flux:button
                                             href="{{ route('employees.profile', $emp->id) }}"

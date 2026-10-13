@@ -5,6 +5,7 @@ use App\Http\Controllers\Auth\FirstPasswordController;
 use App\Http\Controllers\BiometricDashboardController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\DocumentUploadController;
+use App\Http\Controllers\Employee360ReportController;
 use App\Http\Controllers\ImpersonationController;
 use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\PayslipController;
@@ -27,6 +28,7 @@ use App\Livewire\DepartmentDashboard;
 use App\Livewire\Departments\DepartmentOverview;
 use App\Livewire\Documents\DocumentManager;
 use App\Livewire\Employees\Directory;
+use App\Livewire\Employees\Employee360;
 use App\Livewire\Employees\EmployeeCreate;
 use App\Livewire\Employees\EmployeeEdit;
 use App\Livewire\Employees\EmployeeImport;
@@ -218,6 +220,11 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{employee}/finance-profile', FinanceEmployeeProfile::class)
             ->name('finance-profile')
             ->middleware('role:view-finance-profile');
+
+        // Employee 360° — HR, Department Heads and Managers (View Employee
+        // 360°); whose page opens is checked against the scope in the page.
+        Route::get('/{employee}/360', Employee360::class)->name('360')->middleware('can:view_employee_360');
+        Route::get('/{employee}/360/report', Employee360ReportController::class)->name('360.report')->middleware('can:view_employee_360');
 
         // HR / admin only
         Route::middleware('role:manage-employees')->group(function () {

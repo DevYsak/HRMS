@@ -284,6 +284,43 @@ class OvertimeService
     }
 
     /**
+     * Overtime for one employee over a date range (by work date), with the
+     * same definitions as summaryFor(): requests are counted by status, and
+     * the worked/payable hours are the OvertimeRecord's ot_hours of approved
+     * requests (what payroll pays, measured from real punches) — never the
+     * requested window. `requested_hours_approved` is shown beside it only as
+     * the request, so the two are never confused.
+     *
+     * @return array{pending: int, approved: int, rejected: int, requested_hours_approved: float, ot_hours: float, ot_amount: float, unpaid_hours: float, unpaid_amount: float}
+     */
+    public function rangeSummary(Employee $employee, CarbonInterface $from, CarbonInterface $to): array
+    {
+        $window = [$from->toDateString(), $to->toDateString()];
+
+        $requests = $employee->otRequests()->whereBetween('work_date', $window);
+        $byStatus = (clone $requests)
+            ->selectRaw('status, COUNT(*) as aggregate')
+            ->groupBy('status')
+            ->pluck('aggregate', 'status');
+
+        $records = $employee->overtimeRecords()
+            ->whereNotNull('ot_request_id')
+            ->whereHas('otRequest', fn ($q) => $q->where('status', 'approved'))
+            ->whereBetween('work_date', $window);
+
+        return [
+            'pending' => (int) ($byStatus['pending'] ?? 0),
+            'approved' => (int) ($byStatus['approved'] ?? 0),
+            'rejected' => (int) ($byStatus['rejected'] ?? 0),
+            'requested_hours_approved' => round((float) (clone $requests)->where('status', 'approved')->get()->sum(fn (OtRequest $r) => $r->resolvedRequestedHours()), 2),
+            'ot_hours' => round((float) (clone $records)->sum('ot_hours'), 2),
+            'ot_amount' => round((float) (clone $records)->sum('ot_amount'), 2),
+            'unpaid_hours' => round((float) (clone $records)->where('is_paid', false)->sum('ot_hours'), 2),
+            'unpaid_amount' => round((float) (clone $records)->where('is_paid', false)->sum('ot_amount'), 2),
+        ];
+    }
+
+    /**
      * OT requests waiting for THIS user's decision: pending, inside the
      * approve_overtime data scope, never their own. Null when the user cannot
      * approve OT at all (so "0 waiting" is never claimed for a non-approver).

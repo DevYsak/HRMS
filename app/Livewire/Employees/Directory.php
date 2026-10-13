@@ -4,6 +4,7 @@ namespace App\Livewire\Employees;
 
 use App\Models\Department;
 use App\Models\Employee;
+use App\Services\People\Employee360Access;
 use Livewire\Component;
 
 class Directory extends Component
@@ -55,6 +56,7 @@ class Directory extends Component
         return view('livewire.employees.directory', [
             'employees' => $employees,
             'departments' => Department::orderBy('name')->get(),
+            'can360' => app(Employee360Access::class)->checker(auth()->user()),
         ])->layout('layouts.app', ['title' => 'Employee Directory']);
     }
 }

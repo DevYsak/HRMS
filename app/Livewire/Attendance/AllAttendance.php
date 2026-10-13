@@ -28,6 +28,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Response;
 use Livewire\Attributes\Locked;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -54,6 +55,8 @@ class AllAttendance extends Component
 
     public string $filterTeam = '';
 
+    /** ?employee= opens the register for one person (Employee 360° → View full attendance). */
+    #[Url(as: 'employee', except: '')]
     public string $filterEmployee = '';
 
     public function updatedFilterDepartment(): void
