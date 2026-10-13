@@ -6,6 +6,7 @@ use App\Models\Employee;
 use App\Models\LeaveRequest;
 use App\Models\LeaveType;
 use App\Models\OtRequest;
+use App\Models\OvertimeRecord;
 use App\Models\PublicHoliday;
 use App\Models\User;
 use App\Services\Attendance\WorkingDayResolver;
@@ -223,6 +224,33 @@ test('the month history shows every day with one status and the month totals', f
         ->and($history['totals']['leave'])->toBe(1.0)
         ->and($history['totals']['worked_off'])->toBe(1)
         ->and($history['totals']['ot_hours'])->toBe(2.0);
+});
+
+test('the Quick Stats footer follows the selected month: average of completed days and overtime actually worked', function () {
+    $this->travelTo(Carbon::parse('2026-10-14 10:00:00'));
+    $employee = aphEmployee();
+    aphDay($employee, '2026-10-01');                                          // 9h, completed
+    aphDay($employee, '2026-10-02', ['check_out' => '2026-10-02 17:00:00']);  // 8h, completed
+    aphDay($employee, '2026-10-09', ['check_out' => null]);                   // missing checkout: not averaged
+    aphDay($employee, '2026-10-14', ['check_out' => null]);                   // today, still open: not averaged
+    aphDay($employee, '2026-09-30', ['check_out' => '2026-09-30 13:00:00']);  // September: not October's figure
+    $request = OtRequest::create(['employee_id' => $employee->id, 'work_date' => '2026-10-01', 'start_time' => '18:00', 'end_time' => '21:00', 'requested_hours' => 3, 'reason' => 'Release', 'status' => 'approved']);
+    OvertimeRecord::create(['employee_id' => $employee->id, 'ot_request_id' => $request->id, 'work_date' => '2026-10-01', 'total_hours_worked' => 10.5, 'standard_hours' => 9, 'ot_hours' => 1.5, 'rate_per_hour' => 100, 'ot_amount' => 150, 'is_paid' => false]);
+
+    $page = Livewire::actingAs($employee->user)->test(AttendanceTracker::class)->set('historyMonth', '2026-10');
+    $october = $page->get('monthHistory')['totals'];
+
+    expect($october['completed_days'])->toBe(2)
+        ->and($october['avg_minutes'])->toBe(510)
+        ->and($october['missing_checkout'])->toBe(1)
+        // Worked and payable (as on My Overtime), never the 3 requested hours.
+        ->and($october['ot_worked_hours'])->toBe(1.5);
+    $page->assertSeeHtml('data-avg-day')->assertSee('8h 30m')->assertSee('1.5h');
+
+    $september = Livewire::actingAs($employee->user)->test(AttendanceTracker::class)->set('historyMonth', '2026-09')->get('monthHistory')['totals'];
+    expect($september['completed_days'])->toBe(1)
+        ->and($september['avg_minutes'])->toBe(240)
+        ->and($september['ot_worked_hours'])->toBe(0.0);
 });
 
 test('history navigation moves month by month and never into the future', function () {

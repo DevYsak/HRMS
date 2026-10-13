@@ -19,6 +19,7 @@ use App\Models\Employee;
 use App\Models\LeaveBalance;
 use App\Models\LeaveRequest;
 use App\Models\OtRequest;
+use App\Models\OvertimeRecord;
 use App\Models\ShiftSetting;
 use App\Models\Task;
 use App\Models\WfhReport;
@@ -39,6 +40,7 @@ use App\Services\AttendanceService;
 use App\Services\Leave\LeaveYearResolver;
 use App\Services\Notifications\NotificationDispatcher;
 use App\Services\Notifications\NotificationRecipients;
+use App\Services\OvertimeService;
 use App\Services\WfhService;
 use App\Support\UserAgent;
 use Carbon\CarbonPeriod;
@@ -1226,6 +1228,7 @@ class AttendanceTracker extends Component
             $stamp(AttendanceRegularisation::withTrashed()->where('employee_id', $employee->id)->whereBetween('work_date', [$from, $to])),
             $stamp(LeaveRequest::where('employee_id', $employee->id)->where('start_date', '<=', $to)->where('end_date', '>=', $from)),
             $stamp(OtRequest::where('employee_id', $employee->id)->whereBetween('work_date', [$from, $to])),
+            $stamp(OvertimeRecord::where('employee_id', $employee->id)->whereBetween('work_date', [$from, $to])),
             $month->isSameMonth(Carbon::today()) ? intdiv((int) now()->timestamp, 300) : 'closed',
         ]);
 
@@ -1265,7 +1268,7 @@ class AttendanceTracker extends Component
 
         $today = Carbon::today();
         $rows = [];
-        $totals = array_fill_keys(['present', 'late', 'wfh', 'half_day', 'absent', 'leave', 'holiday', 'mdl', 'weekly_off', 'worked_off', 'missing_checkout', 'regularised', 'worked_minutes', 'break_minutes', 'ot_hours'], 0);
+        $totals = array_fill_keys(['present', 'late', 'wfh', 'half_day', 'absent', 'leave', 'holiday', 'mdl', 'weekly_off', 'worked_off', 'missing_checkout', 'regularised', 'worked_minutes', 'break_minutes', 'ot_hours', 'completed_days', 'completed_minutes'], 0);
 
         foreach ($states as $key => $day) {
             $date = Carbon::parse($key);
@@ -1324,6 +1327,12 @@ class AttendanceTracker extends Component
             $totals['break_minutes'] += $break;
             $totals['ot_hours'] += $otHours;
             $totals['missing_checkout'] += $missing ? 1 : 0;
+            // Avg / day counts finished days only: a real OUT (not the nightly
+            // auto checkout), no missing checkout — never today's open session.
+            if ($a !== null && $a->check_in && $a->check_out && ! $missing && ! $a->isSystemAutoCheckout() && $worked > 0) {
+                $totals['completed_days']++;
+                $totals['completed_minutes'] += $worked;
+            }
             $totals['regularised'] += ($a?->is_regularized) ? 1 : 0;
             match ($status) {
                 'Present' => $totals['present']++,
@@ -1341,6 +1350,9 @@ class AttendanceTracker extends Component
         }
 
         $totals['ot_hours'] = round($totals['ot_hours'], 1);
+        $totals['avg_minutes'] = $totals['completed_days'] > 0 ? (int) round($totals['completed_minutes'] / $totals['completed_days']) : null;
+        // Approved OT actually worked and payable (OvertimeRecord), as on My Overtime — not the requested window.
+        $totals['ot_worked_hours'] = app(OvertimeService::class)->rangeSummary($employee, $from, $to)['ot_hours'];
         $firstYear = $employee->joining_date ? (int) Carbon::parse($employee->joining_date)->year : (int) now()->subYears(5)->year;
 
         return [

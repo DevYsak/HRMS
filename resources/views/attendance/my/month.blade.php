@@ -17,8 +17,11 @@
     ]);
     $breakdownTotal = max(1, $breakdown->sum(1));
     $onTimePct = $present > 0 ? (int) round(($present - $late) / $present * 100) : null;
-    $avgWorked = $present > 0 ? (int) round(collect($chartDaily)->sum('hours') * 60 / $present) : 0;
+    // Footer: the selected month's own figures (monthHistory), like the breakdown above.
+    $avgWorked = $t['avg_minutes'] ?? null;
+    $completedDays = (int) ($t['completed_days'] ?? 0);
     $missingPunches = (int) ($t['missing_checkout'] ?? 0);
+    $otWorked = (float) ($t['ot_worked_hours'] ?? 0);
     $ringLen = 2 * M_PI * 34;
     $fmt = fn ($v) => rtrim(rtrim(number_format($v, 1), '0'), '.');
 @endphp
@@ -70,8 +73,8 @@
     </div>
 
     <div class="mt-auto grid grid-cols-3 gap-2 border-t border-zinc-100 pt-3 text-xs dark:border-white/[0.06]">
-        <div><div class="text-zinc-500 dark:text-slate-400">Avg / day</div><div class="mt-0.5 font-bold tabular-nums text-zinc-900 dark:text-white">{{ $present > 0 ? $hm($avgWorked) : '—' }}</div></div>
-        <div><div class="text-zinc-500 dark:text-slate-400">Missing punches</div><div @class(['mt-0.5 font-bold', 'text-orange-600 dark:text-orange-400' => $missingPunches > 0, 'text-zinc-900 dark:text-white' => $missingPunches === 0])>{{ $missingPunches }}</div></div>
-        <div><div class="text-zinc-500 dark:text-slate-400">Approved OT</div><div class="mt-0.5 font-bold tabular-nums text-zinc-900 dark:text-white">{{ (float) ($stats['ot_hours'] ?? 0) > 0 ? $stats['ot_hours'].'h' : '0h' }}</div></div>
+        <div title="{{ $completedDays > 0 ? 'Average of '.$completedDays.' completed '.\Illuminate\Support\Str::plural('day', $completedDays).' (last OUT − first IN)' : 'No completed days yet' }}" data-avg-day><div class="text-zinc-500 dark:text-slate-400">Avg / day</div><div class="mt-0.5 font-bold tabular-nums text-zinc-900 dark:text-white">{{ $avgWorked !== null ? $hm($avgWorked) : '—' }}</div></div>
+        <div title="Days this month with an IN and no OUT" data-missing-punches><div class="text-zinc-500 dark:text-slate-400">Missing punches</div><div @class(['mt-0.5 font-bold', 'text-orange-600 dark:text-orange-400' => $missingPunches > 0, 'text-zinc-900 dark:text-white' => $missingPunches === 0])>{{ $missingPunches }}</div></div>
+        <div title="Overtime worked on approved requests, measured from real punches (as on My Overtime)" data-approved-ot><div class="text-zinc-500 dark:text-slate-400">Approved OT</div><div class="mt-0.5 font-bold tabular-nums text-zinc-900 dark:text-white">{{ $fmt($otWorked) }}h</div></div>
     </div>
 </section>
