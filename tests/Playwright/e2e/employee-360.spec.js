@@ -31,6 +31,14 @@ test('HR: the page is complete and never overflows sideways at any width', async
     }
     await expect(page.locator('[data-360-details]')).toBeVisible();
 
+    // The app shell holds: header and content beside the sidebar, not below it.
+    const side = await page.locator('[data-flux-sidebar]').first().boundingBox();
+    const header = await page.locator('[data-flux-header]').first().boundingBox();
+    const content = await page.locator('[data-employee-360]').boundingBox();
+    expect(header.x, 'header starts after the sidebar').toBeGreaterThanOrEqual(side.x + side.width - 1);
+    expect(header.y, 'header is at the top, not under the sidebar').toBeLessThan(10);
+    expect(content.x, 'content starts after the sidebar').toBeGreaterThanOrEqual(side.x + side.width - 1);
+
     for (const width of WIDTHS) {
         await page.setViewportSize({ width, height: width < 768 ? 860 : 900 });
         await page.waitForTimeout(250);

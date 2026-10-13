@@ -129,6 +129,8 @@ test('the permission is seeded, scoped and granted to the people roles only', fu
 test('HR opens any employee in the company', function () {
     $this->actingAs($this->hr)->get(route('employees.360', $this->ivy))
         ->assertOk()
+        // Inside the app shell's main area, so it sits beside the sidebar.
+        ->assertSee('data-flux-main', false)
         ->assertSee('Ivy IT')
         ->assertSee('All employees · Company scope');
 });

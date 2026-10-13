@@ -12,6 +12,8 @@
     $reportUrl = route('employees.360.report', ['employee' => $employee->id, 'from' => $from, 'to' => $to]);
 @endphp
 
+{{-- flux:main places the page in the app shell's main area, beside the sidebar (every page needs it). --}}
+<flux:main class="bg-zinc-50 p-4 sm:p-6 dark:bg-zinc-950">
 <div class="mx-auto w-full max-w-[1400px] min-w-0 space-y-5" data-employee-360>
     {{-- ── Breadcrumb + scope ── --}}
     <div class="flex flex-wrap items-center justify-between gap-2">
@@ -93,7 +95,7 @@
                         <x-pulse.badge :color="$statusBadge[$identity['status_color']] ?? 'zinc'">{{ $identity['status'] }}</x-pulse.badge>
                     </div>
                     <p class="mt-0.5 text-sm text-zinc-600 dark:text-zinc-300">{{ $identity['designation'] ?? 'No designation' }} · {{ $identity['department'] ?? 'No department' }}</p>
-                    <dl class="mt-3 grid grid-cols-2 gap-x-5 gap-y-2 text-xs sm:grid-cols-3 lg:grid-cols-6">
+                    <dl class="mt-3 grid grid-cols-2 gap-x-5 gap-y-2 text-xs sm:grid-cols-3 min-[1800px]:grid-cols-6">
                         @foreach([
                             'Employee ID' => $identity['code'] ?: '—',
                             'Joined' => $identity['joining_date'] ? $dd->date($identity['joining_date']) : '—',
@@ -565,3 +567,4 @@
         </x-pulse.modal>
     @endif
 </div>
+</flux:main>
