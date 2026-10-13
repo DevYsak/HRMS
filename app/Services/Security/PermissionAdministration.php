@@ -48,6 +48,11 @@ class PermissionAdministration
             return "\"No access\" with {$permission->label} granted is contradictory — remove the permission instead.";
         }
 
+        $allowed = PermissionScopes::allowedScopes($permission->key);
+        if ($allowed !== null && ! in_array($scope, $allowed, true)) {
+            return "{$permission->label} opens at ".implode(', ', array_map(fn (DataScope $s) => mb_strtolower($s->label()), $allowed)).' level only.';
+        }
+
         if ($scope === DataScope::SelectedDepartments && $departmentIds === []) {
             return "Choose at least one department for {$permission->label}.";
         }

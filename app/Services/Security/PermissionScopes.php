@@ -21,6 +21,8 @@ final class PermissionScopes
      * @var array<int, string>
      */
     public const SCOPED = [
+        // Dashboards: the level a view may open at (DashboardAccess)
+        'view_team_dashboard', 'view_department_dashboard',
         // Employees
         'manage_employees', 'view_employee', 'edit_employee', 'delete_employee', 'view_employee_360',
         'manage_onboarding', 'manage_offboarding', 'approve_profile_changes',
@@ -53,6 +55,12 @@ final class PermissionScopes
      * @var array<string, array<int, array{key: string, label: string, description: string}>>
      */
     public const NEW_PERMISSIONS = [
+        'Dashboard' => [
+            ['key' => 'view_main_dashboard', 'label' => 'Main Dashboard', 'description' => 'Open the main dashboard: the company or HR overview, or the employee’s own self-service dashboard'],
+            ['key' => 'view_team_dashboard', 'label' => 'Team View', 'description' => 'Open Team View (approvals and today’s attendance for the people they approve). Scope: the level it opens at — team, department or company'],
+            ['key' => 'view_department_dashboard', 'label' => 'Department View', 'description' => 'Open Department View (a department’s attendance, leave and approvals). Scope: department or company'],
+            ['key' => 'view_finance_dashboard', 'label' => 'Finance View', 'description' => 'Open Finance View (payroll queue, overtime payable, finance sign-off)'],
+        ],
         'Employee Management' => [
             ['key' => 'view_employee_360', 'label' => 'View Employee 360°', 'description' => 'Open the Employee 360° page: one snapshot of attendance, leave, overtime, performance and activity for employees in scope'],
         ],
@@ -116,14 +124,35 @@ final class PermissionScopes
 
     /** Extra default grants per role for the new keys (role slug => keys). */
     public const NEW_ROLE_GRANTS = [
-        'hr_admin' => ['export_attendance', 'view_overtime', 'manage_overtime', 'manage_notifications', 'view_live_attendance', 'view_employee_360'],
-        'director' => ['export_attendance', 'view_overtime', 'view_live_attendance', 'view_employee_360'],
-        'department_head' => ['view_live_attendance', 'view_employee_360'],
-        'manager' => ['view_overtime', 'view_live_attendance', 'view_employee_360'],
-        'coordinator' => ['view_live_attendance'],
+        'hr_admin' => ['export_attendance', 'view_overtime', 'manage_overtime', 'manage_notifications', 'view_live_attendance', 'view_employee_360',
+            'view_main_dashboard', 'view_team_dashboard', 'view_finance_dashboard'],
+        'director' => ['export_attendance', 'view_overtime', 'view_live_attendance', 'view_employee_360',
+            'view_team_dashboard', 'view_department_dashboard'],
+        // Department View only when an admin grants it (it repeats Team View's people).
+        'department_head' => ['view_live_attendance', 'view_employee_360', 'view_team_dashboard'],
+        'manager' => ['view_overtime', 'view_live_attendance', 'view_employee_360', 'view_team_dashboard'],
+        'coordinator' => ['view_live_attendance', 'view_main_dashboard'],
         // Finance: payroll in full; attendance / leave / OT summaries only.
-        'finance' => ['view_attendance', 'export_attendance', 'view_overtime', 'view_leave_management'],
+        'finance' => ['view_attendance', 'export_attendance', 'view_overtime', 'view_leave_management', 'view_finance_dashboard'],
+        'employee' => ['view_main_dashboard'],
     ];
+
+    /**
+     * Scoped dashboards open only at these levels (DashboardAccess); any
+     * other scope — own records, none, unknown — keeps the view closed.
+     *
+     * @var array<string, array<int, DataScope>>
+     */
+    public const DASHBOARD_SCOPES = [
+        'view_team_dashboard' => [DataScope::Team, DataScope::Department, DataScope::SelectedDepartments, DataScope::All],
+        'view_department_dashboard' => [DataScope::Department, DataScope::SelectedDepartments, DataScope::All],
+    ];
+
+    /** @return array<int, DataScope>|null the scopes a permission accepts, or null for any */
+    public static function allowedScopes(string $key): ?array
+    {
+        return self::DASHBOARD_SCOPES[$key] ?? null;
+    }
 
     public static function isScoped(string $key): bool
     {

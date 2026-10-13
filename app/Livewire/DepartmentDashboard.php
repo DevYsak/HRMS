@@ -3,7 +3,7 @@
 namespace App\Livewire;
 
 use App\Models\Department;
-use App\Services\Navigation\DashboardLanding;
+use App\Services\Navigation\DashboardAccess;
 use App\Services\Security\ScopeResolver;
 use Illuminate\Support\Facades\Auth;
 
@@ -23,7 +23,7 @@ class DepartmentDashboard extends ManagerDashboard
     {
         $user = Auth::user();
 
-        abort_unless(DashboardLanding::isDepartmentLevel($user), 403);
+        abort_unless(app(DashboardAccess::class)->allows($user, DashboardAccess::DEPARTMENT), 403);
     }
 
     protected function reach(): ?array

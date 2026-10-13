@@ -4,20 +4,18 @@ namespace App\Services\Navigation;
 
 use App\Enums\DataScope;
 use App\Models\User;
-use App\Services\Help\RouteAccess;
 use App\Services\Security\ScopeResolver;
 
 /**
- * Which dashboard a user's "Dashboard" opens, decided from what they hold —
- * never from the role's name — and only ever a page they can open.
+ * What the Main Dashboard at "/" renders for a user — decided from what they
+ * hold, never from the role's name:
  *
- *   Super Admin                         → the company overview at "/"
- *   HR (HR dashboard + employee mgmt)   → the HR overview at "/"
- *   Executive dashboard, company-wide   → /dashboard/director
- *   Heads a department                  → /dashboard/department
- *   Approves leave for a team           → /dashboard/manager
- *   Payroll / finance sign-off          → /dashboard/finance
- *   Anyone else                         → self-service at "/"
+ *   Super Admin                         → the company overview
+ *   HR (HR overview + employee mgmt)    → the HR overview
+ *   Anyone else                         → employee self-service
+ *
+ * Which dashboard "/" lands on, and whether the user may open each one, is
+ * DashboardAccess (the Dashboard Access permissions).
  */
 class DashboardLanding
 {
@@ -27,31 +25,16 @@ class DashboardLanding
 
     public const SELF_SERVICE = 'self';
 
-    public function __construct(private readonly RouteAccess $routeAccess) {}
-
-    /** The route "/" forwards to, or null to render at "/" (see view()). */
+    /**
+     * The route "/" forwards to, or null to render at "/" (see view()). The
+     * order is DashboardAccess::landing(), from the Dashboard Access
+     * permissions in Roles & Permissions.
+     */
     public function route(User $user): ?string
     {
-        if ($this->view($user) !== self::SELF_SERVICE) {
-            return null;
-        }
+        $landing = app(DashboardAccess::class)->landing($user);
 
-        // People work before money: a department-scoped Director (who also
-        // signs off finance) lands on their team, as before.
-        $candidates = [
-            'dashboard.director' => $user->hasPermission('view_executive_dashboard') && $user->isCompanyWideApprover(),
-            'dashboard.department' => self::isDepartmentLevel($user),
-            'dashboard.manager' => $user->canApproveLeave(),
-            'dashboard.finance' => $user->canRunPayroll() || $user->canApproveFinance(),
-        ];
-
-        foreach ($candidates as $route => $applies) {
-            if ($applies && $this->routeAccess->allows($user, $route)) {
-                return $route;
-            }
-        }
-
-        return null;
+        return $landing === 'dashboard' ? null : $landing;
     }
 
     /**

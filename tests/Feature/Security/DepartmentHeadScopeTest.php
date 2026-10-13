@@ -23,6 +23,7 @@ use App\Models\Permission;
 use App\Models\Role;
 use App\Models\ShiftSetting;
 use App\Models\User;
+use App\Models\UserPermissionOverride;
 use App\Services\Approvals\ApprovalGuard;
 use App\Services\Security\ScopeResolver;
 use Illuminate\Support\Carbon;
@@ -72,6 +73,8 @@ function dhsNikita(Department $sales, ShiftSetting $uk, bool $narrowToShift = tr
     $user->update($narrowToShift
         ? ['scope_departments' => [$sales->id], 'scope_shifts' => [$uk->id]]
         : ['scope_departments' => [$sales->id]]);
+    // Dashboard Access: Department View is granted explicitly (not a Department Head default).
+    UserPermissionOverride::create(['user_id' => $user->id, 'permission_id' => Permission::where('key', 'view_department_dashboard')->value('id'), 'effect' => 'grant']);
 
     return $user->fresh();
 }

@@ -90,7 +90,17 @@
                         <p class="text-[11px] font-bold uppercase tracking-wide text-orange-700 dark:text-orange-300">Role summary</p>
                         <p class="mt-1 font-semibold text-zinc-900 dark:text-white">{{ $roleSummary['name'] }}</p>
                         <dl class="mt-2 grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
-                            <div><dt class="text-xs text-zinc-500">Dashboard</dt><dd class="text-zinc-800 dark:text-zinc-100">{{ $roleSummary['dashboard'] }}</dd></div>
+                            <div class="sm:col-span-2" data-dashboard-access>
+                                <dt class="text-xs text-zinc-500">Dashboard access <span class="text-zinc-400">· lands on {{ $roleSummary['dashboards']['lands_on'] }}</span></dt>
+                                <dd class="mt-1 flex flex-wrap gap-1.5">
+                                    @foreach($roleSummary['dashboards']['visible'] as $label)
+                                        <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300" data-dashboard-visible>✓ {{ $label }}</span>
+                                    @endforeach
+                                    @foreach($roleSummary['dashboards']['hidden'] as $label)
+                                        <span class="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-500 line-through dark:bg-white/5 dark:text-zinc-400" data-dashboard-hidden>{{ $label }}</span>
+                                    @endforeach
+                                </dd>
+                            </div>
                             <div><dt class="text-xs text-zinc-500">Default scope</dt><dd class="text-zinc-800 dark:text-zinc-100">{{ $roleSummary['default_scope'] }}</dd></div>
                             <div><dt class="text-xs text-zinc-500">Can approve</dt><dd class="text-zinc-800 dark:text-zinc-100">{{ $roleSummary['approve'] === [] ? 'Nothing' : implode(', ', $roleSummary['approve']) }}</dd></div>
                             <div><dt class="text-xs text-zinc-500">Can view</dt><dd class="text-zinc-800 dark:text-zinc-100">{{ $roleSummary['view'] === [] ? 'Own records only' : implode(', ', $roleSummary['view']) }}</dd></div>
@@ -171,11 +181,14 @@
                                                 <div class="ms-7 space-y-1.5">
                                                     <flux:select size="sm" wire:model.live="scopes.{{ $permission->id }}.scope" aria-label="Data scope for {{ $permission->label }}">
                                                         <flux:select.option value="">Inherit — {{ $inheritedScopes[$permission->id] ?? 'role default' }}</flux:select.option>
-                                                        @foreach($scopeOptions as $option)
+                                                        @foreach(\App\Services\Security\PermissionScopes::allowedScopes($permission->key) ?? $scopeOptions as $option)
                                                             <flux:select.option value="{{ $option->value }}">{{ $option->label() }}</flux:select.option>
                                                         @endforeach
                                                     </flux:select>
                                                     <flux:error name="scopes.{{ $permission->id }}.scope" />
+                                                    @if(\App\Services\Security\PermissionScopes::allowedScopes($permission->key))
+                                                        <p class="text-[11px] text-zinc-500">The level this view opens at. The people listed follow {{ $permission->key === 'view_department_dashboard' ? 'View Attendance' : 'Approve Leave' }}.</p>
+                                                    @endif
                                                     @if(($scopes[$permission->id]['scope'] ?? '') === \App\Enums\DataScope::SelectedDepartments->value)
                                                         <div class="grid max-h-32 grid-cols-1 gap-1 overflow-y-auto rounded-lg border border-zinc-100 p-2 dark:border-zinc-800">
                                                             @foreach($departments as $department)

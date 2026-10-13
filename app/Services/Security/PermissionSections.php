@@ -13,11 +13,11 @@ use Database\Seeders\RolesAndPermissionsSeeder;
  */
 class PermissionSections
 {
-    public const ORDER = ['Dashboard', 'People', 'Attendance', 'Leave', 'Overtime', 'Performance', 'Payroll', 'Reports', 'Settings'];
+    public const ORDER = ['Dashboard Access', 'People', 'Attendance', 'Leave', 'Overtime', 'Performance', 'Payroll', 'Reports', 'Settings'];
 
     /** stored module => section */
     private const MODULES = [
-        'Dashboard' => 'Dashboard',
+        'Dashboard' => 'Dashboard Access',
         'Employee Management' => 'People',
         'Profile' => 'People',
         'Documents' => 'People',

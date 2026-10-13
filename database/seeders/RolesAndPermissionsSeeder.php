@@ -21,9 +21,9 @@ class RolesAndPermissionsSeeder extends Seeder
      */
     private const CATALOGUE = [
         'Dashboard' => [
-            ['key' => 'view_dashboard', 'label' => 'View Dashboard', 'description' => 'Access the personal dashboard'],
-            ['key' => 'view_executive_dashboard', 'label' => 'View Executive Dashboard', 'description' => 'Access company-wide executive insights'],
-            ['key' => 'view_hr_dashboard', 'label' => 'View HR Dashboard', 'description' => 'Access HR overview metrics and widgets'],
+            // Main Dashboard, Team View, Department View and Finance View: PermissionScopes::NEW_PERMISSIONS.
+            ['key' => 'view_executive_dashboard', 'label' => 'Executive View', 'description' => 'Open Executive View (company-wide insights; needs company-wide approvals)'],
+            ['key' => 'view_hr_dashboard', 'label' => 'HR Overview widgets', 'description' => 'Show the HR overview on the Main Dashboard (with Manage Employees)'],
         ],
         'Employee Management' => [
             ['key' => 'manage_employees', 'label' => 'Manage Employees', 'description' => 'Full access to employee records and lifecycle'],
@@ -148,7 +148,6 @@ class RolesAndPermissionsSeeder extends Seeder
      * @var array<int, string>
      */
     public const DEPARTMENT_HEAD_PERMISSIONS = [
-        'view_dashboard',
         'view_employee', 'view_directory', 'view_org_chart',
         'view_attendance', 'export_attendance', 'approve_regularisation', 'approve_overtime', 'view_overtime', 'approve_wfh',
         'view_leave', 'apply_leave', 'approve_leave',
@@ -169,7 +168,7 @@ class RolesAndPermissionsSeeder extends Seeder
      */
     public const ROLE_DEFAULTS = [
         'hr_admin' => [
-            'view_dashboard', 'view_executive_dashboard', 'view_hr_dashboard',
+            'view_executive_dashboard', 'view_hr_dashboard',
             'manage_employees', 'create_employee', 'edit_employee', 'delete_employee', 'view_employee', 'view_directory', 'view_org_chart', 'manage_onboarding', 'manage_offboarding',
             'view_attendance', 'manage_attendance', 'approve_regularisation', 'hr_approve_regularisation', 'monitor_attendance_exceptions', 'remind_employees', 'assign_coordinators', 'manage_shifts', 'manage_biometric', 'approve_overtime', 'approve_wfh',
             'view_leave', 'apply_leave', 'approve_leave', 'manage_leave_types', 'manage_leave_policies', 'manage_leave_balances', 'manage_leave_encashment',
@@ -189,7 +188,7 @@ class RolesAndPermissionsSeeder extends Seeder
         // no creating, deleting or offboarding employees and no payroll
         // sign-off unless granted in Roles & Permissions.
         'director' => [
-            'view_dashboard', 'view_executive_dashboard',
+            'view_executive_dashboard',
             'manage_employees', 'edit_employee', 'view_employee', 'view_directory', 'view_org_chart', 'manage_onboarding',
             'view_attendance', 'manage_attendance', 'approve_regularisation', 'approve_overtime', 'approve_wfh',
             'view_leave', 'apply_leave', 'approve_leave',
@@ -200,7 +199,6 @@ class RolesAndPermissionsSeeder extends Seeder
             'edit_own_profile', 'request_profile_change',
         ],
         'manager' => [
-            'view_dashboard',
             'view_employee', 'view_directory', 'view_org_chart',
             'view_attendance', 'approve_regularisation', 'approve_overtime', 'approve_wfh',
             'view_leave', 'apply_leave', 'approve_leave',
@@ -210,7 +208,6 @@ class RolesAndPermissionsSeeder extends Seeder
             'edit_own_profile', 'request_profile_change',
         ],
         'finance' => [
-            'view_dashboard',
             'view_employee',
             'view_leave', 'apply_leave',
             'view_payroll', 'run_payroll', 'approve_payroll', 'view_payslips', 'manage_salary_components', 'approve_finance', 'view_finance_profile',
@@ -220,7 +217,6 @@ class RolesAndPermissionsSeeder extends Seeder
             'edit_own_profile', 'request_profile_change',
         ],
         'employee' => [
-            'view_dashboard',
             'view_directory', 'view_org_chart',
             'view_leave', 'apply_leave',
             'view_payslips',
@@ -231,7 +227,6 @@ class RolesAndPermissionsSeeder extends Seeder
         // Employee self-service plus attendance monitoring — no approvals,
         // payroll or settings.
         'coordinator' => [
-            'view_dashboard',
             'view_directory', 'view_org_chart',
             'view_leave', 'apply_leave',
             'view_payslips',

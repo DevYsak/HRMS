@@ -17,9 +17,11 @@ use App\Models\OtRequest;
 use App\Models\PerformanceCycle;
 use App\Models\PerformanceReview;
 use App\Models\PerformanceTemplate;
+use App\Models\Permission;
 use App\Models\Role;
 use App\Models\ShiftSetting;
 use App\Models\User;
+use App\Models\UserPermissionOverride;
 use App\Services\Ai\AiDataTools;
 use App\Services\Ai\AiIntentRouter;
 use App\Services\Approvals\ApprovalQueueService;
@@ -53,6 +55,8 @@ beforeEach(function () {
     $this->ukPeople = collect(range(1, 11))->map(fn (int $i) => hcEmployee('UKPERSON'.$i, $this->uk, $this->shift, $this->nikita->id));
     $this->itPeople = collect(range(1, 3))->map(fn (int $i) => hcEmployee('ITPERSON'.$i, $this->it, $this->shift, null));
 
+    // Dashboard Access: Department View is granted explicitly (not a Department Head default).
+    UserPermissionOverride::create(['user_id' => $this->nikita->id, 'permission_id' => Permission::where('key', 'view_department_dashboard')->value('id'), 'effect' => 'grant']);
     $this->nikita = $this->nikita->fresh();
 });
 

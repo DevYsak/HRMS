@@ -29,7 +29,7 @@ test('a plain employee is forbidden from the role manager', function () {
 });
 
 test('a custom role can be created with selected permissions', function () {
-    $permissionIds = Permission::query()->whereIn('key', ['view_dashboard', 'view_directory'])->pluck('id')->all();
+    $permissionIds = Permission::query()->whereIn('key', ['view_main_dashboard', 'view_directory'])->pluck('id')->all();
 
     Livewire::actingAs($this->admin)
         ->test(RoleManager::class)
@@ -45,14 +45,14 @@ test('a custom role can be created with selected permissions', function () {
     expect($role)->not->toBeNull()
         ->and($role->is_system)->toBeFalse()
         ->and($role->permissions()->pluck('key')->sort()->values()->all())
-        ->toEqual(['view_dashboard', 'view_directory']);
+        ->toEqual(['view_directory', 'view_main_dashboard']);
 });
 
 test('editing a role updates its permissions and is reflected in hasPermission', function () {
     $role = Role::create(['name' => 'Scheduler', 'slug' => 'scheduler', 'is_system' => false, 'is_active' => true]);
     $user = User::factory()->create(['role_id' => $role->id]);
 
-    $viewDashboard = Permission::where('key', 'view_dashboard')->firstOrFail();
+    $viewDashboard = Permission::where('key', 'view_main_dashboard')->firstOrFail();
     $manageEmployees = Permission::where('key', 'manage_employees')->firstOrFail();
 
     expect($user->fresh()->hasPermission('manage_employees'))->toBeFalse();

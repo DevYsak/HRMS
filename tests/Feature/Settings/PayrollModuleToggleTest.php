@@ -93,11 +93,14 @@ test('disabled: the employee dashboard drops the payslip card, KPI and quick act
         ->and(collect($data['quickActions'])->pluck('route')->all())->not->toContain('payroll.payslips');
 });
 
-test('disabled: Finance lands on self-service and the approval queue is gone', function () {
+test('disabled: Finance lands on a safe page and the approval queue is gone', function () {
     $finance = pmUser(UserRole::Finance);
     pmDisable();
 
-    $this->actingAs($finance)->get(route('dashboard'))->assertOk()->assertDontSee('Finance Approval');
+    // Dashboard Access: Finance View is Finance's dashboard; with payroll off
+    // there is none, so "/" goes to the first page they can open.
+    $this->actingAs($finance)->get(route('dashboard'))->assertRedirect(route('attendance.my'));
+    $this->actingAs($finance)->get(route('attendance.my'))->assertOk()->assertDontSee('Finance Approval');
     $this->actingAs($finance)->get(route('dashboard.finance'))->assertForbidden();
 });
 

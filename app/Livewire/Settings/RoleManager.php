@@ -8,6 +8,7 @@ use App\Models\Permission;
 use App\Models\Role;
 use App\Models\UserPermissionOverride;
 use App\Services\Audit\AuditService;
+use App\Services\Navigation\DashboardAccess;
 use App\Services\Security\PermissionAdministration;
 use App\Services\Security\PermissionScopes;
 use App\Services\Security\PermissionSections;
@@ -468,12 +469,10 @@ class RoleManager extends Component
             return $chosen !== '' ? DataScope::from($chosen)->label() : ($inheritedScopes[$permission->id] ?? 'Default');
         };
 
-        $dashboard = match (true) {
-            $has('view_hr_dashboard') && $has('manage_employees') => 'HR Operations',
-            $has('view_executive_dashboard') => 'Executive View',
-            $has('approve_leave') => 'Team View',
-            default => 'My dashboard',
-        };
+        $dashboards = DashboardAccess::summarise(
+            $selected->keys()->all(),
+            $selected->mapWithKeys(fn (Permission $p) => [$p->key => DataScope::tryFrom((string) ($this->scopes[$p->id]['scope'] ?? ''))])->all(),
+        );
 
         $approve = array_values(array_filter([
             $has('approve_leave') ? 'Leave ('.$scopeOf('approve_leave').')' : null,
@@ -504,7 +503,7 @@ class RoleManager extends Component
 
         return [
             'name' => $this->name ?: 'New role',
-            'dashboard' => $dashboard,
+            'dashboards' => $dashboards,
             'default_scope' => $default->label(),
             'approve' => $approve,
             'view' => $view,

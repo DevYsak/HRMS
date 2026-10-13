@@ -20,8 +20,10 @@ use App\Models\MenuSetting;
 use App\Models\OtRequest;
 use App\Models\Payroll;
 use App\Models\Payslip;
+use App\Models\Permission;
 use App\Models\ShiftSetting;
 use App\Models\User;
+use App\Models\UserPermissionOverride;
 use App\Models\WfhRequest;
 use App\Notifications\LeaveBalanceChangedNotification;
 use App\Services\EmployeeDashboardService;
@@ -245,6 +247,8 @@ test('the payroll card shows the employee\'s own latest payslip and nobody else\
 test('the payroll card is left out for an account without view_payslips', function () {
     $employee = edrEmployee();
     $employee->user->forceFill(['role_id' => null])->save();
+    // No role at all, so no view_payslips — but the Main Dashboard itself is granted.
+    UserPermissionOverride::create(['user_id' => $employee->user_id, 'permission_id' => Permission::where('key', 'view_main_dashboard')->value('id'), 'effect' => 'grant']);
 
     Livewire::actingAs($employee->user->fresh())->test(Dashboard::class)
         ->assertOk()

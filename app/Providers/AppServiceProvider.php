@@ -47,6 +47,7 @@ use App\Observers\ReimbursementObserver;
 use App\Observers\UserObserver;
 use App\Services\EmployeeImportService;
 use App\Services\ModuleFeatureService;
+use App\Services\Navigation\DashboardAccess;
 use App\Services\Notifications\NotificationDeliveryGate;
 use App\Support\DateDisplay;
 use Carbon\CarbonImmutable;
@@ -118,6 +119,12 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('manage-settings', function (User $user) {
             return $user->canManageSettings();
         });
+
+        // Dashboard Access (Roles & Permissions): one gate per dashboard route,
+        // the same answer the sidebar and the landing use.
+        foreach (array_keys(DashboardAccess::DASHBOARDS) as $dashboard) {
+            Gate::define("open-{$dashboard}-dashboard", static fn (User $user): bool => app(DashboardAccess::class)->allows($user, $dashboard));
+        }
 
         // Dynamic, database-driven authorization: any ability matching a
         // `permissions.key` row resolves through the user's assigned role.

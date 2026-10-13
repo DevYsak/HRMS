@@ -36,11 +36,13 @@ const ROLES = {
         forbidden: [],
         approvals: ['/time-off/team', '/attendance/employees', '/time-off/leave-management'],
     },
+    // Dashboard Access: Team View by default; Department View and the Main
+    // Dashboard only when an admin grants them.
     department_head: {
-        landing: '/dashboard/department',
-        menu: ['/', '/time-off/team', '/attendance/team', '/overtime/manage'],
-        hidden: ['/employees/create', '/settings/roles', '/payroll/process', '/dashboard/finance', '/attendance/employees'],
-        forbidden: ['/employees/create', '/settings/roles', '/payroll/process', '/dashboard/finance'],
+        landing: '/dashboard/manager',
+        menu: ['/dashboard/manager', '/time-off/team', '/attendance/team', '/overtime/manage'],
+        hidden: ['/employees/create', '/settings/roles', '/payroll/process', '/dashboard/finance', '/attendance/employees', '/dashboard/department', '/dashboard/main'],
+        forbidden: ['/employees/create', '/settings/roles', '/payroll/process', '/dashboard/finance', '/dashboard/department', '/dashboard/main'],
         approvals: ['/time-off/team', '/attendance/team', '/overtime/manage'],
     },
     manager: {

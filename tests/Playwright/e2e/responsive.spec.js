@@ -9,7 +9,7 @@ import { expectHealthyPage, login, logout } from './helpers.js';
 const PAGES = {
     employee: ['/', '/attendance/my', '/time-off/my', '/overtime/my', '/notifications', '/my-profile', '/help/employee-guide'],
     manager: ['/dashboard/manager', '/time-off/team', '/attendance/team', '/overtime/manage'],
-    department_head: ['/dashboard/department'],
+    department_head: ['/dashboard/manager'],
     hr_admin: ['/', '/employees', '/attendance/employees', '/time-off/leave-management'],
     finance: ['/dashboard/finance', '/payroll/process'],
     super_admin: ['/', '/settings/roles'],

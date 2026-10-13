@@ -152,7 +152,8 @@ test('"Dashboard" lands each role on its own page', function (string $slug, ?str
     'hr admin' => ['hr_admin', null, DashboardLanding::HR],
     // D1: a Director lands on their department, not the company-wide executive view.
     'director' => ['director', 'dashboard.department', DashboardLanding::SELF_SERVICE],
-    'department head' => ['department_head', 'dashboard.department', DashboardLanding::SELF_SERVICE],
+    // Dashboard Access: a Department Head holds Team View; Department View only when granted.
+    'department head' => ['department_head', 'dashboard.manager', DashboardLanding::SELF_SERVICE],
     'manager' => ['manager', 'dashboard.manager', DashboardLanding::SELF_SERVICE],
     'employee' => ['employee', null, DashboardLanding::SELF_SERVICE],
 ]);
@@ -160,13 +161,19 @@ test('"Dashboard" lands each role on its own page', function (string $slug, ?str
 test('the landing page is not listed twice in the menu', function () {
     $labels = navLabels(navUser('manager'));
 
-    expect($labels)->toContain('Dashboard')
-        ->and($labels)->not->toContain('Team View');
+    // Dashboard Access: the manager's one dashboard is Team View, listed once.
+    expect(array_count_values($labels)['Team View'] ?? 0)->toBe(1)
+        ->and($labels)->not->toContain('Main Dashboard')
+        ->and($labels)->not->toContain('Dashboard');
 });
 
 test('the Department dashboard shows the headed department and refuses non-heads', function () {
     $head = navUser('department_head');
     $department = Department::where('head_id', $head->id)->first();
+    // Dashboard Access: Department View opens only when granted.
+    $this->actingAs($head)->get(route('dashboard.department'))->assertForbidden();
+    UserPermissionOverride::create(['user_id' => $head->id, 'permission_id' => Permission::where('key', 'view_department_dashboard')->value('id'), 'effect' => 'grant']);
+    $head = $head->fresh();
 
     $this->actingAs($head)->get(route('dashboard.department'))
         ->assertOk()

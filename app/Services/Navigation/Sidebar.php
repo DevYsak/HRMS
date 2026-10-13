@@ -128,19 +128,15 @@ class Sidebar
         }
 
         $groups = [];
-        // "Dashboard" already opens this page, so its own link would repeat it.
-        $landing = $this->landing->route($user);
+        // "/" forwards to the landing dashboard; that entry is the active one there.
+        $landing = $this->landing->route($user) ?? 'dashboard.main';
 
         foreach ($this->catalogue() as $group) {
             $items = [];
 
             foreach ($group['items'] as $item) {
-                if (($item['landing'] ?? false) && in_array($landing, $item['active'] ?? [$item['route']], true)) {
-                    continue;
-                }
-
-                if ($item['route'] === 'dashboard' && $landing !== null) {
-                    $item['active'] = ['dashboard', $landing];
+                if (($item['dashboard'] ?? false) && $item['route'] === $landing) {
+                    $item['active'] = [...($item['active'] ?? [$item['route']]), 'dashboard'];
                 }
 
                 if (! $this->visible($user, $item)) {
@@ -215,14 +211,14 @@ class Sidebar
             [
                 'key' => 'workspace', 'heading' => 'Workspace', 'icon' => 'squares-2x2', 'expanded' => true,
                 'items' => [
-                    ['label' => 'Dashboard', 'route' => 'dashboard', 'icon' => 'squares-2x2', ...$self],
-                    ['label' => 'Executive View', 'route' => 'dashboard.executive', 'icon' => 'chart-bar-square', 'landing' => true,
-                        'active' => ['dashboard.executive', 'dashboard.director'],
-                        'when' => fn (User $u) => $u->isCompanyWideApprover()],
-                    ['label' => 'Department View', 'route' => 'dashboard.department', 'icon' => 'building-office', 'landing' => true,
-                        'when' => fn (User $u) => DashboardLanding::isDepartmentLevel($u)],
-                    ['label' => 'Team View', 'route' => 'dashboard.manager', 'icon' => 'presentation-chart-line', 'landing' => true],
-                    ['label' => 'Finance View', 'route' => 'dashboard.finance', 'icon' => 'banknotes', 'landing' => true],
+                    // Dashboard Access (Roles & Permissions): each entry shows only
+                    // when its route gate (open-*-dashboard) lets the user in.
+                    ['label' => 'Main Dashboard', 'route' => 'dashboard.main', 'icon' => 'squares-2x2', 'dashboard' => true, ...$self],
+                    ['label' => 'Team View', 'route' => 'dashboard.manager', 'icon' => 'presentation-chart-line', 'dashboard' => true],
+                    ['label' => 'Department View', 'route' => 'dashboard.department', 'icon' => 'building-office', 'dashboard' => true],
+                    ['label' => 'Executive View', 'route' => 'dashboard.executive', 'icon' => 'chart-bar-square', 'dashboard' => true,
+                        'active' => ['dashboard.executive', 'dashboard.director']],
+                    ['label' => 'Finance View', 'route' => 'dashboard.finance', 'icon' => 'banknotes', 'dashboard' => true],
                 ],
             ],
             [

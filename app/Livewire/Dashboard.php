@@ -11,6 +11,7 @@ use App\Services\Attendance\ShiftResolver;
 use App\Services\AttendanceService;
 use App\Services\Dashboards\OrganisationOverview;
 use App\Services\EmployeeDashboardService;
+use App\Services\Navigation\DashboardAccess;
 use App\Services\Navigation\DashboardLanding;
 use App\Services\WfhService;
 use Illuminate\Support\Carbon;
@@ -20,18 +21,28 @@ use Livewire\Component;
 class Dashboard extends Component
 {
     /**
-     * Managers, Finance and Directors land on their own dashboard page.
+     * "/" is home: it shows the Main Dashboard when that is the user's landing
+     * (DashboardAccess) and otherwise forwards to the first dashboard they may
+     * open — Department View, Team View, Executive View, Finance View — or a
+     * safe page when they have none. /dashboard/main always shows the Main
+     * Dashboard, for anyone granted it (its route gate checks that).
      *
-     * Each of those is a full-page component with its own layout and route
-     * gate. Rendering one from here sent its approve / reject clicks to this
-     * component, and mounting it as a child broke the app-shell grid — so
+     * Each other dashboard is a full-page component with its own layout and
+     * route gate. Rendering one from here sent its approve / reject clicks to
+     * this component, and mounting it as a child broke the app-shell grid — so
      * "/" forwards to the page itself.
      */
     public function mount(): void
     {
-        $landing = app(DashboardLanding::class)->route(Auth::user());
+        if (request()->routeIs('dashboard.main')) {
+            return;
+        }
 
-        if ($landing !== null) {
+        $landing = app(DashboardAccess::class)->landing(Auth::user());
+
+        abort_if($landing === null, 403, 'No dashboard or page is enabled for your role. Ask an administrator.');
+
+        if ($landing !== 'dashboard') {
             $this->redirectRoute($landing, navigate: true);
         }
     }

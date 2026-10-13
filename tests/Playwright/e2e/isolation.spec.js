@@ -27,8 +27,8 @@ test.describe('department isolation', () => {
             }
 
             // Their own people are there: a manager's Team Attendance lists direct
-            // reports; a department head's department view lists the department.
-            await page.goto(slug === 'manager' ? '/attendance/team' : '/dashboard/department');
+            // reports; a department head's Team View lists the department.
+            await page.goto(slug === 'manager' ? '/attendance/team' : '/dashboard/manager');
             await expect(main(page)).toContainText(alpha.name);
 
             for (const path of [
@@ -44,7 +44,7 @@ test.describe('department isolation', () => {
 
     test('department head dashboard counts only the department', async ({ page }) => {
         await login(page, 'department_head');
-        await page.goto('/dashboard/department');
+        await page.goto('/dashboard/manager');
         await expectHealthyPage(page);
 
         await expect(main(page)).toContainText('E2E Alpha');

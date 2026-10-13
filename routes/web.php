@@ -178,7 +178,10 @@ Route::middleware(['auth'])->group(function () {
         ->name('password.first-change.update');
 
     // Dashboard
+    // "/" opens the user's landing dashboard (DashboardAccess); /dashboard/main
+    // is the Main Dashboard itself, for anyone granted it.
     Route::get('/', Dashboard::class)->name('dashboard');
+    Route::get('/dashboard/main', Dashboard::class)->name('dashboard.main')->middleware('can:open-main-dashboard');
 
     // "Login as" impersonation — permission 'impersonate' (HR Admin by default).
     // (stop is declared first so it isn't captured by the {user} binding)
@@ -390,21 +393,22 @@ Route::middleware(['auth'])->group(function () {
     // --------------------------------------------------
     // Each role dashboard is gated server-side — company-wide figures and
     // payroll data must not be reachable by typing the URL.
+    // Dashboard Access permissions (Roles & Permissions) decide each one.
     Route::get('/dashboard/executive', ExecutiveDashboard::class)->name('dashboard.executive')
-        ->middleware('can:view_executive_dashboard');
+        ->middleware('can:open-executive-dashboard');
     // Director landing — reuses the ExecutiveDashboard component (no new page/component).
     Route::get('/dashboard/director', ExecutiveDashboard::class)->name('dashboard.director')
-        ->middleware('can:view_executive_dashboard');
+        ->middleware('can:open-executive-dashboard');
     Route::get('/dashboard/finance', FinanceDashboard::class)->name('dashboard.finance')
-        ->middleware(['role:run-payroll,approve-finance', 'module:payroll']);
+        ->middleware(['can:open-finance-dashboard', 'module:payroll']);
     Route::get('/dashboard/hr-admin', HrAdminDashboard::class)->name('dashboard.hr-admin')
         ->middleware('can:view_hr_dashboard');
+    // Team View and Department View: Dashboard Access permissions at an allowed
+    // scope. Their approve / reject buttons still check Approve Leave.
     Route::get('/dashboard/manager', ManagerDashboard::class)->name('dashboard.manager')
-        ->middleware('role:approve-leave');
-    // Same quick approve / reject actions as the Manager dashboard, so the same
-    // gate; the component additionally requires heading a department.
+        ->middleware('can:open-team-dashboard');
     Route::get('/dashboard/department', DepartmentDashboard::class)->name('dashboard.department')
-        ->middleware('role:approve-leave');
+        ->middleware('can:open-department-dashboard');
     // One department's workspace — the component allows only a department
     // inside the viewer's view_attendance reach (HR: every department).
     Route::get('/departments/{department}', DepartmentOverview::class)->name('departments.show')

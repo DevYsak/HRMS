@@ -70,13 +70,13 @@ test('an employee stays on "/" and gets self-service inside the app shell', func
     expect(fluxMainParent($page->getContent()))->toBe('body');
 });
 
-test('a role that cannot open its own dashboard page stays on self-service instead of a 403', function () {
+test('a role with no dashboard lands on a safe page instead of a 403', function () {
+    // Dashboard Access: without any dashboard permission "/" goes to the first
+    // page the user can open (My Attendance), never a 403.
     $bare = Role::create(['name' => 'Bare manager', 'slug' => 'bare-manager', 'is_system' => false, 'is_active' => true]);
     $manager = landingUser(UserRole::Manager, ['role_id' => $bare->id]);
 
-    Livewire::actingAs($manager)->test(Dashboard::class)
-        ->assertNoRedirect()
-        ->assertSee('Attendance Overview');
+    $this->actingAs($manager)->get(route('dashboard'))->assertRedirect(route('attendance.my'));
 });
 
 test('a scoped Director lands on the department view and cannot open the company-wide dashboard', function () {
