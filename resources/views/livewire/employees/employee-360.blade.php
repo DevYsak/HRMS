@@ -174,7 +174,7 @@
         <div class="min-w-0 space-y-5">
             {{-- ── KPIs ── --}}
             @if($kpis !== [])
-                <div class="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-6" data-360-kpis>
+                <div class="grid grid-cols-2 gap-3 sm:grid-cols-3" data-360-kpis>
                     @foreach($kpis as $kpi)
                         <x-pulse.kpi-card :label="$kpi['label']" :value="$kpi['value']" :sub="$kpi['hint']" :icon="$kpiIcon[$kpi['key']] ?? 'chart-bar'" :accent="$kpiAccent[$kpi['tone']] ?? 'brand'" data-kpi="{{ $kpi['key'] }}" />
                     @endforeach
@@ -296,13 +296,14 @@
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,15rem)_minmax(0,1fr)]">
-                        <div class="space-y-3" data-leave-types>
+                    <div class="space-y-4">
+                        <div class="space-y-4" data-leave-types>
                             <div class="grid grid-cols-3 gap-2 text-center">
                                 <div class="rounded-xl bg-violet-50 p-2 dark:bg-violet-500/10"><p class="text-lg font-bold tabular-nums text-violet-700 dark:text-violet-300" data-leave-available>{{ \App\Services\People\Employee360Service::number($leave['available']) }}</p><p class="text-[10px] font-semibold uppercase text-violet-600/80">Available</p></div>
                                 <div class="rounded-xl bg-zinc-50 p-2 dark:bg-white/5"><p class="text-lg font-bold tabular-nums text-zinc-800 dark:text-zinc-100" data-leave-taken>{{ \App\Services\People\Employee360Service::number($leave['taken_this_year']) }}</p><p class="text-[10px] font-semibold uppercase text-zinc-500">Taken</p></div>
                                 <div class="rounded-xl bg-amber-50 p-2 dark:bg-amber-500/10"><p class="text-lg font-bold tabular-nums text-amber-700 dark:text-amber-300" data-leave-pending>{{ $leave['pending_requests'] }}</p><p class="text-[10px] font-semibold uppercase text-amber-600/80">Pending</p></div>
                             </div>
+                            <div class="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2 xl:grid-cols-3">
                             @forelse($leave['types'] as $type)
                                 @php($total = max($type['used'] + $type['available'], 0.0001))
                                 <div class="min-w-0">
@@ -317,6 +318,7 @@
                             @empty
                                 <p class="text-xs text-zinc-500">No leave balances this year.</p>
                             @endforelse
+                            </div>
                         </div>
 
                         <div class="min-w-0">
@@ -357,9 +359,9 @@
                 </x-pulse.card>
             @endif
 
-            {{-- ── Performance + Overtime ── --}}
-            @if($performance || $overtime)
-                <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
+            {{-- ── Performance, Overtime, Warnings ── --}}
+            @if($performance || $overtime || $warnings)
+                <div class="grid grid-cols-1 gap-5 md:grid-cols-2 min-[1800px]:grid-cols-3">
                     @if($performance)
                         <x-pulse.card title="Performance" :subtitle="$performance['cycle']?->name ?? 'No active cycle'" icon="chart-bar" data-360-section="performance">
                             <x-slot:actions>
@@ -421,14 +423,9 @@
                             <p class="mt-2 text-[11px] text-zinc-400">Actual OT is measured from real punches on approved requests; the requested window is shown only for reference.</p>
                         </x-pulse.card>
                     @endif
-                </div>
-            @endif
 
-            {{-- ── Warnings + Activity ── --}}
-            @if($warnings || $activity)
-                <div @class(['grid grid-cols-1 gap-5', 'xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]' => $warnings && $activity])>
                     @if($warnings)
-                        <x-pulse.card title="Warnings & conduct" icon="exclamation-triangle" data-360-section="warnings">
+                        <x-pulse.card title="Warnings & conduct" icon="exclamation-triangle" data-360-section="warnings" :class="$performance && $overtime ? 'md:col-span-2 min-[1800px]:col-span-1' : ''">
                             <x-slot:actions>
                                 @if($can['warnings_page'])
                                     <a href="{{ route('performance.warnings.manage') }}" wire:navigate class="text-xs font-semibold text-orange-600 hover:text-orange-700 dark:text-orange-400">View all →</a>
@@ -456,8 +453,11 @@
                             @endif
                         </x-pulse.card>
                     @endif
+                </div>
+            @endif
 
-                    @if($activity)
+            {{-- ── Activity (full width, so the table never scrolls sideways on desktop) ── --}}
+            @if($activity)
                         <x-pulse.card title="Activity & logs" icon="clipboard-document-list" :flush="true" data-360-section="activity">
                             <x-slot:actions>
                                 @if($activity['full'])
@@ -477,7 +477,7 @@
                                                 <tr>
                                                     <td class="whitespace-nowrap px-4 py-2 text-zinc-500">{{ $dd->dateTime($entry['at']) }}</td>
                                                     <td class="px-4 py-2 font-semibold text-zinc-800 dark:text-zinc-100">{{ $entry['action'] }}</td>
-                                                    <td class="max-w-[16rem] truncate px-4 py-2 text-zinc-600 dark:text-zinc-300" title="{{ $entry['details'] }}">{{ $entry['details'] }}</td>
+                                                    <td class="max-w-[26rem] truncate px-4 py-2 text-zinc-600 dark:text-zinc-300" title="{{ $entry['details'] }}">{{ $entry['details'] }}</td>
                                                     <td class="whitespace-nowrap px-4 py-2 text-zinc-600 dark:text-zinc-300">{{ $entry['by'] }}</td>
                                                 </tr>
                                             @endforeach
@@ -486,8 +486,6 @@
                                 </div>
                             @endif
                         </x-pulse.card>
-                    @endif
-                </div>
             @endif
         </div>
 

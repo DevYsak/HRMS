@@ -229,9 +229,12 @@ class Employee360 extends Component
             'dataLabels' => ['enabled' => false],
             'stroke' => ['curve' => 'smooth', 'width' => 2],
             'fill' => ['type' => 'gradient', 'gradient' => ['opacityFrom' => 0.35, 'opacityTo' => 0.02]],
-            // Labels live in the points ({x, y}): the light/dark switch re-applies xaxis and would drop categories.
-            'series' => [['name' => 'Worked hours', 'data' => $rows->map(fn ($d) => ['x' => $display->shortDate(Carbon::parse($d['date'])), 'y' => round($d['worked'] / 60, 1)])->values()->all()]],
-            'xaxis' => ['type' => 'category', 'labels' => ['rotate' => 0, 'hideOverlappingLabels' => true], 'tickAmount' => 6],
+            // A date axis spaces its own ticks (a long range never piles labels up), and the dates
+            // live in the points, so the light/dark re-theme (which re-applies xaxis) keeps them.
+            // Noon UTC keeps every point on its own calendar day.
+            'series' => [['name' => 'Worked hours', 'data' => $rows->map(fn ($d) => ['x' => Carbon::parse($d['date'].' 12:00:00', 'UTC')->getTimestampMs(), 'y' => round($d['worked'] / 60, 1)])->values()->all()]],
+            'xaxis' => ['type' => 'datetime', 'labels' => ['format' => 'dd MMM', 'datetimeUTC' => true, 'rotate' => 0]],
+            'tooltip' => ['x' => ['format' => 'dd MMM yyyy']],
             'yaxis' => ['min' => 0],
             'grid' => ['strokeDashArray' => 4],
         ];

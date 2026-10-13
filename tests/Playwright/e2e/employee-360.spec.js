@@ -14,7 +14,7 @@ test.describe.configure({ mode: 'serial' });
 const SHOTS = path.resolve('storage/logs/e2e-artifacts/employee-360');
 fs.mkdirSync(SHOTS, { recursive: true });
 
-const WIDTHS = [375, 430, 768, 1024, 1366, 1440, 1920];
+const WIDTHS = [375, 430, 768, 1024, 1366, 1440, 1600, 1920];
 const overflowOf = (page) => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
 
 test('HR: the page is complete and never overflows sideways at any width', async ({ page }) => {
@@ -36,6 +36,18 @@ test('HR: the page is complete and never overflows sideways at any width', async
         await page.waitForTimeout(250);
         expect(await overflowOf(page), `horizontal overflow at ${width}px`).toBeLessThanOrEqual(0);
         await page.screenshot({ path: path.join(SHOTS, `hr-light-${width}.png`), fullPage: true });
+    }
+
+    // Desktop: the activity table fits its card, and the trend chart's date labels never overlap.
+    await page.setViewportSize({ width: 1600, height: 900 });
+    await page.waitForTimeout(300);
+    const activityScroll = page.locator('[data-360-section="activity"] .overflow-x-auto').first();
+    if (await activityScroll.count()) {
+        expect(await activityScroll.evaluate((el) => el.scrollWidth - el.clientWidth), 'activity table scrolls at 1600px').toBeLessThanOrEqual(0);
+    }
+    const labelBoxes = await page.locator('[data-360-section="attendance"] .apexcharts-xaxis-texts-g text').evaluateAll((nodes) => nodes.map((n) => n.getBoundingClientRect()).map((r) => [r.left, r.right]));
+    for (let i = 1; i < labelBoxes.length; i++) {
+        expect(labelBoxes[i][0], 'trend chart labels overlap').toBeGreaterThanOrEqual(labelBoxes[i - 1][1] - 1);
     }
 
     // Details move below the content on tablet / phone, beside it on desktop.
