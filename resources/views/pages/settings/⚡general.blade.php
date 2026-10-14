@@ -1,57 +1,104 @@
 <?php
 
 use App\Models\Company;
-use App\Models\Office;
 use App\Models\Department;
-use Illuminate\Support\Carbon;
+use App\Models\Office;
+use App\Services\Branding\SvgSanitizer;
+use Flux\Flux;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
 use Livewire\Component;
-use Flux\Flux;
 use Livewire\WithFileUploads;
 
-new #[Title('Company Settings')] class extends Component {
+new #[Title('Company Settings')] class extends Component
+{
     use WithFileUploads;
 
     public Company $company;
-    
+
     // Company details
     public $name;
+
     public $website;
+
     public $email;
+
     public $phone;
+
     public $address;
+
     public $city;
+
     public $country;
+
     public $timezone;
+
     public $currency;
+
     public $currency_symbol;
+
     public $primary_color;
+
     public $secondary_color;
-    public $logo; // For upload
+
+    public $logo; // For upload — light-mode wordmark
+
+    public $logo_dark; // For upload — dark-mode wordmark
+
+    public $logo_mark; // For upload — square icon for the folded sidebar
+
+    public $logo_mark_dark; // For upload — that icon on dark surfaces
+
     public $favicon; // For upload
+
+    /**
+     * Sidebar / login branding slots, in display order.
+     *
+     * @var array<string, array{label: string, hint: string, square: bool, dark: bool}>
+     */
+    public const BRAND_SLOTS = [
+        'logo' => ['label' => 'Logo (light mode)', 'hint' => 'Wide wordmark on light backgrounds. Sidebar, login & payslips.', 'square' => false, 'dark' => false],
+        'logo_dark' => ['label' => 'Logo (dark mode)', 'hint' => 'Light-coloured wordmark for the dark theme. Empty: the light logo is shown in white.', 'square' => false, 'dark' => true],
+        'logo_mark' => ['label' => 'Sidebar icon (light mode)', 'hint' => 'Square icon shown when the sidebar is collapsed.', 'square' => true, 'dark' => false],
+        'logo_mark_dark' => ['label' => 'Sidebar icon (dark mode)', 'hint' => 'Collapsed-sidebar icon for the dark theme.', 'square' => true, 'dark' => true],
+    ];
 
     // Office form
     public $officeId;
+
     public $officeName;
+
     public $officeAddress;
+
     public $officeCity;
+
     public $officeCountry;
+
     public $officeTimezone = 'UTC';
+
     public $officeRadius = 200;
+
     public $isHeadquarters = false;
 
     // Department form
     public $deptId;
+
     public $deptName;
+
     public $deptCode;
+
     public $deptDesc;
 
     public function mount(): void
     {
         $this->authorizeSettings();
 
-        $this->company = Company::first() ?? new Company();
+        $this->company = Company::first() ?? new Company;
         $this->fillCompanyDetails();
     }
 
@@ -101,9 +148,13 @@ new #[Title('Company Settings')] class extends Component {
             'name' => 'required|string|max:255',
             'email' => 'required|email',
             'website' => 'nullable|url',
-            // Logo: raster image up to 2 MB. No SVG — it is served from the
-            // public disk and an SVG can carry script.
-            'logo' => 'nullable|image|mimes:png,jpg,jpeg,webp|max:2048',
+            // Logos: PNG/JPG/WEBP or SVG up to 2 MB. An SVG is rebuilt by
+            // SvgSanitizer before it is stored — served from the public disk,
+            // a raw SVG could carry script.
+            'logo' => 'nullable|file|mimes:png,jpg,jpeg,webp,svg|max:2048',
+            'logo_dark' => 'nullable|file|mimes:png,jpg,jpeg,webp,svg|max:2048',
+            'logo_mark' => 'nullable|file|mimes:png,jpg,jpeg,webp,svg|max:1024',
+            'logo_mark_dark' => 'nullable|file|mimes:png,jpg,jpeg,webp,svg|max:1024',
             // Favicon: square-ish icon; .ico is not an "image" mime, so list it explicitly.
             'favicon' => 'nullable|mimes:png,ico,jpg|max:1024',
         ]);
@@ -123,8 +174,10 @@ new #[Title('Company Settings')] class extends Component {
             'secondary_color' => $this->secondary_color,
         ]);
 
-        if ($this->logo) {
-            $this->company->logo = $this->logo->store('branding', 'public');
+        foreach (array_keys(self::BRAND_SLOTS) as $slot) {
+            if ($this->{$slot} instanceof UploadedFile) {
+                $this->company->{$slot} = $this->storeBrandFile($this->{$slot}, $slot);
+            }
         }
 
         if ($this->favicon) {
@@ -134,11 +187,51 @@ new #[Title('Company Settings')] class extends Component {
         $this->company->save();
 
         // The page <head> caches the favicon path; drop it so the new icon shows.
-        \Illuminate\Support\Facades\Cache::forget('company.favicon');
+        Cache::forget('company.favicon');
 
-        $this->reset(['logo', 'favicon']);
+        $this->reset(['logo', 'logo_dark', 'logo_mark', 'logo_mark_dark', 'favicon']);
 
         Flux::toast(variant: 'success', text: __('Company details updated.'));
+    }
+
+    /**
+     * Back to the bundled artwork for one slot (the file is deleted).
+     */
+    public function removeBrandFile(string $slot): void
+    {
+        $this->authorizeSettings();
+        abort_unless(array_key_exists($slot, self::BRAND_SLOTS) && $this->company->exists, 404);
+
+        if ($path = $this->company->{$slot}) {
+            Storage::disk('public')->delete($path);
+        }
+
+        $this->company->update([$slot => null]);
+        $this->reset($slot);
+
+        Flux::toast(variant: 'success', text: __(':label removed — the default is shown.', ['label' => self::BRAND_SLOTS[$slot]['label']]));
+    }
+
+    /**
+     * Store a branding upload. An SVG is rebuilt from an allowlist first and
+     * refused when nothing safe is left of it.
+     */
+    protected function storeBrandFile(UploadedFile $file, string $slot): string
+    {
+        if (strtolower($file->getClientOriginalExtension()) !== 'svg' && $file->getMimeType() !== 'image/svg+xml') {
+            return $file->store('branding', 'public');
+        }
+
+        $clean = app(SvgSanitizer::class)->clean((string) file_get_contents($file->getRealPath()));
+
+        if ($clean === null) {
+            throw ValidationException::withMessages([$slot => __('This SVG could not be read safely. Export it again as a plain SVG or upload a PNG.')]);
+        }
+
+        $path = 'branding/'.Str::random(40).'.svg';
+        Storage::disk('public')->put($path, $clean);
+
+        return $path;
     }
 
     // --- Office Actions ---
@@ -304,32 +397,62 @@ new #[Title('Company Settings')] class extends Component {
                     </flux:field>
                 </div>
 
-                {{-- Branding: logo & favicon --}}
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {{-- Logo --}}
-                    <flux:field>
-                        <flux:label>{{ __('Company Logo') }}</flux:label>
-                        <div class="flex items-center gap-4">
-                            <div class="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800">
-                                @if ($logo && $logo->isPreviewable())
-                                    <img src="{{ $logo->temporaryUrl() }}" class="size-full object-contain" alt="Logo preview">
-                                @elseif ($logo)
-                                    <flux:icon.document-check class="size-6 text-emerald-500" />
-                                @elseif ($company->logo)
-                                    <img src="{{ asset('storage/'.$company->logo) }}" class="size-full object-contain" alt="Current logo">
-                                @else
-                                    <flux:icon.photo class="size-6 text-zinc-400" />
-                                @endif
+                {{-- Branding: logos per theme, sidebar icons & favicon --}}
+                <div>
+                    <flux:heading level="3">{{ __('Branding') }}</flux:heading>
+                    <flux:subheading>{{ __('PNG, JPG, WEBP or SVG. SVGs are cleaned of scripts and external links when uploaded. An empty slot uses the bundled Nexcore artwork.') }}</flux:subheading>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6" data-brand-slots>
+                    @foreach ($this::BRAND_SLOTS as $slot => $meta)
+                        @php
+                            $upload = $this->{$slot};
+                            $stored = $company->{$slot} && \Illuminate\Support\Facades\Storage::disk('public')->exists($company->{$slot})
+                                ? \Illuminate\Support\Facades\Storage::disk('public')->url($company->{$slot}) : null;
+                            $default = asset(match ($slot) {
+                                'logo' => Company::FALLBACK_LOGO,
+                                'logo_dark' => Company::FALLBACK_LOGO_DARK,
+                                'logo_mark' => Company::FALLBACK_MARK,
+                                'logo_mark_dark' => Company::FALLBACK_MARK_DARK,
+                            });
+                            // A raw (not yet sanitised) SVG is never previewed.
+                            $previewable = $upload && $upload->isPreviewable() && strtolower($upload->getClientOriginalExtension()) !== 'svg';
+                        @endphp
+                        <flux:field>
+                            <flux:label>{{ __($meta['label']) }}</flux:label>
+                            <div class="flex items-center gap-4">
+                                <div @class([
+                                    'flex shrink-0 items-center justify-center overflow-hidden rounded-xl border p-2',
+                                    'size-16' => $meta['square'],
+                                    'h-16 w-36' => ! $meta['square'],
+                                    'border-zinc-700 bg-[#111827]' => $meta['dark'],
+                                    'border-zinc-200 bg-[#FFF8F1] dark:border-zinc-700' => ! $meta['dark'],
+                                ])>
+                                    @if ($previewable)
+                                        <img src="{{ $upload->temporaryUrl() }}" class="max-h-full max-w-full object-contain" alt="{{ __('Preview') }}">
+                                    @elseif ($upload)
+                                        <flux:icon.document-check class="size-6 text-emerald-500" />
+                                    @else
+                                        <img src="{{ $stored ?? $default }}" class="max-h-full max-w-full object-contain" alt="{{ __($meta['label']) }}">
+                                    @endif
+                                </div>
+                                <div class="min-w-0 flex-1">
+                                    <input type="file" wire:model="{{ $slot }}" accept="image/png,image/jpeg,image/webp,image/svg+xml,.svg"
+                                        class="block w-full text-sm text-zinc-500 file:mr-3 file:rounded-lg file:border-0 file:bg-zinc-100 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-zinc-700 hover:file:bg-zinc-200 dark:file:bg-zinc-700 dark:file:text-zinc-200" />
+                                    <flux:text size="sm" class="mt-1 text-zinc-400">{{ __($meta['hint']) }}</flux:text>
+                                    <div class="mt-1 flex items-center gap-3">
+                                        <flux:badge size="sm" :color="$stored ? 'green' : 'zinc'">{{ $stored ? __('Custom') : __('Default') }}</flux:badge>
+                                        @if ($stored)
+                                            <flux:button size="xs" variant="ghost" wire:click="removeBrandFile('{{ $slot }}')"
+                                                wire:confirm="{{ __('Remove this image and use the default?') }}">{{ __('Use default') }}</flux:button>
+                                        @endif
+                                        <span wire:loading wire:target="{{ $slot }}"><flux:text size="sm" class="text-zinc-400">{{ __('Uploading…') }}</flux:text></span>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="flex-1">
-                                <input type="file" wire:model="logo" accept="image/png,image/jpeg,image/webp,image/svg+xml"
-                                    class="block w-full text-sm text-zinc-500 file:mr-3 file:rounded-lg file:border-0 file:bg-zinc-100 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-zinc-700 hover:file:bg-zinc-200 dark:file:bg-zinc-700 dark:file:text-zinc-200" />
-                                <flux:text size="sm" class="mt-1 text-zinc-400">{{ __('PNG, JPG, WEBP or SVG · max 2 MB. Shown in the sidebar & payslips.') }}</flux:text>
-                                <div wire:loading wire:target="logo"><flux:text size="sm" class="text-zinc-400">{{ __('Uploading…') }}</flux:text></div>
-                            </div>
-                        </div>
-                        <flux:error name="logo" />
-                    </flux:field>
+                            <flux:error :name="$slot" />
+                        </flux:field>
+                    @endforeach
 
                     {{-- Favicon --}}
                     <flux:field>

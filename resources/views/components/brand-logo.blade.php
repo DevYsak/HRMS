@@ -2,6 +2,7 @@
     'size' => 'h-12 w-auto',   // sizing utilities for the <img> itself
     'href' => null,            // wrap in a link when given
     'invertOnDark' => true,    // see note below
+    'variant' => 'logo',       // 'logo' = full wordmark, 'mark' = square icon for the folded sidebar
 ])
 
 {{--
@@ -13,26 +14,40 @@
     differs by surface: the sidebar is narrow so it sizes by width, while the
     login panel has room to size by height.
 
-    The mark is black, so on a dark surface it would disappear. `brightness-0
-    invert` repaints it solid white in dark mode. That loses the red accent in
-    the X, which is the trade for staying legible; pass :invert-on-dark="false"
-    on a surface that is light in both themes.
+    Each theme has its own artwork (Settings → General: light logo, dark logo
+    and the two sidebar icons, PNG or sanitised SVG). When a company uploads a
+    light logo but no dark one, `brightness-0 invert` repaints the light one
+    white in dark mode so it never disappears on a dark surface; pass
+    :invert-on-dark="false" on a surface that is light in both themes.
 
-    The source comes from Company::brandLogoUrl(), so uploading a new logo in
-    Settings → General updates every surface at once.
+    With no icon at all (an uploaded logo, no mark) the company's initial
+    stands in on the folded rail.
 --}}
 @php
-    $src = App\Models\Company::brandLogoUrl();
+    $isMark = $variant === 'mark';
+    $light = $isMark ? App\Models\Company::brandMarkUrl() : App\Models\Company::brandLogoUrl();
+    $dark = $isMark ? App\Models\Company::brandMarkDarkUrl() : App\Models\Company::brandLogoDarkUrl();
     $alt = App\Models\Company::brandName();
 
-    $imgClass = trim($size.' max-w-full object-contain object-left select-none'
-        .($invertOnDark ? ' dark:brightness-0 dark:invert' : ''));
+    $base = trim($size.' max-w-full object-contain select-none '.($isMark ? 'object-center' : 'object-left'));
+    $themed = $invertOnDark && $dark !== null;
+    $singleClass = $base.($invertOnDark && $dark === null ? ' dark:brightness-0 dark:invert' : '');
 @endphp
 
 @if($href)
     <a href="{{ $href }}" {{ $attributes->class('inline-flex min-w-0 items-center') }}>
-        <img src="{{ $src }}" alt="{{ $alt }}" class="{{ $imgClass }}">
-    </a>
+@endif
+
+@if($light === null)
+    <span @unless($href) {{ $attributes->class($size.' inline-flex items-center justify-center rounded-lg bg-orange-500 text-sm font-bold text-white select-none') }} @else class="{{ $size }} inline-flex items-center justify-center rounded-lg bg-orange-500 text-sm font-bold text-white select-none" @endunless
+        role="img" aria-label="{{ $alt }}">{{ mb_strtoupper(mb_substr($alt, 0, 1)) }}</span>
+@elseif($themed)
+    <img src="{{ $light }}" alt="{{ $alt }}" @unless($href) {{ $attributes->class($base.' dark:hidden') }} @else class="{{ $base }} dark:hidden" @endunless>
+    <img src="{{ $dark }}" alt="{{ $alt }}" @unless($href) {{ $attributes->class($base.' hidden dark:block') }} @else class="{{ $base }} hidden dark:block" @endunless>
 @else
-    <img src="{{ $src }}" alt="{{ $alt }}" {{ $attributes->class($imgClass) }}>
+    <img src="{{ $light }}" alt="{{ $alt }}" @unless($href) {{ $attributes->class($singleClass) }} @else class="{{ $singleClass }}" @endunless>
+@endif
+
+@if($href)
+    </a>
 @endif

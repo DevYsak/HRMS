@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Storage;
 
 #[Fillable([
-    'name', 'logo', 'favicon', 'website', 'industry', 'phone', 'email',
+    'name', 'logo', 'logo_dark', 'logo_mark', 'logo_mark_dark', 'favicon', 'website', 'industry', 'phone', 'email',
     'address', 'address_line2', 'cin', 'city', 'country', 'holiday_calendar', 'default_state_code', 'timezone', 'date_format',
     'currency', 'currency_symbol', 'primary_color', 'secondary_color',
 ])]
@@ -64,6 +64,17 @@ class Company extends Model
     public const FALLBACK_LOGO = 'nexcore-logo.png';
 
     /**
+     * Nexcore_new_logo-02.png (white wordmark for dark surfaces) placed on the
+     * light logo's exact canvas, so swapping themes never moves or resizes it.
+     */
+    public const FALLBACK_LOGO_DARK = 'nexcore-logo-dark.png';
+
+    /** The wordmark's X, squared, for the folded sidebar rail (light / dark). */
+    public const FALLBACK_MARK = 'nexcore-mark.png';
+
+    public const FALLBACK_MARK_DARK = 'nexcore-mark-dark.png';
+
+    /**
      * The company whose branding the chrome displays.
      *
      * Explicitly the oldest row, matching the Company::first() the sidebar used
@@ -85,11 +96,61 @@ class Company extends Model
      */
     public static function brandLogoUrl(): string
     {
-        $logo = self::brandCompany()?->logo;
+        return self::storedBrandUrl(self::brandCompany()?->logo) ?? asset(self::FALLBACK_LOGO);
+    }
 
-        return $logo && Storage::disk('public')->exists($logo)
-            ? Storage::disk('public')->url($logo)
-            : asset(self::FALLBACK_LOGO);
+    /**
+     * The wordmark for dark surfaces, or null when the light logo should be
+     * repainted white instead: an uploaded logo with no dark version must not
+     * be swapped for the bundled Nexcore artwork.
+     */
+    public static function brandLogoDarkUrl(): ?string
+    {
+        $company = self::brandCompany();
+
+        if ($dark = self::storedBrandUrl($company?->logo_dark)) {
+            return $dark;
+        }
+
+        return self::storedBrandUrl($company?->logo) ? null : asset(self::FALLBACK_LOGO_DARK);
+    }
+
+    /**
+     * The square icon for the folded sidebar, or null when there is none (an
+     * uploaded logo without a mark) and the initial should stand in.
+     */
+    public static function brandMarkUrl(): ?string
+    {
+        $company = self::brandCompany();
+
+        if ($mark = self::storedBrandUrl($company?->logo_mark)) {
+            return $mark;
+        }
+
+        return self::storedBrandUrl($company?->logo) ? null : asset(self::FALLBACK_MARK);
+    }
+
+    /**
+     * The folded-rail icon for dark surfaces, or null to repaint the light
+     * mark (or show the initial) instead.
+     */
+    public static function brandMarkDarkUrl(): ?string
+    {
+        $company = self::brandCompany();
+
+        if ($dark = self::storedBrandUrl($company?->logo_mark_dark)) {
+            return $dark;
+        }
+
+        return self::storedBrandUrl($company?->logo_mark) || self::storedBrandUrl($company?->logo)
+            ? null
+            : asset(self::FALLBACK_MARK_DARK);
+    }
+
+    /** Public URL of an uploaded branding file, or null when unset or missing. */
+    private static function storedBrandUrl(?string $path): ?string
+    {
+        return $path && Storage::disk('public')->exists($path) ? Storage::disk('public')->url($path) : null;
     }
 
     /** Alt text for the logo — the configured company name, or the app name. */

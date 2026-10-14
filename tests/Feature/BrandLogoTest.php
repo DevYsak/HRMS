@@ -101,10 +101,10 @@ test('the dashboard sidebar shows the logo with no box and no company name', fun
         ->and($brand)->not->toContain('bg-gradient-to-br')
         ->and($brand)->not->toContain('rounded-xl')
         ->and($brand)->not->toContain('shadow-lg')
-        // The rail is cream in light mode but navy in dark mode (`.dark
-        // .pulse-sidebar` in app.css outranks the cream rule), so the black
-        // mark must be repainted white there or it disappears.
-        ->and($brand)->toContain('dark:brightness-0 dark:invert');
+        // The rail is cream in light mode but navy in dark mode, so dark mode
+        // gets the white wordmark (Nexcore_new_logo-02) instead of the black.
+        ->and($brand)->toContain(Company::FALLBACK_LOGO_DARK)
+        ->and($brand)->toContain('hidden dark:block');
 
     // The company name survives only as the img's alt text — never as a text
     // label rendered beside the mark.
@@ -114,9 +114,9 @@ test('the dashboard sidebar shows the logo with no box and no company name', fun
 
 test('the dark-themed auth pages get a legible white mark', function () {
     // layouts/auth.simple forces class="dark" — a black wordmark would be
-    // invisible there, so the inversion is not optional on that surface.
+    // invisible there, so the white dark-mode wordmark is not optional.
     $this->get(route('password.request'))
         ->assertOk()
-        ->assertSee(Company::FALLBACK_LOGO, false)
-        ->assertSee('dark:brightness-0 dark:invert', false);
+        ->assertSee(Company::FALLBACK_LOGO_DARK, false)
+        ->assertSee('hidden dark:block', false);
 });
