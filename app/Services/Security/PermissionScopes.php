@@ -110,6 +110,7 @@ final class PermissionScopes
         'coordinator' => [
             'view_live_attendance' => DataScope::Department,
             'view_team_dashboard' => DataScope::Department,
+            'view_attendance' => DataScope::Department,
         ],
         'finance' => [
             'view_payroll' => DataScope::All,

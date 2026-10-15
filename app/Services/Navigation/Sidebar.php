@@ -2,6 +2,7 @@
 
 namespace App\Services\Navigation;
 
+use App\Livewire\Attendance\AttendanceReports;
 use App\Models\Employee;
 use App\Models\ReviewParticipant;
 use App\Models\User;
@@ -226,6 +227,8 @@ class Sidebar
                 'items' => [
                     ['label' => 'Command Center', 'route' => 'attendance.command-center', 'badge' => fn (User $u) => $this->pendingApprovals($u)],
                     ['label' => 'Team Attendance', 'route' => 'attendance.team'],
+                    ['label' => 'Live Attendance', 'route' => 'attendance.live',
+                        'when' => fn (User $u) => $u->hasPermission('view_live_attendance')],
                     ['label' => 'Team Leave', 'route' => 'time-off.team'],
                     ['label' => 'Overtime Requests', 'route' => 'overtime.manage'],
                     ['label' => 'Nexflow Overtime', 'route' => 'overtime.nexflow'],
@@ -260,7 +263,8 @@ class Sidebar
                     ['label' => 'All Attendance', 'route' => 'attendance.employees',
                         'when' => fn (User $u) => $u->hasPermission('manage_attendance')],
                     ['label' => 'Attendance Reports', 'route' => 'attendance.reports',
-                        'when' => fn (User $u) => $u->hasPermission('manage_attendance') || $u->hasPermission('view_reports')],
+                        'when' => fn (User $u) => AttendanceReports::canOpen($u)
+                            && ($u->hasPermission('manage_attendance') || $u->hasPermission('view_reports') || $u->hasPermission('monitor_attendance_exceptions'))],
                     ['label' => 'Attendance Overview', 'route' => 'attendance.executive',
                         'when' => fn (User $u) => $u->hasPermission('manage_attendance')],
                     ['label' => 'Biometric Summary', 'route' => 'attendance.biometric-summary',

@@ -304,11 +304,13 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/exceptions', AttendanceExceptions::class)->name('exceptions');
         // Live Attendance — view_live_attendance; its scope decides whose attendance shows.
         Route::get('/live', LiveAttendance::class)->name('live')->middleware('can:view_live_attendance');
+        // Attendance Reports — leave approvers, or anyone whose view_attendance reaches
+        // beyond their own record (e.g. a Coordinator's department); checked in the page.
+        Route::get('/reports', AttendanceReports::class)->name('reports');
         Route::middleware('role:approve-leave')->group(function () {
             Route::get('/team', TeamAttendance::class)->name('team');
             Route::get('/employees', AllAttendance::class)->name('employees');
             Route::get('/command-center', CommandCenter::class)->name('command-center');
-            Route::get('/reports', AttendanceReports::class)->name('reports');
             Route::get('/executive', ExecutiveAttendance::class)->name('executive');
             Route::get('/biometric-control', BiometricControl::class)->name('biometric-control');
         });
@@ -586,13 +588,12 @@ Route::middleware(['auth'])->group(function () {
             ->name('employee-lifecycle')
             ->middleware('role:manage-employees');
 
-        // Enterprise attendance reports (13 types) — CSV + PDF, shared builder
-        Route::middleware('role:approve-leave')->group(function () {
-            Route::get('/attendance-report.csv', [ReportController::class, 'attendanceReportCsv'])
-                ->name('attendance-report-csv');
-            Route::get('/attendance-report.pdf', [ReportController::class, 'attendanceReportPdf'])
-                ->name('attendance-report-pdf');
-        });
+        // Enterprise attendance reports (13 types) — CSV + PDF, shared builder.
+        // Same gate and reach as the Attendance Reports page (checked in the controller).
+        Route::get('/attendance-report.csv', [ReportController::class, 'attendanceReportCsv'])
+            ->name('attendance-report-csv');
+        Route::get('/attendance-report.pdf', [ReportController::class, 'attendanceReportPdf'])
+            ->name('attendance-report-pdf');
     });
 
     // --------------------------------------------------

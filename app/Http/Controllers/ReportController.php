@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Livewire\Attendance\AttendanceReports;
 use App\Models\Attendance;
 use App\Models\Employee;
 use App\Models\EmployeeKpi;
@@ -51,7 +52,8 @@ class ReportController extends Controller
         // scope as the Attendance Reports page, so the download matches the
         // preview. A department outside it is ignored, never trusted.
         $user = $request->user();
-        $permission = $user?->hasPermission('view_attendance') ? 'view_attendance' : 'approve_leave';
+        abort_unless($user !== null && AttendanceReports::canOpen($user), 403);
+        $permission = $user->hasPermission('view_attendance') ? 'view_attendance' : 'approve_leave';
         $people = app(PeopleScope::class);
         $reach = $user ? $people->employeeIds($user, $permission, includeSelf: true) : [];
 

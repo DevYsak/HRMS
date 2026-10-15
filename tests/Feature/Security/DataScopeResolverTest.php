@@ -132,7 +132,8 @@ test('role defaults resolve to the pre-scope reach', function (string $slug, str
     'manager: leave approval' => ['manager', 'approve_leave', DataScope::Team],
     'manager: attendance' => ['manager', 'view_attendance', DataScope::Team],
     'manager: no payroll' => ['manager', 'view_payroll', DataScope::None],
-    'coordinator: attendance' => ['coordinator', 'view_attendance', DataScope::Team],
+    // Phase 1 decisions: a Coordinator watches their department's attendance.
+    'coordinator: attendance' => ['coordinator', 'view_attendance', DataScope::Department],
     'employee: own performance' => ['employee', 'view_performance', DataScope::Own],
     'employee: no attendance admin' => ['employee', 'view_attendance', DataScope::None],
 ]);

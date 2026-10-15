@@ -9,6 +9,7 @@ use App\Models\Role;
 use App\Models\User;
 use App\Models\UserPermissionOverride;
 use App\Services\Navigation\DashboardAccess;
+use App\Services\Navigation\Sidebar;
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 
@@ -101,6 +102,26 @@ test('a Coordinator lands on Team View for their department, with no Main dashbo
         $this->actingAs($coordinator)->get($url)->assertForbidden();
     }
     $this->actingAs($coordinator)->get(route('attendance.live'))->assertOk();
+});
+
+test('a Coordinator finds Live Attendance and their department\'s Attendance Reports in the menu', function () {
+    $coordinator = rpdUser('coordinator', $this->ops, 'Cora Coordinator');
+    $labels = collect(app(Sidebar::class)->groups($coordinator))->flatMap(fn ($g) => collect($g['items'])->pluck('label'));
+
+    expect($labels)->toContain('Team View')->toContain('Live Attendance')->toContain('Attendance Exceptions')->toContain('Attendance Reports')
+        ->not->toContain('Team Leave')->not->toContain('Overtime Requests');
+
+    $this->actingAs($coordinator)->get(route('attendance.reports'))
+        ->assertOk()
+        ->assertDontSee('Sales Bravo');
+});
+
+test('Attendance Reports stay closed to someone who only sees their own record', function () {
+    $employee = rpdUser('employee', $this->ops, 'Eve Employee');
+    $manager = rpdUser('manager', $this->ops, 'Max Manager');
+
+    $this->actingAs($employee)->get(route('attendance.reports'))->assertForbidden();
+    $this->actingAs($manager)->get(route('attendance.reports'))->assertOk();
 });
 
 test('HR administers the Department Head role but never the Super Admin role', function () {

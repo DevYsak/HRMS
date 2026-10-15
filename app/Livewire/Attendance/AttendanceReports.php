@@ -2,12 +2,15 @@
 
 namespace App\Livewire\Attendance;
 
+use App\Enums\DataScope;
 use App\Models\Department;
 use App\Models\Employee;
 use App\Models\Office;
 use App\Models\ShiftSetting;
+use App\Models\User;
 use App\Services\AttendanceReportBuilder;
 use App\Services\Security\PeopleScope;
+use App\Services\Security\ScopeResolver;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Url;
 use Livewire\Component;
@@ -40,9 +43,24 @@ class AttendanceReports extends Component
 
     public string $mode = '';
 
+    /**
+     * Who may open Attendance Reports: leave approvers (as before), or anyone
+     * whose view_attendance scope reaches other people — a Coordinator's
+     * department — never someone limited to their own record.
+     */
+    public static function canOpen(User $user): bool
+    {
+        if ($user->canApproveLeave()) {
+            return true;
+        }
+
+        return $user->hasPermission('view_attendance')
+            && ! in_array(app(ScopeResolver::class)->scopeFor($user, 'view_attendance'), [DataScope::Own, DataScope::None], true);
+    }
+
     public function mount(): void
     {
-        abort_unless(Auth::user()->canApproveLeave(), 403);
+        abort_unless(self::canOpen(Auth::user()), 403);
         $this->from = now()->startOfMonth()->toDateString();
         $this->to = now()->toDateString();
 
@@ -97,7 +115,7 @@ class AttendanceReports extends Component
 
     public function render(AttendanceReportBuilder $builder)
     {
-        abort_unless(Auth::user()->canApproveLeave(), 403);
+        abort_unless(self::canOpen(Auth::user()), 403);
 
         // The viewer's reach is applied server-side; never taken from the query string.
         $reach = self::reach();
