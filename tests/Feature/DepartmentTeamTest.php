@@ -63,17 +63,30 @@ test('re-assigning to the same team is a no-op', function () {
     expect($employee->teamMemberships()->count())->toBe(1);
 });
 
-test('approval routes to the team lead first', function () {
+test('the reporting manager is the first approver; the team lead is the next rung, never a replacement', function () {
+    $dept = Department::factory()->create();
+    $leadEmp = Employee::factory()->create(['department_id' => $dept->id, 'user_id' => User::factory()->create(['name' => 'LEAD'])->id]);
+    $team = makeTeam($dept, $leadEmp);
+    $manager = User::factory()->create(['name' => 'MANAGER']);
+
+    $member = Employee::factory()->create(['department_id' => $dept->id, 'manager_id' => $manager->id]);
+    app(TeamService::class)->assign($member, $team);
+
+    $chain = app(ApprovalRoutingService::class)->getApproverChain($member->fresh());
+
+    expect($chain->pluck('name')->take(2)->all())->toBe(['MANAGER', 'LEAD'])
+        ->and(app(ApprovalRoutingService::class)->resolveApprover($member->fresh())->name)->toBe('MANAGER');
+});
+
+test('with no reporting manager, the team lead is the fallback approver', function () {
     $dept = Department::factory()->create();
     $leadEmp = Employee::factory()->create(['department_id' => $dept->id, 'user_id' => User::factory()->create(['name' => 'LEAD'])->id]);
     $team = makeTeam($dept, $leadEmp);
 
-    $member = Employee::factory()->create(['department_id' => $dept->id]);
+    $member = Employee::factory()->create(['department_id' => $dept->id, 'manager_id' => null]);
     app(TeamService::class)->assign($member, $team);
 
-    $approver = app(ApprovalRoutingService::class)->resolveApprover($member->fresh());
-
-    expect($approver->name)->toBe('LEAD');
+    expect(app(ApprovalRoutingService::class)->resolveApprover($member->fresh())->name)->toBe('LEAD');
 });
 
 test('when the team lead is on leave that day, routing falls to the secondary lead', function () {
@@ -82,7 +95,7 @@ test('when the team lead is on leave that day, routing falls to the secondary le
     $secondEmp = Employee::factory()->create(['department_id' => $dept->id, 'user_id' => User::factory()->create(['name' => 'SECOND'])->id]);
     $team = makeTeam($dept, $leadEmp, $secondEmp);
 
-    $member = Employee::factory()->create(['department_id' => $dept->id]);
+    $member = Employee::factory()->create(['department_id' => $dept->id, 'manager_id' => null]);
     app(TeamService::class)->assign($member, $team);
 
     // The primary lead is on approved leave covering today.
@@ -101,7 +114,7 @@ test('when the team lead is on leave that day, routing falls to the secondary le
 test('when the requester is the team lead, routing goes to the department head', function () {
     $head = User::factory()->create(['name' => 'DEPT HEAD']);
     $dept = Department::factory()->create(['head_id' => $head->id]);
-    $leadEmp = Employee::factory()->create(['department_id' => $dept->id]);
+    $leadEmp = Employee::factory()->create(['department_id' => $dept->id, 'manager_id' => null]);
     makeTeam($dept, $leadEmp);
     app(TeamService::class)->assign($leadEmp, makeTeam($dept, $leadEmp));
 
@@ -113,7 +126,7 @@ test('when the requester is the team lead, routing goes to the department head',
 
 test('with no team, routing falls through to an in-scope HR admin', function () {
     $hr = User::factory()->create(['role' => UserRole::HrAdmin, 'name' => 'HR ONE']);
-    $employee = Employee::factory()->create();
+    $employee = Employee::factory()->create(['manager_id' => null]);
 
     $approver = app(ApprovalRoutingService::class)->resolveApprover($employee);
 

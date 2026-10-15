@@ -10,13 +10,15 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
 /**
- * Resolves who approves an employee's request through the team structure
- * (v4 Part 3.2), replacing the flat reporting-manager routing:
+ * Resolves who approves an employee's request:
  *
- *   1. Team Lead (primary approver)
- *   2. Secondary Lead — when the primary is on approved leave on the request date
- *   3. Department Head — escalation, or when the requester IS the team lead
- *   4. HR Admin — final escalation
+ *   1. Reporting manager — the canonical first approver (policy, 15 Oct 2026)
+ *   2. Team Lead — a fallback rung; it never replaces the reporting manager.
+ *      Team-lead approval as a requirement would be an explicit routing
+ *      policy, not something inferred from team membership.
+ *   3. Secondary Lead — when the team lead is on approved leave on the date
+ *   4. Department Head — escalation, or when the requester IS the team lead
+ *   5. HR Admin — final escalation (never the requester themselves)
  *
  * Returns the User who should act; getApproverChain() exposes the ordered
  * fallbacks for notification fan-out and escalation.
@@ -43,6 +45,12 @@ class ApprovalRoutingService
     {
         $onDate ??= Carbon::today();
         $chain = collect();
+
+        // Reporting manager first — the canonical approver (never the requester).
+        $manager = $employee->manager;
+        if ($manager && $manager->id !== $employee->user_id) {
+            $this->pushUser($chain, $manager);
+        }
 
         $team = $employee->activeTeam();
         $isTeamLead = $team && $team->team_lead_id === $employee->id;
