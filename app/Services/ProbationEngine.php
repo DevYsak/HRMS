@@ -113,6 +113,8 @@ class ProbationEngine
         );
 
         app(ApprovalGuard::class)->assertNotSelf($hr, $employee);
+        // A department-scoped HR admin approves only within their scope.
+        abort_unless($hr->coversEmployee($employee), 403, 'This employee is outside your scope.');
 
         if (! $employee->probation_confirmed_at) {
             throw new \DomainException('Manager must confirm before HR can approve.');
@@ -137,6 +139,11 @@ class ProbationEngine
     /** Extend probation period with a reason. Notifies manager. */
     public function extend(Employee $employee, User $actor, string $newEndDate, string $reason): void
     {
+        // Every caller is held to the employee record's rule: manage
+        // employees, within scope, never one's own probation.
+        abort_unless($actor->canManageEmployees() && $actor->coversEmployee($employee), 403, 'You cannot extend this probation.');
+        app(ApprovalGuard::class)->assertNotSelf($actor, $employee);
+
         $setting = ProbationSetting::where('employment_type_id', $employee->employment_type_id)
             ->where('is_active', true)
             ->first()

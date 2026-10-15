@@ -3,6 +3,7 @@
 namespace App\Livewire\Employees;
 
 use App\Models\Employee;
+use App\Services\Approvals\ApprovalGuard;
 use App\Services\ProbationEngine;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
@@ -26,7 +27,8 @@ class ProbationConfirmation extends Component
     {
         $this->employee = $employee;
         abort_unless(
-            Auth::user()->canApproveLeave() || Auth::user()->canManageEmployees(),
+            (Auth::user()->canApproveLeave() || Auth::user()->canManageEmployees())
+                && Auth::user()->coversEmployee($employee),
             403
         );
     }
@@ -74,6 +76,10 @@ class ProbationConfirmation extends Component
     /** Extend probation period. */
     public function extendProbation(): void
     {
+        // Same rule as the employee record's extend: manage employees, within scope, never one's own.
+        $this->authorize('update', $this->employee);
+        app(ApprovalGuard::class)->assertNotSelf(Auth::user(), $this->employee);
+
         $this->validate([
             'extendEndDate' => 'required|date|after:today',
             'extendReason' => 'required|string|max:1000',
