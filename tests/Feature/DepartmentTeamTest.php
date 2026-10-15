@@ -120,6 +120,17 @@ test('with no team, routing falls through to an in-scope HR admin', function () 
     expect($approver->name)->toBe('HR ONE');
 });
 
+test('a request by an HR admin routes to another HR admin, never to themselves', function () {
+    $requester = User::factory()->create(['role' => UserRole::HrAdmin, 'name' => 'HR REQUESTER']);
+    $other = User::factory()->create(['role' => UserRole::HrAdmin, 'name' => 'HR OTHER']);
+    $employee = Employee::factory()->create(['user_id' => $requester->id, 'manager_id' => null]);
+
+    $chain = app(ApprovalRoutingService::class)->getApproverChain($employee->fresh());
+
+    expect($chain->pluck('id'))->not->toContain($requester->id)->toContain($other->id)
+        ->and(app(ApprovalRoutingService::class)->resolveApprover($employee->fresh())->id)->not->toBe($requester->id);
+});
+
 test('submitting leave notifies the team lead', function () {
     Notification::fake();
 

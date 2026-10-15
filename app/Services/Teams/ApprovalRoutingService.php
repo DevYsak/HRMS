@@ -68,9 +68,10 @@ class ApprovalRoutingService
             $this->pushUser($chain, $head);
         }
 
-        // Final escalation — all company-wide + in-scope HR admins.
+        // Final escalation — all company-wide + in-scope HR admins, never the
+        // requester themselves (an HR admin's own request goes to another HR).
         User::whereIn('role', [UserRole::HrAdmin, UserRole::SuperAdmin])->get()
-            ->filter(fn (User $u) => $u->coversEmployee($employee))
+            ->filter(fn (User $u) => $u->id !== $employee->user_id && $u->coversEmployee($employee))
             ->each(fn (User $u) => $this->pushUser($chain, $u));
 
         return $chain->values();
