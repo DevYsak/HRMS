@@ -38,7 +38,8 @@ class EmployeeStatusChangedNotification extends Notification
             'title' => "Status Changed: {$name}",
             'body' => "{$name}'s status changed from {$from} to {$to}".($this->note ? " — {$this->note}" : '.'),
             'action' => 'View Employee',
-            'url' => "/employees/{$this->employee->id}/edit",
+            // The recipient is the employee: their own profile (the HR editor would 403).
+            'url' => route('profile.me'),
             'icon' => 'arrow-path',
             'color' => $this->toStatus->color(),
         ];

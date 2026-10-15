@@ -48,7 +48,8 @@ class ProbationConfirmedNotification extends Notification
             'title' => 'Probation Confirmed',
             'body' => "Probation for {$name} has been fully confirmed. Status updated to Confirmed.",
             'action' => 'View Profile',
-            'url' => "/employees/{$this->employee->id}/edit",
+            // Sent to the employee: their own profile.
+            'url' => route('profile.me'),
             'icon' => 'check-badge',
             'color' => 'green',
         ];

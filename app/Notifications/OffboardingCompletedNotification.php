@@ -38,7 +38,7 @@ class OffboardingCompletedNotification extends Notification implements ShouldQue
                 ? 'Your offboarding process has been completed. All tasks have been marked as complete.'
                 : "The offboarding process for {$name} has been completed. All tasks have been marked as complete.",
             'action' => 'View Details',
-            'url' => '/employees/'.$this->employee->id,
+            'url' => $this->role === 'employee' ? route('dashboard') : route('employees.offboarding', $this->employee),
             'type' => 'offboarding_completed',
             'employee_id' => $this->employee->id,
             'message' => 'Offboarding completed for '.($this->employee->user->name ?? 'employee'),

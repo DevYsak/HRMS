@@ -37,7 +37,8 @@ class ProbationExtendedNotification extends Notification
             'title' => 'Probation Period Extended',
             'body' => "The probation period for {$name} has been extended until {$newDate}.",
             'action' => 'View Employee',
-            'url' => "/employees/{$this->employee->id}/edit",
+            // Sent to the line manager: the probation page, where their confirmation step is.
+            'url' => route('employees.probation', $this->employee),
             'icon' => 'calendar',
             'color' => 'amber',
         ];

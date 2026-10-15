@@ -229,6 +229,10 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{employee}/360', Employee360::class)->name('360')->middleware('can:view_employee_360');
         Route::get('/{employee}/360/report', Employee360ReportController::class)->name('360.report')->middleware('can:view_employee_360');
 
+        // Probation: the line approver confirms (step 1), HR co-approves (step
+        // 2). Whose probation opens is checked against the scope in the page.
+        Route::get('/{employee}/probation', ProbationConfirmation::class)->name('probation')->middleware('role:manage-employees,approve-leave');
+
         // HR / admin only
         Route::middleware('role:manage-employees')->group(function () {
             Route::get('/teams', TeamManagement::class)->name('teams');
@@ -238,7 +242,6 @@ Route::middleware(['auth'])->group(function () {
             // Redesigned profile view; the full 15-tab record stays at /edit
             // while its tabs migrate onto the shared profile components.
             Route::get('/{employee}/profile', EmployeeProfile::class)->name('profile');
-            Route::get('/{employee}/probation', ProbationConfirmation::class)->name('probation');
             Route::get('/{employee}/onboarding', OnboardingChecklist::class)->name('onboarding');
             Route::get('/{employee}/offboarding', OffboardingChecklist::class)->name('offboarding');
             Route::get('/onboarding-manager', OnboardingManager::class)->name('onboarding-manager');
