@@ -92,6 +92,9 @@ class QaAudit extends Component
     public string $to = '';
 
     #[Url]
+    public string $decision = '';
+
+    #[Url]
     public string $theme = 'light';
 
     // Drill-downs
@@ -432,7 +435,7 @@ class QaAudit extends Component
     public function newRun(): void
     {
         $this->authorizeRuns();
-        $this->runForm = ['name' => now()->format('Y-m-d').' Regression', 'qa_phase_id' => '', 'suite' => 'pest', 'environment' => QaEnvironment::LocalTestDb->value, 'commit' => '',
+        $this->runForm = ['name' => now()->format('Y-m-d').' Regression', 'qa_phase_id' => '', 'suite' => 'pest', 'kind' => 'targeted', 'environment' => QaEnvironment::LocalTestDb->value, 'commit' => '',
             'total' => '', 'passed' => '', 'failed' => '0', 'skipped' => '0', 'known_baseline' => '0', 'duration_seconds' => '', 'notes' => ''];
         $this->runFile = null;
         $this->resetValidation();
@@ -459,6 +462,7 @@ class QaAudit extends Component
             'runForm.name' => ['required', 'string', 'max:255'],
             'runForm.qa_phase_id' => ['nullable', 'exists:qa_phases,id'],
             'runForm.suite' => ['required', Rule::in([...array_keys(QaTestRun::SUITES), 'migration'])],
+            'runForm.kind' => ['required', Rule::in(array_keys(QaTestRun::KINDS))],
             'runForm.environment' => ['required', Rule::enum(QaEnvironment::class)],
             'runForm.commit' => ['nullable', 'string', 'regex:/^[0-9a-fA-F]{7,40}$/'],
             'runForm.total' => ['required', 'integer', 'min:0'],

@@ -23,6 +23,7 @@ class QaImportRun extends Command
         {file : JUnit XML or Pest console output}
         {--name= : Run name (default: file name + date)}
         {--suite=pest : pest | phpunit | playwright}
+        {--kind=targeted : full | security | ui | targeted | manual}
         {--environment=local_test_db : local | local_test_db | e2e | staging | production_read_only}
         {--commit= : Commit the run was made on}
         {--phase= : QA phase number}
@@ -41,8 +42,9 @@ class QaImportRun extends Command
 
         $environment = QaEnvironment::tryFrom((string) $this->option('environment'));
         $suite = (string) $this->option('suite');
-        if ($environment === null || ! array_key_exists($suite, QaTestRun::SUITES)) {
-            $this->error('Unknown --environment or --suite.');
+        $kind = (string) $this->option('kind');
+        if ($environment === null || ! array_key_exists($suite, QaTestRun::SUITES) || ! array_key_exists($kind, QaTestRun::KINDS)) {
+            $this->error('Unknown --environment, --suite or --kind.');
 
             return self::FAILURE;
         }
@@ -59,6 +61,7 @@ class QaImportRun extends Command
             'name' => $this->option('name') ?: basename($path).' — '.now()->format('d M Y H:i'),
             'qa_phase_id' => $this->option('phase') ? QaPhase::where('number', (int) $this->option('phase'))->value('id') : null,
             'suite' => $suite,
+            'kind' => $kind,
             'environment' => $environment->value,
             'commit' => $this->option('commit') ?: null,
             'total' => $summary['total'],

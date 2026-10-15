@@ -15,7 +15,7 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 #[Fillable([
     'code', 'qa_phase_id', 'qa_test_case_id', 'kind', 'module', 'title', 'description', 'severity', 'risk',
-    'role_affected', 'scope_affected', 'route', 'page', 'viewport', 'theme', 'status', 'root_cause',
+    'role_affected', 'scope_affected', 'route', 'page', 'viewport', 'theme', 'status', 'needs_decision', 'root_cause',
     'fix_summary', 'retest_result', 'environment', 'found_at', 'closed_at', 'created_by',
 ])]
 class QaFinding extends Model
@@ -31,6 +31,7 @@ class QaFinding extends Model
         return [
             'status' => QaFindingStatus::class,
             'severity' => QaSeverity::class,
+            'needs_decision' => 'boolean',
             'found_at' => 'datetime',
             'closed_at' => 'datetime',
         ];

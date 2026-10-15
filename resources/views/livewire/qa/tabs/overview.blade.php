@@ -68,6 +68,53 @@
         </div>
     </div>
 
+    {{-- Last verified build + open blockers --}}
+    @php
+        $v = $summary['verified'];
+        $b = $summary['open_blockers'];
+        $runLine = fn ($run) => $run ? $run->run_at->format('d M Y H:i').' · '.$run->passed.'/'.$run->total.' passed · '.$run->resultLabel() : null;
+        $buildRows = [
+            ['Branch', $v['branch'], true],
+            ['Commit', $v['commit'], true],
+            ['Environment', $v['environment'], false],
+            ['Last full run', $runLine($v['full']), false],
+            ['Last security run', $runLine($v['security']), false],
+            ['Last UI run', $runLine($v['ui']), false],
+            ['Last manual verification', $v['manual'] ? $v['manual']['at']->format('d M Y H:i').' · '.$v['manual']['what'].($v['manual']['by'] ? ' · '.$v['manual']['by'] : '') : null, false],
+        ];
+        $blockerRows = [
+            ['Critical', $b['critical'], 'rose', "\$set('severity', 'critical'); \$set('status', 'open'); \$set('tab', 'findings')"],
+            ['High', $b['high'], 'rose', "\$set('severity', 'high'); \$set('status', 'open'); \$set('tab', 'findings')"],
+            ['Known baseline', $b['known_baseline'], 'violet', "\$set('status', 'known_baseline'); \$set('tab', 'cases')"],
+            ['Policy decision needed', $b['policy'], 'amber', "\$set('decision', '1'); \$set('tab', 'findings')"],
+            ['Retest required', $b['retest_required'], 'sky', "\$set('status', 'fixed'); \$set('tab', 'findings')"],
+        ];
+    @endphp
+    <div class="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+        <x-pulse.card title="Last verified build" icon="cpu-chip" flush data-last-verified>
+            <dl class="divide-y divide-zinc-100 dark:divide-white/5">
+                @foreach($buildRows as [$label, $value, $mono])
+                    <div class="flex flex-col gap-0.5 px-5 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                        <dt class="shrink-0 text-xs font-medium text-zinc-500">{{ $label }}</dt>
+                        <dd class="min-w-0 text-sm {{ $value ? 'text-zinc-800 dark:text-zinc-100' : 'text-zinc-400' }} {{ $mono ? 'font-mono' : '' }} sm:text-right">{{ $value ?? 'None recorded' }}</dd>
+                    </div>
+                @endforeach
+            </dl>
+        </x-pulse.card>
+        <x-pulse.card title="Open blockers" icon="exclamation-triangle" flush data-open-blockers>
+            <ul class="divide-y divide-zinc-100 dark:divide-white/5">
+                @foreach($blockerRows as [$label, $count, $tone, $action])
+                    <li>
+                        <button type="button" wire:click="{{ $action }}" class="flex w-full items-center justify-between gap-3 px-5 py-3 text-left hover:bg-zinc-50 dark:hover:bg-white/5">
+                            <span class="text-sm font-medium text-zinc-700 dark:text-zinc-200">{{ $label }}</span>
+                            <span class="rounded-full px-2.5 py-0.5 text-sm font-semibold tabular-nums ring-1 {{ $count > 0 ? $soft[$tone] : $soft['zinc'] }}">{{ $count }}</span>
+                        </button>
+                    </li>
+                @endforeach
+            </ul>
+        </x-pulse.card>
+    </div>
+
     {{-- Count cards (each drills into the filtered list) --}}
     <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-9" data-count-cards>
         @foreach($cards as [$label, $value, $icon, $tone, [$toTab, $toStatus]])

@@ -9,6 +9,7 @@ use App\Models\QaFinding;
 use App\Models\QaTestCase;
 use App\Models\QaTestRun;
 use App\Services\Audit\AuditService;
+use App\Services\Qa\BuildInfo;
 use App\Services\Qa\QaFilters;
 use App\Services\Qa\QaReadiness;
 use App\Services\Qa\RoleAccessMatrix;
@@ -41,7 +42,7 @@ class QaReportController extends Controller
             'filters' => $filters->toArray(),
             'generatedBy' => $request->user()->name,
             'generatedAt' => now(),
-            'commit' => $this->headCommit(),
+            'commit' => app(BuildInfo::class)->commit(),
         ];
 
         $pdf = $request->query('format') === 'pdf';
@@ -110,22 +111,5 @@ class QaReportController extends Controller
     private function csvSafe(mixed $value): mixed
     {
         return is_string($value) && $value !== '' && in_array($value[0], ['=', '+', '-', '@'], true) ? "'".$value : $value;
-    }
-
-    private function headCommit(): ?string
-    {
-        $head = base_path('.git/HEAD');
-        if (! is_file($head)) {
-            return null;
-        }
-
-        $ref = trim((string) file_get_contents($head));
-        if (str_starts_with($ref, 'ref: ')) {
-            $file = base_path('.git/'.substr($ref, 5));
-
-            return is_file($file) ? substr(trim((string) file_get_contents($file)), 0, 7) : null;
-        }
-
-        return substr($ref, 0, 7);
     }
 }

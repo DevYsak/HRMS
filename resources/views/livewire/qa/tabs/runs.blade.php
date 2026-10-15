@@ -6,7 +6,7 @@
                 <div class="min-w-0">
                     <p class="font-semibold text-zinc-900 dark:text-white">{{ $run->name }}</p>
                     <p class="text-xs text-zinc-500">
-                        {{ \App\Models\QaTestRun::SUITES[$run->suite] ?? ucfirst($run->suite) }} ·
+                        {{ \App\Models\QaTestRun::SUITES[$run->suite] ?? ucfirst($run->suite) }} · {{ \App\Models\QaTestRun::KINDS[$run->kind] ?? $run->kind }} ·
                         {{ \App\Enums\QaEnvironment::tryFrom($run->environment)?->label() ?? $run->environment }} ·
                         @if($run->commit)<span class="font-mono">{{ substr($run->commit, 0, 7) }}</span> · @endif
                         {{ $run->run_at->format('d M Y H:i') }}

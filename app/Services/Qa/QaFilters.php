@@ -16,7 +16,7 @@ use Illuminate\Database\Eloquent\Builder;
 class QaFilters
 {
     /** @var array<int, string> */
-    public const KEYS = ['search', 'phase', 'module', 'role', 'status', 'severity', 'environment', 'from', 'to', 'commit'];
+    public const KEYS = ['search', 'phase', 'module', 'role', 'status', 'severity', 'environment', 'from', 'to', 'commit', 'decision'];
 
     /** @param  array<string, mixed>  $filters */
     public function __construct(private readonly array $filters = []) {}
@@ -79,8 +79,9 @@ class QaFilters
             ->when($this->get('phase'), fn ($q, $v) => $q->where('qa_phase_id', $v))
             ->when($this->get('module'), fn ($q, $v) => $q->where('module', $v))
             ->when($this->get('role'), fn ($q, $v) => $q->where('role_affected', 'like', "%{$v}%"))
-            ->when($this->get('status'), fn ($q, $v) => $q->where('status', $v))
+            ->when($this->get('status'), fn ($q, $v) => $v === 'open' ? $q->open() : $q->where('status', $v))
             ->when($this->get('severity'), fn ($q, $v) => $q->where('severity', $v))
+            ->when($this->get('decision'), fn ($q) => $q->where('needs_decision', true)->open())
             ->when($this->get('environment'), fn ($q, $v) => $q->where('environment', $v))
             ->when($this->get('from'), fn ($q, $v) => $q->whereDate('found_at', '>=', $v))
             ->when($this->get('to'), fn ($q, $v) => $q->whereDate('found_at', '<=', $v))

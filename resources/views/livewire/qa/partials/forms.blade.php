@@ -151,6 +151,11 @@
                     <flux:select.option value="{{ $k }}">{{ $l }}</flux:select.option>
                 @endforeach
             </flux:select>
+            <flux:select wire:model="runForm.kind" label="Run type">
+                @foreach(\App\Models\QaTestRun::KINDS as $k => $l)
+                    <flux:select.option value="{{ $k }}">{{ $l }}</flux:select.option>
+                @endforeach
+            </flux:select>
             <flux:select wire:model="runForm.environment" label="Environment">
                 @foreach(\App\Enums\QaEnvironment::cases() as $e)
                     <flux:select.option value="{{ $e->value }}">{{ $e->label() }}</flux:select.option>

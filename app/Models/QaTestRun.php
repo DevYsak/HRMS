@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
-    'name', 'qa_phase_id', 'suite', 'environment', 'commit', 'total', 'passed', 'failed', 'skipped',
+    'name', 'qa_phase_id', 'suite', 'kind', 'environment', 'commit', 'total', 'passed', 'failed', 'skipped',
     'known_baseline', 'new_regressions', 'duration_seconds', 'result', 'notes', 'run_at', 'created_by',
 ])]
 class QaTestRun extends Model
@@ -25,6 +25,9 @@ class QaTestRun extends Model
         self::RESULT_PASS_WITH_BASELINE => 'PASS WITH KNOWN BASELINE',
         self::RESULT_FAIL => 'FAIL — NEW REGRESSIONS',
     ];
+
+    /** @var array<string, string> */
+    public const KINDS = ['full' => 'Full suite', 'security' => 'Security / RBAC', 'ui' => 'UI / responsive', 'targeted' => 'Targeted', 'manual' => 'Manual'];
 
     /** @var array<string, string> */
     public const SUITES = ['pest' => 'Pest', 'phpunit' => 'PHPUnit', 'playwright' => 'Playwright', 'manual' => 'Manual'];

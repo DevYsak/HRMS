@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * One cell of a readiness grid: module × dimension, page × viewport/theme,
@@ -26,6 +27,11 @@ class QaChecklistItem extends Model
         return [
             'checked_at' => 'datetime',
         ];
+    }
+
+    public function checker(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'checked_by');
     }
 
     public static function colorFor(string $status): string

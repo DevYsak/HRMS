@@ -10,7 +10,9 @@ use App\Models\QaChecklistItem;
 use App\Models\QaFinding;
 use App\Models\QaPhase;
 use App\Models\QaTestCase;
+use App\Models\QaTestResult;
 use App\Models\QaTestRun;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
 
 /**
@@ -99,7 +101,9 @@ class QaReadiness
      *     scores: array<string, int>,
      *     level: string, level_label: string,
      *     blockers: array<int, string>, next_steps: array<int, string>,
-     *     latest_run: ?QaTestRun
+     *     latest_run: ?QaTestRun,
+     *     verified: array<string, mixed>,
+     *     open_blockers: array<string, int>
      * }
      */
     public function summary(): array
@@ -109,7 +113,7 @@ class QaReadiness
         }
 
         $cases = QaTestCase::query()->get(['id', 'module', 'status']);
-        $findings = QaFinding::query()->get(['id', 'kind', 'severity', 'status', 'module']);
+        $findings = QaFinding::query()->get(['id', 'kind', 'severity', 'status', 'module', 'needs_decision']);
         $openFindings = $findings->filter(fn (QaFinding $f) => $f->status->isOpen());
         $latestRun = QaTestRun::query()->where('suite', '!=', 'migration')->latest('run_at')->latest('id')->first();
         $failedMigration = QaTestRun::query()->where('suite', 'migration')->latest('run_at')->latest('id')->value('result') === QaTestRun::RESULT_FAIL;
@@ -169,6 +173,44 @@ class QaReadiness
             'blockers' => $blockers,
             'next_steps' => $next,
             'latest_run' => $latestRun,
+            'verified' => $this->lastVerified(),
+            'open_blockers' => [
+                'critical' => $counts['open_critical'],
+                'high' => $counts['open_high'],
+                'known_baseline' => $counts['known_baseline'],
+                'policy' => $openFindings->where('needs_decision', true)->count(),
+                'retest_required' => $counts['retest_required'],
+            ],
+        ];
+    }
+
+    /**
+     * The last verified build: the running branch/commit and the latest
+     * full, security and UI runs and manual check.
+     *
+     * @return array{branch: ?string, commit: ?string, environment: string, full: ?QaTestRun, security: ?QaTestRun, ui: ?QaTestRun, manual: ?array{at: CarbonInterface, by: ?string, what: string}}
+     */
+    public function lastVerified(): array
+    {
+        $build = app(BuildInfo::class);
+        $latest = fn (string $kind) => QaTestRun::query()->where('kind', $kind)->latest('run_at')->latest('id')->first();
+
+        $result = QaTestResult::query()->whereNull('qa_test_run_id')->whereNotNull('tested_by')->with('testCase:id,code')->latest('tested_at')->first();
+        $cell = QaChecklistItem::query()->whereNotNull('checked_by')->with('checker:id,name')->latest('checked_at')->first();
+        $manual = match (true) {
+            $result !== null && ($cell === null || $result->tested_at->gte($cell->checked_at)) => ['at' => $result->tested_at, 'by' => $result->tested_by_name, 'what' => ($result->testCase?->code ?? 'Test').' · '.$result->status->label()],
+            $cell !== null => ['at' => $cell->checked_at, 'by' => $cell->checker?->name, 'what' => $cell->subject.' · '.$cell->dimension.' · '.(QaChecklistItem::STATUSES[$cell->status] ?? $cell->status)],
+            default => null,
+        };
+
+        return [
+            'branch' => $build->branch(),
+            'commit' => $build->commit(),
+            'environment' => app()->environment(),
+            'full' => $latest('full'),
+            'security' => $latest('security'),
+            'ui' => $latest('ui'),
+            'manual' => $manual,
         ];
     }
 

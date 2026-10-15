@@ -12,6 +12,8 @@ use App\Models\Role;
 use App\Models\User;
 use App\Models\UserPermissionOverride;
 use App\Services\Navigation\Sidebar;
+use App\Services\Qa\QaReadiness;
+use App\Services\Qa\QaTracker;
 use App\Services\Security\RoleDelegationGuard;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -256,4 +258,30 @@ test('the Super Admin home shows the QA readiness widget; HR does not', function
 
     $this->actingAs(qaUser('hr_admin'))->get(route('dashboard'))
         ->assertOk()->assertDontSee('data-qa-widget', false);
+});
+
+test('the overview shows the last verified build and the open blockers', function () {
+    $admin = qaUser('super_admin');
+    app(QaTracker::class)->recordRun(['name' => 'Full suite 15 Oct', 'kind' => 'full', 'environment' => 'local_test_db', 'total' => 100, 'passed' => 100], $admin);
+
+    $this->actingAs($admin)->get(route('qa-audit.index'))
+        ->assertOk()
+        ->assertSee('Last verified build')->assertSee('Last full run')->assertSee('100/100 passed')
+        ->assertSee('Last security run')->assertSee('438/440 passed')
+        ->assertSee('Open blockers')->assertSee('Policy decision needed');
+
+    $summary = (new QaReadiness)->summary();
+    expect($summary['open_blockers'])->toBe(['critical' => 0, 'high' => 0, 'known_baseline' => 2, 'policy' => 4, 'retest_required' => 0])
+        ->and($summary['verified']['security']->name)->toBe('2026-10-15 Phase 1 RBAC Regression')
+        ->and($summary['verified']['commit'])->toMatch('/^[0-9a-f]{7}$/');
+
+    Livewire::actingAs($admin)->test(QaAudit::class)->set('tab', 'findings')->set('decision', '1')
+        ->assertSee('QA-F-014')->assertSee('QA-F-021')->assertDontSee('QA-F-017');
+});
+
+test('QA-F-022 is closed by its fix commit', function () {
+    $finding = QaFinding::where('code', 'QA-F-022')->firstOrFail();
+
+    expect($finding->status->value)->toBe('verified')
+        ->and($finding->fixes()->value('commit_hash'))->toBe('d90ee89');
 });
