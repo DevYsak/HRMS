@@ -297,7 +297,7 @@ test('Phase 2 is recorded: full run, retest, fixes, policy questions and baselin
         $finding = QaFinding::where('code', $code)->firstOrFail();
         expect($finding->status)->toBe(QaFindingStatus::Verified)->and($finding->fixes()->value('commit_hash'))->toBe($commit);
     }
-    expect(QaFinding::whereIn('code', ['QA-F-025', 'QA-F-026', 'QA-F-027'])->where('needs_decision', true)->count())->toBe(3)
+    expect(QaFinding::whereIn('code', ['QA-F-025', 'QA-F-026', 'QA-F-027'])->where('status', 'verified')->count())->toBe(3)
         ->and(QaFinding::where('code', 'QA-F-029')->first()->status)->toBe(QaFindingStatus::Investigating);
 
     // The retest is the latest run, so the two non-baseline full-run failures do not block readiness.
@@ -305,4 +305,23 @@ test('Phase 2 is recorded: full run, retest, fixes, policy questions and baselin
     expect($summary['latest_run']->name)->toBe('2026-10-15 Retest after 4627c03')
         ->and($summary['verified']['full']->id)->toBe($full->id)
         ->and($summary['level'])->toBe(QaReadiness::INTERNAL_QA);
+});
+
+test('the Phase 2 policy decisions are recorded with their commits and history', function () {
+    $status = fn (string $code) => QaFinding::where('code', $code)->firstOrFail()->status->value;
+
+    foreach (['QA-F-014' => '5e0ea8a', 'QA-F-025' => '8bc845f', 'QA-F-026' => '90f2b0a', 'QA-F-027' => '37a05cc'] as $code => $commit) {
+        $finding = QaFinding::where('code', $code)->firstOrFail();
+        expect($finding->status)->toBe(QaFindingStatus::Verified)
+            ->and($finding->fixes()->pluck('commit_hash'))->toContain($commit)
+            ->and(AuditLog::where('auditable_type', QaFinding::class)->where('auditable_id', $finding->id)->where('event', 'QA_FINDING_STATUS_CHANGED')->exists())->toBeTrue();
+    }
+    expect($status('QA-F-015'))->toBe('accepted_risk')
+        ->and($status('QA-F-016'))->toBe('accepted_risk')
+        ->and($status('QA-F-018'))->toBe('hr_correction_required')
+        ->and($status('QA-F-030'))->toBe('open')
+        ->and($status('QA-F-031'))->toBe('hr_correction_required')
+        ->and(QaFinding::where('code', 'QA-F-031')->value('description'))->toContain('REVIEW REQUIRED')->toContain('Jordan Reed')
+        ->and(QaFinding::open()->where('needs_decision', true)->count())->toBe(0)
+        ->and(QaTestCase::where('code', 'like', 'QA-DEC-%')->where('status', 'pass')->count())->toBe(7);
 });

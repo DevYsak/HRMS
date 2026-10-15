@@ -73,7 +73,7 @@ test('guests are sent to login', function () {
 test('HR granted view_qa_audit reads it but cannot change, run or export anything', function () {
     $hr = qaGrant(qaUser('hr_admin'), 'view_qa_audit');
     $case = QaTestCase::where('code', 'QA-RBAC-002')->firstOrFail();
-    $finding = QaFinding::where('code', 'QA-F-014')->firstOrFail();
+    $finding = QaFinding::where('code', 'QA-F-030')->firstOrFail();
 
     $this->actingAs($hr)->get(route('qa-audit.index', ['tab' => 'cases', 'search' => 'QA-RBAC-002']))->assertOk()->assertSee('QA-RBAC-002')->assertDontSee('New test case');
     $this->actingAs($hr)->get(route('qa-audit.report'))->assertForbidden();
@@ -271,12 +271,14 @@ test('the overview shows the last verified build and the open blockers', functio
         ->assertSee('Open blockers')->assertSee('Policy decision needed');
 
     $summary = (new QaReadiness)->summary();
-    expect($summary['open_blockers'])->toBe(['critical' => 0, 'high' => 0, 'known_baseline' => 12, 'policy' => 7, 'retest_required' => 0, 'hr_corrections' => 0])
+    // Phase 2 decisions closed every policy question; QA-F-018 and QA-F-031 wait on HR data.
+    expect($summary['open_blockers'])->toBe(['critical' => 0, 'high' => 1, 'known_baseline' => 12, 'policy' => 0, 'retest_required' => 0, 'hr_corrections' => 2])
         ->and($summary['verified']['security']->name)->toBe('2026-10-15 Phase 1 RBAC Regression')
         ->and($summary['verified']['commit'])->toMatch('/^[0-9a-f]{7}$/');
 
+    QaFinding::factory()->create(['code' => 'QA-F-901', 'needs_decision' => true]);
     Livewire::actingAs($admin)->test(QaAudit::class)->set('tab', 'findings')->set('decision', '1')
-        ->assertSee('QA-F-014')->assertSee('QA-F-021')->assertDontSee('QA-F-017');
+        ->assertSee('QA-F-901')->assertDontSee('QA-F-014')->assertDontSee('QA-F-017');
 });
 
 test('QA-F-022 is closed by its fix commit', function () {
