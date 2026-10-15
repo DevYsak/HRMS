@@ -6,6 +6,7 @@ use App\Models\DecemberMandatoryDay;
 use App\Models\Employee;
 use App\Models\HolidayPaySetting;
 use App\Models\HolidayWorkRequest;
+use App\Models\LeaveAttachment;
 use App\Models\LeaveEncashment;
 use App\Models\LeaveRequest;
 use App\Models\LeaveType;
@@ -27,6 +28,7 @@ use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 use Livewire\Attributes\On;
 use Livewire\Component;
 use Livewire\WithFileUploads;
@@ -194,7 +196,8 @@ class MyTimeOff extends Component
             'requested_leave_status' => 'required|in:paid,unpaid',
             'reason' => 'required|min:5',
             'employee_remarks' => 'nullable|string|max:1000',
-            'attachment' => 'nullable|file|max:5120|mimes:pdf,jpg,jpeg,png,webp',
+            // The uploaded Livewire file itself — never a filename the browser shows.
+            'attachment' => [Rule::requiredIf(fn () => (bool) $this->chosenLeaveType()?->attachment_required), 'nullable', 'file', 'max:'.self::ATTACHMENT_MAX_KB, 'mimes:'.implode(',', self::ATTACHMENT_TYPES)],
         ];
     }
 
@@ -204,7 +207,39 @@ class MyTimeOff extends Component
         return [
             'end_date.after_or_equal' => 'The end date must be on or after the start date.',
             'start_date.after_or_equal' => 'The start date cannot be in the past.',
+            'attachment.required' => 'An attachment is required for '.($this->chosenLeaveType()?->name ?? 'this leave type').'.',
+            'attachment.file' => 'The attachment could not be uploaded. Please choose the file again.',
+            'attachment.uploaded' => 'The attachment could not be uploaded. Please choose the file again.',
+            'attachment.mimes' => 'Please upload a PDF, JPG, JPEG or PNG.',
+            'attachment.max' => 'Attachment must be '.intdiv(self::ATTACHMENT_MAX_KB, 1024).' MB or smaller.',
         ];
+    }
+
+    /** Supporting documents: up to 5 MB, PDF or image (WEBP is still accepted). */
+    public const ATTACHMENT_MAX_KB = 5120;
+
+    public const ATTACHMENT_TYPES = ['pdf', 'jpg', 'jpeg', 'png', 'webp'];
+
+    private function chosenLeaveType(): ?LeaveType
+    {
+        return $this->leave_type_id ? LeaveType::find($this->leave_type_id) : null;
+    }
+
+    /**
+     * Check the file as soon as it has uploaded, so a wrong type or size is
+     * said at once and an earlier "attachment is required" clears.
+     */
+    public function updatedAttachment(): void
+    {
+        $this->resetErrorBag('attachment');
+        $this->validateOnly('attachment');
+    }
+
+    /** The employee removes the chosen file (it is never kept otherwise). */
+    public function removeAttachment(): void
+    {
+        $this->reset('attachment');
+        $this->resetErrorBag('attachment');
     }
 
     /**
@@ -355,22 +390,11 @@ class MyTimeOff extends Component
 
         $leaveType = LeaveType::findOrFail($this->leave_type_id);
 
-        // Store the single supporting document (≤5 MB).
+        // Store the single supporting document (≤5 MB) privately: it is served
+        // only through the leave-attachments route, to people who may see it.
         $attachmentsPayload = [];
         if ($this->attachment) {
-            $attachmentsPayload[] = [
-                'type' => 'supporting_document',
-                'path' => $this->attachment->store('leave-attachments', 'public'),
-                'original_name' => $this->attachment->getClientOriginalName(),
-                'mime_type' => $this->attachment->getMimeType(),
-                'size' => $this->attachment->getSize(),
-            ];
-        }
-
-        if ($leaveType->attachment_required && $attachmentsPayload === []) {
-            $this->addError('attachment', "An attachment is required for '{$leaveType->name}'.");
-
-            return;
+            $attachmentsPayload[] = LeaveAttachment::storeUpload($this->attachment);
         }
 
         try {

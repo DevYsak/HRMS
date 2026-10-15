@@ -298,7 +298,7 @@ class LeaveService
 
         // Attachment required
         if ($rules['attachment_required'] && $attachmentPath === null) {
-            throw new \DomainException("An attachment is required for '{$leaveType->name}'.");
+            throw new \DomainException("An attachment is required for {$leaveType->name}.");
         }
 
         // Overlap check — must run before balance check so conflict errors surface first.

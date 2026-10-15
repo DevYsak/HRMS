@@ -683,7 +683,7 @@
                                     @if($req->attachments->isNotEmpty())
                                         <div class="mt-1 flex flex-wrap gap-1">
                                             @foreach($req->attachments as $att)
-                                                <a href="{{ asset('storage/'.$att->path) }}" target="_blank" title="{{ $att->typeLabel() }}: {{ $att->original_name }}"
+                                                <a href="{{ $att->url() }}" target="_blank" title="{{ $att->typeLabel() }}: {{ $att->original_name }}"
                                                     class="inline-flex items-center gap-1 rounded bg-zinc-50 dark:bg-zinc-800/50 px-1.5 py-0.5 text-[9px] font-semibold text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:bg-zinc-800 dark:text-zinc-400">
                                                     <flux:icon :name="$att->icon()" class="size-2.5" /> {{ $att->typeLabel() }}
                                                 </a>
@@ -1192,7 +1192,32 @@
 
     {{-- â"€â"€â"€ REQUEST LEAVE MODAL â"€â"€â"€ --}}
     @if($showRequestModal)
-        <x-pulse.modal title="Request Time Off" subtitle="Submit a new leave application for review." close="$wire.closeRequestModal()" width="sm:max-w-lg">
+        {{-- Upload state for the supporting document: Submit waits until the
+             file has reached the server (a phone upload takes seconds), a file of
+             the wrong type or size is refused before it is sent, and a failed
+             upload says so instead of looking attached. --}}
+        <x-pulse.modal title="Request Time Off" subtitle="Submit a new leave application for review." close="$wire.closeRequestModal()" width="sm:max-w-lg"
+            x-data="{
+                uploading: false, progress: 0, uploadError: '',
+                maxBytes: {{ \App\Livewire\TimeOff\MyTimeOff::ATTACHMENT_MAX_KB * 1024 }},
+                types: {{ \Illuminate\Support\Js::from(\App\Livewire\TimeOff\MyTimeOff::ATTACHMENT_TYPES) }},
+                check(event) {
+                    const input = event.target;
+                    if (input.id !== 'leave-attachment' || ! input.files || ! input.files[0]) return;
+                    const file = input.files[0];
+                    const ext = (file.name.split('.').pop() || '').toLowerCase();
+                    this.uploadError = ! this.types.includes(ext) ? 'Please upload a PDF, JPG, JPEG or PNG.'
+                        : (file.size > this.maxBytes ? 'Attachment must be 5 MB or smaller.' : '');
+                    if (this.uploadError) { input.value = ''; event.stopImmediatePropagation(); }
+                },
+            }"
+            x-on:change.capture="check($event)"
+            x-on:livewire-upload-start="uploading = true; progress = 0; uploadError = ''"
+            x-on:livewire-upload-progress="progress = $event.detail.progress"
+            x-on:livewire-upload-finish="uploading = false; progress = 100"
+            x-on:livewire-upload-cancel="uploading = false"
+            x-on:livewire-upload-error="uploading = false; uploadError = 'The attachment could not be uploaded. Check your connection and choose the file again.'; if ($refs.attachmentInput) $refs.attachmentInput.value = ''"
+            x-on:submit.capture="if (uploading) { $event.preventDefault(); $event.stopImmediatePropagation(); }">
                 <div class="space-y-6">
                     <form id="leave-request-form" wire:submit="submitRequest" class="space-y-5" novalidate>
 
@@ -1365,17 +1390,29 @@
                                 <x-pulse.label for="leave-attachment" class="!mb-0" :required="(bool) $selectedType?->attachment_required" :optional="! $selectedType?->attachment_required">Attachment</x-pulse.label>
                                 <span class="text-[10px] font-semibold text-zinc-400">PDF or image — max 5 MB</span>
                             </div>
-                            <input id="leave-attachment" type="file" wire:model="attachment" accept=".pdf,.jpg,.jpeg,.png,.webp" @if($selectedType?->attachment_required) aria-required="true" @endif
+                            <input id="leave-attachment" x-ref="attachmentInput" type="file" wire:model="attachment" accept=".pdf,.jpg,.jpeg,.png,.webp" @if($selectedType?->attachment_required) aria-required="true" @endif
+                                aria-describedby="leave-attachment-status"
                                 class="block w-full text-xs text-zinc-500 dark:text-zinc-400 file:mr-2 file:rounded-lg file:border-0 file:bg-orange-50 file:px-2.5 file:py-1.5 file:text-xs file:font-bold file:text-orange-600 hover:file:bg-orange-100 dark:text-zinc-400">
-                            @error('attachment') <flux:error>{{ $message }}</flux:error> @enderror
-                            @if($attachment)
-                                <div class="mt-1.5 flex items-center gap-2 rounded-lg bg-white dark:bg-zinc-900 px-2 py-1.5 text-[11px] dark:bg-zinc-800">
+                            <div id="leave-attachment-status" aria-live="polite">
+                                <div x-show="uploading" x-cloak class="mt-2" data-upload-progress>
+                                    <p class="text-xs font-semibold text-orange-600 dark:text-orange-400">Uploading attachment… <span x-text="progress + '%'"></span></p>
+                                    <div class="mt-1 h-1 overflow-hidden rounded-full bg-orange-100 dark:bg-orange-500/20"><div class="h-full rounded-full bg-orange-500 transition-all" x-bind:style="'width: ' + progress + '%'"></div></div>
+                                </div>
+                                <p x-show="uploadError" x-cloak x-text="uploadError" class="mt-1.5 text-xs font-medium text-rose-600 dark:text-rose-400" data-upload-error></p>
+                                {{-- A server message from before this file was chosen is not shown while it uploads. --}}
+                                <div x-show="! uploading && ! uploadError">@error('attachment') <flux:error>{{ $message }}</flux:error> @enderror</div>
+                            </div>
+                            @if($attachment && ! $errors->has('attachment'))
+                                <div class="mt-1.5 flex items-center gap-2 rounded-lg bg-white dark:bg-zinc-900 px-2 py-1.5 text-[11px] dark:bg-zinc-800" data-attachment-ready>
                                     @if(str_starts_with($attachment->getMimeType() ?? '', 'image/'))
                                         <img src="{{ $attachment->temporaryUrl() }}" class="size-8 rounded object-cover" alt="preview">
                                     @else
                                         <flux:icon.document-text class="size-4 shrink-0 text-orange-400" />
                                     @endif
-                                    <span class="truncate text-zinc-600 dark:text-zinc-300">{{ $attachment->getClientOriginalName() }}</span>
+                                    <span class="min-w-0 flex-1 truncate text-zinc-600 dark:text-zinc-300">{{ $attachment->getClientOriginalName() }}</span>
+                                    <span class="shrink-0 font-semibold text-emerald-600 dark:text-emerald-400">Uploaded ✓</span>
+                                    <button type="button" wire:click="removeAttachment" x-on:click="if ($refs.attachmentInput) $refs.attachmentInput.value = ''"
+                                        class="shrink-0 font-semibold text-zinc-500 underline-offset-2 hover:text-rose-600 hover:underline" data-remove-attachment>Remove</button>
                                 </div>
                             @endif
                             <p class="mt-2 text-[10px] text-zinc-400">Attachments are automatically deleted 30 days after the leave is approved.</p>
@@ -1449,10 +1486,14 @@
             <x-slot:footer>
                 <button type="button" x-on:click="$wire.closeRequestModal()"
                     class="rounded-xl border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-700">Cancel</button>
-                <button type="submit" form="leave-request-form" wire:loading.attr="disabled" wire:target="submitRequest,attachment" @disabled($rangeHolidays->isNotEmpty() || $rangeMdl->isNotEmpty() || $rangeWeekendDays->isNotEmpty())
+                {{-- Disabled while the attachment uploads (Alpine upload state above),
+                     while submitting, or when the range cannot be requested. --}}
+                <button type="submit" form="leave-request-form" wire:loading.attr="disabled" wire:target="submitRequest" data-submit-leave
+                    x-bind:disabled="uploading || @js($rangeHolidays->isNotEmpty() || $rangeMdl->isNotEmpty() || $rangeWeekendDays->isNotEmpty())"
                     class="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-600 px-5 py-2 text-sm font-bold text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60">
-                    <span wire:loading.remove wire:target="submitRequest,attachment">{{ $rangeHolidays->isNotEmpty() ? 'Holiday in range' : ($rangeMdl->isNotEmpty() ? 'MDL date in range' : ($rangeWeekendDays->isNotEmpty() ? 'Weekend selected' : 'Submit Request')) }}</span>
-                    <span wire:loading wire:target="submitRequest,attachment">Submitting...</span>
+                    <span x-show="uploading" x-cloak>Uploading attachment…</span>
+                    <span x-show="! uploading" wire:loading.remove wire:target="submitRequest">{{ $rangeHolidays->isNotEmpty() ? 'Holiday in range' : ($rangeMdl->isNotEmpty() ? 'MDL date in range' : ($rangeWeekendDays->isNotEmpty() ? 'Weekend selected' : 'Submit Request')) }}</span>
+                    <span wire:loading wire:target="submitRequest">Submitting...</span>
                 </button>
             </x-slot:footer>
         </x-pulse.modal>

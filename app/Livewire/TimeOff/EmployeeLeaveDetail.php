@@ -5,6 +5,7 @@ namespace App\Livewire\TimeOff;
 use App\Models\AuditLog;
 use App\Models\Employee;
 use App\Models\EmployeeLeaveOverride;
+use App\Models\LeaveAttachment;
 use App\Models\LeaveBalance;
 use App\Models\LeaveCarryForwardTransaction;
 use App\Models\LeaveEncashment;
@@ -586,13 +587,7 @@ class EmployeeLeaveDetail extends Component
 
         $attachments = [];
         if ($this->attachment) {
-            $attachments[] = [
-                'type' => 'supporting_document',
-                'path' => $this->attachment->store('leave-attachments', 'public'),
-                'original_name' => $this->attachment->getClientOriginalName(),
-                'mime_type' => $this->attachment->getMimeType(),
-                'size' => $this->attachment->getSize(),
-            ];
+            $attachments[] = LeaveAttachment::storeUpload($this->attachment);
         }
 
         $type = LeaveType::findOrFail($this->formTypeId);

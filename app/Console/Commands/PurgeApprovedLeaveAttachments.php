@@ -54,9 +54,10 @@ class PurgeApprovedLeaveAttachments extends Command
                         $disk->delete($request->attachment_path);
                         $files++;
                     }
+                    // Request documents live on the private disk (older ones on public).
                     foreach ($request->attachments as $att) {
-                        if ($att->path && $disk->exists($att->path)) {
-                            $disk->delete($att->path);
+                        if ($attDisk = $att->diskName()) {
+                            Storage::disk($attDisk)->delete($att->path);
                             $files++;
                         }
                     }

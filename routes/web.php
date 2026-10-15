@@ -8,6 +8,7 @@ use App\Http\Controllers\DocumentUploadController;
 use App\Http\Controllers\Employee360ReportController;
 use App\Http\Controllers\ImpersonationController;
 use App\Http\Controllers\InvitationController;
+use App\Http\Controllers\LeaveAttachmentController;
 use App\Http\Controllers\PayslipController;
 use App\Http\Controllers\QaReportController;
 use App\Http\Controllers\ReportController;
@@ -188,6 +189,10 @@ Route::middleware(['auth'])->group(function () {
     // "Login as" impersonation — permission 'impersonate' (HR Admin by default).
     // (stop is declared first so it isn't captured by the {user} binding)
     Route::get('/impersonate/stop', [ImpersonationController::class, 'stop'])->name('impersonate.stop');
+
+    // A leave request's supporting document (private disk): the owner, or
+    // someone whose leave reach covers the employee (checked in the controller).
+    Route::get('/leave-attachments/{attachment}', LeaveAttachmentController::class)->name('leave-attachments.show');
     Route::post('/impersonate/{user}', [ImpersonationController::class, 'start'])->name('impersonate.start');
 
     // AI Assistant full page

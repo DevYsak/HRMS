@@ -439,7 +439,7 @@
                             <p class="text-xs text-zinc-400 mb-1">Documents:</p>
                             <div class="space-y-1">
                                 @foreach($selectedRequest->attachments as $att)
-                                    <a href="{{ asset('storage/'.$att->path) }}" target="_blank" download
+                                    <a href="{{ $att->url() }}" target="_blank" download
                                         class="flex items-center gap-1.5 text-xs text-indigo-600 dark:text-indigo-400 hover:underline">
                                         <flux:icon :name="$att->icon()" class="size-3.5" />
                                         {{ $att->typeLabel() }} <span class="text-zinc-400">({{ $att->humanSize() }})</span>
