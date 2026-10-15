@@ -62,7 +62,9 @@ class EmployeeImport extends Component
 
     public function exportEmployees(SpreadsheetService $sheets)
     {
-        $export = new EmployeesExport;
+        $this->authorize('create', Employee::class);
+        // Identity and bank details: only the employees this admin manages.
+        $export = new EmployeesExport(auth()->user()->accessibleEmployeeIds('manage_employees'));
 
         return $sheets->download($export->headings(), $export->rows(), 'employees-'.now()->format('Ymd').'.xlsx');
     }

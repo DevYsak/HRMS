@@ -12,6 +12,11 @@ use Illuminate\Support\Carbon;
  */
 class EmployeesExport
 {
+    /**
+     * @param  array<int, int>|null  $employeeIds  the exporter's reach (null = every employee)
+     */
+    public function __construct(private readonly ?array $employeeIds = null) {}
+
     /** @return array<int, string> */
     public function headings(): array
     {
@@ -22,6 +27,7 @@ class EmployeesExport
     public function rows(): array
     {
         return Employee::with(['user', 'office', 'department', 'jobTitle', 'shift', 'manager', 'employmentType', 'payrollSettings'])
+            ->when($this->employeeIds !== null, fn ($q) => $q->whereIn('id', $this->employeeIds))
             ->get()
             ->map(function (Employee $e): array {
                 $user = $e->user;
