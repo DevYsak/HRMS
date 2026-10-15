@@ -79,7 +79,8 @@ test('the branding upload fields render on the settings page', function () {
     $this->actingAs($this->user)
         ->get(route('settings.general'))
         ->assertOk()
-        ->assertSee('Company Logo')
+        ->assertSee('Logo (light mode)')
+        ->assertSee('Logo (dark mode)')
         ->assertSee('Favicon');
 });
 
