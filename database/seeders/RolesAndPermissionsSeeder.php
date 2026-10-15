@@ -126,6 +126,12 @@ class RolesAndPermissionsSeeder extends Seeder
             ['key' => 'data_import', 'label' => 'Import Data', 'description' => 'Bulk-load data such as holidays from a spreadsheet, after a validated preview'],
             ['key' => 'view_audit_log', 'label' => 'View Activity Log', 'description' => 'Read the central activity log / audit trail and export it'],
         ],
+        'QA & Audit' => [
+            ['key' => 'view_qa_audit', 'label' => 'View QA & Audit', 'description' => 'Open the QA & Audit tracker: test cases, findings, fixes, readiness (read-only)'],
+            ['key' => 'manage_qa_audit', 'label' => 'Manage QA & Audit', 'description' => 'Create and edit test cases and findings, record results, link fixes and verify retests'],
+            ['key' => 'run_qa_checks', 'label' => 'Record QA Runs', 'description' => 'Record and import automated test runs (Pest / PHPUnit / Playwright summaries)'],
+            ['key' => 'export_qa_report', 'label' => 'Export QA Report', 'description' => 'Generate the QA, Audit & Readiness report and export QA data'],
+        ],
     ];
 
     /** System roles, mirroring the existing UserRole enum values (preserves real assigned users). */

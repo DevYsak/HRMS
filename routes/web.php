@@ -9,6 +9,7 @@ use App\Http\Controllers\Employee360ReportController;
 use App\Http\Controllers\ImpersonationController;
 use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\PayslipController;
+use App\Http\Controllers\QaReportController;
 use App\Http\Controllers\ReportController;
 use App\Livewire\AiAssistantPage;
 use App\Livewire\Attendance\AllAttendance;
@@ -87,6 +88,7 @@ use App\Livewire\Performance\TeamReviews;
 use App\Livewire\Performance\WarningLetters;
 use App\Livewire\Profile\EmployeeProfile;
 use App\Livewire\Profile\MyProfile;
+use App\Livewire\Qa\QaAudit;
 use App\Livewire\Settings\ApprovalMatrix;
 use App\Livewire\Settings\ApprovalPolicySettings;
 use App\Livewire\Settings\ControlPanel;
@@ -639,6 +641,15 @@ Route::middleware(['auth'])->group(function () {
     // Activity Log / Audit Trail — View Activity Log or Manage Settings,
     // checked in the component, so it is outside the manage-settings group.
     Route::get('/settings/audit-log', AuditLogViewer::class)->name('settings.audit-log');
+
+    // System → QA & Audit — Super Admin by default (view_qa_audit); records QA only.
+    Route::prefix('admin/qa-audit')->name('qa-audit.')->middleware('can:view_qa_audit')->group(function () {
+        Route::get('/', QaAudit::class)->name('index');
+        Route::get('/report', [QaReportController::class, 'report'])->name('report')->middleware('can:export_qa_report');
+        Route::get('/export/{dataset}', [QaReportController::class, 'export'])->name('export')
+            ->whereIn('dataset', ['cases', 'findings', 'fixes', 'runs'])->middleware('can:export_qa_report');
+        Route::get('/evidence/{evidence}', [QaReportController::class, 'evidence'])->name('evidence');
+    });
 
 });
 

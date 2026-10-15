@@ -51,6 +51,11 @@ class RoleDelegationGuard
         // Year-wide leave operations: they move every employee's balance.
         'run_leave_rollover',
         'reconcile_leave',
+        // QA & Audit: internal portal weaknesses and readiness — Super Admin decides who reads it.
+        'view_qa_audit',
+        'manage_qa_audit',
+        'run_qa_checks',
+        'export_qa_report',
     ];
 
     public function isSuperAdmin(?User $user): bool

@@ -60,13 +60,16 @@ class AuditService
 
     public const ONBOARDING = 'onboarding';
 
+    /** QA & Audit tracker: test cases, results, findings, fixes. */
+    public const QA = 'qa';
+
     /** @var array<int, string> */
     public const CATEGORIES = [
         self::AUTHENTICATION, self::EMPLOYEE, self::LEAVE, self::ATTENDANCE, self::PAYROLL,
         self::PERFORMANCE, self::PERMISSIONS, self::ROLES, self::SETTINGS, self::DOCUMENTS,
         self::EXPENSES, self::ASSETS, self::APPROVALS, self::IMPORTS, self::EXPORTS,
         self::SECURITY, self::DATA_MANAGEMENT, self::SYSTEM_JOBS, self::BIOMETRIC,
-        self::OFFBOARDING, self::ONBOARDING,
+        self::OFFBOARDING, self::ONBOARDING, self::QA,
     ];
 
     /**

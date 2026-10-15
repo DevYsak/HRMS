@@ -50,6 +50,10 @@
             </x-pulse.card>
         </div>
 
+        @if($me->hasPermission('view_qa_audit'))
+            @include('dashboard.partials.qa-readiness')
+        @endif
+
         @isset($companyExtras)
             @include('dashboard.partials.company-extras', $companyExtras)
         @endisset

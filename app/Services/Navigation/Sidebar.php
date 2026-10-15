@@ -31,7 +31,7 @@ use Illuminate\Support\Facades\Route;
 class Sidebar
 {
     /** Display order of the groups. */
-    private const ORDER = ['workspace', 'my-work', 'approvals', 'people', 'attendance', 'leave', 'payroll', 'performance', 'reports', 'inbox', 'settings'];
+    private const ORDER = ['workspace', 'my-work', 'approvals', 'people', 'attendance', 'leave', 'payroll', 'performance', 'reports', 'system', 'inbox', 'settings'];
 
     /** @var array<int, array<string, mixed>>|null */
     private ?array $built = null;
@@ -380,6 +380,13 @@ class Sidebar
                     ['label' => 'Review Tasks', 'route' => 'performance.review-tasks', ...$self, 'hideWhenZero' => true, 'badgeColor' => 'violet',
                         'badge' => fn (User $u) => ReviewParticipant::where('reviewer_id', $u->id)->where('status', 'pending')->count()],
                     ['label' => 'My Goals & KPIs', 'route' => 'performance.goals', 'active' => ['performance.goals', 'performance.my-kpis'], ...$self, 'when' => $hasEmployee],
+                ],
+            ],
+            [
+                'key' => 'system', 'heading' => 'System', 'icon' => 'shield-check',
+                'items' => [
+                    ['label' => 'QA & Audit', 'route' => 'qa-audit.index', 'icon' => 'clipboard-document-check', 'active' => ['qa-audit.*'],
+                        'when' => fn (User $u) => $u->hasPermission('view_qa_audit')],
                 ],
             ],
             [
