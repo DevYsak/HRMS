@@ -3,11 +3,13 @@
     $canApproveOt = $user->canApproveOt();
     $access = app(\App\Services\Help\RouteAccess::class);
     $link = fn (string $route): ?string => \Illuminate\Support\Facades\Route::has($route) && $access->allows($user, $route) ? route($route) : null;
-    $isDepartmentView = (bool) ($scopeHeading ?? null);
+    $isDepartmentView = (bool) ($scopeHeading ?? null) || isset($departmentOptions);
     $title = $isDepartmentView ? 'Department View' : 'Team View';
-    $subtitle = $isDepartmentView
-        ? $scopeHeading.' — attendance, approvals and team performance at a glance.'
-        : 'Attendance, approvals and team performance at a glance.';
+    $subtitle = match (true) {
+        $needsDepartment ?? false => 'Choose a department to see its attendance, approvals and team performance.',
+        $isDepartmentView => $scopeHeading.' — attendance, approvals and team performance at a glance.',
+        default => 'Attendance, approvals and team performance at a glance.',
+    };
 
     $teamSize = $teamAttendanceList->count();
     $pendingApprovals = $pendingLeaveCount + ($canApproveOt ? $pendingOtCount : 0);
@@ -39,6 +41,21 @@
         </x-pulse.dashboard-header>
         <x-pulse.scope-badge :scope="$scope" />
 
+        {{-- Company-wide viewers pick a department: Department View never shows company totals. --}}
+        @isset($departmentOptions)
+            <div class="ui-surface flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between" data-department-picker>
+                <label for="department-picker" class="text-sm font-medium text-zinc-700 dark:text-zinc-200">Department</label>
+                <select id="department-picker" wire:model.live="department"
+                    class="h-10 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-800 sm:max-w-xs dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-100">
+                    <option value="">Choose a department…</option>
+                    @foreach($departmentOptions as $option)
+                        <option value="{{ $option->id }}">{{ $option->name }}</option>
+                    @endforeach
+                </select>
+            </div>
+        @endisset
+
+        @if(! ($needsDepartment ?? false))
         {{-- ── ROW 1 — TODAY ── --}}
         <x-pulse.grid :cols="4">
             {{-- Same definitions as the Command Center and HR dashboard (TodayStatusService). --}}
@@ -250,6 +267,7 @@
                 @endif
             </x-pulse.card>
         </x-pulse.grid>
+        @endif
     </div>
 
     {{-- Reject Leave Modal (only interactive on the standalone ManagerDashboard component) --}}
