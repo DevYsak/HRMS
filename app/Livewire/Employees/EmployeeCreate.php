@@ -350,11 +350,17 @@ class EmployeeCreate extends Component
 
         $user->notify(new WelcomeOnboardingNotification($user->employee));
 
-        // Reveal the generated password once so HR/Admin can copy it.
+        // Reveal the generated password once, and only to someone who controls
+        // logins (manage_employee_credentials, QA-F-030). The employee still
+        // receives it in the welcome email.
         $this->newEmployeeName = $this->name;
         $this->newEmployeeEmail = $this->email;
-        $this->generatedPassword = $plainPassword;
-        $this->showCredentialsModal = true;
+        if (Auth::user()->hasPermission('manage_employee_credentials')) {
+            $this->generatedPassword = $plainPassword;
+            $this->showCredentialsModal = true;
+        } else {
+            \Flux::toast('Employee created. Their sign-in details were emailed to them.', variant: 'success');
+        }
 
         // Per-employee allocations entered on the form, written into the LEAVE
         // year rather than the calendar year. Those differ from January to June

@@ -39,6 +39,7 @@ class RolesAndPermissionsSeeder extends Seeder
             ['key' => 'view_probation', 'label' => 'View Probation', 'description' => 'Open the probation confirmation page of employees in scope'],
             ['key' => 'confirm_probation', 'label' => 'Confirm Probation', 'description' => "Step 1: confirm an employee's probation as their line approver"],
             ['key' => 'hr_approve_probation', 'label' => 'HR-Approve Probation', 'description' => 'Step 2: co-approve a confirmed probation and move the employee to Confirmed'],
+            ['key' => 'manage_employee_credentials', 'label' => 'Manage Employee Credentials', 'description' => 'Send password reset links, set temporary passwords, force a password reset and issue login invitations'],
             ['key' => 'view_hr_data_quality', 'label' => 'View Data Quality', 'description' => 'See the read-only org structure & data-quality audit (missing master data, reporting lines, role drift)'],
         ],
         'Attendance' => [
@@ -181,7 +182,7 @@ class RolesAndPermissionsSeeder extends Seeder
         'hr_admin' => [
             'view_executive_dashboard', 'view_hr_dashboard',
             'manage_employees', 'create_employee', 'edit_employee', 'delete_employee', 'view_employee', 'view_directory', 'view_org_chart', 'manage_onboarding', 'manage_offboarding',
-            'view_hr_data_quality', 'view_probation', 'hr_approve_probation',
+            'view_hr_data_quality', 'view_probation', 'hr_approve_probation', 'manage_employee_credentials',
             'view_attendance', 'manage_attendance', 'approve_regularisation', 'hr_approve_regularisation', 'monitor_attendance_exceptions', 'remind_employees', 'assign_coordinators', 'manage_shifts', 'manage_biometric', 'approve_overtime', 'approve_wfh',
             'view_leave', 'apply_leave', 'approve_leave', 'manage_leave_types', 'manage_leave_policies', 'manage_leave_balances', 'manage_leave_encashment',
             'view_leave_carry_forward', 'manage_leave_carry_forward',

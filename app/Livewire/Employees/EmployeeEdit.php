@@ -368,7 +368,8 @@ class EmployeeEdit extends Component
 
     public function resetPassword(): void
     {
-        $this->authorize('update', $this->employee);
+        $this->authorize('manageCredentials', $this->employee);
+        $this->auditCredentialAction('EMPLOYEE_PASSWORD_RESET_LINK_SENT');
 
         try {
             $this->localResetUrl = null;
@@ -403,12 +404,13 @@ class EmployeeEdit extends Component
 
     public function setTemporaryPassword(): void
     {
-        $this->authorize('update', $this->employee);
+        $this->authorize('manageCredentials', $this->employee);
 
         $user = $this->employee->user;
 
         // Secure random password (records history); replaces the old weak Temp@NNNNN.
         $tempPassword = app(PasswordService::class)->resetPassword($user, null, Auth::user());
+        $this->auditCredentialAction('EMPLOYEE_TEMPORARY_PASSWORD_SET');
 
         try {
             Mail::to($user->email)->send(new WelcomeEmployeeMail($user, $tempPassword));
@@ -428,7 +430,7 @@ class EmployeeEdit extends Component
      */
     public function forcePasswordReset(): void
     {
-        $this->authorize('update', $this->employee);
+        $this->authorize('manageCredentials', $this->employee);
 
         $user = $this->employee->user;
         $actor = Auth::user();
@@ -451,6 +453,22 @@ class EmployeeEdit extends Component
         $this->employee->setRelation('user', $user->fresh());
 
         \Flux::toast('They will be asked to set a new password at their next sign-in.', variant: 'success');
+    }
+
+    /**
+     * Who did what to whose login. The audit log adds the impersonating
+     * admin (if any) as well as the acting account. No secret is recorded.
+     */
+    private function auditCredentialAction(string $event): void
+    {
+        app(AuditService::class)->event(
+            $event,
+            AuditService::SECURITY,
+            $this->employee->user,
+            new: ['target_user_id' => $this->employee->user_id, 'acted_by' => Auth::id()],
+            subjectEmployeeId: $this->employee->id,
+            module: AuditService::EMPLOYEE,
+        );
     }
 
     public function openEmailModal(): void

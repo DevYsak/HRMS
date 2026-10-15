@@ -161,6 +161,8 @@
                     <flux:button variant="filled" size="sm" icon="ellipsis-horizontal" aria-label="More actions" title="More actions" />
 
                     <flux:menu class="w-72 max-h-[min(32rem,calc(100vh-5rem))] overflow-y-auto" data-test="more-actions-menu">
+                        {{-- Login credentials: manage_employee_credentials only (QA-F-030); the actions refuse on the server too. --}}
+                        @can('manageCredentials', $employee)
                         <flux:menu.heading class="!text-[10px] !font-bold uppercase tracking-widest !text-[#98A2B3]">Account access</flux:menu.heading>
 
                         <flux:menu.item icon="lock-closed" icon:variant="outline" class="!items-start [&_[data-flux-menu-item-icon]]:!text-orange-500 [&_[data-flux-menu-item-icon]]:mt-0.5"
@@ -198,6 +200,7 @@
                         @endunless
 
                         <flux:menu.separator />
+                        @endcan
                         <flux:menu.heading class="!text-[10px] !font-bold uppercase tracking-widest !text-[#98A2B3]">Record</flux:menu.heading>
 
                         <flux:menu.item icon="clock" icon:variant="outline" class="font-semibold [&_[data-flux-menu-item-icon]]:!text-orange-500" wire:click="setTab('Activity')">

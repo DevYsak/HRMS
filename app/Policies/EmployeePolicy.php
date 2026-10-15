@@ -54,16 +54,28 @@ class EmployeePolicy
     }
 
     /**
-     * Issuing somebody a login.
+     * Issuing somebody a login (an invitation to set their password).
      *
-     * Employee management, not a separate permission: whoever HR trusts to
-     * create and edit employee records is the same person who decides that a
-     * checked record is ready for access. An employee cannot invite anybody,
-     * including themselves, because they do not hold manage_employees.
+     * A credential action (QA-F-030): it needs manage_employee_credentials
+     * as well as reach over the employee — editing employee records does not
+     * imply control of their account.
      */
     public function invite(User $user, Employee $employee): bool
     {
-        return $user->canManageEmployees()
+        return $this->manageCredentials($user, $employee);
+    }
+
+    /**
+     * Control of an employee's login: send a reset link, set a temporary
+     * password, force a reset, issue an invitation. Needs the explicit
+     * manage_employee_credentials permission (Super Admin and HR Admin by
+     * default) — never inferred from manage_employees, edit_employee or a
+     * department scope — plus reach over the employee, and never a Super
+     * Admin's account unless the actor is one.
+     */
+    public function manageCredentials(User $user, Employee $employee): bool
+    {
+        return $user->hasPermission('manage_employee_credentials')
             && $user->coversEmployee($employee)
             && ! $this->isProtectedFrom($user, $employee);
     }

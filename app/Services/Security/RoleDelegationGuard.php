@@ -51,6 +51,8 @@ class RoleDelegationGuard
         // Year-wide leave operations: they move every employee's balance.
         'run_leave_rollover',
         'reconcile_leave',
+        // Control of other people's logins (QA-F-030).
+        'manage_employee_credentials',
         // QA & Audit: internal portal weaknesses and readiness — Super Admin decides who reads it.
         'view_qa_audit',
         'manage_qa_audit',
