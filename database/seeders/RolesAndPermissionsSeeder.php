@@ -211,7 +211,8 @@ class RolesAndPermissionsSeeder extends Seeder
             'view_employee',
             'view_leave', 'apply_leave',
             'view_payroll', 'run_payroll', 'approve_payroll', 'view_payslips', 'manage_salary_components', 'approve_finance', 'view_finance_profile',
-            'view_performance', 'review_performance', 'manage_promotions', 'manage_pip',
+            // Performance management (review, PIP, promotions) only by explicit grant.
+            'view_performance',
             'view_documents', 'acknowledge_documents',
             'view_reports', 'export_reports',
             'edit_own_profile', 'request_profile_change',

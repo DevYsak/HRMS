@@ -187,7 +187,7 @@
                                                     </flux:select>
                                                     <flux:error name="scopes.{{ $permission->id }}.scope" />
                                                     @if(\App\Services\Security\PermissionScopes::allowedScopes($permission->key))
-                                                        <p class="text-[11px] text-zinc-500">The level this view opens at. The people listed follow {{ $permission->key === 'view_department_dashboard' ? 'View Attendance' : 'Approve Leave' }}.</p>
+                                                        <p class="text-[11px] text-zinc-500">The level this view opens at — and whose people it lists. Approval counts on it still follow each approval permission's own scope.</p>
                                                     @endif
                                                     @if(($scopes[$permission->id]['scope'] ?? '') === \App\Enums\DataScope::SelectedDepartments->value)
                                                         <div class="grid max-h-32 grid-cols-1 gap-1 overflow-y-auto rounded-lg border border-zinc-100 p-2 dark:border-zinc-800">

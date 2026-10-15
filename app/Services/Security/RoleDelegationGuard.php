@@ -65,7 +65,10 @@ class RoleDelegationGuard
      *
      * @var array<int, string>
      */
-    public const DEFAULT_DELEGABLE_ROLES = ['employee', 'manager', 'finance', 'coordinator'];
+    // Department Head is an operational, department-scoped role like Manager:
+    // HR administers it and may grant its dashboards (e.g. Department View)
+    // without holding them. Privileged keys stay excluded below.
+    public const DEFAULT_DELEGABLE_ROLES = ['employee', 'manager', 'finance', 'coordinator', 'department_head'];
 
     /**
      * Permission keys the actor may hand to others: their own permissions

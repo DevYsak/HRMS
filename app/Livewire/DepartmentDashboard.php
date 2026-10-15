@@ -37,7 +37,7 @@ class DepartmentDashboard extends ManagerDashboard
 
     protected function scopePermission(): string
     {
-        return Auth::user()->hasPermission('view_attendance') ? 'view_attendance' : 'approve_leave';
+        return 'view_department_dashboard';
     }
 
     protected function scopeHeading(): ?string

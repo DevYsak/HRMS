@@ -126,7 +126,8 @@ test('role defaults resolve to the pre-scope reach', function (string $slug, str
     'finance: payroll' => ['finance', 'view_payroll', DataScope::All],
     'finance: attendance summary' => ['finance', 'view_attendance', DataScope::All],
     'finance: leave summary' => ['finance', 'view_leave_management', DataScope::All],
-    'finance: performance stays team' => ['finance', 'review_performance', DataScope::Team],
+    // Phase 1 decisions: performance management is not a Finance default.
+    'finance: no performance management' => ['finance', 'review_performance', DataScope::None],
     'finance: no leave approval' => ['finance', 'approve_leave', DataScope::None],
     'manager: leave approval' => ['manager', 'approve_leave', DataScope::Team],
     'manager: attendance' => ['manager', 'view_attendance', DataScope::Team],

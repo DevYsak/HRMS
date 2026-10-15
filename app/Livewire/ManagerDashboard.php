@@ -340,9 +340,14 @@ class ManagerDashboard extends Component
     }
 
     /** The permission whose reach this page shows (the scope badge says so). */
+    /**
+     * Whose people the dashboard covers: the dashboard's own permission and
+     * its scope (a Coordinator holds Team View without approving leave).
+     * Approval counts stay scoped by their own approval permissions.
+     */
     protected function scopePermission(): string
     {
-        return 'approve_leave';
+        return 'view_team_dashboard';
     }
 
     /** Optional line naming whose figures these are (e.g. the departments). */

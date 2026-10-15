@@ -90,8 +90,9 @@ final class PermissionScopes
         // own / headed department(s) by default, never every department.
         // Company-wide reach is granted explicitly in Roles & Permissions.
         'director' => DataScope::Department,
-        // Finance reaches its own reporting line for people work (reviews,
-        // PIPs) like any manager; payroll and summaries are company-wide below.
+        // Finance reaches its own reporting line for people data; payroll and
+        // summaries are company-wide below. Performance management is not a
+        // Finance default — it needs its own explicit grant.
         'finance' => DataScope::Team,
         'department_head' => DataScope::Department,
         'manager' => DataScope::Team,
@@ -108,6 +109,7 @@ final class PermissionScopes
         // A coordinator watches the attendance of the department(s) they work in.
         'coordinator' => [
             'view_live_attendance' => DataScope::Department,
+            'view_team_dashboard' => DataScope::Department,
         ],
         'finance' => [
             'view_payroll' => DataScope::All,
@@ -128,10 +130,13 @@ final class PermissionScopes
             'view_main_dashboard', 'view_team_dashboard', 'view_finance_dashboard'],
         'director' => ['export_attendance', 'view_overtime', 'view_live_attendance', 'view_employee_360',
             'view_team_dashboard', 'view_department_dashboard'],
-        // Department View only when an admin grants it (it repeats Team View's people).
-        'department_head' => ['view_live_attendance', 'view_employee_360', 'view_team_dashboard'],
+        // Team View = today's operational work; Department View = the
+        // department's KPIs and trends. Both scoped to the headed department.
+        'department_head' => ['view_live_attendance', 'view_employee_360', 'view_team_dashboard', 'view_department_dashboard'],
         'manager' => ['view_overtime', 'view_live_attendance', 'view_employee_360', 'view_team_dashboard'],
-        'coordinator' => ['view_live_attendance', 'view_main_dashboard'],
+        // A Coordinator lands on Team View for the people they watch; the
+        // Main dashboard only when granted explicitly.
+        'coordinator' => ['view_live_attendance', 'view_team_dashboard'],
         // Finance: payroll in full; attendance / leave / OT summaries only.
         'finance' => ['view_attendance', 'export_attendance', 'view_overtime', 'view_leave_management', 'view_finance_dashboard'],
         'employee' => ['view_main_dashboard'],

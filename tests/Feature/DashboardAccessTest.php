@@ -73,8 +73,12 @@ test('the five Dashboard Access permissions exist, and the two views are scoped'
 test('each role gets its dashboards by default', function (string $slug, array $menu) {
     expect(daMenu(daUser($slug)))->toBe($menu);
 })->with([
-    'department head' => ['department_head', ['Team View']],
+    // Phase 1 decisions (15 Oct 2026): Team View for today's work, Department
+    // View for the department's KPIs — both scoped to the headed department.
+    'department head' => ['department_head', ['Team View', 'Department View']],
     'manager' => ['manager', ['Team View']],
+    // A Coordinator lands on Team View; the Main dashboard only when granted.
+    'coordinator' => ['coordinator', ['Team View']],
     'finance' => ['finance', ['Finance View']],
     'employee' => ['employee', ['Main Dashboard']],
     'hr admin' => ['hr_admin', ['Main Dashboard', 'Team View', 'Executive View', 'Finance View']],
@@ -82,23 +86,26 @@ test('each role gets its dashboards by default', function (string $slug, array $
     'director' => ['director', ['Team View', 'Department View']],
 ]);
 
-test('Nikita sees only Team View and every other dashboard URL is closed', function () {
-    expect(daMenu($this->nikita))->toBe(['Team View']);
+test('Nikita sees Team View and Department View, and every other dashboard URL is closed', function () {
+    expect(daMenu($this->nikita))->toBe(['Team View', 'Department View']);
 
     $this->actingAs($this->nikita)->get(route('dashboard.manager'))->assertOk();
-    foreach (['dashboard.main', 'dashboard.department', 'dashboard.executive', 'dashboard.director', 'dashboard.finance'] as $route) {
+    $this->actingAs($this->nikita)->get(route('dashboard.department'))->assertOk()->assertSee('UK Operations');
+    foreach (['dashboard.main', 'dashboard.executive', 'dashboard.director', 'dashboard.finance'] as $route) {
         $this->actingAs($this->nikita)->get(route($route))->assertForbidden();
     }
 });
 
-test('Department View shows for Nikita only once it is granted', function () {
-    daOverride($this->nikita, 'view_department_dashboard');
+test('Department View lands first for Nikita, and a user override can take it away', function () {
+    // Department before Team in the landing order.
+    expect(app(DashboardAccess::class)->landing($this->nikita))->toBe('dashboard.department');
+
+    daOverride($this->nikita, 'view_department_dashboard', 'revoke');
     $nikita = $this->nikita->fresh();
 
-    expect(daMenu($nikita))->toBe(['Team View', 'Department View']);
-    $this->actingAs($nikita)->get(route('dashboard.department'))->assertOk()->assertSee('UK Operations');
-    // Department before Team in the landing order.
-    expect(app(DashboardAccess::class)->landing($nikita))->toBe('dashboard.department');
+    expect(daMenu($nikita))->toBe(['Team View'])
+        ->and(app(DashboardAccess::class)->landing($nikita))->toBe('dashboard.manager');
+    $this->actingAs($nikita)->get(route('dashboard.department'))->assertForbidden();
 });
 
 test('Team View permission alone opens Team View', function () {
@@ -149,7 +156,8 @@ test('"/" and the login land on the first permitted dashboard', function (string
     $response = $this->get('/');
     $route === null ? $response->assertOk() : $response->assertRedirect(route($route));
 })->with([
-    'department head → Team View' => ['department_head', 'dashboard.manager'],
+    'department head → Department View' => ['department_head', 'dashboard.department'],
+    'coordinator → Team View' => ['coordinator', 'dashboard.manager'],
     'finance → Finance View' => ['finance', 'dashboard.finance'],
     'hr admin → Main Dashboard (HR overview)' => ['hr_admin', null],
     'employee → Main Dashboard (self-service)' => ['employee', null],
@@ -171,9 +179,10 @@ test('impersonation uses the target user\'s dashboards', function () {
     $this->actingAs($admin)->post(route('impersonate.start', $this->nikita))->assertRedirect();
 
     $this->get(route('dashboard.manager'))->assertOk();
+    $this->get(route('dashboard.department'))->assertOk();
     $this->get(route('dashboard.main'))->assertForbidden();
     $this->get(route('dashboard.finance'))->assertForbidden();
-    $this->get('/')->assertRedirect(route('dashboard.manager'));
+    $this->get('/')->assertRedirect(route('dashboard.department'));
 });
 
 test('the role editor shows what the role will see, and offers only valid scopes', function () {
@@ -184,11 +193,11 @@ test('the role editor shows what the role will see, and offers only valid scopes
         ->call('openEdit', $role->id)
         ->assertSeeHtml('data-dashboard-access')
         ->assertSeeHtml('data-dashboard-visible>✓ Team View')
+        ->assertSeeHtml('data-dashboard-visible>✓ Department View')
         ->assertSee('Dashboard Access')
-        ->assertViewHas('roleSummary', fn (array $s) => $s['dashboards']['visible'] === ['Team View']
+        ->assertViewHas('roleSummary', fn (array $s) => $s['dashboards']['visible'] === ['Team View', 'Department View']
             && in_array('Main Dashboard', $s['dashboards']['hidden'], true)
-            && in_array('Department View', $s['dashboards']['hidden'], true)
-            && $s['dashboards']['lands_on'] === 'Team View');
+            && $s['dashboards']['lands_on'] === 'Department View');
 
     expect(DashboardAccess::summarise(['view_department_dashboard'], ['view_department_dashboard' => DataScope::Team])['visible'])->toBe([]);
 });
