@@ -5,6 +5,7 @@ namespace App\Livewire\Employees;
 use App\Models\Department;
 use App\Models\DepartmentTeam;
 use App\Models\Employee;
+use App\Services\Security\ScopeResolver;
 use App\Services\Teams\TeamService;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
@@ -40,6 +41,30 @@ class TeamManagement extends Component
         abort_unless(auth()->user()->canManageEmployees(), 403);
     }
 
+    /**
+     * Departments this user manages employees in (null = every department):
+     * the manage_employees scope, so a department-scoped Director runs only
+     * their own department's teams.
+     *
+     * @return array<int, int>|null
+     */
+    private function departmentReach(): ?array
+    {
+        return app(ScopeResolver::class)->departmentIds(auth()->user(), 'manage_employees');
+    }
+
+    /** @return array<int, int>|null employee ids in reach (null = everyone) */
+    private function employeeReach(): ?array
+    {
+        return auth()->user()->accessibleEmployeeIds('manage_employees');
+    }
+
+    private function assertTeamInReach(DepartmentTeam $team): void
+    {
+        $departments = $this->departmentReach();
+        abort_unless($departments === null || in_array((int) $team->department_id, $departments, true), 403);
+    }
+
     public function newTeam(): void
     {
         $this->reset(['editingId', 'name', 'departmentId', 'teamLeadId', 'secondaryLeadId', 'memberIds']);
@@ -50,6 +75,7 @@ class TeamManagement extends Component
     public function editTeam(int $id): void
     {
         $team = DepartmentTeam::with('activeMemberships')->findOrFail($id);
+        $this->assertTeamInReach($team);
         $this->editingId = $team->id;
         $this->name = $team->name;
         $this->departmentId = $team->department_id;
@@ -72,6 +98,16 @@ class TeamManagement extends Component
         ], [
             'secondaryLeadId.different' => 'The secondary lead must differ from the primary lead.',
         ]);
+
+        // Only teams, leads and members inside the user's reach.
+        $departments = $this->departmentReach();
+        $people = $this->employeeReach();
+        abort_unless($departments === null || in_array((int) $this->departmentId, $departments, true), 403);
+        if ($this->editingId) {
+            $this->assertTeamInReach(DepartmentTeam::findOrFail($this->editingId));
+        }
+        $chosen = array_filter([$this->teamLeadId, $this->secondaryLeadId, ...$this->memberIds]);
+        abort_unless($people === null || array_diff(array_map('intval', $chosen), $people) === [], 403);
 
         $team = DepartmentTeam::updateOrCreate(
             ['id' => $this->editingId],
@@ -100,15 +136,20 @@ class TeamManagement extends Component
 
     public function render()
     {
+        $departments = $this->departmentReach();
+        $people = $this->employeeReach();
+
         $teams = DepartmentTeam::with(['department', 'teamLead.user', 'secondaryLead.user'])
             ->withCount('activeMemberships')
+            ->when($departments !== null, fn ($q) => $q->whereIn('department_id', $departments))
             ->when($this->search, fn ($q) => $q->where('name', 'like', '%'.$this->search.'%'))
             ->orderBy('department_id')->orderBy('name')->get();
 
         return view('livewire.employees.team-management', [
             'teams' => $teams,
-            'departments' => Department::orderBy('name')->get(),
+            'departments' => Department::query()->when($departments !== null, fn ($q) => $q->whereIn('id', $departments))->orderBy('name')->get(),
             'employees' => Employee::with('user')->whereHas('user')
+                ->when($people !== null, fn ($q) => $q->whereIn('id', $people))
                 ->when($this->departmentId, fn ($q) => $q->where('department_id', $this->departmentId))
                 ->orderBy('id')->get(),
         ])->layout('layouts.app', ['title' => 'Teams']);
