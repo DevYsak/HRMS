@@ -271,3 +271,15 @@ test('CSV exports apply the filters', function () {
 
     $this->actingAs($admin)->get('/admin/qa-audit/export/users')->assertNotFound();
 });
+
+test('editing a run or result never rewrites when it ran', function () {
+    $run = QaTestRun::where('name', '2026-10-15 Phase 1 RBAC Regression')->firstOrFail();
+    $result = $run->results()->firstOrFail();
+    $this->travel(2)->hours();
+
+    $run->update(['notes' => 'Edited later']);
+    $result->update(['note' => 'Edited later']);
+
+    expect($run->fresh()->run_at->format('Y-m-d H:i'))->toBe('2026-10-15 12:40')
+        ->and($result->fresh()->tested_at->format('Y-m-d H:i'))->toBe('2026-10-15 12:40');
+});
