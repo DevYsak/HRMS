@@ -207,7 +207,7 @@ class Employee extends Model
      *
      * Nothing is ever filled in to make this list shorter: a missing value is
      * a task for HR (the completion queue on Employee Management), never a
-     * default. Top-of-hierarchy accounts (Super Admin, Director) legitimately
+     * default. Top-of-hierarchy accounts (Super Admin, Director, HR Admin, heads of function) legitimately
      * have no reporting manager, and probation end only matters on probation.
      *
      * @return array<string, string>
@@ -260,8 +260,11 @@ class Employee extends Model
                 ->orWhereNull('work_mode_id')
                 ->orWhereNull('salary_cycle_id')
                 ->orWhere(fn (Builder $p) => $p->where('status', EmployeeStatus::Probation->value)->whereNull('probation_end_date'))
+                // Mirror of isTopOfHierarchy(): no manager is expected only at the top.
                 ->orWhere(fn (Builder $m) => $m->whereNull('manager_id')
-                    ->whereHas('user', fn ($u) => $u->whereNotIn('role', [UserRole::SuperAdmin->value, UserRole::Director->value])));
+                    ->whereHas('user', fn ($u) => $u->whereNotIn('role', self::TOP_LEVEL_ROLES)
+                        ->where(fn ($r) => $r->whereNull('role_id')->orWhereNotIn('role_id', Role::query()->whereIn('slug', self::TOP_LEVEL_ROLE_SLUGS)->select('id')))
+                        ->whereNotIn('id', Department::query()->whereNotNull('head_id')->select('head_id'))));
 
             if ($noDefaultShift) {
                 $q->orWhereNull('shift_id');
@@ -269,10 +272,28 @@ class Employee extends Model
         });
     }
 
-    /** Super Admins and Directors sit at the top: no reporting manager is expected. */
-    private function isTopOfHierarchy(): bool
+    /** Legacy roles at the top of the hierarchy (policy, 15 Oct 2026). */
+    public const TOP_LEVEL_ROLES = [UserRole::SuperAdmin->value, UserRole::Director->value, UserRole::HrAdmin->value];
+
+    /** Role slugs at the top: the Department Head role (heads of function). */
+    public const TOP_LEVEL_ROLE_SLUGS = ['super_admin', 'director', 'hr_admin', 'department_head'];
+
+    /**
+     * Genuinely top-level, so no reporting manager is expected (policy, 15 Oct
+     * 2026): Super Admin, Director, HR Admin, and a Department Head / head of
+     * function — the Department Head role, or whoever heads a department.
+     * Everyone else should report to someone; a missing manager is for review.
+     */
+    public function isTopOfHierarchy(): bool
     {
-        return in_array($this->user?->role, [UserRole::SuperAdmin, UserRole::Director], true);
+        $user = $this->user;
+        if ($user === null) {
+            return false;
+        }
+
+        return in_array($user->role?->value, self::TOP_LEVEL_ROLES, true)
+            || in_array($user->assignedRole?->slug, self::TOP_LEVEL_ROLE_SLUGS, true)
+            || Department::where('head_id', $user->id)->exists();
     }
 
     /**

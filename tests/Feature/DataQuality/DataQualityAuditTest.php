@@ -145,7 +145,7 @@ test('reporting to a deleted or departed manager is flagged', function () {
     expect(dqIssues('inactive_manager')->pluck('employeeId')->all())->toContain($toGone->id, $toLeft->id);
 });
 
-test('a cross-department manager is REVIEW NEEDED when they can approve, INVALID when they cannot', function () {
+test('a cross-department manager is REVIEW REQUIRED when they can approve, INVALID when they cannot', function () {
     $salesManager = dqEmployee($this->sales, null, 'manager')->user;
     $plainEmployee = dqEmployee($this->sales, null)->user;
     $cross = dqEmployee($this->ops, $salesManager);
@@ -154,7 +154,7 @@ test('a cross-department manager is REVIEW NEEDED when they can approve, INVALID
 
     $auditor = app(DataQualityAuditor::class);
     expect($auditor->managerLine($same))->toBe('VALID')
-        ->and($auditor->managerLine($cross))->toBe('REVIEW NEEDED')
+        ->and($auditor->managerLine($cross))->toBe('REVIEW REQUIRED')
         ->and($auditor->managerLine($toPlain))->toBe('INVALID')
         ->and(dqIssues('manager_invalid')->pluck('employeeId'))->toContain($toPlain->id)
         ->and(dqIssues('manager_cross_department')->pluck('employeeId'))->toContain($cross->id);

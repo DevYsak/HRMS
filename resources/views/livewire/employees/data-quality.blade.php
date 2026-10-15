@@ -5,7 +5,7 @@
         'warning' => 'bg-amber-50 text-amber-700 ring-1 ring-amber-100 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/20',
         'info' => 'bg-zinc-100 text-zinc-600 ring-1 ring-zinc-200 dark:bg-white/5 dark:text-zinc-300 dark:ring-white/10',
     ];
-    $lineTone = ['VALID' => 'emerald', 'REVIEW NEEDED' => 'amber', 'INVALID' => 'rose'];
+    $lineTone = ['VALID' => 'emerald', 'REVIEW REQUIRED' => 'amber', 'INVALID' => 'rose'];
     $inputClass = 'h-10 w-full min-w-0 rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-800 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-500/20 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-100';
     $labelClass = 'mb-1 block text-[11px] font-semibold uppercase tracking-wide text-zinc-500';
     $th = 'px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-zinc-500';
@@ -136,7 +136,7 @@
                     </tbody>
                 </table>
             </div>
-            <p class="border-t border-zinc-100 px-4 py-2 text-xs text-zinc-500 dark:border-white/5">Line: VALID = same department, the department head, or company-wide; REVIEW NEEDED = cross-department manager who can approve; INVALID = the manager cannot act for them.</p>
+            <p class="border-t border-zinc-100 px-4 py-2 text-xs text-zinc-500 dark:border-white/5">Line: VALID = same department, the department head, company-wide — or no manager because they are top-level (Super Admin, Director, HR Admin, Department Head / head of function); REVIEW REQUIRED = no manager while not top-level, or a cross-department manager who can approve; INVALID = the manager cannot act for them.</p>
         </div>
     @elseif($tab === 'departments')
         <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3" data-dq-departments>

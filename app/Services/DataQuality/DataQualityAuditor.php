@@ -60,7 +60,7 @@ class DataQualityAuditor
         // Master data
         'no_department' => ['label' => 'Active employee without department', 'severity' => self::HIGH, 'area' => 'Master data', 'nature' => 'data', 'action' => 'Assign the department on the employee record.'],
         'department_missing' => ['label' => 'Employee assigned to a department that does not exist', 'severity' => self::CRITICAL, 'area' => 'Master data', 'nature' => 'data', 'action' => 'Re-assign the employee to an existing department.'],
-        'no_manager' => ['label' => 'Active employee without reporting manager', 'severity' => self::HIGH, 'area' => 'Reporting', 'nature' => 'data', 'action' => 'Set the reporting manager (approvals fall back to the department head / HR until then).'],
+        'no_manager' => ['label' => 'Active employee without reporting manager', 'severity' => self::HIGH, 'area' => 'Reporting', 'nature' => 'data', 'action' => 'REVIEW REQUIRED: set the reporting manager. Only Super Admin, Director, HR Admin and Department Heads / heads of function are exempt (policy, 15 Oct).'],
         'no_shift' => ['label' => 'Active employee without a shift', 'severity' => self::HIGH, 'area' => 'Master data', 'nature' => 'data', 'action' => 'Assign a shift (or set a company default) — attendance cannot be scored without one.'],
         'no_job_title' => ['label' => 'Active employee without job title', 'severity' => self::WARNING, 'area' => 'Master data', 'nature' => 'data', 'action' => 'Set the designation.'],
         'no_employment_type' => ['label' => 'Active employee without employment type', 'severity' => self::WARNING, 'area' => 'Master data', 'nature' => 'data', 'action' => 'Set the employment type (drives probation, notice and eligibility).'],
@@ -71,9 +71,9 @@ class DataQualityAuditor
         'circular_chain' => ['label' => 'Circular reporting chain', 'severity' => self::CRITICAL, 'area' => 'Reporting', 'nature' => 'data', 'action' => 'Break the loop: one person in the chain must report outside it.'],
         'inactive_manager' => ['label' => 'Employee reports to an inactive manager', 'severity' => self::HIGH, 'area' => 'Reporting', 'nature' => 'data', 'action' => 'Re-assign to an active manager.'],
         'manager_invalid' => ['label' => 'Reporting manager cannot act for this employee', 'severity' => self::HIGH, 'area' => 'Reporting', 'nature' => 'data', 'action' => 'The manager holds no approval permission: change the manager or their role.'],
-        'manager_cross_department' => ['label' => 'Manager in another department', 'severity' => self::INFO, 'area' => 'Reporting', 'nature' => 'policy', 'action' => 'Confirm the cross-department line is intended (allowed by policy when the manager can approve).'],
+        'manager_cross_department' => ['label' => 'Manager in another department', 'severity' => self::INFO, 'area' => 'Reporting', 'nature' => 'policy', 'action' => 'REVIEW REQUIRED: confirm the cross-department line is intended (allowed when the manager can approve). Unverified people are classified by HR / Super Admin: real, demo, test / leftover, or archive / delete.'],
         // Departments
-        'department_no_head' => ['label' => 'Department without department head', 'severity' => self::WARNING, 'area' => 'Departments', 'nature' => 'data', 'action' => 'Set a department head — escalations and Department View need one.'],
+        'department_no_head' => ['label' => 'Department without department head', 'severity' => self::WARNING, 'area' => 'Departments', 'nature' => 'data', 'action' => 'HR Data Correction Required: record the real department head. Heads are never assigned automatically.'],
         'department_head_inactive' => ['label' => 'Department head is inactive', 'severity' => self::HIGH, 'area' => 'Departments', 'nature' => 'data', 'action' => 'Set an active department head.'],
         'department_head_outside' => ['label' => 'Department head belongs to another department', 'severity' => self::INFO, 'area' => 'Departments', 'nature' => 'policy', 'action' => 'Confirm the head is meant to lead this department from outside it.'],
         'department_head_unauthorised' => ['label' => 'Department head lacks Department Head / Director authorisation', 'severity' => self::WARNING, 'area' => 'Departments', 'nature' => 'data', 'action' => 'Give the head the Department Head (or Director) role, or choose another head.'],
@@ -94,11 +94,11 @@ class DataQualityAuditor
         'duplicate_employee_code' => ['label' => 'Duplicate employee code', 'severity' => self::CRITICAL, 'area' => 'Identity', 'nature' => 'data', 'action' => 'Give each employee a unique code (biometric sync matches on it).'],
         'duplicate_email' => ['label' => 'Duplicate work email', 'severity' => self::CRITICAL, 'area' => 'Identity', 'nature' => 'data', 'action' => 'Give each account a unique email.'],
         'employee_without_user' => ['label' => 'Active employee without a login account', 'severity' => self::HIGH, 'area' => 'Identity', 'nature' => 'data', 'action' => 'Create or restore the employee\'s user account.'],
-        'user_without_employee' => ['label' => 'Login account without an employee record', 'severity' => self::WARNING, 'area' => 'Identity', 'nature' => 'data', 'action' => 'Link the account to an employee record, or confirm it is a system account.'],
+        'user_without_employee' => ['label' => 'Login account without an employee record', 'severity' => self::WARNING, 'area' => 'Identity', 'nature' => 'data', 'action' => 'REVIEW REQUIRED: HR / Super Admin decide whether it is real, demo, test / leftover, or to archive / delete. Nothing is changed automatically.'],
         // Roles & scope
         'role_no_users' => ['label' => 'Role with no users', 'severity' => self::INFO, 'area' => 'Roles', 'nature' => 'policy', 'action' => 'Keep (built-in) or archive (custom) the role.'],
-        'custom_role_unused' => ['label' => 'Custom role with no users', 'severity' => self::WARNING, 'area' => 'Roles', 'nature' => 'policy', 'action' => 'Archive the role, or record what it is for.'],
-        'custom_role_no_purpose' => ['label' => 'Custom role with no description', 'severity' => self::INFO, 'area' => 'Roles', 'nature' => 'policy', 'action' => 'Describe what the role is for.'],
+        'custom_role_unused' => ['label' => 'Custom role with no users', 'severity' => self::WARNING, 'area' => 'Roles', 'nature' => 'policy', 'action' => 'REVIEW REQUIRED: HR / Super Admin decide whether it is real, demo, test / leftover, or to archive / delete. Nothing is changed automatically.'],
+        'custom_role_no_purpose' => ['label' => 'Custom role with no description', 'severity' => self::INFO, 'area' => 'Roles', 'nature' => 'policy', 'action' => 'Describe what the role is for. REVIEW REQUIRED: HR / Super Admin decide whether it is real, demo, test / leftover, or to archive / delete. Nothing is changed automatically.'],
         'role_drift' => ['label' => 'Role permissions differ from the built-in defaults', 'severity' => self::WARNING, 'area' => 'Roles', 'nature' => 'policy', 'action' => 'Review the difference in Roles & Permissions. Nothing is reset automatically.'],
         'user_override' => ['label' => 'Per-user permission override', 'severity' => self::INFO, 'area' => 'Roles', 'nature' => 'policy', 'action' => 'Confirm the per-user grant / revoke is still wanted.'],
         'user_override_privileged' => ['label' => 'Per-user grant of a privileged permission', 'severity' => self::HIGH, 'area' => 'Roles', 'nature' => 'policy', 'action' => 'Confirm a Super Admin approved this grant.'],
@@ -205,14 +205,16 @@ class DataQualityAuditor
     }
 
     /**
-     * VALID / REVIEW NEEDED / INVALID for the employee's reporting line.
+     * VALID / REVIEW REQUIRED / INVALID for the employee's reporting line.
+     * No manager: VALID only for a genuinely top-level employee
+     * (Employee::isTopOfHierarchy, policy 15 Oct), otherwise REVIEW REQUIRED.
      * A cross-department manager is fine when policy lets them act: they
      * head the department, are company-wide, or hold approval rights.
      */
     public function managerLine(Employee $employee): ?string
     {
         if ($employee->manager_id === null) {
-            return null;
+            return $employee->isTopOfHierarchy() ? 'VALID' : 'REVIEW REQUIRED';
         }
 
         $d = $this->data();
@@ -232,7 +234,7 @@ class DataQualityAuditor
             $managerEmployee !== null && $managerEmployee->department_id === $employee->department_id => 'VALID',
             $department !== null && (int) $department->head_id === (int) $manager->id => 'VALID',
             $this->isTopLevel($manager) => 'VALID',
-            default => 'REVIEW NEEDED',
+            default => 'REVIEW REQUIRED',
         };
     }
 
@@ -450,7 +452,7 @@ class DataQualityAuditor
             $line = $this->managerLine($e);
             if ($line === 'INVALID') {
                 $issues[] = $this->employeeIssue('manager_invalid', $e, "{$manager->name} holds no approval permission for their reports.");
-            } elseif ($line === 'REVIEW NEEDED') {
+            } elseif ($line === 'REVIEW REQUIRED') {
                 $managerDept = $d['departments']->get($d['employeesByUser']->get($manager->id)?->department_id)?->name ?? 'no department';
                 $issues[] = $this->employeeIssue('manager_cross_department', $e, "Manager {$manager->name} is in {$managerDept}.");
             }
@@ -855,7 +857,7 @@ class DataQualityAuditor
 
         return match (true) {
             ! $policyApplied && isset($phase1[$slug][$key]) => 'Phase 1 role-policy migration (2026_10_15_111021) not applied on this database.',
-            $slug === 'super_admin' && $key === 'view_department_dashboard' && $missing => 'Policy (15 Oct): Super Admin needs no Department View by default, but the seeder grants Super Admin every permission — decision needed.',
+            $slug === 'super_admin' && $key === 'view_department_dashboard' && $missing => 'Decided 15 Oct: Super Admin keeps every company-wide capability; Department View opens only once a department is chosen. Grant it back in Roles & Permissions.',
             in_array($key, RoleDelegationGuard::PRIVILEGED, true) && ! $missing => "{$key} is privileged and was added in Roles & Permissions.",
             $missing => "{$key} is a default for this role but is not granted here (removed in Roles & Permissions, or the role predates the grant).",
             default => "{$key} was added in Roles & Permissions.",
