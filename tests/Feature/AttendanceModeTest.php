@@ -148,7 +148,10 @@ test('a hybrid day is listed in the attendance history', function () {
         'total_hours' => 8,
     ]);
 
-    Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
+    // History pages 10 days at a time, newest first: filter to the day so the
+    // assertion holds on any date of the month, not only up to the 13th.
+    Livewire::withQueryParams(['from' => $d->toDateString(), 'to' => $d->toDateString(), 'mode' => 'hybrid'])
+        ->actingAs($employee->user)->test(AttendanceTracker::class)
         ->assertOk()
         ->assertSee('Attendance History')
         ->assertSee($d->lte(today()) ? $d->format('D d M') : 'Attendance History');
