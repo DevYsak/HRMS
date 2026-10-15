@@ -29,6 +29,7 @@ use App\Livewire\Dashboard;
 use App\Livewire\DepartmentDashboard;
 use App\Livewire\Departments\DepartmentOverview;
 use App\Livewire\Documents\DocumentManager;
+use App\Livewire\Employees\DataQuality;
 use App\Livewire\Employees\Directory;
 use App\Livewire\Employees\Employee360;
 use App\Livewire\Employees\EmployeeCreate;
@@ -225,6 +226,10 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/', EmployeeIndex::class)->name('index');
         Route::get('/directory', Directory::class)->name('directory');
         Route::get('/org-chart', OrgChart::class)->name('org-chart');
+
+        // People → Data Quality: read-only org structure & data-quality audit,
+        // limited to the departments the viewer's scope reaches.
+        Route::get('/data-quality', DataQuality::class)->name('data-quality')->middleware('can:view_hr_data_quality');
 
         // Finance read-only salary/bank profile
         Route::get('/{employee}/finance-profile', FinanceEmployeeProfile::class)

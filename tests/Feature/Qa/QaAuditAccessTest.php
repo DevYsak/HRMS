@@ -271,7 +271,7 @@ test('the overview shows the last verified build and the open blockers', functio
         ->assertSee('Open blockers')->assertSee('Policy decision needed');
 
     $summary = (new QaReadiness)->summary();
-    expect($summary['open_blockers'])->toBe(['critical' => 0, 'high' => 0, 'known_baseline' => 2, 'policy' => 4, 'retest_required' => 0])
+    expect($summary['open_blockers'])->toBe(['critical' => 0, 'high' => 0, 'known_baseline' => 2, 'policy' => 4, 'retest_required' => 0, 'hr_corrections' => 0])
         ->and($summary['verified']['security']->name)->toBe('2026-10-15 Phase 1 RBAC Regression')
         ->and($summary['verified']['commit'])->toMatch('/^[0-9a-f]{7}$/');
 

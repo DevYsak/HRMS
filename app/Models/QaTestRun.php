@@ -30,7 +30,10 @@ class QaTestRun extends Model
     public const KINDS = ['full' => 'Full suite', 'security' => 'Security / RBAC', 'ui' => 'UI / responsive', 'targeted' => 'Targeted', 'manual' => 'Manual'];
 
     /** @var array<string, string> */
-    public const SUITES = ['pest' => 'Pest', 'phpunit' => 'PHPUnit', 'playwright' => 'Playwright', 'manual' => 'Manual'];
+    public const SUITES = ['pest' => 'Pest', 'phpunit' => 'PHPUnit', 'playwright' => 'Playwright', 'manual' => 'Manual', 'data_quality' => 'Data quality'];
+
+    /** Runs that are not test-suite runs: they never count as "the latest run". */
+    public const NON_TEST_SUITES = ['migration', 'data_quality'];
 
     protected function casts(): array
     {

@@ -25,7 +25,7 @@ final class PermissionScopes
         'view_team_dashboard', 'view_department_dashboard',
         // Employees
         'manage_employees', 'view_employee', 'edit_employee', 'delete_employee', 'view_employee_360',
-        'manage_onboarding', 'manage_offboarding', 'approve_profile_changes',
+        'manage_onboarding', 'manage_offboarding', 'approve_profile_changes', 'view_hr_data_quality',
         // Attendance
         'view_attendance', 'manage_attendance', 'export_attendance', 'view_live_attendance',
         'approve_regularisation', 'hr_approve_regularisation',

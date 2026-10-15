@@ -36,6 +36,7 @@ class RolesAndPermissionsSeeder extends Seeder
             ['key' => 'view_org_chart', 'label' => 'View Org Chart', 'description' => 'View the organisational hierarchy'],
             ['key' => 'manage_onboarding', 'label' => 'Manage Onboarding', 'description' => 'Run new-hire onboarding workflows'],
             ['key' => 'manage_offboarding', 'label' => 'Manage Offboarding', 'description' => 'Run employee offboarding workflows'],
+            ['key' => 'view_hr_data_quality', 'label' => 'View Data Quality', 'description' => 'See the read-only org structure & data-quality audit (missing master data, reporting lines, role drift)'],
         ],
         'Attendance' => [
             ['key' => 'view_attendance', 'label' => 'View Attendance', 'description' => 'View attendance records'],
@@ -176,6 +177,7 @@ class RolesAndPermissionsSeeder extends Seeder
         'hr_admin' => [
             'view_executive_dashboard', 'view_hr_dashboard',
             'manage_employees', 'create_employee', 'edit_employee', 'delete_employee', 'view_employee', 'view_directory', 'view_org_chart', 'manage_onboarding', 'manage_offboarding',
+            'view_hr_data_quality',
             'view_attendance', 'manage_attendance', 'approve_regularisation', 'hr_approve_regularisation', 'monitor_attendance_exceptions', 'remind_employees', 'assign_coordinators', 'manage_shifts', 'manage_biometric', 'approve_overtime', 'approve_wfh',
             'view_leave', 'apply_leave', 'approve_leave', 'manage_leave_types', 'manage_leave_policies', 'manage_leave_balances', 'manage_leave_encashment',
             'view_leave_carry_forward', 'manage_leave_carry_forward',

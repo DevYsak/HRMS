@@ -88,6 +88,7 @@
             ['Known baseline', $b['known_baseline'], 'violet', "\$set('status', 'known_baseline'); \$set('tab', 'cases')"],
             ['Policy decision needed', $b['policy'], 'amber', "\$set('decision', '1'); \$set('tab', 'findings')"],
             ['Retest required', $b['retest_required'], 'sky', "\$set('status', 'fixed'); \$set('tab', 'findings')"],
+            ['HR data corrections', $b['hr_corrections'], 'amber', "\$set('module', 'Data Quality'); \$set('tab', 'findings')"],
         ];
     @endphp
     <div class="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">

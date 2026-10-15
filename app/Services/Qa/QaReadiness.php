@@ -84,6 +84,9 @@ class QaReadiness
         'performance' => 'Performance', 'reports' => 'Reports', 'ai' => 'AI', 'guide' => 'Guide', 'ready' => 'Ready',
     ];
 
+    /** Test cases recorded by qa:record-data-quality. */
+    public const DATA_MODULE = 'Data Quality';
+
     /** Test-case modules that measure access control. */
     private const RBAC_MODULES = ['RBAC', 'Navigation', 'Scope', 'Dashboards'];
 
@@ -112,10 +115,12 @@ class QaReadiness
             return $this->summary;
         }
 
-        $cases = QaTestCase::query()->get(['id', 'module', 'status']);
+        // Data-quality checks (QA-DQ-*) measure HR data, not the code: they are
+        // reported as HR data corrections, never in the test scores.
+        $cases = QaTestCase::query()->where('module', '!=', self::DATA_MODULE)->get(['id', 'module', 'status']);
         $findings = QaFinding::query()->get(['id', 'kind', 'severity', 'status', 'module', 'needs_decision']);
         $openFindings = $findings->filter(fn (QaFinding $f) => $f->status->isOpen());
-        $latestRun = QaTestRun::query()->where('suite', '!=', 'migration')->latest('run_at')->latest('id')->first();
+        $latestRun = QaTestRun::query()->whereNotIn('suite', QaTestRun::NON_TEST_SUITES)->latest('run_at')->latest('id')->first();
         $failedMigration = QaTestRun::query()->where('suite', 'migration')->latest('run_at')->latest('id')->value('result') === QaTestRun::RESULT_FAIL;
 
         $byStatus = $cases->countBy(fn (QaTestCase $c) => $c->status->value);
@@ -139,7 +144,8 @@ class QaReadiness
         $penalty = fn (Collection $open) => $open->sum(fn (QaFinding $f) => self::PENALTY[$f->severity->value]);
 
         $scores = [
-            'overall' => $this->score($this->passRate($cases), $penalty($openFindings->where('severity', QaSeverity::Critical))),
+            // Test-based: a critical *data* finding blocks the levels below, not this score.
+            'overall' => $this->score($this->passRate($cases), $penalty($openFindings->where('severity', QaSeverity::Critical)->where('kind', '!=', 'data'))),
             'security' => $this->score(
                 $this->passRate($cases->filter(fn ($c) => in_array($c->module, self::SECURITY_MODULES, true))),
                 $penalty($openFindings->where('kind', 'security')),
@@ -180,6 +186,7 @@ class QaReadiness
                 'known_baseline' => $counts['known_baseline'],
                 'policy' => $openFindings->where('needs_decision', true)->count(),
                 'retest_required' => $counts['retest_required'],
+                'hr_corrections' => $openFindings->where('kind', 'data')->count(),
             ],
         ];
     }

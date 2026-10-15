@@ -250,6 +250,8 @@ class Sidebar
                     ['label' => 'Offboarding', 'route' => 'employees.offboarding-manager', 'active' => ['employees.offboarding-manager', 'employees.offboarding'],
                         'when' => fn (User $u) => $u->hasPermission('manage_offboarding')],
                     ['label' => 'Assets', 'route' => 'operations.assets'],
+                    ['label' => 'Data Quality', 'route' => 'employees.data-quality',
+                        'when' => fn (User $u) => $u->hasPermission('view_hr_data_quality')],
                     ['label' => 'Directory', 'route' => 'employees.directory', ...$self],
                     ['label' => 'Org Chart', 'route' => 'employees.org-chart', ...$self],
                 ],

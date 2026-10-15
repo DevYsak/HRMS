@@ -24,7 +24,7 @@ class QaFinding extends Model
     use HasFactory;
 
     /** @var array<string, string> */
-    public const KINDS = ['functional' => 'Functional', 'security' => 'Security', 'rbac' => 'RBAC / Scope', 'ui' => 'UI / UX'];
+    public const KINDS = ['functional' => 'Functional', 'security' => 'Security', 'rbac' => 'RBAC / Scope', 'ui' => 'UI / UX', 'data' => 'Data quality'];
 
     protected function casts(): array
     {

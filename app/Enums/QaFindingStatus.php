@@ -10,6 +10,7 @@ enum QaFindingStatus: string
     case Fixing = 'fixing';
     case Fixed = 'fixed';
     case RetestRequired = 'retest_required';
+    case HrCorrectionRequired = 'hr_correction_required';
     case Verified = 'verified';
     case AcceptedRisk = 'accepted_risk';
     case WontFix = 'wont_fix';
@@ -22,6 +23,7 @@ enum QaFindingStatus: string
             self::Fixing => 'Fixing',
             self::Fixed => 'Fixed',
             self::RetestRequired => 'Retest Required',
+            self::HrCorrectionRequired => 'HR Data Correction Required',
             self::Verified => 'Verified',
             self::AcceptedRisk => 'Accepted Risk',
             self::WontFix => "Won't Fix",
@@ -34,6 +36,7 @@ enum QaFindingStatus: string
             self::Open => 'rose',
             self::Investigating, self::Fixing => 'amber',
             self::Fixed, self::RetestRequired => 'sky',
+            self::HrCorrectionRequired => 'orange',
             self::Verified => 'emerald',
             self::AcceptedRisk => 'violet',
             self::WontFix => 'zinc',
@@ -43,7 +46,7 @@ enum QaFindingStatus: string
     /** Still a live issue: it counts against readiness. */
     public function isOpen(): bool
     {
-        return in_array($this, [self::Open, self::Investigating, self::Fixing, self::Fixed, self::RetestRequired], true);
+        return in_array($this, [self::Open, self::Investigating, self::Fixing, self::Fixed, self::RetestRequired, self::HrCorrectionRequired], true);
     }
 
     /** Closing as an accepted risk or won't-fix must be explained. */
