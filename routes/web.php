@@ -243,7 +243,7 @@ Route::middleware(['auth'])->group(function () {
 
         // Probation: the line approver confirms (step 1), HR co-approves (step
         // 2). Whose probation opens is checked against the scope in the page.
-        Route::get('/{employee}/probation', ProbationConfirmation::class)->name('probation')->middleware('role:manage-employees,approve-leave');
+        Route::get('/{employee}/probation', ProbationConfirmation::class)->name('probation')->middleware('can:view_probation');
 
         // HR / admin only
         Route::middleware('role:manage-employees')->group(function () {

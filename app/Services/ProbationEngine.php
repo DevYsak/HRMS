@@ -78,14 +78,10 @@ class ProbationEngine
     /** Step 1: Manager confirms probation completion. */
     public function managerConfirm(Employee $employee, User $manager, ?string $comment = null): void
     {
-        abort_unless(
-            \in_array($manager->role?->value, ['manager', 'director', 'super_admin'], true),
-            403,
-            'Only managers, directors, or super admins can confirm probation.'
-        );
+        abort_unless($manager->hasPermission('confirm_probation'), 403, 'You do not have permission to confirm probation.');
 
         // The employee's own line (or a scope covering them), never their own probation.
-        app(ApprovalGuard::class)->assertCanDecide($manager, $employee);
+        app(ApprovalGuard::class)->assertCanDecide($manager, $employee, 'confirm_probation');
 
         if ($employee->probation_confirmed_at) {
             throw new \DomainException('Manager has already confirmed this probation.');
@@ -106,15 +102,11 @@ class ProbationEngine
     /** Step 2: HR Admin co-approves and moves employee to Confirmed status. */
     public function hrApprove(Employee $employee, User $hr, ?string $comment = null): void
     {
-        abort_unless(
-            \in_array($hr->role?->value, ['hr_admin', 'super_admin'], true),
-            403,
-            'Only HR admins or super admins can approve probation.'
-        );
+        abort_unless($hr->hasPermission('hr_approve_probation'), 403, 'You do not have permission to approve probation.');
 
         app(ApprovalGuard::class)->assertNotSelf($hr, $employee);
         // A department-scoped HR admin approves only within their scope.
-        abort_unless($hr->coversEmployee($employee), 403, 'This employee is outside your scope.');
+        abort_unless($hr->coversEmployee($employee, 'hr_approve_probation'), 403, 'This employee is outside your scope.');
 
         if (! $employee->probation_confirmed_at) {
             throw new \DomainException('Manager must confirm before HR can approve.');

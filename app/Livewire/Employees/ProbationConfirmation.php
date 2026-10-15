@@ -27,8 +27,7 @@ class ProbationConfirmation extends Component
     {
         $this->employee = $employee;
         abort_unless(
-            (Auth::user()->canApproveLeave() || Auth::user()->canManageEmployees())
-                && Auth::user()->coversEmployee($employee),
+            Auth::user()->hasPermission('view_probation') && Auth::user()->coversEmployee($employee, 'view_probation'),
             403
         );
     }
@@ -108,6 +107,8 @@ class ProbationConfirmation extends Component
         $engine = app(ProbationEngine::class);
 
         return view('livewire.employees.probation-confirmation', [
+            'canConfirm' => Auth::user()->hasPermission('confirm_probation'),
+            'canHrApprove' => Auth::user()->hasPermission('hr_approve_probation'),
             'requiresManagerReview' => $engine->requiresManagerReview($this->employee),
             'requiresHrApproval' => $engine->requiresHrApproval($this->employee),
             'probationDays' => $engine->resolveProbationDays($this->employee),
