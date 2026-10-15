@@ -290,7 +290,7 @@ test('qa:record-data-quality files data issues as HR corrections, never as code 
     expect([$after['counts']['total'], $after['counts']['failed'], $after['scores']['overall']])
         ->toBe([$codeCountsBefore['total'], $codeCountsBefore['failed'], 100])
         ->and($after['open_blockers']['hr_corrections'])->toBeGreaterThan(0)
-        ->and($after['latest_run']->name)->toBe('2026-10-15 Phase 1 RBAC Regression');
+        ->and($after['latest_run']->suite)->not->toBe('data_quality');
 
     $code = QaRecordDataQuality::code('no_manager');
     $finding = QaFinding::where('code', $code)->firstOrFail();

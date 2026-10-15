@@ -10,8 +10,8 @@
         'amber' => 'bg-amber-50 text-amber-700 ring-amber-100 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/20',
         'rose' => 'bg-rose-50 text-rose-700 ring-rose-100 dark:bg-rose-500/10 dark:text-rose-300 dark:ring-rose-500/20',
     ];
-    $run = $qa['latest_run'];
-    // Run-level numbers when a run is recorded (e.g. 438 passed · 0 new regressions · 2 known baseline).
+    // The last full-suite run when there is one (else the latest run): passed · new regressions · known baseline.
+    $run = $qa['verified']['full'] ?? $qa['latest_run'];
     $stats = [
         ['Passed', $run ? $run->passed : $qa['counts']['passed']],
         ['New regressions', $run ? $run->new_regressions : '—'],
@@ -32,6 +32,9 @@
             <x-pulse.radial :value="$qa['scores']['production']" caption="readiness" :accent="$levelTone === 'sky' ? 'blue' : $levelTone" size="size-24" />
             <div class="min-w-0">
                 <span class="inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold tracking-wide ring-1 {{ $toneClasses[$levelTone] }}">{{ $qa['level_label'] }}</span>
+                @if($run)
+                    <p class="mt-2 text-[11px] text-zinc-500 dark:text-zinc-400">{{ $run->name }} · {{ $run->run_at->format('d M Y') }}</p>
+                @endif
                 @if($qa['blockers'] !== [])
                     <p class="mt-2 text-xs font-medium text-rose-600 dark:text-rose-400">{{ $qa['blockers'][0] }}</p>
                 @elseif($qa['next_steps'] !== [])

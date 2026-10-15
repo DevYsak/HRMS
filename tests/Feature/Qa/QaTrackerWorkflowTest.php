@@ -42,7 +42,7 @@ test('Phase 1 is seeded: 440 / 438 / 2 known baseline, and every Phase 1 commit 
     expect([$run->total, $run->passed, $run->failed, $run->known_baseline, $run->new_regressions])->toBe([440, 438, 2, 2, 0])
         ->and($run->result)->toBe(QaTestRun::RESULT_PASS_WITH_BASELINE)
         ->and(QaPhase::where('number', 1)->first()->status)->toBe(QaPhaseStatus::Completed)
-        ->and(QaPhase::where('status', 'not_started')->count())->toBe(5);
+        ->and(QaPhase::where('status', 'not_started')->count())->toBe(4);
 
     foreach (['a6cfb27', 'ba5e1bb', '585d1d4', '2bd6beb', 'cfc173a', '5756210', 'a90dc23', '671b276', '961fac5'] as $hash) {
         $fix = QaFixLink::where('commit_hash', 'like', $hash.'%')->first();
@@ -139,7 +139,7 @@ test('readiness is not a PASS count: a Critical finding blocks UAT, a High secur
     // Seeded state: every Phase 1 case passes, but most modules are not tested yet.
     expect($readiness()['level'])->toBe(QaReadiness::INTERNAL_QA)
         ->and($readiness()['scores']['overall'])->toBe(100)
-        ->and($readiness()['counts']['known_baseline'])->toBe(2);
+        ->and($readiness()['counts']['known_baseline'])->toBe(12);
 
     // Fill every module, demo and responsive cell so only findings decide.
     $rows = [];
@@ -267,7 +267,7 @@ test('CSV exports apply the filters', function () {
     expect($body)->toContain('QA-F-008')->not->toContain('QA-F-001,');
 
     $csv = $this->actingAs($admin)->get(route('qa-audit.export', ['dataset' => 'cases', 'status' => 'known_baseline']))->assertOk();
-    expect(substr_count(trim($csv->streamedContent()), "\n"))->toBe(2);
+    expect(substr_count(trim($csv->streamedContent()), "\n"))->toBe(12);
 
     $this->actingAs($admin)->get('/admin/qa-audit/export/users')->assertNotFound();
 });
@@ -282,4 +282,27 @@ test('editing a run or result never rewrites when it ran', function () {
 
     expect($run->fresh()->run_at->format('Y-m-d H:i'))->toBe('2026-10-15 12:40')
         ->and($result->fresh()->tested_at->format('Y-m-d H:i'))->toBe('2026-10-15 12:40');
+});
+
+test('Phase 2 is recorded: full run, retest, fixes, policy questions and baseline', function () {
+    $phase = QaPhase::where('number', 2)->firstOrFail();
+    $full = QaTestRun::where('kind', 'full')->firstOrFail();
+
+    expect($phase->status)->toBe(QaPhaseStatus::Completed)
+        ->and([$full->total, $full->passed, $full->failed, $full->skipped, $full->known_baseline, $full->new_regressions])->toBe([3110, 3095, 14, 1, 12, 2])
+        ->and(QaTestCase::where('status', 'known_baseline')->count())->toBe(12)
+        ->and(QaTestCase::where('code', 'like', 'QA-ORG-%')->where('status', 'pass')->count())->toBe(27);
+
+    foreach (['QA-F-023' => '9a5efa3', 'QA-F-024' => 'd1fd7bc', 'QA-F-028' => '4627c03'] as $code => $commit) {
+        $finding = QaFinding::where('code', $code)->firstOrFail();
+        expect($finding->status)->toBe(QaFindingStatus::Verified)->and($finding->fixes()->value('commit_hash'))->toBe($commit);
+    }
+    expect(QaFinding::whereIn('code', ['QA-F-025', 'QA-F-026', 'QA-F-027'])->where('needs_decision', true)->count())->toBe(3)
+        ->and(QaFinding::where('code', 'QA-F-029')->first()->status)->toBe(QaFindingStatus::Investigating);
+
+    // The retest is the latest run, so the two non-baseline full-run failures do not block readiness.
+    $summary = (new QaReadiness)->summary();
+    expect($summary['latest_run']->name)->toBe('2026-10-15 Retest after 4627c03')
+        ->and($summary['verified']['full']->id)->toBe($full->id)
+        ->and($summary['level'])->toBe(QaReadiness::INTERNAL_QA);
 });
