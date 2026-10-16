@@ -13,6 +13,13 @@ class AttendanceSettings extends Component
 {
     public $settings;
 
+    /**
+     * Fallback shift, OT rate and check-in requirements. A plain array: with
+     * legacy model binding off, wire:model on the Eloquent $settings threw
+     * "Can't set model properties directly" and save() never wrote them.
+     */
+    public array $general = [];
+
     /** Engine policy thresholds (plain array so tests + binding both work). */
     public array $policy = [];
 
@@ -51,12 +58,12 @@ class AttendanceSettings extends Component
     ];
 
     protected $rules = [
-        'settings.shift_start' => 'required',
-        'settings.shift_end' => 'required',
-        'settings.ot_rate_per_hour' => 'required|numeric|min:0',
-        'settings.requires_location' => 'boolean',
-        'settings.requires_qr' => 'boolean',
-        'settings.requires_photo' => 'boolean',
+        'general.shift_start' => 'required|date_format:H:i',
+        'general.shift_end' => 'required|date_format:H:i',
+        'general.ot_rate_per_hour' => 'required|numeric|min:0|max:100000',
+        'general.requires_location' => 'boolean',
+        'general.requires_qr' => 'boolean',
+        'general.requires_photo' => 'boolean',
         'policy.late_grace_period' => 'required|integer|min:0|max:120',
         'policy.late_warning_threshold' => 'required|integer|min:1|max:31',
         'policy.auto_checkout_buffer_minutes' => 'required|integer|min:0|max:240',
@@ -67,6 +74,14 @@ class AttendanceSettings extends Component
         abort_unless(Auth::user()->canManageSettings(), 403);
 
         $this->settings = AttendanceSetting::firstOrCreate([]);
+        $this->general = [
+            'shift_start' => substr((string) ($this->settings->shift_start ?: '09:00'), 0, 5),
+            'shift_end' => substr((string) ($this->settings->shift_end ?: '18:00'), 0, 5),
+            'ot_rate_per_hour' => (float) ($this->settings->ot_rate_per_hour ?? 0),
+            'requires_location' => (bool) $this->settings->requires_location,
+            'requires_photo' => (bool) $this->settings->requires_photo,
+            'requires_qr' => (bool) $this->settings->requires_qr,
+        ];
         $this->policy = [
             'late_grace_period' => (int) ($this->settings->late_grace_period ?? 15),
             'late_warning_threshold' => (int) ($this->settings->late_warning_threshold ?? 3),
@@ -100,6 +115,12 @@ class AttendanceSettings extends Component
         }
 
         $this->settings->fill([
+            'shift_start' => $this->general['shift_start'],
+            'shift_end' => $this->general['shift_end'],
+            'ot_rate_per_hour' => (float) $this->general['ot_rate_per_hour'],
+            'requires_location' => (bool) $this->general['requires_location'],
+            'requires_photo' => (bool) $this->general['requires_photo'],
+            'requires_qr' => (bool) $this->general['requires_qr'],
             'weekly_off_days' => $offDays !== [] ? $offDays : null,
             'late_grace_period' => $this->policy['late_grace_period'],
             'late_warning_threshold' => $this->policy['late_warning_threshold'],

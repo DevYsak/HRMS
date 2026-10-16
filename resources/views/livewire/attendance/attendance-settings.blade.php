@@ -30,10 +30,10 @@
 
             <div class="space-y-4">
                 <div class="grid grid-cols-2 gap-4">
-                    <flux:input wire:model="settings.shift_start" type="time" label="Default Start" />
-                    <flux:input wire:model="settings.shift_end" type="time" label="Default End" />
+                    <flux:input wire:model="general.shift_start" type="time" label="Default Start" />
+                    <flux:input wire:model="general.shift_end" type="time" label="Default End" />
                 </div>
-                <flux:input wire:model="settings.ot_rate_per_hour" type="number" step="0.01" min="0"
+                <flux:input wire:model="general.ot_rate_per_hour" type="number" step="0.01" min="0"
                     label="Overtime rate (₹ / hour)"
                     description="Used to compute OT pay when an overtime request is approved." />
 
@@ -74,11 +74,11 @@
                         description="A day is Missing Checkout at shift end + 1 hour. The system never creates a check-out; the employee regularises." />
                 </div>
                 <div class="space-y-3 pt-2">
-                    <flux:switch wire:model="settings.requires_location" label="Require Geolocation"
+                    <flux:switch wire:model="general.requires_location" label="Require Geolocation"
                         description="Block clock-in if location is not shared." />
-                    <flux:switch wire:model="settings.requires_photo" label="Require Selfie Photo"
+                    <flux:switch wire:model="general.requires_photo" label="Require Selfie Photo"
                         description="Block clock-in if a punch selfie is not captured." />
-                    <flux:switch wire:model="settings.requires_qr" label="Require QR Scan"
+                    <flux:switch wire:model="general.requires_qr" label="Require QR Scan"
                         description="Require scanning a physical QR code at the office." />
                 </div>
             </div>
