@@ -3,8 +3,11 @@
 namespace App\Notifications;
 
 use App\Models\LeaveRequest;
+use App\Models\User;
 use App\Notifications\Concerns\NotifiesByRole;
 use App\Notifications\Concerns\SendsMailChannel;
+use App\Services\Approvals\ApprovalGuard;
+use App\Services\Help\RouteAccess;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Notification;
@@ -31,7 +34,15 @@ class LeaveRequestNotification extends Notification implements ShouldQueue
 
         // For manager/HR (pending) we open the Team page and pass a query param
         // that the Livewire component will use to open the review modal.
-        $teamUrl = route('time-off.team').'?selectedRequestId='.$this->leaveRequest->id;
+        // Only for someone who may decide it: a team lead kept informed without
+        // approve_leave (or outside its reach) got a Team Leave link that 403'd.
+        // A non-user notifiable (an on-demand mail route) has no permissions to check.
+        $canReview = ! $notifiable instanceof User
+            || (app(RouteAccess::class)->allows($notifiable, 'time-off.team')
+                && app(ApprovalGuard::class)->covers($notifiable, $this->leaveRequest->employee, 'approve_leave'));
+        $teamUrl = $canReview
+            ? route('time-off.team').'?selectedRequestId='.$this->leaveRequest->id
+            : route('dashboard');
         // For employees we anchor to the specific row in My Time Off.
         $myUrl = route('time-off.my').'#request-'.$this->leaveRequest->id;
 

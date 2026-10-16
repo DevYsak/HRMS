@@ -381,10 +381,12 @@ class LeaveService
             ->getApproverChain($employee, Carbon::parse($startDate))
             ->each($push);
 
-        // The HR queue as well as the approver chain, minus anyone the chain
-        // already covered. Deliberate: HR tracks every request centrally.
+        // The HR covering this employee as well as the approver chain, minus
+        // anyone the chain already covered. HR tracks requests centrally, but
+        // a department-scoped HR admin only for the departments they look
+        // after: the link opens Team Leave, which refuses anyone else.
         $notifiedIds = $recipients->pluck('id')->all();
-        app(NotificationRecipients::class)->hrQueue()
+        app(NotificationRecipients::class)->hrCovering($employee)
             ->reject(fn (User $u) => \in_array($u->id, $notifiedIds, true))
             ->each($push);
 
@@ -566,8 +568,8 @@ class LeaveService
             $fresh->employee->user->notify((new LeaveRequestNotification($fresh))->forRole('employee'));
 
             if ($resolvedStatus === 'pending_hr') {
-                // Routed to HR as a queue — whoever picks it up first acts.
-                app(NotificationRecipients::class)->hrQueue()
+                // Routed to HR as a queue — whoever covers the employee and picks it up first acts.
+                app(NotificationRecipients::class)->hrCovering($fresh->employee)
                     ->each(fn (User $hr) => $hr->notify((new LeaveRequestNotification($fresh))->forRole('hr_admin')));
             }
 
@@ -637,7 +639,7 @@ class LeaveService
         if ($isEmployee) {
             $manager = $fresh->employee->manager;
             $manager?->notify((new LeaveRequestNotification($fresh))->forRole('manager'));
-            app(NotificationRecipients::class)->hrQueue()
+            app(NotificationRecipients::class)->hrCovering($fresh->employee)
                 ->reject(fn (User $hr) => $manager && $hr->id === $manager->id)
                 ->each(fn (User $hr) => $hr->notify((new LeaveRequestNotification($fresh))->forRole('hr_admin')));
         } else {

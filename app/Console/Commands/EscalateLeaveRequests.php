@@ -31,11 +31,12 @@ class EscalateLeaveRequests extends Command
         }
 
         // Escalation goes to HR as a queue: the point is that the manager did
-        // not respond, so it needs whoever is available, not another individual.
-        $hrAdmins = app(NotificationRecipients::class)->hrQueue();
+        // not respond, so it needs whoever is available, not another individual
+        // — among the HR who cover this employee (Super Admins cover all).
+        $recipients = app(NotificationRecipients::class);
 
         foreach ($pending as $request) {
-            foreach ($hrAdmins as $hr) {
+            foreach ($recipients->hrCovering($request->employee) as $hr) {
                 LeaveEscalation::create([
                     'leave_request_id' => $request->id,
                     'escalated_to' => $hr->id,
