@@ -237,7 +237,11 @@ class OvertimeService
                 continue;
             }
 
-            if ($record->is_paid || $record->payslip_id) {
+            // Frozen once paid or on a submitted / finalised payslip. A record
+            // on a DRAFT payslip is still re-measured: the draft is rebuilt
+            // from the records, and skipping it re-paid the stale hours.
+            $record->loadMissing('payslip.payroll');
+            if ($record->is_paid || ($record->payslip_id && $record->payslip?->payroll?->status !== 'draft')) {
                 continue;
             }
 

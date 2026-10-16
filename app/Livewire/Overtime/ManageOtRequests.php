@@ -299,23 +299,59 @@ class ManageOtRequests extends Component
         $this->resetPage();
     }
 
-    public function render()
+    /** The requests on screen: the approver's reach, filters and sort. */
+    private function filteredQuery()
     {
-        $this->checkOtPermission();
-
         // Fail closed: only the approver's reporting line / HR scope.
         $scopeIds = Auth::user()->accessibleEmployeeIds('approve_overtime');
-        $inReach = fn ($q) => $q->when($scopeIds !== null, fn ($q) => $q->whereIn('employee_id', $scopeIds));
 
-        $query = OtRequest::with(['employee.user', 'employee.department', 'reviewer'])
-            ->tap($inReach)
+        return OtRequest::with(['employee.user', 'employee.department', 'reviewer'])
+            ->when($scopeIds !== null, fn ($q) => $q->whereIn('employee_id', $scopeIds))
             ->when($this->filterStatus, fn ($q) => $q->where('status', $this->filterStatus))
             ->when($this->filterSearch, function ($q) {
                 $q->whereHas('employee.user', fn ($u) => $u->where('name', 'like', "%{$this->filterSearch}%"));
             })
             ->orderBy(in_array($this->sortField, self::SORTABLE, true) ? $this->sortField : 'work_date', $this->sortDirection === 'asc' ? 'asc' : 'desc');
+    }
 
-        $requests = $query->paginate(15);
+    /**
+     * Export exactly what the screen lists (every page): same reach, status
+     * filter, search and sort. The payable OT records are a separate report.
+     */
+    public function exportCsv()
+    {
+        $this->checkOtPermission();
+        $rows = $this->filteredQuery()->get();
+
+        return response()->streamDownload(function () use ($rows) {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, ['Emp ID', 'Employee', 'Department', 'Work Date', 'Start', 'End', 'Requested OT Hours', 'Status', 'Reviewer', 'Source']);
+            foreach ($rows as $r) {
+                fputcsv($handle, [
+                    $r->employee?->employee_id ?? '',
+                    $r->employee?->user?->name ?? '',
+                    $r->employee?->department?->name ?? '',
+                    $r->work_date ? Carbon::parse($r->work_date)->toDateString() : '',
+                    $r->start_time ? substr((string) $r->start_time, 0, 5) : '',
+                    $r->end_time ? substr((string) $r->end_time, 0, 5) : '',
+                    $r->requested_hours ?? '',
+                    ucfirst((string) $r->status),
+                    $r->reviewer?->name ?? '',
+                    $r->source ?? '',
+                ]);
+            }
+            fclose($handle);
+        }, 'ot-requests-'.now()->format('Ymd').'.csv', ['Content-Type' => 'text/csv']);
+    }
+
+    public function render()
+    {
+        $this->checkOtPermission();
+
+        $scopeIds = Auth::user()->accessibleEmployeeIds('approve_overtime');
+        $inReach = fn ($q) => $q->when($scopeIds !== null, fn ($q) => $q->whereIn('employee_id', $scopeIds));
+
+        $requests = $this->filteredQuery()->paginate(15);
 
         // Overall status mix (unfiltered) for the summary strip.
         $byStatus = OtRequest::query()

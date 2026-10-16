@@ -668,8 +668,11 @@ class AttendanceReportBuilder
 
     protected function overtime(Carbon $from, Carbon $to, array $filters): array
     {
+        // Payable OT = an approved request measured from genuine attendance
+        // (OvertimeService::hours()); unapproved records are never payable.
         $q = OvertimeRecord::with('employee.user', 'employee.department')
-            ->whereBetween('work_date', [$from->toDateString(), $to->toDateString()]);
+            ->whereBetween('work_date', [$from->toDateString(), $to->toDateString()])
+            ->whereHas('otRequest', fn ($r) => $r->where('status', 'approved'));
         $q->whereHas('employee', function (Builder $e) use ($filters) {
             $e->when($filters['department_id'] ?? null, fn ($x, $v) => $x->where('department_id', $v))
                 ->when($filters['office_id'] ?? null, fn ($x, $v) => $x->where('office_id', $v))
@@ -685,11 +688,15 @@ class AttendanceReportBuilder
             Carbon::parse($o->work_date)->format('d M Y'),
             number_format((float) $o->ot_hours, 1).'h',
             $o->ot_amount ? number_format((float) $o->ot_amount, 2) : '—',
-            $o->is_paid ? 'Paid' : 'Pending',
+            match (true) {
+                $o->is_paid => 'Paid',
+                (float) $o->ot_hours <= 0 => 'Waiting for attendance',
+                default => 'Payable — next payroll',
+            },
         ])->all();
 
         return [
-            'columns' => ['Emp ID', 'Employee', 'Department', 'Date', 'Payable OT Hours', 'Payable OT Amount', 'Paid'],
+            'columns' => ['Emp ID', 'Employee', 'Department', 'Date', 'Payable OT Hours', 'Payable OT Amount', 'Payroll Status'],
             'rows' => $data,
             'summary' => [
                 ['label' => 'OT Records', 'value' => $rows->count()],

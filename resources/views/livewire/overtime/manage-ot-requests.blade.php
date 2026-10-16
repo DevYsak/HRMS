@@ -16,7 +16,8 @@
                 <span wire:loading wire:target="syncFromNexflow">Syncing…</span>
             </flux:button>
             @if(auth()->user()->isCompanyWideApprover())
-            <flux:button href="{{ route('reports.ot-records', ['month' => now()->month, 'year' => now()->year]) }}" variant="outline" icon="arrow-down-tray" target="_blank">
+            {{-- The requests listed below, with the same filters (Phase 4) — payable OT records are under Reports. --}}
+            <flux:button wire:click="exportCsv" variant="outline" icon="arrow-down-tray">
                 Export CSV
             </flux:button>
             @endif

@@ -8,7 +8,11 @@
         <div class="flex items-center gap-2">
             <x-clean-select model="filterYear" :live="true"
                 :options="array_merge([['value' => '', 'label' => 'This year']], collect(range(now()->year, now()->year - 3))->map(fn ($y) => ['value' => (string) $y, 'label' => (string) $y])->all())" />
-            <flux:button :href="route('reports.payroll-summary', ['month' => now()->month, 'year' => now()->year])" target="_blank" variant="ghost" icon="arrow-down-tray">Export PDF</flux:button>
+            {{-- The selected year: its latest month (this month for the current year). --}}
+            @php
+                $pdfYear = $filterYear !== '' ? (int) $filterYear : now()->year;
+            @endphp
+            <flux:button :href="route('reports.payroll-summary', ['month' => $pdfYear === now()->year ? now()->month : 12, 'year' => $pdfYear])" target="_blank" variant="ghost" icon="arrow-down-tray" data-payroll-pdf>Export PDF</flux:button>
             <flux:button :href="route('payroll.process')" wire:navigate variant="primary" icon="play">Run Payroll</flux:button>
         </div>
     </div>

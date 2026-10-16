@@ -4,6 +4,7 @@ use App\Enums\UserRole;
 use App\Livewire\Attendance\AttendanceReports;
 use App\Models\Attendance;
 use App\Models\Employee;
+use App\Models\OtRequest;
 use App\Models\OvertimeRecord;
 use App\Models\PublicHoliday;
 use App\Models\User;
@@ -116,9 +117,16 @@ test('HR can download the attendance report as CSV', function () {
 
 test('the overtime report totals hours and amount', function () {
     $emp = Employee::factory()->create(['status' => 'active']);
+    // Payable OT needs an approved request (Phase 4); an unapproved record is never listed as payable.
+    $approved = OtRequest::create(['employee_id' => $emp->id, 'work_date' => today(), 'start_time' => '18:00', 'end_time' => '20:00',
+        'requested_hours' => 2, 'reason' => 'Release', 'status' => 'approved']);
     OvertimeRecord::create([
-        'employee_id' => $emp->id, 'work_date' => today(), 'total_hours_worked' => 11,
+        'employee_id' => $emp->id, 'ot_request_id' => $approved->id, 'work_date' => today(), 'total_hours_worked' => 11,
         'standard_hours' => 9, 'ot_hours' => 2, 'rate_per_hour' => 100, 'ot_amount' => 200, 'is_paid' => false,
+    ]);
+    OvertimeRecord::create([
+        'employee_id' => $emp->id, 'work_date' => today(), 'total_hours_worked' => 12,
+        'standard_hours' => 9, 'ot_hours' => 3, 'rate_per_hour' => 100, 'ot_amount' => 300, 'is_paid' => false,
     ]);
 
     $report = app(AttendanceReportBuilder::class)->build('overtime', [

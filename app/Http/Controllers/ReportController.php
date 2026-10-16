@@ -182,8 +182,12 @@ class ReportController extends Controller
         $from = Carbon::create($year, $month, 1)->startOfMonth();
         $to = $from->copy()->endOfMonth();
 
+        // Payable OT only: an approved request with genuinely measured hours.
+        // A record whose request was later rejected, or with none, is not
+        // payable and was listed as if it were.
         $rows = OvertimeRecord::with('employee.user', 'otRequest')
             ->whereBetween('work_date', [$from->toDateString(), $to->toDateString()])
+            ->whereHas('otRequest', fn ($q) => $q->where('status', 'approved'))
             ->orderBy('work_date')
             ->get();
 
