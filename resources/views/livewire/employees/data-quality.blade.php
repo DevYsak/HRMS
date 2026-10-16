@@ -214,6 +214,40 @@
             </div>
             <p class="border-t border-zinc-100 px-4 py-2 text-xs text-zinc-500 dark:border-white/5">Each cell names the first person in the chain (manager → team lead → department head → HR) who may decide that request. Amber: the first approver cannot, so it moves on.</p>
         </div>
+    @elseif($tab === 'wfh')
+        @php
+            $flagged = array_values(array_filter($rows, fn ($r) => $r['status'] !== \App\Services\Attendance\WfhConsistencyService::VALID));
+            $validDays = count($rows) - count($flagged);
+            $wfhTone = ['unapproved_wfh' => 'amber', 'approved_not_wfh' => 'blue'];
+        @endphp
+        <div class="ui-surface overflow-hidden" data-dq-wfh>
+            <div class="flex flex-wrap gap-x-6 gap-y-1 border-b border-zinc-100 px-4 py-3 text-xs text-zinc-600 dark:border-white/5 dark:text-zinc-300">
+                <span>WFH without an approved request: <span class="font-semibold tabular-nums text-zinc-900 dark:text-white" data-wfh-count="unapproved_wfh">{{ count(array_filter($flagged, fn ($r) => $r['status'] === 'unapproved_wfh')) }}</span></span>
+                <span>Approved WFH, recorded another mode: <span class="font-semibold tabular-nums text-zinc-900 dark:text-white" data-wfh-count="approved_not_wfh">{{ count(array_filter($flagged, fn ($r) => $r['status'] === 'approved_not_wfh')) }}</span></span>
+                <span>Valid: <span class="font-semibold tabular-nums text-zinc-900 dark:text-white" data-wfh-count="valid">{{ $validDays }}</span></span>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full min-w-[820px] text-sm">
+                    <thead class="bg-zinc-50 dark:bg-white/5"><tr>
+                        @foreach(['Employee', 'Date', 'Recorded mode', 'WFH request', 'Result'] as $h)<th class="{{ $th }}">{{ $h }}</th>@endforeach
+                    </tr></thead>
+                    <tbody class="divide-y divide-zinc-100 dark:divide-white/5">
+                        @forelse($flagged as $r)
+                            <tr>
+                                <td class="{{ $td }} font-medium text-zinc-900 dark:text-white">{{ $r['employee'] }}<p class="text-xs font-normal text-zinc-500">{{ $r['department'] ?? '—' }}</p></td>
+                                <td class="{{ $td }} whitespace-nowrap tabular-nums">{{ \Illuminate\Support\Carbon::parse($r['date'])->format('d M Y') }}</td>
+                                <td class="{{ $td }}">{{ $r['recorded_label'] }}</td>
+                                <td class="{{ $td }} text-xs">{{ $r['request_label'] ?? ($r['pending_request_id'] ? 'Pending #'.$r['pending_request_id'].' (not approved)' : 'None') }}</td>
+                                <td class="{{ $td }}"><x-pulse.badge :color="$wfhTone[$r['status']] ?? 'zinc'">{{ $r['label'] }}</x-pulse.badge></td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="5" class="p-5"><x-pulse.empty-state icon="check-badge" title="No WFH mismatches" /></td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+            <p class="border-t border-zinc-100 px-4 py-2 text-xs text-zinc-500 dark:border-white/5">An approved WFH request is the plan; the attendance mode is what was recorded. Both are kept as they are — each row is for HR to review, nothing is corrected automatically. A pending request authorises nothing.</p>
+        </div>
     @elseif($tab === 'roles')
         <div class="space-y-4" data-dq-roles>
             <div class="ui-surface overflow-hidden">

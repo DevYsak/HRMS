@@ -31,6 +31,7 @@ class DataQuality extends Component
         'managers' => 'Manager health',
         'routing' => 'Approval routing',
         'roles' => 'Role drift',
+        'wfh' => 'WFH consistency',
     ];
 
     #[Url]
@@ -150,6 +151,7 @@ class DataQuality extends Component
             'departments' => ['rows' => $keep($auditor->departmentHealth(), 'department_id')],
             'managers' => ['rows' => $keep($auditor->managerHealth(), 'department_id')],
             'routing' => ['rows' => $keep($auditor->routing())],
+            'wfh' => ['rows' => $keep($auditor->wfhConsistency())],
             'roles' => ['rows' => $companyWide ? $auditor->roleDrift() : [], 'overrides' => $companyWide ? $auditor->overrides() : []],
             default => [],
         };

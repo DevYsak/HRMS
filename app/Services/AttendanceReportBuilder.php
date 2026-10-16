@@ -13,6 +13,7 @@ use App\Models\OvertimeRecord;
 use App\Models\PublicHoliday;
 use App\Services\Attendance\AttendanceCalculator;
 use App\Services\Attendance\AttendanceWindowService;
+use App\Services\Attendance\WfhConsistencyService;
 use App\Services\Attendance\WorkingDayResolver;
 use App\Services\Leave\LeaveBalanceCalculator;
 use App\Services\Leave\LeaveYearResolver;
@@ -51,6 +52,7 @@ class AttendanceReportBuilder
         'employee' => 'Employee Report',
         'biometric' => 'Biometric Report',
         'regularization' => 'Regularization Report',
+        'wfh_consistency' => 'WFH Consistency',
     ];
 
     /**
@@ -101,6 +103,7 @@ class AttendanceReportBuilder
             'employee' => $this->employee($from, $to, $filters),
             'biometric' => $this->biometric($from, $to, $filters),
             'regularization' => $this->regularization($from, $to, $filters),
+            'wfh_consistency' => $this->wfhConsistency($from, $to, $filters),
             default => $this->daily($from, $to, $filters),
         };
 
@@ -932,6 +935,45 @@ class AttendanceReportBuilder
                 ['label' => 'Requests', 'value' => $rows->count()],
                 ['label' => 'Approved', 'value' => $rows->where('status', 'approved')->count()],
                 ['label' => 'Pending', 'value' => $rows->where('status', 'pending')->count()],
+            ],
+        ];
+    }
+
+    /**
+     * P3-07: approved WFH (the plan) against the recorded attendance mode,
+     * one row per attended day where either says WFH. Read-only.
+     */
+    protected function wfhConsistency(Carbon $from, Carbon $to, array $filters): array
+    {
+        $service = app(WfhConsistencyService::class);
+        $employees = $this->employeeQuery($filters, activeOnly: false)->with(['user', 'department'])->get()->keyBy('id');
+        $days = $service->days($employees->keys()->all(), $from->copy()->startOfDay(), $to->copy()->startOfDay())
+            ->when(! empty($filters['mode']), fn ($c) => $c->where('recorded_mode', $filters['mode']))
+            ->values();
+        $counts = $service->summary($days);
+
+        $data = $days->map(function (array $day) use ($employees) {
+            $employee = $employees->get($day['employee_id']);
+
+            return [
+                $employee?->employee_id ?? '—',
+                $employee?->user?->name ?? '—',
+                $employee?->department?->name ?? '—',
+                Carbon::parse($day['date'])->format('d M Y'),
+                $day['recorded_label'],
+                $day['request_label'] ?? ($day['pending_request_id'] ? 'Pending #'.$day['pending_request_id'].' (not approved)' : 'None'),
+                $day['label'],
+            ];
+        })->all();
+
+        return [
+            'columns' => ['Emp ID', 'Employee', 'Department', 'Date', 'Recorded Mode', 'WFH Request', 'Result'],
+            'rows' => $data,
+            'summary' => [
+                ['label' => WfhConsistencyService::LABELS[WfhConsistencyService::VALID], 'value' => $counts[WfhConsistencyService::VALID]],
+                ['label' => WfhConsistencyService::LABELS[WfhConsistencyService::APPROVED_NOT_WFH], 'value' => $counts[WfhConsistencyService::APPROVED_NOT_WFH]],
+                ['label' => WfhConsistencyService::LABELS[WfhConsistencyService::UNAPPROVED_WFH], 'value' => $counts[WfhConsistencyService::UNAPPROVED_WFH]],
+                ['label' => 'Employees to review', 'value' => $counts['employees_flagged']],
             ],
         ];
     }

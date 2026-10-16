@@ -16,6 +16,7 @@ use App\Models\User;
 use App\Models\UserPermissionOverride;
 use App\Services\Approvals\ApprovalGuard;
 use App\Services\Attendance\ShiftResolver;
+use App\Services\Attendance\WfhConsistencyService;
 use App\Services\Qa\RoleAccessMatrix;
 use App\Services\Security\PermissionScopes;
 use App\Services\Security\RoleDelegationGuard;
@@ -108,6 +109,9 @@ class DataQualityAuditor
         'manager_no_reports' => ['label' => 'Manager with no direct reports', 'severity' => self::WARNING, 'area' => 'Roles', 'nature' => 'data', 'action' => 'Assign reports, or change the role.'],
         'department_head_no_department' => ['label' => 'Department Head heading no department', 'severity' => self::HIGH, 'area' => 'Departments', 'nature' => 'data', 'action' => 'Set them as head of their department — Department View shows nothing until then.'],
         'coordinator_no_assignment' => ['label' => 'Coordinator with nothing assigned', 'severity' => self::INFO, 'area' => 'Roles', 'nature' => 'data', 'action' => 'Assign the departments or people they coordinate.'],
+        // Appended (QA-DQ codes follow this order). P3-07: approved WFH = the plan, attendance work_mode = the record.
+        'wfh_unapproved' => ['label' => 'WFH recorded without an approved request', 'severity' => self::WARNING, 'area' => 'Attendance', 'nature' => 'data', 'action' => 'REVIEW REQUIRED: confirm the day with the employee — record or approve the WFH request, or correct the day through regularisation. History is never rewritten automatically.'],
+        'wfh_approved_not_used' => ['label' => 'Approved WFH but another mode recorded', 'severity' => self::INFO, 'area' => 'Attendance', 'nature' => 'data', 'action' => 'REVIEW REQUIRED: confirm whether the employee worked from the office, or the punch recorded the wrong mode. Nothing is changed automatically.'],
     ];
 
     /** Request types and the permission that decides them. */
@@ -129,10 +133,14 @@ class DataQualityAuditor
     /** @var Collection<int, DataQualityIssue>|null */
     private ?Collection $issues = null;
 
+    /** @var Collection<int, array<string, mixed>>|null */
+    private ?Collection $wfhDays = null;
+
     public function __construct(
         private readonly ApprovalGuard $guard,
         private readonly ScopeResolver $scopes,
         private readonly ApprovalRoutingService $routing,
+        private readonly WfhConsistencyService $wfh,
     ) {}
 
     /**
@@ -151,6 +159,7 @@ class DataQualityAuditor
             ...$this->identityChecks(),
             ...$this->roleChecks(),
             ...$this->routingChecks(),
+            ...$this->wfhChecks(),
         ])->sortBy(fn (DataQualityIssue $i) => [array_search($i->severity, self::SEVERITIES, true), $i->check, $i->subjectLabel])->values();
     }
 
@@ -732,6 +741,61 @@ class DataQualityAuditor
         }
 
         return $issues;
+    }
+
+    /**
+     * Every day where approved WFH and the recorded mode disagree, with the
+     * valid ones, for the WFH consistency tab (all history, read-only).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function wfhConsistency(): array
+    {
+        $d = $this->data();
+
+        return $this->wfhDays()->map(function (array $day) use ($d) {
+            $e = $d['employeesById']->get($day['employee_id']);
+
+            return $day + [
+                'employee' => $e ? $this->name($e) : 'Employee #'.$day['employee_id'],
+                'department_id' => $e?->department_id,
+                'department' => $e ? $d['departments']->get($e->department_id)?->name : null,
+            ];
+        })->sortBy([
+            fn ($a, $b) => ($a['status'] === WfhConsistencyService::VALID) <=> ($b['status'] === WfhConsistencyService::VALID),   // flagged first
+            fn ($a, $b) => $b['date'] <=> $a['date'],
+        ])->values()->all();
+    }
+
+    /** @return array<int, DataQualityIssue> one per employee and kind, never per day */
+    private function wfhChecks(): array
+    {
+        $d = $this->data();
+        $issues = [];
+        $checks = [WfhConsistencyService::UNAPPROVED_WFH => 'wfh_unapproved', WfhConsistencyService::APPROVED_NOT_WFH => 'wfh_approved_not_used'];
+
+        foreach ($this->wfhDays()->where('status', '!=', WfhConsistencyService::VALID)->groupBy(fn ($day) => $day['status'].'|'.$day['employee_id']) as $days) {
+            $e = $d['employeesById']->get($days->first()['employee_id']);
+            if ($e === null) {
+                continue;
+            }
+            $dates = $days->pluck('date')->sort()->values();
+            $span = $dates->count() === 1 ? $dates->first() : $dates->first().' – '.$dates->last();
+            $count = $dates->count().' '.($dates->count() === 1 ? 'day' : 'days');
+            $message = $days->first()['status'] === WfhConsistencyService::UNAPPROVED_WFH
+                ? "{$count} recorded as WFH with no approved request ({$span})."
+                    .(($pending = $days->whereNotNull('pending_request_id')->count()) > 0 ? " A pending request covers {$pending}; pending does not authorise WFH." : '')
+                : "{$count} with approved WFH recorded as another mode ({$span}: ".$days->pluck('recorded_label')->unique()->implode(', ').').';
+            $issues[] = $this->employeeIssue($checks[$days->first()['status']], $e, $message);
+        }
+
+        return $issues;
+    }
+
+    /** @return Collection<int, array<string, mixed>> */
+    private function wfhDays(): Collection
+    {
+        return $this->wfhDays ??= $this->wfh->days();
     }
 
     // ─────────────────────────────── Helpers ───────────────────────────────

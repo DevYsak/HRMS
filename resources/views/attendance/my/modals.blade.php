@@ -398,6 +398,20 @@
             <flux:subheading>Confirm with a quick selfie &amp; your location.</flux:subheading>
         </div>
 
+        {{-- P3-07: approved WFH suggests the mode; the punch records what is chosen here. --}}
+        @if($wfhApprovedToday)
+            <div x-show="action === 'in'" class="rounded-xl bg-sky-50 px-3 py-2 text-xs text-sky-800 dark:bg-sky-500/10 dark:text-sky-200" data-wfh-suggested>
+                <p class="font-semibold">Approved work from home today</p>
+                <div class="mt-2 inline-flex rounded-lg bg-white/70 p-0.5 font-medium dark:bg-white/10" role="radiogroup" aria-label="Work mode">
+                    @foreach(['wfh' => 'WFH', 'office' => 'Office'] as $modeValue => $modeLabel)
+                        <label class="cursor-pointer rounded-md px-2.5 py-1 has-[:checked]:bg-white has-[:checked]:text-zinc-900 has-[:checked]:shadow-sm dark:has-[:checked]:bg-zinc-800 dark:has-[:checked]:text-white">
+                            <input type="radio" wire:model="workMode" value="{{ $modeValue }}" class="sr-only"> {{ $modeLabel }}
+                        </label>
+                    @endforeach
+                </div>
+            </div>
+        @endif
+
         <div class="relative aspect-[4/3] w-full overflow-hidden rounded-2xl bg-zinc-900">
             <video x-ref="video" autoplay playsinline muted x-show="status === 'camera'" class="h-full w-full object-cover"></video>
             <img :src="photo" x-show="status === 'preview' && photo" class="h-full w-full object-cover" alt="Selfie preview">

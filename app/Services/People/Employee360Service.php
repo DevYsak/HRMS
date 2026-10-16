@@ -15,6 +15,7 @@ use App\Services\Approvals\ApprovalQueueService;
 use App\Services\Attendance\AttendanceWindowService;
 use App\Services\Attendance\PunchTimeline;
 use App\Services\Attendance\TodayStatusService;
+use App\Services\Attendance\WfhConsistencyService;
 use App\Services\Leave\EmployeeLeaveOverviewService;
 use App\Services\OvertimeService;
 use App\Services\Performance\PerformanceStatusService;
@@ -65,6 +66,7 @@ class Employee360Service
         private OvertimeService $overtime,
         private PerformanceStatusService $performance,
         private ApprovalQueueService $queue,
+        private WfhConsistencyService $wfh,
     ) {}
 
     /**
@@ -241,6 +243,8 @@ class Employee360Service
             'day_log' => $visibleDays->take(14)->all(),
             'day_log_total' => $visibleDays->count(),
             'punches' => $punches->all(),
+            // P3-07: approved WFH (plan) against the recorded mode, compared not merged.
+            'wfh' => $this->wfh->forEmployee($employee, $from, $until),
         ];
     }
 

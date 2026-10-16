@@ -205,6 +205,31 @@
                         @endif
                     </div>
 
+                    {{-- P3-07: approved WFH (the plan) against the recorded mode — compared, never merged or rewritten. --}}
+                    @php($wfh = $attendance['wfh'])
+                    @if($wfh['counts']['valid'] + $wfh['counts']['flagged'] > 0)
+                        <div class="mt-4 rounded-xl border border-zinc-100 p-3 dark:border-white/5" data-wfh-consistency>
+                            <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-600 dark:text-zinc-300">
+                                <span class="font-semibold text-zinc-700 dark:text-zinc-200">Work from home</span>
+                                <span>Valid <span class="font-semibold tabular-nums text-zinc-900 dark:text-white" data-wfh-valid>{{ $wfh['counts']['valid'] }}</span></span>
+                                <span>WFH without an approved request <span class="font-semibold tabular-nums {{ $wfh['counts']['unapproved_wfh'] ? 'text-amber-700 dark:text-amber-300' : 'text-zinc-900 dark:text-white' }}" data-wfh-unapproved>{{ $wfh['counts']['unapproved_wfh'] }}</span></span>
+                                <span>Approved WFH, recorded another mode <span class="font-semibold tabular-nums {{ $wfh['counts']['approved_not_wfh'] ? 'text-blue-700 dark:text-blue-300' : 'text-zinc-900 dark:text-white' }}" data-wfh-approved-not-used>{{ $wfh['counts']['approved_not_wfh'] }}</span></span>
+                            </div>
+                            @if($wfh['flagged'] !== [])
+                                <ul class="mt-2 space-y-1 text-xs" data-wfh-flagged>
+                                    @foreach(array_slice($wfh['flagged'], 0, 6) as $day)
+                                        <li class="flex flex-wrap items-center gap-2">
+                                            <span class="font-medium tabular-nums text-zinc-800 dark:text-zinc-100">{{ $dd->shortDate(\Illuminate\Support\Carbon::parse($day['date'])) }}</span>
+                                            <x-pulse.badge :color="$day['status'] === 'unapproved_wfh' ? 'amber' : 'blue'">{{ $day['label'] }}</x-pulse.badge>
+                                            <span class="text-zinc-500">Recorded {{ $day['recorded_label'] }}{{ $day['request_label'] ? ' · request '.$day['request_label'] : ($day['pending_request_id'] ? ' · pending request #'.$day['pending_request_id'] : '') }}</span>
+                                        </li>
+                                    @endforeach
+                                </ul>
+                                <p class="mt-2 text-[11px] text-zinc-400">For HR review. The recorded attendance is kept as it is{{ count($wfh['flagged']) > 6 ? ' · '.(count($wfh['flagged']) - 6).' more in People → Data Quality' : '' }}.</p>
+                            @endif
+                        </div>
+                    @endif
+
                     <div class="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
                         <div class="min-w-0 rounded-xl border border-zinc-100 p-3 dark:border-white/5">
                             <p class="text-xs font-semibold text-zinc-700 dark:text-zinc-200">Attendance trend <span class="font-normal text-zinc-400">· worked hours per day</span></p>

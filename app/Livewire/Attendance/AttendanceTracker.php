@@ -70,6 +70,9 @@ class AttendanceTracker extends Component
     /** Work mode selected at clock-in: office | wfh */
     public string $workMode = 'office';
 
+    /** An approved WFH request covers today: WFH is suggested at clock-in (P3-07), never forced. */
+    public bool $wfhApprovedToday = false;
+
     public $attendanceSettings;
 
     public $shift;
@@ -295,6 +298,11 @@ class AttendanceTracker extends Component
         $this->attendanceSettings = AttendanceSetting::first();
         $this->aiEnabled = Auth::user() ? app(AiAssistant::class)->enabledForUser(Auth::user()) : false;
         $this->loadData();
+        // Approved WFH is the plan, so it is the suggested mode; the employee
+        // can still choose Office, and the punch records what they chose.
+        if ($this->wfhApprovedToday && $this->todayAttendance?->check_in === null) {
+            $this->workMode = 'wfh';
+        }
         $this->initialiseHistoryFilters();
         if ($this->historyMonth !== '' && ! $this->historyCursor()->isSameMonth(Carbon::today())) {
             $this->alignStatsToHistoryMonth();
@@ -359,6 +367,7 @@ class AttendanceTracker extends Component
 
         // 4. Assign Today's Attendance + active break from break_logs
         $this->todayAttendance = $attendanceMap->get(Carbon::today()->toDateString());
+        $this->wfhApprovedToday = app(WfhService::class)->isApprovedFor($employee, Carbon::today());
 
         $this->activeBreak = $this->todayAttendance
             ? BreakLog::where('attendance_id', $this->todayAttendance->id)
@@ -1035,7 +1044,7 @@ class AttendanceTracker extends Component
                     'action' => false,
                 ];
             }
-        } elseif ($shiftOver && ! app(WorkingDayResolver::class)->isWeeklyOff($today) && $this->workMode !== 'wfh') {
+        } elseif ($shiftOver && ! app(WorkingDayResolver::class)->isWeeklyOff($today)) {
             $alerts[] = [
                 'type' => 'missing_checkin',
                 'label' => 'Missing Check-In',
