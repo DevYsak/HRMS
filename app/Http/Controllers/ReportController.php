@@ -18,6 +18,7 @@ use App\Models\PipRecord;
 use App\Models\PromotionRecommendation;
 use App\Models\WarningLetter;
 use App\Services\Attendance\AttendanceCalculator;
+use App\Services\Attendance\AttendanceWindowService;
 use App\Services\AttendanceReportBuilder;
 use App\Services\Security\PeopleScope;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -480,28 +481,40 @@ class ReportController extends Controller
         $from = Carbon::create($year, $month, 1)->startOfMonth();
         $to = $from->copy()->endOfMonth();
 
-        $rows = Attendance::with(['employee.user', 'employee.department', 'employee.employmentType'])
-            ->whereBetween('date', [$from->toDateString(), $to->toDateString()])
-            ->when($request->department_id, fn ($q) => $q->whereHas('employee', fn ($e) => $e->where('department_id', $request->department_id)))
-            ->when($request->employment_type_id, fn ($q) => $q->whereHas('employee', fn ($e) => $e->where('employment_type_id', $request->employment_type_id)))
-            ->orderBy('date')
-            ->get()
-            ->groupBy('employee_id');
+        // Every day is classified by AttendanceWindowService — the rules My
+        // Attendance, Employee 360 and the Monthly report use — never by raw
+        // status strings (P3-01: 'present' / 'unauthorized_absence' are not
+        // stored statuses, so those columns were always 0).
+        $employees = Employee::with(['user', 'department'])
+            ->whereHas('user')
+            ->whereNotIn('status', ['draft', 'archived'])
+            ->when($request->department_id, fn ($q) => $q->where('department_id', $request->department_id))
+            ->when($request->employment_type_id, fn ($q) => $q->where('employment_type_id', $request->employment_type_id))
+            ->orderBy('id')
+            ->get();
+        $window = app(AttendanceWindowService::class);
 
-        return response()->streamDownload(function () use ($rows) {
+        return response()->streamDownload(function () use ($employees, $window, $from, $to) {
             $handle = fopen('php://output', 'w');
-            fputcsv($handle, ['Employee ID', 'Employee Name', 'Department', 'Total Days', 'Present', 'Late', 'Missing Checkout', 'Unauthorized Absence']);
-            foreach ($rows as $empId => $records) {
-                $emp = $records->first()->employee;
+            fputcsv($handle, ['Employee ID', 'Employee Name', 'Department', 'Scheduled Days', 'Present', 'Late', 'Half Days', 'Missing Check-out', 'Absent (no attendance, no approved leave)', 'Leave Days', 'Worked on Weekly Off']);
+            foreach ($employees as $emp) {
+                $summary = $window->summary($emp, $from->copy(), $to->copy());
+                if ($summary['scheduled'] === 0 && ! $summary['has_rows'] && $summary['leave_days'] == 0) {
+                    continue;   // not employed in this month
+                }
+                $missingOut = collect($window->days($emp, $from->copy(), $to->copy()))->where('attended', true)->where('missing_out', true)->count();
                 fputcsv($handle, [
                     $emp->employee_id ?? '',
                     $emp->user->name ?? '',
                     $emp->department?->name ?? '',
-                    $records->count(),
-                    $records->where('status', 'present')->count(),
-                    $records->where('is_late', true)->count(),
-                    $records->where('missing_checkout', true)->count(),
-                    $records->where('status', 'unauthorized_absence')->count(),
+                    $summary['scheduled'],
+                    $summary['present'],
+                    $summary['late'],
+                    $summary['half_days'],
+                    $missingOut,
+                    $summary['absent'],
+                    $summary['leave_days'],
+                    $summary['weekly_off_worked'],
                 ]);
             }
             fclose($handle);

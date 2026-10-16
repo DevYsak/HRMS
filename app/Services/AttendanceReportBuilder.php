@@ -12,6 +12,7 @@ use App\Models\OvertimeRecord;
 use App\Models\PublicHoliday;
 use App\Services\Attendance\AttendanceCalculator;
 use App\Services\Attendance\WorkingDayResolver;
+use App\Services\Attendance\AttendanceWindowService;
 use Carbon\CarbonPeriod;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
@@ -141,8 +142,13 @@ class AttendanceReportBuilder
         }
     }
 
-    /** Employee query narrowed by the placement filters (no attendance join). */
-    protected function employeeQuery(array $filters): Builder
+    /**
+     * Employee query narrowed by the placement filters (no attendance join).
+     * activeOnly keeps the historical "status = active" filter for the reports
+     * that rely on it; the window-based reports take every non-archived
+     * employee and let the working-day rules decide employment.
+     */
+    protected function employeeQuery(array $filters, bool $activeOnly = true): Builder
     {
         return Employee::query()->whereHas('user')
             ->when($filters['department_id'] ?? null, fn ($q, $v) => $q->where('department_id', $v))
@@ -150,7 +156,7 @@ class AttendanceReportBuilder
             ->when($filters['shift_id'] ?? null, fn ($q, $v) => $q->where('shift_id', $v))
             ->when($filters['employee_id'] ?? null, fn ($q, $v) => $q->where('id', $v))
             ->when(isset($filters['employee_ids']), fn ($q) => $q->whereIn('id', $filters['employee_ids']))
-            ->where('status', 'active');
+            ->when($activeOnly, fn ($q) => $q->where('status', 'active'), fn ($q) => $q->whereNotIn('status', ['draft', 'archived']));
     }
 
     protected function attendanceQuery(Carbon $from, Carbon $to, array $filters): Builder
@@ -206,32 +212,34 @@ class AttendanceReportBuilder
 
     protected function monthly(Carbon $from, Carbon $to, array $filters): array
     {
-        $rows = $this->attendanceQuery($from, $to, $filters)->get()->groupBy('employee_id');
-        $workDays = max(1, app(WorkingDayResolver::class)->weekdaysBetween($from, $to));
+        // Same classification as My Attendance and Employee 360
+        // (AttendanceWindowService): absent = a past scheduled working day with
+        // no attendance — never a holiday, weekly off or approved leave (P3-01;
+        // it used to be weekdays − present). Work on a weekly off is its own
+        // column and never offsets an absence.
+        $window = app(AttendanceWindowService::class);
+        $mode = (string) ($filters['mode'] ?? '');
 
         $data = [];
         $totPresent = 0;
-        $days = app(WorkingDayResolver::class);
-        foreach ($rows as $group) {
-            $emp = $group->first()->employee;
-            // Work on a weekly off is its own column: it is not a scheduled
-            // day, so it never offsets an absence.
-            $scheduled = $group->reject(fn ($a) => $days->isWeeklyOff($a->date));
-            $present = $scheduled->whereNotNull('check_in')->count();
-            $offWorked = $group->whereNotNull('check_in')->count() - $present;
-            $late = $scheduled->where('is_late', true)->count();
-            $hours = $group->sum(fn ($a) => $this->worked($a));
-            $totPresent += $present;
+        $maxScheduled = 0;
+        foreach ($this->employeeQuery($filters, activeOnly: false)->with(['user', 'department'])->orderBy('id')->get() as $emp) {
+            $s = $window->summary($emp, $from->copy()->startOfDay(), $to->copy()->startOfDay(), $mode);
+            if ($s['scheduled'] === 0 && ! $s['has_rows']) {
+                continue;   // not employed in the range
+            }
+            $totPresent += $s['present'];
+            $maxScheduled = max($maxScheduled, $s['scheduled']);
             $data[] = [
-                $emp?->employee_id ?? '—',
-                $emp?->user?->name ?? '—',
-                $emp?->department?->name ?? '—',
-                $present,
-                max(0, $workDays - $present),
-                $late,
-                $offWorked,
-                number_format($hours, 1).'h',
-                min(100, round($present / $workDays * 100)).'%',
+                $emp->employee_id ?? '—',
+                $emp->user?->name ?? '—',
+                $emp->department?->name ?? '—',
+                $s['present'],
+                $s['absent'],
+                $s['late'],
+                $s['weekly_off_worked'],
+                number_format($s['minutes'] / 60, 1).'h',
+                $s['scheduled'] > 0 ? min(100, round($s['present'] / $s['scheduled'] * 100)).'%' : '—',
             ];
         }
 
@@ -240,7 +248,7 @@ class AttendanceReportBuilder
             'rows' => $data,
             'summary' => [
                 ['label' => 'Employees', 'value' => count($data)],
-                ['label' => 'Working Days', 'value' => $workDays],
+                ['label' => 'Scheduled Days', 'value' => $maxScheduled],
                 ['label' => 'Avg Present', 'value' => count($data) ? round($totPresent / count($data), 1) : 0],
             ],
             'trend' => $this->dailyTrend($from, $to, $filters),
@@ -574,33 +582,49 @@ class AttendanceReportBuilder
 
     protected function late(Carbon $from, Carbon $to, array $filters): array
     {
-        $rows = $this->attendanceQuery($from, $to, $filters)
-            ->where('is_late', true)->orderBy('date')->get();
+        // Late = the calculator's verdict (shift start + grace) through
+        // AttendanceWindowService — what Team View, My Attendance and
+        // Employee 360 count — not the stored is_late flag (P3-01).
+        $window = app(AttendanceWindowService::class);
+        $mode = (string) ($filters['mode'] ?? '');
+        $late = collect();
+        foreach ($this->employeeQuery($filters, activeOnly: false)->with(['user', 'department'])->orderBy('id')->get() as $emp) {
+            foreach ($window->days($emp, $from->copy()->startOfDay(), $to->copy()->startOfDay()) as $day) {
+                if ($day['status'] === 'late' && ($mode === '' || $day['mode'] === $mode)) {
+                    $late->push(['employee' => $emp, 'day' => $day]);
+                }
+            }
+        }
+        $late = $late->sortBy(fn ($l) => [$l['day']['date'], $l['employee']->id])->values();
+        $lateKeys = $late->mapWithKeys(fn ($l) => [$l['employee']->id.'|'.$l['day']['date'] => true])->all();
+        $minutes = $late->sum(fn ($l) => $l['day']['late_minutes']);
 
-        $data = $rows->map(fn ($a) => [
-            $a->employee?->employee_id ?? '—',
-            $a->employee?->user?->name ?? '—',
-            $a->employee?->department?->name ?? '—',
-            $a->date->format('d M Y'),
-            $a->check_in?->format('h:i A') ?? '—',
-            (int) ($a->late_minutes ?? 0).'m',
+        $data = $late->map(fn ($l) => [
+            $l['employee']->employee_id ?? '—',
+            $l['employee']->user?->name ?? '—',
+            $l['employee']->department?->name ?? '—',
+            Carbon::parse($l['day']['date'])->format('d M Y'),
+            $l['day']['first_in_min'] !== null ? Carbon::parse($l['day']['date'])->startOfDay()->addMinutes($l['day']['first_in_min'])->format('h:i A') : '—',
+            $l['day']['late_minutes'].'m',
         ])->all();
 
         return [
             'columns' => ['Emp ID', 'Employee', 'Department', 'Date', 'Check In', 'Late By'],
             'rows' => $data,
             'summary' => [
-                ['label' => 'Late Instances', 'value' => $rows->count()],
-                ['label' => 'Total Late', 'value' => $this->hm((int) $rows->sum('late_minutes'))],
-                ['label' => 'Avg Late', 'value' => $rows->count() ? round($rows->avg('late_minutes')).'m' : '0m'],
+                ['label' => 'Late Instances', 'value' => $late->count()],
+                ['label' => 'Total Late', 'value' => $this->hm((int) $minutes)],
+                ['label' => 'Avg Late', 'value' => $late->count() ? round($minutes / $late->count()).'m' : '0m'],
             ],
-            'trend' => $this->dailyTrend($from, $to, $filters, fn ($g) => $g->where('is_late', true)->count()),
+            'trend' => $this->dailyTrend($from, $to, $filters, fn ($g) => $g->filter(fn ($a) => isset($lateKeys[$a->employee_id.'|'.$a->date->toDateString()]))->count()),
         ];
     }
 
     protected function absent(Carbon $from, Carbon $to, array $filters): array
     {
-        $employees = $this->employeeQuery($filters)->with('user', 'department')->get();
+        // Every non-archived employee: the working-day rules decide employment
+        // (status "active" alone left out probation and on-leave staff).
+        $employees = $this->employeeQuery($filters, activeOnly: false)->with('user', 'department')->get();
         $att = Attendance::whereIn('employee_id', $employees->pluck('id'))
             ->whereBetween('date', [$from->toDateString(), $to->toDateString()])
             ->whereNotNull('check_in')->get()

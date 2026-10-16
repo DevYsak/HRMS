@@ -84,7 +84,7 @@ class AttendanceWindowService
 
         return [
             'present' => $onScheduled->count(),
-            'late' => $onScheduled->filter(fn ($a) => $a->is_late || $a->status === 'late')->count(),
+            'late' => $onScheduled->filter(fn ($a) => $this->isLate($a, $metrics))->count(),
             'minutes' => (int) $filtered->sum($minutesFor),
             'absent' => $absent,
             'leave_days' => round($leaveDays, 1),
@@ -101,7 +101,7 @@ class AttendanceWindowService
      * holiday | leave | upcoming | not_employed, so counting a status here
      * gives the matching summary() figure.
      *
-     * @return array<string, array{date: string, state: string, status: string, worked: int, first_in_min: ?int, last_out_min: ?int, missing_out: bool, leave_days: float, attended: bool}>
+     * @return array<string, array{date: string, state: string, status: string, worked: int, first_in_min: ?int, last_out_min: ?int, missing_out: bool, late_minutes: int, mode: ?string, leave_days: float, attended: bool}>
      */
     public function days(Employee $employee, Carbon $start, Carbon $end): array
     {
@@ -121,7 +121,7 @@ class AttendanceWindowService
             $m = $metrics[$key] ?? null;
 
             $status = match (true) {
-                $attended && $scheduled => ($row->is_late || $row->status === 'late') ? 'late' : 'present',
+                $attended && $scheduled => $this->isLate($row, $metrics) ? 'late' : 'present',
                 $day['state'] === WorkingDayResolver::PUBLIC_HOLIDAY, $day['state'] === WorkingDayResolver::MDL_SHUTDOWN => 'holiday',
                 $day['state'] === WorkingDayResolver::WEEKLY_OFF => 'weekly_off',
                 $day['state'] === WorkingDayResolver::APPROVED_LEAVE => 'leave',
@@ -137,12 +137,27 @@ class AttendanceWindowService
                 'first_in_min' => $m['first_in_min'] ?? null,
                 'last_out_min' => $m['last_out_min'] ?? null,
                 'missing_out' => (bool) ($m['missing_out'] ?? false),
+                'late_minutes' => $status === 'late' ? (int) ($m['late_minutes'] ?? $row?->late_minutes ?? 0) : 0,
+                'mode' => $row?->work_mode,
                 'leave_days' => (float) $day['leave_days'],
                 'attended' => $attended,
             ];
         }
 
         return $days;
+    }
+
+    /**
+     * Late by the calculator (shift start + grace) when the day was computed;
+     * the stored flag only for a row the calculator did not see.
+     *
+     * @param  array<string, array<string, mixed>>  $metrics
+     */
+    private function isLate(Attendance $attendance, array $metrics): bool
+    {
+        $late = $metrics[$attendance->date->toDateString()]['late'] ?? null;
+
+        return $late !== null ? (bool) $late : ($attendance->is_late || $attendance->status === 'late');
     }
 
     /**
@@ -165,7 +180,7 @@ class AttendanceWindowService
      * display detail only (sessions, ignored scans, duplicates). Days without
      * punch rows or a clock-in are absent from the result.
      *
-     * @return array<string, array{worked: int, break: int, sessions: array<int, array<string, mixed>>, ignored: array<int, array<string, mixed>>, ignored_count: int, duplicate_count: int, first_in_min: ?int, last_out_min: ?int, missing_out: bool}>
+     * @return array<string, array{worked: int, break: int, sessions: array<int, array<string, mixed>>, ignored: array<int, array<string, mixed>>, ignored_count: int, duplicate_count: int, first_in_min: ?int, last_out_min: ?int, missing_out: bool, late: ?bool, late_minutes: ?int}>
      */
     public function dayMetrics(Employee $employee, Carbon $start, Carbon $end): array
     {
@@ -217,6 +232,11 @@ class AttendanceWindowService
                 'first_in_min' => $calc->firstIn ? $toMinutes($calc->firstIn->format('H:i')) : null,
                 'last_out_min' => $calc->lastOut ? $toMinutes($calc->lastOut->format('H:i')) : null,
                 'missing_out' => $calc->missingCheckout,
+                // The calculator's verdict (shift start + grace) — the same
+                // lateness Team View, the HR dashboard and AI count today. Null
+                // when no shift resolves: it cannot judge, the stored flag stands.
+                'late' => $calc->shift !== null ? $calc->isLate : null,
+                'late_minutes' => $calc->shift !== null ? $calc->lateMinutes : null,
             ];
         }
 
