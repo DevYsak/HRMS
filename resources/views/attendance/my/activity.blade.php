@@ -35,7 +35,7 @@
         default => ['Not Working', 'bg-zinc-100 text-zinc-700 ring-zinc-200 dark:bg-white/[0.06] dark:text-slate-200 dark:ring-white/10', 'bg-zinc-400'],
     };
     $stateNote = match ($state) {
-        'break' => 'Since '.($activeBreak?->break_start?->format('h:i A') ?? '—'),
+        'break' => 'Since '.($activeBreak?->break_start?->toImmutable()->userTime() ?? '—'),
         'auto' => 'Closed at '.($lastOut ?? '—').' — shift end',
         'missing' => 'No OUT punch — request regularisation',
         'out' => 'At '.($lastOut ?? '—'),

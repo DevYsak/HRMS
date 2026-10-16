@@ -45,8 +45,9 @@
                         <span class="size-1.5 rounded-full bg-current opacity-70" aria-hidden="true"></span>{{ $r['status'] }}
                     </span>
                 </td>
-                <td class="px-3 py-3 tabular-nums">{{ $r['check_in'] ?? '—' }}</td>
-                <td class="px-3 py-3 tabular-nums">{{ $r['check_out'] ?? ($isToday && $isLive ? 'Working' : '—') }}</td>
+                {{-- Rows keep machine H:i (the CSV export reads them); shown in the reader's 12/24-hour format. --}}
+                <td class="px-3 py-3 tabular-nums">{{ $r['check_in'] !== null ? app(\App\Support\DateDisplay::class)->time($r['date'].' '.$r['check_in']) : '—' }}</td>
+                <td class="px-3 py-3 tabular-nums">{{ $r['check_out'] !== null ? app(\App\Support\DateDisplay::class)->time($r['date'].' '.$r['check_out']) : ($isToday && $isLive ? 'Working' : '—') }}</td>
                 <td class="px-3 py-3 text-right font-medium tabular-nums">{{ $hasPunch ? $hm($r['worked_minutes']) : '—' }}</td>
                 <td class="px-3 py-3 text-right tabular-nums">{{ $hasPunch ? $hm($r['break_minutes']) : '—' }}</td>
                 <td class="px-3 py-3">

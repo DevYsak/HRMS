@@ -237,7 +237,7 @@ test('the page shows the employee resolved shift window in the Today card', func
     Livewire::actingAs($employee->user)->test(AttendanceTracker::class)
         ->assertOk()
         ->assertSee('Shift')
-        ->assertSee('10:30 AM – 7:30 PM')
+        ->assertSee('10:30 AM – 07:30 PM')
         ->assertSet('shiftProgress', fn ($p) => $p['expected_minutes'] === 540
             && $p['worked_minutes'] === 240
             && $p['percent'] === 44

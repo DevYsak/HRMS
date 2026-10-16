@@ -20,8 +20,8 @@
     };
 
     [$statusText, $statusTone, $statusSub] = match (true) {
-        $isLive && $activeBreak !== null => ['On Break', 'text-amber-600 dark:text-amber-400', 'Since '.$activeBreak->break_start->format('h:i A')],
-        $isLive => ['At Work', 'text-emerald-600 dark:text-emerald-400', 'Since '.($liveStartMs ? \Illuminate\Support\Carbon::createFromTimestampMs($liveStartMs, config('app.timezone'))->format('h:i A') : ($firstIn ?? '—'))],
+        $isLive && $activeBreak !== null => ['On Break', 'text-amber-600 dark:text-amber-400', 'Since '.$activeBreak->break_start->toImmutable()->userTime()],
+        $isLive => ['At Work', 'text-emerald-600 dark:text-emerald-400', 'Since '.($liveStartMs ? \Illuminate\Support\Carbon::createFromTimestampMs($liveStartMs, config('app.timezone'))->toImmutable()->userTime() : ($firstIn ?? '—'))],
         $missingOut => ['Missing Checkout', 'text-red-600 dark:text-red-400', 'Action required — request regularisation'],
         $autoClosed => ['Auto Checkout', 'text-amber-600 dark:text-amber-400', 'Closed at '.$lastOut.' (shift end)'],
         (bool) $lastOut => ['Checked Out', 'text-zinc-900 dark:text-white', 'At '.$lastOut],

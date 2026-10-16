@@ -287,7 +287,7 @@
             <div class="grid grid-cols-2 gap-3">
                 <div class="space-y-2 {{ $needIn ? '' : 'pointer-events-none opacity-40' }}" data-reg-side="in">
                     <flux:input wire:model="regCheckIn" label="IN at" type="time" :disabled="! $needIn" :badge="$needIn ? 'Required' : null" :aria-required="$needIn ? 'true' : null" />
-                    <p class="text-[11px] text-zinc-500 dark:text-zinc-400">{{ ($regExisting['in'] ?? null) ? 'Recorded: '.\Illuminate\Support\Carbon::createFromFormat('H:i', $regExisting['in'])->format('h:i A') : 'No check-in recorded' }}</p>
+                    <p class="text-[11px] text-zinc-500 dark:text-zinc-400">{{ ($regExisting['in'] ?? null) ? 'Recorded: '.\Illuminate\Support\Carbon::createFromFormat('H:i', $regExisting['in'])->toImmutable()->userTime() : 'No check-in recorded' }}</p>
                     <flux:select wire:model="regCheckInMethod" :disabled="! $needIn">
                         <flux:select.option value="id_card">via ID Card</flux:select.option>
                         <flux:select.option value="face">via Face</flux:select.option>
@@ -295,7 +295,7 @@
                 </div>
                 <div class="space-y-2 {{ $needOut ? '' : 'pointer-events-none opacity-40' }}" data-reg-side="out">
                     <flux:input wire:model="regCheckOut" label="OUT at" type="time" :disabled="! $needOut" :badge="$needOut ? 'Required' : null" :aria-required="$needOut ? 'true' : null" />
-                    <p class="text-[11px] text-zinc-500 dark:text-zinc-400">{{ ($regExisting['out'] ?? null) ? 'Recorded: '.\Illuminate\Support\Carbon::createFromFormat('H:i', $regExisting['out'])->format('h:i A') : ($regOpenSession ? 'Still working — no check-out needed yet' : 'No check-out recorded') }}</p>
+                    <p class="text-[11px] text-zinc-500 dark:text-zinc-400">{{ ($regExisting['out'] ?? null) ? 'Recorded: '.\Illuminate\Support\Carbon::createFromFormat('H:i', $regExisting['out'])->toImmutable()->userTime() : ($regOpenSession ? 'Still working — no check-out needed yet' : 'No check-out recorded') }}</p>
                     <flux:select wire:model="regCheckOutMethod" :disabled="! $needOut">
                         <flux:select.option value="id_card">via ID Card</flux:select.option>
                         <flux:select.option value="face">via Face</flux:select.option>

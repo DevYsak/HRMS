@@ -57,7 +57,7 @@ test('today shows canonical worked time with the break informational, never dedu
             '02:00 PM', 'IN', 'Face', 'Break In',
             '06:00 PM', 'OUT', 'ID Card', 'Present'])
         ->assertSee("Today's Summary", false)
-        ->assertSee('9:00 AM – 6:00 PM')
+        ->assertSee('09:00 AM – 06:00 PM')
         ->assertSee('No attendance issues today')
         ->assertDontSee('Attendance Needs Attention');
 });

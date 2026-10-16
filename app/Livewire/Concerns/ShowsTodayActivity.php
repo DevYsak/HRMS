@@ -180,7 +180,7 @@ trait ShowsTodayActivity
             'liveStartMs' => $liveStartMs,
             'liveBaseMin' => $liveBaseMin,
             'shiftWindow' => (! $this->shiftUnassigned && $shift?->start_time && $shift?->end_time)
-                ? Carbon::parse($shift->start_time)->format('g:i A').' – '.Carbon::parse($shift->end_time)->format('g:i A')
+                ? Carbon::parse($shift->start_time)->toImmutable()->userTime().' – '.Carbon::parse($shift->end_time)->toImmutable()->userTime()
                 : null,
             'isCurrentMonth' => $month->isSameMonth(Carbon::today()),
             'monthLabel' => $month->format('F Y'),
@@ -276,14 +276,14 @@ trait ShowsTodayActivity
         $att = $this->todayAttendance;
         if ($events === [] && $att?->check_in) {
             $events[] = [
-                'ts' => $att->check_in->getTimestampMs(), 'kind' => 'in', 'time' => $att->check_in->format('h:i A'),
+                'ts' => $att->check_in->getTimestampMs(), 'kind' => 'in', 'time' => $att->check_in->toImmutable()->userTime(),
                 'title' => 'Web IN', 'badge' => 'IN',
                 'details' => ['Event' => 'Web clock-in', 'Time' => $att->check_in->format('h:i:s A'), 'Effective event' => 'IN', 'Source' => ucfirst((string) ($att->check_in_method ?: 'web'))],
             ];
             $firstInIndex = 0;
             if ($att->check_out && ! $ctx['autoClosed']) {
                 $events[] = [
-                    'ts' => $att->check_out->getTimestampMs(), 'kind' => 'out', 'time' => $att->check_out->format('h:i A'),
+                    'ts' => $att->check_out->getTimestampMs(), 'kind' => 'out', 'time' => $att->check_out->toImmutable()->userTime(),
                     'title' => 'Web OUT', 'badge' => 'OUT',
                     'details' => ['Event' => 'Web clock-out', 'Time' => $att->check_out->format('h:i:s A'), 'Effective event' => 'OUT', 'Source' => ucfirst((string) ($att->check_out_method ?: 'web'))],
                 ];
@@ -298,13 +298,13 @@ trait ShowsTodayActivity
         if ($att) {
             foreach (BreakLog::where('attendance_id', $att->id)->orderBy('break_start')->get() as $break) {
                 $events[] = [
-                    'ts' => $break->break_start->getTimestampMs(), 'kind' => 'break_start', 'time' => $break->break_start->format('h:i A'),
+                    'ts' => $break->break_start->getTimestampMs(), 'kind' => 'break_start', 'time' => $break->break_start->toImmutable()->userTime(),
                     'title' => 'Break Start', 'badge' => 'BREAK',
                     'details' => ['Event' => 'Break started', 'Time' => $break->break_start->format('h:i:s A'), 'Note' => 'Breaks are shown for information and never deducted from worked time'],
                 ];
                 if ($break->break_end) {
                     $events[] = [
-                        'ts' => $break->break_end->getTimestampMs(), 'kind' => 'break_end', 'time' => $break->break_end->format('h:i A'),
+                        'ts' => $break->break_end->getTimestampMs(), 'kind' => 'break_end', 'time' => $break->break_end->toImmutable()->userTime(),
                         'title' => 'Break End', 'badge' => 'BREAK',
                         'details' => ['Event' => 'Break ended', 'Time' => $break->break_end->format('h:i:s A'), 'Duration' => (int) $break->duration_minutes.'m'],
                     ];
@@ -315,7 +315,7 @@ trait ShowsTodayActivity
         // The nightly auto checkout closed the day at the shift end (not a real OUT).
         if ($ctx['autoClosed'] && $att?->check_out) {
             $events[] = [
-                'ts' => $att->check_out->getTimestampMs(), 'kind' => 'auto', 'time' => $att->check_out->format('h:i A'),
+                'ts' => $att->check_out->getTimestampMs(), 'kind' => 'auto', 'time' => $att->check_out->toImmutable()->userTime(),
                 'title' => 'Auto Checkout', 'badge' => 'AUTO',
                 'details' => ['Event' => 'Auto checkout', 'Time' => $att->check_out->format('h:i:s A'), 'Effective event' => 'OUT', 'Source' => 'System', 'Note' => Attendance::AUTO_CHECKOUT_EXPLANATION],
             ];

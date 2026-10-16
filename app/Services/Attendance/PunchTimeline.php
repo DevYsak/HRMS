@@ -197,7 +197,7 @@ class PunchTimeline
             $prev = $i > 0 ? $kept->get($i - 1) : null;
 
             return [
-                'time' => $p->punched_at->format('h:i A'),
+                'time' => $p->punched_at->toImmutable()->userTime(),
                 'title' => $isIn ? ($i === 0 ? 'Clocked in' : 'Punch in') : ($isLastOut ? 'Clocked out' : 'Punch out'),
                 'type' => $isIn ? 'in' : 'out',
                 'direction' => $isIn ? 'in' : 'out',
@@ -379,10 +379,10 @@ class PunchTimeline
                 $lastIsCorrection = $this->isCorrection($kept[$last]);
 
                 if ($this->isCorrection($p) && ! $lastIsCorrection) {
-                    $superseded[$last] = 'Superseded — the approved correction sets this '.strtoupper($directions[$i]).' at '.$p->punched_at->format('h:i A');
+                    $superseded[$last] = 'Superseded — the approved correction sets this '.strtoupper($directions[$i]).' at '.$p->punched_at->toImmutable()->userTime();
                     array_pop($chain);
                 } elseif ($lastIsCorrection && ! $this->isCorrection($p)) {
-                    $superseded[$i] = 'Superseded — the approved correction set this '.strtoupper($directions[$i]).' at '.$kept[$last]->punched_at->format('h:i A');
+                    $superseded[$i] = 'Superseded — the approved correction set this '.strtoupper($directions[$i]).' at '.$kept[$last]->punched_at->toImmutable()->userTime();
 
                     continue;
                 }
@@ -590,8 +590,8 @@ class PunchTimeline
                 $workingMinutes += $mins;
                 $sessions[] = [
                     'index' => count($sessions) + 1,
-                    'in' => $openIn->punched_at->format('h:i A'),
-                    'out' => $p->punched_at->format('h:i A'),
+                    'in' => $openIn->punched_at->toImmutable()->userTime(),
+                    'out' => $p->punched_at->toImmutable()->userTime(),
                     'minutes' => $mins,
                     'label' => $this->minutesToHm($mins),
                     'live' => false,
@@ -615,7 +615,7 @@ class PunchTimeline
             if ($live) {
                 $liveElapsed = (int) $openIn->punched_at->diffInMinutes(now());
                 $liveStartMs = (int) $openIn->punched_at->getTimestampMs();
-                $liveStartLabel = $openIn->punched_at->format('h:i A');
+                $liveStartLabel = $openIn->punched_at->toImmutable()->userTime();
                 // The gap before this open IN was already counted as break when
                 // the IN opened the session (above) — never add it twice.
                 $sessions[] = [
@@ -679,8 +679,8 @@ class PunchTimeline
             'nodes' => $nodes,
             'sessions' => $sessions,
             'raw_events' => $rawEvents,
-            'first_in' => $kept->first()->punched_at->format('h:i A'),
-            'last_out' => (! $trailingIn && $lastOut) ? $lastOut->punched_at->format('h:i A') : null,
+            'first_in' => $kept->first()->punched_at->toImmutable()->userTime(),
+            'last_out' => (! $trailingIn && $lastOut) ? $lastOut->punched_at->toImmutable()->userTime() : null,
             // Canonical instants for AttendanceCalculator: the first IN and the
             // final OUT (null while still clocked in / when the OUT is missing).
             'first_in_at' => $firstInAt,
@@ -709,7 +709,7 @@ class PunchTimeline
         $method = $p->methodEnum();
 
         return [
-            'time' => $p->punched_at->format('h:i A'),
+            'time' => $p->punched_at->toImmutable()->userTime(),
             'time_short' => $p->punched_at->format('g:i'),
             'ts_ms' => (int) $p->punched_at->getTimestampMs(),
             'dir' => 'IGN',
@@ -734,7 +734,7 @@ class PunchTimeline
         $method = $p->methodEnum();
 
         return [
-            'time' => $p->punched_at->format('h:i A'),
+            'time' => $p->punched_at->toImmutable()->userTime(),
             'time_short' => $p->punched_at->format('g:i'),
             'ts_ms' => (int) $p->punched_at->getTimestampMs(),
             'dir' => $isIn ? 'IN' : 'OUT',
@@ -768,8 +768,8 @@ class PunchTimeline
     {
         return [
             'index' => $index,
-            'in' => $in?->punched_at->format('h:i A'),
-            'out' => $out?->punched_at->format('h:i A'),
+            'in' => $in?->punched_at->toImmutable()->userTime(),
+            'out' => $out?->punched_at->toImmutable()->userTime(),
             'minutes' => 0,
             'label' => 'Missing '.($in ? 'OUT' : 'IN'),
             'live' => false,

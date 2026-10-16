@@ -455,7 +455,7 @@ class AttendanceTracker extends Component
             ->get(['date', 'synced_at', 'raw_punch_count', 'device_serial'])
             ->map(fn ($s) => [
                 'date' => $s->date->format('d M'),
-                'synced' => $s->synced_at->format('h:i A'),
+                'synced' => $s->synced_at->toImmutable()->userTime(),
                 'punches' => (int) $s->raw_punch_count,
                 // The engine stamps the serial of the reader that produced the
                 // day's punches; the biometric_devices row may hold none.
@@ -868,7 +868,7 @@ class AttendanceTracker extends Component
             if ($events === [] && $item->check_in) {
                 $ua = UserAgent::parse($item->check_in_user_agent);
                 $events[] = [
-                    'time' => $item->check_in->format('h:i A'),
+                    'time' => $item->check_in->toImmutable()->userTime(),
                     'title' => 'Clocked in'.($item->is_late ? ' (late)' : ''),
                     'type' => $item->is_late ? 'late' : 'in',
                     'method' => PunchMethod::tryFrom((string) $item->check_in_method)?->value,
@@ -882,16 +882,16 @@ class AttendanceTracker extends Component
                 ];
                 foreach ($breaksByAttendance->get($item->id, collect()) as $b) {
                     if ($b->break_start) {
-                        $events[] = ['time' => Carbon::parse($b->break_start)->format('h:i A'), 'title' => 'Break started', 'type' => 'break', 'method' => null, 'source' => 'web', 'location' => null, 'device' => null, 'lat' => null, 'lng' => null];
+                        $events[] = ['time' => Carbon::parse($b->break_start)->toImmutable()->userTime(), 'title' => 'Break started', 'type' => 'break', 'method' => null, 'source' => 'web', 'location' => null, 'device' => null, 'lat' => null, 'lng' => null];
                     }
                     if ($b->break_end) {
-                        $events[] = ['time' => Carbon::parse($b->break_end)->format('h:i A'), 'title' => 'Returned from break', 'type' => 'resume', 'method' => null, 'source' => 'web', 'location' => null, 'device' => null, 'lat' => null, 'lng' => null];
+                        $events[] = ['time' => Carbon::parse($b->break_end)->toImmutable()->userTime(), 'title' => 'Returned from break', 'type' => 'resume', 'method' => null, 'source' => 'web', 'location' => null, 'device' => null, 'lat' => null, 'lng' => null];
                     }
                 }
                 if ($item->check_out) {
                     $uaOut = UserAgent::parse($item->check_out_user_agent);
                     $events[] = [
-                        'time' => $item->check_out->format('h:i A'),
+                        'time' => $item->check_out->toImmutable()->userTime(),
                         'title' => 'Clocked out',
                         'type' => 'out',
                         'method' => PunchMethod::tryFrom((string) $item->check_out_method)?->value,
@@ -930,10 +930,10 @@ class AttendanceTracker extends Component
                 'is_regularized' => (bool) $item->is_regularized,
                 // Original punches preserved at regularisation (Rule 9) and the
                 // system auto punch-out flag — both surfaced on the day card.
-                'original_in' => $item->original_check_in?->format('h:i A'),
-                'original_out' => $item->original_check_out?->format('h:i A'),
-                'corrected_in' => $item->check_in?->format('h:i A'),
-                'corrected_out' => $item->check_out?->format('h:i A'),
+                'original_in' => $item->original_check_in?->toImmutable()->userTime(),
+                'original_out' => $item->original_check_out?->toImmutable()->userTime(),
+                'corrected_in' => $item->check_in?->toImmutable()->userTime(),
+                'corrected_out' => $item->check_out?->toImmutable()->userTime(),
                 'is_auto_checkout' => (bool) $item->is_auto_checkout,
                 // Engine decisions for the expandable day view: validated work
                 // sessions, and punches the engine ignored (stray card scans /
@@ -983,7 +983,7 @@ class AttendanceTracker extends Component
                 $alerts[] = [
                     'type' => 'missing_checkout',
                     'label' => 'Missing Check-Out',
-                    'detail' => 'Today · clocked in at '.$this->todayAttendance->check_in->format('h:i A'),
+                    'detail' => 'Today · clocked in at '.$this->todayAttendance->check_in->toImmutable()->userTime(),
                     'date' => $today->toDateString(),
                     'action' => true,
                 ];
@@ -994,7 +994,7 @@ class AttendanceTracker extends Component
                 $alerts[] = [
                     'type' => 'late_arrival',
                     'label' => 'Late Arrival',
-                    'detail' => 'Today · '.(int) ($this->todayAttendance->late_minutes ?? 0).'m past grace ('.$this->todayAttendance->check_in->format('h:i A').')',
+                    'detail' => 'Today · '.(int) ($this->todayAttendance->late_minutes ?? 0).'m past grace ('.$this->todayAttendance->check_in->toImmutable()->userTime().')',
                     'date' => $today->toDateString(),
                     'action' => true,
                 ];
@@ -1005,7 +1005,7 @@ class AttendanceTracker extends Component
                 $alerts[] = [
                     'type' => 'early_exit',
                     'label' => 'Early Exit',
-                    'detail' => 'Today · clocked out '.$this->todayAttendance->check_out->format('h:i A').' before shift end '.$shiftEnd->format('h:i A'),
+                    'detail' => 'Today · clocked out '.$this->todayAttendance->check_out->toImmutable()->userTime().' before shift end '.$shiftEnd->toImmutable()->userTime(),
                     'date' => $today->toDateString(),
                     'action' => true,
                 ];
@@ -1063,7 +1063,7 @@ class AttendanceTracker extends Component
             $alerts[] = [
                 'type' => 'missing_checkout',
                 'label' => 'Missing Check-Out',
-                'detail' => $item->date->format('D, d M').' · clocked in at '.$item->check_in->format('h:i A'),
+                'detail' => $item->date->format('D, d M').' · clocked in at '.$item->check_in->toImmutable()->userTime(),
                 'date' => $item->date->toDateString(),
                 'action' => true,
             ];
@@ -1943,7 +1943,7 @@ class AttendanceTracker extends Component
             $suggestions[] = ['good' => false, 'text' => "Improve break duration — average exceeds {$breakAllowance} minutes"];
         }
         if ($late > 0 && $this->shift?->start_time) {
-            $suggestions[] = ['good' => false, 'text' => 'Arrive before '.Carbon::parse($this->shift->start_time)->addMinutes((int) ($this->shift->grace_minutes ?? 5))->format('g:i A').' to stay on time'];
+            $suggestions[] = ['good' => false, 'text' => 'Arrive before '.Carbon::parse($this->shift->start_time)->addMinutes((int) ($this->shift->grace_minutes ?? 5))->toImmutable()->userTime().' to stay on time'];
         } else {
             $suggestions[] = ['good' => true, 'text' => 'Perfect punctuality this period'];
         }
@@ -2191,10 +2191,10 @@ class AttendanceTracker extends Component
             'auto_checkout_reason' => $att->auto_checkout_reason,
             // Original punches preserved at regularisation — shown next to the
             // corrected times so history is never lost.
-            'original_in' => $att->original_check_in?->format('h:i A'),
-            'original_out' => $att->original_check_out?->format('h:i A'),
+            'original_in' => $att->original_check_in?->toImmutable()->userTime(),
+            'original_out' => $att->original_check_out?->toImmutable()->userTime(),
             'in' => [
-                'time' => $att->check_in?->format('h:i A'),
+                'time' => $att->check_in?->toImmutable()->userTime(),
                 'method' => $inMethod?->label(),
                 'guidance' => $inMethod?->guidance('in'),
                 'method_icon' => $inMethod?->icon(),
@@ -2205,7 +2205,7 @@ class AttendanceTracker extends Component
                 'device' => UserAgent::parse($att->check_in_user_agent)['label'],
             ],
             'out' => [
-                'time' => $att->check_out?->format('h:i A'),
+                'time' => $att->check_out?->toImmutable()->userTime(),
                 'method' => $outMethod?->label(),
                 'guidance' => $outMethod?->guidance('out'),
                 'method_icon' => $outMethod?->icon(),
@@ -2221,7 +2221,7 @@ class AttendanceTracker extends Component
                 ->orderBy('punched_at')
                 ->get()
                 ->map(fn (AttendancePunch $p) => [
-                    'time' => $p->punched_at->format('h:i A'),
+                    'time' => $p->punched_at->toImmutable()->userTime(),
                     'method' => $p->methodEnum()?->label(),
                     // System-written punches carry an authoritative direction;
                     // a device read shows its method's default guidance.
@@ -2240,8 +2240,8 @@ class AttendanceTracker extends Component
                 ->get()
                 ->map(fn ($r) => [
                     'type' => $r->regularisation_type ?? 'punch',
-                    'requested_in' => $r->requested_check_in ? Carbon::parse($r->requested_check_in)->format('h:i A') : null,
-                    'requested_out' => $r->requested_check_out ? Carbon::parse($r->requested_check_out)->format('h:i A') : null,
+                    'requested_in' => $r->requested_check_in ? Carbon::parse($r->requested_check_in)->toImmutable()->userTime() : null,
+                    'requested_out' => $r->requested_check_out ? Carbon::parse($r->requested_check_out)->toImmutable()->userTime() : null,
                     'reason' => $r->reason,
                     'status' => $r->status,
                     'stage' => $r->stageLabel(),
@@ -2482,8 +2482,8 @@ class AttendanceTracker extends Component
         return sprintf(
             '%s: %s – %s IST | Grace: %d mins%s',
             $shift->name ?? 'Shift',
-            Carbon::parse($shift->start_time)->format('g:i A'),
-            Carbon::parse($shift->end_time)->format('g:i A'),
+            Carbon::parse($shift->start_time)->toImmutable()->userTime(),
+            Carbon::parse($shift->end_time)->toImmutable()->userTime(),
             $shift->grace_minutes ?? 0,
             $employee?->shift_id ? '' : ' (company default)',
         );
