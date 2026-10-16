@@ -134,7 +134,7 @@
                 <div class="border-b border-zinc-100 bg-zinc-50/70 px-5 py-3 dark:border-white/5 dark:bg-zinc-800/40">
                     <h3 class="text-xs font-bold uppercase tracking-widest text-zinc-500">{{ $group }}</h3>
                 </div>
-                <table class="w-full text-sm">
+                <div class="overflow-x-auto" data-table-scroll><table class="w-full min-w-[640px] text-sm">
                     <thead>
                         <tr class="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
                             <th class="px-5 py-2 text-left">Notification</th>
@@ -217,7 +217,7 @@
                             @endforeach
                         @endforeach
                     </tbody>
-                </table>
+                </table></div>
             </div>
         @empty
             <div class="rounded-2xl border border-dashed border-zinc-300 p-10 text-center text-sm text-zinc-400 dark:border-zinc-700">
@@ -234,7 +234,7 @@
         @if($logs->isEmpty())
             <p class="px-5 py-8 text-center text-sm text-zinc-400">No emails sent yet.</p>
         @else
-            <table class="w-full text-sm">
+            <div class="overflow-x-auto" data-table-scroll><table class="w-full min-w-[640px] text-sm">
                 <thead>
                     <tr class="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
                         <th class="px-5 py-2 text-left">To</th>
@@ -248,7 +248,7 @@
                         @include('livewire.settings.partials.email-log-row')
                     @endforeach
                 </tbody>
-            </table>
+            </table></div>
             @if($logs->count() > 7)
                 <div class="flex items-center justify-between border-t border-zinc-100 px-5 py-3 text-xs dark:border-white/5">
                     <span class="text-zinc-500">Latest 7 of {{ $logs->count() }}</span>
@@ -257,7 +257,7 @@
                 <flux:modal name="email-logs-all" flyout class="w-full md:w-[44rem]">
                     <div class="space-y-4">
                         <flux:heading size="lg">Recent emails</flux:heading>
-                        <table class="w-full text-sm">
+                        <div class="overflow-x-auto" data-table-scroll><table class="w-full min-w-[640px] text-sm">
                         <thead>
                             <tr class="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
                                 <th class="px-5 py-2 text-left">To</th>
@@ -271,7 +271,7 @@
                                     @include('livewire.settings.partials.email-log-row')
                                 @endforeach
                             </tbody>
-                        </table>
+                        </table></div>
                     </div>
                 </flux:modal>
             @endif

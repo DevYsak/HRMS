@@ -258,7 +258,7 @@ select:focus[data-flux-control] {
 
     /* Page header */
     .pulse-page-header {
-        @apply mb-6 flex items-start justify-between;
+        @apply mb-6 flex flex-wrap items-start justify-between gap-3;
     }
 
     /* Premium hero header — dark with orange glow, rounded card style */

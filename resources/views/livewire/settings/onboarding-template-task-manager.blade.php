@@ -29,7 +29,7 @@
                     <span class="font-semibold text-zinc-700 dark:text-zinc-200">{{ $group['label'] }}</span>
                     <span class="ml-2 text-xs text-zinc-400">{{ $group['items']->count() }} task(s)</span>
                 </div>
-                <table class="w-full text-sm">
+                <div class="overflow-x-auto" data-table-scroll><table class="w-full min-w-[640px] text-sm">
                     <thead class="border-b border-zinc-100 dark:border-zinc-800">
                         <tr>
                             <th class="w-10 px-4 py-2 text-center text-xs font-semibold text-zinc-500">#</th>
@@ -78,7 +78,7 @@
                             </tr>
                         @endforeach
                     </tbody>
-                </table>
+                </table></div>
             </div>
         @endif
     @endforeach

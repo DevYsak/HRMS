@@ -13,7 +13,7 @@
     </div>
 
     <div class="pulse-card overflow-hidden p-0">
-        <table class="w-full text-sm">
+        <div class="overflow-x-auto" data-table-scroll><table class="w-full min-w-[640px] text-sm">
             <thead class="border-b border-zinc-100 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900">
                 <tr>
                     <th class="px-4 py-3 text-left font-semibold text-zinc-600 dark:text-zinc-400">Name</th>
@@ -78,7 +78,7 @@
                     </tr>
                 @endforelse
             </tbody>
-        </table>
+        </table></div>
     </div>
 
     {{-- Add / Edit Modal --}}

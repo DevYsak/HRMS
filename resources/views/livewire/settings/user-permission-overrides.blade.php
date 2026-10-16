@@ -143,7 +143,7 @@
                     <flux:heading size="sm">Effective permissions</flux:heading>
                     <flux:text class="mb-3 text-xs">What {{ $target->name }} can actually do, where it comes from, and how far it reaches.</flux:text>
                     <div class="max-h-[28rem] overflow-y-auto">
-                        <table class="w-full text-sm">
+                        <div class="overflow-x-auto" data-table-scroll><table class="w-full min-w-[640px] text-sm">
                             <thead class="sticky top-0 bg-white text-left text-xs text-zinc-500 dark:bg-zinc-900">
                                 <tr><th class="py-1.5 font-medium">Permission</th><th class="py-1.5 font-medium">Source</th><th class="py-1.5 font-medium">Reach</th></tr>
                             </thead>
@@ -159,7 +159,7 @@
                                     </tr>
                                 @endforeach
                             </tbody>
-                        </table>
+                        </table></div>
                     </div>
                 </div>
             </div>
