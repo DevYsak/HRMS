@@ -254,7 +254,7 @@ test('the page works on phones and in dark mode', function () {
 
 test('the Super Admin home shows the QA readiness widget; HR does not', function () {
     $this->actingAs(qaUser('super_admin'))->get(route('dashboard'))
-        ->assertOk()->assertSee('data-qa-widget', false)->assertSee('Open QA &amp; Audit', false)->assertSee('3126')->assertSee('Phase 3 full suite');
+        ->assertOk()->assertSee('data-qa-widget', false)->assertSee('Open QA &amp; Audit', false)->assertSee('3187')->assertSee('Phase 4 full suite');
 
     $this->actingAs(qaUser('hr_admin'))->get(route('dashboard'))
         ->assertOk()->assertDontSee('data-qa-widget', false);
@@ -271,8 +271,8 @@ test('the overview shows the last verified build and the open blockers', functio
         ->assertSee('Open blockers')->assertSee('Policy decision needed');
 
     $summary = (new QaReadiness)->summary();
-    // After Phase 3: the WFH question (QA-F-037) is decided and verified; QA-F-018 and QA-F-031 remain data findings.
-    expect($summary['open_blockers'])->toBe(['critical' => 0, 'high' => 1, 'known_baseline' => 12, 'policy' => 0, 'retest_required' => 0, 'hr_corrections' => 2])
+    // After Phase 4: four high payroll findings and nine payroll / RBAC policy questions wait for a decision; QA-F-018 and QA-F-031 remain data findings.
+    expect($summary['open_blockers'])->toBe(['critical' => 0, 'high' => 5, 'known_baseline' => 12, 'policy' => 9, 'retest_required' => 0, 'hr_corrections' => 2])
         ->and($summary['verified']['security']->name)->toBe('2026-10-15 Phase 1 RBAC Regression')
         ->and($summary['verified']['commit'])->toMatch('/^[0-9a-f]{7}$/');
 

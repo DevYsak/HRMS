@@ -42,7 +42,7 @@ test('Phase 1 is seeded: 440 / 438 / 2 known baseline, and every Phase 1 commit 
     expect([$run->total, $run->passed, $run->failed, $run->known_baseline, $run->new_regressions])->toBe([440, 438, 2, 2, 0])
         ->and($run->result)->toBe(QaTestRun::RESULT_PASS_WITH_BASELINE)
         ->and(QaPhase::where('number', 1)->first()->status)->toBe(QaPhaseStatus::Completed)
-        ->and(QaPhase::where('status', 'not_started')->count())->toBe(3);
+        ->and(QaPhase::where('status', 'not_started')->count())->toBe(2);
 
     foreach (['a6cfb27', 'ba5e1bb', '585d1d4', '2bd6beb', 'cfc173a', '5756210', 'a90dc23', '671b276', '961fac5'] as $hash) {
         $fix = QaFixLink::where('commit_hash', 'like', $hash.'%')->first();
@@ -319,7 +319,8 @@ test('the Phase 2 policy decisions are recorded with their commits and history',
         ->and($status('QA-F-030'))->toBe('verified')   // fixed in Phase 3 (dd47f75)
         ->and($status('QA-F-031'))->toBe('hr_correction_required')
         ->and(QaFinding::where('code', 'QA-F-031')->value('description'))->toContain('REVIEW REQUIRED')->toContain('Jordan Reed')
-        ->and(QaFinding::open()->where('needs_decision', true)->pluck('code')->all())->toBe([])   // the Phase 3 WFH question was decided 16 Oct
+        ->and(QaFinding::open()->where('needs_decision', true)->pluck('code')->sort()->values()->all())   // WFH decided 16 Oct; Phase 4 payroll / RBAC questions open
+        ->toBe(['QA-F-050', 'QA-F-051', 'QA-F-052', 'QA-F-053', 'QA-F-054', 'QA-F-055', 'QA-F-056', 'QA-F-057', 'QA-F-058'])
         ->and(QaTestCase::where('code', 'like', 'QA-DEC-%')->where('status', 'pass')->count())->toBe(7);
 });
 
@@ -343,10 +344,32 @@ test('Phase 3 is recorded: each fix has its test cases, commit and verification,
     // The confirming full run: 12 known baseline; the 16 failures a concurrent commit caused mid-run passed on re-run.
     $full = QaTestRun::where('name', '2026-10-16 Phase 3 full suite')->firstOrFail();
     expect([$full->kind, $full->commit, $full->total, $full->passed, $full->failed, $full->known_baseline, $full->new_regressions])->toBe(['full', '1c820e9', 3155, 3126, 28, 12, 0])
-        ->and($full->notes)->toContain('905bae5');
+        ->and($full->notes)->toContain('905bae5')
+        ->and(QaTestRun::where('name', '2026-10-16 Phase 3 re-run of disturbed files')->value('new_regressions'))->toBe(0);
+});
+
+test('Phase 4 is recorded: verified fixes with commits, payroll and policy questions open', function () {
+    foreach (['QA-F-040' => '30caa3d', 'QA-F-041' => 'b3ed78f', 'QA-F-042' => '43741e0', 'QA-F-043' => '129816a', 'QA-F-044' => '4884b45',
+        'QA-F-045' => '32017f6', 'QA-F-046' => '981f2dc', 'QA-F-047' => 'e55babf', 'QA-F-048' => '3001a2b', 'QA-F-049' => '50fbdcf'] as $code => $commit) {
+        $finding = QaFinding::where('code', $code)->firstOrFail();
+        expect($finding->status)->toBe(QaFindingStatus::Verified, $code)
+            ->and($finding->fixes()->pluck('commit_hash'))->toContain($commit);
+    }
+
+    // Payroll rules are not changed without a decision: the mismatches stay open.
+    foreach (['QA-F-050', 'QA-F-051', 'QA-F-052', 'QA-F-053'] as $code) {
+        $finding = QaFinding::where('code', $code)->firstOrFail();
+        expect($finding->status)->toBe(QaFindingStatus::Open, $code)->and($finding->needs_decision)->toBeTrue()->and($finding->module)->toBe('Payroll');
+    }
+
+    expect(QaTestCase::where('code', 'like', 'QA-P4-%')->where('status', 'pass')->count())->toBe(23)
+        ->and(QaPhase::where('number', 4)->first()->status)->toBe(QaPhaseStatus::InProgress);
+
+    // The confirming full run at a stable HEAD: exactly the 12 known baseline.
+    $full = QaTestRun::where('name', '2026-10-16 Phase 4 full suite')->firstOrFail();
+    expect([$full->kind, $full->commit, $full->total, $full->passed, $full->failed, $full->known_baseline, $full->new_regressions])->toBe(['full', '32017f6', 3200, 3187, 12, 12, 0]);
 
     $summary = (new QaReadiness)->summary();
-    expect($summary['latest_run']->name)->toBe('2026-10-16 Phase 3 re-run of disturbed files')
-        ->and($summary['verified']['full']->id)->toBe($full->id)
-        ->and($summary['level'])->toBe(QaReadiness::INTERNAL_QA);
+    expect($summary['latest_run']->id)->toBe($full->id)
+        ->and($summary['verified']['full']->id)->toBe($full->id);
 });
