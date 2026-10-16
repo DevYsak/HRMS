@@ -163,6 +163,7 @@ class RolesAndPermissionsSeeder extends Seeder
         'view_attendance', 'export_attendance', 'approve_regularisation', 'approve_overtime', 'view_overtime', 'approve_wfh',
         'view_leave', 'apply_leave', 'approve_leave',
         'view_probation', 'confirm_probation',
+        'view_attendance_reports',
         'view_payslips',
         'view_performance', 'review_performance', 'manage_promotions', 'manage_pip',
         'view_documents', 'acknowledge_documents',

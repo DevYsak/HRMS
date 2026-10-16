@@ -28,7 +28,7 @@ final class PermissionScopes
         'manage_onboarding', 'manage_offboarding', 'approve_profile_changes', 'view_hr_data_quality',
         'view_probation', 'confirm_probation', 'hr_approve_probation',
         // Attendance
-        'view_attendance', 'manage_attendance', 'export_attendance', 'view_live_attendance',
+        'view_attendance', 'manage_attendance', 'export_attendance', 'view_live_attendance', 'view_attendance_reports',
         'approve_regularisation', 'hr_approve_regularisation',
         'monitor_attendance_exceptions', 'remind_employees',
         'approve_wfh',
@@ -67,6 +67,7 @@ final class PermissionScopes
         ],
         'Attendance' => [
             ['key' => 'export_attendance', 'label' => 'Export Attendance', 'description' => 'Download attendance registers and logs for employees in scope'],
+            ['key' => 'view_attendance_reports', 'label' => 'View Attendance Reports', 'description' => 'Open Attendance Reports (read-only: daily, monthly, muster, late, absent, leave and OT summaries) for the people in scope'],
             ['key' => 'view_live_attendance', 'label' => 'View Live Attendance', 'description' => "Open the Live Attendance panel: today's punches and status for employees in scope"],
         ],
         'Overtime' => [
@@ -112,12 +113,15 @@ final class PermissionScopes
             'view_live_attendance' => DataScope::Department,
             'view_team_dashboard' => DataScope::Department,
             'view_attendance' => DataScope::Department,
+            'view_attendance_reports' => DataScope::Department,
         ],
         'finance' => [
             'view_payroll' => DataScope::All,
             'view_finance_profile' => DataScope::All,
             'view_employee' => DataScope::All,
             'view_attendance' => DataScope::All,
+            // Read-only reporting for payroll (QA-F-021), configured explicitly.
+            'view_attendance_reports' => DataScope::All,
             'export_attendance' => DataScope::All,
             'view_overtime' => DataScope::All,
             'view_leave_management' => DataScope::All,
@@ -128,19 +132,19 @@ final class PermissionScopes
 
     /** Extra default grants per role for the new keys (role slug => keys). */
     public const NEW_ROLE_GRANTS = [
-        'hr_admin' => ['export_attendance', 'view_overtime', 'manage_overtime', 'manage_notifications', 'view_live_attendance', 'view_employee_360',
+        'hr_admin' => ['view_attendance_reports', 'export_attendance', 'view_overtime', 'manage_overtime', 'manage_notifications', 'view_live_attendance', 'view_employee_360',
             'view_main_dashboard', 'view_team_dashboard', 'view_finance_dashboard'],
-        'director' => ['export_attendance', 'view_overtime', 'view_live_attendance', 'view_employee_360',
+        'director' => ['view_attendance_reports', 'export_attendance', 'view_overtime', 'view_live_attendance', 'view_employee_360',
             'view_team_dashboard', 'view_department_dashboard'],
         // Team View = today's operational work; Department View = the
         // department's KPIs and trends. Both scoped to the headed department.
-        'department_head' => ['view_live_attendance', 'view_employee_360', 'view_team_dashboard', 'view_department_dashboard'],
-        'manager' => ['view_overtime', 'view_live_attendance', 'view_employee_360', 'view_team_dashboard'],
+        'department_head' => ['view_attendance_reports', 'view_live_attendance', 'view_employee_360', 'view_team_dashboard', 'view_department_dashboard'],
+        'manager' => ['view_attendance_reports', 'view_overtime', 'view_live_attendance', 'view_employee_360', 'view_team_dashboard'],
         // A Coordinator lands on Team View for the people they watch; the
         // Main dashboard only when granted explicitly.
-        'coordinator' => ['view_live_attendance', 'view_team_dashboard'],
+        'coordinator' => ['view_live_attendance', 'view_team_dashboard', 'view_attendance_reports'],
         // Finance: payroll in full; attendance / leave / OT summaries only.
-        'finance' => ['view_attendance', 'export_attendance', 'view_overtime', 'view_leave_management', 'view_finance_dashboard'],
+        'finance' => ['view_attendance', 'view_attendance_reports', 'export_attendance', 'view_overtime', 'view_leave_management', 'view_finance_dashboard'],
         'employee' => ['view_main_dashboard'],
     ];
 

@@ -44,19 +44,18 @@ class AttendanceReports extends Component
     public string $mode = '';
 
     /**
-     * Who may open Attendance Reports: leave approvers (as before), or anyone
-     * whose view_attendance scope reaches other people — a Coordinator's
-     * department — never someone limited to their own record.
+     * Who may open Attendance Reports: holders of the dedicated read-only
+     * view_attendance_reports permission (QA-F-021) whose scope reaches other
+     * people — never inferred from approve_leave or view_attendance, never
+     * someone limited to their own record. It grants no management power.
      */
     public static function canOpen(User $user): bool
     {
-        if ($user->canApproveLeave()) {
-            return true;
-        }
-
-        return $user->hasPermission('view_attendance')
-            && ! in_array(app(ScopeResolver::class)->scopeFor($user, 'view_attendance'), [DataScope::Own, DataScope::None], true);
+        return $user->hasPermission(self::PERMISSION)
+            && ! in_array(app(ScopeResolver::class)->scopeFor($user, self::PERMISSION), [DataScope::Own, DataScope::None], true);
     }
+
+    public const PERMISSION = 'view_attendance_reports';
 
     public function mount(): void
     {
@@ -71,14 +70,10 @@ class AttendanceReports extends Component
             : app(PeopleScope::class)->sanitiseDepartment(Auth::user(), self::permission(), $this->departmentId);
     }
 
-    /**
-     * Whose attendance the reports cover: the view_attendance scope (the same
-     * reach as Team View, the Command Center and Live Attendance), or the
-     * leave-approval reach for an approver without it.
-     */
+    /** Whose attendance the reports cover: the view_attendance_reports scope. */
     public static function permission(): string
     {
-        return Auth::user()->hasPermission('view_attendance') ? 'view_attendance' : 'approve_leave';
+        return self::PERMISSION;
     }
 
     /** @return array<int, int>|null */

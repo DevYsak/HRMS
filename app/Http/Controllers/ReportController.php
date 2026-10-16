@@ -55,7 +55,7 @@ class ReportController extends Controller
         // preview. A department outside it is ignored, never trusted.
         $user = $request->user();
         abort_unless($user !== null && AttendanceReports::canOpen($user), 403);
-        $permission = $user->hasPermission('view_attendance') ? 'view_attendance' : 'approve_leave';
+        $permission = AttendanceReports::PERMISSION;
         $people = app(PeopleScope::class);
         $reach = $user ? $people->employeeIds($user, $permission, includeSelf: true) : [];
 
