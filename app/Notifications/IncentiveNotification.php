@@ -3,11 +3,13 @@
 namespace App\Notifications;
 
 use App\Models\Incentive;
+use App\Notifications\Concerns\LinksForRecipient;
 use App\Notifications\Concerns\SendsMailChannel;
 use Illuminate\Notifications\Notification;
 
 class IncentiveNotification extends Notification
 {
+    use LinksForRecipient;
     use SendsMailChannel;
 
     public function __construct(public readonly Incentive $incentive) {}
@@ -22,6 +24,7 @@ class IncentiveNotification extends Notification
         $title = $this->incentive->title;
         $amount = number_format((float) $this->incentive->amount, 2);
         $status = $this->incentive->status;
+        $url = $this->linkFor($notifiable, [['payroll.incentives'], ['payroll.payslips']]);
 
         return match ($status) {
             'approved' => [
@@ -29,7 +32,7 @@ class IncentiveNotification extends Notification
                 'title' => 'Incentive Approved',
                 'body' => "Your incentive \"{$title}\" of \u{20B9}{$amount} has been approved.",
                 'action' => 'View',
-                'url' => '/payroll/incentives',
+                'url' => $url,
                 'icon' => 'currency-rupee',
                 'color' => 'green',
             ],
@@ -38,7 +41,7 @@ class IncentiveNotification extends Notification
                 'title' => 'Incentive Rejected',
                 'body' => "Your incentive \"{$title}\" of \u{20B9}{$amount} was rejected.",
                 'action' => 'View',
-                'url' => '/payroll/incentives',
+                'url' => $url,
                 'icon' => 'x-circle',
                 'color' => 'red',
             ],
@@ -47,7 +50,7 @@ class IncentiveNotification extends Notification
                 'title' => 'New Incentive Pending',
                 'body' => "Incentive \"{$title}\" of \u{20B9}{$amount} is awaiting approval.",
                 'action' => 'Review',
-                'url' => '/payroll/incentives',
+                'url' => $url,
                 'icon' => 'currency-rupee',
                 'color' => 'blue',
             ],

@@ -3,11 +3,13 @@
 namespace App\Notifications;
 
 use App\Models\Reimbursement;
+use App\Notifications\Concerns\LinksForRecipient;
 use App\Notifications\Concerns\SendsMailChannel;
 use Illuminate\Notifications\Notification;
 
 class ReimbursementNotification extends Notification
 {
+    use LinksForRecipient;
     use SendsMailChannel;
 
     public function __construct(public readonly Reimbursement $reimbursement) {}
@@ -20,6 +22,7 @@ class ReimbursementNotification extends Notification
     public function toArray(object $notifiable): array
     {
         $title = $this->reimbursement->title;
+        $url = $this->linkFor($notifiable, [['payroll.reimbursements'], ['payroll.payslips']]);
         $amount = number_format((float) $this->reimbursement->amount, 2);
         $status = $this->reimbursement->status;
 
@@ -29,7 +32,7 @@ class ReimbursementNotification extends Notification
                 'title' => 'Reimbursement Approved',
                 'body' => "Your reimbursement \"{$title}\" of \u{20B9}{$amount} has been approved and will be included in your next payroll.",
                 'action' => 'View',
-                'url' => '/payroll/reimbursements',
+                'url' => $url,
                 'icon' => 'check-circle',
                 'color' => 'green',
             ],
@@ -38,7 +41,7 @@ class ReimbursementNotification extends Notification
                 'title' => 'Reimbursement Rejected',
                 'body' => "Your reimbursement \"{$title}\" of \u{20B9}{$amount} was rejected.",
                 'action' => 'View',
-                'url' => '/payroll/reimbursements',
+                'url' => $url,
                 'icon' => 'x-circle',
                 'color' => 'red',
             ],
@@ -47,7 +50,7 @@ class ReimbursementNotification extends Notification
                 'title' => 'New Reimbursement Pending',
                 'body' => "Reimbursement \"{$title}\" of \u{20B9}{$amount} is awaiting approval.",
                 'action' => 'Review',
-                'url' => '/payroll/reimbursements',
+                'url' => $url,
                 'icon' => 'banknotes',
                 'color' => 'blue',
             ],

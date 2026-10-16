@@ -3,12 +3,14 @@
 namespace App\Notifications;
 
 use App\Models\ExitRecord;
+use App\Notifications\Concerns\LinksForRecipient;
 use App\Notifications\Concerns\SendsMailChannel;
 use Carbon\Carbon;
 use Illuminate\Notifications\Notification;
 
 class OffboardingDetailsNotification extends Notification
 {
+    use LinksForRecipient;
     use SendsMailChannel;
 
     public function __construct(public readonly ExitRecord $exitRecord) {}
@@ -28,7 +30,7 @@ class OffboardingDetailsNotification extends Notification
             'title' => 'Offboarding Details Recorded',
             'body' => "Your offboarding has been initiated. Exit type: {$exitType}. Last working day: {$lastDay}.",
             'action' => 'View',
-            'url' => route('employees.offboarding', $this->exitRecord->employee_id),
+            'url' => $this->linkFor($notifiable, [['employees.offboarding', ['employee' => $this->exitRecord->employee_id]]]),
             'icon' => 'arrow-right-start-on-rectangle',
             'color' => 'amber',
         ];

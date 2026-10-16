@@ -4,12 +4,14 @@ namespace App\Notifications;
 
 use App\Models\Employee;
 use App\Models\OnboardingTask;
+use App\Notifications\Concerns\LinksForRecipient;
 use App\Notifications\Concerns\NotifiesByRole;
 use App\Notifications\Concerns\SendsMailChannel;
 use Illuminate\Notifications\Notification;
 
 class OnboardingTaskOverdueNotification extends Notification
 {
+    use LinksForRecipient;
     use NotifiesByRole;
     use SendsMailChannel;
 
@@ -25,7 +27,11 @@ class OnboardingTaskOverdueNotification extends Notification
 
     public function toArray(object $notifiable): array
     {
-        $url = route('employees.onboarding', ['employee' => $this->employee->id]);
+        // The checklist for HR; the employee's own task list for them; any
+        // other owner (manager, finance) lands where their access allows.
+        $url = $this->isAbout($notifiable, $this->employee->user_id)
+            ? $this->linkFor($notifiable, [['onboarding.my']])
+            : $this->linkFor($notifiable, [['employees.onboarding', ['employee' => $this->employee->id]]]);
 
         return [
             'type' => 'onboarding_task_overdue',

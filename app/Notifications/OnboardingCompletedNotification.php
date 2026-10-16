@@ -3,12 +3,14 @@
 namespace App\Notifications;
 
 use App\Models\Employee;
+use App\Notifications\Concerns\LinksForRecipient;
 use App\Notifications\Concerns\NotifiesByRole;
 use App\Notifications\Concerns\SendsMailChannel;
 use Illuminate\Notifications\Notification;
 
 class OnboardingCompletedNotification extends Notification
 {
+    use LinksForRecipient;
     use NotifiesByRole;
     use SendsMailChannel;
 
@@ -22,7 +24,10 @@ class OnboardingCompletedNotification extends Notification
     public function toArray(object $notifiable): array
     {
         $name = $this->employee->user?->name ?? 'The employee';
-        $url = route('employees.onboarding', ['employee' => $this->employee->id]);
+        $own = $this->isAbout($notifiable, $this->employee->user_id);
+        $url = $own
+            ? $this->linkFor($notifiable, [['onboarding.my']])
+            : $this->linkFor($notifiable, [['employees.onboarding', ['employee' => $this->employee->id]]]);
 
         return [
             'type' => 'onboarding_completed',

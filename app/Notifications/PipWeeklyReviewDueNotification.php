@@ -3,12 +3,14 @@
 namespace App\Notifications;
 
 use App\Models\PipRecord;
+use App\Notifications\Concerns\LinksForRecipient;
 use App\Notifications\Concerns\NotifiesByRole;
 use App\Notifications\Concerns\SendsMailChannel;
 use Illuminate\Notifications\Notification;
 
 class PipWeeklyReviewDueNotification extends Notification
 {
+    use LinksForRecipient;
     use NotifiesByRole;
     use SendsMailChannel;
 
@@ -22,13 +24,16 @@ class PipWeeklyReviewDueNotification extends Notification
     public function toArray(object $notifiable): array
     {
         $employee = $this->pip->employee->user->name;
+        $own = $this->isAbout($notifiable, $this->pip->employee->user_id);
 
         return [
             'type' => 'pip_weekly_review_due',
             'title' => 'Weekly PIP Review Due',
-            'body' => "A weekly progress review is due for {$employee}'s performance improvement plan (ends {$this->pip->end_date->format('d M Y')}).",
-            'action' => 'Review Progress',
-            'url' => '/performance/pip/manage',
+            'body' => $own
+                ? "A weekly progress review is due on your performance improvement plan (ends {$this->pip->end_date->format('d M Y')})."
+                : "A weekly progress review is due for {$employee}'s performance improvement plan (ends {$this->pip->end_date->format('d M Y')}).",
+            'action' => $own ? 'View My PIP' : 'Review Progress',
+            'url' => $own ? $this->linkFor($notifiable, [['performance.pip.my']]) : $this->linkFor($notifiable, [['performance.pip.manage']]),
             'icon' => 'calendar-days',
             'color' => 'amber',
         ];
