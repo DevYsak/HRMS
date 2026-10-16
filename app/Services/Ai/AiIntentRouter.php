@@ -5,6 +5,8 @@ namespace App\Services\Ai;
 use App\Models\User;
 use App\Services\Attendance\TodayStatusService;
 use App\Services\Dashboards\PeopleOperationsService;
+use App\Support\DateDisplay;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Route;
 
 /**
@@ -37,6 +39,12 @@ class AiIntentRouter
 
     private const BALANCE_PATTERN = '/\b(balance|left|remaining|available|how much leave|how many days)\b/u';
 
+    private const WHERE_PATTERN = '/\b(where|how (do|can|should) i|how to|which page|what page)\b/u';
+
+    private const MISSING_CHECKOUT_PATTERN = '/\b(missing|missed|no|forgot(ten)? to) (check|clock)[- ]?out\b|\bmissing checkouts?\b/u';
+
+    private const FIRST_PERSON_PATTERN = '/\b(my|i|me|mine)\b/u';
+
     public function __construct(private AiDataTools $tools, private AiHelpLinks $links) {}
 
     /**
@@ -53,6 +61,31 @@ class AiIntentRouter
         $types = $this->typesIn($text);
         $asksApprover = (bool) preg_match(self::APPROVER_PATTERN, $text);
         $asksPending = (bool) preg_match(self::PENDING_PATTERN, $text);
+
+        $asksWhere = (bool) preg_match(self::WHERE_PATTERN, $text);
+        $firstPerson = (bool) preg_match(self::FIRST_PERSON_PATTERN, $text);
+
+        // Own-data questions answered from the same services as the screens.
+        if (! $asksWhere && preg_match(self::MISSING_CHECKOUT_PATTERN, $text)) {
+            return $firstPerson || ! $user->hasPermission('view_attendance') ? $this->myAttendanceAnswer($user) : $this->attendanceAnswer($user);
+        }
+
+        if (! $asksWhere && preg_match('/\bmy attendance\b|\battendance (this|for the) month\b/u', $text)) {
+            return $this->myAttendanceAnswer($user);
+        }
+
+        if (! $asksWhere && preg_match('/\b(next|upcoming|coming)\b.*\bholidays?\b/u', $text) && ! str_contains($text, 'holiday work')) {
+            return $this->nextHolidayAnswer($user);
+        }
+
+        if (! $asksWhere && $types === ['wfh'] && ! $asksPending && ! $asksApprover
+            && preg_match('/\b(status|approved|today|tomorrow|do i have|am i|my)\b/u', $text)) {
+            return $this->myWfhAnswer($user);
+        }
+
+        if (! $asksWhere && preg_match('/\bprofile\b/u', $text) && preg_match('/\b(complete|completeness|completion|incomplete|missing|percent)\b/u', $text)) {
+            return $this->profileAnswer($user);
+        }
 
         // "Show UK Operations health" — only a department inside the reach.
         if (preg_match('/\b(health|overview)\b/u', $text) && ($answer = $this->departmentAnswer($user, $text))) {
@@ -78,6 +111,12 @@ class AiIntentRouter
             return $this->leaveBalanceAnswer($user);
         }
 
+        // "Leave pending?" from an approver, not about their own requests:
+        // what waits for them (ApprovalQueueService), never a second count.
+        if ($types !== [] && $asksPending && ! $firstPerson && array_intersect($types, array_keys($this->tools->approvalQueue($user))) !== []) {
+            return $this->approvalQueueAnswer($user, $types);
+        }
+
         if ($types !== [] && $asksPending) {
             return $this->myPendingAnswer($user, $types);
         }
@@ -90,7 +129,7 @@ class AiIntentRouter
             return $this->myPendingAnswer($user, array_keys(self::TYPES));
         }
 
-        if (preg_match('/\b(where|how (do|can|should) i|how to|which page|what page)\b/u', $text)) {
+        if ($asksWhere) {
             return $this->navigationAnswer($user, $question);
         }
 
@@ -305,6 +344,66 @@ class AiIntentRouter
             : implode("\n", $parts);
 
         return $this->answerWith($content, $user, ['leave'], 'leave_balance', ownOnly: true);
+    }
+
+    /** @return array{content: string, links: list<array{label: string, url: string, path: string}>, source: string, intent: string} */
+    private function myAttendanceAnswer(User $user): array
+    {
+        $a = $this->tools->myAttendance($user);
+
+        if ($a === null) {
+            return $this->noEmployeeRecord('my_attendance');
+        }
+
+        $content = 'This month so far: '.$a['present'].' of '.$a['scheduled'].' scheduled days present ('.$a['late'].' late), '
+            .$a['absent'].' absent, '.$this->days($a['leave_days']).' on leave. '
+            .($a['missing_checkouts'] === 1 ? '1 day has' : $a['missing_checkouts'].' days have').' a missing checkout. '
+            .'Today: '.$a['today'].'.';
+
+        return $this->answerWith($content, $user, ['regularisation'], 'my_attendance', ownOnly: true);
+    }
+
+    /** @return array{content: string, links: list<array{label: string, url: string, path: string}>, source: string, intent: string} */
+    private function nextHolidayAnswer(User $user): array
+    {
+        $holiday = $this->tools->nextHoliday($user);
+        $content = $holiday
+            ? 'Your next holiday is '.$holiday['name'].' on '.app(DateDisplay::class)->date(Carbon::parse($holiday['date'])).'.'
+            : 'There is no upcoming holiday on your calendar yet.';
+
+        return ['content' => $content, 'links' => $this->links->pagesFor($user, 'holidays'), 'source' => 'pulse', 'intent' => 'next_holiday'];
+    }
+
+    /** @return array{content: string, links: list<array{label: string, url: string, path: string}>, source: string, intent: string} */
+    private function myWfhAnswer(User $user): array
+    {
+        $wfh = $this->tools->myWfh($user);
+
+        if ($wfh === null) {
+            return $this->noEmployeeRecord('my_wfh');
+        }
+
+        $content = ($wfh['approved_today'] ? 'You have approved work from home today.' : 'You have no approved work from home today.')
+            .' '.$this->countPhrase($wfh['pending'], 'wfh').' pending (a pending request does not authorise WFH).'
+            .($wfh['next_approved'] ? ' Next approved WFH day: '.app(DateDisplay::class)->date(Carbon::parse($wfh['next_approved'])).'.' : '');
+
+        return $this->answerWith($content, $user, ['wfh'], 'my_wfh', ownOnly: true);
+    }
+
+    /** @return array{content: string, links: list<array{label: string, url: string, path: string}>, source: string, intent: string} */
+    private function profileAnswer(User $user): array
+    {
+        $profile = $this->tools->profileCompleteness($user);
+
+        if ($profile === null) {
+            return $this->noEmployeeRecord('profile_completeness');
+        }
+
+        $content = 'Your profile is '.$profile['percent'].'% complete.'
+            .($profile['missing'] !== [] ? ' Still to add: '.implode(', ', $profile['missing']).'.' : '')
+            .($profile['submitted'] !== [] ? ' Waiting for HR: '.implode(', ', $profile['submitted']).'.' : '');
+
+        return ['content' => $content, 'links' => $this->links->pagesFor($user, 'profile'), 'source' => 'pulse', 'intent' => 'profile_completeness'];
     }
 
     /** @return array{content: string, links: list<array{label: string, url: string, path: string}>, source: string, intent: string} */

@@ -4,8 +4,6 @@ namespace App\Services\Ai;
 
 use App\Models\Document;
 use App\Models\Employee;
-use App\Models\LeaveRequest;
-use App\Models\OtRequest;
 use App\Models\PipRecord;
 use App\Models\User;
 use App\Models\WarningLetter;
@@ -32,8 +30,10 @@ class AiContextBuilder
         $figures = array_filter([
             'headcount' => $this->count($user, 'view_employee', fn () => Employee::where('status', 'active'), 'id'),
             'on_probation' => $this->count($user, 'manage_employees', fn () => Employee::where('status', 'probation'), 'id'),
-            'pending_leave_requests' => $this->count($user, 'approve_leave', fn () => LeaveRequest::where('status', 'pending')),
-            'pending_ot_requests' => $this->count($user, 'approve_overtime', fn () => OtRequest::where('status', 'pending')),
+            // No separate "pending leave / OT" counts: what waits for this user
+            // is waiting_for_my_approval (ApprovalQueueService). A second
+            // count here (status 'pending' only, own requests included)
+            // gave the model two different numbers for one question.
             'documents_expiring_30d' => $this->count($user, 'manage_documents', fn () => Document::query()->expiringSoon(30)),
             'employees_on_pip' => $this->count($user, 'manage_pip', fn () => PipRecord::whereIn('status', ['active', 'under_review', 'extended'])),
             'active_warnings' => $this->count($user, 'manage_warning_letters', fn () => WarningLetter::whereIn('status', ['issued', 'acknowledged', 'under_review'])),

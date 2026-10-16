@@ -49,9 +49,10 @@ class AiHelpLinks
             ],
         ],
         'payslip' => [
-            'keywords' => ['payslip', 'salary slip', 'pay slip', 'salary'],
+            'keywords' => ['payslip', 'salary slip', 'pay slip', 'salary', 'payroll', 'pay run'],
             'pages' => [
                 ['route' => 'payroll.payslips', 'label' => 'Open My Payslips', 'path' => 'My Work → My Payslips'],
+                ['route' => 'payroll.overview', 'label' => 'Open Payroll', 'path' => 'Payroll → Overview'],
             ],
         ],
         'profile' => [

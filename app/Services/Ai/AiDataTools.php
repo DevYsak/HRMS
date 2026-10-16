@@ -5,13 +5,19 @@ namespace App\Services\Ai;
 use App\Models\Department;
 use App\Models\HolidayWorkRequest;
 use App\Models\User;
+use App\Models\WfhRequest;
 use App\Services\Approvals\ApprovalQueueService;
+use App\Services\Attendance\AttendanceWindowService;
+use App\Services\Attendance\HolidayResolver;
 use App\Services\Attendance\TodayStatusService;
 use App\Services\Leave\EmployeeLeaveOverviewService;
 use App\Services\ModuleFeatureService;
 use App\Services\OvertimeService;
 use App\Services\Performance\PerformanceStatusService;
+use App\Services\Profile\ProfileCompletionService;
 use App\Services\Security\PeopleScope;
+use App\Services\WfhService;
+use Illuminate\Support\Carbon;
 
 /**
  * Deterministic, authorisation-first data for the AI assistant. Every number
@@ -178,6 +184,100 @@ class AiDataTools
         return app(PeopleScope::class)->departmentOptions($user, 'view_attendance')
             ->sortByDesc(fn ($d) => mb_strlen($d->name))
             ->first(fn ($d) => str_contains($text, mb_strtolower($d->name)));
+    }
+
+    /**
+     * The user's own attendance this month to date — the AttendanceWindowService
+     * figures My Attendance and Employee 360 show — and today's status.
+     *
+     * @return array{from: string, to: string, scheduled: int, present: int, late: int, absent: int, leave_days: float, missing_checkouts: int, today: string}|null
+     */
+    public function myAttendance(User $user): ?array
+    {
+        $employee = $user->employee;
+
+        if (! $employee) {
+            return null;
+        }
+
+        $window = app(AttendanceWindowService::class);
+        $from = Carbon::today()->startOfMonth();
+        $to = Carbon::today();
+        $summary = $window->summary($employee, $from, $to);
+        $today = app(TodayStatusService::class)->summary([$employee->id]);
+        $status = $today['rows'] !== [] ? array_values($today['rows'])[0] : null;
+
+        return [
+            'from' => $from->toDateString(),
+            'to' => $to->toDateString(),
+            'scheduled' => (int) $summary['scheduled'],
+            'present' => (int) $summary['present'],
+            'late' => (int) $summary['late'],
+            'absent' => (int) $summary['absent'],
+            'leave_days' => (float) $summary['leave_days'],
+            'missing_checkouts' => collect($window->days($employee, $from, $to))->where('missing_out', true)->count(),
+            'today' => $status ? (TodayStatusService::LABELS[$status['bucket']] ?? str_replace('_', ' ', $status['bucket'])) : 'Not recorded',
+        ];
+    }
+
+    /**
+     * The next public holiday on the user's own calendar (HolidayResolver).
+     *
+     * @return array{name: string, date: string}|null
+     */
+    public function nextHoliday(User $user): ?array
+    {
+        $holiday = app(HolidayResolver::class)->upcomingHolidays($user->employee, 1)->first();
+
+        return $holiday ? ['name' => (string) $holiday->name, 'date' => Carbon::parse($holiday->date)->toDateString()] : null;
+    }
+
+    /**
+     * The user's WFH position: approved for today (the planned mode), pending
+     * requests, and the next approved day. Pending authorises nothing.
+     *
+     * @return array{approved_today: bool, pending: int, next_approved: ?string}|null
+     */
+    public function myWfh(User $user): ?array
+    {
+        $employee = $user->employee;
+
+        if (! $employee) {
+            return null;
+        }
+
+        $next = WfhRequest::where('employee_id', $employee->id)->where('status', 'approved')
+            ->whereDate('end_date', '>', Carbon::today()->toDateString())
+            ->orderBy('start_date')->first();
+
+        return [
+            'approved_today' => app(WfhService::class)->isApprovedFor($employee, Carbon::today()),
+            'pending' => $employee->wfhRequests()->pending()->count(),
+            'next_approved' => $next ? Carbon::parse($next->start_date)->max(Carbon::tomorrow())->toDateString() : null,
+        ];
+    }
+
+    /**
+     * The user's own profile completeness — the ProfileCompletionService ring
+     * on My Profile. Field labels only, never the values.
+     *
+     * @return array{percent: int, missing: list<string>, submitted: list<string>}|null
+     */
+    public function profileCompleteness(User $user): ?array
+    {
+        $employee = $user->employee;
+
+        if (! $employee) {
+            return null;
+        }
+
+        $completion = app(ProfileCompletionService::class)->for($employee);
+
+        return [
+            'percent' => (int) $completion['percent'],
+            'missing' => array_values(array_map(fn ($m) => $m['label'], $completion['missing'])),
+            'submitted' => array_values(array_map(fn ($m) => $m['label'], $completion['submitted'])),
+        ];
     }
 
     /**
