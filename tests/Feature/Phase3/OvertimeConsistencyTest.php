@@ -67,6 +67,12 @@ test('Payable OT reads the same on the employee dashboard, My Overtime, AI, Team
 
     $ot = app(Employee360Service::class)->build($this->hr, $this->employee, Carbon::parse('2026-10-01'), Carbon::parse('2026-10-14'))['overtime'];
     expect([$ot['payable_hours'], $ot['approved_requested_hours'], $ot['actual_worked_hours'], $ot['requested_hours']])->toBe([2.5, 2.0, 3.0, 3.5]);
+
+    // The 360 footnote describes the same figures the cards show.
+    $this->actingAs($this->hr)->get(route('employees.360', ['employee' => $this->employee->id, 'from' => '2026-10-01', 'to' => '2026-10-14']))->assertOk()
+        ->assertSee('Payable OT is approved overtime measured from real punches.')
+        ->assertSee('Actual worked OT is all time beyond the shift, approved or not.')
+        ->assertDontSee('Actual OT is measured from real punches on approved requests');
 });
 
 test('the OT reports label which figure each column holds', function () {

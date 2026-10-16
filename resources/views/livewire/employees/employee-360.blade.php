@@ -423,7 +423,7 @@
                                     · {{ number_format($overtime['payable']['amount'], 2) }}
                                 </p>
                             @endif
-                            <p class="mt-2 text-[11px] text-zinc-400">Actual OT is measured from real punches on approved requests; the requested window is shown only for reference.</p>
+                            <p class="mt-2 text-[11px] text-zinc-400">Payable OT is approved overtime measured from real punches. Actual worked OT is all time beyond the shift, approved or not. Requested hours are shown for reference only.</p>
                         </x-pulse.card>
                     @endif
 
