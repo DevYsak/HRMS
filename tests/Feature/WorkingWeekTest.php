@@ -1,6 +1,7 @@
 <?php
 
 use App\Livewire\Attendance\AttendanceSettings;
+use App\Models\Attendance;
 use App\Models\AttendanceSetting;
 use App\Models\Employee;
 use App\Models\User;
@@ -58,46 +59,59 @@ test('an out-of-range day number is ignored', function () {
     expect(AttendanceSetting::weeklyOffDays())->toBe([Carbon::SATURDAY]);
 });
 
+/** Present on Monday only: attendance is being recorded, so the rest of the week is absent. */
+function weekPersonPresentMonday(string $name): Employee
+{
+    $user = User::factory()->create(['name' => $name]);
+    $employee = Employee::factory()->create(['user_id' => $user->id, 'status' => 'active', 'joining_date' => '2024-01-08']);
+    Attendance::create(['employee_id' => $employee->id, 'date' => juneWeek()['from'], 'check_in' => juneWeek()['from'].' 09:00:00',
+        'check_out' => juneWeek()['from'].' 18:00:00', 'status' => 'on_time', 'work_mode' => 'office']);
+
+    return $employee;
+}
+
 test('the register counts Saturday as absent on a six-day week and as a weekly off on a five-day week', function () {
-    $user = User::factory()->create(['name' => 'Week Person']);
-    Employee::factory()->create(['user_id' => $user->id, 'status' => 'active']);
+    weekPersonPresentMonday('Week Person');
 
     $builder = app(AttendanceReportBuilder::class);
 
     setWeeklyOffs([Carbon::SUNDAY]); // an explicit six-day week
     $row = $builder->build('register', juneWeek())['rows'][0];
-    $totals = array_slice($row, -8); // P, A, L, HD, LV, WO, H, Payable
+    $totals = array_slice($row, -10); // P, A, L, HD, LV, UL, WO, H, LOP, Paid
     expect(array_slice($row, 3, 7)[5])->toBe('A')  // Saturday
-        ->and($totals[1])->toBe(6)                 // absent
-        ->and($totals[5])->toBe(1);                // weekly offs
+        ->and($totals[1])->toBe(5.0)               // absent Tue–Sat
+        ->and($totals[6])->toBe(1);                // weekly offs
 
     setWeeklyOffs([Carbon::SATURDAY, Carbon::SUNDAY]);
     $row = $builder->build('register', juneWeek())['rows'][0];
-    $totals = array_slice($row, -8);
+    $totals = array_slice($row, -10);
     expect(array_slice($row, 3, 7)[5])->toBe('WO') // Saturday
-        ->and($totals[1])->toBe(5)                 // one fewer absence
-        ->and($totals[5])->toBe(2);                // two weekly offs
+        ->and($totals[1])->toBe(4.0)               // one fewer absence
+        ->and($totals[6])->toBe(2);                // two weekly offs
 });
 
-test('payable days rise and LOP falls when Saturday becomes a weekly off', function () {
-    $user = User::factory()->create(['name' => 'Payroll Person']);
-    Employee::factory()->create(['user_id' => $user->id, 'status' => 'active']);
+test('LOP falls and the eligible working days shrink when Saturday becomes a weekly off', function () {
+    weekPersonPresentMonday('Payroll Person');
 
     $builder = app(AttendanceReportBuilder::class);
+    $named = fn () => (function (array $report) {
+        return array_combine($report['columns'], $report['rows'][0]);
+    })($builder->build('payroll_attendance', juneWeek()));
 
     setWeeklyOffs([Carbon::SUNDAY]); // an explicit six-day week
-    $sixDay = $builder->build('payroll_attendance', juneWeek())['rows'][0];
+    $sixDay = $named();
 
     setWeeklyOffs([Carbon::SATURDAY, Carbon::SUNDAY]);
-    $fiveDay = $builder->build('payroll_attendance', juneWeek())['rows'][0];
+    $fiveDay = $named();
 
-    // Columns: … Absent(9), LOP(10), Payable(11)
-    expect($fiveDay[11])->toBeGreaterThan($sixDay[11])  // more payable days
-        ->and($fiveDay[10])->toBeLessThan($sixDay[10]); // less loss of pay
+    // Paid on actual eligible working days (Phase 4): Saturday stops being one.
+    expect([$sixDay['Eligible Working Days'], $fiveDay['Eligible Working Days']])->toBe([6, 5])
+        ->and($fiveDay['LOP Days'])->toBeLessThan($sixDay['LOP Days'])   // less loss of pay
+        ->and([$sixDay['Paid Days'], $fiveDay['Paid Days']])->toBe([1.0, 1.0]);
 
-    // Every calendar day is still accounted for under both configurations.
-    expect($sixDay[10] + $sixDay[11])->toBe(7.0)
-        ->and($fiveDay[10] + $fiveDay[11])->toBe(7.0);
+    // Every eligible working day is either paid or lost, under both configurations.
+    expect($sixDay['LOP Days'] + $sixDay['Paid Days'])->toBe(6.0)
+        ->and($fiveDay['LOP Days'] + $fiveDay['Paid Days'])->toBe(5.0);
 });
 
 test('the settings screen saves the chosen working week and rejects an all-off week', function () {

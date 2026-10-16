@@ -13,6 +13,8 @@ use App\Models\OvertimeRecord;
 use App\Models\Payroll;
 use App\Models\SalaryComponent;
 use App\Services\Payroll\PayableArrears;
+use App\Services\Payroll\PayableDaysService;
+use App\Services\Payroll\PayslipDayAdjustmentService;
 use App\Services\Payroll\SalaryCycleTransitionService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -20,10 +22,11 @@ use Illuminate\Support\Collection;
 class SalaryCalculationService
 {
     public function __construct(
-        protected LwpService $lwpService,
         protected IncentiveService $incentiveService,
         protected ReimbursementService $reimbursementService,
         protected StatutoryService $statutoryService,
+        protected PayableDaysService $payableDays,
+        protected PayslipDayAdjustmentService $dayAdjustments,
     ) {}
 
     public function calculate(
@@ -163,6 +166,11 @@ class SalaryCalculationService
                 ->whereNull('payslip_id')
                 ->whereDate('work_date', '<=', $cycleEnd->toDateString())
                 ->whereHas('otRequest', fn ($q) => $q->where('status', 'approved'))
+                // Payable OT needs measured hours: a record still at 0 (the
+                // day's checkout missing) waits for genuine attendance or an
+                // approved regularisation and is carried to a later run,
+                // instead of being linked, marked paid at 0 and lost.
+                ->where('ot_hours', '>', 0)
                 ->get();
 
             $otAmount = (float) $otRecords->sum('ot_amount');
@@ -257,25 +265,60 @@ class SalaryCalculationService
             }
         }
 
-        // ── Step 10: LWP deduction ────────────────────────────────────────────
+        // ── Step 10: Unpaid days (PayableDaysService — Phase 4 policy) ───────
+        // Paid on the actual eligible working days of the period: a joiner or
+        // leaver is prorated, approved unpaid leave, the uncovered excess of
+        // paid leave and final unexplained absence are LOP, at
+        // earnings ÷ eligible working days per day. In the first month after
+        // a salary-cycle move, LOP counts from the day after the old cycle's
+        // last paid day — none twice, none missed.
         $lwpDeduction = 0.0;
-        // In the first month after a salary-cycle move, absences count from
-        // the day after the old cycle's last paid day — none twice, none missed.
         $absenceStart = SalaryCycleTransitionService::absenceWindowStart($employee, Carbon::parse($cycleStart), $monthLabel);
-        $lwp = $this->lwpService->calculate($employee, $absenceStart, $cycleEnd, $earningsSum);
+        $payable = $this->payableDays->forPeriod($employee, $cycleStart, $cycleEnd, $absenceStart);
+        $base = $payable['eligible_working_days'];
+        $dailyRate = $base > 0 ? $earningsSum / $base : 0.0;
 
-        if ($lwp['deduction'] > 0) {
-            $lwpDeduction = (float) $lwp['deduction'];
-            $deductionsSum += $lwpDeduction;
+        $unpaidLines = [];
+        if ($payable['not_employed_working_days'] > 0) {
+            $unpaidLines[] = ['Not employed — '.$payable['not_employed_working_days'].' of '.$base.' working days', $payable['not_employed_working_days']];
+        }
+        if ($payable['lop_days'] > 0) {
+            $unpaidLines[] = ['LWP ('.$this->dayCount($payable['lop_days']).')', $payable['lop_days']];
+        }
+        foreach ($unpaidLines as [$name, $days]) {
+            $amount = round(min($dailyRate * $days, max(0.0, $earningsSum - $lwpDeduction)), 2);
+            if ($amount <= 0) {
+                continue;
+            }
+            $lwpDeduction += $amount;
+            $deductionItems[] = ['name' => $name, 'amount' => $amount, 'type' => 'deduction'];
+        }
+        $deductionsSum += $lwpDeduction;
 
-            foreach ($lwp['items'] as $item) {
+        // ── Step 11: Late corrections to closed payslips (arrears / refunds) ──
+        $adjustments = $this->dayAdjustments->forRun($employee, $payroll, Carbon::parse($cycleStart));
+        $adjustmentEarnings = 0.0;
+        foreach ($adjustments['items'] as $item) {
+            if ($item['type'] === 'deduction') {
                 $deductionItems[] = $item;
+                $deductionsSum += $item['amount'];
+            } else {
+                $earningItems[] = $item;
+                $adjustmentEarnings += $item['amount'];
             }
         }
 
+        $snapshot = collect($payable)->except('days')->all() + [
+            'lop_from' => Carbon::parse($absenceStart)->toDateString(),
+            'earnings_base' => round($earningsSum, 2),
+            'daily_rate' => round($dailyRate, 4),
+            'payable_ot_hours' => round((float) $otRecords->sum('ot_hours'), 2),
+            'generated_at' => now()->toDateTimeString(),
+        ];
+
         // ── Final aggregates ──────────────────────────────────────────────────
         $gross = $earningsSum + $otAmount + $incentiveAmount + $reimbursementAmount
-            + $encashmentAmount + $exitSettlementAmount;
+            + $encashmentAmount + $exitSettlementAmount + $adjustmentEarnings;
         $net = $gross - $deductionsSum;
 
         return new SalaryCalculationResult(
@@ -292,7 +335,17 @@ class SalaryCalculationService
             deductionItems: $deductionItems,
             employerContributionItems: $employerContributionItems,
             otRecords: $otRecords,
+            payableSnapshot: $snapshot,
+            dayAdjustmentRows: $adjustments['rows'],
         );
+    }
+
+    /** "1 day", "2.5 days". */
+    private function dayCount(float $days): string
+    {
+        $formatted = rtrim(rtrim(number_format($days, 2, '.', ''), '0'), '.');
+
+        return $formatted.' '.($days == 1.0 ? 'day' : 'days');
     }
 
     /**

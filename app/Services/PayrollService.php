@@ -24,6 +24,7 @@ use App\Notifications\PayrollApprovalNotification;
 use App\Notifications\PayslipGeneratedNotification;
 use App\Notifications\SalaryStructureAssignedNotification;
 use App\Services\Notifications\NotificationRecipients;
+use App\Services\Payroll\PayslipDayAdjustmentService;
 use App\Services\Payroll\SalaryCycleTransitionService;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Carbon;
@@ -170,8 +171,10 @@ class PayrollService
                     'gross_salary' => $result->gross,
                     'total_deductions' => $result->totalDeductions,
                     'net_salary' => $result->net,
+                    'payable_snapshot' => $result->payableSnapshot,
                     'status' => 'draft',
                 ]);
+                app(PayslipDayAdjustmentService::class)->persist($employee, $payroll, $payslip, $result->dayAdjustmentRows);
 
                 $allItems = array_merge(
                     $result->earningItems,
@@ -661,8 +664,10 @@ class PayrollService
                 'gross_salary' => $result->gross,
                 'total_deductions' => $result->totalDeductions,
                 'net_salary' => $result->net,
+                'payable_snapshot' => $result->payableSnapshot,
                 'status' => 'draft',
             ]);
+            app(PayslipDayAdjustmentService::class)->persist($employee, $payroll, $payslip, $result->dayAdjustmentRows);
 
             foreach (array_merge($result->earningItems, $result->deductionItems, $result->employerContributionItems) as $item) {
                 $payslip->items()->create($item);

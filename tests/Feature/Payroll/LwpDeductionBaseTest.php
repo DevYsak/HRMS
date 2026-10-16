@@ -23,7 +23,7 @@ function lwpEmployeeWithIncrement(): Employee
 {
     $user = User::factory()->create();
     $employee = Employee::factory()->create([
-        'user_id' => $user->id, 'status' => 'active', 'salary_cycle' => 'cycle_a',
+        'user_id' => $user->id, 'status' => 'active', 'salary_cycle' => 'cycle_a', 'joining_date' => '2024-01-08',
     ]);
 
     $basic = SalaryComponent::create([
@@ -78,9 +78,11 @@ test('LWP after an increment deducts one current day, not a double-counted one',
         $payroll,
     );
 
-    // Engine pays the post-increment 52,000. One LWP day at 52000/26 = 2,000.
-    // The old double-counted base (26000 + 52000 = 78000) would deduct 3,000.
+    // Engine pays the post-increment 52,000. One LWP day at 52,000 ÷ 23
+    // eligible working days in July 2026 (Phase 4: actual working days, not a
+    // fixed 26) = 2,260.87. The old double-counted base (26000 + 52000 =
+    // 78000) would deduct 3,391.30.
     expect($result->gross)->toBe(52000.0)
-        ->and($result->totalDeductions)->toBe(2000.0)
-        ->and($result->net)->toBe(50000.0);
+        ->and($result->totalDeductions)->toBe(2260.87)
+        ->and($result->net)->toBe(49739.13);
 });

@@ -20,7 +20,9 @@ function reportEmployee(string $name = 'Report Person'): Employee
 {
     $user = User::factory()->create(['name' => $name]);
 
-    return Employee::factory()->create(['user_id' => $user->id, 'status' => 'active']);
+    // A fixed joining date: the register now marks days before joining as
+    // not employed (PayableDaysService), so a random one would be flaky.
+    return Employee::factory()->create(['user_id' => $user->id, 'status' => 'active', 'joining_date' => '2024-01-08']);
 }
 
 function markAttendance(Employee $employee, string $date, array $attributes = []): Attendance
@@ -47,11 +49,12 @@ test('the register produces one column per day plus the trailing totals', functi
 
     $report = app(AttendanceReportBuilder::class)->build('register', junWeek());
 
-    // 3 identity columns + 7 days + 8 total columns.
-    expect($report['columns'])->toHaveCount(3 + 7 + 8)
+    // 3 identity columns + 7 days + 10 total columns (Phase 4: LOP and paid
+    // days from PayableDaysService, unpaid leave in its own column).
+    expect($report['columns'])->toHaveCount(3 + 7 + 10)
         ->and($report['title'])->toBe('Monthly Attendance Register')
         ->and(array_slice($report['columns'], 0, 3))->toBe(['Emp ID', 'Employee', 'Department'])
-        ->and(array_slice($report['columns'], -8))->toBe(['P', 'A', 'L', 'HD', 'LV', 'WO', 'H', 'Payable Days']);
+        ->and(array_slice($report['columns'], -10))->toBe(['P', 'A', 'L', 'HD', 'LV', 'UL', 'WO', 'H', 'LOP Days', 'Paid Days']);
 
     expect($report['rows'][0])->toHaveCount(count($report['columns']));
 });
@@ -79,11 +82,13 @@ test('the register classifies each day with the code HR uses', function () {
     $report = app(AttendanceReportBuilder::class)->build('register', junWeek());
     $row = $report['rows'][0];
 
-    // Day cells sit between the 3 identity columns and the 8 totals.
+    // Day cells sit between the 3 identity columns and the 10 totals.
     expect(array_slice($row, 3, 7))->toBe(['P', 'L', 'HD', 'A', 'LV', 'A', 'WO']);
 
-    // Totals: P counts late as present, so 1 + 1 = 2.
-    expect(array_slice($row, -8))->toBe([2, 2, 1, 1, 1, 1, 0, 4.5]);
+    // Totals: P counts late as present (1 + 1 = 2); the half day loses half a
+    // day, so A = 0.5 + 1 + 1. Paid days are working days (6) minus LOP —
+    // the same figures the payroll engine pays on.
+    expect(array_slice($row, -10))->toBe([2, 2.5, 1, 1, 1.0, 0.0, 1, 0, 2.5, 3.5]);
 });
 
 test('the payroll attendance report separates payable days from loss of pay', function () {
@@ -106,22 +111,27 @@ test('the payroll attendance report separates payable days from loss of pay', fu
     $report = app(AttendanceReportBuilder::class)->build('payroll_attendance', junWeek());
     $row = $report['rows'][0];
 
-    // Calendar, Present, Half, Leave, WeeklyOff, Holiday, Absent, LOP, Payable
-    expect(array_slice($row, 3))->toBe([7, 2, 1, 1, 1, 0, 2, 2.5, 4.5]);
+    $named = array_combine($report['columns'], $row);
+    expect($named)->toMatchArray([
+        'Eligible Working Days' => 6, 'Not Employed' => 0, 'Present' => 2.5, 'Paid Leave' => 1.0, 'Unpaid Leave' => 0.0,
+        'Absent (LOP)' => 2.5, 'Pending (not deducted)' => 0.0, 'Weekly Offs' => 1, 'Holidays' => 0, 'LOP Days' => 2.5, 'Paid Days' => 3.5,
+    ]);
 
-    // Payable + LOP must account for every calendar day.
-    expect($row[11] + $row[10])->toBe(7.0);
+    // Paid days + LOP account for every eligible working day.
+    expect($named['Paid Days'] + $named['LOP Days'])->toBe(6.0);
 });
 
 test('a public holiday is paid and never counted as an absence', function () {
     reportEmployee();
-    PublicHoliday::create(['date' => '2026-06-04', 'name' => 'Test Holiday', 'country' => 'IN']);
+    // On the employee's own calendar (UK by default) — another calendar's
+    // holiday is not theirs (HolidayResolver).
+    PublicHoliday::create(['date' => '2026-06-04', 'name' => 'Test Holiday', 'country' => 'UK']);
 
     $report = app(AttendanceReportBuilder::class)->build('register', junWeek());
     $row = $report['rows'][0];
 
     expect(array_slice($row, 3, 7)[3])->toBe('H');       // Thursday is the holiday
-    expect(array_slice($row, -8)[6])->toBe(1);           // H total
+    expect(array_slice($row, -10)[7])->toBe(1);          // H total
 });
 
 test('the leave summary rolls balances up per employee and leave type, through the calculator and the leave year', function () {

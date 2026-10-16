@@ -1,8 +1,4 @@
 @php
-    use App\Models\Attendance;
-    use App\Models\LeaveRequest;
-    use App\Models\OvertimeRecord;
-    use App\Models\PublicHoliday;
     use App\Support\IndianCurrency;
     use Carbon\Carbon;
 
@@ -25,46 +21,22 @@
     }
 
     // ── Attendance ──────────────────────────────────────────────────────────
-    // Weekly offs (Saturday + Sunday) come from the shared working-day
-    // resolver; work on one is not a scheduled day and never offsets LWP.
-    $workingDayResolver = app(\App\Services\Attendance\WorkingDayResolver::class);
-    $totalDays = (int) ($from->diffInDays($to) + 1);
-    $weekOff = 0;
-    for ($d = $from->copy(); $d->lte($to); $d->addDay()) {
-        if ($workingDayResolver->isWeeklyOff($d)) $weekOff++;
-    }
-    $workingDays = $totalDays - $weekOff;
-
-    $presentDays = (int) Attendance::where('employee_id', $employee->id)
-        ->whereBetween('date', [$from->toDateString(), $to->toDateString()])
-        ->whereNotNull('check_in')->get(['date'])
-        ->reject(fn ($a) => $workingDayResolver->isWeeklyOff($a->date))->count();
-
-    $leaveDays = 0;
-    LeaveRequest::where('employee_id', $employee->id)
-        ->where('status', 'approved')
-        ->where('start_date', '<=', $to->toDateString())
-        ->where('end_date', '>=', $from->toDateString())
-        ->get()->each(function ($lr) use ($from, $to, &$leaveDays, $workingDayResolver) {
-            $s = Carbon::parse($lr->start_date)->max($from);
-            $e = Carbon::parse($lr->end_date)->min($to);
-            for ($c = $s->copy(); $c->lte($e); $c->addDay()) {
-                if (! $workingDayResolver->isWeeklyOff($c)) $leaveDays++;
-            }
-        });
-
-    $holidays = (int) PublicHoliday::whereBetween('date', [$from->toDateString(), $to->toDateString()])
-        ->where('is_active', true)->count();
-
-    $otHours = (float) OvertimeRecord::where('employee_id', $employee->id)
-        ->whereBetween('work_date', [$from->toDateString(), $to->toDateString()])
-        ->sum('ot_hours');
-
-    // LWP only means something once attendance is actually tracked.
-    $lwp = ($presentDays > 0 || $leaveDays > 0)
-        ? max(0, $workingDays - $presentDays - $leaveDays)
-        : 0;
-    $paidDays = max(0, $totalDays - $lwp);
+    // The figures this payslip was calculated from, frozen when it was
+    // generated (PayableDaysService, Phase 4): later attendance, leave or
+    // settings edits never change an issued payslip — corrections arrive as
+    // adjustments in a later run. Payslips generated before snapshots
+    // existed show no day figures rather than numbers computed today.
+    $snap = $payslip->payable_snapshot;
+    $num = fn ($v) => $v === null ? '—' : rtrim(rtrim(number_format((float) $v, 2, '.', ''), '0'), '.');
+    $totalDays = $snap['period_days'] ?? (int) ($from->diffInDays($to) + 1);
+    $workingDays = $snap ? $num($snap['working_days']) : '—';
+    $presentDays = $snap ? $num($snap['present_days']) : '—';
+    $leaveDays = $snap ? $num($snap['paid_leave_days']) : '—';
+    $weekOff = $snap ? $num($snap['weekly_off_days']) : '—';
+    $holidays = $snap ? $num($snap['holiday_days']) : '—';
+    $lwp = $snap ? $num($snap['lop_days']) : '—';
+    $paidDays = $snap ? $num($snap['paid_days']) : '—';
+    $otHours = (float) ($snap['payable_ot_hours'] ?? 0);
 
     // ── Salary lines ────────────────────────────────────────────────────────
     $earnings = $payslip->items->where('type', 'earning')->values();
@@ -196,10 +168,10 @@
             <td><span class="lbl">Paid Leave</span><span class="val">{{ $leaveDays }}</span></td>
             <td><span class="lbl">Week Off</span><span class="val">{{ $weekOff }}</span></td>
             <td><span class="lbl">Holidays</span><span class="val">{{ $holidays }}</span></td>
-            <td><span class="lbl">LWP</span><span class="val">{{ $lwp }}</span></td>
+            <td><span class="lbl">LOP Days</span><span class="val">{{ $lwp }}</span></td>
             <td class="hot"><span class="lbl">Paid Days</span><span class="val">{{ $paidDays }}</span></td>
             @if($otHours > 0)
-                <td><span class="lbl">Overtime (Hrs)</span><span class="val">{{ rtrim(rtrim(number_format($otHours, 2), '0'), '.') }}</span></td>
+                <td><span class="lbl">Payable OT (Hrs)</span><span class="val">{{ rtrim(rtrim(number_format($otHours, 2), '0'), '.') }}</span></td>
             @endif
         </tr>
     </table>
