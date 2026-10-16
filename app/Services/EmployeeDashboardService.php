@@ -16,7 +16,6 @@ use App\Models\LeaveType;
 use App\Models\OnboardingTask;
 use App\Models\OtRequest;
 use App\Models\Payslip;
-use App\Models\PerformanceCycle;
 use App\Models\PerformanceReview;
 use App\Models\PublicHoliday;
 use App\Models\ReviewGoal;
@@ -35,6 +34,7 @@ use App\Services\Leave\EmployeeLeaveOverviewService;
 use App\Services\Leave\LeaveBalanceCalculator;
 use App\Services\Leave\LeaveManagementService;
 use App\Services\Leave\LeaveYearResolver;
+use App\Services\Performance\PerformanceStatusService;
 use App\Services\Profile\ProfileCompletionService;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
@@ -579,23 +579,22 @@ class EmployeeDashboardService
     /** @return array<string, mixed> */
     private function performance(Employee $employee): array
     {
-        $cycle = PerformanceCycle::whereIn('status', ['active', 'completed', 'locked'])
-            ->latest('start_date')
-            ->first();
+        // PerformanceStatusService decides the current cycle and the review
+        // state — the same ones Team View, Employee 360, reports and AI show (P3-06).
+        $statuses = app(PerformanceStatusService::class);
+        $cycle = $statuses->currentCycle();
 
         $scorecard = $cycle
             ? EmployeeScorecard::where('employee_id', $employee->id)->where('performance_cycle_id', $cycle->id)->first()
             : null;
 
         $review = $cycle
-            ? PerformanceReview::where('employee_id', $employee->id)->where('performance_cycle_id', $cycle->id)->latest('id')->first()
+            ? PerformanceReview::with(['participants', 'performanceCycle'])->where('employee_id', $employee->id)->where('performance_cycle_id', $cycle->id)->latest('id')->first()
             : null;
+        $status = $review ? $statuses->statusFor($review) : null;
 
-        $pendingSelf = PerformanceReview::with('cycle:id,name')
-            ->where('employee_id', $employee->id)
-            ->where('type', 'self')
-            ->where('status', 'pending')
-            ->get();
+        // Self-assessment due = the current review is waiting on the employee.
+        $pendingSelf = $status !== null && $status['state'] === PerformanceStatusService::SELF_PENDING ? collect([$review]) : collect();
 
         $goals = ReviewGoal::where('employee_id', $employee->id)
             ->selectRaw('COUNT(*) as total, SUM(CASE WHEN is_completed = 1 THEN 1 ELSE 0 END) as completed')
@@ -607,7 +606,8 @@ class EmployeeDashboardService
             'cycle' => $cycle ? ['name' => $cycle->name, 'status' => Str::headline((string) $cycle->status)] : null,
             'score' => is_numeric($score) ? round((float) $score, 1) : null,
             'grade' => $scorecard?->grade ?? $review?->grade,
-            'review_status' => $review ? Str::headline((string) $review->status) : null,
+            'review_status' => $status['label'] ?? ($cycle ? PerformanceStatusService::LABELS[PerformanceStatusService::NOT_STARTED] : null),
+            'review_overdue' => (bool) ($status['overdue'] ?? false),
             'goals_total' => (int) ($goals->total ?? 0),
             'goals_completed' => (int) ($goals->completed ?? 0),
             'pending_self_reviews' => $pendingSelf,
@@ -747,7 +747,7 @@ class EmployeeDashboardService
             $alerts->push([
                 'icon' => 'star',
                 'title' => 'Self-assessment due',
-                'status' => $review->cycle?->name ?? 'Performance review',
+                'status' => $review->performanceCycle?->name ?? 'Performance review',
                 'progress' => null,
                 'url' => route('performance.my'),
             ]);

@@ -21,6 +21,7 @@ use App\Services\Attendance\AttendanceCalculator;
 use App\Services\Attendance\AttendanceWindowService;
 use App\Services\AttendanceReportBuilder;
 use App\Services\OvertimeService;
+use App\Services\Performance\PerformanceStatusService;
 use App\Services\Security\PeopleScope;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
@@ -226,7 +227,11 @@ class ReportController extends Controller
 
         return response()->streamDownload(function () use ($rows) {
             $handle = fopen('php://output', 'w');
-            fputcsv($handle, ['Employee ID', 'Employee Name', 'Department', 'Designation', 'Cycle', 'Status', 'Final Score', 'Grade', 'Submitted At']);
+            // Status = the state every screen shows (PerformanceStatusService:
+            // Not Started / Self Review Pending / Manager Review Pending /
+            // Completed / Overdue); the workflow step is its own column (P3-06).
+            $statuses = app(PerformanceStatusService::class);
+            fputcsv($handle, ['Employee ID', 'Employee Name', 'Department', 'Designation', 'Cycle', 'Status', 'Workflow Step', 'Final Score', 'Grade', 'Submitted At']);
             foreach ($rows as $r) {
                 fputcsv($handle, [
                     $r->employee->employee_id ?? '',
@@ -234,6 +239,7 @@ class ReportController extends Controller
                     $r->employee->department?->name ?? '',
                     $r->employee->jobTitle?->name ?? '',
                     $r->performanceCycle?->name ?? '',
+                    $statuses->statusFor($r)['label'],
                     $r->statusLabel(),
                     $r->final_score ?? '',
                     $r->gradeLabel(),
