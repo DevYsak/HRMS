@@ -72,7 +72,7 @@
                         <div><dt class="text-xs text-zinc-500">Active</dt><dd class="text-xl font-bold tabular-nums">{{ $people['active'] }}</dd></div>
                         <div><dt class="text-xs text-zinc-500">Probation</dt><dd class="text-xl font-bold tabular-nums">{{ $people['probation'] }}</dd></div>
                         <div><dt class="text-xs text-zinc-500">Notice period</dt><dd class="text-xl font-bold tabular-nums">{{ $people['notice_period'] }}</dd></div>
-                        <div><dt class="text-xs text-zinc-500">Approved OT (month)</dt><dd class="text-xl font-bold tabular-nums">{{ $otHours }}h</dd></div>
+                        <div><dt class="text-xs text-zinc-500">Payable OT (month)</dt><dd class="text-xl font-bold tabular-nums">{{ $otHours }}h</dd></div>
                     </dl>
                 </x-pulse.card>
             </x-pulse.grid>

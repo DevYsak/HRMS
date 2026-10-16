@@ -42,7 +42,7 @@
     {{-- Row 2 — what is waiting for this viewer, and reviews --}}
     <div class="grid grid-cols-2 gap-3 lg:grid-cols-3 2xl:grid-cols-6">
         <x-pulse.kpi-card label="Pending Leave" :value="$ap['leave'] ?? 0" icon="calendar" :href="$link('time-off.employees')" sub="your decision" />
-        <x-pulse.kpi-card label="Pending OT" :value="$ap['overtime'] ?? 0" icon="bolt" accent="amber" :href="$link('overtime.manage')" :sub="$overview['ot_hours'].'h approved this month'" />
+        <x-pulse.kpi-card label="Pending OT" :value="$ap['overtime'] ?? 0" icon="bolt" accent="amber" :href="$link('overtime.manage')" :sub="$overview['ot_hours'].'h payable OT this month'" />
         <x-pulse.kpi-card label="Regularisation" :value="$ap['regularisation'] ?? 0" icon="pencil-square" :href="$link('attendance.command-center')" sub="HR review" />
         <x-pulse.kpi-card label="WFH Pending" :value="$ap['wfh'] ?? 0" icon="home" accent="blue" :href="$link('wfh.manage')" sub="your decision" />
         <x-pulse.kpi-card label="Reviews Due" :value="$r['pending']" icon="star" accent="indigo" :href="$link('performance.kpi-management')" :sub="$r['overdue'].' overdue'" />

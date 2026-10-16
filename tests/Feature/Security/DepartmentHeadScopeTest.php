@@ -277,8 +277,11 @@ test('her dashboard shows UK Sales numbers only — the same people every other 
     dhsLeave($this->mktStaff);
     dhsOt($this->ukStaff);
     dhsOt($this->mktStaff);
-    OvertimeRecord::create(['employee_id' => $this->ukStaff->id, 'work_date' => '2026-10-10', 'total_hours_worked' => 11, 'standard_hours' => 9, 'ot_hours' => 2, 'rate_per_hour' => 100, 'ot_amount' => 200, 'is_paid' => false]);
-    OvertimeRecord::create(['employee_id' => $this->mktStaff->id, 'work_date' => '2026-10-10', 'total_hours_worked' => 12, 'standard_hours' => 9, 'ot_hours' => 3, 'rate_per_hour' => 100, 'ot_amount' => 300, 'is_paid' => false]);
+    // Payable OT is approved, punch-measured OT: each record belongs to an approved request (P3-03).
+    foreach ([[$this->ukStaff, 2, 200], [$this->mktStaff, 3, 300]] as [$staff, $hours, $amount]) {
+        $request = OtRequest::create(['employee_id' => $staff->id, 'work_date' => '2026-10-10', 'start_time' => '18:00', 'end_time' => '21:00', 'requested_hours' => $hours, 'reason' => 'Release', 'status' => 'approved']);
+        OvertimeRecord::create(['employee_id' => $staff->id, 'ot_request_id' => $request->id, 'work_date' => '2026-10-10', 'total_hours_worked' => 9 + $hours, 'standard_hours' => 9, 'ot_hours' => $hours, 'rate_per_hour' => 100, 'ot_amount' => $amount, 'is_paid' => false]);
+    }
     LeaveRequest::create(['employee_id' => $this->ukStaff->id, 'leave_type_id' => LeaveType::first()->id, 'start_date' => '2026-10-15', 'end_date' => '2026-10-15', 'days' => 1, 'reason' => 'x', 'status' => 'approved', 'requested_leave_status' => 'paid']);
     LeaveRequest::create(['employee_id' => $this->mktStaff->id, 'leave_type_id' => LeaveType::first()->id, 'start_date' => '2026-10-15', 'end_date' => '2026-10-15', 'days' => 1, 'reason' => 'x', 'status' => 'approved', 'requested_leave_status' => 'paid']);
 
@@ -320,7 +323,7 @@ test('the dashboard labels she is promised are on the page', function () {
         ->assertSee('Team Attendance Trend')
         ->assertSee('Needs Attention')
         ->assertSee('Leave This Week')
-        ->assertSee('Team OT');
+        ->assertSee('Payable OT');
 });
 
 // ── Defaults she must not have ─────────────────────────────────────────────

@@ -8,6 +8,7 @@ use App\Models\OvertimeRecord;
 use App\Models\User;
 use App\Services\Approvals\ApprovalQueueService;
 use App\Services\Attendance\TodayStatusService;
+use App\Services\OvertimeService;
 use App\Services\Performance\PerformanceStatusService;
 use App\Services\Profile\ProfileCompletionService;
 use App\Services\Security\PeopleScope;
@@ -209,9 +210,8 @@ class PeopleOperationsService
             return 0.0;
         }
 
-        return round((float) OvertimeRecord::whereIn('employee_id', $employeeIds)
-            ->whereBetween('work_date', [now()->startOfMonth()->toDateString(), now()->endOfMonth()->toDateString()])
-            ->sum('ot_hours'), 1);
+        // Payable OT: approved, measured from punches (OvertimeService, P3-03).
+        return round(app(OvertimeService::class)->hours($employeeIds, now()->startOfMonth(), now()->endOfMonth())['payable_hours'], 1);
     }
 
     /** @return list<string> keys of DATA_CHECKS that fail for this employee */

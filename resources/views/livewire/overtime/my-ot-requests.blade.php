@@ -27,7 +27,7 @@
                 ['key' => 'pending', 'label' => 'Pending', 'value' => $summary['pending'], 'hint' => 'awaiting a decision', 'tone' => 'text-amber-600'],
                 ['key' => 'approved', 'label' => 'Approved', 'value' => $summary['approved'], 'hint' => 'all time', 'tone' => 'text-emerald-600'],
                 ['key' => 'rejected', 'label' => 'Rejected', 'value' => $summary['rejected'], 'hint' => 'all time', 'tone' => 'text-rose-600'],
-                ['key' => 'hours', 'label' => 'Approved OT Hours This Month', 'value' => $hours($summary['approved_hours_month']), 'hint' => now()->format('F Y'), 'tone' => 'text-zinc-900 dark:text-white'],
+                ['key' => 'hours', 'label' => 'Payable OT This Month', 'value' => $hours($summary['approved_hours_month']), 'hint' => now()->format('F Y'), 'tone' => 'text-zinc-900 dark:text-white'],
             ] as $card)
                 <div class="min-w-0 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm sm:p-5 dark:border-zinc-800 dark:bg-zinc-900" data-ot-card="{{ $card['key'] }}">
                     <p class="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 [overflow-wrap:anywhere]">{{ $card['label'] }}</p>

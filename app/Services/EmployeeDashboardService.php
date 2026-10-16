@@ -182,10 +182,9 @@ class EmployeeDashboardService
             + WfhRequest::where('employee_id', $employee->id)->pending()->count()
             + AttendanceRegularisation::where('employee_id', $employee->id)->pending()->count();
 
-        $otHours = (float) OtRequest::where('employee_id', $employee->id)
-            ->where('status', 'approved')
-            ->whereBetween('work_date', [$monthStart->toDateString(), $monthEnd->toDateString()])
-            ->sum('requested_hours');
+        // Payable OT (approved, measured from punches) — OvertimeService, the
+        // figure My Overtime and Employee 360 show (P3-03); not requested hours.
+        $otHours = app(OvertimeService::class)->hours([$employee->id], $monthStart, $monthEnd)['payable_hours'];
 
         // ── Payroll: only for an account allowed to see payslips ───────────
         // Same statuses My Payslips lists, so the card can never surface a
@@ -793,8 +792,8 @@ class EmployeeDashboardService
                 'href' => route('attendance.my'),
             ],
             [
-                'label' => 'OT', 'icon' => 'bolt', 'value' => self::formatDays($otHours).'h',
-                'sub' => 'Approved this month', 'tone' => 'neutral',
+                'label' => 'Payable OT', 'icon' => 'bolt', 'value' => self::formatDays($otHours).'h',
+                'sub' => 'Approved, measured from punches — this month', 'tone' => 'neutral',
                 'href' => route('overtime.my'),
             ],
             [

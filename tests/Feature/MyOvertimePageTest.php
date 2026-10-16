@@ -37,7 +37,7 @@ test('the summary cards use the canonical OT summary', function () {
     Livewire::actingAs($user)->test(MyOtRequests::class)
         ->assertSee('My Overtime')
         ->assertSee('Track requests and approved overtime.')
-        ->assertSee('Approved OT Hours This Month')
+        ->assertSee('Payable OT This Month')
         ->assertSeeHtml('data-ot-card="pending"')
         // Actual approved hours come from the OvertimeRecord, not the 3h requested.
         ->assertSee('2.5h')

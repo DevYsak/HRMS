@@ -75,6 +75,6 @@
     <div class="mt-auto grid grid-cols-3 gap-2 border-t border-zinc-100 pt-3 text-xs dark:border-white/[0.06]">
         <div title="{{ $completedDays > 0 ? 'Average of '.$completedDays.' completed '.\Illuminate\Support\Str::plural('day', $completedDays).' (last OUT − first IN)' : 'No completed days yet' }}" data-avg-day><div class="text-zinc-500 dark:text-slate-400">Avg / day</div><div class="mt-0.5 font-bold tabular-nums text-zinc-900 dark:text-white">{{ $avgWorked !== null ? $hm($avgWorked) : '—' }}</div></div>
         <div title="Days this month with an IN and no OUT" data-missing-punches><div class="text-zinc-500 dark:text-slate-400">Missing punches</div><div @class(['mt-0.5 font-bold', 'text-orange-600 dark:text-orange-400' => $missingPunches > 0, 'text-zinc-900 dark:text-white' => $missingPunches === 0])>{{ $missingPunches }}</div></div>
-        <div title="Overtime worked on approved requests, measured from real punches (as on My Overtime)" data-approved-ot><div class="text-zinc-500 dark:text-slate-400">Approved OT</div><div class="mt-0.5 font-bold tabular-nums text-zinc-900 dark:text-white">{{ $fmt($otWorked) }}h</div></div>
+        <div title="Overtime worked on approved requests, measured from real punches (as on My Overtime)" data-approved-ot><div class="text-zinc-500 dark:text-slate-400">Payable OT</div><div class="mt-0.5 font-bold tabular-nums text-zinc-900 dark:text-white">{{ $fmt($otWorked) }}h</div></div>
     </div>
 </section>

@@ -312,13 +312,20 @@ class Employee360Service
     private function overtime(Employee $employee, Carbon $from, Carbon $to, bool $payable): array
     {
         $summary = $this->overtime->rangeSummary($employee, $from, $to);
+        $hours = $this->overtime->hours([$employee->id], $from, $to, withActual: true);
 
         return [
             'pending' => $summary['pending'],
             'approved' => $summary['approved'],
             'rejected' => $summary['rejected'],
-            'requested_hours_approved' => $summary['requested_hours_approved'],
-            'worked_hours' => $summary['ot_hours'],
+            // OvertimeService::LABELS — four figures, never merged (P3-03).
+            'requested_hours' => $hours['requested_hours'],
+            'approved_requested_hours' => $hours['approved_requested_hours'],
+            'actual_worked_hours' => $hours['actual_worked_hours'],
+            'payable_hours' => $hours['payable_hours'],
+            // Earlier names, kept for existing readers.
+            'requested_hours_approved' => $hours['approved_requested_hours'],
+            'worked_hours' => $hours['payable_hours'],
             'payable' => $payable ? ['hours' => $summary['unpaid_hours'], 'amount' => $summary['unpaid_amount'], 'paid_amount' => round($summary['ot_amount'] - $summary['unpaid_amount'], 2)] : null,
         ];
     }
@@ -468,7 +475,7 @@ class Employee360Service
             $cards[] = ['key' => 'warnings', 'label' => 'Active warnings', 'value' => (string) $w['active'], 'hint' => $w['total'].' on record', 'tone' => $w['active'] > 0 ? 'red' : 'zinc'];
         }
         if ($o = $data['overtime']) {
-            $cards[] = ['key' => 'overtime', 'label' => 'Overtime hours', 'value' => self::number($o['worked_hours']), 'hint' => $o['pending'] > 0 ? $o['pending'].' request'.($o['pending'] === 1 ? '' : 's').' pending' : 'Worked, approved', 'tone' => 'orange'];
+            $cards[] = ['key' => 'overtime', 'label' => 'Payable OT', 'value' => self::number($o['payable_hours']), 'hint' => $o['pending'] > 0 ? $o['pending'].' request'.($o['pending'] === 1 ? '' : 's').' pending' : 'Approved, measured from punches', 'tone' => 'orange'];
         }
 
         return $cards;

@@ -320,6 +320,55 @@ class OvertimeService
         ];
     }
 
+    /** The four overtime figures, never merged into one number (P3-03). Label every screen with these. */
+    public const LABELS = [
+        'requested_hours' => 'Requested OT',
+        'approved_requested_hours' => 'Approved requested OT',
+        'actual_worked_hours' => 'Actual worked OT',
+        'payable_hours' => 'Payable OT',
+    ];
+
+    /**
+     * Overtime for a set of employees over a date range (by work date), as
+     * four separate figures:
+     *  - requested_hours: hours asked for on every request not cancelled;
+     *  - approved_requested_hours: hours asked for on approved requests;
+     *  - actual_worked_hours: time beyond the shift from real punches
+     *    (AttendanceCalculator), approved or not — only when $withActual;
+     *  - payable_hours / payable_amount: approved OT measured from punches
+     *    (OvertimeRecord), what payroll pays; unpaid_* is what is still owed.
+     *
+     * @param  iterable<int, int>  $employeeIds
+     * @return array{requested_hours: float, approved_requested_hours: float, actual_worked_hours: ?float, payable_hours: float, payable_amount: float, unpaid_hours: float, unpaid_amount: float}
+     */
+    public function hours(iterable $employeeIds, CarbonInterface $from, CarbonInterface $to, bool $withActual = false): array
+    {
+        $ids = collect($employeeIds)->map(fn ($id) => (int) $id)->unique()->values()->all();
+        $window = [$from->toDateString(), $to->toDateString()];
+
+        $requests = OtRequest::query()->whereIn('employee_id', $ids)->whereBetween('work_date', $window)->where('status', '!=', 'cancelled')->get();
+        $records = OvertimeRecord::query()->whereIn('employee_id', $ids)->whereBetween('work_date', $window)
+            ->whereNotNull('ot_request_id')->whereHas('otRequest', fn ($q) => $q->where('status', 'approved'))
+            ->get(['ot_hours', 'ot_amount', 'is_paid']);
+
+        $actual = null;
+        if ($withActual) {
+            $calculator = app(AttendanceCalculator::class);
+            $actual = round(Attendance::with('employee')->whereIn('employee_id', $ids)->whereBetween('date', $window)->whereNotNull('check_in')->get()
+                ->sum(fn (Attendance $a) => $calculator->forDay($a->employee, $a->date, $a)->beyondShiftMinutes) / 60, 2);
+        }
+
+        return [
+            'requested_hours' => round((float) $requests->sum(fn (OtRequest $r) => $r->resolvedRequestedHours()), 2),
+            'approved_requested_hours' => round((float) $requests->where('status', 'approved')->sum(fn (OtRequest $r) => $r->resolvedRequestedHours()), 2),
+            'actual_worked_hours' => $actual,
+            'payable_hours' => round((float) $records->sum('ot_hours'), 2),
+            'payable_amount' => round((float) $records->sum('ot_amount'), 2),
+            'unpaid_hours' => round((float) $records->where('is_paid', false)->sum('ot_hours'), 2),
+            'unpaid_amount' => round((float) $records->where('is_paid', false)->sum('ot_amount'), 2),
+        ];
+    }
+
     /**
      * OT requests waiting for THIS user's decision: pending, inside the
      * approve_overtime data scope, never their own. Null when the user cannot

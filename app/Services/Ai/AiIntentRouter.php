@@ -238,7 +238,7 @@ class AiIntentRouter
         $content = 'You have '.$this->countPhrase($summary['total'], 'overtime').' in total: '
             .$summary['pending'].' pending, '.$summary['approved'].' approved, '.$summary['rejected'].' rejected'
             .($summary['cancelled'] ? ', '.$summary['cancelled'].' cancelled' : '').'. '
-            .'Approved overtime this month: '.$this->hours($summary['approved_hours_month']).'.';
+            .'Payable overtime this month (approved, measured from punches): '.$this->hours($summary['approved_hours_month']).'.';
 
         return $this->answerWith($content, $user, ['overtime'], 'my_overtime', ownOnly: true);
     }

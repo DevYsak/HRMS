@@ -214,12 +214,12 @@
 
         {{-- ── ROW 4 — OT + REVIEW STATUS ── --}}
         <x-pulse.grid :cols="2" class="items-start">
-            <x-pulse.card :title="'Team OT — '.now()->format('F')" icon="bolt">
+            <x-pulse.card :title="'Payable OT — '.now()->format('F')" icon="bolt">
                 <div class="flex items-baseline gap-3">
                     <div class="text-[26px] font-bold leading-none tabular-nums text-zinc-900 dark:text-white">{{ rtrim(rtrim(number_format($teamOtHours, 2), '0'), '.') }}<span class="ml-1 text-sm font-medium text-zinc-400">h</span></div>
                     <div class="text-base font-semibold tabular-nums text-brand-600">₹{{ number_format($teamOtAmount) }}</div>
                 </div>
-                <p class="mt-1.5 text-xs text-zinc-500">Approved overtime recorded this month.</p>
+                <p class="mt-1.5 text-xs text-zinc-500">Approved overtime measured from punches this month — what payroll pays.</p>
             </x-pulse.card>
 
             <x-pulse.card title="Review Status" icon="star">

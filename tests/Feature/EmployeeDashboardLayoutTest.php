@@ -34,7 +34,7 @@ function edlEmployee(): User
 test('the KPI row is Attendance, Available Leave, Late Arrivals, OT, Pending Requests and Payslip', function () {
     $labels = collect(app(EmployeeDashboardService::class)->build(edlEmployee())['kpis'])->pluck('label')->all();
 
-    expect($labels)->toBe(['Attendance', 'Available Leave', 'Late Arrivals', 'OT', 'Pending Requests', 'Payslip']);
+    expect($labels)->toBe(['Attendance', 'Available Leave', 'Late Arrivals', 'Payable OT', 'Pending Requests', 'Payslip']);
 });
 
 test('with payroll switched off, the payslip tile and card leave no trace', function () {

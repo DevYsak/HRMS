@@ -20,6 +20,7 @@ use App\Models\WarningLetter;
 use App\Services\Attendance\AttendanceCalculator;
 use App\Services\Attendance\AttendanceWindowService;
 use App\Services\AttendanceReportBuilder;
+use App\Services\OvertimeService;
 use App\Services\Security\PeopleScope;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
@@ -190,8 +191,8 @@ class ReportController extends Controller
             $handle = fopen('php://output', 'w');
 
             fputcsv($handle, [
-                'Employee ID', 'Employee Name', 'OT Date', 'OT Hours',
-                'OT Amount', 'Paid',
+                'Employee ID', 'Employee Name', 'OT Date', 'Payable OT Hours',
+                'Payable OT Amount', 'Paid',
             ]);
 
             foreach ($rows as $row) {
@@ -575,7 +576,7 @@ class ReportController extends Controller
 
         return response()->streamDownload(function () use ($rows) {
             $handle = fopen('php://output', 'w');
-            fputcsv($handle, ['Department', 'Employee ID', 'Employee Name', 'Work Date', 'OT Hours', 'Source', 'Status']);
+            fputcsv($handle, ['Department', 'Employee ID', 'Employee Name', 'Work Date', 'Requested OT Hours', 'Source', 'Status']);
 
             foreach ($rows as $row) {
                 fputcsv($handle, [
@@ -610,14 +611,17 @@ class ReportController extends Controller
                 $requests = $employee->otRequests()
                     ->whereBetween('work_date', [$from->toDateString(), $to->toDateString()])
                     ->get();
+                // The four OT figures from OvertimeService (P3-03), each labelled.
+                $hours = app(OvertimeService::class)->hours([$employee->id], $from, $to);
 
                 return [
                     'department' => $employee->department?->name ?? '',
                     'employee_id' => $employee->employee_id ?? '',
                     'name' => $employee->user?->name ?? '',
                     'ot_source' => $employee->ot_tracking_source,
-                    'total_ot_hours' => $requests->sum('requested_hours'),
-                    'approved_hours' => $requests->where('status', 'approved')->sum('requested_hours'),
+                    'requested_hours' => $hours['requested_hours'],
+                    'approved_requested_hours' => $hours['approved_requested_hours'],
+                    'payable_hours' => $hours['payable_hours'],
                     'pending_count' => $requests->where('status', 'pending')->count(),
                     'nexflow_count' => $requests->where('source', 'nexflow')->count(),
                 ];
@@ -627,7 +631,7 @@ class ReportController extends Controller
 
         return response()->streamDownload(function () use ($rows) {
             $handle = fopen('php://output', 'w');
-            fputcsv($handle, ['Department', 'Employee ID', 'Name', 'OT Source', 'Total OT Hours', 'Approved Hours', 'Pending Requests', 'Nexflow Synced']);
+            fputcsv($handle, ['Department', 'Employee ID', 'Name', 'OT Source', 'Requested OT Hours', 'Approved Requested OT Hours', 'Payable OT Hours', 'Pending Requests', 'Nexflow Synced']);
 
             foreach ($rows as $row) {
                 fputcsv($handle, array_values($row));

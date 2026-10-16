@@ -126,5 +126,5 @@ test('the overtime report totals hours and amount', function () {
     ]);
 
     expect($report['rows'])->toHaveCount(1);
-    expect(collect($report['summary'])->firstWhere('label', 'Total OT Hours')['value'])->toBe('2.0h');
+    expect(collect($report['summary'])->firstWhere('label', 'Total Payable OT')['value'])->toBe('2.0h');
 });

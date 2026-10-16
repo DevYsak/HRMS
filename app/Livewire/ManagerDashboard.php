@@ -7,12 +7,12 @@ use App\Models\Employee;
 use App\Models\EmployeeScorecard;
 use App\Models\LeaveRequest;
 use App\Models\OtRequest;
-use App\Models\OvertimeRecord;
 use App\Services\Approvals\ApprovalQueueService;
 use App\Services\Attendance\AttendanceStatusResolver;
 use App\Services\Attendance\TodayStatusService;
 use App\Services\Attendance\WorkingDayResolver;
 use App\Services\LeaveService;
+use App\Services\OvertimeService;
 use App\Services\Performance\PerformanceStatusService;
 use App\Services\Security\PeopleScope;
 use Illuminate\Support\Carbon;
@@ -197,11 +197,10 @@ class ManagerDashboard extends Component
         $trend = $this->attendanceTrend($teamIds, $today);
 
         // --- Team OT this month (spec §5.2: hours and amount) ---
-        $teamOt = OvertimeRecord::whereIn('employee_id', $teamIds)
-            ->whereBetween('work_date', [$today->copy()->startOfMonth()->toDateString(), $today->copy()->endOfMonth()->toDateString()])
-            ->get(['ot_hours', 'ot_amount']);
-        $teamOtHours = round((float) $teamOt->sum('ot_hours'), 2);
-        $teamOtAmount = round((float) $teamOt->sum('ot_amount'), 2);
+        // Payable OT (approved, measured from punches) — OvertimeService, not a table sum (P3-03 / P3-08).
+        $teamOt = app(OvertimeService::class)->hours($teamIds, $today->copy()->startOfMonth(), $today->copy()->endOfMonth());
+        $teamOtHours = $teamOt['payable_hours'];
+        $teamOtAmount = $teamOt['payable_amount'];
 
         // --- Team on leave this week (names and dates only — no reasons) ---
         $weekStart = $today->copy()->startOfWeek();

@@ -110,7 +110,7 @@
         <h2>Overtime</h2>
         <p>
             Pending requests {{ $overtime['pending'] }} · Approved requests {{ $overtime['approved'] }}
-            · Actual OT worked {{ $num($overtime['worked_hours']) }}h (requested on approved: {{ $num($overtime['requested_hours_approved']) }}h)
+            · Payable OT {{ $num($overtime['payable_hours']) }}h · Approved requested OT {{ $num($overtime['approved_requested_hours']) }}h · Actual worked OT {{ $num($overtime['actual_worked_hours'] ?? 0) }}h
             @if($overtime['payable']) · Payable, not yet paid {{ $num($overtime['payable']['hours']) }}h / {{ number_format($overtime['payable']['amount'], 2) }}@endif
         </p>
     @endif

@@ -766,11 +766,11 @@ class AttendanceReportBuilder
         ])->all();
 
         return [
-            'columns' => ['Emp ID', 'Employee', 'Department', 'Date', 'OT Hours', 'Amount', 'Paid'],
+            'columns' => ['Emp ID', 'Employee', 'Department', 'Date', 'Payable OT Hours', 'Payable OT Amount', 'Paid'],
             'rows' => $data,
             'summary' => [
                 ['label' => 'OT Records', 'value' => $rows->count()],
-                ['label' => 'Total OT Hours', 'value' => number_format((float) $rows->sum('ot_hours'), 1).'h'],
+                ['label' => 'Total Payable OT', 'value' => number_format((float) $rows->sum('ot_hours'), 1).'h'],
                 ['label' => 'Total Amount', 'value' => number_format((float) $rows->sum('ot_amount'), 2)],
             ],
         ];
