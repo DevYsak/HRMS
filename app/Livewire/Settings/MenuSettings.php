@@ -4,6 +4,7 @@ namespace App\Livewire\Settings;
 
 use App\Models\MenuSetting;
 use App\Services\EmployeeMenu;
+use Illuminate\Validation\Rule;
 use Livewire\Component;
 
 /**
@@ -46,6 +47,16 @@ class MenuSettings extends Component
     public function save(): void
     {
         $this->authorize('manage-settings');
+
+        // Only the menu's own items, in any order — a crafted request can no
+        // longer invent menu_settings keys or store an over-long label.
+        $known = collect(app(EmployeeMenu::class)->allForAdmin())->pluck('key')->all();
+        $this->validate([
+            'items' => 'array',
+            'items.*.key' => ['required', 'string', Rule::in($known)],
+            'items.*.label' => 'nullable|string|max:40',
+            'items.*.enabled' => 'boolean',
+        ]);
 
         foreach ($this->items as $index => $item) {
             MenuSetting::updateOrCreate(

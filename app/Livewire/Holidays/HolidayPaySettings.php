@@ -4,6 +4,7 @@ namespace App\Livewire\Holidays;
 
 use App\Models\HolidayPaySetting;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
 use Livewire\Component;
 
 /**
@@ -39,6 +40,7 @@ class HolidayPaySettings extends Component
     {
         return [
             'enabledTypes' => 'required|array|min:1',
+            'enabledTypes.*' => ['string', Rule::in(HolidayPaySetting::ALL_PAY_TYPES)],
             'defaultPayType' => 'required|in:overtime,comp_off,double_pay,extra_leave,half_day',
             'doublePayMultiplier' => 'required|numeric|min:1|max:5',
             'compOffDays' => 'required|numeric|min:0|max:5',

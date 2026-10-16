@@ -146,8 +146,18 @@ new #[Title('Company Settings')] class extends Component
 
         $this->validate([
             'name' => 'required|string|max:255',
-            'email' => 'required|email',
-            'website' => 'nullable|url',
+            'email' => 'required|email|max:255',
+            'website' => 'nullable|url|max:255',
+            // Phase 4: every saved field is validated (over-long values were a database error).
+            'phone' => 'nullable|string|max:30',
+            'address' => 'nullable|string|max:500',
+            'city' => 'nullable|string|max:120',
+            'country' => 'nullable|string|max:120',
+            'timezone' => ['required', 'string', 'timezone:all'],
+            'currency' => 'required|string|size:3|alpha',
+            'currency_symbol' => 'required|string|max:5',
+            'primary_color' => ['nullable', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'secondary_color' => ['nullable', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             // Logos: PNG/JPG/WEBP or SVG up to 2 MB. An SVG is rebuilt by
             // SvgSanitizer before it is stored — served from the public disk,
             // a raw SVG could carry script.
