@@ -124,12 +124,14 @@ test('a public holiday is paid and never counted as an absence', function () {
     expect(array_slice($row, -8)[6])->toBe(1);           // H total
 });
 
-test('the leave summary rolls balances up per employee and leave type', function () {
+test('the leave summary rolls balances up per employee and leave type, through the calculator and the leave year', function () {
     $employee = reportEmployee();
     $annual = LeaveType::firstOrCreate(['code' => 'EL'], ['name' => 'Earned Leave', 'category' => 'annual']);
 
+    // June 2026 belongs to leave year 2025/26 (1 July start): its balance row
+    // is keyed 2025, not the calendar year (P3-02).
     LeaveBalance::create([
-        'employee_id' => $employee->id, 'leave_type_id' => $annual->id, 'year' => 2026,
+        'employee_id' => $employee->id, 'leave_type_id' => $annual->id, 'year' => 2025,
         'allocated_days' => 12, 'used_days' => 4, 'carried_forward_days' => 3, 'encashed_days' => 1,
     ]);
 
@@ -138,14 +140,17 @@ test('the leave summary rolls balances up per employee and leave type', function
 
     expect($report['columns'])->toBe([
         'Emp ID', 'Employee', 'Department', 'Leave Type',
-        'Opening', 'Carried Forward', 'Availed', 'Pending', 'Encashed', 'Closing Balance',
+        'Opening / Entitlement', 'Carried Forward', 'Accrued / Earned', 'Adjustments (net)', 'Expired',
+        'Availed', 'Encashed', 'Approved Balance', 'Pending', 'Available to Request',
     ]);
 
-    expect($row[4])->toBe('15.0')   // opening = allocated + carried forward
+    // LeaveBalanceCalculator: the 12 allocated already include the 3 carried
+    // forward, so the opening is 9 and carried forward is counted once.
+    expect($row[4])->toBe('9.0')
         ->and($row[5])->toBe('3.0')
-        ->and($row[6])->toBe('4.0')
-        ->and($row[8])->toBe('1.0')
-        ->and($row[9])->toBe('7.0'); // closing = 12 - 4 - 1
+        ->and($row[9])->toBe('4.0')
+        ->and($row[10])->toBe('1.0')
+        ->and($row[11])->toBe('7.0'); // approved balance = 12 - 4 - 1
 });
 
 test('the comp-off summary only includes comp-off balances', function () {
@@ -153,12 +158,13 @@ test('the comp-off summary only includes comp-off balances', function () {
     $compOff = LeaveType::firstOrCreate(['code' => 'CO'], ['name' => 'Comp Off', 'category' => 'comp_off']);
     $annual = LeaveType::firstOrCreate(['code' => 'EL'], ['name' => 'Earned Leave', 'category' => 'annual']);
 
+    // Leave year 2025/26 (keyed 2025) contains the June 2026 range.
     LeaveBalance::create([
-        'employee_id' => $employee->id, 'leave_type_id' => $compOff->id, 'year' => 2026,
+        'employee_id' => $employee->id, 'leave_type_id' => $compOff->id, 'year' => 2025,
         'allocated_days' => 3, 'used_days' => 1, 'comp_off_credits' => 3,
     ]);
     LeaveBalance::create([
-        'employee_id' => $employee->id, 'leave_type_id' => $annual->id, 'year' => 2026,
+        'employee_id' => $employee->id, 'leave_type_id' => $annual->id, 'year' => 2025,
         'allocated_days' => 12, 'used_days' => 2,
     ]);
 

@@ -8,11 +8,14 @@ use App\Models\AttendanceRegularisation;
 use App\Models\Employee;
 use App\Models\LeaveBalance;
 use App\Models\LeaveRequest;
+use App\Models\LeaveYear;
 use App\Models\OvertimeRecord;
 use App\Models\PublicHoliday;
 use App\Services\Attendance\AttendanceCalculator;
-use App\Services\Attendance\WorkingDayResolver;
 use App\Services\Attendance\AttendanceWindowService;
+use App\Services\Attendance\WorkingDayResolver;
+use App\Services\Leave\LeaveBalanceCalculator;
+use App\Services\Leave\LeaveYearResolver;
 use Carbon\CarbonPeriod;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
@@ -503,76 +506,102 @@ class AttendanceReportBuilder
      */
     protected function leaveSummary(Carbon $from, Carbon $to, array $filters): array
     {
-        $year = (int) $to->year;
+        // The leave year that contains the end of the range (1 July start by
+        // default) — never the calendar year — and every figure from
+        // LeaveBalanceCalculator, the source My Leave, Employee 360 and AI
+        // use: accruals, adjustments and expiry included, carried-forward
+        // counted once (P3-02).
+        $leaveYear = app(LeaveYearResolver::class)->forDate($to);
+        $calculator = app(LeaveBalanceCalculator::class);
         $employeeIds = $this->employeeQuery($filters)->pluck('id');
 
-        $balances = LeaveBalance::with(['employee.user', 'employee.department', 'leaveType'])
-            ->whereIn('employee_id', $employeeIds)
-            ->where('year', $year)
-            ->get()
+        $balances = $this->balancesForLeaveYear($employeeIds, $leaveYear)
             ->sortBy(fn (LeaveBalance $b) => [$b->employee?->user?->name ?? '', $b->leaveType?->name ?? ''])
             ->values();
 
-        $rows = $balances->map(function (LeaveBalance $balance) {
-            $opening = (float) $balance->allocated_days + (float) $balance->carried_forward_days;
+        $rows = $balances->map(function (LeaveBalance $balance) use ($calculator) {
+            $s = $calculator->summary($balance);
 
             return [
                 $balance->employee?->employee_id ?? '—',
                 $balance->employee?->user?->name ?? '—',
                 $balance->employee?->department?->name ?? '—',
                 $balance->leaveType?->name ?? '—',
-                number_format($opening, 1),
-                number_format((float) $balance->carried_forward_days, 1),
-                number_format((float) $balance->used_days, 1),
-                number_format($balance->pendingDays(), 1),
-                number_format((float) ($balance->encashed_days ?? 0), 1),
-                number_format($balance->available(), 1),
+                number_format($s['base'] + $s['opening'], 1),
+                number_format($s['carry_forward'], 1),
+                number_format($s['accrued'] + $s['add_on'], 1),
+                number_format($s['adjustment_credit'] - $s['adjustment_debit'], 1),
+                number_format($s['expired'], 1),
+                number_format($s['used'], 1),
+                number_format($s['encashed'], 1),
+                number_format($s['approved_available'], 1),
+                number_format($s['pending'], 1),
+                number_format($s['available_to_request'], 1),
             ];
         })->all();
 
         return [
             'columns' => [
                 'Emp ID', 'Employee', 'Department', 'Leave Type',
-                'Opening', 'Carried Forward', 'Availed', 'Pending', 'Encashed', 'Closing Balance',
+                'Opening / Entitlement', 'Carried Forward', 'Accrued / Earned', 'Adjustments (net)', 'Expired',
+                'Availed', 'Encashed', 'Approved Balance', 'Pending', 'Available to Request',
             ],
             'rows' => $rows,
             'summary' => [
-                ['label' => 'Year', 'value' => $year],
+                ['label' => 'Leave year', 'value' => $leaveYear->label],
                 ['label' => 'Employees', 'value' => $balances->pluck('employee_id')->unique()->count()],
                 ['label' => 'Total Availed', 'value' => number_format((float) $balances->sum(fn ($b) => (float) $b->used_days), 1)],
             ],
         ];
     }
 
+    /**
+     * Balance rows of one leave year (by leave_year_id, or the legacy year
+     * integer for rows not yet linked) — the lookup My Leave uses.
+     *
+     * @param  Collection<int, int>|array<int, int>  $employeeIds
+     * @return Collection<int, LeaveBalance>
+     */
+    protected function balancesForLeaveYear(Collection|array $employeeIds, LeaveYear $leaveYear, ?string $category = null): Collection
+    {
+        return LeaveBalance::with(['employee.user', 'employee.department', 'leaveType'])
+            ->whereIn('employee_id', $employeeIds)
+            ->where(fn ($q) => $q->where('leave_year_id', $leaveYear->id)->orWhere(fn ($legacy) => $legacy->whereNull('leave_year_id')->where('year', $leaveYear->legacyYear())))
+            ->when($category, fn ($q, $c) => $q->whereHas('leaveType', fn ($t) => $t->where('category', $c)))
+            ->get();
+    }
+
     /** Comp-Off Summary — credits earned against comp-off leave taken. */
     protected function compOff(Carbon $from, Carbon $to, array $filters): array
     {
-        $year = (int) $to->year;
+        // Leave year, not calendar year; balance from the calculator (P3-02).
+        $leaveYear = app(LeaveYearResolver::class)->forDate($to);
+        $calculator = app(LeaveBalanceCalculator::class);
         $employeeIds = $this->employeeQuery($filters)->pluck('id');
 
-        $balances = LeaveBalance::with(['employee.user', 'employee.department', 'leaveType'])
-            ->whereIn('employee_id', $employeeIds)
-            ->where('year', $year)
-            ->whereHas('leaveType', fn ($q) => $q->where('category', 'comp_off'))
-            ->get()
+        $balances = $this->balancesForLeaveYear($employeeIds, $leaveYear, 'comp_off')
             ->sortBy(fn (LeaveBalance $b) => $b->employee?->user?->name ?? '')
             ->values();
 
-        $rows = $balances->map(fn (LeaveBalance $balance) => [
-            $balance->employee?->employee_id ?? '—',
-            $balance->employee?->user?->name ?? '—',
-            $balance->employee?->department?->name ?? '—',
-            number_format((float) ($balance->comp_off_credits ?? 0), 1),
-            number_format((float) $balance->used_days, 1),
-            number_format($balance->pendingDays(), 1),
-            number_format($balance->available(), 1),
-        ])->all();
+        $rows = $balances->map(function (LeaveBalance $balance) use ($calculator) {
+            $s = $calculator->summary($balance);
+
+            return [
+                $balance->employee?->employee_id ?? '—',
+                $balance->employee?->user?->name ?? '—',
+                $balance->employee?->department?->name ?? '—',
+                number_format((float) ($balance->comp_off_credits ?? 0), 1),
+                number_format($s['used'], 1),
+                number_format($s['pending'], 1),
+                number_format($s['approved_available'], 1),
+            ];
+        })->all();
 
         return [
             'columns' => ['Emp ID', 'Employee', 'Department', 'Earned', 'Availed', 'Pending', 'Balance'],
             'rows' => $rows,
             'summary' => [
-                ['label' => 'Year', 'value' => $year],
+                ['label' => 'Leave year', 'value' => $leaveYear->label],
                 ['label' => 'Employees', 'value' => $balances->count()],
                 ['label' => 'Total Earned', 'value' => number_format((float) $balances->sum(fn ($b) => (float) ($b->comp_off_credits ?? 0)), 1)],
                 ['label' => 'Total Availed', 'value' => number_format((float) $balances->sum(fn ($b) => (float) $b->used_days), 1)],
