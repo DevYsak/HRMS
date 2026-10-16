@@ -14,8 +14,9 @@ class EmployeesExport
 {
     /**
      * @param  array<int, int>|null  $employeeIds  the exporter's reach (null = every employee)
+     * @param  bool  $includeFinance  CTC, statutory IDs and bank details: only for view_finance_profile holders
      */
-    public function __construct(private readonly ?array $employeeIds = null) {}
+    public function __construct(private readonly ?array $employeeIds = null, private readonly bool $includeFinance = false) {}
 
     /** @return array<int, string> */
     public function headings(): array
@@ -31,7 +32,9 @@ class EmployeesExport
             ->get()
             ->map(function (Employee $e): array {
                 $user = $e->user;
-                $pay = $e->payrollSettings;
+                // Blank cells are left unchanged on re-import, so withholding
+                // them never wipes the stored values.
+                $pay = $this->includeFinance ? $e->payrollSettings : null;
                 $parts = explode(' ', trim((string) ($user?->name ?? '')), 2);
                 $status = is_object($e->status) ? $e->status->value : $e->status;
 

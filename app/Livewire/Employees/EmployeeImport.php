@@ -63,8 +63,9 @@ class EmployeeImport extends Component
     public function exportEmployees(SpreadsheetService $sheets)
     {
         $this->authorize('create', Employee::class);
-        // Identity and bank details: only the employees this admin manages.
-        $export = new EmployeesExport(auth()->user()->accessibleEmployeeIds('manage_employees'));
+        // Only the employees this admin manages; pay, statutory IDs and bank
+        // details only with view_finance_profile, as on the profile page.
+        $export = new EmployeesExport(auth()->user()->accessibleEmployeeIds('manage_employees'), auth()->user()->hasPermission('view_finance_profile'));
 
         return $sheets->download($export->headings(), $export->rows(), 'employees-'.now()->format('Ymd').'.xlsx');
     }

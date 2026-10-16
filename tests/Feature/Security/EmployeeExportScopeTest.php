@@ -57,3 +57,15 @@ test('company-wide HR exports everyone', function () {
 
     Livewire::actingAs($hr)->test(EmployeeImport::class)->call('exportEmployees')->assertFileDownloaded();
 });
+
+test('pay, statutory IDs and bank details are exported only to view_finance_profile holders (Phase 4)', function () {
+    $this->inside->payrollSettings()->updateOrCreate([], ['ctc' => 777777, 'pan_number' => 'ABCDE1234F', 'account_number' => '00112233445566', 'ifsc_code' => 'HDFC0000001']);
+    $row = fn (bool $finance) => collect((new EmployeesExport([$this->inside->id], $finance))->rows())->first();
+
+    expect($row(true))->toContain('ABCDE1234F')->toContain('00112233445566')
+        ->and($row(false))->not->toContain('ABCDE1234F')->not->toContain('00112233445566')->not->toContain('HDFC0000001');
+
+    // The button passes the exporter's own permission: HR holds it.
+    $hr = eesHr($this->own);
+    expect($hr->hasPermission('view_finance_profile'))->toBeTrue();
+});
