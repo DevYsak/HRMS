@@ -42,7 +42,7 @@ test('Phase 1 is seeded: 440 / 438 / 2 known baseline, and every Phase 1 commit 
     expect([$run->total, $run->passed, $run->failed, $run->known_baseline, $run->new_regressions])->toBe([440, 438, 2, 2, 0])
         ->and($run->result)->toBe(QaTestRun::RESULT_PASS_WITH_BASELINE)
         ->and(QaPhase::where('number', 1)->first()->status)->toBe(QaPhaseStatus::Completed)
-        ->and(QaPhase::where('status', 'not_started')->count())->toBe(4);
+        ->and(QaPhase::where('status', 'not_started')->count())->toBe(3);
 
     foreach (['a6cfb27', 'ba5e1bb', '585d1d4', '2bd6beb', 'cfc173a', '5756210', 'a90dc23', '671b276', '961fac5'] as $hash) {
         $fix = QaFixLink::where('commit_hash', 'like', $hash.'%')->first();
@@ -286,7 +286,7 @@ test('editing a run or result never rewrites when it ran', function () {
 
 test('Phase 2 is recorded: full run, retest, fixes, policy questions and baseline', function () {
     $phase = QaPhase::where('number', 2)->firstOrFail();
-    $full = QaTestRun::where('kind', 'full')->firstOrFail();
+    $full = QaTestRun::where('name', '2026-10-15 Full suite (staging @ fe35a84)')->firstOrFail();
 
     expect($phase->status)->toBe(QaPhaseStatus::Completed)
         ->and([$full->total, $full->passed, $full->failed, $full->skipped, $full->known_baseline, $full->new_regressions])->toBe([3110, 3095, 14, 1, 12, 2])
@@ -300,11 +300,8 @@ test('Phase 2 is recorded: full run, retest, fixes, policy questions and baselin
     expect(QaFinding::whereIn('code', ['QA-F-025', 'QA-F-026', 'QA-F-027'])->where('status', 'verified')->count())->toBe(3)
         ->and(QaFinding::where('code', 'QA-F-029')->first()->status)->toBe(QaFindingStatus::Investigating);
 
-    // The retest is the latest run, so the two non-baseline full-run failures do not block readiness.
-    $summary = (new QaReadiness)->summary();
-    expect($summary['latest_run']->name)->toBe('2026-10-15 Retest after 4627c03')
-        ->and($summary['verified']['full']->id)->toBe($full->id)
-        ->and($summary['level'])->toBe(QaReadiness::INTERNAL_QA);
+    // The retest settled the two non-baseline full-run failures.
+    expect(QaTestRun::where('name', '2026-10-15 Retest after 4627c03')->value('new_regressions'))->toBe(0);
 });
 
 test('the Phase 2 policy decisions are recorded with their commits and history', function () {
@@ -319,9 +316,36 @@ test('the Phase 2 policy decisions are recorded with their commits and history',
     expect($status('QA-F-015'))->toBe('accepted_risk')
         ->and($status('QA-F-016'))->toBe('accepted_risk')
         ->and($status('QA-F-018'))->toBe('hr_correction_required')
-        ->and($status('QA-F-030'))->toBe('open')
+        ->and($status('QA-F-030'))->toBe('verified')   // fixed in Phase 3 (dd47f75)
         ->and($status('QA-F-031'))->toBe('hr_correction_required')
         ->and(QaFinding::where('code', 'QA-F-031')->value('description'))->toContain('REVIEW REQUIRED')->toContain('Jordan Reed')
-        ->and(QaFinding::open()->where('needs_decision', true)->count())->toBe(0)
+        ->and(QaFinding::open()->where('needs_decision', true)->pluck('code')->all())->toBe(['QA-F-037'])   // the Phase 3 WFH question
         ->and(QaTestCase::where('code', 'like', 'QA-DEC-%')->where('status', 'pass')->count())->toBe(7);
+});
+
+test('Phase 3 is recorded: each fix has its test cases, commit and verification; WFH waits on a decision', function () {
+    foreach (['QA-F-030' => 'dd47f75', 'QA-F-021' => '2d29468', 'QA-F-032' => 'bd1d2da', 'QA-F-033' => 'b50a8a3', 'QA-F-034' => 'a474909',
+        'QA-F-035' => 'd29aafb', 'QA-F-036' => 'd29aafb', 'QA-F-038' => 'edf0729', 'QA-F-039' => '1c820e9'] as $code => $commit) {
+        $finding = QaFinding::where('code', $code)->firstOrFail();
+        expect($finding->status)->toBe(QaFindingStatus::Verified, $code)
+            ->and($finding->fixes()->pluck('commit_hash'))->toContain($commit)
+            ->and(AuditLog::where('auditable_type', QaFinding::class)->where('auditable_id', $finding->id)->where('event', 'QA_FIX_LINKED')->exists())->toBeTrue();
+    }
+
+    $wfh = QaFinding::where('code', 'QA-F-037')->firstOrFail();
+    expect($wfh->status)->toBe(QaFindingStatus::Open)
+        ->and($wfh->needs_decision)->toBeTrue()
+        ->and($wfh->description)->toContain('42 attendance days')
+        ->and(QaTestCase::where('code', 'like', 'QA-P3-%')->where('status', 'pass')->count())->toBe(18)
+        ->and(QaPhase::where('number', 3)->first()->status)->toBe(QaPhaseStatus::InProgress);
+
+    // The confirming full run: 12 known baseline; the 16 failures a concurrent commit caused mid-run passed on re-run.
+    $full = QaTestRun::where('name', '2026-10-16 Phase 3 full suite')->firstOrFail();
+    expect([$full->kind, $full->commit, $full->total, $full->passed, $full->failed, $full->known_baseline, $full->new_regressions])->toBe(['full', '1c820e9', 3155, 3126, 28, 12, 0])
+        ->and($full->notes)->toContain('905bae5');
+
+    $summary = (new QaReadiness)->summary();
+    expect($summary['latest_run']->name)->toBe('2026-10-16 Phase 3 re-run of disturbed files')
+        ->and($summary['verified']['full']->id)->toBe($full->id)
+        ->and($summary['level'])->toBe(QaReadiness::INTERNAL_QA);
 });

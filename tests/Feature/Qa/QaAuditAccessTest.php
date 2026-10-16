@@ -73,7 +73,7 @@ test('guests are sent to login', function () {
 test('HR granted view_qa_audit reads it but cannot change, run or export anything', function () {
     $hr = qaGrant(qaUser('hr_admin'), 'view_qa_audit');
     $case = QaTestCase::where('code', 'QA-RBAC-002')->firstOrFail();
-    $finding = QaFinding::where('code', 'QA-F-030')->firstOrFail();
+    $finding = QaFinding::where('code', 'QA-F-037')->firstOrFail();
 
     $this->actingAs($hr)->get(route('qa-audit.index', ['tab' => 'cases', 'search' => 'QA-RBAC-002']))->assertOk()->assertSee('QA-RBAC-002')->assertDontSee('New test case');
     $this->actingAs($hr)->get(route('qa-audit.report'))->assertForbidden();
@@ -254,7 +254,7 @@ test('the page works on phones and in dark mode', function () {
 
 test('the Super Admin home shows the QA readiness widget; HR does not', function () {
     $this->actingAs(qaUser('super_admin'))->get(route('dashboard'))
-        ->assertOk()->assertSee('data-qa-widget', false)->assertSee('Open QA &amp; Audit', false)->assertSee('3095')->assertSee('Full suite');
+        ->assertOk()->assertSee('data-qa-widget', false)->assertSee('Open QA &amp; Audit', false)->assertSee('3126')->assertSee('Phase 3 full suite');
 
     $this->actingAs(qaUser('hr_admin'))->get(route('dashboard'))
         ->assertOk()->assertDontSee('data-qa-widget', false);
@@ -271,8 +271,8 @@ test('the overview shows the last verified build and the open blockers', functio
         ->assertSee('Open blockers')->assertSee('Policy decision needed');
 
     $summary = (new QaReadiness)->summary();
-    // Phase 2 decisions closed every policy question; QA-F-018 and QA-F-031 wait on HR data.
-    expect($summary['open_blockers'])->toBe(['critical' => 0, 'high' => 1, 'known_baseline' => 12, 'policy' => 0, 'retest_required' => 0, 'hr_corrections' => 2])
+    // After Phase 3: one policy question (QA-F-037 WFH); QA-F-018, QA-F-031 and QA-F-037 are data findings.
+    expect($summary['open_blockers'])->toBe(['critical' => 0, 'high' => 1, 'known_baseline' => 12, 'policy' => 1, 'retest_required' => 0, 'hr_corrections' => 3])
         ->and($summary['verified']['security']->name)->toBe('2026-10-15 Phase 1 RBAC Regression')
         ->and($summary['verified']['commit'])->toMatch('/^[0-9a-f]{7}$/');
 
