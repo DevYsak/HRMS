@@ -5,6 +5,7 @@ namespace App\Livewire\Performance;
 use App\Models\IncrementCycle;
 use App\Models\IncrementProposal;
 use App\Services\Increments\IncrementService;
+use App\Services\Security\ScopeResolver;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 
@@ -13,6 +14,11 @@ use Livewire\Component;
  * calibrated proposals, adjust within band ranges, override bands with a
  * logged reason, watch the budget bar, then approve (Director/Super Admin)
  * and apply.
+ *
+ * Reach is the manage_employees scope: a department-scoped holder (e.g. a
+ * Director) sees and adjusts only their own people's proposals and never
+ * the company payroll pool; opening, generating, submitting, approving and
+ * applying a cycle act on everyone, so they need company-wide reach.
  */
 class IncrementCenter extends Component
 {
@@ -51,6 +57,8 @@ class IncrementCenter extends Component
 
     public function newCycleForm(): void
     {
+        $this->assertCompanyWide();
+
         $july = now()->month >= 7 ? now()->year : now()->year - 1;
         $this->financialYear = ($july + 1).'-'.substr((string) ($july + 2), 2);
         $this->effectiveDate = ($july + 1).'-07-01';
@@ -60,6 +68,7 @@ class IncrementCenter extends Component
 
     public function openCycle(IncrementService $service): void
     {
+        $this->assertCompanyWide();
         $this->validate([
             'financialYear' => 'required|string|max:9|unique:increment_cycles,financial_year',
             'effectiveDate' => 'required|date',
@@ -75,6 +84,7 @@ class IncrementCenter extends Component
 
     public function generate(IncrementService $service): void
     {
+        $this->assertCompanyWide();
         try {
             $count = $service->generateProposals($this->cycle(), Auth::user());
         } catch (\DomainException $exception) {
@@ -89,7 +99,7 @@ class IncrementCenter extends Component
     public function saveProposal(int $proposalId, IncrementService $service): void
     {
         $edit = $this->edits[$proposalId] ?? [];
-        $proposal = IncrementProposal::where('increment_cycle_id', $this->cycleId)->findOrFail($proposalId);
+        $proposal = $this->proposalInReach($proposalId);
 
         try {
             $service->updateProposal(
@@ -112,7 +122,7 @@ class IncrementCenter extends Component
 
     public function openOverride(int $proposalId): void
     {
-        $proposal = IncrementProposal::where('increment_cycle_id', $this->cycleId)->findOrFail($proposalId);
+        $proposal = $this->proposalInReach($proposalId);
         $this->overrideProposalId = $proposal->id;
         $this->overrideBand = $proposal->band ?? 'C';
         $this->overrideReason = '';
@@ -128,7 +138,7 @@ class IncrementCenter extends Component
             'overrideReason.min' => 'Please give a meaningful reason (at least 10 characters).',
         ]);
 
-        $proposal = IncrementProposal::where('increment_cycle_id', $this->cycleId)->findOrFail($this->overrideProposalId);
+        $proposal = $this->proposalInReach((int) $this->overrideProposalId);
 
         try {
             $service->overrideBand($proposal, $this->overrideBand, $this->overrideReason, Auth::user());
@@ -144,6 +154,7 @@ class IncrementCenter extends Component
 
     public function submitCycle(IncrementService $service): void
     {
+        $this->assertCompanyWide();
         try {
             $service->submitForApproval($this->cycle(), Auth::user());
             \Flux::toast('Cycle submitted — Directors notified for final approval.');
@@ -155,6 +166,7 @@ class IncrementCenter extends Component
     public function approveCycle(IncrementService $service): void
     {
         abort_unless(Auth::user()->canApproveFinance() || Auth::user()->isSuperAdmin(), 403);
+        $this->assertCompanyWide();
 
         try {
             $held = $service->approveCycle($this->cycle(), Auth::user());
@@ -171,7 +183,7 @@ class IncrementCenter extends Component
     {
         abort_unless(Auth::user()->canApproveFinance() || Auth::user()->isSuperAdmin(), 403);
 
-        $proposal = IncrementProposal::where('increment_cycle_id', $this->cycleId)->findOrFail($proposalId);
+        $proposal = $this->proposalInReach($proposalId);
 
         try {
             $service->approveHeldProposal($proposal, Auth::user());
@@ -184,6 +196,7 @@ class IncrementCenter extends Component
     public function applyCycle(IncrementService $service): void
     {
         abort_unless(Auth::user()->canApproveFinance() || Auth::user()->isSuperAdmin(), 403);
+        $this->assertCompanyWide();
 
         try {
             $count = $service->applyCycle($this->cycle(), Auth::user());
@@ -195,8 +208,10 @@ class IncrementCenter extends Component
 
     public function render()
     {
+        $reach = $this->reach();
         $cycle = $this->cycleId
-            ? IncrementCycle::with(['matrix', 'proposals.employee.user', 'proposals.employee.department', 'proposals.employee.jobTitle'])->find($this->cycleId)
+            ? IncrementCycle::with(['matrix', 'proposals' => fn ($q) => $q->when($reach !== null, fn ($p) => $p->whereIn('employee_id', $reach)),
+                'proposals.employee.user', 'proposals.employee.department', 'proposals.employee.jobTitle'])->find($this->cycleId)
             : null;
 
         $byDepartment = $cycle
@@ -212,10 +227,32 @@ class IncrementCenter extends Component
             'cycle' => $cycle,
             'byDepartment' => $byDepartment,
             'bandCounts' => $bandCounts,
-            'budget' => $cycle?->budgetAmount() ?? 0,
-            'committed' => $cycle?->committedAmount() ?? 0,
-            'canApprove' => Auth::user()->canApproveFinance() || Auth::user()->isSuperAdmin(),
+            // The pool is the company payroll: shown only with company-wide reach.
+            'companyWide' => $reach === null,
+            'budget' => $reach === null ? ($cycle?->budgetAmount() ?? 0) : null,
+            'committed' => $reach === null ? ($cycle?->committedAmount() ?? 0) : null,
+            'canApprove' => $reach === null && (Auth::user()->canApproveFinance() || Auth::user()->isSuperAdmin()),
         ])->layout('layouts.app', ['title' => 'Increment Center']);
+    }
+
+    /** @return array<int, int>|null employee ids in reach; null = company-wide */
+    private function reach(): ?array
+    {
+        return app(ScopeResolver::class)->employeeIds(Auth::user(), 'manage_employees');
+    }
+
+    private function assertCompanyWide(): void
+    {
+        abort_unless($this->reach() === null, 403);
+    }
+
+    private function proposalInReach(int $proposalId): IncrementProposal
+    {
+        $proposal = IncrementProposal::where('increment_cycle_id', $this->cycleId)->findOrFail($proposalId);
+        $reach = $this->reach();
+        abort_unless($reach === null || in_array((int) $proposal->employee_id, $reach, true), 403);
+
+        return $proposal;
     }
 
     private function cycle(): IncrementCycle

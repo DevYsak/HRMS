@@ -8,7 +8,9 @@
             @if($cycles->count() > 1)
                 <x-clean-select model="cycleId" :live="true" :options="$cycles->map(fn ($c) => ['value' => $c->id, 'label' => 'FY '.$c->financial_year])->all()" />
             @endif
-            <flux:button wire:click="newCycleForm" variant="primary" icon="plus">Open cycle</flux:button>
+            @if($companyWide)
+                <flux:button wire:click="newCycleForm" variant="primary" icon="plus">Open cycle</flux:button>
+            @endif
         </div>
     </div>
 
@@ -27,10 +29,10 @@
                     <span class="text-xs text-zinc-400">Effective {{ $cycle->effective_date->format('d M Y') }} · Budget {{ rtrim(rtrim(number_format($cycle->budget_percent, 2), '0'), '.') }}% of payroll</span>
                 </div>
                 <div class="flex items-center gap-2">
-                    @if(in_array($cycle->status, ['draft', 'calibration']))
+                    @if($companyWide && in_array($cycle->status, ['draft', 'calibration']))
                         <flux:button wire:click="generate" size="sm" icon="calculator" wire:confirm="Recompute annual scores and (re)generate draft proposals for all active employees?">{{ $cycle->status === 'draft' ? 'Generate proposals' : 'Regenerate' }}</flux:button>
                     @endif
-                    @if($cycle->status === 'calibration')
+                    @if($companyWide && $cycle->status === 'calibration')
                         <flux:button wire:click="submitCycle" size="sm" variant="primary" icon="paper-airplane">Submit for approval</flux:button>
                     @endif
                     @if($cycle->status === 'proposed' && $canApprove)
@@ -42,7 +44,8 @@
                 </div>
             </div>
 
-            {{-- Budget consumption --}}
+            {{-- Budget consumption: the company pool, company-wide reach only --}}
+            @if($budget !== null)
             @php
                 $pct = $budget > 0 ? min(100, round($committed / $budget * 100)) : 0;
                 $over = $committed > $budget;
@@ -59,6 +62,9 @@
                     <p class="mt-1 text-xs font-semibold text-rose-600">Over budget — approval is blocked until proposals are reduced or the budget is raised.</p>
                 @endif
             </div>
+            @else
+                <p class="text-xs text-zinc-500" data-increment-scoped>Showing proposals for your departments only. The budget pool and cycle actions are company-wide.</p>
+            @endif
 
             {{-- Band distribution + matrix --}}
             <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
