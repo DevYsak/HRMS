@@ -20,6 +20,7 @@ use App\Models\WarningLetter;
 use App\Services\Attendance\AttendanceCalculator;
 use App\Services\Attendance\AttendanceWindowService;
 use App\Services\AttendanceReportBuilder;
+use App\Services\Leave\LeaveYearResolver;
 use App\Services\OvertimeService;
 use App\Services\Performance\PerformanceStatusService;
 use App\Services\Security\PeopleScope;
@@ -419,19 +420,23 @@ class ReportController extends Controller
     {
         $this->assertCompanyWideReach();
 
-        $year = (int) $request->integer('year', now()->year);
+        // `year` names the leave year that starts in it (1 July → June for
+        // Conexus), not the calendar year: the leave balances use that year.
+        $leaveYear = app(LeaveYearResolver::class)->forDate(Carbon::create((int) $request->integer('year', app(LeaveYearResolver::class)->current()->starts_on->year), 12, 31));
+        $year = $leaveYear->starts_on->year;
 
         $rows = LeaveRequest::with(['employee.user', 'employee.department', 'employee.jobTitle', 'employee.employmentType', 'leaveType'])
-            ->whereYear('start_date', $year)
+            ->whereDate('start_date', '<=', $leaveYear->ends_on->toDateString())
+            ->whereDate('end_date', '>=', $leaveYear->starts_on->toDateString())
             ->whereIn('status', ['approved'])
             ->when($request->department_id, fn ($q) => $q->whereHas('employee', fn ($e) => $e->where('department_id', $request->department_id)))
             ->when($request->employment_type_id, fn ($q) => $q->whereHas('employee', fn ($e) => $e->where('employment_type_id', $request->employment_type_id)))
             ->latest('start_date')
             ->get();
 
-        return response()->streamDownload(function () use ($rows) {
+        return response()->streamDownload(function () use ($rows, $leaveYear) {
             $handle = fopen('php://output', 'w');
-            fputcsv($handle, ['Employee ID', 'Employee Name', 'Department', 'Leave Type', 'Start Date', 'End Date', 'Days', 'Status']);
+            fputcsv($handle, ['Employee ID', 'Employee Name', 'Department', 'Leave Type', 'Start Date', 'End Date', 'Days', 'Status', 'Leave Year']);
             foreach ($rows as $r) {
                 fputcsv($handle, [
                     $r->employee->employee_id ?? '',
@@ -440,8 +445,9 @@ class ReportController extends Controller
                     $r->leaveType?->name ?? '',
                     $r->start_date?->toDateString() ?? '',
                     $r->end_date?->toDateString() ?? '',
-                    $r->total_days ?? '',
+                    $r->days ?? '',
                     ucfirst($r->status),
+                    $leaveYear->label,
                 ]);
             }
             fclose($handle);
@@ -459,18 +465,20 @@ class ReportController extends Controller
             ->latest()
             ->get();
 
+        // No Amount column: an encashment is priced when payroll pays it
+        // (SalaryCalculationService), nothing is stored to report here.
         return response()->streamDownload(function () use ($rows) {
             $handle = fopen('php://output', 'w');
-            fputcsv($handle, ['Employee ID', 'Employee Name', 'Department', 'Leave Type', 'Days', 'Amount', 'Status', 'Requested On']);
+            fputcsv($handle, ['Employee ID', 'Employee Name', 'Department', 'Leave Type', 'Days', 'Status', 'Payout Month', 'Requested On']);
             foreach ($rows as $r) {
                 fputcsv($handle, [
                     $r->employee->employee_id ?? '',
                     $r->employee->user->name ?? '',
                     $r->employee->department?->name ?? '',
                     $r->leaveType?->name ?? '',
-                    $r->days ?? '',
-                    $r->amount ?? '',
-                    ucfirst($r->status),
+                    $r->requested_days ?? '',
+                    ucfirst(str_replace('_', ' ', (string) $r->status)),
+                    $r->payout_month ?? '',
                     $r->created_at?->toDateString() ?? '',
                 ]);
             }
