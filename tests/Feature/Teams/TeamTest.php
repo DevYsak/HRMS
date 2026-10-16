@@ -1,12 +1,21 @@
 <?php
 
+/*
+ * Starter-kit account teams are Super Admin only (Phase 4 decision,
+ * 16 Oct 2026); the HRMS team structure is People -> Teams. The acting
+ * users here are Super Admins.
+ */
+
 use App\Enums\TeamRole;
+use App\Enums\UserRole;
+use App\Models\Role;
 use App\Models\Team;
 use App\Models\User;
+use App\Services\Navigation\Sidebar;
 use Livewire\Livewire;
 
 test('teams index page can be rendered', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->create(['role' => UserRole::SuperAdmin]);
 
     $response = $this
         ->actingAs($user)
@@ -16,7 +25,7 @@ test('teams index page can be rendered', function () {
 });
 
 test('teams can be created', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->create(['role' => UserRole::SuperAdmin]);
 
     $this->actingAs($user);
 
@@ -32,7 +41,7 @@ test('teams can be created', function () {
 });
 
 test('team slug uses next available suffix', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->create(['role' => UserRole::SuperAdmin]);
 
     Team::factory()->create(['name' => 'Acme', 'slug' => 'acme']);
     Team::factory()->create(['name' => 'Acme One', 'slug' => 'acme-1']);
@@ -52,7 +61,7 @@ test('team slug uses next available suffix', function () {
 });
 
 test('team edit page can be rendered', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->create(['role' => UserRole::SuperAdmin]);
     $team = Team::factory()->create();
     $team->members()->attach($user, ['role' => TeamRole::Owner->value]);
 
@@ -64,7 +73,7 @@ test('team edit page can be rendered', function () {
 });
 
 test('teams can be updated by owners', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->create(['role' => UserRole::SuperAdmin]);
     $team = Team::factory()->create(['name' => 'Original Name']);
 
     $team->members()->attach($user, ['role' => TeamRole::Owner->value]);
@@ -83,8 +92,8 @@ test('teams can be updated by owners', function () {
 });
 
 test('teams cannot be updated by members', function () {
-    $owner = User::factory()->create();
-    $member = User::factory()->create();
+    $owner = User::factory()->create(['role' => UserRole::SuperAdmin]);
+    $member = User::factory()->create(['role' => UserRole::SuperAdmin]);
     $team = Team::factory()->create();
 
     $team->members()->attach($owner, ['role' => TeamRole::Owner->value]);
@@ -99,7 +108,7 @@ test('teams cannot be updated by members', function () {
 });
 
 test('teams can be deleted by owners', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->create(['role' => UserRole::SuperAdmin]);
     $team = Team::factory()->create();
 
     $team->members()->attach($user, ['role' => TeamRole::Owner->value]);
@@ -117,7 +126,7 @@ test('teams can be deleted by owners', function () {
 });
 
 test('team deletion requires name confirmation', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->create(['role' => UserRole::SuperAdmin]);
     $team = Team::factory()->create();
 
     $team->members()->attach($user, ['role' => TeamRole::Owner->value]);
@@ -136,7 +145,7 @@ test('team deletion requires name confirmation', function () {
 });
 
 test('deleting current team switches to alphabetically first remaining team', function () {
-    $user = User::factory()->create(['name' => 'Mike']);
+    $user = User::factory()->create(['name' => 'Mike', 'role' => UserRole::SuperAdmin]);
 
     $zuluTeam = Team::factory()->create(['name' => 'Zulu Team']);
     $zuluTeam->members()->attach($user, ['role' => TeamRole::Owner->value]);
@@ -164,7 +173,7 @@ test('deleting current team switches to alphabetically first remaining team', fu
 });
 
 test('deleting current team falls back to personal team when alphabetically first', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->create(['role' => UserRole::SuperAdmin]);
     $personalTeam = $user->personalTeam();
     $team = Team::factory()->create(['name' => 'Zulu Team']);
     $team->members()->attach($user, ['role' => TeamRole::Owner->value]);
@@ -186,7 +195,7 @@ test('deleting current team falls back to personal team when alphabetically firs
 });
 
 test('deleting non current team leaves current team unchanged', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->create(['role' => UserRole::SuperAdmin]);
     $personalTeam = $user->personalTeam();
     $team = Team::factory()->create();
     $team->members()->attach($user, ['role' => TeamRole::Owner->value]);
@@ -208,8 +217,8 @@ test('deleting non current team leaves current team unchanged', function () {
 });
 
 test('deleting team switches other affected users to their personal team', function () {
-    $owner = User::factory()->create();
-    $member = User::factory()->create();
+    $owner = User::factory()->create(['role' => UserRole::SuperAdmin]);
+    $member = User::factory()->create(['role' => UserRole::SuperAdmin]);
 
     $team = Team::factory()->create();
     $team->members()->attach($owner, ['role' => TeamRole::Owner->value]);
@@ -229,7 +238,7 @@ test('deleting team switches other affected users to their personal team', funct
 });
 
 test('personal teams cannot be deleted', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->create(['role' => UserRole::SuperAdmin]);
 
     $personalTeam = $user->personalTeam();
 
@@ -247,8 +256,8 @@ test('personal teams cannot be deleted', function () {
 });
 
 test('teams cannot be deleted by non owners', function () {
-    $owner = User::factory()->create();
-    $member = User::factory()->create();
+    $owner = User::factory()->create(['role' => UserRole::SuperAdmin]);
+    $member = User::factory()->create(['role' => UserRole::SuperAdmin]);
     $team = Team::factory()->create();
 
     $team->members()->attach($owner, ['role' => TeamRole::Owner->value]);
@@ -266,4 +275,24 @@ test('guests cannot access teams', function () {
     $response = $this->get(route('teams.index'));
 
     $response->assertRedirect(route('login'));
+});
+test('starter-kit account teams are Super Admin only: everyone else is refused and never sees the menu entry', function () {
+    $employee = User::factory()->create(['role' => UserRole::Employee]);
+
+    $this->actingAs($employee)->get(route('teams.index'))->assertForbidden();
+    $this->actingAs($employee)->get(route('profile.edit'))->assertOk()->assertDontSee('Account Teams (legacy)');
+
+    Livewire::actingAs($employee)->test('pages::teams.index')->set('name', 'Sneaky')->call('createTeam')->assertForbidden();
+    $this->assertDatabaseMissing('teams', ['name' => 'Sneaky']);
+});
+
+test('the Coordinators page is in the Settings menu only for people who assign coordinators', function () {
+    $hrRole = Role::where('slug', 'hr_admin')->firstOrFail();
+    $hr = User::factory()->create(['role' => $hrRole->legacyBucket(), 'role_id' => $hrRole->id]);
+    $employee = User::factory()->create(['role' => UserRole::Employee]);
+    $labels = fn (User $u) => collect(app(Sidebar::class)->settings($u)['items'] ?? [])->pluck('label');
+
+    expect($hr->hasPermission('assign_coordinators'))->toBeTrue()
+        ->and($labels($hr))->toContain('Coordinators')
+        ->and($labels($employee))->not->toContain('Coordinators');
 });

@@ -1,6 +1,13 @@
 <?php
 
+/*
+ * Starter-kit account teams are Super Admin only (Phase 4 decision,
+ * 16 Oct 2026); the HRMS team structure is People -> Teams. The acting
+ * users here are Super Admins.
+ */
+
 use App\Enums\TeamRole;
+use App\Enums\UserRole;
 use App\Models\Team;
 use App\Models\TeamInvitation;
 use App\Models\User;
@@ -10,7 +17,7 @@ use Livewire\Livewire;
 test('team invitations can be created', function () {
     Notification::fake();
 
-    $owner = User::factory()->create();
+    $owner = User::factory()->create(['role' => UserRole::SuperAdmin]);
     $team = Team::factory()->create();
 
     $team->members()->attach($owner, ['role' => TeamRole::Owner->value]);
@@ -31,8 +38,8 @@ test('team invitations can be created', function () {
 });
 
 test('team invitations cannot be created by members', function () {
-    $owner = User::factory()->create();
-    $member = User::factory()->create();
+    $owner = User::factory()->create(['role' => UserRole::SuperAdmin]);
+    $member = User::factory()->create(['role' => UserRole::SuperAdmin]);
     $team = Team::factory()->create();
 
     $team->members()->attach($owner, ['role' => TeamRole::Owner->value]);
@@ -48,7 +55,7 @@ test('team invitations cannot be created by members', function () {
 });
 
 test('team invitations can be cancelled by owner', function () {
-    $owner = User::factory()->create();
+    $owner = User::factory()->create(['role' => UserRole::SuperAdmin]);
     $team = Team::factory()->create();
 
     $team->members()->attach($owner, ['role' => TeamRole::Owner->value]);
@@ -71,7 +78,7 @@ test('team invitations can be cancelled by owner', function () {
 });
 
 test('team invitations can be accepted', function () {
-    $owner = User::factory()->create();
+    $owner = User::factory()->create(['role' => UserRole::SuperAdmin]);
     $invitedUser = User::factory()->create(['email' => 'invited@example.com']);
     $team = Team::factory()->create();
 
@@ -97,7 +104,7 @@ test('team invitations can be accepted', function () {
 });
 
 test('team invitations cannot be accepted by user that wasnt invited', function () {
-    $owner = User::factory()->create();
+    $owner = User::factory()->create(['role' => UserRole::SuperAdmin]);
     $uninvitedUser = User::factory()->create(['email' => 'uninvited@example.com']);
     $team = Team::factory()->create();
 
@@ -121,7 +128,7 @@ test('team invitations cannot be accepted by user that wasnt invited', function 
 });
 
 test('expired invitations cannot be accepted', function () {
-    $owner = User::factory()->create();
+    $owner = User::factory()->create(['role' => UserRole::SuperAdmin]);
     $invitedUser = User::factory()->create(['email' => 'invited@example.com']);
     $team = Team::factory()->create();
 

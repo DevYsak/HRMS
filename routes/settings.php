@@ -28,7 +28,8 @@ Route::middleware(['auth'])->group(function () {
         )
         ->name('security.edit');
 
-    Route::livewire('settings/teams', 'pages::teams.index')->name('teams.index');
+    // Starter-kit account teams — Super Admin only (Phase 4); HRMS teams are People → Teams.
+    Route::livewire('settings/teams', 'pages::teams.index')->name('teams.index')->middleware('can:manage-account-teams');
     // Holiday Management (extends the former thin date+name page at the same URL/name).
     // The components abort without manage_settings too; the route guard lets
     // RouteAccess (settings nav, help links) see that before rendering a link.
@@ -36,7 +37,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('settings/holiday-pay', HolidayPaySettings::class)->middleware('role:manage-settings')->name('settings.holiday-pay');
     Route::livewire('settings/ai', 'pages::settings.ai')->name('settings.ai');
 
-    Route::middleware(EnsureTeamMembership::class)->group(function () {
+    Route::middleware([EnsureTeamMembership::class, 'can:manage-account-teams'])->group(function () {
         Route::livewire('settings/teams/{team}', 'pages::teams.edit')->name('teams.edit');
     });
 });

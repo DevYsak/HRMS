@@ -14,6 +14,8 @@ new #[Title('Teams')] class extends Component {
 
     public function createTeam(CreateTeam $createTeam): void
     {
+        $this->authorize('manage-account-teams');
+
         $validated = $this->validate([
             'name' => ['required', 'string', 'max:255', new TeamName],
         ]);

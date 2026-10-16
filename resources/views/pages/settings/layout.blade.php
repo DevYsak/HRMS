@@ -8,9 +8,6 @@
     $settingsUser = auth()->user();
     $routeAccess = app(\App\Services\Help\RouteAccess::class);
     $canManageSettings = $settingsUser?->can('manageFullSettings') ?? false;
-    $belongsToSharedTeam = $settingsUser
-        ? $settingsUser->toUserTeams(includeCurrent: true)->contains(fn ($team) => ! $team->isPersonal)
-        : false;
 
     $settingsGroups = [
         __('Organisation') => [
@@ -19,7 +16,8 @@
             ['route' => 'settings.roles', 'label' => __('Roles & Permissions'), 'icon' => 'shield-check', 'active' => 'settings.roles', 'when' => $settingsUser?->can('manage_roles') ?? false],
             ['route' => 'settings.ai', 'label' => __('AI Assistant'), 'icon' => 'sparkles', 'active' => 'settings.ai', 'when' => $settingsUser?->hasPermission('manage_ai_settings') ?? false],
             ['route' => 'settings.holidays', 'label' => __('Holidays'), 'icon' => 'calendar-days', 'active' => 'settings.holidays', 'when' => $canManageSettings],
-            ['route' => 'teams.index', 'label' => __('Teams'), 'icon' => 'users', 'active' => 'teams.*', 'when' => $canManageSettings || $belongsToSharedTeam],
+            // Starter-kit account teams, not HRMS teams (People → Teams): Super Admin only (Phase 4).
+            ['route' => 'teams.index', 'label' => __('Account Teams (legacy)'), 'icon' => 'users', 'active' => 'teams.*', 'when' => $settingsUser?->can('manage-account-teams') ?? false],
         ],
         __('Account') => [
             ['route' => 'profile.edit', 'label' => __('Profile'), 'icon' => 'user', 'active' => 'profile.edit', 'when' => true],

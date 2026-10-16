@@ -422,6 +422,8 @@ class Sidebar
                     ['label' => 'Import / Export', 'route' => 'settings.import-export',
                         'when' => fn (User $u) => $u->hasPermission('data_export') || $u->hasPermission('data_import')],
                     ['label' => 'Data Management', 'route' => 'settings.data-management', 'when' => fn (User $u) => $u->hasPermission('data_purge')],
+                    // Only for the people it is for (Phase 4): assign_coordinators.
+                    ['label' => 'Coordinators', 'route' => 'settings.coordinators', 'when' => fn (User $u) => $u->hasPermission('assign_coordinators')],
                 ],
             ],
         ];

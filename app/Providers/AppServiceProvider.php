@@ -132,6 +132,11 @@ class AppServiceProvider extends ServiceProvider
         // everyone, so a scoped payroll grant is not enough (Phase 4 policy).
         Gate::define('payroll-company', static fn (User $user): bool => app(PayrollAccess::class)->isCompanyWide($user));
 
+        // The starter-kit account teams (settings/teams) are not the HRMS team
+        // structure (People → Teams, DepartmentTeam). Phase 4 decision: Super
+        // Admin only, kept apart from HRMS teams.
+        Gate::define('manage-account-teams', static fn (User $user): bool => $user->isSuperAdmin());
+
         // Dynamic, database-driven authorization: any ability matching a
         // `permissions.key` row resolves through the user's assigned role.
         // once() memos (settings rows, the default shift, permission keys)
