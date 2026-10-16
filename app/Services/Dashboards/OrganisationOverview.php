@@ -2,7 +2,6 @@
 
 namespace App\Services\Dashboards;
 
-use App\Models\Attendance;
 use App\Models\AttendanceRegularisation;
 use App\Models\AuditLog;
 use App\Models\Department;
@@ -18,10 +17,11 @@ use App\Models\PipRecord;
 use App\Models\User;
 use App\Models\WarningLetter;
 use App\Models\WfhRequest;
-use App\Services\Attendance\AttendanceStatusResolver;
-use App\Services\Attendance\WorkingDayResolver;
+use App\Services\Approvals\ApprovalQueueService;
+use App\Services\Attendance\TodayStatusService;
 use App\Services\Help\RouteAccess;
 use App\Services\ModuleFeatureService;
+use App\Services\Security\PeopleScope;
 use App\Services\Security\ScopeResolver;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
@@ -45,9 +45,12 @@ class OrganisationOverview
 
     private bool $scoped = false;
 
+    private ?User $viewer = null;
+
     public function for(User $user): self
     {
         $clone = clone $this;
+        $clone->viewer = $user;
         $clone->ids = $user->hasPermission('manage_employees')
             ? app(ScopeResolver::class)->employeeIds($user, 'manage_employees')
             : $user->accessibleEmployeeIds();
@@ -77,7 +80,13 @@ class OrganisationOverview
             'scopeLabel' => $overview->scopeLabel($user),
             'people' => $overview->people(),
             'attendance' => $overview->attendanceToday(),
+            // Three different questions, never one "waiting" number (P3-04):
+            // what waits for THIS user (ApprovalQueueService — the Approvals
+            // badge and Command Center), what is open across their scope
+            // whoever decides it, and what is back with the employee.
+            'myApprovals' => app(ApprovalQueueService::class)->counts($user),
             'approvals' => $overview->approvals(),
+            'moreInfo' => $overview->moreInfo(),
             'issues' => $overview->issues(),
         ];
 
@@ -154,42 +163,45 @@ class OrganisationOverview
      */
     public function attendanceToday(): array
     {
-        $today = Carbon::today();
-        $weeklyOff = app(WorkingDayResolver::class)->isWeeklyOff($today);
-        $team = $this->employees()->with(['user', 'shift'])->whereIn('status', self::WORKING)
-            ->where(fn ($q) => $q->whereNull('joining_date')->orWhereDate('joining_date', '<=', $today->toDateString()))
-            ->get();
-        $rows = Attendance::whereIn('employee_id', $team->pluck('id'))->where('date', $today->toDateString())->get()->keyBy('employee_id');
-        $statuses = app(AttendanceStatusResolver::class)->currentForMany($team, $rows);
-        $onLeave = $this->onLeaveTodayIds();
-
-        $present = $late = $missing = $notIn = 0;
-
-        foreach ($statuses as $employeeId => $status) {
-            if ($status['state'] === AttendanceStatusResolver::NOT_IN) {
-                if (! $weeklyOff && ! in_array($employeeId, $onLeave, true) && ($status['reason'] ?? null) === 'absent') {
-                    $notIn++;
-                }
-
-                continue;
-            }
-
-            $present++;
-            $late += ! $weeklyOff && $status['day']->isLate ? 1 : 0;
-            $missing += $status['state'] === AttendanceStatusResolver::MISSING_CHECKOUT ? 1 : 0;
-        }
+        // TodayStatusService — the source Team View, People Operations Today
+        // and AI use — over the working people in reach; never a second loop
+        // (P3-05). Legacy keys are kept for existing readers.
+        // The same population too: PeopleScope's working people in the
+        // view_attendance reach (the viewer excluded), as People Operations,
+        // Team View and AI count them.
+        $ids = $this->viewer !== null
+            ? app(PeopleScope::class)->workingEmployeeIds($this->viewer, 'view_attendance')
+            : $this->employees()->whereIn('status', self::WORKING)->pluck('id')->all();
+        $summary = app(TodayStatusService::class)->summary($ids);
 
         return [
-            'present' => $present,
-            'late' => $late,
-            'missing_checkout' => $missing,
-            'not_in' => $notIn,
-            'on_leave' => count($onLeave),
-            'weekly_off' => $weeklyOff,
+            'present' => $summary['present'],
+            'late' => $summary['late'],
+            'missing_checkout' => $summary['missing_checkout'],
+            'not_in' => $summary['no_checkin'] + $summary['absent'],
+            'on_leave' => $summary['on_leave'],
+            'weekly_off' => $summary['weekly_off'] > 0,
+            'summary' => $summary,
         ];
     }
 
-    /** @return array<string, int> pending requests by kind */
+    /**
+     * Requests asked to supply more information: back with the employee, so
+     * not waiting for anyone's decision.
+     *
+     * @return array{leave: int}
+     */
+    public function moreInfo(): array
+    {
+        return ['leave' => $this->forEmployees(LeaveRequest::where('status', 'more_info_requested'))->count()];
+    }
+
+    /**
+     * Open requests across the viewer's scope, whoever decides them — not
+     * "waiting for you" (that is ApprovalQueueService::counts()).
+     *
+     * @return array<string, int> pending requests by kind
+     */
     public function approvals(): array
     {
         return [

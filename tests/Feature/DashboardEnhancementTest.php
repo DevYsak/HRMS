@@ -37,7 +37,7 @@ test('hr dashboard shows pending approvals and hides payroll widgets', function 
     // decision"; payroll figures are not on the HR view.
     Livewire::test(Dashboard::class)
         ->assertOk()
-        ->assertSee('Waiting for a decision')
+        ->assertSee('Waiting for your decision')
         ->assertSee('Attendance regularisations')
         ->assertDontSee('Draft cycles open')
         ->assertDontSee('Payroll Completion');

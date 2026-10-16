@@ -36,7 +36,7 @@ test('HR sees the HR operations overview with decisions and alerts', function ()
 
     $this->actingAs($hr)->get(route('dashboard'))->assertOk()
         ->assertSee('HR operations')
-        ->assertSee('Waiting for a decision')
+        ->assertSee('Waiting for your decision')
         ->assertSee('HR alerts')
         ->assertSee('Missing checkout')
         ->assertDontSee('Security — last 7 days');
@@ -56,7 +56,7 @@ test('no invented metrics and no repeated headline cards', function (UserRole $r
         expect($html)->not->toContain($invented);
     }
 
-    foreach (['Working headcount', 'Present today', 'Missing checkout', 'Not checked in', 'Waiting for a decision', 'HR alerts'] as $card) {
+    foreach (['Working headcount', 'Present today', 'Missing checkout', 'Not checked in', 'Waiting for your decision', 'HR alerts'] as $card) {
         expect(substr_count($html, $card))->toBe(1, "'{$card}' appears more than once");
     }
 })->with([UserRole::HrAdmin, UserRole::SuperAdmin]);

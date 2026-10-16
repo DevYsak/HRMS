@@ -17,6 +17,6 @@ test('hr-admin dashboard page renders premium HR content', function () {
         ->assertOk()
         ->assertSee('Present today')
         ->assertSee('Open onboarding tasks')
-        ->assertSee('Waiting for a decision')
+        ->assertSee('Waiting for your decision')
         ->assertSee('Attendance regularisations');
 });

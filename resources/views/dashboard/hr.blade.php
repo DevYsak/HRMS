@@ -24,8 +24,20 @@
              quality, all from the canonical services over one department selector. --}}
         <livewire:dashboard.people-operations />
 
-        <div class="grid grid-cols-1 gap-5 lg:grid-cols-2">
-            <x-pulse.card title="Waiting for a decision" icon="inbox-stack" flush>
+        @php
+            $typeLinks = ['leave' => 'time-off.team', 'regularisation' => 'attendance.command-center', 'overtime' => 'overtime.manage', 'wfh' => 'wfh.manage', 'holiday' => 'time-off.team'];
+            $typeLabels = ['leave' => 'Leave requests', 'regularisation' => 'Attendance regularisations', 'overtime' => 'Overtime requests', 'wfh' => 'WFH requests', 'holiday' => 'Holiday work requests'];
+        @endphp
+        <div class="grid grid-cols-1 gap-5 lg:grid-cols-3">
+            {{-- Same queue as the Approvals badge and Command Center (ApprovalQueueService). --}}
+            <x-pulse.card title="Waiting for your decision" subtitle="Requests you can approve now" icon="check-badge" flush data-my-approvals>
+                @include('dashboard.partials.count-list', ['rows' => collect($myApprovals)->map(fn ($count, $type) => [
+                    'label' => $typeLabels[$type] ?? \Illuminate\Support\Str::headline($type), 'count' => $count, 'href' => $link($typeLinks[$type] ?? 'attendance.command-center'),
+                ])->values()->all(), 'empty' => 'Nothing is waiting for your decision.'])
+            </x-pulse.card>
+
+            {{-- Everything open in scope, whoever decides it (managers included). --}}
+            <x-pulse.card title="Open requests in your scope" subtitle="Pending with anyone — managers, HR or Finance" icon="inbox-stack" flush data-open-in-scope>
                 @include('dashboard.partials.count-list', ['rows' => [
                     ['label' => 'Leave awaiting HR', 'count' => $approvals['leave_hr'], 'href' => $link('time-off.employees')],
                     ['label' => 'Leave with managers', 'count' => $approvals['leave_manager'], 'href' => $link('time-off.employees')],
@@ -34,7 +46,8 @@
                     ['label' => 'WFH requests', 'count' => $approvals['wfh'], 'href' => $link('wfh.manage')],
                     ['label' => 'Leave encashments', 'count' => $approvals['encashments'], 'href' => $link('time-off.encashments')],
                     ['label' => 'Escalated leave', 'count' => $approvals['escalations'], 'href' => $link('notifications.index'), 'tone' => 'rose'],
-                ], 'empty' => 'Nothing is waiting for a decision.'])
+                    ['label' => 'Needs more info — back with the employee', 'count' => $moreInfo['leave'], 'href' => $link('time-off.employees'), 'tone' => 'amber'],
+                ], 'empty' => 'No open requests in your scope.'])
             </x-pulse.card>
 
             <x-pulse.card title="HR alerts" icon="bell-alert" flush>
