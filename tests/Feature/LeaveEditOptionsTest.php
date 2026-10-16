@@ -163,6 +163,8 @@ test('HR changes an approved leave from paid to unpaid with a remark', function 
     $component = leoManage($this, $request->fresh())
         ->assertSeeHtml('data-manage-payment')
         ->assertSee('Leave Payment Type')
+        // Paid / unpaid is its own choice now, not part of the leave type's name.
+        ->assertDontSee('Edit Test Leave (Paid)')
         ->set('form.approved_leave_status', 'unpaid')
         ->assertSee('HR remark (required for a payment change)')
         ->call('saveManage')

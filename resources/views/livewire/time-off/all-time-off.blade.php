@@ -626,8 +626,8 @@
                     <x-clean-select model="form.status" label="Request Status" :live="false"
                         :options="[['value' => 'pending', 'label' => 'Pending'], ['value' => 'approved', 'label' => 'Approved'], ['value' => 'rejected', 'label' => 'Rejected'], ['value' => 'cancelled', 'label' => 'Cancelled']]" />
 
-                    <x-clean-select model="form.leave_type_id" label="Leave Type" :live="false"
-                        :options="$leaveTypes->map(fn ($type) => ['value' => $type->id, 'label' => $type->name.' ('.($type->is_paid ? 'Paid' : 'Unpaid').')'])->all()" />
+                    <x-clean-select model="form.leave_type_id" label="Leave Type"
+                        :options="$leaveTypes->map(fn ($type) => ['value' => $type->id, 'label' => $type->name])->all()" />
 
                     <div class="grid grid-cols-2 gap-4">
                         <flux:input wire:model.live="form.start_date" type="date" label="Start Date" required />
