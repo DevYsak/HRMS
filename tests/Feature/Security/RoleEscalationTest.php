@@ -83,11 +83,18 @@ test('HR can assign the operational roles inside the delegation ceiling', functi
     $target = escalationTarget();
 
     Livewire::actingAs(escalationHr())->test(EmployeeEdit::class, ['employee' => $target])
-        ->set('roleId', (string) escalationRole('finance')->id)
+        ->set('roleId', (string) escalationRole('manager')->id)
         ->call('save')
         ->assertHasNoErrors();
 
-    expect($target->user->fresh()->role)->toBe(UserRole::Finance);
+    expect($target->user->fresh()->role)->toBe(UserRole::Manager);
+
+    // Phase 4: the Finance role carries the bank-transfer file
+    // (export_bank_transfer, privileged), so only a Super Admin assigns it.
+    Livewire::actingAs(escalationHr())->test(EmployeeEdit::class, ['employee' => escalationTarget()])
+        ->set('roleId', (string) escalationRole('finance')->id)
+        ->call('save')
+        ->assertHasErrors('roleId');
 });
 
 test('HR cannot assign a custom role that carries a privileged permission', function () {

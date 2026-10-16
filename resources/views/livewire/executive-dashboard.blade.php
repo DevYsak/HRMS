@@ -23,7 +23,10 @@
 
         // ── Executive metrics ──
         // Payroll & Payslips switched off: no payroll figures or actions here.
-        $payrollOn = app(\App\Services\ModuleFeatureService::class)->payrollEnabled();
+        // Company payroll cost only with company-wide payroll access (Phase 4:
+        // whoever opens this view without it sees no company or employee pay).
+        $payrollOn = app(\App\Services\ModuleFeatureService::class)->payrollEnabled()
+            && app(\App\Services\Payroll\PayrollAccess::class)->isCompanyWide(auth()->user());
         $payrollCost = (float) (($cycleAPayroll?->total_payout ?? 0) + ($cycleBPayroll?->total_payout ?? 0));
         $payrollPerEmp = $activeCount > 0 ? $payrollCost / $activeCount : 0;
         $openApprovals = $pendingLeaves + $pendingOt;

@@ -190,7 +190,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'view_leave_management', 'add_leave_balance', 'deduct_leave_balance', 'correct_leave_balance', 'apply_leave_on_behalf', 'record_approved_leave', 'manage_approved_leave',
             'override_leave_policy', 'bulk_allocate_leave', 'run_leave_rollover', 'reconcile_leave', 'export_leave',
             'view_leave_regularisation', 'create_leave_regularisation', 'approve_leave_regularisation', 'manage_leave_regularisation',
-            'view_payroll', 'run_payroll', 'view_payslips', 'manage_salary_components', 'view_finance_profile', 'lock_payroll', 'unlock_payroll', 'delete_payslip',
+            'view_payroll', 'run_payroll', 'approve_payroll', 'view_payslips', 'manage_salary_components', 'view_finance_profile', 'lock_payroll', 'unlock_payroll', 'delete_payslip',
             'view_performance', 'review_performance', 'manage_kpi_templates', 'manage_review_cycles', 'manage_scorecards', 'manage_promotions', 'manage_pip', 'manage_warning_letters',
             'upload_documents', 'manage_documents', 'view_documents', 'acknowledge_documents', 'view_kyc_documents',
             'view_reports', 'export_reports',
@@ -207,7 +207,9 @@ class RolesAndPermissionsSeeder extends Seeder
             'view_attendance', 'manage_attendance', 'approve_regularisation', 'approve_overtime', 'approve_wfh',
             'view_leave', 'apply_leave', 'approve_leave',
             'view_probation', 'confirm_probation',
-            'view_payroll', 'view_payslips',
+            // Own payslips only; employee pay, payroll and the department
+            // payroll summary need an explicit grant (Phase 4, 16 Oct 2026).
+            'view_payslips',
             'view_performance', 'review_performance', 'manage_kpi_templates', 'manage_review_cycles', 'manage_scorecards', 'manage_promotions', 'manage_pip', 'manage_warning_letters',
             'view_documents', 'acknowledge_documents',
             'view_reports', 'export_reports',
@@ -226,7 +228,7 @@ class RolesAndPermissionsSeeder extends Seeder
         'finance' => [
             'view_employee',
             'view_leave', 'apply_leave',
-            'view_payroll', 'run_payroll', 'approve_payroll', 'view_payslips', 'manage_salary_components', 'approve_finance', 'view_finance_profile',
+            'view_payroll', 'run_payroll', 'approve_payroll', 'view_payslips', 'manage_salary_components', 'approve_finance', 'view_finance_profile', 'export_bank_transfer',
             // Performance management (review, PIP, promotions) only by explicit grant.
             'view_performance',
             'view_documents', 'acknowledge_documents',

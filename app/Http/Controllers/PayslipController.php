@@ -5,10 +5,10 @@ namespace App\Http\Controllers;
 use App\Models\AuditLog;
 use App\Models\Company;
 use App\Models\Payslip;
+use App\Services\Payroll\PayrollAccess;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 
 class PayslipController extends Controller
@@ -38,11 +38,13 @@ class PayslipController extends Controller
         $query = Payslip::with(['payroll', 'items', 'employee.user'])
             ->whereIn('id', $validated['ids']);
 
-        // Employees are scoped to their own payslips; payroll staff may print anyone's.
-        if (! $user->canRunPayroll()) {
-            $employee = $user->employee;
-            abort_unless($employee, 403);
-            $query->where('employee_id', $employee->id);
+        // Own payslips, plus those inside the viewer's payroll reach — never
+        // "anyone's" just because they hold a payroll permission (Phase 4).
+        $access = app(PayrollAccess::class);
+        $reach = $access->reach($user);
+        $ownId = $user->hasPermission('view_payslips') ? $user->employee?->id : null;
+        if ($reach !== null) {
+            $query->whereIn('employee_id', array_values(array_filter([...$reach, $ownId])));
         }
 
         // payrolls.month holds a month *name*, so order by a real date rather
@@ -112,7 +114,7 @@ class PayslipController extends Controller
      */
     public function downloadBulkZip(Request $request)
     {
-        abort_unless(auth()->user()->canRunPayroll(), 403);
+        abort_unless(auth()->user()->canRunPayroll() && app(PayrollAccess::class)->isCompanyWide(auth()->user()), 403);
 
         $validated = $request->validate([
             'ids' => ['required', 'array', 'min:1', 'max:'.self::MAX_BULK_ZIP],
@@ -149,10 +151,9 @@ class PayslipController extends Controller
 
     public function download(Payslip $payslip)
     {
-        // Ensure the user is either the employee who owns the payslip, a manager of the employee, HR Admin, or Finance/SuperAdmin
-        if (! Gate::check('view', $payslip) && auth()->user()->id !== $payslip->employee->user_id && ! auth()->user()->canRunPayroll()) {
-            abort(403, 'Unauthorized action.');
-        }
+        // The owner (view_payslips), or payroll access whose reach covers the
+        // employee — a payroll permission alone is not every employee (Phase 4).
+        abort_unless(app(PayrollAccess::class)->canViewPayslip(auth()->user(), $payslip), 403, 'Unauthorized action.');
 
         AuditLog::record($payslip, 'downloaded', null, null, subjectEmployeeId: $payslip->employee_id);
 

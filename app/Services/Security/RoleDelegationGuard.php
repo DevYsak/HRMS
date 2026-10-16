@@ -39,6 +39,8 @@ class RoleDelegationGuard
         'manage_roles',
         'unlock_payroll',
         'delete_payslip',
+        // The bank-transfer file: every account number and net pay (Phase 4).
+        'export_bank_transfer',
         'manage_security',
         'manage_role_permissions',
         'data_purge',

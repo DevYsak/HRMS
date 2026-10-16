@@ -63,14 +63,16 @@ test('directors are directors and super admins', function () {
         ->toBe(collect([$director->id, $super->id])->sort()->values()->all());
 });
 
-test('payroll approvers are finance, directors and super admins', function () {
+test('payroll approvers are whoever holds approve_finance with company-wide payroll — Finance and Super Admin by default, never Directors', function () {
+    // Phase 4: by permission, not a role list. A Director holds neither
+    // approve_finance nor payroll access, and was sent a page they could not open.
     $finance = nrmUser(UserRole::Finance);
-    $director = nrmUser(UserRole::Director);
+    nrmUser(UserRole::Director);
     $super = nrmUser(UserRole::SuperAdmin);
     nrmUser(UserRole::HrAdmin);
 
     expect(app(NotificationRecipients::class)->payrollApprovers()->pluck('id')->sort()->values()->all())
-        ->toBe(collect([$finance->id, $director->id, $super->id])->sort()->values()->all());
+        ->toBe(collect([$finance->id, $super->id])->sort()->values()->all());
 });
 
 test('no manager is ever included in a role broadcast just for being a manager', function () {

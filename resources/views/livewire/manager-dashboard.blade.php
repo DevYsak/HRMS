@@ -72,6 +72,13 @@
                 :sub="$pendingLeaveCount.' leave'.($canApproveOt ? ' · '.$pendingOtCount.' OT' : '')" :href="$link('time-off.team')" />
         </x-pulse.grid>
 
+        {{-- Department payroll cost — an explicit, aggregate-only grant (Phase 4). --}}
+        @if($departmentPayroll ?? null)
+            <x-pulse.grid :cols="4">
+                <x-pulse.kpi-card label="Department Payroll Cost" :value="'₹'.number_format($departmentPayroll['cost'])" icon="banknotes" accent="blue" :sub="$departmentPayroll['label']" />
+            </x-pulse.grid>
+        @endif
+
         {{-- ── ROW 2 — ATTENDANCE + NEEDS ATTENTION ── --}}
         <x-pulse.grid :split="true" class="items-start">
             <x-pulse.card title="Team Attendance — Today" icon="users" flush>

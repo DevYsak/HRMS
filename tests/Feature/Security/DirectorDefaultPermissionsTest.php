@@ -54,11 +54,12 @@ function d1LeaveType(): LeaveType
 test('the Director role no longer holds create, delete, offboarding or payroll sign-off by default', function () {
     $director = Role::where('slug', 'director')->firstOrFail();
 
-    foreach (['create_employee', 'delete_employee', 'manage_offboarding', 'approve_finance', 'approve_payroll'] as $key) {
+    // Phase 4 (16 Oct): no employee pay by default either — view_payroll only when granted.
+    foreach (['create_employee', 'delete_employee', 'manage_offboarding', 'approve_finance', 'approve_payroll', 'view_payroll', 'view_department_payroll_summary'] as $key) {
         expect($director->hasPermission($key))->toBeFalse("Director should not hold {$key}");
     }
 
-    foreach (['manage_employees', 'view_employee', 'approve_leave', 'manage_onboarding', 'view_payroll'] as $key) {
+    foreach (['manage_employees', 'view_employee', 'approve_leave', 'manage_onboarding', 'view_payslips'] as $key) {
         expect($director->hasPermission($key))->toBeTrue("Director should keep {$key}");
     }
 });

@@ -45,7 +45,7 @@ final class PermissionScopes
         // Documents
         'view_documents', 'manage_documents', 'upload_documents', 'view_kyc_documents',
         // Payroll
-        'view_payroll', 'view_finance_profile',
+        'view_payroll', 'view_finance_profile', 'view_department_payroll_summary',
         // Reports & notifications
         'view_reports', 'export_reports', 'manage_notifications',
     ];
@@ -56,6 +56,11 @@ final class PermissionScopes
      * @var array<string, array<int, array{key: string, label: string, description: string}>>
      */
     public const NEW_PERMISSIONS = [
+        // Phase 4 payroll policy (16 Oct 2026): permission = action, scope = whose payroll.
+        'Payroll' => [
+            ['key' => 'export_bank_transfer', 'label' => 'Export Bank Transfer File', 'description' => 'Download the bank-transfer file (account numbers and net pay). Company-wide payroll access is also required'],
+            ['key' => 'view_department_payroll_summary', 'label' => 'View Department Payroll Summary', 'description' => 'See aggregate payroll cost for the departments in scope — no individual salary, bank details or payslips. Explicit grant only'],
+        ],
         'Dashboard' => [
             ['key' => 'view_main_dashboard', 'label' => 'Main Dashboard', 'description' => 'Open the main dashboard: the company or HR overview, or the employee’s own self-service dashboard'],
             ['key' => 'view_team_dashboard', 'label' => 'Team View', 'description' => 'Open Team View (approvals and today’s attendance for the people they approve). Scope: the level it opens at — team, department or company'],

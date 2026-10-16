@@ -5,6 +5,7 @@ namespace App\Services\Notifications;
 use App\Enums\UserRole;
 use App\Models\Employee;
 use App\Models\User;
+use App\Services\Payroll\PayrollAccess;
 use Illuminate\Support\Collection;
 
 /**
@@ -110,9 +111,14 @@ class NotificationRecipients
      */
     public function payrollApprovers(): Collection
     {
-        return User::query()
-            ->whereIn('role', [UserRole::SuperAdmin, UserRole::Finance, UserRole::Director])
-            ->get();
+        // Whoever can finalise it: approve_finance with company-wide payroll
+        // reach (Phase 4) — not a role list that included Directors, who
+        // could not open the page they were sent to.
+        $access = app(PayrollAccess::class);
+
+        return User::query()->whereNull('deleted_at')->get()
+            ->filter(fn (User $u) => $u->hasPermission('approve_finance') && $access->isCompanyWide($u))
+            ->values();
     }
 
     /**

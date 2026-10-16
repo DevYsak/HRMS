@@ -411,19 +411,20 @@ class PayrollService
             return;
         }
 
-        if (User::where('role', $step->approver_type)->doesntExist()) {
-            throw new \DomainException("Approval step \"{$step->label}\" has no eligible approver (no user with the {$step->approver_type} role) — fix it in the approval policy settings before submitting.");
+        // Permission-based (Phase 4): someone must hold the step's permission
+        // with company-wide payroll reach.
+        $probe = new PayrollApprovalStep(['approver_type' => $step->approver_type]);
+        if ($probe->eligibleUsers()->isEmpty()) {
+            $permission = PayrollApprovalStep::permissionFor($step->approver_type);
+            throw new \DomainException("Approval step \"{$step->label}\" has no eligible approver (nobody holds {$permission} with company-wide payroll access) — fix it in the approval policy settings or Roles & Permissions before submitting.");
         }
     }
 
     /** Notify the resolved approver(s) for a step — every matching user for a role type, or the exact one for specific_user. */
     private function notifyStepApprovers(Payroll $payroll, PayrollApprovalStep $step): void
     {
-        $recipients = $step->approver_type === 'specific_user'
-            ? User::whereKey($step->specific_user_id)->get()
-            : User::where('role', $step->approver_type)->get();
-
-        foreach ($recipients as $recipient) {
+        // Never the maker: they cannot approve their own payroll (maker-checker).
+        foreach ($step->eligibleUsers()->reject(fn (User $u) => $u->id === (int) $payroll->processed_by) as $recipient) {
             $recipient->notify((new PayrollApprovalNotification($payroll, 'step_ready', $step))->forRole('approver'));
         }
     }

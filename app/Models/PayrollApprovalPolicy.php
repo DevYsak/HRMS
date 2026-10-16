@@ -39,8 +39,9 @@ class PayrollApprovalPolicy extends Model
     }
 
     /**
-     * Whether this step is Finance signing off: the Finance role, or a named
-     * person who holds the Finance role.
+     * Whether this step is Finance signing off: a Finance step, or a named
+     * person who holds the Finance sign-off permission (approve_finance) —
+     * not their role name.
      */
     public function isFinanceStep(): bool
     {
@@ -49,7 +50,7 @@ class PayrollApprovalPolicy extends Model
         }
 
         return $this->approver_type === 'specific_user'
-            && $this->specificUser?->role?->value === 'finance';
+            && (bool) $this->specificUser?->hasPermission('approve_finance');
     }
 
     /**

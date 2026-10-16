@@ -34,7 +34,7 @@ class FinanceApproval extends Component
      */
     private function authorizeAccess(): void
     {
-        abort_unless(Auth::user()->canApproveFinance() || Auth::user()->canRunPayroll(), 403);
+        abort_unless(Auth::user()->canApproveFinance() || Auth::user()->canRunPayroll() || Auth::user()->hasPermission('approve_payroll'), 403);
     }
 
     /**

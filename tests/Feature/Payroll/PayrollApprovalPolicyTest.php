@@ -67,7 +67,9 @@ test('submitting with an active policy snapshots ordered steps and notifies only
         ->and($steps[1]->label)->toBe('Finance Sign-off');
 
     Notification::assertSentTo($hrApprover, PayrollApprovalNotification::class, fn ($n) => $n->event === 'step_ready' && $n->step->label === 'HR Review');
-    Notification::assertNotSentTo($financeApprover, PayrollApprovalNotification::class);
+    // Step 2 is not announced yet; and never to the maker (maker-checker).
+    Notification::assertNotSentTo($financeApprover, PayrollApprovalNotification::class, fn ($n) => $n->step?->label === 'Finance Sign-off');
+    Notification::assertNotSentTo($maker, PayrollApprovalNotification::class);
 });
 
 test('resubmitting after rejection wipes stale steps rather than duplicating them', function () {
@@ -225,9 +227,9 @@ test('submitting fails loudly when a specific_user step references a deleted use
 });
 
 test('submitting fails loudly when a role-type step has zero eligible users', function () {
-    $maker = User::factory()->create(['role' => 'hr_admin']);
+    // Eligibility is by permission (Phase 4): nobody holds approve_payroll with company-wide payroll.
+    $maker = User::factory()->create(['role' => 'employee']);
     policyStep('Director Approval', 'director', 1);
-    // No user with role=director exists.
 
     expect(fn () => app(PayrollService::class)->submitForFinanceApproval(draftPayrollFor('January', $maker)))
         ->toThrow(DomainException::class, 'Director Approval');

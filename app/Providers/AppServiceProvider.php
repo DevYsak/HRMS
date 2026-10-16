@@ -49,6 +49,7 @@ use App\Services\EmployeeImportService;
 use App\Services\ModuleFeatureService;
 use App\Services\Navigation\DashboardAccess;
 use App\Services\Notifications\NotificationDeliveryGate;
+use App\Services\Payroll\PayrollAccess;
 use App\Support\DateDisplay;
 use Carbon\CarbonImmutable;
 use Illuminate\Auth\Middleware\Authorize;
@@ -125,6 +126,11 @@ class AppServiceProvider extends ServiceProvider
         foreach (array_keys(DashboardAccess::DASHBOARDS) as $dashboard) {
             Gate::define("open-{$dashboard}-dashboard", static fn (User $user): bool => app(DashboardAccess::class)->allows($user, $dashboard));
         }
+
+        // Company-wide payroll reach (view_payroll at company scope): running
+        // payroll, finance sign-off and payroll / salary exports act on
+        // everyone, so a scoped payroll grant is not enough (Phase 4 policy).
+        Gate::define('payroll-company', static fn (User $user): bool => app(PayrollAccess::class)->isCompanyWide($user));
 
         // Dynamic, database-driven authorization: any ability matching a
         // `permissions.key` row resolves through the user's assigned role.

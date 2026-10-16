@@ -128,6 +128,7 @@ use App\Livewire\TimeOff\TimeOffSettings;
 use App\Livewire\Wfh\ManageWfhRequests;
 use App\Livewire\Wfh\MyWfhRequests;
 use App\Models\IncrementProposal;
+use App\Services\Payroll\PayrollAccess;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Fortify\Features;
@@ -373,19 +374,21 @@ Route::middleware(['auth'])->group(function () {
     // (System Settings › Modules) — on top of, never instead of, each route's
     // own permission.
     Route::prefix('payroll')->name('payroll.')->middleware('module:payroll')->group(function () {
-        // All authenticated users may view their own payslips
-        Route::get('/my-payslips', MyPayslips::class)->name('payslips')->middleware('module:payslips');
+        // Own payslips — view_payslips (every built-in role holds it by default).
+        Route::get('/my-payslips', MyPayslips::class)->name('payslips')->middleware(['module:payslips', 'can:view_payslips']);
         Route::get('/payslips/{payslip}/download', [PayslipController::class, 'download'])
             ->name('payslips.download')->middleware('module:payslips');
         // Combined multi-month print (max 6) — ?ids[]=1&ids[]=2
         Route::get('/payslips/print-combined', [PayslipController::class, 'downloadCombined'])
             ->name('payslips.print-combined')->middleware('module:payslips');
 
-        // Payroll administration — finance, HR Admin, Super Admin
-        Route::middleware('role:run-payroll')->group(function () {
+        // Payroll administration — run_payroll AND company-wide payroll reach
+        // (Phase 4: permission = action, scope = whose payroll; a scoped
+        // payroll grant cannot open company-wide payroll pages).
+        Route::middleware(['role:run-payroll', 'can:payroll-company'])->group(function () {
             Route::get('/overview', Overview::class)->name('overview');
-            Route::get('/components', Components::class)->name('components');
-            Route::get('/structures', SalaryStructures::class)->name('structures');
+            Route::get('/components', Components::class)->name('components')->middleware('can:manage_salary_components');
+            Route::get('/structures', SalaryStructures::class)->name('structures')->middleware('can:manage_salary_components');
             Route::get('/historical-import', HistoricalImport::class)->name('historical-import');
             Route::get('/process', Process::class)->name('process');
             Route::get('/incentives', Incentives::class)->name('incentives');
@@ -402,7 +405,7 @@ Route::middleware(['auth'])->group(function () {
         // configured policy despite not having approve-finance. Real per-step
         // eligibility is enforced in FinanceApproval/PayrollService.
         Route::get('/finance-approve', FinanceApproval::class)->name('finance-approve')
-            ->middleware('role:run-payroll,approve-finance');
+            ->middleware(['role:run-payroll,approve-finance', 'can:payroll-company']);
     });
 
     // --------------------------------------------------
@@ -450,10 +453,11 @@ Route::middleware(['auth'])->group(function () {
         // Increment letter download — own letter, or HR/admin
         Route::get('/increments/letter/{proposal}', function (IncrementProposal $proposal) {
             $user = auth()->user();
-            // Own letter, or HR within reach — the letter states revised pay.
+            // Own letter, or payroll access within reach — the letter states
+            // revised pay, which managing employees alone does not open.
             abort_unless(
                 $proposal->employee?->user_id === $user->id
-                || ($user->canManageEmployees() && $proposal->employee && $user->coversEmployee($proposal->employee)),
+                || ($proposal->employee && app(PayrollAccess::class)->covers($user, $proposal->employee)),
                 403,
             );
             abort_unless($proposal->letter_path && Storage::disk('local')->exists($proposal->letter_path), 404);
@@ -535,13 +539,15 @@ Route::middleware(['auth'])->group(function () {
     Route::prefix('reports')->name('reports.')->group(function () {
         Route::get('/payroll-summary.pdf', [ReportController::class, 'payrollSummaryPdf'])
             ->name('payroll-summary')
-            ->middleware(['role:run-payroll', 'module:payroll']);
+            ->middleware(['role:run-payroll', 'module:payroll', 'can:payroll-company']);
 
         // Payroll reports (12 types) — Phase 6
-        Route::middleware(['role:run-payroll', 'module:payroll'])->group(function () {
+        // Salary and payroll exports: company-level payroll authorisation;
+        // the bank-transfer file also needs export_bank_transfer (Phase 4).
+        Route::middleware(['role:run-payroll', 'module:payroll', 'can:payroll-company'])->group(function () {
             Route::get('/payroll-register.csv', [ReportController::class, 'payrollRegisterCsv'])->name('payroll-register');
             Route::get('/salary-register.csv', [ReportController::class, 'salaryRegisterCsv'])->name('salary-register');
-            Route::get('/bank-transfer.csv', [ReportController::class, 'bankTransferReportCsv'])->name('bank-transfer');
+            Route::get('/bank-transfer.csv', [ReportController::class, 'bankTransferReportCsv'])->name('bank-transfer')->middleware('can:export_bank_transfer');
             Route::get('/pf-report.csv', [ReportController::class, 'providentFundReportCsv'])->name('pf-report');
             Route::get('/esi-report.csv', [ReportController::class, 'esiReportCsv'])->name('esi-report');
             Route::get('/pt-report.csv', [ReportController::class, 'professionalTaxReportCsv'])->name('pt-report');

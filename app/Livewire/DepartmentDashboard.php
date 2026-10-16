@@ -4,6 +4,9 @@ namespace App\Livewire;
 
 use App\Models\Department;
 use App\Models\Employee;
+use App\Models\Payroll;
+use App\Models\Payslip;
+use App\Services\ModuleFeatureService;
 use App\Services\Navigation\DashboardAccess;
 use App\Services\Security\ScopeResolver;
 use Illuminate\Support\Facades\Auth;
@@ -79,7 +82,38 @@ class DepartmentDashboard extends ManagerDashboard
             ]);
         }
 
-        return $view;
+        return $view->with('departmentPayroll', $this->departmentPayroll());
+    }
+
+    /**
+     * Aggregate payroll cost of the department(s) in view — only with an
+     * explicit view_department_payroll_summary grant, within its scope, from
+     * the last finalised run. Never an individual salary (Phase 4 policy).
+     *
+     * @return array{cost: float, label: string}|null
+     */
+    private function departmentPayroll(): ?array
+    {
+        $user = Auth::user();
+        if (! $user->hasPermission('view_department_payroll_summary') || ! app(ModuleFeatureService::class)->payrollEnabled()) {
+            return null;
+        }
+
+        $inView = $this->reach();
+        $granted = app(ScopeResolver::class)->employeeIds($user, 'view_department_payroll_summary', includeSelf: false);
+        $ids = match (true) {
+            $inView === null => $granted,
+            $granted === null => $inView,
+            default => array_values(array_intersect($inView, $granted)),
+        };
+
+        $lastRun = Payroll::where('status', 'finalized')->orderByDesc('finance_approved_at')->orderByDesc('id')->first();
+
+        return [
+            'cost' => $lastRun ? (float) Payslip::where('payroll_id', $lastRun->id)
+                ->when($ids !== null, fn ($q) => $q->whereIn('employee_id', $ids))->sum('net_salary') : 0.0,
+            'label' => $lastRun ? 'net pay · '.$lastRun->month.' '.$lastRun->year : 'no finalised payroll yet',
+        ];
     }
 
     protected function scopePermission(): string

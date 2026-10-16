@@ -104,7 +104,10 @@ test('the salary register breaks each payslip into a column per line item', func
 test('the bank transfer report includes bank details and flags missing ones', function () {
     seededPayslip('March', 2026);
 
-    $response = $this->actingAs(reportsPayrollAdmin())
+    // The bank-transfer file needs export_bank_transfer (Phase 4): Finance by default, not HR.
+    $this->actingAs(reportsPayrollAdmin())->get(route('reports.bank-transfer', ['month' => 3, 'year' => 2026]))->assertForbidden();
+    $finance = User::factory()->create(['role' => 'finance']);
+    $response = $this->actingAs($finance)
         ->get(route('reports.bank-transfer', ['month' => 3, 'year' => 2026]));
 
     $response->assertOk();
