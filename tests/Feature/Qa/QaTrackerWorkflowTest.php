@@ -319,11 +319,11 @@ test('the Phase 2 policy decisions are recorded with their commits and history',
         ->and($status('QA-F-030'))->toBe('verified')   // fixed in Phase 3 (dd47f75)
         ->and($status('QA-F-031'))->toBe('hr_correction_required')
         ->and(QaFinding::where('code', 'QA-F-031')->value('description'))->toContain('REVIEW REQUIRED')->toContain('Jordan Reed')
-        ->and(QaFinding::open()->where('needs_decision', true)->pluck('code')->all())->toBe(['QA-F-037'])   // the Phase 3 WFH question
+        ->and(QaFinding::open()->where('needs_decision', true)->pluck('code')->all())->toBe([])   // the Phase 3 WFH question was decided 16 Oct
         ->and(QaTestCase::where('code', 'like', 'QA-DEC-%')->where('status', 'pass')->count())->toBe(7);
 });
 
-test('Phase 3 is recorded: each fix has its test cases, commit and verification; WFH waits on a decision', function () {
+test('Phase 3 is recorded: each fix has its test cases, commit and verification, WFH included', function () {
     foreach (['QA-F-030' => 'dd47f75', 'QA-F-021' => '2d29468', 'QA-F-032' => 'bd1d2da', 'QA-F-033' => 'b50a8a3', 'QA-F-034' => 'a474909',
         'QA-F-035' => 'd29aafb', 'QA-F-036' => 'd29aafb', 'QA-F-038' => 'edf0729', 'QA-F-039' => '1c820e9'] as $code => $commit) {
         $finding = QaFinding::where('code', $code)->firstOrFail();
@@ -333,10 +333,11 @@ test('Phase 3 is recorded: each fix has its test cases, commit and verification;
     }
 
     $wfh = QaFinding::where('code', 'QA-F-037')->firstOrFail();
-    expect($wfh->status)->toBe(QaFindingStatus::Open)
-        ->and($wfh->needs_decision)->toBeTrue()
-        ->and($wfh->description)->toContain('42 attendance days')
-        ->and(QaTestCase::where('code', 'like', 'QA-P3-%')->where('status', 'pass')->count())->toBe(18)
+    expect($wfh->status)->toBe(QaFindingStatus::Verified)
+        ->and($wfh->needs_decision)->toBeFalse()
+        ->and($wfh->description)->toContain('42 attendance days')->toContain('Decision (16 Oct 2026, approved)')
+        ->and($wfh->fixes()->pluck('commit_hash'))->toContain('e6c70e5')
+        ->and(QaTestCase::where('code', 'like', 'QA-P3-%')->where('status', 'pass')->count())->toBe(23)
         ->and(QaPhase::where('number', 3)->first()->status)->toBe(QaPhaseStatus::InProgress);
 
     // The confirming full run: 12 known baseline; the 16 failures a concurrent commit caused mid-run passed on re-run.
