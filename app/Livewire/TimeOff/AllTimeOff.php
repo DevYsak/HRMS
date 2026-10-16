@@ -77,10 +77,16 @@ class AllTimeOff extends Component
         'start_date' => '',
         'end_date' => '',
         'reason' => '',
+        'is_half_day' => false,
+        'half_day_period' => '',
         'reviewer_comment' => '',
         'approved_leave_status' => '',
         'hr_remark' => '',
     ];
+
+    /** The request's paid / unpaid status when the editor opened (a change needs an HR remark). */
+    #[Locked]
+    public string $managePaymentWas = '';
 
     // New leave request
     public bool $showNewModal = false;
@@ -378,10 +384,13 @@ class AllTimeOff extends Component
             'start_date' => $request->start_date->format('Y-m-d'),
             'end_date' => $request->end_date->format('Y-m-d'),
             'reason' => $request->reason,
+            'is_half_day' => (bool) $request->is_half_day,
+            'half_day_period' => $request->half_day_period ?? '',
             'reviewer_comment' => $request->reviewer_comment ?? '',
             'approved_leave_status' => $request->approved_leave_status ?? $request->requested_leave_status ?? '',
             'hr_remark' => '',
         ];
+        $this->managePaymentWas = (string) $this->form['approved_leave_status'];
 
         $this->superAdminLocked = false;
         $this->lockedByName = '';
@@ -401,7 +410,32 @@ class AllTimeOff extends Component
         $this->superAdminLocked = false;
         $this->resetErrorBag();
         $this->reset(['form']);
-        $this->form = ['status' => '', 'leave_type_id' => '', 'start_date' => '', 'end_date' => '', 'reason' => '', 'reviewer_comment' => '', 'approved_leave_status' => '', 'hr_remark' => ''];
+        $this->form = ['status' => '', 'leave_type_id' => '', 'start_date' => '', 'end_date' => '', 'reason' => '', 'is_half_day' => false, 'half_day_period' => '', 'reviewer_comment' => '', 'approved_leave_status' => '', 'hr_remark' => ''];
+        $this->managePaymentWas = '';
+    }
+
+    /**
+     * Whether the editor may change paid / unpaid: the same rule as
+     * LeaveService::hrOverridePaymentStatus (HR Admin or Super Admin, on a
+     * leave type that allows an HR override).
+     */
+    public function canChangePayment(): bool
+    {
+        $role = Auth::user()?->role;
+
+        return in_array($role?->value ?? $role, ['hr_admin', 'super_admin'], true)
+            && (bool) LeaveType::find($this->form['leave_type_id'] ?? null)?->allow_hr_override;
+    }
+
+    /** A half-day leave is one day: the end date follows the start date. */
+    public function updatedForm(mixed $value, string $key): void
+    {
+        if (in_array($key, ['is_half_day', 'start_date'], true) && $this->form['is_half_day']) {
+            $this->form['end_date'] = $this->form['start_date'];
+        }
+        if ($key === 'is_half_day' && ! $this->form['is_half_day']) {
+            $this->form['half_day_period'] = '';
+        }
     }
 
     public function saveManage(): void
@@ -419,6 +453,11 @@ class AllTimeOff extends Component
         // Validate HR remark when payment status is being changed
         $currentEffective = $request->approved_leave_status ?? $request->requested_leave_status ?? 'paid';
         $newPaymentStatus = $this->form['approved_leave_status'] ?? '';
+        if ($newPaymentStatus && $newPaymentStatus !== $currentEffective && ! $this->canChangePayment()) {
+            $this->addError('form.approved_leave_status', 'Only HR Admin or Super Admin can change paid / unpaid, and only for a leave type that allows it.');
+
+            return;
+        }
         if ($newPaymentStatus && $newPaymentStatus !== $currentEffective && trim($this->form['hr_remark'] ?? '') === '') {
             $this->addError('form.hr_remark', 'HR remark is required when changing the payment status.');
 
@@ -429,7 +468,13 @@ class AllTimeOff extends Component
             'form.status' => 'required|in:pending,pending_hr,approved,rejected,cancelled',
             'form.leave_type_id' => 'required|exists:leave_types,id',
             'form.start_date' => 'required|date',
-            'form.end_date' => 'required|date|after_or_equal:form.start_date',
+            'form.end_date' => ['required', 'date', 'after_or_equal:form.start_date', ...($this->form['is_half_day'] ? ['same:form.start_date'] : [])],
+            'form.is_half_day' => 'boolean',
+            'form.half_day_period' => 'required_if:form.is_half_day,true|nullable|in:first_half,second_half',
+            'form.approved_leave_status' => 'nullable|in:paid,unpaid',
+        ], [
+            'form.end_date.same' => 'A half-day leave is a single day.',
+            'form.half_day_period.required_if' => 'Choose the first or second half.',
         ]);
 
         try {

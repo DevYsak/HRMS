@@ -189,7 +189,9 @@ class MyTimeOff extends Component
     {
         return [
             'leave_type_id' => 'required|exists:leave_types,id',
-            'start_date' => 'required|date|after_or_equal:today',
+            // Past dates are allowed (a backdated request), back to the start of
+            // the current leave year and never before the employee joined.
+            'start_date' => 'required|date|after_or_equal:'.$this->earliestLeaveDate(),
             'end_date' => 'required|date|after_or_equal:start_date',
             'is_half_day' => 'boolean',
             'half_day_period' => 'required_if:is_half_day,true|nullable|in:first_half,second_half',
@@ -206,7 +208,7 @@ class MyTimeOff extends Component
     {
         return [
             'end_date.after_or_equal' => 'The end date must be on or after the start date.',
-            'start_date.after_or_equal' => 'The start date cannot be in the past.',
+            'start_date.after_or_equal' => 'Leave can start no earlier than '.Carbon::parse($this->earliestLeaveDate())->format('d M Y').' (the start of this leave year, or your joining date).',
             'attachment.required' => 'An attachment is required for '.($this->chosenLeaveType()?->name ?? 'this leave type').'.',
             'attachment.file' => 'The attachment could not be uploaded. Please choose the file again.',
             'attachment.uploaded' => 'The attachment could not be uploaded. Please choose the file again.',
@@ -219,6 +221,15 @@ class MyTimeOff extends Component
     public const ATTACHMENT_MAX_KB = 5120;
 
     public const ATTACHMENT_TYPES = ['pdf', 'jpg', 'jpeg', 'png', 'webp'];
+
+    /** The earliest day a request may start: this leave year's first day, or the joining date if later. */
+    public function earliestLeaveDate(): string
+    {
+        $start = app(LeaveYearResolver::class)->current()->starts_on;
+        $joined = Auth::user()?->employee?->joining_date;
+
+        return ($joined && Carbon::parse($joined)->gt($start) ? Carbon::parse($joined) : Carbon::parse($start))->toDateString();
+    }
 
     private function chosenLeaveType(): ?LeaveType
     {

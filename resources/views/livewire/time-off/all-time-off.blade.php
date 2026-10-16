@@ -594,7 +594,7 @@
         <div class="fixed inset-0 z-50 flex items-center justify-center p-4"
              x-data x-on:keydown.escape.window="$wire.closeManageModal()">
             <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" wire:click="closeManageModal"></div>
-            <div class="relative w-full max-w-lg bg-white dark:bg-zinc-800 rounded-2xl shadow-xl ring ring-black/5 dark:ring-zinc-700 p-6 space-y-5">
+            <div class="relative w-full max-w-lg max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain bg-white dark:bg-zinc-800 rounded-2xl shadow-xl ring ring-black/5 dark:ring-zinc-700 p-6 space-y-5" data-manage-modal>
 
                 <button type="button" wire:click="closeManageModal"
                     class="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors">
@@ -630,8 +630,45 @@
                         :options="$leaveTypes->map(fn ($type) => ['value' => $type->id, 'label' => $type->name.' ('.($type->is_paid ? 'Paid' : 'Unpaid').')'])->all()" />
 
                     <div class="grid grid-cols-2 gap-4">
-                        <flux:input wire:model="form.start_date" type="date" label="Start Date" required />
-                        <flux:input wire:model="form.end_date" type="date" label="End Date" required />
+                        <flux:input wire:model.live="form.start_date" type="date" label="Start Date" required />
+                        <flux:input wire:model="form.end_date" type="date" label="End Date" required :disabled="(bool) $form['is_half_day']" />
+                    </div>
+                    @error('form.end_date') <p class="-mt-2 text-xs text-red-500">{{ $message }}</p> @enderror
+
+                    {{-- Half day: one date, first or second half (as on the employee's request form). --}}
+                    <div class="space-y-3 rounded-xl border border-zinc-200 bg-zinc-50/50 px-4 py-3 dark:border-zinc-700 dark:bg-zinc-800/30" data-manage-half-day>
+                        <label class="flex items-center gap-2.5 text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+                            <input type="checkbox" wire:model.live="form.is_half_day" class="size-4 rounded border-zinc-300 text-orange-600 focus:ring-orange-500">
+                            Half-Day Leave <span class="text-xs font-normal text-zinc-400">(deducts 0.5 days)</span>
+                        </label>
+                        @if($form['is_half_day'])
+                            <div class="flex flex-wrap gap-4 ps-6 text-sm text-zinc-700 dark:text-zinc-200">
+                                <label class="flex items-center gap-2"><input type="radio" wire:model="form.half_day_period" value="first_half" class="text-orange-600 focus:ring-orange-500"> First Half</label>
+                                <label class="flex items-center gap-2"><input type="radio" wire:model="form.half_day_period" value="second_half" class="text-orange-600 focus:ring-orange-500"> Second Half</label>
+                            </div>
+                            @error('form.half_day_period') <p class="ps-6 text-xs text-red-500">{{ $message }}</p> @enderror
+                        @endif
+                    </div>
+
+                    {{-- Leave payment type: a change is an HR payment override and needs a remark. --}}
+                    <div class="space-y-2 rounded-xl border border-zinc-200 bg-zinc-50/50 px-4 py-3 dark:border-zinc-700 dark:bg-zinc-800/30" data-manage-payment>
+                        <p class="text-sm font-semibold text-zinc-800 dark:text-zinc-100">Leave Payment Type</p>
+                        @if($this->canChangePayment())
+                            <div class="flex flex-wrap gap-4 text-sm">
+                                <label class="flex items-center gap-2 font-medium text-emerald-700 dark:text-emerald-400"><input type="radio" wire:model.live="form.approved_leave_status" value="paid" class="text-emerald-600 focus:ring-emerald-500"> Paid Leave</label>
+                                <label class="flex items-center gap-2 font-medium text-amber-700 dark:text-amber-400"><input type="radio" wire:model.live="form.approved_leave_status" value="unpaid" class="text-amber-600 focus:ring-amber-500"> Unpaid Leave</label>
+                            </div>
+                        @else
+                            <p class="text-sm font-medium {{ ($form['approved_leave_status'] ?? '') === 'unpaid' ? 'text-amber-700 dark:text-amber-400' : 'text-emerald-700 dark:text-emerald-400' }}">{{ ($form['approved_leave_status'] ?? '') === 'unpaid' ? 'Unpaid Leave' : 'Paid Leave' }}</p>
+                            <p class="text-xs text-zinc-500">Changed only by HR Admin or Super Admin, for leave types that allow an HR payment override.</p>
+                        @endif
+                        @error('form.approved_leave_status') <p class="text-xs text-red-500">{{ $message }}</p> @enderror
+                        @if($managePaymentWas !== '' && ($form['approved_leave_status'] ?? '') !== $managePaymentWas)
+                            <flux:textarea wire:model="form.hr_remark" label="HR remark (required for a payment change)" rows="2"
+                                placeholder="Why is this leave now {{ $form['approved_leave_status'] }}?" />
+                            @error('form.hr_remark') <p class="text-xs text-red-500">{{ $message }}</p> @enderror
+                            <p class="text-xs text-zinc-500">The employee is notified and the balance is updated.</p>
+                        @endif
                     </div>
 
                     <flux:textarea wire:model="form.reason" label="Reason" rows="2" />

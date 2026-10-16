@@ -162,7 +162,7 @@ class GettingStarted
             'intro' => 'Open Leave in the sidebar (My Time Off), check "Available to request" on your balance cards, then click Apply Leave.',
             'points' => [
                 'Leave Type: choose the kind of leave.',
-                'Start Date and End Date: today or later. Leave cannot be backdated, and it cannot start or end on your weekly off or include a company holiday.',
+                'Start Date and End Date: any day from the start of the current leave year (past dates make a backdated request, approved like any other). Leave cannot start or end on your weekly off or include a company holiday.',
                 'Half-Day: tick it for First Half or Second Half (only for leave types that allow half days).',
                 'Paid or Unpaid, then a Reason of at least 5 characters. Additional Remarks are optional.',
                 'Attachment: PDF, JPG, PNG or WEBP up to 5 MB. Some leave types require one (marked with *).',

@@ -1246,7 +1246,12 @@
 
                         {{-- Dates --}}
                         <x-pulse.date-range start="start_date" end="end_date" start-label="Start Date" end-label="End Date"
-                            :required="true" :live="true" :min="now()->toDateString()" />
+                            :required="true" :live="true" :min="$this->earliestLeaveDate()" />
+                        @if($start_date && $start_date < now()->toDateString())
+                            <p class="-mt-2 flex items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400" data-backdated-note>
+                                <flux:icon.clock class="size-3.5 shrink-0" /> Past dates: this is a backdated request. It goes to your approver like any other.
+                            </p>
+                        @endif
 
                         {{-- Live day count for the chosen range --}}
                         @if($rangeDays !== null && $rangeWeekendDays->isEmpty() && $rangeHolidays->isEmpty())

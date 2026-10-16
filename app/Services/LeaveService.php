@@ -489,6 +489,23 @@ class LeaveService
             $end = Carbon::parse($data['end_date']);
             $isHalfDay = (bool) ($data['is_half_day'] ?? false);
             $leaveTypeFresh = LeaveType::find($data['leave_type_id']);
+            // The half (first / second) when the editor sends one; otherwise the
+            // request keeps its own, so a reviewer who only approves changes nothing.
+            $halfDayPeriod = array_key_exists('half_day_period', $data)
+                ? ($data['half_day_period'] ?: null)
+                : $leaveRequest->half_day_period;
+
+            if ($isHalfDay) {
+                if (! $start->isSameDay($end)) {
+                    throw new \DomainException('A half-day leave is a single day — set the end date to the start date.');
+                }
+                if (array_key_exists('half_day_period', $data) && ! in_array($halfDayPeriod, ['first_half', 'second_half'], true)) {
+                    throw new \DomainException('Please specify first half or second half for the half-day leave.');
+                }
+                if ($leaveTypeFresh && ! app(LeaveRuleResolver::class)->settings($employee, $leaveTypeFresh)['allow_half_day']) {
+                    throw new \DomainException("'{$leaveTypeFresh->name}' does not allow half-day requests.");
+                }
+            }
 
             // Re-apply the cross-request sandwich bridge on the (possibly edited)
             // dates, excluding this request itself so it never bridges to its own
@@ -529,6 +546,7 @@ class LeaveService
                 'start_date' => $data['start_date'],
                 'end_date' => $data['end_date'],
                 'is_half_day' => $isHalfDay,
+                'half_day_period' => $isHalfDay ? $halfDayPeriod : null,
                 'days' => $newDays,
                 'reason' => $data['reason'],
                 'reviewer_id' => $reviewerId,
