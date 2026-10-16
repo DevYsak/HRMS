@@ -15,11 +15,13 @@ use App\Models\AttendanceRegularisation;
 use App\Models\AttendanceSetting;
 use App\Models\BiometricDevice;
 use App\Models\BreakLog;
+use App\Models\DecemberMandatoryDay;
 use App\Models\Employee;
 use App\Models\LeaveBalance;
 use App\Models\LeaveRequest;
 use App\Models\OtRequest;
 use App\Models\OvertimeRecord;
+use App\Models\PublicHoliday;
 use App\Models\ShiftSetting;
 use App\Models\Task;
 use App\Models\WfhReport;
@@ -1238,6 +1240,16 @@ class AttendanceTracker extends Component
             $stamp(LeaveRequest::where('employee_id', $employee->id)->where('start_date', '<=', $to)->where('end_date', '>=', $from)),
             $stamp(OtRequest::where('employee_id', $employee->id)->whereBetween('work_date', [$from, $to])),
             $stamp(OvertimeRecord::where('employee_id', $employee->id)->whereBetween('work_date', [$from, $to])),
+            // The rules the days are judged by: working week, shifts, the
+            // employee's own placement and the holiday calendar. Without them
+            // a settings change stayed invisible until the entry expired.
+            $stamp(AttendanceSetting::query()),
+            $stamp(ShiftSetting::query()),
+            (string) $employee->updated_at,
+            $stamp(PublicHoliday::query()->whereBetween('date', [$from, $to])),
+            $stamp(DecemberMandatoryDay::query()->whereBetween('date', [$from, $to])),
+            // Times are formatted for the reader.
+            Auth::user()->date_format.'/'.Auth::user()->time_format.'/'.Auth::user()->timezone,
             $month->isSameMonth(Carbon::today()) ? intdiv((int) now()->timestamp, 300) : 'closed',
         ]);
 
