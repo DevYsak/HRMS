@@ -2,6 +2,7 @@
 
 namespace App\Notifications;
 
+use App\Notifications\Concerns\FormatsForRecipient;
 use App\Models\PipRecord;
 use App\Notifications\Concerns\NotifiesByRole;
 use App\Notifications\Concerns\SendsMailChannel;
@@ -9,6 +10,7 @@ use Illuminate\Notifications\Notification;
 
 class PipCreatedNotification extends Notification
 {
+    use FormatsForRecipient;
     use NotifiesByRole;
     use SendsMailChannel;
 
@@ -26,7 +28,7 @@ class PipCreatedNotification extends Notification
         return [
             'type' => 'pip_created',
             'title' => 'Performance Improvement Plan Drafted',
-            'body' => "A performance improvement plan has been drafted for {$employee} ({$this->pip->start_date->format('d M Y')} – {$this->pip->end_date->format('d M Y')}).",
+            'body' => "A performance improvement plan has been drafted for {$employee} ({$this->pip->start_date->format($this->recipientDateFormat($notifiable))} – {$this->pip->end_date->format($this->recipientDateFormat($notifiable))}).",
             'action' => 'Review',
             'url' => '/performance/pip/manage',
             'icon' => 'document-text',

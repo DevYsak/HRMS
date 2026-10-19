@@ -2,6 +2,7 @@
 
 namespace App\Notifications;
 
+use App\Notifications\Concerns\FormatsForRecipient;
 use App\Notifications\Concerns\SendsMailChannel;
 use Illuminate\Notifications\Notification;
 use Illuminate\Support\Carbon;
@@ -13,6 +14,7 @@ use Illuminate\Support\Carbon;
  */
 class LeaveExpiringNotification extends Notification
 {
+    use FormatsForRecipient;
     use SendsMailChannel;
 
     public function __construct(
@@ -32,7 +34,7 @@ class LeaveExpiringNotification extends Notification
 
     public function toArray(object $notifiable): array
     {
-        $date = Carbon::parse($this->expiresOn)->format('d M Y');
+        $date = Carbon::parse($this->expiresOn)->format($this->recipientDateFormat($notifiable));
         $days = rtrim(rtrim(number_format($this->days, 2), '0'), '.');
 
         return [

@@ -103,7 +103,7 @@
                         <div class="border-b border-zinc-100 p-4 last:border-0 dark:border-zinc-800">
                             <div class="flex flex-wrap items-center justify-between gap-2">
                                 <div class="flex items-center gap-2.5">
-                                    <span class="text-sm font-black text-zinc-900 dark:text-white">{{ \Illuminate\Support\Carbon::parse($r['date'])->format('d M Y') }}</span>
+                                    <span class="text-sm font-black text-zinc-900 dark:text-white">{{ \Illuminate\Support\Carbon::parse($r['date'])->toImmutable()->userDate() }}</span>
                                     <span class="rounded-full px-2 py-0.5 text-[9px] font-bold uppercase {{ $rc }}">{{ $r['status'] ?? '—' }}</span>
                                     <span class="text-xs font-bold tabular-nums text-zinc-600 dark:text-zinc-300">{{ $r['ot_hours'] ?? 0 }}h</span>
                                 </div>

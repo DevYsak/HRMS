@@ -2,6 +2,7 @@
 
 namespace App\Notifications;
 
+use App\Notifications\Concerns\FormatsForRecipient;
 use App\Models\OtRequest;
 use App\Notifications\Concerns\NotifiesByRole;
 use App\Notifications\Concerns\SendsMailChannel;
@@ -12,6 +13,7 @@ use Illuminate\Queue\SerializesModels;
 
 class OtRequestNotification extends Notification implements ShouldQueue
 {
+    use FormatsForRecipient;
     use NotifiesByRole;
     use Queueable, SendsMailChannel, SerializesModels;
 
@@ -36,7 +38,7 @@ class OtRequestNotification extends Notification implements ShouldQueue
     public function toArray(object $notifiable): array
     {
         $employee = $this->otRequest->employee->user->name;
-        $date = $this->otRequest->work_date->format('M d, Y');
+        $date = $this->otRequest->work_date->format($this->recipientDateFormat($notifiable));
         $status = $this->statusAtDispatch;
 
         return match ($status) {

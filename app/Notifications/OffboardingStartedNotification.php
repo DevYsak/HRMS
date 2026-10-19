@@ -2,6 +2,7 @@
 
 namespace App\Notifications;
 
+use App\Notifications\Concerns\FormatsForRecipient;
 use App\Models\ExitRecord;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -10,6 +11,7 @@ use Illuminate\Notifications\Notification;
 
 class OffboardingStartedNotification extends Notification implements ShouldQueue
 {
+    use FormatsForRecipient;
     use Queueable;
 
     public function __construct(public ExitRecord $exitRecord) {}
@@ -24,7 +26,7 @@ class OffboardingStartedNotification extends Notification implements ShouldQueue
         return (new MailMessage)
             ->subject('Offboarding Process Initiated')
             ->line('Your offboarding process has been initiated.')
-            ->line('Your last working day is scheduled for: '.$this->exitRecord->last_working_day->format('M d, Y'))
+            ->line('Your last working day is scheduled for: '.$this->exitRecord->last_working_day->format($this->recipientDateFormat($notifiable)))
             ->action('View Offboarding Checklist', url('/attendance/my')) // Or a dedicated page if exists
             ->line('Please ensure all offboarding tasks and clearances are completed.');
     }

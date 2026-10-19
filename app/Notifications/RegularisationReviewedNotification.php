@@ -2,6 +2,7 @@
 
 namespace App\Notifications;
 
+use App\Notifications\Concerns\FormatsForRecipient;
 use App\Models\AttendanceRegularisation;
 use App\Notifications\Concerns\SendsMailChannel;
 use Carbon\Carbon;
@@ -12,6 +13,7 @@ use Illuminate\Queue\SerializesModels;
 
 class RegularisationReviewedNotification extends Notification implements ShouldQueue
 {
+    use FormatsForRecipient;
     use Queueable, SendsMailChannel, SerializesModels;
 
     /**
@@ -35,7 +37,7 @@ class RegularisationReviewedNotification extends Notification implements ShouldQ
     public function toArray(object $notifiable): array
     {
         $status = $this->statusAtDispatch;
-        $date = Carbon::parse($this->regularisation->work_date)->format('d M Y');
+        $date = Carbon::parse($this->regularisation->work_date)->format($this->recipientDateFormat($notifiable));
 
         return match ($status) {
             'pending' => [

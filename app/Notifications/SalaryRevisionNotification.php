@@ -2,12 +2,14 @@
 
 namespace App\Notifications;
 
+use App\Notifications\Concerns\FormatsForRecipient;
 use App\Models\PromotionRecommendation;
 use App\Notifications\Concerns\SendsMailChannel;
 use Illuminate\Notifications\Notification;
 
 class SalaryRevisionNotification extends Notification
 {
+    use FormatsForRecipient;
     use SendsMailChannel;
 
     public function __construct(public readonly PromotionRecommendation $recommendation) {}
@@ -19,7 +21,7 @@ class SalaryRevisionNotification extends Notification
 
     public function toArray(object $notifiable): array
     {
-        $effective = $this->recommendation->effective_date?->format('d M Y') ?? 'as notified';
+        $effective = $this->recommendation->effective_date?->format($this->recipientDateFormat($notifiable)) ?? 'as notified';
 
         return [
             'type' => 'salary_revision',

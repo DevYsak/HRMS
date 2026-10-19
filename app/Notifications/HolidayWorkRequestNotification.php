@@ -2,6 +2,7 @@
 
 namespace App\Notifications;
 
+use App\Notifications\Concerns\FormatsForRecipient;
 use App\Models\HolidayWorkRequest;
 use App\Notifications\Concerns\NotifiesByRole;
 use App\Notifications\Concerns\SendsMailChannel;
@@ -17,6 +18,7 @@ use Illuminate\Support\Carbon;
  */
 class HolidayWorkRequestNotification extends Notification implements ShouldQueue
 {
+    use FormatsForRecipient;
     use NotifiesByRole;
     use Queueable, SendsMailChannel, SerializesModels;
 
@@ -40,7 +42,7 @@ class HolidayWorkRequestNotification extends Notification implements ShouldQueue
 
     public function toArray(object $notifiable): array
     {
-        $date = Carbon::parse($this->request->work_date)->format('d M Y');
+        $date = Carbon::parse($this->request->work_date)->format($this->recipientDateFormat($notifiable));
         $name = $this->request->employee?->user?->name ?? 'An employee';
 
         return match ($this->statusAtDispatch) {

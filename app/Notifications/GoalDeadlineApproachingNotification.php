@@ -2,12 +2,14 @@
 
 namespace App\Notifications;
 
+use App\Notifications\Concerns\FormatsForRecipient;
 use App\Models\ReviewGoal;
 use App\Notifications\Concerns\SendsMailChannel;
 use Illuminate\Notifications\Notification;
 
 class GoalDeadlineApproachingNotification extends Notification
 {
+    use FormatsForRecipient;
     use SendsMailChannel;
 
     public function __construct(public readonly ReviewGoal $goal) {}
@@ -19,7 +21,7 @@ class GoalDeadlineApproachingNotification extends Notification
 
     public function toArray(object $notifiable): array
     {
-        $due = $this->goal->due_date?->format('d M Y') ?? 'soon';
+        $due = $this->goal->due_date?->format($this->recipientDateFormat($notifiable)) ?? 'soon';
 
         return [
             'type' => 'goal_deadline_approaching',

@@ -2,12 +2,14 @@
 
 namespace App\Notifications;
 
+use App\Notifications\Concerns\FormatsForRecipient;
 use App\Models\SalaryRevision;
 use App\Notifications\Concerns\SendsMailChannel;
 use Illuminate\Notifications\Notification;
 
 class SalaryStructureAssignedNotification extends Notification
 {
+    use FormatsForRecipient;
     use SendsMailChannel;
 
     public function __construct(public readonly SalaryRevision $revision) {}
@@ -19,7 +21,7 @@ class SalaryStructureAssignedNotification extends Notification
 
     public function toArray(object $notifiable): array
     {
-        $effective = $this->revision->effective_date?->format('d M Y') ?? 'as notified';
+        $effective = $this->revision->effective_date?->format($this->recipientDateFormat($notifiable)) ?? 'as notified';
 
         return [
             'type' => 'salary_revision',

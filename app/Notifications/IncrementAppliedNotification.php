@@ -2,6 +2,7 @@
 
 namespace App\Notifications;
 
+use App\Notifications\Concerns\FormatsForRecipient;
 use App\Models\IncrementCycle;
 use App\Models\IncrementProposal;
 use App\Notifications\Concerns\NotifiesByRole;
@@ -13,6 +14,7 @@ use Illuminate\Notifications\Notification;
  */
 class IncrementAppliedNotification extends Notification
 {
+    use FormatsForRecipient;
     use NotifiesByRole;
 
     public function __construct(
@@ -43,7 +45,7 @@ class IncrementAppliedNotification extends Notification
         return [
             'type' => 'increment_applied',
             'title' => 'Your increment has been applied 🎉',
-            'body' => "Your revised salary is effective {$this->cycle->effective_date->format('d M Y')} (+{$this->proposal?->proposed_percent}%). Your increment letter has been emailed to you.",
+            'body' => "Your revised salary is effective {$this->cycle->effective_date->format($this->recipientDateFormat($notifiable))} (+{$this->proposal?->proposed_percent}%). Your increment letter has been emailed to you.",
             'action' => 'View Details',
             'url' => '/performance/dashboard',
             'icon' => 'banknotes',

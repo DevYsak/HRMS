@@ -187,7 +187,7 @@
                                         </div>
                                     </td>
                                     <td class="py-3.5 pr-4 text-sm text-zinc-600 dark:text-zinc-300">
-                                        {{ $req->start_date->format('M d') }} – {{ $req->end_date->format('M d, Y') }}
+                                        {{ $req->start_date->format('M d') }} – {{ $req->end_date->toImmutable()->userDate() }}
                                     </td>
                                     <td class="py-3.5 pr-4 font-bold text-zinc-800 dark:text-zinc-200">{{ (float)$req->days }}</td>
                                     <td class="py-3.5 pr-4">
@@ -196,8 +196,8 @@
                                         </span>
                                     </td>
                                     <td class="py-3.5 pr-4">
-                                        <div class="text-sm text-zinc-700 dark:text-zinc-300">{{ $req->created_at->format('M d, Y') }}</div>
-                                        <div class="text-[11px] text-zinc-400">{{ $req->created_at->format('h:i A') }}</div>
+                                        <div class="text-sm text-zinc-700 dark:text-zinc-300">{{ $req->created_at->toImmutable()->userDate() }}</div>
+                                        <div class="text-[11px] text-zinc-400">{{ $req->created_at->toImmutable()->userTime() }}</div>
                                     </td>
                                     <td class="py-3.5 pr-6 text-right" wire:click.stop>
                                         <div class="flex items-center justify-end gap-1">
@@ -326,7 +326,7 @@
                             <div class="grid grid-cols-2 gap-3 text-xs">
                                 <div>
                                     <div class="text-zinc-400 font-semibold uppercase tracking-wide mb-0.5">Dates</div>
-                                    <div class="text-zinc-700 dark:text-zinc-300 font-semibold">{{ $viewingRequest->start_date->format('d M') }} – {{ $viewingRequest->end_date->format('d M Y') }}</div>
+                                    <div class="text-zinc-700 dark:text-zinc-300 font-semibold">{{ $viewingRequest->start_date->format('d M') }} – {{ $viewingRequest->end_date->toImmutable()->userDate() }}</div>
                                 </div>
                                 <div>
                                     <div class="text-zinc-400 font-semibold uppercase tracking-wide mb-0.5">Days</div>
@@ -341,7 +341,7 @@
                                 </div>
                                 <div>
                                     <div class="text-zinc-400 font-semibold uppercase tracking-wide mb-0.5">Applied On</div>
-                                    <div class="text-zinc-700 dark:text-zinc-300">{{ $viewingRequest->created_at->format('d M Y') }}</div>
+                                    <div class="text-zinc-700 dark:text-zinc-300">{{ $viewingRequest->created_at->toImmutable()->userDate() }}</div>
                                 </div>
                             </div>
 

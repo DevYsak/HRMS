@@ -2,6 +2,7 @@
 
 namespace App\Notifications;
 
+use App\Notifications\Concerns\FormatsForRecipient;
 use App\Models\Attendance;
 use App\Notifications\Concerns\NotifiesByRole;
 use App\Notifications\Concerns\SendsMailChannel;
@@ -15,6 +16,7 @@ use Illuminate\Notifications\Notification;
  */
 class MissingCheckoutNotification extends Notification
 {
+    use FormatsForRecipient;
     use NotifiesByRole;
     use SendsMailChannel;
 
@@ -29,8 +31,8 @@ class MissingCheckoutNotification extends Notification
     {
         $employee = $this->attendance->employee;
         $name = $employee->user->name;
-        $date = $this->attendance->date->format('d M Y');
-        $checkin = $this->attendance->check_in?->format('H:i') ?? '--';
+        $date = $this->attendance->date->format($this->recipientDateFormat($notifiable));
+        $checkin = $this->attendance->check_in?->format($this->recipientTimeFormat($notifiable)) ?? '--';
 
         $body = $this->role === 'manager'
             ? "{$name} clocked in at {$checkin} on {$date} but has no clock-out recorded. Please follow up."
@@ -59,8 +61,8 @@ class MissingCheckoutNotification extends Notification
             'employee_code' => (string) ($employee->employee_code ?? ''),
             'manager_name' => $employee->manager?->name ?? '',
             'department' => $employee->department?->name ?? '',
-            'date' => $this->attendance->date->format('d M Y'),
-            'check_in_time' => $this->attendance->check_in?->format('H:i') ?? '--',
+            'date' => $this->attendance->date->format($this->recipientDateFormat($notifiable)),
+            'check_in_time' => $this->attendance->check_in?->format($this->recipientTimeFormat($notifiable)) ?? '--',
             'action_url' => url('/attendance/my'),
             'company_name' => (string) config('app.name'),
         ];

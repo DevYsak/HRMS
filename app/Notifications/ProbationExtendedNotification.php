@@ -2,12 +2,14 @@
 
 namespace App\Notifications;
 
+use App\Notifications\Concerns\FormatsForRecipient;
 use App\Models\Employee;
 use App\Notifications\Concerns\SendsMailChannel;
 use Illuminate\Notifications\Notification;
 
 class ProbationExtendedNotification extends Notification
 {
+    use FormatsForRecipient;
     use SendsMailChannel;
 
     public function __construct(public readonly Employee $employee) {}
@@ -30,7 +32,7 @@ class ProbationExtendedNotification extends Notification
     public function toArray(object $notifiable): array
     {
         $name = $this->employee->user->name;
-        $newDate = $this->employee->probation_end_date?->format('M d, Y') ?? 'a new date';
+        $newDate = $this->employee->probation_end_date?->format($this->recipientDateFormat($notifiable)) ?? 'a new date';
 
         return [
             'type' => 'probation_extended',

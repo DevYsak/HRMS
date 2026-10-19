@@ -14,7 +14,7 @@
                         <div>
                             <div class="flex items-center gap-3 mb-1">
                                 <span class="text-xs text-zinc-500 font-medium">
-                                    {{ $record->start_date->format('M d, Y') }} &mdash; {{ $record->end_date->format('M d, Y') }}
+                                    {{ $record->start_date->toImmutable()->userDate() }} &mdash; {{ $record->end_date->toImmutable()->userDate() }}
                                 </span>
                             </div>
                             <h3 class="text-lg font-bold text-zinc-900 dark:text-white">Improvement Plan with {{ $record->manager?->name ?? 'Management' }}</h3>
@@ -64,7 +64,7 @@
                 <div class="flex items-start justify-between mb-6">
                     <div>
                         <flux:heading size="lg">Performance Improvement Plan</flux:heading>
-                        <flux:subheading>{{ $activeRecord->start_date->format('M d, Y') }} &mdash; {{ $activeRecord->end_date->format('M d, Y') }}</flux:subheading>
+                        <flux:subheading>{{ $activeRecord->start_date->toImmutable()->userDate() }} &mdash; {{ $activeRecord->end_date->toImmutable()->userDate() }}</flux:subheading>
                     </div>
                     <span class="badge-{{ $activeRecord->statusColor() }} px-2 py-1">{{ strtoupper($activeRecord->statusLabel()) }}</span>
                 </div>
@@ -106,7 +106,7 @@
                                             <span class="text-xs font-bold text-zinc-600 dark:text-zinc-400">{{ $goal->progress_percent }}%</span>
                                         </div>
                                         @if($goal->target_date)
-                                            <p class="text-[10px] text-zinc-400 mt-2">Target: {{ $goal->target_date->format('M d, Y') }}</p>
+                                            <p class="text-[10px] text-zinc-400 mt-2">Target: {{ $goal->target_date->toImmutable()->userDate() }}</p>
                                         @endif
                                     </div>
                                 @endforeach
@@ -130,7 +130,7 @@
                     @if($activeRecord->outcome)
                         <div class="bg-zinc-50 border border-zinc-200 rounded-xl p-4 dark:bg-zinc-900 dark:border-zinc-700">
                             <span class="text-xs font-bold text-zinc-500 uppercase block mb-1">Outcome</span>
-                            <p class="text-sm font-semibold text-zinc-800 dark:text-zinc-200">{{ ucfirst($activeRecord->outcome) }} &mdash; {{ $activeRecord->outcome_date?->format('M d, Y') }}</p>
+                            <p class="text-sm font-semibold text-zinc-800 dark:text-zinc-200">{{ ucfirst($activeRecord->outcome) }} &mdash; {{ $activeRecord->outcome_date?->toImmutable()->userDate() }}</p>
                         </div>
                     @endif
 

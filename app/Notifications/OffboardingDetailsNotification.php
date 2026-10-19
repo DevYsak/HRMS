@@ -2,6 +2,7 @@
 
 namespace App\Notifications;
 
+use App\Notifications\Concerns\FormatsForRecipient;
 use App\Models\ExitRecord;
 use App\Notifications\Concerns\LinksForRecipient;
 use App\Notifications\Concerns\SendsMailChannel;
@@ -10,6 +11,7 @@ use Illuminate\Notifications\Notification;
 
 class OffboardingDetailsNotification extends Notification
 {
+    use FormatsForRecipient;
     use LinksForRecipient;
     use SendsMailChannel;
 
@@ -22,7 +24,7 @@ class OffboardingDetailsNotification extends Notification
 
     public function toArray(object $notifiable): array
     {
-        $lastDay = Carbon::parse($this->exitRecord->last_working_day)->format('d M Y');
+        $lastDay = Carbon::parse($this->exitRecord->last_working_day)->format($this->recipientDateFormat($notifiable));
         $exitType = ucfirst(str_replace('_', ' ', $this->exitRecord->exit_type ?? 'resignation'));
 
         return [

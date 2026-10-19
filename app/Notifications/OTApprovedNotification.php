@@ -2,12 +2,14 @@
 
 namespace App\Notifications;
 
+use App\Notifications\Concerns\FormatsForRecipient;
 use App\Models\OtRequest;
 use App\Notifications\Concerns\SendsMailChannel;
 use Illuminate\Notifications\Notification;
 
 class OTApprovedNotification extends Notification
 {
+    use FormatsForRecipient;
     use SendsMailChannel;
 
     public function __construct(public readonly OtRequest $otRequest) {}
@@ -19,7 +21,7 @@ class OTApprovedNotification extends Notification
 
     public function toArray(object $notifiable): array
     {
-        $date = $this->otRequest->work_date->format('M d, Y');
+        $date = $this->otRequest->work_date->format($this->recipientDateFormat($notifiable));
         $hours = $this->otRequest->requested_hours;
 
         return [

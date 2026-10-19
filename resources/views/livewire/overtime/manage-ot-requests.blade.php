@@ -205,7 +205,7 @@
 
                             {{-- Work Date --}}
                             <td class="px-4 py-4 align-middle">
-                                <div class="font-medium text-zinc-900 dark:text-zinc-100">{{ $req->work_date->format('M d, Y') }}</div>
+                                <div class="font-medium text-zinc-900 dark:text-zinc-100">{{ $req->work_date->toImmutable()->userDate() }}</div>
                                 <div class="text-xs text-zinc-400">{{ $req->work_date->format('l') }}</div>
                             </td>
 
@@ -454,7 +454,7 @@
                     <div class="grid gap-3 sm:grid-cols-2">
                         <div>
                             <p class="text-[11px] font-bold uppercase tracking-wide text-zinc-400">Work date</p>
-                            <p class="mt-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{{ $selectedRequest->work_date->format('d M Y') }}</p>
+                            <p class="mt-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{{ $selectedRequest->work_date->toImmutable()->userDate() }}</p>
                         </div>
                         <div>
                             <p class="text-[11px] font-bold uppercase tracking-wide text-zinc-400">Department</p>
@@ -563,7 +563,7 @@
                     <div class="grid gap-3 sm:grid-cols-2">
                         <div>
                             <p class="text-[11px] font-bold uppercase tracking-wide text-zinc-400">Work date</p>
-                            <p class="mt-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{{ $selectedRequest->work_date->format('d M Y') }}</p>
+                            <p class="mt-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{{ $selectedRequest->work_date->toImmutable()->userDate() }}</p>
                         </div>
                         <div>
                             <p class="text-[11px] font-bold uppercase tracking-wide text-zinc-400">Department</p>

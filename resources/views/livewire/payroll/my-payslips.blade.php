@@ -64,7 +64,7 @@
                     {{ $latestPayslip ? ($latestPayslip->payroll->month . ' ' . $latestPayslip->payroll->year) : '—' }}
                 </div>
                 <div class="text-xs text-emerald-600 mt-1 font-semibold">
-                    {{ $latestPayslip ? 'Salary credited on ' . \Carbon\Carbon::parse($latestPayslip->updated_at)->format('M d, Y') : 'No payslip yet' }}
+                    {{ $latestPayslip ? 'Salary credited on ' . \Carbon\Carbon::parse($latestPayslip->updated_at)->toImmutable()->userDate() : 'No payslip yet' }}
                 </div>
             </div>
         </div>
@@ -634,7 +634,7 @@
                                             Salary Credited
                                         </div>
                                         <div class="text-xs text-zinc-500 mt-0.5">
-                                            {{ \Carbon\Carbon::parse($latestPayslip->updated_at)->format('M d, Y') }}
+                                            {{ \Carbon\Carbon::parse($latestPayslip->updated_at)->toImmutable()->userDate() }}
                                         </div>
                                     </div>
                                 @endif

@@ -2,6 +2,7 @@
 
 namespace App\Notifications;
 
+use App\Notifications\Concerns\FormatsForRecipient;
 use App\Models\Attendance;
 use App\Notifications\Concerns\NotifiesByRole;
 use App\Notifications\Concerns\SendsMailChannel;
@@ -16,6 +17,7 @@ use Illuminate\Notifications\Notification;
  */
 class ExcessBreakNotification extends Notification
 {
+    use FormatsForRecipient;
     use NotifiesByRole;
     use SendsMailChannel;
 
@@ -34,7 +36,7 @@ class ExcessBreakNotification extends Notification
         $excess = $this->totalBreakMinutes - 60;
         $employee = $this->attendance->employee;
         $name = $employee->user->name;
-        $date = $this->attendance->date->format('d M Y');
+        $date = $this->attendance->date->format($this->recipientDateFormat($notifiable));
 
         $body = $this->role === 'manager'
             ? "{$name}'s total break on {$date} was {$this->totalBreakMinutes} min (+{$excess} min over the 60-min limit)."
@@ -63,7 +65,7 @@ class ExcessBreakNotification extends Notification
             'employee_code' => (string) ($employee->employee_code ?? ''),
             'manager_name' => $employee->manager?->name ?? '',
             'department' => $employee->department?->name ?? '',
-            'date' => $this->attendance->date->format('d M Y'),
+            'date' => $this->attendance->date->format($this->recipientDateFormat($notifiable)),
             'break_minutes' => (string) $this->totalBreakMinutes,
             'break_limit' => '60',
             'excess_minutes' => (string) ($this->totalBreakMinutes - 60),

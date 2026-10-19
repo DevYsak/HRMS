@@ -57,7 +57,7 @@
                                 <div class="truncate max-w-[200px]" title="{{ $warning->reason }}">{{ $warning->reason }}</div>
                             </td>
                             <td class="py-3 pr-4 text-zinc-600 dark:text-zinc-300">
-                                {{ \Carbon\Carbon::parse($warning->issue_date)->format('M d, Y') }}
+                                {{ \Carbon\Carbon::parse($warning->issue_date)->toImmutable()->userDate() }}
                             </td>
                             <td class="py-3 pr-4">
                                 <span class="badge-{{ $warning->statusColor() }}">{{ strtoupper($warning->statusLabel()) }}</span>
@@ -173,7 +173,7 @@
                         </div>
                         <div>
                             <span class="text-[10px] font-bold text-zinc-400 uppercase block">Issue Date</span>
-                            <span class="font-medium text-zinc-900 dark:text-white">{{ \Carbon\Carbon::parse($activeWarning->issue_date)->format('M d, Y') }}</span>
+                            <span class="font-medium text-zinc-900 dark:text-white">{{ \Carbon\Carbon::parse($activeWarning->issue_date)->toImmutable()->userDate() }}</span>
                         </div>
                         <div>
                             <span class="text-[10px] font-bold text-zinc-400 uppercase block">Issued By</span>
@@ -181,7 +181,7 @@
                         </div>
                         <div>
                             <span class="text-[10px] font-bold text-zinc-400 uppercase block">Next Review Date</span>
-                            <span class="font-medium text-zinc-900 dark:text-white">{{ $activeWarning->next_review_date ? \Carbon\Carbon::parse($activeWarning->next_review_date)->format('M d, Y') : 'N/A' }}</span>
+                            <span class="font-medium text-zinc-900 dark:text-white">{{ $activeWarning->next_review_date ? \Carbon\Carbon::parse($activeWarning->next_review_date)->toImmutable()->userDate() : 'N/A' }}</span>
                         </div>
                     </div>
 

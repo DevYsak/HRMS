@@ -14,7 +14,7 @@
                         <div>
                             <div class="flex items-center gap-3 mb-1">
                                 <span class="badge-{{ $warning->warningTypeColor() }}">{{ $warning->warningTypeLabel() }}</span>
-                                <span class="text-xs text-zinc-500 font-medium">Issued: {{ \Carbon\Carbon::parse($warning->issue_date)->format('M d, Y') }}</span>
+                                <span class="text-xs text-zinc-500 font-medium">Issued: {{ \Carbon\Carbon::parse($warning->issue_date)->toImmutable()->userDate() }}</span>
                             </div>
                             <h3 class="text-lg font-bold text-zinc-900 dark:text-white">{{ $warning->reason }}</h3>
                         </div>
@@ -59,7 +59,7 @@
                 <div class="flex items-start justify-between mb-6">
                     <div>
                         <flux:heading size="lg">Warning Letter Details</flux:heading>
-                        <flux:subheading>Issued on {{ \Carbon\Carbon::parse($activeWarning->issue_date)->format('M d, Y') }}</flux:subheading>
+                        <flux:subheading>Issued on {{ \Carbon\Carbon::parse($activeWarning->issue_date)->toImmutable()->userDate() }}</flux:subheading>
                     </div>
                     <span class="badge-{{ $activeWarning->statusColor() }} px-2 py-1">{{ strtoupper($activeWarning->statusLabel()) }}</span>
                 </div>
@@ -77,7 +77,7 @@
                         @if($activeWarning->next_review_date)
                             <div class="col-span-2">
                                 <span class="text-[10px] font-bold text-zinc-400 uppercase block">Next Review / Check-in</span>
-                                <span class="font-medium text-zinc-900 dark:text-white">{{ \Carbon\Carbon::parse($activeWarning->next_review_date)->format('M d, Y') }}</span>
+                                <span class="font-medium text-zinc-900 dark:text-white">{{ \Carbon\Carbon::parse($activeWarning->next_review_date)->toImmutable()->userDate() }}</span>
                             </div>
                         @endif
                     </div>

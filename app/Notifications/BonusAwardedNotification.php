@@ -2,12 +2,14 @@
 
 namespace App\Notifications;
 
+use App\Notifications\Concerns\FormatsForRecipient;
 use App\Models\PromotionRecommendation;
 use App\Notifications\Concerns\SendsMailChannel;
 use Illuminate\Notifications\Notification;
 
 class BonusAwardedNotification extends Notification
 {
+    use FormatsForRecipient;
     use SendsMailChannel;
 
     public function __construct(public readonly PromotionRecommendation $recommendation) {}
@@ -22,7 +24,7 @@ class BonusAwardedNotification extends Notification
         $amount = $this->recommendation->bonus_amount
             ? number_format((float) $this->recommendation->bonus_amount, 2)
             : 'an amount';
-        $effective = $this->recommendation->effective_date?->format('d M Y') ?? 'as notified';
+        $effective = $this->recommendation->effective_date?->format($this->recipientDateFormat($notifiable)) ?? 'as notified';
 
         return [
             'type' => 'bonus_awarded',

@@ -129,7 +129,7 @@
                                     @endif
                                 </div>
                                 <div class="mt-0.5 text-xs text-zinc-500">
-                                    {{ $override->reason }} · {{ $override->creator?->name ?? 'System' }}, {{ $override->updated_at->format('d M Y') }}
+                                    {{ $override->reason }} · {{ $override->creator?->name ?? 'System' }}, {{ $override->updated_at->toImmutable()->userDate() }}
                                 </div>
                             </div>
                             <flux:button wire:click="remove({{ $override->id }})" wire:confirm="Remove this override? {{ $target->name }} goes back to what their role gives." size="sm" variant="ghost" icon="x-mark" />

@@ -349,15 +349,15 @@ class AllAttendance extends Component
             // from an engine figure computed some other way.
             $workedMin = 0;
             $breakMin = (int) $summary->break_minutes;
-            $todayIn = $summary->first_punch?->format('h:i A');
-            $todayOut = $stillInside ? null : $summary->last_punch?->format('h:i A');
+            $todayIn = $summary->first_punch?->toImmutable()->userTime();
+            $todayOut = $stillInside ? null : $summary->last_punch?->toImmutable()->userTime();
             $punchCount = (int) $summary->raw_punch_count;
         } else {
             $stillInside = false;
             $breakMin = (int) ($todayAtt->break_minutes ?? 0);
             $workedMin = 0;   // from the calculator below (breaks never deducted)
-            $todayIn = $todayAtt?->check_in?->format('h:i A');
-            $todayOut = $todayAtt?->check_out?->format('h:i A');
+            $todayIn = $todayAtt?->check_in?->toImmutable()->userTime();
+            $todayOut = $todayAtt?->check_out?->toImmutable()->userTime();
             $punchCount = 0;
         }
 
@@ -441,8 +441,8 @@ class AllAttendance extends Component
             ])->values()->all(),
             'history' => $month->take(7)->map(fn ($a) => [
                 'date' => $a->date->format('d M'),
-                'in' => $a->check_in?->format('H:i'),
-                'out' => $a->check_out?->format('H:i'),
+                'in' => $a->check_in?->toImmutable()->userTime(),
+                'out' => $a->check_out?->toImmutable()->userTime(),
                 'hours' => app(AttendanceCalculator::class)->workedHours($a),
                 'status' => $a->status,
             ])->values()->all(),
@@ -463,7 +463,7 @@ class AllAttendance extends Component
                 ->where('status', 'pending')->with('claimer')->orderByDesc('work_date')->get()
                 ->map(fn ($r) => [
                     'id' => $r->id,
-                    'date' => Carbon::parse($r->work_date)->format('d M Y'),
+                    'date' => Carbon::parse($r->work_date)->toImmutable()->userDate(),
                     'window' => $r->requestedWindowLabel(),
                     'reason' => $r->reason,
                     'stage' => $r->stageLabel(),

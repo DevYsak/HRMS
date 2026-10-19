@@ -129,7 +129,7 @@ class TeamAttendance extends Component
         // "Present Now": only people still inside their valid attendance window.
         $currentlyIn = $teamMembers
             ->filter(fn ($m) => $statuses[$m->id]['live'])
-            ->map(fn ($m) => ['name' => $m->user?->name ?? '—', 'since' => $statuses[$m->id]['first_in']?->format('H:i')])
+            ->map(fn ($m) => ['name' => $m->user?->name ?? '—', 'since' => $statuses[$m->id]['first_in']?->toImmutable()->userTime()])
             ->values();
 
         // ── Live board: today's status for every team member ──
@@ -165,7 +165,7 @@ class TeamAttendance extends Component
                 'photo' => $m->photo,
                 'mode' => $att?->work_mode,
                 'status' => $status,
-                'since' => $s['first_in']?->format('h:i A'),
+                'since' => $s['first_in']?->toImmutable()->userTime(),
             ];
         })->sortBy(fn ($r) => ['working' => 0, 'weekly_off_worked' => 0, 'late' => 1, 'on_break' => 2, 'missing_checkout' => 2, 'completed' => 3, 'on_leave' => 4, 'holiday' => 5, 'weekly_off' => 5, 'not_in' => 5, 'absent' => 5][$r['status']] ?? 9)->values();
 

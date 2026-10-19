@@ -2,12 +2,14 @@
 
 namespace App\Notifications;
 
+use App\Notifications\Concerns\FormatsForRecipient;
 use App\Models\EmployeeKpi;
 use App\Notifications\Concerns\SendsMailChannel;
 use Illuminate\Notifications\Notification;
 
 class KpiAssignedNotification extends Notification
 {
+    use FormatsForRecipient;
     use SendsMailChannel;
 
     public function __construct(public readonly EmployeeKpi $kpi) {}
@@ -21,7 +23,7 @@ class KpiAssignedNotification extends Notification
     {
         $component = $this->kpi->component->name ?? 'KPI';
         $target = $this->kpi->target_value;
-        $due = $this->kpi->due_date?->format('d M Y') ?? 'N/A';
+        $due = $this->kpi->due_date?->format($this->recipientDateFormat($notifiable)) ?? 'N/A';
 
         return [
             'type' => 'kpi_assigned',

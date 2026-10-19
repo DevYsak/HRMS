@@ -242,13 +242,13 @@
                                 {{ $log->employee->user->name }}
                             </td>
                             <td class="pulse-td">
-                                {{ $log->date->format('M d, Y') }}
+                                {{ $log->date->toImmutable()->userDate() }}
                             </td>
                             <td class="pulse-td">
-                                {{ $log->check_in->format('H:i') }}
+                                {{ $log->check_in->toImmutable()->userTime() }}
                             </td>
                             <td class="pulse-td">
-                                {{ $log->check_out ? $log->check_out->format('H:i') : '--:--' }}
+                                {{ $log->check_out ? $log->check_out->toImmutable()->userTime() : '--:--' }}
                             </td>
                             <td class="pulse-td">
                                 @php $logOff = $log->weeklyOffLabel(); @endphp
@@ -298,7 +298,7 @@
                     </div>
                     <div class="flex justify-between">
                         <span class="text-zinc-500">Date</span>
-                        <span class="font-bold">{{ \Carbon\Carbon::parse($activeRequest->work_date)->format('M d, Y') }}</span>
+                        <span class="font-bold">{{ \Carbon\Carbon::parse($activeRequest->work_date)->toImmutable()->userDate() }}</span>
                     </div>
                     <div class="flex justify-between">
                         <span class="text-zinc-500">Requested Time</span>

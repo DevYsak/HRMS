@@ -2,6 +2,7 @@
 
 namespace App\Notifications;
 
+use App\Notifications\Concerns\FormatsForRecipient;
 use App\Models\LeaveRequest;
 use App\Notifications\Concerns\SendsMailChannel;
 use Illuminate\Notifications\Notification;
@@ -12,6 +13,7 @@ use Illuminate\Notifications\Notification;
  */
 class LeaveAppliedOnBehalfNotification extends Notification
 {
+    use FormatsForRecipient;
     use SendsMailChannel;
 
     public function __construct(
@@ -26,8 +28,8 @@ class LeaveAppliedOnBehalfNotification extends Notification
 
     public function toArray(object $notifiable): array
     {
-        $dates = $this->request->start_date->format('d M Y')
-            .($this->request->end_date->ne($this->request->start_date) ? ' – '.$this->request->end_date->format('d M Y') : '');
+        $dates = $this->request->start_date->format($this->recipientDateFormat($notifiable))
+            .($this->request->end_date->ne($this->request->start_date) ? ' – '.$this->request->end_date->format($this->recipientDateFormat($notifiable)) : '');
 
         return [
             'type' => 'leave_applied_on_behalf',

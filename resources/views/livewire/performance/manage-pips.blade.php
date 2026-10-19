@@ -83,7 +83,7 @@
                                 <div class="text-[10px] text-zinc-500">{{ $record->employee->jobTitle?->name ?? '—' }}</div>
                             </td>
                             <td class="py-3 pr-4 text-zinc-600 dark:text-zinc-300">
-                                {{ $record->start_date->format('M d, Y') }} &mdash; {{ $record->end_date->format('M d, Y') }}
+                                {{ $record->start_date->toImmutable()->userDate() }} &mdash; {{ $record->end_date->toImmutable()->userDate() }}
                             </td>
                             <td class="py-3 pr-4 text-zinc-600 dark:text-zinc-300">{{ $record->manager?->name ?? '—' }}</td>
                             <td class="py-3 pr-4">
@@ -199,7 +199,7 @@
                     <div class="grid grid-cols-2 gap-4 text-sm bg-zinc-50 dark:bg-zinc-900 p-4 rounded-xl">
                         <div>
                             <span class="text-[10px] font-bold text-zinc-400 uppercase block">Period</span>
-                            <span class="font-medium text-zinc-900 dark:text-white">{{ $activeRecord->start_date->format('M d, Y') }} &mdash; {{ $activeRecord->end_date->format('M d, Y') }}</span>
+                            <span class="font-medium text-zinc-900 dark:text-white">{{ $activeRecord->start_date->toImmutable()->userDate() }} &mdash; {{ $activeRecord->end_date->toImmutable()->userDate() }}</span>
                         </div>
                         <div>
                             <span class="text-[10px] font-bold text-zinc-400 uppercase block">Manager</span>
@@ -264,7 +264,7 @@
                                     <flux:button wire:click="openProgressModal({{ $goal->id }})" size="xs" variant="ghost">Update</flux:button>
                                 </div>
                                 @if($goal->target_date)
-                                    <p class="text-[10px] text-zinc-400 mt-2">Target: {{ $goal->target_date->format('M d, Y') }}</p>
+                                    <p class="text-[10px] text-zinc-400 mt-2">Target: {{ $goal->target_date->toImmutable()->userDate() }}</p>
                                 @endif
                             </div>
                         @empty
@@ -294,7 +294,7 @@
                     @if($activeRecord->outcome)
                         <div class="bg-zinc-50 border border-zinc-200 rounded-xl p-4 dark:bg-zinc-900 dark:border-zinc-700">
                             <span class="text-xs font-bold text-zinc-500 uppercase block mb-1">Outcome</span>
-                            <p class="text-sm font-semibold text-zinc-800 dark:text-zinc-200">{{ ucfirst($activeRecord->outcome) }} &mdash; {{ $activeRecord->outcome_date?->format('M d, Y') }}</p>
+                            <p class="text-sm font-semibold text-zinc-800 dark:text-zinc-200">{{ ucfirst($activeRecord->outcome) }} &mdash; {{ $activeRecord->outcome_date?->toImmutable()->userDate() }}</p>
                         </div>
                     @endif
 

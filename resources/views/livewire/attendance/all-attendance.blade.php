@@ -125,7 +125,7 @@
                 <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-zinc-50/70 px-3 py-2 text-xs dark:bg-zinc-800/40">
                     <div class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5">
                         <span class="font-black text-zinc-900 dark:text-white">{{ $done->employee?->user?->name ?? '—' }}</span>
-                        <span class="text-zinc-500 dark:text-zinc-400">{{ \Carbon\Carbon::parse($done->work_date)->format('d M Y') }}</span>
+                        <span class="text-zinc-500 dark:text-zinc-400">{{ \Carbon\Carbon::parse($done->work_date)->toImmutable()->userDate() }}</span>
                         @if($done->requested_check_in)
                             <span class="font-mono font-bold text-zinc-600 dark:text-zinc-300">{{ $done->requestedWindowLabel() }}</span>
                         @endif
@@ -262,21 +262,21 @@
                                 @if($log->is_regularized)<span class="mt-0.5 inline-flex items-center gap-0.5 rounded bg-blue-100 px-1 py-px text-[8px] font-black uppercase tracking-wide text-blue-600 dark:bg-blue-900/40 dark:text-blue-300"><flux:icon.pencil-square class="size-2.5" /> Regularized</span>@endif
                             </td>
                             <td class="py-2.5">
-                                <span class="font-mono font-bold tabular-nums {{ $log->is_regularized ? 'text-blue-600 dark:text-blue-300' : 'text-zinc-800 dark:text-zinc-100' }}">{{ $log->check_in?->format('h:i A') ?? '—' }}</span>
+                                <span class="font-mono font-bold tabular-nums {{ $log->is_regularized ? 'text-blue-600 dark:text-blue-300' : 'text-zinc-800 dark:text-zinc-100' }}">{{ $log->check_in?->toImmutable()->userTime() ?? '—' }}</span>
                                 @if($log->original_check_in && $log->check_in && ! $log->original_check_in->equalTo($log->check_in))
-                                    <div class="text-[9px] font-semibold text-zinc-400 line-through" title="Original punch (preserved)">{{ $log->original_check_in->format('h:i A') }}</div>
+                                    <div class="text-[9px] font-semibold text-zinc-400 line-through" title="Original punch (preserved)">{{ $log->original_check_in->toImmutable()->userTime() }}</div>
                                 @endif
                                 @if($log->is_late)<div class="text-[9px] font-bold text-amber-600">+{{ (int) ($log->late_minutes ?? 0) }}m late</div>@endif
                             </td>
                             <td class="py-2.5 font-mono tabular-nums">
                                 @if($log->check_out)
-                                    <span class="font-bold {{ $log->is_auto_checkout ? 'text-orange-500' : ($log->is_regularized ? 'text-blue-600 dark:text-blue-300' : 'text-zinc-800 dark:text-zinc-100') }}">{{ $log->check_out->format('h:i A') }}</span>
+                                    <span class="font-bold {{ $log->is_auto_checkout ? 'text-orange-500' : ($log->is_regularized ? 'text-blue-600 dark:text-blue-300' : 'text-zinc-800 dark:text-zinc-100') }}">{{ $log->check_out->toImmutable()->userTime() }}</span>
                                     @if($log->original_check_out && ! $log->original_check_out->equalTo($log->check_out))
-                                        <div class="text-[9px] font-semibold text-zinc-400 line-through" title="Original punch (preserved)">{{ $log->original_check_out->format('h:i A') }}</div>
+                                        <div class="text-[9px] font-semibold text-zinc-400 line-through" title="Original punch (preserved)">{{ $log->original_check_out->toImmutable()->userTime() }}</div>
                                     @endif
                                     @if($log->is_auto_checkout)<div class="text-[9px] font-bold uppercase text-orange-500" title="System auto punch-out — please regularize">Auto OUT</div>@endif
                                 @elseif($log->check_in && ($rowStatus[$log->id]['live'] ?? false))<span class="inline-flex items-center gap-1 font-bold text-emerald-600" data-attendance-state="{{ $rowStatus[$log->id]['state'] }}"><span class="size-1.5 animate-pulse rounded-full bg-emerald-500"></span> {{ ($rowStatus[$log->id]['on_break'] ?? false) ? 'ON BREAK' : 'LIVE' }}</span>
-                                @elseif($log->check_in && ($rowStatus[$log->id]['last_out'] ?? null))<span class="font-bold text-zinc-800 dark:text-zinc-100" data-attendance-state="completed">{{ $rowStatus[$log->id]['last_out']->format('h:i A') }}</span>
+                                @elseif($log->check_in && ($rowStatus[$log->id]['last_out'] ?? null))<span class="font-bold text-zinc-800 dark:text-zinc-100" data-attendance-state="completed">{{ $rowStatus[$log->id]['last_out']->toImmutable()->userTime() }}</span>
                                 @elseif($log->check_in)<span class="font-bold text-amber-500" data-attendance-state="missing_checkout">missing</span>
                                 @else<span class="text-zinc-300">—</span>@endif
                             </td>
@@ -576,13 +576,13 @@ REVIEW REGULARISATION MODAL
                     @endif
                     <div class="space-y-3 rounded-xl border border-orange-100 bg-orange-50/40 p-4 text-sm">
                         <div class="flex items-center justify-between"><span class="text-zinc-500 dark:text-zinc-400">Employee</span><span class="font-bold text-zinc-900 dark:text-white">{{ $activeRequest->employee?->user?->name ?? '—' }}</span></div>
-                        <div class="flex items-center justify-between"><span class="text-zinc-500 dark:text-zinc-400">Date</span><span class="font-bold text-zinc-900 dark:text-white">{{ \Carbon\Carbon::parse($activeRequest->work_date ?? $activeRequest->date)->format('d M Y') }}</span></div>
+                        <div class="flex items-center justify-between"><span class="text-zinc-500 dark:text-zinc-400">Date</span><span class="font-bold text-zinc-900 dark:text-white">{{ \Carbon\Carbon::parse($activeRequest->work_date ?? $activeRequest->date)->toImmutable()->userDate() }}</span></div>
                         <div class="flex items-center justify-between"><span class="text-zinc-500 dark:text-zinc-400">Requested Time</span>
                             <span class="font-mono font-bold text-orange-600">{{ $activeRequest->requestedWindowLabel() }}</span>
                         </div>
                         @if($activeRequest->attendance)
                             <div class="flex items-center justify-between"><span class="text-zinc-500 dark:text-zinc-400">Recorded Time</span>
-                                <span class="font-mono text-zinc-600 dark:text-zinc-300">{{ $activeRequest->attendance->check_in?->format('H:i') ?? '—' }} → {{ $activeRequest->attendance->check_out?->format('H:i') ?? '—' }}</span>
+                                <span class="font-mono text-zinc-600 dark:text-zinc-300">{{ $activeRequest->attendance->check_in?->toImmutable()->userTime() ?? '—' }} → {{ $activeRequest->attendance->check_out?->toImmutable()->userTime() ?? '—' }}</span>
                             </div>
                         @endif
                         <div class="border-t border-orange-100 pt-2">

@@ -2,12 +2,14 @@
 
 namespace App\Notifications;
 
+use App\Notifications\Concerns\FormatsForRecipient;
 use App\Models\Employee;
 use App\Notifications\Concerns\SendsMailChannel;
 use Illuminate\Notifications\Notification;
 
 class WelcomeOnboardingNotification extends Notification
 {
+    use FormatsForRecipient;
     use SendsMailChannel;
 
     public function __construct(public readonly Employee $employee) {}
@@ -19,7 +21,7 @@ class WelcomeOnboardingNotification extends Notification
 
     public function toArray(object $notifiable): array
     {
-        $joining = $this->employee->joining_date?->format('d M Y') ?? 'today';
+        $joining = $this->employee->joining_date?->format($this->recipientDateFormat($notifiable)) ?? 'today';
 
         return [
             'type' => 'welcome_onboarding',

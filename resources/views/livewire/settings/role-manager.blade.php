@@ -56,7 +56,7 @@
                     @endif
                 </div>
 
-                <p class="text-xs text-zinc-400">Created {{ $role->created_at->format('M j, Y') }}</p>
+                <p class="text-xs text-zinc-400">Created {{ $role->created_at->toImmutable()->userDate() }}</p>
 
                 <div class="mt-auto flex items-center gap-1 border-t border-zinc-100 pt-3 dark:border-zinc-800">
                     <flux:button wire:click="openEdit({{ $role->id }})" size="sm" variant="ghost" icon="pencil">Edit</flux:button>
