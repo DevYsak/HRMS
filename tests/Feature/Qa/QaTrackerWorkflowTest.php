@@ -319,8 +319,7 @@ test('the Phase 2 policy decisions are recorded with their commits and history',
         ->and($status('QA-F-030'))->toBe('verified')   // fixed in Phase 3 (dd47f75)
         ->and($status('QA-F-031'))->toBe('hr_correction_required')
         ->and(QaFinding::where('code', 'QA-F-031')->value('description'))->toContain('REVIEW REQUIRED')->toContain('Jordan Reed')
-        ->and(QaFinding::open()->where('needs_decision', true)->pluck('code')->sort()->values()->all())   // WFH decided 16 Oct; Phase 4 payroll / RBAC questions open
-        ->toBe(['QA-F-050', 'QA-F-051', 'QA-F-052', 'QA-F-053', 'QA-F-054', 'QA-F-055', 'QA-F-056', 'QA-F-057', 'QA-F-058'])
+        ->and(QaFinding::open()->where('needs_decision', true)->pluck('code')->all())->toBe([])   // WFH and the Phase 4 payroll / RBAC questions are decided
         ->and(QaTestCase::where('code', 'like', 'QA-DEC-%')->where('status', 'pass')->count())->toBe(7);
 });
 
@@ -348,7 +347,7 @@ test('Phase 3 is recorded: each fix has its test cases, commit and verification,
         ->and(QaTestRun::where('name', '2026-10-16 Phase 3 re-run of disturbed files')->value('new_regressions'))->toBe(0);
 });
 
-test('Phase 4 is recorded: verified fixes with commits, payroll and policy questions open', function () {
+test('Phase 4 is recorded: verified fixes with commits', function () {
     foreach (['QA-F-040' => '30caa3d', 'QA-F-041' => 'b3ed78f', 'QA-F-042' => '43741e0', 'QA-F-043' => '129816a', 'QA-F-044' => '4884b45',
         'QA-F-045' => '32017f6', 'QA-F-046' => '981f2dc', 'QA-F-047' => 'e55babf', 'QA-F-048' => '3001a2b', 'QA-F-049' => '50fbdcf'] as $code => $commit) {
         $finding = QaFinding::where('code', $code)->firstOrFail();
@@ -356,20 +355,40 @@ test('Phase 4 is recorded: verified fixes with commits, payroll and policy quest
             ->and($finding->fixes()->pluck('commit_hash'))->toContain($commit);
     }
 
-    // Payroll rules are not changed without a decision: the mismatches stay open.
-    foreach (['QA-F-050', 'QA-F-051', 'QA-F-052', 'QA-F-053'] as $code) {
-        $finding = QaFinding::where('code', $code)->firstOrFail();
-        expect($finding->status)->toBe(QaFindingStatus::Open, $code)->and($finding->needs_decision)->toBeTrue()->and($finding->module)->toBe('Payroll');
-    }
-
-    expect(QaTestCase::where('code', 'like', 'QA-P4-%')->where('status', 'pass')->count())->toBe(23)
-        ->and(QaPhase::where('number', 4)->first()->status)->toBe(QaPhaseStatus::InProgress);
+    // The first Phase 4 pass: 23 test cases (QA-P4-001…023).
+    expect(QaTestCase::where('code', 'like', 'QA-P4-0%')->where('code', '<=', 'QA-P4-023')->where('status', 'pass')->count())->toBe(23);
 
     // The confirming full run at a stable HEAD: exactly the 12 known baseline.
     $full = QaTestRun::where('name', '2026-10-16 Phase 4 full suite')->firstOrFail();
     expect([$full->kind, $full->commit, $full->total, $full->passed, $full->failed, $full->known_baseline, $full->new_regressions])->toBe(['full', '32017f6', 3200, 3187, 12, 12, 0]);
 
+    expect($full->new_regressions)->toBe(0);
+});
+
+test('the Phase 4 decisions are recorded: each decided finding has its fix commits, test cases and verification', function () {
+    $decided = ['QA-F-050' => '093e84c', 'QA-F-051' => '093e84c', 'QA-F-052' => '093e84c', 'QA-F-053' => '093e84c', 'QA-F-054' => '7f1e8bc',
+        'QA-F-055' => 'ac70fbf', 'QA-F-056' => 'ac70fbf', 'QA-F-057' => 'ac70fbf', 'QA-F-058' => 'e24c503', 'QA-F-059' => '642e189',
+        'QA-F-062' => '16d28a7', 'QA-F-063' => '642e189', 'QA-F-064' => 'e0f7e36', 'QA-F-065' => '7f1e8bc'];
+
+    foreach ($decided as $code => $commit) {
+        $finding = QaFinding::where('code', $code)->firstOrFail();
+        expect($finding->status)->toBe(QaFindingStatus::Verified, $code)
+            ->and($finding->needs_decision)->toBeFalse()
+            ->and($finding->fixes()->pluck('commit_hash'))->toContain($commit)
+            ->and(AuditLog::where('auditable_type', QaFinding::class)->where('auditable_id', $finding->id)->where('event', 'QA_FINDING_STATUS_CHANGED')->exists())->toBeTrue();
+    }
+
+    // Branding, theme coverage and the remaining date formats move to Phase 5.
+    expect(QaFinding::whereIn('code', ['QA-F-060', 'QA-F-061', 'QA-F-066'])->pluck('status')->map->value->unique()->values()->all())->toBe(['open'])
+        ->and(QaFinding::where('code', 'QA-F-050')->value('description'))->toContain('Decision 1 (16 Oct)')
+        ->and(QaTestCase::where('code', 'like', 'QA-P4-%')->where('status', 'pass')->count())->toBe(53);
+
+    // Phase 4 closes on a full run at a stable HEAD with nothing beyond the known baseline.
+    $close = QaTestRun::where('name', '2026-10-19 Phase 4 close — full suite')->firstOrFail();
+    expect([$close->kind, $close->commit, $close->total, $close->failed, $close->known_baseline, $close->new_regressions])->toBe(['full', 'f3b274a', 3237, 13, 13, 0])
+        ->and(QaPhase::where('number', 4)->first()->status)->toBe(QaPhaseStatus::Completed);
+
     $summary = (new QaReadiness)->summary();
-    expect($summary['latest_run']->id)->toBe($full->id)
-        ->and($summary['verified']['full']->id)->toBe($full->id);
+    expect($summary['latest_run']->id)->toBe($close->id)
+        ->and($summary['verified']['full']->id)->toBe($close->id);
 });
