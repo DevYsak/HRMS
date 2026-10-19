@@ -5,7 +5,7 @@
             <flux:heading size="xl">Payroll Overview</flux:heading>
             <flux:subheading>Run status, payout trends and upcoming cycles at a glance.</flux:subheading>
         </div>
-        <div class="flex items-center gap-2">
+        <div class="flex flex-wrap items-center gap-2">
             <x-clean-select model="filterYear" :live="true"
                 :options="array_merge([['value' => '', 'label' => 'This year']], collect(range(now()->year, now()->year - 3))->map(fn ($y) => ['value' => (string) $y, 'label' => (string) $y])->all())" />
             {{-- The selected year: its latest month (this month for the current year). --}}

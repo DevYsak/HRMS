@@ -20,7 +20,7 @@
     <div class="flex flex-wrap items-center justify-end gap-3 rounded-2xl border border-zinc-100 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
         {{-- Month / Year selectors (shown while the payroll is still a draft, or doesn't exist yet) --}}
         @if(!$currentPayroll || $currentPayroll->status === 'draft')
-            <div class="flex gap-2">
+            <div class="flex flex-wrap gap-2">
                 <flux:select wire:model.live="month" size="sm" class="w-32">
                     @foreach(['January','February','March','April','May','June','July','August','September','October','November','December'] as $m)
                         <option value="{{ $m }}">{{ $m }}</option>
@@ -442,8 +442,8 @@
                 Generating the draft will calculate earnings and deductions for all active employees
                 based on their latest salary profiles.
             </p>
-            <div class="mt-8 flex gap-3">
-                <div class="flex gap-2">
+            <div class="mt-8 flex flex-wrap justify-center gap-3">
+                <div class="flex flex-wrap justify-center gap-2">
                     <flux:select wire:model.live="month" size="sm" class="w-36">
                         @foreach(['January','February','March','April','May','June','July','August','September','October','November','December'] as $m)
                             <option value="{{ $m }}">{{ $m }}</option>

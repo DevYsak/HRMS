@@ -154,10 +154,11 @@
                 <flux:button size="xs" variant="ghost" wire:click="setTab('findings')">All findings</flux:button>
             </x-slot:actions>
             @forelse($recentFindings as $f)
-                <button type="button" wire:click="openFinding({{ $f->id }})" class="flex w-full items-center gap-3 border-b border-zinc-100 px-5 py-3 text-left last:border-0 hover:bg-zinc-50 dark:border-white/5 dark:hover:bg-white/5">
+                <button type="button" wire:click="openFinding({{ $f->id }})" class="flex w-full flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-zinc-100 px-5 py-3 text-left last:border-0 hover:bg-zinc-50 dark:border-white/5 dark:hover:bg-white/5">
                     <flux:badge size="sm" :color="$f->severity->color()">{{ $f->severity->label() }}</flux:badge>
-                    <div class="min-w-0 flex-1">
-                        <p class="truncate text-sm font-medium text-zinc-800 dark:text-zinc-100">{{ $f->title }}</p>
+                    {{-- Wraps on phones: the status badge drops below instead of squeezing the title (Phase 5). --}}
+                    <div class="min-w-[12rem] flex-1">
+                        <p class="line-clamp-2 text-sm font-medium text-zinc-800 dark:text-zinc-100">{{ $f->title }}</p>
                         <p class="text-xs text-zinc-500"><span class="font-mono">{{ $f->code }}</span> · {{ $f->module }}</p>
                     </div>
                     <flux:badge size="sm" :color="$f->status->color()">{{ $f->status->label() }}</flux:badge>

@@ -13,13 +13,7 @@
         $toneSoft = ['orange' => 'bg-orange-50 text-orange-500', 'green' => 'bg-green-50 text-green-600', 'amber' => 'bg-amber-50 text-amber-600', 'blue' => 'bg-blue-50 text-blue-600', 'red' => 'bg-red-50 text-red-600', 'violet' => 'bg-violet-50 text-violet-600'];
         $toneText = ['orange' => 'text-orange-500', 'green' => 'text-green-600', 'amber' => 'text-amber-600', 'blue' => 'text-blue-600', 'red' => 'text-red-600', 'violet' => 'text-violet-600'];
 
-        $spark = function (float $end, float $swing = 0.16) {
-            $pts = [];
-            $base = max($end, 1);
-            for ($i = 6; $i >= 0; $i--) { $pts[] = round($base * (1 - ($i / 6) * $swing + (($i % 2) ? -0.04 : 0.03)), 1); }
-            $pts[6] = $end;
-            return $pts;
-        };
+        // KPI sparklines show a real six-month series or none — never an invented trend (Phase 5).
 
         // ── Executive metrics ──
         // Payroll & Payslips switched off: no payroll figures or actions here.
@@ -79,13 +73,13 @@
 
         // ── KPI cards (8) ──
         $kpis = [
-            ['label' => 'Total Employees', 'value' => $activeCount, 'icon' => 'users', 'accent' => 'orange', 'delta' => $growthPct, 'dir' => $growthPct >= 0 ? 'up' : 'down', 'compare' => '6-month growth', 'spark' => $spark(max($activeCount, 1))],
-            ['label' => 'Company Attendance', 'value' => $attendancePercent.'%', 'icon' => 'check-circle', 'accent' => 'green', 'delta' => 0, 'dir' => 'flat', 'compare' => 'present today', 'spark' => $spark(max($attendancePercent, 1), 0.1)],
-            ...($payrollOn ? [['label' => 'Payroll Cost', 'value' => $fmtMoney($payrollCost), 'icon' => 'banknotes', 'accent' => 'blue', 'delta' => 0, 'dir' => 'flat', 'compare' => 'this month', 'spark' => $spark(max($payrollCost / 100000, 1))]] : []),
-            ...($payrollOn ? [['label' => 'Payroll / FTE', 'value' => $fmtMoney($payrollPerEmp), 'icon' => 'wallet', 'accent' => 'violet', 'delta' => 0, 'dir' => 'flat', 'compare' => 'avg per employee', 'spark' => $spark(max($payrollPerEmp / 1000, 1))]] : []),
-            ['label' => 'Open Approvals', 'value' => $openApprovals, 'icon' => 'inbox-stack', 'accent' => 'amber', 'delta' => 0, 'dir' => 'flat', 'compare' => $pendingLeaves.' leave · '.$pendingOt.' OT', 'spark' => $spark(max($openApprovals, 1))],
-            ['label' => 'Pending Compliance', 'value' => $pendingCompliance, 'icon' => 'shield-check', 'accent' => 'red', 'delta' => 0, 'dir' => 'flat', 'compare' => 'docs + reviews', 'spark' => $spark(max($pendingCompliance, 1))],
-            ['label' => 'Performance', 'value' => $perfScore, 'icon' => 'chart-bar', 'accent' => 'orange', 'delta' => 0, 'dir' => 'flat', 'compare' => 'overall score', 'spark' => $spark(max($perfScore, 1), 0.1)],
+            ['label' => 'Total Employees', 'value' => $activeCount, 'icon' => 'users', 'accent' => 'orange', 'delta' => $growthPct, 'dir' => $growthPct >= 0 ? 'up' : 'down', 'compare' => '6-month growth', 'spark' => $growth],
+            ['label' => 'Company Attendance', 'value' => $attendancePercent.'%', 'icon' => 'check-circle', 'accent' => 'green', 'delta' => 0, 'dir' => 'flat', 'compare' => 'present today', 'spark' => $attTrend],
+            ...($payrollOn ? [['label' => 'Payroll Cost', 'value' => $fmtMoney($payrollCost), 'icon' => 'banknotes', 'accent' => 'blue', 'delta' => 0, 'dir' => 'flat', 'compare' => 'this month', 'spark' => $payrollSeries]] : []),
+            ...($payrollOn ? [['label' => 'Payroll / FTE', 'value' => $fmtMoney($payrollPerEmp), 'icon' => 'wallet', 'accent' => 'violet', 'delta' => 0, 'dir' => 'flat', 'compare' => 'avg per employee', 'spark' => []]] : []),
+            ['label' => 'Open Approvals', 'value' => $openApprovals, 'icon' => 'inbox-stack', 'accent' => 'amber', 'delta' => 0, 'dir' => 'flat', 'compare' => $pendingLeaves.' leave · '.$pendingOt.' OT', 'spark' => []],
+            ['label' => 'Pending Compliance', 'value' => $pendingCompliance, 'icon' => 'shield-check', 'accent' => 'red', 'delta' => 0, 'dir' => 'flat', 'compare' => 'docs + reviews', 'spark' => []],
+            ['label' => 'Performance', 'value' => $perfScore, 'icon' => 'chart-bar', 'accent' => 'orange', 'delta' => 0, 'dir' => 'flat', 'compare' => 'overall score', 'spark' => []],
         ];
 
         // ── Chart configs ──
