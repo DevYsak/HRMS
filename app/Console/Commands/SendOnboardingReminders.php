@@ -6,6 +6,7 @@ use App\Models\Employee;
 use App\Models\OnboardingTask;
 use App\Models\User;
 use App\Notifications\OnboardingTaskOverdueNotification;
+use App\Services\Notifications\NotificationDispatcher;
 use App\Services\Notifications\NotificationRecipients;
 use App\Services\OnboardingService;
 use Illuminate\Console\Command;
@@ -63,9 +64,10 @@ class SendOnboardingReminders extends Command
                 default => 'hr_admin',
             };
 
+            // Once per task, recipient and ISO week — the job runs daily and
+            // used to send the same overdue task every day (Phase 4).
             foreach ($recipients as $user) {
-                $user->notify($notification->forRole($role));
-                $notified++;
+                $notified += app(NotificationDispatcher::class)->sendOnce($user, $notification->forRole($role), 'onboarding-overdue|'.$task->id.'|'.now()->format('o-W')) ? 1 : 0;
             }
         }
 

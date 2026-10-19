@@ -7,7 +7,9 @@ use App\Models\Employee;
 use App\Models\EmployeePayrollSettings;
 use App\Models\ProfileChangeRequest;
 use App\Models\User;
+use App\Notifications\ProfileChangeRequestNotification;
 use App\Services\Approvals\ApprovalGuard;
+use App\Services\Notifications\NotificationRecipients;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
@@ -113,6 +115,9 @@ class ProfileChangeService
             subjectEmployeeId: $employee->id,
         );
 
+        app(NotificationRecipients::class)->profileChangeApprovers($employee)
+            ->each(fn (User $approver) => $approver->notify((new ProfileChangeRequestNotification($request))->forRole('approver')));
+
         return $request;
     }
 
@@ -146,6 +151,8 @@ class ProfileChangeService
                 subjectEmployeeId: $employee->id,
             );
 
+            $employee->user?->notify((new ProfileChangeRequestNotification($request->fresh()))->forRole('employee'));
+
             return $request->fresh();
         });
     }
@@ -173,6 +180,8 @@ class ProfileChangeService
             reason: $comment,
             subjectEmployeeId: $request->employee_id,
         );
+
+        $request->employee?->user?->notify((new ProfileChangeRequestNotification($request->fresh()))->forRole('employee'));
 
         return $request->fresh();
     }

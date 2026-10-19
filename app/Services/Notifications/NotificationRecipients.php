@@ -6,6 +6,7 @@ use App\Enums\UserRole;
 use App\Models\Employee;
 use App\Models\User;
 use App\Services\Payroll\PayrollAccess;
+use App\Services\Security\ScopeResolver;
 use Illuminate\Support\Collection;
 
 /**
@@ -52,6 +53,29 @@ class NotificationRecipients
     public function hrCovering(Employee $employee): Collection
     {
         return $this->hrQueue()->filter(fn (User $u) => $u->coversEmployee($employee))->values();
+    }
+
+    /**
+     * Who decides this employee's profile / KYC change requests: everyone
+     * holding approve_profile_changes whose scope covers them — never the
+     * employee themselves (Phase 4).
+     *
+     * @return Collection<int, User>
+     */
+    public function profileChangeApprovers(Employee $employee): Collection
+    {
+        $scopes = app(ScopeResolver::class);
+
+        return User::query()->whereNull('deleted_at')->get()
+            ->filter(function (User $u) use ($employee, $scopes) {
+                if ($u->id === $employee->user_id || ! $u->hasPermission('approve_profile_changes')) {
+                    return false;
+                }
+                $reach = $scopes->employeeIds($u, 'approve_profile_changes');
+
+                return $reach === null || in_array($employee->id, $reach, true);
+            })
+            ->values();
     }
 
     /**

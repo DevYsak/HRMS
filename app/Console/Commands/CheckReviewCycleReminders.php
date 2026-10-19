@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\PerformanceCycle;
 use App\Models\PerformanceReview;
 use App\Notifications\ReviewCycleStartedNotification;
+use App\Services\Notifications\NotificationDispatcher;
 use Illuminate\Console\Command;
 
 class CheckReviewCycleReminders extends Command
@@ -41,8 +42,8 @@ class CheckReviewCycleReminders extends Command
                     continue;
                 }
 
-                $user->notify(new ReviewCycleStartedNotification($cycle));
-                $notified++;
+                // Once per review in the cycle's reminder window, not every day of it (Phase 4).
+                $notified += app(NotificationDispatcher::class)->sendOnce($user, new ReviewCycleStartedNotification($cycle), 'review-cycle-reminder|'.$cycle->id.'|'.$review->id) ? 1 : 0;
             }
         }
 

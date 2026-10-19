@@ -20,7 +20,18 @@ class HolidayWorkRequestNotification extends Notification implements ShouldQueue
     use NotifiesByRole;
     use Queueable, SendsMailChannel, SerializesModels;
 
-    public function __construct(public HolidayWorkRequest $request) {}
+    /**
+     * The status when the event happened. The notification is queued: read
+     * at send time, a request decided before the worker ran told approvers
+     * it was "approved" and the employee twice (Phase 4).
+     */
+    public readonly string $statusAtDispatch;
+
+    public function __construct(public HolidayWorkRequest $request)
+    {
+        $this->statusAtDispatch = (string) $request->status;
+        $this->afterCommit();
+    }
 
     public function via(object $notifiable): array
     {
@@ -32,7 +43,7 @@ class HolidayWorkRequestNotification extends Notification implements ShouldQueue
         $date = Carbon::parse($this->request->work_date)->format('d M Y');
         $name = $this->request->employee?->user?->name ?? 'An employee';
 
-        return match ($this->request->status) {
+        return match ($this->statusAtDispatch) {
             'approved' => [
                 'type' => 'holiday_work',
                 'title' => 'Holiday Work Approved',

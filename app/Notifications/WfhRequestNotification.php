@@ -15,7 +15,18 @@ class WfhRequestNotification extends Notification implements ShouldQueue
     use NotifiesByRole;
     use Queueable, SendsMailChannel, SerializesModels;
 
-    public function __construct(public readonly WfhRequest $wfhRequest) {}
+    /**
+     * The status when the event happened. The notification is queued: read
+     * at send time, a request decided before the worker ran told approvers
+     * it was "approved" and the employee twice (Phase 4).
+     */
+    public readonly string $statusAtDispatch;
+
+    public function __construct(public readonly WfhRequest $wfhRequest)
+    {
+        $this->statusAtDispatch = (string) $wfhRequest->status;
+        $this->afterCommit();
+    }
 
     public function via(object $notifiable): array
     {
@@ -26,7 +37,7 @@ class WfhRequestNotification extends Notification implements ShouldQueue
     {
         $employee = $this->wfhRequest->employee->user->name;
         $dates = $this->wfhRequest->dateRangeLabel();
-        $status = $this->wfhRequest->status;
+        $status = $this->statusAtDispatch;
 
         return match ($status) {
             'pending' => [

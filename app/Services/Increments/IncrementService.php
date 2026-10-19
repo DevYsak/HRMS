@@ -3,7 +3,6 @@
 namespace App\Services\Increments;
 
 use App\Enums\EmployeeStatus;
-use App\Enums\UserRole;
 use App\Mail\IncrementLetterMail;
 use App\Models\AuditLog;
 use App\Models\Employee;
@@ -17,6 +16,7 @@ use App\Notifications\IncrementAppliedNotification;
 use App\Notifications\PipCreatedNotification;
 use App\Services\Notifications\NotificationRecipients;
 use App\Services\Performance\PipService;
+use App\Services\Security\ScopeResolver;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
@@ -454,12 +454,22 @@ class IncrementService
             'success_criteria' => 'Reach at least band C in the next two quarterly reviews.',
         ], $managerUser);
 
-        // Spec: notify HR Admin + Department Head (manager already notified by PipService).
-        $notifiables = User::where('role', UserRole::HrAdmin)->get();
-        if ($head = $employee->department?->head) {
-            $notifiables->push($head);
-        }
-        $notifiables->unique('id')->each(fn (User $u) => $u->notify((new PipCreatedNotification($pip))->forRole('hr_admin')));
+        // Spec: HR and the department head (the manager is notified by
+        // PipService). Phase 4: by permission and scope, not role name —
+        // whoever manages PIPs for this employee (HR company-wide, a
+        // department head for their department), never the employee.
+        $scopes = app(ScopeResolver::class);
+        $managerId = $pip->manager?->id;
+        User::query()->get()
+            ->filter(function (User $u) use ($employee, $scopes, $managerId) {
+                if ($u->id === $employee->user_id || $u->id === $managerId || ! $u->hasPermission('manage_pip')) {
+                    return false;
+                }
+                $reach = $scopes->employeeIds($u, 'manage_pip');
+
+                return $reach === null || in_array($employee->id, $reach, true);
+            })
+            ->each(fn (User $u) => $u->notify((new PipCreatedNotification($pip))->forRole('hr_admin')));
 
         AuditLog::record($pip, 'auto_flagged_band_e', null, ['increment_proposal_id' => $proposal->id]);
     }

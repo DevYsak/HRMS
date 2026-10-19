@@ -6,6 +6,7 @@ use App\Enums\EmployeeStatus;
 use App\Models\Employee;
 use App\Models\User;
 use App\Notifications\ProbationDueNotification;
+use App\Services\Notifications\NotificationDispatcher;
 use App\Services\Notifications\NotificationRecipients;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
@@ -35,8 +36,11 @@ class CheckProbationExpiry extends Command
         // The shared HR queue, deliberately: a probation falling due is HR's as a
         // function, not one named person's. One digest each — the notification
         // takes a collection (passing a single Employee threw a TypeError).
+        // Daily schedule, weekly reminder: one digest per HR person per ISO
+        // week for the same overdue set (Phase 4 — it used to repeat daily).
+        $key = 'probation-overdue|'.now()->format('o-W').'|'.md5($overdue->pluck('id')->sort()->implode(','));
         app(NotificationRecipients::class)->hrQueue()
-            ->each(fn (User $hr) => $hr->notify(new ProbationDueNotification($overdue, 'overdue')));
+            ->each(fn (User $hr) => app(NotificationDispatcher::class)->sendOnce($hr, new ProbationDueNotification($overdue, 'overdue'), $key));
 
         $this->info("Notified HR: {$overdue->count()} overdue probation review(s).");
 

@@ -620,6 +620,7 @@ class LeaveService
 
         $employeeUserId = $leaveRequest->employee?->user_id;
         $isEmployee = $sender->id === $employeeUserId;
+        $statusBefore = $leaveRequest->status;
 
         if (! $isEmployee && in_array($leaveRequest->status, ['pending', 'pending_hr'], true)) {
             // Reviewer is asking for clarification.
@@ -635,15 +636,18 @@ class LeaveService
 
         $fresh = $leaveRequest->fresh(['employee.user', 'leaveType']);
 
-        // Notify the other side.
+        // Notify the other side. A post that changed nothing is announced as
+        // a message — never as the request's decision again (a comment on an
+        // approved leave used to send "Leave Approved" once more).
+        $event = $fresh->status === $statusBefore || $fresh->status === 'pending' ? 'message' : null;
         if ($isEmployee) {
             $manager = $fresh->employee->manager;
-            $manager?->notify((new LeaveRequestNotification($fresh))->forRole('manager'));
+            $manager?->notify((new LeaveRequestNotification($fresh, $event))->forRole('manager'));
             app(NotificationRecipients::class)->hrCovering($fresh->employee)
                 ->reject(fn (User $hr) => $manager && $hr->id === $manager->id)
-                ->each(fn (User $hr) => $hr->notify((new LeaveRequestNotification($fresh))->forRole('hr_admin')));
+                ->each(fn (User $hr) => $hr->notify((new LeaveRequestNotification($fresh, $event))->forRole('hr_admin')));
         } else {
-            $fresh->employee->user?->notify((new LeaveRequestNotification($fresh))->forRole('employee'));
+            $fresh->employee->user?->notify((new LeaveRequestNotification($fresh, $event))->forRole('employee'));
         }
 
         return $fresh;
@@ -1339,6 +1343,36 @@ class LeaveService
         $oldStatus = $leaveRequest->status;
         $leaveRequest->update(['status' => 'cancelled']);
         $this->auditDecision($leaveRequest, $oldStatus, 'cancelled', [], $reason, $actor ?? auth()->user(), $meta);
+
+        $this->notifyCancellation($leaveRequest->fresh(['employee.user', 'employee.manager', 'leaveType']), $isOwnAction);
+    }
+
+    /**
+     * Phase 4: a cancellation used to notify nobody. The employee's own
+     * cancellation goes to the reporting manager and the HR covering them
+     * (for an approved or HR-stage request); anyone else's cancellation goes
+     * to the employee.
+     */
+    private function notifyCancellation(LeaveRequest $leaveRequest, bool $byEmployee): void
+    {
+        $employee = $leaveRequest->employee;
+        if ($employee === null) {
+            return;
+        }
+
+        if (! $byEmployee) {
+            $employee->user?->notify((new LeaveRequestNotification($leaveRequest))->forRole('employee'));
+
+            return;
+        }
+
+        $manager = $employee->manager;
+        if ($manager !== null && $manager->id !== $employee->user_id) {
+            $manager->notify((new LeaveRequestNotification($leaveRequest))->forRole('manager'));
+        }
+        app(NotificationRecipients::class)->hrCovering($employee)
+            ->reject(fn (User $hr) => $hr->id === $employee->user_id || ($manager && $hr->id === $manager->id))
+            ->each(fn (User $hr) => $hr->notify((new LeaveRequestNotification($leaveRequest))->forRole('hr_admin')));
     }
 
     /**

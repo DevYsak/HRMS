@@ -9,6 +9,7 @@ use App\Models\LeaveEscalation;
 use App\Models\User;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -81,6 +82,7 @@ class NotificationsPage extends Component
             ->update(['read_at' => now()]);
 
         $this->selected = [];
+        $this->forgetBadge();
     }
 
     public function deleteSelected(): void
@@ -94,36 +96,48 @@ class NotificationsPage extends Component
             ->delete();
 
         $this->selected = [];
+        $this->forgetBadge();
     }
 
     public function markRead(string $id): void
     {
         Auth::user()->notifications()->findOrFail($id)->markAsRead();
+        $this->forgetBadge();
     }
 
     public function markAllRead(): void
     {
         Auth::user()->unreadNotifications->markAsRead();
+        $this->forgetBadge();
     }
 
     public function delete(string $id): void
     {
         Auth::user()->notifications()->findOrFail($id)->delete();
+        $this->forgetBadge();
     }
 
     public function clearRead(): void
     {
         Auth::user()->notifications()->whereNotNull('read_at')->delete();
+        $this->forgetBadge();
     }
 
     public function redirectTo(string $id): void
     {
         $notif = Auth::user()->notifications()->findOrFail($id);
         $notif->markAsRead();
+        $this->forgetBadge();
         $url = $notif->data['url'] ?? null;
         if ($url) {
             $this->redirect($url, navigate: true);
         }
+    }
+
+    /** The bell caches the unread count for 30s; reading here must clear it (Phase 4). */
+    private function forgetBadge(): void
+    {
+        Cache::forget('notif_count_'.Auth::id());
     }
 
     /**

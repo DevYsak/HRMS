@@ -14,7 +14,18 @@ class RegularisationReviewedNotification extends Notification implements ShouldQ
 {
     use Queueable, SendsMailChannel, SerializesModels;
 
-    public function __construct(public AttendanceRegularisation $regularisation) {}
+    /**
+     * The status when the event happened. The notification is queued: read
+     * at send time, a request decided before the worker ran told approvers
+     * it was "approved" and the employee twice (Phase 4).
+     */
+    public readonly string $statusAtDispatch;
+
+    public function __construct(public AttendanceRegularisation $regularisation)
+    {
+        $this->statusAtDispatch = (string) $regularisation->status;
+        $this->afterCommit();
+    }
 
     public function via(object $notifiable): array
     {
@@ -23,7 +34,7 @@ class RegularisationReviewedNotification extends Notification implements ShouldQ
 
     public function toArray(object $notifiable): array
     {
-        $status = $this->regularisation->status;
+        $status = $this->statusAtDispatch;
         $date = Carbon::parse($this->regularisation->work_date)->format('d M Y');
 
         return match ($status) {

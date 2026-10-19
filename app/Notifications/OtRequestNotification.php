@@ -15,7 +15,18 @@ class OtRequestNotification extends Notification implements ShouldQueue
     use NotifiesByRole;
     use Queueable, SendsMailChannel, SerializesModels;
 
-    public function __construct(public readonly OtRequest $otRequest) {}
+    /**
+     * The status when the event happened. The notification is queued: read
+     * at send time, a request decided before the worker ran told approvers
+     * it was "approved" and the employee twice (Phase 4).
+     */
+    public readonly string $statusAtDispatch;
+
+    public function __construct(public readonly OtRequest $otRequest)
+    {
+        $this->statusAtDispatch = (string) $otRequest->status;
+        $this->afterCommit();
+    }
 
     public function via(object $notifiable): array
     {
@@ -26,7 +37,7 @@ class OtRequestNotification extends Notification implements ShouldQueue
     {
         $employee = $this->otRequest->employee->user->name;
         $date = $this->otRequest->work_date->format('M d, Y');
-        $status = $this->otRequest->status;
+        $status = $this->statusAtDispatch;
 
         return match ($status) {
             'pending' => [

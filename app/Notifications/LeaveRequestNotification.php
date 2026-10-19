@@ -18,7 +18,21 @@ class LeaveRequestNotification extends Notification implements ShouldQueue
     use NotifiesByRole;
     use Queueable, SendsMailChannel, SerializesModels;
 
-    public function __construct(public readonly LeaveRequest $leaveRequest) {}
+    /**
+     * The status when the event happened. The notification is queued: read
+     * at send time, a request decided before the worker ran told approvers
+     * it was "approved" and the employee twice (Phase 4).
+     */
+    public readonly string $statusAtDispatch;
+
+    /**
+     * @param  string|null  $event  'message' for a message-thread post — it never re-announces the decision
+     */
+    public function __construct(public readonly LeaveRequest $leaveRequest, public readonly ?string $event = null)
+    {
+        $this->statusAtDispatch = (string) $leaveRequest->status;
+        $this->afterCommit();
+    }
 
     public function via(object $notifiable): array
     {
@@ -28,7 +42,7 @@ class LeaveRequestNotification extends Notification implements ShouldQueue
     public function toArray(object $notifiable): array
     {
         $employee = $this->leaveRequest->employee->user->name;
-        $status = $this->leaveRequest->status;
+        $status = $this->event === 'message' ? 'message' : $this->statusAtDispatch;
         $type = $this->leaveRequest->leaveType->name;
         $days = $this->leaveRequest->days;
 
@@ -65,15 +79,25 @@ class LeaveRequestNotification extends Notification implements ShouldQueue
                 'icon' => 'check-circle',
                 'color' => 'green',
             ],
-            'cancelled' => [
-                'type' => 'leave_request',
-                'title' => 'Leave Cancelled',
-                'body' => "Your {$type} request for {$days} day(s) has been cancelled.",
-                'action' => 'View',
-                'url' => $myUrl,
-                'icon' => 'x-circle',
-                'color' => 'orange',
-            ],
+            'cancelled' => $this->role === 'employee' || $this->role === null
+                ? [
+                    'type' => 'leave_request',
+                    'title' => 'Leave Cancelled',
+                    'body' => "Your {$type} request for {$days} day(s) has been cancelled.",
+                    'action' => 'View',
+                    'url' => $myUrl,
+                    'icon' => 'x-circle',
+                    'color' => 'orange',
+                ]
+                : [
+                    'type' => 'leave_request',
+                    'title' => 'Leave Cancelled',
+                    'body' => "{$employee} cancelled their {$type} request for {$days} day(s).",
+                    'action' => 'View',
+                    'url' => $teamUrl,
+                    'icon' => 'x-circle',
+                    'color' => 'orange',
+                ],
             'more_info_requested' => [
                 'type' => 'leave_request',
                 'title' => 'More Information Needed',
@@ -112,6 +136,15 @@ class LeaveRequestNotification extends Notification implements ShouldQueue
                     'icon' => 'calendar',
                     'color' => 'amber',
                 ],
+            'message' => [
+                'type' => 'leave_request',
+                'title' => 'New Message on a Leave Request',
+                'body' => "There is a new message on {$employee}'s {$type} request ({$days} day(s)).",
+                'action' => 'Open',
+                'url' => $this->role === 'employee' ? $myUrl : $teamUrl,
+                'icon' => 'chat-bubble-left-right',
+                'color' => 'blue',
+            ],
             // Never fall through to a rejection: an unknown state says only
             // that the request changed.
             default => [
