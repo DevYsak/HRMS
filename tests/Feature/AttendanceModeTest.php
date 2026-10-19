@@ -450,7 +450,8 @@ test('the journey collapses duplicate punches logged seconds apart', function ()
 });
 
 test('a custom date range drives the stats and the attendance log', function () {
-    $employee = Employee::factory()->create();
+    // A fixed joining date: a random one after 10 Jun made the June day "not employed".
+    $employee = Employee::factory()->create(['joining_date' => '2024-01-08']);
     Attendance::create([
         'employee_id' => $employee->id, 'date' => '2026-06-10',
         'check_in' => '2026-06-10 09:00:00', 'check_out' => '2026-06-10 18:00:00',

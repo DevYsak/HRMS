@@ -49,7 +49,9 @@ test('creating an employee with a custom role sets role_id and a permission-deri
 });
 
 test('creating an employee with a built-in role keeps the exact matching legacy bucket', function () {
-    $creator = ecrCreator();
+    // Finance carries export_bank_transfer (privileged, Phase 4): only a Super Admin assigns it.
+    $superAdmin = User::factory()->create(['role' => UserRole::SuperAdmin, 'role_id' => Role::where('slug', 'super_admin')->value('id')]);
+    $creator = $superAdmin;
     $financeRole = Role::firstOrCreate(['slug' => 'finance'], ['name' => 'Finance', 'is_system' => true, 'is_active' => true]);
 
     Livewire::actingAs($creator)->test(EmployeeCreate::class)

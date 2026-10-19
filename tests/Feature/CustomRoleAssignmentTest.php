@@ -48,7 +48,9 @@ test('assigning a custom role sets role_id directly and a permission-derived leg
 });
 
 test('assigning one of the six built-in roles keeps the exact matching legacy bucket', function () {
-    $editor = editorUser();
+    // Finance carries export_bank_transfer (privileged, Phase 4): only a Super Admin assigns it.
+    $superAdmin = User::factory()->create(['role' => UserRole::SuperAdmin, 'role_id' => Role::where('slug', 'super_admin')->value('id')]);
+    $editor = $superAdmin;
     $employee = Employee::factory()->create();
     $financeRole = Role::firstOrCreate(['slug' => 'finance'], ['name' => 'Finance', 'is_system' => true, 'is_active' => true]);
 
