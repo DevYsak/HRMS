@@ -370,11 +370,13 @@
                         @empty
                             <tr>
                                 <td colspan="6" class="py-14 text-center">
-                                    <div class="size-12 rounded-2xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center mx-auto mb-3">
-                                        <flux:icon.calendar-days class="size-6 text-zinc-400" />
+                                    <div class="table-empty-pin">
+                                        <div class="size-12 rounded-2xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center mx-auto mb-3">
+                                            <flux:icon.calendar-days class="size-6 text-zinc-400" />
+                                        </div>
+                                        <p class="text-sm font-bold text-zinc-600 dark:text-zinc-300">No leave activity found</p>
+                                        <p class="text-xs text-zinc-400 mt-1">Try adjusting your filters to see more results</p>
                                     </div>
-                                    <p class="text-sm font-bold text-zinc-600 dark:text-zinc-300">No leave activity found</p>
-                                    <p class="text-xs text-zinc-400 mt-1">Try adjusting your filters to see more results</p>
                                 </td>
                             </tr>
                         @endforelse

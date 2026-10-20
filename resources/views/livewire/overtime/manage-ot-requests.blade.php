@@ -6,7 +6,7 @@
             <h1 class="pulse-page-title">Manage OT Requests</h1>
             <p class="pulse-page-subtitle">Review pre-approval requests with clear work windows, duration, and action context.</p>
         </div>
-        <div class="flex items-center gap-2">
+        <div class="flex flex-wrap items-center gap-2">
             @if(auth()->user()->canManageEmployees())
                 <flux:button href="{{ route('overtime.windows') }}" wire:navigate variant="outline" icon="calendar-days">OT Windows</flux:button>
             @endif
@@ -342,9 +342,11 @@
                     @empty
                         <tr>
                             <td colspan="8" class="py-16 text-center">
-                                <flux:icon.clock class="mx-auto size-10 text-zinc-300 dark:text-zinc-600 mb-3" />
-                                <p class="text-sm font-medium text-zinc-500">No OT requests found</p>
-                                <p class="mt-1 text-xs text-zinc-400">Try adjusting your search or filter.</p>
+                                <div class="table-empty-pin">
+                                    <flux:icon.clock class="mx-auto size-10 text-zinc-300 dark:text-zinc-600 mb-3" />
+                                    <p class="text-sm font-medium text-zinc-500">No OT requests found</p>
+                                    <p class="mt-1 text-xs text-zinc-400">Try adjusting your search or filter.</p>
+                                </div>
                             </td>
                         </tr>
                     @endforelse

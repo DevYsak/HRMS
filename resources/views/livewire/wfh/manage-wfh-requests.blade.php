@@ -268,9 +268,11 @@
                     @empty
                         <tr>
                             <td colspan="7" class="py-16 text-center">
-                                <flux:icon.home class="mx-auto size-10 text-zinc-300 dark:text-zinc-600 mb-3" />
-                                <p class="text-sm font-medium text-zinc-500">No WFH requests found</p>
-                                <p class="mt-1 text-xs text-zinc-400">Try adjusting your search or filter.</p>
+                                <div class="table-empty-pin">
+                                    <flux:icon.home class="mx-auto size-10 text-zinc-300 dark:text-zinc-600 mb-3" />
+                                    <p class="text-sm font-medium text-zinc-500">No WFH requests found</p>
+                                    <p class="mt-1 text-xs text-zinc-400">Try adjusting your search or filter.</p>
+                                </div>
                             </td>
                         </tr>
                     @endforelse

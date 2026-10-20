@@ -516,7 +516,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="8" class="py-12 text-center text-zinc-400 text-sm">No payslips found</td>
+                                    <td colspan="8" class="py-12 text-center text-zinc-400 text-sm"><div class="table-empty-pin">No payslips found</div></td>
                                 </tr>
                             @endforelse
                         </tbody>

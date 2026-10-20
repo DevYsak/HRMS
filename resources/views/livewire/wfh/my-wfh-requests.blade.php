@@ -131,11 +131,13 @@
                         @empty
                             <tr>
                                 <td colspan="6" class="py-16 text-center">
-                                    <flux:icon.home class="size-10 mx-auto mb-3 text-zinc-300 dark:text-zinc-700" />
-                                    <p class="text-sm font-medium text-zinc-400">No work-from-home requests found.</p>
-                                    @if($filterStatus || $filterMonth)
-                                        <button wire:click="clearFilters" class="text-xs text-blue-600 mt-1 hover:underline">Clear filters</button>
-                                    @endif
+                                    <div class="table-empty-pin">
+                                        <flux:icon.home class="size-10 mx-auto mb-3 text-zinc-300 dark:text-zinc-700" />
+                                        <p class="text-sm font-medium text-zinc-400">No work-from-home requests found.</p>
+                                        @if($filterStatus || $filterMonth)
+                                            <button wire:click="clearFilters" class="text-xs text-blue-600 mt-1 hover:underline">Clear filters</button>
+                                        @endif
+                                    </div>
                                 </td>
                             </tr>
                         @endforelse

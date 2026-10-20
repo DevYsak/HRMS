@@ -630,3 +630,12 @@ textarea { overflow-wrap: anywhere; }
     .ui-card-pad { padding: var(--ui-card-padding, 1.25rem); }
     .ui-badge-shape { border-radius: var(--ui-badge-radius, 9999px); }
 }
+
+/* Empty-state row in a horizontally scrolling table: on phones the message stays in the
+   visible part of the scroller instead of centring across the full (off-screen) table width. */
+@layer components {
+    .table-empty-pin { position: sticky; left: 0; width: calc(100vw - 5rem); margin-inline: 0; }
+    @media (min-width: 640px) {
+        .table-empty-pin { position: static; width: auto; }
+    }
+}

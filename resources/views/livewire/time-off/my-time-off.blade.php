@@ -53,32 +53,32 @@
                     ];
                 @endphp
                 @foreach($heroKpis as $kpi)
-                    <div class="flex items-center gap-3 rounded-xl border border-white/70 bg-white/70 px-4 py-3 shadow-sm backdrop-blur dark:border-zinc-700/60 dark:bg-zinc-800/60">
+                    <div class="flex flex-col items-start gap-2 rounded-xl border border-white/70 bg-white/70 px-3.5 py-3 shadow-sm backdrop-blur dark:border-zinc-700/60 dark:bg-zinc-800/60 sm:flex-row sm:items-center sm:gap-3 sm:px-4">
                         <span class="flex size-9 shrink-0 items-center justify-center rounded-lg" style="background: {{ $kpi['color'] }}1a">
                             <flux:icon :name="$kpi['icon']" class="size-4" style="color: {{ $kpi['color'] }}" />
                         </span>
-                        <div class="min-w-0">
-                            <p class="truncate text-[10px] font-bold uppercase tracking-wide text-zinc-400">{{ $kpi['label'] }}</p>
-                            <p class="truncate text-base font-black {{ $kpi['class'] ?? 'text-zinc-900 dark:text-white' }}">{{ $kpi['value'] }}</p>
+                        <div class="w-full min-w-0">
+                            <p class="line-clamp-2 break-words text-[10px] font-bold uppercase leading-snug tracking-wide text-zinc-400">{{ $kpi['label'] }}</p>
+                            <p class="break-words text-base font-black {{ $kpi['class'] ?? 'text-zinc-900 dark:text-white' }}">{{ $kpi['value'] }}</p>
                         </div>
                     </div>
                 @endforeach
 
                 {{-- Next holiday chip --}}
-                <div class="flex items-center gap-3 rounded-xl border border-white/70 bg-white/70 px-4 py-3 shadow-sm backdrop-blur dark:border-zinc-700/60 dark:bg-zinc-800/60">
+                <div class="flex flex-col items-start gap-2 rounded-xl border border-white/70 bg-white/70 px-3.5 py-3 shadow-sm backdrop-blur dark:border-zinc-700/60 dark:bg-zinc-800/60 sm:flex-row sm:items-center sm:gap-3 sm:px-4">
                     <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-rose-500/10">
                         <flux:icon.flag class="size-4 text-rose-500" />
                     </span>
-                    <div class="min-w-0">
-                        <p class="truncate text-[10px] font-bold uppercase tracking-wide text-zinc-400">Next Holiday / MDL</p>
+                    <div class="w-full min-w-0">
+                        <p class="line-clamp-2 break-words text-[10px] font-bold uppercase leading-snug tracking-wide text-zinc-400">Next Holiday / MDL</p>
                         @if($nextMdl && (! $nextHoliday || $nextMdl->lt($nextHoliday->date)))
-                            <p class="truncate text-sm font-black text-zinc-900 dark:text-white">Mandatory December Leave</p>
-                            <p class="truncate text-[11px] font-medium text-zinc-400">{{ $nextMdl->format('d M Y (D)') }} · company shutdown</p>
+                            <p class="line-clamp-2 break-words text-sm font-black leading-snug text-zinc-900 dark:text-white">Mandatory December Leave</p>
+                            <p class="line-clamp-2 text-[11px] font-medium text-zinc-400">{{ $nextMdl->format('d M Y (D)') }} · company shutdown</p>
                         @elseif($nextHoliday)
-                            <p class="truncate text-sm font-black text-zinc-900 dark:text-white">{{ $nextHoliday->name }}</p>
-                            <p class="truncate text-[11px] font-medium text-zinc-400">{{ $nextHoliday->date->format('d M Y (D)') }}</p>
+                            <p class="line-clamp-2 break-words text-sm font-black leading-snug text-zinc-900 dark:text-white">{{ $nextHoliday->name }}</p>
+                            <p class="line-clamp-2 text-[11px] font-medium text-zinc-400">{{ $nextHoliday->date->format('d M Y (D)') }}</p>
                         @else
-                            <p class="truncate text-sm font-black text-zinc-900 dark:text-white">None scheduled</p>
+                            <p class="line-clamp-2 break-words text-sm font-black leading-snug text-zinc-900 dark:text-white">None scheduled</p>
                         @endif
                     </div>
                 </div>
@@ -748,16 +748,18 @@
                         @empty
                             <tr>
                                 <td colspan="6" class="py-16 text-center">
-                                    <div class="flex flex-col items-center gap-3">
-                                        <div
-                                            class="flex size-14 items-center justify-center rounded-2xl bg-zinc-50 dark:bg-zinc-800">
-                                            <flux:icon.document-magnifying-glass
-                                                class="size-7 text-zinc-300 dark:text-zinc-600 dark:text-zinc-300" />
-                                        </div>
-                                        <div>
-                                            <p class="text-sm font-bold text-zinc-400">No leave applications yet</p>
-                                            <p class="mt-0.5 text-xs text-zinc-300 dark:text-zinc-600 dark:text-zinc-300">Click "Apply for
-                                                Leave" to get started.</p>
+                                    <div class="table-empty-pin">
+                                        <div class="flex flex-col items-center gap-3">
+                                            <div
+                                                class="flex size-14 items-center justify-center rounded-2xl bg-zinc-50 dark:bg-zinc-800">
+                                                <flux:icon.document-magnifying-glass
+                                                    class="size-7 text-zinc-300 dark:text-zinc-600 dark:text-zinc-300" />
+                                            </div>
+                                            <div>
+                                                <p class="text-sm font-bold text-zinc-400">No leave applications yet</p>
+                                                <p class="mt-0.5 text-xs text-zinc-300 dark:text-zinc-600 dark:text-zinc-300">Click "Apply for
+                                                    Leave" to get started.</p>
+                                            </div>
                                         </div>
                                     </div>
                                 </td>
@@ -852,12 +854,14 @@
                         @empty
                             <tr>
                                 <td colspan="5" class="py-16 text-center">
-                                    <div class="flex flex-col items-center gap-3">
-                                        <div
-                                            class="flex size-14 items-center justify-center rounded-2xl bg-zinc-50 dark:bg-zinc-800">
-                                            <flux:icon.banknotes class="size-7 text-zinc-300 dark:text-zinc-600 dark:text-zinc-300" />
+                                    <div class="table-empty-pin">
+                                        <div class="flex flex-col items-center gap-3">
+                                            <div
+                                                class="flex size-14 items-center justify-center rounded-2xl bg-zinc-50 dark:bg-zinc-800">
+                                                <flux:icon.banknotes class="size-7 text-zinc-300 dark:text-zinc-600 dark:text-zinc-300" />
+                                            </div>
+                                            <p class="text-sm font-bold text-zinc-400">No encashment requests yet.</p>
                                         </div>
-                                        <p class="text-sm font-bold text-zinc-400">No encashment requests yet.</p>
                                     </div>
                                 </td>
                             </tr>

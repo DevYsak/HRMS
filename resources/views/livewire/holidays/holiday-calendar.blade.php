@@ -33,14 +33,14 @@
     </div>
 
     @if($view === 'month')
-        <div class="overflow-x-auto rounded-2xl border border-zinc-200 bg-white p-3 shadow-sm dark:border-white/10 dark:bg-zinc-900">
-            <div class="grid min-w-[560px] grid-cols-7 gap-1.5">
+        <div class="rounded-2xl border border-zinc-200 bg-white p-2 shadow-sm dark:border-white/10 dark:bg-zinc-900 sm:p-3" data-holiday-month-grid>
+            <div class="grid grid-cols-7 gap-1 sm:gap-1.5">
                 @foreach(['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as $dow)
                     <div class="pb-1 text-center text-[10px] font-bold uppercase tracking-wider text-zinc-400">{{ $dow }}</div>
                 @endforeach
                 @foreach($grid as $cell)
                     <div wire:key="hc-{{ $cell['date'] }}" @class([
-                        'min-h-[4.5rem] rounded-xl border p-1.5 text-xs',
+                        'min-h-[3.25rem] min-w-0 rounded-lg border p-1 text-xs sm:min-h-[4.5rem] sm:rounded-xl sm:p-1.5',
                         'border-dashed border-rose-300 bg-rose-50/70 dark:border-rose-500/40 dark:bg-rose-500/10' => $cell['mdl'],
                         'border-zinc-100 bg-zinc-50 dark:border-white/5 dark:bg-white/5' => ! $cell['mdl'] && $cell['weekly_off'],
                         'border-zinc-100 bg-white dark:border-white/5 dark:bg-zinc-900' => ! $cell['mdl'] && ! $cell['weekly_off'],
@@ -48,11 +48,18 @@
                         'ring-2 ring-orange-400' => $cell['today'],
                     ])>
                         <div class="font-bold text-zinc-600 dark:text-zinc-300">{{ $cell['day'] }}</div>
+                        @if($cell['holidays']->isNotEmpty())
+                            <div class="mt-1 flex flex-wrap gap-0.5 sm:hidden">
+                                @foreach($cell['holidays'] as $h)
+                                    <span class="size-2 rounded-full" style="background: {{ $h->is_optional ? '#0EA5E9' : $h->displayColor() }}" title="{{ $h->name }}"></span>
+                                @endforeach
+                            </div>
+                        @endif
                         @foreach($cell['holidays'] as $h)
-                            <div class="mt-0.5 truncate rounded px-1 text-[10px] font-semibold text-white" style="background: {{ $h->is_optional ? '#0EA5E9' : $h->displayColor() }}" title="{{ $h->name }}{{ $h->is_optional ? ' (optional)' : '' }}">{{ $h->name }}</div>
+                            <div class="mt-0.5 hidden truncate rounded px-1 sm:block text-[10px] font-semibold text-white" style="background: {{ $h->is_optional ? '#0EA5E9' : $h->displayColor() }}" title="{{ $h->name }}{{ $h->is_optional ? ' (optional)' : '' }}">{{ $h->name }}</div>
                         @endforeach
                         @if($cell['mdl'])
-                            <div class="mt-0.5 truncate text-[10px] font-semibold text-rose-700 dark:text-rose-300" title="{{ $cell['mdl']->description }}">MDL · {{ $cell['mdl']->description ?: 'Shutdown' }}</div>
+                            <div class="mt-0.5 hidden truncate text-[10px] font-semibold text-rose-700 dark:text-rose-300 sm:block" title="{{ $cell['mdl']->description }}">MDL · {{ $cell['mdl']->description ?: 'Shutdown' }}</div>
                         @endif
                     </div>
                 @endforeach

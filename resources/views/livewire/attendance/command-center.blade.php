@@ -87,14 +87,14 @@
                     ];
                 @endphp
                 @foreach($overviewKpis as $kpi)
-                    <div class="flex items-center gap-3 rounded-xl border border-white/70 bg-white/70 px-4 py-3 shadow-sm backdrop-blur dark:border-zinc-700/60 dark:bg-zinc-800/60">
+                    <div class="flex flex-col items-start gap-2 rounded-xl border border-white/70 bg-white/70 px-3.5 py-3 shadow-sm backdrop-blur dark:border-zinc-700/60 dark:bg-zinc-800/60 sm:flex-row sm:items-center sm:gap-3 sm:px-4">
                         <span class="flex size-10 shrink-0 items-center justify-center rounded-lg" style="background: {{ $kpi['color'] }}1a">
                             <flux:icon :icon="$kpi['icon']" class="size-5" style="color: {{ $kpi['color'] }}" />
                         </span>
-                        <div class="min-w-0">
+                        <div class="w-full min-w-0">
                             <p class="truncate text-2xl font-black tabular-nums text-zinc-900 dark:text-white">{{ $kpi['value'] }}</p>
-                            <p class="truncate text-[10px] font-bold uppercase tracking-wide text-zinc-400">{{ $kpi['label'] }}</p>
-                            <p class="truncate text-[10px] text-zinc-400">{{ $kpi['sub'] }}</p>
+                            <p class="line-clamp-2 break-words text-[10px] font-bold uppercase leading-snug tracking-wide text-zinc-400">{{ $kpi['label'] }}</p>
+                            <p class="line-clamp-2 text-[10px] leading-snug text-zinc-400">{{ $kpi['sub'] }}</p>
                         </div>
                     </div>
                 @endforeach
