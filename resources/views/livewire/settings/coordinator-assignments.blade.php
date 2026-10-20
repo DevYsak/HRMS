@@ -1,7 +1,7 @@
 <flux:main class="space-y-6 p-4 md:p-6">
 
     <div>
-        <flux:heading size="xl">Coordinators</flux:heading>
+        <flux:heading size="xl" level="1" class="pulse-page-title">Coordinators</flux:heading>
         <flux:subheading>Choose who each coordinator monitors. Coordinators see absences, late arrivals, missing check-outs and pending regularisations for those people, remind them and escalate to the manager or HR. They cannot approve anything or change pay or settings.</flux:subheading>
     </div>
 

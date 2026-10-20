@@ -2,7 +2,7 @@
 
     <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
-            <flux:heading size="xl">Payroll Overview</flux:heading>
+            <flux:heading size="xl" level="1" class="pulse-page-title">Payroll Overview</flux:heading>
             <flux:subheading>Run status, payout trends and upcoming cycles at a glance.</flux:subheading>
         </div>
         <div class="flex flex-wrap items-center gap-2">

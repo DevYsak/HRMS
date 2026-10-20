@@ -2,7 +2,7 @@
 
     <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
-            <flux:heading size="xl">Sidebar Menu</flux:heading>
+            <flux:heading size="xl" level="1" class="pulse-page-title">Sidebar Menu</flux:heading>
             <flux:subheading>Control the employee sidebar — reorder, rename, or hide top-level items. No code changes needed.</flux:subheading>
         </div>
         <flux:button wire:click="save" variant="primary" icon="check">Save changes</flux:button>

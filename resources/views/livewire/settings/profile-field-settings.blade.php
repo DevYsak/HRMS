@@ -1,7 +1,7 @@
 <flux:main class="space-y-6 p-4 md:p-6">
 
     <div>
-        <flux:heading size="xl">Profile Fields</flux:heading>
+        <flux:heading size="xl" level="1" class="pulse-page-title">Profile Fields</flux:heading>
         <flux:subheading>Choose what employees must complete. Required fields count toward profile completion; Optional fields are shown but never lower the score; HR-only fields are hidden from employees and only HR can change them.</flux:subheading>
     </div>
 

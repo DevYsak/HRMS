@@ -3,7 +3,7 @@
 {{-- ═══════════════ HEADER ═══════════════ --}}
 <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
     <div>
-        <h1 class="text-2xl font-black tracking-tight text-zinc-900 dark:text-white">Executive Attendance</h1>
+        <h1 class="pulse-page-title">Executive Attendance</h1>
         <div class="mt-0.5 flex items-center gap-1.5 text-xs text-zinc-400">
             <span>Dashboard</span><flux:icon.chevron-right class="size-3" /><span>Attendance</span><flux:icon.chevron-right class="size-3" /><span class="font-semibold text-orange-500">Executive</span>
             <span class="ml-1">· {{ now()->format('F Y') }} · {{ $elapsedWorkingDays }}/{{ $monthWorkingDays }} working days</span>

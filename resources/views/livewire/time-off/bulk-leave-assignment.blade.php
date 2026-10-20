@@ -6,7 +6,7 @@
     @endphp
 
     <div>
-        <flux:heading size="xl">Bulk Leave Assignment</flux:heading>
+        <flux:heading size="xl" level="1" class="pulse-page-title">Bulk Leave Assignment</flux:heading>
         <flux:subheading>Assign, increase or decrease leave balances for many employees at once. Every change is an audited adjustment.</flux:subheading>
     </div>
 

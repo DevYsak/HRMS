@@ -7,7 +7,7 @@
 
     <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
-            <flux:heading size="xl">Leave Policies</flux:heading>
+            <flux:heading size="xl" level="1" class="pulse-page-title">Leave Policies</flux:heading>
             <flux:subheading>Default leave allocations by department, role, gender, employment type or service — applied automatically on hire.</flux:subheading>
         </div>
         <flux:button wire:click="openCreate" variant="primary" icon="plus">New policy</flux:button>

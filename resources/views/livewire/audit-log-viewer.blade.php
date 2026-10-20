@@ -8,7 +8,7 @@
 
     <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
-            <flux:heading size="xl">Activity Log</flux:heading>
+            <flux:heading size="xl" level="1" class="pulse-page-title">Activity Log</flux:heading>
             <flux:subheading>The Audit Log of every administrative and security action — who, their role, what changed (before → after), why, and from where. Read-only: entries can never be edited or deleted.</flux:subheading>
         </div>
         <div class="flex gap-2">

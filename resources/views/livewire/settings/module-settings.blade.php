@@ -1,7 +1,7 @@
 <flux:main class="space-y-6 p-4 md:p-6">
 
     <div>
-        <flux:heading size="xl">Modules</flux:heading>
+        <flux:heading size="xl" level="1" class="pulse-page-title">Modules</flux:heading>
         <flux:subheading>Switch whole product areas on or off. Switching a module off hides and blocks it — it never deletes data.</flux:subheading>
     </div>
 

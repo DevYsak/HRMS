@@ -1,7 +1,7 @@
 <flux:main class="space-y-6 p-4 md:p-6">
 
     <div>
-        <flux:heading size="xl">Data Management</flux:heading>
+        <flux:heading size="xl" level="1" class="pulse-page-title">Data Management</flux:heading>
         <flux:subheading>Permanently clear operational data or remove a single employee. Needs the Data Management (Purge) permission.</flux:subheading>
     </div>
 

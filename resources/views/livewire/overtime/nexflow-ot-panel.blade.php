@@ -1,7 +1,7 @@
 <flux:main class="space-y-6 p-4 md:p-6">
     <div class="flex flex-wrap items-end justify-between gap-3">
         <div>
-            <flux:heading size="xl">Nexflow Overtime</flux:heading>
+            <flux:heading size="xl" level="1" class="pulse-page-title">Nexflow Overtime</flux:heading>
             <flux:subheading>Pull an employee's overtime from Nexflow and import approved hours into payroll.</flux:subheading>
         </div>
         <span class="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-3 py-1 text-[11px] font-bold text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300">

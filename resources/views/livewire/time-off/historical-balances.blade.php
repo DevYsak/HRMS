@@ -2,7 +2,7 @@
 
     <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
-            <flux:heading size="xl">Historical Leave Balances</flux:heading>
+            <flux:heading size="xl" level="1" class="pulse-page-title">Historical Leave Balances</flux:heading>
             <flux:subheading>Migrate closed leave years from HR's own records.</flux:subheading>
         </div>
         <flux:button wire:click="downloadTemplate" icon="arrow-down-tray" variant="ghost" size="sm">

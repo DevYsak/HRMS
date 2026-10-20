@@ -3,7 +3,7 @@
     {{-- Header --}}
     <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
-            <flux:heading size="xl">Notifications &amp; Email</flux:heading>
+            <flux:heading size="xl" level="1" class="pulse-page-title">Notifications &amp; Email</flux:heading>
             <flux:subheading>Control every transactional email and in-app notification.</flux:subheading>
         </div>
         <div class="flex items-center gap-2">

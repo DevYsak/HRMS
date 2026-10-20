@@ -8,7 +8,7 @@
 {{-- ═══════════════ HEADER ═══════════════ --}}
 <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
     <div>
-        <h1 class="text-2xl font-black tracking-tight text-zinc-900 dark:text-white">Employees Attendance</h1>
+        <h1 class="pulse-page-title">Employees Attendance</h1>
         <div class="mt-0.5 flex items-center gap-1.5 text-xs text-zinc-400">
             <span>Dashboard</span><flux:icon.chevron-right class="size-3" /><span>Attendance</span><flux:icon.chevron-right class="size-3" /><span class="font-semibold text-orange-500">All Employees</span>
         </div>
@@ -59,8 +59,8 @@
             <span class="inline-flex size-10 shrink-0 items-center justify-center rounded-xl" style="background: {{ $k['color'] }}1a; color: {{ $k['color'] }};"><flux:icon :icon="$k['icon']" class="size-5" /></span>
             <div class="min-w-0">
                 <div class="text-xl font-black leading-none tabular-nums text-zinc-900 dark:text-white">{{ $k['value'] }}</div>
-                <div class="mt-0.5 truncate text-[9px] font-bold uppercase tracking-wide text-zinc-400">{{ $k['label'] }}</div>
-                <div class="truncate text-[9px] text-zinc-400">{{ $k['sub'] }}</div>
+                <div class="mt-0.5 line-clamp-2 break-words text-[9px] font-bold uppercase leading-snug tracking-wide text-zinc-400">{{ $k['label'] }}</div>
+                <div class="line-clamp-2 text-[9px] leading-snug text-zinc-400">{{ $k['sub'] }}</div>
             </div>
         </div>
     @endforeach

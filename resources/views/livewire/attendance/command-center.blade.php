@@ -4,7 +4,7 @@
     {{-- ═══════════════ HEADER ═══════════════ --}}
     <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
-            <h1 class="text-2xl font-black tracking-tight text-zinc-900 dark:text-white">Attendance Command Center</h1>
+            <h1 class="pulse-page-title">Attendance Command Center</h1>
             <div class="mt-0.5 flex items-center gap-1.5 text-xs text-zinc-400">
                 <span>Dashboard</span><flux:icon.chevron-right class="size-3" /><span>Attendance</span><flux:icon.chevron-right class="size-3" /><span class="font-semibold text-orange-500">Command Center</span>
             </div>

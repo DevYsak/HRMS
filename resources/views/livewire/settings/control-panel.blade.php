@@ -1,7 +1,7 @@
 <flux:main class="space-y-8 p-4 md:p-6">
 
     <div>
-        <flux:heading size="xl">Control Panel</flux:heading>
+        <flux:heading size="xl" level="1" class="pulse-page-title">Control Panel</flux:heading>
         <flux:subheading>Every administrative setting in one place.</flux:subheading>
     </div>
 

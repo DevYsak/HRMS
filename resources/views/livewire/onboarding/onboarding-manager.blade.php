@@ -3,7 +3,7 @@
     {{-- Header --}}
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-            <h1 class="text-2xl font-black text-zinc-900 dark:text-white">Onboarding</h1>
+            <h1 class="pulse-page-title">Onboarding</h1>
             <p class="text-sm text-zinc-500 mt-1">New joiners in the last 90 days and their checklist progress.</p>
         </div>
         <div class="flex items-center gap-3">

@@ -2,7 +2,7 @@
 
     <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
-            <flux:heading size="xl">Import Employees</flux:heading>
+            <flux:heading size="xl" level="1" class="pulse-page-title">Import Employees</flux:heading>
             <flux:subheading>Bulk-create or update employees from an Excel/CSV file.</flux:subheading>
         </div>
         <div class="flex flex-wrap gap-2">

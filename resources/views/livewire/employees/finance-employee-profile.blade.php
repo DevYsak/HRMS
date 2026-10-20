@@ -6,7 +6,7 @@
         <flux:breadcrumbs.item>Finance View</flux:breadcrumbs.item>
     </flux:breadcrumbs>
 
-    <flux:heading size="xl">Finance Profile — {{ $employee->user->name }}</flux:heading>
+    <flux:heading size="xl" level="1" class="pulse-page-title">Finance Profile — {{ $employee->user->name }}</flux:heading>
     <flux:subheading>Read-only salary and banking information for payroll processing.</flux:subheading>
 
     <div class="grid grid-cols-1 gap-5 lg:grid-cols-2">

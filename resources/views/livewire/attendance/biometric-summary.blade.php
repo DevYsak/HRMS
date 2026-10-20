@@ -4,7 +4,7 @@
     {{-- Header --}}
     <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
-            <flux:heading size="xl">Biometric Attendance Summary</flux:heading>
+            <flux:heading size="xl" level="1" class="pulse-page-title">Biometric Attendance Summary</flux:heading>
             <flux:subheading>
                 Daily attendance calculated by the biometric engine and synced into HRMS.
                 @if($lastSynced)

@@ -20,7 +20,7 @@
             {{-- Greeting + primary actions --}}
             <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                    <h1 class="text-2xl font-black tracking-tight text-zinc-900 dark:text-white">
+                    <h1 class="pulse-page-title">
                         {{ $greeting }}, {{ $firstName }} <span class="inline-block">👋</span>
                     </h1>
                     <p class="mt-1 max-w-md text-sm text-zinc-500 dark:text-zinc-400">

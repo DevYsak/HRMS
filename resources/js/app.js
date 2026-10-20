@@ -2,6 +2,8 @@ import ApexCharts from 'apexcharts';
 import gsap from 'gsap';
 import './request-errors';
 import './form-focus';
+import './table-scroll';
+import './busy-indicator';
 
 window.ApexCharts = ApexCharts;
 window.gsap = gsap;

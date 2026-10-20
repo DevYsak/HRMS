@@ -3,7 +3,7 @@
     {{-- ── Page Header ───────────────────────────────────── --}}
     <div class="flex items-start justify-between">
         <div>
-            <h1 class="text-2xl font-bold text-zinc-900 dark:text-white">Documents</h1>
+            <h1 class="pulse-page-title">Documents</h1>
             <p class="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">
                 {{ $canManage ? 'Manage company policies and employee documents.' : 'Your documents and company policies.' }}
             </p>

@@ -2,7 +2,7 @@
 
     <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
-            <flux:heading size="xl">Holiday Calendar</flux:heading>
+            <flux:heading size="xl" level="1" class="pulse-page-title">Holiday Calendar</flux:heading>
             <flux:subheading>Your holidays ({{ $calendar }} calendar) and the Mandatory December shutdown. Weekly offs are Saturday and Sunday.</flux:subheading>
         </div>
         <div class="flex flex-wrap items-center gap-2">

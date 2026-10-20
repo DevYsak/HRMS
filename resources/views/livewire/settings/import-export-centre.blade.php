@@ -1,7 +1,7 @@
 <flux:main class="space-y-8 p-4 md:p-6">
 
     <div>
-        <flux:heading size="xl">Import / Export</flux:heading>
+        <flux:heading size="xl" level="1" class="pulse-page-title">Import / Export</flux:heading>
         <flux:subheading>Download HR data as a spreadsheet, or load data in bulk after checking a preview.</flux:subheading>
     </div>
 

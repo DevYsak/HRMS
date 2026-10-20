@@ -2,7 +2,7 @@
 
 <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
     <div>
-        <h1 class="text-2xl font-black tracking-tight text-zinc-900 dark:text-white">Holiday Pay Policy</h1>
+        <h1 class="pulse-page-title">Holiday Pay Policy</h1>
         <div class="mt-0.5 flex items-center gap-1.5 text-xs text-zinc-400">
             <span>Settings</span><flux:icon.chevron-right class="size-3" /><span>Holidays</span><flux:icon.chevron-right class="size-3" /><span class="font-semibold text-orange-500">Pay Policy</span>
         </div>

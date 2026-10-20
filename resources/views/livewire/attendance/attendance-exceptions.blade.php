@@ -2,7 +2,7 @@
 
     <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
-            <flux:heading size="xl">Attendance Exceptions</flux:heading>
+            <flux:heading size="xl" level="1" class="pulse-page-title">Attendance Exceptions</flux:heading>
             <flux:subheading>Absences, late arrivals, missing check-outs and pending regularisations among the {{ $monitoredCount }} {{ \Illuminate\Support\Str::plural('person', $monitoredCount) }} you monitor. Weekly offs, holidays and approved leave are never counted.</flux:subheading>
         </div>
         <div class="flex items-center gap-2">

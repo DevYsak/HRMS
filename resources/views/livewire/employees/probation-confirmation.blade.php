@@ -6,7 +6,7 @@
         <flux:breadcrumbs.item>Probation Confirmation</flux:breadcrumbs.item>
     </flux:breadcrumbs>
 
-    <flux:heading size="xl">Probation Confirmation — {{ $employee->user->name }}</flux:heading>
+    <flux:heading size="xl" level="1" class="pulse-page-title">Probation Confirmation — {{ $employee->user->name }}</flux:heading>
     <flux:subheading>Two-stage approval: Manager confirms first, then HR Admin co-approves to finalise.</flux:subheading>
 
     {{-- Status Timeline --}}

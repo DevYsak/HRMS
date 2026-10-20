@@ -4,7 +4,7 @@
     {{-- Header --}}
     <div class="flex items-center justify-between">
         <div>
-            <flux:heading size="xl">Biometric Attendance</flux:heading>
+            <flux:heading size="xl" level="1" class="pulse-page-title">Biometric Attendance</flux:heading>
             <flux:subheading>Live attendance data from the biometric system.</flux:subheading>
         </div>
         <flux:button wire:click="refresh" icon="arrow-path" variant="ghost" size="sm">

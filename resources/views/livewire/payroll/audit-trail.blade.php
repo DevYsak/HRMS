@@ -15,7 +15,7 @@
 
     <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
-            <flux:heading size="xl">Payroll Audit Trail</flux:heading>
+            <flux:heading size="xl" level="1" class="pulse-page-title">Payroll Audit Trail</flux:heading>
             <flux:subheading>Every payroll and payslip action — who, role, when, why, and what changed.</flux:subheading>
         </div>
         <flux:button wire:click="export" icon="arrow-down-tray" variant="ghost" size="sm">Export CSV</flux:button>

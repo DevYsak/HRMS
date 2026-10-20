@@ -1,7 +1,7 @@
 <flux:main class="space-y-6 p-4 md:p-6">
     <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
-            <flux:heading size="xl">Teams</flux:heading>
+            <flux:heading size="xl" level="1" class="pulse-page-title">Teams</flux:heading>
             <flux:subheading>Organise employees into teams under each department, with a lead and a backup approver.</flux:subheading>
         </div>
         <div class="flex items-center gap-2">

@@ -643,6 +643,61 @@ textarea { overflow-wrap: anywhere; }
     background-color: var(--ui-app-bg-dark);
 }
 
+/* Phase 5 dark-mode fallback: a light background, border or divider written
+   without a dark: partner falls back to the dark tokens instead of glowing.
+   Elements that declare their own dark colour are never touched. */
+.dark :is(.bg-\[\#FFF8F3\], .bg-\[\#FFF8F1\], .bg-\[\#F7F8FA\], .bg-\[\#F5F6FA\], .bg-\[\#FAFAF9\], .bg-\[\#F7F7F8\], .bg-\[\#FBF7F1\], .bg-\[\#FAFAFA\]):not([class*="dark:bg-"], body, [data-flux-main]) {
+    background-color: transparent;
+}
+.dark .bg-white:not([class*="dark:bg-"]) {
+    background-color: var(--ui-surface-dark, var(--color-ink-900));
+}
+.dark :is(.bg-zinc-50, .bg-gray-50, .bg-slate-50, .bg-orange-50, .bg-orange-50\/30, .bg-orange-50\/40, .bg-orange-50\/50, .bg-orange-50\/60, .bg-\[\#FFFDF8\]):not([class*="dark:bg-"]) {
+    background-color: rgb(255 255 255 / 0.04);
+}
+.dark :is(.border-zinc-50, .border-zinc-100, .border-zinc-200, .border-gray-100, .border-gray-200, .border-orange-100, .border-orange-100\/70, .border-orange-200, .border-amber-100, .border-amber-200, .border-amber-200\/70, .border-\[\#F3E8DD\]):not([class*="dark:border"]) {
+    border-color: var(--ui-border-dark, rgb(255 255 255 / 0.08));
+}
+.dark :is(.divide-zinc-50, .divide-zinc-100, .divide-orange-50, .divide-\[\#F3E8DD\]):not([class*="dark:divide"]) > :not(:last-child) {
+    border-color: var(--ui-border-dark, rgb(255 255 255 / 0.08));
+}
+
+/* busy-indicator.js: a slow Livewire update shows a thin brand bar at the top. */
+#pulse-busy {
+    position: fixed;
+    inset: 0 0 auto 0;
+    z-index: 100;
+    height: 2px;
+    pointer-events: none;
+    opacity: 0;
+    background: linear-gradient(90deg, transparent, var(--color-orange-500, #f97316), transparent);
+    background-size: 40% 100%;
+    background-repeat: no-repeat;
+    transition: opacity 150ms ease;
+}
+#pulse-busy[data-active] {
+    opacity: 1;
+    animation: pulse-busy-slide 1.1s ease-in-out infinite;
+}
+@keyframes pulse-busy-slide {
+    from { background-position: -40% 0; }
+    to { background-position: 140% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+    #pulse-busy[data-active] { animation: none; background-size: 100% 100%; }
+}
+
+/* Wide tables (table-scroll.js): fade the edge that has more to scroll to. */
+[data-scroll-right] {
+    mask-image: linear-gradient(to right, #000 calc(100% - 2.5rem), transparent);
+}
+[data-scroll-left] {
+    mask-image: linear-gradient(to left, #000 calc(100% - 2.5rem), transparent);
+}
+[data-scroll-left][data-scroll-right] {
+    mask-image: linear-gradient(to right, transparent, #000 2.5rem, #000 calc(100% - 2.5rem), transparent);
+}
+
 /* Empty-state row in a horizontally scrolling table: on phones the message stays in the
    visible part of the scroller instead of centring across the full (off-screen) table width. */
 @layer components {

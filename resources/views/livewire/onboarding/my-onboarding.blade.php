@@ -8,7 +8,7 @@
     <div class="rounded-3xl border border-orange-100/70 bg-gradient-to-br from-[#FFF3E9] via-white to-[#FFF8F1] p-5 shadow-sm dark:border-white/5 dark:from-zinc-900 dark:via-zinc-900 dark:to-zinc-950 md:p-7">
         <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-                <h1 class="text-2xl font-black tracking-tight text-zinc-900 dark:text-white">My Onboarding</h1>
+                <h1 class="pulse-page-title">My Onboarding</h1>
                 <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
                     Everything to get you set up. Tick off yours as you go — the rest are handled for you.
                 </p>
