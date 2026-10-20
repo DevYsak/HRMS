@@ -333,9 +333,10 @@ class ManagerDashboard extends Component
      *
      * @return array<int, int>|null
      */
+    /** QA-F-080: the people Team View covers = its own permission's scope (PeopleScope). */
     protected function reach(): ?array
     {
-        return Auth::user()->accessibleEmployeeIds('approve_leave');
+        return app(PeopleScope::class)->employeeIds(Auth::user(), $this->scopePermission());
     }
 
     /** The permission whose reach this page shows (the scope badge says so). */

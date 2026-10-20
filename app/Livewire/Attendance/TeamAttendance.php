@@ -5,6 +5,7 @@ namespace App\Livewire\Attendance;
 use App\Models\Attendance;
 use App\Models\AttendanceDailyScore;
 use App\Models\AttendanceRegularisation;
+use App\Models\Employee;
 use App\Models\OtRequest;
 use App\Notifications\RegularisationReviewedNotification;
 use App\Services\Approvals\ApprovalGuard;
@@ -12,6 +13,7 @@ use App\Services\Attendance\AttendanceCalculator;
 use App\Services\Attendance\AttendanceStatusResolver;
 use App\Services\Attendance\WorkingDayResolver;
 use App\Services\AttendanceService;
+use App\Services\Security\PeopleScope;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Url;
@@ -117,8 +119,15 @@ class TeamAttendance extends Component
     {
         abort_unless(Auth::user()->canApproveLeave(), 403);
 
-        $manager = Auth::user()->employee;
-        $teamMembers = $manager ? $manager->subordinates()->with(['user', 'shift', 'office', 'exitRecord'])->get() : collect();
+        // QA-F-080: the people this page's permission reaches (PeopleScope) — a
+        // Manager's team, a Department Head's headed department, a Director's
+        // authorised department, HR's configured scope — not only direct reports.
+        $people = app(PeopleScope::class);
+        $scope = $people->summary(Auth::user(), 'view_attendance');
+        $teamMembers = Employee::whereIn('id', $people->workingEmployeeIds(Auth::user(), 'view_attendance'))
+            ->where('id', '!=', (int) (Auth::user()->employee?->id ?? 0))
+            ->with(['user', 'shift', 'office', 'exitRecord'])
+            ->get();
         $teamIds = $teamMembers->pluck('id')->toArray();
 
         // One shared status per member (PunchTimeline + calculator): working,
@@ -233,6 +242,7 @@ class TeamAttendance extends Component
         ])->filter(fn ($r) => $r['score'] !== null)->sortByDesc('score')->take(5)->values()->all();
 
         return view('livewire.attendance.team-attendance', [
+            'scope' => $scope,
             'currentlyIn' => $currentlyIn,
             'recentLogs' => $recentLogs,
             'pendingRegularisations' => $pendingRegularisations,

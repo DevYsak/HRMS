@@ -4,7 +4,8 @@
     <div class="pulse-page-header">
         <div>
             <h1 class="pulse-page-title">Team Attendance</h1>
-            <p class="pulse-page-subtitle">Monitoring real-time presence of your direct reports</p>
+            <p class="pulse-page-subtitle">Real-time presence of the people in your scope</p>
+            <x-pulse.scope-badge :scope="$scope" class="mt-2" />
         </div>
         <div class="flex items-center gap-2">
             <x-attendance.live-button />
@@ -128,7 +129,7 @@
                     @endforeach
                 </div>
             @else
-                <div class="py-8 text-center text-sm text-zinc-400">No direct reports to display.</div>
+                <div class="py-8 text-center text-sm text-zinc-400">No one in your scope to display.</div>
             @endif
         </div>
     </div>

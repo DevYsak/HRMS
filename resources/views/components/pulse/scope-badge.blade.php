@@ -13,6 +13,13 @@
         'own' => 'user',
         default => 'user-group',
     };
+    $kindLabel = match ($scope['kind'] ?? 'team') {
+        'company' => 'Company scope',
+        'department' => 'Department scope',
+        'own' => 'Own records',
+        'none' => null,
+        default => 'Team scope',
+    };
 @endphp
 
 {{-- "Whose data is this?" on every management page — never leave the reader guessing. --}}
@@ -34,6 +41,6 @@
     ]) title="The people this page covers, from your role's permission scope">
         <flux:icon :name="$icon" class="size-3.5" />
         Scope: {{ $scope['label'] }}
-        <span @class(['font-normal', 'text-white/70' => $dark, 'text-orange-700/80 dark:text-orange-300/80' => ! $dark])>· {{ $scope['detail'] }}</span>
+        <span @class(['font-normal', 'text-white/70' => $dark, 'text-orange-700/80 dark:text-orange-300/80' => ! $dark])>@if($kindLabel)· {{ $kindLabel }} @endif· {{ $scope['detail'] }}</span>
     </span>
 </div>
