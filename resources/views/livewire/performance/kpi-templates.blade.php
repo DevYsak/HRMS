@@ -9,10 +9,10 @@
         <flux:button wire:click="newTemplate" variant="primary" icon="plus">New Template</flux:button>
     </div>
 
-    <div class="flex gap-6 items-start">
+    <div class="flex flex-col gap-6 lg:flex-row lg:items-start">
 
         {{-- ── Sidebar: Template List ─────────────────────────────────────── --}}
-        <div class="w-72 shrink-0 space-y-2">
+        <div class="w-full shrink-0 space-y-2 lg:w-72">
             @forelse($templates as $tpl)
                 <div
                     wire:click="selectTemplate({{ $tpl->id }})"

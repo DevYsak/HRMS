@@ -6,7 +6,7 @@
             <h1 class="pulse-page-title">KPI Dashboard</h1>
             <p class="pulse-page-subtitle">Performance scorecard overview across review cycles</p>
         </div>
-        <div class="flex items-center gap-3">
+        <div class="flex flex-wrap items-center gap-3">
             <flux:select wire:model.live="selectedCycleId" class="w-56">
                 <flux:select.option value="">— Select Cycle —</flux:select.option>
                 @foreach($cycles as $cycle)

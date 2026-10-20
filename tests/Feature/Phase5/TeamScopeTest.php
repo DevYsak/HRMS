@@ -58,7 +58,7 @@ test('a Manager\'s Team Attendance stays on their team', function () {
         ->assertOk()
         ->assertSee('OPSALPHA')
         ->assertDontSee('OPSBETA')->assertDontSee('MARKETINGONLY')
-        ->assertSee('Team scope');
+        ->assertSee('Scope: My team')->assertDontSee('Department scope');
 });
 
 test('Team View follows its own permission\'s scope, never wider', function () {

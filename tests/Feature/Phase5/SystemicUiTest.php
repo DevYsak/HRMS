@@ -53,3 +53,13 @@ test('All Attendance tiles keep their full label', function () {
     Livewire::actingAs(suUser('hr_admin'))->test(AllAttendance::class)
         ->assertSeeHtml('line-clamp-2 break-words text-[9px] font-bold uppercase leading-snug tracking-wide text-zinc-400">Total Employees');
 });
+
+test('pages the role journeys found overflowing on phones wrap or stack', function () {
+    $view = fn (string $name) => file_get_contents(resource_path("views/livewire/{$name}.blade.php"));
+
+    expect($view('performance/kpi-templates'))->toContain('flex flex-col gap-6 lg:flex-row lg:items-start')->toContain('w-full shrink-0 space-y-2 lg:w-72')
+        ->and($view('employees/org-chart'))->toContain('flex flex-wrap items-center justify-between gap-3')
+        ->and($view('documents/document-manager'))->toContain('flex w-fit max-w-full flex-wrap items-center gap-1')
+        ->and($view('performance/kpi-dashboard'))->toContain('flex flex-wrap items-center gap-3')
+        ->and($view('attendance/biometric-summary'))->toContain('flex flex-wrap items-center gap-2');
+});

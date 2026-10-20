@@ -12,7 +12,7 @@
                 @endif
             </flux:subheading>
         </div>
-        <div class="flex items-center gap-2">
+        <div class="flex flex-wrap items-center gap-2">
             @if($canSync)
                 <flux:button wire:click="syncNow" icon="bolt" variant="primary" size="sm">Quick Scan</flux:button>
             @endif

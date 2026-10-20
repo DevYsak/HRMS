@@ -13,13 +13,9 @@
         'own' => 'user',
         default => 'user-group',
     };
-    $kindLabel = match ($scope['kind'] ?? 'team') {
-        'company' => 'Company scope',
-        'department' => 'Department scope',
-        'own' => 'Own records',
-        'none' => null,
-        default => 'Team scope',
-    };
+    // A department label is a name ("UK Operations"), so say what kind of
+    // scope it is; "Company-wide", "My team" and "My records" already do.
+    $kindLabel = ($scope['kind'] ?? 'team') === 'department' ? 'Department scope' : null;
 @endphp
 
 {{-- "Whose data is this?" on every management page — never leave the reader guessing. --}}

@@ -23,9 +23,9 @@
     }">
 
     {{-- ─── HEADER ─── --}}
-    <div class="sticky top-14 z-[5] border-b border-zinc-200/80 bg-white/90 backdrop-blur-xl px-6 py-4 shadow-sm dark:border-zinc-800/80 dark:bg-zinc-900/90">
-        <div class="flex items-center justify-between">
-            <div class="flex items-center gap-4">
+    <div class="sticky top-14 z-[5] border-b border-zinc-200/80 bg-white/90 backdrop-blur-xl px-4 py-4 sm:px-6 shadow-sm dark:border-zinc-800/80 dark:bg-zinc-900/90">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="flex flex-wrap items-center gap-4">
                 <div class="flex size-10 items-center justify-center rounded-xl bg-brand-500 shadow-lg shadow-brand-200/40 dark:shadow-brand-900/40">
                     <svg class="size-5 text-white" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0-1 3m8.5-3 1 3m0 0 .5 1.5m-.5-1.5h-9.5m0 0-.5 1.5m.75-9 3-3 2.148 2.148A12.061 12.061 0 0116.5 7.605" />
@@ -39,7 +39,7 @@
             </div>
 
             {{-- Stats + Zoom Controls --}}
-            <div class="flex items-center gap-4">
+            <div class="flex flex-wrap items-center gap-4">
                 @php
                     $allEmps    = $topLevel->merge($groupedByManager->flatten());
                     $totalCount = $topLevel->count() + $groupedByManager->flatten()->unique('id')->count();

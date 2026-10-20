@@ -8,7 +8,7 @@
                 {{ $canManage ? 'Manage company policies and employee documents.' : 'Your documents and company policies.' }}
             </p>
         </div>
-        <div class="flex items-center gap-2">
+        <div class="flex flex-wrap items-center gap-2">
             @if(auth()->user()->employee)
                 <button type="button" onclick="document.getElementById('modal-personal').showModal()"
                     class="inline-flex items-center gap-2 rounded-lg border border-zinc-300 bg-white dark:bg-zinc-900 px-4 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:bg-zinc-800/50 shadow-sm transition-colors">
@@ -44,7 +44,7 @@
             $docTabs['acknowledgements'] = 'Acknowledgements';
         }
     @endphp
-    <div class="flex w-fit items-center gap-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-1 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+    <div class="flex w-fit max-w-full flex-wrap items-center gap-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-1 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
         @foreach($docTabs as $val => $label)
             <button wire:click="setView('{{ $val }}')"
                 class="rounded-lg px-4 py-1.5 text-sm font-bold transition-all
@@ -78,7 +78,7 @@
         @if($canManage)
             <x-clean-select model="filterEmployee" :live="true"
                 :options="array_merge([['value' => '', 'label' => 'All Employees']], collect($employees)->map(fn ($emp) => ['value' => $emp->id, 'label' => $emp->user?->name])->all())" />
-            <div class="flex items-center gap-1.5">
+            <div class="flex flex-wrap items-center gap-1.5">
                 <span class="text-xs font-medium text-zinc-400">Expiry</span>
                 <input type="date" wire:model.live="filterExpiringFrom" aria-label="Expiring from"
                     class="h-9 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100" />
