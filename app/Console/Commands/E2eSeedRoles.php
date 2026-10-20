@@ -58,6 +58,9 @@ class E2eSeedRoles extends Command
         'manager' => ['e2e.manager', 'Mona Manager', 'alpha'],
         'finance' => ['e2e.finance', 'Fin Finance', 'alpha'],
         'employee' => ['e2e.employee', 'Ari Alpha', 'alpha'],
+        // Phase 5 demo journeys cover all eight roles.
+        'director' => ['e2e.director', 'Dara Director', 'alpha'],
+        'coordinator' => ['e2e.coordinator', 'Cora Coordinator', 'alpha'],
     ];
 
     /** An employee in the other department, for isolation checks. */
