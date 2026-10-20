@@ -54,7 +54,7 @@ class Overview extends Component
         $cats = [];
         $series = [];
         for ($i = 5; $i >= 0; $i--) {
-            $m = $now->copy()->subMonths($i);
+            $m = $now->copy()->startOfMonth()->subMonths($i);
             $cats[] = $m->format('M');
             $series[] = round((float) Payroll::where('month', $m->format('F'))->where('year', $m->year)->sum('total_payout') / 100000, 2);
         }

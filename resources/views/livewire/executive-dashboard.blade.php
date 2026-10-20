@@ -40,7 +40,7 @@
         // ── 6-month analytics ──
         $cats = []; $growth = []; $hiring = []; $payrollSeries = []; $attrition = []; $attTrend = [];
         for ($i = 5; $i >= 0; $i--) {
-            $m = now()->subMonths($i);
+            $m = now()->startOfMonth()->subMonths($i); // month-start: no 31st overflow (31 Oct − 1 month ≠ 1 Oct)
             $me = $m->copy()->endOfMonth();
             $cats[] = $m->format('M');
             $growth[] = \App\Models\Employee::whereDate('joining_date', '<=', $me)->whereIn('status', ['active', 'probation', 'onboarding', 'resigned', 'terminated'])->count();
