@@ -1,4 +1,4 @@
-<flux:main class="min-h-screen space-y-5 bg-[#FFF8F3] p-4 dark:bg-zinc-950 md:p-6">
+<flux:main class="min-h-screen space-y-5 bg-[#FFF8F3] p-4 md:p-6">
     <x-attendance.biometric-notice />
 
     {{-- ═══════════════ HEADER ═══════════════ --}}

@@ -1,4 +1,4 @@
-<flux:main class="min-h-screen bg-[#F7F8FA] dark:bg-zinc-950 p-6 space-y-6">
+<flux:main class="min-h-screen bg-[#F7F8FA] p-6 space-y-6">
 
     {{-- ── Header ──────────────────────────────────────────────────────────── --}}
     <div class="pulse-hero shadow-xl">

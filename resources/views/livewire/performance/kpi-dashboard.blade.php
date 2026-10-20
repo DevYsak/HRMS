@@ -1,4 +1,4 @@
-<flux:main class="bg-zinc-50 p-6 dark:bg-zinc-950 min-h-screen">
+<flux:main class="bg-zinc-50 p-6 min-h-screen">
 
     {{-- Header --}}
     <div class="pulse-page-header mb-6">

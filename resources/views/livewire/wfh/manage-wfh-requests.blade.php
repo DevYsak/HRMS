@@ -1,4 +1,4 @@
-<flux:main class="space-y-6 bg-zinc-50 p-6 dark:bg-zinc-950">
+<flux:main class="space-y-6 bg-zinc-50 p-6">
 
     {{-- Page Header --}}
     <div class="flex flex-wrap items-center justify-between gap-3">

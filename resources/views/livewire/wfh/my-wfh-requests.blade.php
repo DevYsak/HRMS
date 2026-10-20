@@ -1,4 +1,4 @@
-<flux:main class="bg-zinc-50 dark:bg-zinc-950 min-h-screen">
+<flux:main class="bg-zinc-50 min-h-screen">
 
     {{-- Header --}}
     {{-- Matches the shared hero used by Overtime, Payslips, Time Off and the

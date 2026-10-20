@@ -1,4 +1,4 @@
-<flux:main class="min-h-screen space-y-6 bg-[#FBF7F1] p-4 dark:bg-[#0B1220] md:p-6">
+<flux:main class="min-h-screen space-y-6 bg-[#FBF7F1] p-4 md:p-6">
 
     @php
         $percent = $total > 0 ? (int) round($completed / $total * 100) : 0;

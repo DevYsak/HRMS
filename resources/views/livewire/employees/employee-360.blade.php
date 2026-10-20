@@ -13,7 +13,7 @@
 @endphp
 
 {{-- flux:main places the page in the app shell's main area, beside the sidebar (every page needs it). --}}
-<flux:main class="bg-zinc-50 p-4 sm:p-6 dark:bg-zinc-950">
+<flux:main class="bg-zinc-50 p-4 sm:p-6">
 <div class="mx-auto w-full max-w-[1400px] min-w-0 space-y-5" data-employee-360>
     {{-- ── Breadcrumb + scope ── --}}
     <div class="flex flex-wrap items-center justify-between gap-2">

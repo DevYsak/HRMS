@@ -1,4 +1,4 @@
-<flux:main class="bg-zinc-50 p-6 space-y-6 dark:bg-zinc-950">
+<flux:main class="bg-zinc-50 p-6 space-y-6">
 
     @if(session('employee_created'))
         <div x-data="{ show: true }" x-show="show" x-init="setTimeout(() => show = false, 6000)"

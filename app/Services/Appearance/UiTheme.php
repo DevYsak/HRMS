@@ -26,6 +26,9 @@ class UiTheme
 
     public const VALUES_CACHE_KEY = 'ui_theme.values.v1';
 
+    /** The dark background default before QA-F-081 (zinc-950). */
+    private const LEGACY_BACKGROUND_DARK = '#09090b';
+
     /** Font choices: key => [label, CSS stack, Google Fonts family or null]. */
     public const FONTS = [
         'inter' => ['Inter', "'Inter', ui-sans-serif, system-ui, sans-serif", 'Inter:wght@300;400;500;600;700;800'],
@@ -86,7 +89,8 @@ class UiTheme
         'secondary_light' => ['group' => 'theme', 'label' => 'Secondary — light', 'type' => 'color', 'default' => '#1f2937'],
         'secondary_dark' => ['group' => 'theme', 'label' => 'Secondary — dark', 'type' => 'color', 'default' => '#cbd5e1'],
         'background_light' => ['group' => 'theme', 'label' => 'Background — light', 'type' => 'color', 'default' => '#fafafa'],
-        'background_dark' => ['group' => 'theme', 'label' => 'Background — dark', 'type' => 'color', 'default' => '#09090b'],
+        // QA-F-081: the one dark canvas is #0B1220 (was zinc-950 #09090b).
+        'background_dark' => ['group' => 'theme', 'label' => 'Background — dark', 'type' => 'color', 'default' => '#0b1220'],
         'surface_light' => ['group' => 'theme', 'label' => 'Card surface — light', 'type' => 'color', 'default' => '#ffffff'],
         'surface_dark' => ['group' => 'theme', 'label' => 'Card surface — dark', 'type' => 'color', 'default' => '#111827'],
         'border_light' => ['group' => 'theme', 'label' => 'Border — light', 'type' => 'color', 'default' => '#f5f5f5'],
@@ -162,6 +166,12 @@ class UiTheme
         $out = [];
         foreach (self::SCHEMA as $key => $schema) {
             $out[$key] = self::sanitise($key, $values[$key] ?? $schema['default']);
+        }
+
+        // A save made before QA-F-081 stored the old default dark background;
+        // it was never a choice, so it follows the new canvas.
+        if (strtolower($out['background_dark']) === self::LEGACY_BACKGROUND_DARK) {
+            $out['background_dark'] = self::SCHEMA['background_dark']['default'];
         }
 
         return $out;

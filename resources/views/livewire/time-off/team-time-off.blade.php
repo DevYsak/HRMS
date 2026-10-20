@@ -1,4 +1,4 @@
-<flux:main class="bg-[#F7F8FA] min-h-screen dark:bg-zinc-950">
+<flux:main class="bg-[#F7F8FA] min-h-screen">
 
     {{-- ── Page Header ────────────────────────────────────────────────────── --}}
     <div class="pulse-hero shadow-xl">

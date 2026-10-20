@@ -22,7 +22,7 @@
     $tabs = $companyWide ? \App\Livewire\Employees\DataQuality::TABS : array_diff_key(\App\Livewire\Employees\DataQuality::TABS, ['roles' => true]);
 @endphp
 
-<flux:main class="bg-zinc-50 p-4 sm:p-6 dark:bg-zinc-950">
+<flux:main class="bg-zinc-50 p-4 sm:p-6">
 <div class="mx-auto w-full max-w-[1400px] min-w-0 space-y-5" data-data-quality>
     <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div class="min-w-0">

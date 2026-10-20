@@ -1,4 +1,4 @@
-<flux:main class="bg-zinc-50 p-6 space-y-6 dark:bg-zinc-950">
+<flux:main class="bg-zinc-50 p-6 space-y-6">
     <div class="pulse-page-header">
         <div>
             <h1 class="pulse-page-title">My Disciplinary Records</h1>

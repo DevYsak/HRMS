@@ -9,7 +9,7 @@
     $percent = $trackedCount > 0 ? (int) round($doneCount / $trackedCount * 100) : 100;
 @endphp
 
-<flux:main class="min-h-screen bg-zinc-50 dark:bg-zinc-950">
+<flux:main class="min-h-screen bg-zinc-50">
     <div class="mx-auto max-w-4xl space-y-6 p-4 md:p-6">
 
         @if(session('status'))

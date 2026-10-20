@@ -1,4 +1,4 @@
-<flux:main class="min-h-screen bg-zinc-50 dark:bg-zinc-800/50 dark:bg-zinc-950 p-6 space-y-5" x-data="{ tab: 'requests' }">
+<flux:main class="min-h-screen bg-zinc-50 p-6 space-y-5" x-data="{ tab: 'requests' }">
 
     {{-- â"€â"€â"€ HERO HEADER â"€â"€â"€ --}}
     @php

@@ -9,7 +9,7 @@
     $hasFilters = $filterStatus !== '' || $filterMonth !== '';
 @endphp
 
-<flux:main class="min-h-screen bg-zinc-50 dark:bg-zinc-950">
+<flux:main class="min-h-screen bg-zinc-50">
     <div class="mx-auto max-w-7xl space-y-5 p-4 md:p-6">
 
         {{-- Header --}}

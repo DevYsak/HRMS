@@ -45,7 +45,7 @@
     ];
 @endphp
 
-<flux:main class="min-h-screen bg-[#F7F7F8] p-4 md:p-6 dark:bg-zinc-950">
+<flux:main class="min-h-screen bg-[#F7F7F8] p-4 md:p-6">
 <div class="mx-auto max-w-[1360px] space-y-6" wire:poll.30s data-live-attendance>
 
     {{-- Header --}}

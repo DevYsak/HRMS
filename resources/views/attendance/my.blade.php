@@ -15,7 +15,7 @@
 --}}
 @use('App\Enums\AttendanceMode')
 
-<flux:main class="min-h-screen bg-[#F5F6FA] p-4 md:p-6 dark:bg-[#0A1020]">
+<flux:main class="min-h-screen bg-[#F5F6FA] p-4 md:p-6">
 
 @php
     // Today's values come from the component (ShowsTodayActivity::todayContext,

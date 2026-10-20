@@ -1,6 +1,6 @@
 @php use App\Services\Profile\ProfileFieldRegistry as Registry; @endphp
 
-<flux:main class="bg-zinc-50 p-4 space-y-5 sm:p-6 dark:bg-zinc-950">
+<flux:main class="bg-zinc-50 p-4 space-y-5 sm:p-6">
 
     {{-- Hero --}}
     <x-profile.hero :employee="$employee" :completion="$completion" :can-edit-photo="$this->canEditPhoto()" />

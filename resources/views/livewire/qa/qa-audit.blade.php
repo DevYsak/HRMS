@@ -20,7 +20,7 @@
     $filterable = in_array($tab, ['cases', 'findings', 'ui', 'fixes', 'runs'], true);
 @endphp
 
-<flux:main class="bg-zinc-50 p-4 sm:p-6 dark:bg-zinc-950">
+<flux:main class="bg-zinc-50 p-4 sm:p-6">
 <div class="mx-auto w-full max-w-[1400px] min-w-0 space-y-5" data-qa-audit>
 
     {{-- ── Header ── --}}

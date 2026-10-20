@@ -1,4 +1,4 @@
-<flux:main class="min-h-screen bg-[#FAFAF9] p-4 sm:p-5 lg:p-6 dark:bg-[#0B1220]">
+<flux:main class="min-h-screen bg-[#FAFAF9] p-4 sm:p-5 lg:p-6">
     {{-- Employee self-service dashboard. Every card is a component under
          components/employee/dashboard, fed by EmployeeDashboardService —
          no queries or business rules live in this view. --}}

@@ -631,6 +631,18 @@ textarea { overflow-wrap: anywhere; }
     .ui-badge-shape { border-radius: var(--ui-badge-radius, 9999px); }
 }
 
+/* QA-F-081 (Phase 5 policy): ONE dark application canvas, #0B1220. Pages never
+   set their own dark background; Brand & Layout's "Background — dark" sets the
+   variable (or, once changed, its own rule). Unlayered so no per-page utility
+   class can drift from it again. */
+:root {
+    --ui-app-bg-dark: #0B1220;
+}
+.dark body,
+.dark [data-flux-main] {
+    background-color: var(--ui-app-bg-dark);
+}
+
 /* Empty-state row in a horizontally scrolling table: on phones the message stays in the
    visible part of the scroller instead of centring across the full (off-screen) table width. */
 @layer components {

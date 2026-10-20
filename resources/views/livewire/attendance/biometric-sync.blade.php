@@ -1,4 +1,4 @@
-<flux:main class="min-h-screen bg-zinc-50 dark:bg-zinc-950 p-6 space-y-6">
+<flux:main class="min-h-screen bg-zinc-50 p-6 space-y-6">
 
     {{-- ── Header ──────────────────────────────────────────────────── --}}
     <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">

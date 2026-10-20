@@ -1,4 +1,4 @@
-<flux:main class="bg-zinc-50 p-0! dark:bg-zinc-950">
+<flux:main class="bg-zinc-50 p-0!">
 
     <div class="flex h-[calc(100dvh-57px)] min-h-[32rem] flex-col" data-ai-assistant-page>
 

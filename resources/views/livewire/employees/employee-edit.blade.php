@@ -7,7 +7,7 @@
      every existing wire binding still works.
 
      Panels below the chrome keep their own markup. --}}
-<flux:main class="nx-record min-h-screen space-y-5 bg-[#F7F8FA] p-4 font-sans md:p-6 dark:bg-[#0B1220]">
+<flux:main class="nx-record min-h-screen space-y-5 bg-[#F7F8FA] p-4 font-sans md:p-6">
     <style>
 
         /* Scoped to this page. Flux inputs default to a compact height that

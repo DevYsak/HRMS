@@ -1,7 +1,7 @@
 @use('App\Enums\AttendanceMode')
 @use('App\Enums\PunchMethod')
 
-<flux:main class="min-h-screen bg-[#FFF8F3] dark:bg-white/5 p-4 md:p-6">
+<flux:main class="min-h-screen bg-[#FFF8F3] p-4 md:p-6">
 
 <x-attendance.biometric-notice class="mb-3" />
 

@@ -1,4 +1,4 @@
-<flux:main class="min-h-screen bg-zinc-50 dark:bg-zinc-950">
+<flux:main class="min-h-screen bg-zinc-50">
 
     <div class="pulse-hero shadow-xl">
         <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_rgba(249,115,22,0.22),_transparent_65%)]"></div>

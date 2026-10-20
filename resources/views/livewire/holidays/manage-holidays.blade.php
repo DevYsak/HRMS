@@ -1,4 +1,4 @@
-<flux:main class="min-h-screen bg-[#FFF8F3] dark:bg-white/5 p-4 md:p-6">
+<flux:main class="min-h-screen bg-[#FFF8F3] p-4 md:p-6">
 
 {{-- ═══════════════ HEADER ═══════════════ --}}
 <div class="mb-4 flex flex-wrap items-center justify-between gap-3">

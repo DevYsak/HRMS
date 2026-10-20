@@ -44,7 +44,7 @@
     $currentSettingsItem = $settingsGroups->flatten(1)->firstWhere('current', true);
 @endphp
 
-<flux:main class="bg-zinc-50 p-4 md:p-8 dark:bg-zinc-950">
+<flux:main class="bg-zinc-50 p-4 md:p-8">
     <div class="mx-auto max-w-7xl">
         {{-- Settings Global Header --}}
         <div class="mb-6 md:mb-8">
