@@ -254,7 +254,7 @@ test('the page works on phones and in dark mode', function () {
 
 test('the Super Admin home shows the QA readiness widget; HR does not', function () {
     $this->actingAs(qaUser('super_admin'))->get(route('dashboard'))
-        ->assertOk()->assertSee('data-qa-widget', false)->assertSee('Open QA &amp; Audit', false)->assertSee('3223')->assertSee('Phase 4 close');
+        ->assertOk()->assertSee('data-qa-widget', false)->assertSee('Open QA &amp; Audit', false)->assertSee('3257')->assertSee('Phase 5 — full suite');
 
     $this->actingAs(qaUser('hr_admin'))->get(route('dashboard'))
         ->assertOk()->assertDontSee('data-qa-widget', false);

@@ -389,10 +389,10 @@ test('the Phase 4 decisions are recorded: each decided finding has its fix commi
     expect([$close->kind, $close->commit, $close->total, $close->failed, $close->known_baseline, $close->new_regressions])->toBe(['full', 'f3b274a', 3237, 13, 13, 0])
         ->and(QaPhase::where('number', 4)->first()->status)->toBe(QaPhaseStatus::Completed);
 
-    // Later runs (the Phase 5 role journeys) are newer, but this stays the last verified full suite until Phase 5 records its own.
+    // Later runs are newer; the Phase 5 full suite (20 Oct) is now the last verified full run.
     $summary = (new QaReadiness)->summary();
     expect($summary['latest_run']->run_at->gte($close->run_at))->toBeTrue()
-        ->and($summary['verified']['full']->id)->toBe($close->id);
+        ->and($summary['verified']['full']->run_at->gte($close->run_at))->toBeTrue();
 });
 
 test('Phase 5 round 1 is recorded: fixed findings verified with their commits, decisions left open', function () {
@@ -429,4 +429,10 @@ test('Phase 5 round 2 records the approved decisions, the systemic UI fixes and 
 
     $journeys = QaTestRun::where('suite', 'playwright')->where('kind', 'ui')->where('name', 'like', '2026-10-20 Phase 5 role journeys%')->orderBy('run_at')->get();
     expect($journeys->map(fn ($r) => [$r->total, $r->failed, $r->commit])->all())->toBe([[774, 17, 'de4e16c'], [304, 0, '8105d54']]);
+
+    // The Phase 5 full suite at a stable HEAD: nothing beyond the known baseline. Phase 5 stays open for QA-F-060 / 061 / 066 / 082.
+    $full = QaTestRun::where('name', '2026-10-20 Phase 5 — full suite')->firstOrFail();
+    expect([$full->kind, $full->commit, $full->total, $full->failed, $full->known_baseline, $full->new_regressions])->toBe(['full', 'a50a156', 3270, 12, 12, 0])
+        ->and((new QaReadiness)->summary()['verified']['full']->id)->toBe($full->id)
+        ->and(QaPhase::where('number', 5)->first()->status)->toBe(QaPhaseStatus::InProgress);
 });
