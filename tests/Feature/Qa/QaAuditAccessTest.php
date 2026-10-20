@@ -272,8 +272,8 @@ test('the overview shows the last verified build and the open blockers', functio
 
     $summary = (new QaReadiness)->summary();
     // After the Phase 4 decisions (16 Oct): the payroll / RBAC questions are decided and verified; QA-F-018 and QA-F-031 remain data findings.
-    // Phase 5 round 1 opens three decisions: attendance-% definition, Department Head team scope, one dark canvas.
-    expect($summary['open_blockers'])->toBe(['critical' => 0, 'high' => 1, 'known_baseline' => 12, 'policy' => 3, 'retest_required' => 0, 'hr_corrections' => 2])
+    // Phase 5 round 1 opened three decisions (attendance %, Department Head scope, dark canvas); all approved and verified 20 Oct.
+    expect($summary['open_blockers'])->toBe(['critical' => 0, 'high' => 1, 'known_baseline' => 12, 'policy' => 0, 'retest_required' => 0, 'hr_corrections' => 2])
         ->and($summary['verified']['security']->name)->toBe('2026-10-15 Phase 1 RBAC Regression')
         ->and($summary['verified']['commit'])->toMatch('/^[0-9a-f]{7}$/');
 

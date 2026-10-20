@@ -319,8 +319,8 @@ test('the Phase 2 policy decisions are recorded with their commits and history',
         ->and($status('QA-F-030'))->toBe('verified')   // fixed in Phase 3 (dd47f75)
         ->and($status('QA-F-031'))->toBe('hr_correction_required')
         ->and(QaFinding::where('code', 'QA-F-031')->value('description'))->toContain('REVIEW REQUIRED')->toContain('Jordan Reed')
-        // WFH and the Phase 4 payroll / RBAC questions are decided; only the Phase 5 round-1 questions are open.
-        ->and(QaFinding::open()->where('needs_decision', true)->orderBy('code')->pluck('code')->all())->toBe(['QA-F-079', 'QA-F-080', 'QA-F-081'])
+        // WFH, the Phase 4 payroll / RBAC questions and the Phase 5 questions (20 Oct) are all decided.
+        ->and(QaFinding::open()->where('needs_decision', true)->pluck('code')->all())->toBe([])
         ->and(QaTestCase::where('code', 'like', 'QA-DEC-%')->where('status', 'pass')->count())->toBe(7);
 });
 
@@ -389,8 +389,9 @@ test('the Phase 4 decisions are recorded: each decided finding has its fix commi
     expect([$close->kind, $close->commit, $close->total, $close->failed, $close->known_baseline, $close->new_regressions])->toBe(['full', 'f3b274a', 3237, 13, 13, 0])
         ->and(QaPhase::where('number', 4)->first()->status)->toBe(QaPhaseStatus::Completed);
 
+    // Later runs (the Phase 5 role journeys) are newer, but this stays the last verified full suite until Phase 5 records its own.
     $summary = (new QaReadiness)->summary();
-    expect($summary['latest_run']->id)->toBe($close->id)
+    expect($summary['latest_run']->run_at->gte($close->run_at))->toBeTrue()
         ->and($summary['verified']['full']->id)->toBe($close->id);
 });
 
@@ -405,8 +406,27 @@ test('Phase 5 round 1 is recorded: fixed findings verified with their commits, d
             ->and($finding->fixes()->pluck('commit_hash'))->toContain($commit);
     }
 
-    expect(QaFinding::whereIn('code', ['QA-F-079', 'QA-F-080', 'QA-F-081'])->where('needs_decision', true)->where('status', 'open')->count())->toBe(3)
+    // Opened in round 1 with needs_decision; approved and verified in round 2 (see the next test).
+    expect(QaFinding::whereIn('code', ['QA-F-079', 'QA-F-080', 'QA-F-081'])->where('needs_decision', false)->where('status', 'verified')->count())->toBe(3)
         ->and(QaFinding::where('code', 'QA-F-082')->value('status')->value)->toBe('open')
-        ->and(QaTestCase::where('code', 'like', 'QA-P5-%')->where('status', 'pass')->count())->toBe(15)
+        ->and(QaTestCase::where('code', 'like', 'QA-P5-%')->where('status', 'pass')->count())->toBe(31)
         ->and(QaPhase::where('number', 5)->first()->status)->toBe(QaPhaseStatus::InProgress);
+});
+
+test('Phase 5 round 2 records the approved decisions, the systemic UI fixes and the role journeys', function () {
+    $verified = ['QA-F-079' => 'cd960dc', 'QA-F-080' => '915845e', 'QA-F-081' => '467fb5d', 'QA-F-083' => 'cd960dc',
+        'QA-F-084' => '7b01f18', 'QA-F-085' => '7b01f18', 'QA-F-086' => '7b01f18', 'QA-F-087' => '8105d54'];
+
+    foreach ($verified as $code => $commit) {
+        $finding = QaFinding::where('code', $code)->firstOrFail();
+        expect($finding->status)->toBe(QaFindingStatus::Verified, $code)
+            ->and($finding->needs_decision)->toBeFalse()
+            ->and($finding->fixes()->pluck('commit_hash'))->toContain($commit);
+    }
+
+    expect(QaFinding::where('code', 'QA-F-079')->value('description'))->toContain('Decision (20 Oct)')
+        ->and(QaFinding::where('code', 'QA-F-082')->value('status')->value)->toBe('open');
+
+    $journeys = QaTestRun::where('suite', 'playwright')->where('kind', 'ui')->where('name', 'like', '2026-10-20 Phase 5 role journeys%')->orderBy('run_at')->get();
+    expect($journeys->map(fn ($r) => [$r->total, $r->failed, $r->commit])->all())->toBe([[774, 17, 'de4e16c'], [304, 0, '8105d54']]);
 });
