@@ -42,7 +42,7 @@ test('Phase 1 is seeded: 440 / 438 / 2 known baseline, and every Phase 1 commit 
     expect([$run->total, $run->passed, $run->failed, $run->known_baseline, $run->new_regressions])->toBe([440, 438, 2, 2, 0])
         ->and($run->result)->toBe(QaTestRun::RESULT_PASS_WITH_BASELINE)
         ->and(QaPhase::where('number', 1)->first()->status)->toBe(QaPhaseStatus::Completed)
-        ->and(QaPhase::where('status', 'not_started')->count())->toBe(2);
+        ->and(QaPhase::where('status', 'not_started')->count())->toBe(1);   // Phase 5 started 19 Oct
 
     foreach (['a6cfb27', 'ba5e1bb', '585d1d4', '2bd6beb', 'cfc173a', '5756210', 'a90dc23', '671b276', '961fac5'] as $hash) {
         $fix = QaFixLink::where('commit_hash', 'like', $hash.'%')->first();
@@ -319,7 +319,8 @@ test('the Phase 2 policy decisions are recorded with their commits and history',
         ->and($status('QA-F-030'))->toBe('verified')   // fixed in Phase 3 (dd47f75)
         ->and($status('QA-F-031'))->toBe('hr_correction_required')
         ->and(QaFinding::where('code', 'QA-F-031')->value('description'))->toContain('REVIEW REQUIRED')->toContain('Jordan Reed')
-        ->and(QaFinding::open()->where('needs_decision', true)->pluck('code')->all())->toBe([])   // WFH and the Phase 4 payroll / RBAC questions are decided
+        // WFH and the Phase 4 payroll / RBAC questions are decided; only the Phase 5 round-1 questions are open.
+        ->and(QaFinding::open()->where('needs_decision', true)->orderBy('code')->pluck('code')->all())->toBe(['QA-F-079', 'QA-F-080', 'QA-F-081'])
         ->and(QaTestCase::where('code', 'like', 'QA-DEC-%')->where('status', 'pass')->count())->toBe(7);
 });
 
@@ -391,4 +392,21 @@ test('the Phase 4 decisions are recorded: each decided finding has its fix commi
     $summary = (new QaReadiness)->summary();
     expect($summary['latest_run']->id)->toBe($close->id)
         ->and($summary['verified']['full']->id)->toBe($close->id);
+});
+
+test('Phase 5 round 1 is recorded: fixed findings verified with their commits, decisions left open', function () {
+    $fixed = ['QA-F-067' => 'fb1faf5', 'QA-F-068' => 'fb1faf5', 'QA-F-069' => 'fb1faf5', 'QA-F-070' => '0f3fb39', 'QA-F-071' => '0f3fb39',
+        'QA-F-072' => '0f3fb39', 'QA-F-073' => '0f3fb39', 'QA-F-074' => '1ae44ea', 'QA-F-075' => '17c2d02',
+        'QA-F-076' => '0204185', 'QA-F-077' => '0204185', 'QA-F-078' => '0204185'];
+
+    foreach ($fixed as $code => $commit) {
+        $finding = QaFinding::where('code', $code)->firstOrFail();
+        expect($finding->status)->toBe(QaFindingStatus::Verified, $code)
+            ->and($finding->fixes()->pluck('commit_hash'))->toContain($commit);
+    }
+
+    expect(QaFinding::whereIn('code', ['QA-F-079', 'QA-F-080', 'QA-F-081'])->where('needs_decision', true)->where('status', 'open')->count())->toBe(3)
+        ->and(QaFinding::where('code', 'QA-F-082')->value('status')->value)->toBe('open')
+        ->and(QaTestCase::where('code', 'like', 'QA-P5-%')->where('status', 'pass')->count())->toBe(15)
+        ->and(QaPhase::where('number', 5)->first()->status)->toBe(QaPhaseStatus::InProgress);
 });
