@@ -6,11 +6,14 @@ use App\Livewire\TimeOff\AllTimeOff;
 use App\Livewire\TimeOff\TeamTimeOff;
 use App\Models\Employee;
 use App\Models\LeaveBalance;
+use App\Models\LeaveLedgerEntry;
 use App\Models\LeaveRequest;
 use App\Models\LeaveType;
 use App\Models\LeaveYear;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\Leave\ConexusLeavePolicyService;
+use App\Services\Leave\LeaveLedgerService;
 use App\Services\Leave\LeaveYearResolver;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Support\Carbon;
@@ -41,6 +44,27 @@ function lybrType(): LeaveType
     return LeaveType::firstOrCreate(['code' => 'LYBR'], [
         'name' => 'Boundary Annual', 'category' => 'annual', 'allow_paid_request' => true,
     ]);
+}
+
+/** The profile reads Available Leave (CSL + Comp Off), so its tests hold CSL. */
+function lybrCsl(): LeaveType
+{
+    return LeaveType::firstOrCreate(['code' => ConexusLeavePolicyService::CSL_CODE], [
+        'name' => 'Casual / Sick Leave', 'category' => 'annual', 'allow_paid_request' => true,
+    ]);
+}
+
+/** CSL days for a leave year, posted through the ledger (CSL balances are ledger-backed). */
+function lybrCslBalance(Employee $e, LeaveYear $y, float $days): LeaveBalance
+{
+    $balance = LeaveBalance::firstOrCreate(
+        ['employee_id' => $e->id, 'leave_type_id' => lybrCsl()->id, 'year' => $y->legacyYear()],
+        ['leave_year_id' => $y->id, 'allocated_days' => 0, 'used_days' => 0],
+    );
+    $ledger = app(LeaveLedgerService::class);
+    $ledger->credit($balance, LeaveLedgerEntry::TYPE_BASE, $days, Carbon::parse($y->starts_on), 'test:lybr:'.$balance->id, ['allow_closed_year' => true]);
+
+    return $ledger->rebuild($balance);
 }
 
 function lybrEmployee(?User $manager = null): Employee
@@ -104,9 +128,8 @@ test('the legacy integer follows the leave year, not the calendar', function () 
 
 test('the profile shows the leave balance in January, not zero', function () {
     [, $y2627] = lybrYears();
-    $type = lybrType();
     $employee = lybrEmployee();
-    lybrBalance($employee, $type, $y2627, 28);
+    lybrCslBalance($employee, $y2627, 28);
 
     // Under the old read this returned no rows at all, so the profile
     // reported 0 days available to somebody holding 28.
@@ -119,9 +142,8 @@ test('the profile shows the leave balance in January, not zero', function () {
 
 test('the profile reports the same balance either side of 1 January', function () {
     [, $y2627] = lybrYears();
-    $type = lybrType();
     $employee = lybrEmployee();
-    lybrBalance($employee, $type, $y2627, 28);
+    lybrCslBalance($employee, $y2627, 28);
 
     test()->travelTo(Carbon::parse('2026-12-31 12:00'));
     $before = null;
@@ -190,9 +212,8 @@ test('the team queue shows a manager the balance in March', function () {
 
 test('a reading in August is unaffected, where the two years already agreed', function () {
     [, $y2627] = lybrYears();
-    $type = lybrType();
     $employee = lybrEmployee();
-    lybrBalance($employee, $type, $y2627, 28);
+    lybrCslBalance($employee, $y2627, 28);
 
     // August 2026: calendar year and leave-year integer are both 2026, so the
     // old read happened to be right here. It must stay right.
@@ -205,11 +226,10 @@ test('a reading in August is unaffected, where the two years already agreed', fu
 
 test('crossing into the next leave year reads the next year, not the closed one', function () {
     [, $y2627, $y2728] = lybrYears();
-    $type = lybrType();
     $employee = lybrEmployee();
 
-    lybrBalance($employee, $type, $y2627, 28);
-    lybrBalance($employee, $type, $y2728, 5);
+    lybrCslBalance($employee, $y2627, 28);
+    lybrCslBalance($employee, $y2728, 5);
 
     test()->travelTo(Carbon::parse('2027-07-01 12:00'));
 

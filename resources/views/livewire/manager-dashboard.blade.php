@@ -18,7 +18,7 @@
     $attention = array_values(array_filter([
         ['label' => 'Leave approvals', 'count' => $pendingLeaveCount, 'href' => $link('time-off.team')],
         $canApproveOt ? ['label' => 'OT approvals', 'count' => $pendingOtCount, 'href' => $link('overtime.manage')] : null,
-        ['label' => 'Missing check-outs', 'count' => $missingCheckoutCount, 'href' => $link('attendance.team'), 'tone' => 'red'],
+        ['label' => 'Missing check-outs today', 'count' => $missingCheckoutCount, 'href' => $link('attendance.team'), 'tone' => 'red'],
         ['label' => 'Reviews due', 'count' => $reviewsPending, 'href' => $link('performance.team'), 'tone' => 'blue'],
     ]));
     $trendMax = max(1, collect($trend)->max(fn ($d) => $d['present'] + $d['absent']));

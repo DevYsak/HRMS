@@ -9,6 +9,7 @@ use App\Models\LeaveType;
 use App\Models\PublicHoliday;
 use App\Services\Approvals\ApprovalGuard;
 use App\Services\Approvals\ApprovalQueueService;
+use App\Services\Attendance\HolidayResolver;
 use App\Services\Attendance\WorkingDayResolver;
 use App\Services\Leave\LeaveYearResolver;
 use App\Services\LeaveService;
@@ -379,10 +380,15 @@ class TeamTimeOff extends Component
             ->where('end_date', '>=', $gridStart->toDateString())
             ->get();
 
-        // Public holidays overlaid on the calendar for the visible grid.
-        $holidays = PublicHoliday::active()
-            ->whereBetween('date', [$gridStart->toDateString(), $gridEnd->toDateString()])
-            ->get()
+        // Public holidays overlaid on the calendar for the visible grid — only
+        // those on a team member's own calendar (a UK team never sees IN
+        // holidays). Same rule as each member's Holiday Calendar.
+        $resolver = app(HolidayResolver::class);
+        $teamMembers = Employee::whereIn('id', $teamIds)->get();
+        $holidays = $resolver->holidaysInRange($gridStart, $gridEnd)
+            ->filter(fn (PublicHoliday $h) => $teamMembers->isEmpty()
+                ? $resolver->appliesTo($h, null)
+                : $teamMembers->contains(fn (Employee $e) => $resolver->appliesTo($h, $e)))
             ->keyBy(fn ($h) => $h->date->toDateString());
 
         $calendarDays = [];

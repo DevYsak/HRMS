@@ -53,20 +53,29 @@ test('team time off shows a colour-coded team leave calendar', function () {
         ->assertSee($day->copy()->addMonth()->format('F Y'));
 });
 
-test('the calendar shows public holidays', function () {
+test("the calendar shows the team's own public holidays, not another country's", function () {
     $manager = User::factory()->create(['role' => UserRole::Manager]);
     $this->actingAs($manager);
+    Employee::factory()->create(['manager_id' => $manager->id, 'status' => 'active', 'holiday_calendar' => 'UK']);
 
     PublicHoliday::create([
         'date' => now()->startOfMonth()->addDays(11)->toDateString(),
         'name' => 'FOUNDERSDAY',
+        'country' => 'UK',
+        'is_active' => true,
+    ]);
+    PublicHoliday::create([
+        'date' => now()->startOfMonth()->addDays(12)->toDateString(),
+        'name' => 'INDIAONLYDAY',
+        'country' => 'IN',
         'is_active' => true,
     ]);
 
     Livewire::test(TeamTimeOff::class)
         ->assertOk()
         ->assertSee('Holiday')          // legend
-        ->assertSee('FOUNDERSDAY');
+        ->assertSee('FOUNDERSDAY')
+        ->assertDontSee('INDIAONLYDAY');
 });
 
 test('the calendar surfaces comp-offs distinctly', function () {

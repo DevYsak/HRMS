@@ -5,9 +5,8 @@ namespace App\Livewire\Profile\Concerns;
 use App\Models\Attendance;
 use App\Models\AttendanceDailyScore;
 use App\Models\Employee;
-use App\Models\LeaveBalance;
 use App\Services\Attendance\WorkingDayResolver;
-use App\Services\Leave\LeaveYearResolver;
+use App\Services\Leave\EmployeeLeaveOverviewService;
 use App\Services\Profile\ProfileCompletionService;
 
 /**
@@ -36,13 +35,10 @@ trait ShowsProfileSummary
 
         $workingDays = max(1, app(WorkingDayResolver::class)->weekdaysBetween($from, now()));
 
-        // The leave year runs 1 July to 30 June, so the calendar year and the
-        // leave year's integer disagree from January to June. Reading
-        // now()->year there returned no balance at all.
-        $balances = LeaveBalance::with('leaveType')
-            ->where('employee_id', $employee->id)
-            ->where('year', app(LeaveYearResolver::class)->legacyYearFor())
-            ->get();
+        // Leave comes from the same overview as My Time Off and the dashboard:
+        // Available Leave = CSL + Comp Off still requestable. Summing every
+        // balance row added Maternity/Paternity entitlements (e.g. 162 days).
+        $leave = app(EmployeeLeaveOverviewService::class)->for($employee);
 
         // Read the engine's own daily scores rather than recomputing, so the
         // profile always agrees with the attendance module.
@@ -54,12 +50,8 @@ trait ShowsProfileSummary
 
         return [
             'attendance' => min(100, (int) round($present / $workingDays * 100)),
-            'leave' => round($balances->sum(fn (LeaveBalance $b) => $b->available()), 1),
-            'comp_off' => round(
-                $balances->filter(fn (LeaveBalance $b) => $b->leaveType?->category === 'comp_off')
-                    ->sum(fn (LeaveBalance $b) => (float) ($b->comp_off_credits ?? 0)),
-                1
-            ),
+            'leave' => round((float) $leave['available_leave'], 1),
+            'comp_off' => round((float) ($leave['comp_off']['earned'] ?? 0), 1),
             'score' => $score !== null ? (int) round((float) $score) : null,
             'tenure' => $tenure ? $tenure->y.'y '.$tenure->m.'m' : 'Not set',
         ];
