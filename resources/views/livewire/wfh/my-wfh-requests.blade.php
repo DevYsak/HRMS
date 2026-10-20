@@ -52,7 +52,7 @@
                     <option value="cancelled">Cancelled</option>
                 </flux:select>
 
-                <flux:input wire:model.live="filterMonth" type="month" size="sm" class="w-44" />
+                <x-month-filter model="filterMonth" :value="$filterMonth" />
 
                 @if($filterStatus || $filterMonth)
                     <button wire:click="clearFilters"

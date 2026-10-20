@@ -64,7 +64,7 @@
                 <option value="Training">Training</option>
                 <option value="general">General</option>
             </flux:select>
-            <flux:input wire:model.live="filterMonth" type="month" size="sm" class="w-44" />
+            <x-month-filter model="filterMonth" :value="$filterMonth" />
             @if($filterStatus || $filterMonth || $filterCategory || $search)
                 <button wire:click="clearFilters"
                     class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-zinc-500 hover:text-zinc-700 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 rounded-lg transition">

@@ -11,7 +11,12 @@
 
     <x-pulse.card title="Approval Command Center" subtitle="Action requests without leaving the dashboard" icon="check-badge">
         <x-slot:actions>
-            <span class="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">
+            {{-- Alarm colour only when something is waiting; zero reads neutral. --}}
+            <span @class([
+                'inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide',
+                'bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400' => $counts['all'] > 0,
+                'bg-zinc-100 text-zinc-500 dark:bg-white/5 dark:text-zinc-400' => $counts['all'] === 0,
+            ]) data-pending-pill>
                 {{ $counts['all'] }} pending
             </span>
         </x-slot:actions>

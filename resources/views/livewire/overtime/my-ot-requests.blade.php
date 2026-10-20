@@ -56,7 +56,7 @@
                         <option value="rejected">Rejected</option>
                         <option value="cancelled">Cancelled</option>
                     </flux:select>
-                    <flux:input wire:model.live="filterMonth" type="month" size="sm" aria-label="Filter by month" />
+                    <x-month-filter model="filterMonth" :value="$filterMonth" />
                     @if($hasFilters)
                         <flux:button size="sm" variant="ghost" icon="x-mark" wire:click="clearFilters">Clear</flux:button>
                     @endif

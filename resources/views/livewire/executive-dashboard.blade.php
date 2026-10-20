@@ -180,7 +180,7 @@
                 @forelse($deptRanked as $idx => $d)
                     <div class="flex items-center gap-3 rounded-xl border border-[#F3E8DD] dark:border-white/10 bg-[#FFFDF8] dark:bg-white/5 p-2.5">
                         <span class="flex size-7 items-center justify-center rounded-lg text-[11px] font-extrabold {{ $idx === 0 ? 'bg-orange-500 text-white' : 'bg-orange-50 text-orange-600' }}">{{ $idx + 1 }}</span>
-                        <div class="min-w-0 flex-1"><div class="truncate text-sm font-semibold text-[#111827] dark:text-white">{{ $d['name'] }}</div><div class="text-[10px] text-[#6B7280] dark:text-zinc-400">{{ $d['headcount'] }} employees</div></div>
+                        <div class="min-w-0 flex-1"><div class="truncate text-sm font-semibold text-[#111827] dark:text-white">{{ $d['name'] }}</div><div class="text-[10px] text-[#6B7280] dark:text-zinc-400">{{ $d['headcount'] }} {{ Str::plural('employee', (int) $d['headcount']) }}</div></div>
                         <div class="w-24"><div class="mb-0.5 flex justify-end text-[11px] font-bold {{ $d['health'] >= 75 ? 'text-green-600' : ($d['health'] >= 50 ? 'text-amber-600' : 'text-red-600') }}">{{ $d['health'] }}%</div><div class="h-1.5 overflow-hidden rounded-full bg-[#F3E8DD] dark:bg-white/10"><div class="h-full rounded-full {{ $d['health'] >= 75 ? 'bg-green-500' : ($d['health'] >= 50 ? 'bg-amber-500' : 'bg-red-500') }}" style="width: {{ $d['health'] }}%"></div></div></div>
                     </div>
                 @empty

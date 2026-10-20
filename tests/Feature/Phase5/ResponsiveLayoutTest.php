@@ -1,19 +1,23 @@
 <?php
 
 use App\Enums\UserRole;
+use App\Livewire\ApprovalCenter;
 use App\Livewire\Attendance\AttendanceReports;
 use App\Livewire\Attendance\CommandCenter;
 use App\Livewire\ExecutiveDashboard;
 use App\Livewire\Holidays\HolidayCalendar;
 use App\Livewire\Overtime\ManageOtRequests;
+use App\Livewire\Overtime\MyOtRequests;
 use App\Livewire\Payroll\Process;
 use App\Livewire\TimeOff\MyTimeOff;
 use App\Livewire\Wfh\ManageWfhRequests;
 use App\Livewire\Wfh\MyWfhRequests;
 use App\Models\Attendance;
+use App\Models\Department;
 use App\Models\Employee;
 use App\Models\Role;
 use App\Models\User;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Blade;
 use Livewire\Livewire;
 
@@ -81,6 +85,23 @@ test('empty tables keep their message in view on phones', function () {
     expect(file_get_contents(resource_path('css/app.css')))->toContain('.table-empty-pin { position: sticky; left: 0;');
 });
 
+test('list month filters offer "All months" instead of an empty native month box', function () {
+    $this->travelTo(Carbon::parse('2026-10-20 10:00:00'));
+    $employee = Employee::factory()->create(['status' => 'active']);
+
+    foreach ([MyWfhRequests::class, MyOtRequests::class] as $component) {
+        Livewire::actingAs($employee->user)->test($component)
+            ->assertSeeHtml('data-month-filter')
+            ->assertDontSeeHtml('type="month"')
+            ->assertSeeHtml('<option value="">All months</option>')
+            ->assertSeeHtml('<option value="2026-10">Oct 2026</option>')
+            ->assertSeeHtml('<option value="2024-11">Nov 2024</option>')
+            ->set('filterMonth', '2023-02')
+            ->assertSeeHtml('wire:model.live="filterMonth"')
+            ->assertSeeHtml('<option value="2023-02">Feb 2023</option>');
+    }
+});
+
 test('the holiday month grid fits a phone without a sideways scroller', function () {
     $user = User::factory()->create(['role' => UserRole::Employee]);
     Employee::factory()->create(['user_id' => $user->id, 'status' => 'active', 'holiday_calendar' => 'UK']);
@@ -102,4 +123,19 @@ test('the attendance report table has dark-mode borders and header', function ()
         ->assertSeeHtml('dark:border-white/10 dark:bg-white/5')
         ->assertSeeHtml('divide-y divide-zinc-50 dark:divide-white/5')
         ->assertDontSeeHtml('border-orange-100/70 bg-white dark:bg-zinc-900');
+});
+
+test('a zero pending count reads neutral, not as an alarm', function () {
+    Livewire::actingAs(rlUser('super_admin'))->test(ApprovalCenter::class)
+        ->assertSeeHtml('bg-zinc-100 text-zinc-500 dark:bg-white/5 dark:text-zinc-400" data-pending-pill')
+        ->assertSee('0 pending');
+});
+
+test('department ranking pluralises headcount', function () {
+    $department = Department::factory()->create(['name' => 'Solo Desk']);
+    Employee::factory()->create(['status' => 'active', 'department_id' => $department->id]);
+
+    $html = Livewire::actingAs(rlUser('super_admin'))->test(ExecutiveDashboard::class)->html();
+
+    expect($html)->toContain('1 employee</div>')->not->toContain('1 employees</div>');
 });
