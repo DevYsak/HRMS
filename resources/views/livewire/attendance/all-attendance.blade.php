@@ -361,7 +361,7 @@ EMPLOYEE 360 DRAWER (480px, right)
                 {{-- KPI row --}}
                 <div class="grid grid-cols-4 gap-2">
                     @foreach([
-                        ['Attendance', $drawer['attendance_pct'].'%', '#10b981'],
+                        ['Attendance', $drawer['attendance_pct'] === null ? '—' : $drawer['attendance_pct'].'%', '#10b981'],
                         ['Score', $drawer['score'].'/100', '#F97316'],
                         ['Late (mo.)', $drawer['late_count'], $drawer['late_count'] ? '#f59e0b' : '#10b981'],
                         ['Leave Bal.', rtrim(rtrim(number_format($drawer['leave_balance'], 1), '0'), '.'), '#14b8a6'],

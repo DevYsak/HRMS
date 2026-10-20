@@ -217,6 +217,9 @@ class AttendanceWindowService
             ->merge($rows->filter(fn ($a) => $a->check_in !== null)->keys())
             ->unique();
 
+        // One approved-leave lookup for the window, not one per attended day.
+        $this->calculator->primeLeaveRange($employee, $start, $end);
+
         $metrics = [];
         foreach ($days as $day) {
             $dayPunches = $punchesByDay->get($day, collect());

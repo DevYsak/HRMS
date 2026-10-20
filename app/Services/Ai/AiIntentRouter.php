@@ -355,7 +355,8 @@ class AiIntentRouter
             return $this->noEmployeeRecord('my_attendance');
         }
 
-        $content = 'This month so far: '.$a['present'].' of '.$a['scheduled'].' scheduled days present ('.$a['late'].' late), '
+        $content = 'This month so far: '.($a['attendance_percent'] !== null ? 'attendance '.$a['attendance_percent'].'%, ' : '')
+            .$a['present'].' of '.$a['scheduled'].' scheduled days present ('.$a['late'].' late), '
             .$a['absent'].' absent, '.$this->days($a['leave_days']).' on leave. '
             .($a['missing_checkouts'] === 1 ? '1 day has' : $a['missing_checkouts'].' days have').' a missing checkout. '
             .'Today: '.$a['today'].'.';

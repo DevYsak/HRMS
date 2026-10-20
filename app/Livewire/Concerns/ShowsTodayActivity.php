@@ -187,7 +187,8 @@ trait ShowsTodayActivity
             'present' => $present,
             'late' => (int) ($this->stats['late'] ?? 0),
             'scheduled' => $scheduled,
-            'attendanceRate' => $scheduled > 0 ? (int) round(min(100, $present / $scheduled * 100)) : null,
+            // The one attendance % (QA-F-079), computed with the stats window.
+            'attendanceRate' => $this->stats['rate'] ?? null,
         ];
     }
 

@@ -14,6 +14,7 @@ use App\Models\PerformanceReview;
 use App\Models\PipRecord;
 use App\Models\PromotionRecommendation;
 use App\Models\WarningLetter;
+use App\Services\Attendance\AttendanceRateService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
@@ -72,8 +73,11 @@ class ExecutiveDashboard extends Component
             ->whereYear('submitted_at', $year)
             ->avg('overall_rating');
 
-        // --- Attendance % today ---
-        $attendancePercent = $activeCount > 0 ? (int) round($presentToday / $activeCount * 100) : 0;
+        // --- Company attendance %: the one definition (QA-F-079), month to date.
+        // Everyone employed in the window; days outside employment never count.
+        $rateEmployees = Employee::whereIn('status', ['active', 'probation', 'onboarding', 'resigned', 'terminated'])
+            ->with(['office', 'exitRecord'])->get();
+        $attendancePercent = app(AttendanceRateService::class)->forEmployees($rateEmployees, $today->copy()->startOfMonth(), $today)['total']['percent'];
 
         // --- Leave analytics ---
         $onLeaveToday = LeaveRequest::where('status', 'approved')
@@ -152,6 +156,7 @@ class ExecutiveDashboard extends Component
             'presentToday',
             'lateToday',
             'attendancePercent',
+            'rateEmployees',
             'onLeaveToday',
             'pendingLeaves',
             'pendingOt',

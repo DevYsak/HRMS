@@ -12,6 +12,8 @@ use App\Models\PerformanceReview;
 use App\Models\PerformanceReviewScore;
 use App\Models\PerformanceTemplate;
 use App\Models\ReviewParticipantScore;
+use App\Services\Attendance\AttendanceRateService;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class KpiScoringEngine
@@ -154,22 +156,11 @@ class KpiScoringEngine
 
     // ── Raw data helpers ──────────────────────────────────────────────────────
 
+    /** The one attendance % (QA-F-079) over the cycle so far; 0 when there is no basis yet. */
     private function attendancePercent(Employee $employee, PerformanceCycle $cycle): float
     {
-        $total = Attendance::where('employee_id', $employee->id)
-            ->whereBetween('date', [$cycle->start_date, $cycle->end_date])
-            ->count();
-
-        if ($total === 0) {
-            return 0.0;
-        }
-
-        $present = Attendance::where('employee_id', $employee->id)
-            ->whereBetween('date', [$cycle->start_date, $cycle->end_date])
-            ->whereNotNull('check_in')
-            ->count();
-
-        return round($present / $total * 100, 2);
+        return (float) (app(AttendanceRateService::class)
+            ->forEmployee($employee, Carbon::parse($cycle->start_date), Carbon::parse($cycle->end_date))['exact'] ?? 0.0);
     }
 
     private function lateMarksCount(Employee $employee, PerformanceCycle $cycle): float

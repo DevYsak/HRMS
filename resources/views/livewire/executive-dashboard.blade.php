@@ -47,9 +47,8 @@
             $hiring[] = \App\Models\Employee::whereYear('joining_date', $m->year)->whereMonth('joining_date', $m->month)->count();
             $payrollSeries[] = round((float) \App\Models\Payroll::whereYear('created_at', $m->year)->whereMonth('created_at', $m->month)->sum('total_payout') / 100000, 2);
             $attrition[] = \App\Models\ExitRecord::whereYear('last_working_day', $m->year)->whereMonth('last_working_day', $m->month)->count();
-            $present = \App\Models\Attendance::whereYear('date', $m->year)->whereMonth('date', $m->month)->whereNotNull('check_in')->count();
-            $wd = max((int) $m->copy()->startOfMonth()->diffInDaysFiltered(fn ($d) => ! app(\App\Services\Attendance\WorkingDayResolver::class)->isWeeklyOff($d), $me), 1);
-            $attTrend[] = $activeCount > 0 ? min(100, (int) round($present / ($activeCount * $wd) * 100)) : 0;
+            // Company attendance % per month: AttendanceRateService (QA-F-079).
+            $attTrend[] = app(\App\Services\Attendance\AttendanceRateService::class)->forEmployees($rateEmployees, $m, $me->copy()->min(today()))['total']['percent'] ?? 0;
         }
         $growthPct = ($growth[0] ?? 0) > 0 ? round((end($growth) - $growth[0]) / $growth[0] * 100) : 0;
 
@@ -67,14 +66,14 @@
         $aiInsights = [];
         if ($attritionRate >= 8) { $aiInsights[] = ['tone' => 'red', 'icon' => 'arrow-trending-down', 'title' => 'Attrition risk', 'text' => 'Attrition at '.$attritionRate.'% — review retention in low-health teams.']; }
         if ($pendingCompliance >= 5) { $aiInsights[] = ['tone' => 'amber', 'icon' => 'shield-exclamation', 'title' => 'Compliance load', 'text' => $pendingCompliance.' compliance items open across docs, probation & discipline.']; }
-        if ($attendancePercent < 80) { $aiInsights[] = ['tone' => 'amber', 'icon' => 'clock', 'title' => 'Attendance dip', 'text' => 'Company attendance at '.$attendancePercent.'% today — below the 80% target.']; }
+        if ($attendancePercent !== null && $attendancePercent < 80) { $aiInsights[] = ['tone' => 'amber', 'icon' => 'clock', 'title' => 'Attendance dip', 'text' => 'Company attendance at '.$attendancePercent.'% this month — below the 80% target.']; }
         if ($perfScore >= 80) { $aiInsights[] = ['tone' => 'green', 'icon' => 'sparkles', 'title' => 'Strong performance', 'text' => 'Overall performance index at '.$perfScore.' — momentum is healthy.']; }
         if (empty($aiInsights)) { $aiInsights[] = ['tone' => 'green', 'icon' => 'check-circle', 'title' => 'All clear', 'text' => 'No critical executive risks detected. Operations are healthy.']; }
 
         // ── KPI cards (8) ──
         $kpis = [
             ['label' => 'Total Employees', 'value' => $activeCount, 'icon' => 'users', 'accent' => 'orange', 'delta' => $growthPct, 'dir' => $growthPct >= 0 ? 'up' : 'down', 'compare' => '6-month growth', 'spark' => $growth],
-            ['label' => 'Company Attendance', 'value' => $attendancePercent.'%', 'icon' => 'check-circle', 'accent' => 'green', 'delta' => 0, 'dir' => 'flat', 'compare' => 'present today', 'spark' => $attTrend],
+            ['label' => 'Company Attendance', 'value' => $attendancePercent === null ? '—' : $attendancePercent.'%', 'icon' => 'check-circle', 'accent' => 'green', 'delta' => 0, 'dir' => 'flat', 'compare' => 'month to date', 'spark' => $attTrend],
             ...($payrollOn ? [['label' => 'Payroll Cost', 'value' => $fmtMoney($payrollCost), 'icon' => 'banknotes', 'accent' => 'blue', 'delta' => 0, 'dir' => 'flat', 'compare' => 'this month', 'spark' => $payrollSeries]] : []),
             ...($payrollOn ? [['label' => 'Payroll / FTE', 'value' => $fmtMoney($payrollPerEmp), 'icon' => 'wallet', 'accent' => 'violet', 'delta' => 0, 'dir' => 'flat', 'compare' => 'avg per employee', 'spark' => []]] : []),
             ['label' => 'Open Approvals', 'value' => $openApprovals, 'icon' => 'inbox-stack', 'accent' => 'amber', 'delta' => 0, 'dir' => 'flat', 'compare' => $pendingLeaves.' leave · '.$pendingOt.' OT', 'spark' => []],

@@ -2,10 +2,9 @@
 
 namespace App\Livewire\Profile\Concerns;
 
-use App\Models\Attendance;
 use App\Models\AttendanceDailyScore;
 use App\Models\Employee;
-use App\Services\Attendance\WorkingDayResolver;
+use App\Services\Attendance\AttendanceRateService;
 use App\Services\Leave\EmployeeLeaveOverviewService;
 use App\Services\Profile\ProfileCompletionService;
 
@@ -22,18 +21,14 @@ trait ShowsProfileSummary
      * Five headline numbers, deliberately cheap aggregates — a profile shell
      * must not become the slowest page in the app.
      *
-     * @return array{attendance:int, leave:float, comp_off:float, score:int|null, tenure:string}
+     * @return array{attendance:int|null, leave:float, comp_off:float, score:int|null, tenure:string}
      */
     protected function summaryKpis(Employee $employee): array
     {
         $from = now()->startOfMonth();
 
-        $present = Attendance::where('employee_id', $employee->id)
-            ->whereBetween('date', [$from->toDateString(), now()->toDateString()])
-            ->whereNotNull('check_in')
-            ->count();
-
-        $workingDays = max(1, app(WorkingDayResolver::class)->weekdaysBetween($from, now()));
+        // The one attendance % (QA-F-079), month to date.
+        $attendance = app(AttendanceRateService::class)->forEmployee($employee, $from, now());
 
         // Leave comes from the same overview as My Time Off and the dashboard:
         // Available Leave = CSL + Comp Off still requestable. Summing every
@@ -49,7 +44,7 @@ trait ShowsProfileSummary
         $tenure = $employee->joining_date?->diff(now());
 
         return [
-            'attendance' => min(100, (int) round($present / $workingDays * 100)),
+            'attendance' => $attendance['percent'],
             'leave' => round((float) $leave['available_leave'], 1),
             'comp_off' => round((float) ($leave['comp_off']['earned'] ?? 0), 1),
             'score' => $score !== null ? (int) round((float) $score) : null,

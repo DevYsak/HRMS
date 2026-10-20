@@ -7,6 +7,7 @@ use App\Models\HolidayWorkRequest;
 use App\Models\User;
 use App\Models\WfhRequest;
 use App\Services\Approvals\ApprovalQueueService;
+use App\Services\Attendance\AttendanceRateService;
 use App\Services\Attendance\AttendanceWindowService;
 use App\Services\Attendance\HolidayResolver;
 use App\Services\Attendance\TodayStatusService;
@@ -204,6 +205,7 @@ class AiDataTools
         $from = Carbon::today()->startOfMonth();
         $to = Carbon::today();
         $summary = $window->summary($employee, $from, $to);
+        $rate = app(AttendanceRateService::class)->forEmployee($employee, $from, $to);
         $today = app(TodayStatusService::class)->summary([$employee->id]);
         $status = $today['rows'] !== [] ? array_values($today['rows'])[0] : null;
 
@@ -211,6 +213,8 @@ class AiDataTools
             'from' => $from->toDateString(),
             'to' => $to->toDateString(),
             'scheduled' => (int) $summary['scheduled'],
+            // The one attendance % (QA-F-079) — the figure every screen shows.
+            'attendance_percent' => $rate['percent'],
             'present' => (int) $summary['present'],
             'late' => (int) $summary['late'],
             'absent' => (int) $summary['absent'],

@@ -30,6 +30,7 @@ use App\Notifications\RegularisationReviewedNotification;
 use App\Services\AiAssistant;
 use App\Services\Attendance\AttendanceCalculator;
 use App\Services\Attendance\AttendanceCoach;
+use App\Services\Attendance\AttendanceRateService;
 use App\Services\Attendance\AttendanceScoreEngine;
 use App\Services\Attendance\AttendanceWindowService;
 use App\Services\Attendance\HolidayResolver;
@@ -1627,6 +1628,8 @@ class AttendanceTracker extends Component
         // working day, within employment) — shared with the comparison.
         $window = $this->windowSummary($employee, $start, $end);
         $absentCount = $window['absent'];
+        // The one attendance % (QA-F-079) — whatever the mode filter narrows.
+        $rate = app(AttendanceRateService::class)->forEmployee($employee, $start, $end);
 
         // EVERY day's minutes come from the PunchTimeline engine (validated
         // sessions) — never raw check_in→check_out math when punch data exists.
@@ -1663,6 +1666,9 @@ class AttendanceTracker extends Component
             // Scheduled working days elapsed (holidays, MDL, weekly offs and
             // approved leave excluded): the attendance % denominator.
             'scheduled' => $window['scheduled'],
+            'rate' => $rate['percent'],
+            'attended' => $rate['attended'],
+            'eligible' => $rate['eligible'],
             'ot_hours' => round((float) $approvedOt->sum('requested_hours'), 1),
             'ot_days' => $approvedOt->pluck('work_date')->unique()->count(),
             'from' => $start->toDateString(),
@@ -1695,7 +1701,7 @@ class AttendanceTracker extends Component
         $avgBreak = $withBreaks->count() > 0 ? (int) round($withBreaks->avg('break_minutes')) : 0;
 
         $onTimePct = $present > 0 ? ($onTime / $present) * 100 : 100;
-        $presentPct = $workingBasis > 0 ? ($present / $workingBasis) * 100 : 100;
+        $presentPct = $rate['exact'] ?? 100.0;
         $breakPct = max(0, 100 - min(100, $excessBreaks * 10));
 
         // Late-arrival trend — fixed last-6-months window (independent of stats period)
@@ -1898,8 +1904,8 @@ class AttendanceTracker extends Component
         $remainingDays = Carbon::tomorrow()->lte($periodEnd)
             ? $resolver->scheduledDaysBetween($employee, Carbon::tomorrow(), $periodEnd)
             : 0;
-        $fullWorkDays = max(1, $window['scheduled'] + $remainingDays);
-        $predictedPct = min(100, (int) round(($present + $remainingDays) / $fullWorkDays * 100));
+        $fullWorkDays = max(1, $rate['eligible'] + $remainingDays);
+        $predictedPct = min(100, (int) round(($rate['attended'] + $remainingDays) / $fullWorkDays * 100));
 
         // Trend vs the selected comparison window (GA4-style): previous period
         // of the same length, the previous month, or the same period last year.
@@ -1913,8 +1919,8 @@ class AttendanceTracker extends Component
 
         // Real deltas for the KPI band — null delta means "no basis to compare"
         // and the UI hides the trend chip rather than inventing one.
-        $rateNow = $window['scheduled'] > 0 ? $present / $window['scheduled'] * 100 : null;
-        $ratePrev = $previous['scheduled'] > 0 ? $previous['present'] / $previous['scheduled'] * 100 : null;
+        $rateNow = $rate['exact'];
+        $ratePrev = app(AttendanceRateService::class)->forEmployee($employee, $prevStart, $prevEnd)['exact'];
         $this->comparison = [
             'label' => match ($this->compareMode) {
                 'last_month' => 'vs last month',
@@ -1947,7 +1953,7 @@ class AttendanceTracker extends Component
         } else {
             $suggestions[] = ['good' => true, 'text' => 'Perfect punctuality this period'];
         }
-        $attPctNow = $workingBasis > 0 ? round($present / $workingBasis * 100) : 100;
+        $attPctNow = $rate['percent'] ?? 100;
         $suggestions[] = $attPctNow >= 98
             ? ['good' => true, 'text' => 'Maintain attendance above 98%']
             : ['good' => false, 'text' => 'Target 98%+ attendance — currently '.$attPctNow.'%'];

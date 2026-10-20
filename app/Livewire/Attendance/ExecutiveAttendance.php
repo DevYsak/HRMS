@@ -9,6 +9,7 @@ use App\Models\Employee;
 use App\Models\LeaveRequest;
 use App\Models\Office;
 use App\Models\PublicHoliday;
+use App\Services\Attendance\AttendanceRateService;
 use App\Services\Attendance\WorkingDayResolver;
 use App\Services\Security\PeopleScope;
 use Carbon\CarbonPeriod;
@@ -108,8 +109,8 @@ class ExecutiveAttendance extends Component
             ->when($reach !== null, fn ($q) => $q->whereIn('id', $reach))
             ->when($this->departmentId, fn ($q) => $q->where('department_id', $this->departmentId))
             ->when($this->officeId, fn ($q) => $q->where('office_id', $this->officeId))
-            ->with(['user:id,name', 'department:id,name', 'office:id,name'])
-            ->get(['id', 'user_id', 'department_id', 'office_id']);
+            ->with(['user:id,name', 'department:id,name', 'office', 'exitRecord'])
+            ->get();
         $activeCount = $employees->count();
         $empById = $employees->keyBy('id');
         $employeeIds = $employees->pluck('id')->all();
@@ -128,8 +129,11 @@ class ExecutiveAttendance extends Component
             ->get(['employee_id', 'date', 'check_in', 'is_late', 'work_mode', 'total_hours']);
         $presentRecords = $range->whereNotNull('check_in');
 
-        $expected = max(1, $activeCount * $rangeWorkingDays);
-        $companyPct = min(100, round($presentRecords->count() / $expected * 100, 1));
+        // The one attendance % (QA-F-079): attended ÷ eligible days, per
+        // employee and summed for every group (company, department, branch).
+        $rates = app(AttendanceRateService::class)->forEmployees($employees, $rangeStart, $rangeEnd->copy()->min($today));
+        $rateOf = fn ($group) => AttendanceRateService::combine($group->map(fn ($e) => $rates['employees'][$e->id]));
+        $companyPct = $rates['total']['exact'] ?? 0;
         $latePct = $presentRecords->count() > 0
             ? round($presentRecords->where('is_late', true)->count() / $presentRecords->count() * 100, 1)
             : 0;
@@ -151,14 +155,12 @@ class ExecutiveAttendance extends Component
         $availability = $activeCount > 0 ? round($presentToday->count() / $activeCount * 100) : 0;
 
         // ── Per-employee attendance % (for performers + risk) ─────────────────
-        $byEmployee = $presentRecords->groupBy('employee_id')->map(fn ($g) => $g->count());
-        $perfRows = $employees->map(function ($e) use ($byEmployee, $rangeWorkingDays, $scoreByEmployee) {
-            $present = (int) ($byEmployee[$e->id] ?? 0);
-
+        // Ranked only where a rate exists (no attendance recorded = no rank).
+        $perfRows = $employees->filter(fn ($e) => $rates['employees'][$e->id]['percent'] !== null)->map(function ($e) use ($rates, $scoreByEmployee) {
             return [
                 'name' => $e->user?->name ?? '—',
                 'dept' => $e->department?->name ?? 'Unassigned',
-                'pct' => min(100, (int) round($present / $rangeWorkingDays * 100)),
+                'pct' => $rates['employees'][$e->id]['percent'],
                 'score' => $scoreByEmployee[$e->id] ?? null,
             ];
         })->sortByDesc('pct')->values();
@@ -167,54 +169,37 @@ class ExecutiveAttendance extends Component
         $bottomPerformers = $perfRows->reverse()->take(5)->values()->all();
 
         // ── Department attendance + engine score (grouped in-memory) ──────────
-        $deptStats = $presentRecords->groupBy(fn ($a) => $empById[$a->employee_id]?->department_id)
-            ->map(fn ($g) => $g->count());
         $deptScore = $scoreRows->groupBy(fn ($r) => $empById[$r->employee_id]?->department_id)
             ->map(fn ($g) => round($g->avg('score')));
-        $departments = $employees->groupBy('department_id')->map(function ($emps) use ($deptStats, $deptScore, $rangeWorkingDays) {
+        $departments = $employees->groupBy('department_id')->map(function ($emps) use ($deptScore, $rateOf) {
             $deptId = $emps->first()->department_id;
-            $present = (int) ($deptStats[$deptId] ?? 0);
-            $expected = max(1, $emps->count() * $rangeWorkingDays);
 
             return [
                 'name' => $emps->first()->department?->name ?? 'Unassigned',
                 'headcount' => $emps->count(),
-                'pct' => min(100, (int) round($present / $expected * 100)),
+                'pct' => $rateOf($emps)['percent'] ?? 0,
                 'score' => (int) ($deptScore[$deptId] ?? 0),
             ];
         })->sortByDesc('pct')->values();
 
         // ── Branch / office attendance ────────────────────────────────────────
-        $officeStats = $presentRecords->groupBy(fn ($a) => $empById[$a->employee_id]?->office_id)
-            ->map(fn ($g) => $g->count());
-        $branches = $employees->groupBy('office_id')->map(function ($emps) use ($officeStats, $rangeWorkingDays) {
-            $present = (int) ($officeStats[$emps->first()->office_id] ?? 0);
-            $expected = max(1, $emps->count() * $rangeWorkingDays);
-
+        $branches = $employees->groupBy('office_id')->map(function ($emps) use ($rateOf) {
             return [
                 'name' => $emps->first()->office?->name ?? 'Head Office',
                 'headcount' => $emps->count(),
-                'pct' => min(100, (int) round($present / $expected * 100)),
+                'pct' => $rateOf($emps)['percent'] ?? 0,
             ];
         })->sortByDesc('pct')->values();
 
         // ── 6-month trend ending at the range end (grouped query) ─────────────
         $trendStart = $rangeEnd->copy()->startOfMonth()->subMonths(5);
-        $trendRaw = Attendance::whereIn('employee_id', $employeeIds)
-            ->whereBetween('date', [$trendStart->toDateString(), $rangeEnd->toDateString()])
-            ->whereNotNull('check_in')
-            ->get(['date'])
-            ->groupBy(fn ($a) => Carbon::parse($a->date)->format('Y-m'))
-            ->map->count();
+        // Each month's company rate: AttendanceRateService over the selection.
+        $rateService = app(AttendanceRateService::class);
         $trend = [];
-        for ($m = $trendStart->copy(); $m->lte($rangeEnd->copy()->startOfMonth()); $m->addMonth()) {
-            $key = $m->format('Y-m');
-            $mEnd = $m->copy()->endOfMonth()->min($today);
-            $wd = $this->workingDays($m->copy()->startOfMonth(), $mEnd, $holidayKeys);
-            $exp = max(1, $activeCount * $wd);
+        for ($m = $trendStart->copy(); $m->lte($rangeEnd->copy()->startOfMonth()); $m = $m->copy()->addMonth()) {
             $trend[] = [
                 'label' => $m->format('M'),
-                'pct' => min(100, (int) round(((int) ($trendRaw[$key] ?? 0)) / $exp * 100)),
+                'pct' => $rateService->forEmployees($employees, $m->copy()->startOfMonth(), $m->copy()->endOfMonth()->min($today))['total']['percent'] ?? 0,
             ];
         }
 

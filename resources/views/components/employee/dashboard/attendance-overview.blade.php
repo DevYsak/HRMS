@@ -40,12 +40,12 @@
 
     <div class="flex flex-wrap items-end justify-between gap-3">
         <div>
-            <p class="text-3xl font-semibold tabular-nums tracking-tight text-zinc-900 dark:text-white">{{ $attendance['percent'] }}%</p>
+            <p class="text-3xl font-semibold tabular-nums tracking-tight text-zinc-900 dark:text-white">{{ $attendance['percent'] === null ? '—' : $attendance['percent'].'%' }}</p>
             <p class="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-                Present {{ $attendance['present_days'] }} of {{ $attendance['working_days'] }} working {{ \Illuminate\Support\Str::plural('day', $attendance['working_days']) }} · {{ $attendance['range_label'] }}
+                Attended {{ \App\Services\EmployeeDashboardService::formatDays($attendance['present_days']) }} of {{ \App\Services\EmployeeDashboardService::formatDays($attendance['working_days']) }} eligible working {{ \Illuminate\Support\Str::plural('day', $attendance['working_days'] == 1 ? 1 : 2) }} · {{ $attendance['range_label'] }}
             </p>
         </div>
-        @if($attendance['present_days'] === 0)
+        @if($attendance['present_days'] == 0)
             <p class="text-xs text-zinc-500 dark:text-zinc-400">No attendance recorded this month yet.</p>
         @endif
     </div>

@@ -179,7 +179,11 @@ test('attendance percentage counts the company week, not Carbon weekends', funct
         'shift_start' => '09:00', 'shift_end' => '18:00', 'weekly_off_days' => [Carbon::SUNDAY],
     ]);
 
-    $employee = edbEmployee();
+    $employee = edbEmployee(['joining_date' => '2024-01-08']);
+    // Eligible days (QA-F-079) count an absence once it is final, which needs
+    // attendance to be recorded: one attended day (Mon 1 Jun) makes it so.
+    Attendance::create(['employee_id' => $employee->id, 'date' => '2026-06-01', 'check_in' => '2026-06-01 09:00:00',
+        'check_out' => '2026-06-01 18:00:00', 'status' => 'on_time', 'work_mode' => 'office']);
 
     // A fixed month so the count is deterministic: 1–7 June 2026 is Mon–Sun.
     $this->travelTo(Carbon::parse('2026-06-07 18:00:00'));
@@ -196,7 +200,11 @@ test('a public holiday is not counted as a working day', function () {
         'shift_start' => '09:00', 'shift_end' => '18:00', 'weekly_off_days' => [Carbon::SUNDAY],
     ]);
 
-    $employee = edbEmployee();
+    $employee = edbEmployee(['joining_date' => '2024-01-08']);
+    // Eligible days (QA-F-079) count an absence once it is final, which needs
+    // attendance to be recorded: one attended day (Mon 1 Jun) makes it so.
+    Attendance::create(['employee_id' => $employee->id, 'date' => '2026-06-01', 'check_in' => '2026-06-01 09:00:00',
+        'check_out' => '2026-06-01 18:00:00', 'status' => 'on_time', 'work_mode' => 'office']);
     PublicHoliday::create(['date' => '2026-06-03', 'name' => 'Mid-week Holiday', 'country' => 'IN']);
 
     $this->travelTo(Carbon::parse('2026-06-07 18:00:00'));

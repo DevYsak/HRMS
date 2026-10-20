@@ -12,6 +12,7 @@ use App\Models\LeaveYear;
 use App\Models\OvertimeRecord;
 use App\Models\PublicHoliday;
 use App\Services\Attendance\AttendanceCalculator;
+use App\Services\Attendance\AttendanceRateService;
 use App\Services\Attendance\AttendanceWindowService;
 use App\Services\Attendance\WfhConsistencyService;
 use App\Services\Attendance\WorkingDayResolver;
@@ -205,6 +206,7 @@ class AttendanceReportBuilder
         // it used to be weekdays − present). Work on a weekly off is its own
         // column and never offsets an absence.
         $window = app(AttendanceWindowService::class);
+        $rates = app(AttendanceRateService::class);
         $mode = (string) ($filters['mode'] ?? '');
 
         $data = [];
@@ -215,6 +217,8 @@ class AttendanceReportBuilder
             if ($s['scheduled'] === 0 && ! $s['has_rows']) {
                 continue;   // not employed in the range
             }
+            // The one attendance % (QA-F-079) — whatever the mode filter narrows.
+            $pct = $rates->forEmployee($emp, $from, $to)['percent'];
             $totPresent += $s['present'];
             $maxScheduled = max($maxScheduled, $s['scheduled']);
             $data[] = [
@@ -226,7 +230,7 @@ class AttendanceReportBuilder
                 $s['late'],
                 $s['weekly_off_worked'],
                 number_format($s['minutes'] / 60, 1).'h',
-                $s['scheduled'] > 0 ? min(100, round($s['present'] / $s['scheduled'] * 100)).'%' : '—',
+                $pct === null ? '—' : $pct.'%',
             ];
         }
 
@@ -742,23 +746,31 @@ class AttendanceReportBuilder
         $rows = $this->attendanceQuery($from, $to, $filters)->get()
             ->groupBy(fn ($a) => $a->employee?->department?->name ?? '—');
 
+        // Department attendance % = its employees' attended ÷ eligible days
+        // (AttendanceRateService, QA-F-079) — not present rows ÷ all rows.
+        $rates = app(AttendanceRateService::class);
+        $ratesByDept = [];
+        foreach ($this->employeeQuery($filters, activeOnly: false)->with('department')->get() as $emp) {
+            $ratesByDept[$emp->department?->name ?? '—'][] = $rates->forEmployee($emp, $from, $to);
+        }
+
         $data = [];
         $trendLabels = [];
         $trendData = [];
         foreach ($rows as $dept => $group) {
             $present = $group->whereNotNull('check_in')->count();
             $late = $group->where('is_late', true)->count();
-            $pct = $group->count() ? round($present / $group->count() * 100) : 0;
+            $pct = AttendanceRateService::combine($ratesByDept[$dept] ?? [])['percent'];
             $data[] = [
                 $dept,
                 $group->pluck('employee_id')->unique()->count(),
                 $present,
                 $late,
                 number_format($group->sum(fn ($a) => $this->worked($a)), 1).'h',
-                $pct.'%',
+                $pct === null ? '—' : $pct.'%',
             ];
             $trendLabels[] = $dept;
-            $trendData[] = $pct;
+            $trendData[] = $pct ?? 0;
         }
 
         return [

@@ -49,7 +49,7 @@
 
     {{-- Same KPI row --}}
     <div class="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <x-employee.kpi-card label="Attendance" :value="$kpis['attendance']" suffix="%" icon="calendar-days" tone="emerald" sub="This month" />
+        <x-employee.kpi-card label="Attendance" :value="$kpis['attendance'] ?? '—'" :suffix="$kpis['attendance'] === null ? '' : '%'" icon="calendar-days" tone="emerald" sub="This month" />
         <x-employee.kpi-card label="Leave balance" :value="$kpis['leave']" icon="sun" tone="blue" sub="Days available" />
         <x-employee.kpi-card label="Comp off" :value="$kpis['comp_off']" icon="clock" tone="violet" sub="Days earned" />
         <x-employee.kpi-card label="Attendance score" :value="$kpis['score'] ?? '—'" icon="sparkles" tone="orange" sub="Avg this month" />

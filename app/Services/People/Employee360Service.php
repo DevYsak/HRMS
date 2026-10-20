@@ -12,6 +12,7 @@ use App\Models\LeaveRequest;
 use App\Models\PerformanceReview;
 use App\Models\User;
 use App\Services\Approvals\ApprovalQueueService;
+use App\Services\Attendance\AttendanceRateService;
 use App\Services\Attendance\AttendanceWindowService;
 use App\Services\Attendance\PunchTimeline;
 use App\Services\Attendance\TodayStatusService;
@@ -237,7 +238,7 @@ class Employee360Service
                 'leave' => (int) ($counts['leave'] ?? 0),
                 'holiday' => (int) ($counts['holiday'] ?? 0),
             ],
-            'rate' => $summary['scheduled'] > 0 ? (int) round($summary['present'] / $summary['scheduled'] * 100) : null,
+            'rate' => app(AttendanceRateService::class)->forEmployee($employee, $from, $until)['percent'],
             'missing_checkouts' => collect($days)->where('missing_out', true)->count(),
             'days' => $days,
             'day_log' => $visibleDays->take(14)->all(),

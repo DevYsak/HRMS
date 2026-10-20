@@ -70,6 +70,14 @@ class WorkingDayResolver
      */
     private ?array $primedLeave = null;
 
+    /**
+     * One employee's approved-leave dates over a range (primeApprovedLeaveRange),
+     * so classifying every day of a window needs one query, not one per day.
+     *
+     * @var array<int, array{from: string, to: string, dates: array<string, true>}>
+     */
+    private array $primedRanges = [];
+
     public function __construct(private readonly HolidayResolver $holidays) {}
 
     /**
@@ -108,9 +116,43 @@ class WorkingDayResolver
         return isset($this->mandatoryDays[$year][Carbon::parse($date)->toDateString()]);
     }
 
-    /** The configured weekly off — company-wide (Saturday + Sunday by default). */
+    /**
+     * Look up one employee's approved leave over a range at once; classify()
+     * then answers for any day inside it from memory.
+     */
+    public function primeApprovedLeaveRange(Employee $employee, CarbonInterface $from, CarbonInterface $to): self
+    {
+        $start = Carbon::parse($from)->startOfDay();
+        $end = Carbon::parse($to)->startOfDay();
+        $dates = [];
+
+        LeaveRequest::where('employee_id', $employee->id)
+            ->where('status', 'approved')
+            ->whereDate('start_date', '<=', $end->toDateString())
+            ->whereDate('end_date', '>=', $start->toDateString())
+            ->get(['start_date', 'end_date'])
+            ->each(function (LeaveRequest $leave) use ($start, $end, &$dates) {
+                $day = Carbon::parse($leave->start_date)->startOfDay()->max($start);
+                $last = Carbon::parse($leave->end_date)->startOfDay()->min($end);
+                for (; $day->lte($last); $day = $day->copy()->addDay()) {
+                    $dates[$day->toDateString()] = true;
+                }
+            });
+
+        $this->primedRanges[(int) $employee->id] = ['from' => $start->toDateString(), 'to' => $end->toDateString(), 'dates' => $dates];
+
+        return $this;
+    }
+
+    /** Whether the employee is on approved leave that day (from a primed range or date when there is one). */
     private function onApprovedLeave(Employee $employee, Carbon $day): bool
     {
+        $range = $this->primedRanges[(int) $employee->id] ?? null;
+        $key = $day->toDateString();
+        if ($range !== null && $key >= $range['from'] && $key <= $range['to']) {
+            return isset($range['dates'][$key]);
+        }
+
         $primed = $this->primedLeave;
 
         if ($primed !== null && $primed['date'] === $day->toDateString() && isset($primed['known'][(int) $employee->id])) {

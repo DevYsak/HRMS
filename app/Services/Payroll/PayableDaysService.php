@@ -40,6 +40,14 @@ use Illuminate\Support\Collection;
  *    could still explain it, and attendance is being recorded at all. Until
  *    then it is reported as pending and not deducted; a later correction
  *    reaches payroll as an adjustment in the next open run.
+ *
+ * The same classification gives THE attendance percentage (Phase 5 policy,
+ * QA-F-079): attended units ÷ eligible units. Eligible = attended + approved
+ * unpaid leave on a working day + finalised unexplained absence. Approved paid
+ * leave, weekly offs, holidays, days outside employment, future days, today
+ * before it is attended and absences that are still explainable (pending)
+ * are never in the denominator. A half day counts ½. Read it through
+ * AttendanceRateService.
  */
 class PayableDaysService
 {
@@ -86,7 +94,7 @@ class PayableDaysService
     /**
      * @param  CarbonInterface|null  $lopFrom  first day absences / unpaid leave count (a salary-cycle move); defaults to $from
      * @param  CarbonInterface|null  $cutoff  last day an absence can be final; defaults to the period end, never after yesterday
-     * @return array{from: string, to: string, cutoff: string, period_days: int, eligible_working_days: int, not_employed_working_days: int, working_days: int, present_days: float, paid_leave_days: float, unpaid_leave_days: float, absent_days: float, lop_days: float, paid_days: float, pending_days: float, weekly_off_days: int, holiday_days: int, attendance_tracked: bool, days: array<string, array{code: string, lop: float}>}
+     * @return array{from: string, to: string, cutoff: string, period_days: int, eligible_working_days: int, not_employed_working_days: int, working_days: int, present_days: float, paid_leave_days: float, unpaid_leave_days: float, absent_days: float, lop_days: float, paid_days: float, pending_days: float, weekly_off_days: int, holiday_days: int, attendance_tracked: bool, attended_units: float, attendance_eligible_units: float, days: array<string, array{code: string, lop: float}>}
      */
     public function forPeriod(Employee $employee, CarbonInterface $from, CarbonInterface $to, ?CarbonInterface $lopFrom = null, ?CarbonInterface $cutoff = null): array
     {
@@ -119,6 +127,7 @@ class PayableDaysService
         $result = [
             'eligible' => 0, 'not_employed' => 0, 'present' => 0.0, 'paid_leave' => 0.0, 'unpaid_leave' => 0.0,
             'absent' => 0.0, 'pending' => 0.0, 'weekly_off' => 0, 'holiday' => 0,
+            'attended' => 0.0, 'attendance_eligible' => 0.0,
         ];
         $perDay = [];
 
@@ -165,6 +174,8 @@ class PayableDaysService
                     $result['unpaid_leave'] += $unpaid;
                     $lop += $unpaid;
                     $code = $unpaid > 0 ? self::CODE_UNPAID_LEAVE : self::CODE_PAID_LEAVE;
+                    // Attendance %: unpaid leave stays in the denominator; paid leave never does.
+                    $result['attendance_eligible'] += $inPeriod ? $unpaid : 0.0;
                 }
 
                 // The part of the day not on leave must be worked.
@@ -174,10 +185,19 @@ class PayableDaysService
                         $halfDay = $row?->status === 'half_day' ? 0.5 : 0.0;
                         $result['present'] += $toWork - min($halfDay, $toWork);
                         $missing = min($halfDay, $toWork);
+                        if ($inPeriod) {
+                            $result['attended'] += $toWork - $missing;
+                            $result['attendance_eligible'] += $toWork - $missing;
+                        }
                         $code ??= $halfDay > 0 ? self::CODE_HALF_DAY : ($day['status'] === 'late' ? self::CODE_LATE : self::CODE_PRESENT);
                     } else {
                         $missing = $toWork;
                         $code ??= $final ? self::CODE_ABSENT : self::CODE_FUTURE;
+                    }
+
+                    // Attendance %: only a finalised, unexplained absence lowers it.
+                    if ($missing > 0 && $inPeriod && $final && $tracked && ! $explainable) {
+                        $result['attendance_eligible'] += $missing;
                     }
 
                     if ($missing > 0 && $countsLop) {
@@ -216,6 +236,8 @@ class PayableDaysService
             'weekly_off_days' => $result['weekly_off'],
             'holiday_days' => $result['holiday'],
             'attendance_tracked' => $tracked,
+            'attended_units' => round($result['attended'], 2),
+            'attendance_eligible_units' => round($result['attendance_eligible'], 2),
             'days' => array_filter($perDay, fn ($d, $key) => Carbon::parse($key)->gte($start), ARRAY_FILTER_USE_BOTH),
         ];
     }

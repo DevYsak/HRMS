@@ -51,6 +51,14 @@ class AttendanceCalculator
         private readonly PunchTimeline $timeline,
     ) {}
 
+    /** Look up an employee's approved leave for a range once, so forDay() inside it asks no more. */
+    public function primeLeaveRange(Employee $employee, CarbonInterface $from, CarbonInterface $to): self
+    {
+        $this->workingDays->primeApprovedLeaveRange($employee, $from, $to);
+
+        return $this;
+    }
+
     /** Whole minutes from first clock-in to final clock-out — the worked time. */
     public function spanMinutes(?CarbonInterface $firstIn, ?CarbonInterface $lastOut): int
     {

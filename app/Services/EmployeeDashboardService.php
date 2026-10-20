@@ -22,6 +22,7 @@ use App\Models\ReviewGoal;
 use App\Models\User;
 use App\Models\WfhRequest;
 use App\Services\Attendance\AttendanceCalculator;
+use App\Services\Attendance\AttendanceRateService;
 use App\Services\Attendance\AttendanceStatusResolver;
 use App\Services\Attendance\HolidayResolver;
 use App\Services\Attendance\PunchTimeline;
@@ -163,7 +164,9 @@ class EmployeeDashboardService
         $resolvedShift = $this->shifts->resolve($employee, $today);
         $upcomingHolidays = $this->holidays->upcomingHolidays($employee, 4, $today);
 
-        $attendance = $this->attendanceOverview($monthAttendance, $leaveByDate, $holidayByDate, $monthStart, $monthEnd, $today, $mdlDates);
+        // The one attendance % (QA-F-079), month to date.
+        $rate = app(AttendanceRateService::class)->forEmployee($employee, $monthStart, $today);
+        $attendance = $this->attendanceOverview($monthAttendance, $leaveByDate, $holidayByDate, $monthStart, $monthEnd, $today, $rate, $mdlDates);
         $todayCard = $this->today($employee, $todayAttendance, $leaveByDate[$today->toDateString()] ?? null,
             $holidayByDate->get($today->toDateString()), isset($mdlDates[$today->toDateString()]), $approvedWfhToday, $resolvedShift, $now, $today);
 
@@ -411,11 +414,10 @@ class EmployeeDashboardService
      * @param  Collection<string, PublicHoliday>  $holidayByDate
      * @return array<string, mixed>
      */
-    private function attendanceOverview(Collection $monthAttendance, array $leaveByDate, Collection $holidayByDate, Carbon $monthStart, Carbon $monthEnd, Carbon $today, array $mdlDates = []): array
+    private function attendanceOverview(Collection $monthAttendance, array $leaveByDate, Collection $holidayByDate, Carbon $monthStart, Carbon $monthEnd, Carbon $today, array $rate, array $mdlDates = []): array
     {
         $counts = ['present' => 0, 'absent' => 0, 'wfh' => 0, 'leave' => 0, 'late' => 0, 'half_day' => 0, 'holiday' => 0, 'weekly_off' => 0, 'mdl' => 0];
         $days = [];
-        $workingDays = 0;
 
         for ($d = $monthStart->copy(); $d->lte($monthEnd); $d = $d->addDay()) {
             $key = $d->toDateString();
@@ -426,13 +428,6 @@ class EmployeeDashboardService
             $shutdown = isset($mdlDates[$key]);
             $isPast = $d->lt($today);
             $elapsed = $d->lte($today);
-
-            // The same working-day rule the dashboard has always used for the
-            // attendance percentage: the company week, minus holidays — and
-            // minus the December shutdown days.
-            if ($elapsed && ! $weeklyOff && ! $holiday && ! $shutdown) {
-                $workingDays++;
-            }
 
             $state = match (true) {
                 $worked && $record->work_mode === AttendanceMode::Wfh->value => 'wfh',
@@ -487,9 +482,11 @@ class EmployeeDashboardService
             'month_label' => $today->format('F Y'),
             'range_label' => $monthStart->userShortDate().' – '.$today->userShortDate(),
             'counts' => $counts,
-            'working_days' => $workingDays,
-            'present_days' => $counts['present'],
-            'percent' => $workingDays > 0 ? min(100, (int) round($counts['present'] / $workingDays * 100)) : 0,
+            // Rate, attended and eligible days: AttendanceRateService — the same
+            // figures as My Attendance, the profile and Employee 360.
+            'working_days' => $rate['eligible'],
+            'present_days' => $rate['attended'],
+            'percent' => $rate['percent'],
             'days' => $days,
             'has_data' => $monthAttendance->isNotEmpty() || $counts['leave'] > 0,
             'avg_check_in' => $avgInMinutes !== null ? $today->copy()->startOfDay()->addMinutes($avgInMinutes)->userTime() : null,
@@ -773,8 +770,8 @@ class EmployeeDashboardService
         // welcome strip — a switched-off module leaves no tile behind.
         $kpis = [
             [
-                'label' => 'Attendance', 'icon' => 'chart-pie', 'value' => $attendance['percent'].'%',
-                'sub' => $attendance['present_days'].' of '.$attendance['working_days'].' working days',
+                'label' => 'Attendance', 'icon' => 'chart-pie', 'value' => $attendance['percent'] === null ? '—' : $attendance['percent'].'%',
+                'sub' => self::formatDays($attendance['present_days']).' of '.self::formatDays($attendance['working_days']).' eligible days',
                 'tone' => 'neutral', 'href' => route('attendance.my'),
             ],
             [

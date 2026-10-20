@@ -17,6 +17,7 @@ use App\Notifications\AttendanceRegularisationNotification;
 use App\Notifications\RegularisationReviewedNotification;
 use App\Services\Approvals\ClaimLockService;
 use App\Services\Attendance\AttendanceCalculator;
+use App\Services\Attendance\AttendanceRateService;
 use App\Services\Attendance\AttendanceStatusResolver;
 use App\Services\Attendance\PunchTimeline;
 use App\Services\Attendance\WorkingDayResolver;
@@ -305,11 +306,12 @@ class AllAttendance extends Component
             ->orderByDesc('date')
             ->get();
 
-        $workDays = max(1, app(WorkingDayResolver::class)->weekdaysBetween($monthStart, $today));
         $present = $month->whereNotNull('check_in')->count();
         $late = $month->where('is_late', true)->count();
         $onTimePct = $present > 0 ? round(($present - $late) / $present * 100) : 100;
-        $presentPct = min(100, round($present / $workDays * 100));
+        // The one attendance % (QA-F-079), month to date.
+        $rate = app(AttendanceRateService::class)->forEmployee($employee, $monthStart, $today);
+        $presentPct = $rate['percent'];
 
         $todayAtt = $month->firstWhere(fn ($a) => $a->date->isToday());
         $stdMin = (int) round((float) ($employee->shift->standard_hours ?? 9) * 60);
@@ -386,7 +388,7 @@ class AllAttendance extends Component
             'office' => $employee->office?->name ?? '—',
             'attendance_pct' => $presentPct,
             'on_time_pct' => $onTimePct,
-            'score' => (int) round($onTimePct * 0.6 + $presentPct * 0.4),
+            'score' => (int) round($onTimePct * 0.6 + ($rate['exact'] ?? 100) * 0.4),
             'late_count' => $late,
             'leave_balance' => LeaveBalance::where('employee_id', $employee->id)
                 ->where('year', app(LeaveYearResolver::class)->legacyYearFor())->get()
