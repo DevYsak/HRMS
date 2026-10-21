@@ -175,8 +175,14 @@ class LeaveV2Preview extends Command
             $this->line(sprintf('    %s: %d request(s), %s day(s)', $class, $group->count(), $group->sum('difference') + 0));
         }
         $this->line('  Uncategorised types (not offered in the V2 request flow until HR categorises them): '.($report['uncategorised'] ?: 'none'));
+        $c = $report['combined'];
+        $this->line(sprintf('  Combined Leave requests: %d (approved %d) · paid %s · unpaid %s · half days %d · header vs day rows mismatches: %d',
+            $c['requests'], $c['approved'], $c['paid'] + 0, $c['unpaid'] + 0, $c['half_days'], count($c['mismatches'])));
+        foreach ($c['mismatches'] as $m) {
+            $this->line('    '.$m);
+        }
         $this->newLine();
-        $this->line('Rollback: V2 is additive. Turning LEAVE_POLICY_ENGINE_V2 off restores the current behaviour; the V2 columns and table can be dropped with `php artisan migrate:rollback --step=3` without touching existing rows.');
+        $this->line('Rollback: V2 is additive. Turning LEAVE_POLICY_ENGINE_V2 off restores the current behaviour; the V2 columns and table can be dropped with `php artisan migrate:rollback --step=4` without touching existing rows.');
 
         if ($path = $this->option('csv')) {
             $fh = fopen($path, 'w');
@@ -190,7 +196,8 @@ class LeaveV2Preview extends Command
 
         // Mismatches with a known, explained cause are informational; a missing
         // or unexplained ledger entry blocks, like a balance that does not reconcile.
-        $blocking = count($rows) - ($counts['RECONCILES'] ?? 0)
+        // A Combined request whose header does not equal its day rows blocks too.
+        $blocking = count($rows) - ($counts['RECONCILES'] ?? 0) + count($report['combined']['mismatches'])
             + count(array_filter($mismatches, fn ($m) => in_array($m['classification'], [self::MISMATCH_MISSING_LEDGER, self::MISMATCH_UNEXPLAINED], true)));
 
         return $blocking === 0 ? self::SUCCESS : self::FAILURE;
@@ -309,6 +316,45 @@ class LeaveV2Preview extends Command
             'usage_by_reason' => $this->usageByReason($year, $only, $resolved),
             'mismatches' => $this->requestMismatches($year, $only),
             'requests' => $this->requestTotals($year, $only),
+            'combined' => $this->combinedSummary($year, $only),
+        ];
+    }
+
+    /**
+     * Combined Leave requests in the year: totals from their day rows, and
+     * any whose header (days, LWP) does not equal the sum of its day rows.
+     *
+     * @param  array<int, int|string>  $only
+     * @return array{requests: int, approved: int, paid: float, unpaid: float, half_days: int, mismatches: array<int, string>}
+     */
+    private function combinedSummary(LeaveYear $year, array $only): array
+    {
+        $requests = LeaveRequest::with('dayAllocations')
+            ->where('request_mode', LeaveRequest::MODE_COMBINED)
+            ->whereDate('start_date', '>=', $year->starts_on->toDateString())
+            ->whereDate('start_date', '<=', $year->ends_on->toDateString())
+            ->when($only, fn ($q, $ids) => $q->whereIn('employee_id', $ids))
+            ->get();
+
+        $mismatches = [];
+        foreach ($requests as $request) {
+            $paid = round((float) $request->dayAllocations->sum('paid_units'), 2);
+            $unpaid = round((float) $request->dayAllocations->sum('unpaid_units'), 2);
+            if (abs($paid - $request->paidDays()) > 0.001 || abs($unpaid - $request->unpaidUnits()) > 0.001) {
+                $mismatches[] = sprintf('LR-%04d: header paid %s / unpaid %s, day rows paid %s / unpaid %s',
+                    $request->id, $request->paidDays() + 0, $request->unpaidUnits() + 0, $paid + 0, $unpaid + 0);
+            }
+        }
+
+        $approved = $requests->where('status', 'approved');
+
+        return [
+            'requests' => $requests->count(),
+            'approved' => $approved->count(),
+            'paid' => round((float) $approved->sum(fn (LeaveRequest $r) => $r->paidDays()), 2),
+            'unpaid' => round((float) $approved->sum(fn (LeaveRequest $r) => $r->unpaidUnits()), 2),
+            'half_days' => $approved->sum(fn (LeaveRequest $r) => $r->dayAllocations->filter(fn ($d) => in_array($d->allocation_type, ['half_paid', 'half_unpaid'], true))->count()),
+            'mismatches' => $mismatches,
         ];
     }
 

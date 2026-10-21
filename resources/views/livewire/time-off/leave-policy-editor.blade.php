@@ -162,6 +162,57 @@
                         </section>
                     @endif
 
+                    {{-- Combined Leave: one request, each date full/half, paid/unpaid --}}
+                    <section class="{{ $card }}" data-combined-rules>
+                        <div class="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                                <h2 class="text-base font-semibold text-zinc-900 dark:text-white">Combined Leave rules</h2>
+                                <p class="text-xs text-zinc-500">One request over a date range; each working date Full or Half Day, Paid or Unpaid. Paid days use the reason's balance (Earned Leave for a reason).</p>
+                            </div>
+                            <flux:button wire:click="saveCombinedRules" variant="primary" size="sm">Save Combined Leave rules</flux:button>
+                        </div>
+                        <div class="mt-4 grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2 xl:grid-cols-3">
+                            @foreach([
+                                'enabled' => 'Offer Combined Leave',
+                                'allow_mixed' => 'Allow paid and unpaid in one request',
+                                'allow_per_date_allocation' => 'Allow a different allocation per date',
+                                'allow_half_days' => 'Allow half days',
+                                'allow_half_paid' => 'Allow Half Day – Paid',
+                                'allow_half_unpaid' => 'Allow Half Day – Unpaid',
+                                'allow_sessions' => 'Ask for first / second half',
+                                'count_weekly_offs' => 'Charge weekly offs (otherwise excluded)',
+                                'count_holidays' => 'Charge holidays (otherwise excluded)',
+                                'allow_per_date_reason' => 'Different reason per date (not yet used)',
+                            ] as $key => $text)
+                                <label class="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-200">
+                                    <input type="checkbox" wire:model="combined.{{ $key }}" class="rounded accent-orange-500" data-combined-flag="{{ $key }}"> {{ $text }}
+                                </label>
+                            @endforeach
+                        </div>
+                        <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+                            <flux:select wire:model="combined.excess_handling" label="If paid days exceed the balance">
+                                <option value="block">Block — the employee changes days to unpaid</option>
+                                <option value="convert_to_lwp">Propose converting the excess to unpaid</option>
+                            </flux:select>
+                            <flux:input type="number" min="1" wire:model="combined.max_range_days" label="Maximum date range (days)" placeholder="31" />
+                            <flux:input type="number" min="1" wire:model="combined.max_consecutive_working_days" label="Maximum working days" placeholder="No limit" />
+                        </div>
+                        <div class="mt-4">
+                            <p class="text-sm font-medium text-zinc-700 dark:text-zinc-200">Reasons allowed <span class="font-normal text-zinc-500">(none ticked = every reason the policy allows)</span></p>
+                            <div class="mt-2 flex flex-wrap gap-x-5 gap-y-2">
+                                @forelse($this->combinedReasonTypes as $type)
+                                    <label wire:key="creason-{{ $type->id }}" class="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-200">
+                                        <input type="checkbox" value="{{ $type->id }}" wire:model="combined.reason_type_ids" class="rounded accent-orange-500"> {{ $type->name }}
+                                    </label>
+                                @empty
+                                    <p class="text-xs text-zinc-500">No reasons yet — allow Earned Leave reasons above.</p>
+                                @endforelse
+                            </div>
+                        </div>
+                        @error('combined.max_range_days')<p class="mt-2 text-xs text-rose-600">{{ $message }}</p>@enderror
+                        @error('combined.max_consecutive_working_days')<p class="mt-2 text-xs text-rose-600">{{ $message }}</p>@enderror
+                    </section>
+
                     {{-- Other leave types with their own balance --}}
                     <section class="{{ $card }} !px-0" data-policy-rules>
                         <div class="flex flex-wrap items-center justify-between gap-3 px-5">

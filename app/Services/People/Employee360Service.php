@@ -9,6 +9,7 @@ use App\Models\AuditLog;
 use App\Models\Employee;
 use App\Models\EmployeeKpi;
 use App\Models\LeaveRequest;
+use App\Models\LeaveRequestDay;
 use App\Models\PerformanceReview;
 use App\Models\User;
 use App\Services\Approvals\ApprovalQueueService;
@@ -272,7 +273,7 @@ class Employee360Service
 
         $overlapping = fn ($q) => $q->whereDate('start_date', '<=', $to->toDateString())->whereDate('end_date', '>=', $from->toDateString());
 
-        $requests = LeaveRequest::with(['leaveType', 'reviewer', 'hrReviewer'])
+        $requests = LeaveRequest::with(['leaveType', 'reviewer', 'hrReviewer', 'dayAllocations'])
             ->where('employee_id', $employee->id)
             ->when($tab === 'pending', fn ($q) => $q->whereIn('status', self::OPEN_LEAVE))
             ->when($tab === 'approved', fn ($q) => $overlapping($q->where('status', 'approved')))
@@ -288,6 +289,15 @@ class Employee360Service
                 'end' => $r->end_date,
                 'type' => $r->leaveType?->name ?? 'Leave',
                 'days' => (float) $r->days,
+                // Combined Leave: one request, its paid / unpaid split and each date.
+                'combined' => $r->isCombined(),
+                'paid' => $r->paidDays(),
+                'unpaid' => $r->unpaidUnits(),
+                'dates' => $r->isCombined() ? $r->dayAllocations->map(fn ($d) => [
+                    'date' => $d->date,
+                    'label' => $d->is_excluded ? ($d->metadata['label'] ?? 'Excluded') : LeaveRequestDay::LABELS[$d->allocation_type].($d->session ? ' · '.str_replace('_', ' ', $d->session) : ''),
+                    'excluded' => (bool) $d->is_excluded,
+                ])->all() : [],
                 'status' => $r->status,
                 'approver' => $r->hrReviewer?->name ?? $r->reviewer?->name ?? $this->queue->approverFor($employee),
                 'can_decide' => $this->queue->canDecide($viewer, $r),

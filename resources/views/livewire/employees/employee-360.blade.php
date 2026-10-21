@@ -361,8 +361,28 @@
                                             @foreach($leave['requests'] as $request)
                                                 <tr wire:key="leave-{{ $request['id'] }}">
                                                     <td class="whitespace-nowrap px-3 py-2 font-medium text-zinc-800 dark:text-zinc-100">{{ $dd->shortDate($request['start']) }}@if(! $request['start']->isSameDay($request['end'])) – {{ $dd->shortDate($request['end']) }}@endif</td>
-                                                    <td class="px-3 py-2">{{ $request['type'] }}</td>
-                                                    <td class="px-3 py-2 tabular-nums">{{ \App\Services\People\Employee360Service::number($request['days']) }}</td>
+                                                    <td class="px-3 py-2">
+                                                        @if($request['combined'])
+                                                            <span class="font-medium text-zinc-800 dark:text-zinc-100">Combined Leave</span>
+                                                            <span class="block text-[11px] text-zinc-500">Reason: {{ $request['type'] }}</span>
+                                                            <details class="mt-1" data-combined-dates="{{ $request['id'] }}">
+                                                                <summary class="cursor-pointer text-[11px] font-semibold text-orange-600 dark:text-orange-400">By date</summary>
+                                                                <ul class="mt-1 space-y-0.5 text-[11px]">
+                                                                    @foreach($request['dates'] as $d)
+                                                                        <li class="{{ $d['excluded'] ? 'text-zinc-400' : 'text-zinc-600 dark:text-zinc-300' }}">{{ $d['date']->format('d M') }} · {{ $d['label'] }}</li>
+                                                                    @endforeach
+                                                                </ul>
+                                                            </details>
+                                                        @else
+                                                            {{ $request['type'] }}
+                                                        @endif
+                                                    </td>
+                                                    <td class="px-3 py-2 tabular-nums">
+                                                        {{ \App\Services\People\Employee360Service::number($request['days']) }}
+                                                        @if($request['combined'])
+                                                            <span class="block text-[11px] text-zinc-500" data-combined-split>Paid {{ \App\Services\People\Employee360Service::number($request['paid']) }} · Unpaid {{ \App\Services\People\Employee360Service::number($request['unpaid']) }}</span>
+                                                        @endif
+                                                    </td>
                                                     <td class="px-3 py-2"><x-pulse.badge :color="$leaveColor[$request['status']] ?? 'zinc'">{{ str_replace('_', ' ', $request['status']) }}</x-pulse.badge></td>
                                                     <td class="max-w-[10rem] truncate px-3 py-2 text-zinc-600 dark:text-zinc-300" title="{{ $request['approver'] }}">{{ $request['approver'] ?? '—' }}</td>
                                                     <td class="whitespace-nowrap px-3 py-2 text-right">

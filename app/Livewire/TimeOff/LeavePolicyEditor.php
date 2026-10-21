@@ -8,6 +8,7 @@ use App\Models\LeavePolicy;
 use App\Models\LeavePolicyAssignment;
 use App\Models\LeavePolicyRule;
 use App\Models\LeaveType;
+use App\Services\Leave\CombinedLeaveService;
 use App\Services\Leave\LeaveBalanceSource;
 use App\Services\Leave\LeaveCategory;
 use App\Services\Leave\LeavePolicyAdminService;
@@ -29,6 +30,9 @@ use Livewire\Component;
  *    a tick plus optional attachment, approval, consecutive-day and notice
  *    rules. Never a balance or an allocation.
  *  - Other leave types with their own balance (special leave, Comp Off).
+ *  - Combined Leave rules: whether one request may mix full/half, paid/unpaid
+ *    dates, which reasons it may use and what happens when paid days exceed
+ *    the balance.
  *  - Where the policy applies (company, department or one employee).
  *
  * Writes go through LeavePolicyAdminService (cap-checked and audited).
@@ -49,6 +53,9 @@ class LeavePolicyEditor extends Component
 
     /** @var array<int, array<string, mixed>> leave_type_id => allowed + validation rules, for Earned Leave reasons */
     public array $reasons = [];
+
+    /** @var array<string, mixed> Combined Leave rules (CombinedLeaveService::RULE_DEFAULTS keys) */
+    public array $combined = [];
 
     /** @var array<string, mixed> */
     public array $assign = ['scope' => 'company', 'scope_id' => null, 'effective_from' => '', 'effective_to' => '', 'notes' => ''];
@@ -193,6 +200,42 @@ class LeavePolicyEditor extends Component
 
         $this->load();
         \Flux::toast('Leave rules saved.', variant: 'success');
+    }
+
+    public function saveCombinedRules(LeavePolicyAdminService $admin): void
+    {
+        $this->authorizeAccess();
+        abort_unless($this->policyId, 404);
+        $this->validate([
+            'combined.excess_handling' => 'required|in:block,convert_to_lwp',
+            'combined.max_range_days' => 'nullable|integer|min:1|max:366',
+            'combined.max_consecutive_working_days' => 'nullable|integer|min:1|max:366',
+            'combined.reason_type_ids' => 'array',
+            'combined.reason_type_ids.*' => 'integer|exists:leave_types,id',
+        ], [], ['combined.max_range_days' => 'maximum date range', 'combined.max_consecutive_working_days' => 'maximum working days']);
+
+        $flags = ['enabled', 'allow_half_days', 'allow_half_paid', 'allow_half_unpaid', 'allow_sessions', 'count_weekly_offs',
+            'count_holidays', 'allow_mixed', 'allow_per_date_allocation', 'allow_per_date_reason'];
+        $rules = collect($flags)->mapWithKeys(fn ($k) => [$k => (bool) ($this->combined[$k] ?? false)])->all() + [
+            'excess_handling' => $this->combined['excess_handling'],
+            'max_range_days' => $this->combined['max_range_days'] === '' || $this->combined['max_range_days'] === null ? null : (int) $this->combined['max_range_days'],
+            'max_consecutive_working_days' => $this->combined['max_consecutive_working_days'] === '' || $this->combined['max_consecutive_working_days'] === null ? null : (int) $this->combined['max_consecutive_working_days'],
+            // None ticked = every reason the policy allows.
+            'reason_type_ids' => array_values(array_map('intval', array_filter((array) ($this->combined['reason_type_ids'] ?? [])))) ?: null,
+        ];
+
+        $admin->savePolicy(['combined_leave_rules' => $rules], $this->policyId, Auth::user());
+        $this->load();
+        \Flux::toast('Combined Leave rules saved.', variant: 'success');
+    }
+
+    /** Reasons a Combined Leave request may be given: Earned Leave reasons and special leave in the policy. */
+    #[Computed]
+    public function combinedReasonTypes(): Collection
+    {
+        return $this->reasonTypes->merge(
+            $this->otherTypes->filter(fn (LeaveType $t) => LeaveCategory::of($t) === LeaveCategory::SPECIAL && ($this->rules[$t->id]['include'] ?? false))
+        )->values();
     }
 
     public function assignPolicy(LeavePolicyAdminService $admin): void
@@ -355,6 +398,10 @@ class LeavePolicyEditor extends Component
             'is_active' => $policy?->is_active ?? true,
             'earned_leave_type_id' => $policy?->earned_leave_type_id ?? '',
         ];
+        $this->combined = CombinedLeaveService::rulesOf($policy);
+        $this->combined['reason_type_ids'] = array_map('intval', (array) ($this->combined['reason_type_ids'] ?? []));
+        $this->combined['max_range_days'] ??= '';
+        $this->combined['max_consecutive_working_days'] ??= '';
         unset($this->poolType, $this->reasonTypes, $this->otherTypes);
 
         $existing = $policy ? LeavePolicyRule::where('leave_policy_id', $policy->id)->get()->keyBy('leave_type_id') : collect();

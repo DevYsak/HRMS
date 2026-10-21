@@ -106,6 +106,7 @@
                             <li wire:key="v2-reason-{{ $reason['id'] }}" class="flex items-center justify-between gap-3 py-1.5" data-reason-usage="{{ $reason['code'] }}">
                                 <span class="text-zinc-700 dark:text-zinc-200">{{ $reason['name'] }}</span>
                                 <span class="tabular-nums text-zinc-900 dark:text-white">{{ $fmt($reason['used']) }} used
+                                    @if(($reason['unpaid'] ?? 0) > 0)<span class="text-amber-700 dark:text-amber-300">· {{ $fmt($reason['unpaid']) }} unpaid</span>@endif
                                     @if($reason['pending'] > 0)<span class="text-zinc-500">· {{ $fmt($reason['pending']) }} pending</span>@endif
                                 </span>
                             </li>

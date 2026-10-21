@@ -218,28 +218,32 @@ class LeaveCategoryBalances
 
     /**
      * Earned Leave days by reason this leave year — usage statistics, not
-     * balances. Approved and pending requests charged to the Earned Leave
-     * balance, grouped by their reason (the paid portion only).
+     * balances. Requests charged to the Earned Leave balance, or given an
+     * Earned Leave reason (a Combined request may be all unpaid), grouped by
+     * reason: paid days used, unpaid days, and paid days still pending.
      *
-     * @return array<int, array{id: int, name: string, code: ?string, used: float, pending: float}>
+     * @return array<int, array{id: int, name: string, code: ?string, used: float, unpaid: float, pending: float}>
      */
     public function usageByReason(Employee $employee, LeaveType $pool, LeaveYear $year): array
     {
+        $paid = fn (LeaveRequest $r) => $r->effectiveLeaveStatus() === 'paid' ? $r->paidDays() : 0.0;
+        $unpaid = fn (LeaveRequest $r) => $r->effectiveLeaveStatus() === 'paid' ? $r->unpaidUnits() : (float) $r->days;
+
         return LeaveRequest::with(['leaveType' => fn ($q) => $q->withTrashed()])
             ->where('employee_id', $employee->id)
-            ->where('balance_leave_type_id', $pool->id)
+            ->where(fn ($q) => $q->where('balance_leave_type_id', $pool->id)->orWhere('main_category', LeaveCategory::EARNED))
             ->whereIn('status', array_merge(['approved'], LeaveBalanceCalculator::RESERVING_STATUSES))
             ->whereDate('start_date', '>=', $year->starts_on->toDateString())
             ->whereDate('start_date', '<=', $year->ends_on->toDateString())
             ->get()
-            ->filter(fn (LeaveRequest $r) => $r->effectiveLeaveStatus() === 'paid')
             ->groupBy('leave_type_id')
             ->map(fn (Collection $requests) => [
                 'id' => (int) $requests->first()->leave_type_id,
                 'name' => $requests->first()->leaveType?->name ?? 'Reason #'.$requests->first()->leave_type_id,
                 'code' => $requests->first()->leaveType?->code,
-                'used' => round((float) $requests->where('status', 'approved')->sum(fn (LeaveRequest $r) => $r->paidDays()), 2),
-                'pending' => round((float) $requests->where('status', '!=', 'approved')->sum(fn (LeaveRequest $r) => $r->paidDays()), 2),
+                'used' => round((float) $requests->where('status', 'approved')->sum($paid), 2),
+                'unpaid' => round((float) $requests->where('status', 'approved')->sum($unpaid), 2),
+                'pending' => round((float) $requests->where('status', '!=', 'approved')->sum($paid), 2),
             ])
             ->sortBy('name')->values()->all();
     }
