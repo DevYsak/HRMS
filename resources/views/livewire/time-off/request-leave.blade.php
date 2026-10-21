@@ -12,15 +12,38 @@
         LeaveCategory::UNPAID => 'bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400',
     ];
     $steps = [1 => 'Category', 2 => 'Details', 3 => 'Review'];
-    $eval = $this->evaluation;
+    // Computed only while the drawer is open: a closed drawer costs the page nothing.
+    $eval = $open ? $this->evaluation : null;
     // Combined Leave: date-wise allocation (null for every other category).
-    $ceval = $this->combinedEvaluation;
-    $selected = $this->selected;
+    $ceval = $open ? $this->combinedEvaluation : null;
+    $selected = $open ? $this->selected : null;
     $label = 'mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-200';
     $input = 'w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-500/20 dark:border-white/10 dark:bg-zinc-900 dark:text-white';
 @endphp
 
-<div>
+{{-- Opens instantly in the browser with a short loading state, then the server fills it in.
+     If the server never answers, the shell says so instead of spinning forever. --}}
+<div x-data="{ opening: false, slow: false, timer: null }"
+    x-on:open-request-leave.window="if (! $wire.open) { opening = true; slow = false; clearTimeout(timer); timer = setTimeout(() => slow = true, 15000) }"
+    x-effect="if ($wire.open) { opening = false; clearTimeout(timer) }">
+<div x-show="opening" x-cloak class="fixed inset-0 z-50 flex items-end justify-center sm:items-stretch sm:justify-end" data-request-leave-loading>
+    <div class="absolute inset-0 bg-zinc-950/50 backdrop-blur-[2px]" x-on:click="opening = false" aria-hidden="true"></div>
+    <div class="relative flex h-[100dvh] w-full flex-col bg-white shadow-2xl ring-1 ring-black/5 sm:max-w-[30rem] sm:rounded-l-2xl dark:bg-zinc-900 dark:ring-white/10" role="status">
+        <header class="border-b border-zinc-100 px-5 py-4 dark:border-zinc-800">
+            <p class="text-base font-bold text-zinc-900 dark:text-white">Request Leave</p>
+            <p class="mt-0.5 text-sm text-zinc-500" x-text="slow ? 'This is taking longer than usual.' : 'Loading your leave policy…'"></p>
+        </header>
+        <div class="space-y-3 px-5 py-5" x-show="! slow">
+            @foreach(range(1, 4) as $i)
+                <div class="h-16 animate-pulse rounded-xl bg-zinc-100 dark:bg-white/5"></div>
+            @endforeach
+        </div>
+        <div class="space-y-3 px-5 py-5 text-sm text-zinc-600 dark:text-zinc-300" x-show="slow" x-cloak>
+            <p>We couldn't open Request Leave. Check your connection and try again, or contact HR if it keeps happening.</p>
+            <button type="button" class="rounded-lg border border-zinc-200 px-3 py-1.5 text-sm font-semibold dark:border-white/10" x-on:click="opening = false">Close</button>
+        </div>
+    </div>
+</div>
 @if($open)
 <div data-app-modal data-request-leave role="dialog" aria-modal="true" aria-labelledby="request-leave-title"
     class="fixed inset-0 z-50 flex items-end justify-center sm:items-stretch sm:justify-end"
@@ -71,8 +94,13 @@
                 </div>
             @enderror
 
+            @if($loadError)
+                <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200" role="alert" data-request-leave-error>
+                    <p class="font-semibold">{{ $loadError }}</p>
+                    <p class="mt-1 text-xs">Nothing has been submitted.</p>
+                </div>
             {{-- STEP 1 — main category --}}
-            @if($step === 1)
+            @elseif($step === 1)
                 <fieldset>
                     <legend class="{{ $label }}">Select leave category <span class="text-rose-500">*</span></legend>
                     <div class="space-y-3">
@@ -370,7 +398,9 @@
                 @else
                     <flux:button wire:click="back" variant="ghost">Back</flux:button>
                 @endif
-                @if($step < 3)
+                @if($loadError)
+                    {{-- Nothing to continue with until the policy loads. --}}
+                @elseif($step < 3)
                     <flux:button wire:click="next" variant="primary" icon-trailing="arrow-right" wire:loading.attr="disabled" wire:target="next,attachment">Next</flux:button>
                 @else
                     <flux:button wire:click="submit" variant="primary" wire:loading.attr="disabled" wire:target="submit">Submit Request</flux:button>

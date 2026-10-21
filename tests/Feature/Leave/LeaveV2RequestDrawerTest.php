@@ -19,7 +19,9 @@ use App\Services\Leave\LeaveBalanceCalculator;
 use App\Services\Leave\LeaveCategory;
 use App\Services\Leave\LeaveLedgerService;
 use App\Services\Leave\LeaveMovementService;
+use App\Services\Leave\LeavePolicyEngine;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
 use Livewire\Livewire;
 
@@ -371,4 +373,93 @@ test('with the flag on, an employee whose policy has no Earned Leave keeps the l
     Livewire::actingAs($this->user)->test(MyLeaveBalances::class, ['embedded' => true])
         ->assertDontSeeHtml('data-v2-balances')
         ->assertDontSee('Earned Leave is not set up for your policy yet.');
+});
+
+test('reopening the drawer clears everything from a cancelled request', function () {
+    $component = Livewire::actingAs($this->user)->test(RequestLeave::class)
+        ->call('openDrawer')
+        ->call('chooseCategory', LeaveCategory::EARNED)
+        ->set('leaveTypeId', $this->sick->id)
+        ->set('startDate', '2026-12-14')
+        ->set('endDate', '2026-12-15')
+        ->set('reason', 'Feeling unwell')
+        ->set('remarks', 'Old remark')
+        ->call('next')
+        ->call('close')
+        ->call('openDrawer');
+
+    $component->assertSet('open', true)
+        ->assertSet('step', 1)
+        ->assertSet('category', '')
+        ->assertSet('leaveTypeId', null)
+        ->assertSet('startDate', '')
+        ->assertSet('endDate', '')
+        ->assertSet('reason', '')
+        ->assertSet('remarks', '')
+        ->assertSet('allocations', [])
+        ->assertSet('loadError', null)
+        ->assertHasNoErrors();
+});
+
+test('the drawer opens with a clear message when the leave policy cannot load', function () {
+    Log::spy();
+    $this->mock(LeavePolicyEngine::class, fn ($mock) => $mock->shouldReceive('balances')->andThrow(new RuntimeException('policy lookup failed')));
+
+    Livewire::actingAs($this->user)->test(RequestLeave::class)
+        ->call('openDrawer')
+        ->assertSet('open', true)
+        ->assertSet('loadError', RequestLeave::LOAD_ERROR)
+        ->assertSee("We couldn't load your current leave policy. Please contact HR.")
+        ->assertSeeHtml('data-request-leave-error')
+        ->assertDontSee('Next');
+
+    Log::shouldHaveReceived('error')->withArgs(fn ($message, $context) => str_contains($message, 'leave policy could not be loaded')
+        && $context['employee_id'] === $this->employee->id && $context['message'] === 'policy lookup failed');
+});
+
+test('dates being typed or ranges over a year never start a day-by-day evaluation', function () {
+    $component = Livewire::actingAs($this->user)->test(RequestLeave::class)
+        ->call('openDrawer')
+        ->call('chooseCategory', LeaveCategory::EARNED)
+        ->call('next')
+        ->set('leaveTypeId', $this->sick->id)
+        // What a date input sends while "2026" is typed into the year.
+        ->set('startDate', '0002-12-14')
+        ->set('endDate', '2026-12-15');
+
+    expect($component->instance()->evaluation)->toBeNull();
+
+    $component->set('startDate', '2026-12-14')->set('endDate', '2028-12-15')->set('reason', 'A very long trip')->call('next')
+        ->assertHasErrors('endDate')
+        ->assertSet('step', 2);
+
+    expect(LeaveYear::count())->toBe(1);
+});
+
+test('the planner opens the drawer with both its dates', function () {
+    Livewire::actingAs($this->user)->test(RequestLeave::class)
+        ->call('openDrawer', null, '2026-12-14', '2026-12-16')
+        ->assertSet('startDate', '2026-12-14')
+        ->assertSet('endDate', '2026-12-16');
+
+    Livewire::actingAs($this->user)->test(MyTimeOff::class)
+        ->set('planner_start', '2026-12-14')
+        ->set('planner_end', '2026-12-16')
+        ->call('applyFromPlanner')
+        ->assertDispatched('open-request-leave', date: '2026-12-14', endDate: '2026-12-16');
+});
+
+test('with the flag on, a policy without Earned Leave keeps the existing form instead of an empty drawer', function () {
+    $this->policy->update(['earned_leave_type_id' => null]);
+
+    Livewire::actingAs($this->user)->test(MyTimeOff::class)
+        ->call('openRequestModal')
+        ->assertNotDispatched('open-request-leave')
+        ->assertSet('showRequestModal', true)
+        ->assertDontSeeHtml('data-request-leave-loading');
+});
+
+test('arriving with ?request=1 opens Request Leave', function () {
+    Livewire::actingAs($this->user)->withQueryParams(['request' => 1])->test(MyTimeOff::class)
+        ->assertDispatched('open-request-leave');
 });

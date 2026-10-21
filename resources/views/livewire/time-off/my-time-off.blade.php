@@ -59,7 +59,12 @@
                 @if($encashableTypes->isNotEmpty())
                     <flux:button wire:click="openEncashModal" icon="banknotes">Encash Leave</flux:button>
                 @endif
-                <flux:button wire:click="openRequestModal" variant="primary" icon="plus" data-request-leave-button>Request Leave</flux:button>
+                {{-- Under V2 the drawer opens straight from the browser: no page round trip first. --}}
+                @if($v2)
+                    <flux:button x-on:click="Livewire.dispatch('open-request-leave')" variant="primary" icon="plus" data-request-leave-button>Request Leave</flux:button>
+                @else
+                    <flux:button wire:click="openRequestModal" variant="primary" icon="plus" data-request-leave-button>Request Leave</flux:button>
+                @endif
             </div>
         </div>
 
@@ -104,7 +109,11 @@
                     </div>
                     <div class="flex shrink-0 flex-wrap items-center gap-2">
                         <flux:button size="sm" x-on:click="go('requests', null, true)">View Request</flux:button>
-                        <flux:button size="sm" variant="primary" wire:click="openRequestModal">Request Another Leave</flux:button>
+                        @if($v2)
+                            <flux:button size="sm" variant="primary" x-on:click="Livewire.dispatch('open-request-leave')">Request Another Leave</flux:button>
+                        @else
+                            <flux:button size="sm" variant="primary" wire:click="openRequestModal">Request Another Leave</flux:button>
+                        @endif
                         <button type="button" x-on:click="shown = false" class="flex size-8 items-center justify-center rounded-lg text-amber-700 hover:bg-amber-100 dark:text-amber-300 dark:hover:bg-white/5" aria-label="Dismiss"><flux:icon.x-mark class="size-4" /></button>
                     </div>
                 </div>
@@ -612,7 +621,7 @@
                         ?? ($day['pending'] ? $day['pending']->leaveType->name . ' (Pending)' : null);
                 @endphp
                 @if($bookableLeave)
-                    <button type="button" wire:click="applyOnDate('{{ $day['date']->toDateString() }}')"
+                    <button type="button" @if($v2) x-on:click="Livewire.dispatch('open-request-leave', { date: '{{ $day['date']->toDateString() }}' })" @else wire:click="applyOnDate('{{ $day['date']->toDateString() }}')" @endif
                         class="{{ $cellClasses }} group" title="Apply leave on @userDate($day['date'])">
                         {{ $day['date']->day }}
                         <span class="pointer-events-none absolute right-1 top-1 hidden text-[9px] font-black text-orange-500 group-hover:block">+</span>
@@ -666,7 +675,7 @@
     </section>
 
     {{-- Leave V2: the policy-driven Request Leave drawer. --}}
-    @if(\App\Services\Leave\LeavePolicyEngine::enabled())
+    @if($v2)
         <livewire:time-off.request-leave />
     @endif
 
@@ -690,7 +699,7 @@
         <div class="grid grid-cols-2 items-stretch gap-3 sm:grid-cols-4 lg:grid-cols-7">
             @foreach($quickActions as $action)
                 @if($action['modal'] ?? false)
-                    <button type="button" wire:click="openRequestModal" class="{{ $qa }}">{!! $qaIcon($action) !!}<flux:icon :name="$action['icon']" class="size-5" /></span><span class="text-xs font-semibold text-zinc-700 dark:text-zinc-200">{{ $action['label'] }}</span></button>
+                    <button type="button" @if($v2) x-on:click="Livewire.dispatch('open-request-leave')" @else wire:click="openRequestModal" @endif class="{{ $qa }}">{!! $qaIcon($action) !!}<flux:icon :name="$action['icon']" class="size-5" /></span><span class="text-xs font-semibold text-zinc-700 dark:text-zinc-200">{{ $action['label'] }}</span></button>
                 @elseif(isset($action['go']))
                     <button type="button" x-on:click="{{ $action['go'] }}" class="{{ $qa }}">{!! $qaIcon($action) !!}<flux:icon :name="$action['icon']" class="size-5" /></span><span class="text-xs font-semibold text-zinc-700 dark:text-zinc-200">{{ $action['label'] }}</span></button>
                 @else
@@ -722,7 +731,11 @@
                     <p class="text-center text-xs text-zinc-500 dark:text-zinc-400">Pick a start and end date to see working days, weekly offs, holidays and the estimated charge.</p>
                 @endif
             </div>
-            <flux:button wire:click="applyFromPlanner" variant="primary" class="mt-3 w-full" :disabled="! $plannerResult">Check Availability &amp; Apply</flux:button>
+            @if($v2)
+                <flux:button x-on:click="Livewire.dispatch('open-request-leave', { date: $wire.planner_start, endDate: $wire.planner_end })" variant="primary" class="mt-3 w-full" :disabled="! $plannerResult">Check Availability &amp; Apply</flux:button>
+            @else
+                <flux:button wire:click="applyFromPlanner" variant="primary" class="mt-3 w-full" :disabled="! $plannerResult">Check Availability &amp; Apply</flux:button>
+            @endif
         </div>
 
         <div class="ui-surface flex flex-col p-5">

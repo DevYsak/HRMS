@@ -118,6 +118,28 @@ class MyTimeOff extends Component
     {
         $this->filterYear = (string) app(LeaveYearResolver::class)->legacyYearFor();
         $this->calendarMonth = now()->format('Y-m');
+
+        // "Apply Leave" elsewhere (the dashboard) links here with ?request=1.
+        if (request()->boolean('request')) {
+            $this->openRequestModal();
+        }
+    }
+
+    /**
+     * Leave V2's drawer serves an employee whose policy has an Earned Leave
+     * balance — the same rule that shows the V2 page. Anyone else keeps the
+     * existing form, so the drawer never opens empty.
+     */
+    private function usesV2Drawer(): bool
+    {
+        $employee = Auth::user()?->employee;
+        if (! LeavePolicyEngine::enabled() || ! $employee) {
+            return false;
+        }
+
+        $year = app(LeaveYearResolver::class)->forDate(Carbon::today());
+
+        return app(LeavePolicyEngine::class)->balances($employee, $year)['earned'] !== null;
     }
 
     public function updatingFilterStatus(): void
@@ -276,7 +298,7 @@ class MyTimeOff extends Component
     public function openRequestModal(): void
     {
         // Leave V2: the policy-driven drawer replaces this form.
-        if (LeavePolicyEngine::enabled()) {
+        if ($this->usesV2Drawer()) {
             $this->dispatch('open-request-leave');
 
             return;
@@ -297,7 +319,7 @@ class MyTimeOff extends Component
     #[On('apply-leave')]
     public function applyForType(int $leaveTypeId): void
     {
-        if (LeavePolicyEngine::enabled()) {
+        if ($this->usesV2Drawer()) {
             $this->dispatch('open-request-leave', leaveTypeId: $leaveTypeId);
 
             return;
@@ -313,8 +335,8 @@ class MyTimeOff extends Component
      */
     public function applyFromPlanner(): void
     {
-        if (LeavePolicyEngine::enabled()) {
-            $this->dispatch('open-request-leave', date: $this->planner_start);
+        if ($this->usesV2Drawer()) {
+            $this->dispatch('open-request-leave', date: $this->planner_start, endDate: $this->planner_end);
 
             return;
         }
@@ -337,7 +359,7 @@ class MyTimeOff extends Component
      */
     public function applyOnDate(string $date): void
     {
-        if (LeavePolicyEngine::enabled()) {
+        if ($this->usesV2Drawer()) {
             $this->dispatch('open-request-leave', date: $date);
 
             return;

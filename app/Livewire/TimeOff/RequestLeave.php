@@ -2,6 +2,7 @@
 
 namespace App\Livewire\TimeOff;
 
+use App\Models\Employee;
 use App\Models\LeaveAttachment;
 use App\Models\LeaveRequest;
 use App\Models\LeaveRequestDay;
@@ -78,20 +79,34 @@ class RequestLeave extends Component
 
     public ?int $submittedId = null;
 
+    /** Set when the leave policy could not be loaded: the drawer shows it instead of spinning. */
+    public ?string $loadError = null;
+
+    /** The longest range one request may cover (also bounds every day-by-day evaluation). */
+    public const MAX_RANGE_DAYS = 366;
+
+    public const LOAD_ERROR = "We couldn't load your current leave policy. Please contact HR.";
+
     #[On('open-request-leave')]
-    public function openDrawer(?int $leaveTypeId = null, ?string $date = null): void
+    public function openDrawer(?int $leaveTypeId = null, ?string $date = null, ?string $endDate = null): void
     {
         abort_unless(LeavePolicyEngine::enabled(), 404);
 
         $this->resetForm();
         $this->open = true;
 
-        if ($date) {
+        if ($date !== null && $this->validDate($date)) {
             $this->startDate = $this->endDate = Carbon::parse($date)->toDateString();
+            if ($endDate !== null && $this->validDate($endDate) && $endDate >= $this->startDate && ! $this->tooLong($this->startDate, $endDate)) {
+                $this->endDate = Carbon::parse($endDate)->toDateString();
+            }
         }
 
-        if ($leaveTypeId) {
-            foreach ($this->choices as $category => $choice) {
+        // Loads the policy now, so a failure shows its message rather than an empty drawer.
+        $choices = $this->choices;
+
+        if ($leaveTypeId && $this->loadError === null) {
+            foreach ($choices as $category => $choice) {
                 $isPool = ($choice['balance_type_id'] ?? null) === $leaveTypeId;
                 if ($isPool || collect($choice['types'])->contains('id', $leaveTypeId)) {
                     // "Request" on the Earned Leave balance opens it with the reason still to pick.
@@ -159,7 +174,7 @@ class RequestLeave extends Component
         $service = app(CombinedLeaveService::class);
         $start = Carbon::parse($this->startDate);
         $end = Carbon::parse($this->endDate);
-        if ($start->diffInDays($end) > 366) {
+        if ($this->tooLong($this->startDate, $this->endDate)) {
             return;
         }
         $defaults = $service->defaultAllocations($service->dates($employee, $start, $end, $service->rulesFor($employee, $start)['rules']));
@@ -221,6 +236,12 @@ class RequestLeave extends Component
                 return;
             }
             $this->validate($this->detailRules(), [], $this->detailNames());
+
+            if ($this->tooLong($this->startDate, $this->endDate)) {
+                $this->addError('endDate', 'One request can cover at most a year. Split longer leave into separate requests.');
+
+                return;
+            }
 
             if ($this->category === self::COMBINED) {
                 $combined = $this->combinedEvaluation;
@@ -342,7 +363,30 @@ class RequestLeave extends Component
             return [];
         }
 
-        $year = app(LeaveYearResolver::class)->forDate($this->startDate !== '' ? Carbon::parse($this->startDate) : Carbon::today());
+        try {
+            return $this->loadChoices($employee);
+        } catch (\Throwable $e) {
+            // Logged with its context; the employee sees a plain message, never a spinner or a raw error.
+            Log::error('Request Leave: the leave policy could not be loaded.', [
+                'user_id' => Auth::id(),
+                'employee_id' => $employee->id,
+                'start_date' => $this->startDate ?: null,
+                'exception' => $e::class,
+                'message' => $e->getMessage(),
+            ]);
+            $this->loadError = self::LOAD_ERROR;
+
+            return [];
+        }
+    }
+
+    /**
+     * @return array<string, array<string, mixed>>
+     */
+    private function loadChoices(Employee $employee): array
+    {
+        // Only a plausible date picks the year: the resolver creates years on demand.
+        $year = app(LeaveYearResolver::class)->forDate($this->validDate($this->startDate) ? Carbon::parse($this->startDate) : Carbon::today());
         $balances = app(LeavePolicyEngine::class)->balances($employee, $year);
         $state = fn (array $row) => match (true) {
             $row['unlimited'] => 'unlimited',
@@ -403,7 +447,8 @@ class RequestLeave extends Component
         $employee = Auth::user()->employee;
         $type = $this->leaveTypeId ? LeaveType::find($this->leaveTypeId) : null;
 
-        if ($this->category !== self::COMBINED || ! $employee || ! $type || ! $this->validDate($this->startDate) || ! $this->validDate($this->endDate)) {
+        if ($this->category !== self::COMBINED || ! $employee || ! $type || ! $this->validDate($this->startDate) || ! $this->validDate($this->endDate)
+            || $this->endDate < $this->startDate || $this->tooLong($this->startDate, $this->endDate)) {
             return null;
         }
 
@@ -429,6 +474,9 @@ class RequestLeave extends Component
         }
 
         $end = $this->validDate($this->endDate) ? $this->endDate : $this->startDate;
+        if ($end < $this->startDate || $this->tooLong($this->startDate, $end)) {
+            return null;
+        }
 
         return app(LeavePolicyEngine::class)->evaluate($employee, $type, Carbon::parse($this->startDate), Carbon::parse($end), $this->isHalfDay);
     }
@@ -469,14 +517,28 @@ class RequestLeave extends Component
         ];
     }
 
+    /**
+     * A real calendar date in a plausible year. While a year is being typed a
+     * date input sends values such as 0002-10-21; evaluating those would walk
+     * two thousand years day by day.
+     */
     private function validDate(string $value): bool
     {
-        return $value !== '' && strtotime($value) !== false;
+        if (! preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $value, $m)) {
+            return false;
+        }
+
+        return checkdate((int) $m[2], (int) $m[3], (int) $m[1]) && (int) $m[1] >= 2000 && (int) $m[1] <= 2100;
+    }
+
+    private function tooLong(string $start, string $end): bool
+    {
+        return Carbon::parse($start)->diffInDays(Carbon::parse($end)) > self::MAX_RANGE_DAYS;
     }
 
     private function resetForm(): void
     {
-        $this->reset(['step', 'category', 'leaveTypeId', 'startDate', 'endDate', 'isHalfDay', 'halfDayPeriod', 'reason', 'remarks', 'attachment', 'submittedId', 'allocations']);
+        $this->reset(['step', 'category', 'leaveTypeId', 'startDate', 'endDate', 'isHalfDay', 'halfDayPeriod', 'reason', 'remarks', 'attachment', 'submittedId', 'allocations', 'loadError']);
         $this->resetErrorBag();
         unset($this->choices, $this->selected, $this->evaluation, $this->combinedEvaluation, $this->submitted);
     }

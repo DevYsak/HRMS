@@ -61,7 +61,7 @@
                         {!! $stat('Pending', $fmt($earned['pending'])) !!}
                     </dl>
                     <div class="mt-4 flex flex-wrap gap-2">
-                        <flux:button size="sm" variant="primary" wire:click="apply({{ $earned['id'] }})">Request Leave</flux:button>
+                        <flux:button size="sm" variant="primary" x-on:click="Livewire.dispatch('open-request-leave', { leaveTypeId: {{ $earned['id'] }} })">Request Leave</flux:button>
                         <flux:button size="sm" x-on:click="earnedDetail = ! earnedDetail" x-bind:aria-expanded="earnedDetail" data-earned-toggle>View Details</flux:button>
                     </div>
                 @endif
@@ -86,7 +86,7 @@
                 @if($compOffType)
                     <div class="mt-4 flex flex-wrap gap-2">
                         @if($compOff['available'] > 0)
-                            <flux:button size="sm" variant="primary" wire:click="apply({{ $compOffType['id'] }})">Request</flux:button>
+                            <flux:button size="sm" variant="primary" x-on:click="Livewire.dispatch('open-request-leave', { leaveTypeId: {{ $compOffType['id'] }} })">Request</flux:button>
                         @endif
                         @if($compOffType['has_balance'])
                             <flux:button size="sm" wire:click="showHistory({{ $compOffType['id'] }})">View History</flux:button>
@@ -110,7 +110,7 @@
                     {!! $stat('Pending', $fmt($b['unpaid']['pending'])) !!}
                 </dl>
                 @if($unpaidType)
-                    <div class="mt-4"><flux:button size="sm" variant="primary" wire:click="apply({{ $unpaidType['id'] }})">Request Leave</flux:button></div>
+                    <div class="mt-4"><flux:button size="sm" variant="primary" x-on:click="Livewire.dispatch('open-request-leave', { leaveTypeId: {{ $unpaidType['id'] }} })">Request Leave</flux:button></div>
                 @endif
             </div>
         </div>
@@ -220,7 +220,7 @@
                                         @endif
                                         <div class="mt-3 flex flex-wrap gap-2">
                                             @if($sub['requestable'] ?? true)
-                                                <flux:button size="sm" variant="primary" wire:click="apply({{ $sub['id'] }})">Request</flux:button>
+                                                <flux:button size="sm" variant="primary" x-on:click="Livewire.dispatch('open-request-leave', { leaveTypeId: {{ $sub['id'] }} })">Request</flux:button>
                                             @endif
                                             @if($sub['has_balance'])<flux:button size="sm" wire:click="showStatement({{ $sub['id'] }})">View Details</flux:button>@endif
                                         </div>
