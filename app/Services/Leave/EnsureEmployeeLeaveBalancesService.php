@@ -109,6 +109,17 @@ class EnsureEmployeeLeaveBalancesService
             return ['status' => self::NO_ENTITLEMENT, 'message' => 'System-controlled type.'] + $row;
         }
 
+        // Leave V2: a historical or inactive type never gets a new balance, and
+        // a Casual, Sick… reason draws on the shared Earned Leave balance and
+        // never holds one of its own.
+        if (LeavePolicyEngine::enabled() && ! $type->isRequestable()) {
+            return ['status' => self::NO_ENTITLEMENT, 'message' => 'Not available for new requests ('.LeaveType::AVAILABILITY_LABELS[$type->availability ?? LeaveType::AVAILABILITY_ACTIVE].').'] + $row;
+        }
+        if (LeavePolicyEngine::enabled()
+            && app(LeaveBalanceSource::class)->for($employee, $type, $year->starts_on)['source'] !== LeaveBalanceSource::OWN) {
+            return ['status' => self::NO_ENTITLEMENT, 'message' => 'Draws on Earned Leave; no balance of its own.'] + $row;
+        }
+
         if (! $this->rules->isEligible($employee, $type, $year)) {
             return ['status' => self::INELIGIBLE, 'message' => 'Not eligible in this leave year (status, joining date or gender).'] + $row;
         }

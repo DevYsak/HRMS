@@ -27,8 +27,11 @@ use App\Services\Audit\AuditService;
 use App\Services\Leave\LeaveAccrualService;
 use App\Services\Leave\LeaveBalanceCalculator;
 use App\Services\Leave\LeaveCarryOverService;
+use App\Services\Leave\LeaveCategory;
 use App\Services\Leave\LeaveLedgerService;
 use App\Services\Leave\LeaveMovementService;
+use App\Services\Leave\LeavePolicyEngine;
+use App\Services\Leave\LeaveRequestEvaluator;
 use App\Services\Leave\LeaveRuleResolver;
 use App\Services\Leave\LeaveYearResolver;
 use App\Services\Notifications\NotificationRecipients;
@@ -206,7 +209,8 @@ class LeaveService
 
         // The employee's policy rule for this type, falling back to the
         // type's own settings where the rule says nothing.
-        $rules = app(LeaveRuleResolver::class)->settings($employee, $leaveType);
+        $v2 = LeavePolicyEngine::enabled();
+        $rules = app(LeaveRuleResolver::class)->settings($employee, $leaveType, $v2 ? $start : null);
 
         // Half-day period required when half day selected
         if ($isHalfDay && $halfDayPeriod === null) {
@@ -218,11 +222,23 @@ class LeaveService
             throw new \DomainException("'{$leaveType->name}' does not allow half-day requests.");
         }
 
+        // Leave V2: the employee never chooses payroll treatment. The leave
+        // category decides it — Unpaid Leave is unpaid, every other category
+        // is paid, with any excess handled by policy (block or LWP).
+        if ($v2) {
+            $category = LeaveCategory::of($leaveType);
+            // Uncategorised, historical, inactive and system types are never requested.
+            if ($category === null || ! $leaveType->isRequestable()) {
+                throw new \DomainException("'{$leaveType->name}' cannot be requested.");
+            }
+            $requestedLeaveStatus = $category === LeaveCategory::UNPAID ? 'unpaid' : 'paid';
+        }
+
         // Paid/Unpaid eligibility
-        if ($requestedLeaveStatus === 'paid' && ! $leaveType->allow_paid_request) {
+        if (! $v2 && $requestedLeaveStatus === 'paid' && ! $leaveType->allow_paid_request) {
             throw new \DomainException("'{$leaveType->name}' can only be requested as unpaid leave.");
         }
-        if ($requestedLeaveStatus === 'unpaid' && ! $leaveType->allow_unpaid_request) {
+        if (! $v2 && $requestedLeaveStatus === 'unpaid' && ! $leaveType->allow_unpaid_request) {
             throw new \DomainException("'{$leaveType->name}' can only be requested as paid leave.");
         }
 
@@ -257,7 +273,7 @@ class LeaveService
 
         // Company holiday block — leave cannot include a holiday that applies
         // to this employee (branch/department/employee scope respected).
-        $holiday = $this->holidayWithinRange($employee, $start, $end);
+        $holiday = $v2 ? null : $this->holidayWithinRange($employee, $start, $end);
         if ($holiday) {
             throw new \DomainException(
                 Carbon::parse($holiday->date)->format('d M Y')." ({$holiday->name}) is already a company holiday. Please exclude it from your leave dates."
@@ -267,7 +283,7 @@ class LeaveService
         // Mandatory December Leave — the company is shut on these dates. They
         // are not drawn from CSL or any other balance, so no leave can be
         // applied on them; working one goes through attendance (Comp Off).
-        $shutdown = DecemberMandatoryDay::whereBetween('date', [$start->toDateString(), $end->toDateString()])
+        $shutdown = $v2 ? null : DecemberMandatoryDay::whereBetween('date', [$start->toDateString(), $end->toDateString()])
             ->orderBy('date')
             ->first();
         if ($shutdown) {
@@ -288,7 +304,13 @@ class LeaveService
         }
 
         // Max consecutive days
-        $days = $isHalfDay ? 0.5 : $this->calculateLeaveDays($start, $end, (bool) $leaveType->is_sandwich_applicable, (int) $leaveType->sandwich_min_days);
+        $evaluation = $v2
+            ? app(LeaveRequestEvaluator::class)->evaluate($employee, $leaveType, $start, $end, $isHalfDay)
+            : null;
+
+        $days = $evaluation !== null
+            ? $evaluation['charged_days']
+            : ($isHalfDay ? 0.5 : $this->calculateLeaveDays($start, $end, (bool) $leaveType->is_sandwich_applicable, (int) $leaveType->sandwich_min_days));
 
         if ($rules['max_consecutive_days'] !== null && $days > $rules['max_consecutive_days']) {
             throw new \DomainException(
@@ -297,7 +319,7 @@ class LeaveService
         }
 
         // Attachment required
-        if ($rules['attachment_required'] && $attachmentPath === null) {
+        if (($evaluation['attachment_required'] ?? $rules['attachment_required']) && $attachmentPath === null) {
             throw new \DomainException("An attachment is required for {$leaveType->name}.");
         }
 
@@ -317,7 +339,14 @@ class LeaveService
         }
 
         // Balance check — only for paid requests (after overlap so conflict errors surface first)
-        if ($requestedLeaveStatus === 'paid') {
+        if ($evaluation !== null) {
+            // Leave V2: the balance it charges (Earned Leave for any Earned
+            // reason), net of pending reservations on that balance, with
+            // excess blocked or converted to LWP by policy.
+            if ($evaluation['blocked']) {
+                throw new \DomainException($evaluation['errors'][0]);
+            }
+        } elseif ($requestedLeaveStatus === 'paid') {
             // The leave year the leave falls in, and net of the days other
             // pending requests already reserve — two requests must not each
             // be accepted against the same available days.
@@ -346,6 +375,12 @@ class LeaveService
             'approved_leave_status' => null,
             'attachment_path' => $attachmentPath,
             'status' => 'pending',
+            'lwp_days' => $evaluation !== null && $evaluation['lwp_days'] > 0 ? $evaluation['lwp_days'] : null,
+            'approval_path' => $evaluation['approval_steps'] ?? null,
+            // V2: the reason stays in leave_type_id; the balance it charges
+            // (the shared Earned Leave balance for a Sick or Casual reason).
+            'main_category' => $evaluation['category'] ?? null,
+            'balance_leave_type_id' => $evaluation['balance_leave_type_id'] ?? null,
         ]);
 
         foreach ($attachments as $file) {
@@ -484,6 +519,7 @@ class LeaveService
             $oldStatus = $leaveRequest->status;
             $oldDays = (float) $leaveRequest->days;
             $oldTypeId = $leaveRequest->leave_type_id;
+            $oldBalanceTypeId = $leaveRequest->balanceTypeId();
             $oldStart = Carbon::parse($leaveRequest->start_date);
             $employee = $leaveRequest->employee;
 
@@ -518,15 +554,28 @@ class LeaveService
                 $data['end_date'] = $end->toDateString();
             }
 
-            $newDays = $isHalfDay ? 0.5 : $this->calculateLeaveDays(
+            $evaluation = LeavePolicyEngine::enabled() && $leaveTypeFresh
+                ? app(LeaveRequestEvaluator::class)->evaluate($employee, $leaveTypeFresh, $start, $end, $isHalfDay, $leaveRequest->id)
+                : null;
+
+            $newDays = $evaluation !== null ? $evaluation['charged_days'] : ($isHalfDay ? 0.5 : $this->calculateLeaveDays(
                 $start, $end,
                 (bool) ($leaveTypeFresh?->is_sandwich_applicable ?? false),
                 (int) ($leaveTypeFresh?->sandwich_min_days ?? 0)
-            );
+            ));
+            $lwpDays = $evaluation !== null
+                ? ($evaluation['lwp_days'] > 0 ? $evaluation['lwp_days'] : null)
+                : $leaveRequest->lwp_days;
+            // The balance it charges follows the (possibly edited) reason. With
+            // V2 off, a changed type charges itself, as every legacy request does.
+            $balanceTypeId = $evaluation !== null
+                ? $evaluation['balance_leave_type_id']
+                : ((int) $data['leave_type_id'] === (int) $oldTypeId ? $leaveRequest->balance_leave_type_id : null);
+            $mainCategory = $evaluation !== null ? $evaluation['category'] : $leaveRequest->main_category;
 
             // Reverse any prior balance deduction if it was approved+paid
             if ($oldStatus === 'approved' && $this->wasApprovedAsPaid($leaveRequest)) {
-                app(LeaveMovementService::class)->reverseUsage($leaveRequest, (int) $oldTypeId, $oldDays, $oldStart, 'Leave re-reviewed', User::find($reviewerId));
+                app(LeaveMovementService::class)->reverseUsage($leaveRequest, $oldBalanceTypeId, $oldDays, $oldStart, 'Leave re-reviewed', User::find($reviewerId));
             }
 
             $reviewer = User::find($reviewerId);
@@ -535,6 +584,16 @@ class LeaveService
             // correction and escalation. Requests already parked in
             // pending_hr are still finished through hrApproval().
             $resolvedStatus = $status;
+
+            // Leave V2: a policy may require HR after the manager. A manager's
+            // approval then hands the request to HR (nothing is debited yet);
+            // HR's approval — or HR approving directly — is final.
+            if ($resolvedStatus === 'approved' && LeavePolicyEngine::enabled()
+                && $oldStatus !== 'pending_hr'
+                && in_array('hr', (array) $leaveRequest->approval_path, true)
+                && ! ($reviewer?->isSuperAdmin() || $reviewer?->canManageEmployees())) {
+                $resolvedStatus = 'pending_hr';
+            }
 
             // An approval must take at least one working day (an edited range
             // can land entirely on non-working days); nothing to approve or debit.
@@ -550,6 +609,9 @@ class LeaveService
                 'is_half_day' => $isHalfDay,
                 'half_day_period' => $isHalfDay ? $halfDayPeriod : null,
                 'days' => $newDays,
+                'lwp_days' => $lwpDays,
+                'main_category' => $mainCategory,
+                'balance_leave_type_id' => $balanceTypeId,
                 'reason' => $data['reason'],
                 'reviewer_id' => $reviewerId,
                 'reviewer_comment' => $comment,
@@ -671,7 +733,8 @@ class LeaveService
 
         return DB::transaction(function () use ($leaveRequest, $hrReviewerId, $decision, $comment, $approvedLeaveStatus, $hrRemark) {
             $employee = $leaveRequest->employee;
-            $newDays = (float) $leaveRequest->days;
+            // Only the paid portion is drawn from the balance (V2 LWP excluded).
+            $newDays = $leaveRequest->paidDays();
 
             // Determine effective approved payment status
             $effectiveStatus = $approvedLeaveStatus ?? $leaveRequest->requested_leave_status ?? 'paid';
@@ -714,7 +777,7 @@ class LeaveService
             // balance and skipped the usage entry entirely.
             if ($decision === 'approved' && $effectiveStatus === 'paid') {
                 app(LeaveMovementService::class)->recordUsage(
-                    $leaveRequest, $newDays, (int) $leaveRequest->leave_type_id,
+                    $leaveRequest, $newDays, $leaveRequest->balanceTypeId(),
                     Carbon::parse($leaveRequest->start_date), enforceBalance: false, actor: User::find($hrReviewerId),
                 );
             }
@@ -769,9 +832,9 @@ class LeaveService
 
                 if ($currentStatus === 'paid' && $newStatus === 'unpaid') {
                     // Return the days to the leave year the leave was taken in.
-                    $movements->reverseUsage($leaveRequest, (int) $leaveRequest->leave_type_id, $days, $start, 'Changed to unpaid by HR', $hr);
+                    $movements->reverseUsage($leaveRequest, $leaveRequest->balanceTypeId(), $days, $start, 'Changed to unpaid by HR', $hr);
                 } elseif ($currentStatus === 'unpaid' && $newStatus === 'paid') {
-                    $balance = $movements->balanceFor($employee->id, (int) $leaveRequest->leave_type_id, $start);
+                    $balance = $movements->balanceFor($employee->id, $leaveRequest->balanceTypeId(), $start);
                     $available = max(0, $movements->approvedAvailable($balance));
 
                     if ($available < $days) {
@@ -780,7 +843,7 @@ class LeaveService
                         );
                     }
 
-                    $movements->recordUsage($leaveRequest, $days, (int) $leaveRequest->leave_type_id, $start, enforceBalance: false, actor: $hr);
+                    $movements->recordUsage($leaveRequest, $days, $leaveRequest->balanceTypeId(), $start, enforceBalance: false, actor: $hr);
                 }
             }
 
@@ -864,7 +927,9 @@ class LeaveService
                 'attachment_required' => $data['attachment_required'] ?? false,
                 'annual_allocation_days' => $data['annual_allocation_days'] ?: null,
                 'is_system_controlled' => $data['is_system_controlled'] ?? false,
-            ],
+                // Leave V2 fields, only when the caller sends them — a caller that
+                // does not know them must never blank what HR configured.
+            ] + array_intersect_key($data, array_flip(['availability', 'leave_category', 'counts_toward_annual_cap', 'consumes_earned_leave', 'description', 'unit', 'icon', 'display_order', 'is_active'])),
         );
     }
 
@@ -1332,7 +1397,7 @@ class LeaveService
             // June leave in July must not credit the new year.
             app(LeaveMovementService::class)->reverseUsage(
                 $leaveRequest,
-                (int) $leaveRequest->leave_type_id,
+                $leaveRequest->balanceTypeId(),
                 (float) $leaveRequest->days,
                 Carbon::parse($leaveRequest->start_date),
                 $reason ? 'Leave cancelled: '.$reason : 'Leave cancelled',
@@ -1468,13 +1533,16 @@ class LeaveService
             ?? $leaveRequest->requested_leave_status
             ?? ($leaveRequest->leaveType?->is_paid ? 'paid' : 'unpaid');
 
-        if ($effectiveStatus === 'paid') {
+        // A V2 LWP portion is never drawn from the balance.
+        $paidDays = round(max(0.0, $newDays - (float) ($leaveRequest->lwp_days ?? 0)), 2);
+
+        if ($effectiveStatus === 'paid' && $paidDays > 0) {
             // Posted to the leave year the leave itself falls in — not today's.
             // A ledger-backed balance records which credit lots it consumed.
             app(LeaveMovementService::class)->recordUsage(
                 $leaveRequest,
-                $newDays,
-                (int) $data['leave_type_id'],
+                $paidDays,
+                $leaveRequest->balanceTypeId(),
                 Carbon::parse($data['start_date']),
             );
         }

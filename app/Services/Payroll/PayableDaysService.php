@@ -283,9 +283,11 @@ class PayableDaysService
 
         $unpaidByDate = [];
         foreach ($requests as $request) {
+            // A V2 policy may convert part of a paid request to LWP; that part
+            // is unpaid from the start, on top of any overdrawn tail.
             $unpaid = $request->effectiveLeaveStatus() === 'unpaid'
                 ? (float) $request->days
-                : $this->uncoveredDays($request);
+                : round((float) ($request->lwp_days ?? 0) + $this->uncoveredDays($request), 2);
             if ($unpaid <= 0) {
                 continue;
             }
@@ -330,13 +332,14 @@ class PayableDaysService
     /**
      * How much of a paid request its balance could not cover: the leave
      * year's overdraw (−approved available), allocated to the latest approved
-     * paid requests of that type first — they are the ones that overdrew it.
+     * paid requests charging that balance first — they are the ones that
+     * overdrew it. A V2 Earned Leave reason charges the shared balance.
      */
     private function uncoveredDays(LeaveRequest $request): float
     {
         $year = $this->leaveYears->forDate(Carbon::parse($request->start_date));
         $balance = LeaveBalance::where('employee_id', $request->employee_id)
-            ->where('leave_type_id', $request->leave_type_id)
+            ->where('leave_type_id', $request->balanceTypeId())
             ->where('year', $year->legacyYear())
             ->first();
         if ($balance === null) {
@@ -350,14 +353,14 @@ class PayableDaysService
 
         /** @var Collection<int, LeaveRequest> $sameYear */
         $sameYear = LeaveRequest::with('leaveType')
-            ->where('employee_id', $request->employee_id)->where('leave_type_id', $request->leave_type_id)->where('status', 'approved')
+            ->where('employee_id', $request->employee_id)->chargedTo($request->balanceTypeId())->where('status', 'approved')
             ->whereDate('start_date', '>=', $year->starts_on->toDateString())->whereDate('start_date', '<=', $year->ends_on->toDateString())
             ->orderByDesc('start_date')->orderByDesc('id')
             ->get()
             ->filter(fn (LeaveRequest $r) => $r->effectiveLeaveStatus() !== 'unpaid');
 
         foreach ($sameYear as $candidate) {
-            $share = min((float) $candidate->days, $overdraw);
+            $share = min($candidate->paidDays(), $overdraw);
             if ($candidate->id === $request->id) {
                 return round($share, 2);
             }

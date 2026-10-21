@@ -92,10 +92,14 @@ class LeaveMovementService
         }
 
         $version = $this->ledger->nextVersion('leave_request', $request->id, LeaveLedgerEntry::TYPE_USAGE);
+        // A V2 Earned Leave request debits the shared balance; its reason
+        // (Sick, Casual…) is recorded on the entry for reporting only.
+        $isReason = (int) $request->leave_type_id !== $leaveTypeId;
         $this->ledger->debit($balance, LeaveLedgerEntry::TYPE_USAGE, $days, $startDate, "usage:leave_request:{$request->id}:v{$version}", [
             'source_type' => 'leave_request',
             'source_id' => $request->id,
-            'reason' => 'Leave approved',
+            'reason' => $isReason ? 'Leave approved — '.($request->leaveType?->name ?? 'reason #'.$request->leave_type_id) : 'Leave approved',
+            'meta' => $isReason ? ['reason_type_id' => (int) $request->leave_type_id, 'reason_type' => $request->leaveType?->name] : null,
             'actor' => $actor,
         ]);
 

@@ -5,6 +5,7 @@ namespace App\Services\Leave;
 use App\Models\LeaveBalance;
 use App\Models\LeaveRequest;
 use App\Models\LeaveYear;
+use Illuminate\Support\Facades\DB;
 
 /**
  * How a balance is built, bucket by bucket (Phase 2A).
@@ -100,13 +101,17 @@ class LeaveBalanceCalculator
     public function pendingFor(int $employeeId, int $leaveTypeId, LeaveYear $year, ?int $excludeRequestId = null): float
     {
         return round((float) LeaveRequest::where('employee_id', $employeeId)
-            ->where('leave_type_id', $leaveTypeId)
+            // The balance each request charges: a V2 Sick or Casual reason
+            // reserves the shared Earned Leave balance, never its own type.
+            ->chargedTo($leaveTypeId)
             ->whereIn('status', self::RESERVING_STATUSES)
             // Unpaid requests never draw on the balance.
             ->where(fn ($q) => $q->whereNull('requested_leave_status')->orWhere('requested_leave_status', 'paid'))
             ->whereDate('start_date', '>=', $year->starts_on->toDateString())
             ->whereDate('start_date', '<=', $year->ends_on->toDateString())
             ->when($excludeRequestId, fn ($q, $id) => $q->where('id', '!=', $id))
-            ->sum('days'), 2);
+            // A V2 LWP portion is never drawn from the balance; historical
+            // requests have none, so this is their full days as before.
+            ->sum(DB::raw('days - COALESCE(lwp_days, 0)')), 2);
     }
 }

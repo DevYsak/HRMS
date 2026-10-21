@@ -73,7 +73,10 @@ class LeaveAccrualService
     {
         $settings = $this->rules->settings($employee, $type);
 
-        if (! in_array($settings['accrual_method'], [LeavePolicyRule::ACCRUAL_MONTHLY, LeavePolicyRule::ACCRUAL_QUARTERLY], true)
+        if (! in_array($settings['accrual_method'], [
+            LeavePolicyRule::ACCRUAL_MONTHLY, LeavePolicyRule::ACCRUAL_QUARTERLY,
+            LeavePolicyRule::ACCRUAL_HALF_YEARLY, LeavePolicyRule::ACCRUAL_ONE_TIME,
+        ], true)
             || $settings['accrual_amount'] <= 0
             || ! $this->rules->isEligible($employee, $type, $leaveYear)) {
             return 'skipped';
@@ -87,6 +90,17 @@ class LeaveAccrualService
         if ($settings['accrual_method'] === LeavePolicyRule::ACCRUAL_QUARTERLY
             && $leaveYear->starts_on->diffInMonths($monthStart) % 3 !== 0) {
             return 'skipped';
+        }
+
+        if ($settings['accrual_method'] === LeavePolicyRule::ACCRUAL_HALF_YEARLY
+            && (int) $leaveYear->starts_on->diffInMonths($monthStart) % 6 !== 0) {
+            return 'skipped';
+        }
+
+        // One-time: a single credit, ever, for this employee and type.
+        if ($settings['accrual_method'] === LeavePolicyRule::ACCRUAL_ONE_TIME
+            && LeaveAccrualLog::where('employee_id', $employee->id)->where('leave_type_id', $type->id)->exists()) {
+            return 'already';
         }
 
         if (! $this->startedBy($employee, $settings, $monthStart)) {
