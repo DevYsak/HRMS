@@ -35,6 +35,11 @@ class MyLeaveBalances extends Component
     /** balances | history | statement | requests */
     public string $panel = 'balances';
 
+    /** Inside My Time Off, whose tab bar drives the panel (no tab bar of its own). */
+    public bool $embedded = false;
+
+    public const PANELS = ['balances', 'requests', 'history', 'statement'];
+
     public ?int $historyTypeId = null;
 
     public ?string $historyMonth = null;
@@ -132,7 +137,7 @@ class MyLeaveBalances extends Component
         }
 
         $today = Carbon::today()->toDateString();
-        $base = fn () => LeaveRequest::with('leaveType')->where('employee_id', $this->employee->id);
+        $base = fn () => LeaveRequest::with(['leaveType' => fn ($q) => $q->withTrashed(), 'reviewer', 'hrReviewer'])->where('employee_id', $this->employee->id);
 
         return [
             'pending' => $base()->whereIn('status', ['pending', 'pending_hr'])->orderBy('start_date')->get(),
@@ -164,16 +169,28 @@ class MyLeaveBalances extends Component
         $this->panel = 'requests';
     }
 
+    /** My Time Off's tabs choose the panel shown. */
+    #[On('leave-panel')]
+    public function showPanel(string $panel): void
+    {
+        if (in_array($panel, self::PANELS, true)) {
+            $this->panel = $panel;
+        }
+    }
+
     public function showHistory(int $leaveTypeId): void
     {
         $this->historyTypeId = $leaveTypeId;
         $this->panel = 'history';
+        // My Time Off follows to its Leave History tab.
+        $this->dispatch('leave-view', view: 'history', sub: 'ledger');
     }
 
     public function showStatement(int $leaveTypeId): void
     {
         $this->statementTypeId = $leaveTypeId;
         $this->panel = 'statement';
+        $this->dispatch('leave-view', view: 'history', sub: 'statement');
     }
 
     public function apply(int $leaveTypeId): void

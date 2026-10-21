@@ -45,7 +45,8 @@ class LeaveCategoryBalances
      *     comp_off: array{available: float, credits: float, used: float, pending: float, subtypes: array<int, array<string, mixed>>},
      *     unpaid: array{used: float, pending: float, types: array<int, array{id: int, name: string, code: ?string}>},
      *     other_paid: array<int, array<string, mixed>>,
-     *     historical_balances: int
+     *     historical_balances: int,
+     *     historical: array<int, array<string, mixed>>
      * }
      */
     public function forEmployee(Employee $employee, LeaveYear $year): array
@@ -117,6 +118,12 @@ class LeaveCategoryBalances
             'historical_balances' => $held
                 ->filter(fn (LeaveType $t) => $this->isHistoricalBalance($t, $pool))
                 ->count(),
+            // The same rows, for the Historical Leave Balances list (read only).
+            'historical' => $held
+                ->filter(fn (LeaveType $t) => $this->isHistoricalBalance($t, $pool))
+                ->map($row)
+                ->filter(fn (array $r) => $r['credits'] != 0 || $r['used'] != 0)
+                ->values()->all(),
         ];
     }
 

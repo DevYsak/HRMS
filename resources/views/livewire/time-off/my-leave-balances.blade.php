@@ -1,4 +1,4 @@
-<div class="space-y-4">
+<div class="space-y-4" data-leave-balances-panel="{{ $panel }}">
     @php
         $fmt = fn ($v) => $v === null ? '—' : rtrim(rtrim(number_format((float) $v, 2), '0'), '.');
         $signed = fn ($v) => ($v > 0 ? '+' : '').$fmt($v);
@@ -13,12 +13,17 @@
     @endforeach
 
     <div class="flex flex-wrap items-center justify-between gap-3">
-        <div class="flex max-w-full gap-1 overflow-x-auto rounded-xl bg-zinc-100 p-1 dark:bg-white/5">
-            @foreach(['balances' => 'My Balances', 'requests' => 'Pending & Upcoming', 'history' => 'Transaction History', 'statement' => 'Month-wise Statement'] as $key => $label)
-                <button type="button" wire:click="$set('panel', '{{ $key }}')"
-                    class="shrink-0 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold {{ $panel === $key ? 'bg-white text-orange-600 shadow-sm dark:bg-zinc-800' : 'text-zinc-600 dark:text-zinc-400' }}">{{ $label }}</button>
-            @endforeach
-        </div>
+        @if($embedded)
+            {{-- Inside My Time Off its tab bar picks the panel; only the year is chosen here. --}}
+            <p class="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{{ ['balances' => 'Current balances', 'requests' => 'Pending & upcoming requests', 'history' => 'Balance movements', 'statement' => 'Month-wise statement'][$panel] ?? '' }}</p>
+        @else
+            <div class="flex max-w-full gap-1 overflow-x-auto rounded-xl bg-zinc-100 p-1 dark:bg-white/5">
+                @foreach(['balances' => 'My Balances', 'requests' => 'Pending & Upcoming', 'history' => 'Transaction History', 'statement' => 'Month-wise Statement'] as $key => $label)
+                    <button type="button" wire:click="$set('panel', '{{ $key }}')"
+                        class="shrink-0 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold {{ $panel === $key ? 'bg-white text-orange-600 shadow-sm dark:bg-zinc-800' : 'text-zinc-600 dark:text-zinc-400' }}">{{ $label }}</button>
+                @endforeach
+            </div>
+        @endif
         <div class="flex items-center gap-2 text-xs text-zinc-500">
             <span>Leave year</span>
             <select wire:model.live="leaveYearId" class="rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs dark:border-white/10 dark:bg-zinc-900">
@@ -29,7 +34,9 @@
         </div>
     </div>
 
-    @if($panel === 'balances' && \App\Services\Leave\LeavePolicyEngine::enabled())
+    {{-- A V2 policy (one with Earned Leave) gets the category view; a legacy
+         policy keeps its own cards, exactly as My Time Off's header decides. --}}
+    @if($panel === 'balances' && \App\Services\Leave\LeavePolicyEngine::enabled() && ($this->v2Balances === null || $this->v2Balances['earned'] !== null))
         @include('livewire.time-off.partials.v2-balances')
     @elseif($panel === 'balances')
         @php
@@ -180,35 +187,92 @@
     @endif
 
     @if($panel === 'requests')
-        @php $g = $this->requestGroups; @endphp
+        @php
+            $g = $this->requestGroups;
+            $chip = fn (string $status) => match ($status) {
+                'approved' => ['Approved', 'emerald'],
+                'rejected' => ['Rejected', 'rose'],
+                'cancelled' => ['Cancelled', 'zinc'],
+                'more_info_requested' => ['Needs info', 'blue'],
+                default => ['Pending', 'amber'],
+            };
+            $rows = collect($g['pending'] ?? [])->merge($g['needs_info'] ?? [])->merge($g['upcoming'] ?? [])->merge($g['rejected'] ?? []);
+            $dates = fn ($r) => $r->start_date->format('d M Y').(! $r->end_date->eq($r->start_date) ? ' – '.$r->end_date->format('d M Y') : '');
+            $category = fn ($r) => $r->isCombined() ? 'Combined Leave' : ($r->main_category ? \App\Services\Leave\LeaveCategory::label($r->main_category) : ($r->leaveType?->name ?? 'Leave'));
+            $reasonOf = fn ($r) => ($r->isCombined() || $r->main_category) ? $r->leaveType?->name : null;
+            $approver = fn ($r) => $r->hrReviewer?->name ?? $r->reviewer?->name;
+            $cancellable = fn ($r) => in_array($r->status, ['pending', 'pending_hr', 'approved'], true);
+            // View: open the full application row in Leave History (table or phone card).
+            $viewDetails = fn ($r) => "\$dispatch('leave-view', { view: 'history', sub: 'requests' }); setTimeout(() => ['request-{$r->id}', 'request-card-{$r->id}'].map(i => document.getElementById(i)).find(e => e && e.offsetParent)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250)";
+        @endphp
         <div class="grid grid-cols-2 gap-3 md:grid-cols-5">
             @foreach(['Pending' => count($g['pending'] ?? []), 'Needs Information' => count($g['needs_info'] ?? []), 'Approved Upcoming' => count($g['upcoming'] ?? []), 'Rejected' => count($g['rejected'] ?? []), 'Encashment Pending' => $g['encashment_pending'] ?? 0] as $label => $n)
-                <div class="rounded-xl border border-zinc-200 bg-white p-3 dark:border-white/10 dark:bg-zinc-900">
-                    <div class="text-[10px] font-bold uppercase tracking-widest text-zinc-500">{{ $label }}</div>
-                    <div class="text-xl font-extrabold text-zinc-900 dark:text-white">{{ $n }}</div>
+                <div class="ui-surface p-3">
+                    <div class="text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">{{ $label }}</div>
+                    <div class="text-xl font-bold tabular-nums text-zinc-900 dark:text-white">{{ $n }}</div>
                 </div>
             @endforeach
         </div>
-        <div class="overflow-x-auto rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-white/10 dark:bg-zinc-900">
-            <table class="min-w-full text-xs">
-                <thead class="bg-zinc-50 text-left text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:bg-white/5">
-                    <tr><th class="px-3 py-2">Leave Type</th><th class="px-3 py-2">Dates</th><th class="px-3 py-2 text-right">Days</th><th class="px-3 py-2">Current Stage</th><th class="px-3 py-2">Status</th></tr>
-                </thead>
-                <tbody class="divide-y divide-zinc-100 dark:divide-white/5">
-                    @forelse(collect($g['pending'] ?? [])->merge($g['needs_info'] ?? [])->merge($g['upcoming'] ?? [])->merge($g['rejected'] ?? []) as $r)
-                        <tr wire:key="req-{{ $r->id }}">
-                            <td class="px-3 py-2">{{ $r->leaveType?->name }}</td>
-                            <td class="px-3 py-2">{{ $r->start_date->format('d M Y') }}@if(! $r->end_date->eq($r->start_date)) – {{ $r->end_date->format('d M Y') }}@endif</td>
-                            <td class="px-3 py-2 text-right">{{ $fmt($r->days) }}</td>
-                            <td class="px-3 py-2">{{ \App\Livewire\TimeOff\MyLeaveBalances::stage($r) }}</td>
-                            <td class="px-3 py-2"><flux:badge size="sm">{{ str_replace('_', ' ', $r->status) }}</flux:badge></td>
-                        </tr>
-                    @empty
-                        <tr><td colspan="5" class="px-3 py-8 text-center text-sm text-zinc-500">Nothing pending or upcoming.</td></tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
+
+        @if($rows->isEmpty())
+            <div class="ui-surface p-8 text-center text-sm text-zinc-500 dark:text-zinc-400">Nothing pending or upcoming.</div>
+        @else
+            {{-- Desktop / tablet table --}}
+            <div class="ui-surface hidden overflow-x-auto sm:block" data-requests-table>
+                <table class="min-w-full text-sm">
+                    <thead class="bg-zinc-50 text-left text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:bg-white/5 dark:text-zinc-400">
+                        <tr><th class="px-4 py-2.5">Dates</th><th class="px-4 py-2.5">Leave</th><th class="px-4 py-2.5">Reason</th><th class="px-4 py-2.5 text-right">Days</th><th class="px-4 py-2.5">Status</th><th class="px-4 py-2.5">Current Stage</th><th class="px-4 py-2.5">Approver</th><th class="px-4 py-2.5 text-right">Actions</th></tr>
+                    </thead>
+                    <tbody class="divide-y divide-zinc-100 dark:divide-white/5">
+                        @foreach($rows as $r)
+                            @php [$chipLabel, $chipColor] = $chip($r->status); @endphp
+                            <tr wire:key="req-{{ $r->id }}">
+                                <td class="whitespace-nowrap px-4 py-2.5 font-medium text-zinc-900 dark:text-white">{{ $dates($r) }}</td>
+                                <td class="px-4 py-2.5 text-zinc-700 dark:text-zinc-200">{{ $category($r) }}</td>
+                                <td class="px-4 py-2.5 text-zinc-500 dark:text-zinc-400">{{ $reasonOf($r) ?? '—' }}</td>
+                                <td class="px-4 py-2.5 text-right tabular-nums">{{ $fmt($r->days) }}</td>
+                                <td class="px-4 py-2.5"><x-pulse.badge :color="$chipColor">{{ $chipLabel }}</x-pulse.badge></td>
+                                <td class="px-4 py-2.5 text-zinc-600 dark:text-zinc-300">{{ \App\Livewire\TimeOff\MyLeaveBalances::stage($r) }}</td>
+                                <td class="px-4 py-2.5 text-zinc-600 dark:text-zinc-300">{{ $approver($r) ?? '—' }}</td>
+                                <td class="whitespace-nowrap px-4 py-2.5 text-right">
+                                    @if($embedded)
+                                        <flux:button size="xs" variant="ghost" x-on:click="{{ $viewDetails($r) }}">View</flux:button>
+                                    @endif
+                                    @if($embedded && $cancellable($r))
+                                        <flux:button size="xs" variant="ghost" wire:click="$parent.cancelRequest({{ $r->id }})" wire:confirm="Cancel this leave request?">Cancel</flux:button>
+                                    @endif
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+
+            {{-- Phones: one card per request --}}
+            <ul class="space-y-2 sm:hidden" data-requests-cards>
+                @foreach($rows as $r)
+                    @php [$chipLabel, $chipColor] = $chip($r->status); @endphp
+                    <li wire:key="req-card-{{ $r->id }}" class="ui-surface p-4">
+                        <div class="flex items-start justify-between gap-2">
+                            <div>
+                                <p class="text-sm font-semibold text-zinc-900 dark:text-white">{{ $dates($r) }}</p>
+                                <p class="text-xs text-zinc-500 dark:text-zinc-400">{{ $category($r) }}@if($reasonOf($r)) · {{ $reasonOf($r) }}@endif · {{ $fmt($r->days) }} {{ \Illuminate\Support\Str::plural('day', (float) $r->days) }}</p>
+                            </div>
+                            <x-pulse.badge :color="$chipColor">{{ $chipLabel }}</x-pulse.badge>
+                        </div>
+                        <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ \App\Livewire\TimeOff\MyLeaveBalances::stage($r) }}@if($approver($r)) · {{ $approver($r) }}@endif</p>
+                        @if($embedded)
+                            <div class="mt-2 flex gap-2">
+                                <flux:button size="xs" variant="ghost" x-on:click="{{ $viewDetails($r) }}">View</flux:button>
+                                @if($cancellable($r))
+                                    <flux:button size="xs" variant="ghost" wire:click="$parent.cancelRequest({{ $r->id }})" wire:confirm="Cancel this leave request?">Cancel</flux:button>
+                                @endif
+                            </div>
+                        @endif
+                    </li>
+                @endforeach
+            </ul>
+        @endif
     @endif
 
     @if($panel === 'history')
