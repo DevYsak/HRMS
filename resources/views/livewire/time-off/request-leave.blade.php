@@ -3,15 +3,18 @@
 
     $fmt = fn ($v) => rtrim(rtrim(number_format((float) $v, 2), '0'), '.');
     $date = fn (?string $d) => $d ? \Illuminate\Support\Carbon::parse($d)->format('d M Y') : '—';
-    $categoryIcon = [LeaveCategory::EARNED => 'sparkles', LeaveCategory::SPECIAL => 'heart', LeaveCategory::COMP_OFF => 'arrow-path-rounded-square', LeaveCategory::UNPAID => 'banknotes'];
+    $categoryIcon = [LeaveCategory::EARNED => 'sparkles', LeaveCategory::SPECIAL => 'heart', LeaveCategory::COMP_OFF => 'arrow-path-rounded-square', LeaveCategory::UNPAID => 'banknotes', 'combined' => 'squares-plus'];
     $categoryTone = [
         LeaveCategory::EARNED => 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400',
         LeaveCategory::SPECIAL => 'bg-sky-50 text-sky-600 dark:bg-sky-500/10 dark:text-sky-400',
+        'combined' => 'bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400',
         LeaveCategory::COMP_OFF => 'bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400',
         LeaveCategory::UNPAID => 'bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400',
     ];
     $steps = [1 => 'Category', 2 => 'Details', 3 => 'Review'];
     $eval = $this->evaluation;
+    // Combined Leave: date-wise allocation (null for every other category).
+    $ceval = $this->combinedEvaluation;
     $selected = $this->selected;
     $label = 'mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-200';
     $input = 'w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-500/20 dark:border-white/10 dark:bg-zinc-900 dark:text-white';
@@ -135,6 +138,19 @@
                                 @error('leaveTypeId')<p class="mt-1 text-xs text-rose-600">{{ $message }}</p>@enderror
                             </div>
                         @endif
+                    @elseif($category === 'combined')
+                        {{-- Combined Leave: one reason for the whole request (labels, no balances). --}}
+                        <div>
+                            <label for="rl-combined-reason" class="{{ $label }}">Reason / leave type <span class="text-rose-500">*</span></label>
+                            <select id="rl-combined-reason" wire:model.live="leaveTypeId" class="{{ $input }}" data-combined-reason>
+                                <option value="">Select a reason…</option>
+                                @foreach($types as $type)
+                                    <option wire:key="creason-{{ $type['id'] }}" value="{{ $type['id'] }}">{{ $type['name'] }}</option>
+                                @endforeach
+                            </select>
+                            <p class="mt-1.5 text-xs text-zinc-500">Paid days use {{ ($choice['balance']['name'] ?? null) ?: 'your Earned Leave' }}; unpaid days use no balance.</p>
+                            @error('leaveTypeId')<p class="mt-1 text-xs text-rose-600">{{ $message }}</p>@enderror
+                        </div>
                     @elseif(count($types) > 1)
                         {{-- Special Leave / Comp Off: each type has its own balance. --}}
                         <fieldset>
@@ -159,7 +175,7 @@
                         </fieldset>
                     @endif
 
-                    @if($selected && ! in_array($category, [LeaveCategory::EARNED, LeaveCategory::UNPAID], true))
+                    @if($selected && in_array($category, [LeaveCategory::SPECIAL, LeaveCategory::COMP_OFF], true))
                         <div class="rounded-xl border border-sky-100 bg-sky-50/60 p-4 dark:border-sky-500/20 dark:bg-sky-500/5" data-selected-balance="{{ $selected['code'] }}">
                             <div class="flex items-baseline justify-between gap-3">
                                 <p class="text-sm font-semibold text-zinc-900 dark:text-white">{{ $selected['name'] }}</p>
@@ -181,6 +197,10 @@
                             @error('endDate')<p class="mt-1 text-xs text-rose-600">{{ $message }}</p>@enderror
                         </div>
                     </div>
+
+                    @if($ceval)
+                        @include('livewire.time-off.partials.combined-allocation', ['ceval' => $ceval])
+                    @endif
 
                     @if($eval)
                         <div class="rounded-xl bg-zinc-50 px-4 py-3 text-sm dark:bg-white/5" data-day-breakdown>
@@ -225,8 +245,9 @@
                     <div>
                         <p class="{{ $label }}">
                             Attachment
-                            <span class="font-normal {{ ($eval['attachment_required'] ?? false) ? 'text-rose-600' : 'text-zinc-400' }}">
-                                ({{ ($eval['attachment_required'] ?? false) ? 'Required' : ($eval['attachment_rule'] ?? 'Optional') }})
+                            @php $attReq = $ceval['attachment_required'] ?? $eval['attachment_required'] ?? false; @endphp
+                            <span class="font-normal {{ $attReq ? 'text-rose-600' : 'text-zinc-400' }}">
+                                ({{ $attReq ? 'Required' : ($ceval['attachment_rule'] ?? $eval['attachment_rule'] ?? 'Optional') }})
                             </span>
                         </p>
                         @if($attachment)
@@ -267,6 +288,9 @@
             @endif
 
             {{-- STEP 3 — review --}}
+            @if($step === 3 && $ceval)
+                @include('livewire.time-off.partials.combined-review', ['ceval' => $ceval])
+            @endif
             @if($step === 3 && $eval)
                 <div class="space-y-4" data-review>
                     <div class="rounded-xl border border-zinc-200 dark:border-white/10">

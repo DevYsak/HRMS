@@ -4,7 +4,9 @@ namespace App\Livewire\TimeOff;
 
 use App\Models\LeaveAttachment;
 use App\Models\LeaveRequest;
+use App\Models\LeaveRequestDay;
 use App\Models\LeaveType;
+use App\Services\Leave\CombinedLeaveService;
 use App\Services\Leave\LeaveCategory;
 use App\Services\Leave\LeavePolicyEngine;
 use App\Services\Leave\LeaveYearResolver;
@@ -29,6 +31,10 @@ use Livewire\WithFileUploads;
  * draws on the same Earned Leave pool. Then dates, half day, reason text and
  * attachment; step 3 reviews the balance before and after.
  *
+ * Combined Leave (when the policy enables it): one request over a date range
+ * where each working date is Full/Half Day, Paid/Unpaid, with one reason for
+ * the whole request (CombinedLeaveService).
+ *
  * Payroll treatment is never chosen here: the policy decides it
  * (LeaveRequestEvaluator), and LeaveService re-checks everything on submit.
  */
@@ -38,6 +44,12 @@ class RequestLeave extends Component
 
     /** The main categories, in order; Special Leave appears only where separately entitled. */
     public const CATEGORIES = [LeaveCategory::EARNED, LeaveCategory::COMP_OFF, LeaveCategory::UNPAID, LeaveCategory::SPECIAL];
+
+    /** Combined Leave: a request mode, not a leave category (never statutory Special Leave). */
+    public const COMBINED = 'combined';
+
+    /** @var array<string, array{type: string, session: ?string}> Combined Leave: date => allocation */
+    public array $allocations = [];
 
     public bool $open = false;
 
@@ -100,7 +112,7 @@ class RequestLeave extends Component
 
     public function chooseCategory(string $category): void
     {
-        if (! in_array($category, self::CATEGORIES, true)) {
+        if (! in_array($category, [...self::CATEGORIES, self::COMBINED], true)) {
             return;
         }
 
@@ -109,6 +121,7 @@ class RequestLeave extends Component
         // One type (usually Comp Off and Unpaid): nothing to pick.
         $this->leaveTypeId = $types->count() === 1 ? $types->first()['id'] : null;
         $this->resetErrorBag();
+        $this->syncAllocations();
     }
 
     public function updatedLeaveTypeId(): void
@@ -123,6 +136,59 @@ class RequestLeave extends Component
     {
         if ($this->endDate === '' || ($this->startDate !== '' && $this->endDate < $this->startDate) || $this->isHalfDay) {
             $this->endDate = $this->startDate;
+        }
+        $this->syncAllocations();
+    }
+
+    public function updatedEndDate(): void
+    {
+        $this->syncAllocations();
+    }
+
+    /**
+     * Combined Leave: one allocation per chargeable date of the range — a
+     * new date starts as a full paid day; a date already set keeps its choice.
+     */
+    public function syncAllocations(): void
+    {
+        $employee = Auth::user()->employee;
+        if ($this->category !== self::COMBINED || ! $employee || ! $this->validDate($this->startDate) || ! $this->validDate($this->endDate) || $this->endDate < $this->startDate) {
+            return;
+        }
+
+        $service = app(CombinedLeaveService::class);
+        $start = Carbon::parse($this->startDate);
+        $end = Carbon::parse($this->endDate);
+        if ($start->diffInDays($end) > 366) {
+            return;
+        }
+        $defaults = $service->defaultAllocations($service->dates($employee, $start, $end, $service->rulesFor($employee, $start)['rules']));
+        $this->allocations = array_intersect_key($this->allocations, $defaults) + $defaults;
+        ksort($this->allocations);
+        unset($this->combinedEvaluation);
+    }
+
+    /** Combined Leave: a half day starts on the first half; a full day has no session. */
+    public function updatedAllocations(mixed $value, string $key): void
+    {
+        if (! str_ends_with($key, '.type')) {
+            return;
+        }
+
+        $date = substr($key, 0, -strlen('.type'));
+        $this->allocations[$date]['session'] = LeaveRequestDay::isHalf((string) $value)
+            ? ($this->allocations[$date]['session'] ?? null) ?: 'first_half'
+            : null;
+    }
+
+    /** Combined Leave: apply the proposed paid → unpaid conversion (the employee reviews it before submitting). */
+    public function applySuggestion(): void
+    {
+        $suggestion = $this->combinedEvaluation['suggestion'] ?? null;
+        if (is_array($suggestion)) {
+            $this->allocations = $suggestion;
+            unset($this->combinedEvaluation);
+            $this->resetErrorBag();
         }
     }
 
@@ -150,11 +216,29 @@ class RequestLeave extends Component
 
         if ($this->step === 2) {
             if ($this->selected === null) {
-                $this->addError('leaveTypeId', $this->category === LeaveCategory::EARNED ? 'Choose a reason for your leave.' : 'Choose a leave type.');
+                $this->addError('leaveTypeId', in_array($this->category, [LeaveCategory::EARNED, self::COMBINED], true) ? 'Choose a reason for your leave.' : 'Choose a leave type.');
 
                 return;
             }
             $this->validate($this->detailRules(), [], $this->detailNames());
+
+            if ($this->category === self::COMBINED) {
+                $combined = $this->combinedEvaluation;
+                if ($combined === null || $combined['blocked']) {
+                    $this->addError('request', $combined['errors'][0] ?? 'Choose the dates for your request.');
+
+                    return;
+                }
+                if ($combined['attachment_required'] && ! $this->attachment) {
+                    $this->addError('attachment', 'An attachment is required for this request.');
+
+                    return;
+                }
+                $this->step = 3;
+
+                return;
+            }
+
             $evaluation = $this->evaluation;
 
             if ($evaluation === null) {
@@ -212,12 +296,14 @@ class RequestLeave extends Component
         $attachments = $this->attachment ? [LeaveAttachment::storeUpload($this->attachment)] : [];
 
         try {
-            $request = $service->submitRequest(
-                $employee, $type, $this->startDate, $this->endDate, $this->reason,
-                $this->isHalfDay, $this->isHalfDay ? $this->halfDayPeriod : null,
-                // Ignored under the V2 engine: the policy decides payroll treatment.
-                'paid', null, $this->remarks ?: null, $attachments,
-            );
+            $request = $this->category === self::COMBINED
+                ? $service->submitCombinedRequest($employee, $type, $this->startDate, $this->endDate, $this->allocations, $this->reason, $attachments)
+                : $service->submitRequest(
+                    $employee, $type, $this->startDate, $this->endDate, $this->reason,
+                    $this->isHalfDay, $this->isHalfDay ? $this->halfDayPeriod : null,
+                    // Ignored under the V2 engine: the policy decides payroll treatment.
+                    'paid', null, $this->remarks ?: null, $attachments,
+                );
         } catch (\DomainException $e) {
             $this->addError('request', $e->getMessage());
             $this->step = 3;
@@ -294,7 +380,34 @@ class RequestLeave extends Component
             ];
         }
 
+        // Combined Leave: offered when the policy enables it, with every reason it allows.
+        $combined = app(CombinedLeaveService::class);
+        if ($combined->rulesFor($employee, Carbon::today())['enabled'] && ($reasons = $combined->reasons($employee, $year)) !== []) {
+            $choices[self::COMBINED] = [
+                'label' => 'Combined Leave',
+                'description' => 'One request: choose full or half day, paid or unpaid, for each date.',
+                'available' => $balances['earned'] && ! $balances['earned']['unlimited'] ? $balances['earned']['available'] : null,
+                'balance_type_id' => null,
+                'balance' => $balances['earned'],
+                'types' => array_map(fn ($r) => $r + ['state' => 'reason'], $reasons),
+            ];
+        }
+
         return $choices;
+    }
+
+    /** Combined Leave: totals, balance and checks for the current allocation; null until a reason and dates are chosen. */
+    #[Computed]
+    public function combinedEvaluation(): ?array
+    {
+        $employee = Auth::user()->employee;
+        $type = $this->leaveTypeId ? LeaveType::find($this->leaveTypeId) : null;
+
+        if ($this->category !== self::COMBINED || ! $employee || ! $type || ! $this->validDate($this->startDate) || ! $this->validDate($this->endDate)) {
+            return null;
+        }
+
+        return app(CombinedLeaveService::class)->evaluate($employee, $type, Carbon::parse($this->startDate), Carbon::parse($this->endDate), $this->allocations);
     }
 
     /** The selected type: an Earned Leave reason (no balance of its own), or a type with its own balance. */
@@ -311,7 +424,7 @@ class RequestLeave extends Component
         $employee = Auth::user()->employee;
         $type = $this->leaveTypeId ? LeaveType::find($this->leaveTypeId) : null;
 
-        if (! $employee || ! $type || ! $this->validDate($this->startDate)) {
+        if (! $employee || ! $type || ! $this->validDate($this->startDate) || $this->category === self::COMBINED) {
             return null;
         }
 
@@ -363,8 +476,8 @@ class RequestLeave extends Component
 
     private function resetForm(): void
     {
-        $this->reset(['step', 'category', 'leaveTypeId', 'startDate', 'endDate', 'isHalfDay', 'halfDayPeriod', 'reason', 'remarks', 'attachment', 'submittedId']);
+        $this->reset(['step', 'category', 'leaveTypeId', 'startDate', 'endDate', 'isHalfDay', 'halfDayPeriod', 'reason', 'remarks', 'attachment', 'submittedId', 'allocations']);
         $this->resetErrorBag();
-        unset($this->choices, $this->selected, $this->evaluation, $this->submitted);
+        unset($this->choices, $this->selected, $this->evaluation, $this->combinedEvaluation, $this->submitted);
     }
 }
