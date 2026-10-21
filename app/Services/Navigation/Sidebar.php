@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Services\AiAssistant;
 use App\Services\Approvals\ApprovalQueueService;
 use App\Services\Help\RouteAccess;
+use App\Services\Leave\LeavePolicyEngine;
 use App\Services\Security\PeopleScope;
 use Closure;
 use Illuminate\Support\Facades\Route;
@@ -294,6 +295,9 @@ class Sidebar
                     ['label' => 'Carry Forward', 'route' => 'time-off.carry-forward'],
                     ['label' => 'Bulk Leave', 'route' => 'time-off.bulk-assign'],
                     ['label' => 'Leave Policies', 'route' => 'time-off.leave-policies'],
+                    // Leave V2 policy engine: shown once the engine is switched on.
+                    ['label' => 'Policies & Assignments', 'route' => 'time-off.policies',
+                        'when' => fn () => LeavePolicyEngine::enabled()],
                     ['label' => 'Leave Settings', 'route' => 'time-off.settings'],
                 ],
             ],

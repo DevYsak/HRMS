@@ -4,7 +4,10 @@ namespace App\Livewire\TimeOff;
 
 use App\Models\LeavePolicy;
 use App\Models\LeaveType;
+use App\Services\Leave\LeaveCategory;
+use App\Services\Leave\LeavePolicyEngine;
 use App\Services\LeaveService;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
@@ -74,6 +77,24 @@ class TimeOffSettings extends Component
 
     public bool $is_system_controlled = false;
 
+    // ── Leave V2 ──────────────────────────────────────────────────────────────
+    /** earned | special | comp_off | unpaid, or '' (only unambiguous legacy categories are derived). */
+    public string $leave_category = '';
+
+    public bool $counts_toward_annual_cap = false;
+
+    /** Special leave only: draw on the Earned Leave balance instead of an entitlement of its own. */
+    public bool $consumes_earned_leave = false;
+
+    public string $description = '';
+
+    public int|string|null $display_order = 0;
+
+    public bool $is_active = true;
+
+    /** active | historical | inactive — only an active type is offered for new requests. */
+    public string $availability = LeaveType::AVAILABILITY_ACTIVE;
+
     // ── Modal state ──────────────────────────────────────────────────────────
     public $editingId = null;
 
@@ -122,6 +143,13 @@ class TimeOffSettings extends Component
             $this->attachment_required = (bool) $type->attachment_required;
             $this->annual_allocation_days = $type->annual_allocation_days ? (float) $type->annual_allocation_days : null;
             $this->is_system_controlled = (bool) $type->is_system_controlled;
+            $this->leave_category = (string) ($type->leave_category ?? '');
+            $this->counts_toward_annual_cap = (bool) $type->counts_toward_annual_cap;
+            $this->consumes_earned_leave = (bool) $type->consumes_earned_leave;
+            $this->description = (string) ($type->description ?? '');
+            $this->display_order = (int) $type->display_order;
+            $this->is_active = (bool) ($type->is_active ?? true);
+            $this->availability = $type->availability ?? LeaveType::AVAILABILITY_ACTIVE;
         } else {
             $this->reset([
                 'name', 'code', 'is_paid', 'color', 'category',
@@ -133,6 +161,7 @@ class TimeOffSettings extends Component
                 'gender_restriction', 'probation_restricted', 'notice_period_restricted',
                 'max_consecutive_days', 'attachment_required',
                 'annual_allocation_days', 'is_system_controlled',
+                'leave_category', 'counts_toward_annual_cap', 'consumes_earned_leave', 'description', 'display_order', 'is_active', 'availability',
             ]);
             $this->is_paid = true;
             $this->color = '#1DB77A';
@@ -192,6 +221,13 @@ class TimeOffSettings extends Component
             'attachment_required' => 'required|boolean',
             'annual_allocation_days' => 'nullable|numeric|min:0|max:365',
             'is_system_controlled' => 'required|boolean',
+            'leave_category' => 'nullable|in:earned,special,comp_off,unpaid',
+            'counts_toward_annual_cap' => 'required|boolean',
+            'consumes_earned_leave' => 'required|boolean',
+            'description' => 'nullable|string|max:255',
+            'display_order' => 'nullable|integer|min:0|max:999',
+            'is_active' => 'required|boolean',
+            'availability' => 'required|in:active,historical,inactive',
         ]);
 
         app(LeaveService::class)->saveLeaveType([
@@ -223,6 +259,14 @@ class TimeOffSettings extends Component
             'attachment_required' => $this->attachment_required,
             'annual_allocation_days' => $this->annual_allocation_days ? (float) $this->annual_allocation_days : null,
             'is_system_controlled' => $this->is_system_controlled,
+            'leave_category' => $this->leave_category ?: null,
+            'counts_toward_annual_cap' => $this->counts_toward_annual_cap,
+            'consumes_earned_leave' => $this->consumes_earned_leave,
+            'description' => $this->description ?: null,
+            'display_order' => (int) $this->display_order,
+            // Availability decides whether the type is offered; is_active follows it.
+            'availability' => $this->availability,
+            'is_active' => $this->availability === LeaveType::AVAILABILITY_ACTIVE,
         ], $this->editingId);
 
         $this->closeModal();
@@ -237,6 +281,41 @@ class TimeOffSettings extends Component
         \Flux::toast('Leave type deleted.');
     }
 
+    /**
+     * How Leave V2 treats a type, for the settings list: its role, and whether
+     * employees can request it now.
+     *
+     * @param  Collection<int, int>  $pools  leave types holding a policy's Earned Leave balance
+     * @return array{label: string, requestable: bool, note: ?string}
+     */
+    public static function v2Role(LeaveType $type, Collection $pools): array
+    {
+        $category = LeaveCategory::of($type);
+        $availability = $type->availability ?? LeaveType::AVAILABILITY_ACTIVE;
+
+        $label = match (true) {
+            $availability === LeaveType::AVAILABILITY_HISTORICAL => $type->is_system_controlled ? 'Historical / system' : 'Historical',
+            $type->is_system_controlled => 'System',
+            $availability === LeaveType::AVAILABILITY_INACTIVE => 'Inactive',
+            $pools->contains($type->id) => 'Earned balance',
+            $category === LeaveCategory::EARNED => 'Earned reason',
+            $category === LeaveCategory::SPECIAL => $type->consumes_earned_leave ? 'Special · draws on Earned' : 'Special leave',
+            $category === LeaveCategory::COMP_OFF => 'Comp Off',
+            $category === LeaveCategory::UNPAID => 'Unpaid leave',
+            default => 'Uncategorised',
+        };
+
+        return [
+            'label' => $label,
+            'requestable' => $type->isRequestable() && $category !== null,
+            'note' => match (true) {
+                $type->category === 'wfh' => 'Use the WFH module',
+                $type->is_system_controlled => 'Not available for employee requests',
+                default => null,
+            },
+        ];
+    }
+
     public function render()
     {
         abort_unless(Auth::user()->canManageSettings(), 403);
@@ -246,6 +325,10 @@ class TimeOffSettings extends Component
             // appear as something HR can still assign.
             'leaveTypes' => LeaveType::orderBy('name')->get(),
             'retiredCount' => LeaveType::onlyTrashed()->count(),
+            // Leave V2: each type's role (Earned balance, Earned reason,
+            // Special, Comp Off, Unpaid, Historical…) and request availability.
+            'v2Enabled' => LeavePolicyEngine::enabled(),
+            'earnedPools' => LeavePolicy::whereNotNull('earned_leave_type_id')->pluck('earned_leave_type_id'),
             // The carry-forward ceiling is a property of the leave policy, not
             // of the type, so the screen has to read it from there or it will
             // describe a limit that no longer decides anything.

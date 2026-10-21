@@ -52,11 +52,26 @@
                                     <span
                                         class="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-zinc-100 dark:bg-zinc-800 text-zinc-500 rounded">{{ $type->code }}</span>
                                 @endif
-                                <span class="px-2 py-0.5 text-[10px] font-bold rounded tracking-wide uppercase"
-                                    style="background-color: {{ $type->color }}22; color: {{ $type->color }}">
-                                    {{ $type->is_paid ? 'PAID' : 'UNPAID' }} &bull;
-                                    {{ strtoupper(str_replace('_', ' ', $type->category ?? 'other')) }}
-                                </span>
+                                @if($v2Enabled)
+                                    @php $role = \App\Livewire\TimeOff\TimeOffSettings::v2Role($type, $earnedPools); @endphp
+                                    <span class="px-2 py-0.5 text-[10px] font-bold rounded tracking-wide uppercase"
+                                        style="background-color: {{ $type->color }}22; color: {{ $type->color }}" data-type-role="{{ $role['label'] }}">
+                                        {{ $type->is_paid ? 'PAID' : 'UNPAID' }} &bull; {{ strtoupper($role['label']) }}
+                                    </span>
+                                    <span @class([
+                                        'px-1.5 py-0.5 text-[10px] font-bold rounded',
+                                        'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' => $role['requestable'],
+                                        'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400' => ! $role['requestable'],
+                                    ]) data-type-requestable="{{ $role['requestable'] ? 'yes' : 'no' }}">
+                                        {{ $role['requestable'] ? 'Available for new requests' : 'Not available for new requests' }}{{ $role['note'] ? ' · '.$role['note'] : '' }}
+                                    </span>
+                                @else
+                                    <span class="px-2 py-0.5 text-[10px] font-bold rounded tracking-wide uppercase"
+                                        style="background-color: {{ $type->color }}22; color: {{ $type->color }}">
+                                        {{ $type->is_paid ? 'PAID' : 'UNPAID' }} &bull;
+                                        {{ strtoupper(str_replace('_', ' ', $type->category ?? 'other')) }}
+                                    </span>
+                                @endif
                                 @if($type->is_monthly_accrual)
                                     <span
                                         class="px-1.5 py-0.5 text-[10px] font-bold bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-400 rounded">Accrual</span>
@@ -145,10 +160,14 @@
                             </div>
                         </div>
 
-                        {{-- Active badge --}}
-                        <span
-                            class="shrink-0 px-2.5 py-1 text-[10px] font-bold rounded-full border bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800/40">
-                            Active
+                        {{-- Status: Active / Historical only / Inactive --}}
+                        @php $availability = $type->availability ?? \App\Models\LeaveType::AVAILABILITY_ACTIVE; @endphp
+                        <span @class([
+                            'shrink-0 px-2.5 py-1 text-[10px] font-bold rounded-full border',
+                            'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800/40' => $availability === \App\Models\LeaveType::AVAILABILITY_ACTIVE,
+                            'bg-zinc-100 text-zinc-500 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700' => $availability !== \App\Models\LeaveType::AVAILABILITY_ACTIVE,
+                        ]) data-type-status="{{ $availability }}">
+                            {{ $availability === \App\Models\LeaveType::AVAILABILITY_ACTIVE ? 'Active' : \App\Models\LeaveType::AVAILABILITY_LABELS[$availability] }}
                         </span>
 
                         {{-- Delete (hover) --}}
@@ -298,6 +317,31 @@
                                 <option value="unpaid">Unpaid</option>
                                 <option value="other">Other</option>
                             </flux:select>
+
+                            {{-- Leave V2: how employees see and request this type. --}}
+                            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2" data-leave-v2-type-fields>
+                                <flux:select wire:model="leave_category" label="Employee category">
+                                    <option value="">Not set (comp off, unpaid and statutory kinds are derived)</option>
+                                    <option value="earned">Earned Leave (the balance, or a reason such as Casual or Sick)</option>
+                                    <option value="special">Special / statutory leave</option>
+                                    <option value="comp_off">Comp Off</option>
+                                    <option value="unpaid">Unpaid Leave / LWP</option>
+                                </flux:select>
+                                <flux:input type="number" min="0" wire:model="display_order" label="Display order" />
+                            </div>
+                            <flux:input wire:model="description" label="Description" placeholder="e.g. For personal work, short absence etc." />
+                            <div class="flex flex-wrap gap-x-6 gap-y-2">
+                                <flux:checkbox wire:model="counts_toward_annual_cap" label="Counts toward annual paid leave cap" />
+                                <flux:checkbox wire:model="consumes_earned_leave" label="Special leave: draws on Earned Leave (no entitlement of its own)" />
+                            </div>
+                            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                <flux:select wire:model="availability" label="Status" data-availability-select>
+                                    @foreach(\App\Models\LeaveType::AVAILABILITY_LABELS as $value => $text)
+                                        <option value="{{ $value }}">{{ $text }}</option>
+                                    @endforeach
+                                </flux:select>
+                                <p class="self-end pb-2 text-xs text-zinc-500">Historical types stay readable in old requests and history, are never offered for new requests and never get new balances.</p>
+                            </div>
 
                             <div class="space-y-1.5">
                                 <flux:label>Color</flux:label>

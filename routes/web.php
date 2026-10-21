@@ -119,6 +119,7 @@ use App\Livewire\TimeOff\HistoricalBalances;
 use App\Livewire\TimeOff\LeaveAllocationPolicies;
 use App\Livewire\TimeOff\LeaveCarryForward;
 use App\Livewire\TimeOff\LeaveManagement;
+use App\Livewire\TimeOff\LeavePolicyEditor;
 use App\Livewire\TimeOff\LeaveReconciliation;
 use App\Livewire\TimeOff\LeaveRegularisation;
 use App\Livewire\TimeOff\LeaveYearRollover;
@@ -306,6 +307,10 @@ Route::middleware(['auth'])->group(function () {
             ->middleware('can:run_leave_rollover');
         Route::get('/leave-management/reconciliation', LeaveReconciliation::class)->name('reconciliation')
             ->middleware('can:reconcile_leave');
+        // Leave V2: policies, the annual paid cap, subtype rules and assignments.
+        // Settings-level, like the other leave configuration pages.
+        Route::get('/leave-management/policies', LeavePolicyEditor::class)->name('policies')
+            ->middleware('role:manage-settings');
     });
 
     // --------------------------------------------------
