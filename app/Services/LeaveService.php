@@ -24,6 +24,7 @@ use App\Services\Approvals\ApprovalGuard;
 use App\Services\Attendance\HolidayResolver;
 use App\Services\Attendance\WorkingDayResolver;
 use App\Services\Audit\AuditService;
+use App\Services\Leave\CombinedLeaveService;
 use App\Services\Leave\LeaveAccrualService;
 use App\Services\Leave\LeaveBalanceCalculator;
 use App\Services\Leave\LeaveCarryOverService;
@@ -396,9 +397,141 @@ class LeaveService
             ]);
         }
 
-        // Notify approvers — reporting manager + dept head + all in-scope HR,
-        // plus the team lead/backup chain (v4 Part 3.2) when the employee is on
-        // an active team. Deduplicated by user id so nobody is pinged twice.
+        $this->notifyNewRequest($request, $employee, $startDate);
+
+        return $request;
+    }
+
+    /**
+     * Submit a Combined Leave request (Leave V2): ONE request over a date
+     * range, each chargeable date Full/Half Day, Paid/Unpaid.
+     *
+     * The header holds the totals — days = paid + unpaid units, lwp_days =
+     * unpaid units — so the pending reservation and the single debit at
+     * approval charge the paid units exactly once (never per date as well).
+     * The day rows hold the per-date allocation payroll and attendance read.
+     *
+     * @param  array<string, array{type?: string, session?: ?string}>  $allocations  date => allocation
+     * @param  array<int, array<string, mixed>>  $attachments
+     */
+    public function submitCombinedRequest(
+        Employee $employee,
+        LeaveType $reason,
+        string $startDate,
+        string $endDate,
+        array $allocations,
+        string $reasonText,
+        array $attachments = [],
+        ?User $actor = null,
+    ): LeaveRequest {
+        if (! LeavePolicyEngine::enabled()) {
+            throw new \DomainException('Combined Leave is not available.');
+        }
+        if (! $reason->isRequestable()) {
+            throw new \DomainException("'{$reason->name}' cannot be requested.");
+        }
+
+        $start = Carbon::parse($startDate)->startOfDay();
+        $end = Carbon::parse($endDate)->startOfDay();
+        $evaluation = app(CombinedLeaveService::class)->evaluate($employee, $reason, $start, $end, $allocations);
+
+        if ($evaluation['blocked']) {
+            throw new \DomainException($evaluation['errors'][0]);
+        }
+        if ($evaluation['attachment_required'] && $attachments === []) {
+            throw new \DomainException("An attachment is required for {$reason->name}.");
+        }
+
+        $overlap = LeaveRequest::where('employee_id', $employee->id)
+            ->whereIn('status', ['approved', 'pending', 'pending_hr', 'more_info_requested'])
+            ->where('start_date', '<=', $end->toDateString())
+            ->where('end_date', '>=', $start->toDateString())
+            ->first();
+        if ($overlap) {
+            $s = $overlap->status === 'approved' ? 'approved' : 'pending';
+            throw new \DomainException(
+                "You already have a {$s} leave from {$overlap->start_date->format('d M Y')} to {$overlap->end_date->format('d M Y')}."
+            );
+        }
+
+        $request = DB::transaction(function () use ($employee, $reason, $start, $end, $evaluation, $reasonText, $attachments, $actor) {
+            $request = LeaveRequest::create([
+                'employee_id' => $employee->id,
+                'leave_type_id' => $reason->id,
+                'start_date' => $start->toDateString(),
+                'end_date' => $end->toDateString(),
+                'is_half_day' => false,
+                'half_day_period' => null,
+                'days' => $evaluation['charged_units'],
+                'reason' => $reasonText,
+                // Payroll treatment comes from the date allocation, never a choice here.
+                'requested_leave_status' => $evaluation['paid_units'] > 0 ? 'paid' : 'unpaid',
+                'approved_leave_status' => null,
+                'attachment_path' => $attachments[0]['path'] ?? null,
+                'status' => 'pending',
+                'lwp_days' => $evaluation['unpaid_units'] > 0 ? $evaluation['unpaid_units'] : null,
+                'approval_path' => $evaluation['approval_steps'],
+                'main_category' => $evaluation['category'],
+                'balance_leave_type_id' => $evaluation['balance_leave_type_id'],
+                'request_mode' => LeaveRequest::MODE_COMBINED,
+            ]);
+
+            foreach ($evaluation['rows'] as $row) {
+                $request->dayAllocations()->create([
+                    'date' => $row['date'],
+                    'day_status' => $row['status'],
+                    'allocation_type' => $row['allocation'],
+                    'paid_units' => $row['paid_units'],
+                    'unpaid_units' => $row['unpaid_units'],
+                    'session' => $row['session'],
+                    'is_excluded' => ! $row['chargeable'],
+                    'exclusion_reason' => $row['exclusion'],
+                    'balance_leave_type_id' => $row['paid_units'] > 0 ? $evaluation['balance_leave_type_id'] : null,
+                    'metadata' => $row['chargeable'] ? null : ['label' => $row['label']],
+                ]);
+            }
+
+            foreach ($attachments as $file) {
+                if (empty($file['path'])) {
+                    continue;
+                }
+                $request->attachments()->create([
+                    'type' => $file['type'] ?? 'supporting_document',
+                    'path' => $file['path'],
+                    'original_name' => $file['original_name'] ?? basename($file['path']),
+                    'mime_type' => $file['mime_type'] ?? null,
+                    'size' => $file['size'] ?? 0,
+                ]);
+            }
+
+            app(AuditService::class)->event('LEAVE_COMBINED_SUBMITTED', AuditService::LEAVE, $request,
+                new: [
+                    'reason_type' => $reason->name,
+                    'start_date' => $start->toDateString(),
+                    'end_date' => $end->toDateString(),
+                    'paid_units' => $evaluation['paid_units'],
+                    'unpaid_units' => $evaluation['unpaid_units'],
+                    'half_days' => $evaluation['half_day_count'],
+                    'balance_type' => $evaluation['balance_type'],
+                    'allocation' => collect($evaluation['rows'])->mapWithKeys(fn ($r) => [$r['date'] => $r['allocation'].($r['session'] ? ':'.$r['session'] : '')])->all(),
+                ],
+                actor: $actor ?? $employee->user);
+
+            return $request;
+        });
+
+        $this->notifyNewRequest($request, $employee, $start->toDateString());
+
+        return $request->fresh(['dayAllocations', 'leaveType']);
+    }
+
+    /**
+     * Notify approvers of a new request — reporting manager + dept head + all
+     * in-scope HR, plus the team lead/backup chain (v4 Part 3.2) when the
+     * employee is on an active team. Deduplicated by user id.
+     */
+    private function notifyNewRequest(LeaveRequest $request, Employee $employee, string $startDate): void
+    {
         $request->load(['employee.user', 'leaveType']);
 
         $recipients = collect();
@@ -436,7 +569,6 @@ class LeaveService
             })
         ));
 
-        return $request;
     }
 
     /**
@@ -523,6 +655,19 @@ class LeaveService
             $oldStart = Carbon::parse($leaveRequest->start_date);
             $employee = $leaveRequest->employee;
 
+            // A Combined request is reviewed as submitted: its dates, reason and
+            // date-wise allocation are fixed; a reviewer approves or rejects it.
+            $combined = $leaveRequest->isCombined();
+            if ($combined) {
+                $data = [
+                    'leave_type_id' => $leaveRequest->leave_type_id,
+                    'start_date' => Carbon::parse($leaveRequest->start_date)->toDateString(),
+                    'end_date' => Carbon::parse($leaveRequest->end_date)->toDateString(),
+                    'reason' => $data['reason'] ?? $leaveRequest->reason,
+                    'is_half_day' => false,
+                ];
+            }
+
             $start = Carbon::parse($data['start_date']);
             $end = Carbon::parse($data['end_date']);
             $isHalfDay = (bool) ($data['is_half_day'] ?? false);
@@ -548,21 +693,23 @@ class LeaveService
             // Re-apply the cross-request sandwich bridge on the (possibly edited)
             // dates, excluding this request itself so it never bridges to its own
             // old range. Keeps stored dates and the day-count consistent.
-            if (! $isHalfDay && $leaveTypeFresh) {
+            if (! $isHalfDay && $leaveTypeFresh && ! $combined) {
                 [$start, $end] = $this->resolveSandwichBridge($employee, $leaveTypeFresh, $start, $end, $leaveRequest->id);
                 $data['start_date'] = $start->toDateString();
                 $data['end_date'] = $end->toDateString();
             }
 
-            $evaluation = LeavePolicyEngine::enabled() && $leaveTypeFresh
+            $evaluation = LeavePolicyEngine::enabled() && $leaveTypeFresh && ! $combined
                 ? app(LeaveRequestEvaluator::class)->evaluate($employee, $leaveTypeFresh, $start, $end, $isHalfDay, $leaveRequest->id)
                 : null;
 
-            $newDays = $evaluation !== null ? $evaluation['charged_days'] : ($isHalfDay ? 0.5 : $this->calculateLeaveDays(
+            // Combined: the header totals derived from its day rows (paid +
+            // unpaid units, unpaid units as LWP) — never recalculated here.
+            $newDays = $combined ? (float) $leaveRequest->days : ($evaluation !== null ? $evaluation['charged_days'] : ($isHalfDay ? 0.5 : $this->calculateLeaveDays(
                 $start, $end,
                 (bool) ($leaveTypeFresh?->is_sandwich_applicable ?? false),
                 (int) ($leaveTypeFresh?->sandwich_min_days ?? 0)
-            ));
+            )));
             $lwpDays = $evaluation !== null
                 ? ($evaluation['lwp_days'] > 0 ? $evaluation['lwp_days'] : null)
                 : $leaveRequest->lwp_days;
@@ -599,6 +746,12 @@ class LeaveService
             // can land entirely on non-working days); nothing to approve or debit.
             if ($resolvedStatus === 'approved' && $newDays <= 0) {
                 throw new \DomainException('These dates contain no working days — there is no leave to approve.');
+            }
+
+            // Combined: the paid units must still fit the balance at approval.
+            // Never converted here — payroll treatment is the employee's to review.
+            if ($combined && in_array($resolvedStatus, ['approved', 'pending_hr'], true)) {
+                app(CombinedLeaveService::class)->assertPaidUnitsCovered($leaveRequest);
             }
 
             $leaveRequest->update([
@@ -819,6 +972,11 @@ class LeaveService
 
         if ($currentStatus === $newStatus) {
             throw new \DomainException('The leave is already set to '.$newStatus.'.');
+        }
+
+        // A Combined request's payroll treatment is its date allocation.
+        if ($leaveRequest->isCombined()) {
+            throw new \DomainException('This Combined Leave request is paid and unpaid by date. Reject it and ask for a new request to change the allocation.');
         }
 
         $employee = $leaveRequest->employee;

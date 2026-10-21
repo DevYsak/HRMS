@@ -6,6 +6,7 @@ use App\Models\AttendanceSetting;
 use App\Models\DecemberMandatoryDay;
 use App\Models\Employee;
 use App\Models\LeaveRequest;
+use App\Models\LeaveRequestDay;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
 
@@ -235,7 +236,12 @@ class WorkingDayResolver
             ->where('status', 'approved')
             ->whereDate('start_date', '<=', $end->toDateString())
             ->whereDate('end_date', '>=', $start->toDateString())
-            ->get(['start_date', 'end_date', 'is_half_day']);
+            ->get(['id', 'start_date', 'end_date', 'is_half_day', 'request_mode']);
+        // A Combined request says per date how much is leave (1 or 0.5).
+        $combinedUnits = LeaveRequestDay::whereIn('leave_request_id', $leaves->where('request_mode', LeaveRequest::MODE_COMBINED)->pluck('id'))
+            ->where('is_excluded', false)
+            ->get(['date', 'paid_units', 'unpaid_units'])
+            ->mapWithKeys(fn (LeaveRequestDay $d) => [$d->date->toDateString() => (float) $d->paid_units + (float) $d->unpaid_units]);
 
         $joining = $employee->joining_date ? Carbon::parse($employee->joining_date)->startOfDay() : null;
         $lastDay = $employee->exitRecord?->last_working_day ? Carbon::parse($employee->exitRecord->last_working_day)->startOfDay() : null;
@@ -257,7 +263,9 @@ class WorkingDayResolver
 
             $days[$key] = [
                 'state' => $state,
-                'leave_days' => $state === self::APPROVED_LEAVE ? ($leave?->is_half_day ? 0.5 : 1.0) : 0.0,
+                'leave_days' => $state === self::APPROVED_LEAVE
+                    ? ($leave?->request_mode === LeaveRequest::MODE_COMBINED ? (float) ($combinedUnits[$key] ?? 0.0) : ($leave?->is_half_day ? 0.5 : 1.0))
+                    : 0.0,
             ];
         }
 

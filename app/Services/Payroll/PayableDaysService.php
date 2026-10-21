@@ -283,6 +283,18 @@ class PayableDaysService
 
         $unpaidByDate = [];
         foreach ($requests as $request) {
+            // A Combined request says per date what is unpaid: read it, never infer it.
+            if ($request->isCombined()) {
+                foreach ($request->dayAllocations()->where('unpaid_units', '>', 0)->get(['date', 'unpaid_units']) as $day) {
+                    $date = $day->date->toDateString();
+                    if ($date >= $start->toDateString() && $date <= $end->toDateString()) {
+                        $unpaidByDate[$date] = ($unpaidByDate[$date] ?? 0.0) + (float) $day->unpaid_units;
+                    }
+                }
+
+                continue;
+            }
+
             // A V2 policy may convert part of a paid request to LWP; that part
             // is unpaid from the start, on top of any overdrawn tail.
             $unpaid = $request->effectiveLeaveStatus() === 'unpaid'
