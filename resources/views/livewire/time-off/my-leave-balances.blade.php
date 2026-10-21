@@ -29,7 +29,9 @@
         </div>
     </div>
 
-    @if($panel === 'balances')
+    @if($panel === 'balances' && \App\Services\Leave\LeavePolicyEngine::enabled())
+        @include('livewire.time-off.partials.v2-balances')
+    @elseif($panel === 'balances')
         @php
             $o = $this->overview;
             $c = $o['csl'];

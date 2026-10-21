@@ -11,12 +11,14 @@ use App\Services\Leave\ConexusLeavePolicyService;
 use App\Services\Leave\EmployeeLeaveOverviewService;
 use App\Services\Leave\LeaveBalanceCalculator;
 use App\Services\Leave\LeaveExpiryService;
+use App\Services\Leave\LeavePolicyEngine;
 use App\Services\Leave\LeaveStatementService;
 use App\Services\Leave\LeaveYearResolver;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Computed;
+use Livewire\Attributes\On;
 use Livewire\Component;
 
 /**
@@ -141,6 +143,25 @@ class MyLeaveBalances extends Component
                 ->whereDate('start_date', '<=', $this->year->ends_on->toDateString())->latest('start_date')->get(),
             'encashment_pending' => LeaveEncashment::where('employee_id', $this->employee->id)->whereIn('status', ['pending', 'pending_finance'])->count(),
         ];
+    }
+
+    /** Leave V2: one Earned Leave balance (with usage by reason), Special Leave, Comp Off and Unpaid. */
+    #[Computed]
+    public function v2Balances(): ?array
+    {
+        return $this->employee ? app(LeavePolicyEngine::class)->balances($this->employee, $this->year) : null;
+    }
+
+    #[On('leave-request-submitted')]
+    public function refreshAfterRequest(): void
+    {
+        unset($this->v2Balances, $this->cards, $this->overview, $this->requestGroups);
+    }
+
+    #[On('show-pending-upcoming')]
+    public function showPendingUpcoming(): void
+    {
+        $this->panel = 'requests';
     }
 
     public function showHistory(int $leaveTypeId): void

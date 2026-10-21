@@ -20,6 +20,7 @@ use App\Services\HolidayWorkService;
 use App\Services\Leave\EmployeeLeaveOverviewService;
 use App\Services\Leave\LeaveAssistantService;
 use App\Services\Leave\LeaveBalanceCalculator;
+use App\Services\Leave\LeavePolicyEngine;
 use App\Services\Leave\LeaveYearResolver;
 use App\Services\LeaveService;
 use App\Services\Notifications\NotificationRecipients;
@@ -274,6 +275,13 @@ class MyTimeOff extends Component
 
     public function openRequestModal(): void
     {
+        // Leave V2: the policy-driven drawer replaces this form.
+        if (LeavePolicyEngine::enabled()) {
+            $this->dispatch('open-request-leave');
+
+            return;
+        }
+
         $this->reset([
             'leave_type_id', 'start_date', 'end_date', 'is_half_day',
             'half_day_period', 'requested_leave_status', 'reason',
@@ -289,6 +297,12 @@ class MyTimeOff extends Component
     #[On('apply-leave')]
     public function applyForType(int $leaveTypeId): void
     {
+        if (LeavePolicyEngine::enabled()) {
+            $this->dispatch('open-request-leave', leaveTypeId: $leaveTypeId);
+
+            return;
+        }
+
         $this->openRequestModal();
         $this->leave_type_id = (string) $leaveTypeId;
     }
@@ -299,6 +313,12 @@ class MyTimeOff extends Component
      */
     public function applyFromPlanner(): void
     {
+        if (LeavePolicyEngine::enabled()) {
+            $this->dispatch('open-request-leave', date: $this->planner_start);
+
+            return;
+        }
+
         $this->reset([
             'leave_type_id', 'is_half_day', 'half_day_period',
             'requested_leave_status', 'reason', 'employee_remarks', 'attachment',
@@ -317,6 +337,12 @@ class MyTimeOff extends Component
      */
     public function applyOnDate(string $date): void
     {
+        if (LeavePolicyEngine::enabled()) {
+            $this->dispatch('open-request-leave', date: $date);
+
+            return;
+        }
+
         $this->reset([
             'leave_type_id', 'is_half_day', 'half_day_period',
             'requested_leave_status', 'reason', 'employee_remarks', 'attachment',
@@ -697,6 +723,11 @@ class MyTimeOff extends Component
         $overview = app(EmployeeLeaveOverviewService::class)->for($employee);
         $leaveYear = $overview['year'];
 
+        // Leave V2: an employee whose policy has an Earned Leave balance sees
+        // the V2 policy (Earned Leave, Special, Comp Off, Unpaid), not CSL/MDL.
+        $v2 = $employee && LeavePolicyEngine::enabled() ? app(LeavePolicyEngine::class)->balances($employee, $leaveYear) : null;
+        $v2 = $v2 !== null && $v2['earned'] !== null ? $v2 : null;
+
         $balances = $employee
             ? $employee->leaveBalances()->with('leaveType')->where('year', $this->filterYear ?: app(LeaveYearResolver::class)->legacyYearFor())->get()
             : collect();
@@ -1017,14 +1048,16 @@ class MyTimeOff extends Component
             'assistantAiAvailable' => $assistant !== null && app(AiAssistant::class)->enabledForUser(Auth::user()),
             'balances' => $balances,
             'overview' => $overview,
+            'v2' => $v2,
             'approvedThisYearDays' => $approvedThisYearDays,
             'availableTotal' => $availableTotal,
             'plannerResult' => $plannerResult,
             'teamAvailability' => $teamAvailability,
             'requests' => $requests,
+            // Historical and inactive types (old WFH, duplicates) are never offered.
             'leaveTypes' => LeaveType::where(function ($q) {
                 $q->where('allow_paid_request', true)->orWhere('allow_unpaid_request', true);
-            })->orderBy('name')->get()->unique('name')->values(),
+            })->where('availability', LeaveType::AVAILABILITY_ACTIVE)->orderBy('name')->get()->unique('name')->values(),
             'encashableTypes' => $encashableTypes,
             'encashments' => $encashments,
             'pendingCount' => $overview['pending_requests'],

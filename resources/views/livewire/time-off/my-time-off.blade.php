@@ -5,7 +5,8 @@
         $fmt = fn ($n) => (float) $n == (int) $n ? (int) $n : number_format((float) $n, 1);
         // Available Leave = CSL + Comp Off approved available (never MDL, never
         // the retired Annual Leave), from EmployeeLeaveOverviewService.
-        $totalAvailable = (float) $overview['available_leave'];
+        // Leave V2: Earned Leave available (Comp Off is shown separately).
+        $totalAvailable = $v2 ? (float) $v2['earned']['available'] : (float) $overview['available_leave'];
         $nextMdl = $overview['next_mdl'];
         $nextHoliday = $upcomingHolidays->first();
         $hour = (int) now()->format('G');
@@ -121,6 +122,11 @@
          expiry alerts, pending/upcoming requests, the ledger timeline and the
          month-wise statement. --}}
     <livewire:time-off.my-leave-balances />
+
+    {{-- Leave V2: the policy-driven Request Leave drawer. --}}
+    @if(\App\Services\Leave\LeavePolicyEngine::enabled())
+        <livewire:time-off.request-leave />
+    @endif
 
 
     {{-- ─── QUICK ACTIONS ─── --}}
@@ -273,7 +279,13 @@
     @php
         $ov = $overview;
         $ovCsl = $ov['csl']['summary'] ?? null;
-        $overviewTiles = [
+        $overviewTiles = $v2 ? [
+            ['label' => 'Policy', 'value' => $v2['policy'], 'sub' => 'Earned Leave '.$fmt($v2['earned']['annual_entitlement'] ?? $v2['annual_cap'] ?? 0).' days/year', 'class' => 'text-base'],
+            ['label' => 'Earned Leave available', 'value' => $fmt($v2['earned']['available']).' days', 'sub' => 'One paid balance · less pending', 'class' => $v2['earned']['available'] < 0 ? 'text-rose-600 dark:text-rose-400' : null],
+            ['label' => 'Special Leave', 'value' => $v2['special']['subtypes'] === [] ? 'None' : count($v2['special']['subtypes']).' '.\Illuminate\Support\Str::plural('type', count($v2['special']['subtypes'])), 'sub' => 'Separately configured', 'class' => null],
+            ['label' => 'Comp Off available', 'value' => $fmt($v2['comp_off']['available']).' days', 'sub' => 'Earned separately', 'class' => null],
+            ['label' => 'Unpaid Leave', 'value' => 'No balance', 'sub' => 'Affects payroll', 'class' => null],
+        ] : [
             ['label' => 'Policy', 'value' => $fmt($ov['policy']['csl_days']).' CSL + '.$ov['policy']['mdl_days'].' MDL', 'sub' => $ov['policy']['name'] ?? 'Leave policy', 'class' => null],
             ['label' => 'Current requestable balance', 'value' => $fmt($ov['available_to_request']).' days', 'sub' => 'CSL + Comp Off, less pending', 'class' => $ov['available_to_request'] < 0 ? 'text-rose-600 dark:text-rose-400' : null],
             ['label' => 'CSL carry forward', 'value' => $fmt($ovCsl['carry_forward'] ?? 0).' days', 'sub' => 'No expiry · never lapses', 'class' => null],
@@ -307,7 +319,9 @@
         @php
             // CSL for the leave year, from the calculator: what the year holds,
             // what is used (incl. encashed) and what is left — never floored.
-            $insCsl = $overview['csl']['summary'] ?? null;
+            $insCsl = $v2 ? ['used' => $v2['earned']['used'], 'encashed' => 0, 'approved_available' => $v2['earned']['approved_available'], 'carry_forward' => $v2['earned']['carry_forward']]
+                : ($overview['csl']['summary'] ?? null);
+            $insName = $v2 ? 'Earned Leave' : 'CSL';
             $insUsed = (float) ($insCsl['used'] ?? 0) + (float) ($insCsl['encashed'] ?? 0);
             $insAvailableReal = (float) ($insCsl['approved_available'] ?? 0);
             $insAvailable = max(0.0, $insAvailableReal);
@@ -329,7 +343,7 @@
                     <div class="rounded-lg bg-violet-50 p-1.5 dark:bg-violet-900/20"><flux:icon.chart-pie class="size-4 text-violet-600 dark:text-violet-400" /></div>
                     <h3 class="text-xs font-black uppercase tracking-[0.12em] text-zinc-600 dark:text-zinc-300">Overview</h3>
                 </div>
-                <span class="text-[10px] font-bold text-zinc-400">CSL · {{ $overview['year']->label }}</span>
+                <span class="text-[10px] font-bold text-zinc-400">{{ $insName }} · {{ $overview['year']->label }}</span>
             </div>
             <div class="flex items-center gap-5">
                 <div class="relative size-32 shrink-0">
@@ -342,7 +356,7 @@
                     </svg>
                     <div class="absolute inset-0 flex flex-col items-center justify-center">
                         <span class="text-2xl font-black text-zinc-900 dark:text-white">{{ $fmt($insAllocated) }}</span>
-                        <span class="text-[9px] font-bold uppercase text-zinc-400">CSL this year</span>
+                        <span class="text-[9px] font-bold uppercase text-zinc-400">{{ $insName }} this year</span>
                     </div>
                 </div>
                 <div class="min-w-0 flex-1 space-y-2.5">
@@ -417,7 +431,12 @@
             </div>
             <p class="mb-4 text-[11px] text-zinc-400">Usage this leave year ({{ $overview['year']->label }}).</p>
             @php
-                $distribution = collect([$overview['csl'], $overview['comp_off']])->filter()
+                $distribution = $v2
+                    ? collect([$v2['earned']])->merge($v2['comp_off']['subtypes'])->merge($v2['special']['subtypes'])
+                        ->map(fn ($r) => ['name' => $r['name'], 'color' => $r['color'], 'summary' => ['used' => $r['used'], 'approved_available' => $r['approved_available']]])
+                        ->filter(fn ($d) => $d['summary']['used'] + $d['summary']['approved_available'] != 0)
+                        ->values()
+                    : collect([$overview['csl'], $overview['comp_off']])->filter()
                     ->map(fn ($c) => ['name' => $c['type']->name, 'color' => $c['type']->color, 'summary' => $c['summary']])
                     ->merge($overview['others']->map(fn ($o) => ['name' => $o['type']->name, 'color' => $o['type']->color, 'summary' => $o['summary']]))
                     ->filter(fn ($d) => $d['summary']['used'] + $d['summary']['approved_available'] != 0)
@@ -1059,6 +1078,13 @@
             </button>
             <ul class="mt-3 space-y-1.5 text-xs text-zinc-600 dark:text-zinc-300" x-show="open" x-transition>
                 @php $pol = $overview['policy']; @endphp
+                @if($v2)
+                    <li>&bull; {{ $v2['policy'] }}: Earned Leave {{ $fmt($v2['earned']['annual_entitlement'] ?? $v2['annual_cap'] ?? 0) }} days/year — one shared paid balance.</li>
+                    <li>&bull; Casual, Sick and other reasons all use your Earned Leave; they have no separate balances.</li>
+                    <li>&bull; Special Leave (maternity, paternity, bereavement…) is configured separately and never uses Earned Leave.</li>
+                    <li>&bull; Comp Off is earned separately; Unpaid Leave needs no balance and affects payroll.</li>
+                    <li>&bull; The leave year runs 1 July – 30 June.</li>
+                @else
                 <li>&bull; {{ $pol['name'] ?? 'Leave policy' }}: {{ $fmt($pol['csl_days'] + $pol['mdl_days']) }} leave days/year = {{ $fmt($pol['csl_days']) }} CSL + {{ $pol['mdl_days'] }} MDL (Mandatory December Leave).</li>
                 <li>&bull; CSL never lapses — unused days carry forward with no cap and no expiry.</li>
                 <li>&bull; MDL is the December shutdown — {{ $pol['mdl_days'] }} fixed dates, not a balance you apply from.</li>
@@ -1067,6 +1093,7 @@
                 <li>&bull; {{ $pol['grant'] }}</li>
                 <li>&bull; Overtime is pre-approved only (₹100/hr), tracked separately.</li>
                 <li>&bull; The leave year runs 1 July – 30 June.</li>
+                @endif
             </ul>
         </div>
     </div>
