@@ -97,6 +97,9 @@ test('the approved company default supplies a missing pattern', function () {
         'status' => 'active',
         'working_days_per_week' => null,
         'working_days' => null,
+        // Fixed, before any leave year in play (as in elpHire()): a random
+        // joining date inside the current year pro-rated the 28 days.
+        'joining_date' => '2024-02-01',
     ]);
 
     $preview = app(LeaveProvisioningService::class)->preview($employee->fresh());
