@@ -65,9 +65,9 @@ test('hero KPI tiles stack their icon on phones and never cut the label to a few
     $stacked = 'flex flex-col items-start gap-2 rounded-xl';
 
     Livewire::actingAs($employee->user)->test(MyTimeOff::class)
-        ->assertSeeHtml($stacked)
-        ->assertSeeHtml('line-clamp-2 break-words text-[10px] font-bold uppercase leading-snug tracking-wide text-zinc-400">Available Leave')
-        ->assertDontSeeHtml('truncate text-[10px] font-bold uppercase tracking-wide text-zinc-400">Available Leave');
+        ->assertSeeHtml('ui-surface flex flex-col items-start gap-2 p-4 sm:flex-row')
+        ->assertSeeHtml('line-clamp-2 break-words text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Available Paid Leave')
+        ->assertDontSeeHtml('truncate text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Available Paid Leave');
 
     Livewire::actingAs(rlUser('hr_admin'))->test(CommandCenter::class)
         ->assertSeeHtml($stacked)

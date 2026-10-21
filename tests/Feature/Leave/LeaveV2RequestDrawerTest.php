@@ -241,10 +241,89 @@ test('WFH, historical and system types never appear in the request flow', functi
 test('My Time Off shows the V2 policy, not CSL and MDL', function () {
     Livewire::actingAs($this->user)->test(MyTimeOff::class)
         ->assertSee('NEXCORE Standard Leave Policy')
-        ->assertSee('Earned Leave available')
-        ->assertSee('Earned Leave 12 days/year')
+        ->assertSee('Available Paid Leave')
+        ->assertSeeInOrder(['Policy Overview', 'Earned Leave', '12 days/year'])
         ->assertDontSee('CSL +')
         ->assertDontSee('CSL carry forward');
+});
+
+test('the My Leave page follows the redesigned order with one Earned Leave figure per place', function () {
+    $component = Livewire::actingAs($this->user)->test(MyTimeOff::class)
+        ->assertSeeInOrder([
+            'Manage your leave balance, requests and upcoming time off.',
+            'Available Paid Leave', 'Pending Requests', 'Approved / Taken This Year', 'Next Holiday',
+            'My Balances', 'Pending &amp; Upcoming', 'Leave History', 'Calendar',
+        ], false)
+        ->assertSeeHtml('data-policy-line')
+        ->assertSeeHtml('data-quick-actions')
+        ->assertSeeHtml('data-planning')
+        ->assertSeeHtml('data-policy-overview')
+        ->assertSeeHtml('data-leave-insights')
+        ->assertSeeHtml('data-holiday-schedule')
+        ->assertSee('Current policy')
+        // The five overview tiles and the Policy Explorer are now one card.
+        ->assertDontSee('Policy Explorer')
+        ->assertDontSee('Earned Leave available');
+
+    $html = $component->html();
+    expect(strpos($html, 'data-leave-tabs'))->toBeLessThan(strpos($html, 'data-quick-actions'))
+        ->and(strpos($html, 'data-quick-actions'))->toBeLessThan(strpos($html, 'data-planning'))
+        ->and(strpos($html, 'data-planning'))->toBeLessThan(strpos($html, 'data-policy-overview'))
+        ->and(strpos($html, 'data-policy-overview'))->toBeLessThan(strpos($html, 'data-leave-insights'));
+});
+
+test('embedded balances follow the page tabs and keep historical balances visible', function () {
+    $old = LeaveType::create([
+        'name' => 'Annual Leave (old policy)', 'code' => 'AOL'.random_int(10, 99), 'category' => 'annual', 'is_paid' => true,
+        'allow_paid_request' => true, 'color' => '#64748b', 'availability' => LeaveType::AVAILABILITY_HISTORICAL, 'is_active' => false,
+    ]);
+    $balance = app(LeaveMovementService::class)->balanceFor($this->employee->id, $old->id, Carbon::parse('2026-07-01'));
+    app(LeaveMovementService::class)->ledgerReady($balance);
+    app(LeaveLedgerService::class)->credit($balance->fresh(), LeaveLedgerEntry::TYPE_BASE, 4, Carbon::parse('2026-07-01'), 'drawer-historical');
+    app(LeaveLedgerService::class)->rebuild($balance->fresh());
+
+    Livewire::actingAs($this->user)->test(MyLeaveBalances::class, ['embedded' => true])
+        // The page owns the tab bar; the component keeps only its year picker.
+        ->assertDontSee('Transaction History')
+        ->assertSeeHtml('data-historical-balances')
+        ->assertSee('Historical Leave Balances')
+        ->assertSee('They cannot be used for new requests.')
+        ->assertSee('Annual Leave (old policy)')
+        ->assertSee('No Earned Leave has been used this leave year.')
+        ->dispatch('leave-panel', panel: 'requests')
+        ->assertSet('panel', 'requests')
+        ->assertSeeHtml('data-leave-balances-panel="requests"')
+        ->dispatch('leave-panel', panel: 'nonsense')
+        ->assertSet('panel', 'requests');
+});
+
+test('Leave History keeps every request, with paid and unpaid days and a Legacy badge on pre-V2 rows', function () {
+    $legacy = LeaveRequest::create([
+        'employee_id' => $this->employee->id, 'leave_type_id' => $this->sick->id,
+        'start_date' => '2026-08-03', 'end_date' => '2026-08-04', 'days' => 2,
+        'reason' => 'Before V2', 'status' => 'cancelled',
+    ]);
+    $current = LeaveRequest::create([
+        'employee_id' => $this->employee->id, 'leave_type_id' => $this->reasons['Casual Leave']->id,
+        'main_category' => LeaveCategory::EARNED, 'balance_leave_type_id' => $this->earned->id,
+        'start_date' => '2026-12-14', 'end_date' => '2026-12-16', 'days' => 3, 'lwp_days' => 1,
+        'reason' => 'Family', 'status' => 'pending',
+    ]);
+
+    $html = Livewire::actingAs($this->user)->test(MyTimeOff::class)
+        ->assertSee('LR-'.str_pad((string) $legacy->id, 4, '0', STR_PAD_LEFT))
+        ->assertSee('LR-'.str_pad((string) $current->id, 4, '0', STR_PAD_LEFT))
+        ->assertSeeInOrder(['Request ID', 'Leave Category', 'Reason / Type', 'Date Range', 'Days', 'Paid', 'Unpaid', 'Status', 'Approver', 'Applied On', 'Actions'])
+        ->assertSeeHtml('data-legacy-badge')
+        ->assertSeeHtml('data-history-cards')
+        ->assertSee('View Request')
+        ->assertSee('Request Another Leave')
+        ->html();
+
+    // Display only: the stored request is untouched.
+    expect($current->fresh()->days)->toEqual('3.00')
+        ->and($current->fresh()->lwp_days)->toEqual('1.00')
+        ->and(substr_count($html, 'data-legacy-badge'))->toBe(1);
 });
 
 test('a special balance granted under an earlier policy shows what was granted, with the policy figure apart', function () {
@@ -280,4 +359,12 @@ test('with the flag off My Time Off keeps its existing request form', function (
 
     Livewire::actingAs($this->user)->test(MyLeaveBalances::class)
         ->assertDontSeeHtml('data-v2-balances');
+});
+
+test('with the flag on, an employee whose policy has no Earned Leave keeps the legacy balance cards', function () {
+    $this->policy->update(['earned_leave_type_id' => null]);
+
+    Livewire::actingAs($this->user)->test(MyLeaveBalances::class, ['embedded' => true])
+        ->assertDontSeeHtml('data-v2-balances')
+        ->assertDontSee('Earned Leave is not set up for your policy yet.');
 });
