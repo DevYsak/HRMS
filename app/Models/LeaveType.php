@@ -24,6 +24,10 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     'gender_restriction', 'probation_restricted', 'notice_period_restricted',
     'max_consecutive_days', 'attachment_required',
     'annual_allocation_days', 'is_system_controlled',
+    // Leave V2
+    'leave_category', 'counts_toward_annual_cap', 'consumes_earned_leave', 'description', 'unit', 'icon', 'display_order', 'is_active',
+    // Leave V2: active for new requests, historical only, or inactive.
+    'availability',
 ])]
 class LeaveType extends Model
 {
@@ -91,6 +95,10 @@ class LeaveType extends Model
             'attachment_required' => 'boolean',
             'annual_allocation_days' => 'decimal:2',
             'is_system_controlled' => 'boolean',
+            'counts_toward_annual_cap' => 'boolean',
+            'consumes_earned_leave' => 'boolean',
+            'display_order' => 'integer',
+            'is_active' => 'boolean',
         ];
     }
 
@@ -117,6 +125,33 @@ class LeaveType extends Model
     public function balanceAdjustments(): HasMany
     {
         return $this->hasMany(LeaveBalanceAdjustment::class);
+    }
+
+    /** Offered for new requests and new balances. */
+    public const AVAILABILITY_ACTIVE = 'active';
+
+    /** Kept for old requests, history and audit only: never requested or provisioned again. */
+    public const AVAILABILITY_HISTORICAL = 'historical';
+
+    /** Switched off for now; may be made active again. */
+    public const AVAILABILITY_INACTIVE = 'inactive';
+
+    public const AVAILABILITY_LABELS = [
+        self::AVAILABILITY_ACTIVE => 'Active for new requests',
+        self::AVAILABILITY_HISTORICAL => 'Historical only',
+        self::AVAILABILITY_INACTIVE => 'Inactive',
+    ];
+
+    /**
+     * Whether an employee can request this type now (Leave V2): live, active,
+     * not historical, and not one the system controls (absence flags, LWP).
+     */
+    public function isRequestable(): bool
+    {
+        return ! $this->trashed()
+            && $this->is_active !== false
+            && ($this->availability ?? self::AVAILABILITY_ACTIVE) === self::AVAILABILITY_ACTIVE
+            && ! $this->is_system_controlled;
     }
 
     /** Whether the employee's gender is eligible to request this leave type. */

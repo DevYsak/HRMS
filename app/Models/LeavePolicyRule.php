@@ -18,6 +18,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'carry_forward_expiry_date', 'max_balance', 'carry_forward_eligible_statuses',
     'probation_restricted', 'notice_period_restricted', 'max_consecutive_days', 'attachment_required', 'allow_half_day',
     'is_active',
+    // Leave V2
+    'excess_handling', 'negative_balance_limit', 'attachment_after_days', 'notice_days', 'allow_past_dates',
+    'past_days_limit', 'future_days_limit', 'encashment_enabled', 'weekend_treatment', 'holiday_treatment',
+    'approval_workflow',
 ])]
 class LeavePolicyRule extends Model
 {
@@ -32,6 +36,14 @@ class LeavePolicyRule extends Model
     public const ACCRUAL_MONTHLY = 'monthly';
 
     public const ACCRUAL_QUARTERLY = 'quarterly';
+
+    public const ACCRUAL_HALF_YEARLY = 'half_yearly';
+
+    /** A single credit, the first month the employee is eligible — never repeated. */
+    public const ACCRUAL_ONE_TIME = 'one_time';
+
+    /** No balance is kept: any number of days may be requested. */
+    public const ACCRUAL_UNLIMITED = 'unlimited';
 
     /**
      * Credits are posted by HR (or a reconciliation), never by a schedule.
@@ -72,6 +84,14 @@ class LeavePolicyRule extends Model
             'attachment_required' => 'boolean',
             'allow_half_day' => 'boolean',
             'is_active' => 'boolean',
+            'negative_balance_limit' => 'decimal:2',
+            'attachment_after_days' => 'decimal:2',
+            'notice_days' => 'integer',
+            'allow_past_dates' => 'boolean',
+            'past_days_limit' => 'integer',
+            'future_days_limit' => 'integer',
+            'encashment_enabled' => 'boolean',
+            'approval_workflow' => 'array',
         ];
     }
 

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -19,6 +20,9 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     'name', 'description', 'statutory_weeks', 'contractual_additional_weeks',
     'bank_holiday_treatment', 'max_carry_over_days', 'carry_over_expiry_months',
     'irregular_accrual_rate', 'mandatory_leave_days', 'is_default', 'is_active',
+    // Leave V2
+    'annual_paid_leave_cap', 'policy_year_type', 'policy_year_start_month', 'policy_year_start_day',
+    'effective_from', 'effective_to', 'earned_leave_type_id',
 ])]
 class LeavePolicy extends Model
 {
@@ -38,6 +42,11 @@ class LeavePolicy extends Model
             'mandatory_leave_days' => 'integer',
             'is_default' => 'boolean',
             'is_active' => 'boolean',
+            'annual_paid_leave_cap' => 'decimal:2',
+            'policy_year_start_month' => 'integer',
+            'policy_year_start_day' => 'integer',
+            'effective_from' => 'date',
+            'effective_to' => 'date',
         ];
     }
 
@@ -49,6 +58,17 @@ class LeavePolicy extends Model
     public function rules(): HasMany
     {
         return $this->hasMany(LeavePolicyRule::class);
+    }
+
+    public function assignments(): HasMany
+    {
+        return $this->hasMany(LeavePolicyAssignment::class);
+    }
+
+    /** The leave type holding this policy's one shared Earned Leave balance. */
+    public function earnedLeaveType(): BelongsTo
+    {
+        return $this->belongsTo(LeaveType::class, 'earned_leave_type_id');
     }
 
     /** Whether bank holidays come out of the entitlement rather than on top. */

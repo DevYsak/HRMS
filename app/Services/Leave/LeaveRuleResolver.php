@@ -40,16 +40,26 @@ class LeaveRuleResolver
     public function __construct(
         private readonly LeaveEntitlementService $engine,
         private readonly LeaveBalanceService $balances,
+        private readonly LeavePolicyAssignmentResolver $assignments,
     ) {}
 
-    public function policyFor(Employee $employee): ?LeavePolicy
+    /**
+     * The employee's policy. With the Leave V2 engine on it comes from
+     * effective-dated assignments (employee > department > company), falling
+     * back to the employee record and then the default — the legacy order.
+     */
+    public function policyFor(Employee $employee, ?CarbonInterface $on = null): ?LeavePolicy
     {
+        if (LeavePolicyEngine::enabled()) {
+            return $this->assignments->policyFor($employee, $on);
+        }
+
         return $employee->leavePolicy ?? LeavePolicy::default();
     }
 
-    public function ruleFor(Employee $employee, LeaveType $type): ?LeavePolicyRule
+    public function ruleFor(Employee $employee, LeaveType $type, ?CarbonInterface $on = null): ?LeavePolicyRule
     {
-        $policy = $this->policyFor($employee);
+        $policy = $this->policyFor($employee, $on);
 
         return $policy
             ? LeavePolicyRule::where('leave_policy_id', $policy->id)->where('leave_type_id', $type->id)->where('is_active', true)->first()
@@ -69,10 +79,10 @@ class LeaveRuleResolver
      *     allow_half_day: bool, rule_id: ?int, policy_id: ?int, policy_name: ?string
      * }
      */
-    public function settings(Employee $employee, LeaveType $type): array
+    public function settings(Employee $employee, LeaveType $type, ?CarbonInterface $on = null): array
     {
-        $rule = $this->ruleFor($employee, $type);
-        $policy = $this->policyFor($employee);
+        $rule = $this->ruleFor($employee, $type, $on);
+        $policy = $this->policyFor($employee, $on);
         $pick = fn (string $ruleKey, mixed $fallback) => $rule && $rule->{$ruleKey} !== null ? $rule->{$ruleKey} : $fallback;
 
         $legacyMethod = $type->code === LeaveProvisioningService::ANNUAL_CODE
@@ -117,6 +127,18 @@ class LeaveRuleResolver
             'max_consecutive_days' => ($v = $pick('max_consecutive_days', $type->max_consecutive_days)) !== null ? (int) $v : null,
             'attachment_required' => (bool) $pick('attachment_required', $type->attachment_required),
             'allow_half_day' => (bool) $pick('allow_half_day', $type->allow_half_day),
+            // Leave V2 — null where the rule says nothing (legacy behaviour).
+            'excess_handling' => $rule?->excess_handling ?: 'block',
+            'negative_balance_limit' => $rule?->negative_balance_limit !== null ? (float) $rule->negative_balance_limit : null,
+            'attachment_after_days' => $rule?->attachment_after_days !== null ? (float) $rule->attachment_after_days : null,
+            'notice_days' => $rule?->notice_days,
+            'allow_past_dates' => $rule?->allow_past_dates,
+            'past_days_limit' => $rule?->past_days_limit,
+            'future_days_limit' => $rule?->future_days_limit,
+            'encashment_enabled' => $rule?->encashment_enabled ?? (bool) $type->allow_encashment,
+            'weekend_treatment' => $rule?->weekend_treatment,
+            'holiday_treatment' => $rule?->holiday_treatment,
+            'approval_workflow' => $rule?->approval_workflow,
             'rule_id' => $rule?->id,
             'policy_id' => $policy?->id,
             'policy_name' => $policy?->name,

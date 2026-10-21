@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -20,6 +21,11 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     'hr_reviewer_id', 'hr_reviewer_comment', 'hr_reviewed_at',
     // Set when HR applied on the employee's behalf (hr_internal_note is never shown to them).
     'applied_by_user_id', 'hr_internal_note',
+    // Leave V2: the LWP portion a policy converted, and the approval steps it required.
+    'lwp_days', 'approval_path',
+    // Leave V2: leave_type_id is the reason (Sick, Casual…); these say which
+    // category it was requested under and which balance it charges.
+    'main_category', 'balance_leave_type_id',
 ])]
 class LeaveRequest extends Model
 {
@@ -36,6 +42,8 @@ class LeaveRequest extends Model
             'hr_reviewed_at' => 'datetime',
             'approved_at' => 'datetime',
             'days' => 'decimal:2',
+            'lwp_days' => 'decimal:2',
+            'approval_path' => 'array',
         ];
     }
 
@@ -97,6 +105,37 @@ class LeaveRequest extends Model
     public function isApproved(): bool
     {
         return $this->status === 'approved';
+    }
+
+    /**
+     * Days of this request drawn from the leave balance: all of them, less
+     * any portion a V2 policy converted to Leave Without Pay. Historical
+     * requests have no LWP portion, so they are unchanged.
+     */
+    public function paidDays(): float
+    {
+        return round(max(0.0, (float) $this->days - (float) ($this->lwp_days ?? 0)), 2);
+    }
+
+    /**
+     * The leave type whose balance this request charges. A V2 Earned Leave
+     * request charges the shared Earned Leave balance whatever its reason;
+     * every historical request charges its own type, exactly as before.
+     */
+    public function balanceTypeId(): int
+    {
+        return (int) ($this->balance_leave_type_id ?? $this->leave_type_id);
+    }
+
+    /** Requests that charge the given leave type's balance (see balanceTypeId()). */
+    public function scopeChargedTo(Builder $query, int $leaveTypeId): Builder
+    {
+        return $query->whereRaw('COALESCE(balance_leave_type_id, leave_type_id) = ?', [$leaveTypeId]);
+    }
+
+    public function balanceLeaveType(): BelongsTo
+    {
+        return $this->belongsTo(LeaveType::class, 'balance_leave_type_id')->withTrashed();
     }
 
     /** Effective paid/unpaid status — approved overrides requested. */

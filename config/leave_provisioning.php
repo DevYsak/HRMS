@@ -39,4 +39,19 @@ return [
 
     'csl_monthly_accrual_enabled' => (bool) env('LEAVE_CSL_MONTHLY_ACCRUAL_ENABLED', false),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Leave V2 policy engine
+    |--------------------------------------------------------------------------
+    |
+    | Categories and subtypes, the annual paid cap, effective-dated policy
+    | assignments, policy-driven paid/LWP treatment and approval paths.
+    | Off locally and in production until the migration preview is
+    | approved; the Leave V2 tests switch it on. Never enable it on live
+    | automatically.
+    |
+    */
+
+    'policy_engine_v2' => (bool) env('LEAVE_POLICY_ENGINE_V2', false),
+
 ];
