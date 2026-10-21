@@ -22,7 +22,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     'irregular_accrual_rate', 'mandatory_leave_days', 'is_default', 'is_active',
     // Leave V2
     'annual_paid_leave_cap', 'policy_year_type', 'policy_year_start_month', 'policy_year_start_day',
-    'effective_from', 'effective_to', 'earned_leave_type_id',
+    'effective_from', 'effective_to', 'earned_leave_type_id', 'combined_leave_rules',
 ])]
 class LeavePolicy extends Model
 {
@@ -47,6 +47,7 @@ class LeavePolicy extends Model
             'policy_year_start_day' => 'integer',
             'effective_from' => 'date',
             'effective_to' => 'date',
+            'combined_leave_rules' => 'array',
         ];
     }
 

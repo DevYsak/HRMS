@@ -26,10 +26,15 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     // Leave V2: leave_type_id is the reason (Sick, Casual…); these say which
     // category it was requested under and which balance it charges.
     'main_category', 'balance_leave_type_id',
+    // Leave V2: 'combined' for a date-wise allocated request (see LeaveRequestDay).
+    'request_mode',
 ])]
 class LeaveRequest extends Model
 {
     use SoftDeletes;
+
+    /** A Combined Leave request: one request, each date allocated full/half, paid/unpaid. */
+    public const MODE_COMBINED = 'combined';
 
     protected function casts(): array
     {
@@ -131,6 +136,23 @@ class LeaveRequest extends Model
     public function scopeChargedTo(Builder $query, int $leaveTypeId): Builder
     {
         return $query->whereRaw('COALESCE(balance_leave_type_id, leave_type_id) = ?', [$leaveTypeId]);
+    }
+
+    /** The date-wise allocation of a Combined Leave request (none for a standard request). */
+    public function dayAllocations(): HasMany
+    {
+        return $this->hasMany(LeaveRequestDay::class)->orderBy('date');
+    }
+
+    public function isCombined(): bool
+    {
+        return $this->request_mode === self::MODE_COMBINED;
+    }
+
+    /** Units on Leave Without Pay: a Combined request's unpaid dates, or a V2 LWP portion. */
+    public function unpaidUnits(): float
+    {
+        return round((float) ($this->lwp_days ?? 0), 2);
     }
 
     public function balanceLeaveType(): BelongsTo
