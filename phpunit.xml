@@ -35,5 +35,7 @@
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
+        <!-- Leave V2 stays off in tests unless a test turns it on (a local .env may enable it). -->
+        <env name="LEAVE_POLICY_ENGINE_V2" value="false"/>
     </php>
 </phpunit>
