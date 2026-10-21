@@ -126,9 +126,15 @@
                 @foreach($b['special']['subtypes'] as $sub)
                     <div wire:key="v2-special-{{ $sub['id'] }}" class="rounded-xl border border-zinc-100 p-4 dark:border-white/5" data-special-card="{{ $sub['code'] }}">
                         <p class="truncate text-sm font-medium text-zinc-700 dark:text-zinc-200">{{ $sub['name'] }}</p>
+                        {{-- Available out of what was actually granted this year; the
+                             policy figure is shown apart when the two differ (a balance
+                             granted under an earlier policy is never rewritten). --}}
                         <p class="mt-1 text-xl font-bold tabular-nums text-zinc-900 dark:text-white">{{ $fmt($sub['available']) }}
-                            @if($sub['annual_entitlement'] !== null)<span class="text-xs font-medium text-zinc-400">/ {{ $fmt($sub['annual_entitlement']) }} days</span>@endif
+                            @if($sub['credits'] > 0)<span class="text-xs font-medium text-zinc-400">/ {{ $fmt($sub['credits']) }} days granted</span>@endif
                         </p>
+                        @if($sub['annual_entitlement'] !== null && abs($sub['annual_entitlement'] - $sub['credits']) > 0.001)
+                            <p class="mt-0.5 text-[11px] text-zinc-500" data-policy-entitlement>Policy entitlement: {{ $fmt($sub['annual_entitlement']) }} days a year</p>
+                        @endif
                         <div class="mt-3 flex flex-wrap gap-2">
                             <flux:button size="xs" variant="primary" wire:click="apply({{ $sub['id'] }})">Request</flux:button>
                             @if($sub['has_balance'])<flux:button size="xs" wire:click="showStatement({{ $sub['id'] }})">View details</flux:button>@endif

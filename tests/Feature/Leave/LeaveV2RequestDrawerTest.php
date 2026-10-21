@@ -239,6 +239,29 @@ test('My Time Off shows the V2 policy, not CSL and MDL', function () {
         ->assertDontSee('CSL carry forward');
 });
 
+test('a special balance granted under an earlier policy shows what was granted, with the policy figure apart', function () {
+    $bereavement = LeaveType::create([
+        'name' => 'Bereavement Leave', 'code' => 'BRV'.random_int(10, 99), 'category' => 'bereavement',
+        'is_paid' => true, 'allow_paid_request' => true, 'color' => '#0ea5e9',
+    ]);
+    LeavePolicyRule::create([
+        'leave_policy_id' => $this->policy->id, 'leave_type_id' => $bereavement->id,
+        'entitlement_method' => LeavePolicyRule::ENTITLEMENT_FIXED, 'fixed_days' => 5,
+        'accrual_method' => LeavePolicyRule::ACCRUAL_UPFRONT, 'is_active' => true,
+    ]);
+    // Granted 10 before the employee moved to this policy; never rewritten.
+    $balance = app(LeaveMovementService::class)->balanceFor($this->employee->id, $bereavement->id, Carbon::parse('2026-07-01'));
+    app(LeaveMovementService::class)->ledgerReady($balance);
+    app(LeaveLedgerService::class)->credit($balance->fresh(), LeaveLedgerEntry::TYPE_BASE, 10, Carbon::parse('2026-07-01'), 'drawer-brv');
+    app(LeaveLedgerService::class)->rebuild($balance->fresh());
+
+    Livewire::actingAs($this->user)->test(MyLeaveBalances::class)
+        ->assertSeeHtml('data-special-card="'.$bereavement->code.'"')
+        ->assertSee('10 days granted')
+        ->assertSee('Policy entitlement: 5 days a year')
+        ->assertDontSee('/ 5 days');
+});
+
 test('with the flag off My Time Off keeps its existing request form', function () {
     config(['leave_provisioning.policy_engine_v2' => false]);
 
