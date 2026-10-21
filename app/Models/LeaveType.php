@@ -157,7 +157,8 @@ class LeaveType extends Model
     /** Whether the employee's gender is eligible to request this leave type. */
     public function isGenderEligible(?string $gender): bool
     {
-        if ($this->gender_restriction === 'none') {
+        // Unset (a model not yet refreshed from the 'none' column default) means no restriction.
+        if (in_array($this->gender_restriction, [null, '', 'none'], true)) {
             return true;
         }
 
