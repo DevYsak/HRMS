@@ -260,6 +260,8 @@ test('the My Leave page follows the redesigned order with one Earned Leave figur
         ->assertSeeHtml('data-policy-overview')
         ->assertSeeHtml('data-leave-insights')
         ->assertSeeHtml('data-holiday-schedule')
+        ->assertSeeHtml('data-recent-applications')
+        ->assertSee('Recent Leave Applications')
         ->assertSee('Current policy')
         // The five overview tiles and the Policy Explorer are now one card.
         ->assertDontSee('Policy Explorer')
@@ -269,7 +271,8 @@ test('the My Leave page follows the redesigned order with one Earned Leave figur
     expect(strpos($html, 'data-leave-tabs'))->toBeLessThan(strpos($html, 'data-quick-actions'))
         ->and(strpos($html, 'data-quick-actions'))->toBeLessThan(strpos($html, 'data-planning'))
         ->and(strpos($html, 'data-planning'))->toBeLessThan(strpos($html, 'data-policy-overview'))
-        ->and(strpos($html, 'data-policy-overview'))->toBeLessThan(strpos($html, 'data-leave-insights'));
+        ->and(strpos($html, 'data-policy-overview'))->toBeLessThan(strpos($html, 'data-leave-insights'))
+        ->and(strpos($html, 'data-leave-insights'))->toBeLessThan(strpos($html, 'data-recent-applications'));
 });
 
 test('embedded balances follow the page tabs and keep historical balances visible', function () {
@@ -289,7 +292,8 @@ test('embedded balances follow the page tabs and keep historical balances visibl
         ->assertSee('Historical Leave Balances')
         ->assertSee('They cannot be used for new requests.')
         ->assertSee('Annual Leave (old policy)')
-        ->assertSee('No Earned Leave has been used this leave year.')
+        ->assertSee('No Earned Leave has been used')
+        ->assertSee('You have not taken any Earned Leave this leave year.')
         ->dispatch('leave-panel', panel: 'requests')
         ->assertSet('panel', 'requests')
         ->assertSeeHtml('data-leave-balances-panel="requests"')

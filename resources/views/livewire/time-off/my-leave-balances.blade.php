@@ -15,7 +15,7 @@
     <div class="flex flex-wrap items-center justify-between gap-3">
         @if($embedded)
             {{-- Inside My Time Off its tab bar picks the panel; only the year is chosen here. --}}
-            <p class="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{{ ['balances' => 'Current balances', 'requests' => 'Pending & upcoming requests', 'history' => 'Balance movements', 'statement' => 'Month-wise statement'][$panel] ?? '' }}</p>
+            <h2 class="text-base font-semibold text-zinc-900 dark:text-white">{{ ['balances' => 'Current Balances', 'requests' => 'Pending & Upcoming Requests', 'history' => 'Balance Movements', 'statement' => 'Month-wise Statement'][$panel] ?? '' }}</h2>
         @else
             <div class="flex max-w-full gap-1 overflow-x-auto rounded-xl bg-zinc-100 p-1 dark:bg-white/5">
                 @foreach(['balances' => 'My Balances', 'requests' => 'Pending & Upcoming', 'history' => 'Transaction History', 'statement' => 'Month-wise Statement'] as $key => $label)

@@ -1054,6 +1054,11 @@ class MyTimeOff extends Component
             'plannerResult' => $plannerResult,
             'teamAvailability' => $teamAvailability,
             'requests' => $requests,
+            // The latest five applications, whatever the Leave History filters say (read only).
+            'recentRequests' => $employee
+                ? $employee->leaveRequests()->with(['leaveType' => fn ($q) => $q->withTrashed(), 'reviewer', 'hrReviewer'])
+                    ->latest('start_date')->latest('id')->limit(5)->get()
+                : collect(),
             // Historical and inactive types (old WFH, duplicates) are never offered.
             'leaveTypes' => LeaveType::where(function ($q) {
                 $q->where('allow_paid_request', true)->orWhere('allow_unpaid_request', true);

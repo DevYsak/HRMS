@@ -150,7 +150,8 @@ test('search filters the leave requests table', function () {
         ->assertSee($familyRequestId)
         ->set('search', 'Doctor')
         ->assertSee($doctorRequestId)
-        ->assertDontSee($familyRequestId);
+        // The Leave History table filters; Recent Leave Applications always lists the latest.
+        ->assertViewHas('requests', fn ($requests) => $requests->pluck('id')->all() === [$doctorRequest->id]);
 });
 
 test('sortBy toggles sort field and direction', function () {
@@ -183,4 +184,29 @@ test('calendar month navigation updates the calendar label', function () {
         ->assertViewHas('calendarLabel', $nextLabel)
         ->call('goToCurrentCalendarMonth')
         ->assertViewHas('calendarLabel', $currentLabel);
+});
+
+test('recent leave applications show the latest five whatever the history filters say', function () {
+    $employee = timeOffEmployee();
+    $this->actingAs($employee->user);
+    $type = timeOffLeaveType(['name' => 'Recent Type Leave']);
+
+    $made = collect(range(1, 6))->map(fn (int $i) => LeaveRequest::create([
+        'employee_id' => $employee->id, 'leave_type_id' => $type->id,
+        'start_date' => now()->subDays(40 - $i)->toDateString(), 'end_date' => now()->subDays(40 - $i)->toDateString(),
+        'days' => 1, 'reason' => 'Recent reason '.$i, 'status' => $i === 6 ? 'pending' : 'approved',
+        'requested_leave_status' => 'paid', 'approved_leave_status' => 'paid',
+    ]));
+
+    $component = Livewire::test(MyTimeOff::class)->set('filterStatus', 'pending');
+    $recent = $component->viewData('recentRequests');
+
+    expect($recent)->toHaveCount(5)
+        ->and($recent->first()->id)->toBe($made->last()->id)
+        ->and($recent->pluck('id'))->not->toContain($made->first()->id);
+
+    $component->assertSeeHtml('data-recent-applications')
+        ->assertSee('Recent Leave Applications')
+        ->assertSee('Encashment History')
+        ->assertSee('Recent reason 2');
 });
