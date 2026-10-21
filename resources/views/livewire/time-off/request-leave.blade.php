@@ -122,23 +122,18 @@
                         </div>
 
                         @if(count($types) > 1)
-                            <fieldset>
-                                <legend class="{{ $label }}">Reason / leave type <span class="text-rose-500">*</span></legend>
-                                <div class="grid grid-cols-1 gap-2 sm:grid-cols-2" role="radiogroup">
+                            <div>
+                                <label for="rl-reason-type" class="{{ $label }}">Reason / leave type <span class="text-rose-500">*</span></label>
+                                {{-- Labels only: a reason never shows or holds a balance. --}}
+                                <select id="rl-reason-type" wire:model.live="leaveTypeId" class="{{ $input }}" data-reason-select>
+                                    <option value="">Select a reason…</option>
                                     @foreach($types as $type)
-                                        <label wire:key="reason-{{ $type['id'] }}" @class([
-                                            'flex cursor-pointer items-center gap-2.5 rounded-xl border px-3 py-2.5 text-sm transition',
-                                            'border-orange-300 bg-orange-50/60 dark:border-orange-500/40 dark:bg-orange-500/10' => $leaveTypeId === $type['id'],
-                                            'border-zinc-200 hover:border-zinc-300 dark:border-white/10' => $leaveTypeId !== $type['id'],
-                                        ]) data-reason="{{ $type['code'] }}">
-                                            <input type="radio" name="leave-reason" value="{{ $type['id'] }}" wire:model.live="leaveTypeId" class="accent-orange-500">
-                                            <span class="font-medium text-zinc-900 dark:text-white">{{ $type['name'] }}</span>
-                                        </label>
+                                        <option wire:key="reason-{{ $type['id'] }}" value="{{ $type['id'] }}" data-reason="{{ $type['code'] }}">{{ $type['name'] }}</option>
                                     @endforeach
-                                </div>
+                                </select>
                                 <p class="mt-1.5 text-xs text-zinc-500">Every reason uses your Earned Leave balance.</p>
-                                @error('leaveTypeId')<p class="mt-2 text-xs text-rose-600">{{ $message }}</p>@enderror
-                            </fieldset>
+                                @error('leaveTypeId')<p class="mt-1 text-xs text-rose-600">{{ $message }}</p>@enderror
+                            </div>
                         @endif
                     @elseif(count($types) > 1)
                         {{-- Special Leave / Comp Off: each type has its own balance. --}}

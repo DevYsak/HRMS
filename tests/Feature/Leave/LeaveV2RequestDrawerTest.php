@@ -110,14 +110,22 @@ test('Earned Leave shows its balance once and the reasons without any balance be
 
     $html = $component->html();
     foreach ($this->reasons as $reason) {
-        $label = str($html)->after('data-reason="'.$reason->code.'"')->before('</label>')->toString();
+        $label = str($html)->after('data-reason="'.$reason->code.'"')->before('</option>')->toString();
         expect($label)->toContain($reason->name)->not->toContain('days available');
     }
     expect(substr_count($html, 'days available'))->toBe(0)
         ->and($html)->not->toContain('data-subtype=');
 
-    // A reason must be chosen before the review.
+    // The reasons are a dropdown, and one must be chosen before the review.
+    expect($html)->toContain('data-reason-select');
     $component->set('startDate', '2026-12-08')->set('endDate', '2026-12-08')->set('reason', 'Fever')
+        ->call('next')
+        ->assertSet('step', 2)
+        ->assertHasErrors('leaveTypeId')
+        // Choosing a reason and then the empty "Select a reason…" option again.
+        ->set('leaveTypeId', $this->sick->id)
+        ->set('leaveTypeId', '')
+        ->assertSet('leaveTypeId', null)
         ->call('next')
         ->assertSet('step', 2)
         ->assertHasErrors('leaveTypeId');
