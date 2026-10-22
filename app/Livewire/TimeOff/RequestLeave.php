@@ -12,10 +12,15 @@ use App\Services\Leave\LeaveCategory;
 use App\Services\Leave\LeavePolicyEngine;
 use App\Services\Leave\LeaveYearResolver;
 use App\Services\LeaveService;
+use App\Services\Security\PeopleScope;
+use App\Services\Security\ScopeResolver;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Livewire\Attributes\Computed;
+use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 use Livewire\Component;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
@@ -38,6 +43,11 @@ use Livewire\WithFileUploads;
  *
  * Payroll treatment is never chosen here: the policy decides it
  * (LeaveRequestEvaluator), and LeaveService re-checks everything on submit.
+ *
+ * HR mode (mounted with hrMode on HR pages): HR first picks an employee in
+ * their apply-on-behalf scope; every category, balance and rule then comes
+ * from THAT employee's policy — never the HR user's own — and the request is
+ * filed through LeaveService's on-behalf path (audited, employee notified).
  */
 class RequestLeave extends Component
 {
@@ -87,10 +97,30 @@ class RequestLeave extends Component
 
     public const LOAD_ERROR = "We couldn't load your current leave policy. Please contact HR.";
 
+    /** HR requesting for an employee (opened with 'open-request-leave-for'). */
+    #[Locked]
+    public bool $hrMode = false;
+
+    /** HR mode: the employee the request is for; checked against scope on every use. */
+    #[Locked]
+    public ?int $forEmployeeId = null;
+
+    public string $employeeSearch = '';
+
+    public function mount(bool $hrMode = false): void
+    {
+        $this->hrMode = $hrMode;
+    }
+
     #[On('open-request-leave')]
     public function openDrawer(?int $leaveTypeId = null, ?string $date = null, ?string $endDate = null): void
     {
         abort_unless(LeavePolicyEngine::enabled(), 404);
+
+        // An HR drawer only answers 'open-request-leave-for'.
+        if ($this->hrMode) {
+            return;
+        }
 
         $this->resetForm();
         $this->open = true;
@@ -119,10 +149,53 @@ class RequestLeave extends Component
         }
     }
 
+    /** HR mode: open for an employee (or to pick one first). */
+    #[On('open-request-leave-for')]
+    public function openForEmployee(?int $employeeId = null): void
+    {
+        abort_unless(LeavePolicyEngine::enabled(), 404);
+
+        if (! $this->hrMode) {
+            return;
+        }
+        abort_unless(Auth::user()->hasPermission('apply_leave_on_behalf'), 403);
+
+        $this->resetForm();
+        $this->forEmployeeId = null;
+        $this->employeeSearch = '';
+        $this->open = true;
+
+        if ($employeeId) {
+            $this->chooseEmployee($employeeId);
+        }
+    }
+
+    /** HR mode: everything after this is that employee's policy, balances and rules. */
+    public function chooseEmployee(int $employeeId): void
+    {
+        $employee = Employee::find($employeeId);
+        abort_unless($this->hrMode && $employee && $this->mayRequestFor($employee), 403);
+
+        $this->resetForm();
+        $this->forEmployeeId = $employee->id;
+        unset($this->subject);
+    }
+
+    public function changeEmployee(): void
+    {
+        $this->resetForm();
+        $this->forEmployeeId = null;
+        unset($this->subject);
+    }
+
     public function close(): void
     {
         $this->open = false;
         $this->resetForm();
+        if ($this->hrMode) {
+            $this->forEmployeeId = null;
+            $this->employeeSearch = '';
+        }
     }
 
     public function chooseCategory(string $category): void
@@ -166,7 +239,7 @@ class RequestLeave extends Component
      */
     public function syncAllocations(): void
     {
-        $employee = Auth::user()->employee;
+        $employee = $this->subject;
         if ($this->category !== self::COMBINED || ! $employee || ! $this->validDate($this->startDate) || ! $this->validDate($this->endDate) || $this->endDate < $this->startDate) {
             return;
         }
@@ -184,9 +257,10 @@ class RequestLeave extends Component
     }
 
     /** Combined Leave: a half day starts on the first half; a full day has no session. */
-    public function updatedAllocations(mixed $value, string $key): void
+    public function updatedAllocations(mixed $value, ?string $key = null): void
     {
-        if (! str_ends_with($key, '.type')) {
+        // The whole map replaced at once: sessions come with it.
+        if ($key === null || ! str_ends_with($key, '.type')) {
             return;
         }
 
@@ -305,11 +379,11 @@ class RequestLeave extends Component
         $this->resetErrorBag();
         $this->validate($this->detailRules(), [], $this->detailNames());
 
-        $employee = Auth::user()->employee;
+        $employee = $this->subject;
         $type = $this->leaveTypeId ? LeaveType::find($this->leaveTypeId) : null;
 
         if (! $employee || ! $type) {
-            $this->addError('request', 'Your employee profile or the leave type could not be found. Contact HR.');
+            $this->addError('request', $this->hrMode ? 'Choose the employee and leave type again.' : 'Your employee profile or the leave type could not be found. Contact HR.');
 
             return;
         }
@@ -317,14 +391,18 @@ class RequestLeave extends Component
         $attachments = $this->attachment ? [LeaveAttachment::storeUpload($this->attachment)] : [];
 
         try {
-            $request = $this->category === self::COMBINED
+            $request = $this->hrMode ? $this->submitForEmployee($service, $employee, $type, $attachments) : ($this->category === self::COMBINED
                 ? $service->submitCombinedRequest($employee, $type, $this->startDate, $this->endDate, $this->allocations, $this->reason, $attachments)
                 : $service->submitRequest(
                     $employee, $type, $this->startDate, $this->endDate, $this->reason,
                     $this->isHalfDay, $this->isHalfDay ? $this->halfDayPeriod : null,
                     // Ignored under the V2 engine: the policy decides payroll treatment.
                     'paid', null, $this->remarks ?: null, $attachments,
-                );
+                ));
+        } catch (AuthorizationException $e) {
+            $this->addError('request', $e->getMessage());
+
+            return;
         } catch (\DomainException $e) {
             $this->addError('request', $e->getMessage());
             $this->step = 3;
@@ -340,6 +418,74 @@ class RequestLeave extends Component
         $this->submittedId = $request->id;
         $this->step = 4;
         $this->dispatch('leave-request-submitted', id: $request->id);
+    }
+
+    /**
+     * HR mode: the same request, filed on the employee's behalf (audited and
+     * notified by LeaveService). Remarks become HR's internal note.
+     *
+     * @param  array<int, array<string, mixed>>  $attachments
+     */
+    private function submitForEmployee(LeaveService $service, Employee $employee, LeaveType $type, array $attachments): LeaveRequest
+    {
+        abort_unless($this->mayRequestFor($employee), 403);
+        $hr = Auth::user();
+
+        return $this->category === self::COMBINED
+            ? $service->applyCombinedOnBehalf($hr, $employee, $type, $this->startDate, $this->endDate, $this->allocations, $this->reason, $this->remarks ?: null, true, $attachments)
+            : $service->applyOnBehalf($hr, $employee, $type, $this->startDate, $this->endDate, $this->reason,
+                $this->isHalfDay, $this->isHalfDay ? $this->halfDayPeriod : null, 'paid', $this->remarks ?: null, true, $attachments);
+    }
+
+    /** HR mode: apply-on-behalf permission, the employee in that scope, and never oneself. */
+    private function mayRequestFor(Employee $employee): bool
+    {
+        $user = Auth::user();
+
+        return $user->hasPermission('apply_leave_on_behalf')
+            && $user->employee?->id !== $employee->id
+            && app(ScopeResolver::class)->covers($user, 'apply_leave_on_behalf', $employee);
+    }
+
+    /** Who the request is for: the signed-in employee, or (HR mode) the employee HR chose. */
+    #[Computed]
+    public function subject(): ?Employee
+    {
+        if (! $this->hrMode) {
+            return Auth::user()->employee;
+        }
+
+        $employee = $this->forEmployeeId ? Employee::with(['user', 'department'])->find($this->forEmployeeId) : null;
+
+        return $employee && $this->mayRequestFor($employee) ? $employee : null;
+    }
+
+    /**
+     * HR mode: working employees in the apply-on-behalf scope, by name or code.
+     *
+     * @return Collection<int, Employee>
+     */
+    #[Computed]
+    public function employeeOptions(): Collection
+    {
+        $user = Auth::user();
+        if (! $this->hrMode || ! $user->hasPermission('apply_leave_on_behalf')) {
+            return collect();
+        }
+
+        $ids = app(ScopeResolver::class)->employeeIds($user, 'apply_leave_on_behalf', false);
+        $term = trim($this->employeeSearch);
+
+        return Employee::query()
+            ->with(['user', 'department'])
+            ->whereIn('status', PeopleScope::WORKING_STATUSES)
+            ->when($ids !== null, fn ($q) => $q->whereIn('id', $ids))
+            ->when($user->employee, fn ($q) => $q->whereKeyNot($user->employee->id))
+            ->when($term !== '', fn ($q) => $q->where(fn ($w) => $w->where('employee_id', 'like', "%{$term}%")
+                ->orWhereHas('user', fn ($u) => $u->where('name', 'like', "%{$term}%"))))
+            ->orderBy('employee_id')
+            ->limit(20)
+            ->get();
     }
 
     public function viewMyRequests(): void
@@ -358,7 +504,7 @@ class RequestLeave extends Component
     #[Computed]
     public function choices(): array
     {
-        $employee = Auth::user()->employee;
+        $employee = $this->subject;
         if (! $employee) {
             return [];
         }
@@ -369,6 +515,7 @@ class RequestLeave extends Component
             // Logged with its context; the employee sees a plain message, never a spinner or a raw error.
             Log::error('Request Leave: the leave policy could not be loaded.', [
                 'user_id' => Auth::id(),
+                'hr_mode' => $this->hrMode,
                 'employee_id' => $employee->id,
                 'start_date' => $this->startDate ?: null,
                 'exception' => $e::class,
@@ -444,7 +591,7 @@ class RequestLeave extends Component
     #[Computed]
     public function combinedEvaluation(): ?array
     {
-        $employee = Auth::user()->employee;
+        $employee = $this->subject;
         $type = $this->leaveTypeId ? LeaveType::find($this->leaveTypeId) : null;
 
         if ($this->category !== self::COMBINED || ! $employee || ! $type || ! $this->validDate($this->startDate) || ! $this->validDate($this->endDate)
@@ -466,7 +613,7 @@ class RequestLeave extends Component
     #[Computed]
     public function evaluation(): ?array
     {
-        $employee = Auth::user()->employee;
+        $employee = $this->subject;
         $type = $this->leaveTypeId ? LeaveType::find($this->leaveTypeId) : null;
 
         if (! $employee || ! $type || ! $this->validDate($this->startDate) || $this->category === self::COMBINED) {
@@ -485,7 +632,7 @@ class RequestLeave extends Component
     public function submitted(): ?LeaveRequest
     {
         return $this->submittedId
-            ? LeaveRequest::with('leaveType')->where('employee_id', Auth::user()->employee?->id)->find($this->submittedId)
+            ? LeaveRequest::with('leaveType')->where('employee_id', $this->subject?->id)->find($this->submittedId)
             : null;
     }
 

@@ -596,13 +596,7 @@ class LeaveService
         bool $notifyEmployee = true,
         array $attachments = [],
     ): LeaveRequest {
-        if (! $hr->hasPermission('apply_leave_on_behalf')) {
-            throw new AuthorizationException('You may not apply leave on behalf of another employee.');
-        }
-
-        if ($hr->employee?->id === $employee->id) {
-            throw new \DomainException('Use My Time Off to apply for your own leave.');
-        }
+        $this->assertMayApplyOnBehalf($hr, $employee);
 
         return DB::transaction(function () use ($hr, $employee, $leaveType, $startDate, $endDate, $reason, $isHalfDay, $halfDayPeriod, $requestedLeaveStatus, $internalNote, $notifyEmployee, $attachments) {
             $request = $this->submitRequest(
@@ -610,28 +604,83 @@ class LeaveService
                 $requestedLeaveStatus, attachments: $attachments,
             );
 
-            $request->forceFill(['applied_by_user_id' => $hr->id, 'hr_internal_note' => $internalNote ?: null])->save();
-
-            app(AuditService::class)->event('LEAVE_APPLIED_ON_BEHALF', AuditService::LEAVE, $request,
-                new: [
-                    'actor_user_id' => $hr->id,
-                    'subject_employee_id' => $employee->id,
-                    'leave_type' => $leaveType->name,
-                    'start_date' => $request->start_date->toDateString(),
-                    'end_date' => $request->end_date->toDateString(),
-                    'days' => (float) $request->days,
-                    'half_day' => $isHalfDay ? $halfDayPeriod : null,
-                    'requested_leave_status' => $requestedLeaveStatus,
-                    'notify_employee' => $notifyEmployee,
-                ],
-                reason: $reason, subjectEmployeeId: $employee->id);
-
-            if ($notifyEmployee && $employee->user) {
-                $employee->user->notify(new LeaveAppliedOnBehalfNotification($request->fresh('leaveType'), $hr->name));
-            }
-
-            return $request;
+            return $this->recordAppliedOnBehalf($hr, $employee, $request, $leaveType, $reason, $internalNote, $notifyEmployee, [
+                'half_day' => $isHalfDay ? $halfDayPeriod : null,
+                'requested_leave_status' => $requestedLeaveStatus,
+            ]);
         });
+    }
+
+    /**
+     * HR files a Leave V2 Combined Leave request for an employee: the same
+     * date-wise request the employee would submit, then the on-behalf record.
+     *
+     * @param  array<string, array{type?: string, session?: ?string}>  $allocations
+     * @param  array<int, array<string, mixed>>  $attachments
+     */
+    public function applyCombinedOnBehalf(
+        User $hr,
+        Employee $employee,
+        LeaveType $reason,
+        string $startDate,
+        string $endDate,
+        array $allocations,
+        string $reasonText,
+        ?string $internalNote = null,
+        bool $notifyEmployee = true,
+        array $attachments = [],
+    ): LeaveRequest {
+        $this->assertMayApplyOnBehalf($hr, $employee);
+
+        return DB::transaction(function () use ($hr, $employee, $reason, $startDate, $endDate, $allocations, $reasonText, $internalNote, $notifyEmployee, $attachments) {
+            $request = $this->submitCombinedRequest($employee, $reason, $startDate, $endDate, $allocations, $reasonText, $attachments, $hr);
+
+            return $this->recordAppliedOnBehalf($hr, $employee, $request, $reason, $reasonText, $internalNote, $notifyEmployee, [
+                'request_mode' => LeaveRequest::MODE_COMBINED,
+                'paid_units' => $request->paidDays(),
+                'unpaid_units' => $request->unpaidUnits(),
+            ]);
+        });
+    }
+
+    /** Applying for someone else needs the permission, the employee in scope, and never oneself. */
+    private function assertMayApplyOnBehalf(User $hr, Employee $employee): void
+    {
+        if (! $hr->hasPermission('apply_leave_on_behalf')) {
+            throw new AuthorizationException('You may not apply leave on behalf of another employee.');
+        }
+
+        if ($hr->employee?->id === $employee->id) {
+            throw new \DomainException('Use My Time Off to apply for your own leave.');
+        }
+    }
+
+    /**
+     * Marks a request as filed by HR, audits it and tells the employee.
+     *
+     * @param  array<string, mixed>  $extra
+     */
+    private function recordAppliedOnBehalf(User $hr, Employee $employee, LeaveRequest $request, LeaveType $leaveType, string $reason, ?string $internalNote, bool $notifyEmployee, array $extra = []): LeaveRequest
+    {
+        $request->forceFill(['applied_by_user_id' => $hr->id, 'hr_internal_note' => $internalNote ?: null])->save();
+
+        app(AuditService::class)->event('LEAVE_APPLIED_ON_BEHALF', AuditService::LEAVE, $request,
+            new: [
+                'actor_user_id' => $hr->id,
+                'subject_employee_id' => $employee->id,
+                'leave_type' => $leaveType->name,
+                'start_date' => $request->start_date->toDateString(),
+                'end_date' => $request->end_date->toDateString(),
+                'days' => (float) $request->days,
+                'notify_employee' => $notifyEmployee,
+            ] + $extra,
+            reason: $reason, subjectEmployeeId: $employee->id);
+
+        if ($notifyEmployee && $employee->user) {
+            $employee->user->notify(new LeaveAppliedOnBehalfNotification($request->fresh('leaveType'), $hr->name));
+        }
+
+        return $request;
     }
 
     /**

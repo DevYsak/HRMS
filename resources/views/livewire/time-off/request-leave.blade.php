@@ -18,13 +18,17 @@
     $ceval = $open ? $this->combinedEvaluation : null;
     $selected = $open ? $this->selected : null;
     $label = 'mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-200';
+    // HR mode: nothing below the employee picker until an employee is chosen.
+    $subject = $open && $hrMode ? $this->subject : null;
+    $picking = $hrMode && $subject === null;
+    $subjectPolicy = $subject ? app(\App\Services\Leave\LeavePolicyAssignmentResolver::class)->policyFor($subject, now())?->name : null;
     $input = 'w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-500/20 dark:border-white/10 dark:bg-zinc-900 dark:text-white';
 @endphp
 
 {{-- Opens instantly in the browser with a short loading state, then the server fills it in.
      If the server never answers, the shell says so instead of spinning forever. --}}
 <div x-data="{ opening: false, slow: false, timer: null }"
-    x-on:open-request-leave.window="if (! $wire.open) { opening = true; slow = false; clearTimeout(timer); timer = setTimeout(() => slow = true, 15000) }"
+    x-on:{{ $hrMode ? 'open-request-leave-for' : 'open-request-leave' }}.window="if (! $wire.open) { opening = true; slow = false; clearTimeout(timer); timer = setTimeout(() => slow = true, 15000) }"
     x-effect="if ($wire.open) { opening = false; clearTimeout(timer) }">
 <div x-show="opening" x-cloak class="fixed inset-0 z-50 flex items-end justify-center sm:items-stretch sm:justify-end" data-request-leave-loading>
     <div class="absolute inset-0 bg-zinc-950/50 backdrop-blur-[2px]" x-on:click="opening = false" aria-hidden="true"></div>
@@ -57,8 +61,8 @@
         {{-- Header --}}
         <header class="flex shrink-0 items-start justify-between gap-4 border-b border-zinc-100 px-5 py-4 dark:border-zinc-800">
             <div class="min-w-0">
-                <h2 id="request-leave-title" class="text-base font-bold text-zinc-900 dark:text-white">Request Leave</h2>
-                <p class="mt-0.5 text-sm text-zinc-500">Submit a new leave application for review.</p>
+                <h2 id="request-leave-title" class="text-base font-bold text-zinc-900 dark:text-white">{{ $hrMode ? 'Request Leave for an Employee' : 'Request Leave' }}</h2>
+                <p class="mt-0.5 text-sm text-zinc-500">{{ $hrMode ? 'Filed on the employee\'s behalf, from their own policy and balances.' : 'Submit a new leave application for review.' }}</p>
             </div>
             <button type="button" wire:click="close" aria-label="Close"
                 class="-mr-1 shrink-0 rounded-lg p-1.5 text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-200">
@@ -66,8 +70,22 @@
             </button>
         </header>
 
+        {{-- HR mode: who the request is for — always visible, never the HR user's own balance. --}}
+        @if($subject)
+            <div class="flex shrink-0 items-start justify-between gap-3 border-b border-zinc-100 bg-orange-50/60 px-5 py-3 text-sm dark:border-zinc-800 dark:bg-orange-500/10" data-requesting-for>
+                <div class="min-w-0">
+                    <p class="text-xs font-medium uppercase tracking-wide text-zinc-500">Requesting for</p>
+                    <p class="font-semibold text-zinc-900 dark:text-white">{{ $subject->user?->name ?? 'Employee' }} <span class="font-normal text-zinc-500">· {{ $subject->employee_id }}</span></p>
+                    <p class="text-xs text-zinc-500">{{ $subject->department?->name ?? 'No department' }} · {{ $subjectPolicy ?? 'No policy assigned' }}</p>
+                </div>
+                @if($step < 4)
+                    <button type="button" wire:click="changeEmployee" class="shrink-0 text-xs font-semibold text-orange-600 hover:underline dark:text-orange-400">Change</button>
+                @endif
+            </div>
+        @endif
+
         {{-- Stepper --}}
-        @if($step < 4)
+        @if($step < 4 && ! $picking)
             <ol class="flex shrink-0 items-center gap-2 border-b border-zinc-100 px-5 py-3 text-sm dark:border-zinc-800" aria-label="Progress">
                 @foreach($steps as $n => $name)
                     <li class="flex flex-1 items-center gap-2 {{ $loop->last ? 'flex-none' : '' }}" @if($step === $n) aria-current="step" @endif>
@@ -94,7 +112,28 @@
                 </div>
             @enderror
 
-            @if($loadError)
+            @if($picking)
+                {{-- HR mode, first: pick the employee in your scope. --}}
+                <div data-employee-picker>
+                    <label class="{{ $label }}" for="rl-employee-search">Select employee <span class="text-rose-500">*</span></label>
+                    <input id="rl-employee-search" type="search" wire:model.live.debounce.300ms="employeeSearch" placeholder="Search by name or employee code" class="{{ $input }}" autocomplete="off">
+                    <ul class="mt-3 divide-y divide-zinc-100 rounded-xl border border-zinc-200 dark:divide-white/5 dark:border-white/10">
+                        @forelse($this->employeeOptions as $option)
+                            <li wire:key="rl-emp-{{ $option->id }}">
+                                <button type="button" wire:click="chooseEmployee({{ $option->id }})" class="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left text-sm hover:bg-zinc-50 dark:hover:bg-white/5">
+                                    <span class="min-w-0">
+                                        <span class="block truncate font-medium text-zinc-900 dark:text-white">{{ $option->user?->name ?? 'Employee' }}</span>
+                                        <span class="block truncate text-xs text-zinc-500">{{ $option->employee_id }} · {{ $option->department?->name ?? 'No department' }}</span>
+                                    </span>
+                                    <flux:icon.chevron-right class="size-4 shrink-0 text-zinc-400" />
+                                </button>
+                            </li>
+                        @empty
+                            <li class="px-4 py-6 text-center text-sm text-zinc-500">No employees in your scope match.</li>
+                        @endforelse
+                    </ul>
+                </div>
+            @elseif($loadError)
                 <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200" role="alert" data-request-leave-error>
                     <p class="font-semibold">{{ $loadError }}</p>
                     <p class="mt-1 text-xs">Nothing has been submitted.</p>
@@ -370,7 +409,7 @@
                         <flux:icon.check class="size-8" />
                     </div>
                     <h3 class="mt-4 text-lg font-bold text-zinc-900 dark:text-white">Leave Request Submitted</h3>
-                    <p class="mt-1 text-sm text-zinc-500">Your leave application has been submitted for review.</p>
+                    <p class="mt-1 text-sm text-zinc-500">{{ $hrMode ? 'Filed on the employee\'s behalf and sent for review.' : 'Your leave application has been submitted for review.' }}</p>
                 </div>
                 <dl class="divide-y divide-zinc-100 rounded-xl border border-zinc-200 text-sm dark:divide-zinc-800 dark:border-white/10">
                     @foreach([
@@ -383,7 +422,7 @@
                     @endforeach
                     <div class="flex gap-4 px-4 py-2"><dt class="w-28 shrink-0 text-zinc-500">Status</dt><dd><span class="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">Pending Approval</span></dd></div>
                 </dl>
-                <p class="mt-4 flex gap-2 rounded-xl bg-sky-50 px-3 py-2.5 text-sm text-sky-800 dark:bg-sky-500/10 dark:text-sky-200"><flux:icon.information-circle class="mt-0.5 size-4 shrink-0" /> You will be notified once your leave request is reviewed.</p>
+                <p class="mt-4 flex gap-2 rounded-xl bg-sky-50 px-3 py-2.5 text-sm text-sky-800 dark:bg-sky-500/10 dark:text-sky-200"><flux:icon.information-circle class="mt-0.5 size-4 shrink-0" /> {{ $hrMode ? 'The employee has been notified. It follows the usual approval path.' : 'You will be notified once your leave request is reviewed.' }}</p>
             @endif
         </div>
 
@@ -391,15 +430,21 @@
         <footer class="flex shrink-0 flex-col-reverse gap-2 border-t border-zinc-100 bg-zinc-50/80 px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:flex-row sm:items-center sm:justify-end dark:border-zinc-800 dark:bg-zinc-900/80">
             @if($step === 4)
                 <flux:button wire:click="close" variant="ghost">Close</flux:button>
-                <flux:button wire:click="viewMyRequests" variant="primary">View My Requests</flux:button>
+                @if($hrMode)
+                    @if($submittedId && \Illuminate\Support\Facades\Route::has('time-off.leave-requests.show'))
+                        <flux:button href="{{ route('time-off.leave-requests.show', $submittedId) }}" wire:navigate variant="primary">Open Request</flux:button>
+                    @endif
+                @else
+                    <flux:button wire:click="viewMyRequests" variant="primary">View My Requests</flux:button>
+                @endif
             @else
                 @if($step === 1)
                     <flux:button wire:click="close" variant="ghost">Cancel</flux:button>
                 @else
                     <flux:button wire:click="back" variant="ghost">Back</flux:button>
                 @endif
-                @if($loadError)
-                    {{-- Nothing to continue with until the policy loads. --}}
+                @if($loadError || $picking)
+                    {{-- Nothing to continue with until the policy loads (or, for HR, an employee is chosen). --}}
                 @elseif($step < 3)
                     <flux:button wire:click="next" variant="primary" icon-trailing="arrow-right" wire:loading.attr="disabled" wire:target="next,attachment">Next</flux:button>
                 @else
