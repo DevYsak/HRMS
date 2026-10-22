@@ -24,8 +24,16 @@
              quality, all from the canonical services over one department selector. --}}
         <livewire:dashboard.people-operations />
 
+        {{-- Leave: operational cards, pending requests and employee balances (lazy: they read the calculator). --}}
+        <livewire:dashboard.leave-overview />
+        <livewire:dashboard.employee-leave-balances />
+
         @php
             $typeLinks = ['leave' => 'time-off.team', 'regularisation' => 'attendance.command-center', 'overtime' => 'overtime.manage', 'wfh' => 'wfh.manage', 'holiday' => 'time-off.team'];
+            // Leave rows open the HR leave request list, filtered to pending.
+            $pendingLeave = app(\App\Services\Leave\LeaveRequestAccess::class)->canBrowse($me)
+                ? route('time-off.leave-requests', ['status' => 'pending'])
+                : $link('time-off.employees');
             $typeLabels = ['leave' => 'Leave requests', 'regularisation' => 'Attendance regularisations', 'overtime' => 'Overtime requests', 'wfh' => 'WFH requests', 'holiday' => 'Holiday work requests'];
         @endphp
         <div class="grid grid-cols-1 gap-5 lg:grid-cols-3">
@@ -39,14 +47,14 @@
             {{-- Everything open in scope, whoever decides it (managers included). --}}
             <x-pulse.card title="Open requests in your scope" subtitle="Pending with anyone — managers, HR or Finance" icon="inbox-stack" flush data-open-in-scope>
                 @include('dashboard.partials.count-list', ['rows' => [
-                    ['label' => 'Leave awaiting HR', 'count' => $approvals['leave_hr'], 'href' => $link('time-off.employees')],
-                    ['label' => 'Leave with managers', 'count' => $approvals['leave_manager'], 'href' => $link('time-off.employees')],
+                    ['label' => 'Leave awaiting HR', 'count' => $approvals['leave_hr'], 'href' => $pendingLeave],
+                    ['label' => 'Leave with managers', 'count' => $approvals['leave_manager'], 'href' => $pendingLeave],
                     ['label' => 'Attendance regularisations', 'count' => $approvals['regularisations'], 'href' => $link('attendance.command-center')],
                     ['label' => 'Overtime requests', 'count' => $approvals['overtime'], 'href' => $link('overtime.manage')],
                     ['label' => 'WFH requests', 'count' => $approvals['wfh'], 'href' => $link('wfh.manage')],
                     ['label' => 'Leave encashments', 'count' => $approvals['encashments'], 'href' => $link('time-off.encashments')],
                     ['label' => 'Escalated leave', 'count' => $approvals['escalations'], 'href' => $link('notifications.index'), 'tone' => 'rose'],
-                    ['label' => 'Needs more info — back with the employee', 'count' => $moreInfo['leave'], 'href' => $link('time-off.employees'), 'tone' => 'amber'],
+                    ['label' => 'Needs more info — back with the employee', 'count' => $moreInfo['leave'], 'href' => $pendingLeave, 'tone' => 'amber'],
                 ], 'empty' => 'No open requests in your scope.'])
             </x-pulse.card>
 
