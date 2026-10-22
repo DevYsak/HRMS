@@ -10,7 +10,8 @@
             <h1 class="mt-1 text-2xl font-extrabold tracking-tight text-[#101828] dark:text-white">{{ $employee->user?->name }}</h1>
             <p class="mt-1 text-sm text-[#667085] dark:text-zinc-400">
                 {{ $employee->employee_id }} · {{ $employee->department?->name ?? 'No department' }} · {{ $employee->status?->label() }}
-                · Policy: <span class="font-semibold">{{ $employee->leavePolicy?->name ?? 'none (company default)' }}</span>
+                · Policy: <span class="font-semibold">{{ $this->currentPolicy['policy']?->name ?? 'none (company default)' }}</span>
+                <span class="text-xs">({{ $this->currentPolicy['source_label'] }})</span>
             </p>
         </div>
         <div class="flex flex-wrap items-end gap-2">
@@ -83,11 +84,14 @@
                             <td class="px-3 py-2 text-right font-bold {{ $s['approved_available'] < 0 ? 'text-rose-600' : '' }}">{{ $fmt($s['approved_available']) }}</td>
                             <td class="px-3 py-2 text-right">{{ $fmt($s['available_to_request']) }}</td>
                             <td class="whitespace-nowrap px-3 py-2 text-right">
-                                @can('add_leave_balance')<flux:button size="xs" wire:click="openAction('add', {{ $b['leave_type']?->id }})">Add</flux:button>@endcan
-                                @can('deduct_leave_balance')<flux:button size="xs" wire:click="openAction('deduct', {{ $b['leave_type']?->id }})">Deduct</flux:button>@endcan
-                                @can('correct_leave_balance')<flux:button size="xs" wire:click="openAction('correct', {{ $b['leave_type']?->id }})">Correct</flux:button>@endcan
+                                {{-- Only real balances: a V2 reason (Casual, Sick…) or a historical type is never adjusted. --}}
+                                @if($balanceTypes->contains('id', $b['leave_type']?->id))
+                                    @can('add_leave_balance')<flux:button size="xs" wire:click="openAction('add', {{ $b['leave_type']?->id }})">Add</flux:button>@endcan
+                                    @can('deduct_leave_balance')<flux:button size="xs" wire:click="openAction('deduct', {{ $b['leave_type']?->id }})">Deduct</flux:button>@endcan
+                                    @can('correct_leave_balance')<flux:button size="xs" wire:click="openAction('correct', {{ $b['leave_type']?->id }})">Correct</flux:button>@endcan
+                                @endif
                                 @can('manage_leave_carry_forward')<flux:button size="xs" wire:click="openAction('carry_forward', {{ $b['leave_type']?->id }})">Carry Fwd</flux:button>@endcan
-                                <flux:button size="xs" variant="ghost" wire:click="$set('historyTypeId', {{ $b['leave_type']?->id }}); $set('tab', 'history')">History</flux:button>
+                                <flux:button size="xs" variant="ghost" wire:click="showTypeHistory({{ $b['leave_type']?->id }})">History</flux:button>
                             </td>
                         </tr>
                     @empty
@@ -310,7 +314,7 @@
 
                 @if(! in_array($action, ['cancel_leave', 'reverse_entry'], true))
                     <flux:select wire:model.live="formTypeId" label="Leave type">
-                        @foreach($leaveTypes as $t)<flux:select.option value="{{ $t->id }}">{{ $t->name }}</flux:select.option>@endforeach
+                        @foreach(in_array($action, ['add', 'deduct', 'correct'], true) ? $balanceTypes : $leaveTypes as $t)<flux:select.option value="{{ $t->id }}">{{ $t->name }}</flux:select.option>@endforeach
                     </flux:select>
                 @endif
 

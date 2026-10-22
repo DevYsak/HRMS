@@ -10,6 +10,7 @@ use App\Models\LeaveBalance;
 use App\Models\LeaveCarryForwardTransaction;
 use App\Models\LeaveEncashment;
 use App\Models\LeaveLedgerEntry;
+use App\Models\LeavePolicy;
 use App\Models\LeaveRequest;
 use App\Models\LeaveType;
 use App\Models\LeaveYear;
@@ -21,6 +22,7 @@ use App\Services\Leave\LeaveAdminActionService;
 use App\Services\Leave\LeaveBalanceCalculator;
 use App\Services\Leave\LeaveCarryForwardService;
 use App\Services\Leave\LeaveManagementService;
+use App\Services\Leave\LeavePolicyAssignmentResolver;
 use App\Services\Leave\LeaveStatementService;
 use App\Services\Leave\LeaveYearResolver;
 use App\Services\LeaveBalanceService;
@@ -276,6 +278,25 @@ class EmployeeLeaveDetail extends Component
         $balance = $this->formTypeId ? $this->balanceFor($this->formTypeId) : null;
 
         return $balance ? app(LeaveBalanceCalculator::class)->summary($balance)['approved_available'] : null;
+    }
+
+    /** One balance's ledger history (a single action: two chained $set calls never run in Livewire 4). */
+    public function showTypeHistory(int $leaveTypeId): void
+    {
+        $this->historyTypeId = $leaveTypeId;
+        $this->tab = 'history';
+    }
+
+    /**
+     * The policy in force today — an employee override, department or company
+     * assignment — and where it comes from; never only the employee record.
+     *
+     * @return array{policy: ?LeavePolicy, source: string, source_label: string, assignment: mixed}
+     */
+    #[Computed]
+    public function currentPolicy(): array
+    {
+        return app(LeavePolicyAssignmentResolver::class)->resolve($this->employee);
     }
 
     public function openAction(string $action, ?int $leaveTypeId = null): void
@@ -713,7 +734,9 @@ class EmployeeLeaveDetail extends Component
     {
         return view('livewire.time-off.employee-leave-detail', [
             'leaveYears' => LeaveYear::orderByDesc('starts_on')->get(),
-            'leaveTypes' => LeaveType::whereNull('deleted_at')->orderBy('name')->get(),
+            'leaveTypes' => $types = LeaveType::whereNull('deleted_at')->orderBy('name')->get(),
+            // Add / deduct / correct: only real balances (V2: Earned Leave, Comp Off, Special Leave).
+            'balanceTypes' => $types->filter(fn (LeaveType $t) => app(LeaveBalanceService::class)->isAdjustable($this->employee, $t))->values(),
             'addOnTypes' => LeaveBalanceService::ADD_ON_TYPES,
             'entryTypes' => LeaveStatementService::LABELS,
             'reversibleTypes' => LeaveAdminActionService::REVERSIBLE_TYPES,

@@ -14,8 +14,11 @@ use App\Models\LeaveType;
 use App\Models\LeaveYear;
 use App\Models\User;
 use App\Services\Leave\LeaveBalanceCalculator;
+use App\Services\Leave\LeaveBalanceSource;
+use App\Services\Leave\LeaveCategory;
 use App\Services\Leave\LeaveLedgerService;
 use App\Services\Leave\LeaveMovementService;
+use App\Services\Leave\LeavePolicyEngine;
 use App\Services\Leave\LeaveYearResolver;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
@@ -227,6 +230,8 @@ class LeaveBalanceService
             );
         }
 
+        $this->assertAdjustable($employee, $leaveType);
+
         // The current LEAVE year, not the calendar year: with a 1 July start
         // those differ from January to June, and an HR correction made in
         // March would otherwise land in a year that has not begun.
@@ -373,6 +378,46 @@ class LeaveBalanceService
 
             return $adjustment;
         });
+    }
+
+    /**
+     * Under a Leave V2 policy only real balances can be adjusted: the Earned
+     * Leave pool, Comp Off and Special Leave with its own entitlement. A
+     * reason (Casual, Sick, Personal, Privilege…) draws on Earned Leave and
+     * holds nothing; Unpaid Leave needs no balance; a historical-only type is
+     * kept for the record. Employees on a policy without Earned Leave keep the
+     * existing behaviour.
+     */
+    public function isAdjustable(Employee $employee, LeaveType $leaveType): bool
+    {
+        return $this->notAdjustableBecause($employee, $leaveType) === null;
+    }
+
+    private function assertAdjustable(Employee $employee, LeaveType $leaveType): void
+    {
+        if (($why = $this->notAdjustableBecause($employee, $leaveType)) !== null) {
+            throw new \DomainException($why);
+        }
+    }
+
+    private function notAdjustableBecause(Employee $employee, LeaveType $leaveType): ?string
+    {
+        if (! LeavePolicyEngine::enabled()) {
+            return null;
+        }
+
+        $sources = app(LeaveBalanceSource::class);
+        $pool = $sources->earnedPool($employee);
+        if ($pool === null) {
+            return null;
+        }
+
+        return match (true) {
+            LeaveCategory::of($leaveType) === LeaveCategory::UNPAID => "'{$leaveType->name}' has no balance to adjust.",
+            $sources->isReason($leaveType, $pool) => "'{$leaveType->name}' is a reason under {$pool->name}, not a balance. Adjust {$pool->name} instead.",
+            ($leaveType->availability ?? LeaveType::AVAILABILITY_ACTIVE) !== LeaveType::AVAILABILITY_ACTIVE => "'{$leaveType->name}' is historical and is kept for the record; it cannot be adjusted.",
+            default => null,
+        };
     }
 
     /**
