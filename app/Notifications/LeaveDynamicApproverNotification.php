@@ -25,7 +25,8 @@ class LeaveDynamicApproverNotification extends Notification
         $employee = $this->leaveRequest->employee->user->name;
         $type = $this->leaveRequest->leaveType?->name ?? 'Leave';
         $days = $this->leaveRequest->days;
-        $url = route('time-off.employees').'?selectedRequestId='.$this->leaveRequest->id;
+        // Straight to the request (the employees list never read selectedRequestId).
+        $url = route('time-off.leave-requests.show', $this->leaveRequest);
 
         return [
             'type' => 'leave_approval_required',

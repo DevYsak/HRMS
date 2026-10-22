@@ -1010,7 +1010,11 @@
                                     <td class="whitespace-nowrap px-3 py-3 text-zinc-600 dark:text-zinc-300">{{ ($r->hrReviewer ?? $r->reviewer)?->name ?? '—' }}</td>
                                     <td class="whitespace-nowrap px-3 py-3 text-zinc-500 dark:text-zinc-400">{{ $r->created_at->format('d M Y') }}</td>
                                     <td class="whitespace-nowrap px-3 py-3 pr-5 text-right">
-                                        <flux:button size="xs" variant="ghost" x-on:click="{{ $recentView($r) }}">View</flux:button>
+                                        @if($manageAsHr && ($hrUrl = $manageAsHr($r)))
+                                            <flux:button size="xs" variant="primary" :href="$hrUrl" data-manage-as-hr>Manage as HR</flux:button>
+                                        @else
+                                            <flux:button size="xs" variant="ghost" x-on:click="{{ $recentView($r) }}">View</flux:button>
+                                        @endif
                                         @if(in_array($r->status, ['pending', 'pending_hr', 'approved'], true))
                                             <flux:button size="xs" variant="ghost" wire:click="cancelRequest({{ $r->id }})" wire:confirm="Cancel this leave request?">Cancel</flux:button>
                                         @endif
@@ -1031,7 +1035,11 @@
                             <p class="text-xs text-zinc-500 dark:text-zinc-400">LR-{{ str_pad($r->id, 4, '0', STR_PAD_LEFT) }} · {{ $recentRange($r) }} · {{ $fmt($r->days) }} {{ Str::plural('day', (float) $r->days == 1 ? 1 : 2) }}</p>
                             <div class="flex flex-wrap items-center gap-2">
                                 @if($r->isCombined())<x-pulse.badge color="violet">Combined</x-pulse.badge>@elseif($recentLegacy($r))<x-pulse.badge>Legacy</x-pulse.badge>@endif
-                                <flux:button size="xs" variant="ghost" x-on:click="{{ $recentView($r) }}">View</flux:button>
+                                @if($manageAsHr && ($hrUrl = $manageAsHr($r)))
+                                    <flux:button size="xs" variant="primary" :href="$hrUrl" data-manage-as-hr>Manage as HR</flux:button>
+                                @else
+                                    <flux:button size="xs" variant="ghost" x-on:click="{{ $recentView($r) }}">View</flux:button>
+                                @endif
                                 @if(in_array($r->status, ['pending', 'pending_hr', 'approved'], true))
                                     <flux:button size="xs" variant="ghost" wire:click="cancelRequest({{ $r->id }})" wire:confirm="Cancel this leave request?">Cancel</flux:button>
                                 @endif

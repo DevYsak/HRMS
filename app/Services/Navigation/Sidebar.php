@@ -10,6 +10,7 @@ use App\Services\AiAssistant;
 use App\Services\Approvals\ApprovalQueueService;
 use App\Services\Help\RouteAccess;
 use App\Services\Leave\LeavePolicyEngine;
+use App\Services\Leave\LeaveRequestAccess;
 use App\Services\Security\PeopleScope;
 use Closure;
 use Illuminate\Support\Facades\Route;
@@ -288,6 +289,9 @@ class Sidebar
                         'when' => fn (User $u) => app(PeopleScope::class)->isCompanyWide($u, 'approve_leave') || $u->hasPermission('view_leave_management')],
                     ['label' => 'Leave Management', 'route' => 'time-off.leave-management',
                         'active' => ['time-off.leave-management*', 'time-off.year-rollover', 'time-off.reconciliation']],
+                    // Every application in reach, each opening its HR detail page.
+                    ['label' => 'Leave Requests', 'route' => 'time-off.leave-requests', 'active' => ['time-off.leave-requests*'],
+                        'when' => fn (User $u) => app(LeaveRequestAccess::class)->canBrowse($u)],
                     ['label' => 'Encashments', 'route' => 'time-off.encashments',
                         'when' => fn (User $u) => $u->canApproveLeave() || $u->canApproveFinance()],
                     ['label' => 'Regularisation', 'route' => 'time-off.regularisation'],

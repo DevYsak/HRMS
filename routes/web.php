@@ -122,6 +122,8 @@ use App\Livewire\TimeOff\LeaveManagement;
 use App\Livewire\TimeOff\LeavePolicyEditor;
 use App\Livewire\TimeOff\LeaveReconciliation;
 use App\Livewire\TimeOff\LeaveRegularisation;
+use App\Livewire\TimeOff\LeaveRequestDetail;
+use App\Livewire\TimeOff\LeaveRequests;
 use App\Livewire\TimeOff\LeaveYearRollover;
 use App\Livewire\TimeOff\MyTimeOff;
 use App\Livewire\TimeOff\TeamTimeOff;
@@ -303,6 +305,11 @@ Route::middleware(['auth'])->group(function () {
             ->middleware('can:view_leave_management');
         Route::get('/leave-management/employees/{employee}', EmployeeLeaveDetail::class)->name('leave-management.employee')
             ->middleware('can:view_leave_management');
+        // HR leave requests: the list and one request's detail. Open to anyone
+        // who manages leave or decides it (LeaveRequestAccess, checked in
+        // mount); every action re-authorises against the approval policy.
+        Route::get('/leave-management/requests', LeaveRequests::class)->name('leave-requests');
+        Route::get('/leave-management/requests/{leaveRequest}', LeaveRequestDetail::class)->name('leave-requests.show');
         Route::get('/leave-management/year-rollover', LeaveYearRollover::class)->name('year-rollover')
             ->middleware('can:run_leave_rollover');
         Route::get('/leave-management/reconciliation', LeaveReconciliation::class)->name('reconciliation')

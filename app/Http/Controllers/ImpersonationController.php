@@ -62,6 +62,12 @@ class ImpersonationController extends Controller
                     new: ['impersonated_user_id' => $impersonated->id],
                     subjectEmployeeId: $impersonated->employee?->id);
             }
+
+            // "Manage as HR" from the employee's screens: back as yourself, on
+            // the HR page for that record. Only a path on this site.
+            if (($to = $this->localPath($request->query('to'))) !== null) {
+                return redirect($to);
+            }
         } elseif ($originalId) {
             // The admin account is gone (deleted mid-session): never leave the
             // browser signed in as the impersonated person with no banner.
@@ -73,5 +79,16 @@ class ImpersonationController extends Controller
         }
 
         return redirect()->route('dashboard');
+    }
+
+    /** A same-site path ("/time-off/…"), never another host or scheme. */
+    private function localPath(mixed $to): ?string
+    {
+        if (! is_string($to) || ! str_starts_with($to, '/') || str_starts_with($to, '//') || str_contains($to, '\\')
+            || preg_match('/[\x00-\x1F]/', $to) === 1 || parse_url($to, PHP_URL_HOST) !== null) {
+            return null;
+        }
+
+        return $to;
     }
 }

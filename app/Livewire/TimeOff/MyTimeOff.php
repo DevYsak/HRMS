@@ -2,6 +2,7 @@
 
 namespace App\Livewire\TimeOff;
 
+use App\Models\AuditLog;
 use App\Models\DecemberMandatoryDay;
 use App\Models\Employee;
 use App\Models\HolidayPaySetting;
@@ -11,6 +12,7 @@ use App\Models\LeaveEncashment;
 use App\Models\LeaveRequest;
 use App\Models\LeaveType;
 use App\Models\PublicHoliday;
+use App\Models\User;
 use App\Models\WfhRequest;
 use App\Notifications\LeaveEncashmentNotification;
 use App\Services\AiAssistant;
@@ -21,6 +23,7 @@ use App\Services\Leave\EmployeeLeaveOverviewService;
 use App\Services\Leave\LeaveAssistantService;
 use App\Services\Leave\LeaveBalanceCalculator;
 use App\Services\Leave\LeavePolicyEngine;
+use App\Services\Leave\LeaveRequestAccess;
 use App\Services\Leave\LeaveYearResolver;
 use App\Services\LeaveService;
 use App\Services\Notifications\NotificationRecipients;
@@ -123,6 +126,30 @@ class MyTimeOff extends Component
         if (request()->boolean('request')) {
             $this->openRequestModal();
         }
+    }
+
+    /**
+     * HR "viewing as" this employee manages a request on the HR page, never
+     * on the employee's own Leave History: the link ends the view (back as
+     * HR) and lands on that request. Null outside an HR view or out of reach.
+     *
+     * @return \Closure(LeaveRequest): ?string|null
+     */
+    private function manageAsHr(): ?\Closure
+    {
+        $hrId = session(AuditLog::IMPERSONATOR_SESSION_KEY);
+        $hr = $hrId ? User::find($hrId) : null;
+        $access = app(LeaveRequestAccess::class);
+
+        if (! $hr || ! $access->canBrowse($hr)) {
+            return null;
+        }
+
+        $ids = $access->employeeIds($hr);
+
+        return fn (LeaveRequest $request) => $ids === null || in_array((int) $request->employee_id, $ids, true)
+            ? route('impersonate.stop', ['to' => route('time-off.leave-requests.show', $request, false)])
+            : null;
     }
 
     /**
@@ -1076,6 +1103,8 @@ class MyTimeOff extends Component
             'plannerResult' => $plannerResult,
             'teamAvailability' => $teamAvailability,
             'requests' => $requests,
+            // While HR views as this employee: a request's HR page (ends the view first).
+            'manageAsHr' => $this->manageAsHr(),
             // The latest five applications, whatever the Leave History filters say (read only).
             'recentRequests' => $employee
                 ? $employee->leaveRequests()->with(['leaveType' => fn ($q) => $q->withTrashed(), 'reviewer', 'hrReviewer'])
