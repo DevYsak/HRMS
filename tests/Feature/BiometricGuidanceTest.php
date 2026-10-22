@@ -47,7 +47,7 @@ test('a face punch the device tagged OUT is still guided as Biometric IN', funct
         ->and(collect($timeline['raw_events'])->pluck('direction_corrected')->all())->toBe([false, true, false]);
 });
 
-test('the punch guide scrolls across My Attendance and All Attendance', function () {
+test('the punch guide shows on My Attendance and All Attendance, without scrolling', function () {
     $user = User::factory()->create(['role' => UserRole::Employee]);
     Employee::factory()->create(['user_id' => $user->id]);
     $hr = User::factory()->create(['role' => UserRole::HrAdmin]);
@@ -56,7 +56,8 @@ test('the punch guide scrolls across My Attendance and All Attendance', function
         ->assertSee('Face = Biometric IN')
         ->assertSee('ID Card = Biometric OUT')
         ->assertSee('Regularised punches are manually corrected attendance entries')
-        ->assertSeeHtml('data-biometric-notice');
+        ->assertSeeHtml('data-biometric-notice')
+        ->assertDontSeeHtml('bio-notice-track');
 
     Livewire::actingAs($hr)->test(AllAttendance::class)
         ->assertSeeHtml('data-biometric-notice');

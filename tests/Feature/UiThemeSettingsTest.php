@@ -244,3 +244,15 @@ test('brand & layout is linked from the settings navigation', function () {
         ->assertOk()
         ->assertSee(route('settings.ui-theme'), false);
 });
+
+test('saving on a database that has not been migrated explains what to run instead of failing', function () {
+    $this->actingAs(uiThemeUser());
+    Schema::drop('ui_theme_settings');
+
+    Livewire::test(UiThemeSettings::class)
+        ->call('save')
+        ->assertOk()
+        ->assertHasErrors('values');
+
+    expect(Schema::hasTable('ui_theme_settings'))->toBeFalse();
+});

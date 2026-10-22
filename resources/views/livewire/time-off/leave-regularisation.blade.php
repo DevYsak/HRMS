@@ -1,4 +1,4 @@
-<flux:main class="min-h-screen space-y-5 bg-[#F7F8FA] p-4 font-['Inter'] md:p-6 dark:bg-[#0B1220]">
+<flux:main class="min-h-screen space-y-5 bg-[#F7F8FA] p-4 font-sans md:p-6 dark:bg-[#0B1220]">
 
     <div class="flex flex-wrap items-start justify-between gap-3">
         <div>

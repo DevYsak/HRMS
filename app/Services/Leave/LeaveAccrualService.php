@@ -7,6 +7,7 @@ use App\Models\Employee;
 use App\Models\LeaveAccrualLog;
 use App\Models\LeavePolicyRule;
 use App\Models\LeaveType;
+use App\Models\LeaveV2Migration;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -71,6 +72,18 @@ class LeaveAccrualService
     /** @return 'credited'|'skipped'|'capped'|'already' */
     public function creditOne(Employee $employee, LeaveType $type, Carbon $monthStart, $leaveYear, int $year, int $month): string
     {
+        // Leave V2: Earned Leave accrues only once migrated, and only for months
+        // after the migration (its opening already holds the months before).
+        $migration = app(LeaveV2MigrationService::class);
+        if ($migration->holdsEarned($employee, $type, $leaveYear) !== null) {
+            if (! LeaveV2Migration::done($employee->id, $type->id, $leaveYear->id)) {
+                return 'skipped';
+            }
+            if ($migration->coversMonth($employee, $type, $leaveYear, $monthStart)) {
+                return 'already';
+            }
+        }
+
         $settings = $this->rules->settings($employee, $type);
 
         if (! in_array($settings['accrual_method'], [

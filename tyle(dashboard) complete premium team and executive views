@@ -1,0 +1,18 @@
+ app/Livewire/ManagerDashboard.php                  |  65 [32m+++[m
+ resources/css/app.css                              |  42 [32m++[m
+ .../components/dashboard/hr/section-card.blade.php |  10 [32m+[m[31m-[m
+ .../views/components/dashboard/kpi-card.blade.php  |   8 [32m+[m[31m-[m
+ .../components/pulse/attention-list.blade.php      |  31 [32m++[m
+ resources/views/components/pulse/badge.blade.php   |   2 [32m+[m[31m-[m
+ resources/views/components/pulse/card.blade.php    |   2 [32m+[m[31m-[m
+ .../components/pulse/dashboard-header.blade.php    |   2 [32m+[m[31m-[m
+ .../views/components/pulse/empty-state.blade.php   |  24 [32m+[m
+ resources/views/components/pulse/grid.blade.php    |  17 [32m+[m
+ .../views/components/pulse/kpi-card.blade.php      |   4 [32m+[m[31m-[m
+ resources/views/components/pulse/table.blade.php   |  25 [32m++[m
+ .../views/livewire/executive-dashboard.blade.php   | 129 [32m++[m[31m----[m
+ .../views/livewire/manager-dashboard.blade.php     | 493 [32m+++++++++[m[31m------------[m
+ tests/Feature/DashboardEnhancementTest.php         |   4 [32m+[m[31m-[m
+ tests/Feature/DirectorDashboardSmokeTest.php       |   3 [32m+[m[31m-[m
+ tests/Feature/UiConsistencyTest.php                | 114 [32m+++++[m
+ 17 files changed, 589 insertions(+), 386 deletions(-)

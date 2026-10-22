@@ -82,7 +82,11 @@
           "note": "timezone and date format"
         },
         {
-          "label": "Help & Employee Guide",
+          "label": "Getting started",
+          "note": "the short new-joiner tutorial"
+        },
+        {
+          "label": "Help & Guide",
           "note": "this guide"
         },
         {
@@ -178,51 +182,57 @@
       "height": 900,
       "markers": [
         {
-          "label": "Period",
-          "note": "today, week, month, quarter, year"
+          "label": "Month",
+          "note": "switch to a previous month"
         },
         {
-          "label": "Attendance score"
+          "label": "Key figures",
+          "note": "attendance rate, worked today, first in, status"
         },
         {
           "label": "Clock in / out",
-          "note": "selfie + location"
-        },
-        {
-          "label": "Breaks",
-          "note": "start and end a break"
+          "note": "selfie + location on the web"
         },
         {
           "label": "Regularize",
           "note": "fix a missing or wrong punch"
         },
         {
-          "label": "Smart status",
-          "note": "what to do next"
+          "label": "Today",
+          "note": "punches and totals for the day"
+        },
+        {
+          "label": "Needs attention",
+          "note": "days that need a correction"
+        },
+        {
+          "label": "Request Regularisation",
+          "note": "start the correction"
         }
       ]
     },
     "attendance-timeline": {
       "file": "attendance-timeline.jpg",
       "annotated": "annotated/attendance-timeline.png",
-      "title": "Attendance insights and day-by-day history",
+      "title": "This month and your day-by-day history",
       "width": 1440,
       "height": 900,
       "markers": [
         {
-          "label": "Insights",
-          "note": "averages, streaks, late count, missing punches"
+          "label": "This month",
+          "note": "present, late, absent and averages"
         },
         {
-          "label": "Suggestions"
-        },
-        {
-          "label": "Timeline",
+          "label": "Attendance history",
           "note": "one row per day; click a day for its punches"
         },
         {
-          "label": "Export",
-          "note": "download your log"
+          "label": "An exception",
+          "note": "what is wrong with that day"
+        },
+        {
+          "label": "Why?",
+          "note": "how that day was decided"
         }
       ]
     },
@@ -253,7 +263,7 @@
         },
         {
           "label": "Approval route",
-          "note": "manager → HR → admin"
+          "note": "HR reviews it, then your hours are recalculated"
         }
       ]
     },
@@ -288,28 +298,37 @@
     "leave-balances": {
       "file": "leave-balances.jpg",
       "annotated": "annotated/leave-balances.png",
-      "title": "My Balances: one card per leave type",
+      "title": "My Balances: Casual / Sick Leave, December leave and Comp Off",
       "width": 1440,
       "height": 900,
       "markers": [
+        {
+          "label": "Casual / Sick Leave",
+          "note": "your main leave balance"
+        },
         {
           "label": "Available to request",
           "note": "what you can apply for now"
         },
         {
-          "label": "Approved balance",
-          "note": "before pending requests"
-        },
-        {
           "label": "Breakdown",
-          "note": "base, carry forward, add-on, used, pending…"
-        },
-        {
-          "label": "Leave year dates"
+          "note": "accrued, used, pending, carry forward…"
         },
         {
           "label": "Card actions",
           "note": "apply, history, statement"
+        },
+        {
+          "label": "Mandatory December Leave",
+          "note": "company shutdown dates, not a balance"
+        },
+        {
+          "label": "Comp Off",
+          "note": "earned by working a holiday"
+        },
+        {
+          "label": "Other leave",
+          "note": "special leave types"
         }
       ]
     },
@@ -368,7 +387,7 @@
       "annotated": "annotated/leave-apply.png",
       "title": "Applying for leave",
       "width": 1440,
-      "height": 900,
+      "height": 1200,
       "markers": [
         {
           "label": "Leave type",
@@ -735,6 +754,6 @@
       ]
     }
   },
-  "captured_at": "2026-10-02T08:22:40.206Z",
+  "captured_at": "2026-10-11T14:55:08.803Z",
   "account": "Employee role demo account (php artisan guide:demo-employee); all data fictional"
 }

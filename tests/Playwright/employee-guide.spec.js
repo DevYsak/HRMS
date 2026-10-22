@@ -33,10 +33,10 @@ const card = (text, options = { exact: true }) => (page) =>
     scope(page).getByText(text, options).first()
         .locator("xpath=ancestor::*[contains(@class,'pulse-card') or (contains(@class,'border') and (contains(@class,'rounded-xl') or contains(@class,'rounded-2xl') or contains(@class,'rounded-3xl')))][1]");
 
-/** A dashboard section card, found by its <h3> title. */
+/** A dashboard card (<section>), found by its <h2> title. */
 const sectionCard = (title) => (page) =>
-    scope(page).locator('h3').filter({ hasText: new RegExp(`^\\s*${title}\\s*$`) }).first()
-        .locator("xpath=ancestor::div[contains(@class,'rounded-2xl')][1]");
+    scope(page).locator('h2').filter({ hasText: new RegExp(`^\\s*${title}\\s*$`) }).first()
+        .locator('xpath=ancestor::section[1]');
 
 const text = (value, options = { exact: true }) => (page) => scope(page).getByText(value, options).first();
 const button = (name, options = { exact: true }) => (page) => scope(page).getByRole('button', { name, ...options }).first();
@@ -60,9 +60,17 @@ const userMenuButton = async (page) => {
 
 const openModal = (trigger, heading) => async (page) => {
     await trigger(page).click();
-    // Flux <dialog> modals and the custom fixed-overlay modals some pages use.
-    const dialog = page.locator('dialog[open], [role=dialog]:visible, div.fixed.inset-0:visible').filter({ hasText: heading }).last();
-    await expect(dialog, `modal "${heading}" did not open`).toBeVisible({ timeout: 10000 });
+    // The shared app modal ([data-app-modal]) first, then Flux <dialog>s and the
+    // older fixed-overlay modals some pages still use.
+    const shared = page.locator('[data-app-modal][role=dialog]').filter({ hasText: heading }).last();
+    const legacy = page.locator('dialog[open], [role=dialog]:visible, div.fixed.inset-0:visible').filter({ hasText: heading }).last();
+    let dialog = shared;
+    try {
+        await expect(shared).toBeVisible({ timeout: 6000 });
+    } catch {
+        dialog = legacy;
+        await expect(dialog, `modal "${heading}" did not open`).toBeVisible({ timeout: 10000 });
+    }
     await page.waitForTimeout(500);
     page.__scope = dialog;
 };
@@ -76,7 +84,7 @@ const SHOTS = [
             ['Sidebar menu', 'every page you can use', (page) => page.getByRole('link', { name: 'Attendance', exact: true }).first().locator('xpath=ancestor::nav[1]')],
             ['Clock In', 'start your working day', button('Clock In')],
             ['Setup prompts', 'finish your profile and onboarding', (page) => page.getByText('Complete your profile').first().locator("xpath=ancestor::*[contains(@class,'grid')][1]")],
-            ['Today at a glance', 'attendance, leave, late marks, OT, pending, salary', (page) => page.getByText('Leave Left', { exact: true }).first().locator("xpath=ancestor::div[contains(@class,'grid-cols-2')][1]")],
+            ['Today at a glance', 'attendance, leave, late marks, OT, pending, salary', (page) => page.getByText('Late Arrivals', { exact: true }).first().locator("xpath=ancestor::*[contains(@class,'grid')][1]")],
             ['Notifications', 'unread count', (page) => page.getByRole('button', { name: 'Notifications' }).first()],
             ['Your menu', 'profile, settings, this guide, log out', userMenuButton],
         ],
@@ -98,7 +106,8 @@ const SHOTS = [
             ['My Profile', 'your personal and job details', (page) => page.getByRole('menuitem', { name: 'My Profile' }).last()],
             ['Account settings', 'password and security', (page) => page.getByRole('menuitem', { name: 'Account settings' }).last()],
             ['Preferences', 'timezone and date format', (page) => page.getByRole('menuitem', { name: 'Preferences' }).last()],
-            ['Help & Employee Guide', 'this guide', (page) => page.getByRole('menuitem', { name: 'Help & Employee Guide' }).last()],
+            ['Getting started', 'the short new-joiner tutorial', (page) => page.getByRole('menuitem', { name: 'Getting started' }).last()],
+            ['Help & Guide', 'this guide', (page) => page.getByRole('menuitem', { name: 'Help & Guide' }).last()],
             ['Log out', null, (page) => page.getByRole('menuitem', { name: 'Log out' }).last()],
         ],
     },
@@ -146,34 +155,35 @@ const SHOTS = [
     {
         id: 'attendance-top', url: '/attendance/my', title: 'My Attendance',
         markers: [
-            ['Period', 'today, week, month, quarter, year', (page) => page.getByRole('button', { name: 'Quarter', exact: true }).first().locator('xpath=..')],
-            ['Attendance score', null, css('.pa-hcard')],
-            ['Clock in / out', 'selfie + location', css('.pa-actbtns > :nth-child(1)')],
-            ['Breaks', 'start and end a break', css('.pa-actbtns > :nth-child(2)')],
-            ['Regularize', 'fix a missing or wrong punch', css('.pa-actbtns > :nth-child(3)')],
-            ['Smart status', 'what to do next', css('.pa-actsmart')],
+            ['Month', 'switch to a previous month', (page) => scope(page).getByText('October 2026', { exact: false }).first().locator('xpath=ancestor::*[self::div][1]')],
+            ['Key figures', 'attendance rate, worked today, first in, status', (page) => scope(page).getByText('Attendance Rate', { exact: true }).first().locator("xpath=ancestor::*[contains(@class,'grid')][1]")],
+            ['Clock in / out', 'selfie + location on the web', button('Clock In', { exact: false })],
+            ['Regularize', 'fix a missing or wrong punch', button('Regularize')],
+            ['Today', 'punches and totals for the day', card('Today')],
+            ['Needs attention', 'days that need a correction', card('Attendance Needs Attention')],
+            ['Request Regularisation', 'start the correction', (page) => scope(page).getByRole('button', { name: 'Request Regularisation' }).first()],
         ],
     },
     {
-        id: 'attendance-timeline', url: '/attendance/my', title: 'Attendance insights and day-by-day history',
-        scrollTo: text('Punch In / Out Timeline', { exact: false }),
+        id: 'attendance-timeline', url: '/attendance/my', title: 'This month and your day-by-day history',
+        scrollTo: text('This Month', { exact: true }),
         markers: [
-            ['Insights', 'averages, streaks, late count, missing punches', text('AI Attendance Insights', { exact: true })],
-            ['Suggestions', null, text('Suggestions', { exact: false })],
-            ['Timeline', 'one row per day; click a day for its punches', text('Punch In / Out Timeline', { exact: false })],
-            ['Export', 'download your log', (page) => page.getByRole('button', { name: /export/i }).last()],
+            ['This month', 'present, late, absent and averages', card('This Month')],
+            ['Attendance history', 'one row per day; click a day for its punches', card('Attendance History')],
+            ['An exception', 'what is wrong with that day', text('Missing OUT', { exact: false })],
+            ['Why?', 'how that day was decided', (page) => scope(page).getByText('Why?', { exact: true }).first()],
         ],
     },
     {
         id: 'attendance-regularise', url: '/attendance/my', title: 'Requesting an attendance correction',
-        prepare: openModal(css('.pa-actbtns > :nth-child(3)'), 'Request Regularization'),
+        prepare: openModal(button('Regularize'), 'Request Regularization'),
         markers: [
             ['Day', null, field('Which day?')],
             ['What to fix', 'a punch, or a half day', field('What do you need to fix?')],
             ['Which punch', 'IN, OUT or both', field('Which punch is missing')],
             ['Correct time', null, field('Expected time')],
             ['Reason & proof', 'attachment optional', field('Reason & proof')],
-            ['Approval route', 'manager → HR → admin', field('What happens next')],
+            ['Approval route', 'HR reviews it, then your hours are recalculated', field('What happens next')],
         ],
     },
     {
@@ -187,14 +197,16 @@ const SHOTS = [
         ],
     },
     {
-        id: 'leave-balances', url: '/time-off/my', title: 'My Balances: one card per leave type',
+        id: 'leave-balances', url: '/time-off/my', title: 'My Balances: Casual / Sick Leave, December leave and Comp Off',
         scrollTo: (page) => scope(page).getByRole('button', { name: 'My Balances', exact: true }).first(),
         markers: [
+            ['Casual / Sick Leave', 'your main leave balance', card('Casual / Sick Leave', { exact: true })],
             ['Available to request', 'what you can apply for now', (page) => scope(page).getByText('Available to request', { exact: true }).first().locator('xpath=..')],
-            ['Approved balance', 'before pending requests', (page) => scope(page).getByText('Approved balance', { exact: true }).first().locator('xpath=..')],
-            ['Breakdown', 'base, carry forward, add-on, used, pending…', (page) => scope(page).getByText('Base Entitlement', { exact: true }).first().locator('xpath=ancestor::dl[1]')],
-            ['Leave year dates', null, (page) => scope(page).getByText(/^Leave year \d/).first()],
-            ['Card actions', 'apply, history, statement', (page) => scope(page).getByRole('button', { name: 'View History', exact: true }).first().locator('xpath=..')],
+            ['Breakdown', 'accrued, used, pending, carry forward…', (page) => scope(page).getByText('Accrued this year', { exact: true }).first().locator('xpath=ancestor::dl[1]')],
+            ['Card actions', 'apply, history, statement', (page) => scope(page).getByRole('button', { name: 'View history', exact: true }).first().locator('xpath=..')],
+            ['Mandatory December Leave', 'company shutdown dates, not a balance', card('Mandatory December Leave', { exact: true })],
+            ['Comp Off', 'earned by working a holiday', card('Comp Off', { exact: true })],
+            ['Other leave', 'special leave types', card('Other leave', { exact: true })],
         ],
     },
     {
@@ -236,7 +248,7 @@ const SHOTS = [
         ],
     },
     {
-        id: 'leave-apply', url: '/time-off/my', title: 'Applying for leave',
+        id: 'leave-apply', url: '/time-off/my', height: 1200, title: 'Applying for leave',
         prepare: openModal(button('Apply Leave'), 'Request Time Off'),
         markers: [
             ['Leave type', 'your balance shows below', field('Leave Type')],
@@ -401,7 +413,7 @@ async function login(page) {
     await page.fill('input[name=email]', EMAIL);
     await page.fill('input[name=password]', PASSWORD);
     await Promise.all([
-        page.waitForURL((url) => !url.pathname.startsWith('/login'), { timeout: 30000 }),
+        page.waitForURL((url) => !url.pathname.startsWith('/login'), { timeout: 60000, waitUntil: 'domcontentloaded' }),
         page.click('[data-test=login-button]'),
     ]);
 }
@@ -449,6 +461,9 @@ async function drawMarkers(page, boxes) {
 
 async function capture(page, shot) {
     page.__scope = undefined;
+    if (!shot.mobile) {
+        await page.setViewportSize({ width: 1440, height: shot.height ?? 900 });
+    }
     const response = await page.goto(shot.url, { waitUntil: 'networkidle' });
     const status = response?.status();
     const landed = new URL(page.url()).pathname;

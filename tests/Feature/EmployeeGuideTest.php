@@ -2,11 +2,14 @@
 
 use App\Enums\UserRole;
 use App\Livewire\Help\EmployeeGuide;
+use App\Models\Department;
 use App\Models\Employee;
+use App\Models\Role;
 use App\Models\User;
 use App\Services\EmployeeMenu;
 use App\Services\Help\EmployeeGuide as EmployeeGuideContent;
 use App\Services\Help\RouteAccess;
+use App\Services\Navigation\Sidebar;
 use Livewire\Livewire;
 
 /**
@@ -125,4 +128,90 @@ test('the demo account command creates a plain employee with fictional data and 
     $this->artisan('guide:demo-employee', ['--remove' => true])->assertSuccessful();
     expect(User::withTrashed()->whereIn('email', ['guide.employee@example.com', 'guide.manager@example.com'])->exists())->toBeFalse()
         ->and(Employee::withTrashed()->where('employee_id', 'GUIDE-0001')->exists())->toBeFalse();
+});
+
+/**
+ * Role matrix: the guide is open to every signed-in role, and every link on it
+ * must open for the reader (never a 403 or an error) — a link they cannot use
+ * is hidden, not shown.
+ */
+dataset('guide roles', ['super_admin', 'hr_admin', 'director', 'department_head', 'manager', 'finance', 'coordinator', 'employee']);
+
+function guideRoleUser(string $slug): User
+{
+    $department = Department::factory()->create();
+    $role = Role::where('slug', $slug)->firstOrFail();
+    $user = User::factory()->create(['role' => $role->legacyBucket(), 'role_id' => $role->id]);
+    Employee::factory()->create(['user_id' => $user->id, 'department_id' => $department->id, 'status' => 'active']);
+
+    if ($slug === 'department_head') {
+        $department->update(['head_id' => $user->id]);
+    }
+
+    return $user->fresh();
+}
+
+/** @return array<int, string> same-site links on the rendered page, anchors and assets excluded */
+function guidePageLinks(string $html): array
+{
+    preg_match_all('/<a\s[^>]*href="([^"#]+)"/i', $html, $matches);
+    $host = parse_url(config('app.url'), PHP_URL_HOST);
+
+    return collect($matches[1])
+        ->map(fn (string $href): string => html_entity_decode($href))
+        ->filter(fn (string $href): bool => str_starts_with($href, '/') || str_contains($href, (string) $host) || str_contains($href, 'localhost'))
+        ->map(fn (string $href): string => parse_url($href, PHP_URL_PATH) ?: '/')
+        ->reject(fn (string $path): bool => str_starts_with($path, '/images') || str_starts_with($path, '/build') || str_starts_with($path, '/logout'))
+        ->unique()
+        ->values()
+        ->all();
+}
+
+test('every role can open the guide and every link on it opens for that role', function (string $slug) {
+    $user = guideRoleUser($slug);
+
+    $html = $this->withoutVite()->actingAs($user)->get(route('help.employee-guide'))->assertOk()->getContent();
+    $links = guidePageLinks($html);
+
+    expect($links)->not->toBeEmpty();
+
+    foreach ($links as $path) {
+        $status = $this->actingAs($user)->get($path)->getStatusCode();
+
+        expect($status)->not->toBe(403, "{$slug}: guide links to {$path}, which returns 403")
+            ->and($status)->not->toBe(404, "{$slug}: guide links to {$path}, which returns 404")
+            ->and($status)->toBeLessThan(500, "{$slug}: guide link {$path} returns {$status}");
+    }
+})->with('guide roles');
+
+test('assets stay out of the guide for roles that cannot open the assets register', function (string $slug) {
+    $html = $this->withoutVite()->actingAs(guideRoleUser($slug))->get(route('help.employee-guide'))->getContent();
+
+    expect($html)->not->toContain(route('operations.assets', absolute: false));
+})->with(['employee', 'coordinator', 'manager', 'finance', 'department_head']);
+
+test('the guide names every item in the employee sidebar', function () {
+    $user = guideRoleUser('employee');
+    $this->actingAs($user);
+
+    // Plain employees get EmployeeMenu (the layout's $pureEmployee branch).
+    expect(app(Sidebar::class)->isSelfServiceOnly($user))->toBeTrue();
+
+    $labels = collect(app(EmployeeMenu::class)->visible())->pluck('label')->unique();
+    $guideText = json_encode(app(EmployeeGuideContent::class)->sections($user), JSON_UNESCAPED_UNICODE);
+
+    $missing = $labels->reject(fn (string $label): bool => str_contains($guideText, $label))->values()->all();
+
+    expect($missing)->toBe([], 'The employee sidebar shows items the guide never mentions: '.implode(', ', $missing));
+});
+
+test('the guide explains the My Work menu that managers and HR see', function () {
+    $user = guideRoleUser('manager');
+    $this->actingAs($user);
+
+    expect(app(Sidebar::class)->isSelfServiceOnly($user))->toBeFalse();
+
+    $guideText = json_encode(app(EmployeeGuideContent::class)->sections($user), JSON_UNESCAPED_UNICODE);
+
+    expect($guideText)->toContain('My Work');
 });

@@ -109,6 +109,12 @@ class EnsureEmployeeLeaveBalancesService
             return ['status' => self::NO_ENTITLEMENT, 'message' => 'System-controlled type.'] + $row;
         }
 
+        // Earned Leave comes from the Leave V2 migration (the employee's current
+        // CSL), never a fresh 12 days on top of it — before or after it runs.
+        if (($held = app(LeaveV2MigrationService::class)->holdsEarned($employee, $type, $year)) !== null) {
+            return ['status' => self::NO_ENTITLEMENT, 'message' => $held] + $row;
+        }
+
         // Leave V2: a historical or inactive type never gets a new balance, and
         // a Casual, Sick… reason draws on the shared Earned Leave balance and
         // never holds one of its own.

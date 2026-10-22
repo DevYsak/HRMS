@@ -7,6 +7,7 @@ use App\Models\UiThemeSetting;
 use App\Services\Appearance\UiTheme;
 use App\Services\Audit\AuditService;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Attributes\Url;
 use Livewire\Component;
@@ -55,6 +56,15 @@ class UiThemeSettings extends Component
     {
         $this->authorizeSettings();
         $this->validate(UiTheme::rules(), [], collect(UiTheme::SCHEMA)->mapWithKeys(fn ($s, $k) => ["values.$k" => mb_strtolower($s['label'])])->all());
+
+        // The settings table arrives with a migration; on a database that has
+        // not been migrated yet, say so instead of failing with a 500.
+        if (! Schema::hasTable((new UiThemeSetting)->getTable())) {
+            $this->addError('values', 'Brand & layout settings cannot be saved yet: the database is missing the ui_theme_settings table. Run "php artisan migrate", then save again.');
+            \Flux::toast('Settings not saved: run "php artisan migrate" first.', variant: 'danger');
+
+            return;
+        }
 
         $setting = UiThemeSetting::current();
         $old = UiTheme::resolve($setting->settings ?? []);
