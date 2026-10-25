@@ -26,6 +26,7 @@ use App\Services\Leave\LeaveYearResolver;
 use Carbon\CarbonPeriod;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Response;
 use Livewire\Attributes\Locked;
@@ -41,14 +42,21 @@ class AllAttendance extends Component
     /** Pending regularisations listed in the preview's "View all" drawer. */
     public const PENDING_LIST_LIMIT = 50;
 
+    /** Filters live in the URL: a reload, a shared link and every page keep them. */
+    #[Url(as: 'q', except: '')]
     public $search = '';
 
+    #[Url(except: '')]
     public $status = '';
 
+    /** A single day; when set it takes the place of the From–To range. */
+    #[Url(as: 'day', except: '')]
     public $date = '';
 
+    #[Url(as: 'from', except: '')]
     public string $dateFrom = '';
 
+    #[Url(as: 'to', except: '')]
     public string $dateTo = '';
 
     /** Department / team / employee filters, always inside the viewer's reach. */
@@ -102,13 +110,64 @@ class AllAttendance extends Component
 
     public function mount(): void
     {
-        // Default to current week (Mon–Sun)
+        // Default to the current week (Mon–Sun) — unless the URL already chose a day or a range.
+        if ((string) $this->date === '' && $this->dateFrom === '' && $this->dateTo === '') {
+            $this->dateFrom = Carbon::now()->startOfWeek()->format('Y-m-d');
+            $this->dateTo = Carbon::now()->endOfWeek()->format('Y-m-d');
+        }
+    }
+
+    /** Back to the default view: this week, every employee in reach, no other filter. */
+    public function clearFilters(): void
+    {
+        $this->reset(['search', 'status', 'date', 'filterDepartment', 'filterTeam', 'filterEmployee']);
         $this->dateFrom = Carbon::now()->startOfWeek()->format('Y-m-d');
         $this->dateTo = Carbon::now()->endOfWeek()->format('Y-m-d');
+        $this->resetErrorBag();
+        $this->resetPage();
+    }
+
+    /** Whether anything differs from the default view (shows "Clear filters"). */
+    public function hasActiveFilters(): bool
+    {
+        return (string) $this->search !== '' || (string) $this->status !== '' || (string) $this->date !== ''
+            || $this->filterDepartment !== '' || $this->filterTeam !== '' || $this->filterEmployee !== ''
+            || $this->dateFrom !== Carbon::now()->startOfWeek()->format('Y-m-d')
+            || $this->dateTo !== Carbon::now()->endOfWeek()->format('Y-m-d');
+    }
+
+    /** A Y-m-d string that is a real date (URL values are user input). */
+    protected static function isDate(string $value): bool
+    {
+        $parsed = \DateTimeImmutable::createFromFormat('!Y-m-d', $value);
+
+        return $parsed !== false && $parsed->format('Y-m-d') === $value;
+    }
+
+    /** The From–To problem to show, or null when the range can be applied. */
+    public function rangeError(): ?string
+    {
+        if ((string) $this->date !== '') {
+            return self::isDate((string) $this->date) ? null : 'Choose a valid day.';
+        }
+        foreach (['From' => $this->dateFrom, 'To' => $this->dateTo] as $label => $value) {
+            if ($value !== '' && ! self::isDate($value)) {
+                return "Choose a valid {$label} date.";
+            }
+        }
+
+        return $this->dateFrom !== '' && $this->dateTo !== '' && $this->dateFrom > $this->dateTo
+            ? 'From date cannot be after To date.'
+            : null;
     }
 
     public function previousWeek(): void
     {
+        if ($this->rangeError() !== null || $this->dateFrom === '' || $this->dateTo === '') {
+            $this->thisWeek();
+
+            return;
+        }
         $this->dateFrom = Carbon::parse($this->dateFrom)->subWeek()->format('Y-m-d');
         $this->dateTo = Carbon::parse($this->dateTo)->subWeek()->format('Y-m-d');
         $this->resetPage();
@@ -116,6 +175,11 @@ class AllAttendance extends Component
 
     public function nextWeek(): void
     {
+        if ($this->rangeError() !== null || $this->dateFrom === '' || $this->dateTo === '') {
+            $this->thisWeek();
+
+            return;
+        }
         $this->dateFrom = Carbon::parse($this->dateFrom)->addWeek()->format('Y-m-d');
         $this->dateTo = Carbon::parse($this->dateTo)->addWeek()->format('Y-m-d');
         $this->resetPage();
@@ -668,6 +732,10 @@ class AllAttendance extends Component
     {
         $today = Carbon::today();
 
+        if ($this->rangeError() !== null) {
+            return 0;
+        }
+
         if ($this->date) {
             return app(WorkingDayResolver::class)->isWeeklyOff(Carbon::parse($this->date)) ? 0 : 1;
         }
@@ -683,6 +751,29 @@ class AllAttendance extends Component
         }
 
         return 1;
+    }
+
+    /**
+     * The raw punches behind a page of attendance rows, in time order and
+     * keyed "employeeId|Y-m-d" — one query for the page. The status resolver
+     * reads them instead of loading each row's punches itself.
+     *
+     * @param  array<int, Attendance>  $rows
+     * @return Collection<string, Collection<int, AttendancePunch>>
+     */
+    protected function punchesFor(array $rows): Collection
+    {
+        if ($rows === []) {
+            return collect();
+        }
+
+        $dates = collect($rows)->map(fn (Attendance $a) => $a->date->toDateString());
+
+        return AttendancePunch::whereIn('employee_id', collect($rows)->pluck('employee_id')->unique()->all())
+            ->whereBetween('punch_date', [$dates->min(), $dates->max()])
+            ->orderBy('punched_at')
+            ->get()
+            ->groupBy(fn (AttendancePunch $p) => $p->employee_id.'|'.$p->punch_date->toDateString());
     }
 
     /** @param Builder<Attendance> $query */
@@ -704,7 +795,9 @@ class AllAttendance extends Component
             $query->whereIn('employee_id', $ids);
         }
 
-        if ($this->date) {
+        if ($this->rangeError() !== null) {
+            $query->whereRaw('1 = 0');
+        } elseif ($this->date) {
             $query->where('date', $this->date);
         } elseif ($this->dateFrom || $this->dateTo) {
             if ($this->dateFrom) {
@@ -789,7 +882,7 @@ class AllAttendance extends Component
 
         // Presence trend across the selected range (drives the overview chart).
         $trend = [];
-        if ($this->dateFrom && $this->dateTo) {
+        if ($this->rangeError() === null && (string) $this->date === '' && $this->dateFrom && $this->dateTo) {
             $byDay = $scoped(Attendance::whereBetween('date', [$this->dateFrom, $this->dateTo]))
                 ->get(['date', 'is_late', 'employee_id'])
                 ->groupBy(fn ($a) => $a->date->toDateString());
@@ -803,17 +896,43 @@ class AllAttendance extends Component
             }
         }
 
-        $weekLabel = $this->dateFrom && $this->dateTo
-            ? Carbon::parse($this->dateFrom)->format('d M').' – '.Carbon::parse($this->dateTo)->format('d M Y')
-            : 'All dates';
+        // Labels follow the reader's date-format preference.
+        $rangeValid = $this->rangeError() === null;
+        $weekLabel = $rangeValid && $this->dateFrom && $this->dateTo
+            ? Carbon::parse($this->dateFrom)->toImmutable()->userShortDate().' – '.Carbon::parse($this->dateTo)->toImmutable()->userDate()
+            : 'This week';
+        $showingLabel = match (true) {
+            ! $rangeValid => null,
+            (string) $this->date !== '' => Carbon::parse($this->date)->toImmutable()->userDate(),
+            $this->dateFrom !== '' && $this->dateTo !== '' => Carbon::parse($this->dateFrom)->toImmutable()->userDate().' – '.Carbon::parse($this->dateTo)->toImmutable()->userDate(),
+            $this->dateFrom !== '' => 'From '.Carbon::parse($this->dateFrom)->toImmutable()->userDate(),
+            $this->dateTo !== '' => 'Up to '.Carbon::parse($this->dateTo)->toImmutable()->userDate(),
+            default => 'All dates',
+        };
 
         $statusResolver = app(AttendanceStatusResolver::class);
 
+        $attendances = $query->latest('date')->paginate(15);
+        // Every punch behind the rows on this page, in one query: the status
+        // resolver and the Punches column both read it.
+        $pagePunches = $this->punchesFor($attendances->items());
+        $timeline = app(PunchTimeline::class);
+
         return view('livewire.attendance.all-attendance', [
-            'attendances' => $attendances = $query->latest('date')->paginate(15),
+            'attendances' => $attendances,
             // Live / completed / missing-checkout for every row, from the shared resolver.
             // One resolver for the page, so its holiday / MDL / calendar lookups are shared by every row.
-            'rowStatus' => collect($attendances->items())->mapWithKeys(fn (Attendance $a) => [$a->id => $statusResolver->forAttendance($a)])->all(),
+            'rowStatus' => collect($attendances->items())->mapWithKeys(fn (Attendance $a) => [
+                $a->id => $statusResolver->forAttendance($a, $pagePunches->get($a->employee_id.'|'.$a->date->toDateString(), collect())),
+            ])->all(),
+            'punchesByDay' => $pagePunches->map(fn (Collection $punches) => $punches->map(fn (AttendancePunch $p) => [
+                'time' => $p->punched_at->toImmutable()->userTime(),
+                'direction' => $timeline->directionOf($p),
+                'source' => $p->source,
+            ])->values()->all())->all(),
+            'rangeError' => $this->rangeError(),
+            'showingLabel' => $showingLabel,
+            'hasActiveFilters' => $this->hasActiveFilters(),
             'pendingRegularisations' => $pendingRegularisations,
             'pendingRegularisationCount' => $pendingRegularisationCount,
             // Recently decided requests HR may still correct or delete.

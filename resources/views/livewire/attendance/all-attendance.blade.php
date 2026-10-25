@@ -200,16 +200,26 @@
             {{-- Date range — filter the punch logs for an arbitrary span --}}
             <div class="flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2 py-1" title="Filter logs by date range">
                 <flux:icon.calendar-days class="size-3.5 text-zinc-400" />
-                <input type="date" wire:model.live="dateFrom" max="{{ now()->toDateString() }}" aria-label="From date"
-                    class="w-[7.5rem] border-0 bg-transparent p-0.5 text-xs font-semibold tabular-nums text-zinc-600 dark:text-zinc-300 focus:ring-0">
+                <input type="date" wire:model.live="dateFrom" max="{{ $dateTo && $dateTo < now()->toDateString() ? $dateTo : now()->toDateString() }}" aria-label="From date"
+                    @disabled($date) title="{{ $date ? 'A single day is selected — clear it to use a range' : 'From date' }}"
+                    class="w-[7.5rem] border-0 bg-transparent p-0.5 text-xs font-semibold tabular-nums text-zinc-600 disabled:opacity-40 dark:text-zinc-300 focus:ring-0">
                 <span class="text-zinc-300">–</span>
-                <input type="date" wire:model.live="dateTo" max="{{ now()->toDateString() }}" aria-label="To date"
-                    class="w-[7.5rem] border-0 bg-transparent p-0.5 text-xs font-semibold tabular-nums text-zinc-600 dark:text-zinc-300 focus:ring-0">
+                <input type="date" wire:model.live="dateTo" min="{{ $dateFrom }}" max="{{ now()->toDateString() }}" aria-label="To date"
+                    @disabled($date) title="{{ $date ? 'A single day is selected — clear it to use a range' : 'To date' }}"
+                    class="w-[7.5rem] border-0 bg-transparent p-0.5 text-xs font-semibold tabular-nums text-zinc-600 disabled:opacity-40 dark:text-zinc-300 focus:ring-0">
             </div>
-            @if($search || $date || $status)
-                <button wire:click="$set('search','');$set('date','');$set('status','')" class="inline-flex items-center gap-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 px-2.5 py-1.5 text-xs font-bold text-zinc-500 dark:text-zinc-400 transition hover:bg-zinc-200"><flux:icon.x-mark class="size-3.5" /> Reset</button>
+            @if($hasActiveFilters)
+                <button wire:click="clearFilters" type="button" data-clear-filters class="inline-flex items-center gap-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 px-2.5 py-1.5 text-xs font-bold text-zinc-500 dark:text-zinc-400 transition hover:bg-zinc-200 dark:hover:bg-zinc-700"><flux:icon.x-mark class="size-3.5" /> Clear filters</button>
             @endif
         </div>
+    </div>
+    {{-- What the log shows, in the reader's date format — or why it shows nothing. --}}
+    <div class="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-orange-100/70 px-5 py-2 text-xs dark:border-white/10">
+        @if($rangeError)
+            <span class="inline-flex items-center gap-1.5 font-semibold text-rose-600 dark:text-rose-400" role="alert" data-range-error><flux:icon.exclamation-triangle class="size-3.5" /> {{ $rangeError }}</span>
+        @else
+            <span class="text-zinc-500 dark:text-zinc-400" data-showing>Showing <span class="font-bold text-zinc-800 dark:text-zinc-100">{{ $showingLabel }}</span>{{ $date ? ' (single day)' : '' }}</span>
+        @endif
     </div>
     <div class="overflow-x-auto">
         @if($attendances->count() > 0)
@@ -220,6 +230,7 @@
                         <th class="py-2.5">Date</th>
                         <th class="py-2.5">Check In</th>
                         <th class="py-2.5">Check Out</th>
+                        <th class="py-2.5">Punches</th>
                         <th class="py-2.5">Break</th>
                         <th class="py-2.5">Hours</th>
                         <th class="py-2.5">Method</th>
@@ -257,8 +268,8 @@
                                 </div>
                             </td>
                             <td class="py-2.5">
-                                <div class="font-bold text-zinc-800 dark:text-zinc-100">{{ $log->date->format('d M') }}</div>
-                                <div class="text-[9px] text-zinc-400">{{ $log->date->format('D') }}</div>
+                                <div class="whitespace-nowrap font-bold text-zinc-800 dark:text-zinc-100">{{ $log->date->toImmutable()->userDate() }}</div>
+                                <div class="text-[9px] text-zinc-400">{{ $log->date->format('l') }}</div>
                                 @if($log->is_regularized)<span class="mt-0.5 inline-flex items-center gap-0.5 rounded bg-blue-100 px-1 py-px text-[8px] font-black uppercase tracking-wide text-blue-600 dark:bg-blue-900/40 dark:text-blue-300"><flux:icon.pencil-square class="size-2.5" /> Regularized</span>@endif
                             </td>
                             <td class="py-2.5">
@@ -280,6 +291,22 @@
                                 @elseif($log->check_in)<span class="font-bold text-amber-500" data-attendance-state="missing_checkout">missing</span>
                                 @else<span class="text-zinc-300">—</span>@endif
                             </td>
+                            <td class="py-2.5" data-punches>
+                                @php $dayPunches = $punchesByDay[$log->employee_id.'|'.$log->date->toDateString()] ?? []; @endphp
+                                @if($dayPunches !== [])
+                                    <div class="flex max-w-[15rem] flex-wrap gap-1">
+                                        @foreach($dayPunches as $punch)
+                                            <span @class([
+                                                'inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 font-mono text-[9px] font-bold tabular-nums',
+                                                'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' => $punch['direction'] === 'in',
+                                                'bg-zinc-100 text-zinc-600 dark:bg-white/10 dark:text-zinc-300' => $punch['direction'] !== 'in',
+                                            ]) title="{{ $punch['source'] === 'regularisation' ? 'Regularised punch' : ($punch['source'] === 'system_auto' ? 'Automatic punch-out' : 'Recorded punch') }}">{{ strtoupper($punch['direction'] ?? '?') }} {{ $punch['time'] }}</span>
+                                        @endforeach
+                                    </div>
+                                @else
+                                    <span class="text-[9px] text-zinc-400" title="No device punches stored for this day — the row's check-in / check-out are the record">—</span>
+                                @endif
+                            </td>
                             <td class="py-2.5 text-zinc-500 dark:text-zinc-400">{{ (int) ($log->break_minutes ?? 0) }}m</td>
                             <td class="py-2.5"><span class="font-black tabular-nums {{ $hrs >= 8 ? 'text-emerald-600' : ($hrs > 0 ? 'text-zinc-800 dark:text-zinc-100' : 'text-zinc-300') }}">{{ $hrs > 0 ? number_format($hrs, 1).'h' : '—' }}</span></td>
                             <td class="py-2.5">
@@ -296,8 +323,8 @@
         @else
             <div class="py-14 text-center text-sm text-zinc-400">
                 <flux:icon.calendar-days class="mx-auto mb-2 size-9 opacity-30" />
-                No attendance records for this range.
-                <div class="mt-1 text-xs text-zinc-300">Try another week, clear the day filter, or reset the filters.</div>
+                {{ $rangeError ? 'Fix the dates to see attendance records.' : 'No attendance records for these filters.' }}
+                <div class="mt-1 text-xs text-zinc-400">Try another week or date range, pick another employee, or clear the filters.</div>
             </div>
         @endif
     </div>
