@@ -22,11 +22,11 @@ function suUser(string $slug): User
 test('a light background or border without a dark partner falls back to the dark tokens', function () {
     $css = file_get_contents(resource_path('css/app.css'));
 
-    expect($css)->toContain('.dark .bg-white:not([class*="dark:bg-"])')
+    expect($css)->toContain('.dark .bg-white:not([class*="dark:bg-"], [data-ui-preview] *)')
         ->and($css)->toContain('.border-orange-100\/70')
-        ->and($css)->toContain(':not([class*="dark:border"])')
-        // The page canvas itself is never repainted by the fallback.
-        ->and($css)->toContain(':not([class*="dark:bg-"], body, [data-flux-main])');
+        ->and($css)->toContain(':not([class*="dark:border"], [data-ui-preview] *)')
+        // The page canvas, and the always-light Brand & Layout preview, are never repainted.
+        ->and($css)->toContain(':not([class*="dark:bg-"], body, [data-flux-main], [data-ui-preview] *)');
 });
 
 test('wide tables get a scroll hint and slow updates a busy bar', function () {

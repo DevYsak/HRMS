@@ -83,7 +83,7 @@
             <div class="overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-700" style="{{ $preview }};--ui-surface-dark:var(--ui-surface);--ui-border-dark:var(--ui-border)" data-ui-preview>
                 <div style="background: var(--pv-bg); font-family: var(--font-sans); font-size: var(--pv-font-size); line-height: var(--pv-line-height); font-weight: var(--pv-body-weight); color: #18181b;">
                     <div class="flex items-center justify-between border-b border-zinc-200 bg-white px-3" style="height: var(--pv-header-height);">
-                        <span style="font-weight: var(--pv-heading-weight);">NEXCORE</span>
+                        <span class="truncate" style="font-weight: var(--pv-heading-weight);" data-preview-brand>{{ \App\Models\Company::brandName() }}</span>
                         <span class="size-6 rounded-full" style="background: var(--pv-primary);"></span>
                     </div>
                     <div class="flex">

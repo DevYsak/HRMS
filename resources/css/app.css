@@ -539,8 +539,9 @@ select:focus[data-flux-control] {
 
 /* ---- Dashboard surfaces (dark) — neutral classes used across the cream dashboards ---- */
 .dark .bg-\[\#FFFDF8\] { background-color: #0F172A !important; }
-.dark .bg-white         { background-color: #1E293B !important; }
-.dark .bg-white\/70     { background-color: rgba(30, 41, 59, .6) !important; }
+/* The Brand & Layout preview always shows light mode, so it is left out. */
+.dark .bg-white:not([data-ui-preview] *)     { background-color: #1E293B !important; }
+.dark .bg-white\/70:not([data-ui-preview] *) { background-color: rgba(30, 41, 59, .6) !important; }
 .dark .bg-\[\#FFF2E8\]  { background-color: #1F2937 !important; }
 .dark .bg-\[\#FFF1E5\]  { background-color: #1F2937 !important; }
 .dark .bg-\[\#F3E8DD\]  { background-color: #334155 !important; }
@@ -645,20 +646,21 @@ textarea { overflow-wrap: anywhere; }
 
 /* Phase 5 dark-mode fallback: a light background, border or divider written
    without a dark: partner falls back to the dark tokens instead of glowing.
-   Elements that declare their own dark colour are never touched. */
-.dark :is(.bg-\[\#FFF8F3\], .bg-\[\#FFF8F1\], .bg-\[\#F7F8FA\], .bg-\[\#F5F6FA\], .bg-\[\#FAFAF9\], .bg-\[\#F7F7F8\], .bg-\[\#FBF7F1\], .bg-\[\#FAFAFA\]):not([class*="dark:bg-"], body, [data-flux-main]) {
+   Elements that declare their own dark colour are never touched, nor is the
+   Brand & Layout preview, which always shows light mode. */
+.dark :is(.bg-\[\#FFF8F3\], .bg-\[\#FFF8F1\], .bg-\[\#F7F8FA\], .bg-\[\#F5F6FA\], .bg-\[\#FAFAF9\], .bg-\[\#F7F7F8\], .bg-\[\#FBF7F1\], .bg-\[\#FAFAFA\]):not([class*="dark:bg-"], body, [data-flux-main], [data-ui-preview] *) {
     background-color: transparent;
 }
-.dark .bg-white:not([class*="dark:bg-"]) {
+.dark .bg-white:not([class*="dark:bg-"], [data-ui-preview] *) {
     background-color: var(--ui-surface-dark, var(--color-ink-900));
 }
-.dark :is(.bg-zinc-50, .bg-gray-50, .bg-slate-50, .bg-orange-50, .bg-orange-50\/30, .bg-orange-50\/40, .bg-orange-50\/50, .bg-orange-50\/60, .bg-\[\#FFFDF8\]):not([class*="dark:bg-"]) {
+.dark :is(.bg-zinc-50, .bg-gray-50, .bg-slate-50, .bg-orange-50, .bg-orange-50\/30, .bg-orange-50\/40, .bg-orange-50\/50, .bg-orange-50\/60, .bg-\[\#FFFDF8\]):not([class*="dark:bg-"], [data-ui-preview] *) {
     background-color: rgb(255 255 255 / 0.04);
 }
-.dark :is(.border-zinc-50, .border-zinc-100, .border-zinc-200, .border-gray-100, .border-gray-200, .border-orange-100, .border-orange-100\/70, .border-orange-200, .border-amber-100, .border-amber-200, .border-amber-200\/70, .border-\[\#F3E8DD\]):not([class*="dark:border"]) {
+.dark :is(.border-zinc-50, .border-zinc-100, .border-zinc-200, .border-gray-100, .border-gray-200, .border-orange-100, .border-orange-100\/70, .border-orange-200, .border-amber-100, .border-amber-200, .border-amber-200\/70, .border-\[\#F3E8DD\]):not([class*="dark:border"], [data-ui-preview] *) {
     border-color: var(--ui-border-dark, rgb(255 255 255 / 0.08));
 }
-.dark :is(.divide-zinc-50, .divide-zinc-100, .divide-orange-50, .divide-\[\#F3E8DD\]):not([class*="dark:divide"]) > :not(:last-child) {
+.dark :is(.divide-zinc-50, .divide-zinc-100, .divide-orange-50, .divide-\[\#F3E8DD\]):not([class*="dark:divide"], [data-ui-preview] *) > :not(:last-child) {
     border-color: var(--ui-border-dark, rgb(255 255 255 / 0.08));
 }
 
