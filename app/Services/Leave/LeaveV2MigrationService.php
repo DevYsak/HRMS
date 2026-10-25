@@ -113,7 +113,11 @@ class LeaveV2MigrationService
             'source_balance_id' => $sourceBalance?->id,
             'csl_available' => $sourceAvailable,
             'sick_available' => $sum(fn (LeaveType $t) => $notSource($t) && ($t->category === 'sick' || str_contains(strtolower($t->name), 'sick'))),
-            'annual_historical' => $sum(fn (LeaveType $t) => $notSource($t) && ($t->category === 'annual' || str_starts_with(strtolower($t->name), 'annual'))),
+            'annual_historical' => $sum(fn (LeaveType $t) =>
+    $notSource($t)
+    && ($earned === null || $t->id !== $earned->id)
+    && ($t->category === 'annual' || str_starts_with(strtolower($t->name), 'annual'))
+),
             'comp_off' => $sum(fn (LeaveType $t) => LeaveCategory::of($t) === LeaveCategory::COMP_OFF || $t->category === 'comp_off'),
             'special' => $sum(fn (LeaveType $t) => LeaveCategory::of($t) === LeaveCategory::SPECIAL),
             'pending_legacy' => $pendingLegacy->count(),
