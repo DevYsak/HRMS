@@ -19,9 +19,12 @@
         null, false
     );
 @endphp
-@if($companyFavicon)
-    <link rel="icon" href="{{ asset('storage/'.$companyFavicon) }}">
-    <link rel="apple-touch-icon" href="{{ asset('storage/'.$companyFavicon) }}">
+@php
+    $companyFaviconUrl = $companyFavicon ? \App\Models\Company::brandFaviconUrl($companyFavicon) : null;
+@endphp
+@if($companyFaviconUrl)
+    <link rel="icon" href="{{ $companyFaviconUrl }}">
+    <link rel="apple-touch-icon" href="{{ $companyFaviconUrl }}">
 @else
     <link rel="icon" href="/favicon.ico" sizes="any">
     <link rel="icon" href="/favicon.svg" type="image/svg+xml">

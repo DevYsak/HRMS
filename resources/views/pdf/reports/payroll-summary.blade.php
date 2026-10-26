@@ -5,13 +5,15 @@
     <title>Payroll Summary — {{ $monthLabel }}</title>
     @php
         $company = \App\Models\Company::first() ?? new \App\Models\Company(['name' => 'Pulse HRMS', 'primary_color' => '#1DB77A']);
+        $brandColor = \App\Models\Company::brandColor();
+        $brandLogo = \App\Models\Company::brandLogoPath();
     @endphp
     <style>
         body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 11px; color: #333; margin: 0; padding: 24px; }
-        h1 { font-size: 20px; color: {{ $company->primary_color }}; margin: 0 0 4px; }
+        h1 { font-size: 20px; color: {{ $brandColor }}; margin: 0 0 4px; }
         .sub { color: #666; font-size: 11px; margin-bottom: 24px; }
         table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-        th { background: #f1f5f1; text-align: left; padding: 7px 10px; font-size: 10px; text-transform: uppercase; border-bottom: 2px solid {{ $company->primary_color }}; }
+        th { background: #f1f5f1; text-align: left; padding: 7px 10px; font-size: 10px; text-transform: uppercase; border-bottom: 2px solid {{ $brandColor }}; }
         td { padding: 7px 10px; border-bottom: 1px solid #e5e7eb; }
         tr:last-child td { border-bottom: none; }
         .mono { font-family: 'Courier New', monospace; }

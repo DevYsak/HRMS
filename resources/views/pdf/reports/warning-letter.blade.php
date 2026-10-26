@@ -5,6 +5,8 @@
     <title>{{ $warning->warningTypeLabel() }} — {{ $warning->employee->user->name }}</title>
     @php
         $company = \App\Models\Company::first() ?? new \App\Models\Company(['name' => 'Pulse HRMS', 'primary_color' => '#f97316']);
+        $brandColor = \App\Models\Company::brandColor();
+        $brandLogo = \App\Models\Company::brandLogoPath();
         $refNumber = 'WL-' . $warning->issue_date->format('Y') . '-' . str_pad($warning->id, 5, '0', STR_PAD_LEFT);
         $reportingManager = $warning->employee->manager?->name ?? $warning->issuedBy->name;
     @endphp
@@ -12,11 +14,11 @@
         * { box-sizing: border-box; }
         body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 11px; color: #1a1a1a; margin: 0; padding: 32px 36px; }
 
-        .header { display: table; width: 100%; border-bottom: 3px solid {{ $company->primary_color ?? '#f97316' }}; padding-bottom: 14px; margin-bottom: 18px; }
+        .header { display: table; width: 100%; border-bottom: 3px solid {{ $brandColor }}; padding-bottom: 14px; margin-bottom: 18px; }
         .header-logo { display: table-cell; width: 70px; vertical-align: middle; }
         .header-logo img { max-height: 52px; max-width: 60px; object-fit: contain; }
         .header-info { display: table-cell; vertical-align: middle; padding-left: 14px; }
-        .header-info .company-name { font-size: 18px; font-weight: bold; color: {{ $company->primary_color ?? '#f97316' }}; margin: 0 0 2px; }
+        .header-info .company-name { font-size: 18px; font-weight: bold; color: {{ $brandColor }}; margin: 0 0 2px; }
         .header-info .company-address { font-size: 9px; color: #666; line-height: 1.5; }
         .header-badge { display: table-cell; vertical-align: middle; text-align: right; width: 160px; }
 
@@ -24,7 +26,7 @@
         .ref-number { font-size: 9px; color: #888; margin-top: 4px; }
         .issued-date { font-size: 9px; color: #888; margin-top: 2px; }
 
-        h2 { font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.6px; color: {{ $company->primary_color ?? '#f97316' }}; margin: 20px 0 8px; border-bottom: 1px solid #e5e7eb; padding-bottom: 4px; }
+        h2 { font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.6px; color: {{ $brandColor }}; margin: 20px 0 8px; border-bottom: 1px solid #e5e7eb; padding-bottom: 4px; }
 
         table { width: 100%; border-collapse: collapse; margin-bottom: 4px; }
         td { padding: 5px 8px; border-bottom: 1px solid #f0f0f0; vertical-align: top; font-size: 10.5px; }
@@ -34,7 +36,7 @@
         .box p { margin: 4px 0; line-height: 1.6; }
 
         .timeline-table { width: 100%; border-collapse: collapse; }
-        .timeline-table th { background: {{ $company->primary_color ?? '#f97316' }}; color: #fff; padding: 6px 10px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; }
+        .timeline-table th { background: {{ $brandColor }}; color: #fff; padding: 6px 10px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; }
         .timeline-table td { padding: 6px 10px; border-bottom: 1px solid #e5e7eb; font-size: 10.5px; }
         .timeline-table tr:last-child td { border-bottom: none; }
 
@@ -57,10 +59,10 @@
     {{-- HEADER --}}
     <div class="header">
         <div class="header-logo">
-            @if($company->logo)
-                <img src="{{ storage_path('app/public/' . $company->logo) }}" alt="{{ $company->name }}">
+            @if($brandLogo)
+                <img src="{{ $brandLogo }}" alt="{{ $company->name }}">
             @else
-                <div style="width:52px;height:52px;border-radius:8px;background:{{ $company->primary_color ?? '#f97316' }};display:flex;align-items:center;justify-content:center;">
+                <div style="width:52px;height:52px;border-radius:8px;background:{{ $brandColor }};display:flex;align-items:center;justify-content:center;">
                     <svg width="28" height="28" viewBox="0 0 24 24" fill="white"><path d="M4 3h3v7h10V3h3v18h-3v-8H7v8H4V3z"/></svg>
                 </div>
             @endif

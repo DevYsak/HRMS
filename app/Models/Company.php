@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\Appearance\UiTheme;
 use Database\Factories\CompanyFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -151,6 +152,43 @@ class Company extends Model
     private static function storedBrandUrl(?string $path): ?string
     {
         return $path && Storage::disk('public')->exists($path) ? Storage::disk('public')->url($path) : null;
+    }
+
+    /**
+     * The brand colour documents use: Brand & Layout's primary — the colour the
+     * app itself shows — so PDFs, letters and the screens never disagree.
+     */
+    public static function brandColor(): string
+    {
+        return (string) (rescue(fn () => app(UiTheme::class)->current()['primary_light'], null, false)
+            ?: UiTheme::SCHEMA['primary_light']['default']);
+    }
+
+    /**
+     * A filesystem path to the logo for PDFs (dompdf reads files, not URLs):
+     * the uploaded logo when its file exists — never a missing file — else the
+     * bundled Nexcore mark, the same choice as brandLogoUrl().
+     *
+     * The bundled mark is a PNG, and dompdf needs PHP's GD extension to embed
+     * a PNG. Without GD it is left out, so a document renders without a logo
+     * (as it always did with nothing uploaded) instead of failing.
+     */
+    public static function brandLogoPath(): ?string
+    {
+        $logo = self::brandCompany()?->logo;
+        if ($logo && Storage::disk('public')->exists($logo)) {
+            return Storage::disk('public')->path($logo);
+        }
+
+        $fallback = public_path(self::FALLBACK_LOGO);
+
+        return extension_loaded('gd') && is_file($fallback) ? $fallback : null;
+    }
+
+    /** The uploaded favicon's URL when its file exists; null means use the bundled icons. */
+    public static function brandFaviconUrl(?string $path = null): ?string
+    {
+        return self::storedBrandUrl($path ?? self::brandCompany()?->favicon);
     }
 
     /** Alt text for the logo — the configured company name, or the app name. */

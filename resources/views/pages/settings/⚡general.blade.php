@@ -390,22 +390,12 @@ new #[Title('Company Settings')] class extends Component
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <flux:field>
-                        <flux:label>{{ __('Primary Color') }}</flux:label>
-                        <div class="flex items-center gap-3">
-                            <input type="color" wire:model="primary_color" class="size-10 rounded border border-zinc-200" />
-                            <flux:input wire:model="primary_color" class="flex-1" />
-                        </div>
-                    </flux:field>
-                    <flux:field>
-                        <flux:label>{{ __('Secondary Color') }}</flux:label>
-                        <div class="flex items-center gap-3">
-                            <input type="color" wire:model="secondary_color" class="size-10 rounded border border-zinc-200" />
-                            <flux:input wire:model="secondary_color" class="flex-1" />
-                        </div>
-                    </flux:field>
-                </div>
+                {{-- Brand colours have one home (QA-F-060): Brand & Layout drives the
+                     app and every PDF, so the old company colour pickers are gone. --}}
+                <flux:callout icon="swatch" variant="secondary" data-brand-colours-note>
+                    <flux:callout.text>{{ __('Brand colours for the app, payslips, letters and reports are set in Brand & Layout.') }}
+                        <flux:link :href="route('settings.ui-theme')" wire:navigate>{{ __('Open Brand & Layout') }}</flux:link></flux:callout.text>
+                </flux:callout>
 
                 {{-- Branding: logos per theme, sidebar icons & favicon --}}
                 <div>
@@ -473,8 +463,8 @@ new #[Title('Company Settings')] class extends Component
                                     <img src="{{ $favicon->temporaryUrl() }}" class="size-8 object-contain" alt="Favicon preview">
                                 @elseif ($favicon)
                                     <flux:icon.document-check class="size-6 text-emerald-500" />
-                                @elseif ($company->favicon)
-                                    <img src="{{ asset('storage/'.$company->favicon) }}" class="size-8 object-contain" alt="Current favicon">
+                                @elseif ($company->favicon && \App\Models\Company::brandFaviconUrl($company->favicon))
+                                    <img src="{{ \App\Models\Company::brandFaviconUrl($company->favicon) }}" class="size-8 object-contain" alt="Current favicon">
                                 @else
                                     <flux:icon.globe-alt class="size-6 text-zinc-400" />
                                 @endif

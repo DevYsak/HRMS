@@ -1,8 +1,8 @@
 @php
-    // Brand accent for the payslip; company primary colour wins when set.
+    // Brand accent for the payslip: Brand & Layout's primary, the one colour
+    // every document and screen uses (QA-F-060). A caller may pass its own.
     if (! isset($accent)) {
-        $accentCompany = \App\Models\Company::first();
-        $accent = ($accentCompany && $accentCompany->primary_color) ? $accentCompany->primary_color : '#f97316';
+        $accent = \App\Models\Company::brandColor();
     }
 
     // DomPDF cannot fetch web fonts — Inter is embedded from local TTFs.

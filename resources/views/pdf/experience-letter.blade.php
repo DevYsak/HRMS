@@ -1,5 +1,7 @@
 @php
     $company = \App\Models\Company::first() ?? new \App\Models\Company(['name' => 'Pulse HRMS', 'primary_color' => '#1a202c', 'address' => '123 Business Avenue', 'city' => 'Tech City', 'email' => 'contact@pulsehrms.com', 'phone' => '+1 234 567 8900']);
+    $brandColor = \App\Models\Company::brandColor();
+    $brandLogo = \App\Models\Company::brandLogoPath();
 @endphp
 <!DOCTYPE html>
 <html lang="en">
@@ -15,13 +17,13 @@
         }
         .header {
             text-align: center;
-            border-bottom: 2px solid {{ $company->primary_color }};
+            border-bottom: 2px solid {{ $brandColor }};
             padding-bottom: 20px;
             margin-bottom: 40px;
         }
         .header h1 {
             margin: 0;
-            color: {{ $company->primary_color }};
+            color: {{ $brandColor }};
         }
         .header p {
             margin: 5px 0 0;
@@ -45,8 +47,8 @@
 </head>
 <body>
     <div class="header">
-        @if($company->logo)
-            <img src="{{ public_path('storage/'.$company->logo) }}" style="height: 60px; width: auto; margin-bottom: 10px;" alt="{{ $company->name }}">
+        @if($brandLogo)
+            <img src="{{ $brandLogo }}" style="height: 60px; width: auto; margin-bottom: 10px;" alt="{{ $company->name }}">
         @endif
         <h1>{{ $company->name }}</h1>
         <p>{{ $company->address }}, {{ $company->city }}, {{ $company->country }}</p>

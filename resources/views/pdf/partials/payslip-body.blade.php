@@ -88,8 +88,8 @@
     $ytdNet = (float) $ytd->sum('net_salary');
     $fyLabel = 'FY '.$fyStartYear.'-'.substr((string) ($fyStartYear + 1), 2);
 
-    $logoSrc = $company->logo ? public_path('storage/'.$company->logo) : null;
-    if ($logoSrc && ! file_exists($logoSrc)) { $logoSrc = null; }
+    // The uploaded logo when its file exists, else the bundled mark (QA-F-060).
+    $logoSrc = \App\Models\Company::brandLogoPath();
 
     // QR → signed public verification URL. Null (no QR) on any failure —
     // authenticity checking must never be the reason a payslip fails to render.
