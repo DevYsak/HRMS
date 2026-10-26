@@ -379,8 +379,8 @@ test('the Phase 4 decisions are recorded: each decided finding has its fix commi
             ->and(AuditLog::where('auditable_type', QaFinding::class)->where('auditable_id', $finding->id)->where('event', 'QA_FINDING_STATUS_CHANGED')->exists())->toBeTrue();
     }
 
-    // Branding, theme coverage and the remaining date formats move to Phase 5.
-    expect(QaFinding::whereIn('code', ['QA-F-060', 'QA-F-061', 'QA-F-066'])->pluck('status')->map->value->unique()->values()->all())->toBe(['open'])
+    // Branding, theme coverage and the remaining date formats moved to Phase 5 and were verified there (26 Oct).
+    expect(QaFinding::whereIn('code', ['QA-F-060', 'QA-F-061', 'QA-F-066'])->pluck('status')->map->value->unique()->values()->all())->toBe(['verified'])
         ->and(QaFinding::where('code', 'QA-F-050')->value('description'))->toContain('Decision 1 (16 Oct)')
         ->and(QaTestCase::where('code', 'like', 'QA-P4-%')->where('status', 'pass')->count())->toBe(53);
 
@@ -408,8 +408,9 @@ test('Phase 5 round 1 is recorded: fixed findings verified with their commits, d
 
     // Opened in round 1 with needs_decision; approved and verified in round 2 (see the next test).
     expect(QaFinding::whereIn('code', ['QA-F-079', 'QA-F-080', 'QA-F-081'])->where('needs_decision', false)->where('status', 'verified')->count())->toBe(3)
-        ->and(QaFinding::where('code', 'QA-F-082')->value('status')->value)->toBe('open')
-        ->and(QaTestCase::where('code', 'like', 'QA-P5-%')->where('status', 'pass')->count())->toBe(31)
+        // QA-F-082 was deferred in round 1 and verified in the finishing round (26 Oct).
+        ->and(QaFinding::where('code', 'QA-F-082')->value('status')->value)->toBe('verified')
+        ->and(QaTestCase::where('code', 'like', 'QA-P5-%')->where('status', 'pass')->count())->toBe(50)
         ->and(QaPhase::where('number', 5)->first()->status)->toBe(QaPhaseStatus::InProgress);
 });
 
@@ -425,7 +426,7 @@ test('Phase 5 round 2 records the approved decisions, the systemic UI fixes and 
     }
 
     expect(QaFinding::where('code', 'QA-F-079')->value('description'))->toContain('Decision (20 Oct)')
-        ->and(QaFinding::where('code', 'QA-F-082')->value('status')->value)->toBe('open');
+        ->and(QaFinding::where('code', 'QA-F-082')->value('status')->value)->toBe('verified');   // finishing round, 26 Oct
 
     $journeys = QaTestRun::where('suite', 'playwright')->where('kind', 'ui')->where('name', 'like', '2026-10-20 Phase 5 role journeys%')->orderBy('run_at')->get();
     expect($journeys->map(fn ($r) => [$r->total, $r->failed, $r->commit])->all())->toBe([[774, 17, 'de4e16c'], [304, 0, '8105d54']]);
@@ -434,5 +435,26 @@ test('Phase 5 round 2 records the approved decisions, the systemic UI fixes and 
     $full = QaTestRun::where('name', '2026-10-20 Phase 5 — full suite')->firstOrFail();
     expect([$full->kind, $full->commit, $full->total, $full->failed, $full->known_baseline, $full->new_regressions])->toBe(['full', 'a50a156', 3270, 12, 12, 0])
         ->and((new QaReadiness)->summary()['verified']['full']->id)->toBe($full->id)
+        ->and(QaPhase::where('number', 5)->first()->status)->toBe(QaPhaseStatus::InProgress);
+});
+
+test('the Phase 5 finishing round verifies branding, theme coverage, date formats and QA-F-082', function () {
+    $verified = ['QA-F-060' => '6110550', 'QA-F-061' => 'a79b951', 'QA-F-066' => 'a79b951', 'QA-F-082' => 'ce1f910'];
+
+    foreach ($verified as $code => $commit) {
+        $finding = QaFinding::where('code', $code)->firstOrFail();
+        expect($finding->status)->toBe(QaFindingStatus::Verified, $code)
+            ->and($finding->fixes()->pluck('commit_hash'))->toContain($commit);
+    }
+
+    expect(QaFinding::where('code', 'QA-F-082')->first()->fixes()->pluck('commit_hash'))->toContain('a79b951')
+        ->and(QaTestCase::where('code', 'like', 'QA-P5-%')->where('status', 'pass')->count())->toBe(50);
+
+    // The focused run is recorded as it was (10 regressions from the GD fallback), then the recheck on the fix.
+    $focused = QaTestRun::where('name', '2026-10-26 Phase 5 finishing — focused regression (196 files)')->firstOrFail();
+    $recheck = QaTestRun::where('name', '2026-10-26 Phase 5 finishing — recheck after the GD fix')->firstOrFail();
+    expect([$focused->kind, $focused->total, $focused->failed, $focused->known_baseline, $focused->new_regressions])->toBe(['targeted', 1913, 16, 6, 10])
+        ->and($focused->notes)->toContain('fallback only when GD is loaded')
+        ->and([$recheck->commit, $recheck->total, $recheck->failed, $recheck->new_regressions])->toBe(['a79b951', 72, 0, 0])
         ->and(QaPhase::where('number', 5)->first()->status)->toBe(QaPhaseStatus::InProgress);
 });
