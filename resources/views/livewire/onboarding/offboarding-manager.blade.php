@@ -110,7 +110,7 @@
                                     <div class="p-4 border border-green-200 dark:border-green-900/50 rounded-xl bg-green-50 dark:bg-green-900/20 flex items-center justify-between">
                                         <div>
                                             <div class="font-bold text-sm text-green-900 dark:text-green-400">{{ $asset->name }}</div>
-                                            <div class="text-xs text-green-700 dark:text-green-600">Returned on {{ $asset->returned_date?->format('M d, Y') }} | Condition: {{ $asset->condition_on_return }}</div>
+                                            <div class="text-xs text-green-700 dark:text-green-600">Returned on {{ $asset->returned_date?->toImmutable()->userDate() }} | Condition: {{ $asset->condition_on_return }}</div>
                                         </div>
                                         <flux:icon.check-circle class="size-6 text-green-500" />
                                     </div>

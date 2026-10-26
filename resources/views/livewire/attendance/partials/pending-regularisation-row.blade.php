@@ -2,7 +2,7 @@
 <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200/70 bg-white/80 dark:bg-zinc-900/80 px-3 py-2">
     <div class="flex min-w-0 items-center gap-3 text-xs">
         <span class="font-black text-zinc-900 dark:text-white">{{ $req->employee?->user?->name ?? '—' }}</span>
-        <span class="text-zinc-500 dark:text-zinc-400">{{ \Carbon\Carbon::parse($req->work_date)->format('d M Y') }}</span>
+        <span class="text-zinc-500 dark:text-zinc-400">{{ \Carbon\Carbon::parse($req->work_date)->toImmutable()->userDate() }}</span>
         <span class="font-mono font-bold text-amber-700">{{ $req->requestedWindowLabel() }}</span>
         <span class="hidden truncate italic text-zinc-400 md:inline">“{{ \Illuminate\Support\Str::limit($req->reason, 60) }}”</span>
     </div>

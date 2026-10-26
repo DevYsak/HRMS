@@ -11,7 +11,7 @@
     </div>
 
     {{-- Filters --}}
-    <div class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-zinc-900">
+    <div class="ui-surface p-5">
         <div class="mb-4 flex items-center justify-between">
             <h3 class="text-sm font-bold text-zinc-900 dark:text-white">1 · Filter employees</h3>
             <span class="inline-flex items-center gap-1.5 rounded-full bg-orange-50 px-3 py-1 text-xs font-bold text-orange-600 dark:bg-orange-900/20 dark:text-orange-400">
@@ -56,7 +56,7 @@
     </div>
 
     {{-- Operation --}}
-    <div class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-zinc-900">
+    <div class="ui-surface p-5">
         <h3 class="mb-4 text-sm font-bold text-zinc-900 dark:text-white">2 · Choose operation</h3>
 
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -93,7 +93,7 @@
 
     {{-- Preview --}}
     @if($showPreview)
-        <div class="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-white/10 dark:bg-zinc-900">
+        <div class="ui-surface overflow-hidden">
             <div class="border-b border-zinc-100 bg-zinc-50/70 px-5 py-3 dark:border-white/5 dark:bg-zinc-800/40">
                 <h3 class="text-xs font-bold uppercase tracking-widest text-zinc-500">Preview · {{ count($previewRows) }} employees</h3>
             </div>

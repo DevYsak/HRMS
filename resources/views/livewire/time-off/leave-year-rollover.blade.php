@@ -36,7 +36,7 @@ Carry forward is posted to {{ $this->toYear->label }}, the rest of {{ $this->fro
         @endforeach
     </div>
 
-    <div class="overflow-x-auto rounded-2xl border border-[#EAECF0] bg-white shadow-sm dark:border-white/10 dark:bg-zinc-900">
+    <div class="ui-surface overflow-x-auto">
         <table class="min-w-full text-xs">
             <thead class="bg-[#F9FAFB] text-left text-[10px] font-bold uppercase tracking-wider text-[#667085] dark:bg-white/5">
                 <tr>
@@ -51,7 +51,7 @@ Carry forward is posted to {{ $this->toYear->label }}, the rest of {{ $this->fro
                         <td class="px-3 py-2"><div class="font-semibold">{{ $r['employee'] }}</div><div class="text-[11px] text-[#98A2B3]">{{ $r['employee_code'] }} · {{ $r['department'] }}</div></td>
                         <td class="px-3 py-2">{{ $r['leave_type'] }}</td>
                         <td class="px-3 py-2 text-right">{{ $fmt($r['closing']) }}</td>
-                        <td class="px-3 py-2 text-right">{{ $fmt($r['carry']) }}@if($r['expires_on'])<div class="text-[10px] text-amber-600">exp. {{ \Illuminate\Support\Carbon::parse($r['expires_on'])->format('d M Y') }}</div>@endif</td>
+                        <td class="px-3 py-2 text-right">{{ $fmt($r['carry']) }}@if($r['expires_on'])<div class="text-[10px] text-amber-600">exp. {{ \Illuminate\Support\Carbon::parse($r['expires_on'])->toImmutable()->userDate() }}</div>@endif</td>
                         <td class="px-3 py-2 text-right">{{ $fmt($r['expire']) }}</td>
                         <td class="px-3 py-2 text-right">{{ $fmt($r['new_base']) }}</td>
                         <td class="px-3 py-2 text-right font-bold">{{ $fmt($r['new_opening']) }}</td>
@@ -73,12 +73,12 @@ Carry forward is posted to {{ $this->toYear->label }}, the rest of {{ $this->fro
     </div>
 
     @if($runs->isNotEmpty())
-        <div class="rounded-2xl border border-[#EAECF0] bg-white p-4 text-xs shadow-sm dark:border-white/10 dark:bg-zinc-900">
+        <div class="ui-surface p-4 text-xs">
             <div class="mb-2 font-bold text-[#101828] dark:text-white">Rollover runs (HR report)</div>
             @foreach($runs as $run)
                 <div class="flex flex-wrap gap-3 border-t border-[#EAECF0] py-1.5 dark:border-white/5">
                     <span class="font-semibold">#{{ $run->id }}</span>
-                    <span>{{ $run->created_at->format('d M Y H:i') }}</span>
+                    <span>{{ $run->created_at->toImmutable()->userDateTime() }}</span>
                     <span>{{ $run->creator?->name ?? 'Scheduler' }}</span>
                     <span>{{ str_replace('_', ' ', $run->status) }}</span>
                     <span class="text-[#667085]">{{ collect($run->summary ?? [])->except('errors')->map(fn ($v, $k) => str_replace('_', ' ', $k).': '.$v)->implode(' · ') }}</span>

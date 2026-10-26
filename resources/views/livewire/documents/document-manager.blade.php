@@ -125,10 +125,10 @@
 
                     {{-- Meta --}}
                     <div class="space-y-1 text-xs text-zinc-400 mb-4">
-                        <div>Uploaded {{ $doc->created_at->format('d M Y') }} by {{ $doc->uploader?->name ?? 'System' }}</div>
+                        <div>Uploaded {{ $doc->created_at->toImmutable()->userDate() }} by {{ $doc->uploader?->name ?? 'System' }}</div>
                         @if($doc->expires_at)
                             <div class="font-medium {{ $doc->expires_at->isPast() ? 'text-red-500' : ($doc->expires_at->diffInDays(now()) <= 30 ? 'text-amber-500' : '') }}">
-                                Expires {{ $doc->expires_at->format('d M Y') }}
+                                Expires {{ $doc->expires_at->toImmutable()->userDate() }}
                             </div>
                         @endif
                         @if($canManage && $doc->employee)
@@ -245,7 +245,7 @@
                             <div class="border-b border-zinc-50 pb-3 last:border-0 last:pb-0 dark:border-zinc-800/60">
                                 <p class="truncate text-sm font-bold text-zinc-900 dark:text-white">{{ $doc->title }}</p>
                                 <p class="text-xs text-zinc-400">
-                                    {{ $doc->employee?->user?->name ?? 'Company-wide' }} · Expires {{ $doc->expires_at->format('d M Y') }}
+                                    {{ $doc->employee?->user?->name ?? 'Company-wide' }} · Expires {{ $doc->expires_at->toImmutable()->userDate() }}
                                 </p>
                             </div>
                         @empty
@@ -316,7 +316,7 @@
                                     @endif
                                     <p class="truncate text-sm font-semibold text-zinc-900 dark:text-white">{{ $v->title }}</p>
                                 </div>
-                                <p class="mt-0.5 text-xs text-zinc-400">{{ $v->created_at->format('d M Y, H:i') }} · {{ $v->uploader?->name ?? 'System' }}</p>
+                                <p class="mt-0.5 text-xs text-zinc-400">{{ $v->created_at->toImmutable()->userDateTime() }} · {{ $v->uploader?->name ?? 'System' }}</p>
                             </div>
                             <div class="flex shrink-0 items-center gap-3">
                                 <a href="{{ URL::temporarySignedRoute('documents.view', now()->addMinutes(5), ['document' => $v->id]) }}" target="_blank" class="text-xs font-semibold text-zinc-500 dark:text-zinc-400 hover:text-orange-600">View</a>

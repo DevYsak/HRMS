@@ -232,7 +232,7 @@
                         <div class="bg-blue-50 border border-blue-100 rounded-xl p-4 dark:bg-blue-900/20 dark:border-blue-800/30">
                             <h4 class="text-xs font-bold text-blue-600 uppercase tracking-wider mb-2">Employee Acknowledgement</h4>
                             @php $ack = $activeWarning->acknowledgements->first(); @endphp
-                            <p class="text-xs text-blue-800 dark:text-blue-300 mb-2">Acknowledged on {{ $ack?->acknowledged_at?->format('M d, Y H:i') }}</p>
+                            <p class="text-xs text-blue-800 dark:text-blue-300 mb-2">Acknowledged on {{ $ack?->acknowledged_at?->toImmutable()->userDateTime() }}</p>
                             @if($ack?->acknowledgement_text)
                                 <div class="bg-white dark:bg-zinc-800 p-3 rounded-lg text-sm italic text-zinc-600 dark:text-zinc-400">
                                     "{{ $ack->acknowledgement_text }}"
@@ -245,7 +245,7 @@
                     @if($activeWarning->status === 'closed')
                         <div class="bg-green-50 border border-green-100 rounded-xl p-4 dark:bg-green-900/20 dark:border-green-800/30">
                             <h4 class="text-xs font-bold text-green-600 uppercase tracking-wider mb-2">Warning Closed</h4>
-                            <p class="text-xs text-green-800 dark:text-green-300 mb-2">Closed on {{ \Carbon\Carbon::parse($activeWarning->closed_at)->format('M d, Y H:i') }} by {{ $activeWarning->closedBy?->name ?? 'System' }}</p>
+                            <p class="text-xs text-green-800 dark:text-green-300 mb-2">Closed on {{ \Carbon\Carbon::parse($activeWarning->closed_at)->toImmutable()->userDateTime() }} by {{ $activeWarning->closedBy?->name ?? 'System' }}</p>
                             @if($activeWarning->hr_comments || $activeWarning->manager_comments)
                                 <div class="bg-white dark:bg-zinc-800 p-3 rounded-lg text-sm italic text-zinc-600 dark:text-zinc-400">
                                     "{{ $activeWarning->hr_comments ?? $activeWarning->manager_comments }}"

@@ -22,7 +22,7 @@
             </dl>
             <div class="space-y-1 text-xs text-zinc-500">
                 <p>Owner: <span class="text-zinc-700 dark:text-zinc-200">{{ $p->owner ?? '—' }}</span></p>
-                <p>Started: <span class="text-zinc-700 dark:text-zinc-200">{{ $p->started_at?->format('d M Y') ?? '—' }}</span> · Completed: <span class="text-zinc-700 dark:text-zinc-200">{{ $p->completed_at?->format('d M Y') ?? '—' }}</span></p>
+                <p>Started: <span class="text-zinc-700 dark:text-zinc-200">{{ $p->started_at?->toImmutable()->userDate() ?? '—' }}</span> · Completed: <span class="text-zinc-700 dark:text-zinc-200">{{ $p->completed_at?->toImmutable()->userDate() ?? '—' }}</span></p>
                 @if($commits->isNotEmpty())
                     <p class="flex flex-wrap gap-1">Commits:
                         @foreach($commits as $hash)

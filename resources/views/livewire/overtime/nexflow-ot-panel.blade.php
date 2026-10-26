@@ -12,7 +12,7 @@
     <div class="grid grid-cols-1 gap-4 lg:grid-cols-4">
         {{-- Employee picker --}}
         <div class="lg:col-span-1">
-            <div class="rounded-2xl border border-zinc-200/70 bg-white p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <div class="ui-surface p-3">
                 <flux:input wire:model.live.debounce.300ms="search" icon="magnifying-glass" placeholder="Search employee…" size="sm" />
                 <div class="mt-2 max-h-[28rem] space-y-1 overflow-y-auto">
                     @forelse($employees as $emp)
@@ -33,7 +33,7 @@
         {{-- Detail --}}
         <div class="space-y-4 lg:col-span-3">
             {{-- Filters --}}
-            <div class="flex flex-wrap items-end gap-3 rounded-2xl border border-zinc-200/70 bg-white p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <div class="ui-surface flex flex-wrap items-end gap-3 p-3">
                 <flux:input wire:model="from" type="date" label="From" size="sm" class="w-40" />
                 <flux:input wire:model="to" type="date" label="To" size="sm" class="w-40" />
                 <div class="w-40">
@@ -60,7 +60,7 @@
             @elseif($data)
                 @php $s = $data['summary'] ?? []; $emp = $data['employee'] ?? []; @endphp
                 {{-- Employee header + import all --}}
-                <div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-200/70 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                <div class="ui-surface flex flex-wrap items-center justify-between gap-3 p-4">
                     <div>
                         <div class="text-sm font-black text-zinc-900 dark:text-white">{{ $emp['name'] ?? $selected->user?->name }}</div>
                         <div class="text-[11px] text-zinc-400">{{ $emp['job_title'] ?? '—' }} · {{ $emp['email'] ?? $selected->user?->email }}
@@ -86,7 +86,7 @@
                         ];
                     @endphp
                     @foreach($cards as [$label, $val, $color, $count])
-                        <div class="rounded-2xl border border-zinc-200/70 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                        <div class="ui-surface p-4">
                             <div class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">{{ $label }}</div>
                             <div class="mt-1 text-2xl font-black tabular-nums {{ $color }}">{{ $val }}</div>
                             <div class="text-[10px] text-zinc-400">{{ $count }} record(s)</div>
@@ -95,7 +95,7 @@
                 </div>
 
                 {{-- Records --}}
-                <div class="overflow-hidden rounded-2xl border border-zinc-200/70 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                <div class="ui-surface overflow-hidden">
                     @forelse($data['ot_records'] ?? [] as $r)
                         @php
                             $rc = match($r['status'] ?? '') { 'approved' => 'bg-emerald-50 text-emerald-600', 'rejected' => 'bg-rose-50 text-rose-500', default => 'bg-amber-50 text-amber-600' };

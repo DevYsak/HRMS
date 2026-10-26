@@ -45,7 +45,7 @@
         <ul class="divide-y divide-zinc-100 text-xs dark:divide-zinc-800">
             @foreach($ceval['rows'] as $row)
                 <li class="flex justify-between gap-3 px-4 py-1.5 {{ $row['chargeable'] ? '' : 'text-zinc-400' }}">
-                    <span>{{ \Illuminate\Support\Carbon::parse($row['date'])->format('d M (D)') }}</span>
+                    <span>{{ \Illuminate\Support\Carbon::parse($row['date'])->toImmutable()->userShortDate() }}</span>
                     <span>{{ $row['chargeable'] ? LeaveRequestDay::LABELS[$row['allocation']].($row['session'] ? ' · '.($row['session'] === 'first_half' ? 'first half' : 'second half') : '') : $row['label'] }}</span>
                 </li>
             @endforeach

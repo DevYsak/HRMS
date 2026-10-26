@@ -70,7 +70,7 @@
                     <div class="flex gap-3 rounded-lg border border-zinc-100 p-3 text-xs dark:border-white/10">
                         <flux:badge size="sm" :color="$result->status->color()">{{ $result->status->label() }}</flux:badge>
                         <div class="min-w-0 flex-1 space-y-0.5">
-                            <p class="text-zinc-500">{{ $result->tested_at->format('d M Y H:i') }} · {{ $result->tested_by_name ?? '—' }} · {{ \App\Enums\QaEnvironment::tryFrom($result->environment)?->label() ?? $result->environment }}
+                            <p class="text-zinc-500">{{ $result->tested_at->toImmutable()->userDateTime() }} · {{ $result->tested_by_name ?? '—' }} · {{ \App\Enums\QaEnvironment::tryFrom($result->environment)?->label() ?? $result->environment }}
                                 @if($result->commit) · <span class="font-mono">{{ substr($result->commit, 0, 7) }}</span>@endif
                                 @if($result->is_retest) · <span class="font-semibold text-sky-600">retest</span>@endif
                             </p>

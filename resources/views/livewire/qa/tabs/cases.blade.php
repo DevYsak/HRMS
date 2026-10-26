@@ -28,7 +28,7 @@
                             <td class="px-4 py-3 text-xs text-zinc-600 dark:text-zinc-300">{{ $case->role ?? '—' }}<br><span class="text-zinc-400">{{ $case->scope }}</span></td>
                             <td class="px-4 py-3"><flux:badge size="sm" :color="$case->severity->color()">{{ $case->severity->label() }}</flux:badge></td>
                             <td class="whitespace-nowrap px-4 py-3"><flux:badge size="sm" :color="$case->status->color()">{{ $case->status->label() }}</flux:badge></td>
-                            <td class="whitespace-nowrap px-4 py-3 text-xs text-zinc-500">{{ $case->last_tested_at?->format('d M Y H:i') ?? '—' }}</td>
+                            <td class="whitespace-nowrap px-4 py-3 text-xs text-zinc-500">{{ $case->last_tested_at?->toImmutable()->userDateTime() ?? '—' }}</td>
                         </tr>
                     @endforeach
                 </tbody>

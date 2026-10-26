@@ -69,7 +69,7 @@
             <div class="mt-4 rounded-lg bg-indigo-50/60 px-3 py-2 dark:bg-indigo-500/[0.06]">
                 <p class="text-[11px] font-medium uppercase tracking-wide text-indigo-500 dark:text-indigo-300">MDL shutdown days</p>
                 <p class="mt-0.5 text-sm text-zinc-700 dark:text-zinc-200">
-                    {{ collect($leave['mdl']['dates'])->map(fn ($d) => $d['date']->format('j M'))->implode(', ') }}
+                    {{ collect($leave['mdl']['dates'])->map(fn ($d) => $d['date']->toImmutable()->userShortDate())->implode(', ') }}
                 </p>
                 <p class="mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">Not deducted from your leave · working one earns 1 Comp Off</p>
             </div>

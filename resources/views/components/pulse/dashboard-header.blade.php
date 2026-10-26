@@ -22,7 +22,7 @@
                         @else<flux:icon.moon class="size-3" /> Evening @endif
                     </span>
                 @endif
-                <span class="text-xs font-medium text-zinc-400 dark:text-zinc-500">{{ now()->format('l, d F Y') }}</span>
+                <span class="text-xs font-medium text-zinc-400 dark:text-zinc-500">{{ now()->toImmutable()->userDate() }}</span>
             </div>
             <h1 class="text-[28px] font-bold leading-tight tracking-tight text-zinc-900 dark:text-white lg:text-[32px]">{{ $title }}</h1>
             @if($subtitle)

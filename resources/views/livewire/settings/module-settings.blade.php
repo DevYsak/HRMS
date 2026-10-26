@@ -6,7 +6,7 @@
     </div>
 
     {{-- Payroll & Payslips --}}
-    <div class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-zinc-900">
+    <div class="ui-surface p-5">
         <div class="flex flex-wrap items-start justify-between gap-4">
             <div class="flex items-start gap-3">
                 <span class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-orange-50 dark:bg-orange-900/20">
@@ -23,7 +23,7 @@
                     </div>
                     <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Controls payroll processing, Finance payroll approvals and employee payslip access.</p>
                     @if($updatedBy)
-                        <p class="mt-1 text-xs text-zinc-400">Last changed by {{ $updatedBy }} on {{ $updatedAt?->format('d M Y, g:i A') }}.</p>
+                        <p class="mt-1 text-xs text-zinc-400">Last changed by {{ $updatedBy }} on {{ $updatedAt?->toImmutable()->userDateTime() }}.</p>
                     @endif
                 </div>
             </div>

@@ -369,7 +369,7 @@
                                                                 <summary class="cursor-pointer text-[11px] font-semibold text-orange-600 dark:text-orange-400">By date</summary>
                                                                 <ul class="mt-1 space-y-0.5 text-[11px]">
                                                                     @foreach($request['dates'] as $d)
-                                                                        <li class="{{ $d['excluded'] ? 'text-zinc-400' : 'text-zinc-600 dark:text-zinc-300' }}">{{ $d['date']->format('d M') }} · {{ $d['label'] }}</li>
+                                                                        <li class="{{ $d['excluded'] ? 'text-zinc-400' : 'text-zinc-600 dark:text-zinc-300' }}">{{ $d['date']->toImmutable()->userShortDate() }} · {{ $d['label'] }}</li>
                                                                     @endforeach
                                                                 </ul>
                                                             </details>

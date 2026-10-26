@@ -322,7 +322,7 @@
                             <td class="px-4 py-3 text-right text-zinc-500">{{ $sc->rank_in_department ?? '—' }}</td>
                             <td class="px-4 py-3 text-right text-zinc-500">{{ $sc->rank_in_company ?? '—' }}</td>
                             <td class="px-4 py-3 text-zinc-400 text-xs">
-                                {{ $sc->generated_at ? $sc->generated_at->format('d M Y') : '—' }}
+                                {{ $sc->generated_at ? $sc->generated_at->toImmutable()->userDate() : '—' }}
                             </td>
                         </tr>
                     @empty

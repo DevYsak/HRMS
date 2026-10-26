@@ -1,5 +1,5 @@
 <flux:main class="p-4 md:p-6">
-    <div class="mx-auto max-w-lg rounded-2xl border border-zinc-200 bg-white p-10 text-center shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+    <div class="ui-surface mx-auto max-w-lg p-10 text-center">
         <div class="mx-auto mb-4 flex size-14 items-center justify-center rounded-2xl bg-orange-50 dark:bg-orange-900/20">
             <flux:icon.trophy class="size-7 text-orange-500" />
         </div>

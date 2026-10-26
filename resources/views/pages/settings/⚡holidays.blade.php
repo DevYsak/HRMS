@@ -100,7 +100,7 @@ new #[Title('Holiday Calendar')] class extends Component {
                 <flux:table.rows>
                     @foreach ($this->publicHolidays as $holiday)
                         <flux:table.row :key="$holiday->id">
-                            <flux:table.cell>{{ Carbon::parse($holiday->date)->format('d M Y') }}</flux:table.cell>
+                            <flux:table.cell>{{ Carbon::parse($holiday->date)->toImmutable()->userDate() }}</flux:table.cell>
                             <flux:table.cell>{{ $holiday->name }}</flux:table.cell>
                             <flux:table.cell>
                                 <flux:button wire:click="removePublicHoliday({{ $holiday->id }})" variant="ghost" size="sm" icon="trash" class="text-red-500" />
@@ -134,7 +134,7 @@ new #[Title('Holiday Calendar')] class extends Component {
                     @foreach ($this->mandatoryDays as $day)
                         <flux:table.row :key="$day->id">
                             <flux:table.cell>{{ $day->year }}</flux:table.cell>
-                            <flux:table.cell>{{ Carbon::parse($day->date)->format('d M Y') }}</flux:table.cell>
+                            <flux:table.cell>{{ Carbon::parse($day->date)->toImmutable()->userDate() }}</flux:table.cell>
                             <flux:table.cell>{{ $day->description }}</flux:table.cell>
                             <flux:table.cell>
                                 <flux:button wire:click="removeMandatoryDay({{ $day->id }})" variant="ghost" size="sm" icon="trash" class="text-red-500" />

@@ -16,7 +16,7 @@
                     <div class="flex justify-between items-center mb-4">
                         <div>
                             <div class="font-bold text-zinc-900 dark:text-white">{{ $review->performanceCycle?->name ?? '—' }}</div>
-                            <div class="text-xs text-zinc-500">Cycle ends: {{ $review->performanceCycle?->end_date?->format('M d, Y') ?? '—' }}</div>
+                            <div class="text-xs text-zinc-500">Cycle ends: {{ $review->performanceCycle?->end_date?->toImmutable()->userDate() ?? '—' }}</div>
                         </div>
                         <div>
                             <span class="badge-{{ $review->statusColor() }}">{{ strtoupper($review->statusLabel()) }}</span>

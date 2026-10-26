@@ -11,7 +11,7 @@
                     @endif
                 </p>
                 @if($ev->note)<p class="break-words text-zinc-600 dark:text-zinc-300">{{ $ev->note }}</p>@endif
-                <p class="text-zinc-400">{{ $ev->uploader?->name ?? 'System' }} · {{ $ev->created_at->format('d M Y H:i') }}</p>
+                <p class="text-zinc-400">{{ $ev->uploader?->name ?? 'System' }} · {{ $ev->created_at->toImmutable()->userDateTime() }}</p>
             </div>
         </div>
     @empty

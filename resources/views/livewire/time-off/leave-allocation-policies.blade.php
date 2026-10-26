@@ -13,7 +13,7 @@
         <flux:button wire:click="openCreate" variant="primary" icon="plus">New policy</flux:button>
     </div>
 
-    <div class="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-white/10 dark:bg-zinc-900">
+    <div class="ui-surface overflow-hidden">
         <table class="w-full text-sm">
             <thead class="border-b border-zinc-100 bg-zinc-50/70 dark:border-white/5 dark:bg-zinc-800/40">
                 <tr class="text-[10px] font-bold uppercase tracking-wider text-zinc-400">

@@ -68,7 +68,7 @@ Rows already carried at their full eligible amount are skipped."
             ['Applied',     $totals['applied'],   'check-circle',     'Days already carried'],
             ['Outstanding', $totals['outstanding'], 'exclamation-circle', 'Eligible but not yet carried'],
         ] as [$label, $value, $icon, $hint])
-            <div class="rounded-2xl border border-[#EAECF0] bg-white p-4 shadow-sm dark:border-white/10 dark:bg-zinc-900">
+            <div class="ui-surface p-4">
                 <div class="flex items-center gap-2">
                     <div class="flex size-8 items-center justify-center rounded-lg bg-orange-50 text-orange-500 dark:bg-orange-500/10">
                         <flux:icon :name="$icon" class="size-4" />
@@ -82,7 +82,7 @@ Rows already carried at their full eligible amount are skipped."
     </div>
 
     {{-- Filters --}}
-    <div class="rounded-2xl border border-[#EAECF0] bg-white p-4 shadow-sm dark:border-white/10 dark:bg-zinc-900">
+    <div class="ui-surface p-4">
         <div class="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-5">
             <x-clean-select model="previousYearId" label="Previous leave year" :live="true"
                 :options="$leaveYears->map(fn ($y) => ['value' => $y->id, 'label' => $y->label])->all()" />
@@ -104,7 +104,7 @@ Rows already carried at their full eligible amount are skipped."
     </div>
 
     {{-- Preview --}}
-    <div class="overflow-hidden rounded-2xl border border-[#EAECF0] bg-white shadow-sm dark:border-white/10 dark:bg-zinc-900">
+    <div class="ui-surface overflow-hidden">
         {{-- Bulk decision. This is the path the migrated years take: their usage
              was never recorded, so nothing can be derived and "Apply carry
              forward" rightly refuses them. HR types the figure per employee

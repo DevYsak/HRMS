@@ -16,7 +16,7 @@
 </div>
 
 {{-- ═══════════════ FILTERS — every metric below recomputes ═══════════════ --}}
-<div class="mb-4 flex flex-wrap items-center gap-2 rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 p-3 shadow-sm" wire:loading.class="opacity-50" wire:target="period,rangeFrom,rangeTo,departmentId,officeId">
+<div class="ui-surface mb-4 flex flex-wrap items-center gap-2 p-3" wire:loading.class="opacity-50" wire:target="period,rangeFrom,rangeTo,departmentId,officeId">
     <span class="inline-flex items-center gap-1.5 text-[11px] font-black uppercase tracking-wider text-zinc-400"><flux:icon.funnel class="size-3.5 text-orange-400" /> Filters</span>
     <select wire:model.live="period" class="rounded-lg border border-orange-100 bg-white dark:bg-zinc-900 py-1.5 pl-2.5 pr-7 text-xs font-bold text-zinc-600 dark:text-zinc-300 focus:border-orange-400 focus:ring-0">
         <option value="this_month">This Month</option>
@@ -85,7 +85,7 @@
             ];
         @endphp
         @foreach($hero as [$label, $value, $icon, $color, $sub])
-            <div class="rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+            <div class="ui-surface p-4 transition hover:-translate-y-0.5 hover:shadow-md">
                 <span class="inline-flex size-8 items-center justify-center rounded-xl" style="background: {{ $color }}1a; color: {{ $color }};"><flux:icon :icon="$icon" class="size-4" /></span>
                 <div class="mt-2 text-xl font-black tabular-nums text-zinc-900 dark:text-white">{{ $value }}</div>
                 <div class="text-[9px] font-bold uppercase tracking-wide text-zinc-400">{{ $label }}</div>
@@ -109,14 +109,14 @@
     ];
 @endphp
 <div class="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-12">
-    <div class="rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 p-5 shadow-sm lg:col-span-7">
+    <div class="ui-surface p-5 lg:col-span-7">
         <div class="mb-1 flex items-center justify-between">
             <div class="text-sm font-black text-zinc-900 dark:text-white">Monthly Attendance Trend</div>
             <span class="rounded-full bg-orange-50 px-2 py-0.5 text-[10px] font-bold text-orange-500">6 months</span>
         </div>
         <x-dashboard.chart :options="$trendChart" id="exec-trend" wire:key="exec-trend" class="-mb-2" />
     </div>
-    <div class="rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 p-5 shadow-sm lg:col-span-5">
+    <div class="ui-surface p-5 lg:col-span-5">
         <div class="mb-3 flex items-center gap-2">
             <span class="inline-flex size-8 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-amber-400 text-white shadow"><flux:icon.sparkles class="size-4" /></span>
             <div class="text-sm font-black text-zinc-900 dark:text-white">AI Insights</div>
@@ -135,7 +135,7 @@
 {{-- ═══════════════ DEPARTMENT + BRANCH + RISK ═══════════════ --}}
 <div class="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-12">
     {{-- Top Departments --}}
-    <div class="rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 p-5 shadow-sm lg:col-span-5">
+    <div class="ui-surface p-5 lg:col-span-5">
         <div class="mb-3 text-sm font-black text-zinc-900 dark:text-white">Department Attendance</div>
         <div class="space-y-2.5">
             @forelse($departments as $d)
@@ -158,7 +158,7 @@
     </div>
 
     {{-- Branch Attendance --}}
-    <div class="rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 p-5 shadow-sm lg:col-span-4">
+    <div class="ui-surface p-5 lg:col-span-4">
         <div class="mb-3 text-sm font-black text-zinc-900 dark:text-white">Branch Attendance</div>
         <div class="space-y-2.5">
             @forelse($branches as $b)
@@ -176,7 +176,7 @@
     </div>
 
     {{-- Attendance Risk --}}
-    <div class="rounded-[18px] border {{ count($risk) ? 'border-rose-200 bg-rose-50/30' : 'border-orange-100/70 bg-white dark:bg-zinc-900' }} p-5 shadow-sm lg:col-span-3">
+    <div class="ui-surface {{ count($risk) ? 'border-rose-200 bg-rose-50/30' : 'border-orange-100/70 dark:bg-zinc-900' }} p-5 lg:col-span-3">
         <div class="mb-3 flex items-center gap-2">
             <flux:icon.shield-exclamation class="size-4 {{ count($risk) ? 'text-rose-500' : 'text-emerald-500' }}" />
             <div class="text-sm font-black text-zinc-900 dark:text-white">Attendance Risk</div>
@@ -197,7 +197,7 @@
 
 {{-- ═══════════════ TOP + BOTTOM PERFORMERS ═══════════════ --}}
 <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
-    <div class="rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 p-5 shadow-sm">
+    <div class="ui-surface p-5">
         <div class="mb-3 flex items-center gap-2"><flux:icon.trophy class="size-4 text-emerald-500" /><div class="text-sm font-black text-zinc-900 dark:text-white">Top Performers</div></div>
         <div class="space-y-1.5">
             @foreach($topPerformers as $i => $p)
@@ -209,7 +209,7 @@
             @endforeach
         </div>
     </div>
-    <div class="rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 p-5 shadow-sm">
+    <div class="ui-surface p-5">
         <div class="mb-3 flex items-center gap-2"><flux:icon.arrow-trending-down class="size-4 text-rose-500" /><div class="text-sm font-black text-zinc-900 dark:text-white">Needs Attention</div></div>
         <div class="space-y-1.5">
             @foreach($bottomPerformers as $p)

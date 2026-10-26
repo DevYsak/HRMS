@@ -235,7 +235,7 @@
                         @forelse($flagged as $r)
                             <tr>
                                 <td class="{{ $td }} font-medium text-zinc-900 dark:text-white">{{ $r['employee'] }}<p class="text-xs font-normal text-zinc-500">{{ $r['department'] ?? '—' }}</p></td>
-                                <td class="{{ $td }} whitespace-nowrap tabular-nums">{{ \Illuminate\Support\Carbon::parse($r['date'])->format('d M Y') }}</td>
+                                <td class="{{ $td }} whitespace-nowrap tabular-nums">{{ \Illuminate\Support\Carbon::parse($r['date'])->toImmutable()->userDate() }}</td>
                                 <td class="{{ $td }}">{{ $r['recorded_label'] }}</td>
                                 <td class="{{ $td }} text-xs">{{ $r['request_label'] ?? ($r['pending_request_id'] ? 'Pending #'.$r['pending_request_id'].' (not approved)' : 'None') }}</td>
                                 <td class="{{ $td }}"><x-pulse.badge :color="$wfhTone[$r['status']] ?? 'zinc'">{{ $r['label'] }}</x-pulse.badge></td>

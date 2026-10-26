@@ -7,7 +7,7 @@
 
         <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
             @foreach($rows as $row)
-                <section class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900" data-approval-matrix="{{ $row['type'] }}">
+                <section class="ui-surface p-5" data-approval-matrix="{{ $row['type'] }}">
                     <div class="flex flex-wrap items-baseline justify-between gap-2">
                         <h2 class="text-base font-bold text-zinc-900 dark:text-white">{{ $row['label'] }}</h2>
                         <span class="text-[11px] font-semibold text-zinc-500">Decided by: {{ $row['permission'] }}</span>

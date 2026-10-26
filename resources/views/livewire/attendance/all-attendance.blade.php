@@ -55,7 +55,7 @@
 <div class="h-1"></div>
 <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
     @foreach($kpis as $k)
-        <div class="flex items-center gap-3 rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+        <div class="ui-surface flex items-center gap-3 p-4 transition hover:-translate-y-0.5 hover:shadow-md">
             <span class="inline-flex size-10 shrink-0 items-center justify-center rounded-xl" style="background: {{ $k['color'] }}1a; color: {{ $k['color'] }};"><flux:icon :icon="$k['icon']" class="size-5" /></span>
             <div class="min-w-0">
                 <div class="text-xl font-black leading-none tabular-nums text-zinc-900 dark:text-white">{{ $k['value'] }}</div>
@@ -115,7 +115,7 @@
 
 {{-- ═══════════════ DECIDED REGULARISATIONS (HR may correct / delete) ═══════════════ --}}
 @if($decidedRegularisations->isNotEmpty())
-    <details class="group mb-4 rounded-[18px] border border-zinc-200/70 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900" data-decided-regularisations>
+    <details class="ui-surface group mb-4" data-decided-regularisations>
         <summary class="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
             <span class="flex items-center gap-2 text-sm font-black text-zinc-900 dark:text-white"><flux:icon.clipboard-document-check class="size-4 text-orange-500" /> Decided regularisations <span class="text-xs font-semibold text-zinc-400">· last 45 days</span></span>
             <flux:icon.chevron-down class="size-4 text-zinc-400 transition group-open:rotate-180" />
@@ -157,7 +157,7 @@
     ];
 @endphp
 @if(count($trend) > 0 && collect($trend)->sum('present') > 0)
-    <div class="rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 p-5 shadow-sm">
+    <div class="ui-surface p-5">
         <div class="mb-1 flex items-center justify-between">
             <div class="text-sm font-black text-zinc-900 dark:text-white">Presence Overview</div>
             <span class="rounded-full bg-orange-50 px-2 py-0.5 text-[10px] font-bold text-orange-500">{{ $weekLabel }}</span>
@@ -168,7 +168,7 @@
 
 {{-- ═══════════════ ATTENDANCE LOG ═══════════════
      No overflow-hidden here: it clipped the filter dropdowns in the header. --}}
-<div class="rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 shadow-sm">
+<div class="ui-surface">
     <div class="flex flex-wrap items-center justify-between gap-3 border-b border-orange-100/70 px-5 py-3.5">
         <h3 class="flex items-center gap-2 text-sm font-black text-zinc-900 dark:text-white"><flux:icon.clock class="size-4 text-orange-500" /> Attendance Log
             <span class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">· {{ $attendances->total() }} records</span>
@@ -401,7 +401,7 @@ EMPLOYEE 360 DRAWER (480px, right)
                 </div>
 
                 {{-- Today --}}
-                <div class="rounded-2xl border border-orange-100/70 bg-white dark:bg-zinc-900 p-4 shadow-sm">
+                <div class="ui-surface p-4">
                     <div class="mb-2 text-[10px] font-bold uppercase tracking-widest text-zinc-400">Today</div>
                     @if($drawer['today'])
                         <div class="grid grid-cols-3 gap-2 text-center">
@@ -425,7 +425,7 @@ EMPLOYEE 360 DRAWER (480px, right)
 
                 {{-- Processed timeline (single source of truth) + raw device audit log --}}
                 @if(! empty($drawer['punches']))
-                    <div class="rounded-2xl border border-orange-100/70 bg-white dark:bg-zinc-900 p-4 shadow-sm" x-data="{ showRaw: false }">
+                    <div class="ui-surface p-4" x-data="{ showRaw: false }">
                         <div class="mb-2 flex items-center justify-between">
                             <span class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Processed Timeline · {{ $drawer['punch_count'] ?? count($drawer['punches']) }} punches</span>
                             @if(! empty($drawer['needs_regularization']))<span class="rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-bold uppercase text-amber-700">Needs Regularization</span>@endif
@@ -520,13 +520,13 @@ EMPLOYEE 360 DRAWER (480px, right)
 
                 {{-- Late + break history --}}
                 <div class="grid grid-cols-2 gap-3">
-                    <div class="rounded-2xl border border-orange-100/70 bg-white dark:bg-zinc-900 p-3 shadow-sm">
+                    <div class="ui-surface p-3">
                         <div class="mb-1.5 text-[9px] font-bold uppercase tracking-widest text-zinc-400">Late History</div>
                         @forelse($drawer['late_history'] as $lh)
                             <div class="flex items-center justify-between py-0.5 text-[11px]"><span class="text-zinc-600 dark:text-zinc-300">{{ $lh['date'] }}</span><span class="font-bold text-amber-600">+{{ $lh['mins'] }}m</span></div>
                         @empty<p class="text-[10px] text-emerald-600">No late arrivals 🎉</p>@endforelse
                     </div>
-                    <div class="rounded-2xl border border-orange-100/70 bg-white dark:bg-zinc-900 p-3 shadow-sm">
+                    <div class="ui-surface p-3">
                         <div class="mb-1.5 text-[9px] font-bold uppercase tracking-widest text-zinc-400">Break History</div>
                         @forelse($drawer['break_history'] as $bh)
                             <div class="flex items-center justify-between py-0.5 text-[11px]"><span class="text-zinc-600 dark:text-zinc-300">{{ $bh['date'] }}</span><span class="font-bold {{ $bh['mins'] > 60 ? 'text-amber-600' : 'text-zinc-800 dark:text-zinc-100' }}">{{ $bh['mins'] }}m</span></div>
@@ -535,7 +535,7 @@ EMPLOYEE 360 DRAWER (480px, right)
                 </div>
 
                 {{-- Attendance history — Daily / Weekly toggle --}}
-                <div class="rounded-2xl border border-orange-100/70 bg-white dark:bg-zinc-900 p-4 shadow-sm" x-data="{ tab: 'daily' }">
+                <div class="ui-surface p-4" x-data="{ tab: 'daily' }">
                     <div class="mb-2 flex items-center justify-between">
                         <div class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Attendance History</div>
                         <div class="flex items-center gap-0.5 rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800">
@@ -638,7 +638,7 @@ REVIEW REGULARISATION MODAL
                                         <div class="flex items-center gap-1.5 text-[10px] text-zinc-500 dark:text-zinc-400">
                                             @php [$stepIcon, $stepTone] = match ($step['action'] ?? '') { 'approved' => ['check-circle', 'text-emerald-500'], 'edited', 'corrected' => ['pencil-square', 'text-sky-500'], default => ['x-circle', 'text-rose-500'] }; @endphp
                                             <flux:icon :icon="$stepIcon" class="size-3 {{ $stepTone }}" />
-                                            <b>{{ $step['name'] ?? 'Reviewer' }}</b> {{ $step['action'] ?? '' }} at {{ str_replace('_', ' ', $step['stage'] ?? '') }} · {{ \Carbon\Carbon::parse($step['at'])->format('d M h:i A') }}
+                                            <b>{{ $step['name'] ?? 'Reviewer' }}</b> {{ $step['action'] ?? '' }} at {{ str_replace('_', ' ', $step['stage'] ?? '') }} · {{ \Carbon\Carbon::parse($step['at'])->toImmutable()->userDateTime() }}
                                         </div>
                                     @endforeach
                                 </div>

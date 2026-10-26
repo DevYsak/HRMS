@@ -43,7 +43,7 @@
                         <div class="text-[11px] text-[#9CA3AF] dark:text-zinc-500">Pays on day {{ $cycle['pay_day'] }} of the month</div>
                     </div>
                     <div class="text-right">
-                        <div class="text-sm font-bold text-orange-600 dark:text-orange-400">{{ $cycle['next']->format('d M') }}</div>
+                        <div class="text-sm font-bold text-orange-600 dark:text-orange-400">{{ $cycle['next']->toImmutable()->userShortDate() }}</div>
                         <div class="text-[11px] text-[#9CA3AF] dark:text-zinc-500">{{ $cycle['days'] === 0 ? 'Today' : ($cycle['days'] === 1 ? 'Tomorrow' : $cycle['days'].' days') }}</div>
                     </div>
                 </div>

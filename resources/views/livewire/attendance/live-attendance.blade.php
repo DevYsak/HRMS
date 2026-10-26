@@ -87,7 +87,7 @@
             <input type="search" wire:model.live.debounce.400ms="search" placeholder="Search employee…" aria-label="Search employee"
                 class="w-full rounded-xl border border-zinc-200 bg-white py-2 pl-9 pr-3 text-sm focus:border-orange-400 focus:ring-0 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 sm:w-56">
         </div>
-        <span class="text-xs text-zinc-400">Today · {{ now()->format('D, d M') }}</span>
+        <span class="text-xs text-zinc-400">Today · {{ now()->toImmutable()->userShortDate() }}</span>
     </div>
 
     {{-- Summary --}}
@@ -113,7 +113,7 @@
 
     @if($tab === 'overview')
         <div class="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,20rem)]">
-            <section class="min-w-0 rounded-2xl border border-zinc-200/80 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900" aria-labelledby="overview-activity">
+            <section class="ui-surface min-w-0" aria-labelledby="overview-activity">
                 <div class="flex items-center justify-between px-5 pb-2 pt-5">
                     <h2 id="overview-activity" class="text-[17px] font-semibold text-zinc-900 dark:text-white">Latest Activity</h2>
                     @if($activity_total > 0)
@@ -122,7 +122,7 @@
                 </div>
                 @include('livewire.attendance.partials.live-activity-table', ['events' => array_slice($activity, 0, 8)])
             </section>
-            <section class="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900" aria-labelledby="needs-attention" data-live-attention>
+            <section class="ui-surface p-5" aria-labelledby="needs-attention" data-live-attention>
                 <h2 id="needs-attention" class="mb-3 text-[17px] font-semibold text-zinc-900 dark:text-white">Needs Attention</h2>
                 <ul class="divide-y divide-zinc-100 dark:divide-zinc-800">
                     @foreach($attentionItems as [$key, $label])
@@ -137,7 +137,7 @@
             </section>
         </div>
     @elseif($tab === 'activity')
-        <section class="rounded-2xl border border-zinc-200/80 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900" aria-labelledby="latest-activity">
+        <section class="ui-surface" aria-labelledby="latest-activity">
             <div class="flex items-center justify-between px-5 pb-2 pt-5">
                 <h2 id="latest-activity" class="text-[17px] font-semibold text-zinc-900 dark:text-white">Latest Activity</h2>
                 <span class="text-xs text-zinc-500">Newest first · {{ min(count($activity), $activity_total) }} of {{ $activity_total }}</span>
@@ -150,7 +150,7 @@
             @endif
         </section>
     @else
-        <section class="rounded-2xl border border-zinc-200/80 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900" aria-labelledby="today-status">
+        <section class="ui-surface" aria-labelledby="today-status">
             <div class="flex items-center justify-between px-5 pb-2 pt-5">
                 <h2 id="today-status" class="text-[17px] font-semibold text-zinc-900 dark:text-white">Today Status</h2>
                 <span class="text-xs text-zinc-500">{{ count($rows) }} {{ \Illuminate\Support\Str::plural('employee', count($rows)) }}</span>

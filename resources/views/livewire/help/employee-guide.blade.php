@@ -200,7 +200,7 @@
                     <section id="{{ $section['id'] }}" data-guide-section
                              data-search="{{ Str::lower($section['title'].' '.$section['category'].' '.$section['summary'].' '.$section['keywords'].' '.implode(' ', $section['steps'])) }}"
                              x-show="matches($el.dataset.search)"
-                             class="scroll-mt-20 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-7">
+                             class="ui-surface scroll-mt-20 p-5 sm:p-7">
 
                         <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                             <div class="flex items-start gap-3">
@@ -393,7 +393,7 @@
                 <section id="can-cannot" data-guide-section
                          data-search="can cannot permissions access allowed what can i do summary table admin settings roles payroll administration other employees records assets"
                          x-show="matches($el.dataset.search)"
-                         class="scroll-mt-20 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-7">
+                         class="ui-surface scroll-mt-20 p-5 sm:p-7">
                     <p class="text-[11px] font-bold uppercase tracking-widest text-orange-600 dark:text-orange-400">Reference</p>
                     <h2 class="mt-0.5 text-xl font-black tracking-tight text-zinc-900 dark:text-white">What you can and cannot do</h2>
                     <p class="mt-2 text-sm text-zinc-600 dark:text-zinc-300">Worked out from your own account's access right now. If something you need shows “No”, ask HR.</p>
@@ -425,7 +425,7 @@
                 <section id="faq" data-guide-section
                          data-search="faq questions help {{ Str::lower(collect($faqs)->map(fn ($f) => $f['q'].' '.$f['a'])->implode(' ')) }}"
                          x-show="matches($el.dataset.search)"
-                         class="scroll-mt-20 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-7">
+                         class="ui-surface scroll-mt-20 p-5 sm:p-7">
                     <p class="text-[11px] font-bold uppercase tracking-widest text-orange-600 dark:text-orange-400">Reference</p>
                     <h2 class="mt-0.5 text-xl font-black tracking-tight text-zinc-900 dark:text-white">Frequently asked questions</h2>
                     <div class="mt-4 divide-y divide-zinc-100 rounded-xl border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
@@ -443,7 +443,7 @@
                 @endif
 
                 @if($capturedAt)
-                    <p class="text-center text-[11px] text-zinc-400">Screenshots captured {{ \Illuminate\Support\Carbon::parse($capturedAt)->format('d M Y') }} from a demo employee account. Names and figures are fictional.</p>
+                    <p class="text-center text-[11px] text-zinc-400">Screenshots captured {{ \Illuminate\Support\Carbon::parse($capturedAt)->toImmutable()->userDate() }} from a demo employee account. Names and figures are fictional.</p>
                 @endif
             </div>
         </div>

@@ -7,7 +7,7 @@
     --}}
     <div class="space-y-5" data-notification-preferences>
         @forelse($settings as $group => $rows)
-            <section class="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-white/10 dark:bg-zinc-900" data-notification-group="{{ $group ?: 'General' }}">
+            <section class="ui-surface overflow-hidden" data-notification-group="{{ $group ?: 'General' }}">
                 <header class="grid grid-cols-1 items-center gap-2 border-b border-zinc-100 bg-zinc-50/70 px-4 py-2.5 sm:grid-cols-[minmax(0,1fr)_6rem_6rem] dark:border-white/5 dark:bg-white/5">
                     <h3 class="min-w-0 text-[11px] font-bold uppercase tracking-wider text-zinc-500">{{ $group ?: 'General' }}</h3>
                     <span class="hidden text-center text-[11px] font-bold uppercase tracking-wider text-zinc-400 sm:block">{{ __('Email') }}</span>

@@ -189,7 +189,7 @@
                                             @endif
                                             <div>
                                                 <div class="font-bold text-zinc-800 dark:text-zinc-100">
-                                                    {{ \Carbon\Carbon::parse($day['date'])->format('d M') }}
+                                                    {{ \Carbon\Carbon::parse($day['date'])->toImmutable()->userShortDate() }}
                                                 </div>
                                                 <div class="text-[11px] text-zinc-400">
                                                     {{ $day['day_name'] }}
@@ -288,7 +288,7 @@
                         d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
                 </svg>
                 Data from Nexflow · Nexflow ID: <span class="font-mono font-bold">{{ $emp['nexflow_id'] }}</span> ·
-                Generated {{ \Carbon\Carbon::parse($clockData['generated_at'])->format('d M Y, H:i') }}
+                Generated {{ \Carbon\Carbon::parse($clockData['generated_at'])->toImmutable()->userDateTime() }}
                 @if(config('nexbridge.cache_ttl') > 0)
                     · Cached for {{ config('nexbridge.cache_ttl') / 60 }} min
                 @endif

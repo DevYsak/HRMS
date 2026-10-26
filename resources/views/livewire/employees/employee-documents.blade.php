@@ -30,9 +30,9 @@
                         <div class="mt-0.5 flex items-center gap-3 text-xs text-zinc-400">
                             <span>{{ $doc->file_name }}</span>
                             <span>{{ number_format($doc->file_size / 1024, 1) }} KB</span>
-                            <span>Uploaded {{ $doc->created_at->format('d M Y') }} by {{ $doc->uploader->name }}</span>
+                            <span>Uploaded {{ $doc->created_at->toImmutable()->userDate() }} by {{ $doc->uploader->name }}</span>
                             @if($doc->expires_at)
-                                <span>Expires {{ $doc->expires_at->format('d M Y') }}</span>
+                                <span>Expires {{ $doc->expires_at->toImmutable()->userDate() }}</span>
                             @endif
                         </div>
                     </div>

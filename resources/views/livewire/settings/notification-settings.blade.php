@@ -60,7 +60,7 @@
     {{-- Status cards: SMTP + Queue + Test --}}
     <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {{-- SMTP --}}
-        <div class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-zinc-900">
+        <div class="ui-surface p-5">
             <div class="mb-3 flex items-center gap-2">
                 <flux:icon.envelope class="size-5 text-orange-500" />
                 <h3 class="text-sm font-bold text-zinc-900 dark:text-white">SMTP Status</h3>
@@ -79,7 +79,7 @@
         </div>
 
         {{-- Queue --}}
-        <div class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-zinc-900">
+        <div class="ui-surface p-5">
             <div class="mb-3 flex items-center gap-2">
                 <flux:icon.queue-list class="size-5 text-orange-500" />
                 <h3 class="text-sm font-bold text-zinc-900 dark:text-white">Queue Status</h3>
@@ -101,7 +101,7 @@
         </div>
 
         {{-- Test email --}}
-        <div class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-zinc-900">
+        <div class="ui-surface p-5">
             <div class="mb-3 flex items-center gap-2">
                 <flux:icon.paper-airplane class="size-5 text-orange-500" />
                 <h3 class="text-sm font-bold text-zinc-900 dark:text-white">Send Test Email</h3>
@@ -130,7 +130,7 @@
     {{-- Notification settings grouped --}}
     <div class="space-y-6">
         @forelse($settings as $group => $rows)
-            <div class="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-white/10 dark:bg-zinc-900">
+            <div class="ui-surface overflow-hidden">
                 <div class="border-b border-zinc-100 bg-zinc-50/70 px-5 py-3 dark:border-white/5 dark:bg-zinc-800/40">
                     <h3 class="text-xs font-bold uppercase tracking-widest text-zinc-500">{{ $group }}</h3>
                 </div>
@@ -227,7 +227,7 @@
     </div>
 
     {{-- Recent email logs --}}
-    <div class="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-white/10 dark:bg-zinc-900">
+    <div class="ui-surface overflow-hidden">
         <div class="border-b border-zinc-100 bg-zinc-50/70 px-5 py-3 dark:border-white/5 dark:bg-zinc-800/40">
             <h3 class="text-xs font-bold uppercase tracking-widest text-zinc-500">Recent Emails</h3>
         </div>

@@ -43,7 +43,7 @@
                             <div class="font-medium text-zinc-900 dark:text-white">{{ $rei->title }}</div>
                             <div class="text-[10px] uppercase text-zinc-400">{{ $rei->category }}</div>
                         </td>
-                        <td class="py-4 pr-4 text-zinc-500">{{ $rei->expense_date?->format('d M Y') }}</td>
+                        <td class="py-4 pr-4 text-zinc-500">{{ $rei->expense_date?->toImmutable()->userDate() }}</td>
                         <td class="py-4 pr-4 text-right font-bold text-zinc-900 dark:text-white">₹{{ number_format($rei->amount, 0) }}</td>
                         <td class="py-4 pr-4">
                             <span class="text-[10px] font-bold px-2 py-1 rounded-full

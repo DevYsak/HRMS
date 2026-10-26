@@ -15,7 +15,7 @@
                     </span>
                     <a href="{{ $doc['view_url'] }}" target="_blank" rel="noopener" class="min-w-0 flex-1 focus-visible:outline-2 focus-visible:outline-orange-500">
                         <span class="block truncate text-sm text-zinc-800 dark:text-zinc-100">{{ $doc['title'] }}</span>
-                        <span class="block truncate text-xs text-zinc-500 dark:text-zinc-400">{{ $doc['type'] }} · {{ $doc['date']?->format('j M Y') }}</span>
+                        <span class="block truncate text-xs text-zinc-500 dark:text-zinc-400">{{ $doc['type'] }} · {{ $doc['date']?->toImmutable()->userDate() }}</span>
                     </a>
                     <flux:tooltip content="Download">
                         <a href="{{ $doc['download_url'] }}" aria-label="Download {{ $doc['title'] }}"

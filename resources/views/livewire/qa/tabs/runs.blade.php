@@ -9,7 +9,7 @@
                         {{ \App\Models\QaTestRun::SUITES[$run->suite] ?? ucfirst($run->suite) }} · {{ \App\Models\QaTestRun::KINDS[$run->kind] ?? $run->kind }} ·
                         {{ \App\Enums\QaEnvironment::tryFrom($run->environment)?->label() ?? $run->environment }} ·
                         @if($run->commit)<span class="font-mono">{{ substr($run->commit, 0, 7) }}</span> · @endif
-                        {{ $run->run_at->format('d M Y H:i') }}
+                        {{ $run->run_at->toImmutable()->userDateTime() }}
                         @if($run->duration_seconds) · {{ gmdate($run->duration_seconds >= 3600 ? 'G\h i\m' : 'i\m s\s', $run->duration_seconds) }}@endif
                         @if($run->phase) · Phase {{ $run->phase->number }}@endif
                     </p>

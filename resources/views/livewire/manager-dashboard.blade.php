@@ -152,7 +152,7 @@
                                         <div class="truncate text-[13px] font-semibold text-zinc-900 dark:text-white">{{ $leave->employee->user->name }}</div>
                                         <div class="truncate text-xs text-zinc-500">
                                             {{ $leave->leaveType?->name }} ·
-                                            {{ \Carbon\Carbon::parse($leave->start_date)->format('d M') }}@if($leave->start_date != $leave->end_date) – {{ \Carbon\Carbon::parse($leave->end_date)->format('d M') }}@endif
+                                            {{ \Carbon\Carbon::parse($leave->start_date)->toImmutable()->userShortDate() }}@if($leave->start_date != $leave->end_date) – {{ \Carbon\Carbon::parse($leave->end_date)->toImmutable()->userShortDate() }}@endif
                                         </div>
                                     </div>
                                     <div class="flex shrink-0 gap-1.5">

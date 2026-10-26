@@ -26,7 +26,7 @@
                 <div class="flex items-center gap-3">
                     <span class="text-lg font-black text-zinc-900 dark:text-white">FY {{ $cycle->financial_year }}</span>
                     <span class="rounded-full bg-zinc-100 dark:bg-zinc-800 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-zinc-500">{{ $cycle->statusLabel() }}</span>
-                    <span class="text-xs text-zinc-400">Effective {{ $cycle->effective_date->format('d M Y') }} · Budget {{ rtrim(rtrim(number_format($cycle->budget_percent, 2), '0'), '.') }}% of payroll</span>
+                    <span class="text-xs text-zinc-400">Effective {{ $cycle->effective_date->toImmutable()->userDate() }} · Budget {{ rtrim(rtrim(number_format($cycle->budget_percent, 2), '0'), '.') }}% of payroll</span>
                 </div>
                 <div class="flex items-center gap-2">
                     @if($companyWide && in_array($cycle->status, ['draft', 'calibration']))

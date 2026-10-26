@@ -28,7 +28,7 @@
     </div>
 
     {{-- Upload --}}
-    <div class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-zinc-900">
+    <div class="ui-surface p-5">
         <div class="flex flex-wrap items-end gap-3">
             <div class="min-w-64 flex-1">
                 <flux:input type="file" wire:model="file" label="Spreadsheet"
@@ -75,7 +75,7 @@
             @endforeach
         </div>
 
-        <div class="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-white/10 dark:bg-zinc-900">
+        <div class="ui-surface overflow-hidden">
             <table class="w-full text-sm">
                 <thead>
                     <tr class="text-[10px] font-bold uppercase tracking-wider text-zinc-400">

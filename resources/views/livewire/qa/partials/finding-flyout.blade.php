@@ -49,7 +49,7 @@
                     <div class="rounded-lg border border-zinc-100 p-3 text-xs dark:border-white/10">
                         <p class="flex flex-wrap items-center gap-2"><span class="rounded bg-zinc-900 px-1.5 py-0.5 font-mono font-semibold text-white dark:bg-white dark:text-zinc-900">{{ $fix->shortHash() }}</span>
                             <span class="font-medium text-zinc-800 dark:text-zinc-100">{{ $fix->commit_message }}</span></p>
-                        <p class="mt-1 text-zinc-500">{{ $fix->fixed_at?->format('d M Y H:i') }}@if($fix->test_case_codes) · tests {{ implode(', ', $fix->test_case_codes) }}@endif @if($fix->files_changed) · {{ count($fix->files_changed) }} file(s)@endif</p>
+                        <p class="mt-1 text-zinc-500">{{ $fix->fixed_at?->toImmutable()->userDateTime() }}@if($fix->test_case_codes) · tests {{ implode(', ', $fix->test_case_codes) }}@endif @if($fix->files_changed) · {{ count($fix->files_changed) }} file(s)@endif</p>
                         @if($fix->developer_note)<p class="mt-1 text-zinc-600 dark:text-zinc-300">{{ $fix->developer_note }}</p>@endif
                     </div>
                 @empty

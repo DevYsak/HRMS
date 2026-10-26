@@ -51,7 +51,7 @@
     </div>
 
     {{-- Table: scrolls sideways on small screens instead of overflowing the page --}}
-    <div class="overflow-x-auto rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-white/10 dark:bg-zinc-900">
+    <div class="ui-surface overflow-x-auto">
         <table class="w-full min-w-[960px] text-sm">
             <thead class="border-b border-zinc-100 bg-zinc-50/70 dark:border-white/5 dark:bg-zinc-800/40">
                 <tr class="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
@@ -73,7 +73,7 @@
                     @endphp
                     <tr wire:key="audit-{{ $log->id }}" class="align-top transition hover:bg-zinc-50/60 dark:hover:bg-zinc-800/30">
                         <td class="whitespace-nowrap px-5 py-3 text-zinc-500">
-                            {{ $log->created_at?->format('d M Y, H:i') }}
+                            {{ $log->created_at?->toImmutable()->userDateTime() }}
                             @if($log->request_id)
                                 <div class="mt-0.5 font-mono text-[10px] text-zinc-400" title="Reference ID {{ $log->request_id }}">Ref {{ \Illuminate\Support\Str::limit($log->request_id, 8, '') }}</div>
                             @endif

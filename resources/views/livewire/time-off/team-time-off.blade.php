@@ -32,7 +32,7 @@
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
 
             {{-- Pending Action --}}
-            <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 p-5 shadow-sm flex items-center gap-4">
+            <div class="ui-surface p-5 flex items-center gap-4">
                 <div class="size-12 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0">
                     <flux:icon.clock class="size-6 text-amber-500" />
                 </div>
@@ -50,7 +50,7 @@
             </div>
 
             {{-- Approved This Month --}}
-            <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 p-5 shadow-sm flex items-center gap-4">
+            <div class="ui-surface p-5 flex items-center gap-4">
                 <div class="size-12 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center shrink-0">
                     <flux:icon.check-circle class="size-6 text-emerald-500" />
                 </div>
@@ -62,7 +62,7 @@
             </div>
 
             {{-- Total Days Approved --}}
-            <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 p-5 shadow-sm flex items-center gap-4">
+            <div class="ui-surface p-5 flex items-center gap-4">
                 <div class="size-12 rounded-xl bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center shrink-0">
                     <flux:icon.calendar-days class="size-6 text-violet-500" />
                 </div>
@@ -74,7 +74,7 @@
             </div>
 
             {{-- Team Members --}}
-            <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 p-5 shadow-sm flex items-center gap-4">
+            <div class="ui-surface p-5 flex items-center gap-4">
                 <div class="size-12 rounded-xl bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center shrink-0">
                     <flux:icon.users class="size-6 text-violet-500" />
                 </div>
@@ -142,7 +142,7 @@
         <div class="grid grid-cols-1 gap-6">
 
             {{-- Pending Requests --}}
-            <div class="min-w-0 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 shadow-sm overflow-hidden">
+            <div class="ui-surface min-w-0 overflow-hidden">
                 <div class="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
                     <h3 class="text-base font-bold text-zinc-900 dark:text-white">
                         Pending Action
@@ -230,7 +230,7 @@
             </div>
 
             {{-- Quick Filters: a full row on desktop, 2 columns on tablet, 1 on phones --}}
-            <div class="order-first min-w-0 rounded-2xl border border-zinc-100 bg-white p-4 shadow-sm sm:p-6 dark:border-zinc-800 dark:bg-zinc-900" data-team-leave-filters>
+            <div class="ui-surface order-first min-w-0 p-4 sm:p-6" data-team-leave-filters>
                 <h3 class="mb-4 text-base font-bold text-zinc-900 dark:text-white">Quick Filters</h3>
 
                 <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] xl:items-end">
@@ -283,7 +283,7 @@
         </div>
 
         {{-- ── Recent Team Activity Table ───────────────────────────────────── --}}
-        <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 shadow-sm overflow-hidden">
+        <div class="ui-surface overflow-hidden">
             <div class="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800">
                 <h3 class="text-base font-bold text-zinc-900 dark:text-white">Recent Team Activity</h3>
             </div>

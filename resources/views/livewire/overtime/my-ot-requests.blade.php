@@ -29,14 +29,14 @@
                 ['key' => 'rejected', 'label' => 'Rejected', 'value' => $summary['rejected'], 'hint' => 'all time', 'tone' => 'text-rose-600'],
                 ['key' => 'hours', 'label' => 'Payable OT This Month', 'value' => $hours($summary['approved_hours_month']), 'hint' => now()->format('F Y'), 'tone' => 'text-zinc-900 dark:text-white'],
             ] as $card)
-                <div class="min-w-0 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm sm:p-5 dark:border-zinc-800 dark:bg-zinc-900" data-ot-card="{{ $card['key'] }}">
+                <div class="ui-surface min-w-0 p-4 sm:p-5" data-ot-card="{{ $card['key'] }}">
                     <p class="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 [overflow-wrap:anywhere]">{{ $card['label'] }}</p>
                     <p class="mt-2 text-2xl font-bold sm:text-3xl {{ $card['tone'] }}">{{ $card['value'] }}</p>
                     <p class="mt-1 text-xs text-zinc-400">{{ $card['hint'] }}</p>
                 </div>
             @endforeach
             @if($showPay)
-                <div class="col-span-2 min-w-0 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm sm:p-5 lg:col-span-1 dark:border-zinc-800 dark:bg-zinc-900" data-ot-card="payable">
+                <div class="ui-surface col-span-2 min-w-0 p-4 sm:p-5 lg:col-span-1" data-ot-card="payable">
                     <p class="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Estimated payable this month</p>
                     <p class="mt-2 text-2xl font-bold text-zinc-900 sm:text-3xl dark:text-white">₹{{ number_format($summary['approved_amount_month'], 2) }}</p>
                     <p class="mt-1 text-xs text-zinc-400">final amount on your payslip</p>
@@ -45,7 +45,7 @@
         </div>
 
         {{-- History --}}
-        <section class="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <section class="ui-surface overflow-hidden">
             <div class="flex flex-col gap-3 border-b border-zinc-100 px-4 py-4 sm:px-5 md:flex-row md:items-center md:justify-between dark:border-zinc-800">
                 <h2 class="text-sm font-bold text-zinc-900 dark:text-white">Request history</h2>
                 <div class="grid grid-cols-1 gap-2 sm:grid-cols-[10rem_11rem_auto] sm:items-center" data-ot-filters>

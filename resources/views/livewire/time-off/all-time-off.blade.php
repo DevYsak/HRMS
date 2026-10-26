@@ -45,7 +45,7 @@
         {{-- ── KPI Cards ──────────────────────────────────────────────────── --}}
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
 
-            <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 p-5 shadow-sm flex items-center gap-4">
+            <div class="ui-surface p-5 flex items-center gap-4">
                 <div class="size-12 rounded-xl bg-brand-50 dark:bg-brand-900/20 flex items-center justify-center shrink-0">
                     <flux:icon.calendar-days class="size-6 text-brand-600" />
                 </div>
@@ -56,7 +56,7 @@
                 </div>
             </div>
 
-            <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 p-5 shadow-sm flex items-center gap-4">
+            <div class="ui-surface p-5 flex items-center gap-4">
                 <div class="size-12 rounded-xl bg-brand-50 dark:bg-brand-900/20 flex items-center justify-center shrink-0">
                     <svg class="size-6 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
@@ -69,7 +69,7 @@
                 </div>
             </div>
 
-            <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 p-5 shadow-sm flex items-center gap-4">
+            <div class="ui-surface p-5 flex items-center gap-4">
                 <div class="size-12 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center shrink-0">
                     <flux:icon.check-circle class="size-6 text-emerald-500" />
                 </div>
@@ -80,7 +80,7 @@
                 </div>
             </div>
 
-            <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 p-5 shadow-sm flex items-center gap-4">
+            <div class="ui-surface p-5 flex items-center gap-4">
                 <div class="size-12 rounded-xl bg-red-50 dark:bg-red-900/20 flex items-center justify-center shrink-0">
                     <flux:icon.x-circle class="size-6 text-red-500" />
                 </div>
@@ -97,7 +97,7 @@
         <div class="flex gap-6 items-start">
 
             {{-- Table Card --}}
-            <div class="flex-1 min-w-0 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 shadow-sm overflow-hidden">
+            <div class="ui-surface flex-1 min-w-0 overflow-hidden">
 
                 {{-- Filter bar --}}
                 <div class="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 flex flex-wrap items-center gap-3">
@@ -187,7 +187,7 @@
                                         </div>
                                     </td>
                                     <td class="py-3.5 pr-4 text-sm text-zinc-600 dark:text-zinc-300">
-                                        {{ $req->start_date->format('M d') }} – {{ $req->end_date->toImmutable()->userDate() }}
+                                        {{ $req->start_date->toImmutable()->userShortDate() }} – {{ $req->end_date->toImmutable()->userDate() }}
                                     </td>
                                     <td class="py-3.5 pr-4 font-bold text-zinc-800 dark:text-zinc-200">{{ (float)$req->days }}</td>
                                     <td class="py-3.5 pr-4">
@@ -257,7 +257,7 @@
 
             {{-- ── Detail Side Panel ──────────────────────────────────────── --}}
             @if($showDetailPanel && $viewingRequest)
-                <div class="w-96 shrink-0 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 shadow-sm overflow-hidden flex flex-col"
+                <div class="ui-surface w-96 shrink-0 overflow-hidden flex flex-col"
                      style="max-height: calc(100vh - 12rem);">
 
                     {{-- Panel Header --}}
@@ -326,7 +326,7 @@
                             <div class="grid grid-cols-2 gap-3 text-xs">
                                 <div>
                                     <div class="text-zinc-400 font-semibold uppercase tracking-wide mb-0.5">Dates</div>
-                                    <div class="text-zinc-700 dark:text-zinc-300 font-semibold">{{ $viewingRequest->start_date->format('d M') }} – {{ $viewingRequest->end_date->toImmutable()->userDate() }}</div>
+                                    <div class="text-zinc-700 dark:text-zinc-300 font-semibold">{{ $viewingRequest->start_date->toImmutable()->userShortDate() }} – {{ $viewingRequest->end_date->toImmutable()->userDate() }}</div>
                                 </div>
                                 <div>
                                     <div class="text-zinc-400 font-semibold uppercase tracking-wide mb-0.5">Days</div>
@@ -385,7 +385,7 @@
                                         <div class="max-w-[85%] rounded-xl px-3 py-2 text-xs {{ $mine ? 'bg-indigo-600 text-white' : 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200' }}">
                                             <div class="mb-0.5 flex items-center gap-2 text-[9px] font-bold uppercase tracking-wide {{ $mine ? 'text-indigo-100' : 'text-zinc-400' }}">
                                                 <span>{{ $mine ? 'You' : ($msg->user?->name ?? 'Employee') }}</span>
-                                                <span class="font-medium normal-case">{{ $msg->created_at->format('d M, H:i') }}</span>
+                                                <span class="font-medium normal-case">{{ $msg->created_at->toImmutable()->userDateTime() }}</span>
                                             </div>
                                             @if($msg->body)<p class="whitespace-pre-line leading-snug">{{ $msg->body }}</p>@endif
                                             @if($msg->attachment_path)
@@ -425,7 +425,7 @@
                                     <div class="size-2 rounded-full bg-indigo-500 mt-1.5 shrink-0"></div>
                                     <div>
                                         <div class="text-xs font-semibold text-zinc-700 dark:text-zinc-300">Submitted</div>
-                                        <div class="text-[11px] text-zinc-400">{{ $viewingRequest->created_at->format('d M Y, h:i A') }}</div>
+                                        <div class="text-[11px] text-zinc-400">{{ $viewingRequest->created_at->toImmutable()->userDateTime() }}</div>
                                     </div>
                                 </div>
                                 @if($viewingRequest->reviewer)
@@ -445,7 +445,7 @@
                                         <div class="size-2 rounded-full bg-emerald-500 mt-1.5 shrink-0"></div>
                                         <div>
                                             <div class="text-xs font-semibold text-zinc-700 dark:text-zinc-300">HR Approved</div>
-                                            <div class="text-[11px] text-zinc-400">by {{ $viewingRequest->hrReviewer->name }} · {{ $viewingRequest->hr_reviewed_at?->format('d M Y, h:i A') }}</div>
+                                            <div class="text-[11px] text-zinc-400">by {{ $viewingRequest->hrReviewer->name }} · {{ $viewingRequest->hr_reviewed_at?->toImmutable()->userDateTime() }}</div>
                                             @if($viewingRequest->hr_reviewer_comment)
                                                 <div class="text-[11px] text-zinc-500 italic">"{{ $viewingRequest->hr_reviewer_comment }}"</div>
                                             @endif
@@ -461,7 +461,7 @@
                                             <div class="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
                                                 Payment: {{ ucfirst($log->from_status) }} → {{ ucfirst($log->to_status) }}
                                             </div>
-                                            <div class="text-[11px] text-zinc-400">by {{ $log->changedByUser?->name }} · {{ $log->created_at->format('d M Y, h:i A') }}</div>
+                                            <div class="text-[11px] text-zinc-400">by {{ $log->changedByUser?->name }} · {{ $log->created_at->toImmutable()->userDateTime() }}</div>
                                             <div class="text-[11px] text-zinc-500 italic">"{{ $log->reason }}"</div>
                                         </div>
                                     </div>

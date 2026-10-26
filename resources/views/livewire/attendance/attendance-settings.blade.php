@@ -13,7 +13,7 @@
     <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
 
         {{-- Global Rules --}}
-        <div class="rounded-2xl border border-zinc-100 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <div class="ui-surface p-6">
             <div class="mb-5 flex items-center gap-2">
                 <div class="rounded-lg bg-sky-50 p-1.5 dark:bg-sky-900/20">
                     <flux:icon.cog-6-tooth class="size-4 text-sky-600 dark:text-sky-400" />
@@ -84,7 +84,7 @@
             </div>
 
             {{-- ═══ Attendance Score Weights (Rule 11 · HR-editable) ═══ --}}
-            <div class="rounded-2xl border border-zinc-100 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <div class="ui-surface p-6">
                 <div class="mb-1 flex items-center gap-2">
                     <div class="rounded-lg bg-blue-50 p-1.5 dark:bg-blue-900/20"><flux:icon.scale class="size-4 text-blue-600 dark:text-blue-400" /></div>
                     <h3 class="text-sm font-black text-zinc-900 dark:text-white">Attendance Score Weights</h3>
@@ -114,7 +114,7 @@
         {{-- Geo-fencing Locations --}}
         <div class="space-y-4 lg:col-span-2">
             <div
-                class="rounded-2xl border border-zinc-100 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                class="ui-surface p-6">
                 <div class="mb-5 flex items-center gap-2">
                     <div class="rounded-lg bg-sky-50 p-1.5 dark:bg-sky-900/20">
                         <flux:icon.map-pin class="size-4 text-sky-600 dark:text-sky-400" />
@@ -153,7 +153,7 @@
     </div>
 
     {{-- ─── ROW 2: Shift Management ─── --}}
-    <div class="rounded-2xl border border-zinc-100 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+    <div class="ui-surface">
 
         {{-- Section header --}}
         <div class="flex items-center justify-between border-b border-zinc-50 px-6 py-4 dark:border-zinc-800">
@@ -227,14 +227,14 @@
                                 <div
                                     class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-2.5 py-1 text-xs font-black text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">
                                     <flux:icon.arrow-right-circle class="size-3" />
-                                    {{ \Illuminate\Support\Carbon::parse($shift->start_time)->format('g:i A') }}
+                                    {{ \Illuminate\Support\Carbon::parse($shift->start_time)->toImmutable()->userTime() }}
                                 </div>
                             </td>
                             <td class="px-4 py-4">
                                 <div
                                     class="inline-flex items-center gap-1.5 rounded-lg bg-zinc-50 px-2.5 py-1 text-xs font-bold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
                                     <flux:icon.arrow-left-circle class="size-3" />
-                                    {{ \Illuminate\Support\Carbon::parse($shift->end_time)->format('g:i A') }}
+                                    {{ \Illuminate\Support\Carbon::parse($shift->end_time)->toImmutable()->userTime() }}
                                 </div>
                             </td>
                             <td class="px-4 py-4 text-center">
@@ -354,7 +354,7 @@
                                     <flux:icon.eye class="inline size-3.5 mr-1" />
                                     Preview: Clock-in deadline =
                                     <span class="font-black">
-                                        {{ \Illuminate\Support\Carbon::parse($shiftStart)->addMinutes((int) $shiftGrace)->format('g:i A') }}
+                                        {{ \Illuminate\Support\Carbon::parse($shiftStart)->addMinutes((int) $shiftGrace)->toImmutable()->userTime() }}
                                     </span>
                                     ({{ $shiftStart }} + {{ $shiftGrace }} min grace)
                                 </p>

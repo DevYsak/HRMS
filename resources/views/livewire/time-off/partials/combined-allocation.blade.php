@@ -49,7 +49,7 @@
                     @php [$badge, $tone] = $badges[$row['status']] ?? ['Working Day', 'emerald']; @endphp
                     <tr wire:key="cday-{{ $row['date'] }}" data-combined-date="{{ $row['date'] }}" data-day-status="{{ $row['status'] }}"
                         @class(['bg-zinc-50/70 dark:bg-white/[0.02]' => ! $row['chargeable']])>
-                        <td style="height: 56px" @class(['whitespace-nowrap px-3 py-2 align-middle font-medium', 'text-zinc-900 dark:text-white' => $row['chargeable'], 'text-zinc-400' => ! $row['chargeable']])>{{ \Illuminate\Support\Carbon::parse($row['date'])->format('d M') }}</td>
+                        <td style="height: 56px" @class(['whitespace-nowrap px-3 py-2 align-middle font-medium', 'text-zinc-900 dark:text-white' => $row['chargeable'], 'text-zinc-400' => ! $row['chargeable']])>{{ \Illuminate\Support\Carbon::parse($row['date'])->toImmutable()->userShortDate() }}</td>
                         <td @class(['whitespace-nowrap px-2 py-2 align-middle', 'text-zinc-600 dark:text-zinc-300' => $row['chargeable'], 'text-zinc-400' => ! $row['chargeable']])>{{ \Illuminate\Support\Carbon::parse($row['date'])->format('D') }}</td>
                         <td class="px-2 py-2 align-middle" title="{{ $tooltip($row) }}">
                             <x-pulse.badge :color="$tone" data-status-badge>{{ $badge }}</x-pulse.badge>

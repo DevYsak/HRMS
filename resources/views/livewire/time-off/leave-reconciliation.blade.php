@@ -6,7 +6,7 @@
             <a href="{{ route('time-off.leave-management') }}" wire:navigate class="text-xs font-semibold text-orange-600 hover:underline">← Leave Management</a>
             <h1 class="mt-1 text-2xl font-extrabold tracking-tight text-[#101828] dark:text-white">Leave Reconciliation</h1>
             <p class="mt-1 text-sm text-[#667085] dark:text-zinc-400">
-                {{ $this->year->label }} ({{ $this->year->starts_on->format('d M Y') }} – {{ $this->year->ends_on->format('d M Y') }}): every eligible employee against their policy.
+                {{ $this->year->label }} ({{ $this->year->starts_on->toImmutable()->userDate() }} – {{ $this->year->ends_on->toImmutable()->userDate() }}): every eligible employee against their policy.
                 The scan is a dry run — nothing changes until you reconcile, and only SAFE AUTO FIX rows are ever fixed automatically.
             </p>
         </div>
@@ -24,7 +24,7 @@
     @if(session('success'))<div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{{ session('success') }}</div>@endif
     @if(session('error'))<div class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{{ session('error') }}</div>@endif
 
-    <div class="grid grid-cols-1 gap-3 rounded-2xl border border-[#EAECF0] bg-white p-4 shadow-sm md:grid-cols-4 dark:border-white/10 dark:bg-zinc-900">
+    <div class="ui-surface grid grid-cols-1 gap-3 p-4 md:grid-cols-4">
         <x-clean-select model="leaveYearId" label="Leave year" :options="$leaveYears->map(fn ($y) => ['value' => $y->id, 'label' => $y->label])->all()" />
         <x-clean-select model="leaveTypeId" label="Leave type" :options="array_merge([['value' => '', 'label' => 'All types']], $leaveTypes->map(fn ($t) => ['value' => $t->id, 'label' => $t->name])->all())" />
         <x-clean-select model="departmentId" label="Department" :options="array_merge([['value' => '', 'label' => 'All departments']], $departments->map(fn ($d) => ['value' => $d->id, 'label' => $d->name])->all())" />
@@ -36,14 +36,14 @@
     @if($scanned)
         <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
             @foreach(['SAFE_AUTO_FIX' => ['Safe auto fix', 'text-emerald-600'], 'NEEDS_HR_REVIEW' => ['Needs HR review', 'text-amber-600'], 'BLOCKED' => ['Blocked', 'text-rose-600'], 'OK' => ['OK', 'text-zinc-500']] as $key => [$label, $color])
-                <div class="rounded-2xl border border-[#EAECF0] bg-white p-4 shadow-sm dark:border-white/10 dark:bg-zinc-900">
+                <div class="ui-surface p-4">
                     <div class="text-[10px] font-bold uppercase tracking-widest {{ $color }}">{{ $label }}</div>
                     <div class="mt-1 text-2xl font-extrabold text-[#101828] dark:text-white">{{ $counts[$key] ?? 0 }}</div>
                 </div>
             @endforeach
         </div>
 
-        <div class="overflow-x-auto rounded-2xl border border-[#EAECF0] bg-white shadow-sm dark:border-white/10 dark:bg-zinc-900">
+        <div class="ui-surface overflow-x-auto">
             <table class="min-w-full text-xs">
                 <thead class="bg-[#F9FAFB] text-left text-[10px] font-bold uppercase tracking-wider text-[#667085] dark:bg-white/5">
                     <tr>

@@ -4,7 +4,7 @@
         {{ $req->employee->user->name }}
     </td>
     <td class="pulse-td">
-        {{ \Carbon\Carbon::parse($req->work_date)->format('M d, Y') }}
+        {{ \Carbon\Carbon::parse($req->work_date)->toImmutable()->userDate() }}
     </td>
     <td class="pulse-td">
         {{ $req->requestedWindowLabel('H:i', ' - ') }}

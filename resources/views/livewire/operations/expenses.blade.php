@@ -76,7 +76,7 @@
     </div>
 
     {{-- â"€â"€â"€ TABLE â"€â"€â"€ --}}
-    <div class="overflow-hidden rounded-2xl border border-zinc-100 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+    <div class="ui-surface overflow-hidden">
         <div class="overflow-x-auto">
             <table class="w-full text-left text-sm">
                 <thead>
@@ -110,7 +110,7 @@
                                 </span>
                             </td>
                             <td class="px-4 py-4 text-sm text-zinc-500 dark:text-zinc-400">
-                                {{ $expense->expense_date->format('d M Y') }}
+                                {{ $expense->expense_date->toImmutable()->userDate() }}
                             </td>
                             <td class="px-4 py-4">
                                 @php

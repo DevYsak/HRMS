@@ -377,7 +377,7 @@
                                 <div class="flex-1 min-w-0 pt-0.5">
                                     <div class="flex items-center gap-2 flex-wrap">
                                         <span class="text-sm font-semibold text-zinc-900 dark:text-white leading-tight">{{ $event->title }}</span>
-                                        <span class="text-[11px] text-zinc-400 tabular-nums">{{ $event->event_date?->format('d M Y') }}</span>
+                                        <span class="text-[11px] text-zinc-400 tabular-nums">{{ $event->event_date?->toImmutable()->userDate() }}</span>
                                     </div>
                                     @if($event->description)
                                         <p class="text-xs text-zinc-500 dark:text-zinc-400 mt-1 leading-relaxed">{{ $event->description }}</p>
@@ -433,9 +433,9 @@
                                     </div>
                                     <div class="text-sm font-medium text-zinc-900 dark:text-white mt-1.5">{{ $warning->reason }}</div>
                                     <div class="text-xs text-zinc-400 mt-0.5">
-                                        Issued {{ $warning->issue_date?->format('d M Y') }}
+                                        Issued {{ $warning->issue_date?->toImmutable()->userDate() }}
                                         @if($warning->next_review_date)
-                                            &middot; Next Review {{ $warning->next_review_date->format('d M Y') }}
+                                            &middot; Next Review {{ $warning->next_review_date->toImmutable()->userDate() }}
                                         @endif
                                     </div>
                                 </div>
@@ -497,7 +497,7 @@
                     </div>
                     <div>
                         <div class="text-xs text-zinc-400">Expected Completion</div>
-                        <div class="text-sm font-bold text-zinc-900 dark:text-white">{{ $activePip->end_date?->format('d M Y') ?? '—' }}</div>
+                        <div class="text-sm font-bold text-zinc-900 dark:text-white">{{ $activePip->end_date?->toImmutable()->userDate() ?? '—' }}</div>
                     </div>
                 </div>
 

@@ -46,7 +46,7 @@
                     @if($nextHoliday)
                         <span class="inline-flex max-w-full items-center gap-1.5 rounded-full border border-zinc-200 bg-white/80 px-2.5 py-1 text-xs text-zinc-600 dark:border-white/10 dark:bg-white/5 dark:text-zinc-300">
                             <flux:icon.sun class="size-3.5 shrink-0 text-zinc-400" />
-                            <span class="truncate">Next holiday: {{ $nextHoliday->name }} · {{ \Illuminate\Support\Carbon::parse($nextHoliday->date)->format('j M') }}</span>
+                            <span class="truncate">Next holiday: {{ $nextHoliday->name }} · {{ \Illuminate\Support\Carbon::parse($nextHoliday->date)->toImmutable()->userShortDate() }}</span>
                         </span>
                     @endif
                 </div>

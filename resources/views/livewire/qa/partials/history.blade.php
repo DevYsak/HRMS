@@ -8,7 +8,7 @@
         <div class="rounded-lg border border-zinc-100 p-3 text-xs dark:border-white/10">
             <div class="flex flex-wrap items-center justify-between gap-1">
                 <span class="font-semibold text-zinc-800 dark:text-zinc-100">{{ \Illuminate\Support\Str::headline(strtolower((string) ($entry->event ?? $entry->action))) }}</span>
-                <span class="text-zinc-500">{{ $entry->user?->name ?? 'System' }} · {{ $entry->created_at->format('d M Y H:i') }}</span>
+                <span class="text-zinc-500">{{ $entry->user?->name ?? 'System' }} · {{ $entry->created_at->toImmutable()->userDateTime() }}</span>
             </div>
             @php $keys = collect(array_keys($entry->old_values ?? []))->merge(array_keys($entry->new_values ?? []))->unique(); @endphp
             @foreach($keys as $key)

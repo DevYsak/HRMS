@@ -31,7 +31,7 @@
                 <div class="space-y-3 mb-6">
                     <div class="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
                         <flux:icon.calendar class="size-4" />
-                        {{ $cycle->start_date->format('M d') }} – {{ $cycle->end_date->format('M d, Y') }}
+                        {{ $cycle->start_date->toImmutable()->userShortDate() }} – {{ $cycle->end_date->toImmutable()->userDate() }}
                         <span class="ml-auto rounded-full bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 text-[10px] font-bold uppercase text-zinc-500">{{ str_replace('_', ' ', $cycle->cycle_type) }}</span>
                     </div>
                     <div class="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
@@ -41,7 +41,7 @@
                     @if($cycle->self_review_deadline)
                         <div class="flex items-center gap-2 text-xs text-zinc-400">
                             <flux:icon.clock class="size-3.5" />
-                            Self-review due {{ $cycle->self_review_deadline->format('M d, Y') }}
+                            Self-review due {{ $cycle->self_review_deadline->toImmutable()->userDate() }}
                         </div>
                     @endif
                 </div>

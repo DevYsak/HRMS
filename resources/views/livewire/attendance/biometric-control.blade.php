@@ -45,7 +45,7 @@
             ];
         @endphp
         @foreach($vol as [$label, $value, $icon, $color])
-            <div class="rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 p-4 shadow-sm">
+            <div class="ui-surface p-4">
                 <span class="inline-flex size-8 items-center justify-center rounded-xl" style="background: {{ $color }}1a; color: {{ $color }};"><flux:icon :icon="$icon" class="size-4" /></span>
                 <div class="mt-2 text-xl font-black tabular-nums text-zinc-900 dark:text-white">{{ $value }}</div>
                 <div class="text-[9px] font-bold uppercase tracking-wide text-zinc-400">{{ $label }}</div>
@@ -54,7 +54,7 @@
     </div>
 
     {{-- Method mix --}}
-    <div class="rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 p-5 shadow-sm lg:col-span-8">
+    <div class="ui-surface p-5 lg:col-span-8">
         <div class="mb-3 flex items-center justify-between">
             <div class="text-sm font-black text-zinc-900 dark:text-white">Verification Method Mix</div>
             <span class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">{{ $dateLabel }} · {{ $totalPunches }} punches</span>
@@ -86,7 +86,7 @@
                     $badge = ['emerald' => 'bg-emerald-100 text-emerald-700', 'amber' => 'bg-amber-100 text-amber-700', 'rose' => 'bg-rose-100 text-rose-600'][$tone];
                     $dot = ['emerald' => 'bg-emerald-500 animate-pulse', 'amber' => 'bg-amber-500 animate-pulse', 'rose' => 'bg-rose-500'][$tone];
                 @endphp
-                <div class="rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 p-4 shadow-sm transition hover:shadow-md">
+                <div class="ui-surface p-4 transition hover:shadow-md">
                     <div class="mb-3 flex items-start justify-between">
                         <div class="flex items-center gap-3">
                             <div class="grid size-11 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-orange-50 to-white"><flux:icon.finger-print class="size-6 text-orange-400" /></div>
@@ -134,7 +134,7 @@
             @endforeach
         </div>
     @else
-        <div class="rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 py-12 text-center text-sm text-zinc-400 shadow-sm">
+        <div class="ui-surface py-12 text-center text-sm text-zinc-400">
             <flux:icon.cpu-chip class="mx-auto mb-2 size-9 opacity-30" /> No machines registered or reporting yet.
         </div>
     @endif
@@ -146,7 +146,7 @@
         ? ['bg-emerald-100 text-emerald-700', 'bg-emerald-500 animate-pulse', 'Online']
         : ['bg-rose-100 text-rose-600', 'bg-rose-500', 'Offline'];
 @endphp
-<div class="mb-4 rounded-[18px] border {{ $queueOnline ? 'border-orange-100/70 bg-white dark:bg-zinc-900' : 'border-rose-300 bg-rose-50/40' }} p-4 shadow-sm">
+<div class="ui-surface mb-4 {{ $queueOnline ? 'border-orange-100/70 dark:bg-zinc-900' : 'border-rose-300 bg-rose-50/40' }} p-4">
     <div class="flex flex-wrap items-center justify-between gap-3">
         <div class="flex items-center gap-3">
             <span class="inline-flex size-10 shrink-0 items-center justify-center rounded-xl {{ $queueOnline ? 'bg-orange-50 text-orange-500' : 'bg-rose-100 text-rose-500' }}"><flux:icon.cog-6-tooth class="size-5" wire:loading.class="animate-spin" wire:target="$refresh" /></span>
@@ -174,7 +174,7 @@
 
 {{-- ═══════════════ SYNC LOGS + CAPABILITY NOTE ═══════════════ --}}
 <div class="grid grid-cols-1 gap-4 lg:grid-cols-12">
-    <div class="overflow-hidden rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 shadow-sm lg:col-span-8">
+    <div class="ui-surface overflow-hidden lg:col-span-8">
         <div class="flex items-center justify-between border-b border-orange-100/70 px-5 py-3">
             <h3 class="flex items-center gap-2 text-sm font-black text-zinc-900 dark:text-white"><flux:icon.queue-list class="size-4 text-orange-500" /> Sync Logs</h3>
             <button wire:click="exportLogs" class="text-[11px] font-bold text-orange-500 hover:underline">Export</button>
@@ -196,7 +196,7 @@
     </div>
 
     {{-- Capability note (honesty) --}}
-    <div class="rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 p-5 shadow-sm lg:col-span-4">
+    <div class="ui-surface p-5 lg:col-span-4">
         <div class="mb-2 flex items-center gap-2"><flux:icon.information-circle class="size-4 text-orange-500" /><div class="text-sm font-black text-zinc-900 dark:text-white">Device Capabilities</div></div>
         <p class="mb-3 text-[11px] text-zinc-500 dark:text-zinc-400">This deployment pulls punches from the attendance engine. The following are not reported by the device and are intentionally omitted rather than faked:</p>
         <div class="space-y-1.5">

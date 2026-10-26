@@ -17,7 +17,7 @@
     </div>
 
     {{-- ── Action Toolbar ──────────────────────────────────────────────────── --}}
-    <div class="flex flex-wrap items-center justify-end gap-3 rounded-2xl border border-zinc-100 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+    <div class="ui-surface flex flex-wrap items-center justify-end gap-3 p-4">
         {{-- Month / Year selectors (shown while the payroll is still a draft, or doesn't exist yet) --}}
         @if(!$currentPayroll || $currentPayroll->status === 'draft')
             <div class="flex flex-wrap gap-2">
@@ -160,7 +160,7 @@
                         {{ $currentPayroll->month }} {{ $currentPayroll->year }}
                     </p>
                     <p class="text-xs text-zinc-400 mt-0.5">
-                        01 {{ substr($currentPayroll->month, 0, 3) }} - {{ \Carbon\Carbon::parse("1 {$currentPayroll->month} {$currentPayroll->year}")->endOfMonth()->format('d M') }}, {{ $currentPayroll->year }}
+                        01 {{ substr($currentPayroll->month, 0, 3) }} - {{ \Carbon\Carbon::parse("1 {$currentPayroll->month} {$currentPayroll->year}")->endOfMonth()->toImmutable()->userShortDate() }}, {{ $currentPayroll->year }}
                     </p>
                 </div>
             </div>

@@ -38,7 +38,7 @@
         </div>
 
         {{-- Contents --}}
-        <nav aria-label="Tutorial steps" class="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-zinc-900">
+        <nav aria-label="Tutorial steps" class="ui-surface p-4">
             <p class="mb-2 text-[11px] font-bold uppercase tracking-widest text-zinc-500">In this tutorial</p>
             <ol class="grid grid-cols-1 gap-1 sm:grid-cols-2">
                 @foreach($steps as $i => $step)
@@ -57,7 +57,7 @@
         {{-- Steps --}}
         <ol class="space-y-4">
             @foreach($steps as $i => $step)
-                <li id="{{ $step['id'] }}" class="scroll-mt-20 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-zinc-900">
+                <li id="{{ $step['id'] }}" class="ui-surface scroll-mt-20 p-5">
                     <div class="flex items-start gap-4">
                         <span class="flex size-10 shrink-0 items-center justify-center rounded-xl {{ $step['done'] ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10' : 'bg-orange-50 text-orange-500 dark:bg-orange-500/10' }}">
                             <flux:icon :name="$step['done'] ? 'check-circle' : $step['icon']" class="size-5" />

@@ -41,7 +41,7 @@
             ];
         @endphp
         @foreach($healthCards as [$label, $value, $icon, $color, $sub, $hint])
-            <div class="rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 p-3.5 shadow-sm" title="{{ $hint }}" data-health-card="{{ \Illuminate\Support\Str::slug($label) }}">
+            <div class="ui-surface p-3.5" title="{{ $hint }}" data-health-card="{{ \Illuminate\Support\Str::slug($label) }}">
                 <span class="inline-flex size-8 items-center justify-center rounded-xl" style="background: {{ $color }}1a; color: {{ $color }};"><flux:icon :icon="$icon" class="size-4" /></span>
                 <div class="mt-2 text-xl font-black tabular-nums {{ $label === 'MTD Score' ? $scoreTone : 'text-zinc-900 dark:text-white' }}">{{ $value }}</div>
                 <div class="text-[9px] font-bold uppercase tracking-wide text-zinc-400">{{ $label }}</div>
@@ -143,7 +143,7 @@
     <div id="queue" class="grid grid-cols-1 items-start gap-4 scroll-mt-6 lg:grid-cols-12">
 
         {{-- ── Pending / history list for the active category ── --}}
-        <div class="overflow-hidden rounded-2xl border border-orange-100/70 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900 lg:col-span-8">
+        <div class="ui-surface overflow-hidden lg:col-span-8">
             <div class="flex flex-wrap items-center justify-between gap-3 border-b border-orange-100/70 px-5 py-3 dark:border-zinc-800">
                 <h3 class="flex items-center gap-2 text-sm font-black text-zinc-900 dark:text-white">
                     <span class="inline-flex size-7 items-center justify-center rounded-lg" style="background: {{ $tabs[$tab][2] }}1a; color: {{ $tabs[$tab][2] }};"><flux:icon :icon="$tabs[$tab][1]" class="size-4" /></span>
@@ -231,7 +231,7 @@
         </div>
 
         {{-- ── Activity feed ── --}}
-        <div class="rounded-2xl border border-orange-100/70 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 lg:col-span-4">
+        <div class="ui-surface p-5 lg:col-span-4">
             <div class="mb-3 flex items-center gap-2">
                 <span class="inline-flex size-8 items-center justify-center rounded-xl bg-orange-50 text-orange-500 dark:bg-orange-900/20"><flux:icon.clock class="size-4" /></span>
                 <div class="text-sm font-black text-zinc-900 dark:text-white">Recent Activity</div>
@@ -271,7 +271,7 @@
             'Holiday Work' => ['briefcase', '#14b8a6'],
         ];
     @endphp
-    <div class="rounded-2xl border border-orange-100/70 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+    <div class="ui-surface">
         <div class="flex items-center justify-between gap-3 border-b border-orange-100/70 px-5 py-3 dark:border-zinc-800">
             <h3 class="flex items-center gap-2 text-sm font-black text-zinc-900 dark:text-white">
                 <span class="inline-flex size-7 items-center justify-center rounded-lg bg-orange-50 text-orange-500 dark:bg-orange-900/20"><flux:icon.sparkles class="size-4" /></span>

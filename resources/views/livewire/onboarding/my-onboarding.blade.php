@@ -71,7 +71,7 @@
                                     <div class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-semibold uppercase tracking-wide">
                                         @if($task->due_date)
                                             <span class="{{ $overdue ? 'text-rose-600' : 'text-zinc-400' }}">
-                                                Due {{ \Illuminate\Support\Carbon::parse($task->due_date)->format('d M Y') }}
+                                                Due {{ \Illuminate\Support\Carbon::parse($task->due_date)->toImmutable()->userDate() }}
                                                 @if($overdue) · Overdue @endif
                                             </span>
                                         @endif

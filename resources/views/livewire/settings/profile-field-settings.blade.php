@@ -19,7 +19,7 @@
 
     <div class="grid grid-cols-1 gap-5 lg:grid-cols-2">
         @foreach($fields as $group => $rows)
-            <div class="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-zinc-900">
+            <div class="ui-surface p-4">
                 <h3 class="mb-2 text-xs font-bold uppercase tracking-widest text-zinc-500">{{ \Illuminate\Support\Str::headline($group) }}</h3>
                 <div class="divide-y divide-zinc-100 dark:divide-white/5">
                     @foreach($rows as $row)
@@ -40,7 +40,7 @@
             </div>
         @endforeach
 
-        <div class="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-zinc-900">
+        <div class="ui-surface p-4">
             <h3 class="mb-1 text-xs font-bold uppercase tracking-widest text-zinc-500">KYC documents</h3>
             <p class="mb-2 text-[11px] text-zinc-400">Uploaded by the employee on My Profile and stored privately; only holders of View KYC Documents can open them.</p>
             <div class="divide-y divide-zinc-100 dark:divide-white/5">

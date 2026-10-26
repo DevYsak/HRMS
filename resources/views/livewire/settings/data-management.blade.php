@@ -18,7 +18,7 @@
         <h3 class="mb-3 text-xs font-bold uppercase tracking-widest text-zinc-500">Bulk clear by type</h3>
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             @foreach($domains as $key => $d)
-                <div class="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-zinc-900">
+                <div class="ui-surface p-4">
                     <div class="flex items-start justify-between gap-2">
                         <div>
                             <div class="text-sm font-bold text-zinc-900 dark:text-white">{{ $d['label'] }}</div>
@@ -38,7 +38,7 @@
     </div>
 
     {{-- Employees --}}
-    <div class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-zinc-900">
+    <div class="ui-surface p-5">
         <h3 class="mb-1 text-sm font-bold text-zinc-900 dark:text-white">Employees</h3>
         <p class="mb-3 text-xs text-zinc-400">Permanently removes the employee, their user account, and all their data (attendance, leave, overtime, payroll, documents, notifications). Super Admins and your own account are protected.</p>
 

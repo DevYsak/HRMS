@@ -114,7 +114,7 @@
                         <div class="bg-zinc-50 border border-zinc-200 rounded-xl p-4 dark:bg-zinc-900 dark:border-zinc-700">
                             @php $ack = $activeWarning->acknowledgements->first(); @endphp
                             <h4 class="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2">Your Acknowledgement</h4>
-                            <p class="text-xs text-zinc-600 dark:text-zinc-400 mb-2">Acknowledged on {{ $ack?->acknowledged_at?->format('M d, Y H:i') }}</p>
+                            <p class="text-xs text-zinc-600 dark:text-zinc-400 mb-2">Acknowledged on {{ $ack?->acknowledged_at?->toImmutable()->userDateTime() }}</p>
                             @if($ack?->acknowledgement_text)
                                 <div class="bg-white dark:bg-zinc-800 p-3 rounded-lg text-sm italic text-zinc-700 dark:text-zinc-300">
                                     "{{ $ack->acknowledgement_text }}"

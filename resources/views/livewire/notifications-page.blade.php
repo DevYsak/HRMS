@@ -160,7 +160,7 @@
     @endif
 
     {{-- ─── NOTIFICATIONS LIST ─── --}}
-    <div class="overflow-hidden rounded-2xl border border-zinc-100 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+    <div class="ui-surface overflow-hidden">
         @forelse($notifications as $notif)
             @php
                 $data    = $notif->data;

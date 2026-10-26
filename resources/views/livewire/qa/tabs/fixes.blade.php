@@ -28,7 +28,7 @@
                 @if($fix->developer_note)<p class="text-xs text-zinc-600 dark:text-zinc-300">{{ $fix->developer_note }}</p>@endif
             </div>
             <div class="shrink-0 text-xs text-zinc-500 sm:text-right">
-                <p>{{ $fix->fixed_at?->format('d M Y H:i') }}</p>
+                <p>{{ $fix->fixed_at?->toImmutable()->userDateTime() }}</p>
                 <p>{{ \App\Enums\QaEnvironment::tryFrom((string) $fix->environment)?->label() }}</p>
             </div>
         </div>

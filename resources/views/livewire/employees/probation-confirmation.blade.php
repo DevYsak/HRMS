@@ -28,7 +28,7 @@
                 </div>
                 <p class="text-sm font-semibold">Manager / Director Confirmation</p>
                 @if($employee->probation_confirmed_at)
-                    <p class="text-xs text-zinc-500">Confirmed by {{ $employee->probationConfirmedBy?->name ?? 'N/A' }} on {{ $employee->probation_confirmed_at->format('d M Y, h:i A') }}</p>
+                    <p class="text-xs text-zinc-500">Confirmed by {{ $employee->probationConfirmedBy?->name ?? 'N/A' }} on {{ $employee->probation_confirmed_at->toImmutable()->userDateTime() }}</p>
                 @else
                     <p class="text-xs text-zinc-400">Awaiting manager review</p>
                 @endif
@@ -50,7 +50,7 @@
                 </div>
                 <p class="text-sm font-semibold">HR Admin Co-Approval</p>
                 @if($employee->probation_hr_approved_at)
-                    <p class="text-xs text-zinc-500">Approved by {{ $employee->probationHrApprovedBy?->name ?? 'N/A' }} on {{ $employee->probation_hr_approved_at->format('d M Y, h:i A') }}</p>
+                    <p class="text-xs text-zinc-500">Approved by {{ $employee->probationHrApprovedBy?->name ?? 'N/A' }} on {{ $employee->probation_hr_approved_at->toImmutable()->userDateTime() }}</p>
                 @else
                     <p class="text-xs text-zinc-400">Awaiting HR sign-off</p>
                 @endif
@@ -62,8 +62,8 @@
     <flux:card class="space-y-3">
         <flux:heading size="lg">Probation Details</flux:heading>
         <div class="grid grid-cols-2 gap-4 text-sm">
-            <div><span class="text-zinc-500">Joining Date</span><p class="font-semibold">{{ $employee->joining_date?->format('d M Y') ?? '—' }}</p></div>
-            <div><span class="text-zinc-500">Probation End Date</span><p class="font-semibold">{{ $employee->probation_end_date?->format('d M Y') ?? '—' }}</p></div>
+            <div><span class="text-zinc-500">Joining Date</span><p class="font-semibold">{{ $employee->joining_date?->toImmutable()->userDate() ?? '—' }}</p></div>
+            <div><span class="text-zinc-500">Probation End Date</span><p class="font-semibold">{{ $employee->probation_end_date?->toImmutable()->userDate() ?? '—' }}</p></div>
             <div><span class="text-zinc-500">Current Status</span><p class="font-semibold">{{ $employee->status?->label() ?? '—' }}</p></div>
             <div><span class="text-zinc-500">Extension Reason</span><p class="font-semibold">{{ $employee->probation_extension_reason ?? '—' }}</p></div>
         </div>

@@ -22,7 +22,7 @@
             ['Cancelled',  $counts['cancelled'],  'no-symbol',    'zinc'],
             ['This month', $counts['this_month'], 'calendar',     'orange'],
         ] as [$label, $value, $icon, $tone])
-            <div class="rounded-2xl border border-[#EAECF0] bg-white p-4 shadow-sm dark:border-white/10 dark:bg-zinc-900">
+            <div class="ui-surface p-4">
                 <div class="flex items-center gap-2">
                     <div class="flex size-8 items-center justify-center rounded-lg bg-{{ $tone }}-50 text-{{ $tone }}-500 dark:bg-white/5">
                         <flux:icon :name="$icon" class="size-4" />
@@ -36,7 +36,7 @@
 
     {{-- Raise a request --}}
     @if($showForm)
-        <div class="rounded-2xl border border-[#EAECF0] bg-white p-5 shadow-sm dark:border-white/10 dark:bg-zinc-900">
+        <div class="ui-surface p-5">
             <h2 class="text-base font-bold text-[#101828] dark:text-white">New leave regularisation</h2>
             <p class="mt-0.5 text-sm text-[#667085]">
                 For a date already past. Regularisation is allowed up to {{ $windowDays }} days back.
@@ -83,7 +83,7 @@
             :options="array_merge([['value' => '', 'label' => 'All employees']], $employees->map(fn ($e) => ['value' => $e->id, 'label' => $e->user?->name ?? $e->employee_id])->all())" />
     </div>
 
-    <div class="overflow-hidden rounded-2xl border border-[#EAECF0] bg-white shadow-sm dark:border-white/10 dark:bg-zinc-900">
+    <div class="ui-surface overflow-hidden">
         <div class="overflow-x-auto">
             <table class="w-full min-w-max text-sm">
                 <thead>
@@ -106,9 +106,9 @@
                         <tr class="align-top">
                             <td class="px-4 py-3 font-semibold text-[#101828] dark:text-zinc-100">{{ $req->employee?->user?->name ?? '—' }}</td>
                             <td class="whitespace-nowrap px-4 py-3 text-[#667085] dark:text-zinc-400">
-                                {{ $req->from_date?->format('d M Y') ?? $req->work_date?->format('d M Y') }}
+                                {{ $req->from_date?->toImmutable()->userDate() ?? $req->work_date?->toImmutable()->userDate() }}
                                 @if($req->to_date && $req->from_date && ! $req->to_date->equalTo($req->from_date))
-                                    <span class="text-[#98A2B3]">→ {{ $req->to_date->format('d M Y') }}</span>
+                                    <span class="text-[#98A2B3]">→ {{ $req->to_date->toImmutable()->userDate() }}</span>
                                 @endif
                             </td>
                             <td class="px-4 py-3 text-[#667085] dark:text-zinc-400">

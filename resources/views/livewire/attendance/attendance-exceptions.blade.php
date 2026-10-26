@@ -31,7 +31,7 @@
         @endforeach
     </div>
 
-    <div class="overflow-x-auto rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-white/10 dark:bg-zinc-900">
+    <div class="ui-surface overflow-x-auto">
         <table class="w-full min-w-[560px] text-sm">
             <thead class="bg-zinc-50/70 text-left text-[10px] font-bold uppercase tracking-wider text-zinc-400 dark:bg-white/5">
                 <tr><th class="px-4 py-2">Employee</th><th class="px-3 py-2">Date</th><th class="px-3 py-2">Detail</th><th class="px-4 py-2 text-right">Follow up</th></tr>
@@ -40,7 +40,7 @@
                 @forelse($exceptions[$tab] as $row)
                     <tr wire:key="ex-{{ $tab }}-{{ $row['employee_id'] }}-{{ $row['date'] }}">
                         <td class="px-4 py-2.5 font-medium text-zinc-800 dark:text-zinc-100">{{ $row['name'] }}</td>
-                        <td class="px-3 py-2.5 tabular-nums text-zinc-500">{{ \Illuminate\Support\Carbon::parse($row['date'])->format('D d M') }}</td>
+                        <td class="px-3 py-2.5 tabular-nums text-zinc-500">{{ \Illuminate\Support\Carbon::parse($row['date'])->toImmutable()->userShortDate() }}</td>
                         <td class="px-3 py-2.5 text-zinc-500">{{ $row['detail'] }}</td>
                         <td class="whitespace-nowrap px-4 py-2.5 text-right">
                             @if($canRemind)
@@ -51,7 +51,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="4" class="px-4 py-10 text-center text-sm text-zinc-400">Nothing to follow up for {{ $day->format('D d M') }}.</td></tr>
+                    <tr><td colspan="4" class="px-4 py-10 text-center text-sm text-zinc-400">Nothing to follow up for {{ $day->toImmutable()->userShortDate() }}.</td></tr>
                 @endforelse
             </tbody>
         </table>

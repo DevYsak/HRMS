@@ -26,14 +26,14 @@
 {{-- ═══════════════ STATS + FILTERS ═══════════════ --}}
 <div class="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
     @foreach([['Total Holidays', $stats['total'], 'calendar-days', '#F97316'], ['Paid', $stats['paid'], 'banknotes', '#10b981'], ['Optional', $stats['optional'], 'hand-raised', '#0ea5e9'], ['Upcoming', $stats['upcoming'], 'clock', '#8b5cf6']] as [$label, $value, $icon, $color])
-        <div class="flex items-center gap-3 rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 p-4 shadow-sm">
+        <div class="ui-surface flex items-center gap-3 p-4">
             <span class="inline-flex size-9 shrink-0 items-center justify-center rounded-xl" style="background: {{ $color }}1a; color: {{ $color }};"><flux:icon :icon="$icon" class="size-4" /></span>
             <div><div class="text-xl font-black tabular-nums text-zinc-900 dark:text-white">{{ $value }}</div><div class="text-[9px] font-bold uppercase tracking-wide text-zinc-400">{{ $label }}</div></div>
         </div>
     @endforeach
 </div>
 
-<div class="mb-4 flex flex-wrap items-center gap-2 rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 p-3 shadow-sm">
+<div class="ui-surface mb-4 flex flex-wrap items-center gap-2 p-3">
     {{-- View toggle --}}
     <div class="flex items-center gap-1 rounded-xl bg-orange-50/60 p-1">
         @foreach(['calendar' => 'Month', 'list' => 'List', 'year' => 'Year'] as $v => $vl)
@@ -61,7 +61,7 @@
 
 {{-- ═══════════════ CALENDAR (MONTH) ═══════════════ --}}
 @if($view === 'calendar')
-    <div class="rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 p-5 shadow-sm">
+    <div class="ui-surface p-5">
         <div class="mb-3 flex items-center justify-between">
             <div class="text-sm font-black text-zinc-900 dark:text-white">{{ $monthLabel }}</div>
             <div class="flex items-center gap-1">
@@ -93,7 +93,7 @@
 
 {{-- ═══════════════ LIST ═══════════════ --}}
 @if($view === 'list')
-    <div class="overflow-hidden rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 shadow-sm">
+    <div class="ui-surface overflow-hidden">
         @if($holidays->count() > 0)
             <table class="w-full text-left text-xs">
                 <thead class="border-b border-orange-100/70 bg-orange-50/40">
@@ -110,7 +110,7 @@
                                     <span class="font-black text-zinc-900 dark:text-white {{ $h->is_active ? '' : 'line-through opacity-50' }}">{{ $h->name }}</span>
                                 </button>
                             </td>
-                            <td class="py-2.5"><div class="font-bold text-zinc-700 dark:text-zinc-200">{{ $h->date->format('d M Y') }}</div><div class="text-[9px] text-zinc-400">{{ $h->date->format('l') }}</div></td>
+                            <td class="py-2.5"><div class="font-bold text-zinc-700 dark:text-zinc-200">{{ $h->date->toImmutable()->userDate() }}</div><div class="text-[9px] text-zinc-400">{{ $h->date->format('l') }}</div></td>
                             <td class="py-2.5"><span class="rounded-full px-2 py-0.5 text-[9px] font-bold text-white" style="background: {{ $h->displayColor() }}">{{ $h->typeLabel() }}</span></td>
                             <td class="py-2.5 text-zinc-500 dark:text-zinc-400">{{ $h->office?->name ?? ($h->department?->name ?? 'Company-wide') }}</td>
                             <td class="py-2.5">
@@ -147,7 +147,7 @@
     <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
         @for($m = 1; $m <= 12; $m++)
             @php $mh = $byMonth[$m] ?? collect(); @endphp
-            <div class="rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 p-4 shadow-sm">
+            <div class="ui-surface p-4">
                 <div class="mb-2 flex items-center justify-between">
                     <div class="text-sm font-black text-zinc-900 dark:text-white">{{ \Carbon\Carbon::create($year, $m, 1)->format('F') }}</div>
                     <span class="rounded-full bg-orange-50 px-2 py-0.5 text-[10px] font-bold text-orange-500">{{ $mh->count() }}</span>
@@ -167,7 +167,7 @@
 @endif
 
 {{-- ═══════════════ MDL SHUTDOWN DATES ═══════════════ --}}
-<div class="mt-4 rounded-[18px] border border-orange-100/70 bg-white p-4 shadow-sm dark:bg-zinc-900">
+<div class="ui-surface mt-4 p-4">
     <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
         <h3 class="flex items-center gap-2 text-sm font-black text-zinc-900 dark:text-white"><flux:icon.building-office class="size-4 text-rose-500" /> Mandatory December Leave (MDL) · {{ $year }}</h3>
         <p class="text-[11px] text-zinc-400">Company shutdown days: never use anyone's leave balance.</p>
@@ -175,7 +175,7 @@
     <div class="flex flex-wrap gap-2">
         @forelse($mdlDays as $m)
             <span wire:key="mdl-{{ $m->id }}" class="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">
-                {{ \Illuminate\Support\Carbon::parse($m->date)->format('D d M') }}
+                {{ \Illuminate\Support\Carbon::parse($m->date)->toImmutable()->userShortDate() }}
                 @if(\Illuminate\Support\Carbon::parse($m->date)->isFuture())
                     <button wire:click="deleteMdl({{ $m->id }})" wire:confirm="Remove this MDL date?" class="text-rose-400 hover:text-rose-600" title="Remove"><flux:icon.x-mark class="size-3.5" /></button>
                 @endif

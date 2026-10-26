@@ -19,7 +19,7 @@
     </div>
 
     {{-- ─── PERIOD ANALYTICS — recomputes from the filter (engine-scored) ─── --}}
-    <div class="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900" wire:loading.class="opacity-50" wire:target="period">
+    <div class="ui-surface p-4" wire:loading.class="opacity-50" wire:target="period">
         <div class="mb-3 flex items-center justify-between">
             <h3 class="flex items-center gap-2 text-sm font-bold text-zinc-900 dark:text-white"><flux:icon.chart-bar class="size-4 text-orange-500" /> Team Analytics</h3>
             <span class="rounded-full bg-orange-50 px-2 py-0.5 text-[10px] font-bold text-orange-500 dark:bg-orange-500/15">{{ $periodLabel }}</span>
@@ -71,7 +71,7 @@
                 ];
             @endphp
             @foreach($cards as $c)
-                <div class="rounded-2xl border border-zinc-200 bg-white p-3.5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                <div class="ui-surface p-3.5">
                     <span class="inline-flex size-8 items-center justify-center rounded-lg" style="background: {{ $c['color'] }}1a; color: {{ $c['color'] }};">
                         <flux:icon :icon="$c['icon']" class="size-4" />
                     </span>
@@ -82,7 +82,7 @@
         </div>
 
         {{-- Roster --}}
-        <div class="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <div class="ui-surface overflow-hidden">
             <div class="flex items-center justify-between border-b border-zinc-100 px-5 py-3 dark:border-zinc-800">
                 <h3 class="flex items-center gap-2 text-sm font-bold text-zinc-900 dark:text-white"><span class="size-2 animate-pulse rounded-full bg-emerald-500"></span> Live Board · {{ $board->count() }} team member{{ $board->count() === 1 ? '' : 's' }}</h3>
                 <span class="text-[10px] uppercase tracking-widest text-zinc-400">{{ now()->format('D, d M · h:i A') }}</span>

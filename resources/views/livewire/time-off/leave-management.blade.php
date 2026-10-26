@@ -9,7 +9,7 @@
             <h1 class="text-2xl font-extrabold tracking-tight text-[#101828] dark:text-white">Leave Management</h1>
             <p class="mt-1 text-sm text-[#667085] dark:text-zinc-400">
                 Every employee's leave for <span class="font-semibold text-[#101828] dark:text-zinc-200">{{ $this->year->label }}</span>
-                ({{ $this->year->starts_on->format('d M Y') }} – {{ $this->year->ends_on->format('d M Y') }}).
+                ({{ $this->year->starts_on->toImmutable()->userDate() }} – {{ $this->year->ends_on->toImmutable()->userDate() }}).
                 Provisioning, accrual and rollover run automatically; manage the exceptions here.
             </p>
         </div>
@@ -74,7 +74,7 @@
     </div>
 
     {{-- Filters --}}
-    <div class="rounded-2xl border border-[#EAECF0] bg-white p-4 shadow-sm dark:border-white/10 dark:bg-zinc-900">
+    <div class="ui-surface p-4">
         <div class="grid grid-cols-1 gap-3 md:grid-cols-3 lg:grid-cols-5">
             <flux:input wire:model.live.debounce.400ms="search" label="Employee" placeholder="Name or code" icon="magnifying-glass" />
             <x-clean-select model="leaveYearId" label="Leave year"
@@ -110,7 +110,7 @@
     </div>
 
     {{-- Employee table --}}
-    <div class="overflow-hidden rounded-2xl border border-[#EAECF0] bg-white shadow-sm dark:border-white/10 dark:bg-zinc-900">
+    <div class="ui-surface overflow-hidden">
         <div class="flex items-center justify-between border-b border-[#EAECF0] px-4 py-3 text-sm dark:border-white/10">
             <span class="font-semibold text-[#101828] dark:text-white">{{ $paged->total() }} employee(s)</span>
             @if(count($selected) > 0)
@@ -120,13 +120,13 @@
             @endif
         </div>
         <div class="overflow-x-auto">
-            <table class="min-w-full text-xs">
+            <table class="w-full min-w-[80rem] text-xs" data-leave-balance-table>
                 <thead class="bg-[#F9FAFB] text-left text-[10px] font-bold uppercase tracking-wider text-[#667085] dark:bg-white/5">
                     <tr>
                         <th class="px-3 py-2"><input type="checkbox" wire:click="toggleSelectPage" class="rounded"></th>
-                        <th class="px-3 py-2">Employee</th>
-                        <th class="px-3 py-2">Department / Manager</th>
-                        <th class="px-3 py-2">Policy</th>
+                        <th class="min-w-44 px-3 py-2">Employee</th>
+                        <th class="min-w-40 px-3 py-2">Department / Manager</th>
+                        <th class="min-w-40 px-3 py-2">Policy</th>
                         <th class="px-3 py-2 text-right" title="Base entitlement + accrual credited this leave year">Current-year credit</th>
                         <th class="px-3 py-2 text-right">Carry Fwd</th>
                         <th class="px-3 py-2 text-right">Used</th>
@@ -135,7 +135,7 @@
                         <th class="px-3 py-2 text-right">Comp Off</th>
                         <th class="px-3 py-2 text-right">Pending</th>
                         <th class="px-3 py-2">MDL</th>
-                        <th class="px-3 py-2">Warnings</th>
+                        <th class="min-w-56 px-3 py-2">Warnings</th>
                         <th class="px-3 py-2"></th>
                     </tr>
                 </thead>
@@ -186,7 +186,8 @@
                                     <span class="text-[11px] text-emerald-600">OK</span>
                                 @endforelse
                             </td>
-                            <td class="whitespace-nowrap px-3 py-2 text-right">
+                            <td class="px-3 py-2 text-right">
+                                <div class="flex min-w-52 flex-wrap justify-end gap-1">
                                 @can('manage_leave_carry_forward')
                                     <flux:button size="xs" icon="arrow-right-circle"
                                         :href="route('time-off.leave-management.employee', ['employee' => $row['employee_id'], 'year' => $leaveYearId, 'tab' => 'carry_forward', 'cf' => $leaveTypeId])" wire:navigate>Carry Fwd</flux:button>
@@ -197,6 +198,7 @@
                                     :href="route('time-off.leave-management.employee', ['employee' => $row['employee_id'], 'year' => $leaveYearId, 'tab' => 'encashments'])" wire:navigate>Encashments</flux:button>
                                 <flux:button size="xs" icon="arrow-top-right-on-square"
                                     :href="route('time-off.leave-management.employee', ['employee' => $row['employee_id'], 'year' => $leaveYearId])" wire:navigate>Open</flux:button>
+                                </div>
                             </td>
                         </tr>
                     @empty

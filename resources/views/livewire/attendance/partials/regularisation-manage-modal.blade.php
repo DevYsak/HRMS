@@ -21,14 +21,14 @@
             <div class="space-y-4">
                 <div>
                     <flux:heading size="lg">{{ $isDelete ? 'Delete regularisation' : 'Edit regularisation' }}</flux:heading>
-                    <flux:subheading>{{ $managed->employee?->user?->name ?? '—' }} · {{ \Illuminate\Support\Carbon::parse($managed->work_date)->format('d M Y') }}</flux:subheading>
+                    <flux:subheading>{{ $managed->employee?->user?->name ?? '—' }} · {{ \Illuminate\Support\Carbon::parse($managed->work_date)->toImmutable()->userDate() }}</flux:subheading>
                 </div>
 
                 <div class="flex items-center justify-between rounded-xl border border-zinc-100 bg-zinc-50/70 px-3 py-2 text-xs dark:border-zinc-800 dark:bg-zinc-800/40">
                     <span class="font-mono font-bold text-zinc-700 dark:text-zinc-200">
                         @if($managed->isLeave()) Leave regularisation
                         @elseif($managed->regularisation_type === 'half_day') Half day · {{ ucfirst((string) $managed->half_day_period) }} half
-                        @else {{ $managed->requested_check_in ? \Illuminate\Support\Carbon::parse($managed->requested_check_in)->format('H:i') : '—' }} → {{ $managed->requested_check_out ? \Illuminate\Support\Carbon::parse($managed->requested_check_out)->format('H:i') : '—' }}
+                        @else {{ $managed->requested_check_in ? \Illuminate\Support\Carbon::parse($managed->requested_check_in)->toImmutable()->userTime() : '—' }} → {{ $managed->requested_check_out ? \Illuminate\Support\Carbon::parse($managed->requested_check_out)->toImmutable()->userTime() : '—' }}
                         @endif
                     </span>
                     <span class="rounded-full px-2 py-0.5 text-[9px] font-bold uppercase {{ $statusChip }}">{{ $managed->status }}</span>

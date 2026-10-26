@@ -26,7 +26,7 @@
     <div class="pluse-margin grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
 
         <div
-            class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 p-5 shadow-sm flex items-center gap-4">
+            class="ui-surface p-5 flex items-center gap-4">
             <div class="size-12 rounded-xl bg-brand-50 dark:bg-brand-900/20 flex items-center justify-center shrink-0">
                 <flux:icon.banknotes class="size-6 text-brand-600" />
             </div>
@@ -39,7 +39,7 @@
         </div>
 
         <div
-            class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 p-5 shadow-sm flex items-center gap-4">
+            class="ui-surface p-5 flex items-center gap-4">
             <div
                 class="size-12 rounded-xl bg-violet-50 dark:bg-violet-900/20 flex items-center justify-center shrink-0">
                 <flux:icon.chart-bar class="size-6 text-violet-600" />
@@ -53,7 +53,7 @@
         </div>
 
         <div
-            class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 p-5 shadow-sm flex items-center gap-4">
+            class="ui-surface p-5 flex items-center gap-4">
             <div
                 class="size-12 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center shrink-0">
                 <flux:icon.calendar-days class="size-6 text-emerald-600" />
@@ -70,7 +70,7 @@
         </div>
 
         <div
-            class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 p-5 shadow-sm flex items-center gap-4">
+            class="ui-surface p-5 flex items-center gap-4">
             <div class="size-12 rounded-xl bg-red-50 dark:bg-red-900/20 flex items-center justify-center shrink-0">
                 <flux:icon.arrow-trending-down class="size-6 text-red-500" />
             </div>
@@ -91,7 +91,7 @@
 
             {{-- Salary Trend Chart --}}
             <div
-                class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 p-6 shadow-sm">
+                class="ui-surface p-6">
 
                 @if(count($trendGross) >= 2)
                     @php
@@ -302,7 +302,7 @@
             {{-- Salary Revision History --}}
             @if(count($salaryRevisions) > 0)
                 <div
-                    class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 p-6 shadow-sm">
+                    class="ui-surface p-6">
                     <h3 class="font-bold text-zinc-900 dark:text-white mb-5">Salary Revision History</h3>
                     <div class="space-y-4">
                         @foreach($salaryRevisions as $rev)
@@ -332,7 +332,7 @@
 
             {{-- Payslip History Table --}}
             <div
-                class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 shadow-sm overflow-hidden">
+                class="ui-surface overflow-hidden">
                 <div
                     class="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between gap-4">
                     <div class="flex items-baseline gap-3">
@@ -537,7 +537,7 @@
 
             @if($latestPayslip)
                 <div
-                    class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 shadow-sm overflow-hidden">
+                    class="ui-surface overflow-hidden">
                     {{-- Panel header --}}
                     <div class="flex items-center justify-between px-5 py-4 border-b border-zinc-100 dark:border-zinc-800">
                         <h3 class="font-bold text-zinc-900 dark:text-white text-sm">
@@ -730,7 +730,7 @@
 
                 {{-- Tax Summary --}}
                 <div
-                    class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 p-5 shadow-sm">
+                    class="ui-surface p-5">
                     <div class="flex items-center gap-2 mb-3">
                         <flux:icon.document-text class="size-4 text-violet-500" />
                         <h4 class="text-sm font-bold text-zinc-700 dark:text-zinc-300">Tax Summary (FY
@@ -765,7 +765,7 @@
 
             @else
                 <div
-                    class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 p-8 shadow-sm text-center">
+                    class="ui-surface p-8 text-center">
                     <flux:icon.document-text class="size-10 text-zinc-300 mx-auto mb-3" />
                     <p class="text-sm font-bold text-zinc-500">No payslip generated yet</p>
                     <p class="text-xs text-zinc-400 mt-1">Your payslip will appear here after payroll is processed</p>

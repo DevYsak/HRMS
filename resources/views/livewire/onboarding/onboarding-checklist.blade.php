@@ -6,7 +6,7 @@
             <flux:avatar :src="$employee->user->avatarUrl()" :initials="$employee->user->initials()" size="lg" />
             <div>
                 <h1 class="pulse-page-title">{{ $employee->user->name }}'s {{ ucfirst($phase) }}</h1>
-                <p class="pulse-page-subtitle">{{ $employee->jobTitle?->name ?? 'No designation' }} · Joined {{ $employee->joining_date?->format('M d, Y') ?? '—' }}</p>
+                <p class="pulse-page-subtitle">{{ $employee->jobTitle?->name ?? 'No designation' }} · Joined {{ $employee->joining_date?->toImmutable()->userDate() ?? '—' }}</p>
             </div>
         </div>
         <div class="flex items-center gap-3">
@@ -24,7 +24,7 @@
             <flux:callout.text>
                 All {{ $total }} onboarding tasks have been completed.
                 @if($timeline->last()?->completed_at)
-                    Last task completed on {{ $timeline->last()->completed_at->format('M d, Y') }}.
+                    Last task completed on {{ $timeline->last()->completed_at->toImmutable()->userDate() }}.
                 @endif
             </flux:callout.text>
         </flux:callout>
@@ -40,7 +40,7 @@
                     <div class="flex-1">
                         <p class="text-sm font-medium text-zinc-800 dark:text-white">{{ $milestone->title }}</p>
                         <p class="text-xs text-zinc-400">
-                            {{ $milestone->completed_at?->format('M d, Y H:i') }}
+                            {{ $milestone->completed_at?->toImmutable()->userDateTime() }}
                             @if($milestone->completedBy)
                                 · by {{ $milestone->completedBy->name }}
                             @endif
@@ -200,13 +200,13 @@
                                         @if($task->is_completed && $task->completed_at)
                                             <div class="mt-2 flex items-center gap-2 text-[10px] text-zinc-400 italic">
                                                 <flux:icon.check-circle class="size-3 text-green-500" />
-                                                <span>Completed {{ $task->completed_at->format('M d, Y') }}
+                                                <span>Completed {{ $task->completed_at->toImmutable()->userDate() }}
                                                     @if($task->completedBy) by {{ $task->completedBy->name }}@endif
                                                 </span>
                                             </div>
                                         @elseif($task->due_date)
                                             <div class="mt-2 text-[10px] {{ $task->due_date->isPast() && !$task->is_completed ? 'text-red-500 font-bold' : 'text-zinc-400' }}">
-                                                Due: {{ $task->due_date->format('M d, Y') }}
+                                                Due: {{ $task->due_date->toImmutable()->userDate() }}
                                             </div>
                                         @endif
                                     </div>

@@ -19,7 +19,7 @@
             </div>
             <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
                 @foreach($deptTeams as $team)
-                    <div class="rounded-2xl border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 shadow-sm transition hover:shadow-md">
+                    <div class="ui-surface p-4 transition hover:shadow-md">
                         <div class="flex items-start justify-between gap-2">
                             <div class="min-w-0">
                                 <div class="flex items-center gap-2">

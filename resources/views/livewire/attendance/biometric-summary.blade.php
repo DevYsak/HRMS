@@ -8,7 +8,7 @@
             <flux:subheading>
                 Daily attendance calculated by the biometric engine and synced into HRMS.
                 @if($lastSynced)
-                    <span class="ml-1 text-xs text-zinc-400">· Last synced {{ \Illuminate\Support\Carbon::parse($lastSynced)->format('d M, g:i A') }}</span>
+                    <span class="ml-1 text-xs text-zinc-400">· Last synced {{ \Illuminate\Support\Carbon::parse($lastSynced)->toImmutable()->userDateTime() }}</span>
                 @endif
             </flux:subheading>
         </div>
@@ -111,8 +111,8 @@
                             <td class="pulse-td">{{ $row->employee?->department?->name ?? '—' }}</td>
                             <td class="pulse-td">{{ $row->employee?->shift?->name ?? '—' }}</td>
                             <td class="pulse-td">{{ $row->employee?->manager?->name ?? '—' }}</td>
-                            <td class="pulse-td font-mono">{{ $row->first_punch?->format('H:i') ?? '—' }}</td>
-                            <td class="pulse-td font-mono">{{ $row->last_punch?->format('H:i') ?? '—' }}</td>
+                            <td class="pulse-td font-mono">{{ $row->first_punch?->toImmutable()->userTime() ?? '—' }}</td>
+                            <td class="pulse-td font-mono">{{ $row->last_punch?->toImmutable()->userTime() ?? '—' }}</td>
                             <td class="pulse-td font-mono">{{ $row->break_minutes }}m</td>
                             <td class="pulse-td font-mono">{{ $row->working_hours }}</td>
                             <td class="pulse-td font-mono">

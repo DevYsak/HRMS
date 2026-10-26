@@ -314,8 +314,8 @@
                                     @forelse($this->assignments as $a)
                                         <tr wire:key="asg-{{ $a->id }}">
                                             <td class="px-3 py-2">{{ $this->assignmentLabel($a) }}</td>
-                                            <td class="px-3 py-2 tabular-nums">{{ $a->effective_from?->format('d M Y') }}</td>
-                                            <td class="px-3 py-2 tabular-nums">{{ $a->effective_to?->format('d M Y') ?? 'Open' }}</td>
+                                            <td class="px-3 py-2 tabular-nums">{{ $a->effective_from?->toImmutable()->userDate() }}</td>
+                                            <td class="px-3 py-2 tabular-nums">{{ $a->effective_to?->toImmutable()->userDate() ?? 'Open' }}</td>
                                             <td class="px-3 py-2">{{ $a->revoked_at ? 'Revoked' : 'Active' }}</td>
                                             <td class="px-3 py-2 text-right">
                                                 @unless($a->revoked_at)

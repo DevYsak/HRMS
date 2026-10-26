@@ -34,7 +34,7 @@
         @if(! $enabled)
             {{-- ── Switched off ── --}}
             <div class="flex flex-1 items-center justify-center p-6">
-                <div class="max-w-md rounded-2xl border border-zinc-200 bg-white p-6 text-center shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                <div class="ui-surface max-w-md p-6 text-center">
                     <flux:icon.sparkles class="mx-auto size-8 text-zinc-300" />
                     <h2 class="mt-3 text-base font-bold text-zinc-900 dark:text-white">The AI Assistant is not switched on for you</h2>
                     <p class="mt-1 text-sm text-zinc-500">An administrator turns it on and chooses which roles can use it.</p>
@@ -83,7 +83,7 @@
                         @if(count($messages) === 0)
                             {{-- Onboarding --}}
                             <div class="mx-auto max-w-2xl space-y-4" data-ai-onboarding>
-                                <div class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                                <div class="ui-surface p-5">
                                     <h2 class="text-base font-bold text-zinc-900 dark:text-white">How to use the AI Assistant</h2>
                                     <ol class="mt-3 grid gap-3 sm:grid-cols-3">
                                         <li class="rounded-xl bg-zinc-50 p-3 dark:bg-zinc-800/60">
@@ -106,7 +106,7 @@
                                     @endif
                                 </div>
 
-                                <details class="group rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                                <details class="ui-surface group p-5">
                                     <summary class="flex cursor-pointer list-none items-center justify-between text-sm font-semibold text-zinc-900 dark:text-white">
                                         What can I ask?
                                         <flux:icon.chevron-down class="size-4 text-zinc-400 transition group-open:rotate-180" />
@@ -182,7 +182,7 @@
                             <div class="mt-1 flex size-7 shrink-0 items-center justify-center rounded-full bg-orange-500">
                                 <flux:icon.sparkles class="size-3.5 text-white" />
                             </div>
-                            <div class="rounded-2xl rounded-bl-sm border border-zinc-100 bg-white px-4 py-3 shadow-sm dark:border-zinc-700 dark:bg-zinc-800">
+                            <div class="ui-surface rounded-bl-sm px-4 py-3 dark:bg-zinc-800">
                                 <div class="flex items-center gap-1.5" aria-label="Thinking">
                                     <span class="size-1.5 animate-bounce rounded-full bg-zinc-400 [animation-delay:-0.3s]"></span>
                                     <span class="size-1.5 animate-bounce rounded-full bg-zinc-400 [animation-delay:-0.15s]"></span>

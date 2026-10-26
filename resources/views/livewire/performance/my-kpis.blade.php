@@ -122,7 +122,7 @@
                             <div>
                                 <div class="font-medium text-zinc-900 dark:text-white text-sm">{{ $kpi->component?->name ?? '—' }}</div>
                                 @if($kpi->due_date)
-                                    <div class="text-xs text-zinc-400 mt-0.5">Due {{ $kpi->due_date->format('d M Y') }}</div>
+                                    <div class="text-xs text-zinc-400 mt-0.5">Due {{ $kpi->due_date->toImmutable()->userDate() }}</div>
                                 @endif
                             </div>
                             <div class="flex items-center gap-2 shrink-0">

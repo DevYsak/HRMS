@@ -26,7 +26,7 @@
 @endphp
 
 <{{ $tag }} @if($href) href="{{ $href }}" wire:navigate @endif
-    class="group relative flex flex-col gap-2 overflow-hidden rounded-2xl border border-zinc-100 bg-white p-4 shadow-sm transition duration-300 hover:-translate-y-0.5 hover:shadow-md dark:border-white/5 dark:bg-zinc-900">
+    class="ui-surface group relative flex flex-col gap-2 overflow-hidden p-4 transition duration-300 hover:-translate-y-0.5 hover:shadow-md">
 
     {{-- soft accent glow on hover --}}
     <div class="pointer-events-none absolute -right-6 -top-6 size-16 rounded-full {{ $t['bg'] }} opacity-0 blur-2xl transition group-hover:opacity-100"></div>

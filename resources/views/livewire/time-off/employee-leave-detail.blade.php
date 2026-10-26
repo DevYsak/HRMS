@@ -53,7 +53,7 @@
     </div>
 
     @if($tab === 'balances')
-        <div class="overflow-x-auto rounded-2xl border border-[#EAECF0] bg-white shadow-sm dark:border-white/10 dark:bg-zinc-900">
+        <div class="ui-surface overflow-x-auto">
             <table class="min-w-full text-xs">
                 <thead class="bg-[#F9FAFB] text-left text-[10px] font-bold uppercase tracking-wider text-[#667085] dark:bg-white/5">
                     <tr>
@@ -103,7 +103,7 @@
     @endif
 
     @if($tab === 'history')
-        <div class="rounded-2xl border border-[#EAECF0] bg-white p-4 shadow-sm dark:border-white/10 dark:bg-zinc-900">
+        <div class="ui-surface p-4">
             <div class="mb-3 grid grid-cols-1 gap-3 md:grid-cols-5">
                 <x-clean-select model="historyTypeId" label="Leave type"
                     :options="array_merge([['value' => '', 'label' => 'All types']], $leaveTypes->map(fn ($t) => ['value' => $t->id, 'label' => $t->name])->all())" />
@@ -117,11 +117,11 @@
                 @forelse($this->history as $h)
                     <li class="flex items-start justify-between gap-3 py-2 text-sm">
                         <div class="flex gap-3">
-                            <span class="w-20 shrink-0 text-xs text-[#98A2B3]">{{ $h['date']->format('d M Y') }}</span>
+                            <span class="w-20 shrink-0 text-xs text-[#98A2B3]">{{ $h['date']->toImmutable()->userDate() }}</span>
                             <div>
                                 <div class="font-semibold text-[#101828] dark:text-white">{{ $h['label'] }} <span class="font-normal text-[#98A2B3]">· {{ $h['leave_type'] }}</span></div>
                                 @if($h['reason'])<div class="text-xs text-[#667085]">{{ $h['reason'] }}</div>@endif
-                                @if($h['expires_on'])<div class="text-[11px] text-amber-600">Expires {{ $h['expires_on']->format('d M Y') }}</div>@endif
+                                @if($h['expires_on'])<div class="text-[11px] text-amber-600">Expires {{ $h['expires_on']->toImmutable()->userDate() }}</div>@endif
                             </div>
                         </div>
                         <div class="text-right">
@@ -142,7 +142,7 @@
     @endif
 
     @if($tab === 'statement')
-        <div class="rounded-2xl border border-[#EAECF0] bg-white p-4 shadow-sm dark:border-white/10 dark:bg-zinc-900">
+        <div class="ui-surface p-4">
             <div class="mb-3 w-64">
                 <x-clean-select model="statementTypeId" label="Leave type"
                     :options="$this->balances->map(fn ($b) => ['value' => $b['leave_type']?->id, 'label' => $b['leave_type']?->name])->values()->all()" />
@@ -159,7 +159,7 @@
                     <flux:button size="sm" variant="primary" icon="arrow-right-circle" wire:click="openAction('carry_forward')">Enter carry forward</flux:button>
                 @endcan
             </div>
-            <div class="overflow-x-auto rounded-2xl border border-[#EAECF0] bg-white shadow-sm dark:border-white/10 dark:bg-zinc-900">
+            <div class="ui-surface overflow-x-auto">
                 <table class="min-w-full text-xs">
                     <thead class="bg-[#F9FAFB] text-left text-[10px] font-bold uppercase tracking-wider text-[#667085] dark:bg-white/5">
                         <tr>
@@ -178,7 +178,7 @@
                                 <td class="px-3 py-2 text-right">{{ $tx->reversed_days > 0 ? $fmt($tx->reversed_days) : '—' }}</td>
                                 <td class="px-3 py-2"><flux:badge size="sm">{{ str_replace('_', ' ', $tx->status) }}</flux:badge></td>
                                 <td class="max-w-xs px-3 py-2 text-[#667085]">{{ $tx->reason ?? '—' }}@if($tx->reversal_reason)<div class="text-rose-600">Reversed: {{ $tx->reversal_reason }}</div>@endif</td>
-                                <td class="px-3 py-2">{{ $tx->appliedBy?->name ?? '—' }}<div class="text-[11px] text-[#98A2B3]">{{ $tx->applied_at?->format('d M Y H:i') }}</div></td>
+                                <td class="px-3 py-2">{{ $tx->appliedBy?->name ?? '—' }}<div class="text-[11px] text-[#98A2B3]">{{ $tx->applied_at?->toImmutable()->userDateTime() }}</div></td>
                                 <td class="px-3 py-2 text-right">
                                     @if($tx->isApplied())
                                         @can('manage_leave_carry_forward')<flux:button size="xs" wire:click="startReverseCarryForward({{ $tx->id }})">Reverse</flux:button>@endcan
@@ -191,11 +191,11 @@
                     </tbody>
                 </table>
             </div>
-            <div class="rounded-2xl border border-[#EAECF0] bg-white p-4 text-xs shadow-sm dark:border-white/10 dark:bg-zinc-900">
+            <div class="ui-surface p-4 text-xs">
                 <div class="mb-2 font-bold text-[#101828] dark:text-white">Audit history</div>
                 @forelse($this->carryAudit as $log)
                     <div class="flex flex-wrap gap-3 border-t border-[#EAECF0] py-1.5 dark:border-white/5">
-                        <span class="w-32 text-[#98A2B3]">{{ $log->created_at->format('d M Y H:i') }}</span>
+                        <span class="w-32 text-[#98A2B3]">{{ $log->created_at->toImmutable()->userDateTime() }}</span>
                         <span class="font-semibold">{{ str_replace(['leave.', '_'], ['', ' '], $log->action) }}</span>
                         <span>{{ $log->user?->name ?? 'System' }}</span>
                         <span class="text-[#667085]">
@@ -212,7 +212,7 @@
     @endif
 
     @if($tab === 'requests')
-        <div class="overflow-x-auto rounded-2xl border border-[#EAECF0] bg-white shadow-sm dark:border-white/10 dark:bg-zinc-900">
+        <div class="ui-surface overflow-x-auto">
             <table class="min-w-full text-xs">
                 <thead class="bg-[#F9FAFB] text-left text-[10px] font-bold uppercase tracking-wider text-[#667085] dark:bg-white/5">
                     <tr><th class="px-3 py-2">Type</th><th class="px-3 py-2">Dates</th><th class="px-3 py-2 text-right">Days</th><th class="px-3 py-2">Status</th><th class="px-3 py-2">Applied by</th><th class="px-3 py-2">HR note</th><th class="px-3 py-2 text-right">HR actions</th></tr>
@@ -221,7 +221,7 @@
                     @forelse($this->requests as $r)
                         <tr>
                             <td class="px-3 py-2">{{ $r->leaveType?->name }}</td>
-                            <td class="px-3 py-2">{{ $r->start_date->format('d M Y') }}@if(! $r->end_date->eq($r->start_date)) – {{ $r->end_date->format('d M Y') }}@endif</td>
+                            <td class="px-3 py-2">{{ $r->start_date->toImmutable()->userDate() }}@if(! $r->end_date->eq($r->start_date)) – {{ $r->end_date->toImmutable()->userDate() }}@endif</td>
                             <td class="px-3 py-2 text-right">{{ $fmt($r->days) }}</td>
                             <td class="px-3 py-2"><flux:badge size="sm">{{ str_replace('_', ' ', $r->status) }}</flux:badge></td>
                             <td class="px-3 py-2">{{ $r->applied_by_user_id ? 'HR (on behalf)' : 'Employee' }}</td>
@@ -246,7 +246,7 @@
     @endif
 
     @if($tab === 'encashments')
-        <div class="overflow-x-auto rounded-2xl border border-[#EAECF0] bg-white shadow-sm dark:border-white/10 dark:bg-zinc-900">
+        <div class="ui-surface overflow-x-auto">
             <table class="min-w-full text-xs">
                 <thead class="bg-[#F9FAFB] text-left text-[10px] font-bold uppercase tracking-wider text-[#667085] dark:bg-white/5">
                     <tr><th class="px-3 py-2">Requested</th><th class="px-3 py-2">Type</th><th class="px-3 py-2 text-right">Days</th><th class="px-3 py-2">Status</th><th class="px-3 py-2">Approved by</th><th class="px-3 py-2">Finance</th><th class="px-3 py-2">Payout month</th></tr>
@@ -254,7 +254,7 @@
                 <tbody class="divide-y divide-[#EAECF0] dark:divide-white/5">
                     @forelse($this->encashments as $enc)
                         <tr>
-                            <td class="px-3 py-2">{{ $enc->created_at?->format('d M Y') }}</td>
+                            <td class="px-3 py-2">{{ $enc->created_at?->toImmutable()->userDate() }}</td>
                             <td class="px-3 py-2">{{ $enc->leaveType?->name }}</td>
                             <td class="px-3 py-2 text-right">{{ $fmt($enc->requested_days) }}</td>
                             <td class="px-3 py-2"><flux:badge size="sm">{{ str_replace('_', ' ', $enc->status) }}</flux:badge></td>
@@ -271,7 +271,7 @@
     @endif
 
     @if($tab === 'overrides')
-        <div class="overflow-x-auto rounded-2xl border border-[#EAECF0] bg-white shadow-sm dark:border-white/10 dark:bg-zinc-900">
+        <div class="ui-surface overflow-x-auto">
             <table class="min-w-full text-xs">
                 <thead class="bg-[#F9FAFB] text-left text-[10px] font-bold uppercase tracking-wider text-[#667085] dark:bg-white/5">
                     <tr><th class="px-3 py-2">Type</th><th class="px-3 py-2">Override</th><th class="px-3 py-2">Applies to</th><th class="px-3 py-2">Reason</th><th class="px-3 py-2">By</th><th class="px-3 py-2">Status</th><th></th></tr>
@@ -281,10 +281,10 @@
                         <tr>
                             <td class="px-3 py-2">{{ $o->leaveType?->name }}</td>
                             <td class="px-3 py-2">{{ $o->mode === 'set' ? 'Set to '.$fmt($o->days) : $signed((float) $o->days) }} day(s)</td>
-                            <td class="px-3 py-2">{{ $o->leaveYear?->label ?? 'From '.($o->effective_from?->format('d M Y') ?? 'start').' on' }}</td>
+                            <td class="px-3 py-2">{{ $o->leaveYear?->label ?? 'From '.($o->effective_from?->toImmutable()->userDate() ?? 'start').' on' }}</td>
                             <td class="px-3 py-2">{{ $o->reason }}</td>
-                            <td class="px-3 py-2">{{ $o->creator?->name }} · {{ $o->created_at->format('d M Y') }}</td>
-                            <td class="px-3 py-2">{{ $o->revoked_at ? 'Revoked '.$o->revoked_at->format('d M Y') : 'Active' }}</td>
+                            <td class="px-3 py-2">{{ $o->creator?->name }} · {{ $o->created_at->toImmutable()->userDate() }}</td>
+                            <td class="px-3 py-2">{{ $o->revoked_at ? 'Revoked '.$o->revoked_at->toImmutable()->userDate() : 'Active' }}</td>
                             <td class="px-3 py-2 text-right">
                                 @if(! $o->revoked_at)
                                     @can('override_leave_policy')
@@ -339,11 +339,11 @@
                     </div>
                 @elseif($action === 'cancel_leave' && $targetRequest)
                     <div class="rounded-lg bg-[#F9FAFB] p-3 text-sm dark:bg-white/5">
-                        <div class="font-semibold">{{ $targetRequest->leaveType?->name }} · {{ $targetRequest->start_date->format('d M Y') }}@if(! $targetRequest->end_date->eq($targetRequest->start_date)) – {{ $targetRequest->end_date->format('d M Y') }}@endif · {{ $fmt($targetRequest->days) }} day(s)</div>
+                        <div class="font-semibold">{{ $targetRequest->leaveType?->name }} · {{ $targetRequest->start_date->toImmutable()->userDate() }}@if(! $targetRequest->end_date->eq($targetRequest->start_date)) – {{ $targetRequest->end_date->toImmutable()->userDate() }}@endif · {{ $fmt($targetRequest->days) }} day(s)</div>
                         <div class="text-xs text-[#667085]">Status: {{ str_replace('_', ' ', $targetRequest->status) }}. Cancelling returns any paid days to the balance they came from; the request and this cancellation both stay in the history.</div>
                     </div>
                 @elseif($action === 'correct_leave' && $targetRequest)
-                    <div class="text-xs text-[#667085]">Currently {{ $targetRequest->start_date->format('d M Y') }}@if(! $targetRequest->end_date->eq($targetRequest->start_date)) – {{ $targetRequest->end_date->format('d M Y') }}@endif ({{ $fmt($targetRequest->days) }} day(s)). The old days are returned and the corrected days deducted, under the same leave rules.</div>
+                    <div class="text-xs text-[#667085]">Currently {{ $targetRequest->start_date->toImmutable()->userDate() }}@if(! $targetRequest->end_date->eq($targetRequest->start_date)) – {{ $targetRequest->end_date->toImmutable()->userDate() }}@endif ({{ $fmt($targetRequest->days) }} day(s)). The old days are returned and the corrected days deducted, under the same leave rules.</div>
                     <div class="grid grid-cols-2 gap-3">
                         <flux:input type="date" wire:model="startDate" label="From" />
                         <flux:input type="date" wire:model="endDate" label="To" :disabled="$isHalfDay" />
@@ -352,7 +352,7 @@
                 @elseif($action === 'reverse_entry' && $targetEntry)
                     <div class="rounded-lg bg-[#F9FAFB] p-3 text-sm dark:bg-white/5">
                         <div class="font-semibold">{{ $entryTypes[$targetEntry->entry_type] ?? str_replace('_', ' ', $targetEntry->entry_type) }} · {{ $targetEntry->leaveType?->name }} · {{ $signed((float) $targetEntry->days) }} day(s)</div>
-                        <div class="text-xs text-[#667085]">{{ $targetEntry->effective_date?->format('d M Y') }}@if($targetEntry->reason) · {{ $targetEntry->reason }}@endif</div>
+                        <div class="text-xs text-[#667085]">{{ $targetEntry->effective_date?->toImmutable()->userDate() }}@if($targetEntry->reason) · {{ $targetEntry->reason }}@endif</div>
                         <div class="mt-1 text-xs text-[#667085]">A reversing entry is added; nothing is deleted. A credit already used becomes a visible shortfall.</div>
                     </div>
                 @elseif($action === 'override')

@@ -14,7 +14,7 @@
                         <div>
                             <div class="flex items-center gap-3 mb-1">
                                 <span class="badge-onboarding">{{ $recommendation->recommendationTypeLabel() }}</span>
-                                <span class="text-xs text-zinc-500 font-medium">Recommended {{ $recommendation->created_at->format('M d, Y') }}</span>
+                                <span class="text-xs text-zinc-500 font-medium">Recommended {{ $recommendation->created_at->toImmutable()->userDate() }}</span>
                             </div>
                             <h3 class="text-lg font-bold text-zinc-900 dark:text-white">
                                 {{ $recommendation->proposed_role ?? $recommendation->recommendationTypeLabel() }}
@@ -59,7 +59,7 @@
                 <div class="flex items-start justify-between mb-6">
                     <div>
                         <flux:heading size="lg">{{ $activeRecommendation->recommendationTypeLabel() }}</flux:heading>
-                        <flux:subheading>Recommended on {{ $activeRecommendation->created_at->format('M d, Y') }}</flux:subheading>
+                        <flux:subheading>Recommended on {{ $activeRecommendation->created_at->toImmutable()->userDate() }}</flux:subheading>
                     </div>
                     <span class="badge-{{ $activeRecommendation->statusColor() }} px-2 py-1">{{ strtoupper($activeRecommendation->statusLabel()) }}</span>
                 </div>
@@ -106,7 +106,7 @@
                         @if($activeRecommendation->effective_date)
                             <div>
                                 <span class="text-[10px] font-bold text-zinc-400 uppercase block">Effective Date</span>
-                                <span class="font-medium text-zinc-900 dark:text-white">{{ $activeRecommendation->effective_date->format('M d, Y') }}</span>
+                                <span class="font-medium text-zinc-900 dark:text-white">{{ $activeRecommendation->effective_date->toImmutable()->userDate() }}</span>
                             </div>
                         @endif
                     </div>
@@ -137,7 +137,7 @@
                     @elseif($activeRecommendation->status === 'approved')
                         <div class="bg-green-50 border border-green-100 rounded-xl p-4 dark:bg-green-900/20 dark:border-green-800/30">
                             <h4 class="text-xs font-bold text-green-600 uppercase tracking-wider mb-2">Approved</h4>
-                            <p class="text-sm text-green-800 dark:text-green-300">Effective {{ $activeRecommendation->effective_date?->format('M d, Y') ?? 'date to be confirmed' }}.</p>
+                            <p class="text-sm text-green-800 dark:text-green-300">Effective {{ $activeRecommendation->effective_date?->toImmutable()->userDate() ?? 'date to be confirmed' }}.</p>
                         </div>
                     @endif
                 </div>

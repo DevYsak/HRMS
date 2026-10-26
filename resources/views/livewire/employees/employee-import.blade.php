@@ -13,7 +13,7 @@
     </div>
 
     {{-- Upload --}}
-    <div class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-zinc-900">
+    <div class="ui-surface p-5">
         <h3 class="mb-4 text-sm font-bold text-zinc-900 dark:text-white">1 · Upload &amp; validate</h3>
 
         <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -57,26 +57,26 @@
     {{-- Result summary --}}
     @if($lastResult)
         <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div class="rounded-2xl border border-zinc-200 bg-white p-4 text-center shadow-sm dark:border-white/10 dark:bg-zinc-900">
+            <div class="ui-surface p-4 text-center">
                 <div class="text-2xl font-black text-emerald-600 dark:text-emerald-400">{{ $lastResult['imported'] }}</div>
                 <div class="text-[10px] font-bold uppercase tracking-wide text-zinc-400">Added</div>
             </div>
-            <div class="rounded-2xl border border-zinc-200 bg-white p-4 text-center shadow-sm dark:border-white/10 dark:bg-zinc-900">
+            <div class="ui-surface p-4 text-center">
                 <div class="text-2xl font-black text-blue-600 dark:text-blue-400">{{ $lastResult['updated'] }}</div>
                 <div class="text-[10px] font-bold uppercase tracking-wide text-zinc-400">Updated</div>
             </div>
-            <div class="rounded-2xl border border-zinc-200 bg-white p-4 text-center shadow-sm dark:border-white/10 dark:bg-zinc-900">
+            <div class="ui-surface p-4 text-center">
                 <div class="text-2xl font-black text-amber-600 dark:text-amber-400">{{ $lastResult['skipped'] }}</div>
                 <div class="text-[10px] font-bold uppercase tracking-wide text-zinc-400">Skipped</div>
             </div>
-            <div class="rounded-2xl border border-zinc-200 bg-white p-4 text-center shadow-sm dark:border-white/10 dark:bg-zinc-900">
+            <div class="ui-surface p-4 text-center">
                 <div class="text-2xl font-black text-rose-600 dark:text-rose-400">{{ $lastResult['failed'] }}</div>
                 <div class="text-[10px] font-bold uppercase tracking-wide text-zinc-400">Failed</div>
             </div>
         </div>
 
         {{-- Post-import validation summary --}}
-        <div class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-zinc-900">
+        <div class="ui-surface p-5">
             <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
                 <h3 class="text-xs font-bold uppercase tracking-widest text-zinc-500">Validation report</h3>
                 <flux:button wire:click="downloadValidationReport({{ $lastResult['log_id'] }})" icon="arrow-down-tray" variant="ghost" size="sm">
@@ -153,7 +153,7 @@
 
         {{-- Data quality counters --}}
         @if(! empty($quality))
-            <div class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-zinc-900">
+            <div class="ui-surface p-5">
                 <h3 class="mb-3 text-xs font-bold uppercase tracking-widest text-zinc-500">Data quality</h3>
                 <div class="flex flex-wrap gap-x-6 gap-y-2 text-sm">
                     @foreach($quality as $key => $count)
@@ -166,7 +166,7 @@
             </div>
         @endif
 
-        <div class="rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-white/10 dark:bg-zinc-900">
+        <div class="ui-surface">
             <div class="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-100 bg-zinc-50/70 px-5 py-3 dark:border-white/5 dark:bg-zinc-800/40">
                 <h3 class="text-xs font-bold uppercase tracking-widest text-zinc-500">2 · Preview · {{ $summary['total'] }} rows</h3>
                 <div class="flex items-center gap-3 text-xs">
@@ -223,7 +223,7 @@
     @endif
 
     {{-- Recent imports --}}
-    <div class="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-white/10 dark:bg-zinc-900">
+    <div class="ui-surface overflow-hidden">
         <div class="border-b border-zinc-100 bg-zinc-50/70 px-5 py-3 dark:border-white/5 dark:bg-zinc-800/40">
             <h3 class="text-xs font-bold uppercase tracking-widest text-zinc-500">Recent imports</h3>
         </div>

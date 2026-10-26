@@ -239,7 +239,7 @@
                         @if($activeRecommendation->effective_date)
                             <div>
                                 <span class="text-[10px] font-bold text-zinc-400 uppercase block">Effective Date</span>
-                                <span class="font-medium text-zinc-900 dark:text-white">{{ $activeRecommendation->effective_date->format('M d, Y') }}</span>
+                                <span class="font-medium text-zinc-900 dark:text-white">{{ $activeRecommendation->effective_date->toImmutable()->userDate() }}</span>
                             </div>
                         @endif
                     </div>

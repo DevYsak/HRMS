@@ -89,7 +89,7 @@
                         </td>
                         <td class="py-4 px-4 text-zinc-600 dark:text-zinc-400">{{ $emp->department?->name ?? '—' }}</td>
                         <td class="py-4 px-4">
-                            <div class="text-zinc-700 dark:text-zinc-300">{{ $emp->joining_date?->format('d M Y') ?? '—' }}</div>
+                            <div class="text-zinc-700 dark:text-zinc-300">{{ $emp->joining_date?->toImmutable()->userDate() ?? '—' }}</div>
                             @if($daysIn !== null)
                                 <div class="text-xs text-zinc-400">Day {{ $daysIn + 1 }}</div>
                             @endif

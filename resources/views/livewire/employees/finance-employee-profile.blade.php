@@ -40,7 +40,7 @@
                 <div class="flex justify-between"><dt class="text-zinc-500">Employee ID</dt><dd class="font-semibold">{{ $employee->employee_id ?? '—' }}</dd></div>
                 <div class="flex justify-between"><dt class="text-zinc-500">Employment Type</dt><dd class="font-semibold">{{ $employee->employmentType?->name ?? '—' }}</dd></div>
                 <div class="flex justify-between"><dt class="text-zinc-500">Salary Cycle</dt><dd class="font-semibold">{{ $employee->salaryCycle?->name ?? '—' }}</dd></div>
-                <div class="flex justify-between"><dt class="text-zinc-500">Joining Date</dt><dd class="font-semibold">{{ $employee->joining_date?->format('d M Y') ?? '—' }}</dd></div>
+                <div class="flex justify-between"><dt class="text-zinc-500">Joining Date</dt><dd class="font-semibold">{{ $employee->joining_date?->toImmutable()->userDate() ?? '—' }}</dd></div>
             </dl>
         </flux:card>
 

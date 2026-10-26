@@ -28,7 +28,7 @@
 </div>
 
 {{-- ═══════════════ FILTERS ═══════════════ --}}
-<div class="mb-4 rounded-[18px] border border-orange-100/70 bg-white dark:border-white/10 dark:bg-zinc-900 p-4 shadow-sm print:hidden">
+<div class="ui-surface mb-4 p-4 print:hidden">
     <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-7">
         <div>
             <label class="mb-1 block text-[10px] font-bold uppercase tracking-wider text-zinc-400">From</label>
@@ -78,7 +78,7 @@
 @if(! empty($report['summary']))
     <div class="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
         @foreach($report['summary'] as $s)
-            <div class="rounded-[18px] border border-orange-100/70 bg-white dark:border-white/10 dark:bg-zinc-900 p-4 shadow-sm">
+            <div class="ui-surface p-4">
                 <div class="text-lg font-black tabular-nums text-orange-600">{{ $s['value'] }}</div>
                 <div class="text-[9px] font-bold uppercase tracking-wide text-zinc-400">{{ $s['label'] }}</div>
             </div>
@@ -88,14 +88,14 @@
 
 {{-- ═══════════════ TREND CHART ═══════════════ --}}
 @if($trendChart)
-    <div class="mb-4 rounded-[18px] border border-orange-100/70 bg-white dark:border-white/10 dark:bg-zinc-900 p-5 shadow-sm">
+    <div class="ui-surface mb-4 p-5">
         <div class="mb-1 text-sm font-black text-zinc-900 dark:text-white">Trend</div>
         <x-dashboard.chart :options="$trendChart" id="report-trend" wire:key="trend-{{ $type }}-{{ $from }}-{{ $to }}" class="-mb-2" />
     </div>
 @endif
 
 {{-- ═══════════════ PREVIEW TABLE ═══════════════ --}}
-<div class="overflow-hidden rounded-[18px] border border-orange-100/70 bg-white dark:border-white/10 dark:bg-zinc-900 shadow-sm">
+<div class="ui-surface overflow-hidden">
     <div class="flex flex-wrap items-center justify-between gap-3 border-b border-orange-100/70 px-5 py-3 dark:border-white/10">
         <h3 class="flex items-center gap-2 text-sm font-black text-zinc-900 dark:text-white">
             <flux:icon.document-text class="size-4 text-orange-500" /> {{ $report['title'] }}

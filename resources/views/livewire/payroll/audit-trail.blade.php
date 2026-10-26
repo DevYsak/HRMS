@@ -33,7 +33,7 @@
     </div>
 
     {{-- Table --}}
-    <div class="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-white/10 dark:bg-zinc-900">
+    <div class="ui-surface overflow-hidden">
         <table class="w-full text-sm">
             <thead class="border-b border-zinc-100 bg-zinc-50/70 dark:border-white/5 dark:bg-zinc-800/40">
                 <tr class="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
@@ -50,7 +50,7 @@
             <tbody class="divide-y divide-zinc-100 dark:divide-white/5">
                 @forelse($logs as $log)
                     <tr class="transition hover:bg-zinc-50/60 dark:hover:bg-zinc-800/30">
-                        <td class="px-5 py-3 whitespace-nowrap text-zinc-500">{{ $log->created_at?->format('d M Y, H:i') }}</td>
+                        <td class="px-5 py-3 whitespace-nowrap text-zinc-500">{{ $log->created_at?->toImmutable()->userDateTime() }}</td>
                         <td class="px-3 py-3 font-medium text-zinc-800 dark:text-zinc-200">{{ $log->user?->name ?? 'System' }}</td>
                         <td class="px-3 py-3 text-xs text-zinc-500">{{ $log->role ?? '—' }}</td>
                         <td class="px-3 py-3 text-zinc-600 dark:text-zinc-300">{{ $log->subjectEmployee?->user?->name ?? '—' }}</td>

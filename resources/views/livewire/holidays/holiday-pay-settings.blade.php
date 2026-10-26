@@ -13,7 +13,7 @@
 <div class="grid grid-cols-1 gap-4 lg:grid-cols-12">
 
     {{-- Allowed pay types --}}
-    <div class="rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 p-5 shadow-sm lg:col-span-6">
+    <div class="ui-surface p-5 lg:col-span-6">
         <div class="mb-1 text-sm font-black text-zinc-900 dark:text-white">Allowed Pay Types</div>
         <p class="mb-3 text-[11px] text-zinc-400">Employees can only choose from the pay types enabled here when requesting to work a holiday.</p>
         <div class="space-y-2">
@@ -34,7 +34,7 @@
     </div>
 
     {{-- Calculation rules --}}
-    <div class="rounded-[18px] border border-orange-100/70 bg-white dark:bg-zinc-900 p-5 shadow-sm lg:col-span-6">
+    <div class="ui-surface p-5 lg:col-span-6">
         <div class="mb-3 text-sm font-black text-zinc-900 dark:text-white">Calculation Rules</div>
         <div class="space-y-3">
             <div>

@@ -33,7 +33,7 @@
     </div>
 
     @if($view === 'month')
-        <div class="rounded-2xl border border-zinc-200 bg-white p-2 shadow-sm dark:border-white/10 dark:bg-zinc-900 sm:p-3" data-holiday-month-grid>
+        <div class="ui-surface p-2 sm:p-3" data-holiday-month-grid>
             <div class="grid grid-cols-7 gap-1 sm:gap-1.5">
                 @foreach(['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as $dow)
                     <div class="pb-1 text-center text-[10px] font-bold uppercase tracking-wider text-zinc-400">{{ $dow }}</div>
@@ -69,7 +69,7 @@
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             @foreach(range(1, 12) as $m)
                 @php $key = $cursor->copy()->setDate($cursor->year, $m, 1)->format('Y-m'); @endphp
-                <div wire:key="hy-{{ $key }}" class="rounded-2xl border border-zinc-200 bg-white p-3 shadow-sm dark:border-white/10 dark:bg-zinc-900">
+                <div wire:key="hy-{{ $key }}" class="ui-surface p-3">
                     <div class="mb-1 text-xs font-black text-zinc-800 dark:text-zinc-100">{{ \Illuminate\Support\Carbon::createFromFormat('!Y-m', $key)->format('F') }}</div>
                     @forelse(($byMonth[$key] ?? collect()) as $h)
                         <div class="flex items-center justify-between gap-2 py-0.5 text-xs">
@@ -93,11 +93,11 @@
     @endif
 
     @if($upcoming->isNotEmpty())
-        <div class="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-zinc-900">
+        <div class="ui-surface p-4">
             <h3 class="mb-2 text-xs font-bold uppercase tracking-widest text-zinc-500">Coming up</h3>
             <div class="flex flex-wrap gap-2">
                 @foreach($upcoming as $h)
-                    <span class="rounded-full bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-700 dark:bg-orange-500/10 dark:text-orange-300">{{ $h->name }} · {{ $h->date->format('D d M') }}</span>
+                    <span class="rounded-full bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-700 dark:bg-orange-500/10 dark:text-orange-300">{{ $h->name }} · {{ $h->date->toImmutable()->userShortDate() }}</span>
                 @endforeach
             </div>
         </div>

@@ -64,7 +64,7 @@
                         default   => 'bg-zinc-300',
                     };
                 @endphp
-                <div class="rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                <div class="ui-surface p-5">
                     <div class="mb-3 flex items-start justify-between">
                         <div>
                             <div class="flex items-center gap-2">
@@ -113,7 +113,7 @@
 
         {{-- Sync selected --}}
         @if($selectedDeviceId)
-            <div class="rounded-2xl border border-zinc-100 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <div class="ui-surface p-6">
                 <h2 class="mb-4 text-sm font-black uppercase tracking-widest text-zinc-400">Sync Selected Device</h2>
                 <div class="flex gap-3">
                     <flux:button wire:click="syncDevice" variant="primary" icon="arrow-path"
@@ -128,19 +128,19 @@
 
         {{-- Stats --}}
         <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <div class="rounded-2xl border border-zinc-100 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <div class="ui-surface p-4">
                 <p class="text-xs font-bold uppercase tracking-widest text-zinc-400">Total Logs</p>
                 <p class="mt-1 text-2xl font-black text-zinc-900 dark:text-white">{{ number_format(\App\Models\BiometricLog::count()) }}</p>
             </div>
-            <div class="rounded-2xl border border-zinc-100 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <div class="ui-surface p-4">
                 <p class="text-xs font-bold uppercase tracking-widest text-zinc-400">Unprocessed</p>
                 <p class="mt-1 text-2xl font-black {{ $this->unprocessedCount > 0 ? 'text-amber-600' : 'text-zinc-900 dark:text-white' }}">{{ $this->unprocessedCount }}</p>
             </div>
-            <div class="rounded-2xl border border-zinc-100 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <div class="ui-surface p-4">
                 <p class="text-xs font-bold uppercase tracking-widest text-zinc-400">Unmatched IDs</p>
                 <p class="mt-1 text-2xl font-black {{ $this->unmatchedCount > 0 ? 'text-rose-600' : 'text-zinc-900 dark:text-white' }}">{{ $this->unmatchedCount }}</p>
             </div>
-            <div class="rounded-2xl border border-zinc-100 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <div class="ui-surface p-4">
                 <p class="text-xs font-bold uppercase tracking-widest text-zinc-400">Devices Online</p>
                 <p class="mt-1 text-2xl font-black text-zinc-900 dark:text-white">
                     {{ $this->devices->where('last_ping_status', 'online')->count() }} / {{ $this->devices->count() }}
@@ -224,7 +224,7 @@
     @elseif($activeTab === 'users')
 
         {{-- Fetch controls --}}
-        <div class="rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <div class="ui-surface p-5">
             <h2 class="mb-4 text-sm font-black uppercase tracking-widest text-zinc-400">Fetch Enrolled Users from Device</h2>
             <div class="flex flex-col gap-3 sm:flex-row sm:items-end">
                 <div class="flex-1">
@@ -248,15 +248,15 @@
 
             {{-- Mini stats --}}
             <div class="grid grid-cols-3 gap-4">
-                <div class="rounded-2xl border border-zinc-100 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                <div class="ui-surface p-4">
                     <p class="text-xs font-bold uppercase tracking-widest text-zinc-400">On Device</p>
                     <p class="mt-1 text-2xl font-black text-zinc-900 dark:text-white">{{ $totalUsers }}</p>
                 </div>
-                <div class="rounded-2xl border border-zinc-100 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                <div class="ui-surface p-4">
                     <p class="text-xs font-bold uppercase tracking-widest text-zinc-400">Mapped to HRMS</p>
                     <p class="mt-1 text-2xl font-black text-emerald-600">{{ $mappedCount }}</p>
                 </div>
-                <div class="rounded-2xl border border-zinc-100 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                <div class="ui-surface p-4">
                     <p class="text-xs font-bold uppercase tracking-widest text-zinc-400">Unmapped</p>
                     <p class="mt-1 text-2xl font-black {{ ($totalUsers - $mappedCount) > 0 ? 'text-rose-600' : 'text-zinc-900 dark:text-white' }}">
                         {{ $totalUsers - $mappedCount }}

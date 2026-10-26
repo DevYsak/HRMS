@@ -125,7 +125,7 @@
                                 </span>
                             @else
                                 <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-600/20 dark:bg-emerald-400/10 dark:text-emerald-300 dark:ring-emerald-400/20" data-test="password-status"
-                                    @if($employee->user->password_changed_at) title="Set {{ $employee->user->password_changed_at->format('d M Y') }}" @endif>
+                                    @if($employee->user->password_changed_at) title="Set {{ $employee->user->password_changed_at->toImmutable()->userDate() }}" @endif>
                                     Password set
                                 </span>
                             @endif
@@ -276,7 +276,7 @@
 
         {{-- ── Left: summary. Ordered above the editor on mobile. ────────── --}}
         <aside class="space-y-5 lg:col-span-4 xl:col-span-3">
-            <div class="overflow-hidden rounded-2xl border border-[#EAECF0] bg-white shadow-sm dark:border-white/10 dark:bg-zinc-900">
+            <div class="ui-surface overflow-hidden">
 
                 @foreach([
                     ['Contact', [
@@ -336,7 +336,7 @@
         </aside>
 
         {{-- ── Right: the record ─────────────────────────────────────────── --}}
-        <div class="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-[#EAECF0] bg-white lg:col-span-8 xl:col-span-9 shadow-sm dark:border-white/10 dark:bg-zinc-900">
+        <div class="ui-surface flex min-w-0 flex-col overflow-hidden lg:col-span-8 xl:col-span-9">
 
             {{-- Primary: which area of the record. Underlined, weighted. --}}
             <div class="nx-scroll overflow-x-auto border-b border-[#EAECF0] px-4 dark:border-white/10">
@@ -455,7 +455,7 @@
                                 <div class="flex items-center gap-2 text-xs text-[#98A2B3]">
                                     <span wire:loading.remove wire:target="save" class="flex items-center gap-1.5">
                                         <flux:icon.check-circle class="size-3.5 text-emerald-500" />
-                                        Last updated {{ $employee->updated_at->format('d M Y, g:i A') }}
+                                        Last updated {{ $employee->updated_at->toImmutable()->userDateTime() }}
                                     </span>
                                     <span wire:loading wire:target="save" class="flex items-center gap-1.5 font-medium text-orange-600">
                                         <flux:icon.arrow-path class="size-3.5 animate-spin" />
@@ -538,7 +538,7 @@
                                 <div class="flex items-center gap-2 text-xs text-[#98A2B3]">
                                     <span wire:loading.remove wire:target="save" class="flex items-center gap-1.5">
                                         <flux:icon.check-circle class="size-3.5 text-emerald-500" />
-                                        Last updated {{ $employee->updated_at->format('d M Y, g:i A') }}
+                                        Last updated {{ $employee->updated_at->toImmutable()->userDateTime() }}
                                     </span>
                                     <span wire:loading wire:target="save" class="flex items-center gap-1.5 font-medium text-orange-600">
                                         <flux:icon.arrow-path class="size-3.5 animate-spin" />
@@ -588,7 +588,7 @@
                                     @if($employee->pending_salary_cycle_id)
                                         <p class="mt-1.5 text-xs font-medium text-amber-700 dark:text-amber-300" data-test="pending-cycle">
                                             Moves to {{ $employee->pendingSalaryCycle?->name ?? 'the new cycle' }} from the
-                                            {{ \Illuminate\Support\Carbon::parse($employee->salary_cycle_effective_month.'-01')->format('F Y') }} payroll — already paid through {{ $employee->salary_cycle_paid_through?->format('d M Y') }}.
+                                            {{ \Illuminate\Support\Carbon::parse($employee->salary_cycle_effective_month.'-01')->format('F Y') }} payroll — already paid through {{ $employee->salary_cycle_paid_through?->toImmutable()->userDate() }}.
                                         </p>
                                     @endif
                                 </div>
@@ -674,7 +674,7 @@
                                 <div class="flex items-center gap-2 text-xs text-[#98A2B3]">
                                     <span wire:loading.remove wire:target="save" class="flex items-center gap-1.5">
                                         <flux:icon.check-circle class="size-3.5 text-emerald-500" />
-                                        Last updated {{ $employee->updated_at->format('d M Y, g:i A') }}
+                                        Last updated {{ $employee->updated_at->toImmutable()->userDateTime() }}
                                     </span>
                                     <span wire:loading wire:target="save" class="flex items-center gap-1.5 font-medium text-orange-600">
                                         <flux:icon.arrow-path class="size-3.5 animate-spin" />
@@ -833,7 +833,7 @@
                                                         </span>
                                                         <span class="text-xs text-[#98A2B3]">{{ $log->leaveType?->name }}</span>
                                                         <span class="text-xs text-[#98A2B3]">·</span>
-                                                        <span class="text-xs text-[#98A2B3]">{{ $log->adjusted_at->format('d M Y, h:i A') }}</span>
+                                                        <span class="text-xs text-[#98A2B3]">{{ $log->adjusted_at->toImmutable()->userDateTime() }}</span>
                                                         <span class="text-xs text-[#98A2B3]">by {{ $log->adjustedByUser?->name }}</span>
                                                     </div>
                                                     <p class="mt-0.5 text-xs text-zinc-500">{{ $log->reason }}</p>
@@ -908,7 +908,7 @@
                                                             @if($tx->reversed_days > 0)
                                                                 <div class="mt-1 text-[11px] text-rose-600">
                                                                     Reversed {{ $tx->reversed_days }} by {{ $tx->reversedBy?->name ?? '—' }}
-                                                                    @if($tx->reversed_at) on {{ $tx->reversed_at->format('d M Y') }} @endif
+                                                                    @if($tx->reversed_at) on {{ $tx->reversed_at->toImmutable()->userDate() }} @endif
                                                                 </div>
                                                                 @if($tx->reversal_reason)
                                                                     <div class="text-[11px] italic text-[#98A2B3]">{{ $tx->reversal_reason }}</div>
@@ -916,7 +916,7 @@
                                                             @endif
                                                         </td>
                                                         <td class="px-4 py-2.5 text-[#667085] dark:text-zinc-400">{{ $tx->appliedBy?->name ?? '—' }}</td>
-                                                        <td class="px-4 py-2.5 text-[11px] text-[#98A2B3]">{{ $tx->applied_at?->format('d M Y, h:i A') ?? '—' }}</td>
+                                                        <td class="px-4 py-2.5 text-[11px] text-[#98A2B3]">{{ $tx->applied_at?->toImmutable()->userDateTime() ?? '—' }}</td>
                                                         <td class="px-4 py-2.5 text-[11px] text-[#98A2B3]">{{ $tx->reason ?? '—' }}</td>
                                                     </tr>
                                                 @endforeach
@@ -967,8 +967,8 @@
                                                                 #{{ $reg->id }}
                                                             @endcan
                                                         </td>
-                                                        <td class="px-4 py-2.5 text-[#667085] dark:text-zinc-400">{{ $reg->from_date?->format('d M Y') ?? $reg->work_date?->format('d M Y') ?? '—' }}</td>
-                                                        <td class="px-4 py-2.5 text-[#667085] dark:text-zinc-400">{{ $reg->to_date?->format('d M Y') ?? '—' }}</td>
+                                                        <td class="px-4 py-2.5 text-[#667085] dark:text-zinc-400">{{ $reg->from_date?->toImmutable()->userDate() ?? $reg->work_date?->toImmutable()->userDate() ?? '—' }}</td>
+                                                        <td class="px-4 py-2.5 text-[#667085] dark:text-zinc-400">{{ $reg->to_date?->toImmutable()->userDate() ?? '—' }}</td>
                                                         <td class="px-4 py-2.5 text-[#667085] dark:text-zinc-400">{{ $reg->leaveType?->name ?? '—' }}</td>
                                                         <td class="px-4 py-2.5 tabular-nums text-zinc-700 dark:text-zinc-200">{{ $reg->duration ?? '—' }}</td>
                                                         <td class="px-4 py-2.5">
@@ -976,7 +976,7 @@
                                                         </td>
                                                         <td class="px-4 py-2.5 text-[11px] text-[#98A2B3]">{{ $reg->stageLabel() }}</td>
                                                         <td class="px-4 py-2.5 text-[#667085] dark:text-zinc-400">{{ $reg->reviewer?->name ?? '—' }}</td>
-                                                        <td class="px-4 py-2.5 text-[11px] text-[#98A2B3]">{{ $reg->reviewed_at?->format('d M Y, h:i A') ?? '—' }}</td>
+                                                        <td class="px-4 py-2.5 text-[11px] text-[#98A2B3]">{{ $reg->reviewed_at?->toImmutable()->userDateTime() ?? '—' }}</td>
                                                         <td class="px-4 py-2.5 text-[11px] text-[#98A2B3]">
                                                             {{ $reg->reason ?? '—' }}
                                                             @if($reg->status === 'rejected' && $reg->reviewer_comment)
@@ -1012,9 +1012,9 @@
                                     <tbody>
                                         @forelse($attendanceRecords as $rec)
                                             <tr>
-                                                <td class="pulse-td pl-6 font-medium text-zinc-900 dark:text-white">{{ \Illuminate\Support\Carbon::parse($rec->date)->format('d M Y') }}</td>
-                                                <td class="pulse-td">{{ $rec->check_in?->format('H:i') ?? '—' }}</td>
-                                                <td class="pulse-td">{{ $rec->check_out?->format('H:i') ?? '—' }}</td>
+                                                <td class="pulse-td pl-6 font-medium text-zinc-900 dark:text-white">{{ \Illuminate\Support\Carbon::parse($rec->date)->toImmutable()->userDate() }}</td>
+                                                <td class="pulse-td">{{ $rec->check_in?->toImmutable()->userTime() ?? '—' }}</td>
+                                                <td class="pulse-td">{{ $rec->check_out?->toImmutable()->userTime() ?? '—' }}</td>
                                                 <td class="pulse-td">{{ $rec->check_out ? app(\App\Services\Attendance\AttendanceCalculator::class)->workedHours($rec) : '—' }}</td>
                                                 <td class="pulse-td">
                                                     @if($rec->is_late)<span class="badge-late">LATE</span>@else<span class="badge-on_time">ON TIME</span>@endif
@@ -1050,7 +1050,7 @@
                                     <tbody>
                                         @forelse($otRecords as $ot)
                                             <tr>
-                                                <td class="pulse-td pl-6 font-medium text-zinc-900 dark:text-white">{{ \Illuminate\Support\Carbon::parse($ot->work_date)->format('d M Y') }}</td>
+                                                <td class="pulse-td pl-6 font-medium text-zinc-900 dark:text-white">{{ \Illuminate\Support\Carbon::parse($ot->work_date)->toImmutable()->userDate() }}</td>
                                                 <td class="pulse-td">{{ (float) $ot->ot_hours }}h</td>
                                             </tr>
                                         @empty
@@ -1112,7 +1112,7 @@
                                     <div class="flex items-center justify-between gap-3 rounded-xl border border-[#EAECF0] px-4 py-3 dark:border-zinc-800">
                                         <div class="min-w-0">
                                             <div class="text-sm font-semibold text-zinc-900 dark:text-white">{{ ucwords(str_replace('_', ' ', $w->warning_type)) }}</div>
-                                            <div class="text-xs text-[#98A2B3]">{{ $w->issue_date ? \Illuminate\Support\Carbon::parse($w->issue_date)->format('d M Y') : '—' }}</div>
+                                            <div class="text-xs text-[#98A2B3]">{{ $w->issue_date ? \Illuminate\Support\Carbon::parse($w->issue_date)->toImmutable()->userDate() : '—' }}</div>
                                         </div>
                                         <span class="badge-warning-{{ $w->status }}">{{ strtoupper(str_replace('_', ' ', $w->status)) }}</span>
                                     </div>
@@ -1130,7 +1130,7 @@
                                 @forelse($pipHistory as $pip)
                                     <div class="flex items-center justify-between gap-3 rounded-xl border border-[#EAECF0] px-4 py-3 dark:border-zinc-800">
                                         <div class="min-w-0">
-                                            <div class="text-sm font-semibold text-zinc-900 dark:text-white">PIP · {{ $pip->start_date ? \Illuminate\Support\Carbon::parse($pip->start_date)->format('d M Y') : '—' }} &rarr; {{ $pip->end_date ? \Illuminate\Support\Carbon::parse($pip->end_date)->format('d M Y') : '—' }}</div>
+                                            <div class="text-sm font-semibold text-zinc-900 dark:text-white">PIP · {{ $pip->start_date ? \Illuminate\Support\Carbon::parse($pip->start_date)->toImmutable()->userDate() : '—' }} &rarr; {{ $pip->end_date ? \Illuminate\Support\Carbon::parse($pip->end_date)->toImmutable()->userDate() : '—' }}</div>
                                             @if($pip->outcome)<div class="text-xs text-[#98A2B3]">Outcome: {{ ucfirst($pip->outcome) }}</div>@endif
                                         </div>
                                         <span class="rounded-full bg-zinc-100 px-2.5 py-0.5 text-[11px] font-bold uppercase text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">{{ str_replace('_', ' ', $pip->status) }}</span>
@@ -1168,7 +1168,7 @@
                                 @forelse($timeline as $event)
                                     <div class="relative">
                                         <span class="absolute -left-[26px] top-1 size-3 rounded-full bg-brand-500 ring-4 ring-white dark:ring-zinc-900"></span>
-                                        <div class="text-xs text-[#98A2B3]">{{ $event->event_date ? \Illuminate\Support\Carbon::parse($event->event_date)->format('d M Y') : '' }}</div>
+                                        <div class="text-xs text-[#98A2B3]">{{ $event->event_date ? \Illuminate\Support\Carbon::parse($event->event_date)->toImmutable()->userDate() : '' }}</div>
                                         <div class="text-sm font-semibold text-zinc-900 dark:text-white">{{ $event->title }}</div>
                                         @if($event->description)<div class="text-xs text-zinc-500">{{ $event->description }}</div>@endif
                                     </div>
@@ -1196,12 +1196,12 @@
                             <div class="grid grid-cols-2 gap-4 rounded-xl border border-[#EAECF0] bg-[#F9FAFB] p-4 text-sm dark:border-zinc-800 dark:bg-zinc-900">
                                 <div>
                                     <div class="mb-1 text-zinc-400">Joining Date</div>
-                                    <div class="font-bold text-zinc-900 dark:text-white">{{ $employee->joining_date?->format('d M Y') ?? 'Not set' }}</div>
+                                    <div class="font-bold text-zinc-900 dark:text-white">{{ $employee->joining_date?->toImmutable()->userDate() ?? 'Not set' }}</div>
                                 </div>
                                 <div>
                                     <div class="mb-1 text-zinc-400">Probation End Date</div>
                                     <div class="font-bold text-zinc-900 dark:text-white">
-                                        {{ $employee->probation_end_date?->format('d M Y') ?? 'Not set' }}
+                                        {{ $employee->probation_end_date?->toImmutable()->userDate() ?? 'Not set' }}
                                     </div>
                                 </div>
                                 @if($employee->probation_extension_reason)

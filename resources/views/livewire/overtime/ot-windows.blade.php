@@ -13,7 +13,7 @@
         'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300' => ! $openToday,
     ])>
         @if($openToday)
-            Open today: <strong>{{ $openToday->title }}</strong> ({{ $openToday->starts_at->format('j M') }} – {{ $openToday->ends_at->format('j M Y') }}).
+            Open today: <strong>{{ $openToday->title }}</strong> ({{ $openToday->starts_at->toImmutable()->userShortDate() }} – {{ $openToday->ends_at->toImmutable()->userDate() }}).
         @else
             No OT window is open today. Overtime requests are still accepted and go to the manager as usual.
         @endif
@@ -51,7 +51,7 @@
                                     <div class="text-xs text-zinc-500">{{ $window->reason }}</div>
                                 @endif
                             </td>
-                            <td class="py-2 pe-3 whitespace-nowrap text-zinc-600 dark:text-zinc-300">{{ $window->starts_at->format('j M') }} – {{ $window->ends_at->format('j M Y') }}</td>
+                            <td class="py-2 pe-3 whitespace-nowrap text-zinc-600 dark:text-zinc-300">{{ $window->starts_at->toImmutable()->userShortDate() }} – {{ $window->ends_at->toImmutable()->userDate() }}</td>
                             <td class="py-2 pe-3 text-zinc-600 dark:text-zinc-300">{{ $window->createdBy?->name ?? '—' }}</td>
                             <td class="py-2 pe-3">
                                 @if($window->is_active)

@@ -13,7 +13,7 @@
         </div>
         <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
             @forelse($pending as $task)
-                <div class="rounded-2xl border border-amber-200/70 dark:border-amber-500/20 bg-white dark:bg-zinc-900 p-4 shadow-sm">
+                <div class="ui-surface dark:border-amber-500/20 p-4">
                     <div class="flex items-start justify-between gap-2">
                         <div class="min-w-0">
                             <div class="truncate text-sm font-black text-zinc-900 dark:text-white">{{ $task->review->employee?->user?->name ?? 'Employee' }}</div>
@@ -50,7 +50,7 @@
                             </div>
                             <span class="shrink-0 rounded-full bg-emerald-50 dark:bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-600 dark:text-emerald-300">Done</span>
                         </div>
-                        <div class="mt-2 text-[11px] text-zinc-400">Submitted {{ $task->submitted_at?->format('d M Y, H:i') }}</div>
+                        <div class="mt-2 text-[11px] text-zinc-400">Submitted {{ $task->submitted_at?->toImmutable()->userDateTime() }}</div>
                     </div>
                 @endforeach
             </div>

@@ -8,7 +8,7 @@
         <flux:button wire:click="save" variant="primary" icon="check">Save changes</flux:button>
     </div>
 
-    <div class="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-white/10 dark:bg-zinc-900">
+    <div class="ui-surface overflow-hidden">
         <div class="divide-y divide-zinc-100 dark:divide-white/5">
             @foreach($items as $i => $item)
                 <div class="flex items-center gap-3 px-4 py-3 {{ $item['enabled'] ? '' : 'opacity-50' }}">

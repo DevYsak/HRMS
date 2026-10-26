@@ -28,7 +28,7 @@
                                 @endif
                                 @if($goal->due_date)
                                     <div class="flex items-center gap-1 mt-3 text-xs font-semibold {{ $goal->due_date->isPast() ? 'text-red-500' : 'text-zinc-400' }}">
-                                        <flux:icon.calendar class="size-3" /> Due {{ $goal->due_date->format('M d, Y') }}
+                                        <flux:icon.calendar class="size-3" /> Due {{ $goal->due_date->toImmutable()->userDate() }}
                                     </div>
                                 @endif
                             </div>

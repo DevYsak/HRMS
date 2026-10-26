@@ -6,7 +6,7 @@
     </div>
 
     <div class="grid grid-cols-1 gap-5 lg:grid-cols-3">
-        <div class="space-y-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm lg:col-span-2 dark:border-white/10 dark:bg-zinc-900">
+        <div class="ui-surface space-y-4 p-4 lg:col-span-2">
             <select wire:model.live="coordinatorId" aria-label="Coordinator" class="w-full rounded-xl border border-zinc-200 bg-white py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900">
                 <option value="">Choose a coordinator…</option>
                 @foreach($coordinators as $c)
@@ -52,7 +52,7 @@
             </div>
         </div>
 
-        <form wire:submit="saveThresholds" class="space-y-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-zinc-900">
+        <form wire:submit="saveThresholds" class="ui-surface space-y-3 p-4">
             <h3 class="text-xs font-bold uppercase tracking-widest text-zinc-500">Alerts</h3>
             <flux:input type="number" min="1" max="24" wire:model="reminderHours" label="Remind about unresolved issues every (hours)" />
             <flux:input type="number" min="0" max="240" wire:model="lateMinutes" label="Alert when late by more than (minutes beyond grace)" />

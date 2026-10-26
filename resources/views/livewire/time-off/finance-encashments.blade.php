@@ -23,7 +23,7 @@
         {{-- ── KPI Cards ────────────────────────────────────────────────────── --}}
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-5">
 
-            <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 p-5 shadow-sm flex items-center gap-4">
+            <div class="ui-surface p-5 flex items-center gap-4">
                 <div class="size-12 rounded-xl bg-amber-50 dark:bg-amber-900/20 flex items-center justify-center shrink-0">
                     <flux:icon.clock class="size-6 text-amber-500" />
                 </div>
@@ -34,7 +34,7 @@
                 </div>
             </div>
 
-            <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 p-5 shadow-sm flex items-center gap-4">
+            <div class="ui-surface p-5 flex items-center gap-4">
                 <div class="size-12 rounded-xl bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center shrink-0">
                     <flux:icon.banknotes class="size-6 text-blue-500" />
                 </div>
@@ -45,7 +45,7 @@
                 </div>
             </div>
 
-            <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 p-5 shadow-sm flex items-center gap-4">
+            <div class="ui-surface p-5 flex items-center gap-4">
                 <div class="size-12 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center shrink-0">
                     <flux:icon.check-circle class="size-6 text-emerald-500" />
                 </div>
@@ -56,7 +56,7 @@
                 </div>
             </div>
 
-            <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 p-5 shadow-sm flex items-center gap-4">
+            <div class="ui-surface p-5 flex items-center gap-4">
                 <div class="size-12 rounded-xl bg-brand-50 dark:bg-brand-900/20 flex items-center justify-center shrink-0">
                     <flux:icon.currency-dollar class="size-6 text-brand-600" />
                 </div>
@@ -70,7 +70,7 @@
         </div>
 
         {{-- ── Table Card ───────────────────────────────────────────────────── --}}
-        <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 shadow-sm overflow-hidden">
+        <div class="ui-surface overflow-hidden">
 
             {{-- Filter bar --}}
             <div class="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 flex flex-wrap items-center gap-3">
@@ -133,7 +133,7 @@
                                     @endphp
                                     <span class="inline-flex px-2.5 py-1 rounded-full text-xs font-semibold {{ $s['class'] }}">{{ $s['label'] }}</span>
                                 </td>
-                                <td class="px-6 py-4 text-zinc-400 text-xs">{{ $enc->created_at->format('d M Y') }}</td>
+                                <td class="px-6 py-4 text-zinc-400 text-xs">{{ $enc->created_at->toImmutable()->userDate() }}</td>
                                 <td class="px-6 py-4 text-right">
                                     <div class="flex items-center justify-end gap-2">
                                         @if($enc->status === 'pending' && auth()->user()->canApproveLeave())

@@ -12,7 +12,7 @@
                 <flux:icon.arrow-down-tray class="size-4 text-orange-400" /> Export
             </h3>
 
-            <div class="grid grid-cols-1 gap-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm sm:grid-cols-4 dark:border-white/10 dark:bg-zinc-900">
+            <div class="ui-surface grid grid-cols-1 gap-3 p-4 sm:grid-cols-4">
                 <flux:select wire:model="format" label="Format">
                     <flux:select.option value="xlsx">Excel (.xlsx)</flux:select.option>
                     <flux:select.option value="csv">CSV (.csv)</flux:select.option>
@@ -28,7 +28,7 @@
 
             <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 @foreach($datasets as $key => $dataset)
-                    <div wire:key="dataset-{{ $key }}" class="flex flex-col justify-between gap-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-zinc-900">
+                    <div wire:key="dataset-{{ $key }}" class="ui-surface flex flex-col justify-between gap-3 p-4">
                         <div>
                             <div class="text-sm font-bold text-zinc-900 dark:text-white">{{ $dataset['label'] }}</div>
                             <p class="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">{{ $dataset['description'] }}</p>
@@ -54,7 +54,7 @@
                 <flux:icon.arrow-up-tray class="size-4 text-orange-400" /> Import holidays
             </h3>
 
-            <div class="space-y-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-zinc-900">
+            <div class="ui-surface space-y-4 p-4">
                 <ol class="list-decimal space-y-1 pl-5 text-sm text-zinc-600 dark:text-zinc-300">
                     <li>Download the template (or export a year's holidays above and edit it).</li>
                     <li>Fill one holiday per row. Dates as <b>YYYY-MM-DD</b> or <b>DD/MM/YYYY</b>; Paid / Optional / Recurring as Yes or No; Country such as UK or IN (blank = the company calendar).</li>

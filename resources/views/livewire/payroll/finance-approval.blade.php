@@ -17,7 +17,7 @@
                             <span class="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-semibold text-zinc-600 dark:bg-white/10 dark:text-zinc-300">{{ $payroll->cycleLabel() }}</span>
                             <span class="badge-manager">PENDING FINANCE</span>
                         </div>
-                        <p class="text-sm text-zinc-500 mt-1">Processed by {{ $payroll->processedBy->name }} on {{ $payroll->processed_at->format('M d, H:i') }}</p>
+                        <p class="text-sm text-zinc-500 mt-1">Processed by {{ $payroll->processedBy->name }} on {{ $payroll->processed_at->toImmutable()->userDateTime() }}</p>
                     </div>
                     <div class="text-right flex items-center gap-6">
                         <div>
