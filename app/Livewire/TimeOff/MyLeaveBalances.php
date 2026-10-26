@@ -137,7 +137,7 @@ class MyLeaveBalances extends Component
         }
 
         $today = Carbon::today()->toDateString();
-        $base = fn () => LeaveRequest::with(['leaveType' => fn ($q) => $q->withTrashed(), 'reviewer', 'hrReviewer'])->where('employee_id', $this->employee->id);
+        $base = fn () => LeaveRequest::with(['leaveType' => fn ($q) => $q->withTrashed(), 'reviewer', 'hrReviewer', 'pendingCancellation'])->where('employee_id', $this->employee->id);
 
         return [
             'pending' => $base()->whereIn('status', ['pending', 'pending_hr'])->orderBy('start_date')->get(),

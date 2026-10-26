@@ -12,6 +12,7 @@ use App\Services\Approvals\ApprovalQueueService;
 use App\Services\Attendance\WorkingDayResolver;
 use App\Services\Leave\LeaveAdminActionService;
 use App\Services\Leave\LeaveBalanceCalculator;
+use App\Services\Leave\LeaveCancellationService;
 use App\Services\Leave\LeaveCategory;
 use App\Services\Leave\LeaveRequestAccess;
 use App\Services\Leave\LeaveRequestPresenter;
@@ -48,6 +49,9 @@ class LeaveRequestDetail extends Component
 
     public string $cancelReason = '';
 
+    /** HR's note when deciding an employee's cancellation request (required to reject). */
+    public string $cancellationNote = '';
+
     /** approve | reject | cancel: the action awaiting confirmation. */
     public ?string $confirming = null;
 
@@ -64,7 +68,7 @@ class LeaveRequestDetail extends Component
         return LeaveRequest::with([
             'employee.user', 'employee.department', 'employee.manager',
             'leaveType' => fn ($q) => $q->withTrashed(),
-            'reviewer', 'hrReviewer', 'attachments', 'dayAllocations.reasonLeaveType',
+            'reviewer', 'hrReviewer', 'attachments', 'dayAllocations.reasonLeaveType', 'pendingCancellation.requester',
         ])->findOrFail($this->requestId);
     }
 
@@ -226,10 +230,40 @@ class LeaveRequestDetail extends Component
             ->orderBy('id')->get();
     }
 
+    /** HR decides the employee's request to cancel this approved leave. */
+    #[Computed]
+    public function canDecideCancellation(): bool
+    {
+        $pending = $this->request->pendingCancellation;
+
+        return $pending !== null && app(LeaveCancellationService::class)->hrMayDecide($pending, Auth::user());
+    }
+
     public function confirm(string $action): void
     {
         $this->resetErrorBag();
-        $this->confirming = in_array($action, ['approve', 'reject', 'cancel'], true) ? $action : null;
+        $this->confirming = in_array($action, ['approve', 'reject', 'cancel', 'approve_cancellation', 'reject_cancellation'], true) ? $action : null;
+    }
+
+    /** Approve the employee's cancellation request: the leave is cancelled and its days returned. */
+    public function approveCancellation(): void
+    {
+        abort_unless($this->canDecideCancellation, 403);
+        $pending = $this->request->pendingCancellation;
+
+        $this->attempt(fn () => app(LeaveCancellationService::class)->approve($pending, Auth::user(), trim($this->cancellationNote) ?: null),
+            'Cancellation approved — the leave is cancelled and its days returned.');
+    }
+
+    /** Reject it: the leave stays approved; the employee is told why. */
+    public function rejectCancellation(): void
+    {
+        abort_unless($this->canDecideCancellation, 403);
+        $this->validate(['cancellationNote' => ['required', 'string', 'min:5', 'max:1000']], [], ['cancellationNote' => 'reason']);
+        $pending = $this->request->pendingCancellation;
+
+        $this->attempt(fn () => app(LeaveCancellationService::class)->reject($pending, Auth::user(), $this->cancellationNote),
+            'Cancellation request rejected — the leave stays approved.');
     }
 
     public function approve(): void
@@ -298,8 +332,8 @@ class LeaveRequestDetail extends Component
             return;
         }
 
-        $this->reset(['comment', 'cancelReason', 'confirming']);
-        unset($this->request, $this->canDecide, $this->canCancel, $this->canCorrect, $this->balanceImpact, $this->dates, $this->ledgerEntries, $this->history);
+        $this->reset(['comment', 'cancelReason', 'cancellationNote', 'confirming']);
+        unset($this->request, $this->canDecide, $this->canCancel, $this->canCorrect, $this->canDecideCancellation, $this->balanceImpact, $this->dates, $this->ledgerEntries, $this->history);
         session()->flash('success', $done);
     }
 

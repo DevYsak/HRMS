@@ -58,8 +58,41 @@
         <div class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300" role="alert">{{ $message }}</div>
     @enderror
 
+    {{-- The employee asks to cancel this APPROVED leave: it stays approved until HR decides. --}}
+    @if($pendingCancellation = $r->pendingCancellation)
+        <div class="ui-surface space-y-3 p-5" style="border-left: 4px solid #f59e0b" data-cancellation-request>
+            <div class="flex flex-wrap items-start justify-between gap-3">
+                <div class="min-w-0">
+                    <p class="flex flex-wrap items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-white">Cancellation requested <x-pulse.badge color="amber">Awaiting HR</x-pulse.badge></p>
+                    <p class="mt-1 text-sm text-zinc-700 dark:text-zinc-200">“{{ $pendingCancellation->reason }}”</p>
+                    <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $pendingCancellation->requester?->name ?? 'The employee' }} · {{ $pendingCancellation->created_at?->format('d M Y, H:i') }} · The leave stays approved and deducted until this is decided.</p>
+                </div>
+                @if($this->canDecideCancellation && ! in_array($confirming, ['approve_cancellation', 'reject_cancellation'], true))
+                    <div class="flex flex-wrap gap-2">
+                        <flux:button size="sm" variant="primary" wire:click="confirm('approve_cancellation')">Approve Cancellation</flux:button>
+                        <flux:button size="sm" wire:click="confirm('reject_cancellation')">Reject</flux:button>
+                    </div>
+                @endif
+            </div>
+            @if($this->canDecideCancellation && in_array($confirming, ['approve_cancellation', 'reject_cancellation'], true))
+                <div class="space-y-3 border-t border-zinc-100 pt-3 dark:border-white/5">
+                    <p class="text-xs text-zinc-500 dark:text-zinc-400">{{ $confirming === 'approve_cancellation' ? 'The leave is cancelled and its paid days return to the balance; attendance and payroll follow.' : 'The leave stays approved. The employee sees your reason.' }}</p>
+                    <flux:textarea wire:model="cancellationNote" rows="2" :label="$confirming === 'reject_cancellation' ? 'Reason for the employee' : 'Note (optional)'" />
+                    <div class="flex flex-wrap gap-2">
+                        @if($confirming === 'approve_cancellation')
+                            <flux:button size="sm" variant="primary" wire:click="approveCancellation" wire:loading.attr="disabled" wire:target="approveCancellation">Confirm — Cancel the Leave</flux:button>
+                        @else
+                            <flux:button size="sm" variant="danger" wire:click="rejectCancellation" wire:loading.attr="disabled" wire:target="rejectCancellation">Confirm — Keep the Leave</flux:button>
+                        @endif
+                        <flux:button size="sm" variant="ghost" wire:click="confirm('')">Back</flux:button>
+                    </div>
+                </div>
+            @endif
+        </div>
+    @endif
+
     {{-- Confirmation: approve / reject / cancel --}}
-    @if($confirming)
+    @if($confirming && ! in_array($confirming, ['approve_cancellation', 'reject_cancellation'], true))
         <div class="ui-surface space-y-3 p-5" style="border-left: 4px solid {{ $confirming === 'approve' ? '#10b981' : '#f43f5e' }}" data-confirm="{{ $confirming }}">
             <p class="text-sm font-semibold text-zinc-900 dark:text-white">
                 {{ ['approve' => 'Approve this leave request?', 'reject' => 'Reject this leave request?', 'cancel' => 'Cancel this leave?'][$confirming] }}

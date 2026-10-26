@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 #[Fillable([
@@ -75,6 +76,18 @@ class LeaveRequest extends Model
     public function paymentStatusChanger(): BelongsTo
     {
         return $this->belongsTo(User::class, 'payment_status_changed_by');
+    }
+
+    /** Requests by the employee to cancel this leave after it was approved (HR decides). */
+    public function cancellationRequests(): HasMany
+    {
+        return $this->hasMany(LeaveCancellationRequest::class)->latest('id');
+    }
+
+    /** The cancellation request HR has not decided yet, if any. */
+    public function pendingCancellation(): HasOne
+    {
+        return $this->hasOne(LeaveCancellationRequest::class)->where('status', LeaveCancellationRequest::PENDING)->latestOfMany();
     }
 
     public function attachments(): HasMany

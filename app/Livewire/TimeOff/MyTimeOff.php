@@ -22,12 +22,14 @@ use App\Services\HolidayWorkService;
 use App\Services\Leave\EmployeeLeaveOverviewService;
 use App\Services\Leave\LeaveAssistantService;
 use App\Services\Leave\LeaveBalanceCalculator;
+use App\Services\Leave\LeaveCancellationService;
 use App\Services\Leave\LeavePolicyEngine;
 use App\Services\Leave\LeaveRequestAccess;
 use App\Services\Leave\LeaveYearResolver;
 use App\Services\LeaveService;
 use App\Services\Notifications\NotificationRecipients;
 use Carbon\Carbon;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -583,6 +585,17 @@ class MyTimeOff extends Component
     // Cancel Leave Request
     // ================================================================
 
+    /** Approved leave whose cancellation the employee is asking HR for (the form is open). */
+    public ?int $cancellingId = null;
+
+    public string $cancellationReason = '';
+
+    /**
+     * Cancel from the employee's side: a pending request is withdrawn at
+     * once; approved leave is never cancelled here — it opens the
+     * cancellation request for HR, and the leave stays approved until HR
+     * decides (LeaveCancellationService).
+     */
     public function cancelRequest(int $id): void
     {
         $employee = Auth::user()->employee;
@@ -593,11 +606,67 @@ class MyTimeOff extends Component
 
         $request = $employee->leaveRequests()->findOrFail($id);
 
+        if ($request->status === 'approved') {
+            $this->openCancellationRequest($request->id);
+
+            return;
+        }
+
         try {
-            app(LeaveService::class)->cancelRequest($request);
-            \Flux::toast('Leave request cancelled.');
+            app(LeaveCancellationService::class)->withdrawPending($request, Auth::user());
+            \Flux::toast('Leave request withdrawn.');
             $this->resetPage();
-        } catch (\DomainException $e) {
+        } catch (\DomainException|AuthorizationException $e) {
+            \Flux::toast($e->getMessage(), variant: 'danger');
+        }
+    }
+
+    public function openCancellationRequest(int $id): void
+    {
+        $request = Auth::user()->employee?->leaveRequests()->findOrFail($id);
+        abort_unless($request !== null && $request->status === 'approved', 404);
+
+        $this->cancellingId = $request->id;
+        $this->cancellationReason = '';
+        $this->resetErrorBag('cancellationReason');
+    }
+
+    public function closeCancellationRequest(): void
+    {
+        $this->reset(['cancellingId', 'cancellationReason']);
+        $this->resetErrorBag('cancellationReason');
+    }
+
+    /** Send HR the request to cancel approved leave; nothing changes until HR approves it. */
+    public function submitCancellationRequest(): void
+    {
+        $this->validate(['cancellationReason' => ['required', 'string', 'min:5', 'max:1000']], [], ['cancellationReason' => 'reason']);
+        $request = Auth::user()->employee?->leaveRequests()->findOrFail($this->cancellingId);
+
+        try {
+            app(LeaveCancellationService::class)->request($request, Auth::user(), $this->cancellationReason);
+        } catch (\DomainException|AuthorizationException $e) {
+            $this->addError('cancellationReason', $e->getMessage());
+
+            return;
+        }
+
+        $this->closeCancellationRequest();
+        \Flux::toast('Cancellation request sent to HR. Your leave stays approved until HR decides.');
+    }
+
+    /** Take back a cancellation request HR has not decided yet. */
+    public function withdrawCancellationRequest(int $leaveRequestId): void
+    {
+        $request = Auth::user()->employee?->leaveRequests()->with('pendingCancellation')->findOrFail($leaveRequestId);
+        if (! $request->pendingCancellation) {
+            return;
+        }
+
+        try {
+            app(LeaveCancellationService::class)->withdrawRequest($request->pendingCancellation, Auth::user());
+            \Flux::toast('Cancellation request withdrawn. Your leave stays approved.');
+        } catch (\DomainException|AuthorizationException $e) {
             \Flux::toast($e->getMessage(), variant: 'danger');
         }
     }
@@ -782,7 +851,7 @@ class MyTimeOff extends Component
             : collect();
 
         $requests = $employee
-            ? $employee->leaveRequests()->with(['leaveType', 'reviewer', 'hrReviewer', 'paymentAuditLogs.changedByUser', 'attachments'])->withCount('messages')
+            ? $employee->leaveRequests()->with(['leaveType', 'reviewer', 'hrReviewer', 'paymentAuditLogs.changedByUser', 'attachments', 'pendingCancellation'])->withCount('messages')
                 ->when($this->filterStatus, fn ($q) => $q->where('status', $this->filterStatus))
                 ->when($this->filterTypeId, fn ($q) => $q->where('leave_type_id', $this->filterTypeId))
                 ->when($this->search, fn ($q) => $q->where(function ($q2) {
@@ -1106,8 +1175,9 @@ class MyTimeOff extends Component
             // While HR views as this employee: a request's HR page (ends the view first).
             'manageAsHr' => $this->manageAsHr(),
             // The latest five applications, whatever the Leave History filters say (read only).
+            'cancellingRequest' => $this->cancellingId && $employee ? $employee->leaveRequests()->with('leaveType')->find($this->cancellingId) : null,
             'recentRequests' => $employee
-                ? $employee->leaveRequests()->with(['leaveType' => fn ($q) => $q->withTrashed(), 'reviewer', 'hrReviewer'])
+                ? $employee->leaveRequests()->with(['leaveType' => fn ($q) => $q->withTrashed(), 'reviewer', 'hrReviewer', 'pendingCancellation'])
                     ->latest('start_date')->latest('id')->limit(5)->get()
                 : collect(),
             // Historical and inactive types (old WFH, duplicates) are never offered.

@@ -24,7 +24,7 @@
 
     {{-- Status tabs --}}
     <nav class="flex max-w-full gap-1 overflow-x-auto border-b border-zinc-200 dark:border-white/10" aria-label="Status">
-        @foreach(['all' => 'All', 'pending' => 'Pending', 'approved' => 'Approved', 'rejected' => 'Rejected', 'cancelled' => 'Cancelled'] as $key => $label)
+        @foreach(['all' => 'All', 'pending' => 'Pending', 'approved' => 'Approved', 'rejected' => 'Rejected', 'cancelled' => 'Cancelled', 'cancellation' => 'Cancellation Requests'] as $key => $label)
             <button type="button" wire:click="setTab('{{ $key }}')" data-status-tab="{{ $key }}"
                 @class(['-mb-px shrink-0 whitespace-nowrap border-b-2 px-3 py-2.5 text-sm font-semibold transition',
                     'border-orange-500 text-orange-600 dark:text-orange-400' => $tab === $key,
@@ -104,11 +104,14 @@
                                 <td class="px-3 py-3 text-right tabular-nums">{{ $fmt($P::paid($r)) }}</td>
                                 <td class="px-3 py-3 text-right tabular-nums {{ $P::unpaid($r) > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-zinc-400' }}">{{ $fmt($P::unpaid($r)) }}</td>
                                 <td class="px-3 py-3 text-right font-semibold tabular-nums">{{ $fmt($r->days) }}</td>
-                                <td class="px-3 py-3"><x-pulse.badge :color="$statusColor">{{ $statusLabel }}</x-pulse.badge></td>
+                                <td class="px-3 py-3">
+                                    <x-pulse.badge :color="$statusColor">{{ $statusLabel }}</x-pulse.badge>
+                                    @if($r->pendingCancellation)<x-pulse.badge color="amber" class="mt-1" data-cancellation-pending>Cancellation requested</x-pulse.badge>@endif
+                                </td>
                                 <td class="px-3 py-3 text-xs text-zinc-600 dark:text-zinc-300" style="max-width: 11rem">{{ $approverOf($r) ?? '—' }}</td>
                                 <td class="whitespace-nowrap px-3 py-3 text-zinc-500 dark:text-zinc-400">{{ $r->created_at->format('d M Y') }}</td>
                                 <td class="whitespace-nowrap px-3 py-3 pr-5 text-right">
-                                    <flux:button size="xs" :href="$url" wire:navigate>{{ $P::isPending($r) ? 'Manage' : 'View' }}</flux:button>
+                                    <flux:button size="xs" :href="$url" wire:navigate>{{ $P::isPending($r) || $r->pendingCancellation ? 'Manage' : 'View' }}</flux:button>
                                 </td>
                             </tr>
                         @endforeach

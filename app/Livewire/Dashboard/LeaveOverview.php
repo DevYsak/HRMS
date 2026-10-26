@@ -49,6 +49,7 @@ class LeaveOverview extends Component
             'approverOf' => fn ($request) => $queue->path($request)['current'],
             'links' => [
                 'pending' => route('time-off.leave-requests', ['status' => 'pending']),
+                'cancellations' => route('time-off.leave-requests', ['status' => 'cancellation']),
                 'on_leave' => route('time-off.leave-requests', ['status' => 'approved', 'from' => $today->toDateString(), 'to' => $today->toDateString()]),
                 'upcoming' => route('time-off.leave-requests', ['status' => 'approved', 'from' => $today->copy()->addDay()->toDateString(), 'to' => $today->copy()->addDays(30)->toDateString()]),
                 'unpaid' => route('time-off.leave-requests', ['status' => 'approved', 'unpaid' => 1, 'from' => $today->copy()->startOfMonth()->toDateString(), 'to' => $today->copy()->endOfMonth()->toDateString()]),

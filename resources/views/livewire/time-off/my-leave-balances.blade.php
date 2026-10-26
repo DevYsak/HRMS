@@ -238,8 +238,8 @@
                                     @if($embedded)
                                         <flux:button size="xs" variant="ghost" x-on:click="{{ $viewDetails($r) }}">View</flux:button>
                                     @endif
-                                    @if($embedded && $cancellable($r))
-                                        <flux:button size="xs" variant="ghost" wire:click="$parent.cancelRequest({{ $r->id }})" wire:confirm="Cancel this leave request?">Cancel</flux:button>
+                                    @if($embedded)
+                                        <x-leave.cancel-action :request="$r" :parent="true" />
                                     @endif
                                 </td>
                             </tr>
@@ -264,9 +264,7 @@
                         @if($embedded)
                             <div class="mt-2 flex gap-2">
                                 <flux:button size="xs" variant="ghost" x-on:click="{{ $viewDetails($r) }}">View</flux:button>
-                                @if($cancellable($r))
-                                    <flux:button size="xs" variant="ghost" wire:click="$parent.cancelRequest({{ $r->id }})" wire:confirm="Cancel this leave request?">Cancel</flux:button>
-                                @endif
+                                <x-leave.cancel-action :request="$r" :parent="true" />
                             </div>
                         @endif
                     </li>

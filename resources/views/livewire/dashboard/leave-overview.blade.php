@@ -47,6 +47,13 @@
             @endforeach
         </div>
 
+        @if($cards['cancellations'] > 0)
+            <a href="{{ $links['cancellations'] }}" wire:navigate class="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm dark:border-amber-500/30 dark:bg-amber-500/10" data-cancellation-alert>
+                <span class="text-amber-900 dark:text-amber-200"><span class="font-semibold">{{ $cards['cancellations'] }} cancellation {{ Str::plural('request', $cards['cancellations']) }}</span> for approved leave {{ $cards['cancellations'] == 1 ? 'is' : 'are' }} waiting for HR.</span>
+                <span class="shrink-0 text-xs font-semibold text-amber-800 dark:text-amber-300">Review</span>
+            </a>
+        @endif
+
         {{-- Pending leave requests --}}
         <div class="ui-surface overflow-hidden" data-pending-leave>
             <div class="flex items-center justify-between gap-2 border-b border-zinc-100 px-5 py-3 dark:border-white/5">

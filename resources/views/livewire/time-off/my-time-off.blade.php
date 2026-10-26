@@ -385,14 +385,7 @@
                                                 <span class="ml-0.5 inline-flex min-w-4 items-center justify-center rounded-full bg-indigo-600 px-1 text-[9px] font-black text-white">{{ $req->messages_count }}</span>
                                             </button>
                                         @endif
-                                        @if(in_array($req->status, ['pending', 'pending_hr', 'approved']))
-                                            <button wire:click="cancelRequest({{ $req->id }})"
-                                                wire:confirm="Cancel this leave request?"
-                                                class="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold text-red-500 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40 rounded-lg transition-colors">
-                                                <flux:icon.x-mark class="size-3" />
-                                                Cancel
-                                            </button>
-                                        @endif
+                                        <x-leave.cancel-action :request="$req" />
                                     </div>
                                 </td>
                             </tr>
@@ -435,9 +428,7 @@
                             @if(in_array($req->status, ['more_info_requested', 'rejected'], true) || $req->messages_count > 0)
                                 <flux:button size="xs" variant="ghost" wire:click="openConversation({{ $req->id }})">{{ $req->status === 'more_info_requested' ? 'Respond' : 'Messages' }}</flux:button>
                             @endif
-                            @if(in_array($req->status, ['pending', 'pending_hr', 'approved']))
-                                <flux:button size="xs" variant="ghost" wire:click="cancelRequest({{ $req->id }})" wire:confirm="Cancel this leave request?">Cancel</flux:button>
-                            @endif
+                            <x-leave.cancel-action :request="$req" />
                         </div>
                     </li>
                 @empty
@@ -1015,9 +1006,7 @@
                                         @else
                                             <flux:button size="xs" variant="ghost" x-on:click="{{ $recentView($r) }}">View</flux:button>
                                         @endif
-                                        @if(in_array($r->status, ['pending', 'pending_hr', 'approved'], true))
-                                            <flux:button size="xs" variant="ghost" wire:click="cancelRequest({{ $r->id }})" wire:confirm="Cancel this leave request?">Cancel</flux:button>
-                                        @endif
+                                        <x-leave.cancel-action :request="$r" />
                                     </td>
                                 </tr>
                             @endforeach
@@ -1040,9 +1029,7 @@
                                 @else
                                     <flux:button size="xs" variant="ghost" x-on:click="{{ $recentView($r) }}">View</flux:button>
                                 @endif
-                                @if(in_array($r->status, ['pending', 'pending_hr', 'approved'], true))
-                                    <flux:button size="xs" variant="ghost" wire:click="cancelRequest({{ $r->id }})" wire:confirm="Cancel this leave request?">Cancel</flux:button>
-                                @endif
+                                <x-leave.cancel-action :request="$r" />
                             </div>
                         </li>
                     @endforeach
@@ -1069,6 +1056,30 @@
             @endforelse
         </div>
     </section>
+
+    {{-- Cancelling APPROVED leave: a request to HR, never a direct cancellation. --}}
+    @if($cancellingRequest)
+        <x-leave.overlay max="max-w-lg">
+            <form wire:submit="submitCancellationRequest" class="space-y-4" data-cancellation-form>
+                <div>
+                    <h2 class="text-base font-semibold text-zinc-900 dark:text-white">Request cancellation</h2>
+                    <p class="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
+                        {{ $cancellingRequest->leaveType?->name ?? 'Leave' }} ·
+                        {{ $cancellingRequest->start_date->format('d M Y') }}@unless($cancellingRequest->end_date->eq($cancellingRequest->start_date)) – {{ $cancellingRequest->end_date->format('d M Y') }}@endunless
+                        · {{ $fmt($cancellingRequest->days) }} {{ Str::plural('day', (float) $cancellingRequest->days == 1 ? 1 : 2) }}
+                    </p>
+                </div>
+                <p class="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
+                    This leave is already approved, so HR reviews the cancellation. It stays approved — and its days stay deducted — until HR approves your request.
+                </p>
+                <flux:textarea wire:model="cancellationReason" rows="3" label="Reason for HR" placeholder="Why do you need to cancel this leave?" />
+                <div class="flex flex-wrap justify-end gap-2">
+                    <flux:button type="button" variant="ghost" wire:click="closeCancellationRequest">Keep Leave</flux:button>
+                    <flux:button type="submit" variant="primary" wire:loading.attr="disabled" wire:target="submitCancellationRequest">Send to HR</flux:button>
+                </div>
+            </form>
+        </x-leave.overlay>
+    @endif
 
     {{-- Holiday work request and conversation dialogs --}}
         {{-- Holiday Work Request modal --}}

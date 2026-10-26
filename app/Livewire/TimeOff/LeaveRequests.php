@@ -33,6 +33,8 @@ class LeaveRequests extends Component
         'approved' => ['approved'],
         'rejected' => ['rejected'],
         'cancelled' => ['cancelled'],
+        // Approved leave the employee has asked HR to cancel (still approved).
+        'cancellation' => ['approved'],
     ];
 
     #[Url(as: 'status')]
@@ -100,16 +102,18 @@ class LeaveRequests extends Component
         $counts = $this->filtered(withTab: false)->toBase()
             ->selectRaw('status, count(*) as total')->groupBy('status')->pluck('total', 'status');
 
-        return collect(self::TABS)->map(fn (?array $statuses) => (int) ($statuses === null
-            ? $counts->sum()
-            : $counts->only($statuses)->sum()))->all();
+        return collect(self::TABS)->map(fn (?array $statuses, string $tab) => (int) match (true) {
+            $tab === 'cancellation' => $this->filtered(withTab: false)->whereHas('pendingCancellation')->count(),
+            $statuses === null => $counts->sum(),
+            default => $counts->only($statuses)->sum(),
+        })->all();
     }
 
     #[Computed]
     public function requests(): LengthAwarePaginator
     {
         return $this->filtered()
-            ->with(['employee.user', 'employee.department', 'employee.manager', 'leaveType' => fn ($q) => $q->withTrashed(), 'reviewer', 'hrReviewer'])
+            ->with(['employee.user', 'employee.department', 'employee.manager', 'leaveType' => fn ($q) => $q->withTrashed(), 'reviewer', 'hrReviewer', 'pendingCancellation'])
             ->latest('start_date')->latest('id')
             ->paginate(20);
     }
@@ -138,6 +142,7 @@ class LeaveRequests extends Component
         return LeaveRequest::query()
             ->when($ids !== null, fn (Builder $q) => $q->whereIn('employee_id', $ids))
             ->when($withTab && self::TABS[$this->tab] !== null, fn (Builder $q) => $q->whereIn('status', self::TABS[$this->tab]))
+            ->when($withTab && $this->tab === 'cancellation', fn (Builder $q) => $q->whereHas('pendingCancellation'))
             ->when($term !== '', fn (Builder $q) => $q->where(function (Builder $w) use ($term, $requestId) {
                 $w->where('reason', 'like', "%{$term}%")
                     ->orWhereHas('employee', fn (Builder $e) => $e->where('employee_id', 'like', "%{$term}%")

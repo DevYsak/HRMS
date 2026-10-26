@@ -33,7 +33,7 @@ class LeaveDashboardService
     ) {}
 
     /**
-     * @return array{on_leave_today: int, pending: int, upcoming: int, low_earned: int, unpaid_requests: int, unpaid_days: float, exceptions: int, month: string}
+     * @return array{on_leave_today: int, pending: int, cancellations: int, upcoming: int, low_earned: int, unpaid_requests: int, unpaid_days: float, exceptions: int, month: string}
      */
     public function cards(User $user): array
     {
@@ -53,6 +53,8 @@ class LeaveDashboardService
                 ->whereDate('start_date', '<=', $today->toDateString())->whereDate('end_date', '>=', $today->toDateString())
                 ->distinct()->count('employee_id'),
             'pending' => $this->requests($ids)->whereIn('status', self::PENDING)->count(),
+            // Approved leave the employee has asked HR to cancel.
+            'cancellations' => $this->requests($ids)->where('status', 'approved')->whereHas('pendingCancellation')->count(),
             'upcoming' => $this->requests($ids)->where('status', 'approved')
                 ->whereDate('start_date', '>', $today->toDateString())->whereDate('start_date', '<=', $today->copy()->addDays(30)->toDateString())->count(),
             'low_earned' => $earned->filter(fn (float $available) => $available >= 0 && $available <= self::LOW_EARNED_DAYS)->count(),
