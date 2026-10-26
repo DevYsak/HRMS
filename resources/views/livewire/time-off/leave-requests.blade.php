@@ -109,7 +109,7 @@
                                     @if($r->pendingCancellation)<x-pulse.badge color="amber" class="mt-1" data-cancellation-pending>Cancellation requested</x-pulse.badge>@endif
                                 </td>
                                 <td class="px-3 py-3 text-xs text-zinc-600 dark:text-zinc-300" style="max-width: 11rem">{{ $approverOf($r) ?? '—' }}</td>
-                                <td class="whitespace-nowrap px-3 py-3 text-zinc-500 dark:text-zinc-400">{{ $r->created_at->format('d M Y') }}</td>
+                                <td class="whitespace-nowrap px-3 py-3 text-zinc-500 dark:text-zinc-400">{{ $r->created_at->toImmutable()->userDate() }}</td>
                                 <td class="whitespace-nowrap px-3 py-3 pr-5 text-right">
                                     <flux:button size="xs" :href="$url" wire:navigate>{{ $P::isPending($r) || $r->pendingCancellation ? 'Manage' : 'View' }}</flux:button>
                                 </td>

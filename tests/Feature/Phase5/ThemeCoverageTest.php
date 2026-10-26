@@ -16,16 +16,6 @@ use Livewire\Livewire;
  * back in.
  */
 
-/** Views another session is changing right now (leave cancellation) — swept once it lands. */
-const TC_PENDING = [
-    'livewire/time-off/my-time-off.blade.php',
-    'livewire/time-off/my-leave-balances.blade.php',
-    'livewire/time-off/leave-request-detail.blade.php',
-    'livewire/time-off/leave-requests.blade.php',
-    'livewire/dashboard/leave-overview.blade.php',
-    'components/leave/cancel-action.blade.php',
-];
-
 /** @return array<string, string> relative path => source, for the screen views (PDFs / exports excluded) */
 function tcViews(): array
 {
@@ -36,9 +26,7 @@ function tcViews(): array
                 continue;
             }
             $relative = str_replace('\\', '/', substr($file->getPathname(), strlen(resource_path('views/'))));
-            if (! in_array($relative, TC_PENDING, true)) {
-                $views[$relative] = file_get_contents($file->getPathname());
-            }
+            $views[$relative] = file_get_contents($file->getPathname());
         }
     }
 

@@ -65,7 +65,7 @@
                 <div class="min-w-0">
                     <p class="flex flex-wrap items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-white">Cancellation requested <x-pulse.badge color="amber">Awaiting HR</x-pulse.badge></p>
                     <p class="mt-1 text-sm text-zinc-700 dark:text-zinc-200">“{{ $pendingCancellation->reason }}”</p>
-                    <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $pendingCancellation->requester?->name ?? 'The employee' }} · {{ $pendingCancellation->created_at?->format('d M Y, H:i') }} · The leave stays approved and deducted until this is decided.</p>
+                    <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $pendingCancellation->requester?->name ?? 'The employee' }} · {{ $pendingCancellation->created_at?->toImmutable()->userDateTime() }} · The leave stays approved and deducted until this is decided.</p>
                 </div>
                 @if($this->canDecideCancellation && ! in_array($confirming, ['approve_cancellation', 'reject_cancellation'], true))
                     <div class="flex flex-wrap gap-2">
@@ -133,7 +133,7 @@
                     <div><dt class="{{ $dt }}">Unpaid</dt><dd class="{{ $dd }} tabular-nums {{ $unpaid > 0 ? 'text-rose-600 dark:text-rose-400' : '' }}">{{ $fmt($unpaid) }}</dd></div>
                     <div><dt class="{{ $dt }}">Half-day units</dt><dd class="{{ $dd }} tabular-nums">{{ $halfUnits }}</dd></div>
                     <div><dt class="{{ $dt }}">Excluded days</dt><dd class="{{ $dd }}">{{ $excluded->isEmpty() ? 'None' : $excluded->count().' ('.$excluded->pluck('status')->unique()->join(', ').')' }}</dd></div>
-                    <div><dt class="{{ $dt }}">Submitted</dt><dd class="{{ $dd }}">{{ $r->created_at->format('d M Y, H:i') }}</dd></div>
+                    <div><dt class="{{ $dt }}">Submitted</dt><dd class="{{ $dd }}">{{ $r->created_at->toImmutable()->userDateTime() }}</dd></div>
                     @if($r->applied_by_user_id)
                         <div><dt class="{{ $dt }}">Filed by</dt><dd class="{{ $dd }}">HR on the employee's behalf</dd></div>
                     @endif
@@ -165,7 +165,7 @@
                         @foreach($dates as $d)
                             <li class="flex flex-wrap items-center justify-between gap-2 py-2" data-date-row="{{ $d['date']->toDateString() }}">
                                 <span class="flex items-center gap-3">
-                                    <span class="w-24 font-medium tabular-nums text-zinc-900 dark:text-white">{{ $d['date']->format('d M') }} <span class="text-zinc-500 dark:text-zinc-400">{{ $d['day'] }}</span></span>
+                                    <span class="w-24 font-medium tabular-nums text-zinc-900 dark:text-white">{{ $d['date']->toImmutable()->userShortDate() }} <span class="text-zinc-500 dark:text-zinc-400">{{ $d['day'] }}</span></span>
                                     <span class="text-xs text-zinc-500 dark:text-zinc-400">{{ $d['status'] }}</span>
                                 </span>
                                 <span class="flex items-center gap-2">
@@ -214,7 +214,7 @@
                     <ul class="mt-3 divide-y divide-zinc-100 text-sm dark:divide-white/5">
                         @foreach($this->ledgerEntries as $entry)
                             <li class="flex flex-wrap items-center justify-between gap-2 py-2">
-                                <span>#{{ $entry->id }} · {{ $entry->effective_date?->format('d M Y') }} · {{ ucwords(str_replace('_', ' ', $entry->entry_type)) }} · {{ $entry->leaveType?->name }}</span>
+                                <span>#{{ $entry->id }} · {{ $entry->effective_date?->toImmutable()->userDate() }} · {{ ucwords(str_replace('_', ' ', $entry->entry_type)) }} · {{ $entry->leaveType?->name }}</span>
                                 <span class="font-semibold tabular-nums {{ (float) $entry->days < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400' }}">{{ (float) $entry->days > 0 ? '+' : '' }}{{ $fmt($entry->days) }}</span>
                             </li>
                         @endforeach
@@ -234,7 +234,7 @@
                                 <span class="mt-1.5 size-2 shrink-0 rounded-full bg-orange-400"></span>
                                 <span class="min-w-0">
                                     <span class="block font-medium text-zinc-900 dark:text-white">{{ ucwords(strtolower(str_replace(['LEAVE_', '_'], ['', ' '], (string) ($event->event ?: $event->action)))) }}</span>
-                                    <span class="block text-xs text-zinc-500 dark:text-zinc-400">{{ $event->user?->name ?? 'System' }} · {{ $event->created_at?->format('d M Y, H:i') }}</span>
+                                    <span class="block text-xs text-zinc-500 dark:text-zinc-400">{{ $event->user?->name ?? 'System' }} · {{ $event->created_at?->toImmutable()->userDateTime() }}</span>
                                     @if($event->reason)<span class="block text-xs text-zinc-600 dark:text-zinc-300">“{{ $event->reason }}”</span>@endif
                                 </span>
                             </li>

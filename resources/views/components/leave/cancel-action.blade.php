@@ -13,7 +13,7 @@
     <flux:button size="xs" variant="ghost" wire:click="{{ $call('cancelRequest') }}" wire:confirm="Withdraw this leave request? It has not been approved yet.">Cancel</flux:button>
 @elseif($request->status === 'approved')
     @if($openCancellation)
-        <x-pulse.badge color="amber" data-cancellation-pending title="Sent {{ $openCancellation->created_at?->format('d M Y') }}: {{ $openCancellation->reason }}">Cancellation requested</x-pulse.badge>
+        <x-pulse.badge color="amber" data-cancellation-pending title="Sent {{ $openCancellation->created_at?->toImmutable()->userDate() }}: {{ $openCancellation->reason }}">Cancellation requested</x-pulse.badge>
         <flux:button size="xs" variant="ghost" wire:click="{{ $call('withdrawCancellationRequest') }}" wire:confirm="Withdraw your cancellation request? The leave stays approved.">Withdraw request</flux:button>
     @else
         <flux:button size="xs" variant="ghost" wire:click="{{ $call('cancelRequest') }}" data-request-cancellation>Request Cancellation</flux:button>

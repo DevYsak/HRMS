@@ -71,7 +71,7 @@
         {{-- Compact policy line: what applies to me, for which year, and why. --}}
         <div class="relative mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm" data-policy-line>
             <span class="text-zinc-500 dark:text-zinc-400">Policy: <span class="font-semibold text-zinc-900 dark:text-white">{{ $policyName }}</span></span>
-            <span class="text-zinc-500 dark:text-zinc-400">Leave year: <span class="font-semibold text-zinc-900 dark:text-white">{{ $policyYear->starts_on->format('d M Y') }} – {{ $policyYear->ends_on->format('d M Y') }}</span></span>
+            <span class="text-zinc-500 dark:text-zinc-400">Leave year: <span class="font-semibold text-zinc-900 dark:text-white">{{ $policyYear->starts_on->toImmutable()->userDate() }} – {{ $policyYear->ends_on->toImmutable()->userDate() }}</span></span>
             @if($v2)
                 <span class="flex flex-wrap gap-2">
                     <x-pulse.badge color="brand">{{ $v2['policy_source'] }}</x-pulse.badge>
@@ -269,7 +269,7 @@
                                 <td class="px-3 py-3.5 text-sm text-zinc-600 dark:text-zinc-300">{{ $histReason($req) }}</td>
                                 <td class="px-3 py-3.5">
                                     <div class="whitespace-nowrap text-sm font-semibold text-zinc-700 dark:text-zinc-200">
-                                        {{ $req->start_date->format('d M') }}@unless($req->end_date->eq($req->start_date)) – {{ $req->end_date->format('d M') }}@endunless
+                                        {{ $req->start_date->toImmutable()->userShortDate() }}@unless($req->end_date->eq($req->start_date)) – {{ $req->end_date->toImmutable()->userShortDate() }}@endunless
                                     </div>
                                     <div class="text-xs text-zinc-500 dark:text-zinc-400">{{ $req->start_date->year }}@if($req->end_date->year !== $req->start_date->year)–{{ $req->end_date->format('y') }}@endif</div>
                                 </td>
@@ -418,7 +418,7 @@
                         <div class="flex items-start justify-between gap-2">
                             <div class="min-w-0">
                                 <p class="text-sm font-semibold text-zinc-900 dark:text-white">{{ $histCategory($req) }}@if($histReason($req) !== '—') <span class="font-normal text-zinc-500 dark:text-zinc-400">· {{ $histReason($req) }}</span>@endif</p>
-                                <p class="text-xs text-zinc-500 dark:text-zinc-400">LR-{{ str_pad($req->id, 4, '0', STR_PAD_LEFT) }} · {{ $req->start_date->format('d M Y') }}@if(! $req->end_date->eq($req->start_date)) – {{ $req->end_date->format('d M Y') }}@endif</p>
+                                <p class="text-xs text-zinc-500 dark:text-zinc-400">LR-{{ str_pad($req->id, 4, '0', STR_PAD_LEFT) }} · {{ $req->start_date->toImmutable()->userDate() }}@if(! $req->end_date->eq($req->start_date)) – {{ $req->end_date->toImmutable()->userDate() }}@endif</p>
                             </div>
                             <x-pulse.badge :color="match ($req->status) { 'approved' => 'emerald', 'rejected' => 'rose', 'cancelled' => 'zinc', 'pending_hr', 'more_info_requested' => 'blue', default => 'amber' }">{{ str($req->status)->replace('_', ' ')->title() }}</x-pulse.badge>
                         </div>
@@ -999,7 +999,7 @@
                                     <td class="px-3 py-3 text-center tabular-nums">{{ $fmt($r->days) }}</td>
                                     <td class="px-3 py-3"><x-pulse.badge :color="$chipColor">{{ $chipLabel }}</x-pulse.badge></td>
                                     <td class="whitespace-nowrap px-3 py-3 text-zinc-600 dark:text-zinc-300">{{ ($r->hrReviewer ?? $r->reviewer)?->name ?? '—' }}</td>
-                                    <td class="whitespace-nowrap px-3 py-3 text-zinc-500 dark:text-zinc-400">{{ $r->created_at->format('d M Y') }}</td>
+                                    <td class="whitespace-nowrap px-3 py-3 text-zinc-500 dark:text-zinc-400">{{ $r->created_at->toImmutable()->userDate() }}</td>
                                     <td class="whitespace-nowrap px-3 py-3 pr-5 text-right">
                                         @if($manageAsHr && ($hrUrl = $manageAsHr($r)))
                                             <flux:button size="xs" variant="primary" :href="$hrUrl" data-manage-as-hr>Manage as HR</flux:button>
@@ -1044,7 +1044,7 @@
                 <div wire:key="recent-enc-{{ $enc->id }}" class="flex items-center justify-between gap-3 border-b border-zinc-100 px-5 py-3 text-sm last:border-0 dark:border-white/5">
                     <span class="min-w-0">
                         <span class="block truncate font-medium text-zinc-900 dark:text-white">{{ $enc->leaveType?->name ?? 'Leave' }}</span>
-                        <span class="text-xs text-zinc-500 dark:text-zinc-400">{{ $fmt($enc->requested_days) }} {{ Str::plural('day', (float) $enc->requested_days == 1 ? 1 : 2) }} · {{ $enc->created_at->format('d M Y') }}</span>
+                        <span class="text-xs text-zinc-500 dark:text-zinc-400">{{ $fmt($enc->requested_days) }} {{ Str::plural('day', (float) $enc->requested_days == 1 ? 1 : 2) }} · {{ $enc->created_at->toImmutable()->userDate() }}</span>
                     </span>
                     <x-pulse.badge :color="$chipColor">{{ $chipLabel }}</x-pulse.badge>
                 </div>
@@ -1065,7 +1065,7 @@
                     <h2 class="text-base font-semibold text-zinc-900 dark:text-white">Request cancellation</h2>
                     <p class="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
                         {{ $cancellingRequest->leaveType?->name ?? 'Leave' }} ·
-                        {{ $cancellingRequest->start_date->format('d M Y') }}@unless($cancellingRequest->end_date->eq($cancellingRequest->start_date)) – {{ $cancellingRequest->end_date->format('d M Y') }}@endunless
+                        {{ $cancellingRequest->start_date->toImmutable()->userDate() }}@unless($cancellingRequest->end_date->eq($cancellingRequest->start_date)) – {{ $cancellingRequest->end_date->toImmutable()->userDate() }}@endunless
                         · {{ $fmt($cancellingRequest->days) }} {{ Str::plural('day', (float) $cancellingRequest->days == 1 ? 1 : 2) }}
                     </p>
                 </div>
@@ -1170,7 +1170,7 @@
                                 <div class="max-w-[80%] rounded-2xl px-3.5 py-2.5 text-sm {{ $mine ? 'bg-indigo-600 text-white' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 dark:bg-zinc-800 dark:text-zinc-200' }}">
                                     <div class="mb-0.5 flex items-center gap-2 text-[10px] font-bold uppercase tracking-wide {{ $mine ? 'text-indigo-100' : 'text-zinc-400' }}">
                                         <span>{{ $mine ? 'You' : ($msg->user?->name ?? 'HR') }}</span>
-                                        <span class="font-medium normal-case">{{ $msg->created_at->format('d M, H:i') }}</span>
+                                        <span class="font-medium normal-case">{{ $msg->created_at->toImmutable()->userDateTime() }}</span>
                                     </div>
                                     @if($msg->body)
                                         <p class="whitespace-pre-line leading-snug">{{ $msg->body }}</p>

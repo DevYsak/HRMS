@@ -8,7 +8,7 @@
     @foreach($this->alerts as $alert)
         <div wire:key="alert-{{ $alert['lot']->id }}" class="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-200">
             <flux:icon.clock class="size-4 shrink-0" />
-            <span><strong>{{ $fmt($alert['remaining']) }} {{ ucwords($alert['bucket']) }}</strong> day(s) of {{ $alert['leave_type'] }} expire on <strong>{{ $alert['expires_on']->format('d M Y') }}</strong> — book them before then.</span>
+            <span><strong>{{ $fmt($alert['remaining']) }} {{ ucwords($alert['bucket']) }}</strong> day(s) of {{ $alert['leave_type'] }} expire on <strong>{{ $alert['expires_on']->toImmutable()->userDate() }}</strong> — book them before then.</span>
         </div>
     @endforeach
 
@@ -28,7 +28,7 @@
             <span>Leave year</span>
             <select wire:model.live="leaveYearId" class="rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs dark:border-white/10 dark:bg-zinc-900">
                 @foreach($leaveYears as $y)
-                    <option value="{{ $y->id }}">{{ $y->label }} ({{ $y->starts_on->format('d M Y') }} – {{ $y->ends_on->format('d M Y') }})</option>
+                    <option value="{{ $y->id }}">{{ $y->label }} ({{ $y->starts_on->toImmutable()->userDate() }} – {{ $y->ends_on->toImmutable()->userDate() }})</option>
                 @endforeach
             </select>
         </div>
@@ -53,7 +53,7 @@
         <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
 
             {{-- CSL --}}
-            <div class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-zinc-900">
+            <div class="ui-surface p-5">
                 <div class="flex items-start justify-between gap-2">
                     <div>
                         <div class="text-xs font-bold uppercase tracking-widest text-zinc-500">{{ $c['type']->name ?? 'Casual / Sick Leave' }}</div>
@@ -109,7 +109,7 @@
             </div>
 
             {{-- MDL --}}
-            <div class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-zinc-900">
+            <div class="ui-surface p-5">
                 <div class="flex items-start justify-between gap-2">
                     <div>
                         <div class="text-xs font-bold uppercase tracking-widest text-zinc-500">Mandatory December Leave</div>
@@ -121,7 +121,7 @@
                 <ul class="mt-3 space-y-1.5 text-xs">
                     @forelse($o['mdl']['dates'] as $d)
                         <li class="flex items-center justify-between gap-2">
-                            <span class="font-medium text-zinc-700 dark:text-zinc-200">{{ $d['date']->format('D, j M Y') }}</span>
+                            <span class="font-medium text-zinc-700 dark:text-zinc-200">{{ $d['date']->format('D') }}, {{ $d['date']->toImmutable()->userDate() }}</span>
                             <span class="flex items-center gap-1.5">
                                 @if($d['comp_off_earned'])<flux:badge size="sm" color="emerald">Comp Off earned</flux:badge>@endif
                                 <flux:badge size="sm" :color="$mdlColor($d['status'])">{{ ucfirst($d['status']) }}</flux:badge>
@@ -138,7 +138,7 @@
             </div>
 
             {{-- Comp Off --}}
-            <div class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-zinc-900">
+            <div class="ui-surface p-5">
                 <div class="flex items-start justify-between gap-2">
                     <div>
                         <div class="text-xs font-bold uppercase tracking-widest text-zinc-500">Comp Off</div>
@@ -171,7 +171,7 @@
         </div>
 
         @if($o['others']->isNotEmpty())
-            <div class="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-zinc-900">
+            <div class="ui-surface p-4">
                 <div class="text-xs font-bold uppercase tracking-widest text-zinc-500">Other leave</div>
                 <p class="mt-0.5 text-[11px] text-zinc-400">Special or statutory leave. Not part of your Available Leave.</p>
                 <div class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
@@ -274,7 +274,7 @@
     @endif
 
     @if($panel === 'history')
-        <div class="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-zinc-900">
+        <div class="ui-surface p-4">
             <div class="mb-3 flex flex-wrap gap-3 text-xs">
                 <select wire:model.live="historyTypeId" class="rounded-lg border border-zinc-200 bg-white px-2 py-1 dark:border-white/10 dark:bg-zinc-900">
                     <option value="">All leave types</option>
@@ -286,11 +286,11 @@
                 @forelse($this->history as $h)
                     <li class="flex items-start justify-between gap-3 py-2 text-sm">
                         <div class="flex gap-3">
-                            <span class="w-20 shrink-0 text-xs text-zinc-400">{{ $h['date']->format('d M Y') }}</span>
+                            <span class="w-20 shrink-0 text-xs text-zinc-400">{{ $h['date']->toImmutable()->userDate() }}</span>
                             <div>
                                 <div class="font-semibold text-zinc-900 dark:text-white">{{ $h['label'] }} <span class="font-normal text-zinc-400">· {{ $h['leave_type'] }}</span></div>
                                 @if($h['reason'])<div class="text-xs text-zinc-500">Reason: {{ $h['reason'] }}</div>@endif
-                                @if($h['expires_on'])<div class="text-[11px] text-amber-600">Expires {{ $h['expires_on']->format('d M Y') }}</div>@endif
+                                @if($h['expires_on'])<div class="text-[11px] text-amber-600">Expires {{ $h['expires_on']->toImmutable()->userDate() }}</div>@endif
                             </div>
                         </div>
                         <div class="text-right font-bold {{ $h['days'] < 0 ? 'text-rose-600' : 'text-emerald-600' }}">{{ $signed($h['days']) }}</div>
@@ -303,7 +303,7 @@
     @endif
 
     @if($panel === 'statement')
-        <div class="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-zinc-900">
+        <div class="ui-surface p-4">
             <select wire:model.live="statementTypeId" class="mb-3 rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs dark:border-white/10 dark:bg-zinc-900">
                 @foreach($this->cards as $c)<option value="{{ $c['type']->id }}">{{ $c['type']->name }}</option>@endforeach
             </select>
