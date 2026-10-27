@@ -73,7 +73,18 @@ class LeavePolicyAdminService
                 }
             }
 
+            $previousEarnedId = $policy->exists ? $policy->getOriginal('earned_leave_type_id') : null;
             $policy->fill($data)->save();
+
+            // The old Earned Leave type stops granting: its rule keeps only validation.
+            if ($previousEarnedId && array_key_exists('earned_leave_type_id', $data) && (int) $previousEarnedId !== (int) $policy->earned_leave_type_id) {
+                LeavePolicyRule::where('leave_policy_id', $policy->id)->where('leave_type_id', $previousEarnedId)->get()
+                    ->each(fn (LeavePolicyRule $rule) => $rule->update([
+                        'entitlement_method' => LeavePolicyRule::ENTITLEMENT_NONE, 'fixed_days' => null,
+                        'accrual_method' => LeavePolicyRule::ACCRUAL_UPFRONT, 'accrual_amount' => null,
+                        'carry_forward_enabled' => false, 'carry_forward_max_days' => null, 'max_balance' => null,
+                    ]));
+            }
 
             $this->audit->event($old ? 'LEAVE_POLICY_UPDATED' : 'LEAVE_POLICY_CREATED', AuditService::LEAVE, $policy,
                 old: $old, new: $policy->only(array_keys($data)), module: AuditService::SETTINGS, actor: $actor);

@@ -75,6 +75,7 @@
                         <flux:checkbox wire:model="form.is_active" label="Active" />
                         <flux:button wire:click="savePolicy" variant="primary">Save policy</flux:button>
                     </div>
+                    @error('form')<p class="mt-2 text-sm text-rose-600" role="alert" data-policy-error>{{ $message }}</p>@enderror
                     @error('form.annual_paid_leave_cap')<p class="mt-2 text-xs text-rose-600">{{ $message }}</p>@enderror
                     @error('form.name')<p class="mt-2 text-xs text-rose-600">{{ $message }}</p>@enderror
                     @error('form.earned_leave_type_id')<p class="mt-2 text-xs text-rose-600">{{ $message }}</p>@enderror
@@ -104,13 +105,25 @@
                                     @endforeach
                                 </flux:select>
                                 <flux:input type="number" step="0.25" min="0" wire:model="earned.accrual_amount" label="Days per period" placeholder="1" />
-                                <div class="flex items-end pb-2"><flux:checkbox wire:model="earned.carry_forward_enabled" label="Carry forward" /></div>
-                                <flux:input type="number" step="0.5" min="0" wire:model="earned.carry_forward_max_days" label="Maximum carry forward" placeholder="—" />
+                                <div class="flex items-end gap-6 pb-2">
+                                    <flux:checkbox wire:model="earned.carry_forward_enabled" label="Carry forward" />
+                                    <flux:checkbox wire:model="earned.allow_half_day" label="Half days allowed" />
+                                </div>
+                                <flux:input type="number" step="0.5" min="0" wire:model="earned.carry_forward_max_days" label="Maximum carry forward (days)" placeholder="Required when carry forward is on" />
+                                <flux:input type="number" step="1" min="1" wire:model="earned.carry_forward_expiry_months" label="Carried days expire after (months)" placeholder="No expiry" />
                                 <flux:select wire:model="earned.excess_handling" label="If the balance is short">
                                     <option value="block">Block the request</option>
                                     <option value="convert_to_lwp">Convert the excess to LWP</option>
                                 </flux:select>
                             </div>
+                            @error('earned.accrual_amount')<p class="mt-2 text-xs text-rose-600">{{ $message }}</p>@enderror
+                            @error('earned.carry_forward_expiry_months')<p class="mt-2 text-xs text-rose-600">{{ $message }}</p>@enderror
+                            <p class="mt-3 text-xs text-zinc-500 dark:text-zinc-400" data-earned-model>
+                                Leave V2: 12 days a year, accrued 1 day per completed month (Jul–Jun) by <code>leave:accrue-earned</code> — never granted up front.
+                                @if($earned['carry_forward_enabled'] && $earned['carry_forward_max_days'] === '')
+                                    <span class="font-semibold text-amber-700 dark:text-amber-300">Carry forward is on with no maximum: the year-end rollover will stop until the company limit is set.</span>
+                                @endif
+                            </p>
                             @if($cap)
                                 <div class="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-zinc-50 px-4 py-3 text-sm dark:bg-white/5" data-cap-summary>
                                     <span class="text-zinc-600 dark:text-zinc-300">{{ $this->poolType->name }}</span>

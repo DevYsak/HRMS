@@ -307,6 +307,9 @@
                                 <option value="sick">Sick</option>
                                 <option value="maternity">Maternity Leave</option>
                                 <option value="paternity">Paternity</option>
+                                <option value="adoption">Adoption</option>
+                                <option value="shared_parental">Shared Parental</option>
+                                <option value="parental">Parental</option>
                                 <option value="bereavement">Bereavement</option>
                                 <option value="comp_off">Comp Off</option>
                                 <option value="lwp">Leave Without Pay</option>

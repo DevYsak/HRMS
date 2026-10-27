@@ -81,7 +81,7 @@ test('the editor sets one Earned Leave entitlement against the cap: 12 / 12', fu
 
 test('reasons carry validation rules but no allocation, and every change is audited', function () {
     Livewire::actingAs($this->admin)->test(LeavePolicyEditor::class, ['policyId' => $this->policy->id])
-        ->set('earned.fixed_days', 12)
+        ->set('earned.fixed_days', 12)->set('earned.accrual_amount', 1)
         ->set("reasons.{$this->sick->id}.include", true)
         ->set("reasons.{$this->sick->id}.attachment_after_days", 2)
         ->set("reasons.{$this->sick->id}.hr_after_days", 3)
@@ -292,4 +292,89 @@ test('an approved request missing from a ledger-backed balance blocks the previe
         ->expectsOutputToContain('missing historical ledger entry')
         ->expectsOutputToContain('Request-vs-ledger mismatches: 1')
         ->assertFailed();
+});
+
+// ── Save / reload: what HR saves is what the editor shows ────────────────────
+
+test('every Earned Leave field saved is exactly what the editor shows on reload', function () {
+    Livewire::actingAs($this->admin)->test(LeavePolicyEditor::class, ['policyId' => $this->policy->id])
+        ->set('earned.fixed_days', 12)->set('earned.accrual_method', 'monthly')->set('earned.accrual_amount', 1)
+        ->set('earned.carry_forward_enabled', true)->set('earned.carry_forward_max_days', 5)->set('earned.carry_forward_expiry_months', 6)
+        ->set('earned.allow_half_day', false)->set('earned.excess_handling', 'convert_to_lwp')
+        ->set("reasons.{$this->casual->id}.include", true)->set("reasons.{$this->sick->id}.include", true)
+        ->call('saveRules')
+        ->assertHasNoErrors();
+
+    $rule = LeavePolicyRule::where('leave_policy_id', $this->policy->id)->where('leave_type_id', $this->earned->id)->sole();
+    expect($rule->only(['accrual_method', 'carry_forward_enabled', 'carry_forward_expiry_months', 'allow_half_day', 'excess_handling']))
+        ->toBe(['accrual_method' => 'monthly', 'carry_forward_enabled' => true, 'carry_forward_expiry_months' => 6, 'allow_half_day' => false, 'excess_handling' => 'convert_to_lwp'])
+        ->and((float) $rule->fixed_days)->toBe(12.0)->and((float) $rule->accrual_amount)->toBe(1.0)->and((float) $rule->carry_forward_max_days)->toBe(5.0);
+
+    $reloaded = Livewire::actingAs($this->admin)->test(LeavePolicyEditor::class, ['policyId' => $this->policy->id]);
+    expect($reloaded->get('earned'))->toMatchArray([
+        'fixed_days' => 12.0, 'accrual_method' => 'monthly', 'accrual_amount' => 1.0, 'carry_forward_enabled' => true,
+        'carry_forward_max_days' => 5.0, 'carry_forward_expiry_months' => 6, 'excess_handling' => 'convert_to_lwp', 'allow_half_day' => false,
+    ])->and($reloaded->get("reasons.{$this->casual->id}.include"))->toBeTrue();
+});
+
+test('saving one section keeps unsaved edits in the others', function () {
+    Livewire::actingAs($this->admin)->test(LeavePolicyEditor::class, ['policyId' => $this->policy->id])
+        ->set('form.name', 'Renamed but not saved yet')
+        ->set('earned.fixed_days', 12)->set('earned.accrual_method', 'monthly')->set('earned.accrual_amount', 1)
+        ->call('saveRules')
+        ->assertHasNoErrors()
+        ->assertSet('form.name', 'Renamed but not saved yet')
+        ->set('earned.carry_forward_max_days', 3)
+        ->call('savePolicy')
+        ->assertSet('earned.carry_forward_max_days', 3);
+
+    expect($this->policy->fresh()->name)->toBe('Renamed but not saved yet');
+});
+
+test('saving Earned Leave never resets settings the editor does not show', function () {
+    LeavePolicyRule::create(['leave_policy_id' => $this->policy->id, 'leave_type_id' => $this->earned->id,
+        'entitlement_method' => LeavePolicyRule::ENTITLEMENT_FIXED, 'fixed_days' => 12, 'accrual_method' => 'monthly', 'accrual_amount' => 1,
+        'max_balance' => 30, 'approval_workflow' => ['steps' => ['manager', 'hr']], 'is_active' => true]);
+
+    Livewire::actingAs($this->admin)->test(LeavePolicyEditor::class, ['policyId' => $this->policy->id])
+        ->set('earned.carry_forward_enabled', true)->set('earned.carry_forward_max_days', 4)
+        ->call('saveRules')->assertHasNoErrors();
+
+    $rule = LeavePolicyRule::where('leave_policy_id', $this->policy->id)->where('leave_type_id', $this->earned->id)->sole();
+    expect((float) $rule->max_balance)->toBe(30.0)
+        ->and($rule->approval_workflow)->toBe(['steps' => ['manager', 'hr']]);
+});
+
+test('a monthly accrual needs its days per period', function () {
+    Livewire::actingAs($this->admin)->test(LeavePolicyEditor::class, ['policyId' => $this->policy->id])
+        ->set('earned.fixed_days', 12)->set('earned.accrual_method', 'monthly')->set('earned.accrual_amount', '')
+        ->call('saveRules')
+        ->assertHasErrors('earned.accrual_amount');
+});
+
+test('switching the Earned Leave type stops the old one granting anything', function () {
+    LeavePolicyRule::create(['leave_policy_id' => $this->policy->id, 'leave_type_id' => $this->earned->id,
+        'entitlement_method' => LeavePolicyRule::ENTITLEMENT_FIXED, 'fixed_days' => 12, 'accrual_method' => 'monthly', 'accrual_amount' => 1, 'is_active' => true]);
+    $newPool = LeaveType::create(['name' => 'Paid Leave (V2)', 'code' => 'PLV'.random_int(10, 99), 'category' => 'other', 'leave_category' => LeaveCategory::EARNED,
+        'is_paid' => true, 'allow_paid_request' => true, 'color' => '#10b981']);
+
+    Livewire::actingAs($this->admin)->test(LeavePolicyEditor::class, ['policyId' => $this->policy->id])
+        ->set('form.earned_leave_type_id', $newPool->id)
+        ->call('savePolicy')
+        ->assertHasNoErrors();
+
+    $old = LeavePolicyRule::where('leave_policy_id', $this->policy->id)->where('leave_type_id', $this->earned->id)->sole();
+    expect($old->entitlement_method)->toBe(LeavePolicyRule::ENTITLEMENT_NONE)
+        ->and($old->fixed_days)->toBeNull()
+        ->and($old->accrual_amount)->toBeNull();
+});
+
+test('a policy error is shown on the policy card, not under the cap', function () {
+    $notEarned = LeaveType::create(['name' => 'Comp Off', 'code' => 'CO'.random_int(10, 99), 'category' => 'comp_off', 'is_paid' => true, 'color' => '#8b5cf6']);
+
+    Livewire::actingAs($this->admin)->test(LeavePolicyEditor::class, ['policyId' => $this->policy->id])
+        ->set('form.earned_leave_type_id', $notEarned->id)
+        ->call('savePolicy')
+        ->assertHasErrors('form')
+        ->assertSeeHtml('data-policy-error');
 });

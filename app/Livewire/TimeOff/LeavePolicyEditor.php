@@ -93,6 +93,8 @@ class LeavePolicyEditor extends Component
             'form.earned_leave_type_id' => 'nullable|integer|exists:leave_types,id',
         ], [], ['form.name' => 'policy name', 'form.annual_paid_leave_cap' => 'annual paid leave cap', 'form.earned_leave_type_id' => 'Earned Leave balance']);
 
+        $previousEarnedId = $this->policyId ? LeavePolicy::whereKey($this->policyId)->value('earned_leave_type_id') : null;
+
         try {
             $policy = $admin->savePolicy([
                 'name' => $this->form['name'],
@@ -106,13 +108,20 @@ class LeavePolicyEditor extends Component
                 'earned_leave_type_id' => $this->form['earned_leave_type_id'] ?: null,
             ], $this->policyId, Auth::user());
         } catch (\DomainException $e) {
-            $this->addError('form.annual_paid_leave_cap', $e->getMessage());
+            $this->addError('form', $e->getMessage());
 
             return;
         }
 
+        $isNew = $this->policyId === null;
         $this->policyId = $policy->id;
-        $this->load();
+        // Only what was saved is reloaded: unsaved edits elsewhere on the page stay.
+        $this->loadForm();
+        if ($isNew || (int) $previousEarnedId !== (int) $policy->earned_leave_type_id) {
+            $this->loadRules();
+            $this->loadCombined();
+        }
+        unset($this->capSummary, $this->assignments);
         \Flux::toast('Policy saved.', variant: 'success');
     }
 
@@ -124,7 +133,7 @@ class LeavePolicyEditor extends Component
         $this->validate([
             'rules.*.fixed_days' => 'nullable|numeric|min:0|max:365',
             'rules.*.accrual_method' => 'required|in:annual_upfront,monthly,quarterly,half_yearly,one_time,manual,unlimited',
-            'rules.*.accrual_amount' => 'nullable|numeric|min:0|max:365',
+            'rules.*.accrual_amount' => 'nullable|required_if:rules.*.accrual_method,monthly,quarterly,half_yearly,one_time|numeric|min:0|max:365',
             'rules.*.carry_forward_max_days' => 'nullable|numeric|min:0|max:365',
             'rules.*.max_balance' => 'nullable|numeric|min:0|max:999',
             'rules.*.excess_handling' => 'required|in:block,convert_to_lwp',
@@ -133,14 +142,16 @@ class LeavePolicyEditor extends Component
             'rules.*.hr_after_days' => 'nullable|numeric|min:0.5|max:365',
             'earned.fixed_days' => 'nullable|numeric|min:0|max:365',
             'earned.accrual_method' => 'nullable|in:annual_upfront,monthly,quarterly,half_yearly,one_time,manual,unlimited',
-            'earned.accrual_amount' => 'nullable|numeric|min:0|max:365',
+            'earned.accrual_amount' => 'nullable|required_if:earned.accrual_method,monthly,quarterly,half_yearly,one_time|numeric|min:0|max:365',
             'earned.carry_forward_max_days' => 'nullable|numeric|min:0|max:365',
+            'earned.carry_forward_expiry_months' => 'nullable|integer|min:1|max:36',
             'earned.excess_handling' => 'nullable|in:block,convert_to_lwp',
             'reasons.*.attachment_after_days' => 'nullable|numeric|min:0.5|max:365',
             'reasons.*.max_consecutive_days' => 'nullable|integer|min:1|max:365',
             'reasons.*.notice_days' => 'nullable|integer|min:0|max:365',
             'reasons.*.hr_after_days' => 'nullable|numeric|min:0.5|max:365',
-        ], [], ['earned.fixed_days' => 'Earned Leave annual entitlement']);
+        ], [], ['earned.fixed_days' => 'Earned Leave annual entitlement', 'earned.accrual_amount' => 'days per period', 'rules.*.accrual_amount' => 'days per period',
+            'earned.carry_forward_expiry_months' => 'carry-forward expiry']);
 
         $blank = fn ($v) => $v === '' || $v === null ? null : $v;
         $workflow = fn ($hrAfter) => $blank($hrAfter) !== null
@@ -164,17 +175,20 @@ class LeavePolicyEditor extends Component
 
         // The one Earned Leave balance: entitlement, accrual, carry forward.
         if ($pool = $this->poolType) {
+            $current = LeavePolicyRule::where('leave_policy_id', $this->policyId)->where('leave_type_id', $pool->id)->first();
             $rows[$pool->id] = [
                 'include' => true,
                 'fixed_days' => $blank($this->earned['fixed_days']),
-                'accrual_method' => $this->earned['accrual_method'] ?: LeavePolicyRule::ACCRUAL_UPFRONT,
+                'accrual_method' => $this->earned['accrual_method'] ?: LeavePolicyRule::ACCRUAL_MONTHLY,
                 'accrual_amount' => $blank($this->earned['accrual_amount']),
                 'carry_forward_enabled' => (bool) $this->earned['carry_forward_enabled'],
                 'carry_forward_max_days' => $blank($this->earned['carry_forward_max_days']),
-                'max_balance' => null,
+                'carry_forward_expiry_months' => $blank($this->earned['carry_forward_expiry_months']),
                 'excess_handling' => $this->earned['excess_handling'] ?: 'block',
-                'allow_half_day' => true,
-                'approval_workflow' => ['steps' => ['manager']],
+                'allow_half_day' => (bool) $this->earned['allow_half_day'],
+                // Not edited here: kept as they are, never reset.
+                'max_balance' => $current?->max_balance,
+                'approval_workflow' => $current?->approval_workflow ?? ['steps' => ['manager']],
             ];
         }
 
@@ -198,7 +212,8 @@ class LeavePolicyEditor extends Component
             return;
         }
 
-        $this->load();
+        $this->loadRules();
+        unset($this->capSummary);
         \Flux::toast('Leave rules saved.', variant: 'success');
     }
 
@@ -225,7 +240,7 @@ class LeavePolicyEditor extends Component
         ];
 
         $admin->savePolicy(['combined_leave_rules' => $rules], $this->policyId, Auth::user());
-        $this->load();
+        $this->loadCombined();
         \Flux::toast('Combined Leave rules saved.', variant: 'success');
     }
 
@@ -233,7 +248,7 @@ class LeavePolicyEditor extends Component
     #[Computed]
     public function combinedReasonTypes(): Collection
     {
-        return $this->reasonTypes->merge(
+        return $this->reasonTypes->filter(fn (LeaveType $t) => $this->reasons[$t->id]['include'] ?? false)->merge(
             $this->otherTypes->filter(fn (LeaveType $t) => LeaveCategory::of($t) === LeaveCategory::SPECIAL && ($this->rules[$t->id]['include'] ?? false))
         )->values();
     }
@@ -337,7 +352,7 @@ class LeavePolicyEditor extends Component
             return null;
         }
 
-        $policy->annual_paid_leave_cap = $this->form['annual_paid_leave_cap'] === '' ? null : $this->form['annual_paid_leave_cap'];
+        // The saved cap: it is what saving the rules is checked against.
         $proposed = collect($this->rules)->map(fn ($r) => $r['include'] ? ($r['fixed_days'] === '' ? 0 : $r['fixed_days']) : 0)->all();
         if ($pool = $this->poolType) {
             $proposed[$pool->id] = ($this->earned['fixed_days'] ?? '') === '' ? 0 : $this->earned['fixed_days'];
@@ -385,6 +400,13 @@ class LeavePolicyEditor extends Component
 
     private function load(): void
     {
+        $this->loadForm();
+        $this->loadCombined();
+        $this->loadRules();
+    }
+
+    private function loadForm(): void
+    {
         $policy = $this->policyId ? LeavePolicy::find($this->policyId) : null;
 
         $this->form = [
@@ -398,11 +420,21 @@ class LeavePolicyEditor extends Component
             'is_active' => $policy?->is_active ?? true,
             'earned_leave_type_id' => $policy?->earned_leave_type_id ?? '',
         ];
+    }
+
+    private function loadCombined(): void
+    {
+        $policy = $this->policyId ? LeavePolicy::find($this->policyId) : null;
         $this->combined = CombinedLeaveService::rulesOf($policy);
         $this->combined['reason_type_ids'] = array_map('intval', (array) ($this->combined['reason_type_ids'] ?? []));
         $this->combined['max_range_days'] ??= '';
         $this->combined['max_consecutive_working_days'] ??= '';
-        unset($this->poolType, $this->reasonTypes, $this->otherTypes);
+    }
+
+    private function loadRules(): void
+    {
+        $policy = $this->policyId ? LeavePolicy::find($this->policyId) : null;
+        unset($this->poolType, $this->reasonTypes, $this->otherTypes, $this->combinedReasonTypes);
 
         $existing = $policy ? LeavePolicyRule::where('leave_policy_id', $policy->id)->get()->keyBy('leave_type_id') : collect();
 
@@ -414,7 +446,9 @@ class LeavePolicyEditor extends Component
             'accrual_amount' => $poolRule?->accrual_amount !== null ? (float) $poolRule->accrual_amount : '',
             'carry_forward_enabled' => (bool) ($poolRule?->carry_forward_enabled ?? false),
             'carry_forward_max_days' => $poolRule?->carry_forward_max_days !== null ? (float) $poolRule->carry_forward_max_days : '',
+            'carry_forward_expiry_months' => $poolRule?->carry_forward_expiry_months ?? '',
             'excess_handling' => $poolRule?->excess_handling ?? 'block',
+            'allow_half_day' => (bool) ($poolRule?->allow_half_day ?? $pool?->allow_half_day ?? true),
         ];
 
         $hrAfterOf = fn (?LeavePolicyRule $r) => collect($r?->approval_workflow['conditions'] ?? [])->first(fn ($c) => in_array('hr', $c['steps'] ?? [], true))['min_days'] ?? '';
