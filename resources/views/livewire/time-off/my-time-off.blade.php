@@ -97,6 +97,31 @@
         </div>
     </section>
 
+    {{-- HR proposed changes to a request: the employee accepts or rejects them. --}}
+    @if($awaitingRevisions->isNotEmpty())
+        <section class="space-y-3" data-awaiting-revisions>
+            @foreach($awaitingRevisions as $revision)
+                @php $leave = $revision->leaveRequest; @endphp
+                <div class="ui-surface space-y-3 p-5" style="border-left: 4px solid #8b5cf6" data-awaiting-revision="{{ $revision->id }}">
+                    <div>
+                        <p class="flex flex-wrap items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-white">
+                            <x-pulse.badge color="violet">Your confirmation needed</x-pulse.badge>
+                            HR proposed changes to your {{ $leave?->leaveType?->name ?? 'leave' }} request
+                        </p>
+                        <p class="mt-1 text-sm text-zinc-700 dark:text-zinc-200">“{{ $revision->reason }}”</p>
+                        <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $revision->proposer?->name ?? 'HR' }} · {{ $revision->created_at?->toImmutable()->userDateTime() }} · Nothing is approved or deducted until you answer and HR approves.</p>
+                    </div>
+                    <x-leave.revision-compare :revision="$revision" />
+                    <flux:textarea wire:model="revisionNotes.{{ $revision->id }}" rows="2" label="Note for HR" placeholder="Required if you reject the changes" />
+                    <div class="flex flex-wrap justify-end gap-2">
+                        <flux:button size="sm" variant="ghost" wire:click="rejectRevision({{ $revision->id }})" wire:loading.attr="disabled">Reject Changes</flux:button>
+                        <flux:button size="sm" variant="primary" wire:click="acceptRevision({{ $revision->id }})" wire:loading.attr="disabled">Accept Changes</flux:button>
+                    </div>
+                </div>
+            @endforeach
+        </section>
+    @endif
+
     {{-- ═══ C. IMPORTANT ALERTS ═══ never buried --}}
     @if((! empty($pendingCount) && $pendingCount > 0) || $totalAvailable < 0)
         <section class="space-y-2" data-leave-alerts>

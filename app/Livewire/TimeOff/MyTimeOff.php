@@ -10,6 +10,7 @@ use App\Models\HolidayWorkRequest;
 use App\Models\LeaveAttachment;
 use App\Models\LeaveEncashment;
 use App\Models\LeaveRequest;
+use App\Models\LeaveRequestRevision;
 use App\Models\LeaveType;
 use App\Models\PublicHoliday;
 use App\Models\User;
@@ -25,6 +26,7 @@ use App\Services\Leave\LeaveBalanceCalculator;
 use App\Services\Leave\LeaveCancellationService;
 use App\Services\Leave\LeavePolicyEngine;
 use App\Services\Leave\LeaveRequestAccess;
+use App\Services\Leave\LeaveRequestRevisionService;
 use App\Services\Leave\LeaveYearResolver;
 use App\Services\LeaveService;
 use App\Services\Notifications\NotificationRecipients;
@@ -655,6 +657,57 @@ class MyTimeOff extends Component
         \Flux::toast('Cancellation request sent to HR. Your leave stays approved until HR decides.');
     }
 
+    // ================================================================
+    // HR-proposed changes: accept or reject
+    // ================================================================
+
+    /** The employee's reasons for rejecting a proposal, by revision id. */
+    public array $revisionNotes = [];
+
+    /** Accept HR's proposed version: it becomes the request and goes back to HR for approval. */
+    public function acceptRevision(int $revisionId): void
+    {
+        $this->resetErrorBag('revisionNotes.'.$revisionId);
+        $revision = $this->ownAwaitingRevision($revisionId);
+
+        try {
+            app(LeaveRequestRevisionService::class)->accept($revision, Auth::user(), trim($this->revisionNotes[$revisionId] ?? '') ?: null);
+        } catch (\DomainException|AuthorizationException $e) {
+            $this->addError('revisionNotes.'.$revisionId, $e->getMessage());
+
+            return;
+        }
+
+        unset($this->revisionNotes[$revisionId]);
+        \Flux::toast('Changes accepted. Your request is back with HR for approval.');
+    }
+
+    /** Reject it: the request stays exactly as submitted, back with HR. */
+    public function rejectRevision(int $revisionId): void
+    {
+        $this->validate(["revisionNotes.{$revisionId}" => ['required', 'string', 'min:5', 'max:1000']], [], ["revisionNotes.{$revisionId}" => 'reason']);
+        $revision = $this->ownAwaitingRevision($revisionId);
+
+        try {
+            app(LeaveRequestRevisionService::class)->reject($revision, Auth::user(), $this->revisionNotes[$revisionId]);
+        } catch (\DomainException|AuthorizationException $e) {
+            $this->addError('revisionNotes.'.$revisionId, $e->getMessage());
+
+            return;
+        }
+
+        unset($this->revisionNotes[$revisionId]);
+        \Flux::toast('Changes rejected. Your request stays as you submitted it.');
+    }
+
+    private function ownAwaitingRevision(int $revisionId): LeaveRequestRevision
+    {
+        $employeeId = Auth::user()->employee?->id;
+        abort_unless($employeeId !== null, 404);
+
+        return LeaveRequestRevision::where('employee_id', $employeeId)->where('status', LeaveRequestRevision::AWAITING)->findOrFail($revisionId);
+    }
+
     /** Take back a cancellation request HR has not decided yet. */
     public function withdrawCancellationRequest(int $leaveRequestId): void
     {
@@ -1176,6 +1229,9 @@ class MyTimeOff extends Component
             'manageAsHr' => $this->manageAsHr(),
             // The latest five applications, whatever the Leave History filters say (read only).
             'cancellingRequest' => $this->cancellingId && $employee ? $employee->leaveRequests()->with('leaveType')->find($this->cancellingId) : null,
+            'awaitingRevisions' => $employee
+                ? LeaveRequestRevision::with(['leaveRequest.leaveType', 'proposer'])->where('employee_id', $employee->id)->where('status', LeaveRequestRevision::AWAITING)->latest('id')->get()
+                : collect(),
             'recentRequests' => $employee
                 ? $employee->leaveRequests()->with(['leaveType' => fn ($q) => $q->withTrashed(), 'reviewer', 'hrReviewer', 'pendingCancellation'])
                     ->latest('start_date')->latest('id')->limit(5)->get()

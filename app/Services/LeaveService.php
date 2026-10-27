@@ -12,6 +12,7 @@ use App\Models\LeaveEncashment;
 use App\Models\LeaveLedgerEntry;
 use App\Models\LeavePaymentAuditLog;
 use App\Models\LeaveRequest;
+use App\Models\LeaveRequestRevision;
 use App\Models\LeaveType;
 use App\Models\PublicHoliday;
 use App\Models\User;
@@ -33,6 +34,7 @@ use App\Services\Leave\LeaveLedgerService;
 use App\Services\Leave\LeaveMovementService;
 use App\Services\Leave\LeavePolicyEngine;
 use App\Services\Leave\LeaveRequestEvaluator;
+use App\Services\Leave\LeaveRequestRevisionService;
 use App\Services\Leave\LeaveRuleResolver;
 use App\Services\Leave\LeaveYearResolver;
 use App\Services\Notifications\NotificationRecipients;
@@ -156,7 +158,7 @@ class LeaveService
     {
         return LeaveRequest::where('employee_id', $employeeId)
             ->when($excludeRequestId, fn ($q) => $q->where('id', '!=', $excludeRequestId))
-            ->whereIn('status', ['approved', 'pending', 'pending_hr'])
+            ->whereIn('status', ['approved', 'pending', 'pending_hr', LeaveRequest::AWAITING_EMPLOYEE])
             ->where('start_date', '<=', $date->toDateString())
             ->where('end_date', '>=', $date->toDateString())
             ->exists();
@@ -327,7 +329,7 @@ class LeaveService
         // Overlap check — must run before balance check so conflict errors surface first.
         // A request waiting on the employee's reply still holds its dates.
         $overlap = LeaveRequest::where('employee_id', $employee->id)
-            ->whereIn('status', ['approved', 'pending', 'pending_hr', 'more_info_requested'])
+            ->whereIn('status', ['approved', 'pending', 'pending_hr', 'more_info_requested', LeaveRequest::AWAITING_EMPLOYEE])
             ->where('start_date', '<=', $endDate)
             ->where('end_date', '>=', $startDate)
             ->first();
@@ -443,7 +445,7 @@ class LeaveService
         }
 
         $overlap = LeaveRequest::where('employee_id', $employee->id)
-            ->whereIn('status', ['approved', 'pending', 'pending_hr', 'more_info_requested'])
+            ->whereIn('status', ['approved', 'pending', 'pending_hr', 'more_info_requested', LeaveRequest::AWAITING_EMPLOYEE])
             ->where('start_date', '<=', $end->toDateString())
             ->where('end_date', '>=', $start->toDateString())
             ->first();
@@ -697,8 +699,20 @@ class LeaveService
         $this->assertCanReview($leaveRequest, $reviewerId);
 
         return DB::transaction(function () use ($leaveRequest, $data, $status, $reviewerId, $comment) {
+            // One decision at a time: a double click, a retry or a second
+            // reviewer waits here, then finds the request already changed.
+            $seen = $leaveRequest->status;
+            $leaveRequest = LeaveRequest::lockForUpdate()->findOrFail($leaveRequest->id);
+            if ($leaveRequest->status !== $seen) {
+                throw new \DomainException('This leave request was changed meanwhile — reload it and try again.');
+            }
+            if ($leaveRequest->isAwaitingEmployee()) {
+                throw new \DomainException('This request is waiting for the employee to confirm the changes HR proposed.');
+            }
+
             $oldStatus = $leaveRequest->status;
             $oldDays = (float) $leaveRequest->days;
+            $oldPaidDays = $leaveRequest->paidDays();
             $oldTypeId = $leaveRequest->leave_type_id;
             $oldBalanceTypeId = $leaveRequest->balanceTypeId();
             $oldStart = Carbon::parse($leaveRequest->start_date);
@@ -715,6 +729,22 @@ class LeaveService
                     'reason' => $data['reason'] ?? $leaveRequest->reason,
                     'is_half_day' => false,
                 ];
+            }
+
+            // An open request is decided as the employee sent it (or as they
+            // confirmed HR's proposal). A rejection never rewrites it; any
+            // other change needs the employee's confirmation first (refused
+            // below, once the edit itself has been checked).
+            $unconfirmedEdit = in_array($oldStatus, ['pending', 'pending_hr', 'more_info_requested'], true) && ! $combined && $this->materiallyChanged($leaveRequest, $data);
+            if ($unconfirmedEdit && $status === 'rejected') {
+                $unconfirmedEdit = false;
+                $data = array_merge($data, [
+                    'leave_type_id' => $leaveRequest->leave_type_id,
+                    'start_date' => $leaveRequest->start_date->toDateString(),
+                    'end_date' => $leaveRequest->end_date->toDateString(),
+                    'is_half_day' => (bool) $leaveRequest->is_half_day,
+                    'half_day_period' => $leaveRequest->half_day_period,
+                ]);
             }
 
             $start = Carbon::parse($data['start_date']);
@@ -759,8 +789,10 @@ class LeaveService
                 (bool) ($leaveTypeFresh?->is_sandwich_applicable ?? false),
                 (int) ($leaveTypeFresh?->sandwich_min_days ?? 0)
             )));
+            // An unpaid portion the employee agreed to with HR stays unpaid.
+            $agreedLwp = $combined ? 0.0 : app(LeaveRequestRevisionService::class)->agreedLwpDays($leaveRequest);
             $lwpDays = $evaluation !== null
-                ? ($evaluation['lwp_days'] > 0 ? $evaluation['lwp_days'] : null)
+                ? (max((float) $evaluation['lwp_days'], $agreedLwp) > 0 ? min(max((float) $evaluation['lwp_days'], $agreedLwp), $newDays) : null)
                 : $leaveRequest->lwp_days;
             // The balance it charges follows the (possibly edited) reason. With
             // V2 off, a changed type charges itself, as every legacy request does.
@@ -771,7 +803,7 @@ class LeaveService
 
             // Reverse any prior balance deduction if it was approved+paid
             if ($oldStatus === 'approved' && $this->wasApprovedAsPaid($leaveRequest)) {
-                app(LeaveMovementService::class)->reverseUsage($leaveRequest, $oldBalanceTypeId, $oldDays, $oldStart, 'Leave re-reviewed', User::find($reviewerId));
+                app(LeaveMovementService::class)->reverseUsage($leaveRequest, $oldBalanceTypeId, $oldPaidDays, $oldStart, 'Leave re-reviewed', User::find($reviewerId));
             }
 
             $reviewer = User::find($reviewerId);
@@ -795,6 +827,10 @@ class LeaveService
             // can land entirely on non-working days); nothing to approve or debit.
             if ($resolvedStatus === 'approved' && $newDays <= 0) {
                 throw new \DomainException('These dates contain no working days — there is no leave to approve.');
+            }
+
+            if ($unconfirmedEdit) {
+                throw new \DomainException('Changing the dates, half day or leave type needs the employee to confirm — propose the change instead of approving it.');
             }
 
             // Combined: the paid units must still fit the balance at approval.
@@ -934,6 +970,10 @@ class LeaveService
         }
 
         return DB::transaction(function () use ($leaveRequest, $hrReviewerId, $decision, $comment, $approvedLeaveStatus, $hrRemark) {
+            $leaveRequest = LeaveRequest::lockForUpdate()->findOrFail($leaveRequest->id);
+            if ($leaveRequest->status !== 'pending_hr') {
+                throw new \DomainException('This leave request is not awaiting HR approval.');
+            }
             $employee = $leaveRequest->employee;
             // Only the paid portion is drawn from the balance (V2 LWP excluded).
             $newDays = $leaveRequest->paidDays();
@@ -1029,9 +1069,15 @@ class LeaveService
         }
 
         $employee = $leaveRequest->employee;
-        $days = (float) $leaveRequest->days;
+        // Only the paid portion is ever drawn from (or returned to) the balance.
+        $days = $leaveRequest->paidDays();
 
         DB::transaction(function () use ($leaveRequest, $hr, $newStatus, $remark, $currentStatus, $employee, $days) {
+            $locked = LeaveRequest::lockForUpdate()->findOrFail($leaveRequest->id);
+            if ($locked->status !== $leaveRequest->status || $locked->effectiveLeaveStatus() !== $currentStatus) {
+                throw new \DomainException('This leave request was changed meanwhile — reload it and try again.');
+            }
+
             // Reverse / apply balance changes
             if ($leaveRequest->status === 'approved') {
                 $movements = app(LeaveMovementService::class);
@@ -1542,7 +1588,7 @@ class LeaveService
             }
 
             $hasPendingLeave = LeaveRequest::where('employee_id', $employee->id)
-                ->whereIn('status', ['pending', 'pending_hr'])
+                ->whereIn('status', ['pending', 'pending_hr', LeaveRequest::AWAITING_EMPLOYEE])
                 ->where('start_date', '<=', $date->toDateString())
                 ->where('end_date', '>=', $date->toDateString())
                 ->exists();
@@ -1586,7 +1632,21 @@ class LeaveService
      */
     public function cancelRequest(LeaveRequest $leaveRequest, ?string $reason = null, ?User $actor = null, array $meta = []): void
     {
-        if (! in_array($leaveRequest->status, ['pending', 'pending_hr', 'approved'])) {
+        $leaveRequest = DB::transaction(function () use ($leaveRequest, $reason, $actor, $meta) {
+            // Locked and re-read: a second cancel (double click, retry) finds it already cancelled.
+            $leaveRequest = LeaveRequest::lockForUpdate()->findOrFail($leaveRequest->id);
+            $this->cancelLocked($leaveRequest, $reason, $actor, $meta);
+
+            return $leaveRequest;
+        });
+
+        $isOwnAction = $actor === null || (int) $actor->id === (int) $leaveRequest->employee?->user_id;
+        $this->notifyCancellation($leaveRequest->fresh(['employee.user', 'employee.manager', 'leaveType']), $isOwnAction);
+    }
+
+    private function cancelLocked(LeaveRequest $leaveRequest, ?string $reason, ?User $actor, array $meta): void
+    {
+        if (! in_array($leaveRequest->status, ['pending', 'pending_hr', LeaveRequest::AWAITING_EMPLOYEE, 'approved'], true)) {
             throw new \DomainException('Only pending or approved leave requests can be cancelled.');
         }
 
@@ -1597,15 +1657,14 @@ class LeaveService
             throw new \DomainException('An absence flag is resolved by HR — submit a regularisation or a leave request for that day instead.');
         }
 
-        $employee = $leaveRequest->employee;
-
         if ($leaveRequest->status === 'approved' && $this->wasApprovedAsPaid($leaveRequest)) {
             // Returned to the leave year the leave was taken in — cancelling
-            // June leave in July must not credit the new year.
+            // June leave in July must not credit the new year. Only the paid
+            // portion was taken; an LWP portion was never drawn.
             app(LeaveMovementService::class)->reverseUsage(
                 $leaveRequest,
                 $leaveRequest->balanceTypeId(),
-                (float) $leaveRequest->days,
+                $leaveRequest->paidDays(),
                 Carbon::parse($leaveRequest->start_date),
                 $reason ? 'Leave cancelled: '.$reason : 'Leave cancelled',
                 $actor ?? auth()->user(),
@@ -1614,9 +1673,19 @@ class LeaveService
 
         $oldStatus = $leaveRequest->status;
         $leaveRequest->update(['status' => 'cancelled']);
+        LeaveRequestRevision::where('leave_request_id', $leaveRequest->id)->where('status', LeaveRequestRevision::AWAITING)
+            ->update(['status' => LeaveRequestRevision::WITHDRAWN, 'responded_by' => ($actor ?? auth()->user())?->id, 'responded_at' => now(), 'response_note' => 'The request was cancelled.']);
         $this->auditDecision($leaveRequest, $oldStatus, 'cancelled', [], $reason, $actor ?? auth()->user(), $meta);
+    }
 
-        $this->notifyCancellation($leaveRequest->fresh(['employee.user', 'employee.manager', 'leaveType']), $isOwnAction);
+    /** Dates, half day / session or leave type differ from the request as it stands. */
+    private function materiallyChanged(LeaveRequest $request, array $data): bool
+    {
+        return Carbon::parse($data['start_date'])->toDateString() !== $request->start_date->toDateString()
+            || Carbon::parse($data['end_date'])->toDateString() !== $request->end_date->toDateString()
+            || (int) $data['leave_type_id'] !== (int) $request->leave_type_id
+            || (bool) ($data['is_half_day'] ?? false) !== (bool) $request->is_half_day
+            || ((bool) $request->is_half_day && array_key_exists('half_day_period', $data) && ($data['half_day_period'] ?: null) !== $request->half_day_period);
     }
 
     /**

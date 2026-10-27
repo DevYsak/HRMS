@@ -29,7 +29,7 @@ use Illuminate\Support\Facades\DB;
 class LeaveCancellationService
 {
     /** Not yet approved: the employee may withdraw these themselves (what LeaveService can cancel). */
-    public const WITHDRAWABLE = ['pending', 'pending_hr'];
+    public const WITHDRAWABLE = ['pending', 'pending_hr', LeaveRequest::AWAITING_EMPLOYEE];
 
     public function __construct(
         private readonly LeaveService $leave,

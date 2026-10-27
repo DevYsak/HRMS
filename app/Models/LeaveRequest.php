@@ -37,6 +37,9 @@ class LeaveRequest extends Model
     /** A Combined Leave request: one request, each date allocated full/half, paid/unpaid. */
     public const MODE_COMBINED = 'combined';
 
+    /** HR proposed a change; the employee confirms or rejects it before any decision. */
+    public const AWAITING_EMPLOYEE = 'awaiting_employee_confirmation';
+
     protected function casts(): array
     {
         return [
@@ -82,6 +85,23 @@ class LeaveRequest extends Model
     public function cancellationRequests(): HasMany
     {
         return $this->hasMany(LeaveCancellationRequest::class)->latest('id');
+    }
+
+    /** HR-proposed changes to this request, newest first (original and proposed versions kept). */
+    public function revisions(): HasMany
+    {
+        return $this->hasMany(LeaveRequestRevision::class)->latest('id');
+    }
+
+    /** The HR proposal the employee has not answered yet, if any. */
+    public function pendingRevision(): HasOne
+    {
+        return $this->hasOne(LeaveRequestRevision::class)->where('status', LeaveRequestRevision::AWAITING)->latestOfMany();
+    }
+
+    public function isAwaitingEmployee(): bool
+    {
+        return $this->status === self::AWAITING_EMPLOYEE;
     }
 
     /** The cancellation request HR has not decided yet, if any. */

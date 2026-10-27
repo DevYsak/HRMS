@@ -120,6 +120,10 @@ class LeaveMovementService
             return;
         }
 
+        if ($days <= 0) {
+            return;
+        }
+
         $balance = LeaveBalance::where('employee_id', $request->employee_id)
             ->where('leave_type_id', $leaveTypeId)
             ->where('year', $this->years->legacyYearFor($startDate))
@@ -130,6 +134,12 @@ class LeaveMovementService
         }
 
         if ($balance->isLedgerBacked()) {
+            // Approved once the balance was already on the ledger, yet nothing
+            // was posted: nothing was taken, so nothing is given back.
+            if ($request->approved_at !== null && $balance->ledger_migrated_at !== null && $request->approved_at->gt($balance->ledger_migrated_at)) {
+                return;
+            }
+
             // Approved before the row was migrated, so its usage is inside the
             // migrated opening figure: return it as a usage credit.
             $this->ledger->credit($balance, LeaveLedgerEntry::TYPE_ADJUSTMENT_CREDIT, $days, Carbon::today(),

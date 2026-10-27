@@ -22,7 +22,7 @@ use Illuminate\Support\Facades\DB;
 class LeaveBalanceCalculator
 {
     /** Request statuses that hold a reservation until decided. */
-    public const RESERVING_STATUSES = ['pending', 'pending_hr', 'more_info_requested'];
+    public const RESERVING_STATUSES = ['pending', 'pending_hr', 'more_info_requested', 'awaiting_employee_confirmation'];
 
     public function __construct(private readonly LeaveLedgerService $ledger) {}
 

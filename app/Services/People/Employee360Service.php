@@ -47,7 +47,7 @@ class Employee360Service
     public const ATTENDANCE_STATUSES = ['present' => 'Present', 'late' => 'Late', 'absent' => 'Absent', 'weekly_off' => 'Weekly off', 'leave' => 'Leave', 'holiday' => 'Holiday'];
 
     /** Open leave statuses (the Pending tab). */
-    private const OPEN_LEAVE = ['pending', 'pending_hr', 'more_info_requested'];
+    private const OPEN_LEAVE = ['pending', 'pending_hr', 'more_info_requested', 'awaiting_employee_confirmation'];
 
     /** Audit trail entries grouped by the section that may show them. */
     private const ACTIVITY_SECTIONS = [

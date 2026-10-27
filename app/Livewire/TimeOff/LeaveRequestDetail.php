@@ -2,7 +2,6 @@
 
 namespace App\Livewire\TimeOff;
 
-use App\Models\AuditLog;
 use App\Models\LeaveBalance;
 use App\Models\LeaveLedgerEntry;
 use App\Models\LeaveRequest;
@@ -16,6 +15,8 @@ use App\Services\Leave\LeaveCancellationService;
 use App\Services\Leave\LeaveCategory;
 use App\Services\Leave\LeaveRequestAccess;
 use App\Services\Leave\LeaveRequestPresenter;
+use App\Services\Leave\LeaveRequestRevisionService;
+use App\Services\Leave\LeaveRequestTimeline;
 use App\Services\Leave\LeaveYearResolver;
 use App\Services\LeaveService;
 use App\Services\People\Employee360Access;
@@ -52,8 +53,18 @@ class LeaveRequestDetail extends Component
     /** HR's note when deciding an employee's cancellation request (required to reject). */
     public string $cancellationNote = '';
 
-    /** approve | reject | cancel: the action awaiting confirmation. */
+    /** approve | reject | cancel | propose: the action awaiting confirmation. */
     public ?string $confirming = null;
+
+    /**
+     * HR's proposed version of the request while 'propose' is open.
+     *
+     * @var array{start_date?: string, end_date?: string, is_half_day?: bool, half_day_period?: string, leave_type_id?: int|string, paid_days?: string, allocations?: array<string, array{type: string, session: ?string}>}
+     */
+    public array $proposal = [];
+
+    /** Why HR proposes the change — shown to the employee. */
+    public string $proposalReason = '';
 
     public function mount(LeaveRequest $leaveRequest): void
     {
@@ -68,8 +79,61 @@ class LeaveRequestDetail extends Component
         return LeaveRequest::with([
             'employee.user', 'employee.department', 'employee.manager',
             'leaveType' => fn ($q) => $q->withTrashed(),
-            'reviewer', 'hrReviewer', 'attachments', 'dayAllocations.reasonLeaveType', 'pendingCancellation.requester',
+            'reviewer', 'hrReviewer', 'attachments', 'dayAllocations.reasonLeaveType', 'pendingCancellation.requester', 'pendingRevision.proposer',
         ])->findOrFail($this->requestId);
+    }
+
+    /** HR may propose a change to an open request (the employee confirms it before any decision). */
+    #[Computed]
+    public function canPropose(): bool
+    {
+        return app(LeaveRequestRevisionService::class)->mayPropose($this->request, Auth::user());
+    }
+
+    #[Computed]
+    public function canWithdrawProposal(): bool
+    {
+        $pending = $this->request->pendingRevision;
+
+        return $pending !== null && app(LeaveRequestRevisionService::class)->mayWithdraw($pending, Auth::user());
+    }
+
+    /** Every proposal made on this request, with the employee's answer. */
+    #[Computed]
+    public function revisions(): Collection
+    {
+        return $this->request->revisions()->with(['proposer', 'responder'])->get();
+    }
+
+    /** Reasons HR may propose instead: the request's own category. */
+    #[Computed]
+    public function proposalTypes(): Collection
+    {
+        $request = $this->request;
+
+        return LeaveType::query()->where('is_active', true)
+            ->when($request->main_category, fn ($q) => $q->where('leave_category', $request->main_category))
+            ->orderBy('name')->get(['id', 'name']);
+    }
+
+    /**
+     * The proposal as approval would read it — days, paid and unpaid — and
+     * what it changes; or why it cannot be proposed.
+     *
+     * @return array<string, mixed>|null
+     */
+    #[Computed]
+    public function proposalPreview(): ?array
+    {
+        if ($this->confirming !== 'propose') {
+            return null;
+        }
+
+        try {
+            return app(LeaveRequestRevisionService::class)->preview($this->request, $this->proposalInput());
+        } catch (\DomainException $e) {
+            return ['error' => $e->getMessage()];
+        }
     }
 
     /** Approve / reject: the approval policy decides who (reporting manager first; never oneself). */
@@ -221,13 +285,17 @@ class LeaveRequestDetail extends Component
             ->orderBy('id')->get();
     }
 
-    /** @return Collection<int, AuditLog> */
+    /**
+     * The request's complete timeline: decisions, proposals and answers,
+     * deductions and reversals (with ledger entry ids), payroll and
+     * cancellation events — system processes named as such.
+     *
+     * @return Collection<int, array<string, mixed>>
+     */
     #[Computed]
     public function history(): Collection
     {
-        return AuditLog::with('user')
-            ->where('auditable_type', LeaveRequest::class)->where('auditable_id', $this->requestId)
-            ->orderBy('id')->get();
+        return app(LeaveRequestTimeline::class)->for($this->request);
     }
 
     /** HR decides the employee's request to cancel this approved leave. */
@@ -243,6 +311,53 @@ class LeaveRequestDetail extends Component
     {
         $this->resetErrorBag();
         $this->confirming = in_array($action, ['approve', 'reject', 'cancel', 'approve_cancellation', 'reject_cancellation'], true) ? $action : null;
+    }
+
+    /** Open the proposal form, starting from the request as it stands. */
+    public function openProposal(): void
+    {
+        abort_unless($this->canPropose, 403);
+        $request = $this->request;
+
+        $this->resetErrorBag();
+        $this->proposal = [
+            'start_date' => $request->start_date->toDateString(),
+            'end_date' => $request->end_date->toDateString(),
+            'is_half_day' => (bool) $request->is_half_day,
+            'half_day_period' => (string) $request->half_day_period,
+            'leave_type_id' => $request->leave_type_id,
+            'paid_days' => (string) (LeaveRequestPresenter::paid($request) + 0),
+            'allocations' => $request->isCombined()
+                ? $request->dayAllocations->where('is_excluded', false)
+                    ->mapWithKeys(fn ($row) => [$row->date->toDateString() => ['type' => $row->allocation_type, 'session' => $row->session]])->all()
+                : [],
+        ];
+        $this->proposalReason = '';
+        $this->confirming = 'propose';
+    }
+
+    /** Send the proposal to the employee; the request waits for their answer. */
+    public function submitProposal(): void
+    {
+        abort_unless($this->canPropose, 403);
+        $this->validate([
+            'proposal.start_date' => ['required', 'date'],
+            'proposal.end_date' => ['required', 'date', 'after_or_equal:proposal.start_date'],
+            'proposal.paid_days' => ['nullable', 'numeric', 'min:0'],
+            'proposalReason' => ['required', 'string', 'min:5', 'max:1000'],
+        ], [], ['proposal.start_date' => 'start date', 'proposal.end_date' => 'end date', 'proposal.paid_days' => 'paid days', 'proposalReason' => 'reason']);
+
+        $this->attempt(fn () => app(LeaveRequestRevisionService::class)->propose($this->request, Auth::user(), $this->proposalInput(), $this->proposalReason),
+            'Changes proposed. The employee confirms them before anything is approved or deducted.');
+    }
+
+    /** Take the unanswered proposal back: the request returns as submitted. */
+    public function withdrawProposal(): void
+    {
+        abort_unless($this->canWithdrawProposal, 403);
+
+        $this->attempt(fn () => app(LeaveRequestRevisionService::class)->withdraw($this->request->pendingRevision, Auth::user()),
+            'Proposal withdrawn — the request is back as the employee submitted it.');
     }
 
     /** Approve the employee's cancellation request: the leave is cancelled and its days returned. */
@@ -332,9 +447,30 @@ class LeaveRequestDetail extends Component
             return;
         }
 
-        $this->reset(['comment', 'cancelReason', 'cancellationNote', 'confirming']);
-        unset($this->request, $this->canDecide, $this->canCancel, $this->canCorrect, $this->canDecideCancellation, $this->balanceImpact, $this->dates, $this->ledgerEntries, $this->history);
+        $this->reset(['comment', 'cancelReason', 'cancellationNote', 'confirming', 'proposal', 'proposalReason']);
+        unset($this->request, $this->canDecide, $this->canCancel, $this->canCorrect, $this->canDecideCancellation, $this->balanceImpact, $this->dates, $this->ledgerEntries, $this->history,
+            $this->canPropose, $this->canWithdrawProposal, $this->revisions);
         session()->flash('success', $done);
+    }
+
+    /** @return array<string, mixed> the proposal form as the revision service reads it */
+    private function proposalInput(): array
+    {
+        $input = [
+            'start_date' => $this->proposal['start_date'] ?? null,
+            'end_date' => $this->proposal['end_date'] ?? null,
+            'leave_type_id' => $this->proposal['leave_type_id'] ?? null,
+        ];
+
+        if ($this->request->isCombined()) {
+            return $input + ['allocations' => $this->proposal['allocations'] ?? []];
+        }
+
+        return $input + [
+            'is_half_day' => (bool) ($this->proposal['is_half_day'] ?? false),
+            'half_day_period' => ($this->proposal['half_day_period'] ?? '') ?: null,
+            'paid_days' => $this->proposal['paid_days'] ?? null,
+        ];
     }
 
     private function isOwn(): bool

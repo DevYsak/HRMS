@@ -82,7 +82,7 @@ class PayableDaysService
     ];
 
     /** Leave statuses that may still explain an absence. */
-    private const PENDING_LEAVE = ['pending', 'pending_hr', 'more_info_requested'];
+    private const PENDING_LEAVE = ['pending', 'pending_hr', 'more_info_requested', 'awaiting_employee_confirmation'];
 
     public function __construct(
         private readonly AttendanceWindowService $window,

@@ -36,6 +36,9 @@
                 <flux:button size="sm" variant="primary" icon="check" wire:click="confirm('approve')">Approve</flux:button>
                 <flux:button size="sm" icon="x-mark" wire:click="confirm('reject')">Reject</flux:button>
             @endif
+            @if($this->canPropose)
+                <flux:button size="sm" variant="ghost" icon="pencil-square" wire:click="openProposal">Propose Changes</flux:button>
+            @endif
             @if($this->canCancel)
                 <flux:button size="sm" variant="ghost" wire:click="confirm('cancel')">Cancel Leave</flux:button>
             @endif
@@ -57,6 +60,91 @@
     @error('action')
         <div class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300" role="alert">{{ $message }}</div>
     @enderror
+
+    {{-- HR proposed a change: the request waits for the employee's answer. --}}
+    @if($pendingRevision = $r->pendingRevision)
+        <div class="ui-surface space-y-3 p-5" style="border-left: 4px solid #8b5cf6" data-pending-revision>
+            <div class="flex flex-wrap items-start justify-between gap-3">
+                <div class="min-w-0">
+                    <p class="text-sm font-semibold text-zinc-900 dark:text-white">Waiting for the employee to confirm the proposed changes</p>
+                    <p class="mt-1 text-sm text-zinc-700 dark:text-zinc-200">“{{ $pendingRevision->reason }}”</p>
+                    <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $pendingRevision->proposer?->name ?? 'HR' }} · {{ $pendingRevision->created_at?->toImmutable()->userDateTime() }} · Nothing is approved or deducted until the employee accepts and the request is approved.</p>
+                </div>
+                @if($this->canWithdrawProposal)
+                    <flux:button size="sm" variant="ghost" wire:click="withdrawProposal" wire:confirm="Withdraw this proposal? The request returns as the employee submitted it.">Withdraw Proposal</flux:button>
+                @endif
+            </div>
+            <x-leave.revision-compare :revision="$pendingRevision" />
+        </div>
+    @endif
+
+    {{-- HR proposes a change; the employee confirms it before anything is decided. --}}
+    @if($confirming === 'propose')
+        @php $preview = $this->proposalPreview; @endphp
+        <form wire:submit="submitProposal" class="ui-surface space-y-4 p-5" style="border-left: 4px solid #8b5cf6" data-proposal-form>
+            <div>
+                <p class="text-sm font-semibold text-zinc-900 dark:text-white">Propose changes to this request</p>
+                <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">The employee sees what they submitted beside your proposal and accepts or rejects it. Nothing is approved or deducted until then; what they submitted is kept either way.</p>
+            </div>
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <flux:input type="date" wire:model.live="proposal.start_date" label="Start date" />
+                <flux:input type="date" wire:model.live="proposal.end_date" label="End date" />
+                @unless($r->isCombined())
+                    <flux:select wire:model.live="proposal.leave_type_id" label="Leave type / reason">
+                        @foreach($this->proposalTypes as $type)
+                            <flux:select.option value="{{ $type->id }}">{{ $type->name }}</flux:select.option>
+                        @endforeach
+                    </flux:select>
+                    <flux:input type="number" step="0.5" min="0" wire:model.live.debounce.400ms="proposal.paid_days" label="Paid days" description="The rest is Leave Without Pay." />
+                    <div class="flex items-end pb-2"><flux:checkbox wire:model.live="proposal.is_half_day" label="Half day" /></div>
+                    @if($proposal['is_half_day'] ?? false)
+                        <flux:select wire:model.live="proposal.half_day_period" label="Session">
+                            <flux:select.option value="">Choose…</flux:select.option>
+                            <flux:select.option value="first_half">First half</flux:select.option>
+                            <flux:select.option value="second_half">Second half</flux:select.option>
+                        </flux:select>
+                    @endif
+                @endunless
+            </div>
+            @if($r->isCombined() && ! isset($preview['error']))
+                <div class="space-y-2" data-proposal-allocations>
+                    <p class="text-xs font-medium text-zinc-500 dark:text-zinc-400">Date allocation</p>
+                    @foreach(($preview['proposed']['rows'] ?? []) as $row)
+                        @continue(! $row['chargeable'])
+                        <div class="flex flex-wrap items-center gap-3">
+                            <span class="w-28 text-sm tabular-nums text-zinc-800 dark:text-zinc-100">{{ \Illuminate\Support\Carbon::parse($row['date'])->toImmutable()->userShortDate() }}</span>
+                            <flux:select size="sm" wire:model.live="proposal.allocations.{{ $row['date'] }}.type" class="max-w-52">
+                                @foreach(\App\Models\LeaveRequestDay::ALLOCATIONS as $allocation)
+                                    <flux:select.option value="{{ $allocation }}">{{ \App\Models\LeaveRequestDay::LABELS[$allocation] }}</flux:select.option>
+                                @endforeach
+                            </flux:select>
+                            @if(\App\Models\LeaveRequestDay::isHalf($row['allocation']))
+                                <flux:select size="sm" wire:model.live="proposal.allocations.{{ $row['date'] }}.session" class="max-w-40">
+                                    <flux:select.option value="">Session…</flux:select.option>
+                                    <flux:select.option value="first_half">First half</flux:select.option>
+                                    <flux:select.option value="second_half">Second half</flux:select.option>
+                                </flux:select>
+                            @endif
+                        </div>
+                    @endforeach
+                </div>
+            @endif
+            @if(isset($preview['error']))
+                <p class="text-sm text-rose-600 dark:text-rose-400" role="alert" data-proposal-error>{{ $preview['error'] }}</p>
+            @elseif($preview)
+                <p class="rounded-lg bg-violet-50 px-3 py-2 text-sm text-violet-900 dark:bg-violet-500/10 dark:text-violet-200" data-proposal-summary>
+                    Proposed: {{ $fmt($preview['proposed']['days']) }} {{ Str::plural('day', (float) $preview['proposed']['days'] == 1 ? 1 : 2) }} —
+                    {{ $fmt((float) $preview['proposed']['days'] - (float) $preview['proposed']['lwp_days']) }} paid, {{ $fmt($preview['proposed']['lwp_days']) }} unpaid.
+                    {{ $preview['changed'] === [] ? 'Nothing changed yet.' : 'The employee is asked to confirm.' }}
+                </p>
+            @endif
+            <flux:textarea wire:model="proposalReason" rows="2" label="Reason for the employee" placeholder="Why do you propose this change?" />
+            <div class="flex flex-wrap justify-end gap-2">
+                <flux:button type="button" variant="ghost" wire:click="$set('confirming', null)">Back</flux:button>
+                <flux:button type="submit" variant="primary" wire:loading.attr="disabled" wire:target="submitProposal">Send to Employee</flux:button>
+            </div>
+        </form>
+    @endif
 
     {{-- The employee asks to cancel this APPROVED leave: it stays approved until HR decides. --}}
     @if($pendingCancellation = $r->pendingCancellation)
@@ -92,7 +180,7 @@
     @endif
 
     {{-- Confirmation: approve / reject / cancel --}}
-    @if($confirming && ! in_array($confirming, ['approve_cancellation', 'reject_cancellation'], true))
+    @if($confirming && ! in_array($confirming, ['approve_cancellation', 'reject_cancellation', 'propose'], true))
         <div class="ui-surface space-y-3 p-5" style="border-left: 4px solid {{ $confirming === 'approve' ? '#10b981' : '#f43f5e' }}" data-confirm="{{ $confirming }}">
             <p class="text-sm font-semibold text-zinc-900 dark:text-white">
                 {{ ['approve' => 'Approve this leave request?', 'reject' => 'Reject this leave request?', 'cancel' => 'Cancel this leave?'][$confirming] }}
@@ -222,25 +310,59 @@
                 @endif
             </section>
 
-            {{-- Audit trail --}}
-            <section class="{{ $card }}" data-section="audit">
-                <h2 class="{{ $h2 }}">Approval History &amp; Audit Trail</h2>
-                @if($this->history->isEmpty())
-                    <p class="mt-2 text-sm text-zinc-500 dark:text-zinc-400">No recorded actions yet beyond submission.</p>
-                @else
-                    <ol class="mt-3 space-y-3 text-sm">
-                        @foreach($this->history as $event)
-                            <li class="flex gap-3">
-                                <span class="mt-1.5 size-2 shrink-0 rounded-full bg-orange-400"></span>
-                                <span class="min-w-0">
-                                    <span class="block font-medium text-zinc-900 dark:text-white">{{ ucwords(strtolower(str_replace(['LEAVE_', '_'], ['', ' '], (string) ($event->event ?: $event->action)))) }}</span>
-                                    <span class="block text-xs text-zinc-500 dark:text-zinc-400">{{ $event->user?->name ?? 'System' }} · {{ $event->created_at?->toImmutable()->userDateTime() }}</span>
-                                    @if($event->reason)<span class="block text-xs text-zinc-600 dark:text-zinc-300">“{{ $event->reason }}”</span>@endif
-                                </span>
+            {{-- HR proposals and the employee's answers --}}
+            @if($this->revisions->isNotEmpty())
+                <section class="{{ $card }}" data-section="revisions">
+                    <h2 class="{{ $h2 }}">Proposed Changes</h2>
+                    <ol class="mt-3 space-y-4">
+                        @foreach($this->revisions as $revision)
+                            <li class="space-y-2" data-revision="{{ $revision->id }}">
+                                <p class="flex flex-wrap items-center gap-2 text-sm">
+                                    <x-pulse.badge :color="['awaiting_employee' => 'violet', 'accepted' => 'emerald', 'rejected' => 'rose'][$revision->status] ?? 'zinc'">{{ ['awaiting_employee' => 'Awaiting employee', 'accepted' => 'Accepted', 'rejected' => 'Rejected by employee', 'withdrawn' => 'Withdrawn'][$revision->status] ?? ucfirst($revision->status) }}</x-pulse.badge>
+                                    <span class="text-zinc-700 dark:text-zinc-200">{{ $revision->proposer?->name ?? 'HR' }} · {{ $revision->created_at?->toImmutable()->userDateTime() }}</span>
+                                </p>
+                                <p class="text-xs text-zinc-600 dark:text-zinc-300">“{{ $revision->reason }}”</p>
+                                @if($revision->responded_at)
+                                    <p class="text-xs text-zinc-500 dark:text-zinc-400">{{ $revision->responder?->name ?? 'System' }} · {{ $revision->responded_at->toImmutable()->userDateTime() }}@if($revision->response_note) · “{{ $revision->response_note }}”@endif</p>
+                                @endif
+                                <x-leave.revision-compare :revision="$revision" />
                             </li>
                         @endforeach
                     </ol>
-                @endif
+                </section>
+            @endif
+
+            {{-- Audit trail --}}
+            <section class="{{ $card }}" data-section="audit">
+                <h2 class="{{ $h2 }}">Approval History &amp; Audit Trail</h2>
+                @php
+                    $dot = ['ledger' => 'bg-emerald-500', 'payroll' => 'bg-rose-400', 'payment' => 'bg-sky-400', 'submitted' => 'bg-zinc-400'];
+                    $show = fn ($v) => is_bool($v) ? ($v ? 'yes' : 'no') : (is_array($v) ? json_encode($v) : (is_float($v) || is_int($v) ? $fmt($v) : (string) $v));
+                    $label = fn ($k) => ucfirst(str_replace('_', ' ', (string) $k));
+                @endphp
+                <ol class="mt-3 space-y-3 text-sm" data-timeline>
+                    @foreach($this->history as $event)
+                        <li class="flex gap-3" data-timeline-event="{{ $event['kind'] }}">
+                            <span class="mt-1.5 size-2 shrink-0 rounded-full {{ $dot[$event['kind']] ?? 'bg-orange-400' }}"></span>
+                            <span class="min-w-0">
+                                <span class="block font-medium text-zinc-900 dark:text-white">{{ $event['action'] }}</span>
+                                <span class="block text-xs text-zinc-500 dark:text-zinc-400">
+                                    {{ $event['actor'] }}@if($event['system']) <x-pulse.badge>System</x-pulse.badge>@endif · {{ $event['at']->toImmutable()->userDateTime() }}
+                                    @if($event['ledger_ids']) · ledger #{{ implode(', #', $event['ledger_ids']) }}@endif
+                                </span>
+                                @php $changes = collect($event['after'])->reject(fn ($v, $k) => in_array($k, ['revision_id', 'cancellation_request_id'], true)); @endphp
+                                @if($changes->isNotEmpty())
+                                    <span class="block text-xs text-zinc-600 dark:text-zinc-300">
+                                        @foreach($changes as $key => $value)
+                                            <span class="mr-2 inline-block">{{ $label($key) }}: @if(array_key_exists($key, $event['before']) && $event['before'][$key] != $value)<span class="text-zinc-400 line-through">{{ $show($event['before'][$key]) }}</span> → @endif{{ $show($value) }}</span>
+                                        @endforeach
+                                    </span>
+                                @endif
+                                @if($event['reason'])<span class="block text-xs text-zinc-600 dark:text-zinc-300">“{{ $event['reason'] }}”</span>@endif
+                            </span>
+                        </li>
+                    @endforeach
+                </ol>
             </section>
         </div>
 

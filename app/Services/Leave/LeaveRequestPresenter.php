@@ -16,6 +16,7 @@ class LeaveRequestPresenter
         'pending' => ['Pending', 'amber'],
         'pending_hr' => ['Pending HR', 'amber'],
         'more_info_requested' => ['Needs info', 'blue'],
+        'awaiting_employee_confirmation' => ['Awaiting employee', 'violet'],
         'approved' => ['Approved', 'emerald'],
         'rejected' => ['Rejected', 'rose'],
         'cancelled' => ['Cancelled', 'zinc'],

@@ -69,7 +69,7 @@ use Illuminate\Support\Str;
 class EmployeeDashboardService
 {
     /** Leave statuses an employee is still waiting on. */
-    private const OPEN_LEAVE_STATUSES = ['pending', 'pending_hr', 'more_info_requested'];
+    private const OPEN_LEAVE_STATUSES = ['pending', 'pending_hr', 'more_info_requested', 'awaiting_employee_confirmation'];
 
     /** Heroicons the notification payloads use that Flux ships. */
     private const NOTIFICATION_ICONS = [
