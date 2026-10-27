@@ -9,6 +9,7 @@ use App\Models\LeaveBalance;
 use App\Models\LeaveEncashment;
 use App\Models\LeaveEscalation;
 use App\Models\LeaveRequest;
+use App\Models\LeaveRequestDay;
 use App\Models\LeaveRolloverRecord;
 use App\Models\LeaveType;
 use App\Models\LeaveYear;
@@ -189,6 +190,32 @@ class LeaveManagementService
      *
      * @return Collection<int, array<string, mixed>>
      */
+    /**
+     * Combined Leave for one employee and leave year: requests by status and,
+     * for the approved ones, the paid, unpaid and half-day units of their day
+     * rows — the final approved allocation. Two queries.
+     *
+     * @return array{requests: int, by_status: array<string, int>, paid_units: float, unpaid_units: float, half_day_units: float}
+     */
+    public function combinedStats(Employee $employee, LeaveYear $year): array
+    {
+        $requests = LeaveRequest::where('employee_id', $employee->id)->where('request_mode', LeaveRequest::MODE_COMBINED)
+            ->whereDate('start_date', '>=', $year->starts_on->toDateString())
+            ->whereDate('start_date', '<=', $year->ends_on->toDateString())
+            ->get(['id', 'status']);
+        $approved = $requests->where('status', 'approved')->pluck('id');
+        $days = $approved->isEmpty() ? collect()
+            : LeaveRequestDay::whereIn('leave_request_id', $approved)->where('is_excluded', false)->get(['allocation_type', 'paid_units', 'unpaid_units']);
+
+        return [
+            'requests' => $requests->count(),
+            'by_status' => $requests->countBy('status')->all(),
+            'paid_units' => round((float) $days->sum('paid_units'), 2),
+            'unpaid_units' => round((float) $days->sum('unpaid_units'), 2),
+            'half_day_units' => round($days->filter(fn ($d) => LeaveRequestDay::isHalf((string) $d->allocation_type))->count() * 0.5, 2),
+        ];
+    }
+
     public function employeeDetail(Employee $employee, LeaveYear $year): Collection
     {
         $balances = LeaveBalance::with('leaveType')

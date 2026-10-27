@@ -115,6 +115,17 @@ class EnsureEmployeeLeaveBalancesService
             return ['status' => self::NO_ENTITLEMENT, 'message' => $held] + $row;
         }
 
+        // Earned Leave is never granted up front — a group allocation, an
+        // override or an "annual" rule cannot add a base on top of the monthly
+        // accrual. Its row is opened so it can accrue and be shown.
+        if (app(LeaveBalanceSource::class)->earnedPool($employee, $year->starts_on)?->id === $type->id) {
+            if (! $dryRun && $this->existingBalance($employee, $type, $year) === null) {
+                $this->openRow($employee, $type, $year);
+            }
+
+            return ['status' => self::ACCRUAL_ONLY, 'message' => 'Earned Leave accrues 1 day per completed month (leave:accrue-earned); never granted up front.'] + $row;
+        }
+
         // Leave V2: a historical or inactive type never gets a new balance, and
         // a Casual, Sick… reason draws on the shared Earned Leave balance and
         // never holds one of its own.

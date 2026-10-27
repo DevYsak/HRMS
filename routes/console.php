@@ -254,6 +254,17 @@ Schedule::command('leave:conexus-csl-accrual --apply')
     ->withoutOverlapping()
     ->runInBackground();
 
+// Leave V2 Earned Leave — 1 day per completed month, effective its last day.
+// 00:20 on the 1st: after the month ends and before the 1 July rollover
+// (01:30), so June's day is in the finishing year when it is carried
+// forward. Idempotent; NEEDS REVIEW / BLOCKED rows are reported, never
+// guessed. Scheduled only when explicitly enabled (earned_accrual_enabled).
+Schedule::command('leave:accrue-earned --apply')
+    ->monthlyOn(1, '00:20')
+    ->when(fn () => (bool) config('leave_provisioning.earned_accrual_enabled'))
+    ->withoutOverlapping()
+    ->runInBackground();
+
 // Phase 2B — provision any eligible employee missing this leave year's base
 // entitlement (idempotent; mismatches and ambiguous balances are only reported)
 Schedule::command('leave:ensure-balances --apply')

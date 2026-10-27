@@ -280,9 +280,10 @@ test('provisioning and accrual never grant 12 on top, before or after the migrat
 
     mgApply($employee);
 
-    // Migrated: no base, no accrual for months the opening already holds.
+    // Migrated: no base; the in-advance monthly job never touches Earned Leave
+    // (only leave:accrue-earned does, for months the opening does not hold).
     expect($ensure()['status'])->toBe(EnsureEmployeeLeaveBalancesService::NO_ENTITLEMENT)
-        ->and(app(LeaveAccrualService::class)->creditOne($employee->fresh(), $this->earned, Carbon::parse('2026-10-01'), $this->year, 2026, 10))->toBe('already')
+        ->and(app(LeaveAccrualService::class)->creditOne($employee->fresh(), $this->earned, Carbon::parse('2026-10-01'), $this->year, 2026, 10))->toBe('skipped')
         ->and(mgAvailable($employee, $this->earned))->toEqual(3.0);
 
     // A zero-balance employee is never topped up to 12 either.

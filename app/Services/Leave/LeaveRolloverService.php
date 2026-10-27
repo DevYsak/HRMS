@@ -85,6 +85,9 @@ class LeaveRolloverService
             ->when($filters['department_id'] ?? null, fn ($q, $id) => $q->whereHas('employee', fn ($e) => $e->where('department_id', $id)))
             ->orderBy('employee_id')->orderBy('leave_type_id')
             ->get()
+            // Leave V2 Earned Leave rolls over in EarnedLeaveRolloverService; a
+            // migrated employee's CSL is history and is never carried beside it.
+            ->reject(fn (LeaveBalance $b) => EarnedLeaveRolloverService::handledByLeaveV2($b, $from))
             ->map(fn (LeaveBalance $b) => $this->row($b, $from, $to, $records->get($b->employee_id.':'.$b->leave_type_id)))
             ->values();
     }

@@ -18,11 +18,14 @@ use App\Models\User;
 use App\Notifications\LeaveBalanceChangedNotification;
 use App\Services\Approvals\ApprovalGuard;
 use App\Services\Leave\EmployeeLeaveOverrideService;
+use App\Services\Leave\LeaveAccrualTransitionService;
 use App\Services\Leave\LeaveAdminActionService;
 use App\Services\Leave\LeaveBalanceCalculator;
 use App\Services\Leave\LeaveCarryForwardService;
+use App\Services\Leave\LeaveCategoryBalances;
 use App\Services\Leave\LeaveManagementService;
 use App\Services\Leave\LeavePolicyAssignmentResolver;
+use App\Services\Leave\LeavePolicyEngine;
 use App\Services\Leave\LeaveStatementService;
 use App\Services\Leave\LeaveYearResolver;
 use App\Services\LeaveBalanceService;
@@ -216,6 +219,82 @@ class EmployeeLeaveDetail extends Component
     public function balances(): Collection
     {
         return app(LeaveManagementService::class)->employeeDetail($this->employee, $this->year);
+    }
+
+    /**
+     * The employee's leave as Leave V2 reads it — Earned Leave, Comp Off,
+     * Special Leave, Unpaid and historical balances — from the same service
+     * the employee's own page uses. Null when no Earned Leave pool applies.
+     *
+     * @return array<string, mixed>|null
+     */
+    #[Computed]
+    public function categorySummary(): ?array
+    {
+        if (! LeavePolicyEngine::enabled()) {
+            return null;
+        }
+
+        $summary = app(LeaveCategoryBalances::class)->forEmployee($this->employee, $this->year);
+
+        return $summary['earned'] !== null ? $summary : null;
+    }
+
+    /** "Monthly Accrual Starts From" form: open, the month (YYYY-MM) and why. */
+    public bool $editingAccrualStart = false;
+
+    public string $accrualStartMonth = '';
+
+    public string $accrualStartReason = '';
+
+    #[Computed]
+    public function accrualStartsOn(): ?Carbon
+    {
+        return app(LeaveAccrualTransitionService::class)->startsOn($this->employee);
+    }
+
+    #[Computed]
+    public function canChangeAccrualStart(): bool
+    {
+        return app(LeaveAccrualTransitionService::class)->mayChange(Auth::user(), $this->employee);
+    }
+
+    public function openAccrualStart(): void
+    {
+        abort_unless($this->canChangeAccrualStart, 403);
+        $this->resetErrorBag(['accrualStartMonth', 'accrualStartReason']);
+        $this->accrualStartMonth = $this->accrualStartsOn?->format('Y-m') ?? '';
+        $this->accrualStartReason = '';
+        $this->editingAccrualStart = true;
+    }
+
+    /** Set or move the date. No balance or ledger entry changes. */
+    public function saveAccrualStart(): void
+    {
+        abort_unless($this->canChangeAccrualStart, 403);
+        $this->validate([
+            'accrualStartMonth' => ['required', 'date_format:Y-m'],
+            'accrualStartReason' => ['required', 'string', 'min:5', 'max:1000'],
+        ], [], ['accrualStartMonth' => 'month', 'accrualStartReason' => 'reason']);
+
+        try {
+            app(LeaveAccrualTransitionService::class)->set($this->employee, $this->accrualStartMonth.'-01', $this->accrualStartReason, Auth::user());
+        } catch (\DomainException|AuthorizationException $e) {
+            $this->addError('accrualStartMonth', $e->getMessage());
+
+            return;
+        }
+
+        $this->reset(['editingAccrualStart', 'accrualStartMonth', 'accrualStartReason']);
+        unset($this->accrualStartsOn);
+        \Flux::toast('Monthly accrual start saved. Existing balances are unchanged.', variant: 'success');
+    }
+
+    /** @return array{requests: int, by_status: array<string, int>, paid_units: float, unpaid_units: float, half_day_units: float} */
+    #[Computed]
+    public function combinedStats(): array
+    {
+        return app(LeaveManagementService::class)->combinedStats($this->employee, $this->year);
     }
 
     #[Computed]

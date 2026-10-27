@@ -54,4 +54,18 @@ return [
 
     'policy_engine_v2' => (bool) env('LEAVE_POLICY_ENGINE_V2', false),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Leave V2 Earned Leave monthly accrual
+    |--------------------------------------------------------------------------
+    |
+    | `leave:accrue-earned` credits 1 day of Earned Leave per completed month
+    | (12 a year), idempotent per employee and month, catching up missed
+    | months. OFF by default: switch it on only after its preview has been
+    | reviewed on live. Previews and manual --apply runs are always allowed.
+    |
+    */
+
+    'earned_accrual_enabled' => (bool) env('LEAVE_EARNED_ACCRUAL_ENABLED', false),
+
 ];

@@ -45,7 +45,7 @@ class LeaveV2MigrationService
     /** The Earned Leave annual entitlement the policy must give (rule 1). */
     public const DEFAULT_ENTITLEMENT = 12.0;
 
-    public const PENDING = ['pending', 'pending_hr', 'more_info_requested'];
+    public const PENDING = ['pending', 'pending_hr', 'more_info_requested', 'awaiting_employee_confirmation'];
 
     private const EPSILON = 0.005;
 
@@ -113,11 +113,10 @@ class LeaveV2MigrationService
             'source_balance_id' => $sourceBalance?->id,
             'csl_available' => $sourceAvailable,
             'sick_available' => $sum(fn (LeaveType $t) => $notSource($t) && ($t->category === 'sick' || str_contains(strtolower($t->name), 'sick'))),
-            'annual_historical' => $sum(fn (LeaveType $t) =>
-    $notSource($t)
+            'annual_historical' => $sum(fn (LeaveType $t) => $notSource($t)
     && ($earned === null || $t->id !== $earned->id)
     && ($t->category === 'annual' || str_starts_with(strtolower($t->name), 'annual'))
-),
+            ),
             'comp_off' => $sum(fn (LeaveType $t) => LeaveCategory::of($t) === LeaveCategory::COMP_OFF || $t->category === 'comp_off'),
             'special' => $sum(fn (LeaveType $t) => LeaveCategory::of($t) === LeaveCategory::SPECIAL),
             'pending_legacy' => $pendingLegacy->count(),
@@ -305,6 +304,13 @@ class LeaveV2MigrationService
             return 'Earned Leave for this year was set by the Leave V2 migration.';
         }
 
+        // Migrated in an earlier year: from then on Earned Leave runs normally
+        // (monthly accrual and the year-end carry forward).
+        if (LeaveV2Migration::where('employee_id', $employee->id)->where('earned_leave_type_id', $type->id)
+            ->whereHas('leaveYear', fn ($q) => $q->where('starts_on', '<', $year->starts_on))->exists()) {
+            return null;
+        }
+
         if (! LeavePolicyEngine::enabled()) {
             return 'Awaiting the Leave V2 migration (Leave V2 is off).';
         }
@@ -314,14 +320,6 @@ class LeaveV2MigrationService
         return $source && $this->balances($employee, $year)->contains('leave_type_id', $source->id)
             ? 'Awaiting the Leave V2 migration of this employee\'s '.$source->name.' balance.'
             : null;
-    }
-
-    /** A month the migration already covers: accrual for it would add on top. */
-    public function coversMonth(Employee $employee, LeaveType $type, LeaveYear $year, Carbon $monthStart): bool
-    {
-        $record = LeaveV2Migration::where('employee_id', $employee->id)->where('earned_leave_type_id', $type->id)->where('leave_year_id', $year->id)->first();
-
-        return $record !== null && $monthStart->lt($record->effective_date);
     }
 
     /** @return Collection<int, LeaveBalance> the employee's balances in the year */
