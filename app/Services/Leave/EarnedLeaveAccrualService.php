@@ -116,7 +116,7 @@ class EarnedLeaveAccrualService
             'as_of' => $asOf->toDateString(),
             'available' => null, 'opening' => null, 'accrued' => null, 'used' => null, 'pending' => null,
             'transition' => null, 'suggested_start' => null,
-            'expected_months' => [], 'expected' => null, 'credited_months' => [],
+            'eligible_months' => [], 'expected_months' => [], 'expected' => null, 'credited_months' => [], 'base_days' => 0.0,
             'due_months' => [], 'proposed' => 0.0,
             'status' => self::BLOCKED, 'reason' => '',
         ];
@@ -217,6 +217,7 @@ class EarnedLeaveAccrualService
             $eligible = array_values(array_filter($eligible, fn (string $m) => $m >= $startMonth));
         }
 
+        $row['eligible_months'] = array_values($eligible);
         $expected = array_values(array_filter($eligible, fn (string $m) => $this->months->monthEnd($m)->lt($asOf)));
         $row['expected_months'] = $expected;
         $row['expected'] = round(count($expected) * self::MONTHLY_DAYS, 2);
@@ -227,12 +228,22 @@ class EarnedLeaveAccrualService
         }
 
         $due = array_values(array_diff($expected, $credited));
-        // Never more than 12 monthly credits a year.
-        $room = (int) floor((self::ANNUAL_DAYS - count($credited)) / self::MONTHLY_DAYS);
+        // Never more than 12 days of NEW entitlement a year: monthly credits
+        // plus any up-front base grant for this year. Carry forward and a
+        // migrated opening are earlier entitlement and never count here.
+        $base = round((float) $live->where('entry_type', LeaveLedgerEntry::TYPE_BASE)->sum('days'), 2);
+        $row['base_days'] = $base;
+        $room = (int) floor((self::ANNUAL_DAYS - $base - count($credited) * self::MONTHLY_DAYS + self::EPSILON) / self::MONTHLY_DAYS);
+        $capped = count($due) > max(0, $room);
         $due = array_slice($due, 0, max(0, $room));
 
         $row['due_months'] = $due;
         $row['proposed'] = round(count($due) * self::MONTHLY_DAYS, 2);
+
+        if ($due === [] && $capped) {
+            return ['status' => self::NO_CHANGE, 'reason' => 'This leave year\'s 12 days of new entitlement are already granted ('
+                .($base > 0 ? ($base + 0).' up front, ' : '').count($credited).' monthly).'] + $row;
+        }
 
         return $due === []
             ? ['status' => self::NO_CHANGE, 'reason' => 'Up to date: '.count($expected).' completed eligible month(s) credited.'] + $row

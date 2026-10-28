@@ -908,7 +908,17 @@
                         <li class="flex items-center justify-between gap-2"><span class="flex items-center gap-2"><span class="size-2.5 rounded-full bg-amber-400"></span>Carry Forward</span><span class="font-semibold tabular-nums">{{ $fmt($insCarried) }}</span></li>
                     </ul>
                 </div>
-                <p class="mt-4 border-t border-zinc-100 pt-3 text-xs text-zinc-500 dark:border-white/5 dark:text-zinc-400" data-leave-forecast>Leave Forecast: <span class="font-semibold text-zinc-700 dark:text-zinc-200">{{ $forecast['projected'] }}</span> projected by year end · <span class="{{ $forecast['on_track'] ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400' }}">{{ $forecast['on_track'] ? 'on track' : 'above your balance' }}</span></p>
+                @if($forecast['v2'])
+                    <p class="mt-4 border-t border-zinc-100 pt-3 text-xs text-zinc-500 dark:border-white/5 dark:text-zinc-400" data-leave-forecast="earned">
+                        @if($forecast['year_end'] !== null)
+                            Leave Forecast: <span class="font-semibold text-zinc-700 dark:text-zinc-200">{{ $fmt($forecast['year_end']) }} days</span> available on {{ $forecast['ends_on']->toImmutable()->userDate() }} if no more leave is taken ({{ $fmt($forecast['today']) }} today + {{ $fmt($forecast['future_credits']) }} monthly {{ \Illuminate\Support\Str::plural('credit', (int) $forecast['future_credits']) }} still to come)
+                        @else
+                            Leave Forecast: available once HR confirms when your monthly accrual starts.
+                        @endif
+                    </p>
+                @else
+                    <p class="mt-4 border-t border-zinc-100 pt-3 text-xs text-zinc-500 dark:border-white/5 dark:text-zinc-400" data-leave-forecast>Leave Forecast: <span class="font-semibold text-zinc-700 dark:text-zinc-200">{{ $forecast['projected'] }}</span> projected by year end · <span class="{{ $forecast['on_track'] ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400' }}">{{ $forecast['on_track'] ? 'on track' : 'above your balance' }}</span></p>
+                @endif
             </div>
 
             {{-- Monthly usage --}}

@@ -5,9 +5,11 @@ namespace App\Services\Leave;
 use App\Models\Attendance;
 use App\Models\DecemberMandatoryDay;
 use App\Models\Employee;
+use App\Models\LeaveAccrualTransition;
 use App\Models\LeaveBalance;
 use App\Models\LeaveEncashment;
 use App\Models\LeaveEscalation;
+use App\Models\LeavePolicy;
 use App\Models\LeaveRequest;
 use App\Models\LeaveRequestDay;
 use App\Models\LeaveRolloverRecord;
@@ -119,8 +121,11 @@ class LeaveManagementService
         $annualId = LeaveType::withTrashed()->where('code', ConexusLeavePolicyService::LEGACY_ANNUAL_CODE)->value('id');
         $annualPending = $annualId ? LeaveRequest::where('leave_type_id', $annualId)->whereIn('status', LeaveBalanceCalculator::RESERVING_STATUSES)
             ->distinct()->pluck('employee_id')->flip() : collect();
+        // Leave V2: the Earned Leave pool is shown by its source lines.
+        $earnedMode = $this->isEarnedPool($type);
+        $startsFrom = $earnedMode ? LeaveAccrualTransition::whereIn('employee_id', $ids)->pluck('starts_on', 'employee_id') : collect();
 
-        $rows = $employees->map(function (Employee $e) use ($balances, $pendingIds, $onLeaveIds, $upcomingIds, $expiringIds, $year, $nextAccrual, $compOff, $mdlDates, $mdlWorked, $annualPending) {
+        $rows = $employees->map(function (Employee $e) use ($balances, $pendingIds, $onLeaveIds, $upcomingIds, $expiringIds, $year, $nextAccrual, $compOff, $mdlDates, $mdlWorked, $annualPending, $earnedMode, $startsFrom) {
             $balance = $balances->get($e->id);
             $s = $balance ? $this->calculator->summary($balance) : null;
             $compOffBalance = $compOff->get($e->id);
@@ -133,6 +138,8 @@ class LeaveManagementService
                 $balance !== null && $balance->ledger_status === LeaveBalance::LEDGER_NEEDS_HR_REVIEW ? 'Balance history needs HR review' : null,
                 $annualPending->has($e->id) ? 'Annual Leave request awaiting a decision (retired type)' : null,
                 $mdlExpected > 0 && $mdlDates->count() !== $mdlExpected ? "{$mdlDates->count()} of {$mdlExpected} MDL dates configured" : null,
+                $earnedMode && $s !== null && abs($s['opening']) > 0.005 ? 'Migrated opening of '.($s['opening'] + 0).' day(s) not yet classified' : null,
+                $earnedMode && $s !== null && (abs($s['opening']) > 0.005 || abs($s['base']) > 0.005) && ! $startsFrom->has($e->id) ? 'Monthly Accrual Starts From not set' : null,
             ]));
 
             return [
@@ -151,7 +158,11 @@ class LeaveManagementService
                 'carry_forward' => $s['carry_forward'] ?? null,
                 'add_on' => $s['add_on'] ?? null,
                 'accrued' => $s['accrued'] ?? null,
-                'adjustment' => $s ? round($s['adjustment_credit'] + $s['opening'] - $s['adjustment_debit'], 2) : null,
+                'opening' => $s['opening'] ?? null,
+                // HR movements only; a migrated opening is its own line.
+                'adjustment' => $s ? round($s['add_on'] + $s['adjustment_credit'] - $s['adjustment_debit'], 2) : null,
+                'earned_mode' => $earnedMode,
+                'breakdown' => $earnedMode && $s !== null ? EarnedLeaveBreakdown::lines($s) : null,
                 'used' => $s['used'] ?? null,
                 'pending' => $s['pending'] ?? null,
                 'expired' => $s['expired'] ?? null,
@@ -185,11 +196,12 @@ class LeaveManagementService
             : $rows;
     }
 
-    /**
-     * Every leave type for one employee and year, with all buckets.
-     *
-     * @return Collection<int, array<string, mixed>>
-     */
+    /** A leave type that some policy names as its Earned Leave pool (Leave V2). */
+    public function isEarnedPool(LeaveType $type): bool
+    {
+        return LeavePolicyEngine::enabled() && LeavePolicy::where('earned_leave_type_id', $type->id)->exists();
+    }
+
     /**
      * Combined Leave for one employee and leave year: requests by status and,
      * for the approved ones, the paid, unpaid and half-day units of their day
@@ -216,6 +228,11 @@ class LeaveManagementService
         ];
     }
 
+    /**
+     * Every leave type for one employee and year, with all buckets.
+     *
+     * @return Collection<int, array<string, mixed>>
+     */
     public function employeeDetail(Employee $employee, LeaveYear $year): Collection
     {
         $balances = LeaveBalance::with('leaveType')

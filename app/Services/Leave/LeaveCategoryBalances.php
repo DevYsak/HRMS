@@ -14,8 +14,9 @@ use Illuminate\Support\Collection;
  * An employee's balances the way they are asked for (Leave V2):
  *
  *  - Earned Leave: ONE shared balance (the policy's Earned Leave type), with
- *    a usage-by-reason breakdown — Casual 2, Sick 1… — that is reporting
- *    only. Casual, Sick, Privilege… never have balances of their own.
+ *    its source breakdown (EarnedLeaveBreakdown) and a usage-by-reason
+ *    breakdown — Casual 2, Sick 1… — that is reporting only. Casual, Sick,
+ *    Privilege… never have balances of their own.
  *  - Special Leave: statutory types with their own entitlement.
  *  - Comp Off: its own balance.
  *  - Unpaid Leave: no balance; days taken this year.
@@ -34,6 +35,7 @@ class LeaveCategoryBalances
         private readonly LeavePolicyAssignmentResolver $assignments,
         private readonly LeavePolicyCap $cap,
         private readonly LeaveBalanceSource $sources,
+        private readonly EarnedLeaveBreakdown $breakdown,
     ) {}
 
     /**
@@ -97,7 +99,12 @@ class LeaveCategoryBalances
             'policy_source' => $policy['source_label'],
             'year' => $year,
             'annual_cap' => $policy['policy'] ? $this->cap->summary($policy['policy'])['cap'] : null,
-            'earned' => $pool ? $row($pool) + ['usage_by_reason' => $this->usageByReason($employee, $pool, $year)] : null,
+            // The canonical Earned Leave breakdown (carry forward, current year,
+            // migrated opening, HR adjustments…) every screen shows.
+            'earned' => $pool ? $row($pool) + [
+                'usage_by_reason' => $this->usageByReason($employee, $pool, $year),
+                'breakdown' => $this->breakdown->for($employee, $year, $pool),
+            ] : null,
             'reasons' => $this->reasons($types, $pool, $ruleDays),
             'special' => $this->group($own(LeaveCategory::SPECIAL)),
             'comp_off' => $this->group($own(LeaveCategory::COMP_OFF)),

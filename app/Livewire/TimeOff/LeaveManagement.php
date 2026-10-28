@@ -12,7 +12,9 @@ use App\Models\Office;
 use App\Models\User;
 use App\Services\Leave\ConexusLeavePolicyService;
 use App\Services\Leave\EnsureEmployeeLeaveBalancesService;
+use App\Services\Leave\LeaveCategoryBalances;
 use App\Services\Leave\LeaveManagementService;
+use App\Services\Leave\LeavePolicyEngine;
 use App\Services\Leave\LeaveYearResolver;
 use App\Services\LeaveBalanceService;
 use App\Services\Security\PeopleScope;
@@ -89,8 +91,11 @@ class LeaveManagement extends Component
         $this->authorize('view_leave_management');
 
         $this->leaveYearId = $years->current()->id;
-        // CSL is the Conexus leave balance; the retired Annual Leave is not the default.
-        $this->leaveTypeId = LeaveType::where('code', ConexusLeavePolicyService::CSL_CODE)->value('id')
+        // Leave V2: the active Earned Leave pool, never a historical CSL
+        // balance. Otherwise CSL is the Conexus balance; the retired Annual
+        // Leave is not the default.
+        $this->leaveTypeId = $this->activePoolId()
+            ?? LeaveType::where('code', ConexusLeavePolicyService::CSL_CODE)->value('id')
             ?? LeaveType::whereNull('deleted_at')->orderBy('id')->value('id');
     }
 
@@ -111,6 +116,37 @@ class LeaveManagement extends Component
     public function year(): LeaveYear
     {
         return LeaveYear::findOrFail($this->leaveYearId);
+    }
+
+    /** The selected type is a policy's Earned Leave pool: rows show its source lines. */
+    #[Computed]
+    public function earnedMode(): bool
+    {
+        $type = LeaveType::withTrashed()->find($this->leaveTypeId);
+
+        return $type !== null && app(LeaveManagementService::class)->isEarnedPool($type);
+    }
+
+    /** A selected type that Leave V2 keeps only as history (a CSL or Sick balance, a retired type). */
+    #[Computed]
+    public function historicalType(): bool
+    {
+        $type = LeaveType::withTrashed()->find($this->leaveTypeId);
+        $pool = ($poolId = $this->activePoolId()) ? LeaveType::find($poolId) : null;
+
+        return $type !== null && $pool !== null && ! $this->earnedMode
+            && ($type->trashed() || app(LeaveCategoryBalances::class)->isHistoricalBalance($type, $pool));
+    }
+
+    /** Leave V2's Earned Leave pool: the default policy's, else any policy's. */
+    private function activePoolId(): ?int
+    {
+        if (! LeavePolicyEngine::enabled()) {
+            return null;
+        }
+
+        return LeavePolicy::default()?->earned_leave_type_id
+            ?? LeavePolicy::whereNotNull('earned_leave_type_id')->orderBy('id')->value('earned_leave_type_id');
     }
 
     #[Computed]
@@ -352,6 +388,7 @@ class LeaveManagement extends Component
                 ->when(($reach = $this->reach()) !== null, fn ($q) => $q->whereIn('id', $reach))
                 ->distinct()->pluck('manager_id'))->orderBy('name')->get(),
             'addOnTypes' => LeaveBalanceService::ADD_ON_TYPES,
+            'earnedPoolIds' => LeavePolicyEngine::enabled() ? LeavePolicy::whereNotNull('earned_leave_type_id')->pluck('earned_leave_type_id') : collect(),
         ]);
     }
 }

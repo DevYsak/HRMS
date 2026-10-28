@@ -292,7 +292,7 @@ test('embedded balances follow the page tabs and keep historical balances visibl
         ->assertDontSee('Transaction History')
         ->assertSeeHtml('data-historical-balances')
         ->assertSee('Historical Leave Balances')
-        ->assertSee('They cannot be used for new requests.')
+        ->assertSee('not usable for new requests · not included in your current Earned Leave total.')
         ->assertSee('Annual Leave (old policy)')
         ->assertSee('No Earned Leave has been used')
         ->assertSee('You have not taken any Earned Leave this leave year.')

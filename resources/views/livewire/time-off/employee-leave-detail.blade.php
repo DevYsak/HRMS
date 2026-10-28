@@ -62,18 +62,58 @@
             @endphp
             <div class="mb-5 grid grid-cols-1 gap-4 lg:grid-cols-3" data-v2-summary>
                 <div class="ui-surface p-4 lg:col-span-2" data-v2-earned>
-                    <p class="text-sm font-semibold text-zinc-900 dark:text-white">Earned Leave <span class="text-xs font-normal text-zinc-500 dark:text-zinc-400">shared paid pool · {{ $this->year->label }}{{ $v2['policy'] ? ' · '.$v2['policy'] : '' }}</span></p>
-                    <dl class="mt-3 grid grid-cols-3 gap-3 sm:grid-cols-6">
-                        {!! $figure('Opening', $fmt($earned['opening'])) !!}
-                        {!! $figure('Carry forward', $fmt($earned['carry_forward'])) !!}
-                        {!! $figure('Accrued', $fmt($earned['accrued'])) !!}
-                        {!! $figure('Used', $fmt($earned['used'])) !!}
-                        {!! $figure('Pending', $fmt($earned['pending'])) !!}
-                        {!! $figure('Available', $fmt($earned['approved_available']), $earned['approved_available'] < 0 ? 'text-rose-600' : '') !!}
+                    @php
+                        $bd = $earned['breakdown'];
+                        $src = $this->openingSource;
+                        $line = fn (string $label, string $value, string $key, string $extra = '') => '<div class="flex items-baseline justify-between gap-3 py-1" data-breakdown="'.e($key).'"><dt class="text-sm text-zinc-600 dark:text-zinc-300">'.e($label).'</dt><dd class="text-sm font-semibold tabular-nums text-zinc-900 dark:text-white '.$extra.'">'.e($value).'</dd></div>';
+                        $date = fn (?string $d) => $d ? \Carbon\CarbonImmutable::parse($d)->userDate() : '—';
+                    @endphp
+                    <div class="flex flex-wrap items-start justify-between gap-2">
+                        <p class="text-sm font-semibold text-zinc-900 dark:text-white">Earned Leave — {{ $this->year->label }} <span class="text-xs font-normal text-zinc-500 dark:text-zinc-400">shared paid pool{{ $v2['policy'] ? ' · '.$v2['policy'] : '' }}</span></p>
+                        <div class="flex flex-wrap gap-1">
+                            @if($balanceTypes->contains('id', $earned['id']))
+                                @can('add_leave_balance')<flux:button size="xs" icon="plus" wire:click="openAction('add', {{ $earned['id'] }})">Add</flux:button>@endcan
+                                @can('deduct_leave_balance')<flux:button size="xs" icon="minus" wire:click="openAction('deduct', {{ $earned['id'] }})">Deduct</flux:button>@endcan
+                                @can('correct_leave_balance')<flux:button size="xs" icon="pencil-square" wire:click="openAction('correct', {{ $earned['id'] }})">Correct</flux:button>@endcan
+                            @endif
+                            <flux:button size="xs" variant="ghost" icon="clock" wire:click="showTypeHistory({{ $earned['id'] }})">History</flux:button>
+                        </div>
+                    </div>
+                    <dl class="mt-3 max-w-md divide-y divide-zinc-100 dark:divide-white/5" data-earned-breakdown>
+                        {!! $line('Carry Forward', $fmt($bd['carry_forward']), 'carry_forward') !!}
+                        {!! $line('Current Year Accrued', $fmt($bd['current_year_accrued']), 'current_year_accrued') !!}
+                        @if(abs($bd['opening']) > 0.001)
+                            {!! $line('Migrated Opening (not yet classified)', $fmt($bd['opening']), 'opening') !!}
+                        @endif
+                        {!! $line('HR Adjustments', abs($bd['hr_adjustment']) > 0.001 ? $signed($bd['hr_adjustment']) : '0', 'hr_adjustment') !!}
+                        {!! $line('Used', $fmt($bd['used']), 'used') !!}
+                        {!! $line('Pending', $fmt($bd['pending']), 'pending') !!}
+                        {!! $line('Expired', $fmt($bd['expired']), 'expired') !!}
+                        @if(abs($bd['encashed']) > 0.001)
+                            {!! $line('Encashed', $fmt($bd['encashed']), 'encashed') !!}
+                        @endif
+                        <div class="flex items-baseline justify-between gap-3 border-t-2 border-zinc-200 pt-2 dark:border-white/10" data-breakdown="total_available">
+                            <dt class="text-sm font-semibold text-zinc-900 dark:text-white">Total Available</dt>
+                            <dd class="text-base font-bold tabular-nums {{ $bd['total_available'] < 0 ? 'text-rose-600' : 'text-zinc-900 dark:text-white' }}">{{ $fmt($bd['total_available']) }}</dd>
+                        </div>
                     </dl>
-                    @if(abs($earned['adjustment']) > 0.001)
-                        <p class="mt-2 text-xs text-zinc-500 dark:text-zinc-400">Includes HR adjustments of {{ $signed($earned['adjustment']) }} day(s).</p>
+                    @if($bd['pending'] > 0.001)
+                        <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $fmt($bd['available_to_request']) }} day(s) left to request after pending requests.</p>
                     @endif
+                    @unless($bd['consistent'])
+                        <p class="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-800 dark:bg-rose-500/10 dark:text-rose-200" data-breakdown-inconsistent>These lines do not add up to the ledger total — run leave:verify.</p>
+                    @endunless
+                    @if(abs($bd['opening']) > 0.001 && $src)
+                        <p class="mt-2 text-xs text-zinc-500 dark:text-zinc-400" data-opening-source="{{ $src['status'] }}">
+                            Migrated from CSL. Evidence: <span class="font-semibold">{{ $src['status'] }}</span> — {{ $src['reason'] }}
+                            @if(in_array($src['status'], \App\Services\Leave\EarnedOpeningSourceService::CLASSIFIABLE, true)) Reclassified only on an HR decision (leave:earned-opening-sources).@endif
+                        </p>
+                    @endif
+                    <dl class="mt-3 grid grid-cols-1 gap-x-6 gap-y-1 text-xs text-zinc-600 sm:grid-cols-2 dark:text-zinc-300" data-earned-accrual-info>
+                        <div><dt class="inline text-zinc-500 dark:text-zinc-400">Monthly accrual:</dt> <dd class="inline font-semibold">{{ $fmt($bd['monthly_days']) }} day/month after each completed month ({{ $fmt($bd['generated_this_year']) }} of {{ $fmt($bd['annual_entitlement']) }} this year)</dd></div>
+                        <div><dt class="inline text-zinc-500 dark:text-zinc-400">Leave year:</dt> <dd class="inline font-semibold">{{ $date($bd['year']['starts_on']) }} – {{ $date($bd['year']['ends_on']) }}</dd></div>
+                        <div data-next-credit><dt class="inline text-zinc-500 dark:text-zinc-400">Next eligible credit:</dt> <dd class="inline font-semibold">{{ $bd['next_credit'] ? $date($bd['next_credit']['date']).' · +'.$fmt($bd['next_credit']['days']).' for '.\Illuminate\Support\Carbon::parse($bd['next_credit']['month'].'-01')->format('F Y') : 'None scheduled' }}</dd></div>
+                    </dl>
                     @if(! empty($earned['usage_by_reason']))
                         <p class="mt-2 text-xs text-zinc-500 dark:text-zinc-400">Used by reason: {{ collect($earned['usage_by_reason'])->map(fn ($r) => $r['name'].' '.$fmt($r['used']))->join(' · ') }}</p>
                     @endif
@@ -157,7 +197,7 @@
                 @if(! empty($v2['historical']))
                     <div class="ui-surface p-4 lg:col-span-3" data-v2-historical>
                         <p class="text-sm font-semibold text-zinc-900 dark:text-white">Historical balances <x-pulse.badge>Historical</x-pulse.badge></p>
-                        <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Kept for the record; never added to Earned Leave or any total above.</p>
+                        <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400" data-historical-note>Retained for record · not usable for new requests · not included in the current Earned Leave total.</p>
                         <ul class="mt-2 divide-y divide-zinc-100 text-sm dark:divide-white/5">
                             @foreach($v2['historical'] as $type)
                                 <li class="flex flex-wrap justify-between gap-2 py-1.5"><span>{{ $type['name'] }}</span><span class="tabular-nums text-zinc-600 dark:text-zinc-300">credited {{ $fmt($type['credits']) }} · used {{ $fmt($type['used']) }} · left {{ $fmt($type['approved_available']) }}</span></li>
@@ -449,9 +489,11 @@
                     </div>
                 @elseif($action === 'correct')
                     <div class="grid grid-cols-2 gap-3">
-                        <flux:input type="number" step="0.5" min="0" wire:model.live.debounce.300ms="targetBalance" label="Correct available balance" />
+                        <flux:input type="number" step="0.5" wire:model.live.debounce.300ms="days" label="Correction (days, + or −)" placeholder="e.g. 1.5 or -2" />
                         <flux:input type="date" wire:model="effectiveDate" label="Effective date" />
                     </div>
+                    @error('days')<p class="text-xs text-rose-600">{{ $message }}</p>@enderror
+                    <p class="text-xs text-[#667085]">Posted as its own audited entry. Monthly accrual, carry forward and earlier months are not recalculated.</p>
                 @elseif($action === 'cancel_leave' && $targetRequest)
                     <div class="rounded-lg bg-[#F9FAFB] p-3 text-sm dark:bg-white/5">
                         <div class="font-semibold">{{ $targetRequest->leaveType?->name }} · {{ $targetRequest->start_date->toImmutable()->userDate() }}@if(! $targetRequest->end_date->eq($targetRequest->start_date)) – {{ $targetRequest->end_date->toImmutable()->userDate() }}@endif · {{ $fmt($targetRequest->days) }} day(s)</div>
@@ -538,7 +580,7 @@
                 @if(in_array($action, ['add', 'deduct', 'correct'], true) && $this->currentAvailable !== null)
                     @php
                         $current = $this->currentAvailable;
-                        $change = match ($action) { 'add' => (float) ($days ?: 0), 'deduct' => -(float) ($days ?: 0), default => round((float) ($targetBalance ?: $current) - $current, 2) };
+                        $change = ($action === 'deduct' ? -1 : 1) * (is_numeric($days) ? (float) $days : 0.0);
                     @endphp
                     <div class="grid grid-cols-3 gap-2 rounded-lg bg-[#F9FAFB] p-3 text-center text-sm dark:bg-white/5">
                         <div><div class="text-[10px] font-bold uppercase text-[#98A2B3]">Current</div><div class="font-bold">{{ $fmt($current) }}</div></div>

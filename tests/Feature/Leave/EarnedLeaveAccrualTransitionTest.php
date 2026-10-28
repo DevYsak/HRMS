@@ -55,9 +55,10 @@ beforeEach(function () {
     $hrRole = Role::where('slug', 'hr_admin')->firstOrFail();
     $this->hr = User::factory()->create(['role' => $hrRole->legacyBucket(), 'role_id' => $hrRole->id, 'name' => 'Hema HR']);
 
-    // Mayuresh: an up-front base of 12. Alex: an opening of 12 of unknown origin.
+    // Mayuresh: an up-front base of 3 (this year's new entitlement, so 9
+    // monthly credits remain). Alex: an opening of 12 of unknown origin.
     $this->mayuresh = atEmployee('CNX-0008');
-    atCredit($this->mayuresh, LeaveLedgerEntry::TYPE_BASE, 12);
+    atCredit($this->mayuresh, LeaveLedgerEntry::TYPE_BASE, 3);
     $this->alex = atEmployee('GUIDE-0001');
     atCredit($this->alex, LeaveLedgerEntry::TYPE_OPENING, 12);
 });
@@ -109,12 +110,12 @@ test('no start date with an up-front base, or an opening of unknown origin, is N
         ->and(atPlan($this->alex, '2026-12-01')['reason'])->toContain('origin and months are unknown');
 
     atRun($this->mayuresh, '2026-12-01');
-    expect(atAccruals($this->mayuresh))->toBe([])->and(atSummary($this->mayuresh)['approved_available'])->toEqual(12.0);
+    expect(atAccruals($this->mayuresh))->toBe([])->and(atSummary($this->mayuresh)['approved_available'])->toEqual(3.0);
 });
 
 // ── With a start date of 1 November 2026 ─────────────────────────────────────
 
-test('from 1 November: nothing mid-November, +1 on 1 December, +2 by 1 January — the held 12 untouched, never backfilled', function () {
+test('from 1 November: nothing mid-November, +1 on 1 December, +2 by 1 January — the held balance untouched, never backfilled', function () {
     app(Transitions::class)->set($this->mayuresh, '2026-11-01', 'Monthly accrual from November', $this->hr);
     app(Transitions::class)->set($this->alex, '2026-11-01', 'Monthly accrual from November', $this->hr);
 
@@ -133,9 +134,22 @@ test('from 1 November: nothing mid-November, +1 on 1 December, +2 by 1 January �
     $a = atSummary($this->alex);
     expect(atAccruals($this->mayuresh))->toBe(["earned-accrual:{$this->mayuresh->id}:{$this->year->id}:2026-11", "earned-accrual:{$this->mayuresh->id}:{$this->year->id}:2026-12"])
         // The base and the opening are exactly as they were; accrual sits beside them.
-        ->and((float) $m['base'])->toEqual(12.0)->and((float) $m['accrued'])->toEqual(2.0)->and((float) $m['approved_available'])->toEqual(14.0)
+        ->and((float) $m['base'])->toEqual(3.0)->and((float) $m['accrued'])->toEqual(2.0)->and((float) $m['approved_available'])->toEqual(5.0)
         ->and((float) $a['opening'])->toEqual(12.0)->and((float) $a['accrued'])->toEqual(1.0)
-        ->and((float) LeaveLedgerEntry::where('employee_id', $this->mayuresh->id)->where('leave_type_id', $this->earned->id)->where('entry_type', LeaveLedgerEntry::TYPE_BASE)->sum('days'))->toEqual(12.0);
+        ->and((float) LeaveLedgerEntry::where('employee_id', $this->mayuresh->id)->where('leave_type_id', $this->earned->id)->where('entry_type', LeaveLedgerEntry::TYPE_BASE)->sum('days'))->toEqual(3.0);
+});
+
+test('an up-front base of 12 is this year\'s whole new entitlement: no monthly credit on top, the balance untouched', function () {
+    $full = atEmployee('CNX-0012');
+    atCredit($full, LeaveLedgerEntry::TYPE_BASE, 12);
+    app(Transitions::class)->set($full, '2026-11-01', 'Monthly accrual from November', $this->hr);
+    $this->travelTo(Carbon::parse('2027-01-01 00:20:00'));
+
+    $row = atRun($full, '2027-01-01');
+    expect($row)->toMatchArray(['status' => Accrual::NO_CHANGE, 'due_months' => [], 'base_days' => 12.0])
+        ->and($row['reason'])->toContain('12 days of new entitlement are already granted')
+        ->and(atAccruals($full))->toBe([])
+        ->and((float) atSummary($full)['approved_available'])->toEqual(12.0);
 });
 
 test('one employee is READY while another without a start date stays NEEDS REVIEW; --apply writes only the READY one', function () {
@@ -234,7 +248,7 @@ test('HR sets Monthly Accrual Starts From on the employee leave page', function 
         ->assertSee('November 2026');
 
     expect(app(Transitions::class)->startsOn($this->mayuresh)->toDateString())->toBe('2026-11-01')
-        ->and(atSummary($this->mayuresh)['approved_available'])->toEqual(12.0);
+        ->and(atSummary($this->mayuresh)['approved_available'])->toEqual(3.0);
 });
 
 // ── leave:verify ─────────────────────────────────────────────────────────────

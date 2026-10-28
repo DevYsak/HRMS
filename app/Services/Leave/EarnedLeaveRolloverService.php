@@ -110,6 +110,13 @@ class EarnedLeaveRolloverService
                 'reason' => 'Rolled over '.$record->processed_at?->format('d M Y H:i').'.'] + $row;
         }
 
+        // One carry forward per year: an opening already reclassified as carry
+        // forward into the new year has brought the previous year in.
+        if (LeaveLedgerEntry::where('employee_id', $employee->id)->where('leave_type_id', $earned->id)->where('leave_year_id', $to->id)
+            ->where('entry_type', LeaveLedgerEntry::TYPE_CARRY_FORWARD)->whereNull('reverses_entry_id')->whereDoesntHave('reversedBy')->exists()) {
+            return $stop(self::REVIEW, "{$to->label} already holds an Earned Leave carry forward — a second one would count {$from->label} twice.");
+        }
+
         if (Carbon::today()->lte($from->ends_on)) {
             return $stop(self::BLOCKED, "{$from->label} has not ended yet (ends ".Carbon::parse($from->ends_on)->format('d M Y').').');
         }

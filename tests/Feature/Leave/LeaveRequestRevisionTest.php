@@ -367,7 +367,7 @@ test('HR sees the employee\'s Earned Leave, Unpaid and Combined figures from the
         ->assertSeeHtml('data-v2-earned')
         ->assertSeeHtml('data-v2-unpaid')
         ->assertSeeHtml('data-v2-combined')
-        ->assertSeeInOrder(['Opening', 'Carry forward', 'Accrued', 'Used', 'Pending', 'Available']);
+        ->assertSeeInOrder(['Carry Forward', 'Current Year Accrued', 'HR Adjustments', 'Used', 'Pending', 'Expired', 'Total Available']);
 
     $summary = app(LeaveCategoryBalances::class)->forEmployee($this->employee, LeaveYear::where('label', '2026/27')->sole());
     expect($summary['earned'])->toMatchArray(['used' => 3.0, 'approved_available' => 7.0]);

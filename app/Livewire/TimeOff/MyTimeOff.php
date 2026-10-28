@@ -1066,12 +1066,26 @@ class MyTimeOff extends Component
         $cslPool = (float) ($cslSummary ? $cslSummary['approved_available'] + $cslSummary['used'] : 0);
         $projectedYearEnd = round(($cslUsed / $monthsElapsed) * 12, 1);
         $forecast = [
+            'v2' => false,
             'used' => $cslUsed,
             'allocated' => round($cslPool, 2),
             'projected' => $projectedYearEnd,
             'on_track' => $cslPool <= 0 || $projectedYearEnd <= $cslPool,
             'label' => $overview['csl']['type']->name ?? 'CSL',
         ];
+        // Leave V2: Earned Leave at year end if no more leave is taken —
+        // today's total plus the monthly credits still to come this year
+        // (EarnedLeaveBreakdown). Carry forward is never projected again.
+        if ($v2 !== null) {
+            $earnedForecast = $v2['earned']['breakdown']['forecast'] ?? null;
+            $forecast = [
+                'v2' => true,
+                'year_end' => $earnedForecast['year_end_available'] ?? null,
+                'future_credits' => $earnedForecast['future_credits'] ?? null,
+                'today' => $v2['earned']['breakdown']['total_available'] ?? null,
+                'ends_on' => $leaveYear->ends_on,
+            ];
+        }
         // ── Live holiday warning for the currently selected leave range ──
         $rangeHolidays = collect();
         if ($employee && $this->start_date && $this->end_date) {

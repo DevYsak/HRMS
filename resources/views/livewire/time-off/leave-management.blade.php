@@ -80,7 +80,7 @@
             <x-clean-select model="leaveYearId" label="Leave year"
                 :options="$leaveYears->map(fn ($y) => ['value' => $y->id, 'label' => $y->label])->all()" />
             <x-clean-select model="leaveTypeId" label="Leave type"
-                :options="$leaveTypes->map(fn ($t) => ['value' => $t->id, 'label' => $t->name])->all()" />
+                :options="$leaveTypes->map(fn ($t) => ['value' => $t->id, 'label' => $t->name.($earnedPoolIds->contains($t->id) ? ' (active Earned Leave)' : '')])->all()" />
             <x-clean-select model="departmentId" label="Department"
                 :options="array_merge([['value' => '', 'label' => 'All departments']], $departments->map(fn ($d) => ['value' => $d->id, 'label' => $d->name])->all())" />
             <x-clean-select model="managerId" label="Manager"
@@ -109,6 +109,12 @@
         </div>
     </div>
 
+    @if($this->historicalType)
+        <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-300" data-historical-type>
+            This is a historical balance, retained for the record. It is not usable for new requests and is not included in the current Earned Leave total.
+        </div>
+    @endif
+
     {{-- Employee table --}}
     <div class="ui-surface overflow-hidden">
         <div class="flex items-center justify-between border-b border-[#EAECF0] px-4 py-3 text-sm dark:border-white/10">
@@ -127,11 +133,20 @@
                         <th class="min-w-44 px-3 py-2">Employee</th>
                         <th class="min-w-40 px-3 py-2">Department / Manager</th>
                         <th class="min-w-40 px-3 py-2">Policy</th>
-                        <th class="px-3 py-2 text-right" title="Base entitlement + accrual credited this leave year">Current-year credit</th>
-                        <th class="px-3 py-2 text-right">Carry Fwd</th>
-                        <th class="px-3 py-2 text-right">Used</th>
-                        <th class="px-3 py-2 text-right">Encashed</th>
-                        <th class="px-3 py-2 text-right">Available</th>
+                        @if($this->earnedMode)
+                            <th class="px-3 py-2 text-right" title="Unused Earned Leave from earlier leave years">Carry Fwd</th>
+                            <th class="px-3 py-2 text-right" title="This leave year's monthly credits (and any up-front grant) — at most 12">Current Year Accrued</th>
+                            <th class="px-3 py-2 text-right" title="Leave V2 migration balance whose origin is not yet classified">Migrated Opening</th>
+                            <th class="px-3 py-2 text-right" title="HR add, deduct and correction (net)">HR Adj.</th>
+                            <th class="px-3 py-2 text-right">Used</th>
+                            <th class="px-3 py-2 text-right">Available</th>
+                        @else
+                            <th class="px-3 py-2 text-right" title="Base entitlement + accrual credited this leave year">Current-year credit</th>
+                            <th class="px-3 py-2 text-right">Carry Fwd</th>
+                            <th class="px-3 py-2 text-right">Used</th>
+                            <th class="px-3 py-2 text-right">Encashed</th>
+                            <th class="px-3 py-2 text-right">Available</th>
+                        @endif
                         <th class="px-3 py-2 text-right">Comp Off</th>
                         <th class="px-3 py-2 text-right">Pending</th>
                         <th class="px-3 py-2">MDL</th>
@@ -156,7 +171,20 @@
                                 <div class="text-[11px] text-[#98A2B3]">{{ $row['status'] }}</div>
                             </td>
                             @if(! $row['has_balance'])
-                                <td colspan="5" class="px-3 py-2 text-center"><flux:badge size="sm" color="red">Missing balance</flux:badge></td>
+                                <td colspan="{{ $this->earnedMode ? 6 : 5 }}" class="px-3 py-2 text-center"><flux:badge size="sm" color="red">Missing balance</flux:badge></td>
+                            @elseif($row['breakdown'])
+                                @php $bd = $row['breakdown']; @endphp
+                                <td class="px-3 py-2 text-right tabular-nums" data-col="carry_forward">{{ $fmt($bd['carry_forward']) }}</td>
+                                <td class="px-3 py-2 text-right tabular-nums" data-col="current_year_accrued">{{ $fmt($bd['current_year_accrued']) }}</td>
+                                <td class="px-3 py-2 text-right tabular-nums" data-col="opening">{{ abs($bd['opening']) > 0.001 ? $fmt($bd['opening']) : '—' }}</td>
+                                <td class="px-3 py-2 text-right tabular-nums" data-col="hr_adjustment">{{ abs($bd['hr_adjustment']) > 0.001 ? ($bd['hr_adjustment'] > 0 ? '+' : '').$fmt($bd['hr_adjustment']) : '—' }}</td>
+                                <td class="px-3 py-2 text-right tabular-nums" data-col="used">{{ $fmt($bd['used']) }}</td>
+                                <td class="px-3 py-2 text-right font-bold tabular-nums {{ $bd['total_available'] < 0 ? 'text-rose-600' : 'text-[#101828] dark:text-white' }}" data-col="available">
+                                    {{ $fmt($bd['total_available']) }}
+                                    @if(abs($bd['expired'] + $bd['encashed']) > 0.001)
+                                        <div class="text-[10px] font-normal text-[#98A2B3]">after {{ $fmt($bd['expired'] + $bd['encashed']) }} expired/encashed</div>
+                                    @endif
+                                </td>
                             @else
                                 <td class="px-3 py-2 text-right tabular-nums">{{ $fmt($row['credit']) }}</td>
                                 <td class="px-3 py-2 text-right tabular-nums">{{ $fmt($row['carry_forward']) }}</td>

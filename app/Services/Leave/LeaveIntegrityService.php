@@ -143,10 +143,16 @@ class LeaveIntegrityService
             }
         }
 
+        // New entitlement for the year: monthly credits plus any up-front base
+        // grant. Carry forward and a migrated opening are earlier entitlement.
+        $base = $live->where('entry_type', LeaveLedgerEntry::TYPE_BASE)
+            ->groupBy(fn (LeaveLedgerEntry $e) => $e->employee_id.':'.$e->leave_type_id)
+            ->map(fn (Collection $g) => (float) $g->sum('days'));
         $monthly->groupBy(fn (LeaveLedgerEntry $e) => $e->employee_id.':'.$e->leave_type_id)
-            ->filter(fn (Collection $g) => (float) $g->sum('days') > EarnedLeaveAccrualService::ANNUAL_DAYS + self::EPSILON)
-            ->each(fn (Collection $g) => $found->push($this->finding(self::ACCRUAL_OVER_CAP, $g->first(), 'entries #'.$g->pluck('id')->implode(', #'),
-                ((float) $g->sum('days') + 0).' day(s) of monthly accrual in '.$year->label.', above the 12-day annual entitlement.')));
+            ->filter(fn (Collection $g, string $key) => (float) $g->sum('days') + ($base[$key] ?? 0) > EarnedLeaveAccrualService::ANNUAL_DAYS + self::EPSILON)
+            ->each(fn (Collection $g, string $key) => $found->push($this->finding(self::ACCRUAL_OVER_CAP, $g->first(), 'entries #'.$g->pluck('id')->implode(', #'),
+                ((float) $g->sum('days') + 0).' day(s) of monthly accrual'.(($base[$key] ?? 0) > 0 ? ' and '.(($base[$key]) + 0).' up front' : '')
+                .' in '.$year->label.', above the 12-day annual entitlement.')));
 
         return $found;
     }
@@ -176,7 +182,10 @@ class LeaveIntegrityService
     /** @return Collection<int, array<string, mixed>> */
     private function duplicateCarryForwards(Collection $live): Collection
     {
-        return $live->where('entry_type', LeaveLedgerEntry::TYPE_CARRY_FORWARD)->where('source_type', EarnedLeaveRolloverService::SOURCE_TYPE)
+        // The year-end rollover and an opening reclassified as carry forward
+        // both bring the previous year in: two of them would count it twice.
+        return $live->where('entry_type', LeaveLedgerEntry::TYPE_CARRY_FORWARD)
+            ->whereIn('source_type', [EarnedLeaveRolloverService::SOURCE_TYPE, EarnedOpeningSourceService::SOURCE_TYPE])
             ->groupBy(fn (LeaveLedgerEntry $e) => $e->employee_id.':'.$e->leave_type_id)
             ->filter(fn (Collection $g) => $g->count() > 1)
             ->map(fn (Collection $g) => $this->finding(self::DUPLICATE_CARRY_FORWARD, $g->first(),

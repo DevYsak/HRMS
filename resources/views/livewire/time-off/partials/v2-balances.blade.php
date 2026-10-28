@@ -26,6 +26,10 @@
     $dots = ['#f59e0b', '#f43f5e', '#14b8a6', '#84cc16', '#6366f1', '#0ea5e9', '#a855f7'];
     $hasSpecial = $b['special']['subtypes'] !== [];
     $hasHistorical = ($b['historical'] ?? []) !== [];
+    // The canonical Earned Leave breakdown (EarnedLeaveBreakdown): the same lines HR sees.
+    $bd = $earned['breakdown'] ?? null;
+    $longDate = fn (?string $d) => $d ? \Carbon\CarbonImmutable::parse($d)->userDate() : '—';
+    $nextCredit = $bd && $bd['next_credit'] ? $longDate($bd['next_credit']['date']).' (+'.$fmt($bd['next_credit']['days']).' for '.\Illuminate\Support\Carbon::parse($bd['next_credit']['month'].'-01')->format('F').')' : null;
 @endphp
 
 <div class="space-y-6" data-v2-balances>
@@ -52,14 +56,23 @@
                 @if($earned === null)
                     <p class="mt-4 flex-1 text-sm text-zinc-500">Earned Leave is not set up for your policy yet. Contact HR.</p>
                 @else
-                    <p class="mt-4 text-2xl font-bold tabular-nums text-zinc-900 dark:text-white">{{ $earned['unlimited'] ? 'As per policy' : $days($earned['available']) }}</p>
-                    <p class="text-xs text-zinc-500 dark:text-zinc-400">Available to request</p>
-                    <dl class="mt-4 grid flex-1 grid-cols-4 gap-2">
-                        {!! $stat('Entitlement', $earned['annual_entitlement'] === null ? '—' : $fmt($earned['annual_entitlement'])) !!}
-                        {!! $stat('Accrued', $fmt($earned['credits'])) !!}
-                        {!! $stat('Used', $fmt($earned['used'])) !!}
-                        {!! $stat('Pending', $fmt($earned['pending'])) !!}
+                    <p class="mt-4 text-2xl font-bold tabular-nums text-zinc-900 dark:text-white" data-earned-total>{{ $earned['unlimited'] ? 'As per policy' : $days($bd['total_available'] ?? $earned['approved_available']) }}</p>
+                    <p class="text-xs text-zinc-500 dark:text-zinc-400">Total available @if(($bd['pending'] ?? 0) > 0) · <span>Available to request</span> {{ $fmt($bd['available_to_request']) }}@endif</p>
+                    <dl class="mt-4 grid flex-1 grid-cols-2 gap-2" data-earned-lines>
+                        {!! $stat('Carry Forward', $fmt($bd['carry_forward'] ?? 0)) !!}
+                        {!! $stat('Current Year Accrued', $fmt($bd['current_year_accrued'] ?? 0)) !!}
+                        @if($bd && abs($bd['opening']) > 0.001)
+                            {!! $stat('Opening balance', $fmt($bd['opening'])) !!}
+                        @endif
+                        @if($bd && abs($bd['hr_adjustment']) > 0.001)
+                            {!! $stat('HR Adjustment', ($bd['hr_adjustment'] > 0 ? '+' : '').$fmt($bd['hr_adjustment'])) !!}
+                        @endif
+                        {!! $stat('Used', $fmt($bd['used'] ?? $earned['used'])) !!}
+                        {!! $stat('Pending', $fmt($bd['pending'] ?? $earned['pending'])) !!}
                     </dl>
+                    @if($bd)
+                        <p class="mt-3 text-xs text-zinc-500 dark:text-zinc-400" data-earned-rule>{{ $fmt($bd['monthly_days']) }} day per completed month · leave year {{ $longDate($bd['year']['starts_on']) }} – {{ $longDate($bd['year']['ends_on']) }}@if($nextCredit) · next credit {{ $nextCredit }}@endif</p>
+                    @endif
                     <div class="mt-4 flex flex-wrap gap-2">
                         <flux:button size="sm" variant="primary" x-on:click="Livewire.dispatch('open-request-leave', { leaveTypeId: {{ $earned['id'] }} })">Request Leave</flux:button>
                         <flux:button size="sm" x-on:click="earnedDetail = ! earnedDetail" x-bind:aria-expanded="earnedDetail" data-earned-toggle>View Details</flux:button>
@@ -124,23 +137,34 @@
                         <flux:button size="sm" variant="ghost" wire:click="showStatement({{ $earned['id'] }})">Month-wise statement</flux:button>
                     @endif
                 </div>
-                <dl class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                    @foreach([
-                        'Annual entitlement' => $earned['annual_entitlement'],
-                        'Opening' => $earned['opening'],
-                        'Accrued' => $earned['accrued'],
-                        'Carry forward' => $earned['carry_forward'],
-                        'Adjustments' => $earned['adjustment'],
-                        'Used' => $earned['used'],
-                        'Pending' => $earned['pending'],
-                        'Available' => $earned['available'],
-                    ] as $k => $v)
-                        <div class="rounded-lg bg-zinc-50 px-3 py-2 dark:bg-white/5">
-                            <dt class="text-xs text-zinc-500 dark:text-zinc-400">{{ $k }}</dt>
-                            <dd class="text-sm font-semibold tabular-nums text-zinc-900 dark:text-white">{{ $v === null ? '—' : $fmt($v) }}</dd>
-                        </div>
-                    @endforeach
-                </dl>
+                @if($bd)
+                    <dl class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4" data-earned-detail-lines>
+                        @foreach(array_filter([
+                            'Carry Forward' => $bd['carry_forward'],
+                            'Current Year Accrued' => $bd['current_year_accrued'],
+                            'Opening balance (previous policy)' => abs($bd['opening']) > 0.001 ? $bd['opening'] : null,
+                            'HR Adjustments' => $bd['hr_adjustment'],
+                            'Used' => $bd['used'],
+                            'Pending' => $bd['pending'],
+                            'Expired' => $bd['expired'],
+                            'Total Available' => $bd['total_available'],
+                        ], fn ($v) => $v !== null) as $k => $v)
+                            <div class="rounded-lg bg-zinc-50 px-3 py-2 dark:bg-white/5">
+                                <dt class="text-xs text-zinc-500 dark:text-zinc-400">{{ $k }}</dt>
+                                <dd class="text-sm font-semibold tabular-nums text-zinc-900 dark:text-white">{{ $k === 'HR Adjustments' && $v > 0 ? '+' : '' }}{{ $fmt($v) }}</dd>
+                            </div>
+                        @endforeach
+                    </dl>
+                    <dl class="mt-3 grid grid-cols-1 gap-1 text-xs text-zinc-600 sm:grid-cols-2 dark:text-zinc-300">
+                        <div><dt class="inline text-zinc-500 dark:text-zinc-400">Monthly accrual:</dt> <dd class="inline font-semibold">{{ $fmt($bd['monthly_days']) }} day after each completed month, up to {{ $fmt($bd['annual_entitlement']) }} new days a year ({{ $fmt($bd['generated_this_year']) }} so far)</dd></div>
+                        <div><dt class="inline text-zinc-500 dark:text-zinc-400">Leave year:</dt> <dd class="inline font-semibold">{{ $longDate($bd['year']['starts_on']) }} – {{ $longDate($bd['year']['ends_on']) }}</dd></div>
+                        @if($bd['starts_from'])
+                            <div><dt class="inline text-zinc-500 dark:text-zinc-400">Monthly accrual starts from:</dt> <dd class="inline font-semibold">{{ \Illuminate\Support\Carbon::parse($bd['starts_from'])->format('F Y') }}</dd></div>
+                        @endif
+                        <div><dt class="inline text-zinc-500 dark:text-zinc-400">Next credit:</dt> <dd class="inline font-semibold">{{ $nextCredit ?? 'None scheduled' }}</dd></div>
+                    </dl>
+                    <p class="mt-2 text-xs text-zinc-500 dark:text-zinc-400">Carry forward is unused leave from earlier years; it is part of your total but never counts as this year's accrual.</p>
+                @endif
             </div>
         @endif
     </div>
@@ -241,7 +265,7 @@
                                             <span class="text-sm font-semibold text-zinc-900 dark:text-white">Historical Leave Balances</span>
                                             <x-pulse.badge>{{ count($b['historical']) }} {{ \Illuminate\Support\Str::plural('balance', count($b['historical'])) }}</x-pulse.badge>
                                         </span>
-                                        <span class="mt-0.5 block text-xs text-zinc-500 dark:text-zinc-400">These balances belong to previous leave policies and are retained for leave history. They cannot be used for new requests.</span>
+                                        <span class="mt-0.5 block text-xs text-zinc-500 dark:text-zinc-400" data-historical-note>Retained for record · not usable for new requests · not included in your current Earned Leave total.</span>
                                     </span>
                                 </span>
                                 <flux:icon.chevron-down class="mt-1 size-4 shrink-0 text-zinc-400 transition group-open:rotate-180" />

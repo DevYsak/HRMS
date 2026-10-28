@@ -163,7 +163,7 @@ test('Deduct Leave and Correct Balance post adjustments; correcting never overwr
         ->call('submitAction')->assertHasErrors('confirmed')
         ->set('confirmed', true)
         ->call('submitAction')->assertHasNoErrors()
-        ->call('openAction', 'correct', $type->id)->set('targetBalance', '8')->set('reason', 'Agreed position after audit')
+        ->call('openAction', 'correct', $type->id)->set('days', '-3')->set('reason', 'Agreed position after audit')
         ->set('confirmed', true)
         ->call('submitAction')->assertHasNoErrors();
 

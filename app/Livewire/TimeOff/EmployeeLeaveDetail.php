@@ -13,11 +13,13 @@ use App\Models\LeaveLedgerEntry;
 use App\Models\LeavePolicy;
 use App\Models\LeaveRequest;
 use App\Models\LeaveType;
+use App\Models\LeaveV2Migration;
 use App\Models\LeaveYear;
 use App\Models\User;
 use App\Notifications\LeaveBalanceChangedNotification;
 use App\Services\Approvals\ApprovalGuard;
 use App\Services\Leave\EarnedLeaveAccrualService;
+use App\Services\Leave\EarnedOpeningSourceService;
 use App\Services\Leave\EmployeeLeaveOverrideService;
 use App\Services\Leave\LeaveAccrualTransitionService;
 use App\Services\Leave\LeaveAdminActionService;
@@ -97,8 +99,6 @@ class EmployeeLeaveDetail extends Component
     public ?string $effectiveDate = null;
 
     public ?string $expiresOn = null;
-
-    public string $targetBalance = '';
 
     public string $overrideMode = 'add';
 
@@ -240,6 +240,20 @@ class EmployeeLeaveDetail extends Component
         $summary = app(LeaveCategoryBalances::class)->forEmployee($this->employee, $this->year);
 
         return $summary['earned'] !== null ? $summary : null;
+    }
+
+    /**
+     * Where a migrated Earned Leave opening came from, read from the source
+     * CSL ledger (evidence only — nothing is reclassified here).
+     *
+     * @return array<string, mixed>|null
+     */
+    #[Computed]
+    public function openingSource(): ?array
+    {
+        $migration = LeaveV2Migration::where('employee_id', $this->employee->id)->where('leave_year_id', $this->year->id)->first();
+
+        return $migration ? app(EarnedOpeningSourceService::class)->planFor($migration) : null;
     }
 
     /** "Monthly Accrual Starts From" form: open, the month (YYYY-MM) and why. */
@@ -425,7 +439,7 @@ class EmployeeLeaveDetail extends Component
         $this->authorizeLeaveAction($this->permissionFor($action));
 
         $this->resetErrorBag();
-        $this->reset(['days', 'targetBalance', 'reason', 'internalNote', 'expiresOn', 'startDate', 'endDate', 'isHalfDay', 'attachment', 'recordApproved', 'confirmed', 'targetRequestId', 'targetEntryId']);
+        $this->reset(['days', 'reason', 'internalNote', 'expiresOn', 'startDate', 'endDate', 'isHalfDay', 'attachment', 'recordApproved', 'confirmed', 'targetRequestId', 'targetEntryId']);
         $this->action = $action;
 
         // No type passed and no balance to take one from: refuse with a
@@ -461,7 +475,7 @@ class EmployeeLeaveDetail extends Component
         $request = LeaveRequest::where('employee_id', $this->employee->id)->findOrFail($requestId);
 
         $this->resetErrorBag();
-        $this->reset(['days', 'targetBalance', 'reason', 'internalNote', 'expiresOn', 'attachment', 'recordApproved', 'confirmed', 'targetEntryId']);
+        $this->reset(['days', 'reason', 'internalNote', 'expiresOn', 'attachment', 'recordApproved', 'confirmed', 'targetEntryId']);
         $this->action = $action;
         $this->targetRequestId = $request->id;
         $this->formTypeId = $request->leave_type_id;
@@ -479,7 +493,7 @@ class EmployeeLeaveDetail extends Component
         $entry = LeaveLedgerEntry::where('employee_id', $this->employee->id)->findOrFail($entryId);
 
         $this->resetErrorBag();
-        $this->reset(['days', 'targetBalance', 'reason', 'internalNote', 'expiresOn', 'attachment', 'recordApproved', 'confirmed', 'targetRequestId']);
+        $this->reset(['days', 'reason', 'internalNote', 'expiresOn', 'attachment', 'recordApproved', 'confirmed', 'targetRequestId']);
         $this->action = 'reverse_entry';
         $this->targetEntryId = $entry->id;
         $this->formTypeId = $entry->leave_type_id;
@@ -547,7 +561,7 @@ class EmployeeLeaveDetail extends Component
         }
 
         $this->action = null;
-        unset($this->balances, $this->history, $this->statement, $this->overrides, $this->requests, $this->carryHistory, $this->carryAudit, $this->carryInfo, $this->reversedEntryIds);
+        unset($this->balances, $this->categorySummary, $this->openingSource, $this->accrualPlan, $this->history, $this->statement, $this->overrides, $this->requests, $this->carryHistory, $this->carryAudit, $this->carryInfo, $this->reversedEntryIds);
     }
 
     public function startReverseCarryForward(int $transactionId): void
@@ -674,25 +688,35 @@ class EmployeeLeaveDetail extends Component
         session()->flash('success', "Deducted {$this->days} day(s) of {$type->name}.");
     }
 
+    /**
+     * A correction is a signed amount (+1.5 / −2) posted as its own audited
+     * ledger movement. HR never types the total: Total Available stays the
+     * sum of the ledger, and accrual, carry forward and earlier months are
+     * left exactly as they are.
+     */
     private function doCorrect(User $hr): void
     {
         $this->validate([
             'formTypeId' => ['required', 'exists:leave_types,id'],
-            'targetBalance' => ['required', 'numeric', 'min:0', 'max:365'],
+            'days' => ['required', 'numeric', 'min:-365', 'max:365', fn ($attribute, $value, $fail) => abs((float) $value) < 0.005 ? $fail('Enter the correction in days, e.g. 1.5 or -2.') : null],
             'effectiveDate' => ['required', 'date'],
             'reason' => ['required', 'string', 'min:3', 'max:500'],
             'internalNote' => ['nullable', 'string', 'max:1000'],
             'attachment' => self::DOCUMENT_RULES,
-        ]);
+        ], [], ['days' => 'correction']);
 
         $type = LeaveType::findOrFail($this->formTypeId);
-        app(LeaveBalanceService::class)->setCorrectBalance(
-            $this->employee, $type, (float) $this->targetBalance, $this->reason, '', $hr, $this->year->legacyYear(), $this->internalNote ?: null,
-            Carbon::parse($this->effectiveDate), $this->storedDocument(),
+        $days = round((float) $this->days, 2);
+        app(LeaveBalanceService::class)->adjust(
+            $this->employee, $type, $days > 0 ? 'credit' : 'debit', abs($days), $this->reason, '', $hr, $this->year->legacyYear(),
+            LeaveBalanceService::CATEGORY_CORRECTION,
+            effectiveDate: Carbon::parse($this->effectiveDate),
+            internalNote: $this->internalNote ?: null,
+            documentPath: $this->storedDocument(),
         );
 
-        $this->notify($type, 'correct', 0);
-        session()->flash('success', "{$type->name} balance corrected to {$this->targetBalance} day(s).");
+        $this->notify($type, 'correct', abs($days));
+        session()->flash('success', 'Corrected '.$type->name.' by '.($days > 0 ? '+' : '').($days + 0).' day(s).');
     }
 
     private function doOverride(User $hr): void

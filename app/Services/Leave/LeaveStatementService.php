@@ -6,6 +6,7 @@ use App\Models\Employee;
 use App\Models\LeaveLedgerEntry;
 use App\Models\LeaveType;
 use App\Models\LeaveYear;
+use App\Services\LeaveBalanceService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -187,6 +188,24 @@ class LeaveStatementService
 
         if ($e->entry_type === LeaveLedgerEntry::TYPE_ACCRUAL) {
             $label = 'Monthly Accrual';
+        }
+
+        // HR movements by what HR did: add, deduct or a signed correction.
+        $category = $e->meta['category'] ?? $e->reverses?->meta['category'] ?? null;
+        if (in_array($e->entry_type, [LeaveLedgerEntry::TYPE_ADJUSTMENT_CREDIT, LeaveLedgerEntry::TYPE_ADJUSTMENT_DEBIT], true)) {
+            $label = match (true) {
+                $category === LeaveBalanceService::CATEGORY_CORRECTION => 'HR Correction',
+                $e->entry_type === LeaveLedgerEntry::TYPE_ADJUSTMENT_CREDIT => 'HR Add',
+                default => 'HR Deduct',
+            };
+        }
+
+        if ($e->entry_type === LeaveLedgerEntry::TYPE_OPENING && $e->source_type === 'leave_v2_migration') {
+            $label = 'Migrated Opening (Leave V2)';
+        }
+
+        if ($e->source_type === EarnedOpeningSourceService::SOURCE_TYPE) {
+            $label = $e->entry_type === LeaveLedgerEntry::TYPE_CARRY_FORWARD ? 'Carry Forward (from CSL)' : 'Current-Year Credit (from CSL)';
         }
 
         if ($e->entry_type === LeaveLedgerEntry::TYPE_ADD_ON && ($e->meta['add_on_type'] ?? null) === 'comp_off_credit') {
