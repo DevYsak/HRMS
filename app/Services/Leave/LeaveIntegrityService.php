@@ -124,6 +124,10 @@ class LeaveIntegrityService
             if ($start && $month < Carbon::parse($start)->format('Y-m')) {
                 $found->push($this->finding(self::ACCRUAL_BEFORE_START, $e, $ref, "Accrued for {$month}, before Monthly Accrual Starts From ".Carbon::parse($start)->toDateString().'.'));
             }
+            // When it was credited: the engine's own (app-clock) date, else the
+            // database timestamp less a day for a database clock in another zone.
+            $creditedOn = isset($e->meta['credited_on']) ? Carbon::parse($e->meta['credited_on'])->startOfDay()
+                : ($e->created_at !== null ? Carbon::parse($e->created_at)->addDay()->startOfDay() : null);
             $joined = $employee?->joining_date ? Carbon::parse($employee->joining_date)->format('Y-m') : null;
             $left = $employee?->exitRecord?->last_working_day ? Carbon::parse($employee->exitRecord->last_working_day)->format('Y-m') : null;
             $why = match (true) {
@@ -131,7 +135,7 @@ class LeaveIntegrityService
                 $month < $first || $month > $last => "{$month} is outside {$year->label}",
                 $joined !== null && $month < $joined => "{$month} is before joining ({$joined})",
                 $left !== null && $month > $left => "{$month} is after the last working day ({$left})",
-                $e->created_at !== null && Carbon::parse($month.'-01')->endOfMonth()->gt($e->created_at) => "{$month} was not complete when it was credited (".$e->created_at->toDateString().')',
+                $creditedOn !== null && $creditedOn->lte(Carbon::parse($month.'-01')->endOfMonth()->startOfDay()) => "{$month} was not complete when it was credited (".($e->meta['credited_on'] ?? $e->created_at?->toDateString()).')',
                 default => null,
             };
             if ($why !== null) {

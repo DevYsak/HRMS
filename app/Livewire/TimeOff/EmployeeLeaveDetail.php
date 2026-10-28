@@ -17,6 +17,7 @@ use App\Models\LeaveYear;
 use App\Models\User;
 use App\Notifications\LeaveBalanceChangedNotification;
 use App\Services\Approvals\ApprovalGuard;
+use App\Services\Leave\EarnedLeaveAccrualService;
 use App\Services\Leave\EmployeeLeaveOverrideService;
 use App\Services\Leave\LeaveAccrualTransitionService;
 use App\Services\Leave\LeaveAdminActionService;
@@ -35,6 +36,7 @@ use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Url;
@@ -259,10 +261,49 @@ class EmployeeLeaveDetail extends Component
         return app(LeaveAccrualTransitionService::class)->mayChange(Auth::user(), $this->employee);
     }
 
+    /**
+     * Today's accrual decision for this employee, from the same service the
+     * accrual command runs (status, reason, suggested start). Read only.
+     *
+     * @return array<string, mixed>
+     */
+    #[Computed]
+    public function accrualPlan(): array
+    {
+        $accrual = app(EarnedLeaveAccrualService::class);
+
+        return $accrual->planFor($this->employee, $accrual->yearFor(Carbon::today()), Carbon::today());
+    }
+
+    /**
+     * The months HR may choose, as 'YYYY-MM' => 'October 2026': the previous,
+     * current and next leave years, plus the saved month if it lies outside.
+     * A list instead of a browser month picker, which some browsers (Firefox,
+     * Safari) show as a plain text box whose free text never validated.
+     *
+     * @return array<string, string>
+     */
+    #[Computed]
+    public function accrualStartOptions(): array
+    {
+        $current = app(LeaveYearResolver::class)->current();
+        $months = [];
+        for ($m = Carbon::parse($current->starts_on)->subYear()->startOfMonth(), $end = Carbon::parse($current->ends_on)->addYear(); $m->lte($end); $m = $m->addMonth()) {
+            $months[$m->format('Y-m')] = $m->format('F Y');
+        }
+        if ($saved = $this->accrualStartsOn) {
+            $months[$saved->format('Y-m')] ??= $saved->format('F Y');
+        }
+        ksort($months);
+
+        return $months;
+    }
+
     public function openAccrualStart(): void
     {
         abort_unless($this->canChangeAccrualStart, 403);
         $this->resetErrorBag(['accrualStartMonth', 'accrualStartReason']);
+        // The saved month, never the suggestion: a suggestion is only shown.
         $this->accrualStartMonth = $this->accrualStartsOn?->format('Y-m') ?? '';
         $this->accrualStartReason = '';
         $this->editingAccrualStart = true;
@@ -273,9 +314,10 @@ class EmployeeLeaveDetail extends Component
     {
         abort_unless($this->canChangeAccrualStart, 403);
         $this->validate([
-            'accrualStartMonth' => ['required', 'date_format:Y-m'],
+            'accrualStartMonth' => ['required', Rule::in(array_keys($this->accrualStartOptions))],
             'accrualStartReason' => ['required', 'string', 'min:5', 'max:1000'],
-        ], [], ['accrualStartMonth' => 'month', 'accrualStartReason' => 'reason']);
+        ], ['accrualStartMonth.required' => 'Choose the month accrual starts from.', 'accrualStartMonth.in' => 'Choose a month from the list.'],
+            ['accrualStartMonth' => 'month', 'accrualStartReason' => 'reason']);
 
         try {
             app(LeaveAccrualTransitionService::class)->set($this->employee, $this->accrualStartMonth.'-01', $this->accrualStartReason, Auth::user());
@@ -286,7 +328,7 @@ class EmployeeLeaveDetail extends Component
         }
 
         $this->reset(['editingAccrualStart', 'accrualStartMonth', 'accrualStartReason']);
-        unset($this->accrualStartsOn);
+        unset($this->accrualStartsOn, $this->accrualPlan, $this->accrualStartOptions);
         \Flux::toast('Monthly accrual start saved. Existing balances are unchanged.', variant: 'success');
     }
 

@@ -34,6 +34,9 @@ use Throwable;
 #[Description('Earned Leave monthly accrual — 1 day per completed month, idempotent, catches up missed months (preview writes nothing)')]
 class AccrueEarnedLeave extends Command
 {
+    /** Employees left out of the run because their policy has no Earned Leave. */
+    private int $outsideScope = 0;
+
     public function handle(EarnedLeaveAccrualService $accrual): int
     {
         $apply = (bool) $this->option('apply');
@@ -107,7 +110,15 @@ class AccrueEarnedLeave extends Command
             }
         }
 
-        return $accrual->plan($asOf, $year, $this->option('employee'), (bool) $this->option('all'));
+        $rows = $accrual->plan($asOf, $year, $this->option('employee'), true);
+        if ($this->option('all') || $this->option('employee') !== []) {
+            return $rows;
+        }
+
+        // Employees whose policy has no Earned Leave are outside this run: counted, never silently dropped.
+        $this->outsideScope = $rows->whereNull('earned_type_id')->count();
+
+        return $rows->whereNotNull('earned_type_id')->values();
     }
 
     /** @param  Collection<int, array<string, mixed>>  $rows */
@@ -118,21 +129,25 @@ class AccrueEarnedLeave extends Command
 
         $this->line('<comment>Earned Leave accrual · '.($first['year'] ?? '—').' · as of '.($first['as_of'] ?? '—')." · {$heading}</comment>");
         $this->table(
-            ['Employee', 'Code', 'Policy', 'Earned now', 'Opening', 'Accrued', 'Used', 'Pending', 'Accrual starts', 'Eligible months', 'Already credited', 'Proposed', 'Status', 'Reason'],
+            ['Employee', 'Code', 'Policy', 'Earned now', 'Opening', 'Accrued', 'Used', 'Pending', 'Joined', 'Accrual starts', 'Eligible months', 'Already credited', 'Proposed', 'Status', 'Reason'],
             $rows->map(fn (array $r) => [
                 $r['employee'], $r['code'], $r['policy'] ?? '—', $fmt($r['available']), $fmt($r['opening']), $fmt($r['accrued']), $fmt($r['used']), $fmt($r['pending']),
+                $r['joining_date'] ?? 'missing',
                 $r['transition'] ?? ($r['suggested_start'] ? 'not set (suggest '.$r['suggested_start'].')' : 'not set'),
                 $r['expected'] === null ? '—' : count($r['expected_months']), count($r['credited_months']), $fmt($r['proposed']), $r['status'], $r['reason'],
             ])->all(),
         );
         $this->line('  '.$rows->count().' employee(s): '.($rows->countBy('status')->map(fn ($n, $s) => "{$s} {$n}")->implode(' · ') ?: 'none'));
+        if ($this->outsideScope > 0) {
+            $this->line("  {$this->outsideScope} other employee(s) have no Earned Leave policy and are not listed (--all lists them).");
+        }
 
         if ($path = $this->option('csv')) {
             $out = fopen($path, 'w');
-            fputcsv($out, ['employee', 'code', 'policy', 'earned_available', 'opening', 'accrued', 'used', 'pending', 'monthly_accrual_starts_from', 'suggested_start',
+            fputcsv($out, ['employee', 'code', 'policy', 'earned_available', 'opening', 'accrued', 'used', 'pending', 'joining_date', 'monthly_accrual_starts_from', 'suggested_start',
                 'eligible_months', 'credited_months', 'proposed', 'due_months', 'status', 'reason']);
             foreach ($rows as $r) {
-                fputcsv($out, [$r['employee'], $r['code'], $r['policy'], $r['available'], $r['opening'], $r['accrued'], $r['used'], $r['pending'], $r['transition'], $r['suggested_start'],
+                fputcsv($out, [$r['employee'], $r['code'], $r['policy'], $r['available'], $r['opening'], $r['accrued'], $r['used'], $r['pending'], $r['joining_date'], $r['transition'], $r['suggested_start'],
                     implode(' ', $r['expected_months']), implode(' ', $r['credited_months']), $r['proposed'], implode(' ', $r['due_months']), $r['status'], $r['reason']]);
             }
             fclose($out);

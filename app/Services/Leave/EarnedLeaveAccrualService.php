@@ -108,6 +108,7 @@ class EarnedLeaveAccrualService
             'employee_id' => $employee->id,
             'employee' => $employee->user?->name ?? 'Employee #'.$employee->id,
             'code' => $employee->employee_id,
+            'joining_date' => $employee->joining_date ? Carbon::parse($employee->joining_date)->toDateString() : null,
             'policy' => $policy?->name,
             'earned_type_id' => $earned?->id,
             'year_id' => $year->id,
@@ -153,7 +154,10 @@ class EarnedLeaveAccrualService
         }
 
         // Which completed months the employee has earned.
-        $joiningRule = $rule->joining_month_rule ?: LeavePolicyRule::JOINING_HALF_MONTH;
+        // Earned Leave is earned per COMPLETED, fully eligible calendar month:
+        // a partial joining month never earns a full day, whatever the
+        // policy's older (CSL-era) joining-month setting says.
+        $joiningRule = LeavePolicyRule::JOINING_NONE;
         if (! $employee->exitRecord?->last_working_day && in_array($this->status($employee), self::LEFT, true)) {
             return $stop(self::BLOCKED, 'Status is '.$this->status($employee).' but no last working day is recorded.');
         }
@@ -196,7 +200,12 @@ class EarnedLeaveAccrualService
             return $stop(self::REVIEW, $this->heldReason($held, $migration, $row['suggested_start']));
         }
         if ($transition !== null) {
-            $late = $held->filter(fn (LeaveLedgerEntry $e) => Carbon::parse($e->effective_date)->gte($transition));
+            // An up-front grant for the period accrual now covers would grant it
+            // twice; an opening is a balance brought in, suspect only when
+            // dated after the start (one on the start day opens the period).
+            $late = $held->filter(fn (LeaveLedgerEntry $e) => $e->entry_type === LeaveLedgerEntry::TYPE_BASE
+                ? Carbon::parse($e->effective_date)->gte($transition)
+                : Carbon::parse($e->effective_date)->gt($transition));
             if ($late->isNotEmpty()) {
                 return $stop(self::REVIEW, 'An up-front or opening credit is dated on or after Monthly Accrual Starts From ('.$transition->toDateString().') — accruing monthly as well would grant it twice.');
             }
@@ -265,7 +274,9 @@ class EarnedLeaveAccrualService
                         'source_type' => self::SOURCE_TYPE,
                         'reason' => 'Earned Leave accrual for '.Carbon::parse($month.'-01')->format('F Y'),
                         'actor' => $actor,
-                        'meta' => ['month' => $month, 'trigger' => $trigger, 'actor' => $actor ? 'user:'.$actor->id : 'system:'.$trigger],
+                        // credited_on: the app's date (the ledger's created_at is the database clock, which may be UTC).
+                        'meta' => ['month' => $month, 'trigger' => $trigger, 'actor' => $actor ? 'user:'.$actor->id : 'system:'.$trigger,
+                            'credited_on' => Carbon::now()->toDateString()],
                     ]);
                 $entryIds[] = $entry->id;
             }

@@ -77,20 +77,40 @@
                     @if(! empty($earned['usage_by_reason']))
                         <p class="mt-2 text-xs text-zinc-500 dark:text-zinc-400">Used by reason: {{ collect($earned['usage_by_reason'])->map(fn ($r) => $r['name'].' '.$fmt($r['used']))->join(' · ') }}</p>
                     @endif
+                    @php
+                        $plan = $this->accrualPlan;
+                        $suggested = $plan['suggested_start'] ? \Illuminate\Support\Carbon::parse($plan['suggested_start'])->format('F Y') : null;
+                        $planColor = ['READY' => 'emerald', 'NO CHANGE' => 'zinc', 'NEEDS REVIEW' => 'amber', 'BLOCKED' => 'rose'][$plan['status']] ?? 'zinc';
+                    @endphp
                     <div class="mt-3 border-t border-zinc-100 pt-3 dark:border-white/5" data-accrual-start>
                         <div class="flex flex-wrap items-center justify-between gap-2">
                             <p class="text-sm text-zinc-700 dark:text-zinc-200">
                                 <span class="text-xs text-zinc-500 dark:text-zinc-400">Monthly Accrual Starts From</span>
-                                <span class="ml-1 font-semibold text-zinc-900 dark:text-white">{{ $this->accrualStartsOn?->toImmutable()->format('F Y') ?? 'Not set' }}</span>
+                                <span class="ml-1 font-semibold text-zinc-900 dark:text-white" data-accrual-start-saved>{{ $this->accrualStartsOn?->format('F Y') ?? 'Not set' }}</span>
+                                @if(! $this->accrualStartsOn && $suggested)
+                                    <span class="ml-2 text-xs text-amber-700 dark:text-amber-300" data-accrual-start-suggested>Suggested: {{ $suggested }} — not saved until you confirm it</span>
+                                @endif
                             </p>
                             @if($this->canChangeAccrualStart && ! $editingAccrualStart)
                                 <flux:button size="xs" wire:click="openAccrualStart">{{ $this->accrualStartsOn ? 'Change' : 'Set' }}</flux:button>
                             @endif
                         </div>
-                        <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Existing opening balances remain unchanged. Automatic Earned Leave accrual begins only from this date.</p>
+                        <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Existing opening balances remain unchanged. Automatic Earned Leave accrual begins only after completed months from this date.</p>
+                        @if(! $this->employee->joining_date)
+                            <p class="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-800 dark:bg-rose-500/10 dark:text-rose-200" data-accrual-joining-missing>No joining date is recorded. Accrual stays blocked until HR records the joining date on the employee profile.</p>
+                        @endif
+                        <p class="mt-2 flex flex-wrap items-center gap-2 text-xs text-zinc-600 dark:text-zinc-300" data-accrual-status="{{ $plan['status'] }}">
+                            <x-pulse.badge :color="$planColor">{{ $plan['status'] }}</x-pulse.badge>
+                            <span>{{ $plan['reason'] }}</span>
+                        </p>
                         @if($editingAccrualStart)
                             <form wire:submit="saveAccrualStart" class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3" data-accrual-start-form>
-                                <flux:input type="month" wire:model="accrualStartMonth" label="Starts from (month)" />
+                                <flux:select wire:model="accrualStartMonth" label="Starts from (month)">
+                                    <flux:select.option value="">Choose a month…</flux:select.option>
+                                    @foreach($this->accrualStartOptions as $value => $label)
+                                        <flux:select.option value="{{ $value }}">{{ $label }}{{ $plan['suggested_start'] && str_starts_with($plan['suggested_start'], $value) ? ' (suggested)' : '' }}</flux:select.option>
+                                    @endforeach
+                                </flux:select>
                                 <div class="sm:col-span-2"><flux:input wire:model="accrualStartReason" label="Reason" placeholder="Why accrual starts from this month" /></div>
                                 <div class="flex justify-end gap-2 sm:col-span-3">
                                     <flux:button type="button" variant="ghost" size="sm" wire:click="$set('editingAccrualStart', false)">Cancel</flux:button>
