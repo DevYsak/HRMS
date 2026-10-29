@@ -182,10 +182,11 @@ class LeaveIntegrityService
     /** @return Collection<int, array<string, mixed>> */
     private function duplicateCarryForwards(Collection $live): Collection
     {
-        // The year-end rollover and an opening reclassified as carry forward
-        // both bring the previous year in: two of them would count it twice.
+        // The year-end rollover, an opening reclassified as carry forward and
+        // the HR register restatement all bring the previous year in: two of
+        // them would count it twice.
         return $live->where('entry_type', LeaveLedgerEntry::TYPE_CARRY_FORWARD)
-            ->whereIn('source_type', [EarnedLeaveRolloverService::SOURCE_TYPE, EarnedOpeningSourceService::SOURCE_TYPE])
+            ->whereIn('source_type', [EarnedLeaveRolloverService::SOURCE_TYPE, EarnedOpeningSourceService::SOURCE_TYPE, LeaveHrHistoryReconciliationService::SOURCE_TYPE])
             ->groupBy(fn (LeaveLedgerEntry $e) => $e->employee_id.':'.$e->leave_type_id)
             ->filter(fn (Collection $g) => $g->count() > 1)
             ->map(fn (Collection $g) => $this->finding(self::DUPLICATE_CARRY_FORWARD, $g->first(),

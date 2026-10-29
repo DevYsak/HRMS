@@ -94,8 +94,8 @@ test('the register file passes its own checksums', function () {
     expect($register['employees'])->toHaveCount(20)
         ->and(collect($register['employees'])->sum('credit'))->toEqual(40)
         ->and(collect($register['employees'])->sum('carry'))->toEqual(56.5)
-        ->and(collect($register['employees'])->sum('used'))->toEqual(51)
-        ->and(collect($register['employees'])->sum('available'))->toEqual(45.5);
+        ->and(collect($register['employees'])->sum('used'))->toEqual(53.5)
+        ->and(collect($register['employees'])->sum('available'))->toEqual(43);
 });
 
 test('a tampered register is refused before anything is touched', function () {
@@ -138,7 +138,7 @@ test('all 20 register employees reconcile exactly and the checksums hold', funct
         $totals['available'] += $report['csl_available'];
     }
 
-    expect($totals)->toEqual(['credit' => 40.0, 'carry' => 56.5, 'used' => 51.0, 'available' => 45.5]);
+    expect($totals)->toEqual(['credit' => 40.0, 'carry' => 56.5, 'used' => 53.5, 'available' => 43.0]);
 });
 
 test('the worked examples: Yogesh 4, Mayuresh 1, Shradha stays -1', function () {
@@ -263,7 +263,7 @@ test('an existing "Paid Leave" type becomes CSL instead of a duplicate', functio
 
     expect(LeaveType::where('code', 'CSL')->value('id'))->toBe($paid->id)
         ->and(LeaveType::withTrashed()->whereIn('name', ['Casual / Sick Leave', 'Paid Leave'])->count())->toBe(1)
-        ->and(cxAvailable($staff['Sunita'], 'CSL'))->toBe(9.0);
+        ->and(cxAvailable($staff['Sunita'], 'CSL'))->toBe(8.5);
 });
 
 test('Annual Leave taken on a real request moves to CSL, and cancelling it returns the day to CSL', function () {
@@ -536,7 +536,7 @@ test('register staff with a missing or late joining date get exactly September, 
         ->and($months->pluck('meta.month')->unique()->all())->toBe(['2026-09'])
         ->and(cxAvailable($staff['Yogesh'], 'CSL'))->toBe(5.0)
         ->and(cxAvailable($staff['Mayuresh'], 'CSL'))->toBe(2.0)
-        ->and(cxAvailable($staff['Gayatri Chagan Navlakhe'], 'CSL'))->toBe(5.5)
+        ->and(cxAvailable($staff['Gayatri Chagan Navlakhe'], 'CSL'))->toBe(3.5)
         ->and(cxAvailable($staff['Nikita Dalal'], 'CSL'))->toBe(2.0)
         ->and(cxAvailable($staff['Shradha'], 'CSL'))->toBe(0.0)
         ->and(LeaveLedgerEntry::where('employee_id', $outsider->id)->count())->toBe($outsiderEntries)

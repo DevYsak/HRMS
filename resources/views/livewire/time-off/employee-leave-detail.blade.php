@@ -87,6 +87,9 @@
                         @endif
                         {!! $line('HR Adjustments', abs($bd['hr_adjustment']) > 0.001 ? $signed($bd['hr_adjustment']) : '0', 'hr_adjustment') !!}
                         {!! $line('Used', $fmt($bd['used']), 'used') !!}
+                        @if(($bd['historical_used'] ?? 0) > 0.001)
+                            <p class="pb-1 text-xs text-zinc-500 dark:text-zinc-400" data-breakdown="historical_used">{{ $fmt($bd['historical_used']) }} used before Leave V2 (HR register) · {{ $fmt($bd['portal_used']) }} used in the portal</p>
+                        @endif
                         {!! $line('Pending', $fmt($bd['pending']), 'pending') !!}
                         {!! $line('Expired', $fmt($bd['expired']), 'expired') !!}
                         @if(abs($bd['encashed']) > 0.001)

@@ -25,16 +25,16 @@ return [
     'checksums' => [
         'credit' => 40.0,
         'carry' => 56.5,
-        'used' => 51.0,
-        'available' => 45.5,
+        'used' => 53.5,
+        'available' => 43.0,
         'rows' => 20,
     ],
 
     'employees' => [
-        ['name' => 'Gayatri Chagan Navlakhe', 'emails' => ['carol@businessenergyservices.co.uk'], 'credit' => 2, 'carry' => 2.5, 'used' => 0, 'encashed' => 0, 'available' => 4.5],
+        ['name' => 'Gayatri Chagan Navlakhe', 'emails' => ['carol@businessenergyservices.co.uk'], 'credit' => 2, 'carry' => 2.5, 'used' => 2, 'encashed' => 0, 'available' => 2.5],
         ['name' => 'Nikita Dalal', 'emails' => ['nikita@conexus-ns.com', 'Nikita.Dalal@conexus-ns.com'], 'credit' => 2, 'carry' => 1, 'used' => 2, 'encashed' => 0, 'available' => 1],
         ['name' => 'Hasan', 'emails' => ['harry@businessenergyservices.co.uk'], 'credit' => 2, 'carry' => 0, 'used' => 2, 'encashed' => 0, 'available' => 0],
-        ['name' => 'Sunita', 'emails' => ['qa@businessenergyservices.co.uk'], 'credit' => 2, 'carry' => 7, 'used' => 0, 'encashed' => 0, 'available' => 9],
+        ['name' => 'Sunita', 'emails' => ['qa@businessenergyservices.co.uk'], 'credit' => 2, 'carry' => 7, 'used' => 0.5, 'encashed' => 0, 'available' => 8.5],
         ['name' => 'Reeba', 'emails' => ['reeba@businessenergyservices.co.uk'], 'credit' => 2, 'carry' => 0, 'used' => 2, 'encashed' => 0, 'available' => 0],
         ['name' => 'Abhishek Bhoir', 'emails' => ['abhishek.bhoir@conexus-ns.com'], 'credit' => 2, 'carry' => 7, 'used' => 7, 'encashed' => 0, 'available' => 2],
         ['name' => 'Sakshi', 'emails' => ['sakshi.dige@conexus-ns.com'], 'credit' => 2, 'carry' => 0, 'used' => 1, 'encashed' => 0, 'available' => 1],

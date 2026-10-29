@@ -4,6 +4,7 @@ namespace App\Services\Leave;
 
 use App\Models\Employee;
 use App\Models\LeaveBalance;
+use App\Models\LeaveLedgerEntry;
 use App\Models\LeaveType;
 use App\Models\LeaveYear;
 use Illuminate\Support\Carbon;
@@ -87,6 +88,11 @@ class EarnedLeaveBreakdown
             ->first();
         $summary = $balance ? $this->calculator->summary($balance) : null;
         $lines = self::lines($summary);
+        // Of the days used: those the HR register stands for (restated by
+        // leave:reconcile-hr-history), and those taken through the portal.
+        $historical = $balance ? round(-(float) LeaveLedgerEntry::where('employee_id', $employee->id)->where('leave_type_id', $pool->id)
+            ->where('leave_year_id', $year->id)->where('entry_type', LeaveLedgerEntry::TYPE_USAGE)
+            ->where('source_type', LeaveHrHistoryReconciliationService::SOURCE_TYPE)->sum('days'), 2) : 0.0;
 
         $today = Carbon::today();
         $plan = $this->accrual->planFor($employee, $year, $today);
@@ -104,6 +110,8 @@ class EarnedLeaveBreakdown
             'has_balance' => $balance !== null,
             'year' => ['id' => $year->id, 'label' => $year->label, 'starts_on' => $year->starts_on->toDateString(), 'ends_on' => $year->ends_on->toDateString()],
         ] + $lines + [
+            'historical_used' => $historical + 0.0,
+            'portal_used' => round($lines['used'] - $historical, 2),
             'monthly_days' => EarnedLeaveAccrualService::MONTHLY_DAYS,
             'annual_entitlement' => EarnedLeaveAccrualService::ANNUAL_DAYS,
             'monthly_credits' => count($credited),

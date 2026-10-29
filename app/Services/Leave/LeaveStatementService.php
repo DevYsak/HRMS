@@ -204,6 +204,15 @@ class LeaveStatementService
             $label = 'Migrated Opening (Leave V2)';
         }
 
+        if (($e->reverses?->source_type ?? $e->source_type) === LeaveHrHistoryReconciliationService::SOURCE_TYPE) {
+            $label = match ($e->entry_type) {
+                LeaveLedgerEntry::TYPE_CARRY_FORWARD => 'Carry Forward (HR register)',
+                LeaveLedgerEntry::TYPE_BASE => 'Current-Year Earned (HR register)',
+                LeaveLedgerEntry::TYPE_USAGE => 'Leave Used to Cutoff (HR register)',
+                default => $label,
+            };
+        }
+
         if ($e->source_type === EarnedOpeningSourceService::SOURCE_TYPE) {
             $label = $e->entry_type === LeaveLedgerEntry::TYPE_CARRY_FORWARD ? 'Carry Forward (from CSL)' : 'Current-Year Credit (from CSL)';
         }

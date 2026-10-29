@@ -163,6 +163,9 @@
                         @endif
                         <div><dt class="inline text-zinc-500 dark:text-zinc-400">Next credit:</dt> <dd class="inline font-semibold">{{ $nextCredit ?? 'None scheduled' }}</dd></div>
                     </dl>
+                    @if(($bd['historical_used'] ?? 0) > 0.001)
+                        <p class="mt-2 text-xs text-zinc-500 dark:text-zinc-400" data-earned-historical-used>Used: {{ $fmt($bd['historical_used']) }} before Leave V2 (HR register) + {{ $fmt($bd['portal_used']) }} in the portal.</p>
+                    @endif
                     <p class="mt-2 text-xs text-zinc-500 dark:text-zinc-400">Carry forward is unused leave from earlier years; it is part of your total but never counts as this year's accrual.</p>
                 @endif
             </div>

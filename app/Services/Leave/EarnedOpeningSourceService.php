@@ -112,6 +112,9 @@ class EarnedOpeningSourceService
         if ($opening === null) {
             return $stop(self::AMBIGUOUS, 'The migration has no opening ledger entry.');
         }
+        if ($opening->reversedBy()->exists() && LeaveLedgerEntry::where('idempotency_key', 'like', LeaveHrHistoryReconciliationService::KEY_PREFIX.":{$migration->employee_id}:{$migration->leave_year_id}:%")->exists()) {
+            return $stop(self::DONE, 'Restated to the HR register by leave:reconcile-hr-history.');
+        }
         if ($opening->reversedBy()->exists()) {
             $done = LeaveLedgerEntry::where('idempotency_key', 'like', self::KEY_PREFIX.':'.$migration->id.':%')->get();
 

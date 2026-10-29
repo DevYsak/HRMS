@@ -4,6 +4,7 @@ use App\Enums\UserRole;
 use App\Models\AuditLog;
 use App\Models\Department;
 use App\Models\Employee;
+use App\Models\LeaveAccrualTransition;
 use App\Models\LeaveBalance;
 use App\Models\LeaveLedgerEntry;
 use App\Models\LeavePolicy;
@@ -14,9 +15,12 @@ use App\Models\LeaveType;
 use App\Models\LeaveYear;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\Leave\EarnedLeaveAccrualService;
+use App\Services\Leave\EarnedLeaveBreakdown;
 use App\Services\Leave\LeaveAccrualTransitionService;
 use App\Services\Leave\LeaveCategory;
 use App\Services\Leave\LeaveHrHistoryReconciliationService as History;
+use App\Services\Leave\LeaveIntegrityService;
 use App\Services\Leave\LeaveLedgerService;
 use App\Services\Leave\LeaveMovementService;
 use App\Services\Leave\LeaveRegisterReconciliationService;
@@ -245,4 +249,157 @@ test('a start date after the months HR\'s credit covers is called out: September
 
     expect(hhPlan()['CNS021'])->toMatchArray(['status' => History::MATCH, 'expected' => 3.0])
         ->and(hhPlan()['CNS021']['reason'])->toContain('September 2026 is earned by neither');
+});
+
+// ── --apply: restate ONE employee to the HR breakdown, total unchanged ───────
+
+/** The September fix as production does it: Monthly Accrual Starts From 1 Sep, then the normal accrual run credits September. */
+function hhSeptemberFix(Employee ...$employees): void
+{
+    foreach ($employees as $employee) {
+        app(LeaveAccrualTransitionService::class)->set($employee, '2026-09-01', 'HR credit covers Jul–Aug', test()->hr);
+        $accrual = app(EarnedLeaveAccrualService::class);
+        $row = $accrual->planFor($employee->fresh(), test()->year, Carbon::today());
+        expect($row['due_months'])->toBe(['2026-09']);
+        $accrual->apply($row);
+    }
+}
+
+function hhBreakdown(Employee $employee): array
+{
+    return app(EarnedLeaveBreakdown::class)->for($employee->fresh(), test()->year);
+}
+
+function hhApply(string $code)
+{
+    return test()->artisan('leave:reconcile-hr-history', ['--register' => test()->register, '--employee' => [$code], '--apply' => true, '--actor' => test()->hr->email]);
+}
+
+/** The four register staff in the brief, migrated on 20 Oct, with their October activity and the September fix. */
+function hhFourStaff(): void
+{
+    test()->sunita = hhEmployee('CNS030', 'qa@businessenergyservices.co.uk', 'Sunita');
+    hhRegisterOnCsl(test()->sunita, credit: 2, carry: 7, used: 0.5);
+    test()->gayatri = hhEmployee('CNS001', 'carol@businessenergyservices.co.uk', 'Gayatri Chagan Navlakhe');
+    hhRegisterOnCsl(test()->gayatri, credit: 2, carry: 2.5, used: 2);
+    @unlink(test()->register);
+    test()->register = hhRegister([
+        ['name' => 'Yogesh', 'emails' => ['yogesh.sakpal@conexus-ns.com'], 'credit' => 2, 'carry' => 7, 'used' => 5, 'encashed' => 0, 'available' => 4],
+        ['name' => 'Pratish', 'emails' => ['Pratish.kavade@conexus-ns.com'], 'credit' => 2, 'carry' => 8, 'used' => 5.5, 'encashed' => 0, 'available' => 4.5],
+        ['name' => 'Sunita', 'emails' => ['qa@businessenergyservices.co.uk'], 'credit' => 2, 'carry' => 7, 'used' => 0.5, 'encashed' => 0, 'available' => 8.5],
+        ['name' => 'Gayatri Chagan Navlakhe', 'emails' => ['carol@businessenergyservices.co.uk'], 'credit' => 2, 'carry' => 2.5, 'used' => 2, 'encashed' => 0, 'available' => 2.5],
+    ]);
+
+    hhOctober();
+    test()->travelTo(Carbon::parse('2026-10-20 11:00:00'));
+    hhMigrate(test()->sunita);
+    hhMigrate(test()->gayatri);
+    test()->travelTo(Carbon::parse('2026-10-29 10:00:00'));
+    hhSeptemberFix(test()->yogesh, test()->pratish, test()->gayatri);
+    // Gayatri after the cutoff: an HR credit, and a day taken then cancelled.
+    app(LeaveBalanceService::class)->adjust(test()->gayatri, test()->earned, 'credit', 0.5, 'Worked a holiday', '', test()->hr, 2026, effectiveDate: Carbon::parse('2026-10-29'));
+    $cancelled = hhTaken(test()->gayatri, test()->earned, 1, '2026-10-30');
+    app(LeaveLedgerService::class)->reverse($cancelled, 'Request cancelled');
+    app(LeaveLedgerService::class)->rebuild(hhBalance(test()->gayatri, test()->earned));
+}
+
+test('Yogesh --apply: 7 carried, 2 HR-earned + September 1, 5 used to the cutoff + 1 in October — available stays 4, the opening is gone', function () {
+    hhFourStaff();
+    $september = LeaveLedgerEntry::where('employee_id', $this->yogesh->id)->where('entry_type', LeaveLedgerEntry::TYPE_ACCRUAL)->sole();
+    $start = LeaveAccrualTransition::where('employee_id', $this->yogesh->id)->sole()->only(['starts_on', 'set_by', 'reason']);
+    $request = LeaveRequest::where('employee_id', $this->yogesh->id)->sole();
+    $requestBefore = $request->getAttributes();
+
+    expect(hhBreakdown($this->yogesh))->toMatchArray(['opening' => 3.0, 'carry_forward' => 0.0, 'current_year_accrued' => 1.0, 'total_available' => 4.0])
+        ->and(hhPlan()['CNS021'])->toMatchArray(['expected' => 4.0, 'existing' => 4.0, 'accrual_after' => 1.0, 'used_after' => 1.0, 'status' => History::MATCH, 'apply_blocker' => null]);
+
+    hhApply('CNS021')->expectsOutputToContain('Migrated Opening')->expectsOutputToContain('RECONCILED')->assertSuccessful();
+
+    expect(hhBreakdown($this->yogesh))->toMatchArray([
+        'carry_forward' => 7.0, 'current_year_accrued' => 3.0, 'opening' => 0.0, 'hr_adjustment' => 0.0,
+        'used' => 6.0, 'historical_used' => 5.0, 'portal_used' => 1.0, 'total_available' => 4.0, 'consistent' => true, 'monthly_credits' => 1,
+    ])
+        // September is its own monthly accrual, untouched; the start date and the request are untouched.
+        ->and(LeaveLedgerEntry::where('employee_id', $this->yogesh->id)->where('entry_type', LeaveLedgerEntry::TYPE_ACCRUAL)->sole()->id)->toBe($september->id)
+        ->and(LeaveAccrualTransition::where('employee_id', $this->yogesh->id)->sole()->only(['starts_on', 'set_by', 'reason']))->toEqual($start)
+        ->and($request->fresh()->getAttributes())->toEqual($requestBefore)
+        // The October day now lives on Earned Leave, so cancelling it returns it there.
+        ->and(app(LeaveLedgerService::class)->activeEntryFor('leave_request', $request->id, LeaveLedgerEntry::TYPE_USAGE)->leave_type_id)->toBe($this->earned->id)
+        ->and(AuditLog::where('event', 'LEAVE_HR_HISTORY_RECONCILED')->where('subject_employee_id', $this->yogesh->id)->where('user_id', $this->hr->id)->count())->toBe(1)
+        ->and(app(LeaveIntegrityService::class)->scan($this->year)->all())->toBe([]);
+    $this->artisan('leave:verify', ['--year' => '2026/27'])->assertSuccessful();
+
+    // October's monthly accrual still follows on 1 November — the restatement does not stop it.
+    $this->travelTo(Carbon::parse('2026-11-01 00:20:00'));
+    expect(app(EarnedLeaveAccrualService::class)->planFor($this->yogesh->fresh(), $this->year, Carbon::today()))
+        ->toMatchArray(['status' => EarnedLeaveAccrualService::READY, 'due_months' => ['2026-10']]);
+});
+
+test('Pratish, Sunita and Gayatri keep their totals: 4, 8.5 and 4 (2.5 baseline + September + HR 0.5; a cancelled day nets nothing)', function () {
+    hhFourStaff();
+
+    foreach ([['CNS042', $this->pratish, 4.0, 8.0, 3.0, 5.5, 1.5], ['CNS030', $this->sunita, 8.5, 7.0, 2.0, 0.5, 0.0], ['CNS001', $this->gayatri, 4.0, 2.5, 3.0, 2.0, 0.0]] as [$code, $employee, $total, $carry, $current, $historical, $portal]) {
+        expect(hhBreakdown($employee)['total_available'])->toBe($total, $code);
+        hhApply($code)->expectsOutputToContain('RECONCILED')->assertSuccessful();
+        expect(hhBreakdown($employee))->toMatchArray(['carry_forward' => $carry, 'current_year_accrued' => $current, 'opening' => 0.0,
+            'historical_used' => $historical, 'portal_used' => $portal, 'total_available' => $total, 'consistent' => true]);
+    }
+    expect(hhBreakdown($this->gayatri)['hr_adjustment'])->toBe(0.5)
+        ->and(app(LeaveIntegrityService::class)->scan($this->year)->all())->toBe([]);
+    $this->artisan('leave:verify', ['--year' => '2026/27'])->assertSuccessful();
+});
+
+test('apply is idempotent: the second run is NO CHANGE and posts nothing', function () {
+    hhFourStaff();
+    hhApply('CNS021')->assertSuccessful();
+    $entries = LeaveLedgerEntry::count();
+    $audits = AuditLog::where('event', 'LEAVE_HR_HISTORY_RECONCILED')->count();
+
+    hhApply('CNS021')->expectsOutputToContain('NO CHANGE')->assertSuccessful();
+    $this->artisan('leave:reconcile-hr-history', ['--register' => $this->register, '--employee' => ['CNS021']])->expectsOutputToContain('NO CHANGE')->assertSuccessful();
+
+    expect(LeaveLedgerEntry::count())->toBe($entries)
+        ->and(AuditLog::where('event', 'LEAVE_HR_HISTORY_RECONCILED')->count())->toBe($audits)
+        ->and(hhBreakdown($this->yogesh)['total_available'])->toBe(4.0);
+});
+
+test('apply is refused in bulk, without an HR actor, and for a DIFFERENCE or NEEDS REVIEW row — and then writes nothing', function () {
+    hhFourStaff();
+    $register = $this->register;
+
+    $this->artisan('leave:reconcile-hr-history', ['--register' => $register, '--apply' => true, '--actor' => $this->hr->email])->assertFailed();
+    $this->artisan('leave:reconcile-hr-history', ['--register' => $register, '--employee' => ['CNS021', 'CNS042'], '--apply' => true, '--actor' => $this->hr->email])->assertFailed();
+    $this->artisan('leave:reconcile-hr-history', ['--register' => $register, '--employee' => ['CNS021'], '--apply' => true])->assertFailed();
+
+    // NEEDS REVIEW: an Earned Leave movement dated inside the HR period (it may already be in the register).
+    $balance = hhBalance($this->sunita, $this->earned);
+    app(LeaveLedgerService::class)->debit($balance, LeaveLedgerEntry::TYPE_EXPIRY, 1, Carbon::parse('2026-09-15'), 'hh-odd-expiry');
+    app(LeaveLedgerService::class)->rebuild($balance->fresh());
+    $before = [LeaveLedgerEntry::count(), AuditLog::count()];
+    expect(hhPlan()['CNS030']['status'])->toBe(History::REVIEW);
+    hhApply('CNS030')->expectsOutputToContain('Refused')->assertFailed();
+
+    // NEEDS REVIEW: an encashment in the register.
+    $this->register = hhRegister([['name' => 'Yogesh', 'emails' => ['yogesh.sakpal@conexus-ns.com'], 'credit' => 2, 'carry' => 7, 'used' => 4, 'encashed' => 1, 'available' => 4]]);
+    expect(hhPlan()['CNS021']['status'])->toBe(History::REVIEW);
+    hhApply('CNS021')->expectsOutputToContain('Refused')->assertFailed();
+    @unlink($this->register);
+
+    // DIFFERENCE: a register that disagrees with the portal.
+    $this->register = hhRegister([['name' => 'Pratish', 'emails' => ['Pratish.kavade@conexus-ns.com'], 'credit' => 2, 'carry' => 9, 'used' => 5.5, 'encashed' => 0, 'available' => 5.5]]);
+    expect(hhPlan()['CNS042']['status'])->toBe(History::DIFFERENCE);
+    hhApply('CNS042')->expectsOutputToContain('Refused')->assertFailed();
+    @unlink($register);
+
+    expect([LeaveLedgerEntry::count(), AuditLog::count()])->toBe($before);
+});
+
+test('an employee outside the register is never restated', function () {
+    hhFourStaff();
+    $outsider = hhEmployee('CNS099', 'new.joiner@conexus-ns.com', 'New Joiner');
+    expect(hhPlan(['CNS099'])['CNS099']['status'])->toBe(History::MISSING);
+    $before = LeaveLedgerEntry::where('employee_id', $outsider->id)->pluck('id')->all();
+
+    hhApply('CNS099')->expectsOutputToContain('Refused')->assertFailed();
+    expect(LeaveLedgerEntry::where('employee_id', $outsider->id)->pluck('id')->all())->toBe($before);
 });
