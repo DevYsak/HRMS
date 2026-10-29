@@ -30,6 +30,15 @@ use RuntimeException;
  *                   (− any expiry / encashment after the cutoff)
  *   Existing now  = today's Earned Leave total available (EarnedLeaveBreakdown)
  *
+ * Every ledger entry is read by classify(): only genuine business after the
+ * cutoff counts (leave taken, HR adjustments, monthly Earned Leave accrual,
+ * expiry). Leave V2 mechanics (the migration opening, its reversal, the
+ * carry-forward / current-year split), the register's own postings and the
+ * CSL bridge (CSL accruals and adjustments after the snapshot, which carried
+ * the old CSL to the migration) are listed but not counted. Excluding never
+ * hides days: they are still in today's balance, so a genuine entry read as
+ * mechanics shows up as a DIFFERENCE, and apply() refuses.
+ *
  * Portal activity is read from the Earned Leave pool AND the CSL ledger it was
  * migrated from: a day taken on CSL in October, before the migration, is
  * inside the Earned opening — the opening itself is never used as the
@@ -43,7 +52,9 @@ use RuntimeException;
  * the Earned Leave pool shows the HR breakdown instead of the migrated
  * opening — the total available is exactly the same before and after:
  *
- *   − the migration opening        (a reversal; the opening entry stays)
+ *   − today's baseline lines       each reversed, never edited: the migration
+ *                                  opening, or the carry-forward / current-year
+ *                                  split leave:earned-opening-sources made of it
  *   + Carry Forward     (HR)       hr-history:{employee}:{year}:carry_forward
  *   + Current-year earned (HR)     hr-history:{employee}:{year}:current_year
  *   − Leave used to the cutoff (HR) hr-history:{employee}:{year}:historical_used
@@ -88,6 +99,52 @@ class LeaveHrHistoryReconciliationService
 
     /** Usage linked to a real record: it can move ledgers with its link. */
     private const LINKED_USAGE = ['leave_request', 'leave_regularisation'];
+
+    /** A cancellation that returned days as a credit (LeaveMovementService). */
+    private const USAGE_RETURN = 'leave_request_return';
+
+    /** Leave V2 bookkeeping: the migration opening and the opening-source split. */
+    private const MECHANIC_SOURCES = ['leave_v2_migration', EarnedOpeningSourceService::SOURCE_TYPE];
+
+    /** HR add-on kinds that restate history, which the register now states. */
+    private const HISTORY_KINDS = ['opening_balance_correction', 'historical_balance'];
+
+    // ── How each ledger entry is read (a reversal is read as the entry it reverses) ──
+
+    /** Counted: leave taken (or returned) after the cutoff. */
+    public const C_USAGE = 'portal usage';
+
+    /** Counted: an HR add / deduct / correction on Earned Leave after the cutoff. */
+    public const C_ADJUSTMENT = 'HR adjustment';
+
+    /** Counted: a genuine monthly Earned Leave accrual. */
+    public const C_ACCRUAL = 'monthly accrual';
+
+    /** Counted: expiry or encashment after the cutoff. */
+    public const C_OTHER = 'expiry / encashment';
+
+    /** Excluded: the register's own postings, or a restatement already made here. */
+    public const C_REGISTER = 'HR register';
+
+    /** Excluded: the Leave V2 migration opening, its reversal, the carry-forward / current-year split. */
+    public const C_MECHANICS = 'migration mechanics';
+
+    /** Excluded: CSL accruals and CSL adjustments after the snapshot — the bridge from the old CSL to the migration. */
+    public const C_BRIDGE = 'CSL bridge';
+
+    /** Excluded: an HR credit HR marked as an opening / historical correction. */
+    public const C_HISTORY_FIX = 'history correction';
+
+    /** Excluded: CSL movement inside the HR period — already in the register. */
+    public const C_HR_PERIOD = 'HR period';
+
+    /** NEEDS REVIEW: an Earned Leave movement dated inside the HR period. */
+    public const C_EARLY = 'dated in HR period';
+
+    /** NEEDS REVIEW: a movement this reconciliation cannot read. */
+    public const C_UNSUPPORTED = 'unsupported';
+
+    private const COUNTED = [self::C_USAGE, self::C_ADJUSTMENT, self::C_ACCRUAL, self::C_OTHER];
 
     public function __construct(
         private readonly LeaveRegisterReconciliationService $register,
@@ -157,7 +214,8 @@ class LeaveHrHistoryReconciliationService
             'hr_current_year' => $hr ? round((float) $hr['credit'], 2) : null,
             'hr_used' => $hr ? round((float) $hr['used'], 2) : null,
             'hr_baseline' => $hr ? round((float) $hr['carry'] + (float) $hr['credit'] - (float) $hr['used'], 2) : null,
-            'used_after' => 0.0, 'adjustments_after' => 0.0, 'accrual_after' => 0.0, 'other_after' => 0.0,
+            'used_after' => 0.0, 'adjustments_after' => 0.0, 'accrual_after' => 0.0, 'other_after' => 0.0, 'excluded_after' => 0.0,
+            'entries' => [],
             'pending' => $breakdown['pending'] ?? 0.0,
             'expected' => null,
             'existing' => $breakdown['total_available'] ?? null,
@@ -177,13 +235,15 @@ class LeaveHrHistoryReconciliationService
 
         // Portal activity: the Earned Leave pool, and the CSL it was migrated from.
         $csl = $this->migration->sourceType();
-        $activity = $this->activity($employee, $year, $cutoff, array_values(array_filter([$pool->id, $csl?->id])), $pool);
+        $activity = $this->activity($employee, $year, $cutoff, $pool, $csl);
         $covered = $hr ? $this->coveredMonths($year, (float) $hr['credit']) : [];
         $row = [
             'used_after' => $activity['used_after'],
             'adjustments_after' => $activity['adjustments_after'],
             'accrual_after' => round((float) collect($activity['accruals'])->reject(fn ($days, $month) => in_array($month, $covered ?? [], true))->sum(), 2),
             'other_after' => $activity['other_after'],
+            'excluded_after' => $activity['excluded_after'],
+            'entries' => $activity['entries'],
         ] + $row;
 
         if ($hr === null) {
@@ -218,6 +278,7 @@ class LeaveHrHistoryReconciliationService
         $summary = sprintf('HR %s + %s − %s = %s; after %s: −%s used, %s HR, +%s accrual.',
             $this->n($row['hr_carry_forward']), $this->n($row['hr_current_year']), $this->n($row['hr_used']), $this->n($row['hr_baseline']),
             $cutoff->format('d M'), $this->n($row['used_after']), $this->signed($row['adjustments_after']), $this->n($row['accrual_after']))
+            .(abs($row['excluded_after']) > self::EPSILON ? ' Not counted (CSL bridge / migration corrections): '.$this->signed($row['excluded_after']).'.' : '')
             .($gap ? ' Note: '.$gap : '');
 
         if (abs((float) $row['difference']) >= self::EPSILON) {
@@ -227,7 +288,7 @@ class LeaveHrHistoryReconciliationService
             return $stop(self::NO_CHANGE, 'Already restated to the HR register; still agrees. '.$summary);
         }
 
-        $row['apply_blocker'] = $this->shapeProblem($employee, $year, $cutoff, $pool, $csl);
+        $row['apply_blocker'] = $this->shapeProblem($employee, $year, $pool, $activity['classified']);
 
         return $stop(self::MATCH, $summary.($row['apply_blocker'] ? ' Apply would refuse: '.$row['apply_blocker'] : ''));
     }
@@ -277,9 +338,11 @@ class LeaveHrHistoryReconciliationService
             $common = ['source_type' => self::SOURCE_TYPE, 'source_id' => $migration?->id, 'actor' => $actor];
             $posted = [];
 
-            // 1. The migrated opening gives way to the HR breakdown (reversed, never edited).
-            if ($migration?->ledger_entry_id && ($opening = LeaveLedgerEntry::find($migration->ledger_entry_id))) {
-                $posted['opening_reversal'] = $this->ledger->reverse($opening, 'Replaced by the HR register breakdown — '.$why, $actor, ['meta' => $meta])->id;
+            // 1. Today's baseline lines — the migration opening, or the carry-forward /
+            //    current-year split it was reclassified into — give way to the HR
+            //    breakdown: each is reversed, never edited.
+            foreach ($this->live($employee, $pool, $year)->whereIn('entry_type', self::BASELINE_TYPES) as $line) {
+                $posted['baseline_reversals'][] = $this->ledger->reverse($line, 'Replaced by the HR register breakdown — '.$why, $actor, ['meta' => $meta])->id;
             }
             // 2. The HR snapshot, as its own lines.
             $start = Carbon::parse($year->starts_on);
@@ -294,7 +357,7 @@ class LeaveHrHistoryReconciliationService
                     $common + ['reason' => 'Leave used to '.$cutoff->format('d M Y').' (HR register)', 'meta' => $meta + ['part' => 'historical_used', 'historical' => true]])->id;
             }
             // 3. Portal days after the cutoff still on CSL move to Earned Leave, keeping their link.
-            foreach ($this->cslMoves($employee, $year, $cutoff, $csl) as $entry) {
+            foreach ($this->cslMoves($employee, $year, $pool, $csl, $cutoff) as $entry) {
                 $this->ledger->reverse($entry, 'Moved to Earned Leave — '.$why, $actor, ['meta' => $meta]);
                 $posted['moved'][] = $this->ledger->debit($earnedBalance->fresh(), LeaveLedgerEntry::TYPE_USAGE, -(float) $entry->days, Carbon::parse($entry->effective_date),
                     $key('moved:'.$entry->id), ['source_type' => $entry->source_type, 'source_id' => $entry->source_id, 'actor' => $actor,
@@ -329,51 +392,39 @@ class LeaveHrHistoryReconciliationService
     }
 
     /**
-     * Why apply() cannot restate this employee safely, or null. Supported:
-     * Earned Leave holding only the migration opening, monthly accruals, and
-     * linked usage / HR adjustments after the cutoff; CSL holding nothing
-     * after the cutoff but linked usage (which moves).
+     * Why apply() cannot restate this employee safely, or null. The preview
+     * has already refused anything unreadable (NEEDS REVIEW); what is left
+     * to check is what apply() must act on: the Earned Leave pool came from
+     * the migration, its baseline lines are migration mechanics, and the CSL
+     * leave taken after the cutoff can move with its link.
+     *
+     * @param  Collection<int, array{entry: LeaveLedgerEntry, class: string}>  $classified
      */
-    private function shapeProblem(Employee $employee, LeaveYear $year, Carbon $cutoff, LeaveType $pool, ?LeaveType $csl): ?string
+    private function shapeProblem(Employee $employee, LeaveYear $year, LeaveType $pool, Collection $classified): ?string
     {
-        $migration = LeaveV2Migration::where('employee_id', $employee->id)->where('earned_leave_type_id', $pool->id)->where('leave_year_id', $year->id)->first();
-        if ($migration === null) {
+        if (! LeaveV2Migration::where('employee_id', $employee->id)->where('earned_leave_type_id', $pool->id)->where('leave_year_id', $year->id)->exists()) {
             return 'no Leave V2 migration record — the Earned Leave history was built another way.';
         }
-        $opening = $migration->ledger_entry_id ? LeaveLedgerEntry::find($migration->ledger_entry_id) : null;
-        if ((float) $migration->migrated_available > self::EPSILON && ($opening === null || $opening->reversedBy()->exists())) {
-            return 'the migration opening is missing or already reversed (reclassified elsewhere?).';
-        }
 
-        $live = $this->live($employee, $pool, $year);
-        $odd = $live->reject(fn (LeaveLedgerEntry $e) => ($opening && $e->id === $opening->id)
-            || ($e->entry_type === LeaveLedgerEntry::TYPE_ACCRUAL && str_starts_with((string) $e->idempotency_key, EarnedLeaveAccrualService::KEY_PREFIX.':'))
-            || ($e->entry_type === LeaveLedgerEntry::TYPE_USAGE && in_array($e->source_type, self::LINKED_USAGE, true) && Carbon::parse($e->effective_date)->gt($cutoff))
-            || (in_array($e->entry_type, self::ADJUSTMENT_TYPES, true) && Carbon::parse($e->effective_date)->gt($cutoff)));
-        if ($odd->isNotEmpty()) {
-            return 'Earned Leave holds entries this command does not restate (#'.$odd->map(fn ($e) => $e->id.' '.str_replace('_', ' ', $e->entry_type))->implode(', #').').';
+        $live = fn (array $c) => $c['entry']->reverses_entry_id === null && ! $classified->contains(fn ($o) => $o['entry']->reverses_entry_id === $c['entry']->id);
+        $baseline = $classified->filter(fn ($c) => $c['entry']->leave_type_id === $pool->id && in_array($c['entry']->entry_type, self::BASELINE_TYPES, true) && $live($c));
+        if ($odd = $baseline->reject(fn ($c) => $c['class'] === self::C_MECHANICS)->pluck('entry')->all()) {
+            return 'Earned Leave baseline lines not from the migration (#'.collect($odd)->pluck('id')->implode(', #').').';
         }
-
-        if ($csl !== null) {
-            $after = $this->live($employee, $csl, $year)
-                ->filter(fn (LeaveLedgerEntry $e) => $e->source_type !== LeaveRegisterReconciliationService::SOURCE_TYPE
-                    && ($e->entry_type === LeaveLedgerEntry::TYPE_ACCRUAL || Carbon::parse($e->effective_date)->gt($cutoff)));
-            $odd = $after->reject(fn (LeaveLedgerEntry $e) => $e->entry_type === LeaveLedgerEntry::TYPE_USAGE && in_array($e->source_type, self::LINKED_USAGE, true)
-                && Carbon::parse($e->effective_date)->gt($cutoff));
-            if ($odd->isNotEmpty()) {
-                return 'CSL holds post-snapshot entries other than leave taken (#'.$odd->map(fn ($e) => $e->id.' '.str_replace('_', ' ', $e->entry_type))->implode(', #').') — unsupported.';
-            }
+        $unmovable = $classified->filter(fn ($c) => $c['entry']->leave_type_id !== $pool->id && $c['class'] === self::C_USAGE && $live($c)
+            && $c['entry']->entry_type !== LeaveLedgerEntry::TYPE_USAGE);
+        if ($unmovable->isNotEmpty()) {
+            return 'CSL holds returned days after the snapshot (#'.$unmovable->pluck('entry.id')->implode(', #').') — they cannot be moved safely.';
         }
 
         return null;
     }
 
     /** @return Collection<int, LeaveLedgerEntry> live CSL usage after the cutoff, to move to Earned Leave */
-    private function cslMoves(Employee $employee, LeaveYear $year, Carbon $cutoff, ?LeaveType $csl): Collection
+    private function cslMoves(Employee $employee, LeaveYear $year, LeaveType $pool, ?LeaveType $csl, Carbon $cutoff): Collection
     {
         return $csl === null ? collect() : $this->live($employee, $csl, $year)
-            ->filter(fn (LeaveLedgerEntry $e) => $e->entry_type === LeaveLedgerEntry::TYPE_USAGE && in_array($e->source_type, self::LINKED_USAGE, true)
-                && Carbon::parse($e->effective_date)->gt($cutoff))
+            ->filter(fn (LeaveLedgerEntry $e) => $e->entry_type === LeaveLedgerEntry::TYPE_USAGE && $this->classify($e, $pool, $cutoff) === self::C_USAGE)
             ->values();
     }
 
@@ -387,46 +438,97 @@ class LeaveHrHistoryReconciliationService
     }
 
     /**
-     * Portal movements of one employee's Earned Leave (and source CSL) in the
-     * year, split at the cutoff. A reversal belongs to the date of the entry
-     * it reverses, so a cancelled October day nets to zero in October.
+     * Portal movements of one employee's Earned Leave (and the CSL it was
+     * migrated from) in the year, each read by classify(). Only the counted
+     * kinds move the expected figure; excluded ones are listed beside it.
      *
-     * @param  array<int, int>  $typeIds
-     * @return array{used_after: float, adjustments_after: float, other_after: float, accruals: array<string, float>, notes: array<int, string>}
+     * @return array{used_after: float, adjustments_after: float, other_after: float, excluded_after: float, accruals: array<string, float>,
+     *     notes: array<int, string>, classified: Collection<int, array{entry: LeaveLedgerEntry, class: string}>, entries: array<int, array<string, mixed>>}
      */
-    private function activity(Employee $employee, LeaveYear $year, Carbon $cutoff, array $typeIds, LeaveType $pool): array
+    private function activity(Employee $employee, LeaveYear $year, Carbon $cutoff, LeaveType $pool, ?LeaveType $csl): array
     {
-        $entries = LeaveLedgerEntry::with('reverses')->where('employee_id', $employee->id)->whereIn('leave_type_id', $typeIds)
+        $classified = LeaveLedgerEntry::with('reverses')->where('employee_id', $employee->id)
+            ->whereIn('leave_type_id', array_values(array_filter([$pool->id, $csl?->id])))
             ->where('leave_year_id', $year->id)->orderBy('id')->get()
-            // The register's own postings — on CSL, or restated on Earned Leave by apply() — ARE the HR
-            // history; the baseline replaces opening, base and carry forward.
-            ->reject(fn (LeaveLedgerEntry $e) => in_array($e->reverses?->source_type ?? $e->source_type, [LeaveRegisterReconciliationService::SOURCE_TYPE, self::SOURCE_TYPE], true)
-                || in_array($e->entry_type, self::BASELINE_TYPES, true));
-
-        $dated = fn (LeaveLedgerEntry $e) => Carbon::parse(($e->reverses ?? $e)->effective_date);
-        $after = $entries->filter(fn (LeaveLedgerEntry $e) => $dated($e)->gt($cutoff) || $e->entry_type === LeaveLedgerEntry::TYPE_ACCRUAL);
-        $sum = fn (Collection $c, array $types) => round((float) $c->whereIn('entry_type', $types)->sum('days'), 2);
+            ->map(fn (LeaveLedgerEntry $e) => ['entry' => $e, 'class' => $this->classify($e, $pool, $cutoff)]);
+        $sum = fn (array $classes) => round((float) $classified->whereIn('class', $classes)->sum(fn ($c) => (float) $c['entry']->days), 2);
+        $ids = fn (string $class) => $classified->where('class', $class)->pluck('entry.id');
 
         $notes = [];
-        // On the Earned pool every movement post-dates Leave V2; one dated inside the HR period may be in the register already.
-        $early = $entries->filter(fn (LeaveLedgerEntry $e) => $e->leave_type_id === $pool->id && $e->entry_type !== LeaveLedgerEntry::TYPE_ACCRUAL && $dated($e)->lte($cutoff));
-        if ($early->isNotEmpty()) {
-            $notes[] = 'Earned Leave holds '.$early->count().' movement(s) dated on or before '.$cutoff->format('d M Y').' (#'.$early->pluck('id')->implode(', #').') — they may already be in the HR register';
+        if ($ids(self::C_EARLY)->isNotEmpty()) {
+            $notes[] = 'Earned Leave holds '.$ids(self::C_EARLY)->count().' movement(s) dated on or before '.$cutoff->format('d M Y').' (#'.$ids(self::C_EARLY)->implode(', #').') — they may already be in the HR register';
+        }
+        if ($ids(self::C_UNSUPPORTED)->isNotEmpty()) {
+            $notes[] = 'movements this reconciliation cannot read (#'.$classified->where('class', self::C_UNSUPPORTED)
+                ->map(fn ($c) => $c['entry']->id.' '.str_replace('_', ' ', $c['entry']->entry_type).' '.($c['entry']->source_type ?? 'no source'))->implode(', #').')';
         }
 
-        $accruals = $after->where('entry_type', LeaveLedgerEntry::TYPE_ACCRUAL)
-            ->groupBy(fn (LeaveLedgerEntry $e) => ($e->reverses ?? $e)->meta['month'] ?? $dated($e)->format('Y-m'))
-            ->map(fn (Collection $g) => round((float) $g->sum('days'), 2))
+        $accruals = $classified->where('class', self::C_ACCRUAL)
+            ->groupBy(fn ($c) => ($c['entry']->reverses ?? $c['entry'])->meta['month'] ?? Carbon::parse(($c['entry']->reverses ?? $c['entry'])->effective_date)->format('Y-m'))
+            ->map(fn (Collection $g) => round((float) $g->sum(fn ($c) => (float) $c['entry']->days), 2))
             ->filter(fn (float $days) => abs($days) > self::EPSILON)
             ->sortKeys()->all();
 
         return [
-            'used_after' => -$sum($after, [LeaveLedgerEntry::TYPE_USAGE]),
-            'adjustments_after' => $sum($after, self::ADJUSTMENT_TYPES),
-            'other_after' => $sum($after, [LeaveLedgerEntry::TYPE_EXPIRY, LeaveLedgerEntry::TYPE_ENCASHMENT]),
+            'used_after' => -$sum([self::C_USAGE]) + 0.0,
+            'adjustments_after' => $sum([self::C_ADJUSTMENT]),
+            'other_after' => $sum([self::C_OTHER]),
+            'excluded_after' => $sum([self::C_BRIDGE, self::C_HISTORY_FIX]),
             'accruals' => $accruals,
             'notes' => $notes,
+            'classified' => $classified,
+            'entries' => $classified->map(fn ($c) => [
+                'id' => $c['entry']->id, 'ledger' => $c['entry']->leave_type_id === $pool->id ? 'Earned' : 'CSL',
+                'type' => $c['entry']->entry_type, 'days' => (float) $c['entry']->days,
+                'date' => Carbon::parse(($c['entry']->reverses ?? $c['entry'])->effective_date)->toDateString(),
+                'source' => $c['entry']->source_type, 'reverses' => $c['entry']->reverses_entry_id,
+                'class' => $c['class'], 'counted' => in_array($c['class'], self::COUNTED, true),
+            ])->values()->all(),
         ];
+    }
+
+    /**
+     * What one ledger entry is, for the reconciliation. A reversal is read as
+     * the entry it reverses (its source and date), so a cancellation nets to
+     * zero in the same place as the day it cancels.
+     *
+     * Earned Leave: monthly accruals, HR adjustments, leave taken and
+     * expiry after the cutoff are business; the migration opening and its
+     * carry-forward / current-year split are mechanics. CSL: only leave
+     * taken after the cutoff is business (it sits inside the migrated
+     * opening); its accruals and adjustments after the snapshot bridged the
+     * old CSL to the migration, and the register now states that history.
+     * Anything else is unsupported — NEEDS REVIEW, never guessed.
+     */
+    public function classify(LeaveLedgerEntry $entry, LeaveType $pool, Carbon $cutoff): string
+    {
+        $original = $entry->reverses ?? $entry;
+        $source = (string) $original->source_type;
+        $type = $entry->entry_type;
+        $after = Carbon::parse($original->effective_date)->gt($cutoff);
+        $onPool = $entry->leave_type_id === $pool->id;
+        $linked = in_array($source, self::LINKED_USAGE, true);
+        $usage = ($type === LeaveLedgerEntry::TYPE_USAGE && $linked)
+            || ($type === LeaveLedgerEntry::TYPE_ADJUSTMENT_CREDIT && $source === self::USAGE_RETURN);
+
+        return match (true) {
+            in_array($source, [LeaveRegisterReconciliationService::SOURCE_TYPE, self::SOURCE_TYPE], true) => self::C_REGISTER,
+            in_array($source, self::MECHANIC_SOURCES, true) => self::C_MECHANICS,
+            // CSL
+            ! $onPool && $type === LeaveLedgerEntry::TYPE_ACCRUAL => self::C_BRIDGE,
+            ! $onPool && ! $after => self::C_HR_PERIOD,
+            ! $onPool && $usage => self::C_USAGE,
+            ! $onPool && in_array($type, self::ADJUSTMENT_TYPES, true) => self::C_BRIDGE,
+            ! $onPool => self::C_UNSUPPORTED,
+            // Earned Leave
+            $type === LeaveLedgerEntry::TYPE_ACCRUAL => str_starts_with((string) $original->idempotency_key, EarnedLeaveAccrualService::KEY_PREFIX.':') ? self::C_ACCRUAL : self::C_UNSUPPORTED,
+            in_array($type, self::BASELINE_TYPES, true) => self::C_UNSUPPORTED,
+            ! $after => self::C_EARLY,
+            $usage => self::C_USAGE,
+            in_array($type, self::ADJUSTMENT_TYPES, true) => in_array($original->meta['add_on_type'] ?? null, self::HISTORY_KINDS, true) ? self::C_HISTORY_FIX : self::C_ADJUSTMENT,
+            in_array($type, [LeaveLedgerEntry::TYPE_EXPIRY, LeaveLedgerEntry::TYPE_ENCASHMENT], true) => self::C_OTHER,
+            default => self::C_UNSUPPORTED,
+        };
     }
 
     /**

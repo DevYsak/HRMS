@@ -17,6 +17,7 @@ use App\Models\Role;
 use App\Models\User;
 use App\Services\Leave\EarnedLeaveAccrualService;
 use App\Services\Leave\EarnedLeaveBreakdown;
+use App\Services\Leave\EarnedOpeningSourceService;
 use App\Services\Leave\LeaveAccrualTransitionService;
 use App\Services\Leave\LeaveCategory;
 use App\Services\Leave\LeaveHrHistoryReconciliationService as History;
@@ -95,7 +96,9 @@ function hhRegisterOnCsl(Employee $employee, float $credit, float $carry, float 
     $opts = ['source_type' => LeaveRegisterReconciliationService::SOURCE_TYPE];
     $ledger->credit($balance, LeaveLedgerEntry::TYPE_BASE, $credit, Carbon::parse('2026-07-01'), "hh-base-{$employee->id}", $opts);
     $ledger->credit($balance->fresh(), LeaveLedgerEntry::TYPE_CARRY_FORWARD, $carry, Carbon::parse('2026-07-01'), "hh-carry-{$employee->id}", $opts);
-    $ledger->debit($balance->fresh(), LeaveLedgerEntry::TYPE_USAGE, $used, Carbon::parse('2026-09-30'), "hh-used-{$employee->id}", $opts);
+    if ($used > 0) {
+        $ledger->debit($balance->fresh(), LeaveLedgerEntry::TYPE_USAGE, $used, Carbon::parse('2026-09-30'), "hh-used-{$employee->id}", $opts);
+    }
     $ledger->rebuild($balance->fresh());
 }
 
@@ -230,7 +233,7 @@ test('carry forward and current-year earned stay separate; a wrong balance is a 
     // Sunita: the register says 7 carried + 2 earned; the portal holds 8 (migrated from a CSL that disagreed).
     $sunita = hhEmployee('CNS030', 'qa@businessenergyservices.co.uk', 'Sunita');
     $balance = hhBalance($sunita, $this->earned);
-    app(LeaveLedgerService::class)->credit($balance, LeaveLedgerEntry::TYPE_OPENING, 8, Carbon::parse('2026-07-01'), 'hh-sunita-opening');
+    app(LeaveLedgerService::class)->credit($balance, LeaveLedgerEntry::TYPE_OPENING, 8, Carbon::parse('2026-07-01'), 'hh-sunita-opening', ['source_type' => 'leave_v2_migration']);
     app(LeaveLedgerService::class)->rebuild($balance->fresh());
     @unlink($this->register);
     $this->register = hhRegister([
@@ -402,4 +405,149 @@ test('an employee outside the register is never restated', function () {
 
     hhApply('CNS099')->expectsOutputToContain('Refused')->assertFailed();
     expect(LeaveLedgerEntry::where('employee_id', $outsider->id)->pluck('id')->all())->toBe($before);
+});
+
+// ── Production ledger shapes: CSL bridge, history corrections, reclassified openings ──
+
+/** The CSL September accrual posted on 1 Oct, as leave:conexus-csl-accrual does. */
+function hhCslAccrual(Employee $employee, string $month = '2026-09'): void
+{
+    $balance = hhBalance($employee, test()->csl);
+    app(LeaveLedgerService::class)->credit($balance, LeaveLedgerEntry::TYPE_ACCRUAL, 1, Carbon::parse($month.'-01')->endOfMonth()->startOfDay(),
+        "conexus-csl-accrual:{$employee->id}:".test()->year->id.":{$month}", ['source_type' => 'conexus_csl_accrual', 'meta' => ['month' => $month]]);
+    app(LeaveLedgerService::class)->rebuild($balance->fresh());
+}
+
+/** An HR deduction on CSL in October (a LeaveBalanceAdjustment's ledger movement). */
+function hhCslDeduct(Employee $employee, float $days, string $key, string $on = '2026-10-05'): void
+{
+    $balance = hhBalance($employee, test()->csl);
+    app(LeaveLedgerService::class)->debit($balance, LeaveLedgerEntry::TYPE_ADJUSTMENT_DEBIT, $days, Carbon::parse($on), $key,
+        ['source_type' => 'leave_balance_adjustment', 'meta' => ['category' => 'adjustment']]);
+    app(LeaveLedgerService::class)->rebuild($balance->fresh());
+}
+
+function hhRegisterOf(array $names): string
+{
+    $all = [
+        'Yogesh' => ['name' => 'Yogesh', 'emails' => ['yogesh.sakpal@conexus-ns.com'], 'credit' => 2, 'carry' => 7, 'used' => 5, 'encashed' => 0, 'available' => 4],
+        'Pratish' => ['name' => 'Pratish', 'emails' => ['Pratish.kavade@conexus-ns.com'], 'credit' => 2, 'carry' => 8, 'used' => 5.5, 'encashed' => 0, 'available' => 4.5],
+        'Sunita' => ['name' => 'Sunita', 'emails' => ['qa@businessenergyservices.co.uk'], 'credit' => 2, 'carry' => 7, 'used' => 0.5, 'encashed' => 0, 'available' => 8.5],
+        'Gayatri' => ['name' => 'Gayatri Chagan Navlakhe', 'emails' => ['carol@businessenergyservices.co.uk'], 'credit' => 2, 'carry' => 2.5, 'used' => 2, 'encashed' => 0, 'available' => 2.5],
+    ];
+
+    return hhRegister(array_values(array_intersect_key($all, array_flip($names))));
+}
+
+/**
+ * Production as the previews show it. CSL was loaded from the OLD register
+ * (Gayatri used 0 / 4.5, Sunita used 0 / 9), then in October: the CSL
+ * September accrual (+1) and a balancing debit (−1); HR deducted the days
+ * the old register missed (Gayatri −2, Sunita −0.5); the migration ran on
+ * 20 Oct; leave:earned-opening-sources split Yogesh's and Pratish's
+ * openings; then the September fix credited Earned Leave for September.
+ */
+function hhProduction(): void
+{
+    test()->sunita = hhEmployee('CNS046', 'qa@businessenergyservices.co.uk', 'Sunita Kotak');
+    hhRegisterOnCsl(test()->sunita, credit: 2, carry: 7, used: 0);
+    test()->gayatri = hhEmployee('CNS005', 'carol@businessenergyservices.co.uk', 'Gayatri Navlakhe');
+    hhRegisterOnCsl(test()->gayatri, credit: 2, carry: 2.5, used: 0);
+    @unlink(test()->register);
+    test()->register = hhRegisterOf(['Yogesh', 'Pratish', 'Sunita', 'Gayatri']);
+
+    test()->travelTo(Carbon::parse('2026-10-01 00:30:00'));
+    foreach ([test()->yogesh, test()->pratish, test()->sunita, test()->gayatri] as $employee) {
+        hhCslAccrual($employee);
+        hhCslDeduct($employee, 1, 'hh-balancing-'.$employee->id, '2026-10-02');
+    }
+    hhCslDeduct(test()->gayatri, 2, 'hh-gayatri-history');
+    hhCslDeduct(test()->sunita, 0.5, 'hh-sunita-history');
+
+    hhOctober(); // Yogesh 1 day on CSL (14 Oct), everyone migrated except Sunita/Gayatri, Pratish 1.5 on Earned (26 Oct)
+    test()->travelTo(Carbon::parse('2026-10-20 11:00:00'));
+    hhMigrate(test()->sunita);
+    hhMigrate(test()->gayatri);
+
+    // leave:earned-opening-sources --apply, for the two of them.
+    test()->travelTo(Carbon::parse('2026-10-22 10:00:00'));
+    $sources = app(EarnedOpeningSourceService::class);
+    foreach (['CNS021', 'CNS042'] as $code) {
+        $row = $sources->plan([$code])->sole();
+        expect($row['status'])->toBeIn(EarnedOpeningSourceService::CLASSIFIABLE);
+        $sources->apply($row, test()->hr, 'Evidence confirmed');
+    }
+
+    test()->travelTo(Carbon::parse('2026-10-29 10:00:00'));
+    hhSeptemberFix(test()->yogesh, test()->pratish);
+}
+
+test('production shapes: CSL bridge and history corrections are not counted; Gayatri 2.5, Sunita 8.5, Yogesh 4, Pratish 4 all MATCH', function () {
+    hhProduction();
+    $rows = hhPlan();
+
+    expect($rows['CNS005'])->toMatchArray(['hr_baseline' => 2.5, 'adjustments_after' => 0.0, 'accrual_after' => 0.0, 'excluded_after' => -2.0,
+        'expected' => 2.5, 'existing' => 2.5, 'status' => History::MATCH, 'apply_blocker' => null])
+        ->and($rows['CNS046'])->toMatchArray(['hr_baseline' => 8.5, 'adjustments_after' => 0.0, 'accrual_after' => 0.0, 'excluded_after' => -0.5,
+            'expected' => 8.5, 'existing' => 8.5, 'status' => History::MATCH, 'apply_blocker' => null])
+        ->and($rows['CNS021'])->toMatchArray(['hr_baseline' => 4.0, 'used_after' => 1.0, 'adjustments_after' => 0.0, 'accrual_after' => 1.0, 'excluded_after' => 0.0,
+            'expected' => 4.0, 'existing' => 4.0, 'status' => History::MATCH, 'apply_blocker' => null])
+        ->and($rows['CNS042'])->toMatchArray(['hr_baseline' => 4.5, 'used_after' => 1.5, 'adjustments_after' => 0.0, 'accrual_after' => 1.0,
+            'expected' => 4.0, 'existing' => 4.0, 'status' => History::MATCH, 'apply_blocker' => null])
+        // Every entry is read and named; the opening-source split is mechanics, the CSL accrual and debits are the bridge.
+        ->and(collect($rows['CNS021']['entries'])->pluck('class')->unique()->values()->all())
+        ->toContain(History::C_REGISTER, History::C_MECHANICS, History::C_BRIDGE, History::C_USAGE, History::C_ACCRUAL);
+
+    $this->artisan('leave:reconcile-hr-history', ['--register' => $this->register, '--employee' => ['CNS005'], '--details' => true])
+        ->expectsOutputToContain('Not counted (CSL bridge / migration corrections): -2')->expectsOutputToContain('Entries read for Gayatri Navlakhe')->assertSuccessful();
+});
+
+test('apply restates an already-reclassified opening and the CSL-bridge shape, keeps every total, and a second run is NO CHANGE', function () {
+    hhProduction();
+    $expected = ['CNS021' => [$this->yogesh, 4.0, 7.0, 3.0, 5.0, 1.0], 'CNS042' => [$this->pratish, 4.0, 8.0, 3.0, 5.5, 1.5],
+        'CNS046' => [$this->sunita, 8.5, 7.0, 2.0, 0.5, 0.0], 'CNS005' => [$this->gayatri, 2.5, 2.5, 2.0, 2.0, 0.0]];
+
+    foreach ($expected as $code => [$employee, $total, $carry, $current, $historical, $portal]) {
+        $before = hhBreakdown($employee);
+        expect($before['total_available'])->toBe($total, $code);
+        hhApply($code)->expectsOutputToContain('RECONCILED')->assertSuccessful();
+        expect(hhBreakdown($employee))->toMatchArray(['carry_forward' => $carry, 'current_year_accrued' => $current, 'opening' => 0.0, 'hr_adjustment' => 0.0,
+            'historical_used' => $historical, 'portal_used' => $portal, 'total_available' => $total, 'consistent' => true]);
+    }
+
+    $entries = LeaveLedgerEntry::count();
+    foreach (array_keys($expected) as $code) {
+        hhApply($code)->expectsOutputToContain('NO CHANGE')->assertSuccessful();
+    }
+    expect(LeaveLedgerEntry::count())->toBe($entries)
+        ->and(hhPlan()->pluck('status')->unique()->values()->all())->toBe([History::NO_CHANGE])
+        ->and(app(LeaveIntegrityService::class)->scan($this->year)->all())->toBe([])
+        ->and(app(EarnedOpeningSourceService::class)->plan(['CNS021'])->sole()['status'])->toBe(EarnedOpeningSourceService::DONE);
+    $this->artisan('leave:verify', ['--year' => '2026/27'])->assertSuccessful();
+});
+
+test('a genuine HR adjustment on Earned Leave after the cutoff still counts; an HR credit marked as an opening correction does not', function () {
+    hhProduction();
+    app(LeaveBalanceService::class)->adjust($this->sunita, $this->earned, 'credit', 1, 'Worked a holiday', '', $this->hr, 2026,
+        addOnType: 'manual_adjustment', effectiveDate: Carbon::parse('2026-10-29'));
+
+    expect(hhPlan()['CNS046'])->toMatchArray(['adjustments_after' => 1.0, 'expected' => 9.5, 'existing' => 9.5, 'status' => History::MATCH]);
+
+    // HR "corrected" the opening on Earned Leave as well — the register already states that history.
+    app(LeaveBalanceService::class)->adjust($this->sunita, $this->earned, 'credit', 0.5, 'Opening fix', '', $this->hr, 2026,
+        addOnType: 'opening_balance_correction', effectiveDate: Carbon::parse('2026-10-29'));
+    expect(hhPlan()['CNS046'])->toMatchArray(['adjustments_after' => 1.0, 'expected' => 9.5, 'existing' => 10.0,
+        'difference' => 0.5, 'status' => History::DIFFERENCE]);
+    hhApply('CNS046')->expectsOutputToContain('Refused')->assertFailed();
+});
+
+test('an Earned Leave credit of unknown origin is NEEDS REVIEW, never read as mechanics or business', function () {
+    hhProduction();
+    $balance = hhBalance($this->gayatri, $this->earned);
+    app(LeaveLedgerService::class)->credit($balance, LeaveLedgerEntry::TYPE_BASE, 12, Carbon::parse('2026-07-01'), 'hh-provisioned', ['source_type' => 'leave_entitlement']);
+    app(LeaveLedgerService::class)->rebuild($balance->fresh());
+
+    $row = hhPlan()['CNS005'];
+    expect($row['status'])->toBe(History::REVIEW)->and($row['reason'])->toContain('cannot read');
+    hhApply('CNS005')->expectsOutputToContain('Refused')->assertFailed();
 });

@@ -32,6 +32,7 @@ use RuntimeException;
     {--apply : Restate ONE employee (needs exactly one --employee and --actor) to the HR breakdown; the total never changes}
     {--actor= : Email of the HR user making the change (required with --apply)}
     {--reason=Restated to the authoritative HR register snapshot : Recorded on every entry and in the audit log}
+    {--details : List every ledger entry read for each employee, and whether it counts}
     {--csv= : Also write the rows to this CSV path}')]
 #[Description('HR register snapshot + portal activity after the cutoff vs current Earned Leave (preview writes nothing; --apply restates one employee)')]
 class ReconcileHrLeaveHistory extends Command
@@ -87,6 +88,9 @@ class ReconcileHrLeaveHistory extends Command
         }
 
         $this->report($rows, $cutoff);
+        if ($this->option('details')) {
+            $this->details($rows);
+        }
 
         if ($csv = $this->option('csv')) {
             $this->writeCsv($rows, (string) $csv, $cutoff);
@@ -126,6 +130,17 @@ class ReconcileHrLeaveHistory extends Command
         $this->info("RECONCILED — {$result['reason']}");
 
         return self::SUCCESS;
+    }
+
+    /** Every ledger entry the reconciliation read, and how. */
+    private function details(Collection $rows): void
+    {
+        foreach ($rows->filter(fn (array $r) => ($r['entries'] ?? []) !== []) as $r) {
+            $this->line("Entries read for {$r['employee']} ({$r['code']}):");
+            $this->table(['#', 'Ledger', 'Type', 'Days', 'Dated', 'Source', 'Reverses', 'Read as', 'Counted'],
+                collect($r['entries'])->map(fn (array $e) => [$e['id'], $e['ledger'], str_replace('_', ' ', $e['type']), $this->n($e['days']), $e['date'],
+                    $e['source'] ?? '—', $e['reverses'] ? '#'.$e['reverses'] : '—', $e['class'], $e['counted'] ? 'yes' : 'no'])->all());
+        }
     }
 
     /** Before and after source breakdown, side by side. */
