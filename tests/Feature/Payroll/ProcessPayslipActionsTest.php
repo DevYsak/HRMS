@@ -59,6 +59,7 @@ test('selectAllVisible fills selected with every payslip on the current page', f
     app(PayrollService::class)->generateDraft('July', 2026, 'cycle_a', $admin->id);
 
     Livewire::actingAs($admin)->test(Process::class)
+        ->set('month', 'July')->set('year', 2026)
         ->call('selectAllVisible')
         ->assertCount('selected', 2);
 });

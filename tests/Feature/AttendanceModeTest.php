@@ -526,6 +526,8 @@ test('journey events carry the duration from the previous punch', function () {
 });
 
 test('insights include longest break, best day and approved overtime', function () {
+    // Mid-month weekday: the fixtures sit early in the month and must be in the past.
+    $this->travelTo(Carbon\Carbon::parse('2026-10-21 12:00:00'));
     $employee = Employee::factory()->create();
     $d = now()->startOfMonth()->addDays(2); // a Wednesday-or-whatever weekday
     Attendance::create([
@@ -568,6 +570,8 @@ test('the advanced analytics grid is not on the everyday attendance page', funct
 });
 
 test('the analytics mode filter narrows the period stats', function () {
+    // Mid-month weekday: the fixtures sit early in the month and must be in the past.
+    $this->travelTo(Carbon\Carbon::parse('2026-10-21 12:00:00'));
     $employee = Employee::factory()->create(['joining_date' => now()->subYear()->toDateString()]);
     // Two working days of this month: present counts scheduled working days
     // (weekend work is "Worked on Weekly Off", not present).
@@ -591,6 +595,8 @@ test('the analytics mode filter narrows the period stats', function () {
 });
 
 test('AI insight stats compute averages, streak, prediction and suggestions', function () {
+    // Mid-month weekday: the fixtures sit early in the month and must be in the past.
+    $this->travelTo(Carbon\Carbon::parse('2026-10-21 12:00:00'));
     $employee = Employee::factory()->create();
     foreach ([1, 2] as $day) {
         Attendance::create([

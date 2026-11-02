@@ -20,6 +20,7 @@ test('a user who can approve finance sees a real link to the finance approval pa
     ]);
 
     Livewire::actingAs($admin)->test(Process::class)
+        ->set('month', 'July')->set('year', 2026)
         ->assertSee('Go to Finance Approval')
         ->assertDontSee('Finalize & Pay')
         ->assertDontSeeHtml('wire:click="finalize"');
@@ -32,7 +33,8 @@ test('a run-payroll-only user sees a plain status badge, not an actionable butto
         'status' => 'pending_finance', 'processed_by' => $hr->id, 'processed_at' => now(),
     ]);
 
-    Livewire::actingAs($hr)->test(Process::class, ['month' => 'July', 'year' => 2026])
+    Livewire::actingAs($hr)->test(Process::class)
+        ->set('month', 'July')->set('year', 2026)
         ->assertSee('Awaiting Finance Approval')
         ->assertDontSee('Go to Finance Approval')
         ->assertDontSee('Finalize & Pay');

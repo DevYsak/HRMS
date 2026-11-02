@@ -48,7 +48,7 @@ test('the command center shows pending counts per request type', function () {
         ->assertOk()
         ->assertSee('Attendance Command Center')
         ->assertViewHas('counts', fn ($c) => $c['regularisation'] === 1 && $c['wfh'] === 1 && $c['overtime'] === 1)
-        ->assertSee('Activity Feed');
+        ->assertSee('Recent Activity');
 });
 
 test('quick approve routes a regularisation through the real service', function () {
@@ -94,13 +94,13 @@ test('the status filter shows decided history, not just pending', function () {
     ]);
 
     // Default (pending) shows the pending one, hides the approved one.
-    Livewire::actingAs($hr)->test(CommandCenter::class)
-        ->assertSee('PENDING GUY')
-        ->assertDontSee('APPROVED GAL')
-        // Switching to Approved history flips it.
-        ->set('statusFilter', 'approved')
-        ->assertSee('APPROVED GAL')
-        ->assertDontSee('PENDING GUY');
+    $queue = fn ($page) => collect($page->viewData('items'))->pluck('employee')->all();
+    $page = Livewire::actingAs($hr)->test(CommandCenter::class)->assertSee('PENDING GUY');
+    expect($queue($page))->toContain('PENDING GUY')->not->toContain('APPROVED GAL');
+
+    // Switching to Approved history flips the queue.
+    $page->set('statusFilter', 'approved')->assertSee('APPROVED GAL');
+    expect($queue($page))->toContain('APPROVED GAL')->not->toContain('PENDING GUY');
 });
 
 test('bulk approve handles every selected overtime request', function () {

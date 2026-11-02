@@ -7,6 +7,7 @@ use App\Models\Employee;
 use App\Models\ShiftSetting;
 use App\Models\User;
 use App\Services\AttendanceService;
+use Illuminate\Support\Carbon;
 
 function regEmployeeOnShift(): Employee
 {
@@ -60,6 +61,8 @@ test('approving a regularisation preserves the original punch and does not overw
 });
 
 test('a punch corrected to after the grace cutoff is marked late, not forced on-time', function () {
+    // A Wednesday: "yesterday" must be a working day (on a Monday it is a weekly off).
+    $this->travelTo(Carbon::parse('2026-10-21 12:00:00'));
     $employee = regEmployeeOnShift();
     $admin = User::factory()->create(['role' => UserRole::SuperAdmin]);
 

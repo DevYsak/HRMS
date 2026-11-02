@@ -8,6 +8,7 @@ use App\Models\LeaveRequest;
 use App\Models\LeaveType;
 use App\Models\PublicHoliday;
 use App\Models\User;
+use App\Services\Attendance\HolidayResolver;
 use Illuminate\Support\Str;
 use Livewire\Livewire;
 
@@ -89,9 +90,12 @@ test('leave center shows forecast, holiday schedule and policy overview', functi
     $type = timeOffLeaveType(['name' => 'Casual Leave']);
     timeOffBalance($employee, $type, ['allocated_days' => 12, 'used_days' => 6]);
 
+    // On the employee's own holiday calendar (the company default is UK; the
+    // column's legacy default is India, which this employee would never see).
     PublicHoliday::create([
         'date' => now()->addDays(10)->toDateString(),
         'name' => 'TESTHOLIDAY',
+        'country' => app(HolidayResolver::class)->resolveCountry($employee),
     ]);
     DecemberMandatoryDay::create([
         'year' => now()->year,

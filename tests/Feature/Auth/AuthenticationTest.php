@@ -63,7 +63,8 @@ test('users can logout', function () {
 
     $response = $this->actingAs($user)->post(route('logout'));
 
-    $response->assertRedirect(route('home'));
+    // Signing out lands on the site root, which sends a guest on to sign in.
+    $response->assertRedirect('/');
 
     $this->assertGuest();
 });

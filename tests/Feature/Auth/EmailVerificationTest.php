@@ -4,6 +4,15 @@ use App\Models\User;
 use Illuminate\Auth\Events\Verified;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\URL;
+use Laravel\Fortify\Features;
+
+// Email verification is switched off for this internal HRMS (config/fortify.php);
+// these run again if it is ever switched back on.
+beforeEach(function () {
+    if (! Features::enabled(Features::emailVerification())) {
+        $this->markTestSkipped('Email verification is disabled in config/fortify.php.');
+    }
+});
 
 test('email verification screen can be rendered', function () {
     $user = User::factory()->unverified()->create();
