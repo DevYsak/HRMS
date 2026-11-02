@@ -29,9 +29,14 @@
     @if($ceval['balance_type'])
         <div class="rounded-xl border border-orange-100 bg-orange-50/60 p-4 text-sm dark:border-orange-500/20 dark:bg-orange-500/5" data-balance-impact>
             <h3 class="mb-2 text-sm font-semibold text-zinc-900 dark:text-white">Balance impact (after approval)</h3>
-            <div class="flex justify-between"><span class="text-zinc-600 dark:text-zinc-300">{{ $ceval['balance_type'] }} balance before</span><span class="tabular-nums">{{ $fmt($ceval['available']) }} {{ \Illuminate\Support\Str::plural('day', $ceval['available']) }}</span></div>
-            <div class="flex justify-between"><span class="text-zinc-600 dark:text-zinc-300">Reserved by this request</span><span class="tabular-nums text-rose-600">−{{ $fmt($ceval['paid_units']) }} {{ \Illuminate\Support\Str::plural('day', $ceval['paid_units']) }}</span></div>
-            <div class="mt-1 flex justify-between border-t border-orange-100 pt-1 font-semibold dark:border-orange-500/20"><span>Balance after approval</span><span class="tabular-nums">{{ $fmt($ceval['remaining_after']) }} {{ \Illuminate\Support\Str::plural('day', $ceval['remaining_after']) }}</span></div>
+            @if($ceval['projection'] ?? null)
+                {{-- The same date-by-date figures as every other request (LeaveBalanceProjection). --}}
+                <x-leave.balance-projection :projection="$ceval['projection']" :paid="$ceval['paid_units']" :lwp="$ceval['unpaid_units']" />
+            @else
+                <div class="flex justify-between"><span class="text-zinc-600 dark:text-zinc-300">{{ $ceval['balance_type'] }} balance before</span><span class="tabular-nums">{{ $fmt($ceval['available']) }} {{ \Illuminate\Support\Str::plural('day', $ceval['available']) }}</span></div>
+                <div class="flex justify-between"><span class="text-zinc-600 dark:text-zinc-300">Reserved by this request</span><span class="tabular-nums text-rose-600">−{{ $fmt($ceval['paid_units']) }} {{ \Illuminate\Support\Str::plural('day', $ceval['paid_units']) }}</span></div>
+                <div class="mt-1 flex justify-between border-t border-orange-100 pt-1 font-semibold dark:border-orange-500/20"><span>Balance after approval</span><span class="tabular-nums">{{ $fmt($ceval['remaining_after']) }} {{ \Illuminate\Support\Str::plural('day', $ceval['remaining_after']) }}</span></div>
+            @endif
         </div>
     @endif
 

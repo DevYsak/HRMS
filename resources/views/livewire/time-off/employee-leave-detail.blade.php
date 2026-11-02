@@ -103,6 +103,9 @@
                     @if($bd['pending'] > 0.001)
                         <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $fmt($bd['available_to_request']) }} day(s) left to request after pending requests.</p>
                     @endif
+                    @if(($bd['booked_ahead'] ?? 0) > 0)
+                        <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400" data-booked-ahead>Includes {{ $fmt($bd['booked_ahead']) }} day(s) of leave approved for later dates, deducted on approval{{ $bd['total_available'] < 0 ? ' — booked against monthly accrual still to come' : '' }}.</p>
+                    @endif
                     @unless($bd['consistent'])
                         <p class="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-800 dark:bg-rose-500/10 dark:text-rose-200" data-breakdown-inconsistent>These lines do not add up to the ledger total — run leave:verify.</p>
                     @endunless

@@ -302,12 +302,16 @@ class CombinedLeaveService
         $balanceSettings = $chargeType ? $this->rules->settings($employee, $chargeType, $start) : null;
         $excess = $rules['excess_handling'] ?? LeaveRequestEvaluator::EXCESS_BLOCK;
         $summary = null;
+        $projection = null;
         if ($chargeType) {
             $row = app(LeaveService::class)->balanceForDate($employee->id, $chargeType->id, $start);
             $summary = $row ? $this->calculator->summary($row, $excludeRequestId) : null;
+            // The same date-by-date figure as a standard request: today's balance,
+            // accrual expected before the leave starts, other bookings.
+            $projection = app(LeaveBalanceProjection::class)->for($employee, $chargeType, $start, $excludeRequestId);
         }
-        $available = round((float) ($summary['available_to_request'] ?? 0), 2);
-        $allowance = round($available + (float) ($balanceSettings['negative_balance_limit'] ?? 0), 2);
+        $allowance = round((float) ($projection['capacity'] ?? 0), 2);
+        $available = round($allowance - (float) ($projection['negative_limit'] ?? 0), 2);
         $suggestion = null;
 
         if ($hasPaid && $charge['source'] === LeaveBalanceSource::MISSING_POOL) {
@@ -315,7 +319,7 @@ class CombinedLeaveService
         } elseif ($hasPaid && $chargeType && $paid > $allowance + 0.001) {
             $short = round($paid - max(0, $allowance), 2);
             $errors[] = sprintf('Only %s days of %s are available. Change %s day(s) to Unpaid Leave or reduce the request.',
-                max(0, $allowance) + 0, $chargeType->name, $short + 0);
+                max(0, $allowance) + 0, $chargeType->name, $short + 0).LeaveBalanceProjection::explain($projection);
             if ($excess === LeaveRequestEvaluator::EXCESS_CONVERT_TO_LWP) {
                 // Proposed, never applied silently: the employee reviews it.
                 $suggestion = $this->convertExcess($rows, $short);
@@ -347,6 +351,7 @@ class CombinedLeaveService
             'balance_type' => $chargeType?->name,
             'approved_available' => round((float) ($summary['approved_available'] ?? 0), 2),
             'pending_reserved' => round((float) ($summary['pending'] ?? 0), 2),
+            'projection' => $projection,
             'available' => $available,
             'remaining_after' => round($available - $paid, 2),
             'excess_handling' => $excess,
@@ -362,7 +367,8 @@ class CombinedLeaveService
 
     /**
      * At approval: the request's paid units must still fit the balance it
-     * charges (net of other pending requests, its own reservation excluded).
+     * charges at its own dates (LeaveBalanceProjection: today's balance,
+     * accrual expected before it starts, other bookings; its own excluded).
      * Never converted here — payroll treatment is the employee's to review.
      *
      * @throws \DomainException
@@ -376,16 +382,13 @@ class CombinedLeaveService
 
         $employee = $request->employee;
         $type = LeaveType::withTrashed()->find($request->balance_leave_type_id);
-        $start = Carbon::parse($request->start_date);
-        $row = app(LeaveService::class)->balanceForDate($employee->id, $type->id, $start);
-        $available = $row ? (float) $this->calculator->summary($row, $request->id)['available_to_request'] : 0.0;
-        $limit = (float) ($this->rules->settings($employee, $type, $start)['negative_balance_limit'] ?? 0);
+        $projection = app(LeaveBalanceProjection::class)->for($employee, $type, Carbon::parse($request->start_date), $request->id);
 
-        if ($paid > $available + $limit + 0.001) {
+        if ($paid > $projection['capacity'] + 0.001) {
             throw new \DomainException(sprintf(
                 'Only %s days of %s are available for this request (%s paid). Ask the employee to change days to Unpaid Leave or reduce the request.',
-                max(0, round($available + $limit, 2)) + 0, $type->name, $paid + 0,
-            ));
+                max(0, $projection['capacity']) + 0, $type->name, $paid + 0,
+            ).LeaveBalanceProjection::explain($projection));
         }
     }
 

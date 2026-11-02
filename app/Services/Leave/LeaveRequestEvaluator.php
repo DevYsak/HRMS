@@ -55,7 +55,8 @@ class LeaveRequestEvaluator
      *     policy: ?string, policy_source: string, year: array{label: string, starts_on: string, ends_on: string},
      *     calendar_days: int, weekly_off_days: int, holiday_days: int, shutdown_days: int, holidays: array<int, string>,
      *     charged_days: float, uses_balance: bool, unlimited: bool, balance: ?array<string, mixed>,
-     *     available: ?float, paid_days: float, unpaid_days: float, lwp_days: float, remaining_after: ?float,
+     *     projection: ?array<string, mixed>, available: ?float, balance_error: ?string,
+     *     paid_days: float, unpaid_days: float, lwp_days: float, remaining_after: ?float,
      *     excess_handling: string, blocked: bool, errors: array<int, string>, warnings: array<int, string>,
      *     attachment_required: bool, attachment_rule: ?string, approval_steps: array<int, string>, allow_half_day: bool
      * }
@@ -148,6 +149,8 @@ class LeaveRequestEvaluator
         $excess = $balanceSettings['excess_handling'] ?? self::EXCESS_BLOCK;
         $balanceName = $chargeType?->name ?? $type->name;
         $balance = null;
+        $projection = null;
+        $balanceError = null;
         $available = null;
         $paid = 0.0;
         $unpaid = 0.0;
@@ -162,17 +165,21 @@ class LeaveRequestEvaluator
         } else {
             $row = app(LeaveService::class)->balanceForDate($employee->id, $chargeType->id, $start);
             $balance = $row ? $this->calculator->summary($row, $excludeRequestId) : null;
-            $available = round((float) ($balance['available_to_request'] ?? 0), 2);
-            $allowance = round($available + (float) ($balanceSettings['negative_balance_limit'] ?? 0), 2);
+            // What the request can draw on at its own dates: today's balance,
+            // monthly accrual expected before it starts, other bookings.
+            $projection = app(LeaveBalanceProjection::class)->for($employee, $chargeType, $start, $excludeRequestId, $today);
+            $allowance = $projection['capacity'];
+            $available = round($allowance - $projection['negative_limit'], 2);
 
-            if ($days['charged'] <= $allowance) {
+            if ($days['charged'] <= $allowance + 0.001) {
                 $paid = $days['charged'];
             } elseif ($excess === self::EXCESS_CONVERT_TO_LWP) {
                 $paid = max(0.0, $allowance);
                 $lwp = round($days['charged'] - $paid, 2);
                 $warnings[] = sprintf('%s day(s) will be paid from %s and %s day(s) will be Leave Without Pay.', $paid + 0, $balanceName, $lwp + 0);
             } else {
-                $errors[] = sprintf('You have only %s %s day(s) available.', max(0, $available) + 0, $balanceName);
+                $balanceError = sprintf('You have only %s %s day(s) available.', max(0, $available) + 0, $balanceName).LeaveBalanceProjection::explain($projection);
+                $errors[] = $balanceError;
             }
         }
 
@@ -212,7 +219,10 @@ class LeaveRequestEvaluator
             'uses_balance' => $usesBalance && ! $unlimited,
             'unlimited' => $unlimited,
             'balance' => $balance,
+            'projection' => $projection,
             'available' => $available,
+            // Only the balance can refuse an approval; notice, past-date and other timing rules are judged at submission.
+            'balance_error' => $balanceError,
             'paid_days' => round($paid, 2),
             'unpaid_days' => round($unpaid, 2),
             'lwp_days' => round($lwp, 2),

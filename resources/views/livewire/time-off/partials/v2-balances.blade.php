@@ -58,6 +58,9 @@
                 @else
                     <p class="mt-4 text-2xl font-bold tabular-nums text-zinc-900 dark:text-white" data-earned-total>{{ $earned['unlimited'] ? 'As per policy' : $days($bd['total_available'] ?? $earned['approved_available']) }}</p>
                     <p class="text-xs text-zinc-500 dark:text-zinc-400">Total available @if(($bd['pending'] ?? 0) > 0) · <span>Available to request</span> {{ $fmt($bd['available_to_request']) }}@endif</p>
+                    @if(($bd['booked_ahead'] ?? 0) > 0)
+                        <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400" data-booked-ahead>Already deducted: {{ $fmt($bd['booked_ahead']) }} {{ \Illuminate\Support\Str::plural('day', $bd['booked_ahead'] == 1 ? 1 : 2) }} of leave approved for later dates{{ $bd['total_available'] < 0 ? ' — booked against monthly accrual still to come' : '' }}.</p>
+                    @endif
                     <dl class="mt-4 grid flex-1 grid-cols-2 gap-2" data-earned-lines>
                         {!! $stat('Carry Forward', $fmt($bd['carry_forward'] ?? 0)) !!}
                         {!! $stat('Current Year Accrued', $fmt($bd['current_year_accrued'] ?? 0)) !!}

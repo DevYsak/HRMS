@@ -13,6 +13,7 @@
             : ($r->is_half_day ? 1 : 0);
         $excluded = $dates->where('excluded', true);
         $impact = $this->balanceImpact;
+        $projection = $impact ? $this->projection : null;
         $pending = $P::isPending($r);
         $card = 'ui-surface p-5';
         $h2 = 'text-base font-semibold text-zinc-900 dark:text-white';
@@ -372,6 +373,10 @@
                 <h2 class="{{ $h2 }}">Balance Impact</h2>
                 @if($impact === null)
                     <p class="mt-2 text-sm text-zinc-600 dark:text-zinc-300">No paid balance is used{{ $unpaid > 0 ? ': the days are unpaid' : '' }}.</p>
+                @elseif($pending && $projection)
+                    {{-- What the employee saw when applying, and what approval re-checks. --}}
+                    <x-leave.balance-projection class="mt-3" :projection="$projection" :paid="$impact['paid']" :lwp="$unpaid" bookings-title="The employee's other approved and pending requests" />
+                    <p class="mt-2 text-xs text-zinc-500 dark:text-zinc-400">{{ $impact['note'] }}</p>
                 @else
                     <p class="{{ $dt }} mt-1">{{ $impact['type'] }}</p>
                     <dl class="mt-3 space-y-2 text-sm">
@@ -380,6 +385,9 @@
                         <div class="flex justify-between border-t border-zinc-100 pt-2 dark:border-white/5"><dt class="font-medium text-zinc-900 dark:text-white">Remaining</dt><dd class="font-bold tabular-nums {{ $impact['after'] < 0 ? 'text-rose-600 dark:text-rose-400' : '' }}">{{ $fmt($impact['after']) }}</dd></div>
                     </dl>
                     <p class="mt-2 text-xs text-zinc-500 dark:text-zinc-400">{{ $impact['note'] }}</p>
+                    @if($projection)
+                        <x-leave.balance-projection class="mt-4" :projection="$projection" :show-lines="false" bookings-title="The employee's other approved and pending requests" />
+                    @endif
                 @endif
                 @if($this->canAdjust)
                     <flux:button size="sm" class="mt-3 w-full" icon="adjustments-horizontal" :href="route('time-off.leave-management.employee', ['employee' => $employee])" wire:navigate>Adjust Leave Balance</flux:button>

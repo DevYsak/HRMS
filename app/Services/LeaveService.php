@@ -28,6 +28,7 @@ use App\Services\Audit\AuditService;
 use App\Services\Leave\CombinedLeaveService;
 use App\Services\Leave\LeaveAccrualService;
 use App\Services\Leave\LeaveBalanceCalculator;
+use App\Services\Leave\LeaveBalanceProjection;
 use App\Services\Leave\LeaveCarryOverService;
 use App\Services\Leave\LeaveCategory;
 use App\Services\Leave\LeaveLedgerService;
@@ -839,6 +840,21 @@ class LeaveService
                 app(CombinedLeaveService::class)->assertPaidUnitsCovered($leaveRequest);
             }
 
+            // Leave V2: the paid days asked for must still fit the balance at the
+            // leave's own dates (LeaveBalanceProjection: today's balance, monthly
+            // accrual expected before it starts, other bookings). Refused when
+            // they no longer do — payroll treatment is never changed silently.
+            if ($evaluation !== null && $evaluation['projection'] !== null && in_array($resolvedStatus, ['approved', 'pending_hr'], true)) {
+                $askedPaid = round(max(0.0, $newDays - max((float) ($leaveRequest->lwp_days ?? 0), $agreedLwp)), 2);
+                $capacity = (float) $evaluation['projection']['capacity'];
+                if ($askedPaid > $capacity + 0.001) {
+                    throw new \DomainException(sprintf(
+                        'Cannot approve: %s paid day(s) no longer fit %s — only %s day(s) are available for these dates.%s Propose a change (some days unpaid) or ask the employee to amend the request.',
+                        $askedPaid + 0, $evaluation['balance_type'], max(0, $capacity) + 0, LeaveBalanceProjection::explain($evaluation['projection']),
+                    ));
+                }
+            }
+
             $leaveRequest->update([
                 'status' => $resolvedStatus,
                 'leave_type_id' => $data['leave_type_id'],
@@ -857,7 +873,9 @@ class LeaveService
 
             if ($resolvedStatus === 'approved') {
                 $leaveRequest->update(['approved_at' => now()]);
-                $this->checkOverlapAndDeductBalance($leaveRequest, $employee, $data, $newDays);
+                // Leave V2 judged the balance above, at the leave's own dates; the
+                // deduction itself must not re-judge it against today's balance alone.
+                $this->checkOverlapAndDeductBalance($leaveRequest, $employee, $data, $newDays, enforceBalance: $evaluation === null && ! ($combined && LeavePolicyEngine::enabled()));
             }
 
             $this->auditDecision($leaveRequest, $oldStatus, $resolvedStatus, [
@@ -991,6 +1009,16 @@ class LeaveService
 
             if ($decision === 'approved') {
                 $updateData['approved_at'] = now();
+            }
+
+            // Leave V2: the same date-by-date balance check as every other approval.
+            $balanceType = LeaveType::withTrashed()->find($leaveRequest->balanceTypeId());
+            if ($decision === 'approved' && $effectiveStatus === 'paid' && $newDays > 0 && $balanceType && LeavePolicyEngine::enabled()) {
+                $projection = app(LeaveBalanceProjection::class)->for($employee, $balanceType, Carbon::parse($leaveRequest->start_date), $leaveRequest->id);
+                if ($newDays > $projection['capacity'] + 0.001) {
+                    throw new \DomainException(sprintf('Cannot approve: %s paid day(s) no longer fit %s — only %s day(s) are available for these dates.%s',
+                        $newDays + 0, $balanceType->name, max(0, $projection['capacity']) + 0, LeaveBalanceProjection::explain($projection)));
+                }
             }
 
             // Write payment audit log when HR overrides from requested status
@@ -1790,7 +1818,7 @@ class LeaveService
         return (bool) $leaveRequest->leaveType?->is_paid;
     }
 
-    private function checkOverlapAndDeductBalance(LeaveRequest $leaveRequest, Employee $employee, array $data, float $newDays): void
+    private function checkOverlapAndDeductBalance(LeaveRequest $leaveRequest, Employee $employee, array $data, float $newDays, bool $enforceBalance = true): void
     {
         $overlap = LeaveRequest::where('employee_id', $employee->id)
             ->where('id', '!=', $leaveRequest->id)
@@ -1820,6 +1848,7 @@ class LeaveService
                 $paidDays,
                 $leaveRequest->balanceTypeId(),
                 Carbon::parse($data['start_date']),
+                $enforceBalance,
             );
         }
     }

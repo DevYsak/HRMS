@@ -5,6 +5,7 @@ namespace App\Services\Leave;
 use App\Models\Employee;
 use App\Models\LeaveBalance;
 use App\Models\LeaveLedgerEntry;
+use App\Models\LeaveRequest;
 use App\Models\LeaveType;
 use App\Models\LeaveYear;
 use Illuminate\Support\Carbon;
@@ -110,6 +111,10 @@ class EarnedLeaveBreakdown
             'has_balance' => $balance !== null,
             'year' => ['id' => $year->id, 'label' => $year->label, 'starts_on' => $year->starts_on->toDateString(), 'ends_on' => $year->ends_on->toDateString()],
         ] + $lines + [
+            // Leave approved for later dates is deducted on approval: when it was
+            // booked against monthly accrual still to come, the total can sit
+            // below zero by up to these days until that accrual is credited.
+            'booked_ahead' => $this->bookedAhead($employee, $pool, $year),
             'historical_used' => $historical + 0.0,
             'portal_used' => round($lines['used'] - $historical, 2),
             'monthly_days' => EarnedLeaveAccrualService::MONTHLY_DAYS,
@@ -133,6 +138,16 @@ class EarnedLeaveBreakdown
                 'year_end_available' => round($lines['total_available'] + count($future) * EarnedLeaveAccrualService::MONTHLY_DAYS, 2),
             ] : null,
         ];
+    }
+
+    /** Paid days of approved leave starting after today in this leave year — already deducted. */
+    private function bookedAhead(Employee $employee, LeaveType $pool, LeaveYear $year): float
+    {
+        return round((float) LeaveRequest::where('employee_id', $employee->id)->chargedTo($pool->id)->where('status', 'approved')
+            ->whereDate('start_date', '>', Carbon::today()->toDateString())
+            ->whereDate('start_date', '>=', $year->starts_on->toDateString())->whereDate('start_date', '<=', $year->ends_on->toDateString())
+            ->get()->filter(fn (LeaveRequest $r) => ($r->approved_leave_status ?? $r->requested_leave_status ?? 'paid') === 'paid')
+            ->sum(fn (LeaveRequest $r) => $r->paidDays()), 2);
     }
 
     /** Today inside the year, else its nearest edge. */

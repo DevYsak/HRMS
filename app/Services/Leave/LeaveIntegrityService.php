@@ -202,7 +202,7 @@ class LeaveIntegrityService
         return LeaveBalance::with(['leaveType' => fn ($q) => $q->withTrashed()])->where('leave_year_id', $year->id)
             ->when($employeeIds !== null, fn ($q) => $q->whereIn('employee_id', $employeeIds))
             ->get()
-            ->flatMap(function (LeaveBalance $balance) use ($sums) {
+            ->flatMap(function (LeaveBalance $balance) use ($sums, $year) {
                 $available = (float) $this->calculator->summary($balance)['approved_available'];
                 $found = [];
                 if ($balance->isLedgerBacked()) {
@@ -212,12 +212,27 @@ class LeaveIntegrityService
                             "Calculated {$available} vs ledger {$ledger} ({$balance->leaveType?->name}).");
                     }
                 }
-                if ($available < -self::EPSILON) {
-                    $found[] = $this->finding(self::NEGATIVE_BALANCE, $balance, 'balance #'.$balance->id, "Available {$available} ({$balance->leaveType?->name}).");
+                // Leave approved ahead of the monthly accrual it relies on is deducted
+                // at approval (LeaveBalanceProjection): until it starts, the balance
+                // may sit below zero by up to those days — anything more is a finding.
+                $ahead = $this->approvedAhead($balance, $year);
+                if ($available + $ahead < -self::EPSILON) {
+                    $found[] = $this->finding(self::NEGATIVE_BALANCE, $balance, 'balance #'.$balance->id, "Available {$available} ({$balance->leaveType?->name})"
+                        .($ahead > 0 ? ", {$ahead} of it approved for later dates" : '').'.');
                 }
 
                 return $found;
             });
+    }
+
+    /** Paid days of leave approved for dates after today, already deducted from this balance. */
+    private function approvedAhead(LeaveBalance $balance, LeaveYear $year): float
+    {
+        return round((float) LeaveRequest::where('employee_id', $balance->employee_id)->chargedTo($balance->leave_type_id)->where('status', 'approved')
+            ->whereDate('start_date', '>', Carbon::today()->toDateString())
+            ->whereDate('start_date', '>=', $year->starts_on->toDateString())->whereDate('start_date', '<=', $year->ends_on->toDateString())
+            ->get()->filter(fn (LeaveRequest $r) => ($r->approved_leave_status ?? $r->requested_leave_status ?? 'paid') === 'paid')
+            ->sum(fn (LeaveRequest $r) => $r->paidDays()), 2);
     }
 
     /** Usage for a request that is missing, or no longer approved. @return Collection<int, array<string, mixed>> */

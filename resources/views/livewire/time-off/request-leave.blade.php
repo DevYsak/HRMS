@@ -284,6 +284,14 @@
                         </div>
                     @endif
 
+                    {{-- As soon as dates are chosen: today's balance, the accrual expected
+                         before the leave starts, and what other requests already hold. --}}
+                    @if($eval && $eval['projection'] && $eval['charged_days'] > 0)
+                        <div class="rounded-xl border border-emerald-100 p-4 dark:border-emerald-500/20" data-dates-balance>
+                            <x-leave.balance-projection :projection="$eval['projection']" :paid="$eval['paid_days']" :lwp="$eval['lwp_days']" :title="($hrMode ? 'Balance' : 'Your balance').' for these dates'" />
+                        </div>
+                    @endif
+
                     @if($eval['allow_half_day'] ?? false)
                         <div class="rounded-xl border border-zinc-200 px-3 py-2.5 dark:border-white/10">
                             <label class="flex items-center gap-2 text-sm font-medium text-zinc-800 dark:text-zinc-100">
@@ -383,12 +391,16 @@
                     @if($eval['uses_balance'])
                         <div class="rounded-xl border border-orange-100 bg-orange-50/60 p-4 text-sm dark:border-orange-500/20 dark:bg-orange-500/5" data-balance-impact>
                             <h3 class="mb-2 text-sm font-semibold text-zinc-900 dark:text-white">Balance impact (after approval)</h3>
-                            <div class="flex justify-between"><span class="text-zinc-600 dark:text-zinc-300">{{ $eval['balance_type'] }} available before</span><span class="tabular-nums">{{ $fmt($eval['available']) }} days</span></div>
-                            <div class="flex justify-between"><span class="text-zinc-600 dark:text-zinc-300">Requested</span><span class="tabular-nums text-rose-600">−{{ $fmt($eval['paid_days']) }} days</span></div>
-                            @if($eval['lwp_days'] > 0)
-                                <div class="flex justify-between"><span class="text-zinc-600 dark:text-zinc-300">Leave Without Pay</span><span class="tabular-nums text-amber-700 dark:text-amber-300">{{ $fmt($eval['lwp_days']) }} days</span></div>
+                            @if($eval['projection'])
+                                <x-leave.balance-projection :projection="$eval['projection']" :paid="$eval['paid_days']" :lwp="$eval['lwp_days']" />
+                            @else
+                                <div class="flex justify-between"><span class="text-zinc-600 dark:text-zinc-300">{{ $eval['balance_type'] }} available before</span><span class="tabular-nums">{{ $fmt($eval['available']) }} days</span></div>
+                                <div class="flex justify-between"><span class="text-zinc-600 dark:text-zinc-300">Requested</span><span class="tabular-nums text-rose-600">−{{ $fmt($eval['paid_days']) }} days</span></div>
+                                @if($eval['lwp_days'] > 0)
+                                    <div class="flex justify-between"><span class="text-zinc-600 dark:text-zinc-300">Leave Without Pay</span><span class="tabular-nums text-amber-700 dark:text-amber-300">{{ $fmt($eval['lwp_days']) }} days</span></div>
+                                @endif
+                                <div class="mt-1 flex justify-between border-t border-orange-100 pt-1 font-semibold dark:border-orange-500/20"><span>Remaining after approval</span><span class="tabular-nums">{{ $fmt($eval['remaining_after']) }} days</span></div>
                             @endif
-                            <div class="mt-1 flex justify-between border-t border-orange-100 pt-1 font-semibold dark:border-orange-500/20"><span>Remaining after approval</span><span class="tabular-nums">{{ $fmt($eval['remaining_after']) }} days</span></div>
                         </div>
                     @endif
 

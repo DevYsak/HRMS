@@ -11,8 +11,10 @@ use App\Services\Approvals\ApprovalQueueService;
 use App\Services\Attendance\WorkingDayResolver;
 use App\Services\Leave\LeaveAdminActionService;
 use App\Services\Leave\LeaveBalanceCalculator;
+use App\Services\Leave\LeaveBalanceProjection;
 use App\Services\Leave\LeaveCancellationService;
 use App\Services\Leave\LeaveCategory;
+use App\Services\Leave\LeavePolicyEngine;
 use App\Services\Leave\LeaveRequestAccess;
 use App\Services\Leave\LeaveRequestPresenter;
 use App\Services\Leave\LeaveRequestRevisionService;
@@ -223,6 +225,27 @@ class LeaveRequestDetail extends Component
             'after' => round($after, 2),
             'note' => $note,
         ];
+    }
+
+    /**
+     * The balance the request draws on at its own dates, and every other
+     * approved or pending request on it — the same LeaveBalanceProjection the
+     * employee saw when applying and the approval re-checks. Null when no
+     * paid balance is charged.
+     *
+     * @return array<string, mixed>|null
+     */
+    #[Computed]
+    public function projection(): ?array
+    {
+        $request = $this->request;
+        $type = LeaveType::withTrashed()->find($request->balanceTypeId());
+
+        if (! LeavePolicyEngine::enabled() || ! $type || ! $type->is_paid || LeaveCategory::of($type) === LeaveCategory::UNPAID || ! $request->employee) {
+            return null;
+        }
+
+        return app(LeaveBalanceProjection::class)->for($request->employee, $type, Carbon::parse($request->start_date), $request->id);
     }
 
     /**
