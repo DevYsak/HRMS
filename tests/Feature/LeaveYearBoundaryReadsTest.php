@@ -174,14 +174,13 @@ test('the HR queue shows an approver the balance in March', function () {
 
     test()->travelTo(Carbon::parse('2027-03-01 12:00'));
 
-    Livewire::actingAs($hr)->test(AllTimeOff::class)
-        ->assertOk()
-        ->assertViewHas('requests', function ($requests) {
-            $req = collect(method_exists($requests, 'items') ? $requests->items() : $requests)->first();
-
-            // An approver must not be asked to decide against a blank balance.
-            return $req !== null && $req->availableBalance !== null;
-        });
+    // An approver must not be asked to decide against a blank balance: the
+    // panel reads the 2026/27 balance the March leave falls in.
+    $request = LeaveRequest::where('employee_id', $employee->id)->sole();
+    $page = Livewire::actingAs($hr)->test(AllTimeOff::class)->assertOk()->call('viewRequest', $request->id)
+        ->assertSeeHtml('data-panel-legacy-balance');
+    expect($page->instance()->panelBalances['legacy']['available_to_request'])->toEqual(28.0)
+        ->and($page->instance()->panelBalances['year'])->toBe('2026/27');
 });
 
 test('the team queue shows a manager the balance in March', function () {

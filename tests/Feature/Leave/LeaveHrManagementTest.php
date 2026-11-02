@@ -3,6 +3,7 @@
 use App\Enums\UserRole;
 use App\Livewire\Dashboard\EmployeeLeaveBalances;
 use App\Livewire\Dashboard\LeaveOverview;
+use App\Livewire\TimeOff\AllTimeOff;
 use App\Livewire\TimeOff\EmployeeLeaveDetail;
 use App\Livewire\TimeOff\LeaveRequestDetail;
 use App\Livewire\TimeOff\LeaveRequests;
@@ -25,6 +26,7 @@ use App\Models\Role;
 use App\Models\User;
 use App\Notifications\LeaveDynamicApproverNotification;
 use App\Services\Leave\LeaveBalanceCalculator;
+use App\Services\Leave\LeaveBalanceProjection;
 use App\Services\Leave\LeaveCategory;
 use App\Services\Leave\LeaveDashboardService;
 use App\Services\Leave\LeaveLedgerService;
@@ -579,4 +581,27 @@ test('the employee cannot use the HR conversation form on their own request page
         ->set('reply', 'Approving my own leave chat')
         ->call('sendMessage')
         ->assertForbidden();
+});
+
+test('All Leave: the side panel reads the same balances as every other leave screen — never the reason\'s own columns', function () {
+    $request = hrlRequest();
+    hrlRequest(['start_date' => '2026-11-16', 'end_date' => '2026-11-17', 'days' => 2, 'lwp_days' => 1, 'reason' => 'Partly unpaid']);
+
+    $page = Livewire::actingAs($this->hr)->test(AllTimeOff::class)
+        ->assertSee('1 unpaid')
+        ->call('viewRequest', $request->id)
+        ->assertSeeHtml('data-panel-request')
+        ->assertSee('Paid days use Earned Leave')
+        ->assertSeeHtml('data-panel-split')
+        ->assertSeeHtml('data-panel-projection')
+        ->assertSee('Balance for these dates')
+        ->assertSeeHtml('data-panel-balances')
+        ->assertSeeHtml('data-panel-earned')
+        ->assertSeeHtml('href="'.route('time-off.leave-requests.show', $request).'"')
+        ->assertSee('Leave balances');
+
+    // The same projection the HR request page and approval use.
+    expect($page->instance()->panelBalances['projection'])
+        ->toBe(app(LeaveBalanceProjection::class)->for($this->employee->fresh(), $this->earned, $request->start_date, $request->id))
+        ->and($page->instance()->panelBalances['summary']['earned']['breakdown']['total_available'])->toBe(12.0);
 });

@@ -163,8 +163,9 @@
                                         'approved'  => ['bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800/40', 'Approved'],
                                         'rejected'  => ['bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-400 dark:border-red-800/40', 'Rejected'],
                                         'cancelled' => ['bg-zinc-100 text-zinc-500 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700', 'Cancelled'],
-                                        default     => ['bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800/40', 'Pending'],
+                                        default     => ['bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800/40', \App\Services\Leave\LeaveRequestPresenter::status($req->status)[0]],
                                     };
+                                    $rowUnpaid = \App\Services\Leave\LeaveRequestPresenter::unpaid($req);
                                 @endphp
                                 <tr wire:key="row-{{ $req->id }}"
                                     class="transition-colors cursor-pointer {{ $isViewing ? 'bg-brand-50/50 dark:bg-brand-900/10' : 'hover:bg-zinc-50/70 dark:hover:bg-zinc-800/30' }}"
@@ -184,12 +185,16 @@
                                         <div class="flex items-center gap-2">
                                             <div class="size-2 rounded-full shrink-0" style="background-color: {{ $req->leaveType->color ?? '#6b7280' }}"></div>
                                             <span class="text-zinc-700 dark:text-zinc-300">{{ $req->leaveType->name }}</span>
+                                            @if($req->isCombined())<x-pulse.badge color="violet">Combined</x-pulse.badge>@endif
                                         </div>
                                     </td>
                                     <td class="py-3.5 pr-4 text-sm text-zinc-600 dark:text-zinc-300">
                                         {{ $req->start_date->toImmutable()->userShortDate() }} – {{ $req->end_date->toImmutable()->userDate() }}
                                     </td>
-                                    <td class="py-3.5 pr-4 font-bold text-zinc-800 dark:text-zinc-200">{{ (float)$req->days }}</td>
+                                    <td class="py-3.5 pr-4" data-row-days="{{ $req->id }}">
+                                        <div class="font-bold text-zinc-800 dark:text-zinc-200">{{ (float)$req->days }}</div>
+                                        @if($rowUnpaid > 0)<div class="text-[11px] font-semibold text-rose-600 dark:text-rose-400">{{ rtrim(rtrim(number_format($rowUnpaid, 2), '0'), '.') }} unpaid</div>@endif
+                                    </td>
                                     <td class="py-3.5 pr-4">
                                         <span class="inline-flex items-center px-2.5 py-1 rounded-lg border text-[10px] font-bold {{ $statusClass }}">
                                             {{ strtoupper($statusLabel) }}
@@ -274,66 +279,81 @@
                     {{-- Scrollable content --}}
                     <div class="flex-1 overflow-y-auto p-5 space-y-5">
                         @php
+                            $P = \App\Services\Leave\LeaveRequestPresenter::class;
                             $panelAvatarColors = ['bg-violet-500','bg-emerald-500','bg-amber-500','bg-rose-500','bg-sky-500','bg-indigo-500','bg-teal-500','bg-pink-500'];
                             $panelColor = $panelAvatarColors[$viewingRequest->employee->id % count($panelAvatarColors)];
-                            $panelBalance = $viewingRequest->availableBalance ?? \App\Models\LeaveBalance::where('employee_id', $viewingRequest->employee_id)->where('leave_type_id', $viewingRequest->leave_type_id)->where('year', now()->year)->first();
                             $effectivePayStatus = $viewingRequest->approved_leave_status ?? $viewingRequest->requested_leave_status ?? ($viewingRequest->leaveType?->is_paid ? 'paid' : 'unpaid');
+                            $pb = $this->panelBalances;
+                            $panelPaid = $P::paid($viewingRequest);
+                            $panelUnpaid = $P::unpaid($viewingRequest);
+                            $panelPending = $P::isPending($viewingRequest);
+                            [$panelStatusLabel, $panelStatusColor] = $P::status($viewingRequest->status);
+                            $num = fn ($v) => rtrim(rtrim(number_format((float) $v, 2), '0'), '.');
+                            $user = auth()->user();
+                            $canOpenBalances = $user->hasPermission('view_leave_management');
                         @endphp
 
-                        {{-- Employee info --}}
+                        {{-- Employee info and where to go next --}}
                         <div class="flex items-center gap-3">
                             <div class="size-12 rounded-full {{ $panelColor }} flex items-center justify-center font-bold text-white text-lg shrink-0">
                                 {{ strtoupper(substr($viewingRequest->employee->user->name, 0, 1)) }}
                             </div>
-                            <div>
+                            <div class="min-w-0">
                                 <div class="font-bold text-zinc-900 dark:text-white">{{ $viewingRequest->employee->user->name }}</div>
                                 <div class="text-xs text-zinc-500">{{ $viewingRequest->employee->department?->name ?? '—' }} Team</div>
                                 <div class="text-xs text-zinc-400">Employee ID: {{ $viewingRequest->employee->employee_id ?? 'N/A' }}</div>
                             </div>
                         </div>
+                        <div class="flex flex-wrap gap-2" data-panel-links>
+                            @if(\Illuminate\Support\Facades\Route::has('time-off.leave-requests.show'))
+                                <flux:button size="xs" icon="arrow-top-right-on-square" :href="route('time-off.leave-requests.show', $viewingRequest)" wire:navigate>Full request{{ $panelPending ? ' · propose changes' : '' }}</flux:button>
+                            @endif
+                            @if($canOpenBalances)
+                                <flux:button size="xs" variant="ghost" icon="scale" :href="route('time-off.leave-management.employee', ['employee' => $viewingRequest->employee])" wire:navigate>Leave balances</flux:button>
+                            @endif
+                        </div>
 
-                        {{-- Request Details --}}
-                        <div class="rounded-xl bg-zinc-50 dark:bg-zinc-800/50 p-4 space-y-3">
-                            <div class="flex justify-between items-start">
-                                <div>
-                                    <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Leave Type</div>
+                        {{-- The request --}}
+                        <div class="rounded-xl bg-zinc-50 dark:bg-zinc-800/50 p-4 space-y-3" data-panel-request>
+                            <div class="flex items-start justify-between gap-2">
+                                <div class="min-w-0">
+                                    <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">{{ $P::reference($viewingRequest) }} · Leave Type</div>
                                     <div class="flex items-center gap-1.5 mt-0.5">
                                         <div class="size-2 rounded-full" style="background-color: {{ $viewingRequest->leaveType->color ?? '#6b7280' }}"></div>
                                         <span class="text-sm font-semibold text-zinc-800 dark:text-zinc-200">{{ $viewingRequest->leaveType->name }}</span>
+                                        @if($viewingRequest->isCombined())<x-pulse.badge color="violet">Combined</x-pulse.badge>@endif
                                     </div>
-                                </div>
-                                {{-- Payment status badge --}}
-                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold
-                                    {{ $effectivePayStatus === 'paid' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' }}">
-                                    {{ ucfirst($effectivePayStatus) }}
-                                    @if($viewingRequest->approved_leave_status && $viewingRequest->approved_leave_status !== $viewingRequest->requested_leave_status)
-                                        <span class="opacity-60">(overridden)</span>
+                                    @if($pb['balance_type'] && $pb['balance_type'] !== $viewingRequest->leaveType->name)
+                                        <div class="mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">Paid days use {{ $pb['balance_type'] }}</div>
                                     @endif
-                                </span>
-                            </div>
-
-                            {{-- Balance --}}
-                            @if($panelBalance)
-                                <div class="flex items-center gap-2 text-xs">
-                                    <flux:icon.chart-bar class="size-3.5 text-zinc-400" />
-                                    <span class="text-zinc-500">Available balance:</span>
-                                    <span class="font-semibold {{ max(0, $panelBalance->allocated_days - $panelBalance->used_days - ($panelBalance->encashed_days ?? 0)) < $viewingRequest->days ? 'text-red-500' : 'text-emerald-600 dark:text-emerald-400' }}">
-                                        {{ max(0, $panelBalance->allocated_days - $panelBalance->used_days - ($panelBalance->encashed_days ?? 0)) }} day(s)
+                                </div>
+                                <div class="flex shrink-0 flex-col items-end gap-1">
+                                    <x-pulse.badge :color="$panelStatusColor">{{ $panelStatusLabel }}</x-pulse.badge>
+                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold
+                                        {{ $effectivePayStatus === 'paid' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' }}">
+                                        {{ ucfirst($effectivePayStatus) }}
+                                        @if($viewingRequest->approved_leave_status && $viewingRequest->approved_leave_status !== $viewingRequest->requested_leave_status)
+                                            <span class="opacity-60">(overridden)</span>
+                                        @endif
                                     </span>
                                 </div>
-                            @endif
+                            </div>
 
                             <div class="grid grid-cols-2 gap-3 text-xs">
-                                <div>
+                                <div class="col-span-2">
                                     <div class="text-zinc-400 font-semibold uppercase tracking-wide mb-0.5">Dates</div>
                                     <div class="text-zinc-700 dark:text-zinc-300 font-semibold">{{ $viewingRequest->start_date->toImmutable()->userShortDate() }} – {{ $viewingRequest->end_date->toImmutable()->userDate() }}</div>
                                 </div>
-                                <div>
-                                    <div class="text-zinc-400 font-semibold uppercase tracking-wide mb-0.5">Days</div>
+                                <div data-panel-days>
+                                    <div class="text-zinc-400 font-semibold uppercase tracking-wide mb-0.5">Days requested</div>
                                     <div class="text-zinc-700 dark:text-zinc-300 font-semibold">
-                                        {{ (float)$viewingRequest->days }}
+                                        {{ $num($viewingRequest->days) }}
                                         @if($viewingRequest->is_half_day) <span class="text-zinc-400">({{ $viewingRequest->half_day_period === 'first_half' ? 'First' : 'Second' }} Half)</span> @endif
                                     </div>
+                                </div>
+                                <div data-panel-split>
+                                    <div class="text-zinc-400 font-semibold uppercase tracking-wide mb-0.5">Paid / Unpaid</div>
+                                    <div class="font-semibold"><span class="text-emerald-600 dark:text-emerald-400">{{ $num($panelPaid) }} paid</span> · <span class="{{ $panelUnpaid > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-zinc-500' }}">{{ $num($panelUnpaid) }} unpaid</span></div>
                                 </div>
                                 <div>
                                     <div class="text-zinc-400 font-semibold uppercase tracking-wide mb-0.5">Requested As</div>
@@ -373,6 +393,71 @@
                                 </a>
                             @endif
                         </div>
+
+                        {{-- The balance it draws on at its own dates — what the employee saw, and what approval re-checks. --}}
+                        @if($pb['projection'])
+                            <div data-panel-projection>
+                                <h4 class="mb-2 text-xs font-bold uppercase tracking-wide text-zinc-500">{{ $panelPending ? 'Balance for these dates' : 'Balance and other requests' }}</h4>
+                                @if($panelPending)
+                                    <x-leave.balance-projection :projection="$pb['projection']" :paid="$panelPaid" :lwp="$panelUnpaid" bookings-title="Other approved and pending requests" />
+                                @else
+                                    <p class="mb-2 text-xs text-zinc-500 dark:text-zinc-400">{{ $viewingRequest->status === 'approved' ? 'Deducted once, on approval.' : 'Nothing is deducted for a '.strtolower($panelStatusLabel).' request.' }}</p>
+                                    <x-leave.balance-projection :projection="$pb['projection']" :show-lines="false" bookings-title="Other approved and pending requests" />
+                                @endif
+                            </div>
+                        @endif
+
+                        @if(! $pb['projection'] && $pb['legacy'])
+                            {{-- Without Leave V2: the calculator's figure for the balance it charges, in its own leave year. --}}
+                            <div class="flex items-center gap-2 rounded-lg bg-zinc-50 px-3 py-2 text-xs dark:bg-zinc-800/50" data-panel-legacy-balance>
+                                <flux:icon.chart-bar class="size-3.5 text-zinc-400" />
+                                <span class="text-zinc-500">{{ $pb['balance_type'] }} available ({{ $pb['year'] }}):</span>
+                                <span class="font-semibold {{ $pb['legacy']['available_to_request'] < $panelPaid ? 'text-red-500' : 'text-emerald-600 dark:text-emerald-400' }}">{{ $num($pb['legacy']['available_to_request']) }} day(s)</span>
+                            </div>
+                        @endif
+
+                        {{-- The employee's balances by kind — the same figures as their own My Leave page. --}}
+                        @if($pb['summary'])
+                            @php $ebd = $pb['summary']['earned']['breakdown']; $cs = $pb['combined']; @endphp
+                            <div class="space-y-3" data-panel-balances>
+                                <h4 class="text-xs font-bold uppercase tracking-wide text-zinc-500">Employee balances · {{ $pb['year'] }}</h4>
+                                <x-leave.balance-card compact tone="emerald" title="Earned Leave" subtitle="Shared paid pool" data-panel-earned
+                                    :headline="$num($ebd['total_available'])" headline-label="Total available" :headline-negative="$ebd['total_available'] < 0"
+                                    :figures="[
+                                        ['label' => 'Accrued this year', 'value' => $num($ebd['current_year_accrued']), 'key' => 'accrued', 'tone' => 'emerald'],
+                                        ['label' => 'Carry forward', 'value' => $num($ebd['carry_forward']), 'key' => 'carry_forward'],
+                                        ['label' => 'Used', 'value' => $num($ebd['used']), 'key' => 'used'],
+                                        ['label' => 'Pending approval', 'value' => $num($ebd['pending']), 'key' => 'pending', 'tone' => $ebd['pending'] > 0 ? 'amber' : null],
+                                        ['label' => 'Left to request', 'value' => $num($ebd['available_to_request']), 'key' => 'available_to_request'],
+                                        ['label' => 'HR adjustments', 'value' => $num($ebd['hr_adjustment']), 'key' => 'hr_adjustment'],
+                                    ]" />
+                                @if($cs && $cs['requests'] > 0)
+                                    <x-leave.balance-card compact tone="amber" title="Combined Leave" :subtitle="$cs['requests'].' '.\Illuminate\Support\Str::plural('request', $cs['requests']).' · paid days use Earned Leave'" data-panel-combined
+                                        :figures="[
+                                            ['label' => 'Paid (approved)', 'value' => $num($cs['paid_units']), 'tone' => 'emerald'],
+                                            ['label' => 'Unpaid (approved)', 'value' => $num($cs['unpaid_units']), 'tone' => $cs['unpaid_units'] > 0 ? 'rose' : null],
+                                            ['label' => 'Pending paid', 'value' => $num($cs['pending_paid_units']), 'tone' => $cs['pending_paid_units'] > 0 ? 'amber' : null],
+                                            ['label' => 'Pending unpaid', 'value' => $num($cs['pending_unpaid_units'])],
+                                        ]" />
+                                @endif
+                                @foreach(['comp_off' => ['Comp Off', 'violet'], 'special' => ['Special Leave', 'sky']] as $key => [$label, $tone])
+                                    @foreach($pb['summary'][$key]['subtypes'] as $type)
+                                        @if($type['credits'] != 0 || $type['used'] != 0 || $type['pending'] != 0)
+                                            <x-leave.balance-card compact :tone="$tone" :title="$type['name']" :subtitle="$label.' · own balance'"
+                                                :headline="$type['unlimited'] ? 'Unlimited' : $num($type['approved_available'])"
+                                                :figures="[
+                                                    ['label' => 'Used', 'value' => $num($type['used'])],
+                                                    ['label' => 'Pending approval', 'value' => $num($type['pending']), 'tone' => $type['pending'] > 0 ? 'amber' : null],
+                                                ]" />
+                                        @endif
+                                    @endforeach
+                                @endforeach
+                                <div class="flex items-center justify-between rounded-lg bg-zinc-50 px-3 py-2 text-xs dark:bg-zinc-800/50" data-panel-unpaid>
+                                    <span class="text-zinc-600 dark:text-zinc-300">Unpaid Leave (no balance)</span>
+                                    <span class="font-semibold tabular-nums text-zinc-900 dark:text-white">{{ $num($pb['summary']['unpaid']['used']) }} taken · {{ $num($pb['summary']['unpaid']['pending']) }} pending</span>
+                                </div>
+                            </div>
+                        @endif
 
                         {{-- Conversation with the employee --}}
                         <div>

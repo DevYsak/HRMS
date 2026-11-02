@@ -15,6 +15,7 @@
     'figures' => [],
     'progress' => null,
     'progressLabel' => null,
+    'compact' => false,
 ])
 
 @php
@@ -44,7 +45,7 @@
 
     @if($headline !== null)
         <div class="mt-3 flex items-baseline gap-2">
-            <span @class(['text-3xl font-bold tabular-nums', 'text-rose-600 dark:text-rose-400' => $headlineNegative, 'text-zinc-900 dark:text-white' => ! $headlineNegative]) data-card-headline>{{ $headline }}</span>
+            <span @class([$compact ? 'text-2xl font-bold tabular-nums' : 'text-3xl font-bold tabular-nums', 'text-rose-600 dark:text-rose-400' => $headlineNegative, 'text-zinc-900 dark:text-white' => ! $headlineNegative]) data-card-headline>{{ $headline }}</span>
             <span class="text-xs font-medium text-zinc-500 dark:text-zinc-400">{{ $headlineLabel }}</span>
         </div>
     @endif
@@ -59,7 +60,7 @@
     @endif
 
     @if($figures !== [])
-        <dl class="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 {{ [2 => 'sm:grid-cols-2', 3 => 'sm:grid-cols-3'][count($figures)] ?? 'sm:grid-cols-4' }}" data-card-figures>
+        <dl class="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 {{ $compact ? '' : ([2 => 'sm:grid-cols-2', 3 => 'sm:grid-cols-3'][count($figures)] ?? 'sm:grid-cols-4') }}" data-card-figures>
             @foreach($figures as $f)
                 <div @if(! empty($f['key'])) data-figure="{{ $f['key'] }}" @endif>
                     <dt class="text-[11px] text-zinc-500 dark:text-zinc-400">{{ $f['label'] }}</dt>

@@ -5,15 +5,22 @@ namespace App\Livewire\TimeOff;
 use App\Livewire\Concerns\HandlesClaimLock;
 use App\Models\AuditLog;
 use App\Models\Employee;
-use App\Models\LeaveBalance;
 use App\Models\LeaveRequest;
 use App\Models\LeaveType;
 use App\Services\Approvals\ApprovalGuard;
+use App\Services\Leave\LeaveBalanceCalculator;
+use App\Services\Leave\LeaveBalanceProjection;
+use App\Services\Leave\LeaveCategory;
+use App\Services\Leave\LeaveCategoryBalances;
+use App\Services\Leave\LeaveManagementService;
+use App\Services\Leave\LeavePolicyEngine;
 use App\Services\Leave\LeaveYearResolver;
 use App\Services\LeaveService;
 use App\Services\Security\PeopleScope;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
 use Livewire\WithFileUploads;
@@ -156,6 +163,44 @@ class AllTimeOff extends Component
         $this->panelShowHrOverride = false;
         $this->resetErrorBag();
         $this->showDetailPanel = true;
+    }
+
+    /**
+     * The viewed request, read the way every other leave screen reads it:
+     * the balance it charges at its own dates (LeaveBalanceProjection — the
+     * figure the employee saw when applying and approval re-checks), the
+     * employee's balances by kind (LeaveCategoryBalances, as on their own
+     * My Leave page) and their Combined Leave. Never raw balance columns.
+     *
+     * Without the V2 engine, the calculator's figure for the balance the
+     * request charges, in the leave year its dates fall in.
+     *
+     * @return array{projection: ?array<string, mixed>, summary: ?array<string, mixed>, combined: ?array<string, mixed>, legacy: ?array<string, mixed>, balance_type: ?string, year: ?string}
+     */
+    #[Computed]
+    public function panelBalances(): array
+    {
+        $request = $this->viewingRequest;
+        $empty = ['projection' => null, 'summary' => null, 'combined' => null, 'legacy' => null, 'balance_type' => null, 'year' => null];
+        if ($request === null || $request->employee === null) {
+            return $empty;
+        }
+
+        $type = LeaveType::withTrashed()->find($request->balanceTypeId());
+        $year = app(LeaveYearResolver::class)->forDate(Carbon::parse($request->start_date));
+        $v2 = LeavePolicyEngine::enabled();
+        $charges = $type && $type->is_paid && LeaveCategory::of($type) !== LeaveCategory::UNPAID;
+        $summary = $v2 ? app(LeaveCategoryBalances::class)->forEmployee($request->employee, $year) : null;
+        $legacyRow = ! $v2 && $charges ? app(LeaveService::class)->balanceForDate($request->employee_id, $type->id, Carbon::parse($request->start_date)) : null;
+
+        return [
+            'projection' => $v2 && $charges ? app(LeaveBalanceProjection::class)->for($request->employee, $type, Carbon::parse($request->start_date), $request->id) : null,
+            'summary' => ($summary['earned'] ?? null) !== null ? $summary : null,
+            'combined' => $v2 ? app(LeaveManagementService::class)->combinedStats($request->employee, $year) : null,
+            'legacy' => $legacyRow ? app(LeaveBalanceCalculator::class)->summary($legacyRow, $request->id) : null,
+            'balance_type' => $charges ? $type->name : null,
+            'year' => $year->label,
+        ];
     }
 
     public function closeDetailPanel(): void
@@ -619,19 +664,6 @@ class AllTimeOff extends Component
         $scopeIds = Auth::user()->accessibleEmployeeIds('approve_leave');
 
         $requests = $this->filteredQuery()->latest()->paginate($this->perPage);
-
-        // Attach available balance
-        // The leave year runs 1 July to 30 June, so the calendar year and the
-        // leave year's integer disagree from January to June — an approver was
-        // shown no balance at all for six months of every year.
-        $leaveYear = app(LeaveYearResolver::class)->legacyYearFor();
-
-        $requests->each(function (LeaveRequest $req) use ($leaveYear) {
-            $req->availableBalance = LeaveBalance::where('employee_id', $req->employee_id)
-                ->where('leave_type_id', $req->leave_type_id)
-                ->where('year', $leaveYear)
-                ->first();
-        });
 
         $kpiBase = LeaveRequest::whereHas('employee.user')
             ->when($scopeIds !== null, fn ($q) => $q->whereIn('employee_id', $scopeIds))
