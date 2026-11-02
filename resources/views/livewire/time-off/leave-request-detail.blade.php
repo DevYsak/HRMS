@@ -333,6 +333,48 @@
                 </section>
             @endif
 
+            {{-- Conversation with the employee — the same thread they see on My Time Off. --}}
+            <section class="{{ $card }}" data-section="conversation">
+                <div class="flex items-center justify-between gap-2">
+                    <h2 class="{{ $h2 }}">Conversation with {{ $employee?->user?->name ?? 'the employee' }}</h2>
+                    <span class="text-xs text-zinc-500 dark:text-zinc-400">{{ $this->conversation->count() }} {{ Str::plural('message', $this->conversation->count()) }}</span>
+                </div>
+                <div class="mt-3 max-h-96 space-y-2 overflow-y-auto" data-messages>
+                    @forelse($this->conversation as $msg)
+                        @php $mine = $msg->user_id === auth()->id(); $fromEmployee = $msg->user_id === $employee?->user_id; @endphp
+                        <div class="flex {{ $mine ? 'justify-end' : 'justify-start' }}" data-message="{{ $msg->id }}">
+                            <div class="max-w-[85%] rounded-xl px-3 py-2 text-sm {{ $mine ? 'bg-indigo-600 text-white' : ($fromEmployee ? 'bg-zinc-100 text-zinc-800 dark:bg-white/10 dark:text-zinc-100' : 'bg-sky-50 text-zinc-800 dark:bg-sky-500/10 dark:text-zinc-100') }}">
+                                <p class="mb-0.5 flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-wide {{ $mine ? 'text-indigo-100' : 'text-zinc-500 dark:text-zinc-400' }}">
+                                    <span>{{ $mine ? 'You' : ($msg->user?->name ?? 'Employee') }}{{ ! $mine && $fromEmployee ? ' · employee' : '' }}</span>
+                                    <span class="font-medium normal-case">{{ $msg->created_at->toImmutable()->userDateTime() }}</span>
+                                </p>
+                                @if($msg->body)<p class="whitespace-pre-line leading-snug">{{ $msg->body }}</p>@endif
+                                @if($msg->attachment_path)
+                                    <a href="{{ asset('storage/'.$msg->attachment_path) }}" target="_blank" rel="noopener"
+                                        class="mt-1 inline-flex items-center gap-1 rounded-lg px-1.5 py-0.5 text-xs font-semibold {{ $mine ? 'bg-white/20 text-white hover:bg-white/30' : 'bg-white text-indigo-600 hover:bg-zinc-50 dark:bg-zinc-800 dark:text-indigo-300' }}">
+                                        <flux:icon.paper-clip class="size-3" /> {{ $msg->attachment_name ?? 'Attachment' }}
+                                    </a>
+                                @endif
+                            </div>
+                        </div>
+                    @empty
+                        <p class="text-sm text-zinc-500 dark:text-zinc-400">No messages yet.{{ $this->canMessage ? ' Write to the employee if you need to clarify anything.' : '' }}</p>
+                    @endforelse
+                </div>
+                @if($this->canMessage)
+                    <form wire:submit="sendMessage" class="mt-3 space-y-2" data-message-form>
+                        <flux:textarea wire:model="reply" rows="2" placeholder="Message the employee…" />
+                        @error('reply')<p class="text-xs text-rose-600 dark:text-rose-400">{{ $message }}</p>@enderror
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <p class="text-xs text-zinc-500 dark:text-zinc-400">
+                                {{ in_array($r->status, ['pending', 'pending_hr'], true) ? 'Sending marks the request “More Info Needed” until the employee replies.' : 'The employee is notified in the app.' }}
+                            </p>
+                            <flux:button type="submit" size="sm" variant="primary" icon="paper-airplane" wire:loading.attr="disabled" wire:target="sendMessage">Send</flux:button>
+                        </div>
+                    </form>
+                @endif
+            </section>
+
             {{-- Audit trail --}}
             <section class="{{ $card }}" data-section="audit">
                 <h2 class="{{ $h2 }}">Approval History &amp; Audit Trail</h2>

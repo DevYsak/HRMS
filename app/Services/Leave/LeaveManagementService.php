@@ -205,16 +205,19 @@ class LeaveManagementService
     /**
      * Combined Leave for one employee and leave year: requests by status and,
      * for the approved ones, the paid, unpaid and half-day units of their day
-     * rows — the final approved allocation. Two queries.
+     * rows — the final approved allocation; for the ones still open, the paid
+     * and unpaid days their headers reserve. Two queries.
      *
-     * @return array{requests: int, by_status: array<string, int>, paid_units: float, unpaid_units: float, half_day_units: float}
+     * @return array{requests: int, by_status: array<string, int>, paid_units: float, unpaid_units: float, half_day_units: float,
+     *     pending_requests: int, pending_paid_units: float, pending_unpaid_units: float}
      */
     public function combinedStats(Employee $employee, LeaveYear $year): array
     {
         $requests = LeaveRequest::where('employee_id', $employee->id)->where('request_mode', LeaveRequest::MODE_COMBINED)
             ->whereDate('start_date', '>=', $year->starts_on->toDateString())
             ->whereDate('start_date', '<=', $year->ends_on->toDateString())
-            ->get(['id', 'status']);
+            ->get(['id', 'status', 'days', 'lwp_days']);
+        $open = $requests->whereIn('status', LeaveBalanceCalculator::RESERVING_STATUSES);
         $approved = $requests->where('status', 'approved')->pluck('id');
         $days = $approved->isEmpty() ? collect()
             : LeaveRequestDay::whereIn('leave_request_id', $approved)->where('is_excluded', false)->get(['allocation_type', 'paid_units', 'unpaid_units']);
@@ -225,6 +228,9 @@ class LeaveManagementService
             'paid_units' => round((float) $days->sum('paid_units'), 2),
             'unpaid_units' => round((float) $days->sum('unpaid_units'), 2),
             'half_day_units' => round($days->filter(fn ($d) => LeaveRequestDay::isHalf((string) $d->allocation_type))->count() * 0.5, 2),
+            'pending_requests' => $open->count(),
+            'pending_paid_units' => round((float) $open->sum(fn (LeaveRequest $r) => $r->paidDays()), 2),
+            'pending_unpaid_units' => round((float) $open->sum(fn (LeaveRequest $r) => (float) ($r->lwp_days ?? 0)), 2),
         ];
     }
 

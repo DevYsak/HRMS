@@ -2,11 +2,13 @@
 
 namespace App\Livewire\TimeOff;
 
+use App\Exceptions\ApprovalNotPermitted;
 use App\Models\LeaveBalance;
 use App\Models\LeaveLedgerEntry;
 use App\Models\LeaveRequest;
 use App\Models\LeaveRequestDay;
 use App\Models\LeaveType;
+use App\Services\Approvals\ApprovalGuard;
 use App\Services\Approvals\ApprovalQueueService;
 use App\Services\Attendance\WorkingDayResolver;
 use App\Services\Leave\LeaveAdminActionService;
@@ -67,6 +69,9 @@ class LeaveRequestDetail extends Component
 
     /** Why HR proposes the change — shown to the employee. */
     public string $proposalReason = '';
+
+    /** HR's next message in the conversation with the employee. */
+    public string $reply = '';
 
     public function mount(LeaveRequest $leaveRequest): void
     {
@@ -225,6 +230,56 @@ class LeaveRequestDetail extends Component
             'after' => round($after, 2),
             'note' => $note,
         ];
+    }
+
+    /** The conversation with the employee, oldest first — the same thread the employee sees on My Time Off. */
+    #[Computed]
+    public function conversation(): Collection
+    {
+        return $this->request->messages()->with('user')->oldest()->get();
+    }
+
+    /**
+     * HR may write to the employee: anyone who may approve this employee's
+     * leave, or manage it once approved — never on their own request. A
+     * message on a pending request asks for more information (status
+     * More Info Needed until the employee replies), as on every leave page.
+     */
+    #[Computed]
+    public function canMessage(): bool
+    {
+        $request = $this->request;
+        $user = Auth::user();
+        if ($this->isOwn() || $request->employee === null) {
+            return false;
+        }
+
+        try {
+            app(ApprovalGuard::class)->assertCanView($user, $request->employee, 'approve_leave');
+            $approver = $user->canApproveLeave();
+        } catch (ApprovalNotPermitted) {
+            $approver = false;
+        }
+
+        return $approver || $this->mayManageApproved();
+    }
+
+    public function sendMessage(LeaveService $service): void
+    {
+        abort_unless($this->canMessage, 403);
+        $this->validate(['reply' => ['required', 'string', 'min:2', 'max:2000']], [], ['reply' => 'message']);
+
+        try {
+            $service->postMessage($this->request, Auth::user(), $this->reply);
+        } catch (\DomainException $e) {
+            $this->addError('reply', $e->getMessage());
+
+            return;
+        }
+
+        $this->reply = '';
+        unset($this->request, $this->conversation, $this->canDecide, $this->history);
+        session()->flash('success', 'Message sent to the employee.');
     }
 
     /**

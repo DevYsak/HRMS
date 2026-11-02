@@ -386,7 +386,7 @@ class EmployeeLeaveDetail extends Component
     #[Computed]
     public function requests(): Collection
     {
-        return LeaveRequest::with('leaveType')->where('employee_id', $this->employee->id)
+        return LeaveRequest::with('leaveType')->withCount('messages')->where('employee_id', $this->employee->id)
             ->whereDate('start_date', '>=', $this->year->starts_on->toDateString())
             ->whereDate('start_date', '<=', $this->year->ends_on->toDateString())
             ->latest('start_date')->limit(50)->get();
@@ -561,7 +561,7 @@ class EmployeeLeaveDetail extends Component
         }
 
         $this->action = null;
-        unset($this->balances, $this->categorySummary, $this->openingSource, $this->accrualPlan, $this->history, $this->statement, $this->overrides, $this->requests, $this->carryHistory, $this->carryAudit, $this->carryInfo, $this->reversedEntryIds);
+        unset($this->balances, $this->categorySummary, $this->combinedStats, $this->openingSource, $this->accrualPlan, $this->history, $this->statement, $this->overrides, $this->requests, $this->carryHistory, $this->carryAudit, $this->carryInfo, $this->reversedEntryIds);
     }
 
     public function startReverseCarryForward(int $transactionId): void

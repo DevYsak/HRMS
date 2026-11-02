@@ -517,3 +517,66 @@ test('the employee leave page names the policy in force and offers adjustments o
         ->assertSet('tab', 'history')
         ->assertSet('historyTypeId', $this->earned->id);
 });
+
+// ── HR view: balance cards, request links, conversation ──────────────────────
+
+test('the HR employee page shows each kind of leave as its own card with balance, accrued, used, pending and remaining', function () {
+    $pending = hrlRequest();
+    LeaveRequest::create(['employee_id' => $this->employee->id, 'leave_type_id' => $this->casual->id, 'main_category' => LeaveCategory::EARNED,
+        'balance_leave_type_id' => $this->earned->id, 'request_mode' => LeaveRequest::MODE_COMBINED, 'start_date' => '2026-12-01', 'end_date' => '2026-12-02',
+        'days' => 2, 'lwp_days' => 1, 'reason' => 'Combined', 'status' => 'pending', 'requested_leave_status' => 'paid']);
+
+    $page = Livewire::actingAs($this->hr)->test(EmployeeLeaveDetail::class, ['employee' => $this->employee]);
+    $page->assertOk()
+        ->assertSeeHtml('data-v2-earned')->assertSeeHtml('data-card-headline')
+        ->assertSeeHtml('data-figure="accrued"')->assertSeeHtml('data-figure="used"')->assertSeeHtml('data-figure="pending"')->assertSeeHtml('data-figure="available_to_request"')
+        ->assertSee('Total available')
+        ->assertSeeInOrder(['Carry Forward', 'Current Year Accrued', 'HR Adjustments', 'Used', 'Pending', 'Expired', 'Total Available'])
+        ->assertSeeHtml('data-v2-combined')->assertSeeHtml('data-figure="combined_pending"')
+        ->assertSee('Paid days are already inside Earned Leave')
+        ->assertSeeHtml('data-v2-unpaid')->assertSeeHtml('data-figure="unpaid_taken"')
+        ->assertSeeHtml('data-v2-comp_off="'.$this->compOff->id.'"');
+
+    // Combined: 2 days pending, 1 of them paid.
+    expect($page->instance()->combinedStats)->toMatchArray(['pending_requests' => 1, 'pending_paid_units' => 1.0, 'pending_unpaid_units' => 1.0]);
+
+    // Requests: each row opens the request page, with its paid / unpaid split.
+    $page->set('tab', 'requests')
+        ->assertSeeHtml('data-request-row="'.$pending->id.'"')
+        ->assertSeeHtml('href="'.route('time-off.leave-requests.show', $pending).'"')
+        ->assertSee('Open');
+});
+
+test('HR reads and joins the employee conversation on the request page; a message on a pending request asks for more information', function () {
+    $request = hrlRequest();
+    $request->messages()->create(['user_id' => $this->user->id, 'body' => 'Can I take the second day as half?']);
+
+    Livewire::actingAs($this->hr)->test(LeaveRequestDetail::class, ['leaveRequest' => $request])
+        ->assertSeeHtml('data-section="conversation"')
+        ->assertSee('Can I take the second day as half?')
+        ->assertSee('Mayuresh Mhatre · employee')
+        ->assertSeeHtml('data-message-form')
+        ->set('reply', '')
+        ->call('sendMessage')
+        ->assertHasErrors('reply')
+        ->set('reply', 'Yes — I will propose the change for you to confirm.')
+        ->call('sendMessage')
+        ->assertHasNoErrors()
+        ->assertSee('Yes — I will propose the change for you to confirm.')
+        ->assertSet('reply', '');
+
+    expect($request->fresh()->status)->toBe('more_info_requested')
+        ->and($request->messages()->count())->toBe(2)
+        ->and($request->messages()->latest('id')->first()->user_id)->toBe($this->hr->id);
+});
+
+test('the employee cannot use the HR conversation form on their own request page', function () {
+    $request = hrlRequest();
+    $this->user->forceFill(['role_id' => $this->hr->role_id, 'role' => $this->hr->role])->save();
+
+    Livewire::actingAs($this->user->fresh())->test(LeaveRequestDetail::class, ['leaveRequest' => $request])
+        ->assertDontSeeHtml('data-message-form')
+        ->set('reply', 'Approving my own leave chat')
+        ->call('sendMessage')
+        ->assertForbidden();
+});

@@ -61,145 +61,204 @@
                 $figure = fn (string $label, $value, string $extra = '') => '<div><dt class="text-[11px] text-zinc-500 dark:text-zinc-400">'.e($label).'</dt><dd class="text-sm font-semibold tabular-nums text-zinc-900 dark:text-white '.$extra.'">'.e($value).'</dd></div>';
             @endphp
             <div class="mb-5 grid grid-cols-1 gap-4 lg:grid-cols-3" data-v2-summary>
-                <div class="ui-surface p-4 lg:col-span-2" data-v2-earned>
-                    @php
-                        $bd = $earned['breakdown'];
-                        $src = $this->openingSource;
-                        $line = fn (string $label, string $value, string $key, string $extra = '') => '<div class="flex items-baseline justify-between gap-3 py-1" data-breakdown="'.e($key).'"><dt class="text-sm text-zinc-600 dark:text-zinc-300">'.e($label).'</dt><dd class="text-sm font-semibold tabular-nums text-zinc-900 dark:text-white '.$extra.'">'.e($value).'</dd></div>';
-                        $date = fn (?string $d) => $d ? \Carbon\CarbonImmutable::parse($d)->userDate() : '—';
-                    @endphp
-                    <div class="flex flex-wrap items-start justify-between gap-2">
-                        <p class="text-sm font-semibold text-zinc-900 dark:text-white">Earned Leave — {{ $this->year->label }} <span class="text-xs font-normal text-zinc-500 dark:text-zinc-400">shared paid pool{{ $v2['policy'] ? ' · '.$v2['policy'] : '' }}</span></p>
-                        <div class="flex flex-wrap gap-1">
-                            @if($balanceTypes->contains('id', $earned['id']))
-                                @can('add_leave_balance')<flux:button size="xs" icon="plus" wire:click="openAction('add', {{ $earned['id'] }})">Add</flux:button>@endcan
-                                @can('deduct_leave_balance')<flux:button size="xs" icon="minus" wire:click="openAction('deduct', {{ $earned['id'] }})">Deduct</flux:button>@endcan
-                                @can('correct_leave_balance')<flux:button size="xs" icon="pencil-square" wire:click="openAction('correct', {{ $earned['id'] }})">Correct</flux:button>@endcan
-                            @endif
-                            <flux:button size="xs" variant="ghost" icon="clock" wire:click="showTypeHistory({{ $earned['id'] }})">History</flux:button>
-                        </div>
-                    </div>
-                    <dl class="mt-3 max-w-md divide-y divide-zinc-100 dark:divide-white/5" data-earned-breakdown>
-                        {!! $line('Carry Forward', $fmt($bd['carry_forward']), 'carry_forward') !!}
-                        {!! $line('Current Year Accrued', $fmt($bd['current_year_accrued']), 'current_year_accrued') !!}
-                        @if(abs($bd['opening']) > 0.001)
-                            {!! $line('Migrated Opening (not yet classified)', $fmt($bd['opening']), 'opening') !!}
+                @php
+                    $bd = $earned['breakdown'];
+                    $src = $this->openingSource;
+                    $line = fn (string $label, string $value, string $key, string $extra = '') => '<div class="flex items-baseline justify-between gap-3 py-1" data-breakdown="'.e($key).'"><dt class="text-sm text-zinc-600 dark:text-zinc-300">'.e($label).'</dt><dd class="text-sm font-semibold tabular-nums text-zinc-900 dark:text-white '.$extra.'">'.e($value).'</dd></div>';
+                    $date = fn (?string $d) => $d ? \Carbon\CarbonImmutable::parse($d)->userDate() : '—';
+                    $credited = round($bd['carry_forward'] + $bd['current_year_accrued'] + $bd['opening'] + max(0, $bd['hr_adjustment']), 2);
+                    $adjustable = $balanceTypes->contains('id', $earned['id']);
+                @endphp
+
+                {{-- Earned Leave: the one paid pool every paid reason draws on. --}}
+                <x-leave.balance-card class="lg:col-span-2" data-v2-earned tone="emerald"
+                    :title="'Earned Leave — '.$this->year->label"
+                    :subtitle="'Shared paid pool'.($v2['policy'] ? ' · '.$v2['policy'] : '').' · Casual, Sick and every other paid reason use it'"
+                    :headline="$fmt($bd['total_available'])" headline-label="Total available" :headline-negative="$bd['total_available'] < 0"
+                    :progress="$credited > 0 ? $bd['used'] / $credited : null"
+                    :progress-label="$credited > 0 ? $fmt($bd['used']).' of '.$fmt($credited).' credited days used' : null"
+                    :figures="[
+                        ['label' => 'Accrued this year', 'value' => $fmt($bd['current_year_accrued']), 'key' => 'accrued', 'tone' => 'emerald'],
+                        ['label' => 'Used', 'value' => $fmt($bd['used']), 'key' => 'used'],
+                        ['label' => 'Pending approval', 'value' => $fmt($bd['pending']), 'key' => 'pending', 'tone' => $bd['pending'] > 0 ? 'amber' : null],
+                        ['label' => 'Left to request', 'value' => $fmt($bd['available_to_request']), 'key' => 'available_to_request'],
+                    ]">
+                    <x-slot:actions>
+                        @if($adjustable)
+                            @can('add_leave_balance')<flux:button size="xs" icon="plus" wire:click="openAction('add', {{ $earned['id'] }})">Add</flux:button>@endcan
+                            @can('deduct_leave_balance')<flux:button size="xs" icon="minus" wire:click="openAction('deduct', {{ $earned['id'] }})">Deduct</flux:button>@endcan
+                            @can('correct_leave_balance')<flux:button size="xs" icon="pencil-square" wire:click="openAction('correct', {{ $earned['id'] }})">Correct</flux:button>@endcan
                         @endif
-                        {!! $line('HR Adjustments', abs($bd['hr_adjustment']) > 0.001 ? $signed($bd['hr_adjustment']) : '0', 'hr_adjustment') !!}
-                        {!! $line('Used', $fmt($bd['used']), 'used') !!}
-                        @if(($bd['historical_used'] ?? 0) > 0.001)
-                            <p class="pb-1 text-xs text-zinc-500 dark:text-zinc-400" data-breakdown="historical_used">{{ $fmt($bd['historical_used']) }} used before Leave V2 (HR register) · {{ $fmt($bd['portal_used']) }} used in the portal</p>
-                        @endif
-                        {!! $line('Pending', $fmt($bd['pending']), 'pending') !!}
-                        {!! $line('Expired', $fmt($bd['expired']), 'expired') !!}
-                        @if(abs($bd['encashed']) > 0.001)
-                            {!! $line('Encashed', $fmt($bd['encashed']), 'encashed') !!}
-                        @endif
-                        <div class="flex items-baseline justify-between gap-3 border-t-2 border-zinc-200 pt-2 dark:border-white/10" data-breakdown="total_available">
-                            <dt class="text-sm font-semibold text-zinc-900 dark:text-white">Total Available</dt>
-                            <dd class="text-base font-bold tabular-nums {{ $bd['total_available'] < 0 ? 'text-rose-600' : 'text-zinc-900 dark:text-white' }}">{{ $fmt($bd['total_available']) }}</dd>
-                        </div>
-                    </dl>
-                    @if($bd['pending'] > 0.001)
-                        <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $fmt($bd['available_to_request']) }} day(s) left to request after pending requests.</p>
-                    @endif
-                    @if(($bd['booked_ahead'] ?? 0) > 0)
-                        <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400" data-booked-ahead>Includes {{ $fmt($bd['booked_ahead']) }} day(s) of leave approved for later dates, deducted on approval{{ $bd['total_available'] < 0 ? ' — booked against monthly accrual still to come' : '' }}.</p>
-                    @endif
-                    @unless($bd['consistent'])
-                        <p class="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-800 dark:bg-rose-500/10 dark:text-rose-200" data-breakdown-inconsistent>These lines do not add up to the ledger total — run leave:verify.</p>
-                    @endunless
-                    @if(abs($bd['opening']) > 0.001 && $src)
-                        <p class="mt-2 text-xs text-zinc-500 dark:text-zinc-400" data-opening-source="{{ $src['status'] }}">
-                            Migrated from CSL. Evidence: <span class="font-semibold">{{ $src['status'] }}</span> — {{ $src['reason'] }}
-                            @if(in_array($src['status'], \App\Services\Leave\EarnedOpeningSourceService::CLASSIFIABLE, true)) Reclassified only on an HR decision (leave:earned-opening-sources).@endif
-                        </p>
-                    @endif
-                    <dl class="mt-3 grid grid-cols-1 gap-x-6 gap-y-1 text-xs text-zinc-600 sm:grid-cols-2 dark:text-zinc-300" data-earned-accrual-info>
-                        <div><dt class="inline text-zinc-500 dark:text-zinc-400">Monthly accrual:</dt> <dd class="inline font-semibold">{{ $fmt($bd['monthly_days']) }} day/month after each completed month ({{ $fmt($bd['generated_this_year']) }} of {{ $fmt($bd['annual_entitlement']) }} this year)</dd></div>
-                        <div><dt class="inline text-zinc-500 dark:text-zinc-400">Leave year:</dt> <dd class="inline font-semibold">{{ $date($bd['year']['starts_on']) }} – {{ $date($bd['year']['ends_on']) }}</dd></div>
-                        <div data-next-credit><dt class="inline text-zinc-500 dark:text-zinc-400">Next eligible credit:</dt> <dd class="inline font-semibold">{{ $bd['next_credit'] ? $date($bd['next_credit']['date']).' · +'.$fmt($bd['next_credit']['days']).' for '.\Illuminate\Support\Carbon::parse($bd['next_credit']['month'].'-01')->format('F Y') : 'None scheduled' }}</dd></div>
-                    </dl>
-                    @if(! empty($earned['usage_by_reason']))
-                        <p class="mt-2 text-xs text-zinc-500 dark:text-zinc-400">Used by reason: {{ collect($earned['usage_by_reason'])->map(fn ($r) => $r['name'].' '.$fmt($r['used']))->join(' · ') }}</p>
-                    @endif
-                    @php
-                        $plan = $this->accrualPlan;
-                        $suggested = $plan['suggested_start'] ? \Illuminate\Support\Carbon::parse($plan['suggested_start'])->format('F Y') : null;
-                        $planColor = ['READY' => 'emerald', 'NO CHANGE' => 'zinc', 'NEEDS REVIEW' => 'amber', 'BLOCKED' => 'rose'][$plan['status']] ?? 'zinc';
-                    @endphp
-                    <div class="mt-3 border-t border-zinc-100 pt-3 dark:border-white/5" data-accrual-start>
-                        <div class="flex flex-wrap items-center justify-between gap-2">
-                            <p class="text-sm text-zinc-700 dark:text-zinc-200">
-                                <span class="text-xs text-zinc-500 dark:text-zinc-400">Monthly Accrual Starts From</span>
-                                <span class="ml-1 font-semibold text-zinc-900 dark:text-white" data-accrual-start-saved>{{ $this->accrualStartsOn?->format('F Y') ?? 'Not set' }}</span>
-                                @if(! $this->accrualStartsOn && $suggested)
-                                    <span class="ml-2 text-xs text-amber-700 dark:text-amber-300" data-accrual-start-suggested>Suggested: {{ $suggested }} — not saved until you confirm it</span>
+                        <flux:button size="xs" variant="ghost" icon="clock" wire:click="showTypeHistory({{ $earned['id'] }})">History</flux:button>
+                    </x-slot:actions>
+
+                    <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
+                        <div>
+                            <p class="mb-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">How the total is made</p>
+                            <dl class="divide-y divide-zinc-100 dark:divide-white/5" data-earned-breakdown>
+                                {!! $line('Carry Forward', $fmt($bd['carry_forward']), 'carry_forward') !!}
+                                {!! $line('Current Year Accrued', $fmt($bd['current_year_accrued']), 'current_year_accrued') !!}
+                                @if(abs($bd['opening']) > 0.001)
+                                    {!! $line('Migrated Opening (not yet classified)', $fmt($bd['opening']), 'opening') !!}
                                 @endif
-                            </p>
-                            @if($this->canChangeAccrualStart && ! $editingAccrualStart)
-                                <flux:button size="xs" wire:click="openAccrualStart">{{ $this->accrualStartsOn ? 'Change' : 'Set' }}</flux:button>
-                            @endif
-                        </div>
-                        <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Existing opening balances remain unchanged. Automatic Earned Leave accrual begins only after completed months from this date.</p>
-                        @if(! $this->employee->joining_date)
-                            <p class="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-800 dark:bg-rose-500/10 dark:text-rose-200" data-accrual-joining-missing>No joining date is recorded. Accrual stays blocked until HR records the joining date on the employee profile.</p>
-                        @endif
-                        <p class="mt-2 flex flex-wrap items-center gap-2 text-xs text-zinc-600 dark:text-zinc-300" data-accrual-status="{{ $plan['status'] }}">
-                            <x-pulse.badge :color="$planColor">{{ $plan['status'] }}</x-pulse.badge>
-                            <span>{{ $plan['reason'] }}</span>
-                        </p>
-                        @if($editingAccrualStart)
-                            <form wire:submit="saveAccrualStart" class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3" data-accrual-start-form>
-                                <flux:select wire:model="accrualStartMonth" label="Starts from (month)">
-                                    <flux:select.option value="">Choose a month…</flux:select.option>
-                                    @foreach($this->accrualStartOptions as $value => $label)
-                                        <flux:select.option value="{{ $value }}">{{ $label }}{{ $plan['suggested_start'] && str_starts_with($plan['suggested_start'], $value) ? ' (suggested)' : '' }}</flux:select.option>
-                                    @endforeach
-                                </flux:select>
-                                <div class="sm:col-span-2"><flux:input wire:model="accrualStartReason" label="Reason" placeholder="Why accrual starts from this month" /></div>
-                                <div class="flex justify-end gap-2 sm:col-span-3">
-                                    <flux:button type="button" variant="ghost" size="sm" wire:click="$set('editingAccrualStart', false)">Cancel</flux:button>
-                                    <flux:button type="submit" variant="primary" size="sm">Save</flux:button>
+                                {!! $line('HR Adjustments', abs($bd['hr_adjustment']) > 0.001 ? $signed($bd['hr_adjustment']) : '0', 'hr_adjustment') !!}
+                                {!! $line('Used', $fmt($bd['used']), 'used') !!}
+                                @if(($bd['historical_used'] ?? 0) > 0.001)
+                                    <p class="pb-1 text-xs text-zinc-500 dark:text-zinc-400" data-breakdown="historical_used">{{ $fmt($bd['historical_used']) }} used before Leave V2 (HR register) · {{ $fmt($bd['portal_used']) }} used in the portal</p>
+                                @endif
+                                {!! $line('Pending', $fmt($bd['pending']), 'pending') !!}
+                                {!! $line('Expired', $fmt($bd['expired']), 'expired') !!}
+                                @if(abs($bd['encashed']) > 0.001)
+                                    {!! $line('Encashed', $fmt($bd['encashed']), 'encashed') !!}
+                                @endif
+                                <div class="flex items-baseline justify-between gap-3 border-t-2 border-zinc-200 pt-2 dark:border-white/10" data-breakdown="total_available">
+                                    <dt class="text-sm font-semibold text-zinc-900 dark:text-white">Total Available</dt>
+                                    <dd class="text-base font-bold tabular-nums {{ $bd['total_available'] < 0 ? 'text-rose-600' : 'text-zinc-900 dark:text-white' }}">{{ $fmt($bd['total_available']) }}</dd>
                                 </div>
-                            </form>
-                        @endif
-                    </div>
-                </div>
-                <div class="ui-surface p-4" data-v2-unpaid>
-                    <p class="text-sm font-semibold text-zinc-900 dark:text-white">Unpaid Leave <span class="text-xs font-normal text-zinc-500 dark:text-zinc-400">no balance</span></p>
-                    <dl class="mt-3 grid grid-cols-2 gap-3">
-                        {!! $figure('Taken', $fmt($v2['unpaid']['used'])) !!}
-                        {!! $figure('Pending', $fmt($v2['unpaid']['pending'])) !!}
-                    </dl>
-                </div>
-                @foreach(['comp_off' => 'Comp Off', 'special' => 'Special Leave'] as $key => $label)
-                    @foreach($v2[$key]['subtypes'] as $type)
-                        <div class="ui-surface p-4" data-v2-{{ $key }}="{{ $type['id'] }}">
-                            <p class="text-sm font-semibold text-zinc-900 dark:text-white">{{ $type['name'] }} <span class="text-xs font-normal text-zinc-500 dark:text-zinc-400">{{ $label }} · own balance</span></p>
-                            <dl class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                                @if($key === 'special')
-                                    {!! $figure('Entitlement', $type['annual_entitlement'] === null ? '—' : $fmt($type['annual_entitlement'])) !!}
-                                @else
-                                    {!! $figure('Opening', $fmt($type['opening'])) !!}
-                                    {!! $figure('Credited', $fmt($type['accrued'] + max(0, $type['adjustment']))) !!}
-                                @endif
-                                {!! $figure('Used', $fmt($type['used'])) !!}
-                                {!! $figure('Pending', $fmt($type['pending'])) !!}
-                                {!! $figure('Available', $type['unlimited'] ? 'Unlimited' : $fmt($type['approved_available'])) !!}
                             </dl>
+                            @if($bd['pending'] > 0.001)
+                                <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $fmt($bd['available_to_request']) }} day(s) left to request after pending requests.</p>
+                            @endif
+                            @if(($bd['booked_ahead'] ?? 0) > 0)
+                                <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400" data-booked-ahead>Includes {{ $fmt($bd['booked_ahead']) }} day(s) of leave approved for later dates, deducted on approval{{ $bd['total_available'] < 0 ? ' — booked against monthly accrual still to come' : '' }}.</p>
+                            @endif
+                            @unless($bd['consistent'])
+                                <p class="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-800 dark:bg-rose-500/10 dark:text-rose-200" data-breakdown-inconsistent>These lines do not add up to the ledger total — run leave:verify.</p>
+                            @endunless
+                            @if(abs($bd['opening']) > 0.001 && $src)
+                                <p class="mt-2 text-xs text-zinc-500 dark:text-zinc-400" data-opening-source="{{ $src['status'] }}">
+                                    Migrated from CSL. Evidence: <span class="font-semibold">{{ $src['status'] }}</span> — {{ $src['reason'] }}
+                                    @if(in_array($src['status'], \App\Services\Leave\EarnedOpeningSourceService::CLASSIFIABLE, true)) Reclassified only on an HR decision (leave:earned-opening-sources).@endif
+                                </p>
+                            @endif
+                        </div>
+
+                        <div class="space-y-3">
+                            <div>
+                                <p class="mb-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Monthly accrual</p>
+                                <dl class="space-y-1 text-xs text-zinc-600 dark:text-zinc-300" data-earned-accrual-info>
+                                    <div><dt class="inline text-zinc-500 dark:text-zinc-400">Monthly accrual:</dt> <dd class="inline font-semibold">{{ $fmt($bd['monthly_days']) }} day/month after each completed month ({{ $fmt($bd['generated_this_year']) }} of {{ $fmt($bd['annual_entitlement']) }} this year)</dd></div>
+                                    <div><dt class="inline text-zinc-500 dark:text-zinc-400">Leave year:</dt> <dd class="inline font-semibold">{{ $date($bd['year']['starts_on']) }} – {{ $date($bd['year']['ends_on']) }}</dd></div>
+                                    <div data-next-credit><dt class="inline text-zinc-500 dark:text-zinc-400">Next eligible credit:</dt> <dd class="inline font-semibold">{{ $bd['next_credit'] ? $date($bd['next_credit']['date']).' · +'.$fmt($bd['next_credit']['days']).' for '.\Illuminate\Support\Carbon::parse($bd['next_credit']['month'].'-01')->format('F Y') : 'None scheduled' }}</dd></div>
+                                    @if($bd['forecast'])
+                                        <div><dt class="inline text-zinc-500 dark:text-zinc-400">Year-end if no more leave:</dt> <dd class="inline font-semibold">{{ $fmt($bd['forecast']['year_end_available']) }} ({{ $signed($bd['forecast']['future_credits']) }} still to accrue)</dd></div>
+                                    @endif
+                                </dl>
+                            </div>
+                            @if(! empty($earned['usage_by_reason']))
+                                <div>
+                                    <p class="mb-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Used by reason</p>
+                                    <ul class="flex flex-wrap gap-1.5" data-usage-by-reason>
+                                        @foreach($earned['usage_by_reason'] as $reason)
+                                            <li class="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-700 dark:bg-white/10 dark:text-zinc-200">{{ $reason['name'] }} <span class="font-semibold tabular-nums">{{ $fmt($reason['used']) }}</span></li>
+                                        @endforeach
+                                    </ul>
+                                </div>
+                            @endif
+                            @php
+                                $plan = $this->accrualPlan;
+                                $suggested = $plan['suggested_start'] ? \Illuminate\Support\Carbon::parse($plan['suggested_start'])->format('F Y') : null;
+                                $planColor = ['READY' => 'emerald', 'NO CHANGE' => 'zinc', 'NEEDS REVIEW' => 'amber', 'BLOCKED' => 'rose'][$plan['status']] ?? 'zinc';
+                            @endphp
+                            <div class="rounded-lg border border-zinc-100 p-3 dark:border-white/5" data-accrual-start>
+                                <div class="flex flex-wrap items-center justify-between gap-2">
+                                    <p class="text-sm text-zinc-700 dark:text-zinc-200">
+                                        <span class="text-xs text-zinc-500 dark:text-zinc-400">Monthly Accrual Starts From</span>
+                                        <span class="ml-1 font-semibold text-zinc-900 dark:text-white" data-accrual-start-saved>{{ $this->accrualStartsOn?->format('F Y') ?? 'Not set' }}</span>
+                                        @if(! $this->accrualStartsOn && $suggested)
+                                            <span class="ml-2 text-xs text-amber-700 dark:text-amber-300" data-accrual-start-suggested>Suggested: {{ $suggested }} — not saved until you confirm it</span>
+                                        @endif
+                                    </p>
+                                    @if($this->canChangeAccrualStart && ! $editingAccrualStart)
+                                        <flux:button size="xs" wire:click="openAccrualStart">{{ $this->accrualStartsOn ? 'Change' : 'Set' }}</flux:button>
+                                    @endif
+                                </div>
+                                <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Existing opening balances remain unchanged. Automatic Earned Leave accrual begins only after completed months from this date.</p>
+                                @if(! $this->employee->joining_date)
+                                    <p class="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-800 dark:bg-rose-500/10 dark:text-rose-200" data-accrual-joining-missing>No joining date is recorded. Accrual stays blocked until HR records the joining date on the employee profile.</p>
+                                @endif
+                                <p class="mt-2 flex flex-wrap items-center gap-2 text-xs text-zinc-600 dark:text-zinc-300" data-accrual-status="{{ $plan['status'] }}">
+                                    <x-pulse.badge :color="$planColor">{{ $plan['status'] }}</x-pulse.badge>
+                                    <span>{{ $plan['reason'] }}</span>
+                                </p>
+                                @if($editingAccrualStart)
+                                    <form wire:submit="saveAccrualStart" class="mt-3 grid grid-cols-1 gap-3" data-accrual-start-form>
+                                        <flux:select wire:model="accrualStartMonth" label="Starts from (month)">
+                                            <flux:select.option value="">Choose a month…</flux:select.option>
+                                            @foreach($this->accrualStartOptions as $value => $label)
+                                                <flux:select.option value="{{ $value }}">{{ $label }}{{ $plan['suggested_start'] && str_starts_with($plan['suggested_start'], $value) ? ' (suggested)' : '' }}</flux:select.option>
+                                            @endforeach
+                                        </flux:select>
+                                        <flux:input wire:model="accrualStartReason" label="Reason" placeholder="Why accrual starts from this month" />
+                                        <div class="flex justify-end gap-2">
+                                            <flux:button type="button" variant="ghost" size="sm" wire:click="$set('editingAccrualStart', false)">Cancel</flux:button>
+                                            <flux:button type="submit" variant="primary" size="sm">Save</flux:button>
+                                        </div>
+                                    </form>
+                                @endif
+                            </div>
+                        </div>
+                    </div>
+                </x-leave.balance-card>
+
+                {{-- Combined Leave: a request mode — paid days come from Earned Leave, unpaid days use no balance. --}}
+                @php $combinedPending = round($combined['pending_paid_units'] + $combined['pending_unpaid_units'], 2); @endphp
+                <x-leave.balance-card data-v2-combined tone="amber" title="Combined Leave"
+                    :subtitle="'Full / half, paid / unpaid by date · '.$combined['requests'].' '.Str::plural('request', $combined['requests']).' this year'"
+                    :headline="$fmt($combined['paid_units'] + $combined['unpaid_units'])" headline-label="days approved"
+                    :figures="[
+                        ['label' => 'Paid (from Earned)', 'value' => $fmt($combined['paid_units']), 'key' => 'combined_paid', 'tone' => 'emerald'],
+                        ['label' => 'Unpaid (LWP)', 'value' => $fmt($combined['unpaid_units']), 'key' => 'combined_unpaid', 'tone' => $combined['unpaid_units'] > 0 ? 'rose' : null],
+                        ['label' => 'Half-day units', 'value' => $fmt($combined['half_day_units']), 'key' => 'combined_half'],
+                        ['label' => 'Pending', 'value' => $combined['pending_requests'] > 0 ? $fmt($combinedPending).' ('.$fmt($combined['pending_paid_units']).' paid)' : '0', 'key' => 'combined_pending', 'tone' => $combined['pending_requests'] > 0 ? 'amber' : null],
+                    ]">
+                    <p>Paid days are already inside Earned Leave's Used and Pending figures — never counted twice.</p>
+                    @if($combined['by_status'])
+                        <p class="flex flex-wrap gap-1.5">
+                            @foreach($combined['by_status'] as $status => $count)
+                                @php [$statusLabel, $statusColor] = \App\Services\Leave\LeaveRequestPresenter::status($status); @endphp
+                                <x-pulse.badge :color="$statusColor">{{ $statusLabel }} {{ $count }}</x-pulse.badge>
+                            @endforeach
+                        </p>
+                    @endif
+                    <flux:button size="xs" variant="ghost" icon="list-bullet" wire:click="$set('tab', 'requests')">View requests</flux:button>
+                </x-leave.balance-card>
+
+                {{-- Comp Off / Special Leave: each type keeps its own balance. --}}
+                @foreach(['comp_off' => ['Comp Off', 'violet'], 'special' => ['Special Leave', 'sky']] as $key => [$label, $tone])
+                    @foreach($v2[$key]['subtypes'] as $type)
+                        @php $typeCredited = $key === 'special' && $type['annual_entitlement'] !== null ? $type['annual_entitlement'] : round($type['opening'] + $type['accrued'] + max(0, $type['adjustment']), 2); @endphp
+                        <div class="contents" data-v2-{{ $key }}="{{ $type['id'] }}">
+                        <x-leave.balance-card :tone="$tone" :title="$type['name']" :subtitle="$label.' · own balance'"
+                            :headline="$type['unlimited'] ? 'Unlimited' : $fmt($type['approved_available'])" headline-label="Remaining" :headline-negative="! $type['unlimited'] && $type['approved_available'] < 0"
+                            :progress="! $type['unlimited'] && $typeCredited > 0 ? $type['used'] / $typeCredited : null"
+                            :figures="[
+                                ['label' => $key === 'special' ? 'Entitlement' : 'Credited', 'value' => $key === 'special' && $type['annual_entitlement'] === null ? '—' : $fmt($typeCredited), 'key' => 'credited'],
+                                ['label' => 'Used', 'value' => $fmt($type['used']), 'key' => 'used'],
+                                ['label' => 'Pending approval', 'value' => $fmt($type['pending']), 'key' => 'pending', 'tone' => $type['pending'] > 0 ? 'amber' : null],
+                                ['label' => 'Left to request', 'value' => $type['unlimited'] ? 'Unlimited' : $fmt($type['available']), 'key' => 'available_to_request'],
+                            ]">
+                            <x-slot:actions>
+                                @if($balanceTypes->contains('id', $type['id']))
+                                    @can('add_leave_balance')<flux:button size="xs" icon="plus" wire:click="openAction('add', {{ $type['id'] }})">Add</flux:button>@endcan
+                                    @can('deduct_leave_balance')<flux:button size="xs" icon="minus" wire:click="openAction('deduct', {{ $type['id'] }})">Deduct</flux:button>@endcan
+                                    @can('correct_leave_balance')<flux:button size="xs" icon="pencil-square" wire:click="openAction('correct', {{ $type['id'] }})">Correct</flux:button>@endcan
+                                @endif
+                                <flux:button size="xs" variant="ghost" icon="clock" wire:click="showTypeHistory({{ $type['id'] }})">History</flux:button>
+                            </x-slot:actions>
+                        </x-leave.balance-card>
                         </div>
                     @endforeach
                 @endforeach
-                <div class="ui-surface p-4" data-v2-combined>
-                    <p class="text-sm font-semibold text-zinc-900 dark:text-white">Combined Leave <span class="text-xs font-normal text-zinc-500 dark:text-zinc-400">{{ $combined['requests'] }} {{ Str::plural('request', $combined['requests']) }}</span></p>
-                    <dl class="mt-3 grid grid-cols-3 gap-3">
-                        {!! $figure('Paid units', $fmt($combined['paid_units'])) !!}
-                        {!! $figure('Unpaid units', $fmt($combined['unpaid_units'])) !!}
-                        {!! $figure('Half-day units', $fmt($combined['half_day_units'])) !!}
-                    </dl>
-                    <p class="mt-2 text-xs text-zinc-500 dark:text-zinc-400">Approved allocations only.@if($combined['by_status']) {{ collect($combined['by_status'])->map(fn ($n, $s) => \App\Services\Leave\LeaveRequestPresenter::status($s)[0].' '.$n)->join(' · ') }}@endif</p>
-                </div>
+
+                {{-- Unpaid Leave: no balance — deducted from pay. --}}
+                <x-leave.balance-card data-v2-unpaid tone="rose" title="Unpaid Leave" subtitle="No balance · deducted from pay as Leave Without Pay"
+                    :headline="$fmt($v2['unpaid']['used'])" headline-label="days taken"
+                    :figures="[
+                        ['label' => 'Taken', 'value' => $fmt($v2['unpaid']['used']), 'key' => 'unpaid_taken'],
+                        ['label' => 'Pending approval', 'value' => $fmt($v2['unpaid']['pending']), 'key' => 'unpaid_pending', 'tone' => $v2['unpaid']['pending'] > 0 ? 'amber' : null],
+                    ]" />
+
                 @if(! empty($v2['historical']))
                     <div class="ui-surface p-4 lg:col-span-3" data-v2-historical>
                         <p class="text-sm font-semibold text-zinc-900 dark:text-white">Historical balances <x-pulse.badge>Historical</x-pulse.badge></p>
@@ -376,18 +435,29 @@
         <div class="ui-surface overflow-x-auto">
             <table class="min-w-full text-xs">
                 <thead class="bg-[#F9FAFB] text-left text-[10px] font-bold uppercase tracking-wider text-[#667085] dark:bg-white/5">
-                    <tr><th class="px-3 py-2">Type</th><th class="px-3 py-2">Dates</th><th class="px-3 py-2 text-right">Days</th><th class="px-3 py-2">Status</th><th class="px-3 py-2">Applied by</th><th class="px-3 py-2">HR note</th><th class="px-3 py-2 text-right">HR actions</th></tr>
+                    <tr><th class="px-3 py-2">Request</th><th class="px-3 py-2">Type</th><th class="px-3 py-2">Dates</th><th class="px-3 py-2 text-right">Days</th><th class="px-3 py-2 text-right">Paid</th><th class="px-3 py-2 text-right">Unpaid</th><th class="px-3 py-2">Status</th><th class="px-3 py-2">Applied by</th><th class="px-3 py-2">HR note</th><th class="px-3 py-2 text-right">HR actions</th></tr>
                 </thead>
                 <tbody class="divide-y divide-[#EAECF0] dark:divide-white/5">
                     @forelse($this->requests as $r)
-                        <tr>
-                            <td class="px-3 py-2">{{ $r->leaveType?->name }}</td>
+                        @php
+                            $P = \App\Services\Leave\LeaveRequestPresenter::class;
+                            [$statusLabel, $statusColor] = $P::status($r->status);
+                        @endphp
+                        <tr wire:key="req-{{ $r->id }}" data-request-row="{{ $r->id }}">
+                            <td class="whitespace-nowrap px-3 py-2">
+                                <a href="{{ route('time-off.leave-requests.show', $r) }}" wire:navigate class="font-semibold text-orange-600 hover:underline dark:text-orange-400">{{ $P::reference($r) }}</a>
+                                @if($r->messages_count > 0)<span class="ml-1 inline-flex items-center gap-0.5 text-[11px] text-indigo-600 dark:text-indigo-300" title="Messages in the conversation"><flux:icon.chat-bubble-left-right class="size-3" />{{ $r->messages_count }}</span>@endif
+                            </td>
+                            <td class="px-3 py-2">{{ $r->leaveType?->name }}@if($r->isCombined()) <x-pulse.badge color="violet">Combined</x-pulse.badge>@endif</td>
                             <td class="px-3 py-2">{{ $r->start_date->toImmutable()->userDate() }}@if(! $r->end_date->eq($r->start_date)) – {{ $r->end_date->toImmutable()->userDate() }}@endif</td>
                             <td class="px-3 py-2 text-right">{{ $fmt($r->days) }}</td>
-                            <td class="px-3 py-2"><flux:badge size="sm">{{ str_replace('_', ' ', $r->status) }}</flux:badge></td>
+                            <td class="px-3 py-2 text-right tabular-nums">{{ $fmt($P::paid($r)) }}</td>
+                            <td class="px-3 py-2 text-right tabular-nums {{ $P::unpaid($r) > 0 ? 'text-rose-600 dark:text-rose-400' : '' }}">{{ $fmt($P::unpaid($r)) }}</td>
+                            <td class="px-3 py-2"><x-pulse.badge :color="$statusColor">{{ $statusLabel }}</x-pulse.badge></td>
                             <td class="px-3 py-2">{{ $r->applied_by_user_id ? 'HR (on behalf)' : 'Employee' }}</td>
                             <td class="px-3 py-2 text-[#667085]">{{ $r->hr_internal_note ?? '—' }}</td>
                             <td class="whitespace-nowrap px-3 py-2 text-right">
+                                <flux:button size="xs" variant="ghost" icon="arrow-top-right-on-square" :href="route('time-off.leave-requests.show', $r)" wire:navigate>Open</flux:button>
                                 @can('manage_approved_leave')
                                     @if($r->status === 'approved')
                                         <flux:button size="xs" wire:click="openRequestAction('correct_leave', {{ $r->id }})">Correct</flux:button>
@@ -399,7 +469,7 @@
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="7" class="px-3 py-8 text-center text-sm text-[#98A2B3]">No requests in {{ $this->year->label }}.</td></tr>
+                        <tr><td colspan="10" class="px-3 py-8 text-center text-sm text-[#98A2B3]">No requests in {{ $this->year->label }}.</td></tr>
                     @endforelse
                 </tbody>
             </table>
