@@ -43,8 +43,9 @@ test('All Attendance previews five pending regularisations and lists the rest in
         ->assertSeeHtml('data-pending-regularisations-all')
         ->html();
 
-    // 5 in the banner + 7 in the drawer.
-    expect(substr_count($html, 'Missed punch'))->toBe(12);
+    // 5 in the banner + 7 in the drawer (the quoted reason of each row,
+    // not the log's own "Missed punch" audit filter).
+    expect(substr_count($html, '“Missed punch'))->toBe(12);
 });
 
 test('All Attendance shows no View all for a short queue', function () {

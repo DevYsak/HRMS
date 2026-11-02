@@ -196,6 +196,8 @@
                     ['value' => 'late', 'label' => 'Late'],
                     ['value' => 'remote', 'label' => 'Remote'],
                     ['value' => 'absent', 'label' => 'Absent'],
+                    ['value' => 'missed_punch', 'label' => 'Missed punch'],
+                    ['value' => 'multiple_breaks', 'label' => 'Multiple breaks'],
                 ]" />
             {{-- Date range — filter the punch logs for an arbitrary span --}}
             <div class="flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2 py-1" title="Filter logs by date range">
@@ -221,6 +223,35 @@
             <span class="text-zinc-500 dark:text-zinc-400" data-showing>Showing <span class="font-bold text-zinc-800 dark:text-zinc-100">{{ $showingLabel }}</span>{{ $date ? ' (single day)' : '' }}</span>
         @endif
     </div>
+
+    {{-- Audit: one click narrows the log to what HR checks — late entries, missed punches, multiple breaks. --}}
+    @php
+        $auditChip = fn (bool $active, string $tone) => $active
+            ? ['emerald' => 'border-emerald-500 bg-emerald-500 text-white', 'amber' => 'border-amber-500 bg-amber-500 text-white', 'rose' => 'border-rose-500 bg-rose-500 text-white', 'violet' => 'border-violet-500 bg-violet-500 text-white'][$tone]
+            : ['emerald' => 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300', 'amber' => 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300', 'rose' => 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300', 'violet' => 'border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100 dark:border-violet-500/30 dark:bg-violet-500/10 dark:text-violet-300'][$tone];
+    @endphp
+    <div class="flex flex-wrap items-center gap-2 border-b border-orange-100/70 px-5 py-2.5 dark:border-white/10" data-audit-chips>
+        <span class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Audit</span>
+        @foreach([
+            ['late', 'Late entries', $stats['late'], 'amber'],
+            ['missed_punch', 'Missed punches', $auditCounts['missed'] ?? null, 'rose'],
+            ['multiple_breaks', 'Multiple breaks', $auditCounts['multiple_breaks'] ?? null, 'violet'],
+        ] as [$key, $chipLabel, $count, $tone])
+            <button type="button" wire:click="$set('status', '{{ $status === $key ? '' : $key }}')" data-audit-chip="{{ $key }}"
+                class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold transition {{ $auditChip($status === $key, $tone) }}">
+                {{ $chipLabel }} <span class="tabular-nums">{{ $count ?? '—' }}</span>
+            </button>
+        @endforeach
+        @if($auditCounts)
+            <span class="text-[11px] text-zinc-500 dark:text-zinc-400">{{ $auditCounts['with_breaks'] }} with a break{{ $auditCounts['duplicates'] ? ' · '.$auditCounts['duplicates'].' with duplicate scans' : '' }}</span>
+        @else
+            <span class="text-[11px] text-zinc-500 dark:text-zinc-400">Narrow the dates or employees to count missed punches and breaks.</span>
+        @endif
+    </div>
+
+    @if($punchLog)
+        @include('livewire.attendance.partials.employee-punch-log', ['log' => $punchLog])
+    @endif
     <div class="overflow-x-auto">
         @if($attendances->count() > 0)
             <table class="w-full text-left">
@@ -263,7 +294,11 @@
                                     <div class="flex size-8 shrink-0 items-center justify-center rounded-xl bg-orange-100 text-[10px] font-black text-orange-600">{{ $initials }}</div>
                                     <div class="min-w-0">
                                         <div class="truncate font-black text-zinc-900 dark:text-white">{{ $name }}</div>
-                                        <div class="text-[9px] text-zinc-400">{{ $log->employee?->employee_id ?? '—' }}</div>
+                                        <div class="flex items-center gap-1.5 text-[9px] text-zinc-400">{{ $log->employee?->employee_id ?? '—' }}
+                                            @if((string) $filterEmployee !== (string) $log->employee_id)
+                                                <button type="button" wire:click.stop="$set('filterEmployee', '{{ $log->employee_id }}')" class="font-semibold text-orange-600 hover:underline dark:text-orange-400" data-open-punch-log="{{ $log->employee_id }}">Punch log</button>
+                                            @endif
+                                        </div>
                                     </div>
                                 </div>
                             </td>
@@ -291,30 +326,27 @@
                                 @elseif($log->check_in)<span class="font-bold text-amber-500" data-attendance-state="missing_checkout">missing</span>
                                 @else<span class="text-zinc-300">—</span>@endif
                             </td>
-                            <td class="py-2.5" data-punches>
-                                @php $dayPunches = $punchesByDay[$log->employee_id.'|'.$log->date->toDateString()] ?? []; @endphp
-                                @if($dayPunches !== [])
-                                    <div class="flex max-w-[15rem] flex-wrap gap-1">
-                                        @foreach($dayPunches as $punch)
-                                            <span @class([
-                                                'inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 font-mono text-[9px] font-bold tabular-nums',
-                                                'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' => $punch['direction'] === 'in',
-                                                'bg-zinc-100 text-zinc-600 dark:bg-white/10 dark:text-zinc-300' => $punch['direction'] !== 'in',
-                                            ]) title="{{ $punch['source'] === 'regularisation' ? 'Regularised punch' : ($punch['source'] === 'system_auto' ? 'Automatic punch-out' : 'Recorded punch') }}">{{ strtoupper($punch['direction'] ?? '?') }} {{ $punch['time'] }}</span>
-                                        @endforeach
-                                    </div>
-                                @else
-                                    <span class="text-[9px] text-zinc-400" title="No device punches stored for this day — the row's check-in / check-out are the record">—</span>
+                            <td class="py-2.5" data-punches wire:click.stop>
+                                <x-attendance.punch-timeline :punches="$punchesByDay[$log->employee_id.'|'.$log->date->toDateString()] ?? []" :title="'All punches — '.$log->date->toImmutable()->userDate()" />
+                            </td>
+                            @php $rowAudit = $audit[$log->id] ?? null; @endphp
+                            <td class="py-2.5" data-break-cell>
+                                <div class="font-semibold tabular-nums text-zinc-600 dark:text-zinc-300">{{ (int) ($log->break_minutes ?? 0) }}m</div>
+                                @if(($rowAudit['breaks'] ?? 0) > 0)
+                                    <div class="text-[9px] font-bold {{ $rowAudit['breaks'] >= 2 ? 'text-violet-600 dark:text-violet-300' : 'text-zinc-400' }}">{{ $rowAudit['breaks'] }} {{ \Illuminate\Support\Str::plural('break', $rowAudit['breaks']) }}</div>
                                 @endif
                             </td>
-                            <td class="py-2.5 text-zinc-500 dark:text-zinc-400">{{ (int) ($log->break_minutes ?? 0) }}m</td>
                             <td class="py-2.5"><span class="font-black tabular-nums {{ $hrs >= 8 ? 'text-emerald-600' : ($hrs > 0 ? 'text-zinc-800 dark:text-zinc-100' : 'text-zinc-300') }}">{{ $hrs > 0 ? number_format($hrs, 1).'h' : '—' }}</span></td>
                             <td class="py-2.5">
                                 @forelse($methods as $m)
                                     <span class="mr-1 inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px] font-bold {{ $m->chipClass() }}"><flux:icon :icon="$m->icon()" class="size-2.5" /> {{ $m->labelWithGuidance() }}</span>
                                 @empty<span class="text-zinc-300">—</span>@endforelse
                             </td>
-                            <td class="py-2.5"><span class="rounded-full px-2 py-0.5 text-[9px] font-bold {{ $badge }}">{{ $statusLabel }}</span></td>
+                            <td class="py-2.5">
+                                <span class="rounded-full px-2 py-0.5 text-[9px] font-bold {{ $badge }}">{{ $statusLabel }}</span>
+                                @if($rowAudit['missed'] ?? false)<div class="mt-1"><span class="rounded-full bg-rose-50 px-2 py-0.5 text-[9px] font-bold text-rose-600 dark:bg-rose-500/10 dark:text-rose-300" data-flag="missed_punch">Missed punch</span></div>@endif
+                                @if(($rowAudit['duplicates'] ?? 0) > 0)<div class="mt-1"><span class="rounded-full bg-zinc-100 px-2 py-0.5 text-[9px] font-bold text-zinc-500 dark:bg-white/10 dark:text-zinc-300" data-flag="duplicate" title="Scanned more than once within a minute — counted once">Duplicate scan</span></div>@endif
+                            </td>
                             <td class="px-5 py-2.5 text-right"><span class="inline-flex items-center rounded px-1.5 py-0.5 text-[8px] font-bold uppercase {{ $rowMode->chipClass() }}">{{ $rowMode->shortLabel() }}</span></td>
                         </tr>
                     @endforeach

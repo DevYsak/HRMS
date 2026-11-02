@@ -42,6 +42,15 @@ class AllAttendance extends Component
     /** Pending regularisations listed in the preview's "View all" drawer. */
     public const PENDING_LIST_LIMIT = 50;
 
+    /** Status filters read from the punches, not from attendances.status. */
+    public const AUDIT_STATUSES = ['missed_punch', 'multiple_breaks'];
+
+    /** Above this many filtered rows the punch audit is not computed (narrow the filters instead). */
+    public const AUDIT_ROW_LIMIT = 4000;
+
+    /** The most days one employee's punch log lists at once. */
+    public const PUNCH_LOG_MAX_DAYS = 92;
+
     /** Filters live in the URL: a reload, a shared link and every page keep them. */
     #[Url(as: 'q', except: '')]
     public $search = '';
@@ -776,6 +785,148 @@ class AllAttendance extends Component
             ->groupBy(fn (AttendancePunch $p) => $p->employee_id.'|'.$p->punch_date->toDateString());
     }
 
+    /**
+     * What each filtered row means for an audit, read from its punches by the
+     * shared PunchTimeline (the same sessions the drawer and My Attendance
+     * show): a missed punch (no check-out on a past day, an automatic
+     * punch-out, or an IN with no OUT before the next IN), how many breaks
+     * (OUT to IN gaps between sessions), and duplicate scans. Null when the
+     * filters cover more than AUDIT_ROW_LIMIT rows.
+     *
+     * @param  Builder<Attendance>  $query
+     * @return array<int, array{missed: bool, breaks: int, duplicates: int}>|null
+     */
+    protected function auditIndex($query): ?array
+    {
+        if ((clone $query)->count() > self::AUDIT_ROW_LIMIT) {
+            return null;
+        }
+
+        $rows = (clone $query)->get(['id', 'employee_id', 'date', 'check_in', 'check_out', 'is_auto_checkout']);
+        $punches = $this->punchesFor($rows->all());
+        $timeline = app(PunchTimeline::class);
+        $today = Carbon::today()->toDateString();
+
+        return $rows->mapWithKeys(function (Attendance $row) use ($punches, $timeline, $today) {
+            $day = $punches->get($row->employee_id.'|'.$row->date->toDateString(), collect());
+
+            return [$row->id => $this->auditOf($row, $day, $timeline, $today)];
+        })->all();
+    }
+
+    /**
+     * @param  Collection<int, AttendancePunch>  $day
+     * @return array{missed: bool, breaks: int, duplicates: int, sessions: int, break_minutes: int}
+     */
+    protected function auditOf(?Attendance $row, Collection $day, PunchTimeline $timeline, string $today): array
+    {
+        $result = $day->isEmpty() || $row === null ? $timeline->emptyResult() : $timeline->process($day, Carbon::parse($row->date));
+        $past = $row !== null && $row->date->toDateString() < $today;
+
+        return [
+            'missed' => $row !== null && ((bool) $row->is_auto_checkout
+                || ($row->check_in && ! $row->check_out && $past && $day->isEmpty())
+                || (bool) ($result['flags']['missing_out'] ?? false)
+                || ($past && (bool) ($result['flags']['missing_checkout'] ?? false))),
+            'breaks' => max(0, (int) $result['session_count'] - 1),
+            'duplicates' => (int) ($result['flags']['duplicate'] ?? 0),
+            'sessions' => (int) $result['session_count'],
+            'break_minutes' => (int) $result['break_minutes'],
+        ];
+    }
+
+    /**
+     * One employee's complete punch log for the selected range: every day
+     * (worked, absent, weekly off, holiday or on leave) with every punch, the
+     * sessions and breaks the shared timeline reads from them, hours and the
+     * audit flags. Null unless one employee and a valid range are chosen.
+     *
+     * @return array<string, mixed>|null
+     */
+    protected function employeePunchLog(): ?array
+    {
+        if ($this->filterEmployee === '' || $this->rangeError() !== null) {
+            return null;
+        }
+        $reach = Auth::user()->accessibleEmployeeIds();
+        $employee = Employee::with(['user', 'exitRecord', 'department'])->find((int) $this->filterEmployee);
+        if (! $employee || ($reach !== null && ! in_array($employee->id, $reach, true))) {
+            return null;
+        }
+
+        $single = (string) $this->date !== '';
+        $start = Carbon::parse($single ? (string) $this->date : ($this->dateFrom ?: Carbon::now()->startOfWeek()->toDateString()))->startOfDay();
+        $end = Carbon::parse($single ? (string) $this->date : ($this->dateTo ?: Carbon::today()->toDateString()))->startOfDay();
+        $capped = $start->diffInDays($end) + 1 > self::PUNCH_LOG_MAX_DAYS;
+        if ($capped) {
+            $start = $end->copy()->subDays(self::PUNCH_LOG_MAX_DAYS - 1);
+        }
+
+        $rows = Attendance::where('employee_id', $employee->id)->whereBetween('date', [$start->toDateString(), $end->toDateString()])->get()
+            ->keyBy(fn (Attendance $a) => $a->date->toDateString());
+        $punches = AttendancePunch::where('employee_id', $employee->id)->whereBetween('punch_date', [$start->toDateString(), $end->toDateString()])
+            ->orderBy('punched_at')->get()->groupBy(fn (AttendancePunch $p) => $p->punch_date->toDateString());
+        $states = app(WorkingDayResolver::class)->classifyRange($employee, $start, $end);
+        $timeline = app(PunchTimeline::class);
+        $calculator = app(AttendanceCalculator::class);
+        $today = Carbon::today()->toDateString();
+
+        $days = collect($states)->map(function (array $state, string $date) use ($rows, $punches, $timeline, $calculator, $today) {
+            $row = $rows->get($date);
+            $raw = $punches->get($date, collect());
+            $audit = $this->auditOf($row, $raw, $timeline, $today);
+            $worked = $row?->check_in !== null;
+
+            [$label, $tone] = match (true) {
+                $worked && $state['state'] === WorkingDayResolver::WEEKLY_OFF => [WorkingDayResolver::WORKED_WEEKLY_OFF_LABEL, 'zinc'],
+                $worked && (bool) $row->is_late => ['Late', 'amber'],
+                $worked => [$row->status === 'remote' ? 'Remote' : 'Present', 'emerald'],
+                $state['state'] === WorkingDayResolver::WEEKLY_OFF => [WorkingDayResolver::WEEKLY_OFF_LABEL, 'zinc'],
+                $state['state'] === WorkingDayResolver::PUBLIC_HOLIDAY => ['Holiday', 'sky'],
+                $state['state'] === WorkingDayResolver::MDL_SHUTDOWN => ['Company shutdown', 'sky'],
+                $state['state'] === WorkingDayResolver::APPROVED_LEAVE => [$state['leave_days'] < 1 ? 'Half-day leave' : 'On leave', 'violet'],
+                in_array($state['state'], [WorkingDayResolver::EMPLOYMENT_NOT_STARTED, WorkingDayResolver::EMPLOYMENT_ENDED], true) => ['Not employed', 'zinc'],
+                $date > $today => ['Upcoming', 'zinc'],
+                $date === $today => ['Not checked in', 'amber'],
+                default => ['Absent', 'rose'],
+            };
+
+            return [
+                'date' => $date,
+                'label' => $label,
+                'tone' => $tone,
+                'check_in' => $row?->check_in?->toImmutable()->userTime(),
+                'check_out' => $row?->check_out?->toImmutable()->userTime(),
+                'late_minutes' => $row && $row->is_late ? (int) ($row->late_minutes ?? 0) : 0,
+                'punches' => $raw->map(fn (AttendancePunch $p) => ['time' => $p->punched_at->toImmutable()->userTime(), 'direction' => $timeline->directionOf($p), 'source' => $p->source])->values()->all(),
+                'breaks' => $audit['breaks'],
+                'break_minutes' => (int) ($row?->break_minutes ?? $audit['break_minutes']),
+                'hours' => $row ? $calculator->workedHours($row) : 0.0,
+                'missed' => $audit['missed'],
+                'duplicates' => $audit['duplicates'],
+                'regularised' => (bool) ($row?->is_regularized),
+            ];
+        })->values();
+
+        return [
+            'employee' => $employee,
+            'from' => $start->toDateString(),
+            'to' => $end->toDateString(),
+            'capped' => $capped,
+            'days' => $days->reverse()->values()->all(),
+            'summary' => [
+                'present' => $days->whereNotNull('check_in')->count(),
+                'late' => $days->where('label', 'Late')->count(),
+                'absent' => $days->where('label', 'Absent')->count(),
+                'leave' => $days->whereIn('label', ['On leave', 'Half-day leave'])->count(),
+                'missed' => $days->where('missed', true)->count(),
+                'multiple_breaks' => $days->filter(fn (array $d) => $d['breaks'] >= 2)->count(),
+                'punches' => $days->sum(fn (array $d) => count($d['punches'])),
+                'hours' => round((float) $days->sum('hours'), 1),
+            ],
+        ];
+    }
+
     /** @param Builder<Attendance> $query */
     protected function applyFilters($query): void
     {
@@ -787,7 +938,9 @@ class AllAttendance extends Component
             });
         }
 
-        if ($this->status) {
+        // The audit filters (missed punch, multiple breaks) are read from the
+        // punches themselves and applied in render() through auditIndex().
+        if ($this->status && ! in_array($this->status, self::AUDIT_STATUSES, true)) {
             $query->where('status', $this->status);
         }
 
@@ -912,6 +1065,20 @@ class AllAttendance extends Component
 
         $statusResolver = app(AttendanceStatusResolver::class);
 
+        // Punch audit over the whole filtered set: the audit chips' counts and
+        // the missed-punch / multiple-breaks filters.
+        $audit = $this->auditIndex($query);
+        if (in_array($this->status, self::AUDIT_STATUSES, true)) {
+            $wanted = $this->status;
+            $query->whereIn('id', $audit === null ? [] : array_keys(array_filter($audit, fn (array $a) => $wanted === 'missed_punch' ? $a['missed'] : $a['breaks'] >= 2)));
+        }
+        $auditCounts = $audit === null ? null : [
+            'missed' => count(array_filter($audit, fn (array $a) => $a['missed'])),
+            'multiple_breaks' => count(array_filter($audit, fn (array $a) => $a['breaks'] >= 2)),
+            'with_breaks' => count(array_filter($audit, fn (array $a) => $a['breaks'] >= 1)),
+            'duplicates' => count(array_filter($audit, fn (array $a) => $a['duplicates'] > 0)),
+        ];
+
         $attendances = $query->latest('date')->paginate(15);
         // Every punch behind the rows on this page, in one query: the status
         // resolver and the Punches column both read it.
@@ -930,6 +1097,9 @@ class AllAttendance extends Component
                 'direction' => $timeline->directionOf($p),
                 'source' => $p->source,
             ])->values()->all())->all(),
+            'audit' => $audit,
+            'auditCounts' => $auditCounts,
+            'punchLog' => $this->employeePunchLog(),
             'rangeError' => $this->rangeError(),
             'showingLabel' => $showingLabel,
             'hasActiveFilters' => $this->hasActiveFilters(),
