@@ -67,8 +67,9 @@ test('HR: the page is complete and never overflows sideways at any width', async
     // Dark mode, same layout rules.
     await page.emulateMedia({ colorScheme: 'dark' });
     await page.evaluate(() => document.documentElement.classList.add('dark'));
-    // Re-theming keeps the trend chart's date labels.
-    await expect(page.locator('[data-360-section="attendance"] .apexcharts-xaxis').first()).toContainText('Oct');
+    // Re-theming keeps the trend chart's date labels (this month's, as the range defaults to it).
+    const thisMonth = new Date().toLocaleString('en-GB', { month: 'short', timeZone: 'Asia/Kolkata' });
+    await expect(page.locator('[data-360-section="attendance"] .apexcharts-xaxis').first()).toContainText(thisMonth);
     for (const width of [375, 1440]) {
         await page.setViewportSize({ width, height: 900 });
         await page.waitForTimeout(250);

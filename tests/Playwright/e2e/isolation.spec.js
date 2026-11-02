@@ -56,9 +56,11 @@ test.describe('department isolation', () => {
         await login(page, 'hr_admin');
 
         await expect(main(page)).toContainText('All departments');
-        // Seven fictional employees across both departments, nobody else.
+        // Every fictional employee across both departments (eight role accounts
+        // and one in the other department), minus HR herself: the people in
+        // reach never include the viewer.
         const headcount = main(page).getByText('Working headcount', { exact: true }).first().locator('xpath=..');
-        await expect(headcount).toHaveText(/(^|\s)7\s+Working headcount/);
+        await expect(headcount).toHaveText(/(^|\s)8\s+Working headcount/);
 
         await page.goto('/employees');
         await expect(main(page)).toContainText(account('employee').name);

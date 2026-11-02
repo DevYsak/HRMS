@@ -238,6 +238,16 @@ class Employee360 extends Component
             'yaxis' => ['min' => 0],
             'grid' => ['strokeDashArray' => 4],
         ];
+        // Under three days of data a date axis ticks by the hour and repeats one
+        // "dd MMM" label across the whole chart (the first days of a month, a
+        // short range): plot those few days as labelled categories instead.
+        $first = $rows->first()['date'] ?? null;
+        $last = $rows->last()['date'] ?? null;
+        if ($first === null || Carbon::parse($first)->diffInDays(Carbon::parse($last)) < 2) {
+            $trend['series'] = [['name' => 'Worked hours', 'data' => $rows->map(fn ($d) => ['x' => $display->shortDate(Carbon::parse($d['date'])), 'y' => round($d['worked'] / 60, 1)])->values()->all()]];
+            $trend['xaxis'] = ['type' => 'category', 'labels' => ['rotate' => 0]];
+            unset($trend['tooltip']);
+        }
 
         $weeks = $rows->groupBy(fn ($d) => Carbon::parse($d['date'])->startOfWeek()->toDateString());
         $weekPoints = fn (string $status) => $weeks->map(fn ($week, $start) => ['x' => 'Wk '.$display->shortDate(Carbon::parse($start)), 'y' => $week->where('status', $status)->count()])->values()->all();

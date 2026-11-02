@@ -14,7 +14,7 @@ import { account, expectHealthyPage, login, logout, sidebarPaths, statusOf } fro
 const SELF_SERVICE = [
     ['/my-profile', null],
     ['/attendance/my', null],
-    ['/time-off/my', 'Apply Leave'],
+    ['/time-off/my', 'Request Leave'],
     ['/overtime/my', 'Request OT'],
     ['/notifications', null],
 ];
@@ -39,10 +39,11 @@ const ROLES = {
     // Dashboard Access: Team View by default; Department View and the Main
     // Dashboard only when an admin grants them.
     department_head: {
-        landing: '/dashboard/manager',
+        // Phase 1 decision (15 Oct 2026): Team View + Department View, landing on the department.
+        landing: '/dashboard/department',
         menu: ['/dashboard/manager', '/time-off/team', '/attendance/team', '/overtime/manage'],
-        hidden: ['/employees/create', '/settings/roles', '/payroll/process', '/dashboard/finance', '/attendance/employees', '/dashboard/department', '/dashboard/main'],
-        forbidden: ['/employees/create', '/settings/roles', '/payroll/process', '/dashboard/finance', '/dashboard/department', '/dashboard/main'],
+        hidden: ['/employees/create', '/settings/roles', '/payroll/process', '/dashboard/finance', '/attendance/employees', '/dashboard/main'],
+        forbidden: ['/employees/create', '/settings/roles', '/payroll/process', '/dashboard/finance', '/dashboard/main'],
         approvals: ['/time-off/team', '/attendance/team', '/overtime/manage'],
     },
     manager: {

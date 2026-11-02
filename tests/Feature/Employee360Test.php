@@ -433,3 +433,20 @@ test('dates and times on the page follow the viewer\'s preferences', function ()
         ->assertSee('08:58')
         ->assertDontSee('8:58 AM');
 });
+
+test('the worked-hours trend never repeats one date label: a short span is plotted by day, a longer one on a date axis', function () {
+    // 2 Oct: the month so far is one or two days — a date axis would tick by the hour.
+    $this->travelTo(Carbon::parse('2026-10-02 11:00:00'));
+    Attendance::create(['employee_id' => $this->ari->id, 'date' => '2026-10-01', 'check_in' => '2026-10-01 09:00:00', 'check_out' => '2026-10-01 18:00:00', 'status' => 'on_time', 'work_mode' => 'office']);
+
+    $short = Livewire::actingAs($this->hr)->test(Employee360::class, ['employee' => $this->ari])->viewData('charts')['trend'];
+    $labels = collect($short['series'][0]['data'])->pluck('x');
+    expect($short['xaxis']['type'])->toBe('category')
+        ->and($labels->unique()->count())->toBe($labels->count());
+
+    // Mid-month: two weeks of days keep the auto-spaced date axis.
+    $this->travelTo(Carbon::parse('2026-10-14 11:00:00'));
+    Attendance::where('employee_id', $this->ari->id)->delete();
+    e360AriAttendance($this->ari);
+    expect(Livewire::actingAs($this->hr)->test(Employee360::class, ['employee' => $this->ari])->viewData('charts')['trend']['xaxis']['type'])->toBe('datetime');
+});
