@@ -110,8 +110,18 @@ new #[Title('Profile settings')] class extends Component {
     }
 
     #[Computed]
+    /**
+     * Self-service deletion only for a login with no employee record. A login
+     * linked to an employee is closed by HR through offboarding: deleting it
+     * here left an active employee with no account, who then vanished from
+     * every list that reads employees through their user.
+     */
     public function showDeleteUser(): bool
     {
+        if (Auth::user()->employee !== null) {
+            return false;
+        }
+
         return ! Auth::user() instanceof MustVerifyEmail
             || (Auth::user() instanceof MustVerifyEmail && Auth::user()->hasVerifiedEmail());
     }
@@ -179,5 +189,9 @@ new #[Title('Profile settings')] class extends Component {
 
     @if ($this->showDeleteUser)
         <livewire:pages::settings.delete-user-form />
+    @elseif (auth()->user()->employee)
+        <p class="mt-10 rounded-xl bg-zinc-50 px-3 py-2.5 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300" data-account-linked-note>
+            {{ __('Your sign-in is linked to your employee record, so it cannot be deleted here. HR closes it when you leave, through offboarding.') }}
+        </p>
     @endif
 </x-pages::settings.layout>

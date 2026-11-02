@@ -19,6 +19,13 @@ new class extends Component {
             'password' => $this->currentPasswordRules(),
         ]);
 
+        // A login linked to an employee record is closed by HR (offboarding), never here.
+        if (Auth::user()->employee !== null) {
+            $this->addError('password', __('Your sign-in is linked to your employee record. Ask HR to close it through offboarding.'));
+
+            return;
+        }
+
         tap(Auth::user(), $logout(...))->delete();
 
         $this->redirect('/', navigate: true);

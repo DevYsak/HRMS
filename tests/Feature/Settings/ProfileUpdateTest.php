@@ -98,8 +98,29 @@ test('user can delete their account', function () {
         ->assertHasNoErrors()
         ->assertRedirect('/');
 
-    expect($user->fresh())->toBeNull();
+    // Users are soft-deleted: the record stays for the audit trail.
+    $this->assertSoftDeleted($user);
     expect(auth()->check())->toBeFalse();
+});
+
+test('a login linked to an employee record cannot be deleted from settings', function () {
+    $user = User::factory()->create();
+    Employee::factory()->create(['user_id' => $user->id, 'status' => 'active']);
+
+    $this->actingAs($user);
+
+    $this->get(route('profile.edit'))->assertOk()
+        ->assertDontSee('Delete account')
+        ->assertSee('linked to your employee record');
+
+    Livewire::test('pages::settings.delete-user-modal')
+        ->set('password', 'password')
+        ->call('deleteUser')
+        ->assertHasErrors('password');
+
+    expect($user->fresh())->not->toBeNull()
+        ->and($user->fresh()->trashed())->toBeFalse()
+        ->and(auth()->check())->toBeTrue();
 });
 
 test('correct password must be provided to delete account', function () {
