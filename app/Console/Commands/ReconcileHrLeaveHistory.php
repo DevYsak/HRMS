@@ -137,9 +137,9 @@ class ReconcileHrLeaveHistory extends Command
     {
         foreach ($rows->filter(fn (array $r) => ($r['entries'] ?? []) !== []) as $r) {
             $this->line("Entries read for {$r['employee']} ({$r['code']}):");
-            $this->table(['#', 'Ledger', 'Type', 'Days', 'Dated', 'Source', 'Reverses', 'Read as', 'Counted'],
+            $this->table(['#', 'Ledger', 'Type', 'Days', 'Dated', 'Source', 'Reverses', 'Read as', 'Counted', 'Why'],
                 collect($r['entries'])->map(fn (array $e) => [$e['id'], $e['ledger'], str_replace('_', ' ', $e['type']), $this->n($e['days']), $e['date'],
-                    $e['source'] ?? '—', $e['reverses'] ? '#'.$e['reverses'] : '—', $e['class'], $e['counted'] ? 'yes' : 'no'])->all());
+                    $e['source'] ?? '—', $e['reverses'] ? '#'.$e['reverses'] : '—', $e['class'], $e['counted'] ? 'yes' : 'no', $e['why'] ?? ''])->all());
         }
     }
 
