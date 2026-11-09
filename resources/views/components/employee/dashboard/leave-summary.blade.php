@@ -11,6 +11,7 @@
     $rows = $p ? array_values(array_filter([
         ['Accrued this year', $p['credit'], false],
         ['Carry forward', $p['carry_forward'], false],
+        ['Opening balance', $p['opening'] ?? 0, false],
         ['Add-ons / adjustments', $p['adjustments'], true],
         ['Expired', -$p['expired'], true],
         ['Used', -$p['used'], true],

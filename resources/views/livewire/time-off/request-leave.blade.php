@@ -181,14 +181,18 @@
                         @php $pool = $choice['balance']; @endphp
                         <div class="rounded-xl border border-emerald-100 bg-emerald-50/60 p-4 dark:border-emerald-500/20 dark:bg-emerald-500/5" data-earned-available>
                             <div class="flex items-baseline justify-between gap-3">
-                                <p class="text-sm font-semibold text-zinc-900 dark:text-white">Earned Leave available</p>
+                                <p class="text-sm font-semibold text-zinc-900 dark:text-white">Earned Leave available today</p>
                                 <p class="text-lg font-bold tabular-nums text-emerald-700 dark:text-emerald-300">{{ $pool['unlimited'] ? 'As per policy' : $fmt($pool['available']).' days' }}</p>
                             </div>
+                            {{-- Balance today − pending = the headline. Credits (carry forward + accrued + opening) are not "accrued". --}}
                             <dl class="mt-2 grid grid-cols-3 gap-x-3 text-xs">
-                                <div><dt class="text-zinc-500">Accrued</dt><dd class="font-semibold tabular-nums">{{ $fmt($pool['credits']) }}</dd></div>
-                                <div><dt class="text-zinc-500">Used</dt><dd class="font-semibold tabular-nums">{{ $fmt($pool['used']) }}</dd></div>
-                                <div><dt class="text-zinc-500">Pending</dt><dd class="font-semibold tabular-nums">{{ $fmt($pool['pending']) }}</dd></div>
+                                <div><dt class="text-zinc-500">Balance today</dt><dd class="font-semibold tabular-nums" data-earned-balance>{{ $fmt($pool['approved_available']) }}</dd></div>
+                                <div><dt class="text-zinc-500">Pending requests</dt><dd class="font-semibold tabular-nums">{{ $fmt($pool['pending']) }}</dd></div>
+                                <div><dt class="text-zinc-500">Used this year</dt><dd class="font-semibold tabular-nums">{{ $fmt($pool['used']) }}</dd></div>
                             </dl>
+                            @unless($pool['unlimited'])
+                                <p class="mt-2 text-xs text-zinc-500 dark:text-zinc-400">Pick your dates: monthly credits due before the leave starts are added there.</p>
+                            @endunless
                         </div>
 
                         @if(count($types) > 1)

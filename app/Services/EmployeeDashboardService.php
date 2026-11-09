@@ -511,7 +511,25 @@ class EmployeeDashboardService
         $overview = $this->leaveOverview->for($employee);
         $year = $overview['year'];
 
-        $shape = function (LeaveType $type, array $s): array {
+        $shape = function (LeaveType $type, array $s, ?array $earned = null): array {
+            // Earned Leave (V2): the canonical EarnedLeaveBreakdown lines.
+            if ($earned !== null) {
+                return [
+                    'id' => $type->id, 'name' => $type->name, 'code' => $type->code, 'color' => $type->color,
+                    'credit' => (float) $earned['current_year_accrued'],
+                    'carry_forward' => (float) $earned['carry_forward'],
+                    'opening' => (float) $earned['opening'],
+                    'adjustments' => (float) $earned['hr_adjustment'],
+                    'expired' => (float) $earned['expired'],
+                    'used' => (float) $earned['used'],
+                    'encashed' => 0.0,
+                    'credits' => $s['credits'],
+                    'available' => (float) $earned['total_available'],
+                    'pending' => (float) $earned['pending'],
+                    'available_to_request' => round((float) $earned['total_available'] - (float) $earned['pending'], 2),
+                ];
+            }
+
             return [
                 'id' => $type->id,
                 'name' => $type->name,
@@ -519,6 +537,7 @@ class EmployeeDashboardService
                 'color' => $type->color,
                 'credit' => round($s['base'] + $s['accrued'], 2),
                 'carry_forward' => $s['carry_forward'],
+                'opening' => 0.0,
                 'adjustments' => round($s['add_on'] + $s['adjustment_credit'] - $s['adjustment_debit'] + $s['opening'], 2),
                 'expired' => $s['expired'],
                 'used' => $s['used'],
@@ -531,7 +550,7 @@ class EmployeeDashboardService
         };
 
         $csl = $overview['csl'];
-        $primary = $csl && $csl['balance'] ? $shape($csl['type'], $csl['summary']) : null;
+        $primary = $csl && $csl['balance'] ? $shape($csl['type'], $csl['summary'], $csl['earned'] ?? null) : null;
 
         $others = collect([$overview['comp_off']])
             ->filter(fn ($c) => $c && $c['balance'])
@@ -543,6 +562,7 @@ class EmployeeDashboardService
         return [
             'year_label' => $year->label,
             'primary' => $primary,
+            'main_label' => $overview['main']['label'],
             'others' => $others,
             'available_leave' => $overview['available_leave'],
             'policy' => $overview['policy'],
@@ -779,7 +799,7 @@ class EmployeeDashboardService
                 // retired Annual Leave.
                 'label' => 'Available Leave', 'icon' => 'calendar-days',
                 'value' => $primary ? self::formatDays($leave['available_leave']).' '.Str::plural('day', abs($leave['available_leave']) == 1 ? 1 : 2) : 'Not set',
-                'sub' => $primary ? 'CSL + Comp Off · '.$leave['year_label'] : 'No CSL for '.$leave['year_label'],
+                'sub' => $primary ? $leave['main_label'].' + Comp Off · '.$leave['year_label'] : 'No '.$leave['main_label'].' for '.$leave['year_label'],
                 'tone' => $primary && $leave['available_leave'] < 0 ? 'danger' : 'neutral',
                 'href' => route('time-off.my'),
             ],

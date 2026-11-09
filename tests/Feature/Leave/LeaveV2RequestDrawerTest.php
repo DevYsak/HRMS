@@ -15,6 +15,9 @@ use App\Models\LeaveRequest;
 use App\Models\LeaveType;
 use App\Models\LeaveYear;
 use App\Models\User;
+use App\Services\EmployeeDashboardService;
+use App\Services\Leave\ConexusLeavePolicyService;
+use App\Services\Leave\EmployeeLeaveOverviewService;
 use App\Services\Leave\LeaveBalanceCalculator;
 use App\Services\Leave\LeaveCategory;
 use App\Services\Leave\LeaveLedgerService;
@@ -104,7 +107,11 @@ test('Earned Leave shows its balance once and the reasons without any balance be
         ->call('next')
         ->assertSet('step', 2)
         ->assertSeeHtml('data-earned-available')
-        ->assertSee('Earned Leave available')
+        // Today's balance less pending — never "Accrued" for credits that include carry forward (9 Nov 2026).
+        ->assertSee('Earned Leave available today')
+        ->assertSeeHtml('data-earned-balance')
+        ->assertSee('Pending requests')
+        ->assertDontSee('Accrued')
         ->assertSee('Casual Leave')
         ->assertSee('Sick Leave')
         ->assertSee('Privilege Leave')
@@ -462,4 +469,29 @@ test('with the flag on, a policy without Earned Leave keeps the existing form in
 test('arriving with ?request=1 opens Request Leave', function () {
     Livewire::actingAs($this->user)->withQueryParams(['request' => 1])->test(MyTimeOff::class)
         ->assertDispatched('open-request-leave');
+});
+
+test('the dashboard shows the Earned Leave My Time Off shows — the old CSL balance is history, not the headline (9 Nov 2026)', function () {
+    // CSL frozen at the HR register figure (3.5) — what the dashboard used to show.
+    $csl = LeaveType::create(['name' => 'Casual Leave', 'code' => ConexusLeavePolicyService::CSL_CODE, 'category' => 'annual', 'is_paid' => true,
+        'allow_paid_request' => true, 'color' => '#f97316', 'availability' => LeaveType::AVAILABILITY_HISTORICAL]);
+    $old = app(LeaveMovementService::class)->balanceFor($this->employee->id, $csl->id, Carbon::parse('2026-07-01'));
+    app(LeaveMovementService::class)->ledgerReady($old);
+    app(LeaveLedgerService::class)->credit($old->fresh(), LeaveLedgerEntry::TYPE_BASE, 3.5, Carbon::parse('2026-07-01'), 'drawer-csl');
+    app(LeaveLedgerService::class)->rebuild($old->fresh());
+
+    $dashboard = app(EmployeeDashboardService::class)->build($this->user);
+    $kpi = collect($dashboard['kpis'])->firstWhere('label', 'Available Leave');
+
+    expect($dashboard['leave']['primary'])->toMatchArray(['name' => 'Earned Leave', 'available' => 8.0, 'available_to_request' => 8.0, 'credit' => 8.0])
+        ->and($dashboard['leave']['main_label'])->toBe('Earned Leave')
+        ->and($kpi['value'])->toBe('8 days')
+        ->and($kpi['sub'])->toStartWith('Earned Leave + Comp Off')
+        ->and(collect($dashboard['leave']['others'])->pluck('name')->all())->not->toContain('Casual Leave')
+        // My Time Off reads the same figure.
+        ->and(app(EmployeeLeaveOverviewService::class)->for($this->employee)['available_leave'])->toBe(8.0);
+
+    // Leave V2 off: the CSL card again.
+    config(['leave_provisioning.policy_engine_v2' => false]);
+    expect(app(EmployeeDashboardService::class)->build($this->user->fresh())['leave']['primary']['name'])->toBe('Casual Leave');
 });

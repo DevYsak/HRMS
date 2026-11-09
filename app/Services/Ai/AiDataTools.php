@@ -96,6 +96,8 @@ class AiDataTools
         $overview = app(EmployeeLeaveOverviewService::class)->for($employee);
 
         return array_filter([
+            // Earned Leave under Leave V2, else CSL: the casual_sick_leave_* figures are that balance.
+            'paid_leave_balance_type' => $overview['main']['label'] ?? null,
             'available_leave_csl_plus_comp_off' => $overview['available_leave'] ?? null,
             'casual_sick_leave_available_to_request' => $overview['csl']['summary']['available_to_request'] ?? null,
             'casual_sick_leave_approved_balance' => $overview['csl']['summary']['approved_available'] ?? null,

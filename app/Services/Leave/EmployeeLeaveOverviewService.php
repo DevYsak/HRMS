@@ -30,6 +30,12 @@ use Illuminate\Support\Collection;
  * MDL is never part of it — it is six dated shutdown days, shown with their
  * status. Retired types (the 28-day Annual Leave) are never shown. Any other
  * leave type with a balance is listed separately and never added in.
+ *
+ * Under Leave V2 (the employee's policy names an Earned Leave pool) the main
+ * paid-leave card is that Earned Leave balance — the figure My Time Off shows
+ * — with its EarnedLeaveBreakdown; CSL and a reason's own old balance are
+ * history then, never listed beside it (9 Nov 2026: the dashboard showed the
+ * frozen CSL figure while My Time Off showed Earned Leave).
  */
 class EmployeeLeaveOverviewService
 {
@@ -53,7 +59,11 @@ class EmployeeLeaveOverviewService
         $year ??= $this->years->current();
         $policy = $this->policyFor($employee);
 
-        $csl = $employee ? $this->typeCard($employee, $this->cslType(), $year) : null;
+        $pool = $employee ? $this->earnedPool($employee, $year) : null;
+        $csl = $employee ? $this->typeCard($employee, $pool ?? $this->cslType(), $year) : null;
+        if ($csl !== null && $pool !== null) {
+            $csl['earned'] = app(EarnedLeaveBreakdown::class)->for($employee, $year, $pool);
+        }
         $compOffType = LeaveType::where('code', ConexusLeavePolicyService::COMP_OFF_CODE)->first()
             ?? LeaveType::where('category', 'comp_off')->first();
         $compOff = $employee && $compOffType ? $this->typeCard($employee, $compOffType, $year) : null;
@@ -78,7 +88,9 @@ class EmployeeLeaveOverviewService
                 'mdl_days' => (int) ($policy?->mandatory_leave_days ?? ConexusLeavePolicyService::MDL_DAYS),
                 'grant' => '1 day is earned for each completed month of the leave year (at most 12); unused days carry forward and never lapse.',
             ],
+            // The main paid-leave card: Earned Leave under V2, else CSL.
             'csl' => $csl,
+            'main' => ['earned' => $pool !== null, 'label' => $pool ? $pool->name : 'CSL'],
             'comp_off' => $compOff,
             'mdl' => $mdl,
             // What the employee can still request: pending requests already
@@ -98,8 +110,20 @@ class EmployeeLeaveOverviewService
                 : 0.0,
             'next_holiday' => $next,
             'next_mdl' => collect($mdl['dates'])->firstWhere('status', 'upcoming')['date'] ?? null,
-            'others' => $employee ? $this->others($employee, $year, array_filter([$csl['type']->id ?? null, $compOffType?->id])) : collect(),
+            'others' => $employee ? $this->others($employee, $year, array_filter([$csl['type']->id ?? null, $compOffType?->id]), $pool) : collect(),
         ];
+    }
+
+    /** The Earned Leave pool of the employee's policy in this leave year, when Leave V2 is on. */
+    public function earnedPool(Employee $employee, LeaveYear $year): ?LeaveType
+    {
+        if (! LeavePolicyEngine::enabled()) {
+            return null;
+        }
+        $today = Carbon::today();
+        $on = $today->lt($year->starts_on) ? Carbon::parse($year->starts_on) : ($today->gt($year->ends_on) ? Carbon::parse($year->ends_on) : $today);
+
+        return app(LeaveBalanceSource::class)->earnedPool($employee, $on);
     }
 
     public function cslType(): ?LeaveType
@@ -192,8 +216,10 @@ class EmployeeLeaveOverviewService
      *
      * @return Collection<int, array<string, mixed>>
      */
-    private function others(Employee $employee, LeaveYear $year, array $excludeTypeIds): Collection
+    private function others(Employee $employee, LeaveYear $year, array $excludeTypeIds, ?LeaveType $pool = null): Collection
     {
+        $balances = app(LeaveCategoryBalances::class);
+
         return LeaveBalance::with('leaveType')
             ->where('employee_id', $employee->id)
             ->whereNotIn('leave_type_id', $excludeTypeIds)
@@ -201,6 +227,8 @@ class EmployeeLeaveOverviewService
             ->get()
             // Retired types (the 28-day Annual Leave) are history, not a balance.
             ->reject(fn (LeaveBalance $b) => $b->leaveType === null || $b->leaveType->trashed())
+            // Under V2: CSL and a reason's own old balance are history.
+            ->reject(fn (LeaveBalance $b) => $pool !== null && $balances->isHistoricalBalance($b->leaveType, $pool))
             ->map(fn (LeaveBalance $b) => ['type' => $b->leaveType, 'summary' => $this->calculator->summary($b)])
             ->filter(fn (array $o) => abs($o['summary']['credits']) > 0.005 || abs($o['summary']['used']) > 0.005)
             ->sortBy(fn (array $o) => $o['type']->name)
