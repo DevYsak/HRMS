@@ -129,12 +129,8 @@ class TeamTimeOff extends Component
 
     public function reject(): void
     {
-        $this->validate([
-            'reviewer_comment' => ['required', 'min:5'],
-        ], [
-            'reviewer_comment.required' => 'Please provide a reason for the rejection.',
-            'reviewer_comment.min' => 'Reason must be at least 5 characters.',
-        ]);
+        // The reason is optional (9 Nov 2026); when given it is sent to the employee.
+        $this->validate(['reviewer_comment' => ['nullable', 'string', 'max:1000']]);
 
         $this->updateStatus('rejected');
     }
@@ -232,8 +228,9 @@ class TeamTimeOff extends Component
         ]);
 
         // Validate HR override remark if override is being applied
-        if ($this->showHrOverride && $this->hr_remark === '') {
-            $this->addError('hr_remark', 'HR remark is required when overriding payment status.');
+        $remarkType = LeaveType::find($this->form['leave_type_id']);
+        if ($this->showHrOverride && $remarkType?->hr_remark_required && $this->hr_remark === '') {
+            $this->addError('hr_remark', 'An HR remark is required to change the payment status of '.$remarkType->name.'.');
 
             return;
         }

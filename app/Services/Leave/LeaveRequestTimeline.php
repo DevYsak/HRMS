@@ -118,6 +118,8 @@ class LeaveRequestTimeline
             'LEAVE_CHANGE_ACCEPTED' => 'Employee accepted the proposed changes',
             'LEAVE_CHANGE_REJECTED' => 'Employee rejected the proposed changes',
             'LEAVE_CHANGE_WITHDRAWN' => 'HR withdrew the proposed changes',
+            'LEAVE_CHANGED_BY_HR' => 'HR changed the request',
+            'LEAVE_RECIPIENTS_NOTIFIED' => 'Decision sent to the people HR added',
             'LEAVE_CANCELLATION_REQUESTED' => 'Cancellation requested',
             'LEAVE_CANCELLATION_WITHDRAWN' => 'Cancellation request withdrawn',
             'LEAVE_CANCELLATION_APPROVED' => 'Cancellation approved',

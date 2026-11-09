@@ -280,7 +280,8 @@ class AppServiceProvider extends ServiceProvider
                 $decision = $gate->mail($key, $role, notifiable: $event->notifiable);
 
                 if (! $decision->allowed) {
-                    $this->logSkippedMail($key, $event->notifiable, $decision->reason);
+                    $context = method_exists($event->notification, 'mailContext') ? $event->notification->mailContext() : null;
+                    $this->logSkippedMail($key, $event->notifiable, $decision->reason, $context);
 
                     return false;
                 }
@@ -300,7 +301,8 @@ class AppServiceProvider extends ServiceProvider
      * Record a blocked send the same way a real one is recorded, so "Recent
      * Emails" shows why nothing went out instead of showing nothing at all.
      */
-    private function logSkippedMail(string $key, mixed $notifiable, ?string $reason): void
+    /** @param  array{type: string, id: int}|null  $context  what the email was about (e.g. a leave request) */
+    private function logSkippedMail(string $key, mixed $notifiable, ?string $reason, ?array $context = null): void
     {
         try {
             $email = method_exists($notifiable, 'routeNotificationForMail')
@@ -319,6 +321,8 @@ class AppServiceProvider extends ServiceProvider
                 'skip_reason' => $reason,
                 'notifiable_type' => $notifiable instanceof Model ? $notifiable::class : null,
                 'notifiable_id' => $notifiable instanceof Model ? $notifiable->getKey() : null,
+                'context_type' => $context['type'] ?? null,
+                'context_id' => $context['id'] ?? null,
             ]);
         } catch (\Throwable) {
             // Logging a skip must never itself block or break a send decision.
@@ -375,6 +379,8 @@ class AppServiceProvider extends ServiceProvider
 
             $ids = [];
             $subject = $message->getSubject();
+            // "leave_request:42" — which record the email is about, when the sender says.
+            [$contextType, $contextId] = array_pad(explode(':', (string) $this->mailHeader($message, 'X-Notification-Context'), 2), 2, null);
 
             foreach (($message->getTo() ?: []) as $address) {
                 $log = EmailLog::create([
@@ -383,6 +389,8 @@ class AppServiceProvider extends ServiceProvider
                     'to_name' => $address->getName() ?: null,
                     'subject' => $subject,
                     'status' => 'sending',
+                    'context_type' => $contextType ?: null,
+                    'context_id' => is_numeric($contextId) ? (int) $contextId : null,
                 ]);
                 $ids[] = $log->id;
             }

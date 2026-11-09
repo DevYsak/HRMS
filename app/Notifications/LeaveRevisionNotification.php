@@ -22,6 +22,9 @@ class LeaveRevisionNotification extends Notification
 
     public const REJECTED = 'rejected';
 
+    /** HR changed the request directly (no confirmation needed). */
+    public const APPLIED = 'applied';
+
     public function __construct(
         public readonly LeaveRequestRevision $revision,
         public readonly string $stage,
@@ -41,6 +44,18 @@ class LeaveRevisionNotification extends Notification
         $employee = $this->revision->employee?->user?->name ?? 'The employee';
 
         return match ($this->stage) {
+            self::APPLIED => [
+                'type' => 'leave_changed_by_hr',
+                'title' => 'HR updated your leave request',
+                'body' => "HR changed your {$type} request ({$dates}): ".((float) $leave->days + 0).' day(s), '
+                    .($leave->paidDays() + 0).' paid and '.((float) ($leave->lwp_days ?? 0) + 0).' unpaid.'
+                    .($this->revision->reason && $this->revision->reason !== 'Changed by HR' ? " HR's note: \u{201C}{$this->revision->reason}\u{201D}." : ''),
+                'action' => 'View',
+                'url' => route('time-off.my').'#request-'.$leave->id,
+                'icon' => 'pencil-square',
+                'color' => 'violet',
+                'leave_request_id' => $leave->id,
+            ],
             self::PROPOSED => [
                 'type' => 'leave_change_proposed',
                 'title' => 'HR proposed a change to your leave',

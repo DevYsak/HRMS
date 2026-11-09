@@ -560,7 +560,7 @@
                                 <div class="space-y-1.5">
                                     <label class="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Reviewer Comment</label>
                                     <textarea wire:model="panelReviewComment" rows="2"
-                                        placeholder="Add a comment (required to reject)…"
+                                        placeholder="Add a comment (optional — sent to the employee)…"
                                         class="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-brand-400/30 focus:border-brand-400 resize-none transition-colors"></textarea>
                                     @error('panelReviewComment')
                                         <p class="text-xs text-red-500">{{ $message }}</p>
@@ -588,7 +588,7 @@
                                                     </label>
                                                 </div>
                                                 <textarea wire:model="panelHrRemark" rows="2"
-                                                    placeholder="HR remark — mandatory when overriding payment status…"
+                                                    placeholder="HR remark (optional) — recorded in the audit…"
                                                     class="w-full rounded-lg border border-amber-200 dark:border-amber-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-700 dark:text-zinc-300 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-amber-300 resize-none"></textarea>
                                                 @error('panelHrRemark')
                                                     <p class="text-xs text-red-500">{{ $message }}</p>
@@ -622,7 +622,7 @@
                                             </label>
                                         </div>
                                         <textarea wire:model="panelHrRemark" rows="2"
-                                            placeholder="HR remark — mandatory (min 10 characters)…"
+                                            placeholder="HR remark (optional) — recorded in the audit…"
                                             class="w-full rounded-lg border border-amber-200 dark:border-amber-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-700 dark:text-zinc-300 placeholder-zinc-400 focus:outline-none resize-none"></textarea>
                                         @error('panelHrRemark')
                                             <p class="text-xs text-red-500">{{ $message }}</p>
@@ -749,7 +749,7 @@
                         @endif
                         @error('form.approved_leave_status') <p class="text-xs text-red-500">{{ $message }}</p> @enderror
                         @if($managePaymentWas !== '' && ($form['approved_leave_status'] ?? '') !== $managePaymentWas)
-                            <flux:textarea wire:model="form.hr_remark" label="HR remark (required for a payment change)" rows="2"
+                            <flux:textarea wire:model="form.hr_remark" :label="$this->manageRemarkRequired() ? 'HR remark (required for a payment change)' : 'HR remark (optional — recorded in the audit)'" rows="2"
                                 placeholder="Why is this leave now {{ $form['approved_leave_status'] }}?" />
                             @error('form.hr_remark') <p class="text-xs text-red-500">{{ $message }}</p> @enderror
                             <p class="text-xs text-zinc-500">The employee is notified and the balance is updated.</p>

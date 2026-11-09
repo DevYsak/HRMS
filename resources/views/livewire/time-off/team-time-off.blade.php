@@ -569,7 +569,7 @@
                     <flux:textarea
                         wire:model="reviewer_comment"
                         label="Manager Comment"
-                        placeholder="Add a comment (required to reject)…"
+                        placeholder="Add a comment (optional — sent to the employee)…"
                         rows="2"
                     />
                     @error('reviewer_comment')

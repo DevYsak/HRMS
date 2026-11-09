@@ -38,7 +38,7 @@
                 <flux:button size="sm" icon="x-mark" wire:click="confirm('reject')">Reject</flux:button>
             @endif
             @if($this->canPropose)
-                <flux:button size="sm" variant="ghost" icon="pencil-square" wire:click="openProposal">Propose Changes</flux:button>
+                <flux:button size="sm" variant="ghost" icon="pencil-square" wire:click="openProposal">Edit Request</flux:button>
             @endif
             @if($this->canCancel)
                 <flux:button size="sm" variant="ghost" wire:click="confirm('cancel')">Cancel Leave</flux:button>
@@ -79,13 +79,13 @@
         </div>
     @endif
 
-    {{-- HR proposes a change; the employee confirms it before anything is decided. --}}
+    {{-- HR changes the request directly (9 Nov 2026): recorded beside what the employee sent, audited, the employee told. --}}
     @if($confirming === 'propose')
         @php $preview = $this->proposalPreview; @endphp
         <form wire:submit="submitProposal" class="ui-surface space-y-4 p-5" style="border-left: 4px solid #8b5cf6" data-proposal-form>
             <div>
-                <p class="text-sm font-semibold text-zinc-900 dark:text-white">Propose changes to this request</p>
-                <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">The employee sees what they submitted beside your proposal and accepts or rejects it. Nothing is approved or deducted until then; what they submitted is kept either way.</p>
+                <p class="text-sm font-semibold text-zinc-900 dark:text-white">Edit this request</p>
+                <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Change the dates, type or length, or make days unpaid (fewer paid days) — for example when the Earned Leave balance is exhausted. Your change applies straight away, is kept beside what the employee submitted, and the employee is told. Nothing is deducted until the leave is approved.</p>
             </div>
             <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <flux:input type="date" wire:model.live="proposal.start_date" label="Start date" />
@@ -136,13 +136,19 @@
                 <p class="rounded-lg bg-violet-50 px-3 py-2 text-sm text-violet-900 dark:bg-violet-500/10 dark:text-violet-200" data-proposal-summary>
                     Proposed: {{ $fmt($preview['proposed']['days']) }} {{ Str::plural('day', (float) $preview['proposed']['days'] == 1 ? 1 : 2) }} —
                     {{ $fmt((float) $preview['proposed']['days'] - (float) $preview['proposed']['lwp_days']) }} paid, {{ $fmt($preview['proposed']['lwp_days']) }} unpaid.
-                    {{ $preview['changed'] === [] ? 'Nothing changed yet.' : 'The employee is asked to confirm.' }}
+                    {{ $preview['changed'] === [] ? 'Nothing changed yet.' : 'Applies when you save.' }}
                 </p>
             @endif
-            <flux:textarea wire:model="proposalReason" rows="2" label="Reason for the employee" placeholder="Why do you propose this change?" />
+            <flux:textarea wire:model="proposalReason" rows="2" label="Note for the employee (optional)" placeholder="Why the request was changed — shown to the employee and kept in the history" />
+            @if($this->canDecide)
+                @include('livewire.time-off.partials.notify-recipients')
+            @endif
             <div class="flex flex-wrap justify-end gap-2">
                 <flux:button type="button" variant="ghost" wire:click="$set('confirming', null)">Back</flux:button>
-                <flux:button type="submit" variant="primary" wire:loading.attr="disabled" wire:target="submitProposal">Send to Employee</flux:button>
+                <flux:button type="submit" wire:loading.attr="disabled" wire:target="submitProposal">Save Changes</flux:button>
+                @if($this->canDecide)
+                    <flux:button type="button" variant="primary" icon="check" wire:click="submitProposal('approved')" wire:loading.attr="disabled" wire:target="submitProposal" data-save-approve>Save &amp; Approve</flux:button>
+                @endif
             </div>
         </form>
     @endif
@@ -192,7 +198,8 @@
             @if($confirming === 'cancel')
                 <flux:textarea wire:model="cancelReason" rows="2" label="Reason" placeholder="Why is this leave being cancelled?" />
             @else
-                <flux:textarea wire:model="comment" rows="2" :label="$confirming === 'reject' ? 'Reason for rejecting' : 'Comment (optional)'" />
+                <flux:textarea wire:model="comment" rows="2" :label="$confirming === 'reject' ? 'Reason for rejecting (optional)' : 'Comment (optional)'" />
+                @include('livewire.time-off.partials.notify-recipients')
             @endif
             <div class="flex flex-wrap gap-2">
                 @if($confirming === 'approve')
@@ -223,6 +230,15 @@
                     <div><dt class="{{ $dt }}">Half-day units</dt><dd class="{{ $dd }} tabular-nums">{{ $halfUnits }}</dd></div>
                     <div><dt class="{{ $dt }}">Excluded days</dt><dd class="{{ $dd }}">{{ $excluded->isEmpty() ? 'None' : $excluded->count().' ('.$excluded->pluck('status')->unique()->join(', ').')' }}</dd></div>
                     <div><dt class="{{ $dt }}">Submitted</dt><dd class="{{ $dd }}">{{ $r->created_at->toImmutable()->userDateTime() }}</dd></div>
+                    @if(isset($r->balance_snapshot['available_for_request']))
+                        @php $snap = $r->balance_snapshot; @endphp
+                        <div class="col-span-2 sm:col-span-3" data-balance-snapshot>
+                            <dt class="{{ $dt }}">{{ $snap['balance_type'] ?? 'Earned Leave' }} when applied</dt>
+                            <dd class="{{ $dd }}">{{ $fmt($snap['available_for_request']) }} available for these dates
+                                <span class="text-xs font-normal text-zinc-500 dark:text-zinc-400">· {{ $fmt($snap['balance_today']) }} balance then + {{ $fmt($snap['expected_accrual']) }} expected accrual − {{ $fmt($snap['booked_by_start']) }} already booked · asked {{ $fmt($snap['paid_days']) }} paid, {{ $fmt($snap['lwp_days']) }} unpaid</span>
+                            </dd>
+                        </div>
+                    @endif
                     @if($r->applied_by_user_id)
                         <div><dt class="{{ $dt }}">Filed by</dt><dd class="{{ $dd }}">HR on the employee's behalf</dd></div>
                     @endif
@@ -314,16 +330,16 @@
             {{-- HR proposals and the employee's answers --}}
             @if($this->revisions->isNotEmpty())
                 <section class="{{ $card }}" data-section="revisions">
-                    <h2 class="{{ $h2 }}">Proposed Changes</h2>
+                    <h2 class="{{ $h2 }}">Changes to the Request</h2>
                     <ol class="mt-3 space-y-4">
                         @foreach($this->revisions as $revision)
                             <li class="space-y-2" data-revision="{{ $revision->id }}">
                                 <p class="flex flex-wrap items-center gap-2 text-sm">
-                                    <x-pulse.badge :color="['awaiting_employee' => 'violet', 'accepted' => 'emerald', 'rejected' => 'rose'][$revision->status] ?? 'zinc'">{{ ['awaiting_employee' => 'Awaiting employee', 'accepted' => 'Accepted', 'rejected' => 'Rejected by employee', 'withdrawn' => 'Withdrawn'][$revision->status] ?? ucfirst($revision->status) }}</x-pulse.badge>
+                                    <x-pulse.badge :color="['awaiting_employee' => 'violet', 'accepted' => 'emerald', 'rejected' => 'rose', 'applied' => 'sky'][$revision->status] ?? 'zinc'">{{ ['awaiting_employee' => 'Awaiting employee', 'accepted' => 'Accepted', 'rejected' => 'Rejected by employee', 'withdrawn' => 'Withdrawn', 'applied' => 'Changed by HR'][$revision->status] ?? ucfirst($revision->status) }}</x-pulse.badge>
                                     <span class="text-zinc-700 dark:text-zinc-200">{{ $revision->proposer?->name ?? 'HR' }} · {{ $revision->created_at?->toImmutable()->userDateTime() }}</span>
                                 </p>
                                 <p class="text-xs text-zinc-600 dark:text-zinc-300">“{{ $revision->reason }}”</p>
-                                @if($revision->responded_at)
+                                @if($revision->responded_at && $revision->status !== 'applied')
                                     <p class="text-xs text-zinc-500 dark:text-zinc-400">{{ $revision->responder?->name ?? 'System' }} · {{ $revision->responded_at->toImmutable()->userDateTime() }}@if($revision->response_note) · “{{ $revision->response_note }}”@endif</p>
                                 @endif
                                 <x-leave.revision-compare :revision="$revision" />
@@ -372,6 +388,28 @@
                             <flux:button type="submit" size="sm" variant="primary" icon="paper-airplane" wire:loading.attr="disabled" wire:target="sendMessage">Send</flux:button>
                         </div>
                     </form>
+                @endif
+            </section>
+
+            {{-- Notifications and emails --}}
+            <section class="{{ $card }}" data-section="notifications">
+                <h2 class="{{ $h2 }}">Notifications &amp; Emails</h2>
+                @php $sent = $this->notificationHistory; @endphp
+                @if($sent->isEmpty())
+                    <p class="mt-2 text-sm text-zinc-500 dark:text-zinc-400">None recorded for this request.</p>
+                @else
+                    <ul class="mt-3 divide-y divide-zinc-100 text-sm dark:divide-white/5" data-notification-history>
+                        @foreach($sent as $item)
+                            <li class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 py-1.5">
+                                <span class="min-w-0">
+                                    <x-pulse.badge :color="$item['channel'] === 'Email' ? 'sky' : 'zinc'">{{ $item['channel'] }}</x-pulse.badge>
+                                    <span class="font-medium text-zinc-900 dark:text-white">{{ $item['to'] }}</span>
+                                    <span class="text-zinc-600 dark:text-zinc-300">— {{ $item['what'] }}</span>
+                                </span>
+                                <span class="shrink-0 text-xs text-zinc-500 dark:text-zinc-400">{{ $item['status'] }} · {{ $item['at']->toImmutable()->userDateTime() }}</span>
+                            </li>
+                        @endforeach
+                    </ul>
                 @endif
             </section>
 

@@ -143,15 +143,22 @@ it('reverses balance deduction when overriding paid to unpaid', function () {
     expect($balance->used_days)->toBe('0.00'); // deduction reversed
 });
 
-it('throws when remark is empty on override', function () {
+it('takes an override without a remark unless the leave type requires one', function () {
     $employee = auditEmployee();
     $type = auditLeaveType();
     $hr = User::factory()->create(['role' => 'hr_admin']);
 
+    // Optional by default (9 Nov 2026).
+    $type->update(['hr_remark_required' => false]);
     $request = approvedRequest($employee, $type, 'paid');
+    app(LeaveService::class)->hrOverridePaymentStatus($request, $hr, 'unpaid', '');
+    expect($request->fresh()->effectiveLeaveStatus())->toBe('unpaid');
 
-    expect(fn () => app(LeaveService::class)->hrOverridePaymentStatus($request, $hr, 'unpaid', ''))
-        ->toThrow(DomainException::class, 'HR remark is mandatory');
+    // HR switched "HR remark required" on for this type.
+    $type->update(['hr_remark_required' => true]);
+    $second = approvedRequest($employee, $type, 'paid');
+    expect(fn () => app(LeaveService::class)->hrOverridePaymentStatus($second, $hr, 'unpaid', ''))
+        ->toThrow(DomainException::class, 'An HR remark is required');
 });
 
 it('throws when trying to override to the same status', function () {

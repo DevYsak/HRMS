@@ -3,11 +3,15 @@
 namespace App\Livewire\TimeOff;
 
 use App\Exceptions\ApprovalNotPermitted;
+use App\Models\EmailLog;
 use App\Models\LeaveBalance;
 use App\Models\LeaveLedgerEntry;
 use App\Models\LeaveRequest;
 use App\Models\LeaveRequestDay;
 use App\Models\LeaveType;
+use App\Models\NotificationSetting;
+use App\Models\User;
+use App\Notifications\LeaveRequestNotification;
 use App\Services\Approvals\ApprovalGuard;
 use App\Services\Approvals\ApprovalQueueService;
 use App\Services\Attendance\WorkingDayResolver;
@@ -26,6 +30,7 @@ use App\Services\LeaveService;
 use App\Services\People\Employee360Access;
 use App\Services\Security\ScopeResolver;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -73,11 +78,23 @@ class LeaveRequestDetail extends Component
     /** HR's next message in the conversation with the employee. */
     public string $reply = '';
 
+    /**
+     * People HR adds to the decision's email (besides the employee and the
+     * approvers already notified). Preset from Notifications & Email.
+     *
+     * @var array<int, int>
+     */
+    public array $notifyUserIds = [];
+
+    public string $recipientSearch = '';
+
     public function mount(LeaveRequest $leaveRequest): void
     {
         abort_unless(app(LeaveRequestAccess::class)->canView(Auth::user(), $leaveRequest), 403);
 
         $this->requestId = $leaveRequest->id;
+        // The default "also notify" people for the leave workflow, as set on Notifications & Email.
+        $this->notifyUserIds = array_values(array_map('intval', NotificationSetting::for(LeaveRequestNotification::class)?->include_user_ids ?? []));
     }
 
     #[Computed]
@@ -414,19 +431,103 @@ class LeaveRequestDetail extends Component
         $this->confirming = 'propose';
     }
 
-    /** Send the proposal to the employee; the request waits for their answer. */
-    public function submitProposal(): void
+    /**
+     * HR changes the request directly (9 Nov 2026): dates, type, length, the
+     * paid / unpaid split — recorded beside what the employee submitted and
+     * audited. With $decision 'approved' / 'rejected' it is decided in the
+     * same step; the employee and anyone HR chose are told.
+     */
+    public function submitProposal(?string $decision = null): void
     {
         abort_unless($this->canPropose, 403);
+        abort_unless($decision === null || (in_array($decision, ['approved', 'rejected'], true) && $this->canDecide), 403);
         $this->validate([
             'proposal.start_date' => ['required', 'date'],
             'proposal.end_date' => ['required', 'date', 'after_or_equal:proposal.start_date'],
             'proposal.paid_days' => ['nullable', 'numeric', 'min:0'],
-            'proposalReason' => ['required', 'string', 'min:5', 'max:1000'],
-        ], [], ['proposal.start_date' => 'start date', 'proposal.end_date' => 'end date', 'proposal.paid_days' => 'paid days', 'proposalReason' => 'reason']);
+            'proposalReason' => ['nullable', 'string', 'max:1000'],
+        ], [], ['proposal.start_date' => 'start date', 'proposal.end_date' => 'end date', 'proposal.paid_days' => 'paid days', 'proposalReason' => 'note']);
 
-        $this->attempt(fn () => app(LeaveRequestRevisionService::class)->propose($this->request, Auth::user(), $this->proposalInput(), $this->proposalReason),
-            'Changes proposed. The employee confirms them before anything is approved or deducted.');
+        $this->attempt(function () use ($decision) {
+            $request = app(LeaveRequestRevisionService::class)->applyByHr($this->request, Auth::user(), $this->proposalInput(), $this->proposalReason, $decision);
+            if ($decision !== null) {
+                app(LeaveService::class)->notifyAlso($request, $this->notifyUserIds, Auth::user());
+            }
+        }, match ($decision) {
+            'approved' => 'Changes saved and the leave approved. The employee has been notified.',
+            'rejected' => 'Changes saved and the leave rejected. The employee has been notified.',
+            default => 'Changes saved. The employee has been notified.',
+        });
+    }
+
+    /** Add someone to the decision's email. */
+    public function addRecipient(int $userId): void
+    {
+        if (User::whereKey($userId)->exists() && ! in_array($userId, $this->notifyUserIds, true)) {
+            $this->notifyUserIds[] = $userId;
+        }
+        $this->recipientSearch = '';
+    }
+
+    public function removeRecipient(int $userId): void
+    {
+        $this->notifyUserIds = array_values(array_filter($this->notifyUserIds, fn ($id) => (int) $id !== $userId));
+    }
+
+    /**
+     * Who HR may add: the people chosen so far, the employee's manager and
+     * department head as suggestions, and — when searching — anyone with a
+     * login by name or email.
+     *
+     * @return Collection<int, array{id: int, name: string, note: ?string, selected: bool}>
+     */
+    #[Computed]
+    public function recipientOptions(): Collection
+    {
+        $employee = $this->request->employee;
+        $selected = array_map('intval', $this->notifyUserIds);
+        $suggested = collect([
+            [$employee?->manager, 'Reporting manager'],
+            [$employee?->department?->head, 'Department head'],
+        ])->filter(fn ($pair) => $pair[0] instanceof User);
+        $term = trim($this->recipientSearch);
+        $found = mb_strlen($term) >= 2
+            ? User::where(fn ($q) => $q->where('name', 'like', "%{$term}%")->orWhere('email', 'like', "%{$term}%"))->orderBy('name')->limit(8)->get()
+            : collect();
+
+        return collect()
+            ->merge(User::whereIn('id', $selected)->get()->map(fn (User $u) => [$u, null]))
+            ->merge($suggested)
+            ->merge($found->map(fn (User $u) => [$u, null]))
+            ->reject(fn ($pair) => (int) $pair[0]->id === (int) Auth::id() || (int) $pair[0]->id === (int) $employee?->user_id)
+            ->unique(fn ($pair) => $pair[0]->id)
+            ->map(fn ($pair) => ['id' => (int) $pair[0]->id, 'name' => $pair[0]->name, 'note' => $pair[1] ?? $pair[0]->email, 'selected' => in_array((int) $pair[0]->id, $selected, true)])
+            ->values();
+    }
+
+    /**
+     * Every notification and email this request produced (from 9 Nov 2026):
+     * in-app copies, and emails sent, skipped by the settings, or failed.
+     *
+     * @return Collection<int, array{at: Carbon, channel: string, to: string, what: string, status: string}>
+     */
+    #[Computed]
+    public function notificationHistory(): Collection
+    {
+        $id = $this->requestId;
+        $inApp = DatabaseNotification::with('notifiable')->where('data->leave_request_id', $id)->latest()->limit(100)->get()
+            ->map(fn (DatabaseNotification $n) => ['at' => Carbon::parse($n->created_at), 'channel' => 'In-app', 'to' => $n->notifiable?->name ?? '—',
+                'what' => $n->data['title'] ?? class_basename($n->type), 'status' => $n->read_at ? 'Read' : 'Delivered']);
+        $emails = EmailLog::where('context_type', 'leave_request')->where('context_id', $id)->latest()->limit(100)->get()
+            ->map(fn (EmailLog $e) => ['at' => Carbon::parse($e->created_at), 'channel' => 'Email', 'to' => $e->to_name ?: (string) $e->to_email,
+                'what' => $e->subject ?: class_basename((string) $e->notification_key), 'status' => match ($e->status) {
+                    'sent' => 'Sent',
+                    'skipped' => 'Not sent — '.str_replace('_', ' ', (string) $e->skip_reason),
+                    'failed' => 'Failed',
+                    default => ucfirst((string) $e->status),
+                }]);
+
+        return $inApp->merge($emails)->sortByDesc('at')->values();
     }
 
     /** Take the unanswered proposal back: the request returns as submitted. */
@@ -468,7 +569,8 @@ class LeaveRequestDetail extends Component
     public function reject(): void
     {
         abort_unless($this->canDecide, 403);
-        $this->validate(['comment' => ['required', 'string', 'min:5', 'max:1000']], [], ['comment' => 'reason for rejecting']);
+        // The reason is optional (9 Nov 2026); when given it is sent to the employee.
+        $this->validate(['comment' => ['nullable', 'string', 'max:1000']], [], ['comment' => 'reason for rejecting']);
         $this->decide('rejected');
     }
 
@@ -500,10 +602,10 @@ class LeaveRequestDetail extends Component
             'is_half_day' => (bool) $request->is_half_day,
         ];
 
-        $this->attempt(
-            fn () => app(LeaveService::class)->reviewRequest($request, $form, $status, Auth::id(), trim($this->comment) ?: null),
-            $status === 'approved' ? 'Leave request approved.' : 'Leave request rejected.',
-        );
+        $this->attempt(function () use ($request, $form, $status) {
+            $decided = app(LeaveService::class)->reviewRequest($request, $form, $status, Auth::id(), trim($this->comment) ?: null);
+            app(LeaveService::class)->notifyAlso($decided, $this->notifyUserIds, Auth::user());
+        }, $status === 'approved' ? 'Leave request approved.' : 'Leave request rejected.');
     }
 
     /** Runs an action; a refusal shows its message, anything else is logged and shown plainly. */
@@ -527,7 +629,7 @@ class LeaveRequestDetail extends Component
 
         $this->reset(['comment', 'cancelReason', 'cancellationNote', 'confirming', 'proposal', 'proposalReason']);
         unset($this->request, $this->canDecide, $this->canCancel, $this->canCorrect, $this->canDecideCancellation, $this->balanceImpact, $this->dates, $this->ledgerEntries, $this->history,
-            $this->canPropose, $this->canWithdrawProposal, $this->revisions);
+            $this->canPropose, $this->canWithdrawProposal, $this->revisions, $this->projection, $this->notificationHistory, $this->conversation);
         session()->flash('success', $done);
     }
 

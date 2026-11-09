@@ -248,11 +248,10 @@ test('HR approves from the detail page: the ledger is charged exactly once and t
         ->assertDontSee('Confirm Approval');
 });
 
-test('rejecting needs a reason and charges nothing; cancelling approved leave returns the days', function () {
+test('rejecting charges nothing (the reason is optional); cancelling approved leave returns the days', function () {
     $rejected = hrlRequest();
     Livewire::actingAs($this->hr)->test(LeaveRequestDetail::class, ['leaveRequest' => $rejected])
-        ->call('confirm', 'reject')->call('reject')->assertHasErrors('comment')
-        ->set('comment', 'Team coverage is too thin that week')->call('reject')->assertHasNoErrors();
+        ->call('confirm', 'reject')->call('reject')->assertHasNoErrors();
     expect($rejected->fresh()->status)->toBe('rejected')->and(hrlUsage($rejected))->toEqual(0.0);
 
     $approved = hrlRequest(['start_date' => '2026-11-17', 'end_date' => '2026-11-18']);

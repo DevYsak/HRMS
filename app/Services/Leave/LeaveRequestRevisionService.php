@@ -29,6 +29,11 @@ use Illuminate\Support\Facades\DB;
  * or rejects, and the request stays exactly as submitted for HR to revise or
  * reject. Nothing is ever deducted here: only final approval deducts.
  *
+ * HR may also change an open request directly (applyByHr — 9 Nov 2026, which
+ * replaces the employee's confirmation for HR): the change is recorded as an
+ * applied revision beside the original, audited, and the employee is told;
+ * HR may approve or reject in the same step.
+ *
  * Every step runs in a transaction, locks the request, and is audited.
  */
 class LeaveRequestRevisionService
@@ -121,6 +126,80 @@ class LeaveRequestRevisionService
     }
 
     /**
+     * HR changes an open request directly: dates, full / half day, the reason,
+     * the paid / unpaid split (e.g. Earned Leave to unpaid when the balance is
+     * exhausted), a Combined request's allocation — worked out exactly as
+     * approval would. Kept as an applied revision beside what the employee
+     * submitted, audited with HR's remark (optional), and the employee is
+     * told. With $decision, approved or rejected in the same step; nothing is
+     * deducted until approval, which re-checks the balance.
+     *
+     * @param  array<string, mixed>  $input  as for preview()
+     */
+    public function applyByHr(LeaveRequest $request, User $hr, array $input, ?string $remark = null, ?string $decision = null): LeaveRequest
+    {
+        $remark = $remark !== null && trim($remark) !== '' ? trim($remark) : null;
+        if ($decision !== null && ! in_array($decision, ['approved', 'rejected'], true)) {
+            throw new \InvalidArgumentException("Unknown decision '{$decision}'.");
+        }
+
+        [$leave, $revision] = DB::transaction(function () use ($request, $hr, $input, $remark) {
+            $locked = LeaveRequest::lockForUpdate()->findOrFail($request->id);
+            if (! $this->mayPropose($locked, $hr)) {
+                throw new AuthorizationException('You may not change this leave request.');
+            }
+
+            ['original' => $original, 'proposed' => $proposed, 'changed' => $changed] = $this->preview($locked, $input);
+            if ($changed === []) {
+                return [$locked, null];
+            }
+            $this->assertNoOverlap($locked, $proposed);
+
+            $revision = LeaveRequestRevision::create([
+                'leave_request_id' => $locked->id,
+                'employee_id' => $locked->employee_id,
+                'proposed_by' => $hr->id,
+                'original' => $original + ['status' => $locked->status],
+                'proposed' => $proposed,
+                'changed_fields' => $changed,
+                'reason' => $remark ?? 'Changed by HR',
+                'requires_confirmation' => false,
+                'status' => LeaveRequestRevision::APPLIED,
+                'responded_by' => $hr->id,
+                'responded_at' => now(),
+            ]);
+            $this->apply($locked, $proposed, $locked->status);
+
+            app(AuditService::class)->event('LEAVE_CHANGED_BY_HR', AuditService::LEAVE, $locked,
+                old: array_intersect_key($original, array_flip($changed)),
+                new: ['revision_id' => $revision->id] + array_intersect_key($proposed, array_flip($changed)),
+                reason: $remark, subjectEmployeeId: $locked->employee_id, actor: $hr);
+
+            return [$locked, $revision];
+        });
+
+        if ($decision !== null) {
+            $fresh = $leave->fresh();
+
+            return $this->leave->reviewRequest($fresh, [
+                'leave_type_id' => $fresh->leave_type_id,
+                'start_date' => Carbon::parse($fresh->start_date)->toDateString(),
+                'end_date' => Carbon::parse($fresh->end_date)->toDateString(),
+                'reason' => $fresh->reason,
+                'is_half_day' => (bool) $fresh->is_half_day,
+                'half_day_period' => $fresh->half_day_period,
+            ], $decision, $hr->id, $remark);
+        }
+
+        if ($revision !== null) {
+            $revision = $revision->fresh(['leaveRequest.leaveType', 'employee.user', 'proposer']);
+            $revision->employee?->user?->notify(new LeaveRevisionNotification($revision, LeaveRevisionNotification::APPLIED));
+        }
+
+        return $leave->fresh(['dayAllocations', 'leaveType']);
+    }
+
+    /**
      * The employee accepts: the proposed version becomes the request, which
      * goes back to HR for the final decision. Still nothing is deducted.
      */
@@ -206,7 +285,7 @@ class LeaveRequestRevisionService
     public function agreedLwpDays(LeaveRequest $request): float
     {
         $revision = LeaveRequestRevision::where('leave_request_id', $request->id)
-            ->where('status', LeaveRequestRevision::ACCEPTED)->latest('id')->first();
+            ->whereIn('status', [LeaveRequestRevision::ACCEPTED, LeaveRequestRevision::APPLIED])->latest('id')->first();
         if ($revision === null) {
             return 0.0;
         }
@@ -315,7 +394,7 @@ class LeaveRequestRevisionService
         }
         $available = $evaluation['available'] ?? null;
         if ($paidDays > 0 && ! $unpaidType && $available !== null && ! ($evaluation['unlimited'] ?? false) && $paidDays > (float) $available + 0.001) {
-            throw new \DomainException(sprintf('Only %s day(s) of %s are available — propose fewer paid days.', max(0, (float) $available) + 0, $evaluation['balance_type'] ?? $type->name));
+            throw new \DomainException(sprintf('Only %s day(s) of %s are available — make the rest unpaid (fewer paid days).', max(0, (float) $available) + 0, $evaluation['balance_type'] ?? $type->name));
         }
 
         $lwp = $unpaidType ? 0.0 : round($days - $paidDays, 2);

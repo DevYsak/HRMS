@@ -23,7 +23,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     // Set when HR applied on the employee's behalf (hr_internal_note is never shown to them).
     'applied_by_user_id', 'hr_internal_note',
     // Leave V2: the LWP portion a policy converted, and the approval steps it required.
-    'lwp_days', 'approval_path',
+    'lwp_days', 'approval_path', 'balance_snapshot',
     // Leave V2: leave_type_id is the reason (Sick, Casual…); these say which
     // category it was requested under and which balance it charges.
     'main_category', 'balance_leave_type_id',
@@ -53,6 +53,7 @@ class LeaveRequest extends Model
             'days' => 'decimal:2',
             'lwp_days' => 'decimal:2',
             'approval_path' => 'array',
+            'balance_snapshot' => 'array',
         ];
     }
 

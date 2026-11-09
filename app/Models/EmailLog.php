@@ -17,6 +17,8 @@ class EmailLog extends Model
         'subject',
         'status',
         'skip_reason',
+        'context_type',
+        'context_id',
         'error',
         'notifiable_type',
         'notifiable_id',

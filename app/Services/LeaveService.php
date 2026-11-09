@@ -385,6 +385,7 @@ class LeaveService
             // (the shared Earned Leave balance for a Sick or Casual reason).
             'main_category' => $evaluation['category'] ?? null,
             'balance_leave_type_id' => $evaluation['balance_leave_type_id'] ?? null,
+            'balance_snapshot' => $evaluation !== null ? $this->balanceSnapshot($evaluation['projection'] ?? null, (float) $evaluation['paid_days'], (float) $evaluation['lwp_days']) : null,
         ]);
 
         foreach ($attachments as $file) {
@@ -477,6 +478,7 @@ class LeaveService
                 'main_category' => $evaluation['category'],
                 'balance_leave_type_id' => $evaluation['balance_leave_type_id'],
                 'request_mode' => LeaveRequest::MODE_COMBINED,
+                'balance_snapshot' => $this->balanceSnapshot($evaluation['projection'] ?? null, (float) $evaluation['paid_units'], (float) $evaluation['unpaid_units']),
             ]);
 
             foreach ($evaluation['rows'] as $row) {
@@ -529,6 +531,61 @@ class LeaveService
     }
 
     /**
+     * People HR chose to keep informed of a decision (9 Nov 2026): each gets
+     * it once, in the app and by email (the leave workflow emails by
+     * default) — never the employee, who is told already, nor the person
+     * deciding. Audited with who was told.
+     *
+     * @param  array<int, int|string>  $userIds
+     * @return array<int, string> the names of the people notified
+     */
+    public function notifyAlso(LeaveRequest $request, array $userIds, User $actor): array
+    {
+        $request = $request->fresh(['employee.user', 'leaveType', 'reviewer']);
+        $users = User::whereIn('id', array_map('intval', $userIds))->get()
+            ->reject(fn (User $u) => (int) $u->id === (int) $actor->id || (int) $u->id === (int) $request->employee?->user_id)
+            ->unique('id')->values();
+
+        $users->each(fn (User $u) => $u->notify((new LeaveRequestNotification($request))->forRole('recipient')));
+
+        if ($users->isNotEmpty()) {
+            app(AuditService::class)->event('LEAVE_RECIPIENTS_NOTIFIED', AuditService::LEAVE, $request,
+                new: ['status' => $request->status, 'recipients' => $users->map(fn (User $u) => ['id' => $u->id, 'name' => $u->name, 'email' => $u->email])->all()],
+                subjectEmployeeId: $request->employee_id, actor: $actor);
+        }
+
+        return $users->pluck('name')->all();
+    }
+
+    /**
+     * The balance a request was judged against when it was submitted (kept
+     * as submitted, never recalculated): the paid / unpaid split, and — for a
+     * balance-backed request — today's balance, the monthly accrual expected
+     * before it starts, what other requests already held and what this one
+     * could use.
+     *
+     * @param  array<string, mixed>|null  $projection  LeaveBalanceProjection::for()
+     * @return array<string, mixed>
+     */
+    private function balanceSnapshot(?array $projection, float $paid, float $lwp): array
+    {
+        $snapshot = ['taken_at' => now()->toIso8601String(), 'paid_days' => round($paid, 2), 'lwp_days' => round($lwp, 2)];
+        if ($projection === null) {
+            return $snapshot;
+        }
+
+        return $snapshot + [
+            'balance_type' => $projection['balance_type'],
+            'balance_today' => $projection['balance_today'],
+            'available_now' => $projection['available_now'],
+            'expected_accrual' => $projection['expected_accrual'],
+            'expected_months' => $projection['expected_months'],
+            'booked_by_start' => $projection['booked_by_start'],
+            'available_for_request' => round($projection['available_at_start'] - $projection['kept_for_later'], 2),
+        ];
+    }
+
+    /**
      * Notify approvers of a new request — reporting manager + dept head + all
      * in-scope HR, plus the team lead/backup chain (v4 Part 3.2) when the
      * employee is on an active team. Deduplicated by user id.
@@ -571,6 +628,11 @@ class LeaveService
                 default => 'approver',
             })
         ));
+
+        // Not enough Earned Leave: the employee is told which days are unpaid and why.
+        if ((float) ($request->lwp_days ?? 0) > 0 && $employee->user) {
+            $employee->user->notify((new LeaveRequestNotification($request, LeaveRequestNotification::SUBMITTED))->forRole('employee'));
+        }
 
     }
 
@@ -1081,8 +1143,9 @@ class LeaveService
             throw new \DomainException("'{$leaveType?->name}' does not allow HR payment status override.");
         }
 
-        if (trim($remark) === '') {
-            throw new \DomainException('HR remark is mandatory when changing the payment status.');
+        // Optional (9 Nov 2026) unless HR switched "HR remark required" on for this leave type.
+        if ($leaveType->hr_remark_required && trim($remark) === '') {
+            throw new \DomainException('An HR remark is required to change the payment status of '.$leaveType->name.'.');
         }
 
         $currentStatus = $leaveRequest->effectiveLeaveStatus();

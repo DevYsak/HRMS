@@ -312,11 +312,11 @@ test('H: an approved cancellation returns the paid days once, and a Combined req
 
 // ── Screens ─────────────────────────────────────────────────────────────────
 
-test('HR proposes from the request page; the employee sees original vs proposed on My Time Off and accepts', function () {
+test('HR edits from the request page directly; a proposal already waiting is still answered on My Time Off', function () {
     $request = rvRequest();
 
     Livewire::actingAs($this->hr)->test(LeaveRequestDetail::class, ['leaveRequest' => $request])
-        ->assertSee('Propose Changes')
+        ->assertSee('Edit Request')
         ->call('openProposal')
         ->assertSeeHtml('data-proposal-form')
         ->set('proposal.paid_days', '2')
@@ -324,11 +324,15 @@ test('HR proposes from the request page; the employee sees original vs proposed 
         ->set('proposalReason', 'Only two days can be paid')
         ->call('submitProposal')
         ->assertHasNoErrors()
-        ->assertSeeHtml('data-pending-revision')
-        ->assertDontSee('Confirm Approval');
-    expect($request->fresh()->status)->toBe(LeaveRequest::AWAITING_EMPLOYEE);
+        ->assertDontSeeHtml('data-pending-revision');
+    expect($request->fresh()->status)->toBe('pending')
+        ->and((float) $request->fresh()->lwp_days)->toEqual(1.0)
+        ->and(LeaveRequestRevision::sole()->status)->toBe(LeaveRequestRevision::APPLIED);
 
-    $revision = LeaveRequestRevision::sole();
+    // A proposal sent before the change (through the service) is still answered by the employee.
+    LeaveRequestRevision::query()->delete();
+    $request->update(['lwp_days' => null]);
+    $revision = app(Revisions::class)->propose($request->fresh(), $this->hr, ['paid_days' => 2], 'Only two days can be paid');
     Livewire::actingAs($this->user)->test(MyTimeOff::class)
         ->assertSeeHtml('data-awaiting-revision="'.$revision->id.'"')
         ->assertSeeHtml('data-revision-compare')

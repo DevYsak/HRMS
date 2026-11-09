@@ -8,15 +8,23 @@ use App\Notifications\Concerns\NotifiesByRole;
 use App\Notifications\Concerns\SendsMailChannel;
 use App\Services\Approvals\ApprovalGuard;
 use App\Services\Help\RouteAccess;
+use App\Services\Leave\LeaveRequestPresenter;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 use Illuminate\Queue\SerializesModels;
 
 class LeaveRequestNotification extends Notification implements ShouldQueue
 {
     use NotifiesByRole;
-    use Queueable, SendsMailChannel, SerializesModels;
+    use Queueable, SerializesModels;
+    use SendsMailChannel {
+        toMail as private standardMail;
+    }
+
+    /** To the employee on submission, when part of the request is unpaid (not enough Earned Leave). */
+    public const SUBMITTED = 'submitted';
 
     /**
      * The status when the event happened. The notification is queued: read
@@ -26,7 +34,8 @@ class LeaveRequestNotification extends Notification implements ShouldQueue
     public readonly string $statusAtDispatch;
 
     /**
-     * @param  string|null  $event  'message' for a message-thread post — it never re-announces the decision
+     * @param  string|null  $event  'message' for a message-thread post — it never re-announces the decision;
+     *                              SUBMITTED for the employee's own notice that some days are unpaid
      */
     public function __construct(public readonly LeaveRequest $leaveRequest, public readonly ?string $event = null)
     {
@@ -42,7 +51,13 @@ class LeaveRequestNotification extends Notification implements ShouldQueue
     public function toArray(object $notifiable): array
     {
         $employee = $this->leaveRequest->employee->user->name;
-        $status = $this->event === 'message' ? 'message' : $this->statusAtDispatch;
+        $status = match ($this->event) {
+            'message' => 'message',
+            self::SUBMITTED => self::SUBMITTED,
+            default => $this->statusAtDispatch,
+        };
+        // Someone HR chose to keep informed of the decision: told about the employee, not addressed as them.
+        $observer = $this->role === 'recipient';
         $type = $this->leaveRequest->leaveType->name;
         $days = $this->leaveRequest->days;
 
@@ -60,7 +75,56 @@ class LeaveRequestNotification extends Notification implements ShouldQueue
         // For employees we anchor to the specific row in My Time Off.
         $myUrl = route('time-off.my').'#request-'.$this->leaveRequest->id;
 
-        return match ($status) {
+        $paid = LeaveRequestPresenter::paid($this->leaveRequest) + 0;
+        $unpaid = LeaveRequestPresenter::unpaid($this->leaveRequest) + 0;
+        $by = $this->leaveRequest->reviewer?->name;
+
+        $data = match ($status) {
+            self::SUBMITTED => [
+                'type' => 'leave_request',
+                'title' => $paid > 0 ? 'Leave submitted — part of it is unpaid' : 'Leave submitted — unpaid',
+                'body' => $paid > 0
+                    ? "Your {$type} request for {$days} day(s) was submitted: {$paid} day(s) paid from your Earned Leave and {$unpaid} day(s) unpaid (Leave Without Pay), because only {$paid} day(s) of Earned Leave were available."
+                    : "Your {$type} request for {$days} day(s) was submitted as unpaid (Leave Without Pay): you have no Earned Leave available for these dates.",
+                'action' => 'View',
+                'url' => $myUrl,
+                'icon' => 'exclamation-triangle',
+                'color' => 'amber',
+            ],
+            'approved' => $observer ? [
+                'type' => 'leave_request',
+                'title' => "Leave Approved — {$employee}",
+                'body' => "{$employee}'s {$type} request for {$days} day(s) was approved".($by ? " by {$by}" : '')." ({$paid} paid, {$unpaid} unpaid).",
+                'action' => 'View',
+                'url' => $teamUrl,
+                'icon' => 'check-circle',
+                'color' => 'green',
+            ] : [
+                'type' => 'leave_request',
+                'title' => 'Leave Approved ✓',
+                'body' => "Your {$type} request for {$days} day(s) has been approved.",
+                'action' => 'View',
+                'url' => $myUrl,
+                'icon' => 'check-circle',
+                'color' => 'green',
+            ],
+            'rejected' => $observer ? [
+                'type' => 'leave_request',
+                'title' => "Leave Rejected — {$employee}",
+                'body' => "{$employee}'s {$type} request for {$days} day(s) was rejected".($by ? " by {$by}" : '').'.',
+                'action' => 'View',
+                'url' => $teamUrl,
+                'icon' => 'x-circle',
+                'color' => 'red',
+            ] : [
+                'type' => 'leave_request',
+                'title' => 'Leave Rejected',
+                'body' => "Your {$type} request for {$days} day(s) was rejected.",
+                'action' => 'View',
+                'url' => $myUrl,
+                'icon' => 'x-circle',
+                'color' => 'red',
+            ],
             'pending' => [
                 'type' => 'leave_request',
                 'title' => 'New Leave Request',
@@ -69,15 +133,6 @@ class LeaveRequestNotification extends Notification implements ShouldQueue
                 'url' => $teamUrl,
                 'icon' => 'calendar',
                 'color' => 'blue',
-            ],
-            'approved' => [
-                'type' => 'leave_request',
-                'title' => 'Leave Approved ✓',
-                'body' => "Your {$type} request for {$days} day(s) has been approved.",
-                'action' => 'View',
-                'url' => $myUrl,
-                'icon' => 'check-circle',
-                'color' => 'green',
             ],
             'cancelled' => $this->role === 'employee' || $this->role === null
                 ? [
@@ -106,15 +161,6 @@ class LeaveRequestNotification extends Notification implements ShouldQueue
                 'url' => $myUrl,
                 'icon' => 'question-mark-circle',
                 'color' => 'amber',
-            ],
-            'rejected' => [
-                'type' => 'leave_request',
-                'title' => 'Leave Rejected',
-                'body' => "Your {$type} request for {$days} day(s) was rejected.",
-                'action' => 'View',
-                'url' => $myUrl,
-                'icon' => 'x-circle',
-                'color' => 'red',
             ],
             // Requests created before D2 can still sit with HR.
             'pending_hr' => $this->role === 'employee'
@@ -157,5 +203,53 @@ class LeaveRequestNotification extends Notification implements ShouldQueue
                 'color' => 'blue',
             ],
         };
+
+        // Every copy names its request, so the request page can list what was sent.
+        return $data + ['leave_request_id' => $this->leaveRequest->id];
+    }
+
+    /**
+     * The standard email with the request's facts under it: who, which leave,
+     * the dates and length, the Earned Leave available when it was applied
+     * for, the paid / unpaid split and — once decided — the decision and the
+     * remarks. An admin's custom subject / body (Notifications & Email) still
+     * replaces the opening text.
+     */
+    public function toMail(object $notifiable): MailMessage
+    {
+        $message = $this->standardMail($notifiable);
+        $request = $this->leaveRequest->loadMissing(['employee.user', 'leaveType', 'reviewer']);
+        $n = fn ($v) => (string) (round((float) $v, 2) + 0);
+        $snapshot = $request->balance_snapshot ?? [];
+        $decided = $this->event === null && in_array($this->statusAtDispatch, ['approved', 'rejected'], true);
+        $dates = $request->start_date->format('d M Y').($request->end_date->ne($request->start_date) ? ' – '.$request->end_date->format('d M Y') : '');
+
+        $details = array_values(array_filter([
+            '**Employee:** '.($request->employee?->user?->name ?? 'Employee').($request->employee?->employee_id ? ' ('.$request->employee->employee_id.')' : ''),
+            '**Leave:** '.($request->leaveType?->name ?? 'Leave'),
+            '**Dates:** '.$dates,
+            '**Duration:** '.$n($request->days).' day(s)'.($request->is_half_day ? ' (half day)' : ''),
+            isset($snapshot['available_for_request'])
+                ? '**'.($snapshot['balance_type'] ?? 'Earned Leave').' available when applied:** '.$n($snapshot['available_for_request']).' day(s)'
+                : null,
+            '**Paid / unpaid:** '.$n(LeaveRequestPresenter::paid($request)).' paid · '.$n(LeaveRequestPresenter::unpaid($request)).' unpaid (Leave Without Pay)',
+            $decided ? '**Decision:** '.ucfirst($this->statusAtDispatch).($request->reviewer ? ' by '.$request->reviewer->name : '') : null,
+            $decided && $request->reviewer_comment ? '**Remarks:** '.$request->reviewer_comment : null,
+        ]));
+        $message->introLines = array_merge($message->introLines, $details);
+
+        return $message->withSymfonyMessage(function ($symfony): void {
+            $symfony->getHeaders()->addTextHeader('X-Notification-Context', 'leave_request:'.$this->leaveRequest->id);
+        });
+    }
+
+    /**
+     * What this notification is about, for the email log.
+     *
+     * @return array{type: string, id: int}
+     */
+    public function mailContext(): array
+    {
+        return ['type' => 'leave_request', 'id' => (int) $this->leaveRequest->id];
     }
 }

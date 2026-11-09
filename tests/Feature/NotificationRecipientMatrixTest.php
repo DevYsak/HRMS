@@ -122,7 +122,8 @@ test('syncing removes a settings row for an event that can never fire', function
 
 test('every role offered in the settings UI belongs to a known role vocabulary', function () {
     $catalog = app(NotificationCatalog::class);
-    $allowed = ['employee', 'manager', 'hr_admin', 'director', 'finance', 'approver'];
+    // 'recipient' = people HR adds to a leave decision on the request page (9 Nov 2026).
+    $allowed = ['employee', 'manager', 'hr_admin', 'director', 'finance', 'approver', 'recipient'];
 
     foreach ($catalog->all() as $entry) {
         foreach (array_keys($catalog->rolesFor($entry['key'])) as $role) {

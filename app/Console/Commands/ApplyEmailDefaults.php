@@ -10,57 +10,67 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
 /**
- * D5 (8 Oct 2026): in-app is the default channel and non-critical email is
- * off by default. New settings rows already follow that; rows created before
- * it still have email switched on. This switches email off on every
- * non-critical event (and its role rows). Preview by default — nothing
- * changes without --apply. HR can switch any event back on afterwards.
+ * D5 (8 Oct 2026): in-app is the default channel and email goes out only for
+ * the events that need it (NotificationCatalog::CRITICAL_MAIL — payslip,
+ * account, password reset, and since 9 Nov 2026 the leave request workflow).
+ * Rows created before that may say otherwise. This brings every event to its
+ * default: email OFF for every other event, email ON for those (each with its
+ * role rows). Preview by default — nothing changes without --apply. HR can
+ * switch any event on or off afterwards.
  */
 class ApplyEmailDefaults extends Command
 {
     protected $signature = 'notifications:apply-email-defaults {--apply : Write the change (default: preview only)}';
 
-    protected $description = 'Switch email off for non-critical notification events (D5); preview unless --apply';
+    protected $description = 'Email only for the events that need it (payslip, account, password reset, leave workflow); preview unless --apply';
 
     public function handle(): int
     {
-        $settings = NotificationSetting::with('roleSettings')->get()
-            ->reject(fn (NotificationSetting $s) => NotificationCatalog::isCriticalMail($s->key))
-            ->filter(fn (NotificationSetting $s) => $s->mail_enabled || $s->roleSettings->contains('mail_enabled', true))
-            ->values();
+        $all = NotificationSetting::with('roleSettings')->get();
+        $emailOn = fn (NotificationSetting $s) => $s->mail_enabled || $s->roleSettings->contains('mail_enabled', true);
+        $emailAll = fn (NotificationSetting $s) => $s->mail_enabled && ! $s->roleSettings->contains('mail_enabled', false);
 
-        if ($settings->isEmpty()) {
-            $this->info('Every non-critical event already has email off. Nothing to change.');
+        $switchOff = $all->reject(fn (NotificationSetting $s) => NotificationCatalog::isCriticalMail($s->key))->filter($emailOn)->values();
+        $switchOn = $all->filter(fn (NotificationSetting $s) => NotificationCatalog::isCriticalMail($s->key))->reject($emailAll)->values();
+
+        if ($switchOff->isEmpty() && $switchOn->isEmpty()) {
+            $this->info('Every event already follows the email defaults. Nothing to change.');
 
             return self::SUCCESS;
         }
 
-        $this->table(['Event', 'Group', 'Email now', 'Role rows with email on'], $settings->map(fn (NotificationSetting $s) => [
+        $row = fn (NotificationSetting $s, string $change) => [
             $s->label ?: class_basename($s->key),
             $s->group,
             $s->mail_enabled ? 'on' : 'off',
             $s->roleSettings->where('mail_enabled', true)->pluck('role')->implode(', ') ?: '—',
-        ])->all());
+            $change,
+        ];
+        $this->table(['Event', 'Group', 'Email now', 'Role rows with email on', 'Change'],
+            $switchOn->toBase()->map(fn ($s) => $row($s, 'email ON'))->merge($switchOff->toBase()->map(fn ($s) => $row($s, 'email off')))->all());
 
         if (! $this->option('apply')) {
-            $this->warn($settings->count().' event(s) would have email switched off. Run again with --apply to write it. In-app delivery is not affected.');
+            $this->warn($switchOff->count().' event(s) would have email switched off and '.$switchOn->count().' switched on. Run again with --apply to write it. In-app delivery is not affected.');
 
             return self::SUCCESS;
         }
 
-        DB::transaction(function () use ($settings) {
-            foreach ($settings as $setting) {
-                $setting->update(['mail_enabled' => false]);
-                NotificationRoleSetting::where('notification_setting_id', $setting->id)->update(['mail_enabled' => false]);
+        DB::transaction(function () use ($switchOff, $switchOn) {
+            foreach ([[$switchOff, false], [$switchOn, true]] as [$settings, $enabled]) {
+                foreach ($settings as $setting) {
+                    $setting->update(['mail_enabled' => $enabled]);
+                    NotificationRoleSetting::where('notification_setting_id', $setting->id)->update(['mail_enabled' => $enabled]);
+                }
             }
         });
 
-        app(AuditService::class)->event('NOTIFICATION_EMAIL_DEFAULTS_APPLIED', AuditService::SETTINGS, $settings->first(),
-            new: ['email_switched_off' => $settings->pluck('key')->all()], reason: 'D5: in-app by default, non-critical email off');
+        app(AuditService::class)->event('NOTIFICATION_EMAIL_DEFAULTS_APPLIED', AuditService::SETTINGS, $switchOff->first() ?? $switchOn->first(),
+            new: ['email_switched_off' => $switchOff->pluck('key')->all(), 'email_switched_on' => $switchOn->pluck('key')->all()],
+            reason: 'D5: email only for payslip, account, password reset and the leave workflow');
 
         NotificationSetting::flushCache();
 
-        $this->info($settings->count().' event(s) now in-app only. Critical email (payslip, account, password reset) is unchanged.');
+        $this->info($switchOn->count().' event(s) now email, '.$switchOff->count().' event(s) now in-app only.');
 
         return self::SUCCESS;
     }

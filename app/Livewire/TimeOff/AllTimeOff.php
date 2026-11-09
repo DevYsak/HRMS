@@ -230,13 +230,14 @@ class AllTimeOff extends Component
         abort_unless($this->viewingId !== null, 422);
         abort_unless(Auth::user()->canApproveLeave(), 403);
 
-        if ($this->panelShowHrOverride && trim($this->panelHrRemark) === '') {
-            $this->addError('panelHrRemark', 'HR remark is required when overriding payment status.');
+        $request = LeaveRequest::with('leaveType')->findOrFail($this->viewingId);
+
+        // Optional (9 Nov 2026) unless the leave type asks for an HR remark.
+        if ($this->panelShowHrOverride && $request->leaveType?->hr_remark_required && trim($this->panelHrRemark) === '') {
+            $this->addError('panelHrRemark', 'An HR remark is required to change the payment status of '.$request->leaveType->name.'.');
 
             return;
         }
-
-        $request = LeaveRequest::findOrFail($this->viewingId);
 
         $form = [
             'leave_type_id' => $request->leave_type_id,
@@ -279,10 +280,8 @@ class AllTimeOff extends Component
 
     public function quickReject(): void
     {
-        $this->validate(
-            ['panelReviewComment' => ['required', 'min:5']],
-            ['panelReviewComment.required' => 'A comment is required to reject.'],
-        );
+        // The reason is optional (9 Nov 2026); when given it is sent to the employee.
+        $this->validate(['panelReviewComment' => ['nullable', 'string', 'max:1000']]);
 
         abort_unless($this->viewingId !== null, 422);
         abort_unless(Auth::user()->canApproveLeave(), 403);
@@ -383,9 +382,10 @@ class AllTimeOff extends Component
         abort_unless($this->viewingId !== null, 422);
         abort_unless(Auth::user()->canApproveLeave(), 403);
 
+        // The remark is optional (9 Nov 2026) unless the leave type asks for one — the service decides.
         $this->validate([
             'panelHrOverrideStatus' => ['required', 'in:paid,unpaid'],
-            'panelHrRemark' => ['required', 'min:10'],
+            'panelHrRemark' => ['nullable', 'string', 'max:1000'],
         ]);
 
         $request = LeaveRequest::findOrFail($this->viewingId);
@@ -472,6 +472,12 @@ class AllTimeOff extends Component
             && (bool) LeaveType::find($this->form['leave_type_id'] ?? null)?->allow_hr_override;
     }
 
+    /** Whether a paid / unpaid change on the request being edited needs an HR remark (the leave type's "HR remark required" flag; off by default since 9 Nov 2026). */
+    public function manageRemarkRequired(): bool
+    {
+        return (bool) LeaveRequest::with('leaveType')->find($this->editingId)?->leaveType?->hr_remark_required;
+    }
+
     /** A half-day leave is one day: the end date follows the start date. */
     public function updatedForm(mixed $value, string $key): void
     {
@@ -503,8 +509,8 @@ class AllTimeOff extends Component
 
             return;
         }
-        if ($newPaymentStatus && $newPaymentStatus !== $currentEffective && trim($this->form['hr_remark'] ?? '') === '') {
-            $this->addError('form.hr_remark', 'HR remark is required when changing the payment status.');
+        if ($newPaymentStatus && $newPaymentStatus !== $currentEffective && $request->leaveType?->hr_remark_required && trim($this->form['hr_remark'] ?? '') === '') {
+            $this->addError('form.hr_remark', 'An HR remark is required to change the payment status of '.$request->leaveType->name.'.');
 
             return;
         }

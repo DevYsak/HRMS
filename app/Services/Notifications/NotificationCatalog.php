@@ -9,6 +9,8 @@ use App\Mail\WelcomeEmployeeMail;
 use App\Models\NotificationRoleSetting;
 use App\Models\NotificationSetting;
 use App\Notifications\ExcessBreakNotification;
+use App\Notifications\LeaveRequestNotification;
+use App\Notifications\LeaveRevisionNotification;
 use App\Notifications\MissingCheckoutNotification;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Notifications\Notification;
@@ -28,7 +30,9 @@ class NotificationCatalog
 {
     /**
      * The only events that email by default (D5, 8 Oct 2026; spec §2.2):
-     * payslip issued, account created / login issued, and password reset.
+     * payslip issued, account created / login issued, and password reset —
+     * and, since 9 Nov 2026, the leave request workflow (request, decision,
+     * HR's changes), which HR and the people HR chooses follow by email.
      * Everything else is in-app by default; HR may still switch email on for
      * an event in Settings → Notifications & Email.
      *
@@ -39,6 +43,8 @@ class NotificationCatalog
         WelcomeEmployeeMail::class,
         EmployeeInvitationMail::class,
         ResetPassword::class,
+        LeaveRequestNotification::class,
+        LeaveRevisionNotification::class,
     ];
 
     public static function isCriticalMail(string $key): bool
@@ -118,6 +124,8 @@ class NotificationCatalog
         // Leave
         'App\Notifications\LeaveRequestNotification' => [
             'employee' => 'Employee', 'manager' => 'Manager', 'hr_admin' => 'HR Admin', 'approver' => 'Approver',
+            // People HR adds to a decision on the request page (9 Nov 2026).
+            'recipient' => 'Also notified (chosen by HR)',
         ],
         'App\Notifications\LeaveEncashmentNotification' => [
             'employee' => 'Employee', 'hr_admin' => 'HR Admin', 'finance' => 'Finance',

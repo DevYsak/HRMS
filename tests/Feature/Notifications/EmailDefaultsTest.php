@@ -5,6 +5,7 @@ use App\Models\NotificationRoleSetting;
 use App\Models\NotificationSetting;
 use App\Notifications\LeaveRequestNotification;
 use App\Notifications\MissingCheckoutNotification;
+use App\Notifications\OtRequestNotification;
 use App\Services\Notifications\NotificationCatalog;
 use App\Services\Notifications\NotificationDeliveryGate;
 use Illuminate\Auth\Notifications\ResetPassword;
@@ -17,9 +18,9 @@ use Illuminate\Auth\Notifications\ResetPassword;
 test('with no settings row, a non-critical event does not email but still reaches the bell', function () {
     $gate = app(NotificationDeliveryGate::class);
 
-    expect($gate->mail(LeaveRequestNotification::class, 'employee')->allowed)->toBeFalse()
-        ->and($gate->mail(LeaveRequestNotification::class, 'employee')->reason)->toBe('email_off_by_default')
-        ->and($gate->database(LeaveRequestNotification::class, 'employee')->allowed)->toBeTrue();
+    expect($gate->mail(OtRequestNotification::class, 'employee')->allowed)->toBeFalse()
+        ->and($gate->mail(OtRequestNotification::class, 'employee')->reason)->toBe('email_off_by_default')
+        ->and($gate->database(OtRequestNotification::class, 'employee')->allowed)->toBeTrue();
 });
 
 test('critical events email by default, and so does a send a person triggers', function () {
@@ -27,7 +28,9 @@ test('critical events email by default, and so does a send a person triggers', f
 
     expect($gate->mail(PayslipMail::class, 'employee')->allowed)->toBeTrue()
         ->and($gate->mail(ResetPassword::class, null)->allowed)->toBeTrue()
-        ->and($gate->mail(LeaveRequestNotification::class, 'employee', manual: true)->allowed)->toBeTrue();
+        // The leave workflow (9 Nov 2026) emails by default too.
+        ->and($gate->mail(LeaveRequestNotification::class, 'employee')->allowed)->toBeTrue()
+        ->and($gate->mail(OtRequestNotification::class, 'employee', manual: true)->allowed)->toBeTrue();
 });
 
 test('HR switching email on for an event is honoured', function () {
@@ -41,13 +44,14 @@ test('HR switching email on for an event is honoured', function () {
 test('newly synced events start with email off unless they are critical', function () {
     app(NotificationCatalog::class)->sync();
 
-    expect(NotificationSetting::where('key', LeaveRequestNotification::class)->value('mail_enabled'))->toBeFalse()
+    expect(NotificationSetting::where('key', OtRequestNotification::class)->value('mail_enabled'))->toBeFalse()
         ->and(NotificationSetting::where('key', PayslipMail::class)->value('mail_enabled'))->toBeTrue()
-        ->and(NotificationSetting::where('key', LeaveRequestNotification::class)->value('database_enabled'))->toBeTrue();
+        ->and(NotificationSetting::where('key', LeaveRequestNotification::class)->value('mail_enabled'))->toBeTrue()
+        ->and(NotificationSetting::where('key', OtRequestNotification::class)->value('database_enabled'))->toBeTrue();
 });
 
 test('the defaults command previews, then switches email off on non-critical events only', function () {
-    $leave = NotificationSetting::create(['key' => LeaveRequestNotification::class, 'label' => 'Leave request', 'group' => 'Leave',
+    $leave = NotificationSetting::create(['key' => OtRequestNotification::class, 'label' => 'Overtime request', 'group' => 'Overtime',
         'mail_enabled' => true, 'database_enabled' => true, 'is_automatic' => true, 'is_system' => true]);
     NotificationRoleSetting::create(['notification_setting_id' => $leave->id, 'role' => 'employee', 'mail_enabled' => true, 'database_enabled' => true, 'is_automatic' => true]);
     $payslip = NotificationSetting::create(['key' => PayslipMail::class, 'label' => 'Payslip Email', 'group' => 'Payroll & Finance',

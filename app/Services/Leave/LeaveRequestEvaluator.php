@@ -174,11 +174,17 @@ class LeaveRequestEvaluator
             if ($days['charged'] <= $allowance + 0.001) {
                 $paid = $days['charged'];
             } elseif ($excess === self::EXCESS_CONVERT_TO_LWP) {
+                // Only what is available is paid; the rest becomes Leave Without Pay — said plainly.
                 $paid = max(0.0, $allowance);
                 $lwp = round($days['charged'] - $paid, 2);
-                $warnings[] = sprintf('%s day(s) will be paid from %s and %s day(s) will be Leave Without Pay.', $paid + 0, $balanceName, $lwp + 0);
+                $warnings[] = ($paid <= 0
+                    ? sprintf('You have no %s available for these dates, so all %s day(s) will be Leave Without Pay (unpaid).', $balanceName, $lwp + 0)
+                    : sprintf('Only %s %s day(s) are available for these dates: %s day(s) will be paid and %s day(s) will be Leave Without Pay (unpaid).', $paid + 0, $balanceName, $paid + 0, $lwp + 0))
+                    .LeaveBalanceProjection::explain($projection);
             } else {
-                $balanceError = sprintf('You have only %s %s day(s) available.', max(0, $available) + 0, $balanceName).LeaveBalanceProjection::explain($projection);
+                // The exact opening "You have only …" is how callers recognise a shortfall.
+                $balanceError = sprintf('You have only %s %s day(s) available.', max(0, $available) + 0, $balanceName).LeaveBalanceProjection::explain($projection)
+                    .($available <= 0 ? ' Apply for fewer days, or choose Unpaid Leave.' : '');
                 $errors[] = $balanceError;
             }
         }
