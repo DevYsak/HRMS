@@ -25,14 +25,15 @@ return [
     'checksums' => [
         'credit' => 40.0,
         'carry' => 56.5,
-        'used' => 53.5,
-        'available' => 43.0,
+        'used' => 54.5,
+        'available' => 42.0,
         'rows' => 20,
     ],
 
     'employees' => [
         ['name' => 'Gayatri Chagan Navlakhe', 'emails' => ['carol@businessenergyservices.co.uk'], 'credit' => 2, 'carry' => 2.5, 'used' => 2, 'encashed' => 0, 'available' => 2.5],
-        ['name' => 'Nikita Dalal', 'emails' => ['nikita@conexus-ns.com', 'Nikita.Dalal@conexus-ns.com'], 'credit' => 2, 'carry' => 1, 'used' => 2, 'encashed' => 0, 'available' => 1],
+        // HR sheet, 9 Nov 2026: 3 days used to 30 Sep (July 1, August 1, September 1) — was 2.
+        ['name' => 'Nikita Dalal', 'emails' => ['nikita@conexus-ns.com', 'Nikita.Dalal@conexus-ns.com'], 'credit' => 2, 'carry' => 1, 'used' => 3, 'encashed' => 0, 'available' => 0],
         ['name' => 'Hasan', 'emails' => ['harry@businessenergyservices.co.uk'], 'credit' => 2, 'carry' => 0, 'used' => 2, 'encashed' => 0, 'available' => 0],
         ['name' => 'Sunita', 'emails' => ['qa@businessenergyservices.co.uk'], 'credit' => 2, 'carry' => 7, 'used' => 0.5, 'encashed' => 0, 'available' => 8.5],
         ['name' => 'Reeba', 'emails' => ['reeba@businessenergyservices.co.uk'], 'credit' => 2, 'carry' => 0, 'used' => 2, 'encashed' => 0, 'available' => 0],

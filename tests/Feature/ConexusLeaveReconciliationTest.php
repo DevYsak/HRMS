@@ -94,8 +94,9 @@ test('the register file passes its own checksums', function () {
     expect($register['employees'])->toHaveCount(20)
         ->and(collect($register['employees'])->sum('credit'))->toEqual(40)
         ->and(collect($register['employees'])->sum('carry'))->toEqual(56.5)
-        ->and(collect($register['employees'])->sum('used'))->toEqual(53.5)
-        ->and(collect($register['employees'])->sum('available'))->toEqual(43);
+        // Nikita: 3 days used to 30 Sep per the HR sheet of 9 Nov 2026 (was 2).
+        ->and(collect($register['employees'])->sum('used'))->toEqual(54.5)
+        ->and(collect($register['employees'])->sum('available'))->toEqual(42);
 });
 
 test('a tampered register is refused before anything is touched', function () {
@@ -138,7 +139,7 @@ test('all 20 register employees reconcile exactly and the checksums hold', funct
         $totals['available'] += $report['csl_available'];
     }
 
-    expect($totals)->toEqual(['credit' => 40.0, 'carry' => 56.5, 'used' => 53.5, 'available' => 43.0]);
+    expect($totals)->toEqual(['credit' => 40.0, 'carry' => 56.5, 'used' => 54.5, 'available' => 42.0]);
 });
 
 test('the worked examples: Yogesh 4, Mayuresh 1, Shradha stays -1', function () {
@@ -156,7 +157,7 @@ test('the live account is used for an employee the register lists under an alias
     $this->artisan('leave:conexus-reconcile', ['--apply' => true])->assertExitCode(0);
 
     expect($staff['Nikita Dalal']->user->email)->toBe('nikita@conexus-ns.com')
-        ->and(cxAvailable($staff['Nikita Dalal'], 'CSL'))->toBe(1.0);
+        ->and(cxAvailable($staff['Nikita Dalal'], 'CSL'))->toBe(0.0);
 });
 
 test('a preview saves nothing', function () {
@@ -537,7 +538,7 @@ test('register staff with a missing or late joining date get exactly September, 
         ->and(cxAvailable($staff['Yogesh'], 'CSL'))->toBe(5.0)
         ->and(cxAvailable($staff['Mayuresh'], 'CSL'))->toBe(2.0)
         ->and(cxAvailable($staff['Gayatri Chagan Navlakhe'], 'CSL'))->toBe(3.5)
-        ->and(cxAvailable($staff['Nikita Dalal'], 'CSL'))->toBe(2.0)
+        ->and(cxAvailable($staff['Nikita Dalal'], 'CSL'))->toBe(1.0)
         ->and(cxAvailable($staff['Shradha'], 'CSL'))->toBe(0.0)
         ->and(LeaveLedgerEntry::where('employee_id', $outsider->id)->count())->toBe($outsiderEntries)
         ->and($staff['Yogesh']->fresh()->joining_date)->toBeNull();

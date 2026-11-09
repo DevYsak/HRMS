@@ -86,6 +86,13 @@ class LeaveHrHistoryReconciliationService
     /** Already restated to the HR register, and still agreeing with it. */
     public const NO_CHANGE = 'NO CHANGE';
 
+    /**
+     * Leave taken after the cutoff that V1 charged to a reason's own old
+     * balance (a Sick Leave day on Sick Leave), the only gap between expected
+     * and existing: apply() moves it to Earned Leave.
+     */
+    public const CHARGE = 'CHARGE TO EARNED';
+
     /** apply() result. */
     public const RECONCILED = 'RECONCILED';
 
@@ -175,7 +182,7 @@ class LeaveHrHistoryReconciliationService
      * @param  array<int, string>  $codes  employee codes (employee_id or numeric employee_code); empty = everyone
      * @return Collection<int, array<string, mixed>>
      */
-    public function plan(array $register, LeaveYear $year, Carbon $cutoff, array $codes = []): Collection
+    public function plan(array $register, LeaveYear $year, Carbon $cutoff, array $codes = [], ?Carbon $asOf = null): Collection
     {
         $wanted = fn (?Employee $e) => $codes === [] || ($e !== null && (in_array((string) $e->employee_id, $codes, true) || in_array((string) $e->employee_code, $codes, true)));
         $rows = collect();
@@ -187,29 +194,30 @@ class LeaveHrHistoryReconciliationService
                 continue;
             }
             if ($employee !== null && isset($seen[$employee->id])) {
-                $rows->push($this->planFor($employee, $hr, $year, $cutoff, 'The register lists this employee more than once.'));
+                $rows->push($this->planFor($employee, $hr, $year, $cutoff, 'The register lists this employee more than once.', $asOf));
 
                 continue;
             }
             if ($employee !== null) {
                 $seen[$employee->id] = true;
             }
-            $rows->push($employee ? $this->planFor($employee, $hr, $year, $cutoff) : $this->unmatched($hr));
+            $rows->push($employee ? $this->planFor($employee, $hr, $year, $cutoff, null, $asOf) : $this->unmatched($hr));
         }
         $source = (string) ($register['source'] ?? 'HR register');
 
         Employee::with('user')->whereIn('status', PeopleScope::WORKING_STATUSES)->whereNotIn('id', array_keys($seen))->orderBy('employee_id')->get()
             ->filter(fn (Employee $e) => $wanted($e) && $this->sources->earnedPool($e, $this->onDate($year)) !== null)
-            ->each(fn (Employee $e) => $rows->push($this->planFor($e, null, $year, $cutoff)));
+            ->each(fn (Employee $e) => $rows->push($this->planFor($e, null, $year, $cutoff, null, $asOf)));
 
         return $rows->map(fn (array $row) => $row + ['register_source' => $source])->values();
     }
 
     /**
      * @param  array<string, mixed>|null  $hr  the register row, null when the register does not list the employee
+     * @param  Carbon|null  $asOf  monthly accrual is due for every month after the HR credit completed before this date (default today)
      * @return array<string, mixed>
      */
-    public function planFor(Employee $employee, ?array $hr, LeaveYear $year, Carbon $cutoff, ?string $problem = null): array
+    public function planFor(Employee $employee, ?array $hr, LeaveYear $year, Carbon $cutoff, ?string $problem = null, ?Carbon $asOf = null): array
     {
         $pool = $this->sources->earnedPool($employee, $this->onDate($year));
         $breakdown = $pool ? $this->breakdown->for($employee, $year, $pool) : null;
@@ -234,11 +242,13 @@ class LeaveHrHistoryReconciliationService
             'difference' => null,
             'existing_lines' => $breakdown ? $this->linesOf($breakdown) : null,
             'apply_blocker' => null,
+            'charged_elsewhere' => 0.0, 'charged_elsewhere_label' => null,
+            'accrual_due' => [], 'accrual_missing' => [], 'expected_today' => null, 'next_step' => '',
             'status' => self::REVIEW, 'reason' => '',
         ];
         // By reference: a stop reports the figures gathered so far.
-        $stop = function (string $status, string $reason) use (&$row): array {
-            return ['status' => $status, 'reason' => $reason] + $row;
+        $stop = function (string $status, string $reason) use (&$row, $breakdown): array {
+            return $this->finish(['status' => $status, 'reason' => $reason] + $row, $breakdown);
         };
 
         if ($pool === null) {
@@ -256,7 +266,16 @@ class LeaveHrHistoryReconciliationService
             'other_after' => $activity['other_after'],
             'excluded_after' => $activity['excluded_after'],
             'entries' => $activity['entries'],
+            'charged_elsewhere' => $activity['charged_elsewhere'],
+            'charged_elsewhere_label' => $activity['charged_elsewhere_label'],
         ] + $row;
+        // The HR credit stands for July and August; every month completed
+        // since is due one day (credited on the 1st of the next month).
+        if ($hr !== null && $covered !== null) {
+            $row['accrual_due'] = $this->dueMonths($employee, $year, $covered, $asOf ?? Carbon::now());
+            $row['accrual_missing'] = array_values(array_filter($row['accrual_due'],
+                fn (string $month) => ($activity['accruals'][$month] ?? 0.0) < self::MONTHLY_DAYS - self::EPSILON));
+        }
 
         if ($hr === null) {
             return $stop(self::MISSING, 'Not in the HR register — there is no historical snapshot to reconcile against.');
@@ -301,7 +320,21 @@ class LeaveHrHistoryReconciliationService
             .(abs($row['excluded_after']) > self::EPSILON ? ' Not counted (CSL bridge / migration corrections): '.$this->signed($row['excluded_after']).'.' : '')
             .($gap ? ' Note: '.$gap : '');
 
+        $info = $activity['unread'] !== []
+            ? ' Not read: '.implode('; ', $activity['unread']).' after '.$cutoff->format('d M').' — charged to its own balance, not Earned Leave.'
+            : '';
+        $summary .= $info;
+
         if (abs((float) $row['difference']) >= self::EPSILON) {
+            // The only gap is leave V1 charged to a reason's own old balance.
+            if ($row['charged_elsewhere'] > self::EPSILON && abs($row['difference'] - $row['charged_elsewhere']) < self::EPSILON) {
+                $row['apply_blocker'] = $this->shapeProblem($employee, $year, $pool, $activity['classified'], $this->applied($employee, $year));
+
+                return $stop(self::CHARGE, $this->n($row['charged_elsewhere']).' day(s) taken after '.$cutoff->format('d M').' ('.$row['charged_elsewhere_label'].') are still charged to the old balance, not Earned Leave. '
+                    .'Apply moves them: Earned Leave '.$this->n($row['existing']).' → '.$this->n($row['expected']).'. '.$summary
+                    .($row['apply_blocker'] ? ' Apply would refuse: '.$row['apply_blocker'] : ''));
+            }
+
             $drift = $activity['loaded'] !== null && abs($activity['loaded'] - $row['hr_baseline']) >= self::EPSILON && ! $activity['normalised']
                 ? ' CSL was loaded with '.$this->n($activity['loaded']).' for the HR period but the register now says '.$this->n($row['hr_baseline'])
                     .', and no HR adjustment after the snapshot brings CSL to it.'
@@ -349,10 +382,18 @@ class LeaveHrHistoryReconciliationService
                 LeaveBalance::whereKey($cslBalance->id)->lockForUpdate()->first();
             }
 
+            $legacyIds = $this->legacyReasonTypes($pool, $csl)->keys()->all();
+            if ($legacyIds !== []) {
+                LeaveBalance::where('employee_id', $employee->id)->whereIn('leave_type_id', $legacyIds)
+                    ->where(fn ($q) => $q->where('leave_year_id', $year->id)->orWhere('year', $year->legacyYear()))->lockForUpdate()->get();
+            }
+
             $row = $this->planFor($employee, $planned['register_row'], $year, $cutoff);
-            if ($row['status'] !== self::MATCH || abs((float) $row['difference']) >= self::EPSILON || $row['apply_blocker'] !== null) {
+            $gap = $row['status'] === self::CHARGE ? (float) $row['charged_elsewhere'] : 0.0;
+            if (! in_array($row['status'], [self::MATCH, self::CHARGE], true) || abs((float) $row['difference'] - $gap) >= self::EPSILON || $row['apply_blocker'] !== null) {
                 return $row;
             }
+            $restated = $this->applied($employee, $year);
 
             $before = $this->breakdown->for($employee, $year, $pool);
             $migration = LeaveV2Migration::where('employee_id', $employee->id)->where('earned_leave_type_id', $pool->id)->where('leave_year_id', $year->id)->first();
@@ -365,19 +406,20 @@ class LeaveHrHistoryReconciliationService
 
             // 1. Today's baseline lines — the migration opening, or the carry-forward /
             //    current-year split it was reclassified into — give way to the HR
-            //    breakdown: each is reversed, never edited.
-            foreach ($this->live($employee, $pool, $year)->whereIn('entry_type', self::BASELINE_TYPES) as $line) {
+            //    breakdown: each is reversed, never edited. (Already restated: only
+            //    step 3 runs.)
+            $classified = $this->activity($employee, $year, $cutoff, $pool, $csl, $row['hr_baseline'], $this->coveredMonths($year, (float) $row['hr_current_year']) ?? [])['classified'];
+            foreach ($restated ? [] : $this->live($employee, $pool, $year)->whereIn('entry_type', self::BASELINE_TYPES) as $line) {
                 $posted['baseline_reversals'][] = $this->ledger->reverse($line, 'Replaced by the HR register breakdown — '.$why, $actor, ['meta' => $meta])->id;
             }
             // 2. The HR snapshot, as its own lines. A counted CSL monthly accrual
             //    (September) was absorbed into the reversed opening, so it rides
             //    on the current-year line; the CSL entry itself stays as it is.
-            $classified = $this->activity($employee, $year, $cutoff, $pool, $csl, $row['hr_baseline'], $this->coveredMonths($year, (float) $row['hr_current_year']) ?? [])['classified'];
             $cslAccruals = $classified->filter(fn ($c) => $c['entry']->leave_type_id !== $pool->id && $c['class'] === self::C_ACCRUAL);
             $cslAccrued = round((float) $cslAccruals->sum(fn ($c) => (float) $c['entry']->days), 2);
             $cslMonths = $cslAccruals->map(fn ($c) => ($c['entry']->reverses ?? $c['entry'])->meta['month'] ?? null)->filter()->unique()->sort()->values()->all();
             $start = Carbon::parse($year->starts_on);
-            foreach ([['carry_forward', LeaveLedgerEntry::TYPE_CARRY_FORWARD, $row['hr_carry_forward'], 'Carry Forward (HR register)', []],
+            foreach ($restated ? [] : [['carry_forward', LeaveLedgerEntry::TYPE_CARRY_FORWARD, $row['hr_carry_forward'], 'Carry Forward (HR register)', []],
                 ['current_year', LeaveLedgerEntry::TYPE_BASE, round($row['hr_current_year'] + $cslAccrued, 2),
                     $year->label.' earned to '.$cutoff->format('d M Y').' (HR register)'.($cslAccrued > self::EPSILON ? ' + '.implode(', ', $cslMonths).' CSL monthly accrual' : ''),
                     $cslAccrued > self::EPSILON ? ['csl_accrual' => $cslAccrued, 'csl_accrual_entries' => $cslAccruals->pluck('entry.id')->all()] : []]] as [$part, $type, $days, $label, $extra]) {
@@ -385,13 +427,22 @@ class LeaveHrHistoryReconciliationService
                     $posted[$part] = $this->ledger->credit($earnedBalance->fresh(), $type, $days, $start, $key($part), $common + ['reason' => $label, 'meta' => $meta + ['part' => $part] + $extra])->id;
                 }
             }
-            if ($row['hr_used'] > self::EPSILON) {
+            if (! $restated && $row['hr_used'] > self::EPSILON) {
                 $posted['historical_used'] = $this->ledger->debit($earnedBalance->fresh(), LeaveLedgerEntry::TYPE_USAGE, $row['hr_used'], $cutoff, $key('historical_used'),
                     $common + ['reason' => 'Leave used to '.$cutoff->format('d M Y').' (HR register)', 'meta' => $meta + ['part' => 'historical_used', 'historical' => true]])->id;
             }
-            // 3. Portal days and HR adjustments after the cutoff still on CSL move
-            //    to Earned Leave, keeping their link (leave request / adjustment record).
+            // 3. Portal days and HR adjustments after the cutoff still on CSL — and
+            //    leave V1 charged to a reason's own old balance (Sick Leave) — move
+            //    to Earned Leave, keeping their link (leave request / adjustment
+            //    record), so a later cancellation returns them to Earned Leave.
+            //    The request itself is not touched.
+            $moved = 0.0;
+            $touched = [];
             foreach ($this->cslMoves($classified, $pool) as $entry) {
+                if ($entry->leave_type_id !== $csl?->id) {
+                    $moved = round($moved - (float) $entry->days, 2);
+                    $touched[$entry->leave_type_id] = $entry->leave_year_id;
+                }
                 $this->ledger->reverse($entry, 'Moved to Earned Leave — '.$why, $actor, ['meta' => $meta]);
                 $options = ['source_type' => $entry->source_type, 'source_id' => $entry->source_id, 'actor' => $actor,
                     'reason' => $entry->reason, 'meta' => ($entry->meta ?? []) + ['moved_from_entry' => $entry->id, 'hr_history' => true]];
@@ -403,20 +454,30 @@ class LeaveHrHistoryReconciliationService
             if ($cslBalance) {
                 $this->ledger->rebuild($cslBalance->fresh());
             }
+            foreach ($touched as $typeId => $yearId) {
+                $this->ledger->rebuild(LeaveBalance::where('employee_id', $employee->id)->where('leave_type_id', $typeId)
+                    ->where(fn ($q) => $q->where('leave_year_id', $yearId)->orWhere('year', LeaveYear::find($yearId)?->legacyYear()))->firstOrFail());
+            }
 
+            // Restating never changes the total; only the moved old-balance days do.
             $after = $this->breakdown->for($employee, $year, $pool);
-            if (abs($after['total_available'] - $before['total_available']) >= self::EPSILON || ! $after['consistent']
+            if (abs($after['total_available'] - ($before['total_available'] - $moved)) >= self::EPSILON || abs($moved - $gap) >= self::EPSILON || ! $after['consistent']
                 || abs($after['total_available'] - (float) $row['expected']) >= self::EPSILON || abs($after['opening']) >= self::EPSILON) {
                 throw new RuntimeException("Restating {$employee->employee_id} would change the balance ({$before['total_available']} → {$after['total_available']}, expected {$row['expected']}); nothing was kept.");
             }
 
-            app(AuditService::class)->event('LEAVE_HR_HISTORY_RECONCILED', AuditService::LEAVE, $earnedBalance->fresh(),
+            app(AuditService::class)->event($restated ? 'LEAVE_CHARGED_TO_EARNED' : 'LEAVE_HR_HISTORY_RECONCILED', AuditService::LEAVE, $earnedBalance->fresh(),
                 old: ['breakdown' => $this->linesOf($before)],
                 new: ['breakdown' => $this->linesOf($after), 'entries' => $posted, 'cutoff' => $cutoff->toDateString(), 'register' => $meta['hr'],
-                    'register_source' => $meta['register_source'], 'actor' => $actor->email],
+                    'register_source' => $meta['register_source'], 'actor' => $actor->email, 'moved_to_earned' => $moved],
                 reason: $why, subjectEmployeeId: $employee->id, actor: $actor);
 
-            return ['status' => self::RECONCILED, 'reason' => 'Restated to the HR register; available unchanged at '.$this->n($after['total_available']).'.',
+            $movedText = $moved > self::EPSILON
+                ? $this->n($moved).' day(s) of '.$row['charged_elsewhere_label'].' moved to Earned Leave; available '.$this->n($before['total_available']).' → '.$this->n($after['total_available']).'.'
+                : '';
+
+            return ['status' => self::RECONCILED,
+                'reason' => $restated ? $movedText : trim('Restated to the HR register; '.($moved > self::EPSILON ? $movedText : 'available unchanged at '.$this->n($after['total_available']).'.')),
                 'before_lines' => $this->linesOf($before), 'after_lines' => $this->linesOf($after), 'entries' => $posted] + $row;
         });
     }
@@ -436,8 +497,14 @@ class LeaveHrHistoryReconciliationService
      *
      * @param  Collection<int, array{entry: LeaveLedgerEntry, class: string}>  $classified
      */
-    private function shapeProblem(Employee $employee, LeaveYear $year, LeaveType $pool, Collection $classified): ?string
+    private function shapeProblem(Employee $employee, LeaveYear $year, LeaveType $pool, Collection $classified, bool $restated = false): ?string
     {
+        if ($restated) {
+            $unmovable = $classified->filter(fn ($c) => $c['entry']->leave_type_id !== $pool->id && $c['class'] === self::C_USAGE
+                && $this->isLive($c, $classified) && ! $this->cslMoves($classified, $pool)->contains('id', $c['entry']->id));
+
+            return $unmovable->isEmpty() ? null : 'returned days on the old balance after the snapshot (#'.$unmovable->pluck('entry.id')->implode(', #').') cannot be moved safely.';
+        }
         if (! LeaveV2Migration::where('employee_id', $employee->id)->where('earned_leave_type_id', $pool->id)->where('leave_year_id', $year->id)->exists()) {
             return 'no Leave V2 migration record — the Earned Leave history was built another way.';
         }
@@ -505,6 +572,36 @@ class LeaveHrHistoryReconciliationService
             ->where('leave_year_id', $year->id)->orderBy('id')->get()
             ->map(fn (LeaveLedgerEntry $e) => ['entry' => $e, 'class' => $this->classify($e, $pool, $cutoff)]);
         [$classified, $loaded, $normalisedAt] = $this->normalise($classified, $pool, $baseline);
+
+        // Leave taken after the cutoff that V1 charged to a reason's own old
+        // balance (a Sick Leave day on Sick Leave). Every reason draws on
+        // Earned Leave, and the register counts every day taken, so it is
+        // Earned Leave's day: counted here, moved there by apply().
+        $reasons = $this->legacyReasonTypes($pool, $csl);
+        $legacy = $reasons->isEmpty() ? collect() : LeaveLedgerEntry::with('reverses')->where('employee_id', $employee->id)
+            ->whereIn('leave_type_id', $reasons->keys()->all())->where('leave_year_id', $year->id)->orderBy('id')->get()
+            ->filter(fn (LeaveLedgerEntry $e) => $this->isLeaveTaken($e) && Carbon::parse(($e->reverses ?? $e)->effective_date)->gt($cutoff))
+            ->map(fn (LeaveLedgerEntry $e) => ['entry' => $e, 'class' => self::C_USAGE])
+            ->values();
+        $classified = $classified->concat($legacy)->values();
+        $chargedElsewhere = round(-(float) $legacy->sum(fn ($c) => (float) $c['entry']->days), 2);
+        $requests = $legacy->filter(fn ($c) => $this->isLive($c, $legacy))->map(fn ($c) => $c['entry']->source_type === 'leave_request' ? 'LR-'.str_pad((string) $c['entry']->source_id, 4, '0', STR_PAD_LEFT) : null)->filter()->unique()->values();
+        $chargedLabel = $legacy->isEmpty() ? null
+            : $legacy->map(fn ($c) => $reasons->get($c['entry']->leave_type_id)?->name)->filter()->unique()->implode(', ')
+                .($requests->isNotEmpty() ? ' '.$requests->implode(', ') : '');
+
+        // Leave after the cutoff on any other paid type with its own balance:
+        // never counted — listed so HR can see it.
+        $unread = LeaveLedgerEntry::with('reverses')->where('employee_id', $employee->id)->where('leave_year_id', $year->id)
+            ->whereNotIn('leave_type_id', array_merge([$pool->id], array_filter([$csl?->id]), $reasons->keys()->all()))->get()
+            ->filter(fn (LeaveLedgerEntry $e) => $this->isLeaveTaken($e) && Carbon::parse(($e->reverses ?? $e)->effective_date)->gt($cutoff));
+        $unreadTypes = LeaveType::withTrashed()->whereKey($unread->pluck('leave_type_id')->unique()->all())->get()
+            ->filter(fn (LeaveType $t) => $t->is_paid && ! in_array(LeaveCategory::of($t), [LeaveCategory::SPECIAL, LeaveCategory::COMP_OFF, LeaveCategory::UNPAID], true))
+            ->keyBy('id');
+        $unreadText = $unread->filter(fn (LeaveLedgerEntry $e) => $unreadTypes->has($e->leave_type_id))->groupBy('leave_type_id')
+            ->map(fn (Collection $g, $typeId) => ['days' => round(-(float) $g->sum('days'), 2), 'name' => $unreadTypes[$typeId]->name])
+            ->filter(fn (array $u) => abs($u['days']) > self::EPSILON)
+            ->map(fn (array $u) => $this->n($u['days']).' day(s) of '.$u['name'])->values()->all();
         $records = LeaveBalanceAdjustment::whereIn('id', $classified->map(fn ($c) => $c['entry']->reverses ?? $c['entry'])
             ->where('source_type', self::HR_ADJUSTMENT_SOURCE)->pluck('source_id')->filter()->unique()->all())->get()->keyBy('id');
         $sum = fn (array $classes) => round((float) $classified->whereIn('class', $classes)->sum(fn ($c) => (float) $c['entry']->days), 2);
@@ -526,6 +623,9 @@ class LeaveHrHistoryReconciliationService
             ->sortKeys()->all();
 
         return [
+            'charged_elsewhere' => $chargedElsewhere + 0.0,
+            'charged_elsewhere_label' => $chargedLabel,
+            'unread' => $unreadText,
             'used_after' => -$sum([self::C_USAGE]) + 0.0,
             'adjustments_after' => $sum([self::C_ADJUSTMENT]),
             'other_after' => $sum([self::C_OTHER]),
@@ -536,7 +636,7 @@ class LeaveHrHistoryReconciliationService
             'notes' => $notes,
             'classified' => $classified,
             'entries' => $classified->map(fn ($c) => [
-                'id' => $c['entry']->id, 'ledger' => $c['entry']->leave_type_id === $pool->id ? 'Earned' : 'CSL',
+                'id' => $c['entry']->id, 'ledger' => $c['entry']->leave_type_id === $pool->id ? 'Earned' : ($reasons->get($c['entry']->leave_type_id)?->name ?? 'CSL'),
                 'type' => $c['entry']->entry_type, 'days' => (float) $c['entry']->days,
                 'date' => Carbon::parse(($c['entry']->reverses ?? $c['entry'])->effective_date)->toDateString(),
                 'source' => $c['entry']->source_type, 'reverses' => $c['entry']->reverses_entry_id,
@@ -693,6 +793,95 @@ class LeaveHrHistoryReconciliationService
 
         return collect(range(0, $months - 1))->filter(fn ($i) => $months > 0)
             ->map(fn (int $i) => Carbon::parse($year->starts_on)->addMonthsNoOverflow($i)->format('Y-m'))->values()->all();
+    }
+
+    /**
+     * The months after the HR credit, completed before $asOf, that the
+     * employee worked through: each is due one day of monthly accrual.
+     *
+     * @param  array<int, string>  $covered
+     * @return array<int, string> Y-m
+     */
+    private function dueMonths(Employee $employee, LeaveYear $year, array $covered, Carbon $asOf): array
+    {
+        $month = $covered === [] ? Carbon::parse($year->starts_on)->startOfMonth() : Carbon::parse(end($covered).'-01')->addMonthNoOverflow();
+        $joined = $employee->joining_date ? Carbon::parse($employee->joining_date)->startOfDay() : null;
+        $lastDay = $employee->exitRecord?->last_working_day ? Carbon::parse($employee->exitRecord->last_working_day)->startOfDay() : null;
+        $today = $asOf->copy()->startOfDay();
+        $yearEnd = Carbon::parse($year->ends_on)->startOfDay();
+        $due = [];
+
+        while ($month->copy()->endOfMonth()->lt($today) && $month->lte($yearEnd) && count($covered) + count($due) < 12) {
+            $end = $month->copy()->endOfMonth()->startOfDay();
+            if ($lastDay !== null && $lastDay->lt($end)) {
+                break;
+            }
+            if ($joined === null || $joined->lte($month)) {
+                $due[] = $month->format('Y-m');
+            }
+            $month = $month->copy()->addMonthNoOverflow();
+        }
+
+        return $due;
+    }
+
+    /**
+     * The expected figure with the monthly accrual still to be credited,
+     * and the next step for the row.
+     *
+     * @param  array<string, mixed>  $row
+     * @param  array<string, mixed>|null  $breakdown
+     * @return array<string, mixed>
+     */
+    private function finish(array $row, ?array $breakdown): array
+    {
+        $missing = $row['accrual_missing'] ?? [];
+        $row['expected_today'] = $row['expected'] === null ? null : round((float) $row['expected'] + count($missing) * self::MONTHLY_DAYS, 2);
+
+        // Missing monthly accrual comes first: credit it, then read the row again.
+        $steps = [];
+        if ($missing !== []) {
+            $first = Carbon::parse($missing[0].'-01');
+            $starts = $breakdown['starts_from'] ?? null;
+            $steps[] = match (true) {
+                $starts === null => 'set Monthly Accrual Starts From to '.$first->format('M Y').' (employee\'s leave page)',
+                Carbon::parse($starts)->format('Y-m') > $missing[0] => 'move Monthly Accrual Starts From back to '.$first->format('M Y'),
+                default => null,
+            };
+            $steps[] = 'php artisan leave:accrue-earned --apply --employee='.($row['code'] ?? '');
+            $steps[] = 're-run this preview';
+            $row['reason'] = trim($row['reason'].' Monthly accrual not credited for '
+                .collect($missing)->map(fn (string $m) => Carbon::parse($m.'-01')->format('M Y'))->implode(', ')
+                .' (+'.$this->n(count($missing) * self::MONTHLY_DAYS).' when credited).');
+        } else {
+            $steps[] = match ($row['status']) {
+                self::MATCH => 'apply — restate to the HR register (available unchanged)',
+                self::CHARGE => 'apply — move '.$this->n($row['charged_elsewhere']).' day(s) to Earned Leave',
+                self::NO_CHANGE => null,
+                self::DIFFERENCE => 'HR review — find the cause, then correct the balance on the employee\'s leave page',
+                default => 'HR review — see reason',
+            };
+        }
+        $row['next_step'] = implode(' → ', array_filter($steps)) ?: '—';
+
+        return $row;
+    }
+
+    /** A reason that draws on Earned Leave under V2 (Casual, Sick…), other than the pool and CSL: its own old balance is history. */
+    private function legacyReasonTypes(LeaveType $pool, ?LeaveType $csl): Collection
+    {
+        return LeaveType::withTrashed()->whereKeyNot(array_values(array_filter([$pool->id, $csl?->id])))->get()
+            ->filter(fn (LeaveType $t) => $this->sources->forPool($t, $pool)['source'] === LeaveBalanceSource::EARNED_POOL)
+            ->keyBy('id');
+    }
+
+    /** Leave taken (a linked usage debit), its reversal, or days given back on cancellation. */
+    private function isLeaveTaken(LeaveLedgerEntry $entry): bool
+    {
+        $original = $entry->reverses ?? $entry;
+
+        return ($original->entry_type === LeaveLedgerEntry::TYPE_USAGE && in_array($original->source_type, self::LINKED_USAGE, true))
+            || ($original->entry_type === LeaveLedgerEntry::TYPE_ADJUSTMENT_CREDIT && $original->source_type === self::USAGE_RETURN);
     }
 
     /** A month earned by neither the HR credit nor monthly accrual. */

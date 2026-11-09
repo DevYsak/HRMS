@@ -20,6 +20,7 @@ use App\Services\Leave\EarnedLeaveAccrualService;
 use App\Services\Leave\EarnedLeaveBreakdown;
 use App\Services\Leave\EarnedOpeningSourceService;
 use App\Services\Leave\LeaveAccrualTransitionService;
+use App\Services\Leave\LeaveBalanceCalculator;
 use App\Services\Leave\LeaveCategory;
 use App\Services\Leave\LeaveHrHistoryReconciliationService as History;
 use App\Services\Leave\LeaveIntegrityService;
@@ -699,4 +700,122 @@ test('a register normalisation posted without an adjustment record still settles
     hhApply('CNS091')->expectsOutputToContain('RECONCILED')->assertSuccessful();
     expect(hhBreakdown($this->reeba))->toMatchArray(['current_year_accrued' => 2.0, 'historical_used' => 2.0, 'total_available' => 0.0, 'consistent' => true]);
     hhApply('CNS091')->expectsOutputToContain('NO CHANGE')->assertSuccessful();
+});
+
+// ── 9 Nov 2026: the HR sheet vs live — leave V1 charged to Sick Leave, and monthly accrual never credited ──
+
+/** A V1 reason with its own old balance (Sick Leave held 6 days a year before Leave V2). */
+function hhSickReason(): LeaveType
+{
+    return LeaveType::firstWhere('code', 'SLH') ?? (test()->sick = LeaveType::create(['name' => 'Sick Leave', 'code' => 'SLH', 'category' => 'sick', 'leave_category' => LeaveCategory::EARNED,
+        'is_paid' => true, 'allow_paid_request' => true, 'color' => '#6366f1']));
+}
+
+/** A day V1 approved on the reason's own balance: the request names no Earned Leave pool. */
+function hhTakenOnOldBalance(Employee $employee, string $date): LeaveRequest
+{
+    $sick = hhSickReason();
+    $balance = hhBalance($employee, $sick);
+    $ledger = app(LeaveLedgerService::class);
+    if (! LeaveLedgerEntry::where('employee_id', $employee->id)->where('leave_type_id', $sick->id)->where('entry_type', LeaveLedgerEntry::TYPE_BASE)->exists()) {
+        $ledger->credit($balance, LeaveLedgerEntry::TYPE_BASE, 6, Carbon::parse('2026-07-01'), "hh-sick-base-{$employee->id}", ['source_type' => 'leave_entitlement']);
+    }
+    $request = LeaveRequest::create(['employee_id' => $employee->id, 'leave_type_id' => $sick->id, 'balance_leave_type_id' => null,
+        'start_date' => $date, 'end_date' => $date, 'days' => 1, 'reason' => 'Fever', 'status' => 'approved', 'requested_leave_status' => 'paid']);
+    $ledger->debit($balance->fresh(), LeaveLedgerEntry::TYPE_USAGE, 1, Carbon::parse($date), "hh-sick-{$request->id}", ['source_type' => 'leave_request', 'source_id' => $request->id]);
+    $ledger->rebuild($balance->fresh());
+
+    return $request;
+}
+
+/** Firoz: HR 1 + 2 − 2.5 = 0.5 at 30 Sep; a sick day on 15 Oct charged to Sick Leave; migrated on 20 Oct; no Monthly Accrual Starts From. */
+function hhFiroz(): Employee
+{
+    test()->firoz = hhEmployee('CNS019', 'firoz.khan@conexus-ns.com', 'Firoz');
+    hhRegisterOnCsl(test()->firoz, credit: 2, carry: 1, used: 2.5);
+    @unlink(test()->register);
+    test()->register = hhRegister([['name' => 'Firoz', 'emails' => ['firoz.khan@conexus-ns.com'], 'credit' => 2, 'carry' => 1, 'used' => 2.5, 'encashed' => 0, 'available' => 0.5]]);
+    test()->travelTo(Carbon::parse('2026-10-15 10:00:00'));
+    test()->firozSick = hhTakenOnOldBalance(test()->firoz, '2026-10-15');
+    test()->travelTo(Carbon::parse('2026-10-20 10:00:00'));
+    hhMigrate(test()->firoz);
+    test()->travelTo(Carbon::parse('2026-11-09 10:00:00'));
+
+    return test()->firoz;
+}
+
+test('Firoz: the sheet says 0.5 at 30 Sep; September and October were never credited and the 15 Oct sick day sits on Sick Leave — the preview says so and what to do', function () {
+    hhFiroz();
+
+    $row = hhPlan(['CNS019'])['CNS019'];
+    expect($row)->toMatchArray(['hr_baseline' => 0.5, 'used_after' => 1.0, 'accrual_after' => 0.0, 'charged_elsewhere' => 1.0,
+        'expected' => -0.5, 'existing' => 0.5, 'accrual_due' => ['2026-09', '2026-10'], 'accrual_missing' => ['2026-09', '2026-10'],
+        'expected_today' => 1.5, 'status' => History::REVIEW])
+        ->and($row['charged_elsewhere_label'])->toBe('Sick Leave LR-'.str_pad((string) $this->firozSick->id, 4, '0', STR_PAD_LEFT))
+        ->and($row['reason'])->toContain('Monthly accrual not credited for Sep 2026, Oct 2026 (+2 when credited)')
+        ->and($row['next_step'])->toStartWith('set Monthly Accrual Starts From to Sep 2026')
+        ->and($row['next_step'])->toContain('leave:accrue-earned --apply --employee=CNS019');
+
+    $this->artisan('leave:reconcile-hr-history', ['--register' => $this->register, '--employee' => ['CNS019']])
+        ->expectsOutputToContain('Accrual Not Credited')->expectsOutputToContain('Sep 2026, Oct 2026')
+        ->expectsOutputToContain('Agree with the HR register and monthly accrual: 0 of 1.')->assertSuccessful();
+});
+
+test('Firoz once HR sets the accrual start: CHARGE TO EARNED, and apply restates him and moves the sick day — 0.5 + 2 − 1 = 1.5, the request untouched', function () {
+    hhFiroz();
+    app(LeaveAccrualTransitionService::class)->set($this->firoz, '2026-09-01', 'HR credit covers Jul–Aug', $this->hr);
+    $accrual = app(EarnedLeaveAccrualService::class);
+    $planned = $accrual->planFor($this->firoz->fresh(), $this->year, Carbon::today());
+    expect($planned['due_months'])->toBe(['2026-09', '2026-10']);
+    $accrual->apply($planned);
+    $requestBefore = $this->firozSick->fresh()->getAttributes();
+
+    expect(hhPlan(['CNS019'])['CNS019'])->toMatchArray(['expected' => 1.5, 'existing' => 2.5, 'difference' => 1.0, 'charged_elsewhere' => 1.0,
+        'accrual_missing' => [], 'status' => History::CHARGE, 'apply_blocker' => null]);
+
+    hhApply('CNS019')->expectsOutputToContain('Sick Leave LR-'.str_pad((string) $this->firozSick->id, 4, '0', STR_PAD_LEFT).' moved to Earned Leave; available 2.5 → 1.5')->assertSuccessful();
+
+    expect(hhBreakdown($this->firoz))->toMatchArray(['carry_forward' => 1.0, 'current_year_accrued' => 4.0, 'opening' => 0.0,
+        'historical_used' => 2.5, 'portal_used' => 1.0, 'total_available' => 1.5, 'consistent' => true])
+        // Sick Leave no longer holds the day; cancelling it would return it to Earned Leave.
+        ->and(app(LeaveLedgerService::class)->activeEntryFor('leave_request', $this->firozSick->id, LeaveLedgerEntry::TYPE_USAGE)->leave_type_id)->toBe($this->earned->id)
+        ->and((float) app(LeaveBalanceCalculator::class)->summary(hhBalance($this->firoz, $this->sick))['used'])->toBe(0.0)
+        ->and($this->firozSick->fresh()->getAttributes())->toEqual($requestBefore)
+        ->and(app(LeaveIntegrityService::class)->scan($this->year)->all())->toBe([]);
+    $this->artisan('leave:verify', ['--year' => '2026/27'])->assertSuccessful();
+
+    $entries = LeaveLedgerEntry::count();
+    hhApply('CNS019')->expectsOutputToContain('NO CHANGE')->assertSuccessful();
+    expect(LeaveLedgerEntry::count())->toBe($entries);
+});
+
+test('an employee already restated with a sick day left on Sick Leave: apply only moves the day (Yogesh 4 → 3), then NO CHANGE', function () {
+    hhFourStaff();
+    hhApply('CNS021')->assertSuccessful();
+    $bases = LeaveLedgerEntry::where('employee_id', $this->yogesh->id)->where('leave_type_id', $this->earned->id)->where('entry_type', LeaveLedgerEntry::TYPE_BASE)->count();
+    $sick = hhTakenOnOldBalance($this->yogesh, '2026-10-16');
+
+    expect(hhPlan(['CNS021'])['CNS021'])->toMatchArray(['expected' => 3.0, 'existing' => 4.0, 'status' => History::CHARGE, 'apply_blocker' => null]);
+    hhApply('CNS021')->expectsOutputToContain('RECONCILED')->assertSuccessful();
+
+    expect(hhBreakdown($this->yogesh))->toMatchArray(['carry_forward' => 7.0, 'historical_used' => 5.0, 'portal_used' => 2.0, 'total_available' => 3.0, 'consistent' => true])
+        ->and(LeaveLedgerEntry::where('employee_id', $this->yogesh->id)->where('leave_type_id', $this->earned->id)->where('entry_type', LeaveLedgerEntry::TYPE_BASE)->count())->toBe($bases)
+        ->and(app(LeaveLedgerService::class)->activeEntryFor('leave_request', $sick->id, LeaveLedgerEntry::TYPE_USAGE)->leave_type_id)->toBe($this->earned->id)
+        ->and(AuditLog::where('event', 'LEAVE_CHARGED_TO_EARNED')->where('subject_employee_id', $this->yogesh->id)->count())->toBe(1);
+    hhApply('CNS021')->expectsOutputToContain('NO CHANGE')->assertSuccessful();
+});
+
+test('a restated employee whose October accrual was never credited: still NO CHANGE, but the missing month and the command to credit it are shown', function () {
+    hhFourStaff();
+    hhApply('CNS021')->assertSuccessful();
+    $this->travelTo(Carbon::parse('2026-11-09 10:00:00'));
+
+    $row = hhPlan(['CNS021'])['CNS021'];
+    expect($row)->toMatchArray(['status' => History::NO_CHANGE, 'expected' => 4.0, 'existing' => 4.0, 'accrual_missing' => ['2026-10'], 'expected_today' => 5.0])
+        ->and($row['next_step'])->toBe('php artisan leave:accrue-earned --apply --employee=CNS021 → re-run this preview');
+
+    $accrual = app(EarnedLeaveAccrualService::class);
+    $accrual->apply($accrual->planFor($this->yogesh->fresh(), $this->year, Carbon::today()));
+
+    expect(hhPlan(['CNS021'])['CNS021'])->toMatchArray(['status' => History::NO_CHANGE, 'expected' => 5.0, 'existing' => 5.0, 'accrual_missing' => [], 'next_step' => '—']);
 });

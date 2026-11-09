@@ -29,6 +29,7 @@ use RuntimeException;
     {--register= : Register file (defaults to database/data/conexus_csl_register_2026_27.php)}
     {--cutoff=2026-09-30 : Last day the HR register covers}
     {--employee=* : Limit to these employee codes (e.g. CNS021)}
+    {--as-of= : Monthly accrual is due for every month completed before this date (default today)}
     {--apply : Restate ONE employee (needs exactly one --employee and --actor) to the HR breakdown; the total never changes}
     {--actor= : Email of the HR user making the change (required with --apply)}
     {--reason=Restated to the authoritative HR register snapshot : Recorded on every entry and in the audit log}
@@ -68,7 +69,8 @@ class ReconcileHrLeaveHistory extends Command
                 throw new DomainException("The cutoff {$cutoff->toDateString()} is outside {$year->label}.");
             }
 
-            $rows = $reconciler->plan($register, $year, $cutoff, $codes);
+            $asOf = $this->option('as-of') ? Carbon::parse((string) $this->option('as-of')) : Carbon::now();
+            $rows = $reconciler->plan($register, $year, $cutoff, $codes, $asOf);
         } catch (DomainException $e) {
             $this->error($e->getMessage());
 
@@ -106,7 +108,8 @@ class ReconcileHrLeaveHistory extends Command
 
             return self::SUCCESS;
         }
-        if ($row['status'] !== History::MATCH || abs((float) $row['difference']) >= 0.005 || $row['apply_blocker'] !== null) {
+        $gap = $row['status'] === History::CHARGE ? (float) $row['charged_elsewhere'] : 0.0;
+        if (! in_array($row['status'], [History::MATCH, History::CHARGE], true) || abs((float) $row['difference'] - $gap) >= 0.005 || $row['apply_blocker'] !== null) {
             $this->error("Refused: {$row['code']} is {$row['status']}".($row['apply_blocker'] ? ' — '.$row['apply_blocker'] : ' — '.$row['reason']));
 
             return self::FAILURE;
@@ -160,11 +163,13 @@ class ReconcileHrLeaveHistory extends Command
         $this->table(
             ['Employee', 'Code', 'HR Carry Forward', 'HR Current Year Earned', 'HR Historical Used', 'HR Baseline Available at '.$cutoff->format('d M Y'),
                 "Portal Used {$after}", "Portal Adjustments {$after}", "Portal Accrual {$after}", 'Portal Pending',
-                'Expected Current Available', 'Existing Current Available', 'Difference', 'Status', 'Reason'],
+                'Expected Current Available', 'Existing Current Available', 'Difference', 'Status',
+                'Accrual Not Credited', 'Expected Once Credited', 'Next Step', 'Reason'],
             $rows->map(fn (array $r) => [
                 $r['employee'], $r['code'] ?? '—', $this->n($r['hr_carry_forward']), $this->n($r['hr_current_year']), $this->n($r['hr_used']),
                 $this->n($r['hr_baseline']), $this->n($r['used_after']), $this->n($r['adjustments_after']), $this->n($r['accrual_after']),
-                $this->n($r['pending']), $this->n($r['expected']), $this->n($r['existing']), $this->n($r['difference']), $r['status'], $r['reason'],
+                $this->n($r['pending']), $this->n($r['expected']), $this->n($r['existing']), $this->n($r['difference']), $r['status'],
+                $this->months($r['accrual_missing'] ?? []), $this->n($r['expected_today'] ?? null), $r['next_step'] ?? '—', $r['reason'],
             ])->all(),
         );
 
@@ -175,6 +180,8 @@ class ReconcileHrLeaveHistory extends Command
         }
 
         $this->line($rows->countBy('status')->map(fn (int $n, string $status) => "{$status}: {$n}")->implode(' · '));
+        $agree = $rows->filter(fn (array $r) => in_array($r['status'], [History::MATCH, History::NO_CHANGE], true) && ($r['accrual_missing'] ?? []) === [])->count();
+        $this->line("Agree with the HR register and monthly accrual: {$agree} of {$rows->count()}.");
         $this->line('Pending requests are shown only; they never reduce the expected or existing figure.');
     }
 
@@ -184,14 +191,22 @@ class ReconcileHrLeaveHistory extends Command
         $handle = fopen($path, 'w');
         fputcsv($handle, ['employee', 'code', 'hr_carry_forward', 'hr_current_year_earned', 'hr_historical_used', 'hr_baseline_'.$cutoff->toDateString(),
             'portal_used_after', 'portal_adjustments_after', 'portal_accrual_after', 'portal_pending',
-            'expected_current_available', 'existing_current_available', 'difference', 'status', 'reason']);
+            'expected_current_available', 'existing_current_available', 'difference', 'status',
+            'accrual_not_credited', 'expected_once_credited', 'next_step', 'reason']);
         foreach ($rows as $r) {
             fputcsv($handle, [$r['employee'], $r['code'], $r['hr_carry_forward'], $r['hr_current_year'], $r['hr_used'], $r['hr_baseline'],
                 $r['used_after'], $r['adjustments_after'], $r['accrual_after'], $r['pending'],
-                $r['expected'], $r['existing'], $r['difference'], $r['status'], $r['reason']]);
+                $r['expected'], $r['existing'], $r['difference'], $r['status'],
+                implode(' ', $r['accrual_missing'] ?? []), $r['expected_today'] ?? null, $r['next_step'] ?? '', $r['reason']]);
         }
         fclose($handle);
         $this->line("CSV written to {$path}");
+    }
+
+    /** @param  array<int, string>  $months  Y-m */
+    private function months(array $months): string
+    {
+        return $months === [] ? '—' : collect($months)->map(fn (string $m) => Carbon::parse($m.'-01')->format('M Y'))->implode(', ');
     }
 
     private function n(mixed $v): string
