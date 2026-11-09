@@ -16,12 +16,13 @@ test('a refused upload explains the size limit, and every other validation messa
         ->and(__('validation.max.file', ['attribute' => 'attachment', 'max' => 5120]))->toBe('The attachment field must not be greater than 5120 kilobytes.');
 });
 
-test('the leave drawer shows that message when an upload is refused', function () {
+test('the leave drawer gives that message when an upload is refused', function () {
     $user = User::factory()->create();
     Employee::factory()->create(['user_id' => $user->id, 'status' => 'active']);
 
-    Livewire\Livewire::actingAs($user)->test(RequestLeave::class)
+    $drawer = Livewire\Livewire::actingAs($user)->test(RequestLeave::class)
         ->call('_uploadErrored', 'attachment', null, false)
-        ->assertHasErrors('attachment')
-        ->assertSee('larger than the server allows');
+        ->assertHasErrors('attachment');
+
+    expect($drawer->errors()->first('attachment'))->toContain('larger than the server allows');
 });
