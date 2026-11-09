@@ -29,6 +29,7 @@ use App\Services\Leave\CombinedLeaveService;
 use App\Services\Leave\LeaveAccrualService;
 use App\Services\Leave\LeaveBalanceCalculator;
 use App\Services\Leave\LeaveBalanceProjection;
+use App\Services\Leave\LeaveBalanceSource;
 use App\Services\Leave\LeaveCarryOverService;
 use App\Services\Leave\LeaveCategory;
 use App\Services\Leave\LeaveLedgerService;
@@ -1125,6 +1126,24 @@ class LeaveService
      * HR override of paid/unpaid status on an already-approved or pending_hr request.
      * Writes immutable audit log; remark is always mandatory.
      */
+    /**
+     * A request made before Leave V2 names no balance, so it charges its own
+     * type. Under V2 a reason (Sick, Casual...) draws on the Earned Leave pool:
+     * when HR makes such a request paid, the paid days come out of Earned
+     * Leave, not the reason's empty old balance (9 Nov 2026, Firoz LR-0028).
+     */
+    private function chargeReasonToEarnedPool(LeaveRequest $leaveRequest, CarbonInterface $on): void
+    {
+        if (! LeavePolicyEngine::enabled() || $leaveRequest->balance_leave_type_id !== null || $leaveRequest->leaveType === null) {
+            return;
+        }
+        $sources = app(LeaveBalanceSource::class);
+        $pool = $sources->earnedPool($leaveRequest->employee, $on);
+        if ($pool !== null && $sources->forPool($leaveRequest->leaveType, $pool)['source'] === LeaveBalanceSource::EARNED_POOL) {
+            $leaveRequest->forceFill(['balance_leave_type_id' => $pool->id, 'main_category' => LeaveCategory::EARNED])->save();
+        }
+    }
+
     public function hrOverridePaymentStatus(
         LeaveRequest $leaveRequest,
         User $hr,
@@ -1178,6 +1197,7 @@ class LeaveService
                     // Return the days to the leave year the leave was taken in.
                     $movements->reverseUsage($leaveRequest, $leaveRequest->balanceTypeId(), $days, $start, 'Changed to unpaid by HR', $hr);
                 } elseif ($currentStatus === 'unpaid' && $newStatus === 'paid') {
+                    $this->chargeReasonToEarnedPool($leaveRequest, $start);
                     $balance = $movements->balanceFor($employee->id, $leaveRequest->balanceTypeId(), $start);
                     $available = max(0, $movements->approvedAvailable($balance));
 

@@ -29,6 +29,7 @@ use App\Services\Leave\LeaveMovementService;
 use App\Services\Leave\LeaveRegisterReconciliationService;
 use App\Services\Leave\LeaveV2MigrationService;
 use App\Services\LeaveBalanceService;
+use App\Services\LeaveService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Notification;
@@ -894,4 +895,27 @@ test('production 9 Nov: Nikita on the corrected register (3 used to 30 Sep) — 
 
     expect(hhPlan(['CNS007'])['CNS007'])->toMatchArray(['hr_baseline' => 0.0, 'adjustments_after' => 0.0, 'accrual_after' => 0.0,
         'expected' => 0.0, 'existing' => 0.0, 'accrual_missing' => ['2026-09', '2026-10'], 'expected_today' => 2.0, 'status' => History::MATCH]);
+});
+
+test('HR makes Firoz\'s unpaid 15 Oct sick day (from before Leave V2) paid: it comes out of Earned Leave — 2.5 → 1.5, as the October HR sheet says — and the check stays NO CHANGE', function () {
+    @unlink($this->register);
+    $this->register = hhRegister([['name' => 'Firoz', 'emails' => ['firoz.khan@conexus-ns.com'], 'credit' => 2, 'carry' => 1, 'used' => 2.5, 'encashed' => 0, 'available' => 0.5]]);
+    $firoz = hhNovemberShape('CNS027', 'firoz.khan@conexus-ns.com', 'Firoz', 2, 1, 2.5, accrue: true);
+    hhApply('CNS027')->expectsOutputToContain('available unchanged at 2.5')->assertSuccessful();
+
+    // V1 approved it unpaid on Sick Leave: no balance named, nothing on any ledger.
+    $sick = hhSickReason();
+    $sick->update(['allow_hr_override' => true]);
+    $request = LeaveRequest::create(['employee_id' => $firoz->id, 'leave_type_id' => $sick->id, 'balance_leave_type_id' => null,
+        'start_date' => '2026-10-15', 'end_date' => '2026-10-15', 'days' => 1, 'reason' => 'Fever', 'status' => 'approved', 'requested_leave_status' => 'unpaid']);
+    expect(hhPlan(['CNS027'])['CNS027'])->toMatchArray(['existing' => 2.5, 'status' => History::NO_CHANGE]);
+
+    app(LeaveService::class)->hrOverridePaymentStatus($request->fresh(), $this->hr, 'paid', 'Counted as paid sick leave in the HR register');
+
+    expect($request->fresh())->toMatchArray(['balance_leave_type_id' => $this->earned->id, 'approved_leave_status' => 'paid', 'status' => 'approved'])
+        ->and(app(LeaveLedgerService::class)->activeEntryFor('leave_request', $request->id, LeaveLedgerEntry::TYPE_USAGE)->leave_type_id)->toBe($this->earned->id)
+        ->and(hhBreakdown($firoz))->toMatchArray(['portal_used' => 1.0, 'total_available' => 1.5])
+        ->and(hhPlan(['CNS027'])['CNS027'])->toMatchArray(['used_after' => 1.0, 'expected' => 1.5, 'existing' => 1.5, 'status' => History::NO_CHANGE])
+        ->and(LeaveBalance::where('employee_id', $firoz->id)->where('leave_type_id', $sick->id)->exists())->toBeFalse()
+        ->and(app(LeaveIntegrityService::class)->scan($this->year)->all())->toBe([]);
 });
