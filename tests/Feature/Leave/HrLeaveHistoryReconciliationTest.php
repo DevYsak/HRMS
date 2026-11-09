@@ -735,6 +735,10 @@ function hhFiroz(): Employee
     hhRegisterOnCsl(test()->firoz, credit: 2, carry: 1, used: 2.5);
     @unlink(test()->register);
     test()->register = hhRegister([['name' => 'Firoz', 'emails' => ['firoz.khan@conexus-ns.com'], 'credit' => 2, 'carry' => 1, 'used' => 2.5, 'encashed' => 0, 'available' => 0.5]]);
+    // As production shows (9 Nov preview): September credited on CSL, then taken back by HR.
+    test()->travelTo(Carbon::parse('2026-10-01 00:30:00'));
+    hhCslAccrual(test()->firoz);
+    hhCslAdjust(test()->firoz, 'debit', 1, 'September is credited on Earned Leave', '2026-10-07');
     test()->travelTo(Carbon::parse('2026-10-15 10:00:00'));
     test()->firozSick = hhTakenOnOldBalance(test()->firoz, '2026-10-15');
     test()->travelTo(Carbon::parse('2026-10-20 10:00:00'));
@@ -818,4 +822,76 @@ test('a restated employee whose October accrual was never credited: still NO CHA
     $accrual->apply($accrual->planFor($this->yogesh->fresh(), $this->year, Carbon::today()));
 
     expect(hhPlan(['CNS021'])['CNS021'])->toMatchArray(['status' => History::NO_CHANGE, 'expected' => 5.0, 'existing' => 5.0, 'accrual_missing' => [], 'next_step' => '—']);
+});
+
+/**
+ * The 9 Nov production shape: CSL loaded from the register, September credited
+ * on CSL (1 Oct) and taken back by an HR deduction of 1, migrated 20 Oct.
+ * With $accrue, HR set Monthly Accrual Starts From = Sep 2026 and Earned
+ * Leave credited September and October.
+ */
+function hhNovemberShape(string $code, string $email, string $name, float $credit, float $carry, float $used, bool $accrue): Employee
+{
+    $employee = hhEmployee($code, $email, $name);
+    hhRegisterOnCsl($employee, credit: $credit, carry: $carry, used: $used);
+    test()->travelTo(Carbon::parse('2026-10-01 00:30:00'));
+    hhCslAccrual($employee);
+    hhCslAdjust($employee, 'debit', 1, 'September is credited on Earned Leave', '2026-10-07');
+    test()->travelTo(Carbon::parse('2026-10-20 10:00:00'));
+    hhMigrate($employee);
+    test()->travelTo(Carbon::parse('2026-11-09 10:00:00'));
+    if ($accrue) {
+        app(LeaveAccrualTransitionService::class)->set($employee, '2026-09-01', 'HR credit covers Jul–Aug', test()->hr);
+        $accrual = app(EarnedLeaveAccrualService::class);
+        $accrual->apply($accrual->planFor($employee->fresh(), test()->year, Carbon::today()));
+    }
+
+    return $employee;
+}
+
+test('production 9 Nov: September on CSL taken back by HR and credited on Earned Leave is read once — Chaitanya 3.5 + 2 = 5.5 MATCH, not "credited more than once"', function () {
+    @unlink($this->register);
+    $this->register = hhRegister([['name' => 'Chaitanya', 'emails' => ['chaitanya.naik@conexus-ns.com'], 'credit' => 2, 'carry' => 4, 'used' => 2.5, 'encashed' => 0, 'available' => 3.5]]);
+    $chaitanya = hhNovemberShape('CNS051', 'chaitanya.naik@conexus-ns.com', 'Chaitanya', 2, 4, 2.5, accrue: true);
+
+    $row = hhPlan(['CNS051'])['CNS051'];
+    expect($row)->toMatchArray(['hr_baseline' => 3.5, 'adjustments_after' => 0.0, 'accrual_after' => 2.0, 'excluded_after' => 0.0,
+        'expected' => 5.5, 'existing' => 5.5, 'accrual_missing' => [], 'status' => History::MATCH, 'apply_blocker' => null])
+        ->and(collect($row['entries'])->where('ledger', 'CSL')->where('class', History::C_WITHDRAWN)->pluck('days')->all())->toBe([1.0, -1.0]);
+
+    hhApply('CNS051')->expectsOutputToContain('available unchanged at 5.5')->assertSuccessful();
+    expect(hhBreakdown($chaitanya))->toMatchArray(['carry_forward' => 4.0, 'current_year_accrued' => 4.0, 'historical_used' => 2.5, 'total_available' => 5.5, 'consistent' => true])
+        ->and(app(LeaveIntegrityService::class)->scan($this->year)->all())->toBe([]);
+});
+
+test('production 9 Nov: Shivani — September taken back on CSL but Earned Leave never credited it: 0 now, 2 once September and October are credited', function () {
+    @unlink($this->register);
+    $this->register = hhRegister([['name' => 'Shivani', 'emails' => ['shivani.shinde@conexus-ns.com'], 'credit' => 2, 'carry' => 1, 'used' => 3, 'encashed' => 0, 'available' => 0]]);
+    $shivani = hhNovemberShape('CNS037', 'shivani.shinde@conexus-ns.com', 'Shivani', 2, 1, 3, accrue: false);
+
+    $row = hhPlan(['CNS037'])['CNS037'];
+    expect($row)->toMatchArray(['expected' => 0.0, 'existing' => 0.0, 'accrual_missing' => ['2026-09', '2026-10'], 'expected_today' => 2.0, 'status' => History::MATCH])
+        ->and($row['next_step'])->toStartWith('set Monthly Accrual Starts From to Sep 2026');
+
+    app(LeaveAccrualTransitionService::class)->set($shivani, '2026-09-01', 'HR credit covers Jul–Aug', $this->hr);
+    $accrual = app(EarnedLeaveAccrualService::class);
+    $accrual->apply($accrual->planFor($shivani->fresh(), $this->year, Carbon::today()));
+
+    expect(hhPlan(['CNS037'])['CNS037'])->toMatchArray(['expected' => 2.0, 'existing' => 2.0, 'accrual_missing' => [], 'status' => History::MATCH]);
+});
+
+test('production 9 Nov: Nikita on the corrected register (3 used to 30 Sep) — HR\'s 7 Oct −2 brought CSL to it; September and October are still to credit (0 now, 2 then)', function () {
+    $nikita = hhEmployee('CNS007', 'nikita@conexus-ns.com', 'Nikita Dalal');
+    hhRegisterOnCsl($nikita, credit: 2, carry: 1, used: 2);                 // loaded from the old register: 1
+    @unlink($this->register);
+    $this->register = hhRegister([['name' => 'Nikita Dalal', 'emails' => ['nikita@conexus-ns.com'], 'credit' => 2, 'carry' => 1, 'used' => 3, 'encashed' => 0, 'available' => 0]]);
+    $this->travelTo(Carbon::parse('2026-10-01 00:30:00'));
+    hhCslAccrual($nikita);                                                   // 2
+    hhCslAdjust($nikita, 'debit', 2, 'System Issuee', '2026-10-07');        // 0
+    $this->travelTo(Carbon::parse('2026-10-20 10:00:00'));
+    hhMigrate($nikita);
+    $this->travelTo(Carbon::parse('2026-11-09 10:00:00'));
+
+    expect(hhPlan(['CNS007'])['CNS007'])->toMatchArray(['hr_baseline' => 0.0, 'adjustments_after' => 0.0, 'accrual_after' => 0.0,
+        'expected' => 0.0, 'existing' => 0.0, 'accrual_missing' => ['2026-09', '2026-10'], 'expected_today' => 2.0, 'status' => History::MATCH]);
 });

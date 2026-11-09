@@ -154,6 +154,15 @@ class LeaveHrHistoryReconciliationService
     /** Excluded: an HR credit HR marked as an opening / historical correction. */
     public const C_HISTORY_FIX = 'history correction';
 
+    /**
+     * Excluded: a CSL monthly credit and the HR deduction of the same size
+     * after the cutoff that took it back (production, Oct 2026: September was
+     * credited on CSL, then deducted when Earned Leave took the month over).
+     * The pair nets to nothing; whether the month is credited is Earned
+     * Leave's own monthly accrual to say.
+     */
+    public const C_WITHDRAWN = 'CSL credit withdrawn';
+
     /** Excluded: CSL movement inside the HR period — already in the register. */
     public const C_HR_PERIOD = 'HR period';
 
@@ -313,7 +322,7 @@ class LeaveHrHistoryReconciliationService
             return $stop(self::REVIEW, ucfirst(implode('; ', $notes)).'.');
         }
 
-        $gap = $this->accrualGap($covered, $breakdown['starts_from'] ?? null);
+        $gap = $this->accrualGap($covered, $breakdown['starts_from'] ?? null, $activity['accruals']);
         $summary = sprintf('HR %s + %s − %s = %s; after %s: −%s used, %s HR, +%s accrual.',
             $this->n($row['hr_carry_forward']), $this->n($row['hr_current_year']), $this->n($row['hr_used']), $this->n($row['hr_baseline']),
             $cutoff->format('d M'), $this->n($row['used_after']), $this->signed($row['adjustments_after']), $this->n($row['accrual_after']))
@@ -572,6 +581,7 @@ class LeaveHrHistoryReconciliationService
             ->where('leave_year_id', $year->id)->orderBy('id')->get()
             ->map(fn (LeaveLedgerEntry $e) => ['entry' => $e, 'class' => $this->classify($e, $pool, $cutoff)]);
         [$classified, $loaded, $normalisedAt] = $this->normalise($classified, $pool, $baseline);
+        $classified = $this->pairWithdrawn($classified, $pool);
 
         // Leave taken after the cutoff that V1 charged to a reason's own old
         // balance (a Sick Leave day on Sick Leave). Every reason draws on
@@ -629,7 +639,7 @@ class LeaveHrHistoryReconciliationService
             'used_after' => -$sum([self::C_USAGE]) + 0.0,
             'adjustments_after' => $sum([self::C_ADJUSTMENT]),
             'other_after' => $sum([self::C_OTHER]),
-            'excluded_after' => $sum([self::C_BRIDGE, self::C_HISTORY_FIX, self::C_NORMALISATION]),
+            'excluded_after' => $sum([self::C_BRIDGE, self::C_HISTORY_FIX, self::C_NORMALISATION, self::C_WITHDRAWN]),
             'accruals' => $accruals,
             'loaded' => $loaded,
             'normalised' => $normalisedAt !== null,
@@ -694,6 +704,32 @@ class LeaveHrHistoryReconciliationService
     }
 
     /**
+     * A live CSL monthly accrual and a live CSL HR deduction of exactly the
+     * same days after the cutoff (the deduction that took the credit back)
+     * are read as one withdrawn credit: neither counts. Each deduction pairs
+     * with one credit, in date order; anything unpaired keeps its reading.
+     *
+     * @param  Collection<int, array{entry: LeaveLedgerEntry, class: string}>  $classified
+     * @return Collection<int, array{entry: LeaveLedgerEntry, class: string}>
+     */
+    private function pairWithdrawn(Collection $classified, LeaveType $pool): Collection
+    {
+        $onCsl = fn (array $c) => $c['entry']->leave_type_id !== $pool->id && $c['entry']->reverses_entry_id === null && $this->isLive($c, $classified);
+        $paired = [];
+        foreach ($classified->filter(fn ($c) => $onCsl($c) && $c['class'] === self::C_ACCRUAL && (float) $c['entry']->days > self::EPSILON) as $credit) {
+            $deduction = $classified->first(fn ($c) => $onCsl($c) && $c['class'] === self::C_ADJUSTMENT && ! in_array($c['entry']->id, $paired, true)
+                && abs((float) $c['entry']->days + (float) $credit['entry']->days) < self::EPSILON);
+            if ($deduction !== null) {
+                $paired[] = $credit['entry']->id;
+                $paired[] = $deduction['entry']->id;
+            }
+        }
+
+        return $paired === [] ? $classified
+            : $classified->map(fn ($c) => in_array($c['entry']->id, $paired, true) ? ['class' => self::C_WITHDRAWN] + $c : $c);
+    }
+
+    /**
      * Why one entry counts or not, for --details.
      *
      * @param  array{entry: LeaveLedgerEntry, class: string}  $c
@@ -714,6 +750,9 @@ class LeaveHrHistoryReconciliationService
             self::C_HR_PERIOD => 'dated on or before '.$cutoff->format('d M Y').' — inside the HR register',
             self::C_NORMALISATION => ($c['entry']->id === $normalisedAt ? 'brings CSL from the loaded '.$this->n($loaded).' to the HR register\'s '.$this->n($baseline) : 'settled by the register normalisation #'.$normalisedAt).$hr,
             self::C_BRIDGE => 'CSL bookkeeping with no HR adjustment record or monthly-accrual key — carried into the migration',
+            self::C_WITHDRAWN => ($original->entry_type === LeaveLedgerEntry::TYPE_ACCRUAL
+                ? 'CSL credit for '.$month.' taken back by an HR deduction of the same size'
+                : 'takes back a CSL monthly credit of the same size').' — nets to nothing; Earned Leave\'s own accrual decides the month'.$hr,
             self::C_HISTORY_FIX => 'HR marked it '.($original->meta['add_on_type'] ?? 'a history correction').' — the register states that history'.$hr,
             self::C_ACCRUAL => 'monthly accrual for '.$month.(in_array($month, $covered, true) ? ' — the HR credit already covers it' : ' — not covered by the HR credit'),
             self::C_ADJUSTMENT => 'HR adjustment after '.$cutoff->format('d M').$hr,
@@ -885,12 +924,16 @@ class LeaveHrHistoryReconciliationService
     }
 
     /** A month earned by neither the HR credit nor monthly accrual. */
-    private function accrualGap(?array $covered, ?string $startsFrom): ?string
+    private function accrualGap(?array $covered, ?string $startsFrom, array $accruals = []): ?string
     {
         if ($covered === null || $startsFrom === null) {
             return null;
         }
         $next = $covered === [] ? null : Carbon::parse(end($covered).'-01')->addMonthNoOverflow()->format('Y-m');
+        // Credited after all (a CSL monthly accrual for that month counts).
+        if ($next !== null && ($accruals[$next] ?? 0.0) >= self::MONTHLY_DAYS - self::EPSILON) {
+            return null;
+        }
         $start = Carbon::parse($startsFrom)->format('Y-m');
 
         return $next !== null && $start > $next
