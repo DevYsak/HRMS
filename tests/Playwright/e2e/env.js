@@ -26,6 +26,9 @@ export const E2E_ENV = {
     PULSE_ENABLED: 'false',
     TELESCOPE_ENABLED: 'false',
     NIGHTWATCH_ENABLED: 'false',
+    // The role seed builds Casual / Sick Leave (pre-V2) balances, so pin the
+    // leave mode it was written for instead of inheriting the developer's .env.
+    LEAVE_POLICY_ENGINE_V2: 'false',
 };
 
 if (!E2E_DATABASE.endsWith('_e2e')) {

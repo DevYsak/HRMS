@@ -130,7 +130,7 @@ test('employee: leave dates validate under their own field and the modal fits a 
     await login(page, 'employee');
     await page.setViewportSize({ width: 375, height: 667 });
     await page.goto('/time-off/my');
-    await page.getByRole('button', { name: 'Apply Leave' }).filter({ visible: true }).first().click();
+    await page.getByRole('button', { name: 'Request Leave', exact: true }).filter({ visible: true }).first().click();
 
     const modal = page.locator('[data-app-modal]');
     await expect(modal).toBeVisible();

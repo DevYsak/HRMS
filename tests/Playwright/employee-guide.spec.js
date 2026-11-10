@@ -158,7 +158,6 @@ const SHOTS = [
             ['Month', 'switch to a previous month', (page) => scope(page).getByText('October 2026', { exact: false }).first().locator('xpath=ancestor::*[self::div][1]')],
             ['Key figures', 'attendance rate, worked today, first in, status', (page) => scope(page).getByText('Attendance Rate', { exact: true }).first().locator("xpath=ancestor::*[contains(@class,'grid')][1]")],
             ['Clock in / out', 'selfie + location on the web', button('Clock In', { exact: false })],
-            ['Regularize', 'fix a missing or wrong punch', button('Regularize')],
             ['Today', 'punches and totals for the day', card('Today')],
             ['Needs attention', 'days that need a correction', card('Attendance Needs Attention')],
             ['Request Regularisation', 'start the correction', (page) => scope(page).getByRole('button', { name: 'Request Regularisation' }).first()],
@@ -176,7 +175,7 @@ const SHOTS = [
     },
     {
         id: 'attendance-regularise', url: '/attendance/my', title: 'Requesting an attendance correction',
-        prepare: openModal(button('Regularize'), 'Request Regularization'),
+        prepare: openModal(button('Request Regularisation'), 'Request Regularisation'),
         markers: [
             ['Day', null, field('Which day?')],
             ['What to fix', 'a punch, or a half day', field('What do you need to fix?')],
@@ -189,7 +188,7 @@ const SHOTS = [
     {
         id: 'leave-top', url: '/time-off/my', title: 'My Time Off',
         markers: [
-            ['Apply Leave', null, button('Apply Leave')],
+            ['Request Leave', null, button('Request Leave')],
             ['Your summary', 'available, pending, approved, next holiday', (page) => page.getByText(/available leave/i).first().locator("xpath=ancestor::div[contains(@class,'grid')][1]")],
             ['Awaiting approval', 'requests still with a reviewer', card('leave request awaiting approval', { exact: false })],
             ['Balance views', 'balances, pending & upcoming, history, statement', (page) => scope(page).getByRole('button', { name: 'My Balances', exact: true }).first().locator('xpath=..')],
@@ -249,7 +248,7 @@ const SHOTS = [
     },
     {
         id: 'leave-apply', url: '/time-off/my', height: 1200, title: 'Applying for leave',
-        prepare: openModal(button('Apply Leave'), 'Request Time Off'),
+        prepare: openModal(button('Request Leave'), 'Request Time Off'),
         markers: [
             ['Leave type', 'your balance shows below', field('Leave Type')],
             ['Dates', null, (page) => scope(page).getByText('Start Date', { exact: true }).first().locator("xpath=ancestor::div[contains(@class,'grid')][1]")],

@@ -28,7 +28,7 @@ test('leave: employee → manager approves → employee notified', async ({ brow
 
     const emp = await as(browser, 'employee');
     await emp.page.goto('/time-off/my');
-    await emp.page.getByRole('button', { name: 'Apply Leave' }).filter({ visible: true }).first().click();
+    await emp.page.getByRole('button', { name: 'Request Leave', exact: true }).filter({ visible: true }).first().click();
 
     const form = emp.page.locator('form[wire\\:submit="submitRequest"]');
     await expect(form).toBeVisible();
@@ -37,7 +37,7 @@ test('leave: employee → manager approves → employee notified', async ({ brow
     await fillInput(form.locator('input[wire\\:model\\.live="start_date"]'), day);
     await fillInput(form.locator('input[wire\\:model\\.live="end_date"]'), day);
     await form.locator('textarea[wire\\:model="reason"]').fill('E2E journey — family appointment.');
-    await form.getByRole('button', { name: 'Submit Request' }).click();
+    await emp.page.locator('[data-submit-leave]').click();
     await expect(form).toBeHidden({ timeout: 30 * 1000 });
     await expect(emp.page.locator('body')).toContainText(/pending/i);
     await emp.close();
@@ -87,7 +87,9 @@ test('overtime: employee → their manager is asked, Finance is not', async ({ b
     await emp.page.getByRole('button', { name: 'Request OT' }).filter({ visible: true }).first().click();
     const workDate = emp.page.locator('input[wire\\:model="work_date"]');
     await expect(workDate).toBeVisible();
-    await fillInput(workDate, isoDate(new Date()));
+    // Yesterday: the hardening journey already asks for overtime today, and
+    // a second request for the same day is (rightly) refused.
+    await fillInput(workDate, isoDate(new Date(Date.now() - 86400000)));
     await fillInput(emp.page.locator('input[wire\\:model="start_time"]'), '18:30');
     await fillInput(emp.page.locator('input[wire\\:model="end_time"]'), '20:30');
     await emp.page.locator('textarea[wire\\:model="reason"]').fill('E2E journey — month-end dispatch.');
@@ -120,8 +122,8 @@ test('regularisation: employee → HR decides; manager and Finance are not asked
 
     const emp = await as(browser, 'employee');
     await emp.page.goto('/attendance/my');
-    await emp.page.locator('button', { hasText: 'Regularize' }).filter({ visible: true }).first().click();
-    const dialog = emp.page.locator('[data-modal="regularisation-modal"], ui-modal', { hasText: 'Request Regularization' }).filter({ visible: true }).first();
+    await emp.page.getByRole('button', { name: 'Request Regularisation' }).filter({ visible: true }).first().click();
+    const dialog = emp.page.locator('[data-modal="regularisation-modal"], ui-modal', { hasText: 'Request Regularisation' }).filter({ visible: true }).first();
     await expect(dialog).toBeVisible();
     await fillInput(dialog.locator('input[wire\\:model="regDate"]'), isoDate(yesterday));
     const fixOut = dialog.locator('input[wire\\:model\\.live="regFixOut"]');
