@@ -305,7 +305,7 @@
                             <td class="py-2.5">
                                 <div class="whitespace-nowrap font-bold text-zinc-800 dark:text-zinc-100">{{ $log->date->toImmutable()->userDate() }}</div>
                                 <div class="text-[9px] text-zinc-400">{{ $log->date->format('l') }}</div>
-                                @if($log->is_regularized)<span class="mt-0.5 inline-flex items-center gap-0.5 rounded bg-blue-100 px-1 py-px text-[8px] font-black uppercase tracking-wide text-blue-600 dark:bg-blue-900/40 dark:text-blue-300"><flux:icon.pencil-square class="size-2.5" /> Regularized</span>@endif
+                                @if($log->is_regularized)<span class="mt-0.5 inline-flex items-center gap-0.5 rounded bg-blue-100 px-1 py-px text-[8px] font-black uppercase tracking-wide text-blue-600 dark:bg-blue-900/40 dark:text-blue-300"><flux:icon.pencil-square class="size-2.5" /> Regularised</span>@endif
                             </td>
                             <td class="py-2.5">
                                 <span class="font-mono font-bold tabular-nums {{ $log->is_regularized ? 'text-blue-600 dark:text-blue-300' : 'text-zinc-800 dark:text-zinc-100' }}">{{ $log->check_in?->toImmutable()->userTime() ?? '—' }}</span>
@@ -516,7 +516,7 @@ EMPLOYEE 360 DRAWER (480px, right)
                 {{-- Pending regularizations --}}
                 @if(! empty($drawer['pending']))
                     <div class="rounded-2xl border border-amber-300 bg-gradient-to-r from-amber-50 to-orange-50 p-4 shadow-sm">
-                        <div class="mb-2 text-[10px] font-bold uppercase tracking-widest text-amber-700">Pending Regularization · {{ count($drawer['pending']) }}</div>
+                        <div class="mb-2 text-[10px] font-bold uppercase tracking-widest text-amber-700">Pending Regularisation · {{ count($drawer['pending']) }}</div>
                         <div class="space-y-2">
                             @foreach($drawer['pending'] as $pr)
                                 <div class="rounded-xl border border-amber-200/70 bg-white/80 dark:bg-zinc-900/80 p-2.5">

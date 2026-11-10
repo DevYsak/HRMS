@@ -314,7 +314,7 @@ test('quick actions follow the sidebar menu HR configured', function () {
 
     Livewire::actingAs($employee->user)->test(Dashboard::class)
         ->assertViewHas('quickActions', fn ($actions) => collect($actions)->pluck('label')->doesntContain('WFH Request')
-            && collect($actions)->pluck('label')->contains('Apply Leave'));
+            && collect($actions)->pluck('label')->contains('Request Leave'));
 });
 
 // ── Today ──────────────────────────────────────────────────────────────────

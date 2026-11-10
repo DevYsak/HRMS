@@ -440,7 +440,7 @@ class CommandCenter extends Component
         ]);
 
         return collect()
-            ->concat($map($this->inReach(AttendanceRegularisation::query())->with('employee.user')->where('status', 'pending')->latest()->limit(6)->get(), 'Regularization', 'regularisation', fn ($r) => Carbon::parse($r->work_date)->format('d M Y')))
+            ->concat($map($this->inReach(AttendanceRegularisation::query())->with('employee.user')->where('status', 'pending')->latest()->limit(6)->get(), 'Regularisation', 'regularisation', fn ($r) => Carbon::parse($r->work_date)->format('d M Y')))
             ->concat($map($this->inReach(LeaveRequest::query())->with(['employee.user', 'leaveType'])->where('status', 'pending')->latest()->limit(6)->get(), 'Leave', 'leave', fn ($r) => ($r->leaveType?->name ?? 'Leave').' · '.$r->days.'d'))
             ->concat($map($this->inReach(WfhRequest::query())->with('employee.user')->where('status', 'pending')->latest()->limit(6)->get(), 'WFH', 'wfh', fn ($r) => Carbon::parse($r->start_date)->format('d M').' – '.Carbon::parse($r->end_date)->format('d M')))
             ->concat($map($this->inReach(OtRequest::query())->with('employee.user')->where('status', 'pending')->latest()->limit(6)->get(), 'Overtime', 'overtime', fn ($r) => 'OT '.$r->requested_hours.'h'))

@@ -99,7 +99,7 @@
                     <flux:input wire:model="weights.early_exit_penalty" type="number" step="0.5" min="0" label="Early exit" suffix="pts" />
                     <flux:input wire:model="weights.missing_punch_penalty" type="number" step="0.5" min="0" label="Missing punch" suffix="pts" />
                     <flux:input wire:model="weights.auto_punch_out_penalty" type="number" step="0.5" min="0" label="Auto punch-out" suffix="pts" />
-                    <flux:input wire:model="weights.regularization_penalty" type="number" step="0.5" min="0" label="Regularized day" suffix="pts" />
+                    <flux:input wire:model="weights.regularization_penalty" type="number" step="0.5" min="0" label="Regularised day" suffix="pts" />
                     <flux:input wire:model="weights.break_violation_penalty" type="number" step="0.5" min="0" label="Break over allowance" suffix="pts" />
                     <flux:input wire:model="weights.short_hours_penalty" type="number" step="0.5" min="0" label="Short working hours" suffix="pts" />
                     <flux:input wire:model="weights.overtime_bonus" type="number" step="0.5" min="0" label="Overtime bonus" suffix="pts" />

@@ -66,7 +66,7 @@
             <div class="flex items-center justify-between rounded-xl bg-zinc-50 dark:bg-zinc-800/40 px-3 py-2">
                 <span class="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Final status</span>
                 <span class="text-xs font-black {{ $decision['status'] === 'late' ? 'text-amber-600' : ($decision['status'] === 'absent' ? 'text-rose-500' : 'text-emerald-600') }}">
-                    {{ ucwords(str_replace('_', ' ', $decision['status'])) }}{{ $decision['regularized'] ? ' · Regularized' : '' }}
+                    {{ ucwords(str_replace('_', ' ', $decision['status'])) }}{{ $decision['regularized'] ? ' · Regularised' : '' }}
                 </span>
             </div>
         </div>
@@ -221,7 +221,7 @@
         <div class="flex items-start gap-3">
             <span class="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-orange-100 text-orange-600"><flux:icon.pencil-square class="size-5" /></span>
             <div>
-                <flux:heading size="lg">Request Regularization</flux:heading>
+                <flux:heading size="lg">Request Regularisation</flux:heading>
                 <flux:subheading>Fix a missing or wrong punch. Raw device logs stay untouched — the correction applies only after final approval.</flux:subheading>
             </div>
         </div>

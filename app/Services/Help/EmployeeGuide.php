@@ -155,7 +155,7 @@ class EmployeeGuide
             ['q' => 'Where can I check a pending leave request?', 'a' => 'Open Leave and choose the Pending & Upcoming tab. The Current Stage column shows who has it now. Leave Applications further down also lists every request with its reviewer.'],
             ['q' => 'Will my carried-forward leave expire?', 'a' => 'Casual / Sick Leave never lapses: unused days carry forward to the next leave year with no cap. Comp Off never expires either. If any other leave type ever has an expiry date, an amber alert at the top of My Time Off shows the days and the date.'],
             ['q' => 'Why is my Casual / Sick Leave 0 or very low?', 'a' => 'You earn one day for each completed month of the leave year (at most 12), so a recent joiner starts at 0. If the figure does not match your joining date, contact HR.'],
-            ['q' => 'My attendance is wrong. What should I do?', 'a' => 'Open Attendance, click Regularize in the Today card (or Request Regularisation on a day under Attendance Needs Attention), choose the punch to correct, enter the right time and a reason, and submit. It goes straight to HR for approval.'],
+            ['q' => 'My attendance is wrong. What should I do?', 'a' => 'Open Attendance and click Request Regularisation (under Common attendance actions, or on a day listed under Attendance Needs Attention), choose the punch to correct, enter the right time and a reason, and submit. It goes straight to HR for approval.'],
             ['q' => 'I forgot to clock out. Will I lose the day?', 'a' => 'The day is flagged as a missing check-out. Raise a regularisation request for the OUT punch; once approved, your hours are recalculated.'],
             ['q' => 'Where can I download my payslip?', 'a' => 'Payroll → My Payslips. Click Download PDF for the current month, or the download icon next to any month in Payslip History.'],
             ['q' => 'How do I change my profile details?', 'a' => 'Open My Profile from your name at the top right. Phone, emergency contact and photo save immediately. Name, date of birth, address, bank details, PAN and Aadhaar are sent to HR for approval. Department, manager, job title and work email can only be changed by HR.'],
@@ -188,7 +188,7 @@ class EmployeeGuide
                 ],
                 'can' => [
                     'Clock in straight from the dashboard.',
-                    'Jump to Apply Leave, Log Overtime, My Payslips, Documents, Performance or WFH Request with the quick actions.',
+                    'Jump to Request Leave, Log Overtime, My Payslips, Documents, Performance or WFH Request with the quick actions.',
                     'Open your profile and onboarding from the "Complete your profile" and "Finish your onboarding" prompts.',
                 ],
                 'next' => [
@@ -308,7 +308,7 @@ class EmployeeGuide
                 'summary' => 'If a punch is missing or wrong, ask for a correction. It goes straight to HR. The raw device record is never changed; the correction applies once HR approves it.',
                 'shots' => ['attendance-regularise'],
                 'steps' => [
-                    'On My Attendance, click Regularize in the Today card, or click Request Regularisation on a day listed under Attendance Needs Attention.',
+                    'On My Attendance, click Request Regularisation under Common attendance actions, or on a day listed under Attendance Needs Attention.',
                     'Choose the day.',
                     'Choose what to fix: a punch, or mark the day as a half day.',
                     'For a punch, tick IN and/or OUT and enter the correct time.',
@@ -385,7 +385,7 @@ class EmployeeGuide
                 'summary' => 'Apply from My Time Off. Your reporting manager reviews the request, and their decision is final. HR can step in to correct or escalate a request.',
                 'shots' => ['leave-apply', 'leave-pending-upcoming', 'leave-applications'],
                 'steps' => [
-                    'On My Time Off, click Apply Leave.',
+                    'On My Time Off, click Request Leave.',
                     'Choose the leave type (for everyday leave, Casual / Sick Leave). The Leave Assistant at the bottom of the form tells you your available balance, what is held by pending requests and any upcoming December shutdown dates.',
                     'Pick the start and end dates.',
                     'For a half day, tick Half day and choose the first or second half.',

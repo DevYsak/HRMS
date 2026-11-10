@@ -128,7 +128,7 @@ class GettingStarted
             'points' => [
                 'Today\'s status has the Clock In / Clock Out button.',
                 '"Tasks waiting for you" lists anything you need to do, such as completing your profile.',
-                'Quick Actions jump straight to Apply Leave, My Payslips, Documents and Help Desk.',
+                'Quick Actions jump straight to Request Leave, My Payslips, Documents and Help Desk.',
                 'The left sidebar lists every page you can use. Your name at the top right opens My Profile, Account settings and Help.',
             ],
             'tip' => 'Press Ctrl + K (⌘ K on a Mac) to search for any page.',
@@ -159,7 +159,7 @@ class GettingStarted
             'id' => 'apply-leave',
             'title' => 'Apply for leave',
             'icon' => 'calendar-days',
-            'intro' => 'Open Leave in the sidebar (My Time Off), check "Available to request" on your balance cards, then click Apply Leave.',
+            'intro' => 'Open Leave in the sidebar (My Time Off), check "Available to request" on your balance cards, then click Request Leave.',
             'points' => [
                 'Leave Type: choose the kind of leave.',
                 'Start Date and End Date: any day from the start of the current leave year (past dates make a backdated request, approved like any other). Leave cannot start or end on your weekly off or include a company holiday.',
@@ -197,7 +197,7 @@ class GettingStarted
             'icon' => 'clock',
             'intro' => 'Clock in and out from the dashboard or from Attendance in the sidebar.',
             'points' => [
-                'Forgot to clock out, or a punch is wrong? On My Attendance click Regularize, pick the day, enter the correct time and a reason, and submit.',
+                'Forgot to clock out, or a punch is wrong? On My Attendance click Request Regularisation, pick the day, enter the correct time and a reason, and submit.',
                 'Regularisation requests go straight to HR. When HR approves, the day\'s hours are recalculated and you are notified.',
             ],
             'tip' => null,

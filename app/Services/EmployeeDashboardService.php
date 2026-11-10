@@ -845,7 +845,7 @@ class EmployeeDashboardService
 
         $candidates = [
             ['menu' => 'attendance', 'label' => 'Clock In / Out', 'icon' => 'finger-print', 'route' => 'attendance.my'],
-            ['menu' => 'leave', 'label' => 'Apply Leave', 'icon' => 'calendar-days', 'route' => 'time-off.my'],
+            ['menu' => 'leave', 'label' => 'Request Leave', 'icon' => 'calendar-days', 'route' => 'time-off.my'],
             ['menu' => 'overtime', 'label' => 'Log Overtime', 'icon' => 'bolt', 'route' => 'overtime.my'],
             ['menu' => 'wfh', 'label' => 'WFH Request', 'icon' => 'home-modern', 'route' => 'wfh.my'],
             ['menu' => 'payroll', 'label' => 'My Payslips', 'icon' => 'banknotes', 'route' => 'payroll.payslips', 'allowed' => $canViewPayslips],

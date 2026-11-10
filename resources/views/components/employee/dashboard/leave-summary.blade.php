@@ -101,7 +101,7 @@
         <div class="flex items-center gap-3 pt-4">
             <a href="{{ route('time-off.my', ['request' => 1]) }}" wire:navigate
                class="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-orange-500 px-3 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-orange-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500">
-                <flux:icon.plus class="size-4" /> Apply Leave
+                <flux:icon.plus class="size-4" /> Request Leave
             </a>
             <a href="{{ route('time-off.my') }}" wire:navigate
                class="inline-flex items-center gap-1 text-sm font-medium text-zinc-600 transition hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white">

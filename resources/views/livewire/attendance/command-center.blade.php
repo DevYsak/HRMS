@@ -105,7 +105,7 @@
     {{-- ═══════════════ REQUEST CATEGORIES ═══════════════ --}}
     @php
         $tabs = [
-            'regularisation' => ['Regularization', 'pencil-square', '#F97316'],
+            'regularisation' => ['Regularisation', 'pencil-square', '#F97316'],
             'leave' => ['Leave', 'calendar-days', '#8b5cf6'],
             'wfh' => ['Work From Home', 'home', '#3b82f6'],
             'overtime' => ['Overtime', 'bolt', '#f59e0b'],
@@ -264,7 +264,7 @@
     {{-- ═══════════════ RECENT NEW REQUESTS (latest incoming, all categories) ═══════════════ --}}
     @php
         $typeStyles = [
-            'Regularization' => ['pencil-square', '#F97316'],
+            'Regularisation' => ['pencil-square', '#F97316'],
             'Leave' => ['calendar-days', '#8b5cf6'],
             'WFH' => ['home', '#3b82f6'],
             'Overtime' => ['bolt', '#f59e0b'],
