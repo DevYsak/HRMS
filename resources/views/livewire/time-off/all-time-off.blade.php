@@ -255,7 +255,7 @@
                             <x-clean-select model="perPage" :live="true"
                                 :options="[['value' => '10', 'label' => '10'], ['value' => '25', 'label' => '25'], ['value' => '50', 'label' => '50']]" />
                         </div>
-                        {{ $requests->links('vendor.pagination.simple-tailwind') }}
+                        {{ $requests->links('vendor.pagination.livewire-simple-tailwind') }}
                     </div>
                 </div>
             </div>

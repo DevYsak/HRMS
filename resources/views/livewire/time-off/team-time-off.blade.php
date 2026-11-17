@@ -396,7 +396,7 @@
                             :options="[['value' => '10', 'label' => '10'], ['value' => '25', 'label' => '25'], ['value' => '50', 'label' => '50']]" />
                     </div>
                     <div class="flex items-center gap-1">
-                        {{ $history->links('vendor.pagination.simple-tailwind') }}
+                        {{ $history->links('vendor.pagination.livewire-simple-tailwind') }}
                     </div>
                 </div>
             </div>
