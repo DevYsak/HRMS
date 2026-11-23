@@ -6,6 +6,7 @@ use App\Http\Middleware\EnsureModuleEnabled;
 use App\Http\Middleware\EnsureRole;
 use App\Models\AttendanceRegularisation;
 use App\Models\AttendanceSetting;
+use App\Models\AuditLog;
 use App\Models\Company;
 use App\Models\DecemberMandatoryDay;
 use App\Models\DocumentAcknowledgement;
@@ -45,6 +46,7 @@ use App\Observers\PayrollObserver;
 use App\Observers\PayslipObserver;
 use App\Observers\ReimbursementObserver;
 use App\Observers\UserObserver;
+use App\Services\Attendance\ShiftHistory;
 use App\Services\EmployeeImportService;
 use App\Services\ModuleFeatureService;
 use App\Services\Navigation\DashboardAccess;
@@ -80,6 +82,10 @@ class AppServiceProvider extends ServiceProvider
         // Module switches are read once per request, however many menus,
         // routes and components ask.
         $this->app->scoped(ModuleFeatureService::class);
+
+        // The audit-log shift history is read once per request / job (and
+        // flushed when an employee or shift change is audited).
+        $this->app->scoped(ShiftHistory::class);
     }
 
     /**
@@ -98,6 +104,13 @@ class AppServiceProvider extends ServiceProvider
         $this->configureDefaults();
         $this->configureDateDisplay();
         $this->registerObservers();
+
+        // A recorded employee or shift change: the shift history reads the log again.
+        AuditLog::created(function (AuditLog $log): void {
+            if (in_array($log->auditable_type, [Employee::class, ShiftSetting::class], true) && $this->app->resolved(ShiftHistory::class)) {
+                $this->app->make(ShiftHistory::class)->flush();
+            }
+        });
 
         // Re-apply the route's role:/can: checks on every Livewire update
         // request too, not only on the initial page load — a user demoted

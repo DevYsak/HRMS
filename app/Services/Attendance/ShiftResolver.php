@@ -15,7 +15,9 @@ use Illuminate\Support\Carbon;
  * auto punch-out) reads from the returned {@see ResolvedShift} rather than a
  * hardcoded literal. Resolution order, all DB-driven:
  *
- *   1. The employee's assigned ShiftSetting (employees.shift_id).
+ *   1. The employee's assigned ShiftSetting (employees.shift_id) — as it
+ *      stood on that day: a later move to another shift, or a later edit of
+ *      the shift's timings, does not reach back (ShiftHistory).
  *   2. The shift HR nominated as the company default (is_default).
  *
  * Returns null when neither applies. Callers all guard for that and skip,
@@ -35,7 +37,10 @@ class ShiftResolver
     {
         $day = $date instanceof Carbon ? $date->copy() : Carbon::parse($date);
 
-        $shift = $employee->shift ?? self::companyDefault();
+        // The shift that applied on that day (ShiftHistory): today's shift
+        // unless a recorded change says otherwise, so a past day is never
+        // judged against a shift the employee moved to later.
+        $shift = app(ShiftHistory::class)->shiftOn($employee, $day) ?? self::companyDefault();
         $settings = self::settings();
 
         // No assigned shift and no nominated default: refuse to guess.
