@@ -136,7 +136,7 @@ class AttendanceReportBuilder
      * that rely on it; the window-based reports take every non-archived
      * employee and let the working-day rules decide employment.
      */
-    protected function employeeQuery(array $filters, bool $activeOnly = true): Builder
+    public function employeeQuery(array $filters, bool $activeOnly = true): Builder
     {
         return Employee::query()->whereHas('user')
             ->when($filters['department_id'] ?? null, fn ($q, $v) => $q->where('department_id', $v))

@@ -4,9 +4,12 @@ namespace App\Services;
 
 use Illuminate\Support\Str;
 use OpenSpout\Common\Entity\Row;
+use OpenSpout\Common\Entity\Style\Style;
 use OpenSpout\Reader\CSV\Reader as CsvReader;
 use OpenSpout\Reader\XLSX\Reader as XlsxReader;
+use OpenSpout\Writer\AutoFilter;
 use OpenSpout\Writer\CSV\Writer as CsvWriter;
+use OpenSpout\Writer\XLSX\Entity\SheetView;
 use OpenSpout\Writer\XLSX\Writer as XlsxWriter;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
@@ -34,6 +37,47 @@ class SpreadsheetService
         foreach ($rows as $row) {
             $writer->addRow(Row::fromValues(array_map(fn ($v) => $v ?? '', array_values($row))));
         }
+        $writer->close();
+
+        return response()
+            ->download($tmp, $filename)
+            ->deleteFileAfterSend(true);
+    }
+
+    /**
+     * Stream an xlsx workbook of several sheets. Each sheet gets a bold,
+     * frozen heading row with filters, and column widths when given.
+     *
+     * @param  list<array{name: string, headings: list<string>, rows: list<list<mixed>>, widths?: list<float>}>  $sheets
+     */
+    public function downloadWorkbook(array $sheets, string $filename): BinaryFileResponse
+    {
+        $tmp = tempnam(sys_get_temp_dir(), 'book_');
+        $heading = (new Style)->withFontBold(true)->withFontColor('FFFFFF')->withBackgroundColor('F97316');
+
+        $writer = new XlsxWriter;
+        $writer->openToFile($tmp);
+
+        foreach (array_values($sheets) as $index => $sheet) {
+            $current = $index === 0 ? $writer->getCurrentSheet() : $writer->addNewSheetAndMakeItCurrent();
+            // Excel caps a sheet name at 31 characters and refuses : \ / ? * [ ].
+            $current->setName(Str::limit(str_replace([':', '\\', '/', '?', '*', '[', ']'], ' ', $sheet['name']), 31, ''));
+            $current->setSheetView((new SheetView)->withFreezeRow(2));
+
+            foreach ($sheet['widths'] ?? [] as $column => $width) {
+                $current->setColumnWidth($width, $column + 1);
+            }
+
+            $writer->addRow(Row::fromValuesWithStyle($sheet['headings'], $heading));
+            foreach ($sheet['rows'] as $row) {
+                $writer->addRow(Row::fromValues(array_map(fn ($v) => $v ?? '', array_values($row))));
+            }
+
+            if ($sheet['rows'] !== []) {
+                $current->setAutoFilter(new AutoFilter(0, 1, count($sheet['headings']) - 1, count($sheet['rows']) + 1));
+            }
+        }
+
         $writer->close();
 
         return response()

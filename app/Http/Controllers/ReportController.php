@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Livewire\Attendance\AttendanceReports;
 use App\Models\Attendance;
+use App\Models\AuditLog;
 use App\Models\Employee;
 use App\Models\EmployeeKpi;
 use App\Models\LeaveEncashment;
@@ -19,17 +20,20 @@ use App\Models\PromotionRecommendation;
 use App\Models\WarningLetter;
 use App\Services\Attendance\AttendanceCalculator;
 use App\Services\Attendance\AttendanceWindowService;
+use App\Services\Attendance\AttendanceWorkbook;
 use App\Services\AttendanceReportBuilder;
 use App\Services\Leave\LeaveYearResolver;
 use App\Services\OvertimeService;
 use App\Services\Performance\PerformanceStatusService;
 use App\Services\Security\PeopleScope;
+use App\Services\SpreadsheetService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ReportController extends Controller
@@ -88,6 +92,39 @@ class ReportController extends Controller
             }
             fclose($handle);
         }, $filename, ['Content-Type' => 'text/csv']);
+    }
+
+    /** Longest period one workbook covers, so a request cannot ask for years of daily rows. */
+    public const WORKBOOK_MAX_DAYS = 366;
+
+    /**
+     * The attendance Excel workbook — Summary, Late Marks, Detailed
+     * Attendance, Shift Changes — with the same gate, reach and filters as the
+     * Attendance Reports page, so it covers exactly the people shown there.
+     */
+    public function attendanceWorkbook(Request $request, AttendanceWorkbook $workbook, SpreadsheetService $sheets): BinaryFileResponse
+    {
+        $filters = $this->attendanceReportFilters($request);
+        $from = Carbon::parse($filters['from'] ?? now()->startOfMonth())->startOfDay();
+        $to = Carbon::parse($filters['to'] ?? now())->startOfDay();
+
+        abort_if(abs($from->diffInDays($to)) >= self::WORKBOOK_MAX_DAYS, 422, 'Choose a period of up to one year for the Excel workbook.');
+
+        // A year of daily rows for everyone takes longer than a page. Never
+        // from the console: there it would cap the whole process (test runs).
+        if (! app()->runningInConsole()) {
+            @set_time_limit(300);
+        }
+
+        AuditLog::record($request->user(), 'attendance.workbook_exported', null, array_filter([
+            'from' => $from->toDateString(), 'to' => $to->toDateString(),
+            'department_id' => $filters['department_id'], 'employee_id' => $filters['employee_id'], 'mode' => $filters['mode'],
+        ]));
+
+        return $sheets->downloadWorkbook(
+            $workbook->sheets($filters),
+            'attendance-workbook-'.$from->format('Ymd').'-'.$to->format('Ymd').'.xlsx',
+        );
     }
 
     /** Enterprise attendance report → PDF, full result set (portrait/landscape by width). */

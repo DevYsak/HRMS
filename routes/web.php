@@ -624,6 +624,9 @@ Route::middleware(['auth'])->group(function () {
             ->name('attendance-report-csv');
         Route::get('/attendance-report.pdf', [ReportController::class, 'attendanceReportPdf'])
             ->name('attendance-report-pdf');
+        // The Excel workbook: summary, late marks, detailed attendance, shift changes.
+        Route::get('/attendance-workbook.xlsx', [ReportController::class, 'attendanceWorkbook'])
+            ->name('attendance-workbook');
     });
 
     // --------------------------------------------------

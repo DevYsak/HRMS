@@ -10,6 +10,10 @@
         <x-pulse.scope-badge :scope="$scope" class="mt-2" />
     </div>
     <div class="flex flex-wrap items-center gap-2">
+        {{-- Every report's people and period, as one workbook: Summary, Late Marks, Detailed Attendance, Shift Changes. --}}
+        <a href="{{ route('reports.attendance-workbook', $this->exportParams) }}" data-attendance-workbook
+           title="Summary, late marks, detailed attendance and shift changes for the people and period selected below"
+           class="inline-flex items-center gap-1.5 rounded-xl bg-orange-500 px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-orange-600"><flux:icon.arrow-down-tray class="size-4" /> Excel workbook</a>
         <a href="{{ route('reports.attendance-report-csv', $this->exportParams) }}"
            class="inline-flex items-center gap-1.5 rounded-xl border border-orange-100 bg-white dark:border-zinc-700 dark:bg-zinc-900 px-3 py-2 text-xs font-bold text-zinc-600 dark:text-zinc-300 shadow-sm transition hover:bg-orange-50 dark:hover:bg-zinc-800"><flux:icon.table-cells class="size-4 text-emerald-500" /> CSV / Excel</a>
         <a href="{{ route('reports.attendance-report-pdf', $this->exportParams) }}" target="_blank"
