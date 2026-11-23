@@ -172,6 +172,9 @@
     </div>
 </div>
 
+{{-- ═══════════════ ATTENDANCE HISTORY SYNC ═══════════════ --}}
+<livewire:attendance.history-sync-panel />
+
 {{-- ═══════════════ SYNC LOGS + CAPABILITY NOTE ═══════════════ --}}
 <div class="grid grid-cols-1 gap-4 lg:grid-cols-12">
     <div class="ui-surface overflow-hidden lg:col-span-8">
