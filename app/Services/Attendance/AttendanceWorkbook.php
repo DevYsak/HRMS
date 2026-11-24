@@ -40,6 +40,7 @@ class AttendanceWorkbook
         private AttendanceWindowService $window,
         private AttendanceCalculator $calculator,
         private ShiftResolver $shifts,
+        private MissedPunchTracker $missed,
     ) {}
 
     /**
@@ -76,6 +77,7 @@ class AttendanceWorkbook
                 ->whereBetween('punch_date', [$from->toDateString(), $to->toDateString()])
                 ->orderBy('punched_at')->get()
                 ->groupBy(fn (AttendancePunch $p) => $p->punch_date->toDateString());
+            $missedByDay = $this->missed->between($employee, $from, $to);
             $otDays = OtRequest::where('employee_id', $employee->id)->where('status', 'approved')
                 ->whereBetween('work_date', [$from->toDateString(), $to->toDateString()])
                 ->pluck('work_date')->map(fn ($d) => Carbon::parse($d)->toDateString())->flip();
@@ -159,6 +161,8 @@ class AttendanceWorkbook
                     $row?->is_regularized ? 'Yes' : 'No',
                     $row?->is_auto_checkout ? 'Yes' : 'No',
                     $dayPunches->isNotEmpty() ? 'Biometric' : ($row ? 'Web / manual' : '—'),
+                    count($missedByDay[$date] ?? []),
+                    collect($missedByDay[$date] ?? [])->map(fn (array $m) => $m['label'].($m['resolved'] ? ' (regularised)' : ''))->implode('; '),
                 ];
             }
 
@@ -180,6 +184,9 @@ class AttendanceWorkbook
                 $totals['missing_out'],
                 $totals['regularised'],
                 round($totals['ot_min'] / 60, 2),
+                collect($missedByDay)->sum(fn (array $list) => count($list)),
+                collect($missedByDay)->groupBy(fn (array $list, string $date) => Carbon::parse($date)->startOfWeek(Carbon::MONDAY)->toDateString(), preserveKeys: true)
+                    ->filter(fn ($week) => $week->sum(fn (array $list) => count($list)) >= MissedPunchTracker::WEEKLY_WARNING_AT)->count(),
             ];
         }
 
@@ -188,9 +195,10 @@ class AttendanceWorkbook
                 'name' => 'Summary',
                 'headings' => ['Emp ID', 'Employee', 'Department', 'Shift(s) in period', 'Shift change', 'Working days', 'Present (incl. late)',
                     'Late marks', 'Total late (min)', 'Total late', 'Avg late (min)', 'Absent', 'Leave days', 'Weekly offs / holidays',
-                    'Worked on off day', 'Total worked (h)', 'Avg worked per present day (h)', 'Missing check-outs', 'Regularised days', 'Approved OT (h)'],
+                    'Worked on off day', 'Total worked (h)', 'Avg worked per present day (h)', 'Missing check-outs', 'Regularised days', 'Approved OT (h)',
+                    'Missed punches', 'Weeks with '.MissedPunchTracker::WEEKLY_WARNING_AT.'+ missed'],
                 'rows' => $summary,
-                'widths' => [10, 26, 18, 44, 60, 12, 12, 10, 12, 12, 12, 9, 10, 14, 12, 12, 14, 12, 12, 12],
+                'widths' => [10, 26, 18, 44, 60, 12, 12, 10, 12, 12, 12, 9, 10, 14, 12, 12, 14, 12, 12, 12, 12, 14],
             ],
             [
                 'name' => 'Late Marks',
@@ -203,9 +211,9 @@ class AttendanceWorkbook
                 'name' => 'Detailed Attendance',
                 'headings' => ['Emp ID', 'Employee', 'Department', 'Date', 'Day', 'Status', 'Shift', 'Shift timing', 'First in', 'Last out',
                     'Worked', 'Worked (h)', 'Break (min)', 'Late by (min)', 'Approved OT (h)', 'Missing check-out', 'Punches', 'Punch times',
-                    'In method', 'Out method', 'Work mode', 'Regularised', 'Auto check-out', 'Source'],
+                    'In method', 'Out method', 'Work mode', 'Regularised', 'Auto check-out', 'Source', 'Missed punches', 'Missed punch details'],
                 'rows' => $detail,
-                'widths' => [10, 26, 18, 12, 6, 13, 18, 34, 10, 10, 10, 10, 10, 12, 13, 14, 9, 60, 11, 11, 11, 11, 13, 13],
+                'widths' => [10, 26, 18, 12, 6, 13, 18, 34, 10, 10, 10, 10, 10, 12, 13, 14, 9, 60, 11, 11, 11, 11, 13, 13, 12, 60],
             ],
             [
                 'name' => 'Shift Changes',
@@ -302,6 +310,8 @@ class AttendanceWorkbook
             ['Shift history', 'Moves to another shift are in the history since the first release. Edits of a shift\'s own timings are recorded from '
                 .Carbon::parse(ShiftHistory::TIMING_AUDIT_FROM)->format('d M Y').'; an earlier timing edit is not in the history, so those days use the timings recorded after it.'],
             ['Missing check-out', 'A day with a clock-in and no final clock-out after the shift end plus one hour. Nothing more is counted for it.'],
+            ['Missed punch', 'Two INs in a row (a missed OUT), two OUTs in a row (a missed IN), or no final check-out once it is overdue. A regularised day still shows what was missed. '
+                .MissedPunchTracker::WEEKLY_WARNING_AT.' or more in one Monday–Sunday week is a warning.'],
             ['Source', 'Biometric = device punches synced from the attendance engine; Web / manual = clocked in on the web or recorded by HR.'],
         ];
 

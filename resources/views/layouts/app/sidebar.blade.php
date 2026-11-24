@@ -415,6 +415,8 @@
     {{-- AI HR Copilot — renders nothing unless OPENAI_API_KEY is configured --}}
     @auth
         <livewire:ai-copilot />
+        {{-- Missed-punch popup — renders nothing unless the employee has a new missed punch --}}
+        <livewire:attendance.missed-punch-popup />
     @endauth
 
     @fluxScripts

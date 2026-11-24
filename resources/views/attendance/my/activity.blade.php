@@ -22,6 +22,7 @@
         'break_end' => ['icon' => 'play', 'dot' => 'bg-gradient-to-b from-sky-400 to-blue-600 text-white ring-sky-100 dark:ring-sky-500/20', 'badge' => 'bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-300'],
         'auto' => ['icon' => 'clock', 'dot' => 'border-2 border-dashed border-orange-400 bg-orange-50 text-orange-600 ring-orange-50 dark:bg-orange-500/10 dark:text-orange-300 dark:ring-orange-500/10', 'badge' => 'bg-orange-50 text-orange-700 dark:bg-orange-500/10 dark:text-orange-300'],
         'regularised' => ['icon' => 'pencil-square', 'dot' => 'bg-gradient-to-b from-violet-400 to-violet-600 text-white ring-violet-100 dark:ring-violet-500/20', 'badge' => 'bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-300'],
+        'missed' => ['icon' => 'exclamation-triangle', 'dot' => 'border-2 border-dashed border-red-400 bg-red-50 text-red-600 ring-red-100 dark:bg-red-500/10 dark:text-red-300 dark:ring-red-500/20', 'badge' => 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300'],
     ];
     $clockStart = $activity['clock_start_ms'];
     $elapsed = $clockStart ? max(0, intdiv((int) (now()->getTimestampMs() - $clockStart), 1000)) : 0;
@@ -66,6 +67,17 @@
                 </span>
                 {{ $stateBadge[0] }}
             </span>
+
+            {{-- Punches missed this Monday–Sunday week: red, with a warning, from 3. --}}
+            @if(($activity['missed_week'] ?? 0) > 0)
+                @php $missedWarn = $activity['missed_week'] >= \App\Services\Attendance\MissedPunchTracker::WEEKLY_WARNING_AT; @endphp
+                <span @class(['inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset',
+                    'bg-red-50 text-red-700 ring-red-200 dark:bg-red-500/10 dark:text-red-300 dark:ring-red-500/30' => $missedWarn,
+                    'bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/30' => ! $missedWarn])
+                      title="{{ $missedWarn ? 'Warning: '.\App\Services\Attendance\MissedPunchTracker::WEEKLY_WARNING_AT.' or more missed punches in one week' : 'Missed punches this week' }}" data-missed-week="{{ $activity['missed_week'] }}">
+                    <flux:icon.exclamation-triangle variant="micro" class="size-3.5" />{{ $activity['missed_week'] }} missed this week
+                </span>
+            @endif
 
             @if($state === 'working' && $clockStart)
                 <div wire:key="today-clock-{{ $clockStart }}" class="rounded-xl bg-emerald-50 px-3.5 py-1.5 text-center ring-1 ring-inset ring-emerald-100 dark:bg-emerald-500/10 dark:ring-emerald-500/20"

@@ -353,7 +353,15 @@ trait FiltersAttendanceHistory
      */
     public function historyExceptions(array $r, bool $liveToday = false): array
     {
+        $missed = $r['missed'] ?? [];
+
         return array_values(array_filter([
+            // A punch missed mid-day (MissedPunchTracker): "Missed OUT", or "Missed punches ×2".
+            match (true) {
+                count($missed) === 1 => $missed[0]['kind'] === 'in' ? 'Missed IN' : 'Missed OUT',
+                count($missed) > 1 => 'Missed punches ×'.count($missed),
+                default => null,
+            },
             ($r['auto_checkout'] ?? false) ? 'Auto Checkout' : null,
             ($r['missing_checkout'] ?? false) && ! ($r['auto_checkout'] ?? false) && ! $liveToday ? 'Missing OUT' : null,
             ($r['regularised'] ?? false) ? 'Regularised' : null,

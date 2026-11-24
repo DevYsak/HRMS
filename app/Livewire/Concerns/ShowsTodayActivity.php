@@ -322,6 +322,28 @@ trait ShowsTodayActivity
             ];
         }
 
+        // Missed punches today (MissedPunchTracker), each just after the punch
+        // it follows — a missed OUT sits between the two INs.
+        foreach ($this->missedPunches[Carbon::today()->toDateString()] ?? [] as $missed) {
+            $title = match ($missed['kind']) {
+                'in' => 'Missed IN',
+                'out' => 'Missed OUT',
+                default => 'Missed Check-out',
+            };
+            $events[] = [
+                'ts' => (int) ($missed['after_ms'] ?? 0) + 1,
+                'kind' => 'missed',
+                'time' => $missed['kind'] === 'checkout' ? 'After '.$missed['after'] : $missed['after'].' – '.$missed['before'],
+                'title' => $title,
+                'badge' => 'MISSED',
+                'details' => [
+                    'Event' => $missed['label'],
+                    'Status' => $missed['resolved'] ? 'Regularised' : 'Not regularised yet',
+                    'What to do' => $missed['resolved'] ? 'Nothing — HR approved the correction' : 'Request a regularisation so your hours are right',
+                ],
+            ];
+        }
+
         usort($events, fn ($a, $b) => $a['ts'] <=> $b['ts']);
 
         $onBreak = $this->activeBreak !== null;
@@ -343,6 +365,8 @@ trait ShowsTodayActivity
             'state' => $state,
             'clock_start_ms' => $clockStart,
             'since' => $clockStart ? $fmt((int) $clockStart, 'h:i A') : null,
+            // Punches missed this Monday–Sunday week (warning from MissedPunchTracker::WEEKLY_WARNING_AT).
+            'missed_week' => $this->missedWeekCount,
         ];
     }
 }

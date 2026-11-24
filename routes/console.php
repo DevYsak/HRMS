@@ -197,6 +197,14 @@ Schedule::command('attendance:sync-engine')
     ->withoutOverlapping()
     ->runInBackground();
 
+// Missed punches: notify each one (and a 3+-a-week warning) to the employee
+// and their manager, five minutes behind every engine sync, over yesterday
+// and today. Keyed, so nobody is notified twice.
+Schedule::command('attendance:missed-punches')
+    ->cron('5,15,25,35,45,55 7-23 * * *')
+    ->withoutOverlapping()
+    ->runInBackground();
+
 // Nightly catch-up: re-sync the last 14 days so short engine/network outages
 // or late corrections self-heal without a manual backfill → 23:50 IST
 Schedule::command('attendance:sync-engine --days=14 --resilient')

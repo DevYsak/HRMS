@@ -8,6 +8,8 @@ use App\Models\NotificationSetting;
 use App\Models\User;
 use App\Notifications\AttendanceExceptionNotification;
 use App\Notifications\AttendanceRegularisationNotification;
+use App\Notifications\MissedPunchNotification;
+use App\Notifications\MissedPunchWeeklyWarningNotification;
 use App\Notifications\MissingCheckoutNotification;
 use Illuminate\Support\Collection;
 
@@ -41,6 +43,8 @@ class NotificationRecipientPolicy
      */
     public const RECIPIENT_AWARE = [
         MissingCheckoutNotification::class,
+        MissedPunchNotification::class,
+        MissedPunchWeeklyWarningNotification::class,
         AttendanceRegularisationNotification::class,
         AttendanceExceptionNotification::class,
     ];

@@ -34,6 +34,7 @@ use App\Services\Attendance\AttendanceRateService;
 use App\Services\Attendance\AttendanceScoreEngine;
 use App\Services\Attendance\AttendanceWindowService;
 use App\Services\Attendance\HolidayResolver;
+use App\Services\Attendance\MissedPunchTracker;
 use App\Services\Attendance\PunchClassifier;
 use App\Services\Attendance\PunchTimeline as PunchTimelineEngine;
 use App\Services\Attendance\ShiftProgress;
@@ -173,6 +174,16 @@ class AttendanceTracker extends Component
     /** Smart Attendance Alerts — missing check-in/out/break, past & present. */
     public array $attendanceAlerts = [];
 
+    /**
+     * Missed punches of the last 7 days (and this week), by date — see MissedPunchTracker.
+     *
+     * @var array<string, list<array<string, mixed>>>
+     */
+    public array $missedPunches = [];
+
+    /** Punches missed this Monday–Sunday week (a warning from MissedPunchTracker::WEEKLY_WARNING_AT). */
+    public int $missedWeekCount = 0;
+
     /** Auto-generated plain-language attendance insights for the period. */
     public array $insights = [];
 
@@ -309,6 +320,14 @@ class AttendanceTracker extends Component
         $this->initialiseHistoryFilters();
         if ($this->historyMonth !== '' && ! $this->historyCursor()->isSameMonth(Carbon::today())) {
             $this->alignStatsToHistoryMonth();
+        }
+
+        // A missed-punch popup or notification links here with ?regularise=DATE:
+        // open the request for that day straight away.
+        $regularise = (string) request()->query('regularise', '');
+        if (Auth::user()->employee && preg_match('/^\d{4}-\d{2}-\d{2}$/', $regularise)
+            && strtotime($regularise) !== false && Carbon::parse($regularise)->lte(Carbon::today())) {
+            $this->openRegularisation($regularise);
         }
     }
 
@@ -462,6 +481,17 @@ class AttendanceTracker extends Component
                 // day's punches; the biometric_devices row may hold none.
                 'serial' => $s->device_serial,
             ])->all();
+
+        // Missed punches (MissedPunchTracker — the one definition): the last 7
+        // days and this Monday–Sunday week, for the alerts, the weekly count
+        // and Today Activity. Plain arrays: a Livewire property holds no Carbon.
+        $weekStart = Carbon::today()->startOfWeek(Carbon::MONDAY);
+        $this->missedPunches = collect(app(MissedPunchTracker::class)->between($employee, Carbon::today()->subDays(6)->min($weekStart), Carbon::today()))
+            ->map(fn (array $list) => array_map(fn (array $m) => array_diff_key($m, ['after_at' => true]), $list))
+            ->all();
+        $this->missedWeekCount = collect($this->missedPunches)
+            ->filter(fn (array $list, string $date) => $date >= $weekStart->toDateString())
+            ->sum(fn (array $list) => count($list));
 
         $this->attendanceAlerts = $this->buildAttendanceAlerts();
 
@@ -1070,6 +1100,34 @@ class AttendanceTracker extends Component
             ];
         }
 
+        // ── Missed punches in the middle of past days (today's are on the
+        // Today Activity timeline; missed check-outs are listed above) ──
+        foreach (collect($this->missedPunches)->except([$today->toDateString()])->sortKeysDesc() as $date => $list) {
+            foreach ($list as $missed) {
+                if ($missed['kind'] === MissedPunchTracker::KIND_CHECKOUT || $missed['resolved']) {
+                    continue;
+                }
+                $alerts[] = [
+                    'type' => 'missed_punch',
+                    'label' => $missed['kind'] === MissedPunchTracker::KIND_IN ? 'Missed IN punch' : 'Missed OUT punch',
+                    'detail' => Carbon::parse($date)->format('D, d M').' · '.$missed['label'],
+                    'date' => $date,
+                    'action' => true,
+                ];
+            }
+        }
+
+        // ── 3+ missed punches this week: a warning ──
+        if ($this->missedWeekCount >= MissedPunchTracker::WEEKLY_WARNING_AT) {
+            $alerts[] = [
+                'type' => 'missed_punch_week',
+                'label' => "Warning — {$this->missedWeekCount} missed punches this week",
+                'detail' => 'Missed punches lower your attendance score. Punch Face IN and ID Card OUT every time you leave and come back, and regularise the ones above.',
+                'date' => $today->toDateString(),
+                'action' => false,
+            ];
+        }
+
         // Biometric device offline (no sync in 30+ minutes on a working day).
         $sync = $this->biometricDevice?->last_synced_at;
         if ($sync && Carbon::parse($sync)->lt(now()->subMinutes(30)) && ! app(WorkingDayResolver::class)->isWeeklyOff($today)) {
@@ -1288,9 +1346,11 @@ class AttendanceTracker extends Component
             ->keyBy(fn ($r) => Carbon::parse($r->work_date)->toDateString());
         $holidayNames = app(HolidayResolver::class)->keyedForEmployee($employee, $from, $to);
 
+        $missedByDay = app(MissedPunchTracker::class)->between($employee, $from, $to);
+
         $today = Carbon::today();
         $rows = [];
-        $totals = array_fill_keys(['present', 'late', 'wfh', 'half_day', 'absent', 'leave', 'holiday', 'mdl', 'weekly_off', 'worked_off', 'missing_checkout', 'regularised', 'worked_minutes', 'break_minutes', 'ot_hours', 'completed_days', 'completed_minutes'], 0);
+        $totals = array_fill_keys(['present', 'late', 'wfh', 'half_day', 'absent', 'leave', 'holiday', 'mdl', 'weekly_off', 'worked_off', 'missing_checkout', 'regularised', 'worked_minutes', 'break_minutes', 'ot_hours', 'completed_days', 'completed_minutes', 'missed'], 0);
 
         foreach ($states as $key => $day) {
             $date = Carbon::parse($key);
@@ -1343,8 +1403,14 @@ class AttendanceTracker extends Component
                 'regularised' => (bool) ($a?->is_regularized),
                 // Closed by the nightly auto checkout at shift end (not a real OUT).
                 'auto_checkout' => (bool) $a?->isSystemAutoCheckout(),
+                // Punches missed in the middle of the day (the check-out is "missing_checkout").
+                'missed' => array_values(array_map(
+                    fn (array $m) => ['kind' => $m['kind'], 'label' => $m['label'], 'resolved' => $m['resolved']],
+                    array_filter($missedByDay[$key] ?? [], fn (array $m) => $m['kind'] !== MissedPunchTracker::KIND_CHECKOUT),
+                )),
             ];
 
+            $totals['missed'] += count($missedByDay[$key] ?? []);
             $totals['worked_minutes'] += $worked;
             $totals['break_minutes'] += $break;
             $totals['ot_hours'] += $otHours;

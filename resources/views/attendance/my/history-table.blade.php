@@ -34,7 +34,9 @@
                 $exceptions = $this->historyExceptions($r, $isToday && $isLive);
                 $mode = $r['mode'] ? \App\Enums\AttendanceMode::tryFromValue($r['mode']) : null;
             @endphp
-            <tr @class(['text-zinc-700 dark:text-slate-300', 'cursor-pointer transition hover:bg-orange-50/40 dark:hover:bg-white/[0.03]' => $hasPunch, 'text-zinc-400 dark:text-slate-500' => ! $hasPunch])
+            @php $missedRow = ($r['missed'] ?? []) !== [] || (($r['missing_checkout'] ?? false) && ! ($r['auto_checkout'] ?? false) && ! ($isToday && $isLive)); @endphp
+            <tr @class(['text-zinc-700 dark:text-slate-300', 'cursor-pointer transition hover:bg-orange-50/40 dark:hover:bg-white/[0.03]' => $hasPunch, 'text-zinc-400 dark:text-slate-500' => ! $hasPunch, 'bg-red-50/60 dark:bg-red-500/[0.06]' => $missedRow])
+                @if($missedRow) data-history-missed title="{{ collect($r['missed'] ?? [])->pluck('label')->implode('; ') ?: 'No check-out recorded' }}" @endif
                 @if($hasPunch) wire:click="showPunchDetail('{{ $r['date'] }}')" @endif
                 wire:key="history-row-{{ $r['date'] }}"
                 data-history-row="{{ $r['date'] }}">
@@ -54,9 +56,10 @@
                     @forelse($exceptions as $ex)
                         <span @class([
                             'mr-1 inline-block whitespace-nowrap rounded-md px-1.5 py-0.5 text-[11px] font-semibold',
+                            'bg-red-100 text-red-700 ring-1 ring-inset ring-red-200 dark:bg-red-500/15 dark:text-red-300 dark:ring-red-500/30' => str_starts_with($ex, 'Missed'),
                             'bg-orange-50 text-orange-700 dark:bg-orange-500/10 dark:text-orange-300' => str_starts_with($ex, 'Missing') || str_starts_with($ex, 'Late') || $ex === 'Auto Checkout',
                             'bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-300' => str_starts_with($ex, 'Regularis'),
-                            'bg-zinc-100 text-zinc-600 dark:bg-white/[0.05] dark:text-slate-300' => ! str_starts_with($ex, 'Missing') && ! str_starts_with($ex, 'Late') && ! str_starts_with($ex, 'Regularis') && $ex !== 'Auto Checkout',
+                            'bg-zinc-100 text-zinc-600 dark:bg-white/[0.05] dark:text-slate-300' => ! str_starts_with($ex, 'Missing') && ! str_starts_with($ex, 'Missed') && ! str_starts_with($ex, 'Late') && ! str_starts_with($ex, 'Regularis') && $ex !== 'Auto Checkout',
                         ])>{{ $ex }}</span>
                     @empty
                         <span class="text-zinc-300 dark:text-slate-600">—</span>

@@ -116,13 +116,22 @@ class AttendanceScoreEngine
             }
         }
 
-        // Missing punch — an unresolved gap the engine flagged.
-        $missingPunch = ($metrics['needs_regularization'] ?? false)
+        // Missed punches (MissedPunchTracker — the one definition): each one
+        // not yet regularised costs the missing-punch penalty, so two missed
+        // punches cost twice one. A check-out the nightly auto checkout closed
+        // is the auto punch-out deduction below instead.
+        $missed = collect(app(MissedPunchTracker::class)->forDay(
+            $employee, $day, $punches->where('source', '!=', 'regularisation')->values(), $attendance,
+        ))->reject(fn (array $m) => $m['resolved'] || $m['auto_closed']
+            || ($m['kind'] === MissedPunchTracker::KIND_CHECKOUT && $attendance->is_auto_checkout));
+        $missingPunch = $missed->isNotEmpty()
+            || ($metrics['needs_regularization'] ?? false)
             || ($metrics['missing_out'] ?? false)
             || (! $attendance->check_out);
-        if ($missingPunch && ! $attendance->is_regularized && ! $attendance->is_auto_checkout) {
-            $apply('missing_punch', 'Missing punch', -$settings->missing_punch_penalty,
-                'An IN/OUT punch is missing and has not been regularized.');
+        if ($missed->isNotEmpty() && ! $attendance->is_regularized) {
+            $apply('missing_punch', $missed->count() === 1 ? 'Missing punch' : 'Missed punches ('.$missed->count().')',
+                -$settings->missing_punch_penalty * $missed->count(),
+                $missed->pluck('label')->implode('; ').' — not regularized.');
         }
 
         // Auto punch-out — the system had to close the day.
