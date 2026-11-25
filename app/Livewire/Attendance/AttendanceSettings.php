@@ -68,7 +68,7 @@ class AttendanceSettings extends Component
         'policy.late_grace_period' => 'required|integer|min:0|max:120',
         'policy.late_warning_threshold' => 'required|integer|min:1|max:31',
         'policy.auto_checkout_buffer_minutes' => 'required|integer|min:0|max:240',
-        'policy.missed_punch_weekly_allowance' => 'required|integer|min:1|max:50',
+        'policy.missed_punch_monthly_allowance' => 'required|integer|min:1|max:50',
         'policy.missed_punch_warning_at' => 'required|integer|min:0|max:50',
     ];
 
@@ -89,7 +89,7 @@ class AttendanceSettings extends Component
             'late_grace_period' => (int) ($this->settings->late_grace_period ?? 15),
             'late_warning_threshold' => (int) ($this->settings->late_warning_threshold ?? 3),
             'auto_checkout_buffer_minutes' => (int) ($this->settings->auto_checkout_buffer_minutes ?? 30),
-            'missed_punch_weekly_allowance' => (int) ($this->settings->missed_punch_weekly_allowance ?? MissedPunchTracker::DEFAULT_ALLOWANCE),
+            'missed_punch_monthly_allowance' => (int) ($this->settings->missed_punch_monthly_allowance ?? MissedPunchTracker::DEFAULT_ALLOWANCE),
             'missed_punch_warning_at' => (int) ($this->settings->missed_punch_warning_at ?? MissedPunchTracker::DEFAULT_WARNING_AT),
         ];
 
@@ -130,7 +130,7 @@ class AttendanceSettings extends Component
             'late_grace_period' => $this->policy['late_grace_period'],
             'late_warning_threshold' => $this->policy['late_warning_threshold'],
             'auto_checkout_buffer_minutes' => $this->policy['auto_checkout_buffer_minutes'],
-            'missed_punch_weekly_allowance' => (int) $this->policy['missed_punch_weekly_allowance'],
+            'missed_punch_monthly_allowance' => (int) $this->policy['missed_punch_monthly_allowance'],
             'missed_punch_warning_at' => (int) $this->policy['missed_punch_warning_at'],
         ])->save();
 

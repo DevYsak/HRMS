@@ -18,8 +18,9 @@ use Illuminate\Support\Collection;
 /**
  * Acts on missed punches (MissedPunchTracker), each once:
  *   - every mid-day missed punch → the employee and HR;
- *   - the working week (Mon–Fri) reaching the early warning → the employee and HR;
- *   - the week going over the allowance → the employee is flagged for HR
+ *   - the calendar month (its Mon–Fri days) reaching the early warning →
+ *     the employee and HR;
+ *   - the month going over the allowance → the employee is flagged for HR
  *     review (MissedPunchFlag, audited), HR is told to review, and the
  *     employee is told the allowance is used up and to contact HR.
  * Recipients are the employee and the HR covering their department — never
@@ -48,11 +49,20 @@ class MissedPunchAlerts
 
         $people = $this->people($employee);
         $role = fn (User $u): string => $u->id === $employee->user_id ? 'employee' : 'hr_admin';
-        $weeks = [];
+        // Whole months, so each month's count is complete (between() stops at
+        // today); only the days from $from to $to are notified.
+        $byDate = $this->tracker->between($employee, MissedPunchTracker::monthStart($from), MissedPunchTracker::monthStart($to)->endOfMonth());
+        $fromDate = $from->toDateString();
+        $toDate = $to->toDateString();
+        $months = [];
 
-        foreach ($this->tracker->between($employee, $from, $to) as $date => $missed) {
-            $weekStart = MissedPunchTracker::weekStart(Carbon::parse($date))->toDateString();
-            $weeks[$weekStart] ??= $this->tracker->weekCount($employee, Carbon::parse($date));
+        foreach ($byDate as $date => $missed) {
+            if ($date < $fromDate || $date > $toDate) {
+                continue;
+            }
+
+            $monthStart = MissedPunchTracker::monthStart(Carbon::parse($date))->toDateString();
+            $months[$monthStart] ??= MissedPunchTracker::countInMonth($byDate, Carbon::parse($monthStart));
 
             foreach ($missed as $punch) {
                 $result['missed']++;
@@ -61,7 +71,7 @@ class MissedPunchAlerts
                     continue;
                 }
 
-                $notification = new MissedPunchNotification($employee, $punch, $weeks[$weekStart]);
+                $notification = new MissedPunchNotification($employee, $punch, $months[$monthStart]);
                 $result['notified'] += $this->dispatcher->sendToRecipients(
                     MissedPunchNotification::class, $people,
                     fn (User $u) => $notification->forRole($role($u)),
@@ -70,16 +80,16 @@ class MissedPunchAlerts
             }
         }
 
-        foreach ($weeks as $weekStart => $count) {
+        foreach ($months as $monthStart => $count) {
             $status = MissedPunchTracker::status($count);
 
             if ($status === MissedPunchTracker::STATUS_EXCEEDED) {
-                $result['flagged'] += $this->exceeded($employee, $weekStart, $count, $people, $role);
+                $result['flagged'] += $this->exceeded($employee, $monthStart, $count, $people, $role);
             } elseif ($status === MissedPunchTracker::STATUS_WARNING) {
                 $result['warned'] += $this->dispatcher->sendToRecipients(
                     MissedPunchWeeklyWarningNotification::class, $people,
-                    fn (User $u) => (new MissedPunchWeeklyWarningNotification($employee, $count, $weekStart))->forRole($role($u)),
-                    'missed_punch_week:'.$employee->id.':'.$weekStart, $employee,
+                    fn (User $u) => (new MissedPunchWeeklyWarningNotification($employee, $count, $monthStart))->forRole($role($u)),
+                    'missed_punch_month:'.$employee->id.':'.$monthStart, $employee,
                 );
             }
         }
@@ -88,17 +98,17 @@ class MissedPunchAlerts
     }
 
     /**
-     * Over the allowance: flag the week (once; the count follows the week),
+     * Over the allowance: flag the month (once; the count follows the month),
      * audit it, and tell HR and the employee — each once.
      *
      * @param  Collection<int, User>  $people
      * @return int 1 when the flag was raised now
      */
-    private function exceeded(Employee $employee, string $weekStart, int $count, Collection $people, callable $role): int
+    private function exceeded(Employee $employee, string $monthStart, int $count, Collection $people, callable $role): int
     {
         $allowance = MissedPunchTracker::allowance();
         $flag = MissedPunchFlag::firstOrCreate(
-            ['employee_id' => $employee->id, 'week_start' => $weekStart],
+            ['employee_id' => $employee->id, 'period' => MissedPunchFlag::PERIOD_MONTH, 'period_start' => $monthStart],
             ['missed_count' => $count, 'allowance' => $allowance, 'flagged_at' => now()],
         );
         $raised = $flag->wasRecentlyCreated;
@@ -109,14 +119,14 @@ class MissedPunchAlerts
 
         if ($raised) {
             app(AuditService::class)->event('ATTENDANCE_MISSED_PUNCH_FLAGGED', AuditService::ATTENDANCE, $flag,
-                new: ['week_start' => $weekStart, 'missed_count' => $count, 'allowance' => $allowance],
+                new: ['period' => MissedPunchFlag::PERIOD_MONTH, 'period_start' => $monthStart, 'missed_count' => $count, 'allowance' => $allowance],
                 subjectEmployeeId: $employee->id);
         }
 
         $this->dispatcher->sendToRecipients(
             MissedPunchAllowanceExceededNotification::class, $people,
-            fn (User $u) => (new MissedPunchAllowanceExceededNotification($employee, $count, $allowance, $weekStart))->forRole($role($u)),
-            'missed_punch_allowance:'.$employee->id.':'.$weekStart, $employee,
+            fn (User $u) => (new MissedPunchAllowanceExceededNotification($employee, $count, $allowance, $monthStart))->forRole($role($u)),
+            'missed_punch_allowance:'.$employee->id.':month:'.$monthStart, $employee,
         );
 
         return $raised ? 1 : 0;

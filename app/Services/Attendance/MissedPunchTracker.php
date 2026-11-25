@@ -12,7 +12,7 @@ use Illuminate\Support\Collection;
 
 /**
  * Missed punches, from live attendance data — the ONE definition every
- * screen, alert, weekly count and score uses.
+ * screen, alert, monthly count and score uses.
  *
  * Read from the employee's own device punches through PunchTimeline (Face =
  * IN, ID Card = OUT, 60-second duplicates merged):
@@ -29,10 +29,10 @@ use Illuminate\Support\Collection;
  * was missed — marked resolved. A web clock-in day has only its check-out
  * to miss.
  *
- * The weekly allowance counts the working week, Monday to Friday, and starts
- * again every Monday. HR sets it on Attendance Settings (default 5): going
- * over it flags the employee for HR review. An early warning goes out at its
- * own number (default 3; 0 = none).
+ * The allowance counts the calendar month — its Monday-to-Friday days — and
+ * starts again on the 1st. HR sets it on Attendance Settings (default 5):
+ * going over it flags the employee for HR review. An early warning goes out
+ * at its own number (default 3; 0 = none).
  */
 class MissedPunchTracker
 {
@@ -273,18 +273,18 @@ class MissedPunchTracker
             ['counted', 'corrected', 'missed', 'missed_corrected', 'duplicate', 'ignored', 'superseded'], 0), $counts)];
     }
 
-    /** Missed punches in the Monday–Friday working week holding $day (to today). */
-    public function weekCount(Employee $employee, ?CarbonInterface $day = null): int
+    /** Missed punches on the Monday–Friday days of the calendar month holding $day (to today). */
+    public function monthCount(Employee $employee, ?CarbonInterface $day = null): int
     {
-        $start = self::weekStart($day ?? now());
+        $start = self::monthStart($day ?? now());
 
-        return self::countInWeek($this->between($employee, $start, $start->copy()->addDays(4)), $start);
+        return self::countInMonth($this->between($employee, $start, $start->copy()->endOfMonth()), $start);
     }
 
-    /** Missed punches the working week allows (Attendance Settings, default 5). */
+    /** Missed punches a calendar month allows (Attendance Settings, default 5). */
     public static function allowance(): int
     {
-        return max(1, (int) (ShiftResolver::settings()?->missed_punch_weekly_allowance ?? self::DEFAULT_ALLOWANCE));
+        return max(1, (int) (ShiftResolver::settings()?->missed_punch_monthly_allowance ?? self::DEFAULT_ALLOWANCE));
     }
 
     /** Missed punches that bring an early warning (Attendance Settings, default 3; 0 = none). */
@@ -293,7 +293,7 @@ class MissedPunchTracker
         return (int) (ShiftResolver::settings()?->missed_punch_warning_at ?? self::DEFAULT_WARNING_AT);
     }
 
-    /** ok, warning or exceeded for a week's count. */
+    /** ok, warning or exceeded for a month's count. */
     public static function status(int $count): string
     {
         $warningAt = self::warningAt();
@@ -305,24 +305,31 @@ class MissedPunchTracker
         };
     }
 
-    /** The Monday of the week holding $day. */
-    public static function weekStart(CarbonInterface $day): Carbon
+    /** The 1st of the month holding $day. */
+    public static function monthStart(CarbonInterface $day): Carbon
     {
-        return Carbon::parse($day->toDateString())->startOfWeek(Carbon::MONDAY);
+        return Carbon::parse($day->toDateString())->startOfMonth();
+    }
+
+    /** "November 2026". */
+    public static function monthLabel(CarbonInterface $monthStart): string
+    {
+        return $monthStart->format('F Y');
     }
 
     /**
-     * Missed punches on the working days (Monday–Friday) of the week starting
-     * $weekStart, from a by-date list (between()).
+     * Missed punches on the working days (Monday–Friday) of the calendar month
+     * starting $monthStart, from a by-date list (between()).
      *
      * @param  array<string, list<array<string, mixed>>>  $byDate
      */
-    public static function countInWeek(array $byDate, CarbonInterface $weekStart): int
+    public static function countInMonth(array $byDate, CarbonInterface $monthStart): int
     {
-        $from = $weekStart->toDateString();
-        $to = Carbon::parse($from)->addDays(4)->toDateString();
+        $from = $monthStart->toDateString();
+        $to = Carbon::parse($from)->endOfMonth()->toDateString();
 
-        return collect($byDate)->filter(fn (array $list, string $date) => $date >= $from && $date <= $to)
+        return collect($byDate)
+            ->filter(fn (array $list, string $date) => $date >= $from && $date <= $to && Carbon::parse($date)->isWeekday())
             ->sum(fn (array $list) => count($list));
     }
 

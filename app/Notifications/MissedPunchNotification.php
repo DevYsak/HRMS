@@ -27,7 +27,7 @@ class MissedPunchNotification extends Notification
     /**
      * @param  array{key: string, date: string, kind: string, label: string}  $missed
      */
-    public function __construct(public readonly Employee $employee, public readonly array $missed, public readonly int $weekCount) {}
+    public function __construct(public readonly Employee $employee, public readonly array $missed, public readonly int $monthCount) {}
 
     public function via(object $notifiable): array
     {
@@ -39,22 +39,22 @@ class MissedPunchNotification extends Notification
         $date = Carbon::parse($this->missed['date'])->format($this->recipientDateFormat($notifiable));
         $what = $this->missed['label'];
         $name = $this->employee->user?->name ?? 'An employee';
-        $week = $this->weekCount.' of '.MissedPunchTracker::allowance().' allowed this week';
+        $month = $this->monthCount.' of '.MissedPunchTracker::allowance().' allowed this month';
         $employeeCopy = $this->role === null || $this->role === 'employee';
 
         return [
             'type' => 'missed_punch',
             'title' => $this->missed['kind'] === 'in' ? 'Missed IN punch' : 'Missed OUT punch',
             'body' => $employeeCopy
-                ? "{$what} on {$date}. Request a regularisation so your hours are right. {$week}."
-                : "{$name}: {$what} on {$date}. {$week}.",
+                ? "{$what} on {$date}. Request a regularisation so your hours are right. {$month}."
+                : "{$name}: {$what} on {$date}. {$month}.",
             'action' => $employeeCopy ? 'Regularise' : 'Review',
             'url' => $employeeCopy ? '/attendance/my?regularise='.$this->missed['date'] : '/attendance/missed-punches',
             'icon' => 'exclamation-triangle',
             'color' => 'red',
             'missed_key' => $this->missed['key'],
             'date' => $this->missed['date'],
-            'week_count' => $this->weekCount,
+            'month_count' => $this->monthCount,
         ];
     }
 
@@ -69,8 +69,8 @@ class MissedPunchNotification extends Notification
             'department' => $this->employee->department?->name ?? '',
             'date' => Carbon::parse($this->missed['date'])->format($this->recipientDateFormat($notifiable)),
             'missed_punch' => $this->missed['label'],
-            'week_count' => (string) $this->weekCount,
-            'weekly_allowance' => (string) MissedPunchTracker::allowance(),
+            'month_count' => (string) $this->monthCount,
+            'monthly_allowance' => (string) MissedPunchTracker::allowance(),
             'action_url' => url('/attendance/my?regularise='.$this->missed['date']),
             'company_name' => (string) config('app.name'),
         ];

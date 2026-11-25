@@ -185,8 +185,8 @@ class AttendanceWorkbook
                 $totals['regularised'],
                 round($totals['ot_min'] / 60, 2),
                 collect($missedByDay)->sum(fn (array $list) => count($list)),
-                collect(array_keys($missedByDay))->map(fn (string $date) => MissedPunchTracker::weekStart(Carbon::parse($date))->toDateString())->unique()
-                    ->filter(fn (string $week) => MissedPunchTracker::countInWeek($missedByDay, Carbon::parse($week)) > MissedPunchTracker::allowance())->count(),
+                collect(array_keys($missedByDay))->map(fn (string $date) => MissedPunchTracker::monthStart(Carbon::parse($date))->toDateString())->unique()
+                    ->filter(fn (string $month) => MissedPunchTracker::countInMonth($missedByDay, Carbon::parse($month)) > MissedPunchTracker::allowance())->count(),
             ];
         }
 
@@ -196,7 +196,7 @@ class AttendanceWorkbook
                 'headings' => ['Emp ID', 'Employee', 'Department', 'Shift(s) in period', 'Shift change', 'Working days', 'Present (incl. late)',
                     'Late marks', 'Total late (min)', 'Total late', 'Avg late (min)', 'Absent', 'Leave days', 'Weekly offs / holidays',
                     'Worked on off day', 'Total worked (h)', 'Avg worked per present day (h)', 'Missing check-outs', 'Regularised days', 'Approved OT (h)',
-                    'Missed punches', 'Weeks over the allowance ('.MissedPunchTracker::allowance().')'],
+                    'Missed punches', 'Months over the allowance ('.MissedPunchTracker::allowance().')'],
                 'rows' => $summary,
                 'widths' => [10, 26, 18, 44, 60, 12, 12, 10, 12, 12, 12, 9, 10, 14, 12, 12, 14, 12, 12, 12, 12, 14],
             ],
@@ -311,7 +311,7 @@ class AttendanceWorkbook
                 .Carbon::parse(ShiftHistory::TIMING_AUDIT_FROM)->format('d M Y').'; an earlier timing edit is not in the history, so those days use the timings recorded after it.'],
             ['Missing check-out', 'A day with a clock-in and no final clock-out after the shift end plus one hour. Nothing more is counted for it.'],
             ['Missed punch', 'Two INs in a row (a missed OUT), two OUTs in a row (a missed IN), or no final check-out once it is overdue. A regularised day still shows what was missed. '
-                .MissedPunchTracker::allowance().' are allowed in a working week (Monday–Friday); one more flags the employee for HR review.'],
+                .MissedPunchTracker::allowance().' are allowed in a calendar month (counted Monday–Friday); one more flags the employee for HR review.'],
             ['Source', 'Biometric = device punches synced from the attendance engine; Web / manual = clocked in on the web or recorded by HR.'],
         ];
 

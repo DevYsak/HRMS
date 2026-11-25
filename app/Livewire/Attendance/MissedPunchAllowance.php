@@ -15,18 +15,18 @@ use Livewire\Component;
 
 /**
  * Attendance → Missed Punches (HR): every employee's missed punches in one
- * working week (Mon–Fri) against the weekly allowance, who is over it and
- * flagged, the regularisation requests they made, and HR's review of each
- * flag — plus the flag history. Only the people the viewer's attendance
- * reach covers.
+ * calendar month (its Mon–Fri days) against the monthly allowance, who is
+ * over it and flagged, the regularisation requests they made, and HR's review
+ * of each flag — plus the flag history. Only the people the viewer's
+ * attendance reach covers.
  */
 class MissedPunchAllowance extends Component
 {
     public const PERMISSION = 'manage_attendance';
 
-    /** The Monday of the week shown. */
+    /** The month shown, "Y-m". */
     #[Url(except: '')]
-    public string $week = '';
+    public string $month = '';
 
     #[Url(as: 'department', except: null)]
     public ?int $departmentId = null;
@@ -45,25 +45,25 @@ class MissedPunchAllowance extends Component
     public function mount(): void
     {
         $this->authorizeView();
-        $this->week = MissedPunchTracker::weekStart($this->week !== '' && strtotime($this->week) ? Carbon::parse($this->week) : Carbon::today())->toDateString();
+        $this->month = $this->monthStart()->format('Y-m');
     }
 
-    public function previousWeek(): void
+    public function previousMonth(): void
     {
-        $this->week = Carbon::parse($this->week)->subWeek()->toDateString();
+        $this->month = $this->monthStart()->subMonthNoOverflow()->format('Y-m');
         $this->expanded = null;
     }
 
-    public function nextWeek(): void
+    public function nextMonth(): void
     {
-        $next = Carbon::parse($this->week)->addWeek();
-        $this->week = ($next->gt(Carbon::today()) ? MissedPunchTracker::weekStart(Carbon::today()) : $next)->toDateString();
+        $next = $this->monthStart()->addMonthNoOverflow();
+        $this->month = ($next->gt(Carbon::today()) ? Carbon::today() : $next)->format('Y-m');
         $this->expanded = null;
     }
 
-    public function thisWeek(): void
+    public function thisMonth(): void
     {
-        $this->week = MissedPunchTracker::weekStart(Carbon::today())->toDateString();
+        $this->month = Carbon::today()->format('Y-m');
         $this->expanded = null;
     }
 
@@ -110,8 +110,9 @@ class MissedPunchAllowance extends Component
     {
         $this->authorizeView();
 
-        $start = Carbon::parse($this->week);
-        $end = $start->copy()->addDays(4)->min(Carbon::today());
+        $start = $this->monthStart();
+        $monthEnd = $start->copy()->endOfMonth();
+        $end = $monthEnd->copy()->min(Carbon::today());
         $reach = Auth::user()->accessibleEmployeeIds(self::PERMISSION);
         $allowance = MissedPunchTracker::allowance();
 
@@ -124,15 +125,15 @@ class MissedPunchAllowance extends Component
                 ->orWhere('employee_id', 'like', '%'.trim($this->search).'%')))
             ->get();
 
-        $flags = MissedPunchFlag::with('reviewer')->whereDate('week_start', $start->toDateString())
+        $flags = MissedPunchFlag::with('reviewer')->where('period', MissedPunchFlag::PERIOD_MONTH)->whereDate('period_start', $start->toDateString())
             ->whereIn('employee_id', $employees->pluck('id'))->get()->keyBy('employee_id');
         $requests = AttendanceRegularisation::with('reviewer')->whereIn('employee_id', $employees->pluck('id'))
-            ->whereBetween('work_date', [$start->toDateString(), $start->copy()->addDays(4)->toDateString()])
+            ->whereBetween('work_date', [$start->toDateString(), $monthEnd->toDateString()])
             ->orderBy('work_date')->get()->groupBy('employee_id');
 
         $rows = $employees->map(function (Employee $employee) use ($tracker, $start, $end, $flags, $requests) {
             $byDate = $start->lte($end) ? $tracker->between($employee, $start, $end) : [];
-            $count = MissedPunchTracker::countInWeek($byDate, $start);
+            $count = MissedPunchTracker::countInMonth($byDate, $start);
 
             return [
                 'employee' => $employee,
@@ -156,15 +157,15 @@ class MissedPunchAllowance extends Component
         $history = MissedPunchFlag::with(['employee.user', 'employee.department', 'reviewer'])
             ->when($reach !== null, fn ($q) => $q->whereIn('employee_id', $reach))
             ->when($this->departmentId, fn ($q) => $q->whereHas('employee', fn ($e) => $e->where('department_id', $this->departmentId)))
-            ->latest('week_start')->latest('id')->limit(50)->get();
+            ->latest('period_start')->latest('id')->limit(50)->get();
 
         return view('livewire.attendance.missed-punch-allowance', [
             'rows' => $rows,
             'history' => $history,
             'allowance' => $allowance,
             'warningAt' => MissedPunchTracker::warningAt(),
-            'weekEnd' => $start->copy()->addDays(4),
-            'isThisWeek' => $start->isSameDay(MissedPunchTracker::weekStart(Carbon::today())),
+            'monthLabel' => MissedPunchTracker::monthLabel($start),
+            'isThisMonth' => $start->isSameDay(MissedPunchTracker::monthStart(Carbon::today())),
             'kpis' => [
                 'missed' => $rows->where('count', '>', 0)->count(),
                 'warning' => $rows->where('status', MissedPunchTracker::STATUS_WARNING)->count(),
@@ -176,6 +177,16 @@ class MissedPunchAllowance extends Component
                 ->orderBy('name')->get(['id', 'name']),
             'reviewing' => $this->reviewFlagId ? MissedPunchFlag::with('employee.user')->find($this->reviewFlagId) : null,
         ])->layout('layouts.app', ['title' => 'Missed Punches']);
+    }
+
+    /** The 1st of the month shown; this month for a missing or bad value, never a future month. */
+    private function monthStart(): Carbon
+    {
+        $start = preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $this->month)
+            ? Carbon::createFromFormat('Y-m-d', $this->month.'-01')->startOfDay()
+            : Carbon::today()->startOfMonth();
+
+        return $start->min(Carbon::today()->startOfMonth());
     }
 
     /** HR / attendance managers: manage_attendance, over the people it reaches. */

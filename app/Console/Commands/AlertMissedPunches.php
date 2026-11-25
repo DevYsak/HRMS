@@ -11,7 +11,7 @@ use Illuminate\Support\Carbon;
 
 /**
  * Notifies missed punches from live attendance data — each mid-day missed
- * punch, the week's early warning, and going over the weekly allowance
+ * punch, the month's early warning, and going over the monthly allowance
  * (which flags the employee for HR review) — to the employee and HR.
  * Scheduled every 10 minutes, right behind the engine sync, over yesterday
  * and today. Safe to re-run: nobody is notified twice.
@@ -19,7 +19,7 @@ use Illuminate\Support\Carbon;
 #[Signature('attendance:missed-punches
     {--from= : First day to check (Y-m-d); defaults to yesterday}
     {--to= : Last day to check (Y-m-d); defaults to today}')]
-#[Description('Notify missed punches, the weekly warning and the allowance (flagging the employee) to the employee and HR')]
+#[Description('Notify missed punches, the monthly warning and the allowance (flagging the employee) to the employee and HR')]
 class AlertMissedPunches extends Command
 {
     public function handle(MissedPunchAlerts $alerts): int
@@ -42,7 +42,7 @@ class AlertMissedPunches extends Command
                 }
             });
 
-        $this->info("Missed punches {$from->toDateString()} → {$to->toDateString()}: {$totals['missed']} found, {$totals['notified']} notified, {$totals['warned']} weekly warnings, {$totals['flagged']} newly over the allowance.");
+        $this->info("Missed punches {$from->toDateString()} → {$to->toDateString()}: {$totals['missed']} found, {$totals['notified']} notified, {$totals['warned']} monthly warnings, {$totals['flagged']} newly over the allowance.");
 
         return self::SUCCESS;
     }

@@ -23,11 +23,11 @@ use Illuminate\Support\Once;
 use Livewire\Livewire;
 
 /*
- * The weekly missed-punch allowance: a working week (Monday–Friday) allows a
- * number of missed punches set on Attendance Settings (default 5); one more
- * flags the employee for HR review, HR is asked to review, and the employee
- * is told to contact HR. HR sees employee-wise counts, reviews flags, and
- * keeps the flag history.
+ * The monthly missed-punch allowance: a calendar month (its Monday–Friday
+ * days) allows a number of missed punches set on Attendance Settings
+ * (default 5); one more flags the employee for HR review, HR is asked to
+ * review, and the employee is told to contact HR. HR sees employee-wise
+ * counts, reviews flags, and keeps the flag history.
  */
 
 function mpaPunch(Employee $employee, string $at, string $method): void
@@ -50,7 +50,7 @@ function mpaDay(Employee $employee, string $date, int $extraIns): void
 
 function mpaAllowance(int $allowance, int $warningAt = 0): void
 {
-    AttendanceSetting::query()->firstOrCreate([])->update(['missed_punch_weekly_allowance' => $allowance, 'missed_punch_warning_at' => $warningAt]);
+    AttendanceSetting::query()->firstOrCreate([])->update(['missed_punch_monthly_allowance' => $allowance, 'missed_punch_warning_at' => $warningAt]);
     Once::flush();
 }
 
@@ -69,13 +69,13 @@ beforeEach(function () {
     mpaDay($this->employee, '2026-11-24', 1);   // Tue: 1 missed
 });
 
-test('HR sets the weekly allowance and the early warning on Attendance Settings, and the change is audited', function () {
+test('HR sets the monthly allowance and the early warning on Attendance Settings, and the change is audited', function () {
     expect(MissedPunchTracker::allowance())->toBe(5)->and(MissedPunchTracker::warningAt())->toBe(3);
 
     $this->actingAs(User::factory()->create(['role' => UserRole::SuperAdmin]));
     Livewire::test(AttendanceSettings::class)
-        ->assertSee('Missed punches allowed per week')
-        ->set('policy.missed_punch_weekly_allowance', 4)
+        ->assertSee('Missed punches allowed per month')
+        ->set('policy.missed_punch_monthly_allowance', 4)
         ->set('policy.missed_punch_warning_at', 0)
         ->call('save')
         ->assertHasNoErrors();
@@ -86,7 +86,7 @@ test('HR sets the weekly allowance and the early warning on Attendance Settings,
         ->and(MissedPunchTracker::status(4))->toBe(MissedPunchTracker::STATUS_OK)
         ->and(MissedPunchTracker::status(5))->toBe(MissedPunchTracker::STATUS_EXCEEDED)
         ->and(AuditLog::where('auditable_type', AttendanceSetting::class)->latest('id')->first()->new_values)
-        ->toMatchArray(['missed_punch_weekly_allowance' => 4, 'missed_punch_warning_at' => 0]);
+        ->toMatchArray(['missed_punch_monthly_allowance' => 4, 'missed_punch_warning_at' => 0]);
 });
 
 test('one over the allowance flags the employee once, tells HR to review and the employee to contact HR — never the manager', function () {
@@ -98,11 +98,13 @@ test('one over the allowance flags the employee once, tells HR to review and the
     expect($result['flagged'])->toBe(1);
     $flag = MissedPunchFlag::sole();
     expect($flag->only(['employee_id', 'missed_count', 'allowance']))->toBe(['employee_id' => $this->employee->id, 'missed_count' => 3, 'allowance' => 2])
-        ->and($flag->week_start->toDateString())->toBe('2026-11-23')
+        ->and($flag->period)->toBe(MissedPunchFlag::PERIOD_MONTH)
+        ->and($flag->period_start->toDateString())->toBe('2026-11-01')
         ->and(AuditLog::where('action', 'attendance_missed_punch_flagged')->where('subject_employee_id', $this->employee->id)->exists())->toBeTrue();
 
     Notification::assertSentTo($this->user, MissedPunchAllowanceExceededNotification::class,
-        fn ($n) => $n->toArray($this->user)['title'] === 'Missed-punch allowance used up — contact HR');
+        fn ($n) => $n->toArray($this->user)['title'] === 'Missed-punch allowance used up — contact HR'
+            && str_contains($n->toArray($this->user)['body'], 'in November 2026, over the 2 allowed in a month'));
     Notification::assertSentTo($this->hr, MissedPunchAllowanceExceededNotification::class,
         fn ($n) => str_starts_with($n->forRole('hr_admin')->toArray($this->hr)['title'], 'Review attendance: Yogesh Sapkal'));
     Notification::assertNotSentTo($this->manager, MissedPunchAllowanceExceededNotification::class);
@@ -116,29 +118,37 @@ test('one over the allowance flags the employee once, tells HR to review and the
     expect(MissedPunchFlag::sole()->missed_count)->toBe(4);
 });
 
-test('only Monday–Friday counts, and the allowance starts again every Monday', function () {
-    // Sat 28 Nov: a missed punch on a weekend day.
+test('the whole calendar month counts, Monday–Friday only, and the allowance starts again on the 1st', function () {
+    // Mon 2 Nov: an earlier week of the same month counts too.
+    mpaDay($this->employee, '2026-11-02', 1);
+    // Sat 28 Nov: a missed punch on a weekend day does not.
     $this->travelTo(Carbon::parse('2026-11-28 21:00:00'));
     mpaDay($this->employee, '2026-11-28', 2);
     $tracker = app(MissedPunchTracker::class);
 
     expect(collect($tracker->between($this->employee, Carbon::parse('2026-11-28'), Carbon::parse('2026-11-28')))->flatten(1))->toHaveCount(2)
-        ->and($tracker->weekCount($this->employee))->toBe(3);   // Mon 2 + Tue 1; Saturday's 2 do not count
+        ->and($tracker->monthCount($this->employee))->toBe(4);   // 2 Nov 1 + Mon 23 2 + Tue 24 1; Saturday's 2 do not count
 
-    $this->travelTo(Carbon::parse('2026-11-30 09:00:00'));   // the next Monday
-    expect($tracker->weekCount($this->employee))->toBe(0);
+    $this->travelTo(Carbon::parse('2026-12-01 09:00:00'));   // the 1st of the next month
+    expect($tracker->monthCount($this->employee))->toBe(0)
+        ->and($tracker->monthCount($this->employee, Carbon::parse('2026-11-15')))->toBe(4);
 });
 
-test('HR sees employee-wise weekly counts, reviews a flag, and keeps the flag history', function () {
+test('HR sees employee-wise monthly counts, reviews a flag, and keeps the flag history', function () {
     Notification::fake();
     mpaAllowance(2);
     app(MissedPunchAlerts::class)->scan($this->employee, Carbon::parse('2026-11-23'), Carbon::parse('2026-11-25'));
     $flag = MissedPunchFlag::sole();
+    // A flag from when the allowance was weekly keeps its week in the history.
+    MissedPunchFlag::factory()->reviewed()->create(['employee_id' => $this->employee->id,
+        'period' => MissedPunchFlag::PERIOD_WEEK, 'period_start' => '2026-10-19', 'flagged_at' => '2026-10-23 20:00:00']);
 
     $this->actingAs($this->hr);
     $this->withoutVite()->get(route('attendance.missed-punches'))->assertOk()->assertSee('Missed Punches');
 
     Livewire::test(MissedPunchAllowance::class)
+        ->assertSet('month', '2026-11')
+        ->assertSee('November 2026')
         ->assertSee('Yogesh Sapkal')
         ->assertSee('3 / 2')
         ->assertSee('Over allowance')
@@ -157,9 +167,14 @@ test('HR sees employee-wise weekly counts, reviews a flag, and keeps the flag hi
         ->and($flag->fresh()->review_note)->toBe('Spoke to Yogesh; reminded him to card out at lunch.')
         ->and(AuditLog::where('action', 'attendance_missed_punch_reviewed')->exists())->toBeTrue();
 
-    // A week with nothing missed lists nobody as over.
-    Livewire::test(MissedPunchAllowance::class)->call('previousWeek')->assertDontSee('Flagged — to review')
-        ->assertSee('Spoke to Yogesh');   // the history keeps it
+    // A month with nothing missed lists nobody as over; the history keeps both
+    // flags, each with its own period; a future month is never shown.
+    Livewire::test(MissedPunchAllowance::class)->call('previousMonth')->assertSet('month', '2026-10')
+        ->assertSee('October 2026')->assertDontSee('Flagged — to review')
+        ->assertSee('Spoke to Yogesh')
+        ->assertSee('Week of')
+        ->call('nextMonth')->call('nextMonth')->assertSet('month', '2026-11');
+    Livewire::withQueryParams(['month' => '2027-05'])->test(MissedPunchAllowance::class)->assertSet('month', '2026-11');
 });
 
 test('the page is for attendance managers only', function () {
@@ -171,7 +186,7 @@ test('the employee is told on My Attendance and in the popup that the allowance 
     mpaAllowance(2);
 
     Livewire::actingAs($this->user)->test(AttendanceTracker::class)
-        ->assertSee('Missed-punch allowance used up — 3 of 2 this week')
+        ->assertSee('Missed-punch allowance used up — 3 of 2 this month')
         ->assertSee('Please contact HR about your attendance');
 
     Livewire::actingAs($this->user)->test(MissedPunchPopup::class)

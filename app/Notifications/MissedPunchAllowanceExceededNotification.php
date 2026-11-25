@@ -6,13 +6,15 @@ use App\Models\Employee;
 use App\Notifications\Concerns\FormatsForRecipient;
 use App\Notifications\Concerns\NotifiesByRole;
 use App\Notifications\Concerns\SendsMailChannel;
+use App\Services\Attendance\MissedPunchTracker;
 use Illuminate\Notifications\Notification;
 use Illuminate\Support\Carbon;
 
 /**
- * The working week (Mon–Fri) went over the missed-punch allowance: the
- * employee is flagged. HR is asked to review their attendance; the employee
- * is told the allowance is used up and to contact HR. Sent once per week.
+ * The calendar month (its Mon–Fri days) went over the missed-punch
+ * allowance: the employee is flagged. HR is asked to review their
+ * attendance; the employee is told the allowance is used up and to contact
+ * HR. Sent once per month.
  */
 class MissedPunchAllowanceExceededNotification extends Notification
 {
@@ -24,7 +26,7 @@ class MissedPunchAllowanceExceededNotification extends Notification
         public readonly Employee $employee,
         public readonly int $count,
         public readonly int $allowance,
-        public readonly string $weekStart,
+        public readonly string $monthStart,
     ) {}
 
     public function via(object $notifiable): array
@@ -34,7 +36,7 @@ class MissedPunchAllowanceExceededNotification extends Notification
 
     public function toArray(object $notifiable): array
     {
-        $week = Carbon::parse($this->weekStart)->format($this->recipientDateFormat($notifiable));
+        $month = MissedPunchTracker::monthLabel(Carbon::parse($this->monthStart));
         $name = $this->employee->user?->name ?? 'An employee';
         $department = $this->employee->department?->name;
         $employeeCopy = $this->role === null || $this->role === 'employee';
@@ -43,13 +45,13 @@ class MissedPunchAllowanceExceededNotification extends Notification
             'type' => 'missed_punch_allowance',
             'title' => $employeeCopy ? 'Missed-punch allowance used up — contact HR' : "Review attendance: {$name}",
             'body' => $employeeCopy
-                ? "You have missed {$this->count} punches in the week of {$week}, over the {$this->allowance} allowed. Please contact HR about your attendance; you can still request regularisations."
-                : "{$name}".($department ? " ({$department})" : '')." has missed {$this->count} punches in the week of {$week}, over the {$this->allowance} allowed, and is flagged for your review.",
+                ? "You have missed {$this->count} punches in {$month}, over the {$this->allowance} allowed in a month. Please contact HR about your attendance; you can still request regularisations."
+                : "{$name}".($department ? " ({$department})" : '')." has missed {$this->count} punches in {$month}, over the {$this->allowance} allowed in a month, and is flagged for your review.",
             'action' => $employeeCopy ? 'View attendance' : 'Review',
             'url' => $employeeCopy ? '/attendance/my' : '/attendance/missed-punches',
             'icon' => 'exclamation-triangle',
             'color' => 'red',
-            'week_count' => $this->count,
+            'month_count' => $this->count,
         ];
     }
 
@@ -62,9 +64,9 @@ class MissedPunchAllowanceExceededNotification extends Notification
             'employee_name' => $this->employee->user?->name ?? '',
             'employee_code' => (string) ($this->employee->employee_id ?? ''),
             'department' => $this->employee->department?->name ?? '',
-            'week_start' => Carbon::parse($this->weekStart)->format($this->recipientDateFormat($notifiable)),
+            'month' => MissedPunchTracker::monthLabel(Carbon::parse($this->monthStart)),
             'missed_count' => (string) $this->count,
-            'weekly_allowance' => (string) $this->allowance,
+            'monthly_allowance' => (string) $this->allowance,
             'action_url' => url('/attendance/missed-punches'),
             'company_name' => (string) config('app.name'),
         ];

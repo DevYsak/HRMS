@@ -14,8 +14,8 @@ use Livewire\Component;
 /**
  * The missed-punch popup, on every page for the signed-in employee: each
  * missed punch of the last 7 days that is not regularised and not yet seen,
- * and the working week (Mon–Fri) reaching the early warning or going over
- * the allowance (MissedPunchTracker), each once.
+ * and the calendar month (its Mon–Fri days) reaching the early warning or
+ * going over the allowance (MissedPunchTracker), each once.
  * Read from live attendance data (refreshed every 2 minutes); "Got it"
  * remembers what was seen and marks the matching notifications read.
  */
@@ -38,7 +38,7 @@ class MissedPunchPopup extends Component
             $seen[] = $missed['key'];
         }
         if ($state['warn']) {
-            $seen[] = $state['week_key'];
+            $seen[] = $state['month_key'];
         }
         Cache::forever($this->seenKey(), array_slice(array_values(array_unique($seen)), -300));
 
@@ -65,7 +65,7 @@ class MissedPunchPopup extends Component
     /**
      * What to show now, or null when there is nothing new.
      *
-     * @return array{missed: list<array<string, mixed>>, week_count: int, warn: bool, week_key: string, status: string, allowance: int, week_start: string}|null
+     * @return array{missed: list<array<string, mixed>>, month_count: int, warn: bool, month_key: string, status: string, allowance: int, month_label: string}|null
      */
     private function state(): ?array
     {
@@ -76,12 +76,12 @@ class MissedPunchPopup extends Component
         }
 
         $today = Carbon::today();
-        $weekStart = MissedPunchTracker::weekStart($today)->toDateString();
+        $monthStart = MissedPunchTracker::monthStart($today);
 
         // The same 2-minute snapshot for every page in between, so the popup costs
         // one cache read per page.
         $byDate = Cache::remember('missed-punch-popup:'.$employee->id.':'.intdiv(now()->timestamp, 120), 150,
-            fn () => collect(app(MissedPunchTracker::class)->between($employee, $today->copy()->subDays(self::LOOKBACK_DAYS)->min(Carbon::parse($weekStart)), $today))
+            fn () => collect(app(MissedPunchTracker::class)->between($employee, $today->copy()->subDays(self::LOOKBACK_DAYS)->min($monthStart), $today))
                 ->map(fn (array $list) => array_map(fn (array $m) => array_diff_key($m, ['after_at' => true]), $list))
                 ->all());
 
@@ -92,20 +92,20 @@ class MissedPunchPopup extends Component
             ->flatten(1)
             ->reject(fn (array $m) => $m['resolved'] || isset($seen[$m['key']]))
             ->sortByDesc('date')->values()->all();
-        $weekCount = MissedPunchTracker::countInWeek($byDate, Carbon::parse($weekStart));
-        $status = MissedPunchTracker::status($weekCount);
+        $monthCount = MissedPunchTracker::countInMonth($byDate, $monthStart);
+        $status = MissedPunchTracker::status($monthCount);
         // Seen per level: going over the allowance pops up again after the warning was seen.
-        $weekKey = 'week:'.$weekStart.':'.$status;
-        $warn = $status !== MissedPunchTracker::STATUS_OK && ! isset($seen[$weekKey]);
+        $monthKey = 'month:'.$monthStart->format('Y-m').':'.$status;
+        $warn = $status !== MissedPunchTracker::STATUS_OK && ! isset($seen[$monthKey]);
 
         return $missed === [] && ! $warn ? null : [
             'missed' => $missed,
-            'week_count' => $weekCount,
+            'month_count' => $monthCount,
             'warn' => $warn,
-            'week_key' => $weekKey,
+            'month_key' => $monthKey,
             'status' => $status,
             'allowance' => MissedPunchTracker::allowance(),
-            'week_start' => $weekStart,
+            'month_label' => MissedPunchTracker::monthLabel($monthStart),
         ];
     }
 

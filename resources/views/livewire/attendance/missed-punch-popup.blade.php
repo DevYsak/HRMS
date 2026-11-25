@@ -16,7 +16,7 @@
                             @elseif($state['missed'] !== [])
                                 You missed {{ count($state['missed']) === 1 ? 'a punch' : count($state['missed']).' punches' }}
                             @else
-                                Missed punches this week
+                                Missed punches this month
                             @endif
                         </h2>
                         <p class="mt-0.5 text-xs text-red-700/80 dark:text-red-200/80">Punch Face IN when you arrive or come back, and ID Card OUT every time you leave.</p>
@@ -37,8 +37,8 @@
 
                     <p @class(['text-sm font-semibold', 'mt-3' => $state['missed'] !== [],
                         'text-red-700 dark:text-red-300' => $atWarning,
-                        'text-zinc-600 dark:text-slate-300' => ! $atWarning]) data-missed-punch-week="{{ $state['week_count'] }}">
-                        {{ $state['week_count'] }} of {{ $state['allowance'] }} missed punches allowed this week (Mon–Fri).
+                        'text-zinc-600 dark:text-slate-300' => ! $atWarning]) data-missed-punch-month="{{ $state['month_count'] }}">
+                        {{ $state['month_count'] }} of {{ $state['allowance'] }} missed punches allowed this month ({{ $state['month_label'] }}, counted Mon–Fri).
                         @if($over)
                             You are over the allowance and flagged for HR review — please contact HR about your attendance.
                         @elseif($atWarning)

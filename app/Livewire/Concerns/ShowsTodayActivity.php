@@ -366,10 +366,10 @@ trait ShowsTodayActivity
             'state' => $state,
             'clock_start_ms' => $clockStart,
             'since' => $clockStart ? $fmt((int) $clockStart, 'h:i A') : null,
-            // Punches missed this working week (Mon–Fri) against the weekly allowance.
-            'missed_week' => $this->missedWeekCount,
+            // Punches missed this calendar month (Mon–Fri days) against the monthly allowance.
+            'missed_month' => $this->missedMonthCount,
             'missed_allowance' => MissedPunchTracker::allowance(),
-            'missed_status' => MissedPunchTracker::status($this->missedWeekCount),
+            'missed_status' => MissedPunchTracker::status($this->missedMonthCount),
         ];
     }
 }

@@ -68,14 +68,14 @@
                 {{ $stateBadge[0] }}
             </span>
 
-            {{-- Punches missed this working week (Mon–Fri) against the allowance: amber, red from the warning. --}}
-            @if(($activity['missed_week'] ?? 0) > 0)
+            {{-- Punches missed this calendar month (Mon–Fri days) against the allowance: amber, red from the warning. --}}
+            @if(($activity['missed_month'] ?? 0) > 0)
                 @php $missedWarn = ($activity['missed_status'] ?? 'ok') !== 'ok'; @endphp
                 <span @class(['inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset',
                     'bg-red-50 text-red-700 ring-red-200 dark:bg-red-500/10 dark:text-red-300 dark:ring-red-500/30' => $missedWarn,
                     'bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/30' => ! $missedWarn])
-                      title="{{ ($activity['missed_status'] ?? '') === 'exceeded' ? 'Over the weekly allowance — flagged for HR review' : 'Missed punches this week (Mon–Fri) of the '.$activity['missed_allowance'].' allowed' }}" data-missed-week="{{ $activity['missed_week'] }}">
-                    <flux:icon.exclamation-triangle variant="micro" class="size-3.5" />{{ $activity['missed_week'] }} of {{ $activity['missed_allowance'] }} missed this week
+                      title="{{ ($activity['missed_status'] ?? '') === 'exceeded' ? 'Over the monthly allowance — flagged for HR review' : 'Missed punches this month (Mon–Fri days) of the '.$activity['missed_allowance'].' allowed' }}" data-missed-month="{{ $activity['missed_month'] }}">
+                    <flux:icon.exclamation-triangle variant="micro" class="size-3.5" />{{ $activity['missed_month'] }} of {{ $activity['missed_allowance'] }} missed this month
                 </span>
             @endif
 

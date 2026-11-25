@@ -56,6 +56,16 @@ class NotificationCatalog
     }
 
     /**
+     * Shown names for events whose class name no longer says what they are
+     * (the class name is the key of their settings row, so it stays).
+     *
+     * @var array<class-string, string>
+     */
+    private const LABELS = [
+        MissedPunchWeeklyWarningNotification::class => 'Missed Punch Warning',
+    ];
+
+    /**
      * Mailables that are sent directly (not through the notification system) but
      * should still be admin-controllable. Keyed by FQCN.
      *
@@ -265,8 +275,8 @@ class NotificationCatalog
             'department' => "The employee's department",
             'date' => 'The day of the missed punch',
             'missed_punch' => 'What was missed, e.g. "Missed OUT between 12:39 PM and 01:05 PM"',
-            'week_count' => 'Punches missed so far this week (Mon–Fri)',
-            'weekly_allowance' => 'Missed punches allowed per week',
+            'month_count' => 'Punches missed so far this month (Mon–Fri days)',
+            'monthly_allowance' => 'Missed punches allowed per month',
             'action_url' => 'Link to request a regularisation for that day',
             'company_name' => 'The company name',
         ],
@@ -274,9 +284,9 @@ class NotificationCatalog
             'employee_name' => "The employee's name",
             'employee_code' => "The employee's ID",
             'department' => "The employee's department",
-            'week_start' => 'The Monday the week starts',
-            'missed_count' => 'Punches missed that week (Mon–Fri)',
-            'weekly_allowance' => 'Missed punches allowed per week',
+            'month' => 'The month, e.g. "November 2026"',
+            'missed_count' => 'Punches missed that month (Mon–Fri days)',
+            'monthly_allowance' => 'Missed punches allowed per month',
             'action_url' => 'Link to the attendance page',
             'company_name' => 'The company name',
         ],
@@ -284,9 +294,9 @@ class NotificationCatalog
             'employee_name' => "The employee's name",
             'employee_code' => "The employee's ID",
             'department' => "The employee's department",
-            'week_start' => 'The Monday the week starts',
-            'missed_count' => 'Punches missed that week (Mon–Fri)',
-            'weekly_allowance' => 'Missed punches allowed per week',
+            'month' => 'The month, e.g. "November 2026"',
+            'missed_count' => 'Punches missed that month (Mon–Fri days)',
+            'monthly_allowance' => 'Missed punches allowed per month',
             'action_url' => 'Link to the Missed Punches review page',
             'company_name' => 'The company name',
         ],
@@ -323,16 +333,16 @@ class NotificationCatalog
             MissedPunchNotification::class => [
                 'employee_name' => 'Jordan Lee', 'employee_code' => 'CNS042', 'department' => 'Operations',
                 'date' => now()->format('d M Y'), 'missed_punch' => 'Missed OUT between 12:39 PM and 01:05 PM',
-                'week_count' => '2', 'weekly_allowance' => '5', 'action_url' => url('/attendance/my'), 'company_name' => (string) config('app.name'),
+                'month_count' => '2', 'monthly_allowance' => '5', 'action_url' => url('/attendance/my'), 'company_name' => (string) config('app.name'),
             ],
             MissedPunchWeeklyWarningNotification::class => [
                 'employee_name' => 'Jordan Lee', 'employee_code' => 'CNS042', 'department' => 'Operations',
-                'week_start' => now()->startOfWeek()->format('d M Y'), 'missed_count' => '3', 'weekly_allowance' => '5',
+                'month' => now()->format('F Y'), 'missed_count' => '3', 'monthly_allowance' => '5',
                 'action_url' => url('/attendance/my'), 'company_name' => (string) config('app.name'),
             ],
             MissedPunchAllowanceExceededNotification::class => [
                 'employee_name' => 'Jordan Lee', 'employee_code' => 'CNS042', 'department' => 'Operations',
-                'week_start' => now()->startOfWeek()->format('d M Y'), 'missed_count' => '6', 'weekly_allowance' => '5',
+                'month' => now()->format('F Y'), 'missed_count' => '6', 'monthly_allowance' => '5',
                 'action_url' => url('/attendance/missed-punches'), 'company_name' => (string) config('app.name'),
             ],
         ];
@@ -374,7 +384,7 @@ class NotificationCatalog
             $base = Str::beforeLast(class_basename($class), 'Notification');
             $entries[$class] = [
                 'key' => $class,
-                'label' => Str::headline($base ?: class_basename($class)),
+                'label' => self::LABELS[$class] ?? Str::headline($base ?: class_basename($class)),
                 'group' => $this->groupFor($class),
                 'description' => null,
             ];

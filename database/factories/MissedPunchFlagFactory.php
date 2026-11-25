@@ -21,7 +21,8 @@ class MissedPunchFlagFactory extends Factory
     {
         return [
             'employee_id' => Employee::factory(),
-            'week_start' => Carbon::today()->startOfWeek(Carbon::MONDAY)->toDateString(),
+            'period' => MissedPunchFlag::PERIOD_MONTH,
+            'period_start' => Carbon::today()->startOfMonth()->toDateString(),
             'missed_count' => 6,
             'allowance' => 5,
             'flagged_at' => now(),

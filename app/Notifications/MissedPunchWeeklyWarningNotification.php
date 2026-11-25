@@ -11,9 +11,11 @@ use Illuminate\Notifications\Notification;
 use Illuminate\Support\Carbon;
 
 /**
- * Early warning: the working week (Mon–Fri) reached the warning number of
- * missed punches set on Attendance Settings, still within the allowance.
- * Sent once per week to the employee and the HR covering them.
+ * Early warning: the calendar month (its Mon–Fri days) reached the warning
+ * number of missed punches set on Attendance Settings, still within the
+ * allowance. Sent once per month to the employee and the HR covering them.
+ * The class keeps its first name ("Weekly") because it is the key of its row
+ * on Notifications & Email; the event is shown as "Missed Punch Warning".
  */
 class MissedPunchWeeklyWarningNotification extends Notification
 {
@@ -21,7 +23,7 @@ class MissedPunchWeeklyWarningNotification extends Notification
     use NotifiesByRole;
     use SendsMailChannel;
 
-    public function __construct(public readonly Employee $employee, public readonly int $count, public readonly string $weekStart) {}
+    public function __construct(public readonly Employee $employee, public readonly int $count, public readonly string $monthStart) {}
 
     public function via(object $notifiable): array
     {
@@ -30,22 +32,22 @@ class MissedPunchWeeklyWarningNotification extends Notification
 
     public function toArray(object $notifiable): array
     {
-        $week = Carbon::parse($this->weekStart)->format($this->recipientDateFormat($notifiable));
+        $month = MissedPunchTracker::monthLabel(Carbon::parse($this->monthStart));
         $name = $this->employee->user?->name ?? 'An employee';
         $allowance = MissedPunchTracker::allowance();
         $employeeCopy = $this->role === null || $this->role === 'employee';
 
         return [
             'type' => 'missed_punch_warning',
-            'title' => "Warning: {$this->count} of {$allowance} missed punches used this week",
+            'title' => "Warning: {$this->count} of {$allowance} missed punches used this month",
             'body' => $employeeCopy
-                ? "You have missed {$this->count} punches in the week of {$week}; {$allowance} are allowed. Punch Face IN and ID Card OUT every time you leave and come back — one more than {$allowance} and HR reviews your attendance."
-                : "{$name} has missed {$this->count} of {$allowance} allowed punches in the week of {$week}.",
+                ? "You have missed {$this->count} punches in {$month}; {$allowance} are allowed in a month. Punch Face IN and ID Card OUT every time you leave and come back — one more than {$allowance} and HR reviews your attendance."
+                : "{$name} has missed {$this->count} of {$allowance} allowed punches in {$month}.",
             'action' => 'View attendance',
             'url' => $employeeCopy ? '/attendance/my' : '/attendance/missed-punches',
             'icon' => 'exclamation-triangle',
             'color' => 'amber',
-            'week_count' => $this->count,
+            'month_count' => $this->count,
         ];
     }
 
@@ -58,9 +60,9 @@ class MissedPunchWeeklyWarningNotification extends Notification
             'employee_name' => $this->employee->user?->name ?? '',
             'employee_code' => (string) ($this->employee->employee_id ?? ''),
             'department' => $this->employee->department?->name ?? '',
-            'week_start' => Carbon::parse($this->weekStart)->format($this->recipientDateFormat($notifiable)),
+            'month' => MissedPunchTracker::monthLabel(Carbon::parse($this->monthStart)),
             'missed_count' => (string) $this->count,
-            'weekly_allowance' => (string) MissedPunchTracker::allowance(),
+            'monthly_allowance' => (string) MissedPunchTracker::allowance(),
             'action_url' => url('/attendance/my'),
             'company_name' => (string) config('app.name'),
         ];
