@@ -9,6 +9,7 @@ use App\Models\AttendanceRegularisation;
 use App\Models\BreakLog;
 use App\Services\Attendance\AttendanceCalculator;
 use App\Services\Attendance\HolidayResolver;
+use App\Services\Attendance\MissedPunchTracker;
 use App\Services\Attendance\WorkingDayResolver;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -365,8 +366,10 @@ trait ShowsTodayActivity
             'state' => $state,
             'clock_start_ms' => $clockStart,
             'since' => $clockStart ? $fmt((int) $clockStart, 'h:i A') : null,
-            // Punches missed this Monday–Sunday week (warning from MissedPunchTracker::WEEKLY_WARNING_AT).
+            // Punches missed this working week (Mon–Fri) against the weekly allowance.
             'missed_week' => $this->missedWeekCount,
+            'missed_allowance' => MissedPunchTracker::allowance(),
+            'missed_status' => MissedPunchTracker::status($this->missedWeekCount),
         ];
     }
 }

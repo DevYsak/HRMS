@@ -181,7 +181,7 @@ class AttendanceTracker extends Component
      */
     public array $missedPunches = [];
 
-    /** Punches missed this Monday–Sunday week (a warning from MissedPunchTracker::WEEKLY_WARNING_AT). */
+    /** Punches missed this working week, Monday–Friday (MissedPunchTracker::allowance() / warningAt()). */
     public int $missedWeekCount = 0;
 
     /** Auto-generated plain-language attendance insights for the period. */
@@ -483,15 +483,13 @@ class AttendanceTracker extends Component
             ])->all();
 
         // Missed punches (MissedPunchTracker — the one definition): the last 7
-        // days and this Monday–Sunday week, for the alerts, the weekly count
+        // days and this working week (Mon–Fri), for the alerts, the weekly count
         // and Today Activity. Plain arrays: a Livewire property holds no Carbon.
-        $weekStart = Carbon::today()->startOfWeek(Carbon::MONDAY);
+        $weekStart = MissedPunchTracker::weekStart(Carbon::today());
         $this->missedPunches = collect(app(MissedPunchTracker::class)->between($employee, Carbon::today()->subDays(6)->min($weekStart), Carbon::today()))
             ->map(fn (array $list) => array_map(fn (array $m) => array_diff_key($m, ['after_at' => true]), $list))
             ->all();
-        $this->missedWeekCount = collect($this->missedPunches)
-            ->filter(fn (array $list, string $date) => $date >= $weekStart->toDateString())
-            ->sum(fn (array $list) => count($list));
+        $this->missedWeekCount = MissedPunchTracker::countInWeek($this->missedPunches, $weekStart);
 
         $this->attendanceAlerts = $this->buildAttendanceAlerts();
 
@@ -1117,12 +1115,22 @@ class AttendanceTracker extends Component
             }
         }
 
-        // ── 3+ missed punches this week: a warning ──
-        if ($this->missedWeekCount >= MissedPunchTracker::WEEKLY_WARNING_AT) {
+        // ── The weekly allowance (Mon–Fri): over it, or at the early warning ──
+        $allowance = MissedPunchTracker::allowance();
+        $weekStatus = MissedPunchTracker::status($this->missedWeekCount);
+        if ($weekStatus === MissedPunchTracker::STATUS_EXCEEDED) {
+            $alerts[] = [
+                'type' => 'missed_punch_allowance',
+                'label' => "Missed-punch allowance used up — {$this->missedWeekCount} of {$allowance} this week",
+                'detail' => 'You are over the weekly allowance and flagged for HR review. Please contact HR about your attendance; you can still request regularisations.',
+                'date' => $today->toDateString(),
+                'action' => false,
+            ];
+        } elseif ($weekStatus === MissedPunchTracker::STATUS_WARNING) {
             $alerts[] = [
                 'type' => 'missed_punch_week',
-                'label' => "Warning — {$this->missedWeekCount} missed punches this week",
-                'detail' => 'Missed punches lower your attendance score. Punch Face IN and ID Card OUT every time you leave and come back, and regularise the ones above.',
+                'label' => "Warning — {$this->missedWeekCount} of {$allowance} missed punches used this week",
+                'detail' => "Missed punches lower your attendance score, and more than {$allowance} in a week (Mon–Fri) is reviewed by HR. Punch Face IN and ID Card OUT every time you leave and come back, and regularise the ones above.",
                 'date' => $today->toDateString(),
                 'action' => false,
             ];

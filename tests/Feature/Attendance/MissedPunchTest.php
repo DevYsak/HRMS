@@ -6,6 +6,7 @@ use App\Livewire\Attendance\MissedPunchPopup;
 use App\Models\Attendance;
 use App\Models\AttendancePunch;
 use App\Models\AttendanceScoreSetting;
+use App\Models\AttendanceSetting;
 use App\Models\Employee;
 use App\Models\ShiftSetting;
 use App\Models\User;
@@ -18,6 +19,7 @@ use App\Services\Attendance\MissedPunchTracker;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Once;
 use Livewire\Livewire;
 
 /*
@@ -46,6 +48,7 @@ beforeEach(function () {
 
     $shift = ShiftSetting::create(['name' => 'IT Shift', 'start_time' => '10:30', 'end_time' => '19:30', 'grace_minutes' => 6, 'standard_hours' => 9]);
     $this->manager = User::factory()->create(['role' => UserRole::Manager, 'name' => 'Mazhar Manager']);
+    $this->hr = User::factory()->create(['role' => UserRole::HrAdmin, 'name' => 'Shivani HR']);
     $this->user = User::factory()->create(['name' => 'Yogesh Sapkal']);
     $this->employee = Employee::factory()->create(['user_id' => $this->user->id, 'employee_code' => 17, 'shift_id' => $shift->id,
         'status' => 'active', 'joining_date' => '2024-01-01', 'manager_id' => $this->manager->id]);
@@ -90,24 +93,26 @@ test('missed punches come from the punch sequence: IN→IN, OUT→OUT and an ove
     expect(app(MissedPunchTracker::class)->between($this->employee, Carbon::parse('2026-11-23'), Carbon::parse('2026-11-23'))['2026-11-23'][0]['resolved'])->toBeTrue();
 });
 
-test('each mid-day missed punch notifies the employee and their manager once, and 3 in a week warns them', function () {
+test('each mid-day missed punch notifies the employee and HR once — never the manager — and 3 in the week warns them', function () {
     Notification::fake();
 
     $result = app(MissedPunchAlerts::class)->scan($this->employee, Carbon::parse('2026-11-23'), Carbon::parse('2026-11-25'));
 
-    // 3 missed; the 2 mid-day ones go to both people (the overdue check-out has its own alert).
-    expect($result)->toBe(['missed' => 3, 'notified' => 4, 'warned' => 2]);
+    // 3 missed; the 2 mid-day ones go to the employee and HR (the overdue check-out has its own alert).
+    expect($result)->toBe(['missed' => 3, 'notified' => 4, 'warned' => 2, 'flagged' => 0]);
     Notification::assertSentToTimes($this->user, MissedPunchNotification::class, 2);
-    Notification::assertSentToTimes($this->manager, MissedPunchNotification::class, 2);
+    Notification::assertSentToTimes($this->hr, MissedPunchNotification::class, 2);
+    Notification::assertNotSentTo($this->manager, MissedPunchNotification::class);
+    Notification::assertNotSentTo($this->manager, MissedPunchWeeklyWarningNotification::class);
     Notification::assertSentTo($this->user, MissedPunchWeeklyWarningNotification::class,
-        fn ($n) => $n->toArray($this->user)['title'] === 'Warning: 3 missed punches this week');
+        fn ($n) => $n->toArray($this->user)['title'] === 'Warning: 3 of 5 missed punches used this week');
 
     // Nobody is told twice.
     expect(app(MissedPunchAlerts::class)->scan($this->employee, Carbon::parse('2026-11-23'), Carbon::parse('2026-11-25')))
-        ->toBe(['missed' => 3, 'notified' => 0, 'warned' => 0]);
+        ->toBe(['missed' => 3, 'notified' => 0, 'warned' => 0, 'flagged' => 0]);
 
     $this->artisan('attendance:missed-punches', ['--from' => '2026-11-23', '--to' => '2026-11-25'])
-        ->expectsOutputToContain('3 found, 0 notified, 0 weekly warnings')
+        ->expectsOutputToContain('3 found, 0 notified, 0 weekly warnings, 0 newly over the allowance')
         ->assertSuccessful();
 });
 
@@ -127,12 +132,13 @@ test('every missed punch costs the missing-punch penalty in the attendance score
         ->and($line['label'])->toBe('Missed punches (2)');
 });
 
-test('My Attendance highlights the missed punches, lists them, counts the week and warns at 3', function () {
+test('My Attendance highlights the missed punches, lists them, counts the week against the allowance and warns at 3', function () {
     Livewire::actingAs($this->user)->test(AttendanceTracker::class)
         ->assertSet('missedWeekCount', 3)
         ->assertSee('Missed OUT punch')
         ->assertSee('Missed IN punch')
-        ->assertSee('Warning — 3 missed punches this week')
+        ->assertSee('Warning — 3 of 5 missed punches used this week')
+        ->assertSee('3 of 5 missed this week')
         ->assertSeeHtml('data-activity-event="missed"')
         ->assertSeeHtml('data-missed-week="3"')
         ->assertSeeHtml('data-history-row="2026-11-23"')
@@ -150,8 +156,8 @@ test('the popup shows new missed punches and the weekly warning until the employ
     Livewire::actingAs($this->user)->test(MissedPunchPopup::class)
         ->assertSee('You missed 3 punches')
         ->assertSee('Missed OUT between')
-        ->assertSee('3 missed punches this week')
-        ->assertSee('warning')
+        ->assertSee('3 of 5 missed punches allowed this week')
+        ->assertSee('One more than 5 and HR reviews your attendance')
         ->call('dismiss')
         ->assertDontSeeHtml('data-missed-punch-dialog');
 
@@ -160,7 +166,7 @@ test('the popup shows new missed punches and the weekly warning until the employ
     Cache::flush();
     Cache::forever('missed-punch-popup:seen:'.$this->user->id, collect(app(MissedPunchTracker::class)
         ->between($this->employee, Carbon::parse('2026-11-19'), Carbon::parse('2026-11-25')))->flatten(1)
-        ->reject(fn ($m) => $m['date'] === '2026-11-25' && $m['kind'] === 'out')->pluck('key')->push('week:2026-11-23')->all());
+        ->reject(fn ($m) => $m['date'] === '2026-11-25' && $m['kind'] === 'out')->pluck('key')->push('week:2026-11-23:warning')->all());
 
     Livewire::actingAs($this->user)->test(MissedPunchPopup::class)
         ->assertSee('You missed a punch')
@@ -170,7 +176,7 @@ test('the popup shows new missed punches and the weekly warning until the employ
     Livewire::actingAs($this->manager)->test(MissedPunchPopup::class)->assertDontSeeHtml('data-missed-punch-dialog');
 });
 
-test('the Excel workbook counts missed punches per day and the weeks with 3 or more', function () {
+test('the Excel workbook counts missed punches per day and the weeks over the allowance', function () {
     $this->actingAs(User::factory()->create(['role' => UserRole::HrAdmin]));
     $sheets = collect(app(AttendanceWorkbook::class)->sheets(['from' => '2026-11-23', 'to' => '2026-11-25', 'employee_id' => $this->employee->id]))->keyBy('name');
 
@@ -178,5 +184,12 @@ test('the Excel workbook counts missed punches per day and the weeks with 3 or m
     expect($detail['2026-11-23'][24])->toBe(1)
         ->and($detail['2026-11-23'][25])->toStartWith('Missed OUT between')
         ->and($sheets['Summary']['rows'][0][20])->toBe(3)
-        ->and($sheets['Summary']['rows'][0][21])->toBe(1);
+        ->and($sheets['Summary']['rows'][0][21])->toBe(0);
+
+    // With an allowance of 2, the week of 23 Nov (3 missed) is over it.
+    AttendanceSetting::query()->firstOrCreate([])->update(['missed_punch_weekly_allowance' => 2]);
+    AttendanceSetting::flushWeeklyOffCache();
+    Once::flush();
+    $sheets = collect(app(AttendanceWorkbook::class)->sheets(['from' => '2026-11-23', 'to' => '2026-11-25', 'employee_id' => $this->employee->id]))->keyBy('name');
+    expect($sheets['Summary']['rows'][0][21])->toBe(1);
 });

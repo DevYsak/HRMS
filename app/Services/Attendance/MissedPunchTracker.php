@@ -28,11 +28,26 @@ use Illuminate\Support\Collection;
  * Regularisation punches are left out, so a corrected day still shows what
  * was missed — marked resolved. A web clock-in day has only its check-out
  * to miss.
+ *
+ * The weekly allowance counts the working week, Monday to Friday, and starts
+ * again every Monday. HR sets it on Attendance Settings (default 5): going
+ * over it flags the employee for HR review. An early warning goes out at its
+ * own number (default 3; 0 = none).
  */
 class MissedPunchTracker
 {
-    /** Missed punches in one Monday–Sunday week that trigger a warning. */
-    public const WEEKLY_WARNING_AT = 3;
+    public const DEFAULT_ALLOWANCE = 5;
+
+    public const DEFAULT_WARNING_AT = 3;
+
+    /** Within the warning and the allowance. */
+    public const STATUS_OK = 'ok';
+
+    /** At or past the early warning, within the allowance. */
+    public const STATUS_WARNING = 'warning';
+
+    /** Over the allowance: flagged for HR review. */
+    public const STATUS_EXCEEDED = 'exceeded';
 
     public const KIND_OUT = 'out';
 
@@ -179,13 +194,57 @@ class MissedPunchTracker
         return $missed;
     }
 
-    /** Missed punches in the Monday–Sunday week holding $day (to today). */
+    /** Missed punches in the Monday–Friday working week holding $day (to today). */
     public function weekCount(Employee $employee, ?CarbonInterface $day = null): int
     {
-        $day = Carbon::parse(($day ?? now())->toDateString());
+        $start = self::weekStart($day ?? now());
 
-        return collect($this->between($employee, $day->copy()->startOfWeek(Carbon::MONDAY), $day->copy()->endOfWeek(Carbon::SUNDAY)))
-            ->flatten(1)->count();
+        return self::countInWeek($this->between($employee, $start, $start->copy()->addDays(4)), $start);
+    }
+
+    /** Missed punches the working week allows (Attendance Settings, default 5). */
+    public static function allowance(): int
+    {
+        return max(1, (int) (ShiftResolver::settings()?->missed_punch_weekly_allowance ?? self::DEFAULT_ALLOWANCE));
+    }
+
+    /** Missed punches that bring an early warning (Attendance Settings, default 3; 0 = none). */
+    public static function warningAt(): int
+    {
+        return (int) (ShiftResolver::settings()?->missed_punch_warning_at ?? self::DEFAULT_WARNING_AT);
+    }
+
+    /** ok, warning or exceeded for a week's count. */
+    public static function status(int $count): string
+    {
+        $warningAt = self::warningAt();
+
+        return match (true) {
+            $count > self::allowance() => self::STATUS_EXCEEDED,
+            $warningAt > 0 && $count >= $warningAt => self::STATUS_WARNING,
+            default => self::STATUS_OK,
+        };
+    }
+
+    /** The Monday of the week holding $day. */
+    public static function weekStart(CarbonInterface $day): Carbon
+    {
+        return Carbon::parse($day->toDateString())->startOfWeek(Carbon::MONDAY);
+    }
+
+    /**
+     * Missed punches on the working days (Monday–Friday) of the week starting
+     * $weekStart, from a by-date list (between()).
+     *
+     * @param  array<string, list<array<string, mixed>>>  $byDate
+     */
+    public static function countInWeek(array $byDate, CarbonInterface $weekStart): int
+    {
+        $from = $weekStart->toDateString();
+        $to = Carbon::parse($from)->addDays(4)->toDateString();
+
+        return collect($byDate)->filter(fn (array $list, string $date) => $date >= $from && $date <= $to)
+            ->sum(fn (array $list) => count($list));
     }
 
     private function clock(?array $node): string

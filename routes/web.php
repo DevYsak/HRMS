@@ -23,6 +23,7 @@ use App\Livewire\Attendance\BiometricSummary;
 use App\Livewire\Attendance\CommandCenter;
 use App\Livewire\Attendance\ExecutiveAttendance;
 use App\Livewire\Attendance\LiveAttendance;
+use App\Livewire\Attendance\MissedPunchAllowance;
 use App\Livewire\Attendance\TeamAttendance;
 use App\Livewire\AuditLogViewer;
 use App\Livewire\Dashboard;
@@ -332,6 +333,8 @@ Route::middleware(['auth'])->group(function () {
         // Attendance Reports — leave approvers, or anyone whose view_attendance reaches
         // beyond their own record (e.g. a Coordinator's department); checked in the page.
         Route::get('/reports', AttendanceReports::class)->name('reports');
+        // Missed Punches — weekly allowance, flags and HR review; manage_attendance, checked in the page.
+        Route::get('/missed-punches', MissedPunchAllowance::class)->name('missed-punches');
         Route::middleware('role:approve-leave')->group(function () {
             Route::get('/team', TeamAttendance::class)->name('team');
             Route::get('/employees', AllAttendance::class)->name('employees');

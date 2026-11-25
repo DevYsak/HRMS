@@ -11,6 +11,7 @@ use App\Models\NotificationSetting;
 use App\Notifications\ExcessBreakNotification;
 use App\Notifications\LeaveRequestNotification;
 use App\Notifications\LeaveRevisionNotification;
+use App\Notifications\MissedPunchAllowanceExceededNotification;
 use App\Notifications\MissedPunchNotification;
 use App\Notifications\MissedPunchWeeklyWarningNotification;
 use App\Notifications\MissingCheckoutNotification;
@@ -120,8 +121,9 @@ class NotificationCatalog
         // Attendance
         ExcessBreakNotification::class => ['employee' => 'Employee', 'manager' => 'Manager'],
         MissingCheckoutNotification::class => ['employee' => 'Employee', 'manager' => 'Manager'],
-        MissedPunchNotification::class => ['employee' => 'Employee', 'manager' => 'Manager'],
-        MissedPunchWeeklyWarningNotification::class => ['employee' => 'Employee', 'manager' => 'Manager'],
+        MissedPunchNotification::class => ['employee' => 'Employee', 'hr_admin' => 'HR Admin'],
+        MissedPunchWeeklyWarningNotification::class => ['employee' => 'Employee', 'hr_admin' => 'HR Admin'],
+        MissedPunchAllowanceExceededNotification::class => ['employee' => 'Employee', 'hr_admin' => 'HR Admin'],
         'App\Notifications\AttendanceRegularisationNotification' => [
             'employee' => 'Employee', 'manager' => 'Manager', 'hr_admin' => 'HR Admin',
         ],
@@ -209,23 +211,33 @@ class NotificationCatalog
         ],
         MissedPunchNotification::class => [
             'employee_name' => "The employee's name",
-            'employee_code' => "The employee's code",
-            'manager_name' => "The employee's manager (blank if none)",
+            'employee_code' => "The employee's ID",
             'department' => "The employee's department",
             'date' => 'The day of the missed punch',
             'missed_punch' => 'What was missed, e.g. "Missed OUT between 12:39 PM and 01:05 PM"',
-            'week_count' => 'Punches missed so far this week',
+            'week_count' => 'Punches missed so far this week (Mon–Fri)',
+            'weekly_allowance' => 'Missed punches allowed per week',
             'action_url' => 'Link to request a regularisation for that day',
             'company_name' => 'The company name',
         ],
         MissedPunchWeeklyWarningNotification::class => [
             'employee_name' => "The employee's name",
-            'employee_code' => "The employee's code",
-            'manager_name' => "The employee's manager (blank if none)",
+            'employee_code' => "The employee's ID",
             'department' => "The employee's department",
             'week_start' => 'The Monday the week starts',
-            'missed_count' => 'Punches missed that week',
+            'missed_count' => 'Punches missed that week (Mon–Fri)',
+            'weekly_allowance' => 'Missed punches allowed per week',
             'action_url' => 'Link to the attendance page',
+            'company_name' => 'The company name',
+        ],
+        MissedPunchAllowanceExceededNotification::class => [
+            'employee_name' => "The employee's name",
+            'employee_code' => "The employee's ID",
+            'department' => "The employee's department",
+            'week_start' => 'The Monday the week starts',
+            'missed_count' => 'Punches missed that week (Mon–Fri)',
+            'weekly_allowance' => 'Missed punches allowed per week',
+            'action_url' => 'Link to the Missed Punches review page',
             'company_name' => 'The company name',
         ],
     ];
@@ -259,14 +271,19 @@ class NotificationCatalog
                 'action_url' => url('/attendance/my'), 'company_name' => (string) config('app.name'),
             ],
             MissedPunchNotification::class => [
-                'employee_name' => 'Jordan Lee', 'employee_code' => '1042', 'manager_name' => 'Priya Sharma',
-                'department' => 'Operations', 'date' => now()->format('d M Y'), 'missed_punch' => 'Missed OUT between 12:39 PM and 01:05 PM',
-                'week_count' => '2', 'action_url' => url('/attendance/my'), 'company_name' => (string) config('app.name'),
+                'employee_name' => 'Jordan Lee', 'employee_code' => 'CNS042', 'department' => 'Operations',
+                'date' => now()->format('d M Y'), 'missed_punch' => 'Missed OUT between 12:39 PM and 01:05 PM',
+                'week_count' => '2', 'weekly_allowance' => '5', 'action_url' => url('/attendance/my'), 'company_name' => (string) config('app.name'),
             ],
             MissedPunchWeeklyWarningNotification::class => [
-                'employee_name' => 'Jordan Lee', 'employee_code' => '1042', 'manager_name' => 'Priya Sharma',
-                'department' => 'Operations', 'week_start' => now()->startOfWeek()->format('d M Y'), 'missed_count' => '3',
+                'employee_name' => 'Jordan Lee', 'employee_code' => 'CNS042', 'department' => 'Operations',
+                'week_start' => now()->startOfWeek()->format('d M Y'), 'missed_count' => '3', 'weekly_allowance' => '5',
                 'action_url' => url('/attendance/my'), 'company_name' => (string) config('app.name'),
+            ],
+            MissedPunchAllowanceExceededNotification::class => [
+                'employee_name' => 'Jordan Lee', 'employee_code' => 'CNS042', 'department' => 'Operations',
+                'week_start' => now()->startOfWeek()->format('d M Y'), 'missed_count' => '6', 'weekly_allowance' => '5',
+                'action_url' => url('/attendance/missed-punches'), 'company_name' => (string) config('app.name'),
             ],
         ];
     }

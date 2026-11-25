@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Once;
 
-#[Fillable(['shift_start', 'shift_end', 'weekly_off_days', 'late_grace_period', 'late_warning_threshold', 'auto_checkout_buffer_minutes', 'ot_auto_close_time', 'ot_rate_per_hour', 'requires_location', 'requires_qr', 'requires_photo', 'coordinator_reminder_hours', 'coordinator_late_minutes'])]
+#[Fillable(['shift_start', 'shift_end', 'weekly_off_days', 'late_grace_period', 'late_warning_threshold', 'auto_checkout_buffer_minutes', 'ot_auto_close_time', 'ot_rate_per_hour', 'requires_location', 'requires_qr', 'requires_photo', 'coordinator_reminder_hours', 'coordinator_late_minutes', 'missed_punch_weekly_allowance', 'missed_punch_warning_at'])]
 class AttendanceSetting extends Model
 {
     protected $casts = [
@@ -18,6 +18,8 @@ class AttendanceSetting extends Model
         'requires_location' => 'boolean',
         'requires_qr' => 'boolean',
         'requires_photo' => 'boolean',
+        'missed_punch_weekly_allowance' => 'integer',
+        'missed_punch_warning_at' => 'integer',
     ];
 
     /**

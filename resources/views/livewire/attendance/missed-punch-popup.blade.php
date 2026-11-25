@@ -1,7 +1,8 @@
 <div wire:poll.120s data-missed-punch-popup>
     @if($state)
         @php
-            $warnAt = \App\Services\Attendance\MissedPunchTracker::WEEKLY_WARNING_AT;
+            $over = $state['status'] === \App\Services\Attendance\MissedPunchTracker::STATUS_EXCEEDED;
+            $atWarning = $state['status'] !== \App\Services\Attendance\MissedPunchTracker::STATUS_OK;
             $first = $state['missed'][0] ?? null;
         @endphp
         <div class="fixed inset-0 z-[60] flex items-end justify-center bg-zinc-900/40 p-4 sm:items-center" role="dialog" aria-modal="true" aria-labelledby="missed-punch-title" data-missed-punch-dialog>
@@ -10,7 +11,9 @@
                     <span class="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600 dark:bg-red-500/20 dark:text-red-300"><flux:icon.exclamation-triangle class="size-5" /></span>
                     <div class="min-w-0">
                         <h2 id="missed-punch-title" class="text-base font-bold text-red-800 dark:text-red-200">
-                            @if($state['missed'] !== [])
+                            @if($over && $state['warn'])
+                                Missed-punch allowance used up
+                            @elseif($state['missed'] !== [])
                                 You missed {{ count($state['missed']) === 1 ? 'a punch' : count($state['missed']).' punches' }}
                             @else
                                 Missed punches this week
@@ -33,11 +36,13 @@
                     @endif
 
                     <p @class(['text-sm font-semibold', 'mt-3' => $state['missed'] !== [],
-                        'text-red-700 dark:text-red-300' => $state['week_count'] >= $warnAt,
-                        'text-zinc-600 dark:text-slate-300' => $state['week_count'] < $warnAt]) data-missed-punch-week="{{ $state['week_count'] }}">
-                        {{ $state['week_count'] }} missed {{ \Illuminate\Support\Str::plural('punch', $state['week_count']) }} this week
-                        @if($state['week_count'] >= $warnAt)
-                            — warning: {{ $warnAt }} or more in a week lower your attendance score.
+                        'text-red-700 dark:text-red-300' => $atWarning,
+                        'text-zinc-600 dark:text-slate-300' => ! $atWarning]) data-missed-punch-week="{{ $state['week_count'] }}">
+                        {{ $state['week_count'] }} of {{ $state['allowance'] }} missed punches allowed this week (Mon–Fri).
+                        @if($over)
+                            You are over the allowance and flagged for HR review — please contact HR about your attendance.
+                        @elseif($atWarning)
+                            One more than {{ $state['allowance'] }} and HR reviews your attendance.
                         @endif
                     </p>
                 </div>

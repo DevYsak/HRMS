@@ -197,9 +197,10 @@ Schedule::command('attendance:sync-engine')
     ->withoutOverlapping()
     ->runInBackground();
 
-// Missed punches: notify each one (and a 3+-a-week warning) to the employee
-// and their manager, five minutes behind every engine sync, over yesterday
-// and today. Keyed, so nobody is notified twice.
+// Missed punches: notify each one, the week's early warning and going over
+// the weekly allowance (flagging the employee for HR review) to the employee
+// and HR, five minutes behind every engine sync, over yesterday and today.
+// Keyed, so nobody is notified twice.
 Schedule::command('attendance:missed-punches')
     ->cron('5,15,25,35,45,55 7-23 * * *')
     ->withoutOverlapping()

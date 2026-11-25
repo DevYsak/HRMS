@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Attendance;
 
+use App\Notifications\MissedPunchAllowanceExceededNotification;
 use App\Notifications\MissedPunchNotification;
 use App\Notifications\MissedPunchWeeklyWarningNotification;
 use App\Services\Attendance\MissedPunchTracker;
@@ -13,7 +14,8 @@ use Livewire\Component;
 /**
  * The missed-punch popup, on every page for the signed-in employee: each
  * missed punch of the last 7 days that is not regularised and not yet seen,
- * and a warning once this week reaches MissedPunchTracker::WEEKLY_WARNING_AT.
+ * and the working week (Mon–Fri) reaching the early warning or going over
+ * the allowance (MissedPunchTracker), each once.
  * Read from live attendance data (refreshed every 2 minutes); "Got it"
  * remembers what was seen and marks the matching notifications read.
  */
@@ -36,12 +38,12 @@ class MissedPunchPopup extends Component
             $seen[] = $missed['key'];
         }
         if ($state['warn']) {
-            $seen[] = 'week:'.$state['week_start'];
+            $seen[] = $state['week_key'];
         }
         Cache::forever($this->seenKey(), array_slice(array_values(array_unique($seen)), -300));
 
         $user->unreadNotifications()
-            ->whereIn('type', [MissedPunchNotification::class, MissedPunchWeeklyWarningNotification::class])
+            ->whereIn('type', [MissedPunchNotification::class, MissedPunchWeeklyWarningNotification::class, MissedPunchAllowanceExceededNotification::class])
             ->update(['read_at' => now()]);
     }
 
@@ -63,7 +65,7 @@ class MissedPunchPopup extends Component
     /**
      * What to show now, or null when there is nothing new.
      *
-     * @return array{missed: list<array<string, mixed>>, week_count: int, warn: bool, week_start: string}|null
+     * @return array{missed: list<array<string, mixed>>, week_count: int, warn: bool, week_key: string, status: string, allowance: int, week_start: string}|null
      */
     private function state(): ?array
     {
@@ -74,7 +76,7 @@ class MissedPunchPopup extends Component
         }
 
         $today = Carbon::today();
-        $weekStart = $today->copy()->startOfWeek(Carbon::MONDAY)->toDateString();
+        $weekStart = MissedPunchTracker::weekStart($today)->toDateString();
 
         // The same 2-minute snapshot for every page in between, so the popup costs
         // one cache read per page.
@@ -90,13 +92,19 @@ class MissedPunchPopup extends Component
             ->flatten(1)
             ->reject(fn (array $m) => $m['resolved'] || isset($seen[$m['key']]))
             ->sortByDesc('date')->values()->all();
-        $weekCount = collect($byDate)->filter(fn (array $list, string $date) => $date >= $weekStart)->sum(fn (array $list) => count($list));
-        $warn = $weekCount >= MissedPunchTracker::WEEKLY_WARNING_AT && ! isset($seen['week:'.$weekStart]);
+        $weekCount = MissedPunchTracker::countInWeek($byDate, Carbon::parse($weekStart));
+        $status = MissedPunchTracker::status($weekCount);
+        // Seen per level: going over the allowance pops up again after the warning was seen.
+        $weekKey = 'week:'.$weekStart.':'.$status;
+        $warn = $status !== MissedPunchTracker::STATUS_OK && ! isset($seen[$weekKey]);
 
         return $missed === [] && ! $warn ? null : [
             'missed' => $missed,
             'week_count' => $weekCount,
             'warn' => $warn,
+            'week_key' => $weekKey,
+            'status' => $status,
+            'allowance' => MissedPunchTracker::allowance(),
             'week_start' => $weekStart,
         ];
     }

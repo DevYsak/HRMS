@@ -266,6 +266,8 @@ class Sidebar
                     // repeat Team Attendance — they belong to those who manage attendance.
                     ['label' => 'All Attendance', 'route' => 'attendance.employees',
                         'when' => fn (User $u) => $u->hasPermission('manage_attendance')],
+                    ['label' => 'Missed Punches', 'route' => 'attendance.missed-punches',
+                        'when' => fn (User $u) => $u->hasPermission('manage_attendance')],
                     ['label' => 'Attendance Reports', 'route' => 'attendance.reports',
                         'when' => fn (User $u) => AttendanceReports::canOpen($u)
                             && ($u->hasPermission('manage_attendance') || $u->hasPermission('view_reports') || $u->hasPermission('monitor_attendance_exceptions'))],

@@ -8,6 +8,7 @@ use App\Models\NotificationSetting;
 use App\Models\User;
 use App\Notifications\AttendanceExceptionNotification;
 use App\Notifications\AttendanceRegularisationNotification;
+use App\Notifications\MissedPunchAllowanceExceededNotification;
 use App\Notifications\MissedPunchNotification;
 use App\Notifications\MissedPunchWeeklyWarningNotification;
 use App\Notifications\MissingCheckoutNotification;
@@ -45,6 +46,7 @@ class NotificationRecipientPolicy
         MissingCheckoutNotification::class,
         MissedPunchNotification::class,
         MissedPunchWeeklyWarningNotification::class,
+        MissedPunchAllowanceExceededNotification::class,
         AttendanceRegularisationNotification::class,
         AttendanceExceptionNotification::class,
     ];

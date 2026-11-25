@@ -11,9 +11,9 @@ use Illuminate\Notifications\Notification;
 use Illuminate\Support\Carbon;
 
 /**
- * Warning: MissedPunchTracker::WEEKLY_WARNING_AT or more punches missed in
- * one Monday–Sunday week. Sent once per week to the employee and their
- * manager, each as their own role.
+ * Early warning: the working week (Mon–Fri) reached the warning number of
+ * missed punches set on Attendance Settings, still within the allowance.
+ * Sent once per week to the employee and the HR covering them.
  */
 class MissedPunchWeeklyWarningNotification extends Notification
 {
@@ -32,17 +32,19 @@ class MissedPunchWeeklyWarningNotification extends Notification
     {
         $week = Carbon::parse($this->weekStart)->format($this->recipientDateFormat($notifiable));
         $name = $this->employee->user?->name ?? 'An employee';
+        $allowance = MissedPunchTracker::allowance();
+        $employeeCopy = $this->role === null || $this->role === 'employee';
 
         return [
             'type' => 'missed_punch_warning',
-            'title' => "Warning: {$this->count} missed punches this week",
-            'body' => $this->role === 'manager'
-                ? "{$name} has missed {$this->count} punches in the week of {$week} (warning from ".MissedPunchTracker::WEEKLY_WARNING_AT.').'
-                : "You have missed {$this->count} punches in the week of {$week}. Missed punches lower your attendance score — punch Face IN and ID Card OUT every time you leave and return.",
+            'title' => "Warning: {$this->count} of {$allowance} missed punches used this week",
+            'body' => $employeeCopy
+                ? "You have missed {$this->count} punches in the week of {$week}; {$allowance} are allowed. Punch Face IN and ID Card OUT every time you leave and come back — one more than {$allowance} and HR reviews your attendance."
+                : "{$name} has missed {$this->count} of {$allowance} allowed punches in the week of {$week}.",
             'action' => 'View attendance',
-            'url' => $this->role === 'manager' ? '/attendance/team' : '/attendance/my',
+            'url' => $employeeCopy ? '/attendance/my' : '/attendance/missed-punches',
             'icon' => 'exclamation-triangle',
-            'color' => 'red',
+            'color' => 'amber',
             'week_count' => $this->count,
         ];
     }
@@ -54,11 +56,11 @@ class MissedPunchWeeklyWarningNotification extends Notification
     {
         return [
             'employee_name' => $this->employee->user?->name ?? '',
-            'employee_code' => (string) ($this->employee->employee_code ?? ''),
-            'manager_name' => $this->employee->manager?->name ?? '',
+            'employee_code' => (string) ($this->employee->employee_id ?? ''),
             'department' => $this->employee->department?->name ?? '',
             'week_start' => Carbon::parse($this->weekStart)->format($this->recipientDateFormat($notifiable)),
             'missed_count' => (string) $this->count,
+            'weekly_allowance' => (string) MissedPunchTracker::allowance(),
             'action_url' => url('/attendance/my'),
             'company_name' => (string) config('app.name'),
         ];
