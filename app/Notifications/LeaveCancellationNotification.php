@@ -61,4 +61,14 @@ class LeaveCancellationNotification extends Notification
                 'leave_request_id' => $leave->id,
             ];
     }
+
+    /**
+     * The leave request being cancelled, for the email history.
+     *
+     * @return array{type: string, id: int}
+     */
+    public function mailContext(): array
+    {
+        return ['type' => 'leave_request', 'id' => (int) $this->cancellation->leave_request_id];
+    }
 }

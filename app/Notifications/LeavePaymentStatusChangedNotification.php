@@ -43,4 +43,14 @@ class LeavePaymentStatusChangedNotification extends Notification
             'hr_remark' => $this->leaveRequest->hr_remark,
         ];
     }
+
+    /**
+     * The leave request converted, for the email history.
+     *
+     * @return array{type: string, id: int}
+     */
+    public function mailContext(): array
+    {
+        return ['type' => 'leave_request', 'id' => (int) $this->leaveRequest->id];
+    }
 }

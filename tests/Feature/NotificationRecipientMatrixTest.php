@@ -139,7 +139,8 @@ test('sync creates a role row for every role an event declares', function () {
     foreach ($catalog->all() as $entry) {
         $declared = array_keys($catalog->rolesFor($entry['key']));
 
-        if ($declared === []) {
+        // A stage ("…@approved") has no role rows: the event's role rows govern it.
+        if ($declared === [] || str_contains($entry['key'], '@')) {
             continue;
         }
 
@@ -272,7 +273,8 @@ test('every notification setting in the catalog has a real dispatch path', funct
             continue; // Mailables are dispatched via Mail::to(), covered separately
         }
 
-        $short = class_basename($key);
+        // A stage ("…LeaveRequestNotification@approved") is sent by its event's class.
+        $short = class_basename(NotificationCatalog::parentKey($key));
         $found = false;
 
         foreach (['app/Services', 'app/Livewire', 'app/Console', 'app/Http', 'app/Observers'] as $dir) {

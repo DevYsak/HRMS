@@ -7,10 +7,10 @@ use App\Models\AttendanceDailyScore;
 use App\Models\AttendanceRegularisation;
 use App\Models\Employee;
 use App\Models\OtRequest;
-use App\Notifications\RegularisationReviewedNotification;
 use App\Services\Approvals\ApprovalGuard;
 use App\Services\Attendance\AttendanceCalculator;
 use App\Services\Attendance\AttendanceStatusResolver;
+use App\Services\Attendance\RegularisationNotices;
 use App\Services\Attendance\WorkingDayResolver;
 use App\Services\AttendanceService;
 use App\Services\Security\PeopleScope;
@@ -86,7 +86,7 @@ class TeamAttendance extends Component
 
         \Flux::toast('Regularisation request approved.');
 
-        $this->activeRequest->employee->user->notify(new RegularisationReviewedNotification($this->activeRequest));
+        app(RegularisationNotices::class)->decided($this->activeRequest);
 
         $this->showReviewModal = false;
         $this->activeRequest = null;
@@ -108,7 +108,7 @@ class TeamAttendance extends Component
             return;
         }
 
-        $this->activeRequest->employee->user->notify(new RegularisationReviewedNotification($this->activeRequest));
+        app(RegularisationNotices::class)->decided($this->activeRequest);
 
         $this->showReviewModal = false;
         $this->activeRequest = null;

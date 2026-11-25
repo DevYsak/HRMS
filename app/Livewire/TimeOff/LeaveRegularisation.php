@@ -5,8 +5,8 @@ namespace App\Livewire\TimeOff;
 use App\Models\AttendanceRegularisation;
 use App\Models\Employee;
 use App\Models\LeaveType;
-use App\Notifications\RegularisationReviewedNotification;
 use App\Services\Approvals\ApprovalGuard;
+use App\Services\Attendance\RegularisationNotices;
 use App\Services\AttendanceService;
 use App\Services\Leave\LeaveRegularisationService;
 use Illuminate\Support\Carbon;
@@ -139,7 +139,7 @@ class LeaveRegularisation extends Component
         app(AttendanceService::class)->approveRegularisation($reg, auth()->id(), $this->reviewComment ?: null);
 
         $fresh = $reg->fresh();
-        $fresh->employee?->user?->notify(new RegularisationReviewedNotification($fresh));
+        app(RegularisationNotices::class)->decided($fresh);
 
         $this->reviewComment = '';
         $this->reviewId = null;
@@ -176,7 +176,7 @@ class LeaveRegularisation extends Component
 
             return;
         }
-        $reg->fresh()->employee?->user?->notify(new RegularisationReviewedNotification($reg->fresh()));
+        app(RegularisationNotices::class)->decided($reg->fresh());
 
         $this->reviewId = null;
         $this->reviewComment = '';

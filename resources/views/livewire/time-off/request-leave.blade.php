@@ -321,6 +321,10 @@
                         <textarea id="rl-remarks" wire:model.blur="remarks" rows="2" class="{{ $input }}" placeholder="Anything else for your approver"></textarea>
                     </div>
 
+                    @unless($hrMode)
+                        @include('livewire.time-off.partials.notify-recipients', ['recipientLabel' => 'Notify others', 'recipientHint' => 'optional — your manager and HR are always told; the people you add get this application and its decision'])
+                    @endunless
+
                     <div>
                         <p class="{{ $label }}">
                             Attachment
@@ -386,6 +390,7 @@
                                 'Working days' => $fmt($eval['charged_days']).($isHalfDay ? ' ('.($halfDayPeriod === 'first_half' ? 'first' : 'second').' half)' : ''),
                                 'Reason' => $reason,
                                 'Attachment' => $attachment?->getClientOriginalName() ?? 'None',
+                                ...(! $hrMode && $this->canNotifyOthers() ? ['Notify others' => $this->recipientOptions->where('selected', true)->pluck('name')->join(', ') ?: 'None'] : []),
                             ] as $k => $v)
                                 <div class="flex gap-4 px-4 py-2"><dt class="w-28 shrink-0 text-zinc-500">{{ $k }}</dt><dd class="min-w-0 flex-1 break-words text-zinc-900 dark:text-white">{{ $v }}</dd></div>
                             @endforeach

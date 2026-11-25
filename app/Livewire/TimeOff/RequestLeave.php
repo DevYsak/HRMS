@@ -2,6 +2,7 @@
 
 namespace App\Livewire\TimeOff;
 
+use App\Livewire\Concerns\ChoosesLeaveRecipients;
 use App\Models\Employee;
 use App\Models\LeaveAttachment;
 use App\Models\LeaveRequest;
@@ -51,7 +52,7 @@ use Livewire\WithFileUploads;
  */
 class RequestLeave extends Component
 {
-    use WithFileUploads;
+    use ChoosesLeaveRecipients, WithFileUploads;
 
     /** The main categories, in order; Special Leave appears only where separately entitled. */
     public const CATEGORIES = [LeaveCategory::EARNED, LeaveCategory::COMP_OFF, LeaveCategory::UNPAID, LeaveCategory::SPECIAL];
@@ -392,12 +393,13 @@ class RequestLeave extends Component
 
         try {
             $request = $this->hrMode ? $this->submitForEmployee($service, $employee, $type, $attachments) : ($this->category === self::COMBINED
-                ? $service->submitCombinedRequest($employee, $type, $this->startDate, $this->endDate, $this->allocations, $this->reason, $attachments)
+                ? $service->submitCombinedRequest($employee, $type, $this->startDate, $this->endDate, $this->allocations, $this->reason, $attachments, notifyUserIds: $this->chosenRecipientIds())
                 : $service->submitRequest(
                     $employee, $type, $this->startDate, $this->endDate, $this->reason,
                     $this->isHalfDay, $this->isHalfDay ? $this->halfDayPeriod : null,
                     // Ignored under the V2 engine: the policy decides payroll treatment.
                     'paid', null, $this->remarks ?: null, $attachments,
+                    notifyUserIds: $this->chosenRecipientIds(),
                 ));
         } catch (AuthorizationException $e) {
             $this->addError('request', $e->getMessage());
@@ -445,6 +447,12 @@ class RequestLeave extends Component
         return $user->hasPermission('apply_leave_on_behalf')
             && $user->employee?->id !== $employee->id
             && app(ScopeResolver::class)->covers($user, 'apply_leave_on_behalf', $employee);
+    }
+
+    /** Notify Others never offers the employee the request is for. */
+    protected function recipientEmployeeUserId(): ?int
+    {
+        return $this->subject?->user_id;
     }
 
     /** Who the request is for: the signed-in employee, or (HR mode) the employee HR chose. */
@@ -685,7 +693,7 @@ class RequestLeave extends Component
 
     private function resetForm(): void
     {
-        $this->reset(['step', 'category', 'leaveTypeId', 'startDate', 'endDate', 'isHalfDay', 'halfDayPeriod', 'reason', 'remarks', 'attachment', 'submittedId', 'allocations', 'loadError']);
+        $this->reset(['step', 'category', 'leaveTypeId', 'startDate', 'endDate', 'isHalfDay', 'halfDayPeriod', 'reason', 'remarks', 'attachment', 'submittedId', 'allocations', 'loadError', 'notifyUserIds', 'recipientSearch']);
         $this->resetErrorBag();
         unset($this->choices, $this->selected, $this->evaluation, $this->combinedEvaluation, $this->submitted);
     }

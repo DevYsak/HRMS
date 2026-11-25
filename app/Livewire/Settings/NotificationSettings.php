@@ -3,10 +3,14 @@
 namespace App\Livewire\Settings;
 
 use App\Mail\CustomBroadcastMail;
+use App\Models\AttendanceRegularisation;
 use App\Models\AuditLog;
 use App\Models\Department;
 use App\Models\EmailLog;
+use App\Models\Employee;
+use App\Models\LeaveRequest;
 use App\Models\MailSetting;
+use App\Models\NotificationDepartmentRule;
 use App\Models\NotificationRoleSetting;
 use App\Models\NotificationSetting;
 use App\Models\Role;
@@ -16,12 +20,16 @@ use App\Services\Audit\AuditService;
 use App\Services\Notifications\NotificationCatalog;
 use App\Services\Notifications\NotificationRecipientPolicy;
 use App\Services\Notifications\TemplateVariableRenderer;
+use App\Services\Security\PeopleScope;
 use Illuminate\Contracts\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
+use Livewire\Attributes\Url;
 use Livewire\Component;
+use Livewire\WithPagination;
 
 /**
  * Admin control panel for every transactional email / notification:
@@ -30,6 +38,12 @@ use Livewire\Component;
  */
 class NotificationSettings extends Component
 {
+    use WithPagination;
+
+    /** modules (events, recipients, templates, mail status) | departments | history */
+    #[Url(except: 'modules')]
+    public string $tab = 'modules';
+
     public string $search = '';
 
     // ── Edit modal (event-level, or one role of an event — never both) ─────────
@@ -94,6 +108,46 @@ class NotificationSettings extends Component
 
     public bool $rcApplyToAll = false;
 
+    /** @var array<int, string> named people who never receive this event */
+    public array $rcExcludeUserIds = [];
+
+    // ── Department rules ────────────────────────────────────────────
+    #[Url(as: 'department', except: null)]
+    public ?int $ruleDepartmentId = null;
+
+    public bool $showRuleModal = false;
+
+    public ?string $ruleKey = null;
+
+    public bool $ruleEnabled = true;
+
+    public bool $ruleReplace = false;
+
+    /** @var array<int, string> */
+    public array $ruleIncludeRoles = [];
+
+    /** @var array<int, string> */
+    public array $ruleIncludeUserIds = [];
+
+    /** @var array<int, string> */
+    public array $ruleExcludeRoles = [];
+
+    /** @var array<int, string> */
+    public array $ruleExcludeUserIds = [];
+
+    // ── Email history filters ───────────────────────────────────────
+    public string $historySearch = '';
+
+    public string $historyEvent = '';
+
+    public string $historyStatus = '';
+
+    public ?int $historyDepartment = null;
+
+    public string $historyFrom = '';
+
+    public string $historyTo = '';
+
     public bool $rcMandatory = false;
 
     public function openRecipients(int $id): void
@@ -106,6 +160,7 @@ class NotificationSettings extends Component
         $this->rcExcludeRoles = array_values($setting->exclude_roles ?? []);
         $this->rcUserIds = array_map('strval', $setting->include_user_ids ?? []);
         $this->rcDepartmentIds = array_map('strval', $setting->department_ids ?? []);
+        $this->rcExcludeUserIds = array_map('strval', $setting->exclude_user_ids ?? []);
         $this->rcApplyToAll = (bool) $setting->apply_to_all;
         $this->rcMandatory = (bool) $setting->is_mandatory;
         $this->resetErrorBag();
@@ -125,6 +180,7 @@ class NotificationSettings extends Component
             'rcIncludeRoles.*' => ['string', 'in:'.implode(',', $roles)],
             'rcExcludeRoles.*' => ['string', 'in:'.implode(',', $roles)],
             'rcUserIds.*' => ['integer', 'exists:users,id'],
+            'rcExcludeUserIds.*' => ['integer', 'exists:users,id'],
             'rcDepartmentIds.*' => ['integer', 'exists:departments,id'],
         ]);
 
@@ -134,10 +190,17 @@ class NotificationSettings extends Component
             return;
         }
 
+        if (array_intersect($this->rcUserIds, $this->rcExcludeUserIds) !== []) {
+            $this->addError('rcExcludeUserIds', 'A person cannot be both added and excluded.');
+
+            return;
+        }
+
         NotificationSetting::findOrFail($this->recipientsId)->update([
             'include_roles' => array_values($this->rcIncludeRoles) ?: null,
             'exclude_roles' => array_values($this->rcExcludeRoles) ?: null,
             'include_user_ids' => array_map('intval', $this->rcUserIds) ?: null,
+            'exclude_user_ids' => array_map('intval', $this->rcExcludeUserIds) ?: null,
             'department_ids' => array_map('intval', $this->rcDepartmentIds) ?: null,
             'apply_to_all' => $this->rcApplyToAll,
             'is_mandatory' => $this->rcMandatory,
@@ -145,6 +208,116 @@ class NotificationSettings extends Component
 
         $this->showRecipientsModal = false;
         \Flux::toast('Recipients saved.', variant: 'success');
+    }
+
+    // ── Department rules ────────────────────────────────────────────
+
+    /** Open one event's rule for the chosen department. */
+    public function openRule(string $key): void
+    {
+        $this->authorize('manage-settings');
+        $this->assertDepartmentAllowed();
+        abort_unless(NotificationSetting::for($key) !== null, 404);
+
+        $rule = NotificationDepartmentRule::where('notification_key', $key)->where('department_id', $this->ruleDepartmentId)->first();
+        $this->ruleKey = $key;
+        $this->ruleEnabled = $rule?->is_enabled ?? true;
+        $this->ruleReplace = $rule?->replace_defaults ?? false;
+        $this->ruleIncludeRoles = array_values($rule?->include_roles ?? []);
+        $this->ruleIncludeUserIds = array_map('strval', $rule?->include_user_ids ?? []);
+        $this->ruleExcludeRoles = array_values($rule?->exclude_roles ?? []);
+        $this->ruleExcludeUserIds = array_map('strval', $rule?->exclude_user_ids ?? []);
+        $this->resetErrorBag();
+        $this->showRuleModal = true;
+    }
+
+    /** Save the department's rule for the event; an empty rule is removed (it changes nothing). */
+    public function saveRule(): void
+    {
+        $this->authorize('manage-settings');
+        $this->assertDepartmentAllowed();
+        abort_unless($this->ruleKey !== null && NotificationSetting::for($this->ruleKey) !== null, 404);
+
+        $roles = Role::pluck('slug')->all();
+        $this->validate([
+            'ruleIncludeRoles.*' => ['string', 'in:'.implode(',', $roles)],
+            'ruleExcludeRoles.*' => ['string', 'in:'.implode(',', $roles)],
+            'ruleIncludeUserIds.*' => ['integer', 'exists:users,id'],
+            'ruleExcludeUserIds.*' => ['integer', 'exists:users,id'],
+        ]);
+
+        if (array_intersect($this->ruleIncludeRoles, $this->ruleExcludeRoles) !== [] || array_intersect($this->ruleIncludeUserIds, $this->ruleExcludeUserIds) !== []) {
+            $this->addError('ruleExcludeRoles', 'A role or person cannot be both added and excluded.');
+
+            return;
+        }
+
+        if ($this->ruleReplace && $this->ruleIncludeRoles === [] && $this->ruleIncludeUserIds === []) {
+            $this->addError('ruleIncludeUserIds', 'Add the roles or people who should receive it instead.');
+
+            return;
+        }
+
+        $rule = NotificationDepartmentRule::firstOrNew(['notification_key' => $this->ruleKey, 'department_id' => $this->ruleDepartmentId]);
+        $rule->fill([
+            'is_enabled' => $this->ruleEnabled,
+            'replace_defaults' => $this->ruleReplace,
+            'include_roles' => array_values($this->ruleIncludeRoles) ?: null,
+            'include_user_ids' => array_map('intval', $this->ruleIncludeUserIds) ?: null,
+            'exclude_roles' => array_values($this->ruleExcludeRoles) ?: null,
+            'exclude_user_ids' => array_map('intval', $this->ruleExcludeUserIds) ?: null,
+        ]);
+
+        if ($rule->isEmpty()) {
+            $rule->exists && $rule->delete();
+        } else {
+            $rule->save();
+        }
+
+        $this->showRuleModal = false;
+        \Flux::toast('Department rule saved.', variant: 'success');
+    }
+
+    /** Turn an event on or off for the chosen department in one click. */
+    public function toggleRuleEnabled(string $key): void
+    {
+        $this->authorize('manage-settings');
+        $this->assertDepartmentAllowed();
+        abort_unless(NotificationSetting::for($key) !== null, 404);
+
+        $rule = NotificationDepartmentRule::firstOrNew(['notification_key' => $key, 'department_id' => $this->ruleDepartmentId]);
+        $rule->is_enabled = ! ($rule->is_enabled ?? true);
+        $rule->isEmpty() ? ($rule->exists && $rule->delete()) : $rule->save();
+    }
+
+    /** Back to the company-wide settings for this event in this department. */
+    public function resetRule(string $key): void
+    {
+        $this->authorize('manage-settings');
+        $this->assertDepartmentAllowed();
+
+        NotificationDepartmentRule::where('notification_key', $key)->where('department_id', $this->ruleDepartmentId)->get()->each->delete();
+        $this->showRuleModal = false;
+        \Flux::toast('Back to the company-wide settings.', variant: 'success');
+    }
+
+    public function updated(string $property): void
+    {
+        if (str_starts_with($property, 'history')) {
+            $this->resetPage('historyPage');
+        }
+    }
+
+    /** A department the viewer may configure: within their manage_settings reach. */
+    private function assertDepartmentAllowed(): void
+    {
+        abort_unless($this->ruleDepartmentId !== null
+            && $this->allowedDepartments()->contains('id', $this->ruleDepartmentId), 403);
+    }
+
+    private function allowedDepartments(): Collection
+    {
+        return app(PeopleScope::class)->departmentOptions(Auth::user(), 'manage_settings');
     }
 
     public function mount(): void
@@ -636,8 +809,95 @@ class NotificationSettings extends Component
         $recipientAware = NotificationRecipientPolicy::RECIPIENT_AWARE;
         $editingSetting = $this->recipientsId ? NotificationSetting::find($this->recipientsId) : null;
 
-        return view('livewire.settings.notification-settings', compact('settings', 'queue', 'smtp', 'logs', 'recipientList', 'aiEnabled', 'catalog', 'rbacRoles', 'departmentList', 'recipientAware', 'editingSetting'))
+        // Department rules: the departments within the viewer's reach.
+        $ruleDepartments = $this->allowedDepartments();
+        if ($this->tab === 'departments' && $this->ruleDepartmentId === null && $ruleDepartments->isNotEmpty()) {
+            $this->ruleDepartmentId = $ruleDepartments->first()->id;
+        }
+        $departmentRules = $this->tab === 'departments' && $this->ruleDepartmentId
+            ? NotificationDepartmentRule::where('department_id', $this->ruleDepartmentId)->get()->keyBy('notification_key')
+            : collect();
+        $ruleSetting = $this->ruleKey ? NotificationSetting::for($this->ruleKey) : null;
+
+        // Email history: filtered, with what each email was about.
+        $history = $this->tab === 'history' ? $this->historyQuery()->paginate(25, pageName: 'historyPage') : null;
+        $historyContext = $history ? $this->historyContext($history->getCollection()) : [];
+        $eventLabels = NotificationSetting::query()->pluck('label', 'key');
+
+        return view('livewire.settings.notification-settings', compact('settings', 'queue', 'smtp', 'logs', 'recipientList', 'aiEnabled', 'catalog', 'rbacRoles', 'departmentList', 'recipientAware', 'editingSetting',
+            'ruleDepartments', 'departmentRules', 'ruleSetting', 'history', 'historyContext', 'eventLabels'))
             ->layout('layouts.app', ['title' => 'Notifications & Email']);
+    }
+
+    /** The email log, filtered by the Email history controls, newest first. */
+    private function historyQuery()
+    {
+        $search = trim($this->historySearch);
+
+        return EmailLog::query()
+            ->when($search !== '', fn ($q) => $q->where(fn ($w) => $w->where('to_email', 'like', "%{$search}%")
+                ->orWhere('to_name', 'like', "%{$search}%")->orWhere('subject', 'like', "%{$search}%")))
+            // An event includes its stages ("…@approved").
+            ->when($this->historyEvent !== '', fn ($q) => $q->where(fn ($w) => $w->where('notification_key', $this->historyEvent)
+                ->orWhere('notification_key', 'like', $this->historyEvent.'@%')))
+            ->when($this->historyStatus !== '', fn ($q) => $q->where('status', $this->historyStatus))
+            ->when($this->historyFrom !== '' && strtotime($this->historyFrom), fn ($q) => $q->whereDate('created_at', '>=', $this->historyFrom))
+            ->when($this->historyTo !== '' && strtotime($this->historyTo), fn ($q) => $q->whereDate('created_at', '<=', $this->historyTo))
+            ->when($this->historyDepartment, function ($q): void {
+                $employees = Employee::where('department_id', $this->historyDepartment)->pluck('id');
+                $q->where(fn ($w) => $w
+                    ->where(fn ($x) => $x->where('context_type', 'employee')->whereIn('context_id', $employees))
+                    ->orWhere(fn ($x) => $x->where('context_type', 'leave_request')->whereIn('context_id', LeaveRequest::whereIn('employee_id', $employees)->select('id')))
+                    ->orWhere(fn ($x) => $x->where('context_type', 'attendance_regularisation')->whereIn('context_id', AttendanceRegularisation::whereIn('employee_id', $employees)->select('id'))));
+            })
+            ->latest('id');
+    }
+
+    /**
+     * For each email on the page: the request it was about, its employee and
+     * department, and who triggered it (the employee who applied / asked, or
+     * the person who decided; "System" for an automatic alert).
+     *
+     * @param  Collection<int, EmailLog>  $logs
+     * @return array<int, array{related: ?string, url: ?string, employee: ?string, department: ?string, by: ?string}>
+     */
+    private function historyContext(Collection $logs): array
+    {
+        $ids = fn (string $type) => $logs->where('context_type', $type)->pluck('context_id')->filter()->unique()->all();
+        $leaves = LeaveRequest::with(['employee.user', 'employee.department', 'reviewer'])->whereIn('id', $ids('leave_request'))->get()->keyBy('id');
+        $regs = AttendanceRegularisation::with(['employee.user', 'employee.department', 'reviewer'])->whereIn('id', $ids('attendance_regularisation'))->get()->keyBy('id');
+        $employees = Employee::with(['user', 'department'])->whereIn('id', $ids('employee'))->get()->keyBy('id');
+
+        $context = [];
+        foreach ($logs as $log) {
+            $id = (int) $log->context_id;
+            $context[$log->id] = match ($log->context_type) {
+                'leave_request' => ($leave = $leaves->get($id)) ? [
+                    'related' => 'Leave request #'.$id.' · '.ucfirst(str_replace('_', ' ', (string) $leave->status)),
+                    'url' => route('time-off.leave-requests.show', $id),
+                    'employee' => $leave->employee?->user?->name,
+                    'department' => $leave->employee?->department?->name,
+                    'by' => in_array($leave->status, ['pending', 'pending_hr'], true) ? $leave->employee?->user?->name : ($leave->reviewer?->name ?? 'HR'),
+                ] : ['related' => 'Leave request #'.$id, 'url' => null, 'employee' => null, 'department' => null, 'by' => null],
+                'attendance_regularisation' => ($reg = $regs->get($id)) ? [
+                    'related' => 'Regularisation #'.$id.' · '.ucfirst((string) $reg->status),
+                    'url' => null,
+                    'employee' => $reg->employee?->user?->name,
+                    'department' => $reg->employee?->department?->name,
+                    'by' => $reg->status === 'pending' ? $reg->employee?->user?->name : ($reg->reviewer?->name ?? 'HR'),
+                ] : ['related' => 'Regularisation #'.$id, 'url' => null, 'employee' => null, 'department' => null, 'by' => null],
+                'employee' => ($emp = $employees->get($id)) ? [
+                    'related' => 'Attendance · '.$emp->user?->name,
+                    'url' => null,
+                    'employee' => $emp->user?->name,
+                    'department' => $emp->department?->name,
+                    'by' => 'System',
+                ] : ['related' => null, 'url' => null, 'employee' => null, 'department' => null, 'by' => 'System'],
+                default => ['related' => null, 'url' => null, 'employee' => null, 'department' => null, 'by' => null],
+            };
+        }
+
+        return $context;
     }
 
     private function tableCount(string $table): int

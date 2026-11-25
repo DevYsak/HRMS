@@ -2,6 +2,7 @@
 
 namespace App\Services\Notifications;
 
+use App\Models\Employee;
 use App\Models\NotificationRoleSetting;
 use App\Models\NotificationSetting;
 use App\Models\User;
@@ -23,9 +24,11 @@ use App\Models\User;
  * critical event (payslip, account, password reset) or a send a person
  * triggered (D5, 8 Oct 2026 — in-app is the default channel).
  *
- * When the recipient is known (the notification path passes it), two more
+ * When the recipient is known (the notification path passes it), more
  * checks come first (NotificationRecipientPolicy): a recipient whose RBAC
- * role is excluded from the event never receives it, and a recipient who
+ * role, or who personally, is excluded from the event never receives it;
+ * when the employee the event is about is known, their department's rule
+ * can switch the event off or exclude the recipient; and a recipient who
  * muted an optional event does not receive that channel — a mandatory event
  * cannot be muted.
  */
@@ -38,13 +41,13 @@ class NotificationDeliveryGate
      * exist/log internally, but must NOT automatically send email." A manual
      * send still respects mail_enabled and the global pause.
      */
-    public function mail(string $eventKey, ?string $role, bool $manual = false, ?object $notifiable = null): DeliveryDecision
+    public function mail(string $eventKey, ?string $role, bool $manual = false, ?object $notifiable = null, ?Employee $subject = null): DeliveryDecision
     {
-        if ($decision = $this->recipientDecision($eventKey, $notifiable, 'mail')) {
+        if ($decision = $this->recipientDecision($eventKey, $notifiable, 'mail', $subject)) {
             return $decision;
         }
 
-        $resolved = $this->resolve($eventKey, $role);
+        $resolved = $this->flags($eventKey, $role);
 
         // No settings row yet. D5 (8 Oct 2026): email is off by default for
         // anything non-critical, so only a critical event (payslip, account,
@@ -56,38 +59,38 @@ class NotificationDeliveryGate
                 : DeliveryDecision::skip('email_off_by_default');
         }
 
-        if (! $resolved->mail_enabled) {
+        if (! $resolved['mail_enabled']) {
             return DeliveryDecision::skip('notification_email_disabled');
         }
 
-        if (! $manual && ! $resolved->is_automatic) {
+        if (! $manual && ! $resolved['is_automatic']) {
             return DeliveryDecision::skip('auto_send_disabled');
         }
 
         return DeliveryDecision::allow();
     }
 
-    public function database(string $eventKey, ?string $role, ?object $notifiable = null): DeliveryDecision
+    public function database(string $eventKey, ?string $role, ?object $notifiable = null, ?Employee $subject = null): DeliveryDecision
     {
-        if ($decision = $this->recipientDecision($eventKey, $notifiable, 'database')) {
+        if ($decision = $this->recipientDecision($eventKey, $notifiable, 'database', $subject)) {
             return $decision;
         }
 
-        $resolved = $this->resolve($eventKey, $role);
+        $resolved = $this->flags($eventKey, $role);
 
         if ($resolved === null) {
             return DeliveryDecision::allow();
         }
 
-        if (! $resolved->database_enabled) {
+        if (! $resolved['database_enabled']) {
             return DeliveryDecision::skip('notification_disabled');
         }
 
         return DeliveryDecision::allow();
     }
 
-    /** An excluded role or a personal mute, for a known recipient; null = carry on. */
-    private function recipientDecision(string $eventKey, ?object $notifiable, string $channel): ?DeliveryDecision
+    /** An exclusion, the department's rule or a personal mute, for a known recipient; null = carry on. */
+    private function recipientDecision(string $eventKey, ?object $notifiable, string $channel, ?Employee $subject = null): ?DeliveryDecision
     {
         if (! $notifiable instanceof User) {
             return null;
@@ -99,11 +102,47 @@ class NotificationDeliveryGate
             return DeliveryDecision::skip('recipient_role_excluded');
         }
 
+        if ($reason = $policy->departmentDecision($eventKey, $subject, $notifiable)) {
+            return DeliveryDecision::skip($reason);
+        }
+
         if ($policy->mutedBy($notifiable, $eventKey, $channel)) {
             return DeliveryDecision::skip('muted_by_recipient');
         }
 
         return null;
+    }
+
+    /**
+     * The effective switches for this event+role: the role's override when
+     * one exists, else the row's own. For a stage ("…@approved") its own
+     * switches, narrowed by the event's override for the role — a stage can
+     * only send less than its event allows a role, never more.
+     *
+     * @return array{mail_enabled: bool, database_enabled: bool, is_automatic: bool}|null
+     */
+    private function flags(string $eventKey, ?string $role): ?array
+    {
+        $own = $this->resolve($eventKey, $role);
+
+        if ($own === null) {
+            return null;
+        }
+
+        $flags = [
+            'mail_enabled' => (bool) $own->mail_enabled,
+            'database_enabled' => (bool) $own->database_enabled,
+            'is_automatic' => (bool) $own->is_automatic,
+        ];
+
+        $parent = NotificationCatalog::parentKey($eventKey);
+        if ($parent !== $eventKey && ($eventRole = NotificationSetting::for($parent)?->roleSetting($role)) !== null) {
+            foreach ($flags as $field => $value) {
+                $flags[$field] = $value && (bool) $eventRole->{$field};
+            }
+        }
+
+        return $flags;
     }
 
     /**

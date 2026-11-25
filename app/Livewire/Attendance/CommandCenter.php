@@ -11,10 +11,10 @@ use App\Models\LeaveRequest;
 use App\Models\OtRequest;
 use App\Models\WfhRequest;
 use App\Notifications\OtRequestNotification;
-use App\Notifications\RegularisationReviewedNotification;
 use App\Notifications\WfhRequestNotification;
 use App\Services\Approvals\ApprovalQueueService;
 use App\Services\Attendance\AttendanceScoreEngine;
+use App\Services\Attendance\RegularisationNotices;
 use App\Services\Attendance\TodayStatusService;
 use App\Services\AttendanceService;
 use App\Services\HolidayWorkService;
@@ -242,7 +242,7 @@ class CommandCenter extends Component
             app(AttendanceService::class)->rejectRegularisation($request, Auth::id(), $comment ?? '');
         }
 
-        $request->employee->user?->notify(new RegularisationReviewedNotification($request->fresh()));
+        app(RegularisationNotices::class)->decided($request->fresh());
     }
 
     protected function decideLeave(int $id, string $decision, ?string $comment = null): void

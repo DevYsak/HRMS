@@ -39,11 +39,14 @@ use App\Services\Leave\LeaveRequestEvaluator;
 use App\Services\Leave\LeaveRequestRevisionService;
 use App\Services\Leave\LeaveRuleResolver;
 use App\Services\Leave\LeaveYearResolver;
+use App\Services\Notifications\NotificationCatalog;
+use App\Services\Notifications\NotificationRecipientPolicy;
 use App\Services\Notifications\NotificationRecipients;
 use App\Services\Teams\ApprovalRoutingService;
 use Carbon\CarbonInterface;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class LeaveService
@@ -198,6 +201,7 @@ class LeaveService
         ?string $attachmentPath = null,
         ?string $employeeRemarks = null,
         array $attachments = [],
+        array $notifyUserIds = [],
     ): LeaveRequest {
         $start = Carbon::parse($startDate);
         $end = Carbon::parse($endDate);
@@ -385,6 +389,7 @@ class LeaveService
             // V2: the reason stays in leave_type_id; the balance it charges
             // (the shared Earned Leave balance for a Sick or Casual reason).
             'main_category' => $evaluation['category'] ?? null,
+            'notify_user_ids' => $this->cleanNotifyIds($notifyUserIds, $employee),
             'balance_leave_type_id' => $evaluation['balance_leave_type_id'] ?? null,
             'balance_snapshot' => $evaluation !== null ? $this->balanceSnapshot($evaluation['projection'] ?? null, (float) $evaluation['paid_days'], (float) $evaluation['lwp_days']) : null,
         ]);
@@ -428,6 +433,7 @@ class LeaveService
         string $reasonText,
         array $attachments = [],
         ?User $actor = null,
+        array $notifyUserIds = [],
     ): LeaveRequest {
         if (! LeavePolicyEngine::enabled()) {
             throw new \DomainException('Combined Leave is not available.');
@@ -459,7 +465,7 @@ class LeaveService
             );
         }
 
-        $request = DB::transaction(function () use ($employee, $reason, $start, $end, $evaluation, $reasonText, $attachments, $actor) {
+        $request = DB::transaction(function () use ($employee, $reason, $start, $end, $evaluation, $reasonText, $attachments, $actor, $notifyUserIds) {
             $request = LeaveRequest::create([
                 'employee_id' => $employee->id,
                 'leave_type_id' => $reason->id,
@@ -479,6 +485,7 @@ class LeaveService
                 'main_category' => $evaluation['category'],
                 'balance_leave_type_id' => $evaluation['balance_leave_type_id'],
                 'request_mode' => LeaveRequest::MODE_COMBINED,
+                'notify_user_ids' => $this->cleanNotifyIds($notifyUserIds, $employee),
                 'balance_snapshot' => $this->balanceSnapshot($evaluation['projection'] ?? null, (float) $evaluation['paid_units'], (float) $evaluation['unpaid_units']),
             ]);
 
@@ -547,7 +554,16 @@ class LeaveService
             ->reject(fn (User $u) => (int) $u->id === (int) $actor->id || (int) $u->id === (int) $request->employee?->user_id)
             ->unique('id')->values();
 
-        $users->each(fn (User $u) => $u->notify((new LeaveRequestNotification($request))->forRole('recipient')));
+        // The decision's own notice already reached the people the rules on
+        // Notifications & Email add and those the employee chose: HR's list
+        // never tells them a second time (they are still named in the audit).
+        $eventKey = NotificationCatalog::eventKeyFor(new LeaveRequestNotification($request));
+        $alreadyTold = app(NotificationRecipientPolicy::class)->resolve($eventKey, collect(), $request->employee)
+            ->merge($this->chosenRecipients($request, $eventKey))
+            ->pluck('id')->map(fn ($id) => (int) $id)->all();
+
+        $users->reject(fn (User $u) => in_array((int) $u->id, $alreadyTold, true))
+            ->each(fn (User $u) => $u->notify((new LeaveRequestNotification($request))->forRole('recipient')));
 
         if ($users->isNotEmpty()) {
             app(AuditService::class)->event('LEAVE_RECIPIENTS_NOTIFIED', AuditService::LEAVE, $request,
@@ -619,14 +635,28 @@ class LeaveService
             ->reject(fn (User $u) => \in_array($u->id, $notifiedIds, true))
             ->each($push);
 
+        // Admin's rules on Settings → Notifications & Email (the application
+        // stage, the employee's department) add, exclude or replace people.
+        $notification = new LeaveRequestNotification($request);
+        $chainIds = $recipients->pluck('id')->all();
+        // Notify Others: the people the employee chose are told as well.
+        $eventKey = NotificationCatalog::eventKeyFor($notification);
+        $recipients = app(NotificationRecipientPolicy::class)->resolve($eventKey, $recipients, $employee)
+            ->merge($this->chosenRecipients($request, $eventKey))
+            ->unique('id')
+            ->reject(fn (User $u) => $u->id === $employee->user_id)
+            ->values();
+
         // Manager, approver chain and HR each tagged with the role they are
-        // being notified as, so all three can be configured separately.
+        // being notified as, so all three can be configured separately;
+        // someone the rules added is told about the request, not asked to decide.
         $managerId = $employee->manager_id;
         $recipients->each(fn (User $u) => $u->notify(
-            (new LeaveRequestNotification($request))->forRole(match (true) {
+            $notification->forRole(match (true) {
                 $managerId !== null && $u->id === $managerId => 'manager',
                 \in_array($u->role?->value ?? $u->role, ['hr_admin', 'super_admin'], true) => 'hr_admin',
-                default => 'approver',
+                \in_array($u->id, $chainIds, true) => 'approver',
+                default => 'recipient',
             })
         ));
 
@@ -946,13 +976,13 @@ class LeaveService
             ], $comment, $reviewer);
 
             $fresh = $leaveRequest->fresh(['employee.user', 'leaveType', 'reviewer']);
-            $fresh->employee->user->notify((new LeaveRequestNotification($fresh))->forRole('employee'));
-
-            if ($resolvedStatus === 'pending_hr') {
-                // Routed to HR as a queue — whoever covers the employee and picks it up first acts.
-                app(NotificationRecipients::class)->hrCovering($fresh->employee)
-                    ->each(fn (User $hr) => $hr->notify((new LeaveRequestNotification($fresh))->forRole('hr_admin')));
-            }
+            // Routed to HR as a queue — whoever covers the employee and picks it up first acts.
+            $this->sendLeaveNotice($fresh, new LeaveRequestNotification($fresh), array_merge(
+                [[$fresh->employee->user, 'employee']],
+                $resolvedStatus === 'pending_hr'
+                    ? app(NotificationRecipients::class)->hrCovering($fresh->employee)->map(fn (User $hr) => [$hr, 'hr_admin'])->all()
+                    : [],
+            ));
 
             return $fresh;
         });
@@ -1116,7 +1146,7 @@ class LeaveService
             }
 
             $fresh = $leaveRequest->fresh(['employee.user', 'leaveType', 'reviewer', 'hrReviewer']);
-            $fresh->employee->user->notify((new LeaveRequestNotification($fresh))->forRole('employee'));
+            $this->sendLeaveNotice($fresh, new LeaveRequestNotification($fresh), [[$fresh->employee->user, 'employee']]);
 
             return $fresh;
         });
@@ -1813,18 +1843,93 @@ class LeaveService
         }
 
         if (! $byEmployee) {
-            $employee->user?->notify((new LeaveRequestNotification($leaveRequest))->forRole('employee'));
+            $this->sendLeaveNotice($leaveRequest, new LeaveRequestNotification($leaveRequest), [[$employee->user, 'employee']]);
 
             return;
         }
 
         $manager = $employee->manager;
-        if ($manager !== null && $manager->id !== $employee->user_id) {
-            $manager->notify((new LeaveRequestNotification($leaveRequest))->forRole('manager'));
+        $this->sendLeaveNotice($leaveRequest, new LeaveRequestNotification($leaveRequest), array_merge(
+            $manager !== null && $manager->id !== $employee->user_id ? [[$manager, 'manager']] : [],
+            app(NotificationRecipients::class)->hrCovering($employee)
+                ->reject(fn (User $hr) => $hr->id === $employee->user_id || ($manager && $hr->id === $manager->id))
+                ->map(fn (User $hr) => [$hr, 'hr_admin'])->all(),
+        ));
+    }
+
+    /**
+     * Send a leave notice to the code's own recipients as Admin's rules on
+     * Settings → Notifications & Email have them — the stage (application,
+     * approved, rejected, cancelled) and the employee's department may add,
+     * exclude or replace people. Someone a rule added is told about the
+     * request ('recipient'), never addressed as the employee or a decider —
+     * as are the people the employee chose when applying (Notify Others).
+     *
+     * @param  array<int, array{0: ?User, 1: string}>  $defaults  each person and the role they are told as
+     */
+    private function sendLeaveNotice(LeaveRequest $request, LeaveRequestNotification $notification, array $defaults): void
+    {
+        $roles = [];
+        $people = collect();
+        foreach ($defaults as [$user, $role]) {
+            if ($user !== null && ! isset($roles[$user->id])) {
+                $roles[$user->id] = $role;
+                $people->push($user);
+            }
         }
-        app(NotificationRecipients::class)->hrCovering($employee)
-            ->reject(fn (User $hr) => $hr->id === $employee->user_id || ($manager && $hr->id === $manager->id))
-            ->each(fn (User $hr) => $hr->notify((new LeaveRequestNotification($leaveRequest))->forRole('hr_admin')));
+
+        $eventKey = NotificationCatalog::eventKeyFor($notification);
+        app(NotificationRecipientPolicy::class)
+            ->resolve($eventKey, $people, $request->employee)
+            ->merge($this->chosenRecipients($request, $eventKey))
+            ->unique('id')
+            ->each(fn (User $u) => $u->notify($notification->forRole($roles[$u->id] ?? 'recipient')));
+    }
+
+    /**
+     * The people the employee chose to tell (Notify Others) — never the
+     * employee themself, nor anyone Notifications & Email excludes from
+     * this stage. A department rule that switches the stage off or
+     * excludes them still holds them back at sending.
+     *
+     * @return Collection<int, User>
+     */
+    private function chosenRecipients(LeaveRequest $request, string $eventKey): Collection
+    {
+        $ids = array_map('intval', (array) $request->notify_user_ids);
+        if ($ids === []) {
+            return collect();
+        }
+
+        $policy = app(NotificationRecipientPolicy::class);
+        $employeeUserId = (int) $request->employee?->user_id;
+
+        return User::whereIn('id', $ids)->get()
+            ->reject(fn (User $u) => (int) $u->id === $employeeUserId || $policy->excludes($eventKey, $u))
+            ->values();
+    }
+
+    /**
+     * Notify Others ids as stored: existing logins only, never the
+     * employee's own, at most ten; null when none.
+     *
+     * @param  array<int, int|string>  $ids
+     * @return array<int, int>|null
+     */
+    private function cleanNotifyIds(array $ids, Employee $employee): ?array
+    {
+        $ids = collect($ids)->map(fn ($id) => (int) $id)
+            ->reject(fn (int $id) => $id <= 0 || $id === (int) $employee->user_id)
+            ->unique()->take(10)->values()->all();
+
+        if ($ids === []) {
+            return null;
+        }
+
+        $existing = User::whereIn('id', $ids)->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $ids = array_values(array_filter($ids, fn (int $id) => in_array($id, $existing, true)));
+
+        return $ids === [] ? null : $ids;
     }
 
     /**

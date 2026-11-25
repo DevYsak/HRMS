@@ -248,6 +248,10 @@
                     @foreach(array_filter(['Reviewer comment' => $r->reviewer_comment, 'HR comment' => $r->hr_reviewer_comment, 'HR remark' => $r->hr_remark, 'HR internal note' => $showInternal ? $r->hr_internal_note : null]) as $label => $remark)
                         <p><span class="{{ $dt }} block">{{ $label }}</span><span class="text-zinc-800 dark:text-zinc-100">{{ $remark }}</span></p>
                     @endforeach
+                    @if($this->employeeChosenRecipients->isNotEmpty())
+                        <p data-employee-notify-others><span class="{{ $dt }} block">Also told (chosen by the employee)</span><span class="text-zinc-800 dark:text-zinc-100">{{ $this->employeeChosenRecipients->pluck('name')->join(', ') }}</span>
+                            <span class="block text-xs text-zinc-400">They get the application and every decision on it.</span></p>
+                    @endif
                 </div>
             </section>
 

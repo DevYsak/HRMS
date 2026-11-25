@@ -52,7 +52,7 @@ class NotificationCatalog
 
     public static function isCriticalMail(string $key): bool
     {
-        return in_array($key, self::CRITICAL_MAIL, true);
+        return in_array(self::parentKey($key), self::CRITICAL_MAIL, true);
     }
 
     /**
@@ -108,6 +108,55 @@ class NotificationCatalog
     ];
 
     /**
+     * Events whose stages are configured separately: each stage is its own
+     * settings row keyed "FQCN@stage" — its own email / in-app / auto-send
+     * switches, template and recipients — so "Leave approved" can email while
+     * "Leave application" only shows in-app. A stage with no row of its own
+     * follows the event. The notification says which stage it is through
+     * notificationStage().
+     *
+     * @var array<class-string, array<string, string>>
+     */
+    public const STAGES = [
+        'App\Notifications\LeaveRequestNotification' => [
+            'submitted' => 'Leave application',
+            'approved' => 'Leave approved',
+            'rejected' => 'Leave rejected',
+            'cancelled' => 'Leave cancelled',
+        ],
+        'App\Notifications\RegularisationReviewedNotification' => [
+            'approved' => 'Missed punch (regularisation) approved',
+            'rejected' => 'Missed punch (regularisation) rejected',
+        ],
+    ];
+
+    /** "FQCN@stage", or the class itself when there is no stage. */
+    public static function stageKey(string $class, ?string $stage): string
+    {
+        return $stage !== null && isset(self::STAGES[$class][$stage]) ? $class.'@'.$stage : $class;
+    }
+
+    /** The event (class) a key belongs to: "FQCN@stage" → FQCN. */
+    public static function parentKey(string $key): string
+    {
+        return Str::before($key, '@');
+    }
+
+    /**
+     * The settings key one notification is governed by: its stage's row when
+     * that stage has one, else its event's. Fail-open: a stage not synced yet
+     * follows the event, exactly as before stages existed.
+     */
+    public static function eventKeyFor(object $notification): string
+    {
+        $class = $notification::class;
+        $stage = method_exists($notification, 'notificationStage') ? $notification->notificationStage() : null;
+        $key = self::stageKey($class, $stage);
+
+        return $key !== $class && NotificationSetting::for($key) !== null ? $key : $class;
+    }
+
+    /**
      * Events that notify more than one distinct role, and are configured
      * with per-role rows on sync. Every other event stays single-role —
      * governed only by its own NotificationSetting row, exactly as before
@@ -130,8 +179,9 @@ class NotificationCatalog
         // Leave
         'App\Notifications\LeaveRequestNotification' => [
             'employee' => 'Employee', 'manager' => 'Manager', 'hr_admin' => 'HR Admin', 'approver' => 'Approver',
-            // People HR adds to a decision on the request page (9 Nov 2026).
-            'recipient' => 'Also notified (chosen by HR)',
+            // People HR adds to a decision (9 Nov 2026), the employee adds to an
+            // application (Notify Others, 25 Nov 2026), or a settings rule adds.
+            'recipient' => 'Also notified (added by HR, the employee or a rule)',
         ],
         'App\Notifications\LeaveEncashmentNotification' => [
             'employee' => 'Employee', 'hr_admin' => 'HR Admin', 'finance' => 'Finance',
@@ -296,7 +346,7 @@ class NotificationCatalog
      */
     public function sampleDataFor(string $key): array
     {
-        $curated = $this->samples()[$key] ?? [];
+        $curated = $this->samples()[$key] ?? $this->samples()[self::parentKey($key)] ?? [];
         $variables = $this->variablesFor($key);
 
         $generic = [];
@@ -346,6 +396,21 @@ class NotificationCatalog
         $entries = array_values($entries);
         usort($entries, fn ($a, $b) => [$a['group'], $a['label']] <=> [$b['group'], $b['label']]);
 
+        // Each event's stages right under it, in their own order.
+        $withStages = [];
+        foreach ($entries as $entry) {
+            $withStages[] = $entry;
+            foreach (self::STAGES[$entry['key']] ?? [] as $stage => $label) {
+                $withStages[] = [
+                    'key' => self::stageKey($entry['key'], $stage),
+                    'label' => $label,
+                    'group' => $entry['group'],
+                    'description' => 'A stage of '.$entry['label'].' — configured on its own; with nothing set it follows '.$entry['label'].'.',
+                ];
+            }
+        }
+        $entries = $withStages;
+
         return array_map(function ($entry, $i) {
             $entry['sort_order'] = $i;
 
@@ -377,15 +442,20 @@ class NotificationCatalog
                     'is_system' => true,
                 ]);
             } else {
+                // A new stage starts exactly as its event is set now, so adding
+                // stages never starts or stops a single email by itself.
+                $parent = $entry['key'] !== self::parentKey($entry['key'])
+                    ? NotificationSetting::where('key', self::parentKey($entry['key']))->first()
+                    : null;
                 $setting = NotificationSetting::create([
                     'key' => $entry['key'],
                     'label' => $entry['label'],
                     'group' => $entry['group'],
                     'description' => $entry['description'],
                     // D5: in-app by default; email only for critical events.
-                    'mail_enabled' => self::isCriticalMail($entry['key']),
-                    'database_enabled' => true,
-                    'is_automatic' => true,
+                    'mail_enabled' => $parent?->mail_enabled ?? self::isCriticalMail($entry['key']),
+                    'database_enabled' => $parent?->database_enabled ?? true,
+                    'is_automatic' => $parent?->is_automatic ?? true,
                     'is_system' => true,
                     'sort_order' => $entry['sort_order'],
                 ]);
@@ -406,7 +476,13 @@ class NotificationCatalog
      */
     private function syncRoles(NotificationSetting $setting): void
     {
-        $roles = self::ROLES[$setting->key] ?? [];
+        // A stage has no role rows of its own: its switch governs it, and the
+        // event's role rows still apply (NotificationDeliveryGate).
+        if (str_contains($setting->key, '@')) {
+            return;
+        }
+
+        $roles = $this->rolesFor($setting->key);
 
         if ($roles === []) {
             return;
@@ -443,7 +519,7 @@ class NotificationCatalog
      */
     public function rolesFor(string $key): array
     {
-        return self::ROLES[$key] ?? [];
+        return self::ROLES[$key] ?? self::ROLES[self::parentKey($key)] ?? [];
     }
 
     /**
@@ -454,7 +530,7 @@ class NotificationCatalog
      */
     public function variablesFor(string $key): array
     {
-        return self::VARIABLES[$key] ?? self::DEFAULT_VARIABLES;
+        return self::VARIABLES[$key] ?? self::VARIABLES[self::parentKey($key)] ?? self::DEFAULT_VARIABLES;
     }
 
     /**

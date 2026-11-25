@@ -16,6 +16,19 @@
         </div>
     </div>
 
+    {{-- Sections --}}
+    <div class="flex flex-wrap gap-1 border-b border-zinc-200 dark:border-white/10" role="tablist" data-notification-tabs>
+        @foreach (['modules' => ['Modules & general', 'squares-2x2'], 'departments' => ['Department rules', 'building-office-2'], 'history' => ['Email history', 'clock']] as $key => [$label, $icon])
+            <button type="button" role="tab" wire:click="$set('tab', '{{ $key }}')" aria-selected="{{ $tab === $key ? 'true' : 'false' }}"
+                @class(['-mb-px inline-flex items-center gap-1.5 border-b-2 px-4 py-2.5 text-sm font-semibold transition',
+                    'border-orange-500 text-orange-600 dark:text-orange-400' => $tab === $key,
+                    'border-transparent text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200' => $tab !== $key])>
+                <flux:icon :icon="$icon" variant="micro" class="size-4" /> {{ $label }}
+            </button>
+        @endforeach
+    </div>
+
+    @if($tab === 'modules')
     {{-- Master mail switch --}}
     <div @class([
         'rounded-2xl border p-5 shadow-sm transition',
@@ -148,15 +161,18 @@
                         @foreach($rows as $s)
                             @php($roles = $catalog->rolesFor($s->key))
                             <tr class="transition hover:bg-zinc-50/60 dark:hover:bg-zinc-800/30">
-                                <td class="px-5 py-3">
+                                <td @class(['py-3 pr-5', 'pl-5' => ! str_contains($s->key, '@'), 'pl-10' => str_contains($s->key, '@')]) @if(str_contains($s->key, '@')) data-notification-stage="{{ \Illuminate\Support\Str::after($s->key, '@') }}" @endif>
                                     <div class="flex flex-wrap items-center gap-1.5 font-semibold text-zinc-900 dark:text-white">
+                                        @if(str_contains($s->key, '@'))<span class="rounded bg-sky-50 px-1.5 text-[9px] font-bold uppercase text-sky-700 dark:bg-sky-500/10 dark:text-sky-300">Stage</span>@endif
                                         {{ $s->label }}
                                         @if($s->is_mandatory)<span class="rounded bg-rose-50 px-1.5 text-[9px] font-bold uppercase text-rose-600 dark:bg-rose-500/10 dark:text-rose-300">Mandatory</span>@endif
                                         @if($s->apply_to_all)<span class="rounded bg-orange-50 px-1.5 text-[9px] font-bold uppercase text-orange-600 dark:bg-orange-500/10">All staff</span>@endif
                                         @if(! empty($s->include_roles))<span class="rounded bg-emerald-50 px-1.5 text-[9px] font-bold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">+ {{ implode(', ', $s->include_roles) }}</span>@endif
                                         @if(! empty($s->exclude_roles))<span class="rounded bg-zinc-100 px-1.5 text-[9px] font-bold text-zinc-500 dark:bg-white/5">− {{ implode(', ', $s->exclude_roles) }}</span>@endif
                                     </div>
-                                    @if($roles !== [])
+                                    @if(str_contains($s->key, '@'))
+                                        <div class="mt-0.5 text-[11px] text-zinc-400">Only this stage — switch it off to stop it; the event's role switches above still apply</div>
+                                    @elseif($roles !== [])
                                         <div class="mt-0.5 text-[11px] text-zinc-400">Default — applies to any role below with no override</div>
                                     @elseif($s->custom_subject)
                                         <div class="mt-0.5 truncate text-[11px] text-zinc-400">Subject: {{ $s->custom_subject }}</div>
@@ -277,6 +293,15 @@
             @endif
         @endif
     </div>
+    @endif
+
+    @if($tab === 'departments')
+        @include('livewire.settings.partials.notification-department-rules')
+    @endif
+
+    @if($tab === 'history')
+        @include('livewire.settings.partials.notification-email-history')
+    @endif
 
     {{-- Compose & send broadcast modal --}}
     <flux:modal wire:model.self="showComposeModal" class="w-full max-w-2xl">
@@ -406,14 +431,7 @@
             </div>
 
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                    <label class="mb-1 block text-xs font-bold uppercase tracking-wider text-zinc-500">Specific people (optional)</label>
-                    <select wire:model="rcUserIds" multiple size="6" class="w-full rounded-xl border border-zinc-200 bg-white text-xs dark:border-zinc-700 dark:bg-zinc-900">
-                        @foreach($recipientList as $person)
-                            <option value="{{ $person->id }}">{{ $person->name }}</option>
-                        @endforeach
-                    </select>
-                </div>
+                <x-notifications.people-picker model="rcUserIds" :people="$recipientList" label="Also send to these people (optional)" tone="text-emerald-700" />
                 <div>
                     <label class="mb-1 block text-xs font-bold uppercase tracking-wider text-zinc-500">Only these departments (optional)</label>
                     <select wire:model="rcDepartmentIds" multiple size="6" class="w-full rounded-xl border border-zinc-200 bg-white text-xs dark:border-zinc-700 dark:bg-zinc-900">
@@ -422,6 +440,11 @@
                         @endforeach
                     </select>
                 </div>
+            </div>
+
+            <div>
+                <x-notifications.people-picker model="rcExcludeUserIds" :people="$recipientList" label="Never send to these people (exceptions)" />
+                @error('rcExcludeUserIds')<p class="mt-1 text-xs text-rose-600">{{ $message }}</p>@enderror
             </div>
 
             <div class="flex justify-end gap-2">

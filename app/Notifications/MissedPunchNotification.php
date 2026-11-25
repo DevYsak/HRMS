@@ -75,4 +75,14 @@ class MissedPunchNotification extends Notification
             'company_name' => (string) config('app.name'),
         ];
     }
+
+    /**
+     * The employee it is about, for the email history.
+     *
+     * @return array{type: string, id: int}
+     */
+    public function mailContext(): array
+    {
+        return ['type' => 'employee', 'id' => (int) $this->employee->id];
+    }
 }

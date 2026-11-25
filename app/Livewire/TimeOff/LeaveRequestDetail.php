@@ -3,6 +3,7 @@
 namespace App\Livewire\TimeOff;
 
 use App\Exceptions\ApprovalNotPermitted;
+use App\Livewire\Concerns\ChoosesLeaveRecipients;
 use App\Models\EmailLog;
 use App\Models\LeaveBalance;
 use App\Models\LeaveLedgerEntry;
@@ -52,6 +53,10 @@ use Livewire\Component;
  */
 class LeaveRequestDetail extends Component
 {
+    // "Also notify": people HR adds to the decision's email, besides the
+    // employee and the approvers already told. Preset from Notifications & Email.
+    use ChoosesLeaveRecipients;
+
     #[Locked]
     public int $requestId;
 
@@ -78,23 +83,15 @@ class LeaveRequestDetail extends Component
     /** HR's next message in the conversation with the employee. */
     public string $reply = '';
 
-    /**
-     * People HR adds to the decision's email (besides the employee and the
-     * approvers already notified). Preset from Notifications & Email.
-     *
-     * @var array<int, int>
-     */
-    public array $notifyUserIds = [];
-
-    public string $recipientSearch = '';
-
     public function mount(LeaveRequest $leaveRequest): void
     {
         abort_unless(app(LeaveRequestAccess::class)->canView(Auth::user(), $leaveRequest), 403);
 
         $this->requestId = $leaveRequest->id;
         // The default "also notify" people for the leave workflow, as set on Notifications & Email.
-        $this->notifyUserIds = array_values(array_map('intval', NotificationSetting::for(LeaveRequestNotification::class)?->include_user_ids ?? []));
+        $this->notifyUserIds = $this->canNotifyOthers()
+            ? array_values(array_map('intval', NotificationSetting::for(LeaveRequestNotification::class)?->include_user_ids ?? []))
+            : [];
     }
 
     #[Computed]
@@ -451,7 +448,7 @@ class LeaveRequestDetail extends Component
         $this->attempt(function () use ($decision) {
             $request = app(LeaveRequestRevisionService::class)->applyByHr($this->request, Auth::user(), $this->proposalInput(), $this->proposalReason, $decision);
             if ($decision !== null) {
-                app(LeaveService::class)->notifyAlso($request, $this->notifyUserIds, Auth::user());
+                app(LeaveService::class)->notifyAlso($request, $this->chosenRecipientIds(), Auth::user());
             }
         }, match ($decision) {
             'approved' => 'Changes saved and the leave approved. The employee has been notified.',
@@ -460,49 +457,38 @@ class LeaveRequestDetail extends Component
         });
     }
 
-    /** Add someone to the decision's email. */
-    public function addRecipient(int $userId): void
+    /**
+     * HR's suggestions: the employee's manager and department head.
+     *
+     * @return array<int, array{0: User, 1: string}>
+     */
+    protected function recipientSuggestions(): array
     {
-        if (User::whereKey($userId)->exists() && ! in_array($userId, $this->notifyUserIds, true)) {
-            $this->notifyUserIds[] = $userId;
-        }
-        $this->recipientSearch = '';
+        $employee = $this->request->employee;
+
+        return collect([
+            [$employee?->manager, 'Reporting manager'],
+            [$employee?->department?->head, 'Department head'],
+        ])->filter(fn ($pair) => $pair[0] instanceof User)->values()->all();
     }
 
-    public function removeRecipient(int $userId): void
+    protected function recipientEmployeeUserId(): ?int
     {
-        $this->notifyUserIds = array_values(array_filter($this->notifyUserIds, fn ($id) => (int) $id !== $userId));
+        return $this->request->employee?->user_id;
     }
 
     /**
-     * Who HR may add: the people chosen so far, the employee's manager and
-     * department head as suggestions, and — when searching — anyone with a
-     * login by name or email.
+     * The people the employee chose to tell when applying (Notify Others):
+     * they get every decision on the request already.
      *
-     * @return Collection<int, array{id: int, name: string, note: ?string, selected: bool}>
+     * @return Collection<int, User>
      */
     #[Computed]
-    public function recipientOptions(): Collection
+    public function employeeChosenRecipients(): Collection
     {
-        $employee = $this->request->employee;
-        $selected = array_map('intval', $this->notifyUserIds);
-        $suggested = collect([
-            [$employee?->manager, 'Reporting manager'],
-            [$employee?->department?->head, 'Department head'],
-        ])->filter(fn ($pair) => $pair[0] instanceof User);
-        $term = trim($this->recipientSearch);
-        $found = mb_strlen($term) >= 2
-            ? User::where(fn ($q) => $q->where('name', 'like', "%{$term}%")->orWhere('email', 'like', "%{$term}%"))->orderBy('name')->limit(8)->get()
-            : collect();
+        $ids = array_map('intval', (array) $this->request->notify_user_ids);
 
-        return collect()
-            ->merge(User::whereIn('id', $selected)->get()->map(fn (User $u) => [$u, null]))
-            ->merge($suggested)
-            ->merge($found->map(fn (User $u) => [$u, null]))
-            ->reject(fn ($pair) => (int) $pair[0]->id === (int) Auth::id() || (int) $pair[0]->id === (int) $employee?->user_id)
-            ->unique(fn ($pair) => $pair[0]->id)
-            ->map(fn ($pair) => ['id' => (int) $pair[0]->id, 'name' => $pair[0]->name, 'note' => $pair[1] ?? $pair[0]->email, 'selected' => in_array((int) $pair[0]->id, $selected, true)])
-            ->values();
+        return $ids === [] ? collect() : User::whereIn('id', $ids)->orderBy('name')->get();
     }
 
     /**
@@ -604,7 +590,7 @@ class LeaveRequestDetail extends Component
 
         $this->attempt(function () use ($request, $form, $status) {
             $decided = app(LeaveService::class)->reviewRequest($request, $form, $status, Auth::id(), trim($this->comment) ?: null);
-            app(LeaveService::class)->notifyAlso($decided, $this->notifyUserIds, Auth::user());
+            app(LeaveService::class)->notifyAlso($decided, $this->chosenRecipientIds(), Auth::user());
         }, $status === 'approved' ? 'Leave request approved.' : 'Leave request rejected.');
     }
 

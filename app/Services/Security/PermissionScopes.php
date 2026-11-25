@@ -138,19 +138,21 @@ final class PermissionScopes
     /** Extra default grants per role for the new keys (role slug => keys). */
     public const NEW_ROLE_GRANTS = [
         'hr_admin' => ['view_attendance_reports', 'export_attendance', 'view_overtime', 'manage_overtime', 'manage_notifications', 'view_live_attendance', 'view_employee_360',
-            'view_main_dashboard', 'view_team_dashboard', 'view_finance_dashboard'],
+            'view_main_dashboard', 'view_team_dashboard', 'view_finance_dashboard', 'notify_others_on_leave'],
         'director' => ['view_attendance_reports', 'export_attendance', 'view_overtime', 'view_live_attendance', 'view_employee_360',
-            'view_team_dashboard', 'view_department_dashboard'],
+            'view_team_dashboard', 'view_department_dashboard', 'notify_others_on_leave'],
         // Team View = today's operational work; Department View = the
         // department's KPIs and trends. Both scoped to the headed department.
-        'department_head' => ['view_attendance_reports', 'view_live_attendance', 'view_employee_360', 'view_team_dashboard', 'view_department_dashboard'],
-        'manager' => ['view_attendance_reports', 'view_overtime', 'view_live_attendance', 'view_employee_360', 'view_team_dashboard'],
+        'department_head' => ['view_attendance_reports', 'view_live_attendance', 'view_employee_360', 'view_team_dashboard', 'view_department_dashboard', 'notify_others_on_leave'],
+        'manager' => ['view_attendance_reports', 'view_overtime', 'view_live_attendance', 'view_employee_360', 'view_team_dashboard', 'notify_others_on_leave'],
         // A Coordinator lands on Team View for the people they watch; the
         // Main dashboard only when granted explicitly.
-        'coordinator' => ['view_live_attendance', 'view_team_dashboard', 'view_attendance_reports'],
+        'coordinator' => ['view_live_attendance', 'view_team_dashboard', 'view_attendance_reports', 'notify_others_on_leave'],
         // Finance: payroll in full; attendance / leave / OT summaries only.
-        'finance' => ['view_attendance', 'view_attendance_reports', 'export_attendance', 'view_overtime', 'view_leave_management', 'view_finance_dashboard'],
-        'employee' => ['view_main_dashboard'],
+        'finance' => ['view_attendance', 'view_attendance_reports', 'export_attendance', 'view_overtime', 'view_leave_management', 'view_finance_dashboard', 'notify_others_on_leave'],
+        // Notify Others on a leave application (25 Nov 2026): every role
+        // that applies for leave, removable per role.
+        'employee' => ['view_main_dashboard', 'notify_others_on_leave'],
     ];
 
     /**

@@ -201,7 +201,10 @@ test('HR adds people to the decision: preset from settings, each told once, neve
     }
     Notification::assertNotSentTo($this->hr, LeaveRequestNotification::class, fn ($n) => $n->notificationRole() === 'recipient');
     Notification::assertSentTo($this->employee->user, LeaveRequestNotification::class, fn ($n) => $n->notificationRole() !== 'recipient');
-    expect(AuditLog::where('event', 'LEAVE_RECIPIENTS_NOTIFIED')->sole()->new_values['recipients'])->toHaveCount(2);
+    expect(AuditLog::where('event', 'LEAVE_RECIPIENTS_NOTIFIED')->sole()->new_values['recipients'])->toHaveCount(2)
+        // Preset from settings: the decision's own notice told them; "Also notify" never repeats it.
+        ->and(Notification::sent($this->payroll, LeaveRequestNotification::class,
+            fn ($n) => str_contains($n->toArray($this->payroll)['title'], 'Leave Approved'))->count())->toBe(1);
 });
 
 test('the leave email carries the facts, is logged against its request, and the request page lists every notification and email', function () {

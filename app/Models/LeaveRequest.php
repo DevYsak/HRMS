@@ -29,6 +29,8 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     'main_category', 'balance_leave_type_id',
     // Leave V2: 'combined' for a date-wise allocated request (see LeaveRequestDay).
     'request_mode',
+    // Notify Others: people the employee chose to tell (application and every decision).
+    'notify_user_ids',
 ])]
 class LeaveRequest extends Model
 {
@@ -54,6 +56,7 @@ class LeaveRequest extends Model
             'lwp_days' => 'decimal:2',
             'approval_path' => 'array',
             'balance_snapshot' => 'array',
+            'notify_user_ids' => 'array',
         ];
     }
 

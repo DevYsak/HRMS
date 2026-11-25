@@ -2,6 +2,7 @@
 
 namespace App\Livewire\TimeOff;
 
+use App\Livewire\Concerns\ChoosesLeaveRecipients;
 use App\Models\AuditLog;
 use App\Models\DecemberMandatoryDay;
 use App\Models\Employee;
@@ -44,6 +45,7 @@ use Livewire\WithPagination;
 
 class MyTimeOff extends Component
 {
+    use ChoosesLeaveRecipients;
     use WithFileUploads;
     use WithPagination;
 
@@ -338,7 +340,7 @@ class MyTimeOff extends Component
         $this->reset([
             'leave_type_id', 'start_date', 'end_date', 'is_half_day',
             'half_day_period', 'requested_leave_status', 'reason',
-            'employee_remarks', 'attachment',
+            'employee_remarks', 'attachment', 'notifyUserIds', 'recipientSearch',
         ]);
         $this->resetErrorBag();
         $this->resetValidation();
@@ -374,7 +376,7 @@ class MyTimeOff extends Component
 
         $this->reset([
             'leave_type_id', 'is_half_day', 'half_day_period',
-            'requested_leave_status', 'reason', 'employee_remarks', 'attachment',
+            'requested_leave_status', 'reason', 'employee_remarks', 'attachment', 'notifyUserIds', 'recipientSearch',
         ]);
         $this->requested_leave_status = 'paid';
         $this->start_date = $this->planner_start;
@@ -398,7 +400,7 @@ class MyTimeOff extends Component
 
         $this->reset([
             'leave_type_id', 'is_half_day', 'half_day_period',
-            'requested_leave_status', 'reason', 'employee_remarks', 'attachment',
+            'requested_leave_status', 'reason', 'employee_remarks', 'attachment', 'notifyUserIds', 'recipientSearch',
         ]);
         $this->requested_leave_status = 'paid';
         $this->start_date = $date;
@@ -500,6 +502,7 @@ class MyTimeOff extends Component
                 null,
                 $this->employee_remarks ?: null,
                 $attachmentsPayload,
+                notifyUserIds: $this->chosenRecipientIds(),
             );
         } catch (\DomainException $exception) {
             $this->addError('request', $exception->getMessage());

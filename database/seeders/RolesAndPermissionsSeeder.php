@@ -58,6 +58,7 @@ class RolesAndPermissionsSeeder extends Seeder
         'Leave Management' => [
             ['key' => 'view_leave', 'label' => 'View Leave', 'description' => 'View leave requests and balances'],
             ['key' => 'apply_leave', 'label' => 'Apply Leave', 'description' => 'Submit personal leave applications'],
+            ['key' => 'notify_others_on_leave', 'label' => 'Notify Others on Leave', 'description' => 'Choose extra people to tell about a leave application or decision (the manager, approvers and HR are always told)'],
             ['key' => 'approve_leave', 'label' => 'Approve Leave', 'description' => 'Review and approve / reject leave requests'],
             ['key' => 'manage_leave_types', 'label' => 'Manage Leave Types', 'description' => 'Configure leave type definitions'],
             ['key' => 'manage_leave_policies', 'label' => 'Manage Leave Policies', 'description' => 'Configure leave accrual and policy rules'],

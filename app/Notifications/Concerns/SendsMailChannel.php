@@ -3,6 +3,7 @@
 namespace App\Notifications\Concerns;
 
 use App\Models\NotificationSetting;
+use App\Services\Notifications\NotificationCatalog;
 use App\Services\Notifications\TemplateVariableRenderer;
 use Illuminate\Notifications\Messages\MailMessage;
 
@@ -29,18 +30,22 @@ trait SendsMailChannel
     public function toMail(object $notifiable): MailMessage
     {
         $data = $this->toArray($notifiable);
-        $key = static::class;
+        // A stage with its own row ("Leave approved") is governed by it; its
+        // template falls back to the event's when it has none of its own.
+        $key = NotificationCatalog::eventKeyFor($this);
         $role = method_exists($this, 'notificationRole') ? $this->notificationRole() : null;
 
         $setting = NotificationSetting::for($key);
         $roleSetting = $setting?->roleSetting($role);
+        $event = $key !== static::class ? NotificationSetting::for(static::class) : null;
+        $eventRole = $event?->roleSetting($role);
 
         $title = $data['title'] ?? config('app.name');
         $action = $data['action'] ?? 'Open';
         $url = isset($data['url']) ? url($data['url']) : url('/');
 
-        $customSubject = $roleSetting?->custom_subject ?: $setting?->custom_subject;
-        $customBody = $roleSetting?->custom_body ?: $setting?->custom_body;
+        $customSubject = $roleSetting?->custom_subject ?: $setting?->custom_subject ?: $eventRole?->custom_subject ?: $event?->custom_subject;
+        $customBody = $roleSetting?->custom_body ?: $setting?->custom_body ?: $eventRole?->custom_body ?: $event?->custom_body;
 
         if (method_exists($this, 'templateVariables')) {
             $renderer = app(TemplateVariableRenderer::class);
@@ -60,6 +65,11 @@ trait SendsMailChannel
             ->line('You are receiving this email because you are subscribed to notifications from '.config('app.name').'.')
             ->withSymfonyMessage(function ($message) use ($key, $role): void {
                 $message->getHeaders()->addTextHeader('X-Notification-Key', $key);
+
+                // Which record the email is about, for the email history.
+                if (method_exists($this, 'mailContext') && ($context = $this->mailContext()) !== null) {
+                    $message->getHeaders()->addTextHeader('X-Notification-Context', $context['type'].':'.$context['id']);
+                }
 
                 if ($role !== null) {
                     $message->getHeaders()->addTextHeader('X-Notification-Role', $role);

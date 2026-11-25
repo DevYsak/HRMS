@@ -1445,6 +1445,9 @@
                             <flux:error name="employee_remarks" />
                         </div>
 
+                        {{-- Notify Others: extra people told about this application and its decision --}}
+                        @include('livewire.time-off.partials.notify-recipients', ['recipientLabel' => 'Notify others', 'recipientHint' => 'optional — your manager and HR are always told; the people you add get this application and its decision'])
+
                         {{-- Attachment — one supporting document, previewed before submit --}}
                         <div class="rounded-xl border border-zinc-100 dark:border-zinc-800 bg-zinc-50/60 p-4 dark:border-zinc-800 dark:bg-zinc-900/40">
                             <div class="mb-2 flex items-center justify-between">

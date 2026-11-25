@@ -88,4 +88,14 @@ class LeaveRevisionNotification extends Notification
             ],
         };
     }
+
+    /**
+     * The leave request HR changed, for the email history.
+     *
+     * @return array{type: string, id: int}
+     */
+    public function mailContext(): array
+    {
+        return ['type' => 'leave_request', 'id' => (int) $this->revision->leave_request_id];
+    }
 }

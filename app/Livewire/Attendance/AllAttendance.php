@@ -14,12 +14,12 @@ use App\Models\DepartmentTeamMember;
 use App\Models\Employee;
 use App\Models\LeaveBalance;
 use App\Notifications\AttendanceRegularisationNotification;
-use App\Notifications\RegularisationReviewedNotification;
 use App\Services\Approvals\ClaimLockService;
 use App\Services\Attendance\AttendanceCalculator;
 use App\Services\Attendance\AttendanceRateService;
 use App\Services\Attendance\AttendanceStatusResolver;
 use App\Services\Attendance\PunchTimeline;
+use App\Services\Attendance\RegularisationNotices;
 use App\Services\Attendance\WorkingDayResolver;
 use App\Services\AttendanceService;
 use App\Services\Leave\LeaveYearResolver;
@@ -593,7 +593,7 @@ class AllAttendance extends Component
         $request->refresh();
 
         \Flux::toast('Regularisation approved — hours & attendance updated.');
-        $request->employee->user?->notify(new RegularisationReviewedNotification($request));
+        app(RegularisationNotices::class)->decided($request);
 
         if ($this->drawerEmployeeId) {
             $this->openEmployeeDrawer($this->drawerEmployeeId); // refresh drawer data
@@ -664,7 +664,7 @@ class AllAttendance extends Component
                 : 'Regularisation updated.');
         }
 
-        $this->activeRequest->employee->user->notify(new RegularisationReviewedNotification($this->activeRequest));
+        app(RegularisationNotices::class)->decided($this->activeRequest);
 
         app(ClaimLockService::class)->release($this->activeRequest);
         $this->showReviewModal = false;
@@ -716,7 +716,7 @@ class AllAttendance extends Component
             return;
         }
 
-        $this->activeRequest->employee->user->notify(new RegularisationReviewedNotification($this->activeRequest));
+        app(RegularisationNotices::class)->decided($this->activeRequest);
 
         app(ClaimLockService::class)->release($this->activeRequest);
         $this->showReviewModal = false;

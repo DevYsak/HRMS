@@ -10,8 +10,8 @@ use App\Models\LeaveRequest;
 use App\Models\OtRequest;
 use App\Models\User;
 use App\Notifications\OtRequestNotification;
-use App\Notifications\RegularisationReviewedNotification;
 use App\Services\Approvals\ApprovalGuard;
+use App\Services\Attendance\RegularisationNotices;
 use App\Services\AttendanceService;
 use App\Services\LeaveService;
 use App\Services\OvertimeService;
@@ -112,7 +112,7 @@ class ApprovalCenter extends Component
                     } else {
                         app(AttendanceService::class)->rejectRegularisation($req, $user->id, $comment);
                     }
-                    $req->employee?->user?->notify(new RegularisationReviewedNotification($req->fresh()));
+                    app(RegularisationNotices::class)->decided($req->fresh());
                     break;
 
                 case 'encashment':

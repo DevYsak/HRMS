@@ -238,9 +238,9 @@ class LeaveRequestNotification extends Notification implements ShouldQueue
         ]));
         $message->introLines = array_merge($message->introLines, $details);
 
-        return $message->withSymfonyMessage(function ($symfony): void {
-            $symfony->getHeaders()->addTextHeader('X-Notification-Context', 'leave_request:'.$this->leaveRequest->id);
-        });
+        // The X-Notification-Context header (the email history's link to the
+        // request) is stamped by SendsMailChannel from mailContext().
+        return $message;
     }
 
     /**
@@ -251,5 +251,23 @@ class LeaveRequestNotification extends Notification implements ShouldQueue
     public function mailContext(): array
     {
         return ['type' => 'leave_request', 'id' => (int) $this->leaveRequest->id];
+    }
+
+    /**
+     * Which stage this is, so each can be switched on or off on its own
+     * (NotificationCatalog::STAGES): the application, the decision, or a
+     * cancellation. A message-thread post has no stage of its own.
+     */
+    public function notificationStage(): ?string
+    {
+        return match (true) {
+            $this->event === 'message' => null,
+            $this->event === self::SUBMITTED => 'submitted',
+            in_array($this->statusAtDispatch, ['pending', 'pending_hr', 'pending_manager'], true) => 'submitted',
+            $this->statusAtDispatch === 'approved' => 'approved',
+            $this->statusAtDispatch === 'rejected' => 'rejected',
+            in_array($this->statusAtDispatch, ['cancelled', 'withdrawn'], true) => 'cancelled',
+            default => null,
+        };
     }
 }

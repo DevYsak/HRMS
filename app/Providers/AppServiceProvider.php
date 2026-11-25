@@ -20,6 +20,7 @@ use App\Models\LeaveRequest;
 use App\Models\LeaveType;
 use App\Models\MailSetting;
 use App\Models\MenuSetting;
+use App\Models\NotificationDepartmentRule;
 use App\Models\NotificationRoleSetting;
 use App\Models\NotificationSetting;
 use App\Models\OtRequest;
@@ -50,7 +51,9 @@ use App\Services\Attendance\ShiftHistory;
 use App\Services\EmployeeImportService;
 use App\Services\ModuleFeatureService;
 use App\Services\Navigation\DashboardAccess;
+use App\Services\Notifications\NotificationCatalog;
 use App\Services\Notifications\NotificationDeliveryGate;
+use App\Services\Notifications\NotificationRecipientPolicy;
 use App\Services\Payroll\PayrollAccess;
 use App\Support\DateDisplay;
 use Carbon\CarbonImmutable;
@@ -235,6 +238,7 @@ class AppServiceProvider extends ServiceProvider
         foreach ([
             NotificationSetting::class,
             NotificationRoleSetting::class,
+            NotificationDepartmentRule::class,
             MailSetting::class,
             PayrollApprovalPolicy::class,
             SalaryCycle::class,
@@ -283,14 +287,17 @@ class AppServiceProvider extends ServiceProvider
     protected function configureNotificationGates(): void
     {
         Event::listen(function (NotificationSending $event): ?bool {
-            $key = $event->notification::class;
+            // The stage's own settings row when it has one ("Leave approved"), else the event's.
+            $key = NotificationCatalog::eventKeyFor($event->notification);
+            // The employee it is about, so their department's rule applies.
+            $subject = NotificationRecipientPolicy::subjectOf($event->notification);
             $role = method_exists($event->notification, 'notificationRole')
                 ? $event->notification->notificationRole()
                 : null;
             $gate = app(NotificationDeliveryGate::class);
 
             if ($event->channel === 'mail') {
-                $decision = $gate->mail($key, $role, notifiable: $event->notifiable);
+                $decision = $gate->mail($key, $role, notifiable: $event->notifiable, subject: $subject);
 
                 if (! $decision->allowed) {
                     $context = method_exists($event->notification, 'mailContext') ? $event->notification->mailContext() : null;
@@ -302,7 +309,7 @@ class AppServiceProvider extends ServiceProvider
                 return null;
             }
 
-            if ($event->channel === 'database' && ! $gate->database($key, $role, $event->notifiable)->allowed) {
+            if ($event->channel === 'database' && ! $gate->database($key, $role, $event->notifiable, $subject)->allowed) {
                 return false;
             }
 

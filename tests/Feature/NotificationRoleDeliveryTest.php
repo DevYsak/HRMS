@@ -494,7 +494,8 @@ test('every role-tagged event resolves its own gate decision independently', fun
     foreach ($catalog->all() as $entry) {
         $roles = array_keys($catalog->rolesFor($entry['key']));
 
-        if ($roles === []) {
+        // A stage ("…@approved") has no role rows: the event's role rows govern it.
+        if ($roles === [] || str_contains($entry['key'], '@')) {
             continue;
         }
 

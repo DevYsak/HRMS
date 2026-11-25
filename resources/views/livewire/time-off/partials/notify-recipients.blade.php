@@ -1,6 +1,12 @@
-{{-- People HR adds to the decision's email, besides the employee and the approvers already told (9 Nov 2026). --}}
+{{--
+    Notify Others (ChoosesLeaveRecipients): people HR adds to a decision's
+    email (9 Nov 2026), or the employee adds to an application (25 Nov 2026),
+    besides the people always told. Only with notify_others_on_leave.
+    Optional: $recipientLabel, $recipientHint.
+--}}
+@if($this->canNotifyOthers())
 <div class="space-y-2" data-notify-recipients>
-    <p class="text-xs font-medium text-zinc-700 dark:text-zinc-200">Also notify <span class="font-normal text-zinc-500 dark:text-zinc-400">(optional — they get the decision in the app and by email)</span></p>
+    <p class="text-xs font-medium text-zinc-700 dark:text-zinc-200">{{ $recipientLabel ?? 'Also notify' }} <span class="font-normal text-zinc-500 dark:text-zinc-400">({{ $recipientHint ?? 'optional — they get the decision in the app and by email' }})</span></p>
     <div class="flex flex-wrap gap-1.5">
         @foreach($this->recipientOptions as $person)
             <button type="button" wire:key="recipient-{{ $person['id'] }}"
@@ -20,3 +26,4 @@
     </div>
     <flux:input size="sm" wire:model.live.debounce.300ms="recipientSearch" icon="magnifying-glass" placeholder="Add someone by name or email…" />
 </div>
+@endif
