@@ -135,23 +135,59 @@
                 @endforeach
             </div>
 
-            {{-- Attendance Replay — every raw punch of the day --}}
-            @if(! empty($detail['punches']))
-                <div>
-                    <div class="mb-2 text-[10px] font-bold uppercase tracking-widest text-zinc-400">Punch Timeline · {{ count($detail['punches']) }} punches</div>
-                    <div class="max-h-48 space-y-1.5 overflow-y-auto pr-1">
-                        @foreach($detail['punches'] as $i => $pp)
-                            <div class="flex items-center gap-2 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 px-3 py-1.5 text-xs dark:bg-zinc-800/40">
-                                <span class="w-16 shrink-0 font-black tabular-nums text-zinc-900 dark:text-white">{{ $pp['time'] }}</span>
-                                @if($pp['method'])<span class="inline-flex items-center gap-1 text-zinc-600 dark:text-zinc-300"><flux:icon :icon="$pp['method_icon']" class="size-3.5 text-zinc-400" /> {{ $pp['method'] }}@if(! empty($pp['guidance'])) · {{ $pp['guidance'] }}@endif</span>@endif
-                                <span class="ml-auto flex items-center gap-2 text-[10px] text-zinc-400">
-                                    @if($pp['location'])<span>{{ $pp['location'] }}</span>@endif
-                                    @if($pp['device'])<span>{{ $pp['device'] }}</span>@endif
-                                    <span class="uppercase">{{ $pp['source'] }}</span>
-                                </span>
-                            </div>
+            {{-- Punch tracking — every punch with what was done with it, and every
+                 missed punch where it was missed (MissedPunchTracker::dayTrail). --}}
+            @php
+                $trail = $detail['trail'] ?? ['rows' => [], 'counts' => []];
+                $trackStyle = [
+                    'counted' => ['Counted', 'border-l-emerald-500 bg-emerald-50/60 dark:bg-emerald-500/[0.07]', 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300', 'check-circle', 'text-emerald-500'],
+                    'corrected' => ['Correction', 'border-l-violet-500 bg-violet-50/70 dark:bg-violet-500/[0.08]', 'bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300', 'pencil-square', 'text-violet-500'],
+                    'missed' => ['Missed', 'border-l-red-500 bg-red-50 dark:bg-red-500/[0.10]', 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300', 'exclamation-triangle', 'text-red-500'],
+                    'missed_corrected' => ['Missed · corrected', 'border-l-red-400 bg-red-50/50 dark:bg-red-500/[0.06]', 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300', 'exclamation-triangle', 'text-red-400'],
+                    'duplicate' => ['Duplicate', 'border-l-zinc-300 bg-zinc-50 opacity-70 dark:border-l-zinc-600 dark:bg-zinc-800/40', 'bg-zinc-100 text-zinc-500 dark:bg-white/[0.06] dark:text-zinc-400', 'document-duplicate', 'text-zinc-400'],
+                    'ignored' => ['Ignored', 'border-l-amber-400 bg-amber-50/60 dark:bg-amber-500/[0.07]', 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300', 'no-symbol', 'text-amber-500'],
+                    'superseded' => ['Replaced', 'border-l-zinc-300 bg-zinc-50 line-through opacity-60 dark:border-l-zinc-600 dark:bg-zinc-800/40', 'bg-zinc-100 text-zinc-500 dark:bg-white/[0.06] dark:text-zinc-400', 'arrow-path', 'text-zinc-400'],
+                ];
+                $missedTotal = ($trail['counts']['missed'] ?? 0) + ($trail['counts']['missed_corrected'] ?? 0);
+                $punchTotal = count($trail['rows']) - $missedTotal;
+            @endphp
+            @if($trail['rows'] !== [])
+                <div data-punch-trail>
+                    <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+                        <div class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Punch Timeline · {{ $punchTotal }} {{ \Illuminate\Support\Str::plural('punch', $punchTotal) }}</div>
+                        @if($missedTotal > 0)
+                            <span class="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-700 dark:bg-red-500/20 dark:text-red-300" data-trail-missed="{{ $missedTotal }}">
+                                {{ $missedTotal }} missed{{ ($trail['counts']['missed_corrected'] ?? 0) > 0 ? ' · '.$trail['counts']['missed_corrected'].' corrected' : '' }}
+                            </span>
+                        @endif
+                    </div>
+                    {{-- Legend: only the kinds this day has --}}
+                    <div class="mb-2 flex flex-wrap gap-1.5" data-trail-legend>
+                        @foreach($trackStyle as $state => [$label, , $chip])
+                            @if(($trail['counts'][$state] ?? 0) > 0)
+                                <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold {{ $chip }}">{{ $label }} · {{ $trail['counts'][$state] }}</span>
+                            @endif
                         @endforeach
                     </div>
+                    <ol class="max-h-64 space-y-1.5 overflow-y-auto pr-1">
+                        @foreach($trail['rows'] as $row)
+                            @php [$label, $rowTone, $chip, $icon, $iconTone] = $trackStyle[$row['state']] ?? $trackStyle['counted']; @endphp
+                            <li class="flex items-center gap-2 rounded-lg border-l-4 px-3 py-1.5 text-xs {{ $rowTone }}" data-trail-state="{{ $row['state'] }}">
+                                <flux:icon :icon="$icon" variant="micro" class="size-3.5 shrink-0 {{ $iconTone }}" />
+                                <span class="w-20 shrink-0 font-black tabular-nums text-zinc-900 dark:text-white">
+                                    @if($row['time']){{ $row['time'] }}<span class="text-[10px] font-semibold text-zinc-400">:{{ $row['seconds'] }}</span>@else — @endif
+                                </span>
+                                <span class="min-w-0">
+                                    <span class="font-semibold text-zinc-800 dark:text-zinc-100">{{ $row['title'] }}</span>
+                                    <span class="block truncate text-[10px] text-zinc-500 dark:text-zinc-400" title="{{ $row['note'] }}">{{ $row['note'] }}</span>
+                                </span>
+                                <span class="ml-auto flex shrink-0 items-center gap-2">
+                                    @if($row['device'])<span class="hidden text-[10px] text-zinc-400 sm:inline">{{ $row['device'] }}</span>@endif
+                                    <span class="rounded-full px-2 py-0.5 text-[9px] font-bold uppercase {{ $chip }}">{{ $row['state'] === 'missed_corrected' ? 'Corrected' : $label }}</span>
+                                </span>
+                            </li>
+                        @endforeach
+                    </ol>
                 </div>
             @endif
 

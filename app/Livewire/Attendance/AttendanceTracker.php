@@ -2295,6 +2295,9 @@ class AttendanceTracker extends Component
                 'ip' => $att->check_out_ip,
                 'device' => UserAgent::parse($att->check_out_user_agent)['label'],
             ],
+            // Tracked trail: every punch with what was done with it, and every
+            // missed punch where it was missed — corrected or not.
+            'trail' => app(MissedPunchTracker::class)->dayTrail($employee, Carbon::parse($date)),
             // Attendance Replay — every raw punch of that day, chronological.
             'punches' => AttendancePunch::where('employee_id', $employee->id)
                 ->whereDate('punch_date', $date)

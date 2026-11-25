@@ -193,3 +193,30 @@ test('the Excel workbook counts missed punches per day and the weeks over the al
     $sheets = collect(app(AttendanceWorkbook::class)->sheets(['from' => '2026-11-23', 'to' => '2026-11-25', 'employee_id' => $this->employee->id]))->keyBy('name');
     expect($sheets['Summary']['rows'][0][21])->toBe(1);
 });
+
+test('Punch Details tracks every punch by colour: counted, duplicate, ignored, missed — and missed then corrected', function () {
+    // Mon 23 also has a duplicate read of the 10:30 Face IN.
+    mpPunch($this->employee, '2026-11-23 10:30:20', 'face');
+    $trail = app(MissedPunchTracker::class)->dayTrail($this->employee, Carbon::parse('2026-11-23'));
+
+    expect(array_column($trail['rows'], 'state'))->toBe(['ignored', 'duplicate', 'counted', 'missed', 'counted', 'counted'])
+        ->and($trail['rows'][3]['title'])->toBe('Missed OUT')
+        ->and($trail['rows'][3]['note'])->toContain('not regularised')
+        ->and($trail['counts'])->toMatchArray(['counted' => 3, 'duplicate' => 1, 'ignored' => 1, 'missed' => 1, 'missed_corrected' => 0]);
+
+    Livewire::actingAs($this->user)->test(AttendanceTracker::class)
+        ->call('showPunchDetail', '2026-11-23')
+        ->assertSeeHtml('data-trail-state="missed"')
+        ->assertSee('Missed OUT')
+        ->assertSee('Duplicate · 1')
+        ->assertSee('1 missed');
+
+    // HR approves a correction: the OUT at 11:00 is added, the miss shows as corrected.
+    AttendancePunch::create(['employee_id' => $this->employee->id, 'punched_at' => '2026-11-23 11:00:00', 'punch_date' => '2026-11-23',
+        'method' => 'id_card', 'direction' => 'out', 'source' => 'regularisation']);
+    Attendance::where('employee_id', $this->employee->id)->whereDate('date', '2026-11-23')->update(['is_regularized' => true]);
+
+    $trail = app(MissedPunchTracker::class)->dayTrail($this->employee, Carbon::parse('2026-11-23'));
+    expect(array_column($trail['rows'], 'state'))->toContain('corrected', 'missed_corrected')->not->toContain('missed')
+        ->and(collect($trail['rows'])->firstWhere('state', 'missed_corrected')['note'])->toContain('corrected by an approved regularisation');
+});

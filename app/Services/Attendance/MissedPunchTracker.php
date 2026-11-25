@@ -194,6 +194,85 @@ class MissedPunchTracker
         return $missed;
     }
 
+    /**
+     * One day's punches as a tracked trail, for Punch Details: every punch
+     * with what the system did with it — counted, a correction from an
+     * approved regularisation, a duplicate it merged, a tap it ignored, a
+     * device punch a correction replaced — and every missed punch at the
+     * place it was missed, with whether it has been corrected. Read from the
+     * same PunchTimeline and missed-punch rules as everything else.
+     *
+     * @return array{rows: list<array{ts: int, state: string, time: ?string, seconds: ?string, title: string, note: ?string, source: ?string, device: ?string}>, counts: array<string, int>}
+     */
+    public function dayTrail(Employee $employee, Carbon $day): array
+    {
+        $date = $day->toDateString();
+        $punches = AttendancePunch::where('employee_id', $employee->id)->whereDate('punch_date', $date)->orderBy('punched_at')->get();
+        $row = Attendance::where('employee_id', $employee->id)->whereDate('date', $date)->first();
+        $regularised = AttendanceRegularisation::where('employee_id', $employee->id)->where('status', 'approved')
+            ->whereDate('work_date', $date)->exists();
+        $rows = [];
+
+        if ($punches->isNotEmpty()) {
+            $sorted = $punches->sortBy('punched_at')->values();
+            $events = $this->timeline->process($sorted, $day, null, $this->shifts->resolve($employee, $date))['raw_events'] ?? [];
+
+            foreach ($sorted as $i => $punch) {
+                $event = $events[$i] ?? [];
+                $direction = strtoupper((string) ($event['direction'] ?? $punch->direction ?? ''));
+                $correction = $punch->source === 'regularisation';
+                $state = match ($event['flag'] ?? 'kept') {
+                    'duplicate', 'retry' => 'duplicate',
+                    'ignored' => 'ignored',
+                    'superseded' => 'superseded',
+                    default => $correction ? 'corrected' : 'counted',
+                };
+
+                $rows[] = [
+                    'ts' => (int) $punch->punched_at->getTimestampMs(),
+                    'state' => $state,
+                    'time' => $punch->punched_at->toImmutable()->userTime(),
+                    'seconds' => $punch->punched_at->format('s'),
+                    'title' => trim(($correction ? 'Correction' : ($punch->methodEnum()?->label() ?? 'Punch')).' '.$direction),
+                    'note' => match ($state) {
+                        'corrected' => 'Added by an approved regularisation',
+                        'duplicate' => 'Read twice — merged into the punch next to it',
+                        'superseded' => 'Replaced by the approved correction',
+                        'ignored' => $event['note'] ?? 'Ignored',
+                        default => 'Counted',
+                    },
+                    'source' => $punch->source,
+                    'device' => $punch->device_serial,
+                ];
+            }
+        }
+
+        $devicePunches = $punches->where('source', '!=', 'regularisation')->values();
+        foreach ($this->forDay($employee, $day, $devicePunches, $row, $regularised) as $missed) {
+            $rows[] = [
+                'ts' => (int) ($missed['after_ms'] ?? 0) + 1,
+                'state' => $missed['resolved'] ? 'missed_corrected' : 'missed',
+                'time' => null,
+                'seconds' => null,
+                'title' => match ($missed['kind']) {
+                    self::KIND_IN => 'Missed IN',
+                    self::KIND_OUT => 'Missed OUT',
+                    default => 'Missed check-out',
+                },
+                'note' => $missed['label'].($missed['resolved'] ? ' — corrected by an approved regularisation' : ' — not regularised'),
+                'source' => null,
+                'device' => null,
+            ];
+        }
+
+        usort($rows, fn (array $a, array $b) => $a['ts'] <=> $b['ts']);
+
+        $counts = array_count_values(array_column($rows, 'state'));
+
+        return ['rows' => $rows, 'counts' => array_merge(array_fill_keys(
+            ['counted', 'corrected', 'missed', 'missed_corrected', 'duplicate', 'ignored', 'superseded'], 0), $counts)];
+    }
+
     /** Missed punches in the Monday–Friday working week holding $day (to today). */
     public function weekCount(Employee $employee, ?CarbonInterface $day = null): int
     {
