@@ -211,6 +211,20 @@ class MissedPunchTracker
         $row = Attendance::where('employee_id', $employee->id)->whereDate('date', $date)->first();
         $regularised = AttendanceRegularisation::where('employee_id', $employee->id)->where('status', 'approved')
             ->whereDate('work_date', $date)->exists();
+
+        return $this->trail($employee, $day, $punches, $row, $regularised);
+    }
+
+    /**
+     * dayTrail() from data already loaded — for screens that show many
+     * employee-days at once (Live Attendance: By Day, By Employee, Punch Audit).
+     *
+     * @param  Collection<int, AttendancePunch>  $punches  every punch of the day, corrections included
+     * @return array{rows: list<array{ts: int, state: string, time: ?string, seconds: ?string, title: string, note: ?string, source: ?string, device: ?string}>, counts: array<string, int>}
+     */
+    public function trail(Employee $employee, Carbon $day, Collection $punches, ?Attendance $row, bool $regularised): array
+    {
+        $date = $day->toDateString();
         $rows = [];
 
         if ($punches->isNotEmpty()) {
