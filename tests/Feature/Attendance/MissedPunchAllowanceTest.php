@@ -150,7 +150,9 @@ test('HR sees employee-wise monthly counts, reviews a flag, and keeps the flag h
         'period' => MissedPunchFlag::PERIOD_WEEK, 'period_start' => '2026-10-19', 'flagged_at' => '2026-10-23 20:00:00']);
 
     $this->actingAs($this->hr);
-    $this->withoutVite()->get(route('attendance.missed-punches'))->assertOk()->assertSee('Missed Punches');
+    // The page sits in the main area beside the sidebar, not under it.
+    $this->withoutVite()->get(route('attendance.missed-punches'))->assertOk()->assertSee('Missed Punches')
+        ->assertSee('data-flux-main', false);
 
     Livewire::test(MissedPunchAllowance::class)
         ->assertSet('month', '2026-11')

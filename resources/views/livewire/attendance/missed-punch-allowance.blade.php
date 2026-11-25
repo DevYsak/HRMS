@@ -1,4 +1,6 @@
-<div class="space-y-4" data-missed-punch-allowance>
+{{-- A full page: <flux:main> puts it beside the sidebar, like every other attendance page. --}}
+<flux:main class="min-h-screen bg-[#FFF8F3] p-4 md:p-6">
+<div class="mx-auto max-w-[1400px] space-y-4" data-missed-punch-allowance>
     @php
         $statusChip = [
             'ok' => ['Within allowance', 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/30'],
@@ -229,3 +231,4 @@
         </form>
     </flux:modal>
 </div>
+</flux:main>
