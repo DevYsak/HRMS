@@ -1,12 +1,47 @@
 @use('App\Enums\AttendanceMode')
 @use('App\Enums\PunchMethod')
+@use('App\Services\Attendance\AttendanceRegister')
+
+@php
+    $hm = fn (int $m): string => intdiv($m, 60).'h '.str_pad((string) ($m % 60), 2, '0', STR_PAD_LEFT).'m';
+    $short = fn (int $m): string => $m >= 60 ? intdiv($m, 60).'h '.str_pad((string) ($m % 60), 2, '0', STR_PAD_LEFT).'m' : $m.'m';
+    // Worked against the shift — the same tones as the Live board.
+    $progressBar = ['on_track' => 'bg-emerald-500', 'nearing' => 'bg-lime-500', 'done' => 'bg-yellow-400', 'beyond' => 'bg-orange-500', 'way_beyond' => 'bg-rose-500'];
+    $progressText = ['on_track' => 'text-emerald-600 dark:text-emerald-400', 'nearing' => 'text-lime-600 dark:text-lime-400', 'done' => 'text-yellow-600 dark:text-yellow-400', 'beyond' => 'text-orange-600 dark:text-orange-400', 'way_beyond' => 'text-rose-600 dark:text-rose-400'];
+    $chipTone = [
+        'green' => 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/30',
+        'amber' => 'bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/30',
+        'red' => 'bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-500/10 dark:text-rose-300 dark:ring-rose-500/30',
+        'blue' => 'bg-sky-50 text-sky-700 ring-sky-200 dark:bg-sky-500/10 dark:text-sky-300 dark:ring-sky-500/30',
+        'violet' => 'bg-violet-50 text-violet-700 ring-violet-200 dark:bg-violet-500/10 dark:text-violet-300 dark:ring-violet-500/30',
+        'zinc' => 'bg-zinc-100 text-zinc-600 ring-zinc-200 dark:bg-white/5 dark:text-zinc-300 dark:ring-white/10',
+    ];
+    // Wall-clock labels for the timeline (minutes from the date's midnight), in the reader's 12 / 24-hour choice.
+    $is24h = app(\App\Support\DateDisplay::class)->timeFormat() === 'H:i';
+    $clockAt = fn (int $minute): string => \Carbon\CarbonImmutable::today()->addMinutes($minute)->format($is24h ? 'H:i' : 'h:i A');
+    $hourAt = fn (int $minute): string => $is24h ? sprintf('%02d:00', intdiv($minute, 60) % 24) : \Carbon\CarbonImmutable::today()->addMinutes($minute)->format('g A');
+    $ticksFor = function (array $window): array {
+        $span = max(1, $window['to'] - $window['from']);
+        $step = $span <= 720 ? 120 : 180;
+        $ticks = [];
+        for ($m = (int) ceil($window['from'] / $step) * $step; $m <= $window['to']; $m += $step) {
+            $ticks[] = ['at' => $m, 'pct' => round(($m - $window['from']) * 100 / $span, 3)];
+        }
+
+        return $ticks;
+    };
+    $canCorrect = auth()->user()->canManageEmployees();
+    $canSeeLive = auth()->user()->can('view_live_attendance');
+    $ghostLink = 'inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold text-zinc-600 transition hover:bg-orange-50 hover:text-orange-600 dark:text-zinc-300 dark:hover:bg-white/5';
+@endphp
 
 <flux:main class="min-h-screen bg-[#FFF8F3] p-4 md:p-6">
+<div class="mx-auto max-w-[1600px]">
 
 <x-attendance.biometric-notice class="mb-3" />
 
 {{-- ═══════════════ HEADER ═══════════════ --}}
-<div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+<header class="mb-4 flex flex-wrap items-end justify-between gap-3">
     <div>
         <h1 class="pulse-page-title">Employees Attendance</h1>
         <div class="mt-0.5 flex items-center gap-1.5 text-xs text-zinc-400">
@@ -15,53 +50,71 @@
     </div>
     <div class="flex flex-wrap items-center gap-2">
         <x-attendance.live-button />
-        {{-- Week navigator --}}
-        <div class="flex items-center gap-1 rounded-xl border border-orange-100 bg-white dark:bg-zinc-900 p-1 shadow-sm">
-            <button wire:click="previousWeek" type="button" class="flex size-7 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-orange-50 hover:text-orange-500"><flux:icon.chevron-left class="size-4" /></button>
-            <button wire:click="thisWeek" type="button" class="min-w-[9rem] px-2 py-1 text-center text-xs font-bold text-zinc-700 dark:text-zinc-200 transition hover:text-orange-500" title="Jump to this week">{{ $weekLabel }}</button>
-            <button wire:click="nextWeek" type="button" class="flex size-7 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-orange-50 hover:text-orange-500"><flux:icon.chevron-right class="size-4" /></button>
-        </div>
-        <div class="flex items-center gap-1.5 rounded-xl border {{ $date ? 'border-orange-400 ring-1 ring-orange-200' : 'border-orange-100' }} bg-white dark:bg-zinc-900 px-2 py-1 shadow-sm" title="Pick a single date (overrides the week)">
-            <span class="text-[10px] font-bold uppercase tracking-wider {{ $date ? 'text-orange-500' : 'text-zinc-400' }}">Day</span>
-            <input type="date" wire:model.live="date" class="w-[8rem] border-0 bg-transparent p-1 text-xs font-semibold text-zinc-600 dark:text-zinc-300 focus:ring-0">
-        </div>
-        <a href="{{ route('attendance.command-center') }}" class="inline-flex items-center gap-1.5 rounded-xl border border-orange-100 bg-white dark:bg-zinc-900 px-3 py-2 text-xs font-bold text-zinc-600 dark:text-zinc-300 shadow-sm transition hover:bg-orange-50"><flux:icon.bolt class="size-4 text-orange-500" /> Command Center</a>
-        <a href="{{ route('attendance.reports') }}" class="inline-flex items-center gap-1.5 rounded-xl border border-orange-100 bg-white dark:bg-zinc-900 px-3 py-2 text-xs font-bold text-zinc-600 dark:text-zinc-300 shadow-sm transition hover:bg-orange-50"><flux:icon.document-chart-bar class="size-4 text-orange-500" /> Reports</a>
-        <a href="{{ route('attendance.executive') }}" class="inline-flex items-center gap-1.5 rounded-xl border border-orange-100 bg-white dark:bg-zinc-900 px-3 py-2 text-xs font-bold text-zinc-600 dark:text-zinc-300 shadow-sm transition hover:bg-orange-50"><flux:icon.presentation-chart-line class="size-4 text-orange-500" /> Executive</a>
-        @can('manage_biometric')
-        <a href="{{ route('attendance.biometric-control') }}" class="inline-flex items-center gap-1.5 rounded-xl border border-orange-100 bg-white dark:bg-zinc-900 px-3 py-2 text-xs font-bold text-zinc-600 dark:text-zinc-300 shadow-sm transition hover:bg-orange-50"><flux:icon.finger-print class="size-4 text-orange-500" /> Biometric</a>
-        @endcan
-        <button wire:click="exportCsv" type="button" class="inline-flex items-center gap-1.5 rounded-xl border border-orange-100 bg-white dark:bg-zinc-900 px-3 py-2 text-xs font-bold text-zinc-600 dark:text-zinc-300 shadow-sm transition hover:bg-orange-50"><flux:icon.arrow-down-tray class="size-4 text-orange-500" /> Export CSV</button>
-        <button wire:click="openMarkModal" type="button" class="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 px-4 py-2 text-xs font-bold text-white shadow-lg shadow-orange-300/40 transition hover:shadow-xl"><flux:icon.pencil-square class="size-4" /> Mark Attendance</button>
+        <button wire:click="exportCsv" type="button" class="inline-flex items-center gap-1.5 rounded-xl border border-orange-100 bg-white px-3 py-2 text-xs font-bold text-zinc-600 shadow-sm transition hover:bg-orange-50 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-300"><flux:icon.arrow-down-tray class="size-4 text-orange-500" /> Export CSV</button>
+        @if($canCorrect)
+            <button wire:click="openMarkModal" type="button" class="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 px-4 py-2 text-xs font-bold text-white shadow-lg shadow-orange-300/40 transition hover:shadow-xl dark:shadow-none"><flux:icon.pencil-square class="size-4" /> Mark Attendance</button>
+        @endif
     </div>
+</header>
+
+{{-- ═══════════════ PERIOD + QUICK LINKS ═══════════════ --}}
+<div class="ui-surface mb-4 flex flex-wrap items-center justify-between gap-3 px-3 py-2.5">
+    <div class="flex flex-wrap items-center gap-2">
+        <div class="flex items-center gap-1 rounded-xl border border-orange-100 bg-white p-1 shadow-sm dark:border-white/10 dark:bg-zinc-900">
+            <button wire:click="previousWeek" type="button" aria-label="Previous week" class="flex size-7 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-orange-50 hover:text-orange-500"><flux:icon.chevron-left class="size-4" /></button>
+            <button wire:click="thisWeek" type="button" class="min-w-[9rem] px-2 py-1 text-center text-xs font-bold text-zinc-700 transition hover:text-orange-500 dark:text-zinc-200" title="Jump to this week">{{ $weekLabel }}</button>
+            <button wire:click="nextWeek" type="button" aria-label="Next week" class="flex size-7 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-orange-50 hover:text-orange-500"><flux:icon.chevron-right class="size-4" /></button>
+        </div>
+        <div class="flex items-center gap-1.5 rounded-xl border {{ $date ? 'border-orange-400 ring-1 ring-orange-200 dark:ring-orange-500/30' : 'border-orange-100 dark:border-white/10' }} bg-white px-2 py-1 shadow-sm dark:bg-zinc-900" title="Pick a single date (overrides the week)">
+            <span class="text-[10px] font-bold uppercase tracking-wider {{ $date ? 'text-orange-500' : 'text-zinc-400' }}">Day</span>
+            <input type="date" wire:model.live="date" max="{{ now()->toDateString() }}" class="w-[8rem] border-0 bg-transparent p-1 text-xs font-semibold text-zinc-600 focus:ring-0 dark:text-zinc-300">
+            @if($date)
+                <button type="button" wire:click="$set('date', '')" class="rounded-md p-0.5 text-zinc-400 hover:bg-orange-50 hover:text-orange-600" aria-label="Back to the week"><flux:icon.x-mark class="size-3.5" /></button>
+            @endif
+        </div>
+    </div>
+    <nav class="flex flex-wrap items-center gap-0.5" aria-label="Attendance tools">
+        <a href="{{ route('attendance.command-center') }}" class="{{ $ghostLink }}"><flux:icon.bolt class="size-4 text-orange-500" /> Command Center</a>
+        <a href="{{ route('attendance.reports') }}" class="{{ $ghostLink }}"><flux:icon.document-chart-bar class="size-4 text-orange-500" /> Reports</a>
+        <a href="{{ route('attendance.executive') }}" class="{{ $ghostLink }}"><flux:icon.presentation-chart-line class="size-4 text-orange-500" /> Executive</a>
+        @can('manage_biometric')
+            <a href="{{ route('attendance.biometric-control') }}" class="{{ $ghostLink }}"><flux:icon.finger-print class="size-4 text-orange-500" /> Biometric</a>
+        @endcan
+    </nav>
 </div>
 
 <div class="space-y-4">
 
-{{-- ═══════════════ TODAY KPI STRIP ═══════════════ --}}
+{{-- ═══════════════ KPI TILES (the current filter) ═══════════════ --}}
 @php
     $kpis = [
-        ['label' => 'Total Employees', 'value' => $stats['total'], 'sub' => 'active workforce', 'icon' => 'users', 'color' => '#71717a'],
-        ['label' => 'Present', 'value' => $stats['present'], 'sub' => $stats['present_pct'].'% of expected', 'icon' => 'check-circle', 'color' => '#10b981'],
-        ['label' => 'Absent', 'value' => $stats['absent'], 'sub' => $stats['absent_pct'].'% of expected', 'icon' => 'x-circle', 'color' => '#ef4444'],
-        ['label' => 'On Time', 'value' => $stats['on_time'], 'sub' => 'within grace', 'icon' => 'clock', 'color' => '#3b82f6'],
-        ['label' => 'Late Arrivals', 'value' => $stats['late'], 'sub' => $stats['late_pct'].'% of present', 'icon' => 'exclamation-triangle', 'color' => '#f59e0b'],
-        ['label' => 'WFH / Hybrid', 'value' => $stats['wfh'], 'sub' => 'working remotely', 'icon' => 'home', 'color' => '#8b5cf6'],
+        ['label' => 'Total Employees', 'value' => $stats['total'], 'sub' => 'active workforce', 'icon' => 'users', 'color' => '#71717a', 'pct' => null],
+        ['label' => 'Present', 'value' => $stats['present'], 'sub' => $stats['present_pct'].'% of expected', 'icon' => 'check-circle', 'color' => '#10b981', 'pct' => $stats['present_pct']],
+        ['label' => 'Absent', 'value' => $stats['absent'], 'sub' => $stats['absent_pct'].'% of expected', 'icon' => 'x-circle', 'color' => '#ef4444', 'pct' => $stats['absent_pct']],
+        ['label' => 'On Time', 'value' => $stats['on_time'], 'sub' => 'within grace', 'icon' => 'clock', 'color' => '#3b82f6', 'pct' => $stats['present'] > 0 ? round($stats['on_time'] * 100 / $stats['present'], 1) : 0],
+        ['label' => 'Late Arrivals', 'value' => $stats['late'], 'sub' => $stats['late_pct'].'% of present', 'icon' => 'exclamation-triangle', 'color' => '#f59e0b', 'pct' => $stats['late_pct']],
+        ['label' => 'WFH / Hybrid', 'value' => $stats['wfh'], 'sub' => 'working remotely', 'icon' => 'home', 'color' => '#8b5cf6', 'pct' => $stats['present'] > 0 ? min(100, round($stats['wfh'] * 100 / $stats['present'], 1)) : 0],
     ];
 @endphp
 <div class="flex items-center gap-2 text-[11px] font-bold text-zinc-400">
     <flux:icon.funnel class="size-3.5 text-orange-400" /> Metrics below reflect the current filter · <span class="text-orange-500">{{ $weekLabel }}</span>
 </div>
-<div class="h-1"></div>
-<div class="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+<div class="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6" data-kpi-tiles>
     @foreach($kpis as $k)
-        <div class="ui-surface flex items-center gap-3 p-4 transition hover:-translate-y-0.5 hover:shadow-md">
-            <span class="inline-flex size-10 shrink-0 items-center justify-center rounded-xl" style="background: {{ $k['color'] }}1a; color: {{ $k['color'] }};"><flux:icon :icon="$k['icon']" class="size-5" /></span>
-            <div class="min-w-0">
-                <div class="text-xl font-black leading-none tabular-nums text-zinc-900 dark:text-white">{{ $k['value'] }}</div>
-                <div class="mt-0.5 line-clamp-2 break-words text-[9px] font-bold uppercase leading-snug tracking-wide text-zinc-400">{{ $k['label'] }}</div>
-                <div class="line-clamp-2 text-[9px] leading-snug text-zinc-400">{{ $k['sub'] }}</div>
+        <div class="ui-surface relative overflow-hidden p-4 transition hover:-translate-y-0.5 hover:shadow-md">
+            <span class="pointer-events-none absolute -right-6 -top-6 size-20 rounded-full opacity-[0.07]" style="background: {{ $k['color'] }}"></span>
+            <div class="flex items-start justify-between gap-2">
+                <span class="inline-flex size-9 shrink-0 items-center justify-center rounded-xl" style="background: {{ $k['color'] }}1a; color: {{ $k['color'] }};"><flux:icon :icon="$k['icon']" class="size-[18px]" /></span>
+                @if($k['pct'] !== null)
+                    <span class="rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums" style="background: {{ $k['color'] }}14; color: {{ $k['color'] }};">{{ rtrim(rtrim(number_format((float) $k['pct'], 1), '0'), '.') }}%</span>
+                @endif
             </div>
+            <div class="mt-3 text-2xl font-black leading-none tabular-nums text-zinc-900 dark:text-white">{{ $k['value'] }}</div>
+            <div class="mt-1 line-clamp-2 break-words text-[9px] font-bold uppercase leading-snug tracking-wide text-zinc-400">{{ $k['label'] }}</div>
+            <div class="line-clamp-2 text-[10px] leading-snug text-zinc-400">{{ $k['sub'] }}</div>
+            @if($k['pct'] !== null)
+                <div class="mt-2.5 h-1 overflow-hidden rounded-full bg-zinc-100 dark:bg-white/10"><div class="h-full rounded-full" style="width: {{ min(100, (float) $k['pct']) }}%; background: {{ $k['color'] }};"></div></div>
+            @endif
         </div>
     @endforeach
 </div>
@@ -166,18 +219,23 @@
     </div>
 @endif
 
-{{-- ═══════════════ ATTENDANCE LOG ═══════════════
+{{-- ═══════════════ ATTENDANCE LOG — date-wise ═══════════════
      No overflow-hidden here: it clipped the filter dropdowns in the header. --}}
-<div class="ui-surface">
-    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-orange-100/70 px-5 py-3.5">
-        <h3 class="flex items-center gap-2 text-sm font-black text-zinc-900 dark:text-white"><flux:icon.clock class="size-4 text-orange-500" /> Attendance Log
-            <span class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">· {{ $attendances->total() }} records</span>
-        </h3>
+<section class="ui-surface" data-attendance-log>
+    <div class="flex flex-wrap items-start justify-between gap-3 border-b border-orange-100/70 px-5 py-3.5 dark:border-white/10">
+        <div>
+            <h3 class="flex items-center gap-2 text-sm font-black text-zinc-900 dark:text-white">
+                <span class="inline-flex size-7 items-center justify-center rounded-lg bg-orange-50 text-orange-500 dark:bg-orange-500/10"><flux:icon.clock class="size-4" /></span>
+                Attendance Log
+                <span class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">· {{ $attendances->total() }} records</span>
+            </h3>
+            <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Date by date, in order of arrival. Select a row, or <span class="font-semibold text-zinc-700 dark:text-zinc-200">History</span>, for that person's whole day.</p>
+        </div>
         <div class="flex flex-wrap items-center gap-2">
             <div class="relative">
                 <flux:icon.magnifying-glass class="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-zinc-400" />
                 <input type="text" wire:model.live.debounce.300ms="search" placeholder="Search employee…"
-                    class="w-48 rounded-lg border border-orange-100 bg-white dark:bg-zinc-900 py-1.5 pl-8 pr-2.5 text-xs font-semibold text-zinc-600 dark:text-zinc-300 placeholder:text-zinc-400 focus:border-orange-400 focus:ring-0">
+                    class="w-48 rounded-lg border border-orange-100 bg-white py-1.5 pl-8 pr-2.5 text-xs font-semibold text-zinc-600 placeholder:text-zinc-400 focus:border-orange-400 focus:ring-0 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-300">
             </div>
             @if($filterDepartments->isNotEmpty())
                 <x-clean-select model="filterDepartment" :live="true"
@@ -200,21 +258,22 @@
                     ['value' => 'multiple_breaks', 'label' => 'Multiple breaks'],
                 ]" />
             {{-- Date range — filter the punch logs for an arbitrary span --}}
-            <div class="flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2 py-1" title="Filter logs by date range">
+            <div class="flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-2 py-1 dark:border-zinc-700 dark:bg-zinc-900" title="Filter logs by date range">
                 <flux:icon.calendar-days class="size-3.5 text-zinc-400" />
                 <input type="date" wire:model.live="dateFrom" max="{{ $dateTo && $dateTo < now()->toDateString() ? $dateTo : now()->toDateString() }}" aria-label="From date"
                     @disabled($date) title="{{ $date ? 'A single day is selected — clear it to use a range' : 'From date' }}"
-                    class="w-[7.5rem] border-0 bg-transparent p-0.5 text-xs font-semibold tabular-nums text-zinc-600 disabled:opacity-40 dark:text-zinc-300 focus:ring-0">
+                    class="w-[7.5rem] border-0 bg-transparent p-0.5 text-xs font-semibold tabular-nums text-zinc-600 focus:ring-0 disabled:opacity-40 dark:text-zinc-300">
                 <span class="text-zinc-300">–</span>
                 <input type="date" wire:model.live="dateTo" min="{{ $dateFrom }}" max="{{ now()->toDateString() }}" aria-label="To date"
                     @disabled($date) title="{{ $date ? 'A single day is selected — clear it to use a range' : 'To date' }}"
-                    class="w-[7.5rem] border-0 bg-transparent p-0.5 text-xs font-semibold tabular-nums text-zinc-600 disabled:opacity-40 dark:text-zinc-300 focus:ring-0">
+                    class="w-[7.5rem] border-0 bg-transparent p-0.5 text-xs font-semibold tabular-nums text-zinc-600 focus:ring-0 disabled:opacity-40 dark:text-zinc-300">
             </div>
             @if($hasActiveFilters)
-                <button wire:click="clearFilters" type="button" data-clear-filters class="inline-flex items-center gap-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 px-2.5 py-1.5 text-xs font-bold text-zinc-500 dark:text-zinc-400 transition hover:bg-zinc-200 dark:hover:bg-zinc-700"><flux:icon.x-mark class="size-3.5" /> Clear filters</button>
+                <button wire:click="clearFilters" type="button" data-clear-filters class="inline-flex items-center gap-1 rounded-lg bg-zinc-100 px-2.5 py-1.5 text-xs font-bold text-zinc-500 transition hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"><flux:icon.x-mark class="size-3.5" /> Clear filters</button>
             @endif
         </div>
     </div>
+
     {{-- What the log shows, in the reader's date format — or why it shows nothing. --}}
     <div class="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-orange-100/70 px-5 py-2 text-xs dark:border-white/10">
         @if($rangeError)
@@ -230,127 +289,260 @@
             ? ['emerald' => 'border-emerald-500 bg-emerald-500 text-white', 'amber' => 'border-amber-500 bg-amber-500 text-white', 'rose' => 'border-rose-500 bg-rose-500 text-white', 'violet' => 'border-violet-500 bg-violet-500 text-white'][$tone]
             : ['emerald' => 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300', 'amber' => 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300', 'rose' => 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300', 'violet' => 'border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100 dark:border-violet-500/30 dark:bg-violet-500/10 dark:text-violet-300'][$tone];
     @endphp
-    <div class="flex flex-wrap items-center gap-2 border-b border-orange-100/70 px-5 py-2.5 dark:border-white/10" data-audit-chips>
-        <span class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Audit</span>
-        @foreach([
-            ['late', 'Late entries', $stats['late'], 'amber'],
-            ['missed_punch', 'Missed punches', $auditCounts['missed'] ?? null, 'rose'],
-            ['multiple_breaks', 'Multiple breaks', $auditCounts['multiple_breaks'] ?? null, 'violet'],
-        ] as [$key, $chipLabel, $count, $tone])
-            <button type="button" wire:click="$set('status', '{{ $status === $key ? '' : $key }}')" data-audit-chip="{{ $key }}"
-                class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold transition {{ $auditChip($status === $key, $tone) }}">
-                {{ $chipLabel }} <span class="tabular-nums">{{ $count ?? '—' }}</span>
-            </button>
-        @endforeach
-        @if($auditCounts)
-            <span class="text-[11px] text-zinc-500 dark:text-zinc-400">{{ $auditCounts['with_breaks'] }} with a break{{ $auditCounts['duplicates'] ? ' · '.$auditCounts['duplicates'].' with duplicate scans' : '' }}</span>
-        @else
-            <span class="text-[11px] text-zinc-500 dark:text-zinc-400">Narrow the dates or employees to count missed punches and breaks.</span>
-        @endif
+    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-orange-100/70 px-5 py-2.5 dark:border-white/10">
+        <div class="flex flex-wrap items-center gap-2" data-audit-chips>
+            <span class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Audit</span>
+            @foreach([
+                ['late', 'Late entries', $stats['late'], 'amber'],
+                ['missed_punch', 'Missed punches', $auditCounts['missed'] ?? null, 'rose'],
+                ['multiple_breaks', 'Multiple breaks', $auditCounts['multiple_breaks'] ?? null, 'violet'],
+            ] as [$key, $chipLabel, $count, $tone])
+                <button type="button" wire:click="$set('status', '{{ $status === $key ? '' : $key }}')" data-audit-chip="{{ $key }}"
+                    class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold transition {{ $auditChip($status === $key, $tone) }}">
+                    {{ $chipLabel }} <span class="tabular-nums">{{ $count ?? '—' }}</span>
+                </button>
+            @endforeach
+            @if($auditCounts)
+                <span class="text-[11px] text-zinc-500 dark:text-zinc-400">{{ $auditCounts['with_breaks'] }} with a break{{ $auditCounts['duplicates'] ? ' · '.$auditCounts['duplicates'].' with duplicate scans' : '' }}</span>
+            @else
+                <span class="text-[11px] text-zinc-500 dark:text-zinc-400">Narrow the dates or employees to count missed punches and breaks.</span>
+            @endif
+        </div>
+        {{-- How to read the timeline and the worked bar. --}}
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-semibold text-zinc-500 dark:text-zinc-400" data-log-legend>
+            <span class="inline-flex items-center gap-1"><span class="h-2 w-4 rounded-full bg-orange-200 ring-1 ring-inset ring-orange-300"></span> Shift</span>
+            <span class="inline-flex items-center gap-1"><span class="h-2 w-4 rounded-full bg-emerald-500"></span> Worked</span>
+            <span class="inline-flex items-center gap-1"><span class="h-2 w-4 rounded-full bg-amber-400"></span> Auto check-out</span>
+            <span class="inline-flex items-center gap-1"><span class="h-2 w-4 rounded-full border border-dashed border-rose-400 bg-rose-100"></span> No check-out</span>
+            <span class="inline-flex items-center gap-1"><span class="size-2 rotate-45 rounded-[2px] bg-rose-500"></span> Missed punch</span>
+        </div>
     </div>
 
     @if($punchLog)
         @include('livewire.attendance.partials.employee-punch-log', ['log' => $punchLog])
     @endif
+
     <div class="overflow-x-auto">
         @if($attendances->count() > 0)
-            <table class="w-full text-left">
-                <thead class="border-b border-orange-100/70 bg-orange-50/40">
+            <table class="w-full min-w-[1180px] text-left" data-log-table>
+                <thead class="border-b border-orange-100/70 bg-orange-50/40 dark:border-white/10 dark:bg-white/[0.02]">
                     <tr class="text-[9px] font-bold uppercase tracking-widest text-zinc-400">
-                        <th class="px-5 py-2.5">Employee</th>
-                        <th class="py-2.5">Date</th>
-                        <th class="py-2.5">Check In</th>
-                        <th class="py-2.5">Check Out</th>
-                        <th class="py-2.5">Punches</th>
-                        <th class="py-2.5">Break</th>
-                        <th class="py-2.5">Hours</th>
-                        <th class="py-2.5">Method</th>
-                        <th class="py-2.5">Status</th>
-                        <th class="px-5 py-2.5 text-right">Mode</th>
+                        <th class="w-[230px] px-5 py-2.5">Employee</th>
+                        <th class="w-[150px] py-2.5">In · Out</th>
+                        <th class="px-3 py-2.5">Day timeline &amp; punches</th>
+                        <th class="w-[170px] py-2.5 pr-4">Worked vs shift</th>
+                        <th class="w-[90px] py-2.5">Breaks</th>
+                        <th class="w-[150px] py-2.5">Status</th>
+                        <th class="w-[150px] px-5 py-2.5 text-right">Actions</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-zinc-50">
-                    @foreach($attendances as $log)
-                        @php
-                            $name = $log->employee?->user?->name ?? '—';
-                            $initials = collect(explode(' ', $name))->map(fn ($n) => $n[0] ?? '')->take(2)->join('');
-                            $offLabel = $log->weeklyOffLabel();
-                            [$badge, $statusLabel] = $offLabel ? ['bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300', $offLabel] : match ($log->status) {
-                                'on_time' => ['bg-emerald-50 text-emerald-600', 'Present'],
-                                'late' => ['bg-amber-50 text-amber-600', 'Late'],
-                                'absent' => ['bg-rose-50 text-rose-500', 'Absent'],
-                                'remote' => ['bg-blue-50 text-blue-600', 'Remote'],
-                                default => ['bg-zinc-50 dark:bg-zinc-800/50 text-zinc-500 dark:text-zinc-400', ucfirst($log->status ?? '—')],
-                            };
-                            $rowMode = AttendanceMode::tryFromValue($log->work_mode ?? 'office');
-                            $inMethod = PunchMethod::tryFrom((string) $log->check_in_method);
-                            $outMethod = PunchMethod::tryFrom((string) $log->check_out_method);
-                            $methods = collect([$inMethod, $outMethod])->filter()->unique();
-                            $hrs = app(\App\Services\Attendance\AttendanceCalculator::class)->workedHours($log);
-                        @endphp
-                        <tr wire:click="openEmployeeDrawer({{ $log->employee_id }})" class="cursor-pointer text-xs transition {{ $log->is_regularized ? 'bg-blue-50/60 hover:bg-blue-50 dark:bg-blue-950/20' : 'hover:bg-orange-50/40' }}">
-                            <td class="px-5 py-2.5">
-                                <div class="flex items-center gap-2.5">
-                                    <div class="flex size-8 shrink-0 items-center justify-center rounded-xl bg-orange-100 text-[10px] font-black text-orange-600">{{ $initials }}</div>
-                                    <div class="min-w-0">
-                                        <div class="truncate font-black text-zinc-900 dark:text-white">{{ $name }}</div>
-                                        <div class="flex items-center gap-1.5 text-[9px] text-zinc-400">{{ $log->employee?->employee_id ?? '—' }}
-                                            @if((string) $filterEmployee !== (string) $log->employee_id)
-                                                <button type="button" wire:click.stop="$set('filterEmployee', '{{ $log->employee_id }}')" class="font-semibold text-orange-600 hover:underline dark:text-orange-400" data-open-punch-log="{{ $log->employee_id }}">Punch log</button>
-                                            @endif
+                @foreach(collect($attendances->items())->groupBy(fn ($a) => $a->date->toDateString()) as $groupDate => $groupRows)
+                    @php
+                        $group = $dayGroups[$groupDate] ?? ['window' => AttendanceRegister::window([]), 'records' => $groupRows->count(), 'present' => 0, 'late' => 0, 'missed' => null];
+                        $groupTicks = $ticksFor($group['window']);
+                        $groupDay = \Carbon\CarbonImmutable::parse($groupDate);
+                    @endphp
+                    <tbody wire:key="log-day-{{ $groupDate }}" data-log-date="{{ $groupDate }}" class="divide-y divide-zinc-100/80 border-b border-orange-100/70 dark:divide-white/5 dark:border-white/10">
+                        <tr class="bg-gradient-to-r from-orange-50/90 via-orange-50/30 to-transparent dark:from-white/[0.04] dark:via-transparent">
+                            <td colspan="2" class="px-5 py-2.5">
+                                <div class="flex items-center gap-3">
+                                    <span class="flex size-10 shrink-0 flex-col items-center justify-center rounded-xl bg-white leading-none shadow-sm ring-1 ring-orange-100 dark:bg-zinc-900 dark:ring-white/10">
+                                        <span class="text-[8px] font-bold uppercase tracking-wider text-orange-500">{{ $groupDay->format('M') }}</span>
+                                        <span class="mt-0.5 text-sm font-black text-zinc-900 dark:text-white">{{ $groupDay->format('d') }}</span>
+                                    </span>
+                                    <div>
+                                        <div class="flex items-center gap-1.5 text-xs font-black text-zinc-900 dark:text-white">{{ $groupDay->format('l') }}
+                                            @if($groupDay->isToday())<span class="rounded-full bg-emerald-100 px-1.5 py-px text-[9px] font-bold uppercase text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">Today</span>@endif
                                         </div>
+                                        <div class="text-[10px] text-zinc-500 dark:text-zinc-400">{{ $groupDay->userDate() }}</div>
                                     </div>
                                 </div>
                             </td>
-                            <td class="py-2.5">
-                                <div class="whitespace-nowrap font-bold text-zinc-800 dark:text-zinc-100">{{ $log->date->toImmutable()->userDate() }}</div>
-                                <div class="text-[9px] text-zinc-400">{{ $log->date->format('l') }}</div>
-                                @if($log->is_regularized)<span class="mt-0.5 inline-flex items-center gap-0.5 rounded bg-blue-100 px-1 py-px text-[8px] font-black uppercase tracking-wide text-blue-600 dark:bg-blue-900/40 dark:text-blue-300"><flux:icon.pencil-square class="size-2.5" /> Regularised</span>@endif
+                            <td class="px-3 pb-1.5 pt-2.5 align-bottom">
+                                <div class="relative h-3.5" aria-hidden="true">
+                                    @foreach($groupTicks as $tick)
+                                        @if($tick['pct'] > 2 && $tick['pct'] < 98)
+                                            <span class="absolute -translate-x-1/2 whitespace-nowrap text-[9px] font-semibold tabular-nums text-zinc-400" style="left: {{ $tick['pct'] }}%">{{ $hourAt($tick['at']) }}</span>
+                                        @endif
+                                    @endforeach
+                                </div>
                             </td>
-                            <td class="py-2.5">
-                                <span class="font-mono font-bold tabular-nums {{ $log->is_regularized ? 'text-blue-600 dark:text-blue-300' : 'text-zinc-800 dark:text-zinc-100' }}">{{ $log->check_in?->toImmutable()->userTime() ?? '—' }}</span>
-                                @if($log->original_check_in && $log->check_in && ! $log->original_check_in->equalTo($log->check_in))
-                                    <div class="text-[9px] font-semibold text-zinc-400 line-through" title="Original punch (preserved)">{{ $log->original_check_in->toImmutable()->userTime() }}</div>
-                                @endif
-                                @if($log->is_late)<div class="text-[9px] font-bold text-amber-600">+{{ (int) ($log->late_minutes ?? 0) }}m late</div>@endif
+                            <td colspan="4" class="px-5 py-2.5">
+                                <div class="flex flex-wrap items-center justify-end gap-1.5 text-[10px] font-bold" data-log-date-totals>
+                                    <span class="rounded-full bg-white px-2 py-0.5 text-zinc-600 ring-1 ring-inset ring-zinc-200 dark:bg-zinc-900 dark:text-zinc-300 dark:ring-white/10">{{ $group['records'] }} {{ \Illuminate\Support\Str::plural('record', $group['records']) }}</span>
+                                    <span class="rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-700 ring-1 ring-inset ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/30">{{ $group['present'] }} present</span>
+                                    @if($group['late'] > 0)<span class="rounded-full bg-amber-50 px-2 py-0.5 text-amber-700 ring-1 ring-inset ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/30">{{ $group['late'] }} late</span>@endif
+                                    @if(($group['missed'] ?? 0) > 0)<span class="rounded-full bg-rose-50 px-2 py-0.5 text-rose-700 ring-1 ring-inset ring-rose-200 dark:bg-rose-500/10 dark:text-rose-300 dark:ring-rose-500/30">{{ $group['missed'] }} missed {{ \Illuminate\Support\Str::plural('punch', $group['missed']) }}</span>@endif
+                                </div>
                             </td>
-                            <td class="py-2.5 font-mono tabular-nums">
-                                @if($log->check_out)
-                                    <span class="font-bold {{ $log->is_auto_checkout ? 'text-orange-500' : ($log->is_regularized ? 'text-blue-600 dark:text-blue-300' : 'text-zinc-800 dark:text-zinc-100') }}">{{ $log->check_out->toImmutable()->userTime() }}</span>
-                                    @if($log->original_check_out && ! $log->original_check_out->equalTo($log->check_out))
-                                        <div class="text-[9px] font-semibold text-zinc-400 line-through" title="Original punch (preserved)">{{ $log->original_check_out->toImmutable()->userTime() }}</div>
-                                    @endif
-                                    @if($log->is_auto_checkout)<div class="text-[9px] font-bold uppercase text-orange-500" title="System auto punch-out — please regularize">Auto OUT</div>@endif
-                                @elseif($log->check_in && ($rowStatus[$log->id]['live'] ?? false))<span class="inline-flex items-center gap-1 font-bold text-emerald-600" data-attendance-state="{{ $rowStatus[$log->id]['state'] }}"><span class="size-1.5 animate-pulse rounded-full bg-emerald-500"></span> {{ ($rowStatus[$log->id]['on_break'] ?? false) ? 'ON BREAK' : 'LIVE' }}</span>
-                                @elseif($log->check_in && ($rowStatus[$log->id]['last_out'] ?? null))<span class="font-bold text-zinc-800 dark:text-zinc-100" data-attendance-state="completed">{{ $rowStatus[$log->id]['last_out']->toImmutable()->userTime() }}</span>
-                                @elseif($log->check_in)<span class="font-bold text-amber-500" data-attendance-state="missing_checkout">missing</span>
-                                @else<span class="text-zinc-300">—</span>@endif
-                            </td>
-                            <td class="py-2.5" data-punches wire:click.stop>
-                                <x-attendance.punch-timeline :punches="$punchesByDay[$log->employee_id.'|'.$log->date->toDateString()] ?? []" :title="'All punches — '.$log->date->toImmutable()->userDate()" />
-                            </td>
-                            @php $rowAudit = $audit[$log->id] ?? null; @endphp
-                            <td class="py-2.5" data-break-cell>
-                                <div class="font-semibold tabular-nums text-zinc-600 dark:text-zinc-300">{{ (int) ($log->break_minutes ?? 0) }}m</div>
-                                @if(($rowAudit['breaks'] ?? 0) > 0)
-                                    <div class="text-[9px] font-bold {{ $rowAudit['breaks'] >= 2 ? 'text-violet-600 dark:text-violet-300' : 'text-zinc-400' }}">{{ $rowAudit['breaks'] }} {{ \Illuminate\Support\Str::plural('break', $rowAudit['breaks']) }}</div>
-                                @endif
-                            </td>
-                            <td class="py-2.5"><span class="font-black tabular-nums {{ $hrs >= 8 ? 'text-emerald-600' : ($hrs > 0 ? 'text-zinc-800 dark:text-zinc-100' : 'text-zinc-300') }}">{{ $hrs > 0 ? number_format($hrs, 1).'h' : '—' }}</span></td>
-                            <td class="py-2.5">
-                                @forelse($methods as $m)
-                                    <span class="mr-1 inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px] font-bold {{ $m->chipClass() }}"><flux:icon :icon="$m->icon()" class="size-2.5" /> {{ $m->labelWithGuidance() }}</span>
-                                @empty<span class="text-zinc-300">—</span>@endforelse
-                            </td>
-                            <td class="py-2.5">
-                                <span class="rounded-full px-2 py-0.5 text-[9px] font-bold {{ $badge }}">{{ $statusLabel }}</span>
-                                @if($rowAudit['missed'] ?? false)<div class="mt-1"><span class="rounded-full bg-rose-50 px-2 py-0.5 text-[9px] font-bold text-rose-600 dark:bg-rose-500/10 dark:text-rose-300" data-flag="missed_punch">Missed punch</span></div>@endif
-                                @if(($rowAudit['duplicates'] ?? 0) > 0)<div class="mt-1"><span class="rounded-full bg-zinc-100 px-2 py-0.5 text-[9px] font-bold text-zinc-500 dark:bg-white/10 dark:text-zinc-300" data-flag="duplicate" title="Scanned more than once within a minute — counted once">Duplicate scan</span></div>@endif
-                            </td>
-                            <td class="px-5 py-2.5 text-right"><span class="inline-flex items-center rounded px-1.5 py-0.5 text-[8px] font-bold uppercase {{ $rowMode->chipClass() }}">{{ $rowMode->shortLabel() }}</span></td>
                         </tr>
-                    @endforeach
-                </tbody>
+
+                        @foreach($groupRows as $log)
+                            @php
+                                $line = $lines[$log->employee_id.'|'.$groupDate] ?? null;
+                                $name = $log->employee?->user?->name ?? '—';
+                                $initials = \App\Services\Attendance\LiveAttendanceService::initials($name);
+                                $offLabel = $log->weeklyOffLabel();
+                                [$badge, $statusLabel] = $offLabel ? ['bg-zinc-100 text-zinc-600 ring-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:ring-white/10', $offLabel] : match ($log->status) {
+                                    'on_time' => ['bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/30', 'Present'],
+                                    'late' => ['bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/30', 'Late'],
+                                    'absent' => ['bg-rose-50 text-rose-600 ring-rose-200 dark:bg-rose-500/10 dark:text-rose-300 dark:ring-rose-500/30', 'Absent'],
+                                    'remote' => ['bg-sky-50 text-sky-700 ring-sky-200 dark:bg-sky-500/10 dark:text-sky-300 dark:ring-sky-500/30', 'Remote'],
+                                    default => ['bg-zinc-50 text-zinc-500 ring-zinc-200 dark:bg-zinc-800/50 dark:text-zinc-400 dark:ring-white/10', ucfirst($log->status ?? '—')],
+                                };
+                                $rowMode = AttendanceMode::tryFromValue($log->work_mode ?? 'office');
+                                $methods = collect([PunchMethod::tryFrom((string) $log->check_in_method), PunchMethod::tryFrom((string) $log->check_out_method)])->filter()->unique();
+                                $rowAudit = $audit[$log->id] ?? null;
+                                $rowState = $rowStatus[$log->id] ?? [];
+                                $pct = $line && $line['expected_minutes'] > 0 ? (int) floor($line['worked_minutes'] * 100 / $line['expected_minutes']) : 0;
+                            @endphp
+                            <tr wire:key="log-{{ $log->id }}" wire:click="openDayHistory({{ $log->employee_id }}, '{{ $groupDate }}')" data-log-row="{{ $log->id }}"
+                                class="group cursor-pointer align-top text-xs transition {{ $log->is_regularized ? 'bg-blue-50/50 hover:bg-blue-50 dark:bg-blue-950/20' : 'hover:bg-orange-50/50 dark:hover:bg-white/[0.03]' }}">
+                                {{-- Employee --}}
+                                <td class="px-5 py-3">
+                                    <div class="flex items-center gap-3">
+                                        <div class="relative shrink-0">
+                                            <div class="flex size-9 items-center justify-center rounded-full bg-gradient-to-br from-orange-400 to-amber-400 text-[11px] font-black text-white shadow-sm shadow-orange-200 dark:shadow-none">{{ $initials }}</div>
+                                            @if($line['live'] ?? false)<span class="absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-white bg-emerald-500 dark:border-zinc-900" title="In now"></span>@endif
+                                        </div>
+                                        <div class="min-w-0">
+                                            <div class="truncate font-black text-zinc-900 dark:text-white">{{ $name }}</div>
+                                            <div class="truncate text-[10px] text-zinc-400">{{ $log->employee?->employee_id ?? '—' }}@if($line && $line['department'] !== '—') · {{ $line['department'] }}@endif</div>
+                                            @if((string) $filterEmployee !== (string) $log->employee_id)
+                                                <button type="button" wire:click.stop="$set('filterEmployee', '{{ $log->employee_id }}')" class="text-[10px] font-semibold text-orange-600 hover:underline dark:text-orange-400" data-open-punch-log="{{ $log->employee_id }}">Punch log</button>
+                                            @endif
+                                        </div>
+                                    </div>
+                                </td>
+
+                                {{-- In · Out --}}
+                                <td class="py-3 pr-3">
+                                    <div class="space-y-1 font-mono tabular-nums">
+                                        <div class="flex flex-wrap items-center gap-1.5">
+                                            <span class="size-1.5 shrink-0 rounded-full bg-emerald-500"></span>
+                                            <span class="font-bold {{ $log->is_regularized ? 'text-blue-600 dark:text-blue-300' : 'text-zinc-800 dark:text-zinc-100' }}">{{ $log->check_in?->toImmutable()->userTime() ?? '—' }}</span>
+                                            @if($log->is_late)<span class="rounded bg-amber-50 px-1 py-px font-sans text-[9px] font-bold text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">+{{ (int) ($log->late_minutes ?? 0) }}m late</span>@endif
+                                        </div>
+                                        @if($log->original_check_in && $log->check_in && ! $log->original_check_in->equalTo($log->check_in))
+                                            <div class="pl-3 text-[9px] font-semibold text-zinc-400 line-through" title="Original punch (preserved)">{{ $log->original_check_in->toImmutable()->userTime() }}</div>
+                                        @endif
+                                        <div class="flex flex-wrap items-center gap-1.5">
+                                            <span class="size-1.5 shrink-0 rounded-full bg-orange-500"></span>
+                                            @if($log->check_out)
+                                                <span class="font-bold {{ $log->is_auto_checkout ? 'text-orange-500' : ($log->is_regularized ? 'text-blue-600 dark:text-blue-300' : 'text-zinc-800 dark:text-zinc-100') }}">{{ $log->check_out->toImmutable()->userTime() }}</span>
+                                                @if($log->is_auto_checkout)<span class="rounded bg-orange-50 px-1 py-px font-sans text-[9px] font-bold uppercase text-orange-600 dark:bg-orange-500/10" title="System auto punch-out — please regularize">Auto OUT</span>@endif
+                                            @elseif($log->check_in && ($rowState['live'] ?? false))
+                                                <span class="inline-flex items-center gap-1 font-sans font-bold text-emerald-600" data-attendance-state="{{ $rowState['state'] }}"><span class="size-1.5 animate-pulse rounded-full bg-emerald-500"></span> {{ ($rowState['on_break'] ?? false) ? 'ON BREAK' : 'LIVE' }}</span>
+                                            @elseif($log->check_in && ($rowState['last_out'] ?? null))
+                                                <span class="font-bold text-zinc-800 dark:text-zinc-100" data-attendance-state="completed">{{ $rowState['last_out']->toImmutable()->userTime() }}</span>
+                                            @elseif($log->check_in)
+                                                <span class="font-sans font-bold text-rose-500" data-attendance-state="missing_checkout">missing</span>
+                                            @else
+                                                <span class="text-zinc-300">—</span>
+                                            @endif
+                                        </div>
+                                        @if($log->original_check_out && $log->check_out && ! $log->original_check_out->equalTo($log->check_out))
+                                            <div class="pl-3 text-[9px] font-semibold text-zinc-400 line-through" title="Original punch (preserved)">{{ $log->original_check_out->toImmutable()->userTime() }}</div>
+                                        @endif
+                                    </div>
+                                    @if($methods->isNotEmpty())
+                                        <div class="mt-1.5 flex flex-wrap gap-1">
+                                            @foreach($methods as $m)
+                                                <span class="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px] font-bold {{ $m->chipClass() }}" title="{{ $m->labelWithGuidance() }}"><flux:icon :icon="$m->icon()" class="size-2.5" /> {{ $m->label() }}</span>
+                                            @endforeach
+                                        </div>
+                                    @endif
+                                </td>
+
+                                {{-- Day timeline + every punch --}}
+                                <td class="px-3 py-3" data-punches>
+                                    @if($line)
+                                        @include('livewire.attendance.partials.day-timeline-bar', ['line' => $line, 'window' => $group['window'], 'ticks' => $groupTicks, 'size' => 'sm'])
+                                    @endif
+                                    <div class="mt-2 flex items-start justify-between gap-2">
+                                        <x-attendance.punch-timeline :punches="$punchesByDay[$log->employee_id.'|'.$groupDate] ?? []" :title="'All punches — '.$log->date->toImmutable()->userDate()" />
+                                        @if($line && ($line['missed_count'] > 0 || $line['extra_taps'] > 0))
+                                            <div class="shrink-0 space-y-0.5 text-right text-[9px] font-bold">
+                                                @if($line['missed_count'] > 0)<div class="text-rose-600 dark:text-rose-400">{{ $line['missed_count'] }} missed</div>@endif
+                                                @if($line['extra_taps'] > 0)<div class="text-zinc-400">{{ $line['extra_taps'] }} extra {{ \Illuminate\Support\Str::plural('tap', $line['extra_taps']) }}</div>@endif
+                                            </div>
+                                        @endif
+                                    </div>
+                                </td>
+
+                                {{-- Worked vs shift --}}
+                                <td class="py-3 pr-4" data-worked-cell>
+                                    @if($line && $line['missing_checkout'])
+                                        <div class="text-[11px] font-bold text-rose-600 dark:text-rose-400">No check-out</div>
+                                        <div class="mt-0.5 text-[10px] leading-snug text-zinc-400">Not counted until the day is regularised</div>
+                                    @elseif($line && $line['present'])
+                                        <div class="flex items-baseline justify-between gap-2">
+                                            <span class="text-sm font-black tabular-nums text-zinc-900 dark:text-white">{{ $hm($line['worked_minutes']) }}</span>
+                                            <span class="text-[10px] font-black tabular-nums {{ $progressText[$line['progress']] }}">{{ $pct }}%</span>
+                                        </div>
+                                        <div class="mt-1 h-1.5 overflow-hidden rounded-full bg-zinc-100 dark:bg-white/10">
+                                            <div class="h-full rounded-full {{ $progressBar[$line['progress']] }} {{ $line['live'] ? 'animate-pulse' : '' }}" style="width: {{ min(100, $pct) }}%"></div>
+                                        </div>
+                                        <div class="mt-1 flex flex-wrap items-center gap-1 text-[10px] text-zinc-400">
+                                            of {{ $hm($line['expected_minutes']) }}{{ $line['live'] ? ' · so far' : '' }}
+                                            @if($line['ot_minutes'] > 0)<span class="rounded bg-violet-50 px-1 py-px font-bold text-violet-700 dark:bg-violet-500/10 dark:text-violet-300">+{{ $short($line['ot_minutes']) }} OT</span>@endif
+                                        </div>
+                                    @else
+                                        @php $hrs = app(\App\Services\Attendance\AttendanceCalculator::class)->workedHours($log); @endphp
+                                        <span class="font-black tabular-nums {{ $hrs > 0 ? 'text-zinc-800 dark:text-zinc-100' : 'text-zinc-300' }}">{{ $hrs > 0 ? number_format($hrs, 1).'h' : '—' }}</span>
+                                    @endif
+                                </td>
+
+                                {{-- Breaks --}}
+                                <td class="py-3" data-break-cell>
+                                    @php $breakMinutes = $line['break_minutes'] ?? (int) ($log->break_minutes ?? 0); @endphp
+                                    <div class="font-bold tabular-nums {{ ($line['excess_break'] ?? false) ? 'text-rose-600 dark:text-rose-400' : 'text-zinc-700 dark:text-zinc-200' }}">{{ $short($breakMinutes) }}</div>
+                                    @if(($rowAudit['breaks'] ?? 0) > 0)
+                                        <div class="text-[9px] font-bold {{ $rowAudit['breaks'] >= 2 ? 'text-violet-600 dark:text-violet-300' : 'text-zinc-400' }}">{{ $rowAudit['breaks'] }} {{ \Illuminate\Support\Str::plural('break', $rowAudit['breaks']) }}</div>
+                                    @endif
+                                </td>
+
+                                {{-- Status + flags --}}
+                                <td class="py-3">
+                                    <div class="flex flex-wrap items-center gap-1">
+                                        <span class="rounded-full px-2 py-0.5 text-[10px] font-bold ring-1 ring-inset {{ $badge }}">{{ $statusLabel }}</span>
+                                        @if($rowMode)<span class="rounded px-1.5 py-0.5 text-[8px] font-bold uppercase {{ $rowMode->chipClass() }}">{{ $rowMode->shortLabel() }}</span>@endif
+                                    </div>
+                                    <div class="mt-1 flex flex-wrap gap-1">
+                                        @if($rowAudit['missed'] ?? false)<span class="rounded-full bg-rose-50 px-2 py-0.5 text-[9px] font-bold text-rose-600 dark:bg-rose-500/10 dark:text-rose-300" data-flag="missed_punch">Missed punch</span>@endif
+                                        @if(($rowAudit['duplicates'] ?? 0) > 0)<span class="rounded-full bg-zinc-100 px-2 py-0.5 text-[9px] font-bold text-zinc-500 dark:bg-white/10 dark:text-zinc-300" data-flag="duplicate" title="Scanned more than once within a minute — counted once">Duplicate scan</span>@endif
+                                        @if($log->is_regularized)<span class="inline-flex items-center gap-0.5 rounded-full bg-blue-50 px-2 py-0.5 text-[9px] font-bold text-blue-600 dark:bg-blue-500/10 dark:text-blue-300"><flux:icon.pencil-square class="size-2.5" /> Regularised</span>@endif
+                                    </div>
+                                </td>
+
+                                {{-- Actions --}}
+                                <td class="px-5 py-3 text-right" wire:click.stop>
+                                    <div class="inline-flex items-center gap-1">
+                                        <button type="button" wire:click="openDayHistory({{ $log->employee_id }}, '{{ $groupDate }}')" data-day-history-open="{{ $log->id }}"
+                                            class="inline-flex items-center gap-1 rounded-lg border border-orange-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-orange-600 shadow-sm transition hover:border-orange-300 hover:bg-orange-50 dark:border-orange-500/30 dark:bg-zinc-900 dark:text-orange-400 dark:hover:bg-orange-500/10">
+                                            <flux:icon.clock class="size-3.5" /> History
+                                        </button>
+                                        <flux:dropdown position="bottom" align="end">
+                                            <button type="button" class="inline-flex size-7 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-white/10 dark:hover:text-zinc-200" aria-label="More actions for {{ $name }}"><flux:icon.ellipsis-vertical class="size-4" /></button>
+                                            <flux:menu>
+                                                <flux:menu.item icon="clock" wire:click="openDayHistory({{ $log->employee_id }}, '{{ $groupDate }}')">Day history</flux:menu.item>
+                                                <flux:menu.item icon="identification" wire:click="openEmployeeDrawer({{ $log->employee_id }})">Employee 360°</flux:menu.item>
+                                                <flux:menu.item icon="list-bullet" wire:click="$set('filterEmployee', '{{ $log->employee_id }}')">Punch log for the range</flux:menu.item>
+                                                @if($canSeeLive)
+                                                    <flux:menu.item icon="signal" href="{{ route('attendance.live', ['tab' => 'employee', 'employee' => $log->employee_id, 'from' => $log->date->copy()->subDays(29)->toDateString(), 'to' => $groupDate]) }}">Last 30 days on the Live board</flux:menu.item>
+                                                @endif
+                                                @if($canCorrect)
+                                                    <flux:menu.separator />
+                                                    <flux:menu.item icon="pencil-square" wire:click="openMarkModal({{ $log->employee_id }}, '{{ $groupDate }}')">Correct this day</flux:menu.item>
+                                                @endif
+                                            </flux:menu>
+                                        </flux:dropdown>
+                                    </div>
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                @endforeach
             </table>
         @else
             <div class="py-14 text-center text-sm text-zinc-400">
@@ -361,12 +553,12 @@
         @endif
     </div>
     @if($attendances->hasPages())
-        <div class="flex flex-wrap items-center justify-between gap-2 border-t border-orange-100/70 bg-orange-50/30 px-5 py-3">
+        <div class="flex flex-wrap items-center justify-between gap-2 border-t border-orange-100/70 bg-orange-50/30 px-5 py-3 dark:border-white/10 dark:bg-white/[0.02]">
             <div class="text-xs text-zinc-400">Showing {{ $attendances->firstItem() }}–{{ $attendances->lastItem() }} of {{ $attendances->total() }}</div>
             {{ $attendances->links() }}
         </div>
     @endif
-</div>
+</section>
 
 </div>{{-- /space-y --}}
 
@@ -606,6 +798,11 @@ EMPLOYEE 360 DRAWER (480px, right)
     </div>
 @endif
 
+{{-- Day history: one person's date, from a log row --}}
+@if($dayHistory)
+    @include('livewire.attendance.partials.day-history')
+@endif
+
 {{-- ══════════════════════════════════════════
 REVIEW REGULARISATION MODAL
 ══════════════════════════════════════════ --}}
@@ -713,12 +910,12 @@ HR MARK ATTENDANCE MODAL
                     <div class="shrink-0 rounded-xl bg-orange-50 p-2.5"><flux:icon.pencil-square class="size-5 text-orange-500" /></div>
                     <div>
                         <flux:heading size="lg">Mark Attendance for Employee</flux:heading>
-                        <flux:subheading>Creates a regularisation request pending approval.</flux:subheading>
+                        <flux:subheading>Applies straight away and is recorded against your name.</flux:subheading>
                     </div>
                 </div>
                 <div class="flex gap-3 rounded-xl border border-amber-100 bg-amber-50 p-3">
                     <flux:icon.information-circle class="mt-0.5 size-4 shrink-0 text-amber-600" />
-                    <p class="text-xs leading-relaxed text-amber-700">This creates a <strong>Regularisation Request</strong> sent to the employee's <strong>Line Manager</strong> for approval.</p>
+                    <p class="text-xs leading-relaxed text-amber-700">The corrected times replace the day's check-in and check-out at once — hours, overtime, score and payroll follow — and the employee is told. The original punches are kept.</p>
                 </div>
                 <div class="space-y-4">
                     <x-clean-select model="markEmployeeId" label="Employee" placeholder="Select employee..." :live="false" :required="true"
@@ -741,11 +938,12 @@ HR MARK ATTENDANCE MODAL
                 </div>
                 <div class="flex justify-end gap-3 pt-2">
                     <button type="button" @click="$wire.set('showMarkModal', false)" class="rounded-xl border border-zinc-200 dark:border-zinc-800 px-4 py-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300 transition-colors hover:bg-zinc-50 dark:bg-zinc-800/50">Cancel</button>
-                    <flux:button wire:click="submitMarkAttendance" variant="primary" icon="paper-airplane">Submit for Approval</flux:button>
+                    <flux:button wire:click="submitMarkAttendance" variant="primary" icon="check">Apply correction</flux:button>
                 </div>
             </div>
         </div>
     </div>
 @endif
 
+</div>{{-- /max-w --}}
 </flux:main>

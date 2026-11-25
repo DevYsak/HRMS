@@ -17,6 +17,7 @@ use App\Notifications\AttendanceRegularisationNotification;
 use App\Services\Approvals\ClaimLockService;
 use App\Services\Attendance\AttendanceCalculator;
 use App\Services\Attendance\AttendanceRateService;
+use App\Services\Attendance\AttendanceRegister;
 use App\Services\Attendance\AttendanceStatusResolver;
 use App\Services\Attendance\PunchTimeline;
 use App\Services\Attendance\RegularisationNotices;
@@ -297,13 +298,28 @@ class AllAttendance extends Component
 
     public string $markReason = '';
 
-    public function openMarkModal(): void
+    /**
+     * Open Mark Attendance — empty, or for one person's date (from the Day
+     * history) with the day's recorded check-in, check-out and mode filled in.
+     */
+    public function openMarkModal(?int $employeeId = null, ?string $date = null): void
     {
         abort_unless(Auth::user()->canManageEmployees(), 403);
 
         $this->reset(['markEmployeeId', 'markDate', 'markCheckIn', 'markCheckOut', 'markReason']);
+        $this->resetErrorBag();
         $this->markWorkMode = 'office';
-        $this->markDate = now()->format('Y-m-d');
+        $this->markDate = $date !== null && self::isDate($date) && $date <= now()->format('Y-m-d') ? $date : now()->format('Y-m-d');
+
+        $employee = $employeeId !== null ? Employee::find($employeeId) : null;
+        if ($employee && Auth::user()->coversEmployee($employee)) {
+            $row = Attendance::where('employee_id', $employee->id)->where('date', $this->markDate)->first();
+            $this->markEmployeeId = (string) $employee->id;
+            $this->markCheckIn = $row?->check_in?->format('H:i') ?? '';
+            $this->markCheckOut = $row?->check_out?->format('H:i') ?? '';
+            $this->markWorkMode = in_array($row?->work_mode, ['office', 'wfh', 'remote'], true) ? $row->work_mode : 'office';
+        }
+
         $this->showMarkModal = true;
     }
 
@@ -320,6 +336,8 @@ class AllAttendance extends Component
         ]);
 
         $employee = Employee::with(['user', 'manager'])->findOrFail($this->markEmployeeId);
+        // Only someone in this HR's reach, as the employee list offers.
+        abort_unless(Auth::user()->coversEmployee($employee), 403);
         $attendance = Attendance::where('employee_id', $employee->id)
             ->where('date', $this->markDate)
             ->first();
@@ -355,6 +373,64 @@ class AllAttendance extends Component
 
         $this->showMarkModal = false;
         \Flux::toast("Attendance updated for {$employee->user->name} and recorded against your name.");
+    }
+
+    // ── Day history ──────────────────────────────────────────────────────────
+
+    /** The person and date the Day history shows; null when it is closed. */
+    #[Locked]
+    public ?int $historyEmployeeId = null;
+
+    #[Locked]
+    public string $historyDate = '';
+
+    /** Open one person's date: its timeline, every punch, the raw device log and what changed it. */
+    public function openDayHistory(int $employeeId, string $date): void
+    {
+        abort_unless(Auth::user()->canApproveLeave(), 403);
+        abort_unless(self::isDate($date) && $date <= Carbon::today()->toDateString(), 404);
+        abort_unless(Auth::user()->coversEmployee(Employee::findOrFail($employeeId)), 403);
+
+        $this->historyEmployeeId = $employeeId;
+        $this->historyDate = $date;
+    }
+
+    /** The same person's previous or next date (never past today). */
+    public function shiftHistoryDate(int $days): void
+    {
+        if ($this->historyEmployeeId === null || ! self::isDate($this->historyDate)) {
+            return;
+        }
+        $date = Carbon::parse($this->historyDate)->addDays($days);
+        if ($date->lte(Carbon::today())) {
+            $this->historyDate = $date->toDateString();
+        }
+    }
+
+    public function closeDayHistory(): void
+    {
+        $this->historyEmployeeId = null;
+        $this->historyDate = '';
+    }
+
+    /**
+     * The open Day history, or null — re-checked against the viewer's reach
+     * on every render.
+     *
+     * @return array<string, mixed>|null
+     */
+    protected function dayHistory(): ?array
+    {
+        if ($this->historyEmployeeId === null || ! self::isDate($this->historyDate)) {
+            return null;
+        }
+        $employee = Employee::with(['user', 'department', 'shift', 'exitRecord'])->find($this->historyEmployeeId);
+        if (! $employee || ! Auth::user()->coversEmployee($employee)) {
+            return null;
+        }
+
+        return ['employee' => $employee, 'date' => $this->historyDate]
+            + app(AttendanceRegister::class)->history($employee, Carbon::parse($this->historyDate));
     }
 
     // ── Employee 360 Drawer ──────────────────────────────────────────────────
@@ -974,7 +1050,7 @@ class AllAttendance extends Component
         // their biometric card is released on exit and they should not surface here.
         // office / exitRecord / shift / activeBreak are read by the status of
         // every row; loading them here keeps the page at a fixed query count.
-        $query = Attendance::query()->with('employee.user', 'employee.office', 'employee.exitRecord', 'employee.shift', 'activeBreak')
+        $query = Attendance::query()->with('employee.user', 'employee.office', 'employee.exitRecord', 'employee.shift', 'employee.department', 'activeBreak')
             ->whereHas('employee.user')
             ->whereHas('employee', fn ($q) => $q->whereNotIn('status', ['inactive', 'archived']));
         $scoped($query);
@@ -1079,11 +1155,35 @@ class AllAttendance extends Component
             'duplicates' => count(array_filter($audit, fn (array $a) => $a['duplicates'] > 0)),
         ];
 
-        $attendances = $query->latest('date')->paginate(15);
+        // Newest date first; within a date, in order of arrival.
+        $attendances = (clone $query)->latest('date')->orderBy('check_in')->orderBy('id')->paginate(15);
         // Every punch behind the rows on this page, in one query: the status
         // resolver and the Punches column both read it.
         $pagePunches = $this->punchesFor($attendances->items());
         $timeline = app(PunchTimeline::class);
+
+        // Each row's day from the shared register (worked against the shift,
+        // the timeline bar, missed punches), and a heading per date with the
+        // totals of the whole filtered set on that date.
+        $lines = app(AttendanceRegister::class)->forAttendances($attendances->items());
+        $pageDates = collect($attendances->items())->map(fn (Attendance $a) => $a->date->toDateString())->unique()->values();
+        $dayGroups = $pageDates->mapWithKeys(fn (string $date) => [$date => [
+            'window' => AttendanceRegister::window(collect($lines)->filter(fn (array $l) => $l['date'] === $date)),
+            'records' => 0, 'present' => 0, 'late' => 0, 'missed' => null,
+        ]])->all();
+        if ($pageDates->isNotEmpty()) {
+            (clone $query)->setEagerLoads([])->whereIn('date', $pageDates->all())->get(['id', 'date', 'check_in', 'is_late'])
+                ->groupBy(fn (Attendance $a) => $a->date->toDateString())
+                ->each(function (Collection $rows, string $date) use (&$dayGroups, $audit) {
+                    $dayGroups[$date] = [
+                        'window' => $dayGroups[$date]['window'] ?? AttendanceRegister::window([]),
+                        'records' => $rows->count(),
+                        'present' => $rows->whereNotNull('check_in')->count(),
+                        'late' => $rows->where('is_late', true)->count(),
+                        'missed' => $audit === null ? null : $rows->filter(fn (Attendance $a) => $audit[$a->id]['missed'] ?? false)->count(),
+                    ];
+                });
+        }
 
         return view('livewire.attendance.all-attendance', [
             'attendances' => $attendances,
@@ -1100,6 +1200,9 @@ class AllAttendance extends Component
             'audit' => $audit,
             'auditCounts' => $auditCounts,
             'punchLog' => $this->employeePunchLog(),
+            'lines' => $lines,
+            'dayGroups' => $dayGroups,
+            'dayHistory' => $this->dayHistory(),
             'rangeError' => $this->rangeError(),
             'showingLabel' => $showingLabel,
             'hasActiveFilters' => $this->hasActiveFilters(),
